@@ -26,6 +26,12 @@ export interface EdgePolicyResolutionContext {
     Kind: CloneEdgeKind;
     ParentEntityName: string;
     ChildEntityName: string;
+    /**
+     * The clone root's entity. A bare child-entity key in the root's `Relationships` applies only to
+     * edges from this entity; below it, only relationship-ID and `Child.JoinField` keys match. Left out,
+     * the edge is taken to start at the root.
+     */
+    RootEntityName?: string;
     JoinField: string;
     RelationshipID?: string;
     CollectionName?: string;
@@ -91,9 +97,7 @@ export function ResolveEdgePolicy(ctx: EdgePolicyResolutionContext): EdgePolicyR
 
     const configuredPolicy =
         ctx.RelationshipConfig?.Policy ??
-        (ctx.RelationshipID ? BagEntry(ctx.RootEntityConfig?.Relationships, ctx.RelationshipID)?.Policy : undefined) ??
-        BagEntry(ctx.RootEntityConfig?.Relationships, `${ctx.ChildEntityName}.${ctx.JoinField}`)?.Policy ??
-        BagEntry(ctx.RootEntityConfig?.Relationships, ctx.ChildEntityName)?.Policy ??
+        rootRelationship(ctx)?.Policy ??
         BagEntry(ctx.RootEntityConfig?.Descendants, ctx.ChildEntityName)?.Policy ??
         parentRelationship(ctx)?.Policy;
 
@@ -191,10 +195,7 @@ export function ResolveEdgePolicy(ctx: EdgePolicyResolutionContext): EdgePolicyR
 
     // 5. Root Entity Bag (Relationships & Descendants)
     if (ctx.RootEntityConfig) {
-        const relMatch =
-            (ctx.RelationshipID && BagEntry(ctx.RootEntityConfig.Relationships, ctx.RelationshipID)) ||
-            BagEntry(ctx.RootEntityConfig.Relationships, `${ctx.ChildEntityName}.${ctx.JoinField}`) ||
-            BagEntry(ctx.RootEntityConfig.Relationships, ctx.ChildEntityName);
+        const relMatch = rootRelationship(ctx);
         if (relMatch) {
             if (relMatch.Locked) locked = true;
             if (relMatch.Policy) {
@@ -280,6 +281,27 @@ export function ResolveEdgePolicy(ctx: EdgePolicyResolutionContext): EdgePolicyR
         Locked: locked,
         Warnings: warnings,
     };
+}
+
+/**
+ * The root's entry for this edge: by relationship ID or "<Child>.<JoinField>" at any depth, by bare
+ * child name only on edges from the root's entity. A child can hang from several entities in the walk
+ * (AI Agent Actions from the agent by AgentID and from a copied prompt by CompactPromptID); a bare key
+ * written for the root's own rows must not copy another record's rows that point at a copied one.
+ */
+function rootRelationship(ctx: EdgePolicyResolutionContext): { Policy?: CloneEdgePolicy; Locked?: boolean } | undefined {
+    const rels = ctx.RootEntityConfig?.Relationships;
+    if (!rels) return undefined;
+    return (
+        (ctx.RelationshipID ? BagEntry(rels, ctx.RelationshipID) : undefined) ??
+        BagEntry(rels, `${ctx.ChildEntityName}.${ctx.JoinField}`) ??
+        (IsEdgeFromRoot(ctx.ParentEntityName, ctx.RootEntityName) ? BagEntry(rels, ctx.ChildEntityName) : undefined)
+    );
+}
+
+/** Whether an edge from `parentEntityName` starts at the root's entity (ignoring case); true when the root isn't given. */
+export function IsEdgeFromRoot(parentEntityName: string, rootEntityName: string | undefined | null): boolean {
+    return !rootEntityName || parentEntityName.toLowerCase() === rootEntityName.toLowerCase();
 }
 
 /** The parent entity's own entry for this edge: by relationship ID, "<Child>.<JoinField>", or child name. */

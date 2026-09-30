@@ -40,6 +40,7 @@ import {
     NameTemplateOptions,
     RowMatchesExclusion,
     BagEntry,
+    IsEdgeFromRoot,
     type CloneFieldMappingContext,
     type UniqueKeyDefinition,
 } from '@memberjunction/record-cloning-base';
@@ -328,6 +329,7 @@ export class ClonePlanner {
                         Kind: candidate.Kind as CloneEdgeKind,
                         ParentEntityName: candidate.SourceEntityName,
                         ChildEntityName: candidate.TargetEntityName,
+                        RootEntityName: entityName,
                         JoinField: candidate.JoinField,
                         RelationshipID: candidate.Relationship?.ID,
                         RelationshipConfig: relPolicy,
@@ -946,16 +948,17 @@ export class ClonePlanner {
             }
             // Same chain as ResolveEdgePolicy: the relationship's own bag, the root's entry (by
             // relationship ID, Child.JoinField, Child), then, below the root, the parent entity's own
-            // entry. Descendants entries carry field rules, not row exclusions.
-            const entryIn = (bag: Record<string, { ExcludeRows?: ICloneRowExclusion[] }> | undefined) =>
+            // entry. Descendants entries carry field rules, not row exclusions. A bare child key in the
+            // root's bag applies only to edges from the root's entity.
+            const entryIn = (bag: Record<string, { ExcludeRows?: ICloneRowExclusion[] }> | undefined, bareKey: boolean) =>
                 (edge.Relationship?.ID ? BagEntry(bag, edge.Relationship.ID)?.ExcludeRows : undefined) ??
                 BagEntry(bag, `${edge.TargetEntityName}.${edge.JoinField}`)?.ExcludeRows ??
-                BagEntry(bag, edge.TargetEntityName)?.ExcludeRows;
+                (bareKey ? BagEntry(bag, edge.TargetEntityName)?.ExcludeRows : undefined);
             const parentBag = edge.SourceEntityName !== rootEntityName ? this.Provider.EntityByName(edge.SourceEntityName)?.CloneConfig?.Relationships : undefined;
             const rules: ICloneRowExclusion[] | undefined =
                 edge.Relationship?.CloneConfig?.ExcludeRows ??
-                entryIn(rootConfig?.Relationships) ??
-                entryIn(parentBag);
+                entryIn(rootConfig?.Relationships, IsEdgeFromRoot(edge.SourceEntityName, rootEntityName)) ??
+                entryIn(parentBag, true);
             const matched = RowMatchesExclusion(node.RecordData ?? {}, rules);
             if (!matched && !isDropped(edge.FromKey)) {
                 kept.push(node);

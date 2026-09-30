@@ -135,6 +135,31 @@ describe('shipped clone configurations', () => {
         expect(res.Locked).toBe(true);
     });
 
+    it("copies an agent's own rows but not another agent's rows that point at a copied prompt or template", () => {
+        const agents = byName.get('MJ: AI Agents');
+        const edge = (ParentEntityName: string, ChildEntityName: string, JoinField: string) =>
+            ResolveEdgePolicy({
+                FromKey: `${ParentEntityName}::1`,
+                ToKey: `${ChildEntityName}::2`,
+                Kind: 'Relationship',
+                ParentEntityName,
+                ChildEntityName,
+                JoinField,
+                RootEntityName: 'MJ: AI Agents',
+                CurrentDepth: 2,
+                MaxDepth: 5,
+                RootEntityConfig: agents,
+                ParentEntityConfig: byName.get(ParentEntityName),
+            }).Policy;
+        // The root's rows, and a sub-agent's (also an agent), are copied.
+        expect(edge('MJ: AI Agents', 'MJ: AI Agent Actions', 'AgentID')).toBe('Deep');
+        expect(edge('MJ: AI Agents', 'MJ: AI Agent Prompts', 'AgentID')).toBe('Deep');
+        // Rows that hang from a copied prompt or template belong to whichever agent owns them.
+        expect(edge('MJ: AI Prompts', 'MJ: AI Agent Actions', 'CompactPromptID')).toBe('Skip');
+        expect(edge('MJ: AI Prompts', 'MJ: AI Agent Prompts', 'PromptID')).toBe('Skip');
+        expect(edge('MJ: Templates', 'MJ: AI Agent Search Scopes', 'QueryTemplateID')).toBe('Skip');
+    });
+
     it('uses only valid policies where one is set', () => {
         const valid = new Set(['Deep', 'Reference', 'Skip']);
         for (const [name, config] of byName) {

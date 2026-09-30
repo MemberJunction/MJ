@@ -204,6 +204,17 @@ describe('ClonePolicyResolver', () => {
         expect(ResolveEdgePolicy(edge).Policy).toBe('Skip');
     });
 
+    it("applies a bare root key only to edges from the root's entity; ID and Child.JoinField keys apply at any depth", () => {
+        const below = { ...baseContext, ParentEntityName: 'Products', JoinField: 'ProductID', RelationshipID: 'rel-products-details', RootEntityName: 'Orders', CurrentDepth: 2 };
+        const bare = { Relationships: { OrderDetails: { Policy: 'Deep' as const } } };
+        expect(ResolveEdgePolicy({ ...below, RootEntityConfig: bare }).Policy).toBe('Skip');
+        expect(ResolveEdgePolicy({ ...below, ParentEntityName: 'orders', RootEntityConfig: bare }).Policy).toBe('Deep');
+        expect(ResolveEdgePolicy({ ...below, RootEntityConfig: { Relationships: { 'OrderDetails.ProductID': { Policy: 'Deep' } } } }).Policy).toBe('Deep');
+        expect(ResolveEdgePolicy({ ...below, RootEntityConfig: { Relationships: { 'rel-products-details': { Policy: 'Deep' } } } }).Policy).toBe('Deep');
+        // The parent entity's own bare key still applies to its rows.
+        expect(ResolveEdgePolicy({ ...below, ParentEntityConfig: bare }).Policy).toBe('Deep');
+    });
+
     it('reports a NotCloneable child only when something asks to copy it', () => {
         const notCloneable = { ...baseContext, ChildEntityConfig: { NotCloneable: true } };
         expect(ResolveEdgePolicy(notCloneable).Warnings).toEqual([]);

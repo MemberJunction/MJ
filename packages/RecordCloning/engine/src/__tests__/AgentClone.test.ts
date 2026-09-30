@@ -69,7 +69,8 @@ describe('Phase 4.3: MJ: AI Agents Record Cloning Use Case', () => {
             'MJ: AI Agent Prompts': { Policy: 'Deep' as const },
             'MJ: AI Agent Actions': { Policy: 'Deep' as const },
             'MJ: AI Agent Steps': { Policy: 'Deep' as const },
-            'MJ: AI Agent Step Paths': { Policy: 'Deep' as const },
+            // Step paths hang from steps, not the agent, so the key names the join column.
+            'MJ: AI Agent Step Paths.AgentStepID': { Policy: 'Deep' as const },
             'MJ: AI Agent Relationships': { Policy: 'Deep' as const },
             'MJ: AI Agent Artifact Types': { Policy: 'Deep' as const },
             'MJ: AI Agent Skills': { Policy: 'Deep' as const },

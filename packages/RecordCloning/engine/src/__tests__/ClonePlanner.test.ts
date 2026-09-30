@@ -275,6 +275,71 @@ describe('ClonePlanner', () => {
         mockRunViewInstance.mockReset();
     });
 
+    describe('a child with FKs to two entities in the walk', () => {
+        // Agent A owns prompt P (copied Deep). Actions hang from agents (AgentID) and from prompts
+        // (CompactPromptID): action b1 belongs to agent B but compacts with P.
+        const field = (Name: string, extra: Record<string, unknown> = {}) => ({ Name, IsPrimaryKey: Name === 'ID', Type: Name === 'Name' ? 'nvarchar' : 'uniqueidentifier', IsSPParameter: () => true, ...extra });
+        const perms = () => ({ CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true });
+        const rel = (ID: string, EntityID: string, RelatedEntity: string, RelatedEntityID: string, RelatedEntityJoinField: string) => ({ ID, EntityID, Type: 'One To Many', RelatedEntity, RelatedEntityID, RelatedEntityJoinField });
+        const agents = {
+            ID: 'ent-agents', Name: 'Agents', BaseView: 'vwAgents', TrackRecordChanges: true, AllowCreateAPI: true,
+            PrimaryKeys: [{ Name: 'ID' }], FirstPrimaryKey: { Name: 'ID' }, Fields: [field('ID'), field('Name')],
+            RelatedEntities: [rel('rel-agent-prompts', 'ent-agents', 'Prompts', 'ent-prompts', 'OwnerAgentID'), rel('rel-agent-actions', 'ent-agents', 'Actions', 'ent-actions', 'AgentID')],
+            GetUserPermisions: perms,
+        };
+        const prompts = {
+            ID: 'ent-prompts', Name: 'Prompts', BaseView: 'vwPrompts', TrackRecordChanges: true, AllowCreateAPI: true,
+            PrimaryKeys: [{ Name: 'ID' }], FirstPrimaryKey: { Name: 'ID' },
+            Fields: [field('ID'), field('Name'), field('OwnerAgentID', { RelatedEntityID: 'ent-agents', RelatedEntity: 'Agents', RelatedEntityFieldName: 'ID' })],
+            RelatedEntities: [rel('rel-prompt-actions', 'ent-prompts', 'Actions', 'ent-actions', 'CompactPromptID')],
+            GetUserPermisions: perms,
+        };
+        const actions = {
+            ID: 'ent-actions', Name: 'Actions', BaseView: 'vwActions', TrackRecordChanges: true, AllowCreateAPI: true,
+            PrimaryKeys: [{ Name: 'ID' }], FirstPrimaryKey: { Name: 'ID' },
+            Fields: [
+                field('ID'), field('Name'),
+                field('AgentID', { RelatedEntityID: 'ent-agents', RelatedEntity: 'Agents', RelatedEntityFieldName: 'ID' }),
+                field('CompactPromptID', { RelatedEntityID: 'ent-prompts', RelatedEntity: 'Prompts', RelatedEntityFieldName: 'ID' }),
+            ],
+            RelatedEntities: [], GetUserPermisions: perms,
+        };
+        const rows: Record<string, Array<Record<string, string | null>>> = {
+            Agents: [{ ID: 'A', Name: 'Agent A' }, { ID: 'B', Name: 'Agent B' }],
+            Prompts: [{ ID: 'P', Name: 'Prompt P', OwnerAgentID: 'A' }],
+            Actions: [
+                { ID: 'a1', Name: 'A action', AgentID: 'A', CompactPromptID: null },
+                { ID: 'b1', Name: 'B action', AgentID: 'B', CompactPromptID: 'P' },
+            ],
+        };
+        const planWith = async (relationships: Record<string, { Policy: 'Deep' }>) => {
+            mockRunViewInstance.mockImplementation(async (params: { EntityName: string; ExtraFilter?: string; Fields?: string[] }) => {
+                if (params.Fields) return { Success: true, Results: [] };
+                const filter = params.ExtraFilter ?? '';
+                const values = [...filter.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+                const column = /\[?(\w+)\]?\s*(?:=|IN)/i.exec(filter)?.[1] ?? 'ID';
+                return { Success: true, Results: (rows[params.EntityName] ?? []).filter((r) => r[column] !== null && values.includes(String(r[column]))) };
+            });
+            const list = [{ ...agents, CloneConfig: { Enabled: true, Relationships: relationships } }, prompts, actions] as unknown as EntityInfo[];
+            const provider = {
+                ...mockProvider, Entities: list,
+                EntityByName: (n: string) => list.find((e) => e.Name.toLowerCase() === n.toLowerCase()) ?? null,
+                EntityByID: (id: string) => list.find((e) => e.ID === id) ?? null,
+            } as IMetadataProvider;
+            const plan = await new ClonePlanner({ Provider: provider }).Plan({ EntityName: 'Agents', SourceRecordKey: { ID: 'A' } }, standardUser);
+            mockRunViewInstance.mockReset();
+            return plan.Nodes.filter((n) => n.EntityName === 'Actions' && n.Action === 'Create').map((n) => n.DisplayName).sort();
+        };
+
+        it("applies a bare root key only to the root's own rows, not to another agent's row that points at a copied prompt", async () => {
+            expect(await planWith({ Prompts: { Policy: 'Deep' }, Actions: { Policy: 'Deep' } })).toEqual(['A action']);
+        });
+
+        it('still follows a Child.JoinField key below the root', async () => {
+            expect(await planWith({ Prompts: { Policy: 'Deep' }, 'Actions.AgentID': { Policy: 'Deep' }, 'Actions.CompactPromptID': { Policy: 'Deep' } })).toEqual(['A action', 'B action']);
+        });
+    });
+
     it('clones a child node with its subtree, keeping its parent as a reference and leaving siblings out', async () => {
         const folder = {
             ID: 'ent-folder', Name: 'Folders', BaseView: 'vwFolders', TrackRecordChanges: true, AllowCreateAPI: true,
