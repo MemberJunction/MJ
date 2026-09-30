@@ -97,6 +97,13 @@ export interface DuplicateReasoningCandidateVerdict {
     Confidence: number | null;
     /** Short rationale specific to THIS candidate. */
     Reasoning: string;
+    /**
+     * The AI Prompt Run that produced THIS verdict, when it is not the set's
+     * {@link DuplicateReasoningOutput.AIPromptRunID}. `DecisionThenPrompt` sets it on each candidate
+     * its decision dropped, so that candidate's match row points at the decision run rather than at
+     * a prompt run that never saw it. Omit it when the set's run produced the verdict.
+     */
+    AIPromptRunID?: string | null;
 }
 
 /**

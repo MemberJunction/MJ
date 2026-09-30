@@ -1377,7 +1377,8 @@ export class DuplicateRecordDetector extends VectorBase {
      * independently), so a false-positive candidate reads NotDuplicate even when another candidate
      * in the same set is a confident Merge. Falls back to the set-level summary only when the
      * reasoner returned no per-candidate verdict for this record. The proposed survivor + field
-     * map stay set-level (they describe the merge of the set's true duplicates).
+     * map stay set-level (they describe the merge of the set's true duplicates). The run id is
+     * the set's, unless this candidate's verdict came from a run of its own.
      *
      * @param candidateRecordID this candidate's record id (matches the input candidate RecordID)
      */
@@ -1394,6 +1395,23 @@ export class DuplicateRecordDetector extends VectorBase {
         match.LLMProposedFieldMap = reasoning.FieldChoices.length > 0
             ? JSON.stringify(reasoning.FieldChoices)
             : null;
+        this.applyRunIDsToMatch(match, reasoning, verdict);
+    }
+
+    /**
+     * Point the match row at the run that produced its verdict: the verdict's own prompt run when
+     * it carries one (a candidate `DecisionThenPrompt`'s decision dropped), else the set's run.
+     */
+    private applyRunIDsToMatch(
+        match: MJDuplicateRunDetailMatchEntity,
+        reasoning: DuplicateReasoningOutput,
+        verdict: DuplicateReasoningCandidateVerdict | undefined
+    ): void {
+        if (verdict?.AIPromptRunID) {
+            match.AIPromptRunID = verdict.AIPromptRunID;
+            match.AIAgentRunID = null;
+            return;
+        }
         match.AIPromptRunID = reasoning.AIPromptRunID ?? null;
         match.AIAgentRunID = reasoning.AIAgentRunID ?? null;
     }

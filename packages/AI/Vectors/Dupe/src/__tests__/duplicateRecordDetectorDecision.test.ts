@@ -359,6 +359,19 @@ describe('DuplicateRecordDetector — decision reasoning modes', () => {
             }
         });
 
+        it('points each match row at the run that produced its verdict', async () => {
+            answerByRecord({ 'cand-a': 0.9, 'cand-b': 0.1, 'cand-c': 0.2 });
+            promptVerdicts({ 'cand-a': 'Merge' });
+            const { output } = await reasonOverSet('DecisionThenPrompt');
+
+            const rows = CANDIDATE_IDS.map(id => {
+                const match = matchRow();
+                detector.ApplyToMatch(match, output, id);
+                return [match.AIPromptRunID, match.AIAgentRunID];
+            });
+            expect(rows).toEqual([['prompt-run-1', null], ['decision-run-1', null], ['decision-run-1', null]]);
+        });
+
         it('is NotDuplicate with no prompt call when no candidate survives', async () => {
             answerByRecord({ 'cand-a': 0.1, 'cand-b': 0.1, 'cand-c': 0.2 });
             const { ed, result } = await reasonOverSet('DecisionThenPrompt');

@@ -13,6 +13,10 @@
  * every candidate goes to the prompt provider, which is the `Prompt` mode's behaviour: narrowing is
  * an optimisation, so its failure must never hide a candidate.
  *
+ * Each match row points at the run that produced its verdict: a survivor's at the prompt run, a
+ * dropped candidate's at the decision run. A failed decision's run is named in the error log, since
+ * a match row holds only one prompt run id.
+ *
  * @module @memberjunction/ai-vector-dupe
  */
 
@@ -67,7 +71,7 @@ export class DecisionThenPromptReasoningProvider extends DuplicateReasoningProvi
     ): Promise<DuplicateReasoningOutput> {
         const decision = await this.DecisionStage.DecideCandidates(input, context);
         if (!decision.Success) {
-            LogError(`DecisionThenPrompt: the decision failed (${decision.ErrorMessage ?? 'unknown error'}); passing every candidate to the prompt.`);
+            LogError(`DecisionThenPrompt: the decision failed (${this.describeFailure(decision)}); passing every candidate to the prompt.`);
             return this.PromptStage.Reason(input, context);
         }
         const dropped = decision.Candidates.filter(c => !this.DecisionStage.IsPlausible(c.Probability));
@@ -75,7 +79,7 @@ export class DecisionThenPromptReasoningProvider extends DuplicateReasoningProvi
             return this.noSurvivorsOutput(decision);
         }
         const output = await this.PromptStage.Reason(this.NarrowToSurvivors(input, dropped), context);
-        return this.withDroppedVerdicts(output, dropped);
+        return this.withDroppedVerdicts(output, dropped, decision.AIPromptRunID);
     }
 
     /**
@@ -107,13 +111,15 @@ export class DecisionThenPromptReasoningProvider extends DuplicateReasoningProvi
     }
 
     /**
-     * Give each dropped candidate its own `NotDuplicate` verdict from the decision, so its match row
-     * never falls back to the set-level recommendation. The prompt's verdicts and set-level fields
-     * are otherwise left as the prompt returned them.
+     * Give each dropped candidate its own `NotDuplicate` verdict from the decision, carrying the
+     * decision's run id, so its match row neither falls back to the set-level recommendation nor
+     * points at a prompt run that never saw it. The prompt's verdicts and set-level fields are
+     * otherwise left as the prompt returned them.
      */
     private withDroppedVerdicts(
         output: DuplicateReasoningOutput,
-        dropped: DuplicateCandidateProbability[]
+        dropped: DuplicateCandidateProbability[],
+        decisionRunID: string | null
     ): DuplicateReasoningOutput {
         if (!output.Success) {
             return output;
@@ -121,9 +127,15 @@ export class DecisionThenPromptReasoningProvider extends DuplicateReasoningProvi
         const droppedIDs = this.recordIDSet(dropped);
         output.CandidateVerdicts = [
             ...output.CandidateVerdicts.filter(v => !droppedIDs.has(this.normalizeRecordID(v.RecordID))),
-            ...dropped.map(c => this.DecisionStage.BandCandidate(c))
+            ...dropped.map(c => ({ ...this.DecisionStage.BandCandidate(c), AIPromptRunID: decisionRunID }))
         ];
         return output;
+    }
+
+    /** The failure for the log, naming the decision's run when the runner wrote one. */
+    private describeFailure(decision: DuplicateDecisionResult): string {
+        const error = decision.ErrorMessage ?? 'unknown error';
+        return decision.AIPromptRunID ? `${error}; decision run ${decision.AIPromptRunID}` : error;
     }
 
     private stillDiffers(delta: ReasoningFieldDelta): boolean {

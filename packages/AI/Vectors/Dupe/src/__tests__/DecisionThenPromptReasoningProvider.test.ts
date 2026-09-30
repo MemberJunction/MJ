@@ -40,6 +40,7 @@ vi.mock('@memberjunction/ai-core-plus', () => ({
     AIPromptParams: class {},
 }));
 
+import { LogError } from '@memberjunction/core';
 import { DecisionThenPromptReasoningProvider } from '../reasoning/DecisionThenPromptReasoningProvider';
 import { DecisionReasoningProvider } from '../reasoning/DecisionReasoningProvider';
 import { DuplicateReasoningProvider } from '../reasoning/DuplicateReasoningProvider';
@@ -198,6 +199,15 @@ describe('DecisionThenPromptReasoningProvider', () => {
             expect(dropped?.Recommendation).toBe('NotDuplicate');
             expect(dropped?.Confidence).toBe(0.2);
         });
+
+        it('points each dropped candidate\'s verdict at the decision run, and leaves the survivors\' on the set\'s prompt run', async () => {
+            answerByRecord({ 'ID|c1': 0.9, 'ID|c2': 0.2, 'ID|c3': 0.5 });
+            const output = await chainedWithStub().Reason(input(), CONTEXT);
+
+            const runIDs = output.CandidateVerdicts.map(v => [v.RecordID, v.AIPromptRunID]);
+            expect(runIDs).toEqual([['ID|c1', undefined], ['ID|c3', undefined], ['ID|c2', 'decision-run-1']]);
+            expect(output.AIPromptRunID).toBe('prompt-run-1');
+        });
     });
 
     describe('no survivors', () => {
@@ -232,6 +242,15 @@ describe('DecisionThenPromptReasoningProvider', () => {
 
             expect(promptStageInput()).toBe(original);
             expect(output).toEqual(promptMergesC1());
+        });
+
+        it('names the failed decision\'s run in the error log', async () => {
+            mockExecuteDecision.mockResolvedValue({
+                success: false, errorMessage: 'model overloaded', Answers: {}, promptRun: runRow('decision-run-9'),
+            });
+            await chainedWithStub().Reason(input(), CONTEXT);
+
+            expect(vi.mocked(LogError)).toHaveBeenCalledWith(expect.stringContaining('model overloaded; decision run decision-run-9'));
         });
 
         it('passes every candidate to the prompt provider when the runner throws', async () => {
