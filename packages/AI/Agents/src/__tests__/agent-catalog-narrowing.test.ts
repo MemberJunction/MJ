@@ -7,14 +7,15 @@
  * Contract pinned:
  *   1. Off by default: the template data is identical to what BaseAgent produced before narrowing
  *      existed (GOLDEN was captured from the unmodified code), and no decision call is made.
- *   2. With a limit: one decision per run, not per step; the top N plus every MinExecutionsPerRun item
- *      and the Find Candidate tools are shown; _effectiveActions / _effectiveSubAgents stay whole, so
- *      a hidden action can still be called; one `Catalog narrowing` Decision step is recorded.
+ *   2. With a limit: one decision per run, not per step, and a fresh one on the next run; the top N
+ *      plus every MinExecutionsPerRun item and the Find Candidate tools are shown;
+ *      _effectiveActions / _effectiveSubAgents stay whole, so a hidden action can still be called;
+ *      one `Catalog narrowing` Decision step is recorded, and its prompt run counts toward the run.
  *      Hidden is never unreachable: each narrowed list starts with a note on how many it hides and how
  *      to reach them, the counts stay whole, and actions are narrowed only when the agent has Find
  *      Candidate Actions.
- *   3. Fail open: a failed, throwing, timed-out or answer-less decision, or a missing prompt, shows the
- *      full catalog and logs a warning.
+ *   3. Fail open: a failed, throwing, timed-out, cancelled or answer-less decision, or a missing
+ *      prompt, shows the full catalog and logs a warning.
  *   4. Skills: narrowed in the catalog only, after the filterAvailableSkills policy (which stays the
  *      identity, so an override that skips super keeps narrowing), and an error while narrowing
  *      returns them all.
@@ -908,6 +909,24 @@ describe('catalog narrowing — with a limit', () => {
 
         expect(ask.mock.calls[0][0].PromptName).toBe('Catalog Decision');
     });
+
+    it('narrows each run afresh: a second run of the same instance asks again, about its own request', async () => {
+        const secondRequest = 'What is the weather in Lisbon tomorrow?';
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask')
+            .mockImplementationOnce(answerByName(PROBABILITIES))
+            .mockImplementationOnce(answerByName({ ...PROBABILITIES, 'Look Up Weather': 0.99, 'Send Email': 0.01 }));
+        const { agent, runner } = makeAgent([...twoTurnScript(), ...twoTurnScript()]);
+
+        await agent.Execute(makeParams());
+        await agent.Execute(makeParams([{ role: 'user', content: secondRequest }]));
+
+        expect(ask).toHaveBeenCalledTimes(2);
+        expect(ask.mock.calls[1][0].State).toBe(secondRequest);
+        expect(runner.Calls).toHaveLength(4);
+        expect(templateData(runner.Calls[2]).actionDetails).toBe(narrowedSection(
+            ONE_ACTION_HIDDEN,
+            actionDetailsFor('Look Up Weather', 'Create Invoice', 'Find Candidate Actions', 'Translate Text')));
+    });
 });
 
 describe('catalog narrowing — fails open', () => {
@@ -1021,6 +1040,33 @@ describe('catalog narrowing — fails open', () => {
 
             expect(result.success).toBe(false);
             expect(result.errorMessage).toContain('cancelled');
+        });
+
+        it('stops at once when the run was cancelled before the call began', async () => {
+            vi.useFakeTimers();
+            const controller = new AbortController();
+            controller.abort('user cancelled');
+            let signal: AbortSignal | undefined;
+            vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation((args) => {
+                signal = args.CancellationToken;
+                return new Promise<AIDecisionRunResult>(() => undefined);
+            });
+            const agent = new HarnessAgent();
+            const params: ExecuteAgentParams = { ...makeParams(), cancellationToken: controller.signal };
+            agent['_executeParams'] = params;
+            agent['_openingRequest'] = OPENING_REQUEST;
+
+            // An abort listener added to an already-aborted signal never fires, so without its own
+            // check the call would wait out the 30-second timeout.
+            let result: AIDecisionRunResult | undefined;
+            void agent['askCatalogNarrowing'](params.agent, TEST_USER, QUESTIONS, 'Default Decision').then(r => {
+                result = r;
+            });
+            await vi.advanceTimersByTimeAsync(0);
+
+            expect(result?.success).toBe(false);
+            expect(result?.errorMessage).toContain('cancelled');
+            expect(signal?.aborted).toBe(true);
         });
     });
 });
