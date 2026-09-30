@@ -4736,13 +4736,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     const end = new Date().getTime();
                     LogStatusEx({ message: `GetAllMetadata() took ${end - start} ms`, verboseOnly: true });
                     if (res) {
-                        // Atomic swap via UpdateLocalMetadata: single property assignment is atomic in JavaScript
-                        // Readers now see new metadata instead of old
-                        // Uses UpdateLocalMetadata() to maintain consistency with LoadLocalMetadataFromStorage()
-                        // and allow potential subclass overrides for extensibility
-                        this.UpdateLocalMetadata(res);
-                        this._latestLocalMetadataTimestamps = this._latestRemoteMetadataTimestamps // update this since we just used server to get all the stuff
-                        await this.SaveLocalMetadataToStorage();
+                        await this.adoptServerMetadata(res);
                     }
                     else {
                         // GetAllMetadata failed - log error but keep existing metadata
@@ -4765,6 +4759,20 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
+     * Adopts a metadata snapshot just loaded from the server: swaps it in, records that the
+     * local copy now matches the server's timestamps, and persists it to local storage.
+     *
+     * The swap goes through UpdateLocalMetadata — a single property assignment, atomic in
+     * JavaScript, so readers see the old snapshot until the new one is complete — which keeps
+     * it consistent with LoadLocalMetadataFromStorage() and lets subclasses override it.
+     */
+    private async adoptServerMetadata(res: AllMetadata): Promise<void> {
+        this.UpdateLocalMetadata(res);
+        this._latestLocalMetadataTimestamps = this._latestRemoteMetadataTimestamps; // we just used the server to get all the stuff
+        await this.SaveLocalMetadataToStorage();
+    }
+
+    /**
      * Background validation for the stale-while-revalidate fast-start pattern.
      * Checks if local metadata is still current; if stale, fetches fresh metadata
      * and atomically swaps it in. The app continues operating on cached data
@@ -4779,9 +4787,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 const res = await this.GetAllMetadata(providerToUse, false);
                 const elapsed = Date.now() - start;
                 if (res) {
-                    this.UpdateLocalMetadata(res);
-                    this._latestLocalMetadataTimestamps = this._latestRemoteMetadataTimestamps;
-                    await this.SaveLocalMetadataToStorage();
+                    await this.adoptServerMetadata(res);
                     LogStatusEx({ message: `⚡ [Metadata Cache] Background refresh complete (${elapsed}ms) — metadata updated in place`, verboseOnly: false });
                 }
             } else {
@@ -4822,9 +4828,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 const res = await this.GetAllMetadata(providerToUse, false);
                 const elapsed = Date.now() - start;
                 if (res) {
-                    this.UpdateLocalMetadata(res);
-                    this._latestLocalMetadataTimestamps = this._latestRemoteMetadataTimestamps;
-                    await this.SaveLocalMetadataToStorage();
+                    await this.adoptServerMetadata(res);
                     LogStatusEx({ message: `⚡ [Metadata Cache] Pre-validation refresh complete (${elapsed}ms)`, verboseOnly: false });
                 }
             } else {
