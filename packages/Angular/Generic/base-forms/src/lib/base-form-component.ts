@@ -36,7 +36,7 @@ import { EntityFormConfig } from './types/entity-form-config';
 import { FormToolbarItemConfig, FormToolbarItemKey, FormToolbarItemClickEventArgs } from './types/form-toolbar-item';
 import { CollectFormPanelRegistrations } from './panel-slot/collect-form-panel-registrations';
 import { ContributionHiddenSectionKeys } from './panel-slot/form-contribution';
-import { DuplicateEntryCheckController } from './duplicate-entry-check/duplicate-entry-check';
+import { DuplicateEntryCheckController, type DuplicateEntryCheckValue } from './duplicate-entry-check/duplicate-entry-check';
 
 /**
  * Abstract base class for all entity record forms in MemberJunction.
@@ -679,9 +679,12 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
    * A person edited a field on this form. For a new record this restarts the entry-time duplicate
    * check. `mj-record-form-container` calls it for every `mj-form-field` edit; a custom editor that
    * changes the record some other way can call it too.
+   *
+   * A user who cannot read the entity (one who may only create its records) never starts a check:
+   * the server would refuse it, and a flagged record is one they could not open anyway.
    */
   public OnFieldEdited(): void {
-    if (this.record && !this.record.IsSaved) {
+    if (this.record && !this.record.IsSaved && this.UserCanRead) {
       this.DuplicateEntryCheck.RecordEdited(this.record);
     }
   }
@@ -711,7 +714,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
    * provider that is not a `GraphQLDataProvider` has no server to ask, so the check reports
    * `NotConfigured` and stops for the entity. Override to send the check elsewhere.
    */
-  protected async CheckDuplicateEntry(entityName: string, values: Record<string, unknown>): Promise<DuplicateEntryCheckResult> {
+  protected async CheckDuplicateEntry(entityName: string, values: Record<string, DuplicateEntryCheckValue>): Promise<DuplicateEntryCheckResult> {
     const provider = this.ProviderToUse;
     if (!(provider instanceof GraphQLDataProvider)) {
       return { Status: 'NotConfigured', Candidates: [] };
