@@ -112,6 +112,7 @@ const MAX_LISTED_KEYS = 10;
 export class PayloadFeedbackManager {
     private config: PayloadFeedbackConfig;
     private decisionService: AgentDecisionService;
+    private _lastDecisionResult: AIDecisionRunResult | undefined;
 
     /**
      * @param config - Feedback settings. See {@link PayloadFeedbackConfig}.
@@ -136,7 +137,15 @@ export class PayloadFeedbackManager {
         const threshold = this.config.intendedThreshold;
         return typeof threshold === 'number' && threshold >= 0 && threshold <= 1 ? threshold : DEFAULT_INTENDED_THRESHOLD;
     }
-    
+
+    /**
+     * The result of the most recent decision call {@link QueryAgent} made, so the caller can link
+     * its prompt run to a run step and count its cost. Undefined until a call is made.
+     */
+    public get LastDecisionResult(): AIDecisionRunResult | undefined {
+        return this._lastDecisionResult;
+    }
+
     /**
      * Generate feedback questions from warnings
      */
@@ -215,16 +224,6 @@ export class PayloadFeedbackManager {
      * @param contextUser - The user the decision runs as
      * @returns One response per question, in the same order
      */
-    private _lastDecisionResult: AIDecisionRunResult | undefined;
-
-    /**
-     * The result of the most recent decision call {@link QueryAgent} made, so the caller can link
-     * its prompt run to a run step and count its cost. Undefined until a call is made.
-     */
-    public get LastDecisionResult(): AIDecisionRunResult | undefined {
-        return this._lastDecisionResult;
-    }
-
     public async QueryAgent(
         questions: PayloadFeedbackQuestion[],
         context: PayloadFeedbackContext,

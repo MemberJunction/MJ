@@ -1253,6 +1253,33 @@ describe('BaseAgent.Execute — the payload change check (opt-in with payloadFee
             expect(output.unintendedPaths).toEqual(['summary']);
         });
 
+        it('counts the check toward the run\'s tokens and cost: its step carries the decision\'s prompt run', async () => {
+            const CHECK_RUN = {
+                ID: 'aaaaaaaa-6666-4000-8000-000000000002',
+                TokensUsedRollup: 90,
+                TokensPromptRollup: 80,
+                TokensCompletionRollup: 10,
+                TokensCacheReadRollup: 0,
+                TokensCacheWriteRollup: 0,
+                TotalCost: 0.0031,
+            } satisfies Pick<MJAIPromptRunEntity, 'ID' | 'TokensUsedRollup' | 'TokensPromptRollup' | 'TokensCompletionRollup' | 'TokensCacheReadRollup' | 'TokensCacheWriteRollup' | 'TotalCost'>;
+            const { agent } = makeAgent(truncatingScript([]));
+            vi.spyOn(agent.DecisionService, 'Ask').mockResolvedValueOnce({ ...likelihood(0.9), promptRun: CHECK_RUN as MJAIPromptRunEntity });
+
+            await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY } }));
+
+            const check = harness.steps[2];
+            expect(check.StepName).toBe('Payload change check');
+            // The persisted link to the prompt run.
+            expect(check.TargetLogID).toBe(CHECK_RUN.ID);
+            // The run's totals read each Decision step's PromptRun. The scripted prompts carry none, so
+            // the check is the run's whole spend.
+            expect(harness.run.TotalCost).toBe(CHECK_RUN.TotalCost);
+            expect(harness.run.TotalTokensUsed).toBe(CHECK_RUN.TokensUsedRollup);
+            expect(harness.run.TotalPromptTokensUsed).toBe(CHECK_RUN.TokensPromptRollup);
+            expect(harness.run.TotalCompletionTokensUsed).toBe(CHECK_RUN.TokensCompletionRollup);
+        });
+
         it('accepts every change, adds nothing, and records why, when decisions are unavailable', async () => {
             // No spy: the harness has no 'Default Decision' prompt, so the real Ask fails.
             const turns: string[][] = [];
