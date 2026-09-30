@@ -47,7 +47,7 @@ import {
     type EntityMetadataStub,
     type MinimalEscalationTargetRow,
 } from '@memberjunction/feature-pipelines';
-import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { MJButtonDirective, MJConfirmDialogComponent } from '@memberjunction/ng-ui-components';
 
 export type PromptOption = Pick<MJAIPromptEntity, 'ID' | 'Name' | 'Description'>;
@@ -64,6 +64,16 @@ export interface EscalationTargetCandidate extends MinimalEscalationTargetRow {
     Description?: string | null;
     Configuration?: string | null;
     ParsedSpec?: DataFeatureSpec;
+}
+
+/**
+ * The confidence floor typed into the builder, as a number. A blank or non-numeric entry is NaN, so the spec
+ * check reports it ("must be a number greater than 0 and less than 1, but is NaN") instead of the builder
+ * guessing a value; an out-of-range number is kept as typed, for the same check to report.
+ */
+export function ParseConfidenceFloor(raw: string): number {
+    const text = raw.trim();
+    return text.length === 0 ? Number.NaN : Number(text);
 }
 
 @Component({
@@ -89,6 +99,17 @@ export interface EscalationTargetCandidate extends MinimalEscalationTargetRow {
                         <div class="rpe-static-text">{{ SelectedPipelineTypeDescription || '—' }}</div>
                     </div>
                 </div>
+                @if (ShowCaptureReasoning) {
+                    <div class="rpe-grid2 rpe-mt">
+                        <div class="field">
+                            <label>Capture Reasoning</label>
+                            <select class="mj-input fpb-reasoning-select" [value]="spec.CaptureReasoning ? 'true' : 'false'" (change)="UpdateCaptureReasoning($event)">
+                                <option value="true">Yes — Keep the model's rationale with each Feature Value</option>
+                                <option value="false">No</option>
+                            </select>
+                        </div>
+                    </div>
+                }
             </section>
 
             <!-- STAGE 1: CONTEXT SOURCE -->
@@ -408,7 +429,7 @@ export interface EscalationTargetCandidate extends MinimalEscalationTargetRow {
                                     class="mj-input"
                                     [value]="spec.Escalation?.PipelineID || ''"
                                     (change)="OnEscalationTargetChange($event)">
-                                    <option value="" disabled>{{ AvailableEscalationTargets.length > 0 ? '— Select LLM Pipeline —' : '— No other Infer pipelines on this entity —' }}</option>
+                                    <option value="" disabled>{{ EscalationTargetsPlaceholder }}</option>
                                     @for (target of AvailableEscalationTargets; track target.ID) {
                                         <option [value]="target.ID" [disabled]="!!GetTargetProblem(target)">
                                             {{ target.Name }}{{ GetTargetProblem(target) ? ' (' + GetTargetProblem(target) + ')' : '' }}
@@ -598,10 +619,31 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
     }
 
     public AvailableEscalationTargets: EscalationTargetCandidate[] = [];
+    /** Whether the escalation targets were loaded. False until a load succeeds, and after one fails. */
     public EscalationTargetsLoaded = false;
+    /** Why the last load of escalation targets failed, or null when it did not. */
+    public EscalationTargetsLoadError: string | null = null;
+    /** Numbers each target load, so a slower earlier load cannot overwrite a later one. */
+    private escalationTargetsLoadSeq = 0;
 
     public get IsEscalationEnabled(): boolean {
         return this.spec.Escalation !== undefined && this.spec.Escalation !== null;
+    }
+
+    /** The target picker's empty option: what to pick, or why there is nothing to pick. */
+    public get EscalationTargetsPlaceholder(): string {
+        if (this.EscalationTargetsLoadError) {
+            return '— Pipelines could not be loaded —';
+        }
+        return this.AvailableEscalationTargets.length > 0 ? '— Select LLM Pipeline —' : '— No other Infer pipelines on this entity —';
+    }
+
+    /**
+     * Whether to offer the Capture Reasoning setting: for a type that produces reasoning, and for any spec
+     * that already asks for it, so a pipeline switched to a type without reasoning can turn it off.
+     */
+    public get ShowCaptureReasoning(): boolean {
+        return this.CurrentCapabilities.ProducesReasoning || this.spec.CaptureReasoning === true;
     }
 
     public get SelectedPipelineTypeDescription(): string {
@@ -756,7 +798,11 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
     ngOnChanges(changes: SimpleChanges): void {
         if (changes['Record'] || changes['EntityID']) {
             this.SyncFromRecord();
-            this.LoadEscalationTargets();
+            // ngOnInit loads the targets for the first binding; reload only when the pipeline or entity changes after it
+            const firstBinding = Object.values(changes).every((change) => change.firstChange);
+            if (!firstBinding) {
+                void this.LoadEscalationTargets();
+            }
         }
     }
 
@@ -779,6 +825,9 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
                     } else {
                         delete this.spec.Escalation;
                     }
+                    // Carried so the capability check sees what the runtime sees, and the next edit keeps them
+                    this.spec.CaptureReasoning = parsed.CaptureReasoning;
+                    this.spec.Watermark = parsed.Watermark;
                 }
             }
         }
@@ -930,51 +979,58 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         }
     }
 
+    /**
+     * Loads the Infer pipelines on this pipeline's entity that it could escalate to. With no entity there is
+     * nothing to offer, so nothing is loaded. A failed load is recorded in {@link EscalationTargetsLoadError},
+     * not taken to mean there are no targets. Only the latest load's result is kept.
+     */
     public async LoadEscalationTargets(): Promise<void> {
+        const seq = ++this.escalationTargetsLoadSeq;
         const targetEntityID = this.Record?.EntityID || this.EntityID;
+        const outcome = targetEntityID
+            ? await this.fetchEscalationTargets(targetEntityID)
+            : { Targets: [], Error: null };
+        if (seq !== this.escalationTargetsLoadSeq) {
+            return; // a later load, for a later Record or entity, has superseded this one
+        }
+        this.AvailableEscalationTargets = outcome.Targets;
+        this.EscalationTargetsLoadError = outcome.Error;
+        this.EscalationTargetsLoaded = outcome.Error === null;
+        this.recomputeValidation();
+        this.cdr.detectChanges();
+    }
+
+    /** The Infer pipelines on the entity, other than this one, each with its parsed spec; or why they could not be read. */
+    private async fetchEscalationTargets(entityID: string): Promise<{ Targets: EscalationTargetCandidate[]; Error: string | null }> {
         try {
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-            const extraFilter = targetEntityID
-                ? `WorkType='Infer' AND EntityID='${targetEntityID}'`
-                : `WorkType='Infer'`;
             const res = await rv.RunView<EscalationTargetCandidate>({
                 EntityName: 'MJ: Record Processes',
                 Fields: ['ID', 'Name', 'Description', 'Entity', 'EntityID', 'WorkType', 'Status', 'Configuration'],
-                ExtraFilter: extraFilter,
+                ExtraFilter: `WorkType='Infer' AND EntityID='${EscapeSQLString(entityID)}'`,
                 OrderBy: 'Name',
                 ResultType: 'simple',
             });
-            if (res.Success && Array.isArray(res.Results)) {
-                const currentID = this.Record?.ID;
-                this.AvailableEscalationTargets = res.Results
-                    .filter((r) => !currentID || !UUIDsEqual(r.ID, currentID))
-                    .map((r) => {
-                        let parsedSpec: DataFeatureSpec | undefined;
-                        if (r.Configuration) {
-                            const parsed = SafeJSONParse<DataFeatureSpec>(r.Configuration);
-                            if (parsed && typeof parsed === 'object') {
-                                parsedSpec = parsed;
-                            }
-                        }
-                        return {
-                            ...r,
-                            ParsedSpec: parsedSpec,
-                        };
-                    });
-            } else {
-                this.AvailableEscalationTargets = [];
-                if (!res.Success) {
-                    LogError(`Failed to load Escalation Targets: ${res.ErrorMessage || 'unknown error'}`);
-                }
+            if (!res.Success) {
+                const reason = res.ErrorMessage || 'unknown error';
+                LogError(`Failed to load Escalation Targets: ${reason}`);
+                return { Targets: [], Error: reason };
             }
+            const currentID = this.Record?.ID;
+            const targets = (res.Results ?? [])
+                .filter((r) => !currentID || !UUIDsEqual(r.ID, currentID))
+                .map((r) => ({ ...r, ParsedSpec: this.parseTargetSpec(r.Configuration) }));
+            return { Targets: targets, Error: null };
         } catch (error) {
-            this.AvailableEscalationTargets = [];
             LogError('Error loading Escalation Targets', undefined, error);
-        } finally {
-            this.EscalationTargetsLoaded = true;
+            return { Targets: [], Error: error instanceof Error ? error.message : String(error) };
         }
-        this.recomputeValidation();
-        this.cdr.detectChanges();
+    }
+
+    /** A target's Configuration as a spec, or undefined when it is empty or not a JSON object. */
+    private parseTargetSpec(configuration: string | null | undefined): DataFeatureSpec | undefined {
+        const parsed = configuration ? SafeJSONParse<DataFeatureSpec>(configuration) : null;
+        return parsed && typeof parsed === 'object' ? parsed : undefined;
     }
 
     /** @deprecated Use {@link LoadEscalationTargets}. */
@@ -982,11 +1038,19 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         return this.LoadEscalationTargets();
     }
 
+    /**
+     * Why a pipeline cannot be this pipeline's escalation target, or null when it can. Beyond the shared row and
+     * output checks, its own spec must pass `ValidateSpec`, as the engine requires before it builds the target.
+     */
     public GetTargetProblem(target: EscalationTargetCandidate): string | null {
         const targetEntityID = this.Record?.EntityID || this.EntityID || '';
         const rowProblem = FindEscalationTargetRowProblem(target, targetEntityID);
         if (rowProblem) {
             return rowProblem;
+        }
+        const specError = target.ParsedSpec ? validateSpec(target.ParsedSpec).find((issue) => issue.Severity === 'error') : undefined;
+        if (specError) {
+            return `has an invalid spec: ${specError.Message}`;
         }
         return FindEscalationTargetSpecProblem(target.ParsedSpec, this.spec.Outputs ?? []);
     }
@@ -1017,20 +1081,10 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         this.emitChanges();
     }
 
+    /** Sets the confidence floor from its input, as a number; a blank or invalid entry is NaN, which the spec check reports. */
     public OnEscalationFloorChange(event: Event): void {
-        if (!this.spec.Escalation) {
-            this.spec.Escalation = {
-                PipelineID: '',
-                BelowConfidence: 0.7,
-            };
-        }
-        const raw = (event.target as HTMLInputElement).value.trim();
-        if (raw === '') {
-            delete (this.spec.Escalation as Partial<typeof this.spec.Escalation>).BelowConfidence;
-        } else {
-            const num = parseFloat(raw);
-            this.spec.Escalation.BelowConfidence = isNaN(num) ? (raw as unknown as number) : num;
-        }
+        const floor = ParseConfidenceFloor((event.target as HTMLInputElement).value);
+        this.spec.Escalation = { PipelineID: this.spec.Escalation?.PipelineID ?? '', BelowConfidence: floor };
         this.emitChanges();
     }
 
@@ -1395,6 +1449,16 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         return this.UpdateCacheScope(event);
     }
 
+    /** Turns capture of the model's rationale on or off. Off removes the flag, so a spec that never set it keeps its hash. */
+    public UpdateCaptureReasoning(event: Event): void {
+        if ((event.target as HTMLSelectElement).value === 'true') {
+            this.spec.CaptureReasoning = true;
+        } else {
+            delete this.spec.CaptureReasoning;
+        }
+        this.emitChanges();
+    }
+
     public OnPipelineTypeSelect(event: Event): void {
         const target = event.target as HTMLSelectElement;
         const newType = target.value;
@@ -1675,9 +1739,17 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
             });
         }
 
-        if (this.IsDecisionPipeline && this.spec.Escalation) {
+        if (this.IsDecisionPipeline && this.spec.Escalation && this.spec.Escalation.PipelineID && this.EscalationTargetsLoadError) {
+            // The targets are unknown, not absent: say so, and leave the target to be checked at run time
+            this.ValidationErrors.push({
+                Path: 'Escalation.PipelineID',
+                Severity: 'warning',
+                Message: `The escalation target could not be checked: the pipelines on this entity could not be loaded (${this.EscalationTargetsLoadError}).`,
+                FixRecommendation: 'Reopen the pipeline to retry. The target is still checked when the pipeline runs.',
+            });
+        } else if (this.IsDecisionPipeline && this.spec.Escalation) {
             const targetID = this.spec.Escalation.PipelineID;
-            if (targetID && (this.EscalationTargetsLoaded || this.AvailableEscalationTargets.length > 0)) {
+            if (targetID && this.EscalationTargetsLoaded) {
                 const match = this.AvailableEscalationTargets.find((t) => UUIDsEqual(t.ID, targetID));
                 if (!match) {
                     this.ValidationErrors.push({

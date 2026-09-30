@@ -2,10 +2,11 @@ import '@angular/compiler';
 import { getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { describe, it, expect } from 'vitest';
-import type { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
-import type { MJRecordProcessEntity } from '@memberjunction/core-entities';
+import { EntityInfo, type RunViewParams, type RunViewResult } from '@memberjunction/core';
+import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { renderComponentFixture, query, queryAll, createFakeProvider } from '@memberjunction/ng-test-utils';
-import { FeaturePipelineBuilderComponent, type EscalationTargetCandidate } from './feature-pipeline-builder.component';
+import { FeaturePipelineBuilderComponent, ParseConfidenceFloor, type EscalationTargetCandidate } from './feature-pipeline-builder.component';
 import type { DataFeatureSpec } from '@memberjunction/feature-pipelines';
 
 try {
@@ -15,13 +16,14 @@ try {
 }
 
 const ENTITIES = [
-  {
+  new EntityInfo({
     ID: 'e1',
     Name: 'Accounts',
     DisplayName: 'Accounts',
     Fields: [
       {
         Name: 'Rating',
+        Type: 'nvarchar',
         DisplayName: 'Rating',
         EntityFieldValues: [
           { Value: 'Hot', Description: 'High intent prospect' },
@@ -31,50 +33,117 @@ const ENTITIES = [
       },
       {
         Name: 'ChurnRiskScore',
+        Type: 'decimal',
         DisplayName: 'Churn Risk Score',
       },
       {
         Name: 'IsAtRisk',
+        Type: 'bit',
         DisplayName: 'Is At Risk',
       },
+      {
+        Name: 'Summary',
+        Type: 'nvarchar',
+        DisplayName: 'Summary',
+      },
     ],
-  },
-] as Array<Partial<EntityInfo>>;
+  }),
+];
 
-const makeRecord = (spec?: Partial<DataFeatureSpec>): MJRecordProcessEntity =>
-  ({
-    ID: 'rec1',
-    Name: 'Customer Churn Predictor',
-    Status: 'Active',
-    Description: 'Predicts churn risk',
-    EntityID: 'e1',
-    Configuration: JSON.stringify(spec ?? {
-      PipelineType: 'LLM',
-      Outputs: [
-        {
-          Name: 'ChurnRisk',
-          Ref: 'risk',
-          Target: { Mode: 'field', EntityFieldName: 'Rating' },
-          Constraint: { Type: 'enum', Values: ['Hot', 'Warm', 'Cold'], OnViolation: 'fail' },
-        },
-      ],
-    }),
-  } as unknown as MJRecordProcessEntity);
+/** The Record Process columns the builder reads and writes. */
+const RECORD_PROCESS_ENTITY = new EntityInfo({
+  ID: 'rp-entity',
+  Name: 'MJ: Record Processes',
+  Fields: ['ID', 'Name', 'Description', 'EntityID', 'Status', 'WorkType', 'PromptID', 'Configuration', 'OutputMapping', 'WatermarkStrategy', 'SkipUnchanged'].map(
+    (Name) => ({ Name, IsPrimaryKey: Name === 'ID', AllowUpdateAPI: Name !== 'ID' })
+  ),
+});
+
+const makeRecord = (spec?: Partial<DataFeatureSpec>): MJRecordProcessEntity => {
+  const record = new MJRecordProcessEntity(RECORD_PROCESS_ENTITY);
+  record.ID = 'rec1';
+  record.Name = 'Customer Churn Predictor';
+  record.Status = 'Active';
+  record.Description = 'Predicts churn risk';
+  record.EntityID = 'e1';
+  record.PromptID = 'prompt-1';
+  record.Configuration = JSON.stringify(spec ?? {
+    PipelineType: 'LLM',
+    Outputs: [
+      {
+        Name: 'ChurnRisk',
+        Ref: 'risk',
+        Target: { Mode: 'field', EntityFieldName: 'Rating' },
+        Constraint: { Type: 'enum', Values: ['Hot', 'Warm', 'Cold'], OnViolation: 'fail' },
+      },
+    ],
+  });
+  return record;
+};
 
 function fakeProvider() {
-  const p = createFakeProvider({ entities: ENTITIES });
-  Object.assign(p, {
-    EntityByID: (id: string) => ENTITIES.find((e) => e.ID === id),
+  return Object.assign(createFakeProvider({ entities: ENTITIES }), {
+    EntityByID: (id: string) => ENTITIES.find((e) => UUIDsEqual(e.ID, id)),
   });
-  return p;
 }
 
-const render = (record: MJRecordProcessEntity) =>
+/** A change event from a real <select>/<input> holding `value`, as the builder's handlers receive it. */
+function eventWithValue(value: string, tag: 'select' | 'input' = 'select'): Event {
+  const element = document.createElement(tag);
+  if (element instanceof HTMLSelectElement) {
+    const option = document.createElement('option');
+    option.value = value;
+    element.appendChild(option);
+  }
+  element.value = value;
+  const event = new Event('change');
+  element.dispatchEvent(event);
+  return event;
+}
+
+/** A change event from a real checkbox, checked or not. */
+function checkboxEvent(checked: boolean): Event {
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = checked;
+  const event = new Event('change');
+  input.dispatchEvent(event);
+  return event;
+}
+
+/** A RunView result, successful unless an error message is given. */
+function runViewResult<T>(rows: T[], errorMessage?: string): RunViewResult<T> {
+  return {
+    Success: !errorMessage,
+    Results: rows,
+    RowCount: rows.length,
+    TotalRowCount: rows.length,
+    ExecutionTime: 0,
+    ErrorMessage: errorMessage ?? '',
+  };
+}
+
+/** The fake provider, with its RunView answered by `runView` (to fail, throw, or record the params). */
+function providerWithRunView(runView: (params: RunViewParams) => Promise<RunViewResult>) {
+  return Object.assign(fakeProvider(), { RunView: runView });
+}
+
+/** The spec the builder last wrote to the record. */
+function savedSpec(record: MJRecordProcessEntity): DataFeatureSpec | null {
+  return SafeJSONParse<DataFeatureSpec>(record.Configuration ?? '');
+}
+
+const render = (record: MJRecordProcessEntity, validity?: boolean[]) =>
   renderComponentFixture(FeaturePipelineBuilderComponent, {
     inputs: {
       Record: record,
       Provider: fakeProvider(),
       EntityID: record.EntityID,
+    },
+    setup: (instance) => {
+      if (validity) {
+        instance.ValidChange.subscribe((valid) => validity.push(valid));
+      }
     },
   });
 
@@ -183,8 +252,7 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     });
     const f = render(rec);
 
-    const makeSelectEvent = (val: string) => ({ target: { value: val } } as unknown as Event);
-    f.componentInstance.OnPipelineTypeSelect(makeSelectEvent('Decision'));
+    f.componentInstance.OnPipelineTypeSelect(eventWithValue('Decision'));
 
     expect(f.componentInstance.ShowTypeSwitchConfirm).toBe(true);
     expect(f.componentInstance.PendingPipelineType).toBe('Decision');
@@ -196,7 +264,7 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     expect(f.componentInstance.CurrentPipelineTypeName).toBe('LLM');
 
     // Select again and confirm
-    f.componentInstance.OnPipelineTypeSelect(makeSelectEvent('Decision'));
+    f.componentInstance.OnPipelineTypeSelect(eventWithValue('Decision'));
     f.componentInstance.OnTypeSwitchConfirmed();
     expect(f.componentInstance.ShowTypeSwitchConfirm).toBe(false);
     expect(f.componentInstance.CurrentPipelineTypeName).toBe('Decision');
@@ -221,8 +289,7 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     });
     const f = render(rec);
 
-    const makeSelectEvent = (val: string) => ({ target: { value: val } } as unknown as Event);
-    f.componentInstance.OnPipelineTypeSelect(makeSelectEvent('Decision'));
+    f.componentInstance.OnPipelineTypeSelect(eventWithValue('Decision'));
     f.detectChanges();
 
     expect(f.componentInstance.ShowTypeSwitchConfirm).toBe(true);
@@ -276,11 +343,10 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     expect(thresholdInput.placeholder).toBe('0.5');
     expect(thresholdInput.value).toBe('');
 
-    const inputEvent = (val: string) => ({ target: { value: val } } as unknown as Event);
-    f.componentInstance.UpdateBooleanThreshold(0, inputEvent('1.5'));
+    f.componentInstance.UpdateBooleanThreshold(0, eventWithValue('1.5', 'input'));
     expect(out.Constraint?.Threshold).toBe(1.5);
 
-    f.componentInstance.UpdateBooleanThreshold(0, inputEvent(''));
+    f.componentInstance.UpdateBooleanThreshold(0, eventWithValue('', 'input'));
     expect(out.Constraint?.Threshold).toBeUndefined();
     expect(f.componentInstance.GetBooleanThreshold(out)).toBeNull();
   });
@@ -351,7 +417,7 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     expect(f.componentInstance.spec.Escalation).toBeUndefined();
 
     // Toggle ON
-    f.componentInstance.OnEscalationToggle({ target: { checked: true } } as unknown as Event);
+    f.componentInstance.OnEscalationToggle(checkboxEvent(true));
     f.detectChanges();
     expect(f.componentInstance.IsEscalationEnabled).toBe(true);
     expect(f.componentInstance.spec.Escalation).toEqual({
@@ -360,7 +426,7 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     });
 
     // Toggle OFF
-    f.componentInstance.OnEscalationToggle({ target: { checked: false } } as unknown as Event);
+    f.componentInstance.OnEscalationToggle(checkboxEvent(false));
     f.detectChanges();
     expect(f.componentInstance.IsEscalationEnabled).toBe(false);
     expect(f.componentInstance.spec.Escalation).toBeUndefined();
@@ -394,6 +460,9 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
       ParsedSpec: {
         Name: 'Full LLM Pipeline',
         Description: 'Full LLM',
+        PromptID: 'llm-prompt',
+        Context: { Fields: ['Name'] },
+        Caching: { Cacheable: false },
         Outputs: [
           {
             Name: 'IsAtRisk',
@@ -423,6 +492,9 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
       ParsedSpec: {
         Name: 'Incomplete',
         Description: 'Incomplete',
+        PromptID: 'llm-prompt',
+        Context: { Fields: ['Name'] },
+        Caching: { Cacheable: false },
         Outputs: [
           {
             Name: 'OtherOutput',
@@ -443,6 +515,9 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
       ParsedSpec: {
         Name: 'Another Decision',
         Description: 'Another Decision',
+        PromptID: 'decision-prompt',
+        Context: { Fields: ['Name'] },
+        Caching: { Cacheable: false },
         PipelineType: 'Decision',
         Outputs: [
           {
@@ -469,16 +544,16 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     expect(f.componentInstance.GetTargetProblem(decisionCandidate)).toContain("is a 'Decision' pipeline");
 
     // Select valid candidate
-    f.componentInstance.OnEscalationTargetChange({ target: { value: 'target-1' } } as unknown as Event);
+    f.componentInstance.OnEscalationTargetChange(eventWithValue('target-1'));
     expect(f.componentInstance.spec.Escalation?.PipelineID).toBe('target-1');
     expect(f.componentInstance.ValidationErrors.some((e) => e.Path === 'Escalation.PipelineID')).toBe(false);
 
     // Select invalid candidate
-    f.componentInstance.OnEscalationTargetChange({ target: { value: 'target-3' } } as unknown as Event);
+    f.componentInstance.OnEscalationTargetChange(eventWithValue('target-3'));
     expect(f.componentInstance.ValidationErrors.some((e) => e.Path === 'Escalation.PipelineID')).toBe(true);
   });
 
-  it('handles confidence floor changes without clamping invalid inputs', () => {
+  it('stores the confidence floor as a number, keeping an out-of-range or blank entry for the spec check to report', () => {
     const rec = makeRecord({
       PipelineType: 'Decision',
       Outputs: [
@@ -495,21 +570,33 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
       },
     });
     const f = render(rec);
+    const floorErrors = () => f.componentInstance.ValidationErrors.filter((e) => e.Path === 'Escalation.BelowConfidence').map((e) => e.Message);
 
-    const inputEvent = (val: string) => ({ target: { value: val } } as unknown as Event);
-
-    // Set valid floor
-    f.componentInstance.OnEscalationFloorChange(inputEvent('0.85'));
+    // A valid floor
+    f.componentInstance.OnEscalationFloorChange(eventWithValue('0.85', 'input'));
     expect(f.componentInstance.spec.Escalation?.BelowConfidence).toBe(0.85);
+    expect(savedSpec(rec)?.Escalation?.BelowConfidence).toBe(0.85);
+    expect(floorErrors()).toEqual([]);
 
-    // Set invalid floor (1.5) - not clamped, but caught by validateSpec
-    f.componentInstance.OnEscalationFloorChange(inputEvent('1.5'));
+    // Out of range: kept as typed (not clamped), and reported
+    f.componentInstance.OnEscalationFloorChange(eventWithValue('1.5', 'input'));
     expect(f.componentInstance.spec.Escalation?.BelowConfidence).toBe(1.5);
-    expect(f.componentInstance.ValidationErrors.some((e) => e.Path === 'Escalation.BelowConfidence')).toBe(true);
+    expect(floorErrors()).toEqual([expect.stringContaining('but is 1.5')]);
 
-    // Clear floor
-    f.componentInstance.OnEscalationFloorChange(inputEvent(''));
-    expect(f.componentInstance.spec.Escalation?.BelowConfidence).toBeUndefined();
+    // Cleared: NaN, a number, reported; the pipeline keeps its target
+    f.componentInstance.OnEscalationFloorChange(eventWithValue('', 'input'));
+    expect(f.componentInstance.spec.Escalation).toEqual({ PipelineID: 'target-1', BelowConfidence: Number.NaN });
+    expect(floorErrors()).toEqual([expect.stringContaining('but is NaN')]);
+    // JSON has no NaN, so the record holds null, never a string
+    expect(savedSpec(rec)?.Escalation?.BelowConfidence).toBeNull();
+  });
+
+  it('parses a confidence floor strictly, to NaN when blank or not a number', () => {
+    expect(ParseConfidenceFloor(' 0.25 ')).toBe(0.25);
+    expect(ParseConfidenceFloor('1e-1')).toBe(0.1);
+    expect(ParseConfidenceFloor('')).toBeNaN();
+    expect(ParseConfidenceFloor('   ')).toBeNaN();
+    expect(ParseConfidenceFloor('0.7abc')).toBeNaN();
   });
 
   it('deletes Escalation when switching away from Decision pipeline', () => {
@@ -535,5 +622,220 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     f.componentInstance.ApplyPipelineTypeChange('LLM');
     expect(f.componentInstance.spec.Escalation).toBeUndefined();
     expect(f.componentInstance.IsEscalationEnabled).toBe(false);
+  });
+
+  describe('escalation targets', () => {
+    const decisionWithTarget = (): MJRecordProcessEntity =>
+      makeRecord({
+        PipelineType: 'Decision',
+        Outputs: [
+          {
+            Name: 'IsAtRisk',
+            Ref: '$',
+            Target: { Mode: 'field', EntityFieldName: 'IsAtRisk' },
+            Constraint: { Type: 'boolean', OnViolation: 'fail' },
+          },
+        ],
+        Escalation: { PipelineID: 'target-1', BelowConfidence: 0.7 },
+      });
+    const renderWith = (record: MJRecordProcessEntity, provider: ReturnType<typeof fakeProvider>, validity?: boolean[]) =>
+      renderComponentFixture(FeaturePipelineBuilderComponent, {
+        inputs: { Record: record, Provider: provider, EntityID: record.EntityID },
+        setup: (instance) => {
+          if (validity) {
+            instance.ValidChange.subscribe((valid) => validity.push(valid));
+          }
+        },
+      });
+    const targetIssues = (f: ReturnType<typeof renderWith>) =>
+      f.componentInstance.ValidationErrors.filter((e) => e.Path === 'Escalation.PipelineID');
+
+    it('reports a failed load as a failure to check the target, a warning, not as "target not found"', async () => {
+      const validity: boolean[] = [];
+      const f = renderWith(decisionWithTarget(), providerWithRunView(async () => runViewResult([], 'Timeout expired')), validity);
+
+      await f.componentInstance.LoadEscalationTargets();
+
+      expect(f.componentInstance.EscalationTargetsLoaded).toBe(false);
+      expect(f.componentInstance.EscalationTargetsLoadError).toBe('Timeout expired');
+      expect(targetIssues(f)).toEqual([
+        expect.objectContaining({ Severity: 'warning', Message: expect.stringContaining('could not be loaded (Timeout expired)') }),
+      ]);
+      expect(targetIssues(f).some((e) => e.Message.includes('was not found'))).toBe(false);
+      expect(validity[validity.length - 1]).toBe(true);
+      expect(f.componentInstance.EscalationTargetsPlaceholder).toBe('— Pipelines could not be loaded —');
+    });
+
+    it('treats a load that throws the same way', async () => {
+      const f = renderWith(
+        decisionWithTarget(),
+        providerWithRunView(async () => {
+          throw new Error('network down');
+        })
+      );
+
+      await f.componentInstance.LoadEscalationTargets();
+
+      expect(f.componentInstance.EscalationTargetsLoadError).toBe('network down');
+      expect(targetIssues(f).map((e) => e.Severity)).toEqual(['warning']);
+    });
+
+    it('still reports a target that a successful load did not find', async () => {
+      const validity: boolean[] = [];
+      const f = renderWith(decisionWithTarget(), providerWithRunView(async () => runViewResult([])), validity);
+
+      await f.componentInstance.LoadEscalationTargets();
+
+      expect(targetIssues(f)).toEqual([
+        expect.objectContaining({ Severity: 'error', Message: "Escalation target pipeline 'target-1' was not found on this entity." }),
+      ]);
+      expect(validity[validity.length - 1]).toBe(false);
+    });
+
+    it('keeps the latest load when an earlier, slower one finishes after it', async () => {
+      let releaseSlow: (result: RunViewResult) => void = () => undefined;
+      const slow = new Promise<RunViewResult>((resolve) => {
+        releaseSlow = resolve;
+      });
+      const answers = [() => slow, async () => runViewResult([{ ID: 'fresh', Name: 'Fresh', WorkType: 'Infer', Status: 'Active', EntityID: 'e1' }])];
+      const f = renderWith(decisionWithTarget(), providerWithRunView(() => (answers.shift() ?? (async () => runViewResult([])))()));
+
+      const earlier = f.componentInstance.LoadEscalationTargets();
+      await f.componentInstance.LoadEscalationTargets();
+      releaseSlow(runViewResult([{ ID: 'stale', Name: 'Stale', WorkType: 'Infer', Status: 'Active', EntityID: 'e1' }]));
+      await earlier;
+
+      expect(f.componentInstance.AvailableEscalationTargets.map((t) => t.ID)).toEqual(['fresh']);
+    });
+
+    it('loads nothing when the pipeline has no entity, and escapes the entity ID in the filter', async () => {
+      const filters: string[] = [];
+      const provider = providerWithRunView(async (params) => {
+        if (params.EntityName === 'MJ: Record Processes') {
+          filters.push(params.ExtraFilter ?? '');
+        }
+        return runViewResult([]);
+      });
+      const noEntity = decisionWithTarget();
+      noEntity.EntityID = '';
+      const f = renderWith(noEntity, provider);
+      await f.whenStable();
+
+      await f.componentInstance.LoadEscalationTargets();
+      expect(filters).toEqual([]);
+
+      noEntity.EntityID = "e'1";
+      await f.componentInstance.LoadEscalationTargets();
+      expect(filters).toEqual(["WorkType='Infer' AND EntityID='e''1'"]);
+    });
+
+    it("rejects a target whose own spec the engine would refuse to build", () => {
+      const f = render(decisionWithTarget());
+      const invalidSpec: EscalationTargetCandidate = {
+        ID: 'target-5',
+        Name: 'No Prompt Pipeline',
+        WorkType: 'Infer',
+        Status: 'Active',
+        EntityID: 'e1',
+        Entity: 'Accounts',
+        ParsedSpec: {
+          Name: 'No Prompt',
+          Description: 'Missing its prompt',
+          PromptID: '',
+          Context: { Fields: ['Name'] },
+          Caching: { Cacheable: false },
+          Outputs: [{ Name: 'IsAtRisk', Ref: '$', Target: { Mode: 'field', EntityFieldName: 'IsAtRisk' } }],
+        },
+      };
+
+      expect(f.componentInstance.GetTargetProblem(invalidSpec)).toBe('has an invalid spec: DataFeatureSpec PromptID is required.');
+    });
+  });
+
+  describe('the capability rules, live', () => {
+    const REASONING_ERROR = 'This pipeline type does not produce reasoning; turn off CaptureReasoning or use an LLM pipeline.';
+    const isAtRisk = {
+      Name: 'IsAtRisk',
+      Ref: '$.isAtRisk',
+      Target: { Mode: 'field' as const, EntityFieldName: 'IsAtRisk' },
+      Constraint: { Type: 'boolean' as const, OnViolation: 'fail' as const },
+    };
+
+    it('reports a Decision freetext output as an error and emits ValidChange(false)', () => {
+      const validity: boolean[] = [];
+      const rec = makeRecord({
+        PipelineType: 'Decision',
+        Outputs: [
+          {
+            Name: 'Summary',
+            Ref: '$.summary',
+            Target: { Mode: 'field', EntityFieldName: 'Summary' },
+            Constraint: { Type: 'freetext', MaxLength: 500 },
+          },
+        ],
+      });
+
+      const f = render(rec, validity);
+
+      expect(f.componentInstance.ValidationErrors.map((e) => e.Message)).toContain(
+        "Output 'Summary' has constraint type 'freetext', which this pipeline type cannot produce."
+      );
+      expect(validity.length).toBeGreaterThan(0);
+      expect(validity[validity.length - 1]).toBe(false);
+    });
+
+    it('emits ValidChange(true) for the same output on an LLM pipeline', () => {
+      const validity: boolean[] = [];
+      const rec = makeRecord({
+        Outputs: [
+          {
+            Name: 'Summary',
+            Ref: '$.summary',
+            Target: { Mode: 'field', EntityFieldName: 'Summary' },
+            Constraint: { Type: 'freetext', MaxLength: 500 },
+          },
+        ],
+      });
+
+      render(rec, validity);
+
+      expect(validity[validity.length - 1]).toBe(true);
+    });
+
+    it("loads CaptureReasoning, so a Decision pipeline shows the runtime's reasoning error", () => {
+      const f = render(makeRecord({ PipelineType: 'Decision', CaptureReasoning: true, Outputs: [isAtRisk] }));
+
+      expect(f.componentInstance.spec.CaptureReasoning).toBe(true);
+      expect(f.componentInstance.ValidationErrors.map((e) => e.Message)).toContain(REASONING_ERROR);
+      expect(query(f, '.fpb-reasoning-select')).not.toBeNull();
+    });
+
+    it('keeps CaptureReasoning and Watermark on the next edit', () => {
+      const rec = makeRecord({
+        CaptureReasoning: true,
+        Watermark: { Enabled: true, Strategy: 'UpdatedAt' },
+        Outputs: [isAtRisk],
+      });
+      const f = render(rec);
+
+      f.componentInstance.UpdateBooleanThreshold(0, eventWithValue('0.6', 'input'));
+
+      expect(savedSpec(rec)?.CaptureReasoning).toBe(true);
+      expect(savedSpec(rec)?.Watermark).toEqual({ Enabled: true, Strategy: 'UpdatedAt' });
+    });
+
+    it('turning Capture Reasoning off clears the error and removes the flag from the record', () => {
+      const validity: boolean[] = [];
+      const rec = makeRecord({ PipelineType: 'Decision', CaptureReasoning: true, Outputs: [isAtRisk] });
+      const f = render(rec, validity);
+
+      f.componentInstance.UpdateCaptureReasoning(eventWithValue('false'));
+      f.detectChanges();
+
+      expect(f.componentInstance.ValidationErrors.map((e) => e.Message)).not.toContain(REASONING_ERROR);
+      expect(savedSpec(rec)).not.toHaveProperty('CaptureReasoning');
+      expect(validity[validity.length - 1]).toBe(true);
+      expect(query(f, '.fpb-reasoning-select')).toBeNull();
+    });
   });
 });

@@ -23,7 +23,8 @@ import {
     RunView,
     UserInfo,
 } from '@memberjunction/core';
-import { MJRecordProcessEntity, MJScheduledJobEntity, MJScheduledJobTypeEntity } from '@memberjunction/core-entities';
+import { MJScheduledJobEntity, MJScheduledJobTypeEntity } from '@memberjunction/core-entities';
+import { MJRecordProcessEntityExtended } from '@memberjunction/feature-pipelines';
 import { ReconcileRecordProcessOnChange } from './RecordProcessOnChangeReconciler';
 
 /** The `MJ: Scheduled Job Types.Name` seeded for record-process recurrence (metadata-driven). */
@@ -87,8 +88,12 @@ export function buildScheduledJobFields(p: {
     return BuildScheduledJobFields(p);
 }
 
+/**
+ * Extends the shared {@link MJRecordProcessEntityExtended}, so the Feature Pipeline save check in its
+ * `Validate()` runs on the server too, ahead of the reconciliation here.
+ */
 @RegisterClass(BaseEntity, 'MJ: Record Processes')
-export class MJRecordProcessEntityServer extends MJRecordProcessEntity {
+export class MJRecordProcessEntityServer extends MJRecordProcessEntityExtended {
     /**
      * Persists the record, then (best-effort) reconciles the owned Scheduled Job. Reconciliation
      * runs only when a schedule-relevant field changed (or on first save), and never fails the
