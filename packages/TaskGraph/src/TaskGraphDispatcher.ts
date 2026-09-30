@@ -2999,6 +2999,9 @@ export class TaskGraphDispatcher implements IShutdownable {
             ? new Set<TaskGraphNodeStatus>(['Complete', 'Failed'])
             : new Set<TaskGraphNodeStatus>(['Complete']);
 
+        // Why each exclusive edge that cannot be evaluated is held, by edge — reported below, once the
+        // resolution says whether its fork is actually held.
+        const exclusiveHoldReasons = new Map<string, string>();
         const resolution = ResolveExclusiveGroups(
             exclusive.map((d) => ({
                 id: d.ID,
@@ -3008,7 +3011,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 originStatus: (entityById.get(d.DependsOnTaskID)?.Status ?? 'Pending') as TaskGraphNodeStatus,
                 priority: d.Priority ?? 0,
                 sequence: d.Sequence ?? 0,
-                conditionOutcome: this.evaluateExclusiveCondition(d, entityById, invocation, decisions, debug),
+                conditionOutcome: this.evaluateExclusiveCondition(d, entityById, invocation, decisions, debug, exclusiveHoldReasons),
             })),
             // WHICH STATUSES MAY DECIDE — the graph's own failure dialect, not a constant.
             //
@@ -3101,13 +3104,18 @@ export class TaskGraphDispatcher implements IShutdownable {
         for (const d of exclusive) {
             const originStatus = entityById.get(d.DependsOnTaskID)?.Status ?? 'Pending';
             if (!decidingStatuses.has(originStatus as TaskGraphNodeStatus) && !OverrideVerdictFor(debug ?? {}, d.ID)) continue;
+            const held = !loserEdgeIDs.has(d.ID) && exclusiveHolds.has(d.TaskID);
+            // The edge that holds its fork says why — below its confidence, from a failed call — and
+            // is logged once, as an ordinary edge is. Its siblings hold only because it does.
+            const holdReason = held ? exclusiveHoldReasons.get(d.ID) : undefined;
+            if (holdReason) this.logUnevaluableConditionOnce(d, holdReason);
             gateDecisions.push({
                 edge: d,
                 verdict: loserEdgeIDs.has(d.ID)
                     ? 'notTaken'
-                    : exclusiveHolds.has(d.TaskID) ? 'held' : 'satisfied',
-                reason: exclusiveHolds.has(d.TaskID)
-                    ? 'this fork is undecided — a path in its group cannot be answered yet'
+                    : held ? 'held' : 'satisfied',
+                reason: held
+                    ? holdReason ?? 'this fork is undecided — a path in its group cannot be answered yet'
                     : undefined,
             });
         }
@@ -3269,6 +3277,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         invocation: ConditionInvocation,
         decisions: GraphDecisions,
         debug?: TaskGraphDebugState,
+        holdReasons?: Map<string, string>,
     ): EdgeConditionOutcome {
         // Same override-first rule as ordinary edges — see evaluateEdgeCondition.
         const override = OverrideVerdictFor(debug ?? {}, dep.ID);
@@ -3289,13 +3298,16 @@ export class TaskGraphDispatcher implements IShutdownable {
             (condition, context) => this.conditionEvaluator.Evaluate(condition, context),
         );
         // A fork on a judgment that is not settled — below its confidence, or from a failed call —
-        // holds the whole group rather than guessing a branch (plan 4.5).
-        if (result.Unevaluable) return 'unevaluable';
+        // holds the whole group rather than guessing a branch (plan 4.5). The reason is kept for the
+        // caller to report, as an ordinary edge's is.
+        const unevaluable = result.Unevaluable || (!result.Success && IsBrokenGuard(result.ErrorMessage));
+        if (unevaluable && result.ErrorMessage) holdReasons?.set(dep.ID, result.ErrorMessage);
+        if (unevaluable) return 'unevaluable';
         // SAME CLASSIFICATION AS THE ORDINARY DIALECT (R2-3). The null-safe envelope already makes
         // one level of absence read as false here, but a deeper absent chain still throws — and
         // calling that 'unevaluable' would hold the whole group forever on a terminal origin, while
         // `DecideGate` would have dropped the identical condition. Two dialects, one question.
-        if (!result.Success) return IsBrokenGuard(result.ErrorMessage) ? 'unevaluable' : 'unsatisfied';
+        if (!result.Success) return 'unsatisfied';
         return result.Value ? 'satisfied' : 'unsatisfied';
     }
 

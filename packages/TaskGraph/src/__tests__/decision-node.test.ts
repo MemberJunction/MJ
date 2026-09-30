@@ -65,7 +65,14 @@ import {
     RetryRefusal,
     type RetryableTask,
 } from '../TaskGraphService';
-import type { TaskDecisionRunner, TaskDecisionRunParams, TaskDecisionRunResult, TaskPromptRunner } from '../types';
+import type {
+    TaskDecisionRunner,
+    TaskDecisionRunParams,
+    TaskDecisionRunResult,
+    TaskGraphFrame,
+    TaskGraphObserver,
+    TaskPromptRunner,
+} from '../types';
 
 // ── fixtures ────────────────────────────────────────────────────────────────────────────────────
 
@@ -280,15 +287,18 @@ function drivesDispatcher(value: object): value is DispatcherInternals {
  * A dispatcher with only what these paths read. The real constructor stands up a claim store, timers
  * and a provider factory none of this touches; the methods under test come from the prototype.
  */
-function dispatcherWith(runner: TaskDecisionRunner, promptRunner?: TaskPromptRunner): DispatcherInternals {
+function dispatcherWith(runner: TaskDecisionRunner, promptRunner?: TaskPromptRunner, observer?: TaskGraphObserver): DispatcherInternals {
     const instance = {
         decisionRunner: runner,
         promptRunner,
+        observer,
         contextUser: new UserInfo(),
         conditionEvaluator: new DispatcherConditionEvaluator(),
         reportedUnevaluableConditions: new Set<string>(),
         inFlight: new Set<string>(),
         runStepLogs: new Map<string, Promise<void>>(),
+        emittedGateVerdicts: new Map<string, Map<string, string>>(),
+        ownerByParentID: new Map<string, string | null>(),
     };
     Object.setPrototypeOf(instance, TaskGraphDispatcher.prototype);
     if (!drivesDispatcher(instance)) throw new Error('TaskGraphDispatcher no longer has the methods these tests drive.');
@@ -976,6 +986,35 @@ describe('retrying a held Decision in a running graph re-decides nothing', () =>
         expect(ResolveGraphDecisions([graph.triage()]).Answers.triage).toEqual({
             intent: BILLING_CONFIDENT.intent, urgent: { probability: 0.05 },
         });
+    });
+});
+
+describe('a held exclusive fork says why', () => {
+    const LOW_INTENT = { ...BILLING_CONFIDENT, intent: { value: 'billing', confidence: 0.55 } };
+
+    it('logs the hold reason once per edge and puts it on the edge\'s GateDecision frame', async () => {
+        const graph = supportGraph('exclusive');
+        graph.triage().Status = 'Complete';
+        graph.triage().OutputPayload = JSON.stringify(triageOutput(LOW_INTENT));
+        const frames: TaskGraphFrame[] = [];
+        const dispatcher = dispatcherWith(decisionRunner({ Success: true }), undefined, { OnFrame: (frame) => frames.push(frame) });
+        const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            const first = await dispatcher.loadGraphState(graph.provider, 'graph-1');
+            await dispatcher.loadGraphState(graph.provider, 'graph-1');
+            await new Promise((resolve) => setTimeout(resolve, 0));
+
+            expect([...first.holdTaskIDs].sort()).toEqual(['task-a', 'task-b']);
+            const reason = 'the decision "Triage the ticket" answered "intent" with confidence 0.55, below its minConfidence of 0.7';
+            const logged = errors.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('unevaluable condition'));
+            expect(logged.filter((line) => line.includes('Dependency e-a '))).toHaveLength(1);
+            expect(logged.filter((line) => line.includes('Dependency e-b '))).toHaveLength(1);
+            expect(logged[0]).toContain(reason);
+            expect(logged[0]).toContain('Retrying the Decision step it reads asks the questions it is holding again');
+            expect(frames.find((f) => f.Kind === 'GateDecision' && f.EdgeID === 'e-a')).toMatchObject({ Verdict: 'held', Reason: reason });
+        } finally {
+            errors.mockRestore();
+        }
     });
 });
 
