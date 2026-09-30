@@ -32,7 +32,8 @@
  *   npx tsx packages/TestingFramework/integration-test-suite/rigs/generate-discovery-corpus.ts \
  *     --out <dir> [--per-agent 6] [--none 60] [--model <name>] [--dry-run]
  *
- * `--dry-run` prints the agent count, the model and the planned calls, and makes none.
+ * `--dry-run` prints the database it read the agents from (never its user or password), the agent
+ * count, the model and the planned calls, and makes none.
  */
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -47,6 +48,7 @@ import { CONVERSATION_MANAGER_NAME, FindRepoRoot } from '@memberjunction/testing
 import {
     AssertCorpusOutputDir,
     BuildDiscoveryCorpusFiles,
+    DescribeCorpusDatabase,
     DISCOVERY_CORPUS_MAX_RETRIES,
     DiscoverableAgentsForCorpus,
     GenerateOrPlanDiscoveryCorpus,
@@ -57,6 +59,7 @@ import {
     type DiscoveryCorpusTask
 } from '../src/discovery-corpus/generator';
 import { BootstrapAI } from './lib/ai-bootstrap';
+import { LoadDbConfig } from './lib/harness';
 
 // This package is native ESM, so __dirname does not exist.
 const RIG_DIR = dirname(fileURLToPath(import.meta.url));
@@ -131,11 +134,19 @@ async function loadAgents(user: UserInfo): Promise<{ Agents: DecisionDiscoveryOp
     return { Agents: DiscoverableAgentsForCorpus(runnable, manager.ID), ManagerId: manager.ID };
 }
 
-/** Prints what the run will do. */
-function printPlan(args: CorpusArgs, outDir: string, agents: readonly DecisionDiscoveryOption[], model: DiscoveryCorpusModel, tasks: readonly DiscoveryCorpusTask[]): void {
+/** Prints what the run will do, and the database it read the agents from. */
+function printPlan(
+    args: CorpusArgs,
+    outDir: string,
+    database: string,
+    agents: readonly DecisionDiscoveryOption[],
+    model: DiscoveryCorpusModel,
+    tasks: readonly DiscoveryCorpusTask[]
+): void {
     const agentRequests = tasks.filter(t => t.Label.label === 'agent').reduce((sum, t) => sum + t.Count, 0);
     const noneRequests = tasks.filter(t => t.Label.label === 'none').reduce((sum, t) => sum + t.Count, 0);
     console.log(args.DryRun ? '── discovery corpus — DRY RUN (no model calls) ──' : '── discovery corpus ──');
+    console.log(`   database     : ${database}`);
     console.log(`   out          : ${outDir}`);
     console.log(`   agents       : ${agents.length} discoverable (runnable, directly discoverable, with a description, minus ${CONVERSATION_MANAGER_NAME})`);
     console.log(`   model        : ${model.Name} (${model.DriverClass}, ${model.APIName})`);
@@ -174,10 +185,12 @@ async function main(): Promise<void> {
     const outDir = AssertCorpusOutputDir(args.OutDir, [REPO_ROOT]);
     const ctx = await BootstrapAI();
     try {
+        // The same settings BootstrapAI connected with; only the database, schema and host are shown.
+        const database = DescribeCorpusDatabase(await LoadDbConfig());
         const { Agents: agents, ManagerId: managerId } = await loadAgents(ctx.user);
         const model = PickGenerationModel(AIEngine.Instance.Models, args.Model, driverClass => !!GetAIAPIKey(driverClass));
         const tasks = PlanDiscoveryCorpus(agents, args.PerAgent, args.None);
-        printPlan(args, outDir, agents, model, tasks);
+        printPlan(args, outDir, database, agents, model, tasks);
         const result = await GenerateOrPlanDiscoveryCorpus({
             DryRun: args.DryRun, CreateDriver: () => createDriver(model), Model: model.APIName, Tasks: tasks, Log: line => console.log(line)
         });

@@ -188,7 +188,8 @@ export type DiscoveryBaselineRecord = z.infer<typeof DiscoveryBaselineRecordSche
  * What a discovery run records as its `ActualOutput`. Both arms fill the shared fields:
  * - `ChosenAgentId`: the Choice's agent (decision), or the action's first row (baseline);
  * - `WouldInject`: whether production would suggest the agent: `JudgeDecisionDiscovery` at
- *   production's threshold (decision), or whether the action returns any row (baseline).
+ *   production's threshold, and only when the discovery finished within production's timeout
+ *   (decision), or whether the action returns any row (baseline).
  */
 export const DiscoveryEvalActualOutputSchema = z.object({
     Decision: z.literal('agent-discovery'),
@@ -218,9 +219,19 @@ export const DiscoveryEvalActualOutputSchema = z.object({
     /** The model record (decision arm), or null. */
     Model: DecisionEvalModelRecordSchema.nullable(),
     Sampling: DecisionEvalSamplingSchema,
-    /** Wall-clock time of the decision call, or of the search for the baseline, in milliseconds. */
+    /** Wall-clock time of the decision call alone, or of the search for the baseline, in milliseconds. */
     LatencyMs: z.number().nullable(),
-    /** Whether the decision answered within production's discovery timeout, or null. */
+    /**
+     * Decision arm: wall-clock time from building the options, the semantic search included, through
+     * the decision call, in milliseconds. That is the span production's discovery timeout bounds.
+     * Null for the baseline. Absent from runs recorded before it was measured.
+     */
+    DiscoveryLatencyMs: z.number().nullish(),
+    /**
+     * Whether the discovery (`DiscoveryLatencyMs`) finished within production's timeout, or null
+     * without an answer. Production gives up at the timeout and injects nothing, so a late answer is
+     * never `WouldInject`. In runs recorded before `DiscoveryLatencyMs`, it timed the call alone.
+     */
     WithinProductionTimeout: z.boolean().nullable(),
     PromptRunId: z.string().nullable(),
     CostUSD: z.number().nullable(),

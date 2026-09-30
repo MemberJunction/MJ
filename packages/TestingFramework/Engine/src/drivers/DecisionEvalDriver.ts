@@ -137,6 +137,11 @@ export interface DiscoveryEvalCall {
     Result: AIDecisionRunResult;
     /** Wall-clock time of the call, in milliseconds. It includes writing the prompt-run row. */
     LatencyMs: number;
+    /**
+     * Wall-clock time from building the options, the semantic search included, through the call, in
+     * milliseconds: the span production's discovery timeout ({@link DECISION_DISCOVERY_TIMEOUT_MS}) bounds.
+     */
+    DiscoveryLatencyMs: number;
 }
 
 /** What the shared result helpers read from either decision's parsed test. */
@@ -176,8 +181,11 @@ const SAMPLING_NOT_APPLIED = 'The decision path has no sampling parameters: AIDe
  * discovery decision instead (plan Task 3.1): the options come from `BuildDecisionDiscoveryOptionSet`
  * over the agents the run's user may run, with the real semantic search, and the questions from
  * `BuildDecisionDiscoveryQuestions`, both from `@memberjunction/ai-agents`, the code `BaseAgent`
- * runs. A `semantic-search` baseline cell makes no decision call: it records what
- * `Find Candidate Agents` would have listed first.
+ * runs. Production gives up after {@link DECISION_DISCOVERY_TIMEOUT_MS}, counted from building the
+ * options, so the driver times the same span and records an answer that came later as not injected.
+ * The call itself runs to the end, so the late answer is still recorded. A `semantic-search`
+ * baseline cell makes no decision call: it records what `Find Candidate Agents` would have listed
+ * first.
  *
  * **Never throws.** A bad test, a missing prompt, a point with nothing to decide, and a failed
  * decision all come back as an `Error` run with the reason.
@@ -305,6 +313,8 @@ export class DecisionEvalDriver extends BaseTestDriver {
             const baseline = await this.runSemanticSearchBaseline(test, environment, request);
             return this.completedResult(test, baseline, await this.runOracles(test, baseline, undefined, context), undefined, context, startedAt);
         }
+        // Production's timeout covers the options (and their semantic search) as well as the call.
+        const discoveryStarted = Date.now();
         const optionSet = await BuildDecisionDiscoveryOptionSet({
             Agents: environment.RunnableAgents,
             RunningAgentID: environment.ConversationManager.ID,
@@ -318,18 +328,22 @@ export class DecisionEvalDriver extends BaseTestDriver {
             return { ...this.errorResult(`There are ${optionSet.Options.length} agents to choose from, so production asks nothing.`, test, null, [], startedAt), status: 'Skipped' };
         }
         this.logToTestRun(context, 'info', `Asking agent discovery with '${environment.Prompt?.Name}' over ${optionSet.Options.length} option(s)`);
-        const call = await this.callDiscoveryDecision(test.Config, request, optionSet, environment.Prompt, context);
+        const call = await this.callDiscoveryDecision(test.Config, request, optionSet, environment.Prompt, context, discoveryStarted);
         const actual = BuildDiscoveryEvalActualOutput(test.Config, environment.Prompt?.Name ?? DEFAULT_DECISION_PROMPT_NAME, call, test.Expected);
         return this.completedResult(test, actual, await this.runOracles(test, actual, call.Result, context), call.Result, context, startedAt);
     }
 
-    /** Builds the discovery decision's parameters and makes the one call, waiting for the prompt run to be saved. */
+    /**
+     * Builds the discovery decision's parameters and makes the one call, waiting for the prompt run to
+     * be saved. `discoveryStarted` is when building the options began, where production's timeout starts.
+     */
     private async callDiscoveryDecision(
         config: DiscoveryEvalConfig,
         request: string,
         optionSet: DecisionDiscoveryOptionSet,
         prompt: MJAIPromptEntityExtended | null,
-        context: DriverExecutionContext
+        context: DriverExecutionContext,
+        discoveryStarted: number
     ): Promise<DiscoveryEvalCall> {
         if (!prompt) {
             throw new Error('No decision prompt was loaded for a decision cell');
@@ -338,10 +352,10 @@ export class DecisionEvalDriver extends BaseTestDriver {
         const runner = this.CreateRunner(IsFailoverAllowed(config));
         const callStarted = Date.now();
         const result = await runner.ExecuteDecision(params);
-        const latencyMs = Date.now() - callStarted;
+        const callEnded = Date.now();
         // Prompt-run persistence is fire-and-forget: settle it before the run links to the row.
         await runner.WaitForPendingPromptRunSaves();
-        return { OptionSet: optionSet, Result: result, LatencyMs: latencyMs };
+        return { OptionSet: optionSet, Result: result, LatencyMs: callEnded - callStarted, DiscoveryLatencyMs: callEnded - discoveryStarted };
     }
 
     /**
@@ -698,8 +712,11 @@ export function BuildDiscoveryDecisionParams(
  * What a discovery decision run records as its `ActualOutput`: the options, the summarized answers,
  * the chosen agent with its confidence, the `anyApplies` probability, `JudgeDecisionDiscovery`'s
  * verdict at production's threshold, whether the labelled agent was an option, the model and
- * sampling records, the latency and whether it fits production's timeout, the prompt run and its
- * cost, and the error when there are no answers.
+ * sampling records, the call's latency and the whole discovery's, the prompt run and its cost, and
+ * the error when there are no answers.
+ *
+ * A discovery that took longer than {@link DECISION_DISCOVERY_TIMEOUT_MS} is recorded as not
+ * injected, with a "timed out" reason, whatever its answer: production would have given up by then.
  *
  * @param config The cell's configuration.
  * @param promptName The decision prompt's name.
@@ -719,6 +736,7 @@ export function BuildDiscoveryEvalActualOutput(
     const verdict = result.success ? JudgeDecisionDiscovery(answers, optionSet.Options, DECISION_DISCOVERY_MIN_CONFIDENCE) : null;
     const answer = verdict?.Answer;
     const production = answer ? DecisionDiscoveryFromResult(result, optionSet.Options, DECISION_DISCOVERY_MIN_CONFIDENCE) : null;
+    const onTime = call.DiscoveryLatencyMs <= DECISION_DISCOVERY_TIMEOUT_MS;
     return {
         Decision: 'agent-discovery',
         Arm: 'decision',
@@ -730,14 +748,17 @@ export function BuildDiscoveryEvalActualOutput(
         ChosenAgentName: answer?.Agent.Name ?? null,
         Confidence: answer?.Confidence ?? null,
         AnyApplies: answer?.AnyApplies ?? null,
-        WouldInject: production ? production.Injected : null,
+        WouldInject: production ? production.Injected && onTime : null,
         MinConfidence: DECISION_DISCOVERY_MIN_CONFIDENCE,
-        VerdictReason: production ? production.Reason ?? null : verdict?.Reason ?? null,
+        VerdictReason: production && !onTime
+            ? DiscoveryTimedOutReason(call.DiscoveryLatencyMs)
+            : production ? production.Reason ?? null : verdict?.Reason ?? null,
         Baseline: null,
         Model: modelRecord(config, result),
         Sampling: samplingRecord(config),
         LatencyMs: call.LatencyMs,
-        WithinProductionTimeout: result.success ? call.LatencyMs <= DECISION_DISCOVERY_TIMEOUT_MS : null,
+        DiscoveryLatencyMs: call.DiscoveryLatencyMs,
+        WithinProductionTimeout: result.success ? onTime : null,
         PromptRunId: result.promptRun?.ID ?? null,
         CostUSD: result.promptRun?.TotalCost ?? result.promptRun?.Cost ?? result.cost ?? null,
         Error: result.success ? null : (result.errorMessage || 'the decision failed with no message')
@@ -780,11 +801,22 @@ export function BuildBaselineEvalActualOutput(
         Model: null,
         Sampling: samplingRecord(config),
         LatencyMs: latencyMs,
+        DiscoveryLatencyMs: null,
         WithinProductionTimeout: null,
         PromptRunId: null,
         CostUSD: null,
         Error: null
     };
+}
+
+/**
+ * Why a discovery that answered too late injects nothing: production had given up.
+ *
+ * @param discoveryLatencyMs How long the discovery took, options and call.
+ */
+export function DiscoveryTimedOutReason(discoveryLatencyMs: number): string {
+    return `timed out: the discovery took ${Math.round(discoveryLatencyMs)} ms, past production's ${DECISION_DISCOVERY_TIMEOUT_MS} ms limit, `
+        + 'so production would have given up and injected nothing';
 }
 
 /** How the options were reached, for the record. */
