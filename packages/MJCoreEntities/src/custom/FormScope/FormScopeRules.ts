@@ -73,6 +73,20 @@ export function FormScopeWriteRefusal(write: FormScopeWrite): string | null {
 }
 
 /**
+ * How narrow a scope's audience is, for breaking a tie between two rows at the same precedence.
+ * Higher wins: `User` (3) over `Role` (2) over `Global` (1). A value that is not one of the three
+ * ranks 0, below every scope.
+ */
+export function ContributionScopeRank(scope: FormScope | null | undefined): number {
+    switch (scope) {
+        case 'User': return 3;
+        case 'Role': return 2;
+        case 'Global': return 1;
+        default: return 0;
+    }
+}
+
+/**
  * Whether this user may publish forms and panels to a role or to everyone.
  *
  * An `Owner`-type user counts as holding it: they are the platform's top authority and must never

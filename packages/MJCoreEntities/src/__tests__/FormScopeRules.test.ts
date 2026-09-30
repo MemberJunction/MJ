@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AuthorizationInfo, AuthorizationRoleInfo, Metadata, UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import {
+    ContributionScopeRank,
     FormScopeWriteRefusal,
     MANAGE_FORM_DEFAULTS_AUTHORIZATION,
     UserCanManageFormDefaults,
@@ -189,6 +190,23 @@ describe('the refusal', () => {
     it('compares ids case-insensitively, as SQL Server and PostgreSQL return them differently', () => {
         const w = write({ PriorUserID: ME.toUpperCase(), NextUserID: ` ${ME.toUpperCase()} ` });
         expect(allowed(w)).toBe(true);
+    });
+});
+
+/**
+ * Two rows under one key at the same precedence: the narrower audience wins. The form's collapse
+ * ranks by this, and code on either tier can rank the same way.
+ */
+describe('ContributionScopeRank', () => {
+    it('ranks User over Role over Global', () => {
+        expect(ContributionScopeRank('User')).toBeGreaterThan(ContributionScopeRank('Role'));
+        expect(ContributionScopeRank('Role')).toBeGreaterThan(ContributionScopeRank('Global'));
+    });
+
+    it('ranks a missing or unknown scope below every scope', () => {
+        expect(ContributionScopeRank(null)).toBeLessThan(ContributionScopeRank('Global'));
+        expect(ContributionScopeRank(undefined)).toBe(0);
+        expect(ContributionScopeRank('global ' as FormScope)).toBe(0);
     });
 });
 
