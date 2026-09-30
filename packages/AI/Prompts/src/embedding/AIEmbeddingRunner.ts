@@ -1,5 +1,5 @@
 import { MJGlobal, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
-import { BaseEntitySaveQueue, Metadata, IMetadataProvider } from '@memberjunction/core';
+import { BaseEntitySaveQueue, Metadata } from '@memberjunction/core';
 import { AIEngine } from '@memberjunction/aiengine';
 import {
   BaseEmbeddings,
@@ -47,6 +47,31 @@ interface FailoverExecutionResult {
   answeredBy: ModelVendorCandidate;
 }
 
+/** The prompt a call runs under. */
+interface ResolvedEmbeddingPrompt {
+  Prompt: MJAIPromptEntityExtended;
+  /**
+   * False when no Embedding prompt exists and the call runs under an unsaved stand-in. No run row
+   * is written then, because a run row's `PromptID` must reference a saved prompt.
+   */
+  IsSaved: boolean;
+}
+
+/** Everything a call needs once its prompt, candidates and selected candidate are known. */
+interface EmbeddingPlan {
+  Prompt: ResolvedEmbeddingPrompt;
+  Candidates: ModelVendorCandidate[];
+  PromptParams: AIPromptParams;
+  Selection: EmbeddingSelection;
+}
+
+/** What exists so far in one call, so a failure at any point can finalize it. */
+interface EmbeddingCallState {
+  StartTime: Date;
+  PromptRun: MJAIPromptRunEntityExtended | null;
+  Candidate?: ModelVendorCandidate;
+}
+
 /**
  * Executes text embedding calls on `Embeddings`-type models with candidate selection,
  * credential resolution, failover, and `MJ: AI Prompt Runs` observability tracking.
@@ -59,7 +84,11 @@ export class AIEmbeddingRunner extends BaseModelRunner {
    */
   private static readonly keyRequirementByDriver = new Map<string, boolean>();
 
-  private _providerOverride: IMetadataProvider | null = null;
+  constructor() {
+    super();
+    // With no Provider set, BaseModelRunner.Provider falls back to this: the global default.
+    this._metadata = new Metadata();
+  }
 
   public override get RequiredModelType(): string {
     return 'Embeddings';
@@ -74,17 +103,6 @@ export class AIEmbeddingRunner extends BaseModelRunner {
    */
   public get PromptRunQueue(): BaseEntitySaveQueue {
     return this._promptRunQueue;
-  }
-
-  /**
-   * Optional metadata provider override.
-   */
-  public get Provider(): IMetadataProvider {
-    return this._providerOverride ?? (new Metadata() as unknown as IMetadataProvider);
-  }
-
-  public set Provider(value: IMetadataProvider | null) {
-    this._providerOverride = value;
   }
 
   /**
@@ -116,73 +134,97 @@ export class AIEmbeddingRunner extends BaseModelRunner {
    * Never throws: every failure returns an EmbeddingRunResult with `Success: false`.
    */
   public async RunEmbedding(params: EmbeddingRunParams): Promise<EmbeddingRunResult> {
-    const startTime = new Date();
-    let promptRun: MJAIPromptRunEntityExtended | null = null;
-    let selected: ModelVendorCandidate | undefined;
-
+    const call: EmbeddingCallState = { StartTime: new Date(), PromptRun: null };
+    const invalid = this.validateParams(params);
+    if (invalid) {
+      return this.failedResult(invalid, call.StartTime);
+    }
     try {
-      const invalid = this.validateParams(params);
-      if (invalid) {
-        return this.failedResult(invalid, startTime, promptRun, selected);
-      }
-
-      await AIEngine.Instance.Config(false, params.ContextUser);
-
-      const promptOrError = this.resolvePrompt(params);
-      if (typeof promptOrError === 'string') {
-        return this.failedResult(promptOrError, startTime, promptRun, selected);
-      }
-      const prompt = promptOrError;
-
-      const candidatesOrError = this.buildCandidates(prompt, params);
-      if (typeof candidatesOrError === 'string') {
-        return this.failedResult(candidatesOrError, startTime, promptRun, selected);
-      }
-      const candidates = candidatesOrError;
-
-      const promptParams = this.createPromptParams(prompt, params);
-      const selectionOrError = this.selectCandidate(prompt, candidates, promptParams);
-      if (typeof selectionOrError === 'string') {
-        return this.failedResult(selectionOrError, startTime, promptRun, selected);
-      }
-      const selection = selectionOrError;
-      selected = selection.Candidate;
-
-      const selectionInfo = this.buildSelectionInfo(prompt, candidates, selection);
-      promptRun = await this.createEmbeddingRunRecord(prompt, selected, promptParams, params, startTime, selectionInfo);
-
-      const { result: execResult, answeredBy } = await this.executeEmbeddingWithFailover(
-        prompt,
-        promptParams,
-        candidates,
-        selection,
-        params,
-        promptRun
-      );
-      const endTime = new Date();
-      const executionTimeMS = endTime.getTime() - startTime.getTime();
-
-      if (execResult.success) {
-        if (promptRun) {
-          await this.finalizeSuccessRun(promptRun, execResult, endTime, executionTimeMS);
-        }
-        return this.successResult(execResult, answeredBy, promptRun, executionTimeMS);
-      }
-
-      if (promptRun) {
-        await this.finalizeFailedRun(promptRun, execResult.errorMessage ?? 'Embedding execution failed', endTime, executionTimeMS);
-      }
-      return this.failedResult(execResult.errorMessage ?? 'Embedding execution failed', startTime, promptRun, answeredBy);
-
+      return await this.runEmbedding(params, call);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      const endTime = new Date();
-      const executionTimeMS = endTime.getTime() - startTime.getTime();
-      if (promptRun) {
-        await this.finalizeFailedRun(promptRun, message, endTime, executionTimeMS);
-      }
-      return this.failedResult(message, startTime, promptRun, selected);
+      return this.failCall(message, call, call.Candidate);
     }
+  }
+
+  private async runEmbedding(params: EmbeddingRunParams, call: EmbeddingCallState): Promise<EmbeddingRunResult> {
+    await AIEngine.Instance.Config(false, params.ContextUser);
+
+    const plan = await this.planEmbedding(params);
+    if (typeof plan === 'string') {
+      return this.failedResult(plan, call.StartTime);
+    }
+    call.Candidate = plan.Selection.Candidate;
+    call.PromptRun = await this.startRunRecord(plan, params, call.StartTime);
+
+    const { result, answeredBy } = await this.executeEmbeddingWithFailover(
+      plan.Prompt.Prompt,
+      plan.PromptParams,
+      plan.Candidates,
+      plan.Selection,
+      params,
+      call.PromptRun
+    );
+    if (!result.success) {
+      return this.failCall(result.errorMessage ?? 'Embedding execution failed', call, answeredBy);
+    }
+    const endTime = new Date();
+    const executionTimeMS = endTime.getTime() - call.StartTime.getTime();
+    if (call.PromptRun) {
+      await this.finalizeSuccessRun(call.PromptRun, result, endTime, executionTimeMS);
+    }
+    return this.successResult(result, answeredBy, call.PromptRun, executionTimeMS);
+  }
+
+  /** Resolves the prompt, builds the candidates and selects the first one with credentials. Returns an error message on failure. */
+  private async planEmbedding(params: EmbeddingRunParams): Promise<EmbeddingPlan | string> {
+    const prompt = await this.resolvePrompt(params);
+    if (typeof prompt === 'string') {
+      return prompt;
+    }
+    const candidates = this.buildCandidates(prompt.Prompt, params);
+    if (typeof candidates === 'string') {
+      return candidates;
+    }
+    const promptParams = this.createPromptParams(prompt.Prompt, params);
+    const selection = this.selectCandidate(prompt.Prompt, candidates, promptParams);
+    if (typeof selection === 'string') {
+      return selection;
+    }
+    return { Prompt: prompt, Candidates: candidates, PromptParams: promptParams, Selection: selection };
+  }
+
+  /** Writes the run row, unless the caller opted out or the prompt is the unsaved stand-in. */
+  private async startRunRecord(
+    plan: EmbeddingPlan,
+    params: EmbeddingRunParams,
+    startTime: Date
+  ): Promise<MJAIPromptRunEntityExtended | null> {
+    if (params.SkipRunRecord || !plan.Prompt.IsSaved) {
+      return null;
+    }
+    const selectionInfo = this.buildSelectionInfo(plan.Prompt.Prompt, plan.Candidates, plan.Selection);
+    return this.createEmbeddingRunRecord(
+      plan.Prompt.Prompt,
+      plan.Selection.Candidate,
+      plan.PromptParams,
+      params,
+      startTime,
+      selectionInfo
+    );
+  }
+
+  /** Finalizes the run row (when there is one) as failed and returns the failure. */
+  private async failCall(
+    errorMessage: string,
+    call: EmbeddingCallState,
+    candidate?: ModelVendorCandidate
+  ): Promise<EmbeddingRunResult> {
+    if (call.PromptRun) {
+      const endTime = new Date();
+      await this.finalizeFailedRun(call.PromptRun, errorMessage, endTime, endTime.getTime() - call.StartTime.getTime());
+    }
+    return this.failedResult(errorMessage, call.StartTime, call.PromptRun, candidate);
   }
 
   private validateParams(params: EmbeddingRunParams): string | undefined {
@@ -200,47 +242,58 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     promptParams.prompt = prompt;
     promptParams.contextUser = params.ContextUser;
     promptParams.parentPromptRunId = params.ParentRunID;
-    promptParams.provider = params.Provider ?? this._providerOverride ?? undefined;
+    promptParams.provider = params.Provider ?? this._provider ?? undefined;
     return promptParams;
   }
 
-  private resolvePrompt(params: EmbeddingRunParams): MJAIPromptEntityExtended | string {
+  /**
+   * The prompt the call runs under: `params.PromptID` when given, else the first active Embedding
+   * prompt, else an unsaved stand-in (see {@link createStandInPrompt}).
+   */
+  private async resolvePrompt(params: EmbeddingRunParams): Promise<ResolvedEmbeddingPrompt | string> {
     if (params.PromptID) {
-      const found = AIEngine.Instance.Prompts.find(p => UUIDsEqual(p.ID, params.PromptID));
-      if (!found) {
-        return `Prompt '${params.PromptID}' was not found`;
-      }
-      return found;
+      const named = AIEngine.Instance.Prompts.find(p => UUIDsEqual(p.ID, params.PromptID));
+      return named ? { Prompt: named, IsSaved: true } : `Prompt '${params.PromptID}' was not found`;
     }
-
-    let requiredTypeId = '';
-    try {
-      requiredTypeId = this.RequiredModelTypeID();
-    } catch {
-      // Catalog may not have Embeddings type registered yet
+    const configured = this.findEmbeddingPrompt();
+    if (configured) {
+      return { Prompt: configured, IsSaved: true };
     }
+    return { Prompt: await this.createStandInPrompt(params), IsSaved: false };
+  }
 
-    const prompt = AIEngine.Instance.Prompts.find(
+  private findEmbeddingPrompt(): MJAIPromptEntityExtended | undefined {
+    const requiredTypeId = this.tryRequiredModelTypeID();
+    return AIEngine.Instance.Prompts.find(
       p => p.Status === 'Active' && (
         p.Type?.toLowerCase() === 'embedding' ||
-        (requiredTypeId && UUIDsEqual(p.AIModelTypeID, requiredTypeId))
+        (requiredTypeId !== undefined && UUIDsEqual(p.AIModelTypeID, requiredTypeId))
       )
     );
-    if (prompt) {
-      return prompt;
-    }
+  }
 
-    return {
-      ID: '00000000-0000-0000-0000-000000000000',
-      Name: 'Default Embedding',
-      Status: 'Active',
-      SelectionStrategy: 'Default',
-      AIModelTypeID: requiredTypeId,
-      FailoverStrategy: 'NextInList',
-      MaxFailoverAttempts: 3,
-      PromptModels: [],
-      ModelVendors: [],
-    } as unknown as MJAIPromptEntityExtended;
+  /** The Embeddings model type's ID, or undefined when the catalog doesn't have that type yet. */
+  private tryRequiredModelTypeID(): string | undefined {
+    try {
+      return this.RequiredModelTypeID();
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * An unsaved `MJ: AI Prompts` entity for installs with no active Embedding prompt. Candidate
+   * building, failover and retries all read their settings from a prompt, so the call runs under
+   * this one, which carries the entity's default settings. A pinned call (the usual case: vector
+   * sync, dupe detection, vector search) still runs on the pinned model only. The stand-in is never
+   * saved, and no run row is written for it.
+   */
+  private async createStandInPrompt(params: EmbeddingRunParams): Promise<MJAIPromptEntityExtended> {
+    const provider = params.Provider ?? this._provider ?? Metadata.Provider;
+    const prompt = await provider.GetEntityObject<MJAIPromptEntityExtended>('MJ: AI Prompts', params.ContextUser);
+    prompt.Name = 'Embedding (no Embedding prompt configured)';
+    prompt.FailoverStrategy = 'SameModelDifferentVendor';
+    return prompt;
   }
 
   private buildCandidates(
@@ -582,7 +635,6 @@ export class AIEmbeddingRunner extends BaseModelRunner {
       ModelID: answeredBy?.model.ID,
       ModelName: answeredBy?.model.Name,
       ModelInfo: modelInfo,
-      modelInfo: modelInfo,
     };
   }
 
@@ -605,7 +657,6 @@ export class AIEmbeddingRunner extends BaseModelRunner {
       ModelID: candidate?.model.ID,
       ModelName: candidate?.model.Name,
       ModelInfo: modelInfo,
-      modelInfo: modelInfo,
     };
   }
 

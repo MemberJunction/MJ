@@ -47,6 +47,8 @@ interface RecordedRun {
   TokensUsed?: number;
   Cost?: number;
   SaveCount: number;
+  /** The row's Status as each save started: the INSERT sees 'Running', the finalize UPDATE the outcome. */
+  StatusAtSave: string[];
 }
 
 const h = vi.hoisted(() => {
@@ -62,6 +64,8 @@ const h = vi.hoisted(() => {
     prompts: [] as FakePrompt[],
     configuredDrivers: new Set<string>(),
     runs: [] as RecordedRun[],
+    /** When true, every run-row save reports failure, as a failed INSERT or UPDATE would. */
+    failRunSaves: false,
   };
 
   const byModelID = <T extends { ModelID: string }>(rows: T[]): Map<string, T[]> => {
@@ -100,22 +104,48 @@ const h = vi.hoisted(() => {
   /** Returned for 'MJ: AI Prompt Runs'; the runner's base class sets many more fields than these at runtime. */
   class FakePromptRun implements RecordedRun {
     public ID = '';
+    public Status?: string;
     public SaveCount = 0;
+    public StatusAtSave: string[] = [];
+    public LatestResult: { CompleteMessage: string } | null = null;
     public NewRecord(): boolean {
       this.ID = `run-${++runSeq}`;
       state.runs.push(this);
       return true;
     }
     public async Save(): Promise<boolean> {
+      this.StatusAtSave.push(this.Status ?? '');
+      await new Promise(resolve => setTimeout(resolve, 2));
       this.SaveCount++;
+      if (state.failRunSaves) {
+        this.LatestResult = { CompleteMessage: 'simulated save failure' };
+        return false;
+      }
       return true;
     }
   }
 
+  /**
+   * Returned for 'MJ: AI Prompts', which the runner asks for only when no Embedding prompt exists.
+   * The real GetEntityObject hands back a new record carrying the entity's defaults.
+   */
+  class FakeNewPrompt {
+    public ID = 'unsaved-prompt';
+    public Name = '';
+    public Status: MJAIPromptEntityExtended['Status'] = 'Pending';
+    public AIModelTypeID: string | null = null;
+    public SelectionStrategy: MJAIPromptEntityExtended['SelectionStrategy'] = 'Default';
+    public FailoverStrategy: MJAIPromptEntityExtended['FailoverStrategy'] = 'SameModelDifferentVendor';
+    public RequireSpecificModels = false;
+  }
+
   const provider = {
-    GetEntityObject: vi.fn(async (entityName: string) =>
-      entityName === 'MJ: AI Prompt Runs' ? new FakePromptRun() : null
-    ),
+    GetEntityObject: vi.fn(async (entityName: string) => {
+      if (entityName === 'MJ: AI Prompt Runs') {
+        return new FakePromptRun();
+      }
+      return entityName === 'MJ: AI Prompts' ? new FakeNewPrompt() : null;
+    }),
   };
 
   return {
@@ -348,6 +378,7 @@ describe('AIEmbeddingRunner', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     h.state.runs = [];
+    h.state.failRunSaves = false;
     for (const key of [DRIVER_1, DRIVER_1B, DRIVER_2, DRIVER_LOCAL]) {
       scripts.set(key, { ConstructedWith: [], Calls: [] });
     }
@@ -589,6 +620,101 @@ describe('AIEmbeddingRunner', () => {
       expect(result.Success).toBe(false);
       expect(result.ErrorMessage).toContain('No Embeddings model has credentials available');
       expect(scriptFor(DRIVER_1).Calls).toHaveLength(0);
+    });
+  });
+
+  describe('run rows', () => {
+    it('SkipRunRecord embeds without writing a row, and returns a null PromptRunID', async () => {
+      const result = await runner.RunEmbedding({
+        Texts: ['search query'],
+        ContextUser: mockUser,
+        ModelID: MODEL_1_ID,
+        SkipRunRecord: true,
+      });
+
+      expect(result.Success).toBe(true);
+      expect(result.PromptRunID).toBeNull();
+      await runner.WaitForPendingPromptRunSaves();
+      expect(h.state.runs).toHaveLength(0);
+    });
+
+    it('without PromptID, the row is recorded against the first active Embedding prompt', async () => {
+      const result = await runner.RunEmbedding({
+        Texts: ['vector sync batch'],
+        ContextUser: mockUser,
+        ModelID: MODEL_1_ID,
+      });
+
+      expect(result.Success).toBe(true);
+      await runner.WaitForPendingPromptRunSaves();
+      expect(lastRun()?.PromptID).toBe(PROMPT_ID);
+    });
+
+    it('with no Embedding prompt, a pinned call runs under an unsaved stand-in and writes no row', async () => {
+      h.state.prompts = [];
+
+      const result = await runner.RunEmbedding({
+        Texts: ['no prompt configured'],
+        ContextUser: mockUser,
+        ModelID: MODEL_1_ID,
+      });
+
+      expect(result.Success).toBe(true);
+      expect(result.ModelID).toBe(MODEL_1_ID);
+      expect(result.PromptRunID).toBeNull();
+      expect(h.provider.GetEntityObject).toHaveBeenCalledWith('MJ: AI Prompts', mockUser);
+      await runner.WaitForPendingPromptRunSaves();
+      expect(h.state.runs).toHaveLength(0);
+    });
+
+    it('the stand-in keeps a pinned call on the pinned model when it fails', async () => {
+      h.state.prompts = [];
+      addSecondVendorToModel1();
+      scriptFor(DRIVER_1).Answer = () => Promise.reject(new Error('503 Service Unavailable'));
+
+      const result = await runner.RunEmbedding({
+        Texts: ['no prompt configured'],
+        ContextUser: mockUser,
+        ModelID: MODEL_1_ID,
+      });
+
+      expect(result.Success).toBe(true);
+      expect(result.ModelID).toBe(MODEL_1_ID);
+      expect(scriptFor(DRIVER_1B).Calls).toHaveLength(1);
+    });
+
+    it('the INSERT lands before the finalize UPDATE', async () => {
+      await runner.RunEmbedding({ Texts: ['ordered saves'], ContextUser: mockUser, PromptID: PROMPT_ID });
+      await runner.WaitForPendingPromptRunSaves();
+
+      expect(lastRun()?.StatusAtSave).toEqual(['Running', 'Completed']);
+    });
+
+    it('a failed run-row save does not fail the call, and the flush still settles', async () => {
+      h.state.failRunSaves = true;
+
+      const result = await runner.RunEmbedding({ Texts: ['save fails'], ContextUser: mockUser, PromptID: PROMPT_ID });
+
+      expect(result.Success).toBe(true);
+      expect(result.Vectors).toHaveLength(1);
+      await expect(runner.WaitForPendingPromptRunSaves()).resolves.toBeUndefined();
+    });
+
+    it('WaitForPendingPromptRunSaves resolves with nothing queued, on the runner and on AIModelRunner', async () => {
+      await expect(runner.WaitForPendingPromptRunSaves()).resolves.toBeUndefined();
+      await expect(new AIModelRunner().WaitForPendingPromptRunSaves()).resolves.toBeUndefined();
+    });
+
+    it('an unknown PromptID fails clearly and writes no row', async () => {
+      const result = await runner.RunEmbedding({
+        Texts: ['text'],
+        ContextUser: mockUser,
+        PromptID: 'E0000000-0000-0000-0000-00000000DEAD',
+      });
+
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toContain('was not found');
+      expect(h.state.runs).toHaveLength(0);
     });
   });
 

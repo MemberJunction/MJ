@@ -1,4 +1,4 @@
-import { BaseEntitySaveQueue, IMetadataProvider } from '@memberjunction/core';
+import { IMetadataProvider } from '@memberjunction/core';
 import { AIEmbeddingRunner } from './embedding/AIEmbeddingRunner';
 import { EmbeddingRunParams, EmbeddingRunResult } from './embedding/embedding-runner.types';
 
@@ -21,13 +21,6 @@ export class AIModelRunner {
     }
     public set Provider(value: IMetadataProvider | null) {
         this._embeddingRunner.Provider = value;
-    }
-
-    /**
-     * Exposes the embedding runner's prompt run save queue for backward compatibility.
-     */
-    private get _promptRunQueue(): BaseEntitySaveQueue {
-        return this._embeddingRunner.PromptRunQueue;
     }
 
     /**
