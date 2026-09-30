@@ -14,7 +14,13 @@
  */
 import { SafeExpressionEvaluator } from '@memberjunction/global';
 import { CONDITION_ROOTS, UnknownConditionRoots } from './condition-roots';
-import { DecisionChoiceTestOf, DecisionReferencesIn, type DecisionReference } from './decision-conditions';
+import {
+    DecisionChoiceTestOf,
+    DecisionReferencesIn,
+    DecisionsReadAsProperty,
+    DecisionValueComparisonsIn,
+    type DecisionReference,
+} from './decision-conditions';
 import {
     ComputeCertainlyRun,
     ComputeDownstream,
@@ -218,9 +224,13 @@ function checkConditionSyntax(
  * - a step that is not a Decision step in this graph, a question that step does not ask, or an
  *   answer field that question's kind does not have — which would read `undefined` and turn every
  *   comparison into a silent `false`;
+ * - a Choice compared with a value that is not one of its options, which can never match;
  * - a decision that cannot have answered by the time the edge is decided — the edge's own target, a
  *   step after it, or one on a branch that may be skipped. The edge would hold waiting for it, and
- *   the graph would stall forever.
+ *   the graph would stall forever;
+ * - an answer read through a step's OUTPUT (`payload.decisions…`) rather than the root. That copy is
+ *   for later steps to read, and a condition reading it is never held: a below-threshold answer is
+ *   missing from it, and a missing answer reads as `false`.
  *
  * A loop condition may not read `decisions` at all. It is evaluated between iterations against the
  * loop's own payload, where there is no `decisions` root, and none of the hold rules apply there.
@@ -239,6 +249,20 @@ function checkDecisionReferences(
             TempId: site.TempId,
         });
     };
+
+    // Only where a Decision step exists can a `decisions` property be one's answers; elsewhere it is
+    // an ordinary payload field, and refusing it would reject workflows that have nothing to do with
+    // decisions.
+    if (decisions.Steps.size > 0) {
+        for (const read of new Set(DecisionsReadAsProperty(condition))) {
+            refuse(site.IsLoopCondition
+                ? `reads Decision answers through "${read}". Only an edge condition can read a Decision step's answers, `
+                    + 'through the decisions root; route on the decision with a conditional dependency instead'
+                : `reads Decision answers through "${read}", a copy a condition cannot hold on: an answer below its `
+                    + 'minConfidence, or from a failed call, is missing there and reads as false. '
+                    + 'Read it through the decisions root instead, for example decisions.<step>.<question>.value');
+        }
+    }
 
     if (site.IsLoopCondition) {
         if (scan.References.length > 0 || scan.Malformed.length > 0) {
@@ -262,6 +286,14 @@ function checkDecisionReferences(
         timed.add(reference.NodeId);
         const late = decisionTimingProblem(reference.NodeId, site.Origin, site.TempId, decisions);
         if (late) refuse(late);
+    }
+    const compared = new Set<string>();
+    for (const comparison of DecisionValueComparisonsIn(condition)) {
+        const key = JSON.stringify([comparison.NodeId, comparison.QuestionKey, comparison.Value]);
+        if (compared.has(key)) continue;
+        compared.add(key);
+        const problem = choiceValueProblem(comparison.NodeId, comparison.QuestionKey, comparison.Value, decisions.Steps);
+        if (problem) refuse(problem);
     }
 }
 
@@ -302,6 +334,19 @@ function decisionTimingProblem(
     return `reads the decision of "${decision}", which "${origin}" does not wait for: it may not have answered when `
         + `this condition is decided, and if its branch is skipped it never will. Make "${origin}" depend on `
         + `"${decision}" through steps that cannot be skipped, or read the decision from a step that does`;
+}
+
+/** Why a Choice compared with `value` can never match, or `null` when `value` is one of its options. */
+function choiceValueProblem(nodeID: string, questionKey: string, value: string, decisionSteps: DecisionSteps): string | null {
+    const step = decisionSteps.get(nodeID);
+    const questions = step?.Config.questions ?? {};
+    const question = Object.prototype.hasOwnProperty.call(questions, questionKey) ? questions[questionKey] : undefined;
+    // Anything but a well-formed Choice is reported by the reference and configuration checks.
+    if (!step || question?.kind !== 'Choice' || !Array.isArray(question.options)) return null;
+    const options = question.options.map((o) => o.value);
+    if (options.includes(value)) return null;
+    return `compares the Choice question "${questionKey}" of Decision step "${step.Name}" with "${value}", which is not `
+        + `one of its options (${options.map((o) => `"${o}"`).join(', ')}), so the comparison can never be true`;
 }
 
 /** What is wrong with one `decisions.<step>.<question>[.<field>]` reference, or `null`. */
