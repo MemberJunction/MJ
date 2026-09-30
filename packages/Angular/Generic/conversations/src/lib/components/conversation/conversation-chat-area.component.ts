@@ -445,6 +445,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   get allowMessageDelete(): ConversationChatAreaComponent['AllowMessageDelete'] {
     return this.AllowMessageDelete;
   }
+  /**
+   * Host-forced read-only. Hides every composer. A View share
+   * ({@link IsReadOnlyView}) with this left false keeps today's disabled composer.
+   */
+  @Input() ReadOnly = false;
+
+  /** Banner copy when {@link ReadOnly} is set. Null uses the View-share text. */
+  @Input() ReadOnlyMessage: string | null = null;
   /** Show the empty-state's built-in suggested-prompt chips (and the @mention tip). */
   @Input() ShowSuggestedPrompts = true;
 
@@ -3178,14 +3186,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       // Check for missed completions (user navigated away, agent completed, user returned)
       for (const message of this.messages) {
         if (message.Status === 'In-Progress' && message.ID) {
-          const recentCompletion = this.streamingService.getRecentCompletion(message.ID);
+          const recentCompletion = this.streamingService.GetRecentCompletion(message.ID);
           if (recentCompletion) {
             LogStatusEx({message: `📥 Found missed completion for message ${message.ID}, handling...`, verboseOnly: true});
             await this.handleMessageCompletion(message, recentCompletion.agentRunId, conversationId, loadToken);
             if (!this.isActiveConversationLoad(conversationId, loadToken)) {
               return;
             }
-            this.streamingService.clearRecentCompletion(message.ID);
+            this.streamingService.ClearRecentCompletion(message.ID);
           }
         }
       }
@@ -3596,14 +3604,22 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       if (!this.isActiveConversation(message.ConversationID)) {
         return;
       }
+    }
 
-      // CRITICAL: If this is a new In-Progress AI message, add it to inProgressMessageIds
-      // immediately so message-input registers a PubSub streaming callback for it.
-      // buildMessagesFromCache handles the nav-away/nav-back reconnection case;
-      // this handles the active-session case where the agent just started.
-      // Without this, inProgressMessageIds stays [] and the completion event is never received.
-      if (message.Status === 'In-Progress' && message.ID && !this.InProgressMessageIds.includes(message.ID)) {
+    // A host turn can finish before this row is on screen. The completion is already in the
+    // streaming service's replay window; apply it the way a conversation load does, so the
+    // row does not stay In-Progress until the conversation is opened again. Register the row
+    // for the live callback either way — an update of an existing In-Progress row included.
+    if (message.Status === 'In-Progress' && message.ID) {
+      if (!this.InProgressMessageIds.some((id) => UUIDsEqual(id, message.ID))) {
         this.InProgressMessageIds = [...this.InProgressMessageIds, message.ID];
+      }
+      const recentCompletion = this.streamingService.GetRecentCompletion(message.ID);
+      if (recentCompletion) {
+        await this.handleMessageCompletion(message, recentCompletion.agentRunId, message.ConversationID);
+        if (this.isActiveConversation(message.ConversationID)) {
+          this.streamingService.ClearRecentCompletion(message.ID);
+        }
       }
     }
 
@@ -3891,6 +3907,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
   }
 
+  /** Detail ids whose completion this instance has already applied. A live callback and the replay window can both deliver one finish. */
+  private handledCompletionIds?: Set<string>;
+
   /**
    * Handle message completion triggered by PubSub completion event
    * Reloads message, agent run, and artifacts, then updates UI
@@ -3903,6 +3922,15 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     expectedConversationId: string | null | undefined = message.ConversationID,
     loadToken?: number
   ): Promise<void> {
+    const completionId = message.ID ? NormalizeUUID(message.ID) : '';
+    if (completionId) {
+      this.handledCompletionIds ??= new Set();
+      if (this.handledCompletionIds.has(completionId)) {
+        return;
+      }
+      this.handledCompletionIds.add(completionId);
+    }
+    let finished = false;
     try {
       const isCurrent = () => this.isCurrentConversationContext(expectedConversationId, loadToken);
 
@@ -3974,9 +4002,15 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.cdr.detectChanges();
 
       LogStatusEx({message: `✅ Completion handled for message ${message.ID}`, verboseOnly: true});
+      finished = true;
     } catch (error) {
       console.error(`Error handling message completion for ${message.ID}:`, error);
       this.cdr.detectChanges();
+    } finally {
+      // A switch away mid-reload must not consume the completion. The next load still has the replay entry.
+      if (!finished && completionId) {
+        this.handledCompletionIds?.delete(completionId);
+      }
     }
   }
 
@@ -4127,6 +4161,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   OpenProjectSelector(): void {
+    if (this.EffectiveReadOnly) {
+      return;
+    }
     this.ShowProjectSelector = true;
   }
 
@@ -4596,6 +4633,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return this.IsReadOnlyView;
   }
 
+  /** Read-only for any reason: the host said so, or the conversation is shared with View access. */
+  public get EffectiveReadOnly(): boolean {
+    return this.ReadOnly || this.IsReadOnlyView;
+  }
+
   /**
    * `true` when the current user is allowed to create new shares on this
    * conversation: the owner, or a user with an Owner-level grant. Uses the same
@@ -4817,6 +4859,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Unpins a message from the pins panel — saves to DB and patches the cache.
    */
   async OnUnpinFromPanel(message: MJConversationDetailEntity): Promise<void> {
+    if (this.EffectiveReadOnly) {
+      return;
+    }
     const previous = message.IsPinned;
     message.IsPinned = false;
     this.cdr.detectChanges();
@@ -4840,6 +4885,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Sends the selected response as a new user message WITHOUT modifying the visible input
    */
   async OnSuggestedResponseSelected(event: {text: string; customInput?: string}): Promise<void> {
+    if (this.EffectiveReadOnly) {
+      return;
+    }
     const messageText = event.customInput || event.text;
 
     // Get the active message input for the current conversation
@@ -6010,6 +6058,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     //   3. a generic re-prompt        — last resort if no user message found
     // OnAnalyzeArtifact prefilled messageText with 'Analyze "..." — '; we
     // overwrite that with the resolved followup before sending.
+    // Read-only (host flag or a View share) must not auto-send the follow-up.
+    if (this.EffectiveReadOnly) {
+      return;
+    }
     const messageInput = this.getActiveMessageInputComponent();
     if (messageInput) {
       let followup = command.followupMessage?.trim();
