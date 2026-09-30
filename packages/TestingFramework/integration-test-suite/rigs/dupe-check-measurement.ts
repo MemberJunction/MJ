@@ -32,7 +32,7 @@
  *   NO record text is ever written to reports or output files.
  */
 
-import { appendFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { AssertOutputOutsideRepo } from '@memberjunction/testing-engine';
@@ -718,9 +718,8 @@ async function main(): Promise<void> {
 
     mkdirSync(options.OutDir, { recursive: true });
     const checksJsonlPath = resolve(options.OutDir, 'checks.jsonl');
-    if (existsSync(checksJsonlPath)) {
-        rmSync(checksJsonlPath);
-    }
+    // Start the log empty by truncating it: no exists-check first, so nothing can change between a check and the writes.
+    writeFileSync(checksJsonlPath, '', 'utf8');
 
     const observations: RecordCheckObservation[] = [];
     console.log(`Starting measurement run: ${corpusRecords.length} records × ${options.Reps} reps...`);
