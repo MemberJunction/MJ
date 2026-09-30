@@ -18,7 +18,7 @@ Every measurement:
 |---|---|---|---|---|---|
 | Sage agent discovery | 3.1 | 258 requests, 33 agents | Jev picks the right agent 77% of the time; semantic search 30% | calibrated 0.85 (was raw 0.7) | #4892, #4893 |
 | Duplicate check at entry | 3.8 | 160 new records, 5 candidates each | Jev: 97% precision at 71% recall; the vector threshold alone flags everything | calibrated 0.7 (was raw 0.5); pre-filter 0.3 | #4894, #4896 |
-| finishIf gate | 4.6 | replay of 739 gated action rounds | at 0.9 it ends 22% of rounds the agent continued | recommend opt-in (product decision) | #4895 |
+| finishIf gate | 4.6 | replay of 739 gated action rounds | at 0.9 it ends 22% of rounds the agent continued | opt-in (`finishIfMode`, default off; shadow to measure) | #4895, #4814 |
 | LLM vs Decision pipelines | 5.5 | 117 and 198 labelled rows | Decision matches or beats the LLM at ¼ the latency and ⅓ the cost | — | #4890 |
 | Escalation floors | 5.4 | the same | escalating to the LLM didn't help on either task | no floor recommended yet | #4890 |
 | Self-reported `confidence` | 3.4 | 546 recorded loop turns | carries no usable signal | don't gate on it | — |
@@ -134,7 +134,7 @@ Production's code checks never gate 260 rounds, where an action failed or may ha
 **Recommendation:**
 - **Don't rely on `finishIf` at 0.9 by default.** The milestone turned it on by default at 0.9 per question, on Amith's direction, with the option to make it opt-in.
 - **Make it opt-in per agent until it is measured with live-authored gates,** using the Prompt Eval corpus with the gate recorded and not acted on, as §5 of the plan proposes. Keep 0.9 for the agents that opt in; per-model calibration doesn't help here.
-- This is a product decision, recorded here with the data. It isn't changed in code by this work.
+- **Done on the train (`e250baf527`):** a Loop prompt param, `finishIfMode`, defaults to `off`. `shadow` evaluates and records every gate without acting, to measure an agent's own gates on real traffic, and `on` acts as before.
 
 ## 5. The loop agent's self-reported `confidence` (Task 3.4)
 

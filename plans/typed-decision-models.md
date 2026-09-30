@@ -1127,8 +1127,8 @@ a config flag where practical.
 > - **Self-reported `confidence` (3.4):** it clusters near 1.0 and doesn't track outcomes, so it
 >   should not be made load-bearing; the memory manager's gate on it should move to a typed decision.
 > - **finishIf (4.6):** replayed on 739 recorded action rounds (#4895). At 0.9 the gate would have
->   ended 22% of the rounds where the agent went on to act. Recommendation: opt-in per agent until
->   gates authored live are measured. That default is a product decision, not changed here.
+>   ended 22% of the rounds where the agent went on to act. Gates are now opt-in per agent
+>   (`finishIfMode`: `off` by default, `shadow` to measure, `on` to act).
 
 ### Task 3.0 — A decision-backed judge oracle *(recommended first)*
 
