@@ -9,8 +9,10 @@
  * @module @memberjunction/task-graph
  */
 import {
+    DecisionReferencesIn,
     GetValueFromPath,
     ResolveDecisionStepAnswers,
+    type EdgeConditionOutcome,
     type GraphDecisions,
     type HeldDecisionAnswer,
     type TaskGraphDecisionAnswer,
@@ -208,6 +210,49 @@ export function HeldDecisionAnswers(row: DecisionTaskRow): Record<string, string
     const config = ReadDecisionStepConfiguration(row.Configuration);
     if (!config) return {};
     return { ...ResolveGraphDecisions([row]).Unresolved[config.nodeId] };
+}
+
+/** The `tempId`s of the graph's Decision steps whose call failed. */
+export function FailedDecisionIDs(rows: readonly DecisionTaskRow[]): Set<string> {
+    const failed = new Set<string>();
+    for (const row of rows) {
+        if (row.StepType !== 'Decision' || row.Status !== 'Failed') continue;
+        const config = ReadDecisionStepConfiguration(row.Configuration);
+        if (config) failed.add(config.nodeId);
+    }
+    return failed;
+}
+
+/** True when a condition reads any of the given Decision steps. */
+export function ReadsFailedDecision(condition: string, failedDecisionIDs: ReadonlySet<string>): boolean {
+    if (failedDecisionIDs.size === 0 || !condition) return false;
+    return DecisionReferencesIn(condition).References.some((r) => failedDecisionIDs.has(r.NodeId));
+}
+
+/**
+ * An exclusive fork's edges with each path that reads a FAILED decision counted as not taken, in
+ * every fork that has a satisfied path — so the satisfied one wins whatever its rank.
+ *
+ * A failed decision call is a failed step, and a flow's failure handling is its outgoing paths: the
+ * recovery path its author drew (`stepResult.Success === false`, or a fallback) is how the flow goes
+ * on. Holding the fork because a higher-ranked path reads the answer that never came would stop it
+ * from ever being taken. The paths are not evaluated — a negated read of a missing answer would come
+ * out true — only set aside.
+ *
+ * A fork with NO satisfied path is left alone: every path is unevaluable, the fork holds, and a
+ * Retry of the failed Decision step can still route it. An answer below `minConfidence` is never set
+ * aside; it holds, because its path might have been the one to take.
+ */
+export function PassOverFailedDecisionPaths<E extends { id: string; exclusiveGroup: string; conditionOutcome: EdgeConditionOutcome }>(
+    edges: readonly E[],
+    readsFailedDecision: (edge: E) => boolean,
+): E[] {
+    const recoverable = new Set(edges.filter((e) => e.conditionOutcome === 'satisfied').map((e) => e.exclusiveGroup));
+    return edges.map((e) =>
+        e.conditionOutcome === 'unevaluable' && recoverable.has(e.exclusiveGroup) && readsFailedDecision(e)
+            ? { ...e, conditionOutcome: 'unsatisfied' }
+            : e,
+    );
 }
 
 /** A completed step's answers, as it wrote them into its output. */

@@ -41,7 +41,10 @@ import {
     BuildDecisionStepOutput,
     DecisionStepOutputAnswers,
     DecisionsPayloadConflict,
+    FailedDecisionIDs,
     HeldDecisionAnswers,
+    PassOverFailedDecisionPaths,
+    ReadsFailedDecision,
     ReadDecisionStepConfiguration,
     ResolveDecisionState,
     ResolveGraphDecisions,
@@ -619,6 +622,58 @@ describe('a failed decision holds; it never reads as false', () => {
         const evaluate = vi.fn((): ConditionVerdict => ({ Success: true, Value: true }));
         expect(EvaluateCondition("decisions.triage.intent.value === 'other'", {}, FAILED, evaluate).Unevaluable).toBe(true);
         expect(evaluate).not.toHaveBeenCalled();
+    });
+});
+
+describe('a failed decision with a recovery path', () => {
+    const FAILED_ROW = decisionRow('Failed', {}, 'the model timed out');
+    const RECOVER = { ...edge('e-recover', 'stepResult.Success === false', 'route'), Priority: 0 };
+    /** The intent fork ranked 3/2/1, above whatever else the test adds at 0. */
+    const RANKED_FORK = INTENT_FORK.map((d, i) => ({ ...d, Priority: 3 - i }));
+
+    /** Resolves a fork out of `triage` the way `loadGraphState` does, recovery rule included. */
+    const resolveFork = (edges: EdgeFields[], row: DecisionTaskRow, originStatus: 'Complete' | 'Failed') => {
+        const dispatcher = dispatcherWith(decisionRunner({ Success: true }));
+        const entityById = new Map([['task-triage', origin(originStatus, {})]]);
+        const decisions = ResolveGraphDecisions([row]);
+        const failed = FailedDecisionIDs([row]);
+        const evaluated: EvaluatedEdge[] = edges.map((d) => ({
+            id: d.ID, taskId: d.TaskID, dependsOnTaskId: d.DependsOnTaskID, exclusiveGroup: 'route',
+            originStatus, priority: d.Priority, sequence: 0,
+            conditionOutcome: dispatcher.evaluateExclusiveCondition(d, entityById, {}, decisions),
+        }));
+        const conditions = new Map(edges.map((d) => [d.ID, d.Condition ?? '']));
+        return ResolveExclusiveGroups(
+            PassOverFailedDecisionPaths(evaluated, (e) => ReadsFailedDecision(conditions.get(e.id) ?? '', failed)),
+            new Set(['Complete', 'Failed']),
+        );
+    };
+
+    it('takes the recovery path however it ranks, and sets the paths reading the answer aside', () => {
+        const resolution = resolveFork([...RANKED_FORK, RECOVER], FAILED_ROW, 'Failed');
+        expect(resolution.keptEdgeIDs).toEqual(['e-recover']);
+        expect(resolution.loserEdgeIDs.sort()).toEqual(['e-billing', 'e-other', 'e-refund']);
+        expect(resolution.holdTaskIDs).toEqual([]);
+    });
+
+    it('still holds a fork with no recovery path, so a Retry of the step can route it', () => {
+        const resolution = resolveFork(RANKED_FORK, FAILED_ROW, 'Failed');
+        expect(resolution.holdTaskIDs).toHaveLength(3);
+        expect(resolution.loserEdgeIDs).toEqual([]);
+    });
+
+    it('never sets aside an answer below minConfidence — its path might have been the one to take', () => {
+        const below = decisionRow('Complete', triageOutput({ ...BILLING_CONFIDENT, intent: { value: 'billing', confidence: 0.55 } }));
+        const fallback = { ...edge('e-fallback', '', 'route'), Condition: null, Priority: 0 };
+        const resolution = resolveFork([...RANKED_FORK, fallback], below, 'Complete');
+        expect(resolution.holdTaskIDs.sort()).toEqual(['target-e-billing', 'target-e-fallback', 'target-e-other', 'target-e-refund']);
+        expect(resolution.keptEdgeIDs).toEqual([]);
+    });
+
+    it('names only the Decision steps that failed', () => {
+        expect([...FailedDecisionIDs([FAILED_ROW, decisionRow('Complete', triageOutput(BILLING_CONFIDENT))])]).toEqual(['triage']);
+        expect(ReadsFailedDecision("decisions.triage.intent.value === 'x'", new Set(['triage']))).toBe(true);
+        expect(ReadsFailedDecision('stepResult.Success === false', new Set(['triage']))).toBe(false);
     });
 });
 

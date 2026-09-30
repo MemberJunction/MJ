@@ -67,6 +67,9 @@ import {
     BuildDecisionStepOutput,
     DecisionStepOutputAnswers,
     DecisionsPayloadConflict,
+    FailedDecisionIDs,
+    PassOverFailedDecisionPaths,
+    ReadsFailedDecision,
     ReadDecisionStepConfiguration,
     ResolveDecisionState,
     ResolveGraphDecisions,
@@ -2995,17 +2998,26 @@ export class TaskGraphDispatcher implements IShutdownable {
             ? new Set<TaskGraphNodeStatus>(['Complete', 'Failed'])
             : new Set<TaskGraphNodeStatus>(['Complete']);
 
+        // A path reading a decision whose call FAILED is passed over when another path of its fork
+        // is satisfied: that path is the author's recovery route, taken whatever its rank, exactly
+        // as the in-run walker takes it. With no such path the fork still holds, so a Retry of the
+        // failed Decision step can route it.
+        const failedDecisions = FailedDecisionIDs(children);
+        const conditionByEdge = new Map(exclusive.map((d) => [d.ID, d.Condition ?? '']));
         const resolution = ResolveExclusiveGroups(
-            exclusive.map((d) => ({
-                id: d.ID,
-                taskId: d.TaskID,
-                dependsOnTaskId: d.DependsOnTaskID,
-                exclusiveGroup: d.ExclusiveGroup!,
-                originStatus: (entityById.get(d.DependsOnTaskID)?.Status ?? 'Pending') as TaskGraphNodeStatus,
-                priority: d.Priority ?? 0,
-                sequence: d.Sequence ?? 0,
-                conditionOutcome: this.evaluateExclusiveCondition(d, entityById, invocation, decisions, debug),
-            })),
+            PassOverFailedDecisionPaths(
+                exclusive.map((d) => ({
+                    id: d.ID,
+                    taskId: d.TaskID,
+                    dependsOnTaskId: d.DependsOnTaskID,
+                    exclusiveGroup: d.ExclusiveGroup!,
+                    originStatus: (entityById.get(d.DependsOnTaskID)?.Status ?? 'Pending') as TaskGraphNodeStatus,
+                    priority: d.Priority ?? 0,
+                    sequence: d.Sequence ?? 0,
+                    conditionOutcome: this.evaluateExclusiveCondition(d, entityById, invocation, decisions, debug),
+                })),
+                (edge) => ReadsFailedDecision(conditionByEdge.get(edge.id) ?? '', failedDecisions),
+            ),
             // WHICH STATUSES MAY DECIDE — the graph's own failure dialect, not a constant.
             //
             // Under `'edges'`, a flow's failure handling IS its outgoing edges, so a Failed origin

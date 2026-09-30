@@ -508,9 +508,7 @@ describe('a Decision step walked in-run', () => {
         expect(harness.run.ErrorMessage).toContain('the decision "Triage the ticket" answered "intent" with confidence 0.55, below its minConfidence of 0.7');
     });
 
-    it('fails the run when the decision call fails, and takes no other path', async () => {
-        harness.steps.push(subAgentStep('Queue'));
-        harness.paths.push(path(TRIAGE_STEP_ID, stepID('Queue'), null, 0));
+    it('fails the run when the decision call fails and no path can be taken without its answer', async () => {
         const agent = makeAgent(FAILED_CALL);
 
         const result = await agent.Execute(makeParams());
@@ -519,6 +517,34 @@ describe('a Decision step walked in-run', () => {
         expect(agent.SubAgentCalls).toEqual([]);
         expect(harness.run.ErrorMessage).toContain('the decision "Triage the ticket" failed: the model timed out');
         expect(harness.decisionRunSteps[0]).toMatchObject({ Success: false, ErrorMessage: 'the model timed out' });
+    });
+
+    it('takes a recovery path ranked BELOW every path reading the failed decision — the probe', async () => {
+        // The intent fork at 3/2/1 and the recovery path at 0: a walker cannot retry, so the paths that
+        // read the answer that never came are passed over, not held.
+        harness.steps.push(subAgentStep('Recover'));
+        harness.paths.push(path(TRIAGE_STEP_ID, stepID('Recover'), 'stepResult.Success === false', 0));
+        const agent = makeAgent(FAILED_CALL);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(agent.SubAgentCalls).toEqual(['Recover Agent']);
+        expect(result.success).toBe(true);
+    });
+
+    it('never evaluates a path reading the failed decision, so a negated one is not taken', async () => {
+        harness.steps = [triageStep(), subAgentStep('Billing'), subAgentStep('Other'), subAgentStep('Recover')];
+        harness.paths = [
+            path(TRIAGE_STEP_ID, stepID('Billing'), "decisions.triage.intent.value === 'billing'", 3),
+            // With no answer, `undefined !== 'billing'` is true: evaluated, this would route on nothing.
+            path(TRIAGE_STEP_ID, stepID('Other'), "decisions.triage.intent.value !== 'billing'", 2),
+            path(TRIAGE_STEP_ID, stepID('Recover'), 'stepResult.Success === false', 0),
+        ];
+        const agent = makeAgent(FAILED_CALL);
+
+        await agent.Execute(makeParams());
+
+        expect(agent.SubAgentCalls).toEqual(['Recover Agent']);
     });
 
     it('takes a recovery path that outranks every path reading the failed decision', async () => {

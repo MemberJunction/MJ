@@ -15,12 +15,14 @@ import { RegisterClass, SafeExpressionEvaluator, UUIDsEqual } from '@memberjunct
 import {
     CollectDecisionStepKeys,
     DecisionHoldReason,
+    DecisionReferencesIn,
     NO_DECISIONS,
     ReadFlowDecisionStepConfiguration,
     ResolveDecisionStepAnswers,
     SelectOutgoingEdges,
     ValidateTaskGraphSpec,
     type AgentDecisionAnswerSummary,
+    type ConditionHold,
     type DecisionStepAnswers,
     type FlowCompileResult,
     type FlowDecisionStepConfiguration,
@@ -138,6 +140,15 @@ export class FlowExecutionState {
      * of them holds. Never written into the payload.
      */
     Decisions: GraphDecisions = NO_DECISIONS;
+
+    /**
+     * The keys of the Decision steps whose call failed in this run.
+     *
+     * A walker cannot retry, so such a decision never answers in this run, and a path reading it can
+     * never be taken: it is passed over, and a recovery path ranked below it can be. An answer below
+     * its `minConfidence` is different — the path might have been the one to take — and holds.
+     */
+    FailedDecisionKeys = new Set<string>();
 
     constructor(agentId: string) {
         this.agentId = agentId;
@@ -572,7 +583,7 @@ export class FlowAgentType extends BaseAgentType {
             repo,
             this._conditionEvaluator,
             this.buildConditionContext(payload, flowState, params),
-            (condition) => DecisionHoldReason(condition, flowState.Decisions)
+            (condition) => this.decisionHold(condition, flowState)
         );
 
         for (const rejection of selection.Rejected) {
@@ -596,6 +607,23 @@ export class FlowAgentType extends BaseAgentType {
                 .filter((p): p is MJAIAgentStepPathEntity => !!p),
             HoldReason: selection.Held?.Detail ?? null
         };
+    }
+
+    /**
+     * Why a path condition must not be evaluated, because of a decision it reads, or `null`.
+     *
+     * A condition reading a decision whose call failed is UNANSWERABLE in this run: a walker has no
+     * retry, so the path can never be taken, and a recovery path ranked below it is taken instead.
+     * Any other unusable answer — below its `minConfidence`, or not given — holds, because the path
+     * might have been the one to take.
+     */
+    private decisionHold(condition: string, flowState: FlowExecutionState): ConditionHold | null {
+        const reason = DecisionHoldReason(condition, flowState.Decisions);
+        if (!reason) return null;
+        const failed = DecisionReferencesIn(condition).References.find(r => flowState.FailedDecisionKeys.has(r.NodeId));
+        if (!failed) return { Detail: reason };
+        const unresolved = flowState.Decisions.Unresolved[failed.NodeId];
+        return { Detail: unresolved?.[failed.QuestionKey] ?? reason, Unanswerable: true };
     }
 
     /**
@@ -1066,8 +1094,8 @@ export class FlowAgentType extends BaseAgentType {
      * step's outcome.
      *
      * A call that succeeded makes the step `'Success'`; one that failed makes it `'Failed'`, so a
-     * failed decision takes the same recovery handling as any failed step, and every condition that
-     * reads its answers holds.
+     * failed decision takes the same recovery handling as any failed step: the paths that read its
+     * answers are passed over, and a recovery path is taken whatever its rank.
      */
     private completeDecisionStep<P>(
         step: BaseAgentNextStep<P>,
@@ -1112,6 +1140,8 @@ export class FlowAgentType extends BaseAgentType {
         const given = outcome.Status === 'Complete' ? outcome.Answers : {};
         const resolved = ResolveDecisionStepAnswers(run, read.Config.questions, given);
         flowState.Decisions = withDecisionStep(flowState.Decisions, read.Config, resolved);
+        if (outcome.Status === 'Failed') flowState.FailedDecisionKeys.add(read.Config.key);
+        else flowState.FailedDecisionKeys.delete(read.Config.key);
     }
     
     /**

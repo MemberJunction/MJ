@@ -24,6 +24,7 @@ import {
     MarkNodeCompleted,
     GetNodeResult,
     IsTraversalSettled,
+    type ConditionHold,
     type GraphEdge,
     type GraphNode,
     type IConditionEvaluator,
@@ -318,8 +319,16 @@ describe('TraversalState', () => {
 });
 
 describe('SelectOutgoingEdges with a hold check', () => {
-    /** Holds every condition that starts with `held`, standing in for one that reads an unusable decision. */
-    const holdCheck = (condition: string): string | null => (condition.startsWith('held') ? `cannot tell ${condition}` : null);
+    /**
+     * Holds every condition that starts with `held`, standing in for one that reads an unusable
+     * decision, and calls one that starts with `failed` unanswerable, standing in for one that reads
+     * a decision whose call failed.
+     */
+    const holdCheck = (condition: string): ConditionHold | null => {
+        if (condition.startsWith('held')) return { Detail: `cannot tell ${condition}` };
+        if (condition.startsWith('failed')) return { Detail: `never known ${condition}`, Unanswerable: true };
+        return null;
+    };
 
     /** An evaluator that records what it was asked, so a test can show a held condition never is. */
     const recording = (): IConditionEvaluator & { Asked: string[] } => {
@@ -383,6 +392,37 @@ describe('SelectOutgoingEdges with a hold check', () => {
         expect(sel.Held).toBeUndefined();
         expect(sel.Rejected[0]).toMatchObject({ EdgeId: 'hi', Reason: 'DestinationInactive' });
         expect(sel.Edges.map((e) => e.id)).toEqual(['lo']);
+    });
+
+    it('passes over an unanswerable edge, however it ranks, so a lower-ranked recovery edge is taken', () => {
+        const repo = repoOf(
+            [node('a'), node('b'), node('c')],
+            [edge('hi', 'a', 'b', { condition: 'failedHi', priority: 9 }), edge('recover', 'a', 'c', { condition: 'go', priority: 0 })],
+        );
+        const ev = recording();
+        const sel = SelectOutgoingEdges('a', repo, ev, { go: true }, holdCheck);
+        expect(sel.Edges.map((e) => e.id)).toEqual(['recover']);
+        expect(sel.Held).toBeUndefined();
+        expect(sel.Rejected[0]).toMatchObject({ EdgeId: 'hi', Reason: 'ConditionHeld', Detail: 'never known failedHi' });
+        // Never evaluated: a negated read of a failed answer must not come out true.
+        expect(ev.Asked).toEqual(['go']);
+    });
+
+    it('still holds on a held edge that outranks the recovery edge, even past an unanswerable one', () => {
+        const repo = repoOf(
+            [node('a'), node('b'), node('c'), node('d')],
+            [
+                edge('failed', 'a', 'b', { condition: 'failedX', priority: 9 }),
+                edge('held', 'a', 'c', { condition: 'heldY', priority: 5 }),
+                edge('recover', 'a', 'd', { condition: 'go', priority: 0 }),
+            ],
+        );
+        expect(SelectOutgoingEdges('a', repo, evaluator, { go: true }, holdCheck).Held?.EdgeId).toBe('held');
+    });
+
+    it('reports an unanswerable edge as held when nothing is followable — the node cannot say where to go', () => {
+        const repo = repoOf([node('a'), node('b')], [edge('e1', 'a', 'b', { condition: 'failedA' })]);
+        expect(SelectOutgoingEdges('a', repo, evaluator, {}, holdCheck).Held).toMatchObject({ EdgeId: 'e1', Detail: 'never known failedA' });
     });
 
     it('selects exactly as before when no condition is held', () => {
