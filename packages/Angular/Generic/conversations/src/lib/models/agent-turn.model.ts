@@ -92,6 +92,12 @@ export interface AgentTurnRequest {
     RequestedSkillIDs: string[];
     /** Whether Plan Mode is on for the conversation. */
     PlanMode: boolean;
+    /**
+     * The artifact version (`MJ: Artifact Versions.ID`) the message modifies, when the chat's
+     * routing decision (`EnableDecisionRouting`) confidently named one this agent produced. MJ's
+     * own path continues from that version instead of the agent's latest output. Null otherwise.
+     */
+    TargetArtifactVersionId: string | null;
 }
 
 /** What an {@link AgentTurnHandler} reports back to the chat area. */
