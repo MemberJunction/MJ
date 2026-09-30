@@ -1073,7 +1073,7 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const res = await rv.RunView<EscalationTargetCandidate>({
                 EntityName: 'MJ: Record Processes',
-                Fields: ['ID', 'Name', 'Description', 'Entity', 'EntityID', 'WorkType', 'Status', 'Configuration'],
+                Fields: ['ID', 'Name', 'Description', 'Entity', 'EntityID', 'WorkType', 'Status', 'PromptID', 'Configuration'],
                 ExtraFilter: `WorkType='Infer' AND EntityID='${EscapeSQLString(entityID)}'`,
                 OrderBy: 'Name',
                 ResultType: 'simple',

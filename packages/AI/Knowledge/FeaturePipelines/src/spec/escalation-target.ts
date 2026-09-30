@@ -26,10 +26,12 @@ export interface MinimalEscalationTargetRow {
     Status?: string | null;
     EntityID?: string | null;
     Entity?: string | null;
+    /** The pipeline's prompt. An Infer pipeline without one cannot be built, so it cannot be escalated to. */
+    PromptID: string | null;
 }
 
 /**
- * Checks the target row itself: it must be an Active Infer pipeline on the Decision pipeline's entity.
+ * Checks the target row itself: it must be an Active Infer pipeline on the Decision pipeline's entity, with a prompt.
  * @returns What is wrong, worded to follow the pipeline's name, or null.
  */
 export function FindEscalationTargetRowProblem(row: MinimalEscalationTargetRow, entityID: string): string | null {
@@ -41,6 +43,9 @@ export function FindEscalationTargetRowProblem(row: MinimalEscalationTargetRow, 
     }
     if (!UUIDsEqual(row.EntityID, entityID)) {
         return `is on entity '${row.Entity ?? row.EntityID}' (${row.EntityID}), not the Decision pipeline's entity (${entityID})`;
+    }
+    if (!row.PromptID) {
+        return 'has no PromptID; an Infer pipeline needs a prompt to run';
     }
     return null;
 }

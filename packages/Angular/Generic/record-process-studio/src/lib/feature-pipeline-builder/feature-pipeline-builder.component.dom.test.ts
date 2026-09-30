@@ -463,6 +463,7 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
       ID: 'target-1',
       Name: 'Full LLM Pipeline',
       WorkType: 'Infer',
+      PromptID: 'llm-prompt',
       Status: 'Active',
       EntityID: 'e1',
       Entity: 'Accounts',
@@ -486,6 +487,7 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
       ID: 'target-2',
       Name: 'Wrong Entity Pipeline',
       WorkType: 'Infer',
+      PromptID: 'llm-prompt',
       Status: 'Active',
       EntityID: 'e2',
       Entity: 'Contacts',
@@ -495,6 +497,7 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
       ID: 'target-3',
       Name: 'Incomplete Pipeline',
       WorkType: 'Infer',
+      PromptID: 'llm-prompt',
       Status: 'Active',
       EntityID: 'e1',
       Entity: 'Accounts',
@@ -518,6 +521,7 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
       ID: 'target-4',
       Name: 'Another Decision Pipeline',
       WorkType: 'Infer',
+      PromptID: 'llm-prompt',
       Status: 'Active',
       EntityID: 'e1',
       Entity: 'Accounts',
@@ -744,6 +748,7 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
         ID: 'target-5',
         Name: 'No Prompt Pipeline',
         WorkType: 'Infer',
+        PromptID: 'llm-prompt',
         Status: 'Active',
         EntityID: 'e1',
         Entity: 'Accounts',
@@ -758,6 +763,40 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
       };
 
       expect(f.componentInstance.GetTargetProblem(invalidSpec)).toBe('has an invalid spec: DataFeatureSpec PromptID is required.');
+    });
+
+    it('rejects a target row with no PromptID, which the engine cannot build, and loads the column to check it', async () => {
+      const fields: Array<RunViewParams['Fields']> = [];
+      const f = renderWith(
+        decisionWithTarget(),
+        providerWithRunView(async (params) => {
+          if (params.EntityName === 'MJ: Record Processes') {
+            fields.push(params.Fields);
+          }
+          return runViewResult([]);
+        })
+      );
+      await f.componentInstance.LoadEscalationTargets();
+      const noPrompt: EscalationTargetCandidate = {
+        ID: 'target-6',
+        Name: 'Promptless Pipeline',
+        WorkType: 'Infer',
+        PromptID: null,
+        Status: 'Active',
+        EntityID: 'e1',
+        Entity: 'Accounts',
+        ParsedSpec: {
+          Name: 'Promptless',
+          Description: 'Its spec names a prompt, its row does not',
+          PromptID: 'llm-prompt',
+          Context: { Fields: ['Name'] },
+          Caching: { Cacheable: false },
+          Outputs: [{ Name: 'IsAtRisk', Ref: '$', Target: { Mode: 'field', EntityFieldName: 'IsAtRisk' } }],
+        },
+      };
+
+      expect(fields.at(-1)).toContain('PromptID');
+      expect(f.componentInstance.GetTargetProblem(noPrompt)).toBe('has no PromptID; an Infer pipeline needs a prompt to run');
     });
   });
 
