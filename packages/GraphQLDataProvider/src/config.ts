@@ -27,9 +27,15 @@ export async function SetupGraphQLClient(config: GraphQLProviderConfigData): Pro
     // would fail later, far from the cause. ProviderBase.Config logs a failed metadata download
     // and carries on (it must — a timer-driven refresh has to keep the last good graph), so the
     // boot is where "nothing loaded" becomes an error. Checked before LoggedIn so no engine
-    // starts against an empty graph.
+    // starts against an empty graph. The download's own failure travels in the message as well as
+    // `cause`: callers classify boot errors by message text (a user with no roles fails reading
+    // `MJ: User Roles`, and the Explorer/Bootstrap initializers show the no-roles screen for it).
     if (provider.Entities.length === 0) {
-        throw new Error(`SetupGraphQLClient: no entity metadata was loaded from ${config.URL} — the metadata download failed or returned nothing; see the logged GetAllMetadata error`);
+        const message = `SetupGraphQLClient: no entity metadata was loaded from ${config.URL} — the metadata download failed or returned nothing`;
+        const cause = provider.LastMetadataLoadError;
+        throw cause
+            ? new Error(`${message}: ${cause.message}`, { cause })
+            : new Error(`${message}; see the logged GetAllMetadata error`);
     }
 
     // Fire LoggedIn event BEFORE awaiting StartupManager, so that subscribers

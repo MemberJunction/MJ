@@ -50,4 +50,28 @@ describe('ProviderBase Config after a failed metadata download', () => {
 
         expect(refreshTimestamps).toHaveBeenCalledTimes(1);
     });
+
+    it('records why the download failed, and clears it once a load succeeds', async () => {
+        const cause = new Error('User a@b.com does not have read permissions on MJ: User Roles');
+        vi.spyOn(provider as never, 'GetCurrentUser' as never).mockRejectedValueOnce(cause as never);
+
+        await provider.Config(testConfig);
+        expect(provider.Entities.length).toBe(0);
+        expect(provider.LastMetadataLoadError).toBe(cause);
+
+        await provider.Config(testConfig);
+        expect(provider.Entities.length).toBeGreaterThan(0);
+        expect(provider.LastMetadataLoadError).toBeNull();
+    });
+
+    it('records a failed dataset read', async () => {
+        vi.spyOn(provider, 'GetDatasetByName').mockResolvedValueOnce({
+            DatasetID: '', DatasetName: 'MJ_Metadata', Success: false, Status: 'Access denied',
+            LatestUpdateDate: new Date(), Results: []
+        });
+
+        await provider.Config(testConfig);
+
+        expect(provider.LastMetadataLoadError?.message).toContain('Access denied');
+    });
 });

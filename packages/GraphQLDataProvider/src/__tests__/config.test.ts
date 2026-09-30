@@ -1,7 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // The entities every mocked provider instance reports; tests swap it to simulate an empty or loaded graph.
-const mockProviderState = vi.hoisted(() => ({ entities: [{ Name: 'Stub Entity' }] as Array<{ Name: string }> }));
+const mockProviderState = vi.hoisted(() => ({
+  entities: [{ Name: 'Stub Entity' }] as Array<{ Name: string }>,
+  lastMetadataLoadError: null as Error | null,
+}));
 
 // Mock all dependencies
 vi.mock('@memberjunction/core', () => ({
@@ -33,6 +36,7 @@ vi.mock('../graphQLDataProvider', () => {
     backgroundValidateAndRefresh = vi.fn().mockResolvedValue(undefined);
     Connect = vi.fn().mockResolvedValue(undefined);
     Entities: Array<{ Name: string }> = mockProviderState.entities;
+    LastMetadataLoadError: Error | null = mockProviderState.lastMetadataLoadError;
   }
   class MockGraphQLProviderConfigData {
     Token: string;
@@ -117,6 +121,18 @@ describe('SetupGraphQLClient with an empty metadata graph', () => {
 
   afterEach(() => {
     mockProviderState.entities = [{ Name: 'Stub Entity' }];
+    mockProviderState.lastMetadataLoadError = null;
+  });
+
+  it('carries the metadata download failure through as the cause', async () => {
+    const cause = new Error('User a@b.com does not have read permissions on MJ: User Roles');
+    mockProviderState.lastMetadataLoadError = cause;
+    const config = new GraphQLProviderConfigData('t', 'http://meta.example:4000', 'ws://meta.example:4000');
+
+    const rejection = await SetupGraphQLClient(config).then(() => null, (e: Error) => e);
+
+    expect(rejection?.message).toMatch(/no entity metadata.*does not have read permissions on MJ: User Roles/);
+    expect(rejection?.cause).toBe(cause);
   });
 
   it('rejects naming the cause and the URL, before LoggedIn or engine startup', async () => {
