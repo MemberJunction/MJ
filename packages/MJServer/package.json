@@ -158,6 +158,7 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
+    "@memberjunction/conversations-runtime": "6.2.0-edge.1",
     "@types/express": "^5.0.6",
     "pkgroll": "2.23.0",
     "rimraf": "6.1.2",

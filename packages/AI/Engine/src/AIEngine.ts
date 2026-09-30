@@ -1069,6 +1069,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
                 model: model.APIName
             };
 
+            // BaseEmbeddings used directly: AIEngine sits below @memberjunction/ai-prompts in the dependency hierarchy.
             const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
                 BaseEmbeddings,
                 model.DriverClass,
@@ -1131,6 +1132,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
             return this.EmbedText(model, content, apiKey);
         }
 
+        // BaseEmbeddings used directly: AIEngine sits below @memberjunction/ai-prompts in the dependency hierarchy.
         const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
             BaseEmbeddings,
             model.DriverClass,

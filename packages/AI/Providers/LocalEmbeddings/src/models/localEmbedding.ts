@@ -115,6 +115,15 @@ export class LocalEmbedding extends BaseEmbeddings {
     }
 
     /**
+     * Runs ONNX models in-process, so it needs no API key. Lets credential checks (e.g.
+     * `AIEmbeddingRunner`) accept a local model on an install with no
+     * `AI_VENDOR_API_KEY__LocalEmbedding` set.
+     */
+    public override get RequiresAPIKey(): boolean {
+        return false;
+    }
+
+    /**
      * Get or create a pipeline for the specified model
      */
     private async getPipeline(modelName: string): Promise<any> {

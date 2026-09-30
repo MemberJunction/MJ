@@ -3478,6 +3478,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.2.0-edge.1
         version: link:../../../MJGlobal
+      '@memberjunction/integration-engine':
+        specifier: 6.2.0-edge.1
+        version: link:../../../Integration/engine
     devDependencies:
       '@types/node':
         specifier: 24.10.11
@@ -12676,6 +12679,9 @@ importers:
         specifier: ^3.25.0
         version: 3.25.76
     devDependencies:
+      '@memberjunction/conversations-runtime':
+        specifier: 6.2.0-edge.1
+        version: link:../ConversationsRuntime
       '@types/express':
         specifier: ^5.0.6
         version: 5.0.6
@@ -14053,6 +14059,9 @@ importers:
       '@memberjunction/ai':
         specifier: 6.2.0-edge.1
         version: link:../AI/Core
+      '@memberjunction/ai-prompts':
+        specifier: 6.2.0-edge.1
+        version: link:../AI/Prompts
       '@memberjunction/ai-vectordb':
         specifier: 6.2.0-edge.1
         version: link:../AI/Vectors/Database
