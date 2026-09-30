@@ -11,7 +11,7 @@ import {
     BuildRoutingState,
     BuildRoutingStateStructured,
     CanAskRoutingDecision,
-    type RoutingAgent
+    type RoutingCatalogAgent
 } from '@memberjunction/ai-core-plus';
 import { ParseDecisionCorpus } from '../decision-eval/corpus';
 import { HistoryBeforeMessage, MapPointToRoutingInput, type DecisionEvalAgentCatalog } from '../decision-eval/point-mapping';
@@ -30,11 +30,12 @@ const pointNumber = (n: number): DecisionCorpusPoint => {
 const LEDGER_ID = 'A1000000-0000-4000-8000-000000000001';
 const CALENDAR_ID = 'A1000000-0000-4000-8000-000000000002';
 const MEMO_ID = 'A1000000-0000-4000-8000-000000000003';
-const SAGE: RoutingAgent = { ID: 'A1000000-0000-4000-8000-0000000000FF', Name: 'Sage', Description: 'Routes each request.' };
+const ACTIVE = { Status: 'Active', IsRestricted: false } as const;
+const SAGE: RoutingCatalogAgent = { ID: 'A1000000-0000-4000-8000-0000000000FF', Name: 'Sage', Description: 'Routes each request.', ...ACTIVE };
 
 /** The engine knows the Ledger Helper by a newer description, and Sage; nobody else. */
-const ENGINE_AGENTS: RoutingAgent[] = [
-    { ID: LEDGER_ID, Name: 'Ledger Helper', Description: 'Engine description: expenses and reimbursements.' },
+const ENGINE_AGENTS: RoutingCatalogAgent[] = [
+    { ID: LEDGER_ID, Name: 'Ledger Helper', Description: 'Engine description: expenses and reimbursements.', ...ACTIVE },
     SAGE
 ];
 const CATALOG: DecisionEvalAgentCatalog = {
@@ -56,9 +57,20 @@ describe('MapPointToRoutingInput', () => {
         expect(input.Participants.map(p => p.Agent.ID)).toEqual([CALENDAR_ID, LEDGER_ID]);
         // The engine knows the Ledger Helper; the Calendar Coordinator comes from the point.
         expect(input.Participants[1].Agent.Description).toBe('Engine description: expenses and reimbursements.');
+        // An agent only the point knows is taken as routable: the point records it answering here.
         expect(input.Participants[0].Agent).toEqual({
-            ID: CALENDAR_ID, Name: 'Calendar Coordinator', Description: 'Schedules meetings and finds free time on shared calendars.'
+            ID: CALENDAR_ID, Name: 'Calendar Coordinator', Description: 'Schedules meetings and finds free time on shared calendars.', ...ACTIVE
         });
+    });
+
+    it('leaves out an agent the catalog has as inactive or restricted, as the chat does', () => {
+        for (const status of [{ Status: 'Disabled' as const, IsRestricted: false }, { Status: 'Active' as const, IsRestricted: true }]) {
+            const catalog: DecisionEvalAgentCatalog = {
+                FindAgent: id => (id.toUpperCase() === LEDGER_ID ? { ...ENGINE_AGENTS[0], ...status } : undefined),
+                ConversationManager: SAGE
+            };
+            expect(MapPointToRoutingInput(pointNumber(2), catalog).Participants.map(p => p.Agent.ID)).toEqual([CALENDAR_ID]);
+        }
     });
 
     it('describes a non-previous agent the engine lacks by its history name alone', () => {
