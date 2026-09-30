@@ -90,7 +90,10 @@ export interface PayloadFeedbackContext {
     Message?: string;
     /** The agent asking, recorded on the decision's prompt run. */
     AgentID?: string;
-    /** Aborts the decision call. */
+    /**
+     * Aborts the decision call. The call is also bounded by
+     * {@link PayloadFeedbackManager.DECISION_TIMEOUT_MS}.
+     */
     CancellationToken?: AbortSignal;
 }
 
@@ -110,6 +113,12 @@ const MAX_LISTED_KEYS = 10;
  * Manages feedback collection for suspicious payload changes
  */
 export class PayloadFeedbackManager {
+    /**
+     * The longest the decision call may take. Past it the call is aborted and every change is
+     * accepted, as on any other failure. The same bound as the catalog narrowing decision.
+     */
+    public static readonly DECISION_TIMEOUT_MS = 30000;
+
     private config: PayloadFeedbackConfig;
     private decisionService: AgentDecisionService;
     private _lastDecisionResult: AIDecisionRunResult | undefined;
@@ -216,8 +225,9 @@ export class PayloadFeedbackManager {
      *
      * A change is `intended` when its probability is at or above {@link IntendedThreshold}, and
      * its explanation carries the probability. When no decision answers a change (no context user,
-     * a failed or throwing call, a missing answer, or more questions than one call carries), the
-     * change is accepted, as it always was, and its explanation says why. Never throws.
+     * a failed, throwing, cancelled or timed-out call, a missing answer, or more questions than one
+     * call carries), the change is accepted, as it always was, and its explanation says why. Never
+     * throws.
      *
      * @param questions - The questions from {@link GenerateQuestions}
      * @param context - The agent's reasoning and message for the step, and the call's options
@@ -298,24 +308,54 @@ export class PayloadFeedbackManager {
         ].join('\n');
     }
 
-    /** Asks the questions in one call. A throw becomes a failed result, so the caller can fall back. */
+    /**
+     * Asks the questions in one call. Never throws, and never waits longer than
+     * {@link PayloadFeedbackManager.DECISION_TIMEOUT_MS} or past the run's cancellation: a throw, a
+     * timeout and a cancelled run each come back as a failed result, so the caller accepts every
+     * change. Stopping also aborts the call.
+     */
     private async askDecisions(
         questions: PayloadFeedbackQuestion[],
         context: PayloadFeedbackContext,
         contextUser: UserInfo
     ): Promise<AIDecisionRunResult> {
+        const runToken = context.CancellationToken;
+        if (runToken?.aborted) {
+            return this.failedResult('the run was cancelled');
+        }
+        const controller = new AbortController();
+        let stop: (reason: string) => void = () => undefined;
+        const stopped = new Promise<AIDecisionRunResult>(resolve => {
+            stop = (reason: string): void => {
+                controller.abort(reason);
+                resolve(this.failedResult(reason));
+            };
+        });
+        const relayRunAbort = (): void => stop('the run was cancelled');
+        runToken?.addEventListener('abort', relayRunAbort, { once: true });
+        const timeoutMS = PayloadFeedbackManager.DECISION_TIMEOUT_MS;
+        const timer = setTimeout(() => stop(`timed out after ${timeoutMS} ms`), timeoutMS);
         try {
-            return await this.decisionService.Ask({
+            const ask = this.decisionService.Ask({
                 State: this.buildDecisionState(questions, context),
                 Questions: this.buildDecisionQuestions(questions),
                 ContextUser: contextUser,
                 AgentID: context.AgentID,
                 PromptName: this.config.decisionPromptName,
-                CancellationToken: context.CancellationToken
+                CancellationToken: controller.signal
             });
+            return await Promise.race([ask, stopped]);
         } catch (error) {
-            return { success: false, errorMessage: error instanceof Error ? error.message : String(error), Answers: {} };
+            return this.failedResult(error instanceof Error ? error.message : String(error));
+        } finally {
+            clearTimeout(timer);
+            runToken?.removeEventListener('abort', relayRunAbort);
         }
+    }
+
+    /** A decision result that answered nothing, and why. */
+    private failedResult(errorMessage: string): AIDecisionRunResult {
+        return { success: false, errorMessage, Answers: {} };
     }
 
     /** One Likelihood per question: "Given the agent's stated reasoning, this change was intended: ...". */

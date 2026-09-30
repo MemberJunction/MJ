@@ -473,7 +473,9 @@ export interface LoopAgentTypePromptParams {
      * are listed on the agent's next turn, which asks it to confirm or restore them.
      *
      * A change is never reverted or blocked automatically: the agent decides. When the decision
-     * fails, every change is accepted, as it is when this is off.
+     * fails or takes longer than 30 seconds, every change is accepted, as it is when this is off. A
+     * step that ends the run (`Success`, `Chat`, or any step that terminates) is not checked, since
+     * no turn would read the result.
      *
      * Off by default: each check costs an extra decision call.
      * @default false

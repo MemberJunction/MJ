@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { UserInfo } from '@memberjunction/core';
 import { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { AgentDecisionService, AgentDecisionAskParams } from '../AgentDecisionService';
@@ -79,9 +79,8 @@ describe('PayloadFeedbackManager.QueryAgent', () => {
             const { manager, ask } = makeManager();
             ask.mockResolvedValueOnce(likelihoods(0.9, 0.8));
             const questions = manager.GenerateQuestions([truncation(), keyRemoval()]);
-            const signal = new AbortController().signal;
 
-            await manager.QueryAgent(questions, { Reasoning: 'Shortening it', AgentID: 'agent-1', CancellationToken: signal }, USER);
+            await manager.QueryAgent(questions, { Reasoning: 'Shortening it', AgentID: 'agent-1' }, USER);
 
             expect(ask).toHaveBeenCalledTimes(1);
             const asked = ask.mock.calls[0][0];
@@ -97,7 +96,8 @@ describe('PayloadFeedbackManager.QueryAgent', () => {
             });
             expect(asked.ContextUser).toBe(USER);
             expect(asked.AgentID).toBe('agent-1');
-            expect(asked.CancellationToken).toBe(signal);
+            // Its own signal, which the time limit and the run's cancellation both abort.
+            expect(asked.CancellationToken).toBeInstanceOf(AbortSignal);
             expect(asked.PromptName).toBeUndefined();
         });
 
@@ -266,6 +266,88 @@ describe('PayloadFeedbackManager.QueryAgent', () => {
             expect(responses.map(r => r.intended)).toEqual([false, false, true]);
             expect(responses[2].explanation).toBe('Accepted by default (over the limit of 2 questions per decision call)');
         });
+    });
+});
+
+describe('PayloadFeedbackManager.QueryAgent: the time limit and cancellation', () => {
+    const TIMEOUT = PayloadFeedbackManager.DECISION_TIMEOUT_MS;
+
+    /** A decision call that never answers, and the signal it was given. */
+    function neverAnswers(ask: ReturnType<typeof makeManager>['ask']): { signal: () => AbortSignal | undefined } {
+        let signal: AbortSignal | undefined;
+        ask.mockImplementationOnce((params) => {
+            signal = params.CancellationToken;
+            return new Promise<AIDecisionRunResult>(() => undefined);
+        });
+        return { signal: () => signal };
+    }
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('allows 30 seconds, as the catalog narrowing decision does', () => {
+        expect(TIMEOUT).toBe(30_000);
+    });
+
+    it('accepts every change, and aborts the call, when the call takes longer than the limit', async () => {
+        vi.useFakeTimers();
+        const { manager, ask } = makeManager();
+        const call = neverAnswers(ask);
+        let settled = false;
+        const pending = manager.QueryAgent(manager.GenerateQuestions([truncation(), keyRemoval()]), {}, USER).then((responses) => {
+            settled = true;
+            return responses;
+        });
+
+        await vi.advanceTimersByTimeAsync(TIMEOUT - 1);
+        expect(settled).toBe(false);
+        expect(call.signal()?.aborted).toBe(false);
+
+        await vi.advanceTimersByTimeAsync(1);
+        const responses = await pending;
+
+        expect(call.signal()?.aborted).toBe(true);
+        expect(responses.map((r) => r.intended)).toEqual([true, true]);
+        expect(responses.every((r) => r.probability === undefined)).toBe(true);
+        expect(responses[0].explanation).toBe(`Accepted by default (the decision call failed: timed out after ${TIMEOUT} ms)`);
+        expect(manager.LastDecisionResult?.success).toBe(false);
+    });
+
+    it('clears its timer when the call answers in time', async () => {
+        vi.useFakeTimers();
+        const { manager, ask } = makeManager();
+        ask.mockResolvedValueOnce(likelihoods(0.1));
+
+        const responses = await manager.QueryAgent(manager.GenerateQuestions([truncation()]), {}, USER);
+
+        expect(responses[0].intended).toBe(false);
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('stops waiting, and aborts the call, when the run is cancelled', async () => {
+        const { manager, ask } = makeManager();
+        const call = neverAnswers(ask);
+        const run = new AbortController();
+
+        const pending = manager.QueryAgent(manager.GenerateQuestions([truncation()]), { CancellationToken: run.signal }, USER);
+        expect(ask).toHaveBeenCalledTimes(1);
+        run.abort();
+        const responses = await pending;
+
+        expect(call.signal()?.aborted).toBe(true);
+        expect(responses).toEqual([expect.objectContaining({ intended: true, explanation: 'Accepted by default (the decision call failed: the run was cancelled)' })]);
+    });
+
+    it('asks nothing when the run is already cancelled', async () => {
+        const { manager, ask } = makeManager();
+        const run = new AbortController();
+        run.abort();
+
+        const responses = await manager.QueryAgent(manager.GenerateQuestions([truncation()]), { CancellationToken: run.signal }, USER);
+
+        expect(ask).not.toHaveBeenCalled();
+        expect(responses).toEqual([expect.objectContaining({ intended: true, explanation: 'Accepted by default (the decision call failed: the run was cancelled)' })]);
     });
 });
 
