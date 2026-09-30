@@ -53,6 +53,8 @@
     "@memberjunction/ai-heygen": 0.6,
     "@memberjunction/ai-huggingface": 2.1,
     "@memberjunction/ai-inception": 0.7,
+    "@memberjunction/ai-deepinfra": 0.7,
+    "@memberjunction/ai-siliconflow": 0.7,
     "@memberjunction/ai-inworld": 0.9,
     "@memberjunction/ai-knowledge-pipeline": 0.4,
     "@memberjunction/ai-llamacpp": 0.8,

@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo, LogStatus } from '@memberjunction/core';
 import { ActionResult } from '@memberjunction/actions-base';
 import { AIDecisionRunResult } from '@memberjunction/ai-prompts';
+import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { AIPromptRunResult, BaseAgentNextStep, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 import { AgentDecisionService, AgentDecisionAskParams } from '../AgentDecisionService';
 import { BaseAgent } from '../base-agent';
 import { LoopAgentType } from '../agent-types/loop-agent-type';
 import {
     DEFAULT_LOOP_AGENT_PROMPT_PARAMS,
-    DEFAULT_RESPONSE_TYPE_INCLUSION_RULES,
 } from '../agent-types/loop-agent-prompt-params';
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
@@ -36,6 +36,8 @@ class MockStepEntity {
     public InputData?: string;
     public OutputData?: string;
     public ParentID?: string;
+    public TargetLogID?: string | null;
+    public PromptRun?: MJAIPromptRunEntity;
     constructor(id: string) {
         this.ID = id;
     }
@@ -119,6 +121,8 @@ describe('finishIf', () => {
         internals._effectiveActions = [{ ID: '11111111-1111-1111-1111-111111111111', Name: 'Create Record' }];
         internals._activeProvider = { GetEntityObject: vi.fn(async () => new MockStepEntity('step-1')) };
         internals._agentRun = { ID: 'run-1', AgentID: 'agent-1', Steps: [] };
+        // These tests exercise a live gate; gates are opt-in (finishIfMode defaults to 'off').
+        internals._agentTypePromptParams = { finishIfMode: 'on' };
         decisions = new AgentDecisionService();
         agent.SetDecisionService(decisions);
         vi.spyOn(internals, 'validateSuccessNextStep').mockImplementation(async (_params, nextStep) => nextStep);
@@ -142,18 +146,32 @@ describe('finishIf', () => {
     }
 
     describe('prompt params', () => {
-        it('is on by default, with a 0.9 threshold', () => {
-            expect(DEFAULT_RESPONSE_TYPE_INCLUSION_RULES.finishIf).toBe(true);
-            expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.includeFinishIfDocs).toBe(true);
+        it('is off by default (opt-in per agent), with a 0.9 threshold for agents that turn it on', () => {
+            expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.finishIfMode).toBe('off');
             expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.finishIfThreshold).toBe(0.9);
         });
 
+        it('with finishIfMode unset or off, the docs and the field are off', () => {
+            for (const params of [{}, { finishIfMode: 'off' }, { finishIfMode: 'bogus' }, { finishIfMode: 'off', includeFinishIfDocs: true }] as Record<string, unknown>[]) {
+                agent.TestApplyResponseTypeAutoAlignment(params);
+                expect(params.includeFinishIfDocs).toBe(false);
+                expect((params.includeResponseTypeDefinition as Record<string, unknown>).finishIf).toBe(false);
+            }
+        });
+
+        it.each(['shadow', 'on'])('with finishIfMode %s, the docs and the field are on', (mode) => {
+            const params: Record<string, unknown> = { finishIfMode: mode };
+            agent.TestApplyResponseTypeAutoAlignment(params);
+            expect(params.includeFinishIfDocs).not.toBe(false);
+            expect((params.includeResponseTypeDefinition as Record<string, unknown>).finishIf).toBe(true);
+        });
+
         it('includeFinishIfDocs: false turns the field off, unless it is set explicitly', () => {
-            const off: Record<string, unknown> = { includeFinishIfDocs: false };
+            const off: Record<string, unknown> = { finishIfMode: 'on', includeFinishIfDocs: false };
             agent.TestApplyResponseTypeAutoAlignment(off);
             expect((off.includeResponseTypeDefinition as Record<string, unknown>).finishIf).toBe(false);
 
-            const explicit: Record<string, unknown> = { includeFinishIfDocs: false, includeResponseTypeDefinition: { finishIf: true } };
+            const explicit: Record<string, unknown> = { finishIfMode: 'on', includeFinishIfDocs: false, includeResponseTypeDefinition: { finishIf: true } };
             agent.TestApplyResponseTypeAutoAlignment(explicit, { finishIf: true });
             expect((explicit.includeResponseTypeDefinition as Record<string, unknown>).finishIf).toBe(true);
         });
@@ -217,6 +235,42 @@ describe('finishIf', () => {
             expect(asked.State).toContain('Action: Create Record');
             expect(asked.State).toContain('Output RecordID: T-42');
             expect(finishChecks).toEqual([expect.objectContaining({ passed: true, probabilities: { q1: 0.95 }, threshold: 0.9 })]);
+        });
+
+        it('records a passing gate in shadow mode, and continues as it would have without the gate', async () => {
+            internals._agentTypePromptParams = { finishIfMode: 'shadow' };
+            actionSucceeds();
+            const ask = vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(likelihoods(0.95));
+
+            const result = await executeActions(makeParams(), actionsDecision());
+
+            expect(ask).toHaveBeenCalledTimes(1);
+            expect(result).toMatchObject({ step: 'Retry', terminate: false });
+            expect(finishChecks).toEqual([expect.objectContaining({ passed: true, mode: 'shadow', endedRun: false })]);
+        });
+
+        it('records that the gate ended the run in on mode', async () => {
+            actionSucceeds();
+            vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(likelihoods(0.95));
+
+            await executeActions(makeParams(), actionsDecision());
+
+            expect(finishChecks).toEqual([expect.objectContaining({ passed: true, mode: 'on', endedRun: true })]);
+        });
+
+        it.each([
+            ['unset', undefined],
+            ['off', { finishIfMode: 'off' }],
+        ])('never asks, and records nothing, with finishIfMode %s', async (_label, promptParams) => {
+            internals._agentTypePromptParams = promptParams;
+            actionSucceeds();
+            const ask = vi.spyOn(decisions, 'Ask');
+
+            const result = await executeActions(makeParams(), actionsDecision());
+
+            expect(ask).not.toHaveBeenCalled();
+            expect(result).toMatchObject({ step: 'Retry', terminate: false });
+            expect(finishChecks).toEqual([]);
         });
 
         it('continues as today when a probability is below the threshold', async () => {
@@ -287,7 +341,7 @@ describe('finishIf', () => {
         });
 
         it('is never evaluated when includeResponseTypeDefinition.finishIf is false', async () => {
-            internals._agentTypePromptParams = { includeResponseTypeDefinition: { finishIf: false } };
+            internals._agentTypePromptParams = { finishIfMode: 'on', includeResponseTypeDefinition: { finishIf: false } };
             actionSucceeds();
             const ask = vi.spyOn(decisions, 'Ask');
 
@@ -298,7 +352,7 @@ describe('finishIf', () => {
         });
 
         it('reads the threshold and the decision prompt from the merged prompt params', async () => {
-            internals._agentTypePromptParams = { finishIfThreshold: 0.8, decisionPromptName: 'Custom Decision' };
+            internals._agentTypePromptParams = { finishIfMode: 'on', finishIfThreshold: 0.8, decisionPromptName: 'Custom Decision' };
             actionSucceeds();
             const ask = vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(likelihoods(0.85));
 
@@ -343,6 +397,16 @@ describe('finishIf', () => {
             expect(result).toMatchObject({ step: 'Success', terminate: false });
         });
 
+        it('returns the sub-agent step unchanged, rather than throwing out of the loop, when the gate throws', async () => {
+            subAgentSucceeded();
+            vi.spyOn(decisions, 'Ask').mockRejectedValueOnce(new Error('network down'));
+
+            const result = await agent.TestExecuteNextStep(makeParams(), subAgentDecision());
+
+            expect(result).toMatchObject({ step: 'Success', terminate: false });
+            expect(finishChecks).toEqual([expect.objectContaining({ passed: false, reason: 'network down' })]);
+        });
+
         it.each([
             ['the sub-agent failed', { step: 'Failed' }],
             ['the step already terminates', { terminate: true }],
@@ -353,6 +417,130 @@ describe('finishIf', () => {
             await agent.TestExecuteNextStep(makeParams(), subAgentDecision());
 
             expect(ask).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("the gate's guarantees", () => {
+        /** An ActionResult as the action engine returns it. */
+        const actionResult = (fields: Partial<ActionResult>): ActionResult => Object.assign(new ActionResult(), fields);
+
+        function twoActionsDecision(): BaseAgentNextStep {
+            return {
+                step: 'Actions',
+                terminate: false,
+                actions: [{ name: 'Create Record', params: {} }, { name: 'Create Record', params: { Name: 'Second' } }],
+                finishIf: FINISH_IF,
+            };
+        }
+
+        it.each([
+            ['returns Success: false', (): Promise<ActionResult> => Promise.resolve(actionResult({ Success: false, Message: 'Denied', Params: [] }))],
+            ['throws', (): Promise<ActionResult> => Promise.reject(new Error('Action timed out'))],
+        ])('never asks when one of two actions %s, so one success cannot end the run', async (_label, second) => {
+            vi.spyOn(internals, 'ExecuteSingleAction')
+                .mockResolvedValueOnce(actionResult({ Success: true, Message: 'Created', Params: [] }))
+                .mockImplementationOnce(second);
+            const ask = vi.spyOn(decisions, 'Ask').mockResolvedValue(likelihoods(0.99));
+
+            const result = await executeActions(makeParams(), twoActionsDecision());
+
+            expect(result).toMatchObject({ step: 'Retry', terminate: false });
+            expect(ask).not.toHaveBeenCalled();
+        });
+
+        it('ends the run when both of two actions succeed', async () => {
+            vi.spyOn(internals, 'ExecuteSingleAction')
+                .mockResolvedValueOnce(actionResult({ Success: true, Message: 'Created', Params: [] }))
+                .mockResolvedValueOnce(actionResult({ Success: true, Message: 'Created', Params: [] }));
+            vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(likelihoods(0.99));
+
+            const result = await executeActions(makeParams(), twoActionsDecision());
+
+            expect(result).toMatchObject({ step: 'Success', terminate: true, message: FINISH_IF.message });
+        });
+
+        it.each([
+            ['the default threshold', undefined, 0.9],
+            ['a configured threshold', 0.8, 0.8],
+        ])('passes a probability exactly at %s', async (_label, configured, probability) => {
+            internals._agentTypePromptParams = configured === undefined ? { finishIfMode: 'on' } : { finishIfMode: 'on', finishIfThreshold: configured };
+            actionSucceeds();
+            vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(likelihoods(probability));
+
+            const result = await executeActions(makeParams(), actionsDecision());
+
+            expect(result).toMatchObject({ step: 'Success', terminate: true });
+            expect(finishChecks[0]).toMatchObject({ passed: true, threshold: probability });
+        });
+
+        it.each([
+            ['a numeric string', '0.5'],
+            ['NaN', Number.NaN],
+            ['zero', 0],
+            ['a negative number', -0.2],
+            ['a number above 1', 1.5],
+        ])('falls back to the 0.9 threshold when finishIfThreshold is %s', async (_label, threshold) => {
+            internals._agentTypePromptParams = { finishIfMode: 'on', finishIfThreshold: threshold };
+            actionSucceeds();
+            vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(likelihoods(0.85));
+
+            const result = await executeActions(makeParams(), actionsDecision());
+
+            expect(result).toMatchObject({ step: 'Retry', terminate: false });
+            expect(finishChecks[0]).toMatchObject({ passed: false, threshold: 0.9 });
+        });
+
+        it('does not end the run when checking Success validation throws', async () => {
+            actionSucceeds();
+            vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(likelihoods(0.99));
+            vi.mocked(internals.validateSuccessNextStep).mockRejectedValueOnce(new Error('validator crashed'));
+
+            const result = await executeActions(makeParams(), actionsDecision());
+
+            expect(result).toMatchObject({ step: 'Retry', terminate: false });
+            expect(result.errorMessage).toBeUndefined();
+            expect(finishChecks).toEqual([expect.objectContaining({ passed: false, reason: 'validator crashed' })]);
+        });
+
+        it('skips the gate, and logs why, when an action returned AIDirectives the model must read', async () => {
+            vi.mocked(LogStatus).mockClear();
+            vi.spyOn(internals, 'ExecuteSingleAction').mockResolvedValueOnce(actionResult({
+                Success: true,
+                Message: 'Found a stored query',
+                Params: [],
+                AIDirectives: [{ Message: 'Call "Run Stored Query" with QueryID abc-123', Type: 'instruction', Priority: 'high' }],
+            }));
+            const ask = vi.spyOn(decisions, 'Ask').mockResolvedValue(likelihoods(0.99));
+            const params = makeParams();
+
+            const result = await executeActions(params, actionsDecision());
+
+            expect(result).toMatchObject({ step: 'Retry', terminate: false });
+            expect(ask).not.toHaveBeenCalled();
+            expect(params.conversationMessages.some(m => typeof m.content === 'string' && m.content.startsWith('IMPORTANT — Follow these directives'))).toBe(true);
+            const logged = vi.mocked(LogStatus).mock.calls.map(([message]) => String(message));
+            expect(logged.some(line => line.includes('Gate skipped') && line.includes('Create Record returned AIDirectives'))).toBe(true);
+        });
+
+        it("links the decision call's prompt run to the Finish check step, so the run counts its cost", async () => {
+            const steps: MockStepEntity[] = [];
+            internals._activeProvider = {
+                GetEntityObject: vi.fn(async () => {
+                    const step = new MockStepEntity(`step-${steps.length + 1}`);
+                    steps.push(step);
+                    return step;
+                }),
+            };
+            actionSucceeds();
+            const promptRun = { ID: 'prun-gate' } satisfies Pick<MJAIPromptRunEntity, 'ID'>;
+            vi.spyOn(decisions, 'Ask').mockResolvedValueOnce({ ...likelihoods(0.95), promptRun: promptRun as MJAIPromptRunEntity });
+
+            await executeActions(makeParams(), actionsDecision());
+
+            const finishCheck = steps.find(step => step.StepName?.includes('Finish check'));
+            expect(finishCheck?.StepType).toBe('Decision');
+            expect(finishCheck?.TargetLogID).toBe('prun-gate');
+            expect(finishCheck?.PromptRun?.ID).toBe('prun-gate');
         });
     });
 });

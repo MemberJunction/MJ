@@ -36,7 +36,8 @@ import {
   MJAIPromptEntityExtended,
   MJAIPromptRunEntityExtended,
   AIPromptParams,
-  AIModelSelectionInfo
+  AIModelSelectionInfo,
+  ResolvePromptRunUserID
 } from '@memberjunction/ai-core-plus';
 import {
   BaseResult,
@@ -1431,6 +1432,16 @@ export abstract class BaseModelRunner {
       if (params.agentId) {
         promptRun.AgentID = params.agentId;
       }
+      // The user is recorded on the run itself: for a direct (non-agent) run it is the only record
+      // of who caused it. The agent run a prompt run belongs to is NOT stored here — the agent layer
+      // owns that link (AIAgentRunStep.TargetLogID).
+      promptRun.UserID = ResolvePromptRunUserID({ UserID: params.UserID, ContextUser: params.contextUser });
+      if (params.ExecutionOrder !== undefined) {
+        promptRun.ExecutionOrder = params.ExecutionOrder;
+      }
+      if (params.RunType) {
+        promptRun.RunType = params.RunType;
+      }
 
       // Set initial status and tracking fields
       promptRun.Status = 'Running';
@@ -2162,7 +2173,8 @@ export abstract class BaseModelRunner {
         promptRun.TokensUsedRollup = promptRun.TokensUsed;
         promptRun.TokensCacheReadRollup = promptRun.TokensCacheRead;
         promptRun.TokensCacheWriteRollup = promptRun.TokensCacheWrite;
-        if (promptRun.Cost !== undefined) {
+        // A parallel parent carries no own Cost (its arms do); its TotalCost is their sum.
+        if (promptRun.RunType !== 'ParallelParent' && promptRun.Cost !== undefined) {
           promptRun.TotalCost = promptRun.Cost;
         }
       } catch (error) {
