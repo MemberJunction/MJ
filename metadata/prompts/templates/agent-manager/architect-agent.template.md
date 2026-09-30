@@ -105,7 +105,7 @@ interface AgentSpec {
     StartingStep: boolean;          // Is this the first step? (REQUIRED)
     ActionID?: string;              // For Action type steps
     SubAgentID?: string;            // For Sub-Agent type steps
-    PromptID?: string;              // For Prompt type steps (can use existing prompt), or optional custom prompt for Decision steps
+    PromptID?: string;              // For Prompt type steps (can use existing prompt); for Decision steps, optional (empty = Default Decision)
     PromptText?: string;            // Or inline prompt text for Prompt type steps
     ActionInputMapping?: string | object;  // JSON string OR object: maps payload/static → action inputs
     ActionOutputMapping?: string | object; // JSON string OR object: maps action outputs → payload paths
@@ -205,31 +205,42 @@ A **Decision** step evaluates typed questions (classification, triage, rating, n
 ### Step Fields
 
 - **`StepType`**: `"Decision"` (REQUIRED)
-- **`Configuration`**: Object (or JSON string) defining `key` and `questions` (REQUIRED)
-- **`PromptID`**: Optional custom prompt ID. Leave empty/omitted to use the built-in Default Decision prompt.
+- **`Configuration`**: Object (or JSON string) defining `key` and `questions`, and optionally `state` (REQUIRED)
+- **`PromptID`**: Optional. Leave it empty or omit it to use the built-in Default Decision prompt. If you set it, it must be the ID of an existing prompt whose model type is Decision; a chat (LLM) prompt cannot run a Decision step.
 
 ### Configuration Schema
 
-- **`key`** (string, REQUIRED): Unique identifier for this decision step (e.g. `"triage"`). Path conditions reference this key as `decisions.<key>.<question>.value`. Must match `/^[A-Za-z_][A-Za-z0-9_]*$/`.
-- **`questions`** (Record<string, QuestionDefinition>, REQUIRED): Map of question key to question definition. Must define at least one question.
-  - **`instructions`** (string, REQUIRED): The instructions/guidance for what to evaluate (alias: `text`).
+- **`key`** (string, REQUIRED): Names this Decision step in path conditions, as `decisions.<key>.<question>` (e.g. `"triage"`). Unique among the flow's Decision steps. Letters, digits and underscores, not starting with a digit (`/^[A-Za-z_][A-Za-z0-9_]*$/`).
+- **`state`** (string, optional): What the questions are about. `"payload"` (the default) is the whole payload; `"payload.<path>"` is one value in it, such as `"payload.ticket"`. Point it at just what the questions need: a narrower state gives better answers.
+- **`questions`** (Record<string, QuestionDefinition>, REQUIRED): Map of question key to question definition. Must define at least one question. All of a step's questions are answered in one call, so put every question one fork needs on one step.
+  - **`instructions`** (string, REQUIRED): The instructions/guidance for what to evaluate (alias: `text`). The model never sees the question key, so everything it needs goes here.
   - **`kind`** (string, REQUIRED): One of `"Choice"`, `"Likelihood"`, `"Score"`.
-  - **`options`** (Array<{ value: string, description: string }>, REQUIRED for `"Choice"`): The allowable answers. Each option has a `value` and a `description` (alias: `text`).
-  - **`levels`** (string[], REQUIRED for `"Score"`): Array of two or more scoring levels from lowest to highest.
-  - **`minConfidence`** (number, optional): Minimum confidence threshold (0.0 to 1.0).
+  - **`options`** (Array<{ value: string, description: string }>, REQUIRED for `"Choice"`): Two or more allowable answers, each with a distinct `value` and a `description` (alias: `text`).
+  - **`levels`** (string[], REQUIRED for `"Score"`): Two or more levels, ordered from lowest to highest.
+  - **`minConfidence`** (number from 0 to 1, optional): Below this confidence the answer is not acted on: a path whose condition reads it is held, neither taken nor skipped, so the flow never routes on a guess. A Likelihood's confidence is how far its probability is from 0.5, so 0.05 is as sure as 0.95.
 
 ### Outgoing Path Conditions
 
-Outgoing paths route based on the decision outcome:
+A condition reads an answer as `decisions.<key>.<question>.<field>`. Each kind of answer has its own fields, and reading any other field is refused:
+
+| Kind | Fields | What they hold |
+|------|--------|----------------|
+| **Choice** | `value`, `confidence`, `probabilities` | `value` is the chosen option's `value`; `probabilities` maps each option's `value` to its probability |
+| **Likelihood** | `probability` | The probability, from 0 to 1, that the statement in `instructions` is true. A Likelihood has **no** `value` |
+| **Score** | `value`, `confidence`, `probabilities` | `value` is the level's position counted **from 0** (the lowest level) to one less than the number of levels, and can fall between two levels; `probabilities` maps each level to its probability |
+
+Examples:
 - **Choice**: `decisions.<key>.<question>.value === '<optionValue>'`
 - **Likelihood**: `decisions.<key>.<question>.probability >= 0.8`
-- **Score**: `decisions.<key>.<question>.value >= 2`
+- **Score**: with `levels: ["low", "medium", "high"]`, `decisions.<key>.<question>.value >= 1` means medium or higher, and `>= 2` means high only
 
 **Prefer routing on a Choice's `value`.** Probabilities are calibrated per model, so the same threshold can mean different things on different models. Use a Likelihood threshold only when a yes/no gate needs one, and write it as `>= 0.8`.
 
 ### Choice Fork Rule
 
-When all outgoing paths from a step test the `value` of a single `Choice` question, they form a **Choice fork**. **A Choice fork must cover every option defined on that question.**
+When two or more outgoing paths leave a step and every one of them tests the `value` of the same `Choice` question, they form a **Choice fork**, and the flow takes one of them. **A Choice fork must have a path for every option of that question**, or an unconditional path (no `Condition`) as the default for the rest. Otherwise, when the model picks an option with no path, every path loses and that branch of the flow ends silently.
+
+A single conditional path from a step is a gate, not a fork: it runs only when its option is picked.
 
 ### Example
 
