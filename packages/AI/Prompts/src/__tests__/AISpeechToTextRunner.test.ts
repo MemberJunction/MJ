@@ -294,6 +294,22 @@ describe('AISpeechToTextRunner', () => {
     });
   });
 
+  describe('API names', () => {
+    it("sends no model for a model with no API name, so the driver uses its default", async () => {
+      MediaHarness.State.Models.forEach(m => m.ModelVendors.forEach(mv => {
+        if (mv.APIName === 'whisper-groq') {
+          mv.APIName = null;
+        }
+      }));
+
+      const result = await runner.RunSpeechToText(transcriptionParams());
+
+      expect(result.Success).toBe(true);
+      expect(calls).toHaveLength(1);
+      expect(calls[0].Params.model).toBe('');
+    });
+  });
+
   describe('refusals', () => {
     it('refuses a model of another type', async () => {
       const result = await runner.RunSpeechToText(transcriptionParams({ ModelID: AnLLMModelID(MediaHarness) }));

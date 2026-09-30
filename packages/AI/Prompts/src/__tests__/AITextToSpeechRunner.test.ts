@@ -14,6 +14,7 @@ import {
 import { VENDOR } from '@memberjunction/unit-testing';
 import { MediaHarness } from './__fixtures__/media-runner.harness';
 import { AnLLMModelID, LoadMediaCatalog, USAGE_TYPE } from './__fixtures__/media-runner.catalog';
+import type { MediaCatalogSpec } from './__fixtures__/media-runner.catalog';
 import { AITextToSpeechRunner } from '../audio/AITextToSpeechRunner';
 import type { AITextToSpeechRunParams } from '../audio/audio-runner.types';
 
@@ -74,6 +75,9 @@ interface SpeechCall {
 const calls: SpeechCall[] = [];
 let respond: (driver: string, params: TextToSpeechParams) => SpeechResult;
 
+/** When set, building a driver throws this, as an SDK client's constructor can. */
+let constructorFailure: string | undefined;
+
 function spoken(usage?: ModelUsage): SpeechResult {
   const result = new SpeechResult();
   result.success = true;
@@ -125,6 +129,9 @@ const HTTP_CLIENT_400 = sdkError('Request failed with status code 400', { status
 abstract class ScriptedTextToSpeech extends BaseTextToSpeech {
   constructor(private readonly key: string, private readonly driverKey: string) {
     super(key);
+    if (constructorFailure) {
+      throw new Error(constructorFailure);
+    }
   }
 
   public async CreateSpeech(params: TextToSpeechParams): Promise<SpeechResult> {
@@ -168,7 +175,7 @@ const PROMPT_ID = 'C2B2C2B2-0000-4000-8000-0000000000F1';
 
 const contextUser = new UserInfo(undefined, { ID: 'user-001', Name: 'Test User', Email: 'test@example.com' });
 
-function loadCatalog(failoverStrategy: 'SameModelDifferentVendor' | 'NextBestModel' = 'SameModelDifferentVendor'): void {
+function loadCatalog(failoverStrategy: MediaCatalogSpec['FailoverStrategy'] = 'SameModelDifferentVendor'): void {
   LoadMediaCatalog(MediaHarness, {
     ModelTypeID: TTS_TYPE_ID,
     ModelTypeName: 'TTS',
@@ -203,6 +210,7 @@ describe('AITextToSpeechRunner', () => {
     loadCatalog();
     calls.length = 0;
     respond = () => spoken();
+    constructorFailure = undefined;
     runner = new AITextToSpeechRunner();
   });
 
@@ -308,8 +316,6 @@ describe('AITextToSpeechRunner', () => {
       expect(result.Success).toBe(false);
       expect(result.ErrorMessage).toBe('503 Service Unavailable');
       expect(MediaHarness.LastRun?.Status).toBe('Failed');
-      // A failed call is not billed for the characters it sent.
-      expect(MediaHarness.LastRun?.UsageTypeID).toBeUndefined();
     });
 
     it('a pinned model fails over only within its own vendors, even under NextBestModel', async () => {
@@ -376,6 +382,58 @@ describe('AITextToSpeechRunner', () => {
       expect(result.Success).toBe(true);
       expect(result.DriverClass).toBe(DRIVER_B);
       expect(MediaHarness.LastRun?.FailoverAttempts).toBe(1);
+    });
+  });
+
+  describe('what a failed call records', () => {
+    it.each([
+      ['with failover off', 'None', () => failed('503 Service Unavailable')],
+      ['when the failure is not eligible for failover', 'SameModelDifferentVendor', () => rejected(INVALID_VOICE_400)],
+    ] as const)("is not billed for the characters it sent, %s", async (_name, strategy, failure) => {
+      loadCatalog(strategy);
+      respond = failure;
+
+      const result = await runner.RunTextToSpeech(speechParams());
+      await runner.WaitForPendingPromptRunSaves();
+
+      // These paths hand the driver's failed result back, so there is an output the count could read.
+      expect(result.SpeechResult?.success).toBe(false);
+      expect(calls).toHaveLength(1);
+      expect(MediaHarness.LastRun?.Status).toBe('Failed');
+      expect(MediaHarness.LastRun?.UsageTypeID).toBeUndefined();
+      expect(MediaHarness.LastRun?.InputUnitsUsed).toBeUndefined();
+    });
+
+    it('finalizes the run row as failed when the call throws after the row exists', async () => {
+      loadCatalog('None');
+      constructorFailure = 'The SDK client could not be created';
+
+      const result = await runner.RunTextToSpeech(speechParams());
+      await runner.WaitForPendingPromptRunSaves();
+      const run = MediaHarness.LastRun;
+
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toBe('The SDK client could not be created');
+      expect(result.PromptRunID).toBe(run?.ID);
+      expect(run?.Status).toBe('Failed');
+      expect(run?.Success).toBe(false);
+      expect(run?.ErrorMessage).toBe('The SDK client could not be created');
+    });
+  });
+
+  describe('API names', () => {
+    it("leaves model_id unset for a model with no API name, so the driver uses its default", async () => {
+      MediaHarness.State.Models.forEach(m => m.ModelVendors.forEach(mv => {
+        if (mv.APIName === 'tts-primary') {
+          mv.APIName = null;
+        }
+      }));
+
+      const result = await runner.RunTextToSpeech(speechParams());
+
+      expect(result.Success).toBe(true);
+      expect(calls).toHaveLength(1);
+      expect(calls[0].Params.model_id).toBeUndefined();
     });
   });
 
