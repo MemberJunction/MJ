@@ -177,7 +177,7 @@ export interface DiscoveryOnTimeSummary {
 
 /** What production's current rule (the driver's `WouldInject`, on time) did. */
 export interface DiscoveryProductionVerdict {
-    /** The threshold production uses today. */
+    /** The threshold production uses today, on calibrated answers. */
     MinConfidence: number;
     Coverage: number | null;
     Precision: number | null;

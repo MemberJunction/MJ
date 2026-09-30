@@ -187,9 +187,11 @@ export type DiscoveryBaselineRecord = z.infer<typeof DiscoveryBaselineRecordSche
 /**
  * What a discovery run records as its `ActualOutput`. Both arms fill the shared fields:
  * - `ChosenAgentId`: the Choice's agent (decision), or the action's first row (baseline);
- * - `WouldInject`: whether production would suggest the agent: `JudgeDecisionDiscovery` at
- *   production's threshold, and only when the discovery finished within production's timeout
- *   (decision), or whether the action returns any row (baseline).
+ * - `WouldInject`: whether production would suggest the agent: production's own verdict,
+ *   `DecisionDiscoveryFromResult`, which calibrates the answers for the answering model and judges
+ *   them at production's threshold, and only when the discovery finished within production's
+ *   timeout (decision); or whether the action returns any row (baseline). `Confidence` and
+ *   `AnyApplies` stay the model's raw answers, which calibration is fitted on.
  */
 export const DiscoveryEvalActualOutputSchema = z.object({
     Decision: z.literal('agent-discovery'),
@@ -210,7 +212,7 @@ export const DiscoveryEvalActualOutputSchema = z.object({
     AnyApplies: z.number().nullable(),
     /** Whether production would suggest the chosen agent, or null without a usable answer. */
     WouldInject: z.boolean().nullable(),
-    /** The threshold `WouldInject` was judged at (decision arm), or null. */
+    /** The calibrated threshold `WouldInject` was judged at (decision arm), or null. */
     MinConfidence: z.number().nullable(),
     /** Why nothing would be injected, or null. */
     VerdictReason: z.string().nullable(),
