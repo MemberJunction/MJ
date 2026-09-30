@@ -123,7 +123,7 @@ export class VectorBase {
         if (!entity || !entity.FirstPrimaryKey) return false; // first-pk-ok: keyset-eligibility check; an entity without a key column cannot be seek-paginated
         if (entity.PrimaryKeys.length !== 1) return false;
         // Inline allowlist check (avoid pulling in the helper here)
-        const t = VectorBase.NormalizeSqlTypeName(entity.FirstPrimaryKey.Type || ''); // first-pk-ok: guarded by PrimaryKeys.length === 1 above
+        const t = VectorBase.normalizeSqlTypeName(entity.FirstPrimaryKey.Type || ''); // first-pk-ok: guarded by PrimaryKeys.length === 1 above
         // Same set as KEYSET_PAGINATION_ORDERABLE_PK_TYPES in @memberjunction/core
         return ['uniqueidentifier','uuid','int','bigint','smallint','tinyint','decimal','numeric','money','smallmoney',
             'float','real','double precision','char','varchar','nchar','nvarchar','text','ntext',
@@ -137,7 +137,7 @@ export class VectorBase {
      * `nvarchar` and `decimal(10, 2)` becomes `decimal`. It scans the string instead of using a
      * regex: the type comes from metadata, and a backtracking pattern over it runs in polynomial time.
      */
-    private static NormalizeSqlTypeName(type: string): string {
+    private static normalizeSqlTypeName(type: string): string {
         const trimmed = type.trim();
         if (!trimmed.endsWith(')')) {
             return trimmed.toLowerCase();
