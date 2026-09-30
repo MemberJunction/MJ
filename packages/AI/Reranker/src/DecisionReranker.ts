@@ -13,8 +13,9 @@ import type { DecisionAnswer, DecisionQuestion, RerankDocument, RerankParams, Re
 import { LogStatus, UserInfo } from '@memberjunction/core';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIDecisionParams, AIDecisionRunner } from '@memberjunction/ai-prompts';
-import type { ModelVendorCandidate } from '@memberjunction/ai-prompts';
+import type { AIDecisionRunResult, ModelVendorCandidate } from '@memberjunction/ai-prompts';
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { BasePromptBackedReranker } from './BasePromptBackedReranker';
 
 /** The decision prompt the reranker asks when it is given no prompt ID. */
 const DEFAULT_DECISION_PROMPT_NAME = 'Default Decision';
@@ -71,7 +72,9 @@ class DecisionRerankRunner extends AIDecisionRunner {
  * <document text>"). A document's relevance score is the probability.
  *
  * Every call writes an `MJ: AI Prompt Runs` row through the decision runner, which also selects the
- * decision model, resolves its credentials and fails over.
+ * decision model, resolves its credentials and fails over. When the reranker is given a parent run
+ * (`ParentPromptRunID`, which `AIRerankerRunner` sets), those rows are its children, and a rerank's
+ * response carries their tokens and cost as `Usage`.
  *
  * Configuration:
  * - The decision prompt is the one whose ID the reranker is given, or `Default Decision` when it is
@@ -97,7 +100,7 @@ class DecisionRerankRunner extends AIDecisionRunner {
  * ```
  */
 @RegisterClass(BaseReranker, 'DecisionReranker')
-export class DecisionReranker extends BaseReranker {
+export class DecisionReranker extends BasePromptBackedReranker {
     private _promptID: string;
     private _contextUser: UserInfo;
 
@@ -123,15 +126,22 @@ export class DecisionReranker extends BaseReranker {
 
     /**
      * Scores every document with one Likelihood question, splitting the questions across parallel
-     * calls when there are more than one call may carry.
+     * calls when there are more than one call may carry. Records the usage of every call, the failed
+     * ones included, before it fails on any of them.
      */
     protected async doRerank(params: RerankParams): Promise<RerankResult[]> {
         const prompt = this.resolvePrompt();
         const runner = new DecisionRerankRunner();
         const batches = this.splitIntoBatches(params.documents, runner.GetMaxQuestionsPerCall(prompt));
         LogStatus(`DecisionReranker: Scoring ${params.documents.length} documents in ${batches.length} decision call(s)`);
-        const scored = await Promise.all(batches.map(batch => this.scoreBatch(runner, prompt, params.query, batch)));
-        return this.sortByRelevance(scored.flat());
+        const results = await Promise.all(batches.map(batch => runner.ExecuteDecision(this.buildDecisionParams(prompt, params.query, batch))));
+        // The decision runner saves its runs fire-and-forget, and the server prices a run when it saves
+        // it. Wait for the saves, so UsageOf can read each run's cost, and so each save's cost rollup to
+        // the parent run lands before the parent run is finalized.
+        await runner.WaitForPendingPromptRunSaves();
+        this.RecordUsage(params, this.CombinedUsage(results.map(result => this.UsageOf(result))));
+        const scored = batches.flatMap((batch, index) => this.scoreBatch(batch, results[index]));
+        return this.sortByRelevance(scored);
     }
 
     /** The decision prompt with the configured ID, or `Default Decision` when none is configured. */
@@ -164,14 +174,8 @@ export class DecisionReranker extends BaseReranker {
         return batches;
     }
 
-    /** Asks one decision call about a batch, and returns each document scored by its probability. */
-    private async scoreBatch(
-        runner: DecisionRerankRunner,
-        prompt: MJAIPromptEntityExtended,
-        query: string,
-        documents: RerankDocument[]
-    ): Promise<RerankResult[]> {
-        const result = await runner.ExecuteDecision(this.buildDecisionParams(prompt, query, documents));
+    /** Scores a batch's documents by their answers' probabilities, or throws when its decision call failed. */
+    private scoreBatch(documents: RerankDocument[], result: AIDecisionRunResult): RerankResult[] {
         if (!result.success) {
             throw new Error(`DecisionReranker: Decision call failed: ${result.errorMessage || 'Unknown error'}`);
         }
@@ -189,6 +193,9 @@ export class DecisionReranker extends BaseReranker {
         decisionParams.contextUser = this._contextUser;
         decisionParams.State = query;
         decisionParams.Questions = questions;
+        if (this.ParentPromptRunID) {
+            decisionParams.parentPromptRunId = this.ParentPromptRunID;
+        }
         return decisionParams;
     }
 

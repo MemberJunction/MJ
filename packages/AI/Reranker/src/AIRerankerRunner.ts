@@ -19,7 +19,11 @@ import { BaseModelRunner } from '@memberjunction/ai-prompts';
 import type { FailoverAttempt, ModelVendorCandidate } from '@memberjunction/ai-prompts';
 import { IsPromptBackedReranker } from './prompt-backed-rerankers';
 import type { AIRerankParams, AIRerankRunResult } from './rerank-runner.types';
-import { LLMReranker } from './LLMReranker';
+import { BasePromptBackedReranker } from './BasePromptBackedReranker';
+// The prompt-backed drivers this package ships. The runner builds drivers by class name through the
+// ClassFactory, so it loads them for their @RegisterClass registrations.
+import './LLMReranker';
+import './DecisionReranker';
 
 /** The driver class of the seeded LLM reranker model, which has no model-vendor row to name it. */
 const LLM_RERANKER_DRIVER = 'LLMReranker';
@@ -108,26 +112,28 @@ export class AIRerankerRunner extends BaseModelRunner {
     }
 
     /**
-     * Makes an `LLMReranker`'s chat run a child of this rerank's run. The child's INSERT names this run
-     * as its `ParentID`, so this run's queued INSERT must land first. When that INSERT failed (the
-     * seeded `LLM Reranker` model has no model-vendor row, so its run fails validation on `VendorID`),
-     * there is no row to point at: the child would then fail its foreign key and go unrecorded too, so
-     * the chat run is left unlinked instead.
+     * Makes a prompt-backed driver's prompt runs (`LLMReranker`'s chat run, `DecisionReranker`'s
+     * decision runs) children of this rerank's run. A child's INSERT names this run as its `ParentID`,
+     * so this run's queued INSERT must land first. When that INSERT failed (the seeded `LLM Reranker`
+     * model has no model-vendor row, so its run fails validation on `VendorID`), there is no row to
+     * point at: a child would then fail its foreign key and go unrecorded too, so the driver's runs
+     * are left unlinked instead.
      */
     private async linkChildRun(driver: BaseReranker, promptRun: MJAIPromptRunEntityExtended): Promise<void> {
         await this.WaitForPendingPromptRunSaves();
-        if (driver instanceof LLMReranker && promptRun.IsSaved) {
+        if (driver instanceof BasePromptBackedReranker && promptRun.IsSaved) {
             driver.ParentPromptRunID = promptRun.ID;
         }
     }
 
     /**
-     * Whether a driver makes its model call through a prompt run of its own, which this runner makes
-     * a child of the rerank's run. `LLMReranker` does: it runs a chat prompt, so its cost is that
-     * child run's cost, not the rerank run's own.
+     * Whether a driver makes its model calls through prompt runs of its own, which this runner makes
+     * children of the rerank's run. The prompt-backed drivers do (`LLMReranker` runs a chat prompt,
+     * `DecisionReranker` asks a decision prompt), so their tokens and cost are those child runs', not
+     * the rerank run's own.
      */
     private driverRunsChildPrompt(driverClass: string): boolean {
-        return driverClass === LLM_RERANKER_DRIVER;
+        return IsPromptBackedReranker(driverClass);
     }
 
     /**
@@ -427,8 +433,9 @@ export class AIRerankerRunner extends BaseModelRunner {
 
     /**
      * Finalizes the run row with the ranked document IDs and scores in `Result`, and the cost the
-     * driver reports in its response's `Usage`. It records no tokens: the only driver that reports
-     * usage is `LLMReranker`, whose tokens are its chat run's and are recorded on that run. A driver
+     * driver reports in its response's `Usage`. It records no tokens of its own: the drivers that
+     * report tokens are the prompt-backed ones, whose tokens are their child runs' and are recorded
+     * on those runs. They go into this run's token rollups instead, as its descendants'. A driver
      * that reports no cost leaves the cost empty rather than guessed.
      */
     private async finalizeRerankRun(
@@ -438,10 +445,10 @@ export class AIRerankerRunner extends BaseModelRunner {
         executionTimeMS: number
     ): Promise<void> {
         const attempt = rerankRun.Attempt;
+        const usage = attempt.Response?.Usage;
         const costIsDescendant = this.driverRunsChildPrompt(rerankRun.AnsweredBy.driverClass);
         await this.FinalizeRunRecord(promptRun, attempt.success, endTime, executionTimeMS, run => {
             run.Result = JSON.stringify(this.rankedScores(attempt.Response));
-            const usage = attempt.Response?.Usage;
             if (usage) {
                 this.applyCost(run, usage, costIsDescendant);
             }
@@ -449,14 +456,34 @@ export class AIRerankerRunner extends BaseModelRunner {
                 run.ErrorMessage = attempt.errorMessage;
             }
         });
+        if (usage && costIsDescendant) {
+            this.recordDescendantTokens(promptRun, usage);
+        }
     }
 
     /**
-     * Records the driver's cost on the run. When the cost was incurred by a child run
-     * (`LLMReranker`'s chat prompt), it is the child's cost, so it is recorded as `DescendantCost`
-     * and in `TotalCost`, never as this run's `Cost`: a report summing `Cost` over every run would
-     * otherwise count the chat call twice. The child's save rolls the same `DescendantCost` up to
-     * this run's row, so the two writes agree.
+     * Adds a prompt-backed driver's tokens to the run's token rollups, which count a run and its
+     * descendants, so an agent run whose step links this run counts the child runs' tokens.
+     * `FinalizeRunRecord` sets each rollup to the run's own tokens, so this is a second queued update
+     * that lands after it.
+     */
+    private recordDescendantTokens(promptRun: MJAIPromptRunEntityExtended, usage: ModelUsage): void {
+        if (usage.promptTokens + usage.completionTokens <= 0) {
+            return;
+        }
+        this._promptRunQueue.Update(promptRun, () => {
+            promptRun.TokensPromptRollup = (promptRun.TokensPrompt ?? 0) + usage.promptTokens;
+            promptRun.TokensCompletionRollup = (promptRun.TokensCompletion ?? 0) + usage.completionTokens;
+            promptRun.TokensUsedRollup = (promptRun.TokensUsed ?? 0) + usage.promptTokens + usage.completionTokens;
+        });
+    }
+
+    /**
+     * Records the driver's cost on the run. When the cost was incurred by child runs (a prompt-backed
+     * driver's prompt runs), it is the children's cost, so it is recorded as `DescendantCost` and in
+     * `TotalCost`, never as this run's `Cost`: a report summing `Cost` over every run would otherwise
+     * count those calls twice. Each child's save rolls its cost up to this run's `DescendantCost`, so
+     * the writes agree.
      */
     private applyCost(run: MJAIPromptRunEntityExtended, usage: ModelUsage, costIsDescendant: boolean): void {
         if (usage.cost !== undefined) {
@@ -494,6 +521,7 @@ export class AIRerankerRunner extends BaseModelRunner {
             ErrorMessage: attempt.success ? undefined : attempt.errorMessage,
             Response: attempt.Response,
             PromptRunID: promptRun.ID,
+            PromptRun: promptRun,
             ModelID: run.AnsweredBy.model.ID,
             ModelName: run.AnsweredBy.model.Name,
             DriverClass: run.AnsweredBy.driverClass,
@@ -512,6 +540,7 @@ export class AIRerankerRunner extends BaseModelRunner {
             Success: false,
             ErrorMessage: errorMessage,
             PromptRunID: promptRun?.ID,
+            PromptRun: promptRun,
             ModelID: selected?.model.ID,
             ModelName: selected?.model.Name,
             DriverClass: selected?.driverClass,

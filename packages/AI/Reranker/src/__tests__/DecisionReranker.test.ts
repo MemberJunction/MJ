@@ -16,6 +16,7 @@ import { BaseReranker } from '@memberjunction/ai';
 import type { AIModelConfiguration, DecisionAnswer, RerankDocument, RerankResponse } from '@memberjunction/ai';
 import { AIDecisionRunner } from '@memberjunction/ai-prompts';
 import type { AIDecisionParams, AIDecisionRunResult } from '@memberjunction/ai-prompts';
+import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { DecisionReranker } from '../DecisionReranker';
 import { LLMReranker } from '../LLMReranker';
 import { AIRerankerRunner } from '../AIRerankerRunner';
@@ -278,6 +279,22 @@ function batchSizes(): number[] {
     return decisionCalls.map(call => Object.keys(call.Questions).length);
 }
 
+/** The usage fields of a decision call's result, as `AIDecisionRunner` reports them. */
+type DecisionUsageFields = Pick<AIDecisionRunResult, 'promptTokens' | 'completionTokens' | 'cost' | 'costCurrency' | 'promptRun'>;
+
+/** Answers every question, and reports `usage` as the call's tokens and cost. */
+function answerWithUsage(params: AIDecisionParams, usage: DecisionUsageFields): AIDecisionRunResult {
+    return { ...answerAll(params), ...usage };
+}
+
+/** The cost columns of a decision call's prompt run that the reranker reads. */
+type DecisionRunCost = Pick<MJAIPromptRunEntity, 'Cost' | 'DescendantCost' | 'TotalCost' | 'CostCurrency'>;
+
+/** The seam onto the full prompt-run entity a decision result carries, from the cost columns the reranker reads. */
+function asPromptRun(run: DecisionRunCost): MJAIPromptRunEntity {
+    return run as MJAIPromptRunEntity;
+}
+
 // ---------------------------------------------------------------------------
 // Fake prompt-run rows and the provider that hands them out (for AIRerankerRunner)
 // ---------------------------------------------------------------------------
@@ -287,6 +304,8 @@ let promptRunSeq = 0;
 class FakePromptRun {
     public ID = '';
     public LatestResult: { CompleteMessage: string } | null = null;
+    /** Whether a Save has succeeded, as `BaseEntity.IsSaved` reports it. */
+    public IsSaved = false;
     [key: string]: unknown;
 
     public NewRecord(): boolean {
@@ -295,6 +314,7 @@ class FakePromptRun {
     }
 
     public async Save(): Promise<boolean> {
+        this.IsSaved = true;
         return true;
     }
 }
@@ -465,6 +485,82 @@ describe('DecisionReranker', () => {
         expect(response.results).toEqual([]);
     });
 
+    describe("its decision runs' parent, and their usage", () => {
+        it('asks every decision call as a child of its parent run, when it has one', async () => {
+            setModelLimit(PRIMARY_DECISION_MODEL_ID, 2);
+            stubDecisions();
+            const reranker = new DecisionReranker('', '', '', contextUser);
+            reranker.ParentPromptRunID = 'rerank-run-1';
+
+            await rerank(reranker, notes(5));
+
+            expect(decisionCalls.map(call => call.parentPromptRunId)).toEqual(['rerank-run-1', 'rerank-run-1', 'rerank-run-1']);
+        });
+
+        it('leaves parentPromptRunId unset when it has no parent run', async () => {
+            stubDecisions();
+
+            await rerank(new DecisionReranker('', '', '', contextUser), notes(2));
+
+            expect(decisionCalls[0].parentPromptRunId).toBeUndefined();
+        });
+
+        it("reports the tokens and cost of all its decision calls as the response's Usage", async () => {
+            setModelLimit(PRIMARY_DECISION_MODEL_ID, 2);
+            stubDecisions(async params => answerWithUsage(params, { promptTokens: 100, completionTokens: 5, cost: 0.001, costCurrency: 'USD' }));
+
+            const response = await rerank(new DecisionReranker('', '', '', contextUser), notes(5));
+
+            expect(decisionCalls).toHaveLength(3);
+            expect(response.Usage?.promptTokens).toBe(300);
+            expect(response.Usage?.completionTokens).toBe(15);
+            expect(response.Usage?.cost).toBeCloseTo(0.003, 10);
+            expect(response.Usage?.costCurrency).toBe('USD');
+        });
+
+        it("waits for the decision runs' saves, then reads the cost the server gave a run the model did not price", async () => {
+            const run: DecisionRunCost = { Cost: null, DescendantCost: null, TotalCost: null, CostCurrency: null };
+            stubDecisions(async params => answerWithUsage(params, { promptTokens: 80, completionTokens: 4, promptRun: asPromptRun(run) }));
+            // The server prices a decision run when its row is saved.
+            const waitForSaves = vi.spyOn(AIDecisionRunner.prototype, 'WaitForPendingPromptRunSaves').mockImplementation(async () => {
+                run.Cost = 0.0004;
+                run.TotalCost = 0.0004;
+                run.CostCurrency = 'USD';
+            });
+
+            const response = await rerank(new DecisionReranker('', '', '', contextUser), notes(2));
+
+            expect(waitForSaves).toHaveBeenCalledTimes(1);
+            expect(response.Usage?.cost).toBe(0.0004);
+            expect(response.Usage?.costCurrency).toBe('USD');
+        });
+
+        it('reports the usage of every call when one of them fails, because a failed call still cost money', async () => {
+            setModelLimit(PRIMARY_DECISION_MODEL_ID, 2);
+            let callCount = 0;
+            stubDecisions(async params => {
+                callCount++;
+                const usage: DecisionUsageFields = { promptTokens: 100, completionTokens: 5, cost: 0.001, costCurrency: 'USD' };
+                return callCount === 2 ? { success: false, errorMessage: 'Rate limited', Answers: {}, ...usage } : answerWithUsage(params, usage);
+            });
+
+            const response = await rerank(new DecisionReranker('', '', '', contextUser), notes(5));
+
+            expect(response.success).toBe(false);
+            expect(response.Usage?.promptTokens).toBe(300);
+            expect(response.Usage?.cost).toBeCloseTo(0.003, 10);
+        });
+
+        it('leaves the cost unset when no call reports one', async () => {
+            stubDecisions(async params => answerWithUsage(params, { promptTokens: 80, completionTokens: 4 }));
+
+            const response = await rerank(new DecisionReranker('', '', '', contextUser), notes(2));
+
+            expect(response.Usage?.promptTokens).toBe(80);
+            expect(response.Usage?.cost).toBeUndefined();
+        });
+    });
+
     it("is registered with the ClassFactory as 'DecisionReranker'", () => {
         const resolution = MJGlobal.Instance.ClassFactory.TryCreateInstance<BaseReranker>(
             BaseReranker, 'DecisionReranker', '', '', CUSTOM_DECISION_PROMPT_ID, contextUser
@@ -542,6 +638,36 @@ describe('AIRerankerRunner, prompt-backed branch', () => {
         expect(result.Success).toBe(true);
         expect(tryCreateInstance).toHaveBeenCalledWith(BaseReranker, 'DecisionReranker', '', '', CUSTOM_DECISION_PROMPT_ID, contextUser);
         expect(decisionCalls[0].prompt.ID).toBe(CUSTOM_DECISION_PROMPT_ID);
+    });
+
+    it("makes the decision calls children of the rerank's run, whose cost and token rollups are theirs", async () => {
+        setModelLimit(PRIMARY_DECISION_MODEL_ID, 2);
+        stubDecisions(async params => answerWithUsage(params, { promptTokens: 200, completionTokens: 10, cost: 0.002, costCurrency: 'USD' }));
+        const runner = newRerankerRunner();
+
+        const result = await runner.RunRerank({
+            query: QUERY,
+            documents: notes(3),
+            ContextUser: contextUser,
+            ModelID: DECISION_RERANKER_MODEL_ID,
+        });
+        await runner.WaitForPendingPromptRunSaves();
+
+        expect(result.Success).toBe(true);
+        expect(result.PromptRunID).toBeDefined();
+        expect(decisionCalls.map(call => call.parentPromptRunId)).toEqual([result.PromptRunID, result.PromptRunID]);
+        const run = result.PromptRun;
+        expect(run?.ID).toBe(result.PromptRunID);
+        // The decision calls' cost is the rerank run's descendant cost, not its own.
+        expect(run?.DescendantCost).toBeCloseTo(0.004, 10);
+        expect(run?.TotalCost).toBeCloseTo(0.004, 10);
+        expect(run?.Cost).toBeUndefined();
+        expect(run?.CostCurrency).toBe('USD');
+        // Their tokens are in its rollups, which count a run and its descendants, and not in its own tokens.
+        expect(run?.TokensPromptRollup).toBe(400);
+        expect(run?.TokensCompletionRollup).toBe(20);
+        expect(run?.TokensUsedRollup).toBe(420);
+        expect(run?.TokensUsed).toBeUndefined();
     });
 
     it('reports a failed decision call as a failed rerank, with no scores', async () => {
