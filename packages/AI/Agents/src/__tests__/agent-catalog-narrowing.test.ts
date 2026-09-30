@@ -12,7 +12,9 @@
  *      a hidden action can still be called; one `Catalog narrowing` Decision step is recorded.
  *   3. Fail open: a failed, throwing, timed-out or answer-less decision, or a missing prompt, shows the
  *      full catalog and logs a warning.
- *   4. Skills: narrowed in the catalog only, and an error while narrowing returns them all.
+ *   4. Skills: narrowed in the catalog only, after the filterAvailableSkills policy (which stays the
+ *      identity, so an override that skips super keeps narrowing), and an error while narrowing
+ *      returns them all.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BaseAgent } from '../base-agent';
@@ -427,8 +429,7 @@ interface AgentInternals {
     ): Promise<AIDecisionRunResult>;
 }
 
-function makeAgent(script: Array<() => AIPromptRunResult>): { agent: HarnessAgent; runner: ScriptedPromptRunner } {
-    const agent = new HarnessAgent();
+function makeAgent(script: Array<() => AIPromptRunResult>, agent: HarnessAgent = new HarnessAgent()): { agent: HarnessAgent; runner: ScriptedPromptRunner } {
     const runner = new ScriptedPromptRunner(script);
     (agent as unknown as AgentInternals)._promptRunner = runner;
     return { agent, runner };
@@ -579,6 +580,13 @@ function narrowingSteps(): MockStepEntity[] {
 class SkillHookAgent extends HarnessAgent {
     public FilterSkills(skills: MJAISkillEntity[], purpose: SkillAvailabilityPurpose): Promise<MJAISkillEntity[]> {
         return this.filterAvailableSkills(skills, purpose, harness.agent as unknown as MJAIAgentEntityExtended, TEST_USER);
+    }
+}
+
+/** A skill policy that refuses Tax Advisor everywhere, and never calls `super`. */
+class NoTaxAdvisorAgent extends HarnessAgent {
+    protected override async filterAvailableSkills(skills: MJAISkillEntity[]): Promise<MJAISkillEntity[]> {
+        return skills.filter(s => s.Name !== 'Tax Advisor');
     }
 }
 
@@ -876,34 +884,46 @@ describe('catalog narrowing — skills', () => {
     const skills = SKILLS as unknown as MJAISkillEntity[];
 
     /** Gives the agent a run narrowing that hides the Poet skill. */
-    function hidePoet(agent: SkillHookAgent): void {
+    function hidePoet(agent: HarnessAgent): void {
         const narrowing = NoCatalogNarrowing();
         narrowing.Hidden.skill = new Set([SKILLS[1].ID]);
-        (agent as unknown as AgentInternals)._catalogNarrowing = narrowing;
+        agent['_catalogNarrowing'] = narrowing;
     }
 
-    it('with narrowing off, the catalog purpose is still the identity', async () => {
-        const agent = new SkillHookAgent();
-        expect(await agent.FilterSkills(skills, 'catalog')).toBe(skills);
-    });
-
-    it('hides a narrowed-out skill from the catalog only: activation and requests still see it', async () => {
+    it('filterAvailableSkills stays the identity for every purpose, even while the run hides a skill', async () => {
         const agent = new SkillHookAgent();
         hidePoet(agent);
 
-        expect((await agent.FilterSkills(skills, 'catalog')).map(s => s.Name)).toEqual(['Tax Advisor', 'Accountant']);
-        expect(await agent.FilterSkills(skills, 'auto-activation')).toBe(skills);
-        expect(await agent.FilterSkills(skills, 'requested')).toBe(skills);
+        for (const purpose of ['catalog', 'auto-activation', 'requested'] as const) {
+            expect(await agent.FilterSkills(skills, purpose)).toBe(skills);
+        }
     });
 
-    it('an error while narrowing the skill catalog returns every skill it was given, and logs a warning', async () => {
-        const agent = new SkillHookAgent();
+    it('narrows the catalog after the policy, even when a filterAvailableSkills override skips super', async () => {
+        // Actions (and so skills) narrowed to 1. The policy refuses Tax Advisor, leaving 2 skills.
+        harness.agent = makeAgentRow({ maxActionsInPrompt: 1 });
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answerByName(PROBABILITIES));
+        const { agent, runner } = makeAgent(twoTurnScript(), new NoTaxAdvisorAgent());
+
+        await agent.Execute(makeParams());
+
+        const skillQuestions = Object.values(ask.mock.calls[0][0].Questions).map(q => q.Instructions).filter(i => i.startsWith('This skill'));
+        expect(skillQuestions).toEqual([
+            'This skill is useful for the request: Poet: Writes poems',
+            'This skill is useful for the request: Accountant: Keeps the books',
+        ]);
+        const data = templateData(runner.Calls[0]);
+        expect(data.skillsCatalog).toBe(skillsCatalogFor('Accountant'));
+    });
+
+    it('an error while narrowing the skill catalog returns every skill it was given, and logs a warning', () => {
+        const agent = new HarnessAgent();
         hidePoet(agent);
-        vi.spyOn(agent as unknown as AgentInternals, 'hideNarrowedOut').mockImplementation(() => {
+        agent['hideNarrowedOut'] = (): never => {
             throw new Error('boom');
-        });
+        };
 
-        expect(await agent.FilterSkills(skills, 'catalog')).toBe(skills);
+        expect(agent['narrowSkillCatalog'](skills)).toBe(skills);
         expect(vi.mocked(LogErrorEx)).toHaveBeenCalledWith(expect.objectContaining({ severity: 'warning', category: 'CatalogNarrowing' }));
     });
 });
