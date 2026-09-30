@@ -58,7 +58,12 @@ export type SaveAsWorkflowLoss =
      * A Decision node names a prompt that could not be resolved to an ID, so the saved step runs on
      * `Default Decision` instead of the prompt the graph chose.
      */
-    | { Kind: 'UnknownPrompt'; TempId: string; Detail: string };
+    | { Kind: 'UnknownPrompt'; TempId: string; Detail: string }
+    /**
+     * An Action node names an action that could not be resolved to an ID, so the saved step has no
+     * action to run until one is chosen in the editor.
+     */
+    | { Kind: 'UnknownAction'; TempId: string; Detail: string };
 
 export type SaveAsWorkflowResult = {
     Success: boolean;
@@ -142,6 +147,8 @@ export function ConvertTaskGraphToAgentSpec(
 
         const unresolvedPrompt = unresolvedDecisionPrompt(node, options);
         if (unresolvedPrompt) losses.push(unresolvedPrompt);
+        const unresolved = unresolvedAction(node, options);
+        if (unresolved) losses.push(unresolved);
 
         const stepID = options.NextID();
         stepIdByTempId.set(node.tempId, stepID);
@@ -307,6 +314,22 @@ function unresolvedDecisionPrompt(node: TaskGraphSpecNode, options: SaveAsWorkfl
         Kind: 'UnknownPrompt',
         TempId: node.tempId,
         Detail: `Decision prompt "${promptName}" could not be resolved; "${node.name}" is saved to use the Default Decision prompt.`,
+    };
+}
+
+/**
+ * A loss when an Action node names an action that cannot be resolved, or `null`.
+ *
+ * The step is still saved — its mappings and position are the author's work — but with no
+ * `ActionID` it runs nothing, so it is said rather than saved quietly.
+ */
+function unresolvedAction(node: TaskGraphSpecNode, options: SaveAsWorkflowOptions): SaveAsWorkflowLoss | null {
+    const actionName = ConfigOf(node, 'Action')?.actionName;
+    if (!actionName || options.ResolveActionID?.(actionName)) return null;
+    return {
+        Kind: 'UnknownAction',
+        TempId: node.tempId,
+        Detail: `Action "${actionName}" could not be resolved; "${node.name}" is saved with no action, so choose one in the workflow editor.`,
     };
 }
 

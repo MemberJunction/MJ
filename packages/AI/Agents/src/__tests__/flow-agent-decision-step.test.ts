@@ -371,7 +371,11 @@ class DecisionFlowAgent extends BaseAgent {
         payload?: SR,
     ): Promise<ExecuteAgentResult<SR>> {
         this.SubAgentCalls.push(subAgentRequest.name);
-        const agentRun = { ID: `run-${subAgentRequest.name}`, FinalStep: 'Success', ErrorMessage: null, Steps: [] } as unknown as MJAIAgentRunEntityExtended;
+        const agentRun = standIn<MJAIAgentRunEntityExtended>(
+            { ID: `run-${subAgentRequest.name}`, FinalStep: 'Success', ErrorMessage: null, Steps: [] },
+            ['ID', 'FinalStep', 'ErrorMessage', 'Steps'],
+            'sub-agent run',
+        );
         return { success: true, payload, agentRun };
     }
 }
@@ -394,25 +398,41 @@ function makeAgent(result: AIDecisionRunResult): DecisionFlowAgent {
     return new DecisionFlowAgent(new ScriptedDecisionService(result));
 }
 
+/** True when `value` has every one of `fields` — the ones the code under test reads off it. */
+function hasFields<T extends object>(value: object, fields: ReadonlyArray<keyof T>): value is T {
+    return fields.every((field) => Reflect.has(value, field));
+}
+
 /**
- * The seam onto BaseAgent's entity-typed parameters. The fakes carry only the fields a run reads;
- * constructing real entity objects would need a live provider.
+ * A stand-in as the entity-typed parameter BaseAgent takes, once it is checked to carry the fields a
+ * run reads. Constructing real entity objects would need a live provider; a stand-in missing a field
+ * the test relies on fails here, by name, rather than as an `undefined` deep inside a run.
  */
+function standIn<T extends object>(value: object, fields: ReadonlyArray<keyof T>, what: string): T {
+    if (!hasFields<T>(value, fields)) {
+        const missing = fields.filter((field) => !Reflect.has(value, field)).map(String);
+        throw new Error(`The ${what} stand-in lacks ${missing.join(', ')}.`);
+    }
+    return value;
+}
+
+/** The seam onto BaseAgent's entity-typed parameters. The fakes carry only the fields a run reads. */
 function makeParams(agentTypeParams: FlowAgentExecuteParams = { executionMode: 'inRun' }, payload: Record<string, unknown> = { ticket: 'I was charged twice' }): ExecuteAgentParams {
-    return {
-        agent: harness.agent as unknown as MJAIAgentEntityExtended,
+    const params: ExecuteAgentParams = {
+        agent: standIn<MJAIAgentEntityExtended>(harness.agent, ['ID', 'Name', 'TypeID', 'Status', 'DefaultStorageAccountID'], 'flow agent'),
         conversationMessages: [{ role: 'user', content: 'Route this ticket' }],
         contextUser: new UserInfo(undefined, { ID: USER_ID, Name: 'Flow Tester', Email: 'flow@test.mj' }),
-        provider: harness.provider as unknown as IMetadataProvider,
+        provider: standIn<IMetadataProvider>(harness.provider, ['GetEntityObject'], 'provider'),
         disableDataPreloading: true,
         payload,
         agentTypeParams,
-    } as ExecuteAgentParams;
+    };
+    return params;
 }
 
 /** A step row as the entity the flow's `skipSteps` takes. The walker reads only its ID. */
 function asStepEntity(row: StepRow): MJAIAgentStepEntity {
-    return row as unknown as MJAIAgentStepEntity;
+    return standIn<MJAIAgentStepEntity>(row, ['ID', 'Name', 'StepType'], 'agent step');
 }
 
 beforeEach(() => {
@@ -508,9 +528,7 @@ describe('a Decision step walked in-run', () => {
         expect(harness.run.ErrorMessage).toContain('the decision "Triage the ticket" answered "intent" with confidence 0.55, below its minConfidence of 0.7');
     });
 
-    it('fails the run when the decision call fails, and takes no other path', async () => {
-        harness.steps.push(subAgentStep('Queue'));
-        harness.paths.push(path(TRIAGE_STEP_ID, stepID('Queue'), null, 0));
+    it('fails the run when the decision call fails and no path can be taken without its answer', async () => {
         const agent = makeAgent(FAILED_CALL);
 
         const result = await agent.Execute(makeParams());
@@ -519,6 +537,34 @@ describe('a Decision step walked in-run', () => {
         expect(agent.SubAgentCalls).toEqual([]);
         expect(harness.run.ErrorMessage).toContain('the decision "Triage the ticket" failed: the model timed out');
         expect(harness.decisionRunSteps[0]).toMatchObject({ Success: false, ErrorMessage: 'the model timed out' });
+    });
+
+    it('takes a recovery path ranked BELOW every path reading the failed decision — the probe', async () => {
+        // The intent fork at 3/2/1 and the recovery path at 0: a walker cannot retry, so the paths that
+        // read the answer that never came are passed over, not held.
+        harness.steps.push(subAgentStep('Recover'));
+        harness.paths.push(path(TRIAGE_STEP_ID, stepID('Recover'), 'stepResult.Success === false', 0));
+        const agent = makeAgent(FAILED_CALL);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(agent.SubAgentCalls).toEqual(['Recover Agent']);
+        expect(result.success).toBe(true);
+    });
+
+    it('never evaluates a path reading the failed decision, so a negated one is not taken', async () => {
+        harness.steps = [triageStep(), subAgentStep('Billing'), subAgentStep('Other'), subAgentStep('Recover')];
+        harness.paths = [
+            path(TRIAGE_STEP_ID, stepID('Billing'), "decisions.triage.intent.value === 'billing'", 3),
+            // With no answer, `undefined !== 'billing'` is true: evaluated, this would route on nothing.
+            path(TRIAGE_STEP_ID, stepID('Other'), "decisions.triage.intent.value !== 'billing'", 2),
+            path(TRIAGE_STEP_ID, stepID('Recover'), 'stepResult.Success === false', 0),
+        ];
+        const agent = makeAgent(FAILED_CALL);
+
+        await agent.Execute(makeParams());
+
+        expect(agent.SubAgentCalls).toEqual(['Recover Agent']);
     });
 
     it('takes a recovery path that outranks every path reading the failed decision', async () => {
@@ -581,6 +627,55 @@ describe('a Decision step walked in-run', () => {
         expect(result.success).toBe(false);
         expect(agent.Decisions.Calls).toHaveLength(0);
         expect(harness.run.ErrorMessage).toContain('Decision step "Triage the ticket" cannot run: it asks no questions.');
+    });
+
+    it('refuses an incomplete Choice fork before any step runs, as the dispatched path does', async () => {
+        harness.steps = [triageStep(), subAgentStep('Billing'), subAgentStep('Refund')];
+        harness.paths = intentFork().slice(0, 2);
+        const agent = makeAgent(answered({ value: 'other', confidence: 0.95 }, 0.1));
+
+        const result = await agent.Execute(makeParams());
+
+        // Walked unchecked, the model's "other" matched no path and the flow ended "successfully".
+        expect(result.success).toBe(false);
+        expect(agent.Decisions.Calls).toHaveLength(0);
+        expect(agent.SubAgentCalls).toEqual([]);
+        expect(harness.run.ErrorMessage).toContain('[IncompleteFork] Exclusive group "Triage the ticket"');
+        expect(harness.run.ErrorMessage).toContain('no path for "other"');
+        expect(harness.run.ErrorMessage).not.toContain(TRIAGE_STEP_ID);
+    });
+
+    it('refuses a path that reads the answers through the payload, as the dispatched path does', async () => {
+        harness.paths = [
+            ...intentFork(),
+            path(TRIAGE_STEP_ID, stepID('Other'), "payload.decisions.triage.intent.value === 'other'", 0),
+        ];
+        const agent = makeAgent(answered({ value: 'billing', confidence: 0.92 }, 0.1));
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(false);
+        expect(agent.Decisions.Calls).toHaveLength(0);
+        expect(harness.run.ErrorMessage).toContain('through "payload.decisions"');
+    });
+
+    it('routes the 0.55 example on stepResult.result to the fallback, as the dispatched path does', async () => {
+        // The reviewer's probe: a path reading the answer through stepResult.result, at priority 2, and a
+        // fallback at priority 1, with "billing" answered at 0.55 against a minConfidence of 0.7. A
+        // Decision step's result is the payload it hands on, which carries no answers, so the path
+        // cannot route on one below its threshold. task-graph's decision-node tests pin the dispatched
+        // half of the same example.
+        harness.steps = [triageStep(), subAgentStep('Billing'), subAgentStep('Queue')];
+        harness.paths = [
+            path(TRIAGE_STEP_ID, stepID('Billing'), "stepResult.result.intent.value === 'billing'", 2),
+            path(TRIAGE_STEP_ID, stepID('Queue'), null, 1),
+        ];
+        const agent = makeAgent(answered({ value: 'billing', confidence: 0.55 }, 0.1));
+
+        const result = await agent.Execute(makeParams());
+
+        expect(agent.SubAgentCalls).toEqual(['Queue Agent']);
+        expect(result.success).toBe(true);
     });
 
     it('refuses a flow whose Decision steps share a key before any step runs', async () => {

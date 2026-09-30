@@ -14,8 +14,22 @@
  */
 import { SafeExpressionEvaluator } from '@memberjunction/global';
 import { CONDITION_ROOTS, UnknownConditionRoots } from './condition-roots';
-import { DecisionChoiceTestOf, DecisionReferencesIn, type DecisionReference } from './decision-conditions';
-import { DetectCycle, type TaskGraphEdge, type TaskGraphNode } from './graph-algorithms';
+import {
+    DecisionChoiceTestOf,
+    DecisionReferencesIn,
+    DecisionsReadAsProperty,
+    DecisionValueComparisonsIn,
+    type DecisionReference,
+} from './decision-conditions';
+import {
+    ComputeCertainlyRun,
+    ComputeDownstream,
+    ComputeUpstream,
+    DetectCycle,
+    type RoutedTaskGraphEdge,
+    type TaskGraphEdge,
+    type TaskGraphNode,
+} from './graph-algorithms';
 import {
     ConfigOf,
     DECISION_ANSWER_FIELDS,
@@ -51,7 +65,65 @@ type ConditionSite = {
     TempId: string;
     /** A While loop's condition, which is evaluated per iteration and has no `decisions` root. */
     IsLoopCondition: boolean;
+    /** For an edge condition, the step the edge leaves: its condition is decided when that step finishes. */
+    Origin?: string;
 };
+
+/**
+ * Where the steps sit relative to one another, which is what decides whether a decision a condition
+ * reads can have answered by the time the condition is decided. Computed once per graph, lazily.
+ */
+type StepOrder = {
+    /** The steps certain to have run whenever this one has, itself included; `null` in a cyclic graph. */
+    CertainBy(tempId: string): ReadonlySet<string> | null;
+    /** Every step that depends on this one, directly or not. */
+    Downstream(tempId: string): ReadonlySet<string>;
+    /** Every step this one depends on, directly or not. */
+    Upstream(tempId: string): ReadonlySet<string>;
+};
+
+/** What checking a condition's decision references needs to know about the graph. */
+type DecisionContext = {
+    Steps: DecisionSteps;
+    Order: StepOrder;
+    NameOf: (tempId: string) => string;
+};
+
+/** The graph's step order, from its dependencies. An edge with a condition or an exclusive group can be cut. */
+function buildStepOrder(tasks: readonly TaskGraphSpecNode[]): StepOrder {
+    const ids = tasks.map((t) => t.tempId).filter((id): id is string => !!id);
+    const known = new Set(ids);
+    const edges: RoutedTaskGraphEdge[] = tasks.flatMap((t) =>
+        (t.dependsOn ?? [])
+            .map(NormalizeDependency)
+            .filter((d) => known.has(d.tempId) && d.tempId !== t.tempId)
+            .map((d) => ({
+                taskId: t.tempId,
+                dependsOnTaskId: d.tempId,
+                dependencyType: d.dependencyType,
+                mayBeCut: !!d.condition?.trim() || !!d.exclusiveGroup,
+            })),
+    );
+
+    let certain: Map<string, ReadonlySet<string>> | null | undefined;
+    const downstream = new Map<string, ReadonlySet<string>>();
+    const upstream = new Map<string, ReadonlySet<string>>();
+    const cached = (cache: Map<string, ReadonlySet<string>>, id: string, compute: () => ReadonlySet<string>): ReadonlySet<string> => {
+        const hit = cache.get(id);
+        if (hit) return hit;
+        const value = compute();
+        cache.set(id, value);
+        return value;
+    };
+    return {
+        CertainBy: (id) => {
+            if (certain === undefined) certain = ComputeCertainlyRun(ids, edges);
+            return certain?.get(id) ?? null;
+        },
+        Downstream: (id) => cached(downstream, id, () => ComputeDownstream(id, edges)),
+        Upstream: (id) => cached(upstream, id, () => ComputeUpstream(id, edges)),
+    };
+}
 
 /**
  * Refuses an edge condition that cannot parse, at the door.
@@ -76,8 +148,7 @@ type ConditionSite = {
  */
 function checkConditionSyntax(
     task: TaskGraphSpecNode,
-    nameByTempId: ReadonlyMap<string, string>,
-    decisionSteps: DecisionSteps,
+    decisions: DecisionContext,
     errors: TaskGraphValidationError[],
 ): void {
     // C7: name steps the way their author does. On the compiled-flow path `tempId` is a UUID, and a
@@ -85,8 +156,8 @@ function checkConditionSyntax(
     // in exactly the place it has to explain itself — to somebody editing an unrelated step in an
     // old flow who has just been told their save failed.
     const label = task.name?.trim() || task.tempId;
-    const nameOf = (tempId: string): string => nameByTempId.get(tempId) || tempId;
-    const report = (where: string, condition: string, isLoopCondition = false): void => {
+    const nameOf = decisions.NameOf;
+    const report = (where: string, condition: string, origin?: string): void => {
         const verdict = CONDITION_SYNTAX.validateSyntax(condition);
         // Undecidable means this host cannot compile at all (a strict CSP) — not that the condition
         // is wrong. Refusing then would reject every condition in the browser while the same spec
@@ -120,12 +191,17 @@ function checkConditionSyntax(
         // A DECISION REFERENCE IS DECIDABLE NOW TOO. The graph's Decision steps and their questions
         // are all in the spec, so `decisions.triage.intnet.value` is a typo we can name at the door
         // rather than an answer that never arrives and holds the branch forever.
-        checkDecisionReferences(condition, { Label: label, Where: where, TempId: task.tempId, IsLoopCondition: isLoopCondition }, decisionSteps, errors);
+        checkDecisionReferences(
+            condition,
+            { Label: label, Where: where, TempId: task.tempId, IsLoopCondition: origin === undefined, Origin: origin },
+            decisions,
+            errors,
+        );
     };
 
     for (const raw of task.dependsOn ?? []) {
         const dep = NormalizeDependency(raw);
-        if (dep.condition?.trim()) report(`a condition on its dependency "${nameOf(dep.tempId)}"`, dep.condition);
+        if (dep.condition?.trim()) report(`a condition on its dependency "${nameOf(dep.tempId)}"`, dep.condition, dep.tempId);
     }
 
     // A While step's loop condition is the same grammar evaluated by the same evaluator, and a typo
@@ -134,18 +210,27 @@ function checkConditionSyntax(
     if (task.kind === 'While') {
         const loopCondition = (task.configuration as { condition?: unknown } | undefined)?.condition;
         if (typeof loopCondition === 'string' && loopCondition.trim()) {
-            report('a loop condition', loopCondition, true);
+            report('a loop condition', loopCondition);
         }
     }
 }
 
 /**
- * Refuses a condition that reads a decision the graph does not make.
+ * Refuses a condition that reads a decision the graph does not make, or cannot have made in time.
  *
- * Four ways to be wrong, all answerable from the spec alone: a use of `decisions` that names no step
- * and question; a step that is not a Decision step in this graph; a question that step does not
- * ask; and an answer field that question's kind does not have — which would read `undefined` and
- * turn every comparison into a silent `false`.
+ * Every way to be wrong here is answerable from the spec alone:
+ *
+ * - a use of `decisions` that names no step and question;
+ * - a step that is not a Decision step in this graph, a question that step does not ask, or an
+ *   answer field that question's kind does not have — which would read `undefined` and turn every
+ *   comparison into a silent `false`;
+ * - a Choice compared with a value that is not one of its options, which can never match;
+ * - a decision that cannot have answered by the time the edge is decided — the edge's own target, a
+ *   step after it, or one on a branch that may be skipped. The edge would hold waiting for it, and
+ *   the graph would stall forever;
+ * - an answer read through a step's OUTPUT (`payload.decisions…`) rather than the root. That copy is
+ *   for later steps to read, and a condition reading it is never held: a below-threshold answer is
+ *   missing from it, and a missing answer reads as `false`.
  *
  * A loop condition may not read `decisions` at all. It is evaluated between iterations against the
  * loop's own payload, where there is no `decisions` root, and none of the hold rules apply there.
@@ -153,7 +238,7 @@ function checkConditionSyntax(
 function checkDecisionReferences(
     condition: string,
     site: ConditionSite,
-    decisionSteps: DecisionSteps,
+    decisions: DecisionContext,
     errors: TaskGraphValidationError[],
 ): void {
     const scan = DecisionReferencesIn(condition);
@@ -165,6 +250,20 @@ function checkDecisionReferences(
         });
     };
 
+    // Only where a Decision step exists can a `decisions` property be one's answers; elsewhere it is
+    // an ordinary payload field, and refusing it would reject workflows that have nothing to do with
+    // decisions.
+    if (decisions.Steps.size > 0) {
+        for (const read of new Set(DecisionsReadAsProperty(condition))) {
+            refuse(site.IsLoopCondition
+                ? `reads Decision answers through "${read}". Only an edge condition can read a Decision step's answers, `
+                    + 'through the decisions root; route on the decision with a conditional dependency instead'
+                : `reads Decision answers through "${read}", a copy a condition cannot hold on: an answer below its `
+                    + 'minConfidence, or from a failed call, is missing there and reads as false. '
+                    + 'Read it through the decisions root instead, for example decisions.<step>.<question>.value');
+        }
+    }
+
     if (site.IsLoopCondition) {
         if (scan.References.length > 0 || scan.Malformed.length > 0) {
             refuse('reads "decisions". Only an edge condition can read a Decision step\'s answers; route on the decision with a conditional dependency instead');
@@ -175,10 +274,79 @@ function checkDecisionReferences(
         refuse(`reads "decisions" without naming a Decision step and one of its questions (${malformed}). `
             + 'Write it as decisions.<step>.<question>, for example decisions.triage.intent.value');
     }
+    const timed = new Set<string>();
     for (const reference of scan.References) {
-        const problem = decisionReferenceProblem(reference, decisionSteps);
+        const problem = decisionReferenceProblem(reference, decisions.Steps);
+        if (problem) {
+            refuse(problem);
+            continue;
+        }
+        // One message per decision, however many of its questions the condition reads.
+        if (site.Origin === undefined || timed.has(reference.NodeId)) continue;
+        timed.add(reference.NodeId);
+        const late = decisionTimingProblem(reference.NodeId, site.Origin, site.TempId, decisions);
+        if (late) refuse(late);
+    }
+    const compared = new Set<string>();
+    for (const comparison of DecisionValueComparisonsIn(condition)) {
+        const key = JSON.stringify([comparison.NodeId, comparison.QuestionKey, comparison.Value]);
+        if (compared.has(key)) continue;
+        compared.add(key);
+        const problem = choiceValueProblem(comparison.NodeId, comparison.QuestionKey, comparison.Value, decisions.Steps);
         if (problem) refuse(problem);
     }
+}
+
+/**
+ * Why a decision cannot have answered by the time an edge's condition is decided, or `null` when it
+ * certainly has.
+ *
+ * A condition is decided when the edge's origin finishes, so the decision must be certain to have
+ * run by then: the origin itself, or a step the origin cannot run without. Anything else is a hold
+ * that may never end — which the dispatcher cannot tell from a slow decision, so it is refused here.
+ */
+function decisionTimingProblem(
+    decisionID: string,
+    originID: string,
+    targetID: string,
+    decisions: DecisionContext,
+): string | null {
+    const certain = decisions.Order.CertainBy(originID);
+    // A cyclic graph has no order to reason about; the cycle is refused on its own.
+    if (!certain || certain.has(decisionID)) return null;
+
+    const decision = decisions.NameOf(decisionID);
+    const origin = decisions.NameOf(originID);
+    const target = decisions.NameOf(targetID);
+    const forever = 'so the edge would wait for it forever';
+    if (decisionID === targetID) {
+        return `reads the decision of "${decision}", the step this edge leads to. It can only answer after this `
+            + `condition lets it run, ${forever}`;
+    }
+    if (decisions.Order.Downstream(targetID).has(decisionID)) {
+        return `reads the decision of "${decision}", which comes after "${target}". It can only answer once this `
+            + `condition has let "${target}" run, ${forever}`;
+    }
+    if (decisions.Order.Upstream(originID).has(decisionID)) {
+        return `reads the decision of "${decision}", which is on a branch that can be skipped while "${origin}" still `
+            + `runs. A skipped decision never answers, ${forever}. Read it only from a step that cannot run without it`;
+    }
+    return `reads the decision of "${decision}", which "${origin}" does not wait for: it may not have answered when `
+        + `this condition is decided, and if its branch is skipped it never will. Make "${origin}" depend on `
+        + `"${decision}" through steps that cannot be skipped, or read the decision from a step that does`;
+}
+
+/** Why a Choice compared with `value` can never match, or `null` when `value` is one of its options. */
+function choiceValueProblem(nodeID: string, questionKey: string, value: string, decisionSteps: DecisionSteps): string | null {
+    const step = decisionSteps.get(nodeID);
+    const questions = step?.Config.questions ?? {};
+    const question = Object.prototype.hasOwnProperty.call(questions, questionKey) ? questions[questionKey] : undefined;
+    // Anything but a well-formed Choice is reported by the reference and configuration checks.
+    if (!step || question?.kind !== 'Choice' || !Array.isArray(question.options)) return null;
+    const options = question.options.map((o) => o.value);
+    if (options.includes(value)) return null;
+    return `compares the Choice question "${questionKey}" of Decision step "${step.Name}" with "${value}", which is not `
+        + `one of its options (${options.map((o) => `"${o}"`).join(', ')}), so the comparison can never be true`;
 }
 
 /** What is wrong with one `decisions.<step>.<question>[.<field>]` reference, or `null`. */
@@ -516,6 +684,11 @@ export function ValidateTaskGraphSpec(spec: TaskGraphSpec): TaskGraphValidationR
     // Built once, before any condition is read: a condition may read a Decision step declared
     // anywhere in the graph, including after the task that carries it.
     const decisionSteps = collectDecisionSteps(tasks);
+    const decisionContext: DecisionContext = {
+        Steps: decisionSteps,
+        Order: buildStepOrder(tasks),
+        NameOf: (tempId: string): string => nameByTempId.get(tempId) || tempId,
+    };
     const seen = new Set<string>();
     for (const task of tasks) {
         if (!task.tempId || task.tempId.trim().length === 0) {
@@ -544,7 +717,7 @@ export function ValidateTaskGraphSpec(spec: TaskGraphSpec): TaskGraphValidationR
 
         checkConfiguration(task, errors);
         checkDecisionConfiguration(task, errors);
-        checkConditionSyntax(task, nameByTempId, decisionSteps, errors);
+        checkConditionSyntax(task, decisionContext, errors);
 
         for (const raw of task.dependsOn ?? []) {
             // NORMALISE before comparing. The object form `{ tempId: <own> }` used to slip past this

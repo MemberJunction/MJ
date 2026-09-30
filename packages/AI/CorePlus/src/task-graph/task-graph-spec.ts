@@ -227,7 +227,12 @@ export type TaskGraphNodeConfigMap = {
      * A fork whose edges all test one Choice question's `value` is checked at submit for
      * exhaustiveness: it must have a path for every option. An answer below its question's
      * `minConfidence`, or one from a call that failed, makes the edges that read it unevaluable, so
-     * they hold rather than read as `false`.
+     * they hold rather than read as `false`. `Retry` on the step asks again, whichever it was.
+     *
+     * A condition reads a decision only through the `decisions` root, never through the copy in a
+     * step's output (`payload.decisions…`), which holds nothing below threshold and cannot hold. And
+     * it reads only a decision certain to have answered when its edge is decided: the edge's origin,
+     * or a step the origin cannot run without. Both are refused at submit.
      *
      * **What a `'Decision'` run step means.** When an agent run submitted the graph, the call is also
      * logged on that run as an `AIAgentRunStep` with `StepType 'Decision'`, and the value means
