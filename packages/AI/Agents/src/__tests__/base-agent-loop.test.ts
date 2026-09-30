@@ -1107,6 +1107,11 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
     /** Asked only the decision requests, never the gate. */
     const decisionCalls = (ask: ReturnType<typeof answerDecisions>) => ask.mock.calls.filter(([args]) => !('q1' in args.Questions));
 
+    /** Run params for an agent whose finishIf gates are `mode` (gates are opt-in; the default is off). */
+    function gateParams(mode: 'on' | 'shadow'): ExecuteAgentParams {
+        return makeParams({ data: { __agentTypePromptParams: { finishIfMode: mode } } });
+    }
+
     function gatedActionsEnvelope(): LoopAgentResponse {
         return {
             taskComplete: false,
@@ -1225,7 +1230,7 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
             () => llmEnvelope(successEnvelope()),
         ]);
 
-        const result = await agent.Execute(makeParams());
+        const result = await agent.Execute(gateParams('on'));
 
         expect(result.success).toBe(true);
         expect(runner.Calls).toHaveLength(1);
@@ -1241,7 +1246,7 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
             () => llmEnvelope(gatedActionsEnvelope()),
             () => llmEnvelope(successEnvelope()),
         ]);
-        const params = makeParams();
+        const params = gateParams('on');
 
         const result = await agent.Execute(params);
 
@@ -1252,6 +1257,38 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
         expect(harness.steps[3].StepName).toContain('Finish check');
         expect(harness.steps[4].StepName).toContain('Decision: triage');
         expect(runner.Calls[1].conversationMessages?.map(textOf).some((c) => c.startsWith('Decision results:') && c.includes('"id":"triage"'))).toBe(true);
+    });
+
+    it('in shadow mode, records a passing gate, does not end the run, and asks the decisions for the next prompt', async () => {
+        const ask = answerDecisions(0.95);
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(gatedActionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(gateParams('shadow'));
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(2);
+        expect(harness.run.Message).not.toBe(FINISH_IF.message);
+        expect(decisionCalls(ask)).toHaveLength(1);
+        expect(harness.steps.some((s) => s.StepName.includes('Finish check'))).toBe(true);
+    });
+
+    it('with gates off (the default), asks no gate, and asks the decisions for the next prompt', async () => {
+        const ask = answerDecisions(0.95);
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(gatedActionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(2);
+        expect(ask.mock.calls.some(([args]) => 'q1' in args.Questions)).toBe(false);
+        expect(decisionCalls(ask)).toHaveLength(1);
+        expect(harness.steps.some((s) => s.StepName.includes('Finish check'))).toBe(false);
     });
 
     it('never asks decisions sent with client tools and taskComplete, which end the run once the tools return', async () => {

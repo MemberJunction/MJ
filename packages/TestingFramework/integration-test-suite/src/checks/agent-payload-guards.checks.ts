@@ -37,7 +37,7 @@ import type { MJAIAgentEntity } from '@memberjunction/core-entities';
 import type { AgentInvoker } from './_it-live-agent-harness';
 import {
     ResolveClient, NewMarker, LoadAgentByName, RunAgentClient, RunIdOf, Settle,
-    ReadRun, ReadSteps, ReadPromptRunsForAgent, ParseStepPayloadChange, ParseJsonObject,
+    ReadRun, ReadSteps, ReadPromptRunsForAgent, ReadPayloadAudit, ParseJsonObject,
     DeepDeleteRunTrees, RunWithCompliance,
     AgentStepRow
 } from './_it-live-agent-harness';
@@ -198,14 +198,11 @@ export const PayloadGuardsChecks: NamedCheck[] = [
             Assert(!('secret' in finalPayload), 'PG2: the ungranted `secret` was merged into the parent payload (block broken)');
 
             const steps = await ReadSteps(ctx.Provider, ctx.User, rootRunId);
-            const violations = subAgentSteps(steps)
-                .map(ParseStepPayloadChange)
-                .map((p) => p?.PayloadValidation?.upstreamMergeViolations)
-                .find((v) => !!v);
-            Assert(!!violations, 'PG2: the blocked op was not recorded in upstreamMergeViolations (unauditable)');
+            const attempted = ReadPayloadAudit(subAgentSteps(steps)).UpstreamAttempted;
+            Assert(attempted.length > 0, 'PG2: the blocked op was not recorded in upstreamMergeViolations (unauditable)');
             Assert(
-                (violations!.attemptedOperations ?? []).some((o) => (o.path ?? '').includes('secret')),
-                `PG2: upstreamMergeViolations does not name the blocked secret path: ${JSON.stringify(violations)}`
+                attempted.some((o) => o.path.includes('secret')),
+                `PG2: upstreamMergeViolations does not name the blocked secret path: ${JSON.stringify(attempted)}`
             );
         }
     },
@@ -259,9 +256,7 @@ export const PayloadGuardsChecks: NamedCheck[] = [
             // behaviour change in the merge engine, not a release-prep edit. If someone implements it,
             // THIS assertion flips and the one below becomes the real per-op audit assertion.
             const steps = await ReadSteps(ctx.Provider, ctx.User, rootRunId);
-            const blobs = subAgentSteps(steps).map(ParseStepPayloadChange);
-            const attempted = blobs.flatMap((p) => p?.PayloadValidation?.upstreamMergeViolations?.attemptedOperations ?? []);
-            const warnings = blobs.flatMap((p) => p?.Warnings ?? []);
+            const { UpstreamAttempted: attempted, Warnings: warnings } = ReadPayloadAudit(subAgentSteps(steps));
             // The child's own emitted text goes in the message: fixtures are purged at teardown, so a
             // red here cannot be re-queried from the database afterwards.
             const emitted = await childResultText(ctx, rootRunId, fx.ChildID);
@@ -271,7 +266,7 @@ export const PayloadGuardsChecks: NamedCheck[] = [
                 `  child emitted: ${emitted.slice(0, 1200)}`
             );
             Assert(
-                !attempted.some((o) => (o.path ?? '').includes('analysis.x') && /delete|remove/i.test(o.operation ?? '')),
+                !attempted.some((o) => o.path.includes('analysis.x') && /delete|remove/i.test(o.operation)),
                 `PG3: the upstream boundary NOW records a per-op delete violation — the audit gap this check ` +
                 `pins has been closed. Flip this assertion to require the record, and drop this comment.\n` +
                 `  attemptedOperations: ${JSON.stringify(attempted)}\n` +
@@ -394,10 +389,8 @@ export const PayloadGuardsChecks: NamedCheck[] = [
             Assert(!('config' in finalPayload), 'PG7: the RESTRICTED config.b self-write leaked into the payload');
 
             const steps = await ReadSteps(ctx.Provider, ctx.User, selfRunId);
-            const denied = steps
-                .map(ParseStepPayloadChange)
-                .flatMap((p) => p?.PayloadValidation?.selfWriteViolations?.deniedOperations ?? []);
-            Assert(denied.some((o) => (o.path ?? '').includes('config')),
+            const denied = ReadPayloadAudit(steps).SelfWriteDenied;
+            Assert(denied.some((o) => o.path.includes('config')),
                 `PG7: the blocked self-write was not recorded in selfWriteViolations: ${JSON.stringify(denied)}`);
         }
     },
