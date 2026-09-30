@@ -5,8 +5,11 @@ import type { GetExamplesParams, GetNotesParams } from '../agent-context-injecto
 // The builder is the thin orchestration wrapper; we mock the collaborators so the tests are
 // deterministic and never touch DB/network.
 
-const getNotes = vi.fn(async (_params: GetNotesParams) => [] as unknown[]);
-const getExamples = vi.fn(async (_params: GetExamplesParams) => [] as unknown[]);
+/** The note and example fields the builder reads from what the injector returns. */
+type RetrievedRecord = { ID: string };
+
+const getNotes = vi.fn(async (_params: GetNotesParams): Promise<RetrievedRecord[]> => []);
+const getExamples = vi.fn(async (_params: GetExamplesParams): Promise<RetrievedRecord[]> => []);
 const formatNotes = vi.fn((notes: unknown[]) => (notes.length ? `NOTES(${notes.length})` : ''));
 const formatExamples = vi.fn((examples: unknown[]) => (examples.length ? `EXAMPLES(${examples.length})` : ''));
 
