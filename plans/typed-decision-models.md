@@ -65,7 +65,7 @@ retargeted to `next` when #4814 merged; before that they were stacked on `train/
 | 1.2 The `Decision` model type and configuration | #4811 | Merged |
 | 1.3 `AIDecisionRunner`; 1.4 `LLMDecision`; 1.5 the config carrier (`MJ: AI Prompts`); 1.6 `Run Decision` | #4814 | Merged (the milestone, §0.2). #4812 carried 1.4 first and was closed as superseded. |
 | 2.3 `OpenRouterDecision` (Jev) | #4814 | Merged |
-| 4.6 `finishIf`; 4.7 `decisions` in the loop response | #4814 | Merged. `finishIf` is opt-in per agent (`finishIfMode`: `off` by default, `shadow`, `on`). |
+| 4.6 `finishIf`; 4.7 `decisions` in the loop response | #4814 | Merged. `finishIf` is opt-in per agent (`finishIfMode`: `off` by default, `shadow`, `on`). `decisions` shipped on by default and becomes opt-in (`includeDecisionsDocs: true`) in #4906, after the measurement in Task 4.7. |
 | Follow-ups from the #4814 review (#4900, #4901, #4902) | #4906 | In review |
 | Client-callable decisions (`RunDecision` over GraphQL) | #4854 | In review |
 | A delegated decision's chat cost rolls into its run | #4880 | In review |
@@ -144,7 +144,7 @@ by default (see §0.1).
 **Amith's direction on loop agents:** "loop agents just having this available will start using it
 like how they started using scratchpad." So Tasks 4.6 and 4.7 move out of Phase 4 and into the
 milestone.
-- **Task 4.7 (`decisions`) is on by default** for loop agents, as scratchpad is.
+- **Task 4.7 (`decisions`) shipped on by default,** as scratchpad is, and becomes opt-in in #4906. On the Prompt Eval corpus no model used it, and it cost about 1,180 tokens a turn (Task 4.7).
 - **Task 4.6 (`finishIf`) shipped opt-in.** It was planned on by default. The replay (#4895) showed that at 0.9 it would end 22% of the rounds where the agent went on to act, so it shipped with `finishIfMode` (`off` by default, `shadow`, `on`; `e250baf527`).
 
 For an agent that opts in, the safety comes from the design:
@@ -1733,12 +1733,23 @@ one. It uses the same mechanics as `scratchpad` and `artifactToolCalls`.
   - to get a consistent, logged judgment instead of prose;
   - to settle a routing or classification question with probabilities the agent can compare.
 - **Gated like scratchpad.** Prompt params include it in the response type and the system prompt.
-  It is on by default for loop agents, and its docs add about 540 tokens (~2,160 characters) to
-  every loop agent's system prompt.
-- **Not yet measured:** the Prompt Eval corpus has not been run with and without the `decisions`
-  docs. The risk table says a new output channel isn't neutral, so run that comparison before relying
-  on the default.
-- **Measure adoption and channel effects** on the Prompt Eval corpus (§5, channel effects).
+  It shipped on by default (#4814). After the measurement below it becomes **opt-in**
+  (`includeDecisionsDocs: true`, #4906), as `finishIf` is.
+- **Measured on the Prompt Eval corpus (2026-09-30), docs on against docs off:**
+  - **Setup:** 68 cases × 4 models (Gemini 3.7 Flash, Claude Sonnet 5, Claude Haiku 4.5,
+    GPT-OSS-120B) × 3 repeats, 1,632 runs. The arms differ only in `includeDecisionsDocs`, set
+    through the runtime prompt-param override, and every run's rendered prompt was checked against its
+    arm. 351 runs never reached a model (an OpenRouter credit limit); none were Gemini's, and they
+    split evenly across the arms.
+  - **Channel effect: none measurable.** The right next step 81.0% in both arms; paired by case,
+    0.0 points (95% CI −2.1 to +1.9, 206 case×model pairs). Well-formed replies 99.1% in both.
+  - **Adoption: none.** No model wrote a `decisions` request in 1,281 completed runs.
+  - **Cost:** about 1,180 prompt tokens per turn (+5.7%), 6.6% of cost. That is twice the ~540 first
+    estimated, because with `finishIf` off the decision types are in the prompt only for `decisions`.
+  - **Limit:** no corpus case is one where asking a decision is the right move, so the benefit is
+    unmeasured, not refuted.
+- **Next:** measure adoption on agents that opt in and whose work fits (classifying, filtering or
+  routing many items), with corpus cases where a decision request is the right answer.
 
 ---
 
