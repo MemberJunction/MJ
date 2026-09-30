@@ -19,7 +19,6 @@ import {
   CollectRoutingParticipants,
   RunRoutingDecision,
   ShouldRunRoutingDecision,
-  type RoutingAgent,
   type RoutingArtifactVersion,
   type RoutingCatalogAgent,
   type RoutingDecisionInput,
@@ -2163,7 +2162,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    */
   private buildRoutingDecisionInput(message: MJConversationDetailEntity, continuityAgentId: string): RoutingDecisionInput {
     const history = this.ConversationHistory.filter(row => this.isWithinHistoryFloor(row) && !UUIDsEqual(row.ID, message.ID));
-    const findSpeaker = (agentId: string): RoutingAgent | undefined => AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
+    const findAgent = (agentId: string): RoutingCatalogAgent | undefined => AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
     const runnable = this.mentionAutocomplete.GetAvailableAgents();
     const findRunnable = (agentId: string): RoutingCatalogAgent | undefined => runnable.find(a => UUIDsEqual(a.ID, agentId));
     const manager = this.ConverationManagerAgent;
@@ -2172,7 +2171,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       ContinuityAgentId: continuityAgentId,
       Participants: CollectRoutingParticipants(history, manager?.ID ?? null, this.AllowedAgentIDs, findRunnable),
       ConversationManager: manager?.ID && IsAgentAllowed(manager.ID, this.AllowedAgentIDs) ? manager : null,
-      RecentTurns: BuildRecentTurns(history, findSpeaker),
+      RecentTurns: BuildRecentTurns(history, findAgent),
       ArtifactVersions: [],
       AllowedAgentIDs: this.AllowedAgentIDs
     };
