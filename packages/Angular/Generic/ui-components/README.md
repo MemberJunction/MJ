@@ -98,7 +98,7 @@ Editable text-input combobox (CDK overlay): type-to-filter, keyboard nav, option
 ```
 
 ### `mj-dropdown` — MJDropdownComponent
-Non-editable select (CDK overlay) with optional in-panel filter (`[Filterable]`, default false) and `DefaultItem` clear option. Same `Data`/`TextField`/`ValueField`/`ValuePrimitive` contract as combobox. Custom item template via `<ng-template #mjDropdownItem>`.
+Non-editable select (CDK overlay) with optional in-panel filter (`[Filterable]`, default false) and `DefaultItem` clear option. Same `Data`/`TextField`/`ValueField`/`ValuePrimitive` contract as combobox. Custom item template via `<ng-template #mjDropdownItem>`. Tab in an open panel closes it, puts focus back on the field, and leaves the key to the browser, so Tab moves on from the field.
 
 **Give every dropdown an accessible name** — see [Accessible names](#accessible-names--one-contract-across-every-control). The trigger is a `div[role=combobox]`, so `<label for>` neither names nor focuses it: the visible-label path here is `AriaLabelledBy`, not `InputId`. The name is applied to the popup listbox as well as the trigger, and a filterable panel's filter box takes its name from the same source.
 
@@ -114,7 +114,7 @@ Non-editable select (CDK overlay) with optional in-panel filter (`[Filterable]`,
 ```
 
 ### `mj-datepicker` — MJDatepickerComponent
-Text input + calendar popup with `Min`/`Max` range disabling and typed-input parsing. Accepts `Date | string | null` through forms; emits `ValueChange: Date | null`. (Display format is currently fixed at `MM/dd/yyyy`.) The toggle button and the calendar grid take their names from the field's own name, so two pickers on one form do not present two grids both called "Calendar".
+Text input + calendar popup with `Min`/`Max` range disabling and typed-input parsing. Accepts `Date | string | null` through forms; emits `ValueChange: Date | null`. (Display format is currently fixed at `MM/dd/yyyy`.) The toggle button and the calendar grid take their names from the field's own name, so two pickers on one form do not present two grids both called "Calendar". Tab in an open calendar closes it, puts focus back on the field, and leaves the key to the browser, so Tab moves on from the field.
 
 ```html
 <mj-datepicker AriaLabel="Due date" [(ngModel)]="dueDate" [Min]="minDate" [Max]="maxDate" Placeholder="Select a date" />
@@ -272,7 +272,7 @@ Modal with backdrop, Esc/backdrop close (`Closeable`), body scroll lock. Inputs:
 Focus inputs, each on by default:
 
 - `AutoFocus` (default `true`) moves focus into the dialog on open: `[data-autofocus]`, else the first field, else the first body or actions button (never the close button), else the container.
-- `TrapFocus` (default `true`) wraps only. The browser moves Tab between stops. Tab on the last stop wraps to the first, and Shift+Tab on the first stop or the container wraps to the last. A Tab that arrives while focus is outside the open dialog is brought back in. Stops skip `display: none`, `[hidden]`, `visibility: hidden`, disabled controls, hidden inputs, and `tabindex="-1"`. A `contenteditable` region is a stop unless `contenteditable="false"`. A nested dialog handles its own Tab first.
+- `TrapFocus` (default `true`) wraps only. The browser moves Tab between stops. Tab on the last stop wraps to the first, and Shift+Tab on the first stop or the container wraps to the last. Only the topmost visible dialog brings a Tab in, and only when it traps focus. Focus in another modal, or in an overlay panel, keeps its Tab. When a dropdown or calendar on the first or last stop hands focus back to its field, the dialog wraps. Stops skip `display: none`, `[hidden]`, `visibility: hidden`, disabled controls, hidden inputs, and `tabindex="-1"`. A `contenteditable` region is a stop unless `contenteditable="false"`. A nested dialog handles its own Tab first.
 - `RestoreFocus` (default `true`) returns focus to the element that opened the dialog.
 - `AriaLabel` names the dialog when `Title` is empty. A title uses `aria-labelledby` and does not also set `aria-label`.
 
