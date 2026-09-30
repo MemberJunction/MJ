@@ -8113,7 +8113,7 @@ The context is now within limits. Please retry your request with the recovered c
      * Links a decision call's prompt run to its step, as the Prompt step links its own, so the run's
      * cost and token totals and its `MaxCostPerRun` / `MaxTokensPerRun` checks count the call.
      */
-    private attachDecisionPromptRun(step: MJAIAgentRunStepEntityExtended, result: AIDecisionRunResult): void {
+    protected attachDecisionPromptRun(step: MJAIAgentRunStepEntityExtended, result: AIDecisionRunResult): void {
         if (result.promptRun?.ID) {
             step.TargetLogID = result.promptRun.ID;
             step.PromptRun = result.promptRun; // transient related object (not a persisted field)

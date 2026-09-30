@@ -9,10 +9,29 @@ import {
     MJAIAgentRunStepEntity,
     IsInjectableNoteStatus
 } from '@memberjunction/core-entities';
-import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, MJAIAgentEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { AIPromptRunner, AIDecisionRunResult } from '@memberjunction/ai-prompts';
+import {
+    AIPromptParams,
+    AIPromptRunResult,
+    ExecuteAgentParams,
+    AgentConfiguration,
+    BaseAgentNextStep,
+    MJAIAgentEntityExtended,
+    MJAIPromptEntityExtended,
+    MJAIAgentRunStepEntityExtended
+} from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { UUIDsEqual } from '@memberjunction/global';
+import type { DecisionAnswer } from '@memberjunction/ai';
+import { AgentDecisionService } from './AgentDecisionService';
+import {
+    BuildMemoryNoteQuestions,
+    BuildMemoryNoteState,
+    JudgeMemoryNotes,
+    MemoryNotePromptQuestionCap,
+    ChunkMemoryNotes,
+    MEMORY_NOTE_MIN_PROBABILITY
+} from './memory-note-gate';
 
 /**
  * Minimal shape of a conversation message that ExtractExamples needs. Lets callers pass
@@ -505,6 +524,20 @@ export class MemoryManagerAgent extends BaseAgent {
     private _stepCounter: number = 0;
     /** Context user for step operations */
     private _contextUser: UserInfo | null = null;
+    /** Flag to enable typed decision gate instead of self-confidence threshold */
+    private _enableDecisionGate: boolean = false;
+
+    /**
+     * Whether the typed decision gate is enabled for filtering extracted memory notes.
+     * When false (default), uses the self-reported confidence filter (confidence >= 80).
+     */
+    public get EnableDecisionGate(): boolean {
+        return this._enableDecisionGate;
+    }
+
+    public set EnableDecisionGate(value: boolean) {
+        this._enableDecisionGate = value;
+    }
 
     /** Check if a string is a valid UUID format. Filters out LLM-generated placeholders like "user-uuid-here". */
     private static isValidUUID(id: string | undefined | null): boolean {
@@ -1005,10 +1038,10 @@ export class MemoryManagerAgent extends BaseAgent {
             }
         }
 
-        // Step 3: filter by confidence and content length
-        const candidateNotes = this.filterByConfidenceAndLength(rawNotes);
+        // Step 3: filter by decision gate or confidence/content length
+        const candidateNotes = await this.filterCandidateNotes(rawNotes, promptData.conversationThreads, contextUser);
         if (candidateNotes.length === 0) {
-            if (this._verbose) LogStatus('Memory Manager: No candidates passed confidence/length thresholds');
+            if (this._verbose) LogStatus('Memory Manager: No candidates passed gating thresholds');
             return [];
         }
 
@@ -1155,6 +1188,148 @@ export class MemoryManagerAgent extends BaseAgent {
             }
         }
         return filtered;
+    }
+
+    /**
+     * Filters candidate notes using either the typed decision gate (if enabled)
+     * or the traditional self-reported confidence and length filters.
+     */
+    private async filterCandidateNotes(
+        notes: ExtractedNote[],
+        conversationThreads: ConversationThread[],
+        contextUser: UserInfo
+    ): Promise<ExtractedNote[]> {
+        if (!this._enableDecisionGate) {
+            return this.filterByConfidenceAndLength(notes);
+        }
+        return this.filterWithDecisionGate(notes, conversationThreads, contextUser);
+    }
+
+    /**
+     * Evaluates candidate notes through the typed decision gate in batches conforming
+     * to the prompt model's declared MaxQuestionsPerCall limit.
+     */
+    private async filterWithDecisionGate(
+        notes: ExtractedNote[],
+        conversationThreads: ConversationThread[],
+        contextUser: UserInfo
+    ): Promise<ExtractedNote[]> {
+        const lengthFiltered = notes.filter(n =>
+            n.content && n.content.length >= EXTRACTION_CONFIG.minContentLength
+        );
+        if (lengthFiltered.length === 0) {
+            if (this._verbose) LogStatus('Memory Manager: No candidates passed content length check before decision gate');
+            return [];
+        }
+
+        const cap = MemoryNotePromptQuestionCap(AIEngine.Instance, 'Default Decision');
+        const batches = ChunkMemoryNotes(lengthFiltered, cap);
+        const kept: ExtractedNote[] = [];
+        const threadExcerpts = this.formatThreadExcerpts(conversationThreads);
+
+        for (const batch of batches) {
+            const batchPassed = await this.judgeDecisionBatch(batch, threadExcerpts, contextUser, cap);
+            kept.push(...batchPassed);
+        }
+
+        return kept;
+    }
+
+    /**
+     * Formats conversation thread history for decision state projection.
+     */
+    private formatThreadExcerpts(threads: ConversationThread[]): string {
+        return threads.map(t =>
+            `Conversation ${t.conversationId}:\n` +
+            t.messages.map(m => `[${m.role}]: ${m.message}`).join('\n')
+        ).join('\n---\n');
+    }
+
+    /**
+     * Runs a decision prompt call for a single batch of candidate notes, falling back
+     * to the confidence filter if the decision call fails.
+     */
+    private async judgeDecisionBatch(
+        batch: ExtractedNote[],
+        threadExcerpts: string,
+        contextUser: UserInfo,
+        modelCap: number | undefined
+    ): Promise<ExtractedNote[]> {
+        const questions = BuildMemoryNoteQuestions(batch);
+        const state = BuildMemoryNoteState(batch, threadExcerpts);
+        const step = await this.createRunStep('Decision', 'Judge Extracted Notes', {
+            noteCount: batch.length,
+            modelCap
+        });
+
+        const decisionService = this._agentDecisionService ?? new AgentDecisionService();
+        const result = await decisionService.Ask({
+            ContextUser: contextUser,
+            PromptName: 'Default Decision',
+            State: state,
+            Questions: questions,
+            AgentID: this.AgentRun?.AgentID ?? undefined
+        });
+
+        await this.recordDecisionStep(step, result);
+
+        if (!result.success) {
+            LogStatus(`Memory Manager: Decision call failed (${result.errorMessage ?? 'unknown error'}), falling back to confidence filter for batch`);
+            return this.filterByConfidenceAndLength(batch);
+        }
+
+        return this.evaluateDecisionVerdict(batch, result.Answers, result.modelInfo?.modelName);
+    }
+
+    /**
+     * Attaches decision prompt run telemetry to the step and marks it complete.
+     */
+    private async recordDecisionStep(
+        step: MJAIAgentRunStepEntity | null,
+        result: AIDecisionRunResult
+    ): Promise<void> {
+        if (!step) return;
+        if (step instanceof MJAIAgentRunStepEntityExtended && result.promptRun) {
+            this.attachDecisionPromptRun(step, result);
+        }
+        await this.finalizeRunStep(
+            step,
+            result.success,
+            { answers: result.Answers, model: result.modelInfo?.modelName },
+            result.promptRun?.ID,
+            result.errorMessage
+        );
+    }
+
+    /**
+     * Applies calibrated probabilities to judge which candidate notes to keep.
+     */
+    private evaluateDecisionVerdict(
+        batch: ExtractedNote[],
+        answers: Record<string, DecisionAnswer> | undefined,
+        modelName?: string
+    ): ExtractedNote[] {
+        const verdict = JudgeMemoryNotes(
+            answers,
+            batch,
+            modelName,
+            MEMORY_NOTE_MIN_PROBABILITY
+        );
+        // Only a calibrated model replaces the self-reported confidence: one that answered without a
+        // calibration (a failover, say) has not been shown to beat it, so the batch falls back to it.
+        if (!verdict.Calibrated) {
+            LogStatus(`Memory Manager: '${modelName ?? 'unknown'}' has no memory-note calibration, falling back to confidence filter for batch`);
+            return this.filterByConfidenceAndLength(batch);
+        }
+
+        if (this._verbose) {
+            LogStatus(`Memory Manager: Decision gate evaluated ${batch.length} notes (calibrated: ${verdict.Calibrated}): kept ${verdict.KeptNotes.length}`);
+            for (const judged of verdict.JudgedNotes) {
+                LogStatus(`Memory Manager: Note [${judged.Note.type}] "${judged.Note.content.slice(0, 50)}..." -> kept: ${judged.Kept} (prob: ${judged.CalibratedProbability ?? judged.RawProbability ?? 'none'}), reason: ${judged.Reason}`);
+            }
+        }
+
+        return verdict.KeptNotes;
     }
 
     /**
@@ -3765,6 +3940,9 @@ export class MemoryManagerAgent extends BaseAgent {
         try {
             // Use verbose flag from agent execution params or data payload (UI passes it via data)
             this._verbose = params.verbose || params.data?.verbose || false;
+            if (typeof params.data?.enableDecisionGate === 'boolean') {
+                this._enableDecisionGate = params.data.enableDecisionGate;
+            }
 
             // Initialize observability state for this run
             this._agentRunID = this.AgentRun?.ID || null;
