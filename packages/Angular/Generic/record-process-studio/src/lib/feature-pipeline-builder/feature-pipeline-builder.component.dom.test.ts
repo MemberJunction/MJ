@@ -2,7 +2,7 @@ import '@angular/compiler';
 import { getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { describe, it, expect } from 'vitest';
-import { EntityInfo } from '@memberjunction/core';
+import { EntityInfo, type RunViewParams, type RunViewResult } from '@memberjunction/core';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { renderComponentFixture, query, queryAll, createFakeProvider } from '@memberjunction/ng-test-utils';
@@ -109,6 +109,23 @@ function checkboxEvent(checked: boolean): Event {
   const event = new Event('change');
   input.dispatchEvent(event);
   return event;
+}
+
+/** A RunView result, successful unless an error message is given. */
+function runViewResult<T>(rows: T[], errorMessage?: string): RunViewResult<T> {
+  return {
+    Success: !errorMessage,
+    Results: rows,
+    RowCount: rows.length,
+    TotalRowCount: rows.length,
+    ExecutionTime: 0,
+    ErrorMessage: errorMessage ?? '',
+  };
+}
+
+/** The fake provider, with its RunView answered by `runView` (to fail, throw, or record the params). */
+function providerWithRunView(runView: (params: RunViewParams) => Promise<RunViewResult>) {
+  return Object.assign(fakeProvider(), { RunView: runView });
 }
 
 /** The spec the builder last wrote to the record. */
@@ -443,6 +460,9 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
       ParsedSpec: {
         Name: 'Full LLM Pipeline',
         Description: 'Full LLM',
+        PromptID: 'llm-prompt',
+        Context: { Fields: ['Name'] },
+        Caching: { Cacheable: false },
         Outputs: [
           {
             Name: 'IsAtRisk',
@@ -472,6 +492,9 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
       ParsedSpec: {
         Name: 'Incomplete',
         Description: 'Incomplete',
+        PromptID: 'llm-prompt',
+        Context: { Fields: ['Name'] },
+        Caching: { Cacheable: false },
         Outputs: [
           {
             Name: 'OtherOutput',
@@ -492,6 +515,9 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
       ParsedSpec: {
         Name: 'Another Decision',
         Description: 'Another Decision',
+        PromptID: 'decision-prompt',
+        Context: { Fields: ['Name'] },
+        Caching: { Cacheable: false },
         PipelineType: 'Decision',
         Outputs: [
           {
@@ -596,6 +622,134 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     f.componentInstance.ApplyPipelineTypeChange('LLM');
     expect(f.componentInstance.spec.Escalation).toBeUndefined();
     expect(f.componentInstance.IsEscalationEnabled).toBe(false);
+  });
+
+  describe('escalation targets', () => {
+    const decisionWithTarget = (): MJRecordProcessEntity =>
+      makeRecord({
+        PipelineType: 'Decision',
+        Outputs: [
+          {
+            Name: 'IsAtRisk',
+            Ref: '$',
+            Target: { Mode: 'field', EntityFieldName: 'IsAtRisk' },
+            Constraint: { Type: 'boolean', OnViolation: 'fail' },
+          },
+        ],
+        Escalation: { PipelineID: 'target-1', BelowConfidence: 0.7 },
+      });
+    const renderWith = (record: MJRecordProcessEntity, provider: ReturnType<typeof fakeProvider>, validity?: boolean[]) =>
+      renderComponentFixture(FeaturePipelineBuilderComponent, {
+        inputs: { Record: record, Provider: provider, EntityID: record.EntityID },
+        setup: (instance) => {
+          if (validity) {
+            instance.ValidChange.subscribe((valid) => validity.push(valid));
+          }
+        },
+      });
+    const targetIssues = (f: ReturnType<typeof renderWith>) =>
+      f.componentInstance.ValidationErrors.filter((e) => e.Path === 'Escalation.PipelineID');
+
+    it('reports a failed load as a failure to check the target, a warning, not as "target not found"', async () => {
+      const validity: boolean[] = [];
+      const f = renderWith(decisionWithTarget(), providerWithRunView(async () => runViewResult([], 'Timeout expired')), validity);
+
+      await f.componentInstance.LoadEscalationTargets();
+
+      expect(f.componentInstance.EscalationTargetsLoaded).toBe(false);
+      expect(f.componentInstance.EscalationTargetsLoadError).toBe('Timeout expired');
+      expect(targetIssues(f)).toEqual([
+        expect.objectContaining({ Severity: 'warning', Message: expect.stringContaining('could not be loaded (Timeout expired)') }),
+      ]);
+      expect(targetIssues(f).some((e) => e.Message.includes('was not found'))).toBe(false);
+      expect(validity[validity.length - 1]).toBe(true);
+      expect(f.componentInstance.EscalationTargetsPlaceholder).toBe('— Pipelines could not be loaded —');
+    });
+
+    it('treats a load that throws the same way', async () => {
+      const f = renderWith(
+        decisionWithTarget(),
+        providerWithRunView(async () => {
+          throw new Error('network down');
+        })
+      );
+
+      await f.componentInstance.LoadEscalationTargets();
+
+      expect(f.componentInstance.EscalationTargetsLoadError).toBe('network down');
+      expect(targetIssues(f).map((e) => e.Severity)).toEqual(['warning']);
+    });
+
+    it('still reports a target that a successful load did not find', async () => {
+      const validity: boolean[] = [];
+      const f = renderWith(decisionWithTarget(), providerWithRunView(async () => runViewResult([])), validity);
+
+      await f.componentInstance.LoadEscalationTargets();
+
+      expect(targetIssues(f)).toEqual([
+        expect.objectContaining({ Severity: 'error', Message: "Escalation target pipeline 'target-1' was not found on this entity." }),
+      ]);
+      expect(validity[validity.length - 1]).toBe(false);
+    });
+
+    it('keeps the latest load when an earlier, slower one finishes after it', async () => {
+      let releaseSlow: (result: RunViewResult) => void = () => undefined;
+      const slow = new Promise<RunViewResult>((resolve) => {
+        releaseSlow = resolve;
+      });
+      const answers = [() => slow, async () => runViewResult([{ ID: 'fresh', Name: 'Fresh', WorkType: 'Infer', Status: 'Active', EntityID: 'e1' }])];
+      const f = renderWith(decisionWithTarget(), providerWithRunView(() => (answers.shift() ?? (async () => runViewResult([])))()));
+
+      const earlier = f.componentInstance.LoadEscalationTargets();
+      await f.componentInstance.LoadEscalationTargets();
+      releaseSlow(runViewResult([{ ID: 'stale', Name: 'Stale', WorkType: 'Infer', Status: 'Active', EntityID: 'e1' }]));
+      await earlier;
+
+      expect(f.componentInstance.AvailableEscalationTargets.map((t) => t.ID)).toEqual(['fresh']);
+    });
+
+    it('loads nothing when the pipeline has no entity, and escapes the entity ID in the filter', async () => {
+      const filters: string[] = [];
+      const provider = providerWithRunView(async (params) => {
+        if (params.EntityName === 'MJ: Record Processes') {
+          filters.push(params.ExtraFilter ?? '');
+        }
+        return runViewResult([]);
+      });
+      const noEntity = decisionWithTarget();
+      noEntity.EntityID = '';
+      const f = renderWith(noEntity, provider);
+      await f.whenStable();
+
+      await f.componentInstance.LoadEscalationTargets();
+      expect(filters).toEqual([]);
+
+      noEntity.EntityID = "e'1";
+      await f.componentInstance.LoadEscalationTargets();
+      expect(filters).toEqual(["WorkType='Infer' AND EntityID='e''1'"]);
+    });
+
+    it("rejects a target whose own spec the engine would refuse to build", () => {
+      const f = render(decisionWithTarget());
+      const invalidSpec: EscalationTargetCandidate = {
+        ID: 'target-5',
+        Name: 'No Prompt Pipeline',
+        WorkType: 'Infer',
+        Status: 'Active',
+        EntityID: 'e1',
+        Entity: 'Accounts',
+        ParsedSpec: {
+          Name: 'No Prompt',
+          Description: 'Missing its prompt',
+          PromptID: '',
+          Context: { Fields: ['Name'] },
+          Caching: { Cacheable: false },
+          Outputs: [{ Name: 'IsAtRisk', Ref: '$', Target: { Mode: 'field', EntityFieldName: 'IsAtRisk' } }],
+        },
+      };
+
+      expect(f.componentInstance.GetTargetProblem(invalidSpec)).toBe('has an invalid spec: DataFeatureSpec PromptID is required.');
+    });
   });
 
   describe('the capability rules, live', () => {
