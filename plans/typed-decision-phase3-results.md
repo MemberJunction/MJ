@@ -152,8 +152,9 @@ Production's code checks never gate 260 rounds, where an action failed or may ha
 - **It understates the risk in another.** A false finish returns the model's pre-written message in place of work the agent went on to do.
 
 **Recommendation:**
-- **Don't rely on `finishIf` at 0.9 by default.** The milestone turned it on by default at 0.9 per question, on Amith's direction, with the option to make it opt-in.
+- **Don't rely on `finishIf` at 0.9 by default.** The milestone planned it on by default at 0.9 per question, on Amith's direction. After this replay it shipped opt-in instead (see below).
 - **Make it opt-in per agent until it is measured with live-authored gates,** using the Prompt Eval corpus with the gate recorded and not acted on, as §5 of the plan proposes. Keep 0.9 for the agents that opt in; per-model calibration doesn't help here.
+- **Try a narrower gate** (Amith's review): let finishIf end a run only when the finish condition can also be checked in code, not by reading intent alone (plan rule 6).
 - **Done on the train (`e250baf527`):** a Loop prompt param, `finishIfMode`, defaults to `off`. `shadow` evaluates and records every gate without acting, to measure an agent's own gates on real traffic, and `on` acts as before.
 
 ## 5. The loop agent's self-reported `confidence` (Task 3.4)
@@ -202,6 +203,11 @@ The Memory Manager keeps an extracted note when the extraction prompt's own `con
 ## Limitations
 
 - **The corpora are synthetic**, written by an LLM from MJ's own metadata or recorded simulated traffic. Refit each calibration on real, consented, labelled data before relying on the numbers.
+  - **Where real data comes from.** Client MJ usage data never comes back to Blue Cypress, so pooling client traffic is off the table. There are two options:
+    - refit on our own dogfood tenants;
+    - calibrate inside each client's instance.
+  - **Where the calibrations live today:** in code. `FindDecisionCalibration` (`@memberjunction/ai-core-plus`, #4876) does the lookup, keyed to the exact model the fit came from. Routing (#4876), discovery (#4893) and duplicates (#4896) each pass it their own table. The memory gate (#4897) still keys its table by model name alone.
+  - **Calibrating per instance** needs those parameters stored as per-instance metadata, with the code constants as defaults, plus a scheduled refit job over the instance's own labelled outcomes. That fits with the MJ Care Canon-audit work.
 - **The development catalog includes test fixtures,** which shape discovery's options.
 - **The duplicate measurement covers one entity** (`MJ: Actions`).
 - **Some cost is missing.** On branches without #4880, LLM Decision's chat cost isn't linked to its decision run, so its cost per 1,000 is missing from some tables.

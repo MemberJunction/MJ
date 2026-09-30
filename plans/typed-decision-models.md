@@ -143,8 +143,11 @@ by default (see §0.1).
 
 **Amith's direction on loop agents:** "loop agents just having this available will start using it
 like how they started using scratchpad." So Tasks 4.6 and 4.7 move out of Phase 4 and into the
-milestone, and are **on by default** for loop agents, as scratchpad is. Their safety comes from the
-design, not from being switched off:
+milestone.
+- **Task 4.7 (`decisions`) is on by default** for loop agents, as scratchpad is.
+- **Task 4.6 (`finishIf`) shipped opt-in.** It was planned on by default. The replay (#4895) showed that at 0.9 it would end 22% of the rounds where the agent went on to act, so it shipped with `finishIfMode` (`off` by default, `shadow`, `on`; `e250baf527`).
+
+For an agent that opts in, the safety comes from the design:
 - a gate can only end a run early, never start work;
 - it needs every action to have succeeded and every answer to clear a high threshold;
 - anything else takes today's path;
@@ -1345,7 +1348,18 @@ decision rises down the list.
 6. **Selecting content in the UI.** Decide which records, cards or suggestions a screen shows
    first for this user and task. It is the narrowing pattern (§3.7) with a person as the reader. A
    wrong answer costs a scroll, so it can come early once Task 3.6's `DecisionReranker` exists.
-7. **Smart paste.** Split pasted text (an email, a resume, meeting notes) into fragments. Then ask
+7. **Two high-volume association prompts** (added from Amith's review). These are probably the
+   largest decision volume across association data. Measure each before switching.
+   - **`Job Function and Seniority Derivation`.** Seniority is an ordered scale, so it is a natural
+     Score. Job function is a Choice, but its categories may overlap the way the pipeline
+     measurement's System/Data/Utilities did (results §3), so measure it on labelled records first.
+   - **`Content Autotagging`**, the tag-selection part only: a Likelihood per candidate tag, or a
+     Choice over the taxonomy. The titles and descriptions it writes stay with the LLM.
+8. **The realtime turn moderator** (`packages/AI/Agents/src/realtime/realtime-turn-moderator.ts`).
+   Realtime stays out of the runner hierarchy (§3.1), but the moderator is an ordinary prompt call
+   that chooses among agents, and it is where latency matters most. Caveat: turn-taking is close to
+   reading intent, a stated weak spot.
+9. **Smart paste.** Split pasted text (an email, a resume, meeting notes) into fragments. Then ask
    one Choice per fragment over the form's fields, with "none" as an option, and fill only the
    confident matches. The socket is the runtime entity-form components. (`packages/AI/FormBuilder`
    holds agents that author forms, not a layer that fills them.) The rule is to fill, never save: a
@@ -1624,8 +1638,15 @@ below-threshold → `unevaluable` → the group holds rather than guessing.
 
 > **Moved into the wrap-up milestone (§0.2), and extended to sub-agents.** `finishIf` may be
 > attached to `nextStep.subAgent` as well as to `nextStep.actions`. After the sub-agent returns, the
-> same check runs against its result. It is on by default for loop agents, with a conservative
-> threshold (0.9 per question) set per agent, until Task 2.4's calibration replaces it.
+> same check runs against its result. **It shipped opt-in:** `finishIfMode` is `off` by default,
+> `shadow` records every gate without acting, and `on` acts at 0.9 per question. The replay
+> (#4895, results §4) showed that 0.9 would end 22% of the rounds where the agent went on to act.
+>
+> **Follow-up (Amith's review):** a narrower gate. finishIf may end a run only when the finish
+> condition can also be checked in code, for example an action's output parameter or the payload
+> it wrote, and not by reading intent alone. That is rule 6 (§3.6): a decision reads state; it
+> doesn't verify effects. The 22% looks like a failure to read intent, which TypeSafe names as a
+> weak spot, so shadow data on the current gate may never clear the bar.
 
 This is Amith's example. The big model, when it asks for an action, also writes down in advance
 what a good result looks like: *"if this action has a good result, stop."* After the action runs, a
@@ -1712,7 +1733,11 @@ one. It uses the same mechanics as `scratchpad` and `artifactToolCalls`.
   - to get a consistent, logged judgment instead of prose;
   - to settle a routing or classification question with probabilities the agent can compare.
 - **Gated like scratchpad.** Prompt params include it in the response type and the system prompt.
-  It is on by default for loop agents.
+  It is on by default for loop agents, and its docs add about 540 tokens (~2,160 characters) to
+  every loop agent's system prompt.
+- **Not yet measured:** the Prompt Eval corpus has not been run with and without the `decisions`
+  docs. The risk table says a new output channel isn't neutral, so run that comparison before relying
+  on the default.
 - **Measure adoption and channel effects** on the Prompt Eval corpus (§5, channel effects).
 
 ---
