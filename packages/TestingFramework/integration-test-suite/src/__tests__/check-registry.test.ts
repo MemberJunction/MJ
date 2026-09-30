@@ -25,6 +25,7 @@ import { ConcurrentChecks } from '../checks/concurrent.checks';
 import { AgentRunnerChecks } from '../checks/agent-runner.checks';
 import { RemoteOpAiAuthoringChecks } from '../checks/remote-op-ai-authoring.checks';
 import { ConversationCompactionChecks } from '../checks/conversation-compaction.checks';
+import { TrailingRuntimeStateChecks } from '../checks/trailing-runtime-state.checks';
 import { ListsChecks } from '../checks/lists.checks';
 import { OpenAppTeardownChecks } from '../checks/open-app-teardown.checks';
 import { UserRoutinesChecks } from '../checks/user-routines.checks';
@@ -130,6 +131,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 16],
         ['conversation-compaction', ConversationCompactionChecks, 18], // CC1-CC18
+        ['trailing-runtime-state', TrailingRuntimeStateChecks, 6], // TRS1-TRS6
         ['agent-loop-live', AgentLoopLiveChecks, 7],
         ['shipped-agents-live', ShippedAgentsLiveChecks, 4],
         ['agent-carry-forward', AgentCarryForwardChecks, 6],
@@ -163,7 +165,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['fls-enforcement', FlsEnforcementChecks, 23], // FLS1-FLS23 field-level security against a live DB (IT90); FLS22/FLS23 cover the Record Changes payload projection, FLS21 measures metadata-refresh cost
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT91)
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
-        ['metadata-sync-push', MetadataSyncPushChecks, 8], // MSP1-MSP8 sync push atomicity, incl. server-derived child rows, mutation tier (IT94)
+        ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -211,13 +213,13 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     // not fail the build. When you add/remove a check DELIBERATELY, update the count here;
     // the failure message prints a paste-ready copy of the actual registry state.
     const EXPECTED_BUNDLE_COUNTS: Record<string, number> = {
-        'actions-pipeline': 5,
+        'actions-pipeline': 6,
         'agent-artifact-tools': 9,
         'agent-carry-forward': 6,
         'agent-compaction-e2e': 3,
         'agent-external-harness': 7,
         'agent-loop-live': 7,
-        'agent-loop-standin': 6,
+        'agent-loop-standin': 11,
         'prompt-eval-harness': 7,
         'agent-memory-guards': 5,
         'agent-note-cache-types': 3,
@@ -228,7 +230,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-skills-live': 5,
         'agent-wire-callback': 2,
         'aggregates-cache': 3,
-        'ai-cost': 7,
+        'ai-cost': 10,
         'ai-embeddings': 5,
         'ai-permissions': 6,
         'ai-providers': 3,
@@ -246,6 +248,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'concurrent': 2,
         'content-vectorization': 8,
         'conversation-compaction': 18,
+        'trailing-runtime-state': 6,
         'dataset-cache': 3,
         'entity-actions': 8,
         'entity-embedded': 6,
@@ -263,10 +266,10 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'materialized-read': 3,
         'metadata-consistency': 7,
         'metadata-sync': 9,
-        'metadata-sync-push': 8,
+        'metadata-sync-push': 10,
         'nested-transactions': 11,
         'open-app-teardown': 2,
-        'permission-engine': 14,
+        'permission-engine': 15,
         'predictive-studio': 5,
         'prompt-runner': 1,
         'queue': 7,
@@ -328,7 +331,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(94);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(95);
     });
 });
 
@@ -437,6 +440,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'fls-lifecycle.LC8',
         'fls-lifecycle.LC9',
         'metadata-sync-push.MSP1',
+        'metadata-sync-push.MSP10',
         'metadata-sync-push.MSP2',
         'metadata-sync-push.MSP3',
         'metadata-sync-push.MSP4',
@@ -444,6 +448,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'metadata-sync-push.MSP6',
         'metadata-sync-push.MSP7',
         'metadata-sync-push.MSP8',
+        'metadata-sync-push.MSP9',
         'nested-transactions.NT1',
         'nested-transactions.NT10',
         'nested-transactions.NT2',

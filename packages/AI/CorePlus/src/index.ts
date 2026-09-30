@@ -1,3 +1,4 @@
+export * from './model-run.types';
 export * from './prompt.types';
 export * from './agent-types';
 export * from './agent-failure-message';
@@ -11,6 +12,7 @@ export * from './conversation-utility';
 export * from './foreach-operation';
 export * from './while-operation';
 export * from './agent-scratchpad';
+export * from './agent-decisions';
 export * from './agent-run-steps';
 export * from './app-context';
 export * from './client-tool-resolver';
