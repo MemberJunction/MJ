@@ -266,6 +266,15 @@ export interface DerivedStateIdempotencyResult {
     Idempotent: boolean;
     AfterFirst: Record<string, number>;
     AfterSecond: Record<string, number>;
+    /**
+     * True when the engine was left holding what a normal load produces — either because the check
+     * changed nothing (an idempotent engine, by definition) or because the extra runs were undone.
+     * False means this engine is still carrying the drift the check induced and should be reloaded
+     * before its data is trusted.
+     */
+    Restored: boolean;
+    /** Why the restore failed, when it did. */
+    RestoreError?: string;
 }
 
 /** The parts of a census that a repeated rebuild must not change. */
@@ -429,12 +438,47 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const first = this.GetStateCensus();
         await this.AdditionalLoading(contextUser);
         const second = this.GetStateCensus();
+        const idempotent = censusFingerprint(first) === censusFingerprint(second);
+        // An idempotent engine needs nothing undone — the two runs left exactly what one run left,
+        // which is what a normal load produces. A drifting one is carrying two extra runs of
+        // whatever it does wrong, and nothing else will correct that: in the integration tier every
+        // later check would then run against a corrupted engine, and in a server the diagnostic
+        // would degrade the process it was called to inspect (plan §22.3).
+        const restoreError = idempotent ? undefined : await this.restoreAfterVerification(contextUser);
         return {
             EngineClass: this.constructor.name,
-            Idempotent: censusFingerprint(first) === censusFingerprint(second),
+            Idempotent: idempotent,
             AfterFirst: first.Derived,
             AfterSecond: second.Derived,
+            Restored: restoreError === undefined,
+            RestoreError: restoreError,
         };
+    }
+
+    /**
+     * Puts the engine back to what a normal load produces: rows re-read from the database, then a
+     * single `AdditionalLoading` over them.
+     *
+     * Re-running `AdditionalLoading` alone cannot undo anything — it is the operation that drifted,
+     * and it runs against the same row objects it already mutated. Only fresh rows give it a clean
+     * base, so this bypasses the cache; a cached copy can be the very state we are trying to leave.
+     *
+     * Calls `AdditionalLoading` directly rather than `RebuildDerivedState`, which would queue behind
+     * the verification this is running inside and deadlock.
+     *
+     * @returns undefined when the engine was restored, otherwise why it was not
+     */
+    private async restoreAfterVerification(contextUser?: UserInfo): Promise<string | undefined> {
+        try {
+            const user = contextUser ?? this._contextUser;
+            await this.LoadConfigs([...this._metadataConfigs, ...Array.from(this._dynamicConfigs.values())], user, /*bypassCache*/ true);
+            await this.AdditionalLoading(user);
+            return undefined;
+        } catch (e) {
+            const why = e instanceof Error ? e.message : String(e);
+            LogError(`${this.constructor.name}: derived state drifted AND could not be restored after the idempotency check (${why}). This engine is holding state that no normal load would produce; reload it before trusting its data.`);
+            return why;
+        }
     }
 
     /** The on-rebuild variant of {@link VerifyDerivedStateIdempotent}: one extra run, logged. */

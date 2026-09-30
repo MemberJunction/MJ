@@ -308,6 +308,17 @@ export const CacheArchitectureChecks: NamedCheck[] = [
             for (const engine of engines) {
                 results.push(await engine.VerifyDerivedStateIdempotent(ctx.User));
             }
+            // This check MUTATES every engine it inspects: VerifyDerivedStateIdempotent runs
+            // AdditionalLoading twice on the live engine. It now puts a drifting engine back
+            // (BaseEngine.restoreAfterVerification), which matters here more than anywhere — every
+            // later check in the tier shares this process, so an engine left carrying two extra
+            // rebuilds would turn one finding into a spray of unrelated failures. Report a restore
+            // that did NOT happen, because from that point on the process is suspect.
+            const unrestored = results.filter(r => !r.Restored)
+                .map(r => `${r.EngineClass} (${r.RestoreError ?? 'no reason given'})`);
+            AssertEqual(unrestored.length, 0,
+                `every engine this check rebuilt must be left as a normal load would leave it; these were not, so later checks in this run are unreliable: ${unrestored.join('; ')}`);
+
             const drifting = results.filter(r => !r.Idempotent)
                 .map(r => `${r.EngineClass} (${JSON.stringify(r.AfterFirst)} → ${JSON.stringify(r.AfterSecond)})`);
             AssertEqual(drifting.length, 0,
