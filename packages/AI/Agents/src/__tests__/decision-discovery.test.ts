@@ -1,10 +1,10 @@
 /**
- * The pure half of decision discovery (decision-discovery.ts): the switch, @mention detection, the
- * options and the option cap, narrowing by search rank, the questions, how answers are judged, and
- * the injected message.
+ * The pure half of decision discovery (decision-discovery.ts): the switch, the opening turn, @mention
+ * detection, the options and the option cap, narrowing by search rank, the questions, how answers
+ * are judged, and the injected message.
  */
 import { describe, it, expect } from 'vitest';
-import type { DecisionAnswer } from '@memberjunction/ai';
+import type { ChatMessage, DecisionAnswer } from '@memberjunction/ai';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import {
     AgentsWithoutDescription,
@@ -25,6 +25,7 @@ import {
     FailedDecisionDiscovery,
     HostAllowedAgentIDs,
     IsDecisionDiscoveryOn,
+    IsOpeningTurn,
     JudgeDecisionDiscovery,
     KeepHostAllowedAgents,
     MentionsAgent,
@@ -81,6 +82,31 @@ describe('IsDecisionDiscoveryOn', () => {
         expect(IsDecisionDiscoveryOn({ decisionDiscovery: false })).toBe(false);
         expect(IsDecisionDiscoveryOn({ decisionDiscovery: 'true' })).toBe(false);
         expect(IsDecisionDiscoveryOn({ decisionDiscovery: 1 })).toBe(false);
+    });
+});
+
+describe('IsOpeningTurn', () => {
+    const user = (content: string): ChatMessage => ({ role: 'user', content });
+    const assistant = (content: string): ChatMessage => ({ role: 'assistant', content });
+    const system = (content: string): ChatMessage => ({ role: 'system', content });
+
+    it('is the opening turn when the run holds exactly one user message', () => {
+        expect(IsOpeningTurn([user('Invoice Acme')])).toBe(true);
+    });
+
+    it('ignores assistant and system messages, so a greeting or injected context before the request still counts', () => {
+        expect(IsOpeningTurn([system('<retrieved_context>'), assistant('Hi! How can I help?'), user('Invoice Acme')])).toBe(true);
+    });
+
+    it('is a follow-up when an earlier request, or the summary of earlier turns, is in the history', () => {
+        expect(IsOpeningTurn([user('Invoice Acme'), assistant('Done.'), user('Make it shorter')])).toBe(false);
+        expect(IsOpeningTurn([user('Summary of the earlier conversation'), user('Make it shorter')])).toBe(false);
+    });
+
+    it('is not an opening turn without a user message', () => {
+        expect(IsOpeningTurn([])).toBe(false);
+        expect(IsOpeningTurn(undefined)).toBe(false);
+        expect(IsOpeningTurn([assistant('Hi!')])).toBe(false);
     });
 });
 

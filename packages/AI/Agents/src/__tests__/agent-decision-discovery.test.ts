@@ -9,7 +9,7 @@
  *   1. Off by default: no decision call, no step, and the first prompt's messages are untouched.
  *   2. On: one call per run, over the agents the user may run (rebuilt every run, minus the running
  *      agent, Sub-Agents and agents without a description), as agent IDs with their descriptions.
- *      An @mention of another agent means no call.
+ *      An @mention of another agent, or a follow-up turn, means no call.
  *   3. A confident Choice and Likelihood put a <suggested_agent> system message first in the first
  *      prompt; a low Choice confidence, a low Likelihood, an error, a throw, an unusable answer, a
  *      timeout and a cancelled run each inject nothing. Every call is recorded as one
@@ -874,6 +874,64 @@ describe('decision discovery — a cancelled run', () => {
         // Not the timeout: the run's cancellation reached the call before DECISION_DISCOVERY_TIMEOUT_MS.
         expect(String(stepOutput(step).reason)).toContain('cancelled');
         expectDiscoveryRunCounted();
+    });
+});
+
+describe('decision discovery — follow-up turns', () => {
+    beforeEach(() => {
+        harness.self = makeSelf(ON);
+    });
+
+    it.each([
+        ['a follow-up to an agent already at work', [
+            { role: 'user', content: OPENING_REQUEST },
+            { role: 'assistant', content: 'Billing Agent drafted the invoice.' },
+            { role: 'user', content: 'Make it shorter' },
+        ]],
+        ['a turn after a summary of the earlier conversation', [
+            { role: 'user', content: 'Summary: Billing Agent is drafting an invoice for Acme.', metadata: { isConversationSummary: true } },
+            { role: 'user', content: 'Make it shorter' },
+        ]],
+    ] satisfies Array<[string, ChatMessage[]]>)('asks nothing, records no step and leaves the prompt untouched on %s', async (_label, messages) => {
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(MARKETING, 0.99, 0.99));
+        const { agent, runner } = makeAgent();
+
+        const result = await agent.Execute(makeParams({ conversationMessages: messages }));
+
+        expect(result.success).toBe(true);
+        expect(ask).not.toHaveBeenCalled();
+        expect(harness.filterCalls).toHaveLength(0);
+        expect(discoverySteps()).toHaveLength(0);
+        expect(suggestionsInFirstPrompt(runner)).toHaveLength(0);
+    });
+
+    it("still asks on the conversation's opening request when a greeting came before it", async () => {
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.84, 0.9));
+        const { agent, runner } = makeAgent();
+
+        await agent.Execute(makeParams({ conversationMessages: [
+            { role: 'assistant', content: 'Hi! What can I help you with?' },
+            { role: 'user', content: OPENING_REQUEST },
+        ] }));
+
+        expect(ask).toHaveBeenCalledTimes(1);
+        expect(ask.mock.calls[0][0].State).toBe(OPENING_REQUEST);
+        expect(suggestionsInFirstPrompt(runner)).toHaveLength(1);
+    });
+
+    it('asks again on the opening request of the next conversation the same agent instance runs', async () => {
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.84, 0.9));
+        const { agent } = makeAgent();
+
+        await agent.Execute(makeParams({ conversationMessages: [
+            { role: 'user', content: 'Hello' },
+            { role: 'assistant', content: 'Hi' },
+            { role: 'user', content: 'Make it shorter' },
+        ] }));
+        await agent.Execute(makeParams());
+
+        expect(ask).toHaveBeenCalledTimes(1);
+        expect(ask.mock.calls[0][0].State).toBe(OPENING_REQUEST);
     });
 });
 

@@ -3,20 +3,21 @@
  *
  * When the user names no agent, a conversation manager such as Sage takes two turns to delegate: it
  * calls Find Candidate Agents, then reads the rows and picks one. With the Loop prompt param
- * `decisionDiscovery` on, `BaseAgent` instead asks one decision before the first prompt: a Choice
- * over the agents the user may run, and a Likelihood that any of them should handle the request.
- * When both answers are confident, a `<suggested_agent>` system message reaches the first prompt, so
- * the agent can delegate in its first turn. These helpers build the options and questions, judge the
- * answers and format the message. The call, the `Agent discovery` step and the injection live on
- * `BaseAgent`.
+ * `decisionDiscovery` on, `BaseAgent` instead asks one decision before the first prompt of a
+ * conversation's opening turn: a Choice over the agents the user may run, and a Likelihood that a
+ * specialist agent should handle the request. When both answers are confident, a `<suggested_agent>`
+ * system message reaches the first prompt, so the agent can delegate in its first turn. These helpers
+ * build the options and questions, judge the answers and format the message. The call, the
+ * `Agent discovery` step and the injection live on `BaseAgent`.
  *
  * It fails safe: after an error, a timeout, an unusable answer or an unsure one, nothing is injected
- * and the agent behaves as it did before.
+ * and the agent behaves as it did before. A follow-up turn is never asked about (see
+ * {@link IsOpeningTurn}), so discovery never pulls the agent away from one it has already engaged.
  *
  * @module @memberjunction/ai-agents
  */
 
-import type { DecisionAnswer, DecisionQuestion } from '@memberjunction/ai';
+import type { ChatMessage, DecisionAnswer, DecisionQuestion } from '@memberjunction/ai';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { ConversationUtility, type MentionContent, type SpecialContent } from '@memberjunction/ai-core-plus';
 import type { IRunViewProvider } from '@memberjunction/core';
@@ -163,6 +164,20 @@ export function FailedDecisionDiscovery(reason: string): DecisionDiscoveryOutcom
 /** Whether decision discovery is on in merged agent-type prompt params. Only `true` turns it on. */
 export function IsDecisionDiscoveryOn(promptParams: Record<string, unknown> | undefined): boolean {
     return promptParams?.decisionDiscovery === true;
+}
+
+/**
+ * Whether a run answers a conversation's opening request, the only turn discovery asks about: its
+ * messages hold exactly one user message. A follow-up turn carries the earlier requests in its
+ * history (or the summary of them, which also arrives as a user message), and may be continuing work
+ * with an agent already engaged, which a suggestion must not pull the agent away from. Assistant and
+ * system messages do not count, so a greeting before the first request still leaves it the opening
+ * turn. Read it from the messages the run started with, before the framework adds any.
+ *
+ * @param messages - The run's conversation messages, as the run received them.
+ */
+export function IsOpeningTurn(messages: ReadonlyArray<ChatMessage> | undefined): boolean {
+    return (messages ?? []).filter(m => m.role === 'user').length === 1;
 }
 
 /**

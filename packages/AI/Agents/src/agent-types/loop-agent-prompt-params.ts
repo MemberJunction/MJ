@@ -521,14 +521,15 @@ export interface LoopAgentTypePromptParams {
 
     /**
      * Decision discovery (plan Task 3.1): suggest the agent to delegate to before the first prompt.
-     * When true, and the run's opening request does not @mention an agent, one decision call runs
-     * once per run, in parallel with the rest of pre-execution. It asks which of the agents the user
-     * may run (the Find Candidate Agents set, minus this agent, and only those the host's
-     * `ALL_AVAILABLE_AGENTS` allows when it sends one) should handle the request, and whether the
-     * request needs a specialist at all. When both answers are confident it adds a
-     * `<suggested_agent>` system message to the first prompt, so the agent can delegate in its first
-     * turn instead of calling Find Candidate Agents first. Otherwise, and on any error or timeout, the
-     * prompt is unchanged.
+     * When true, and the run answers its conversation's opening request (its messages hold one user
+     * message) without @mentioning an agent, one decision call runs once per run, in parallel with the
+     * rest of pre-execution. It asks which of the agents the user may run (the Find Candidate Agents
+     * set, minus this agent, and only those the host's `ALL_AVAILABLE_AGENTS` allows when it sends
+     * one) should handle the request, and whether the request needs a specialist at all. When both
+     * answers are confident it adds a `<suggested_agent>` system message to the first prompt, so the
+     * agent can delegate in its first turn instead of calling Find Candidate Agents first. Otherwise,
+     * and on any error, timeout or cancellation, the prompt is unchanged. A follow-up turn is never
+     * asked about, so a suggestion never pulls the agent away from one it has already engaged.
      * @default false
      */
     decisionDiscovery?: boolean;

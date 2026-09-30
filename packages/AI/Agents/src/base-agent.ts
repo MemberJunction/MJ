@@ -172,6 +172,7 @@ import {
     FailedDecisionDiscovery,
     HostAllowedAgentIDs,
     IsDecisionDiscoveryOn,
+    IsOpeningTurn,
     KeepHostAllowedAgents,
     MentionsAgent,
     RankOptionsBySearch,
@@ -1549,6 +1550,13 @@ export class BaseAgent {
      */
     private _openingRequest: string = '';
 
+    /**
+     * Whether the run answers its conversation's opening request ({@link IsOpeningTurn}), read from
+     * the messages it started with. Decision discovery asks about no other turn.
+     * @private
+     */
+    private _isOpeningTurn: boolean = false;
+
     /** The longest the catalog narrowing decision may take before the run shows the full catalog. */
     private static readonly CATALOG_NARROWING_TIMEOUT_MS = 30000;
 
@@ -2181,6 +2189,7 @@ export class BaseAgent {
             this._messageLifecycleCallback = params.onMessageLifecycle;
             this._catalogNarrowing = undefined;
             this._openingRequest = OpeningRequestText(params.conversationMessages);
+            this._isOpeningTurn = IsOpeningTurn(params.conversationMessages);
 
             // Resolve storage account for file artifacts
             this._resolvedStorageAccountId = await this.getStorageAccountID(wrappedParams);
@@ -3893,11 +3902,14 @@ export class BaseAgent {
      * Decision discovery (plan Task 3.1): suggests the agent to delegate to before the first prompt.
      *
      * Runs in parallel with the rest of Phase 2 of `Execute()`, and only when the merged agent-type
-     * prompt params set `decisionDiscovery: true` and the opening request @mentions no agent. One
-     * decision asks which of the agents the user may run (and the host allows) should handle the
-     * request, and whether a specialist should. When both answers are confident, a `<suggested_agent>`
-     * system message is unshifted onto `conversationMessages`, the way pre-execution RAG adds
-     * `<retrieved_context>`. Each discovery is recorded as one `Agent discovery` Decision step.
+     * prompt params set `decisionDiscovery: true`, the run answers its conversation's opening request
+     * ({@link IsOpeningTurn}), and that request @mentions no agent. A follow-up turn is never asked
+     * about: it may be continuing work with an agent already engaged, and a suggestion must not pull
+     * the agent away from it. One decision asks which of the agents the user may run (and the host
+     * allows) should handle the request, and whether a specialist should. When both answers are
+     * confident, a `<suggested_agent>` system message is unshifted onto `conversationMessages`, the
+     * way pre-execution RAG adds `<retrieved_context>`. Each discovery is recorded as one
+     * `Agent discovery` Decision step.
      *
      * Fails safe: an error, a timeout, an unusable answer or an unsure one adds nothing, so the agent
      * behaves as it would without discovery. Never delays the first prompt by more than
@@ -3922,6 +3934,10 @@ export class BaseAgent {
             }
             if (!this._openingRequest || !contextUser) {
                 this.logStatus(`Decision discovery skipped for '${agent.Name}': the run has no ${contextUser ? 'user message' : 'context user'}`, true);
+                return;
+            }
+            if (!this._isOpeningTurn) {
+                this.logStatus(`Decision discovery skipped for '${agent.Name}': a follow-up turn, which may continue with an agent already engaged`, true);
                 return;
             }
             if (MentionsAgent(this._openingRequest, AIEngine.Instance.Agents, agent.ID)) {
