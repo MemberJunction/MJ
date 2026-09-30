@@ -17,7 +17,7 @@ Every measurement:
 | Consumer | Plan task | Corpus | Result | Threshold now | PRs |
 |---|---|---|---|---|---|
 | Sage agent discovery | 3.1 | 258 requests, 33 agents | Jev picks the right agent 77% of the time; semantic search 30% | calibrated 0.85 (was raw 0.7) | #4892, #4893 |
-| Duplicate check at entry | 3.8 | 160 new records, 5 candidates each | Jev: 97% precision at 71% recall; the vector threshold alone flags everything | calibrated 0.7 (was raw 0.5); pre-filter 0.3 | #4894, #4896 |
+| Duplicate check at entry | 3.8 | 160 new records, 5 candidates each | Jev: 97% precision at 70% recall (out of fold); the vector threshold alone flags everything | calibrated 0.7 (was raw 0.5); pre-filter 0.3 | #4894, #4896 |
 | finishIf gate | 4.6 | replay of 739 gated action rounds | at 0.9 it ends 22% of rounds the agent continued | opt-in (`finishIfMode`, default off; shadow to measure) | #4895, #4814 |
 | LLM vs Decision pipelines | 5.5 | 117 and 198 labelled rows | Decision matches or beats the LLM at ¼ the latency and ⅓ the cost | — | #4890 |
 | Escalation floors | 5.4 | the same | escalating to the LLM didn't help on either task | no floor recommended yet | #4890 |
@@ -61,27 +61,30 @@ Labels come from construction. The catalog includes development fixtures, so abs
 
 **The corpus:** 160 new records for `MJ: Actions`, written by Gemini 3 Flash from the entity's own rows:
 - **80 duplicates:** a rewrite of one existing row, as a person re-entering it would type it;
-- **80 new records:** similar actions that don't exist.
+- **80 new records:** similar actions that don't exist. These were screened only for an exact match with existing rows. One may already exist under other wording, and a correct flag on it would then count as a false flag.
 
-Each record went through the entry check's own retrieval: 5 vector candidates, all above `PotentialMatchThreshold`, and every duplicate's source among them. Then three arms judged the same candidates.
+Each record went through the entry check's own retrieval: 5 vector candidates, all above `PotentialMatchThreshold`, and every duplicate's source among them. Then three arms judged the same candidates. Every calibrated row is scored **out of fold**: each candidate is calibrated by a Platt fit that never saw it.
 
 | Arm | Precision | Recall | False flags on new records | p50 / p95 | $ / 1k checks |
 |---|---|---|---|---|---|
 | Vector threshold (0.7) | 0.10 | 1.00 | 100% | 6 / 13 ms | 0 |
 | Prompt (`Duplicate Resolution`) | 0.64 | 0.70 | 40.0% | 718 / 1,209 ms | 1.77 |
 | Decision, Jev, raw 0.5 | 0.64 | 1.00 | 57.5% | 198 / 296 ms | 0.24 |
-| **Decision, Jev, calibrated 0.7** | **0.97** | **0.71** | **2.5%** | 198 / 296 ms | 0.24 |
-| Decision, LLM Decision, calibrated 0.7 | 0.74 | 0.40 | 13.8% | 569 / 1,213 ms | — |
+| **Decision, Jev, calibrated 0.7** | **0.97** | **0.70** | **2.5%** | 198 / 296 ms | 0.24 |
+| Decision, LLM Decision, calibrated 0.7 | 0.74 | 0.36 | 12.5% | 569 / 1,213 ms | — |
 
 - **The vector threshold alone can't separate a duplicate from a similar record:** every candidate for an action scored above 0.7 with this embedding model.
 - **Jev ranks candidates almost perfectly** (AUC 0.993; LLM Decision 0.971), but its raw probabilities run high for similar records. At the raw 0.5 band it flagged more than half of the new records. Calibration fixes that.
-- **The entry check** (retrieval plus Jev) had a p95 of 304 ms; every check was within the 1,500 ms budget. With LLM Decision, 96.6% were.
+- **The measurement counts what production would show.** A candidate the decision gave no answer for is flagged, and a failed decision flags nothing, as in the entry check. Both are reported. Neither run had either: no decision call failed, and every candidate was answered. The prompt gave no verdict for 2 of 800 candidates, and these count as not flagged.
+- **Latency is a lower bound.** The vector query plus Jev's decision had a p95 of 304 ms, and every check was within the 1,500 ms budget; with LLM Decision, 96.6% were. These times leave out building the record, the permission check and loading the candidates, which the entry check also does. The measurement now times the whole path, but these runs predate that.
 - **The Prompt mode is slower, costlier and less precise** than calibrated Decision here. It still owns what Decision doesn't do: `Merge`, the survivor and the field map.
 - **The setting (#4896):**
-  - per-model calibration of the duplicate Likelihood;
-  - the entry and `Decision`-mode band at a calibrated **0.7**, which favours precision because a flag asks a person to look;
-  - the `DecisionThenPrompt` pre-filter at a calibrated **0.3**, which keeps recall, since the prompt reasons over what survives (Jev kept 98.8% of true duplicates and passed 14.5% of candidates).
-  - An uncalibrated model gives no probability, and its candidates are flagged, since the provider fails toward inclusion.
+  - per-model calibration of the duplicate Likelihood, fitted on every candidate: Jev (`typesafe/jev-1.13-20260917`) at A 2.5855, B −4.4485; LLM Decision (through its `LLM Decision` prompt) at A 0.9918, B −1.4843;
+  - the entry and `Decision`-mode band at a calibrated **0.7**, which favours precision because a flag asks a person to look. Out of fold, it's where false flags fall from 15% (at 0.6) to 2.5% at 96.6% precision; at 0.8, recall falls to 31% with no gain in precision;
+  - the `DecisionThenPrompt` pre-filter at a calibrated **0.3**, which keeps recall, since the prompt reasons over what survives. Jev kept 98.8% of true duplicates and passed 14.8% of candidates.
+  - **An uncalibrated model flags nothing at entry,** as a failed decision does: its raw probabilities can't be banded, and flagging every candidate would be the vector threshold alone. The provider logs the missing calibration once per model. Batch `Decision` mode sends such a model's candidates for review, and `DecisionThenPrompt` passes them all to the prompt.
+
+---
 
 ## 3. LLM against Decision Feature Pipelines (Tasks 5.5 and 5.4)
 
@@ -172,7 +175,7 @@ The Memory Manager keeps an extracted note when the extraction prompt's own `con
 
 ## Findings across consumers
 
-1. **Calibrate every consumer, per model.** On all three new decisions, raw probabilities were biased (discovery's Likelihood compressed below 0.8, duplicates' inflated), while ranking was good (AUC 0.77–0.99). Every threshold set here is on calibrated probabilities, and an uncalibrated model is treated as unsure.
+1. **Calibrate every consumer, per model.** On all three new decisions, raw probabilities were biased (discovery's Likelihood compressed below 0.8, duplicates' inflated), while ranking was good (AUC 0.77–0.99). Every threshold set here is on calibrated probabilities, and an uncalibrated model is treated as unsure (the duplicate entry check shows nothing for it).
 2. **Jev beats LLM Decision on every task:** more accurate, 3–6× faster, and cheaper. LLM Decision stays the failover.
 3. **Thresholds follow the cost of each kind of mistake.**
    - When a wrong action costs more than a missed one (injecting the wrong agent, flagging a record that isn't a duplicate), the threshold favours precision.
@@ -185,4 +188,4 @@ The Memory Manager keeps an extracted note when the extraction prompt's own `con
 - **The development catalog includes test fixtures,** which shape discovery's options.
 - **The duplicate measurement covers one entity** (`MJ: Actions`).
 - **Some cost is missing.** On branches without #4880, LLM Decision's chat cost isn't linked to its decision run, so its cost per 1,000 is missing from some tables.
-- **Latencies are measured in-process** against a local database.
+- **Latencies are measured in-process** against a local database. The duplicate entry check's were timed without the record build, the permission check and the candidate load.
