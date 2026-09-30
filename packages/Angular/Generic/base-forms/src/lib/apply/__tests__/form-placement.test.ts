@@ -25,6 +25,7 @@ import {
     PanelsInPosition,
     MovedSortKey,
     ChosenSectionKeys,
+    KeepEditedRowKey,
     PLACEMENT_ORDER_STEP,
     type FormPlacementContext,
     type PlacementOrderItem,
@@ -374,9 +375,19 @@ describe('ResolvePlacementDecision — standing in for a whole rail tab', () => 
     // Details and More are assembled from their members, so the panel has to join them or
     // the emptied tab is left behind. Every other tab IS its members.
     it('joins a tab that would otherwise be left empty, and only such a tab', () => {
-        expect(ResolvePlacementDecision(tab(DETAILS_TAB_KEY), railed, PROPOSAL).Contribution.chromeGroup).toBe('details');
-        expect(ResolvePlacementDecision(tab(MORE_TAB_KEY), railed, PROPOSAL).Contribution.chromeGroup).toBe('more');
-        expect(ResolvePlacementDecision(tab('courseEnrollments'), railed, PROPOSAL).Contribution.chromeGroup).toBeUndefined();
+        const panelTab = (key: string) => ({ ...tab(key), Presentation: 'panel' as const });
+        expect(ResolvePlacementDecision(panelTab(DETAILS_TAB_KEY), railed, PROPOSAL).Contribution.chromeGroup).toBe('details');
+        expect(ResolvePlacementDecision(panelTab(MORE_TAB_KEY), railed, PROPOSAL).Contribution.chromeGroup).toBe('more');
+        expect(ResolvePlacementDecision(panelTab('courseEnrollments'), railed, PROPOSAL).Contribution.chromeGroup).toBeUndefined();
+    });
+
+    // A bare strip is never a rail item, and the database refuses a bare row with a chrome group.
+    it('gives a bare strip standing in for a tab no chrome group', () => {
+        expect(tab(DETAILS_TAB_KEY).Presentation).toBe('bare');
+        const out = ResolvePlacementDecision(tab(DETAILS_TAB_KEY), railed, PROPOSAL).Contribution;
+        expect(out.replacesSectionKey).toBe(DETAILS_TAB_KEY);
+        expect(out.chromeGroup).toBeUndefined();
+        expect(out.inclusion).toBeUndefined();
     });
 
     it('claims no single section and no grid', () => {
@@ -605,6 +616,115 @@ describe('PlacementStateFromContribution', () => {
     it('moves a slot the form does not emit onto one it does', () => {
         const narrow: FormPlacementContext = { ...railed, SlotsPresent: ['after-fields'], SlotsVerified: true };
         expect(PlacementStateFromContribution(spec({ slot: 'top-area' }), narrow, true).Slot).toBe('after-fields');
+    });
+});
+
+/** Two grids can show one entity through different join fields; a claim names exactly one of them. */
+describe('PlacementStateFromContribution — two grids from one entity', () => {
+    const twoGrids: FormPlacementContext = {
+        ...CONTEXT,
+        Related: [
+            { Entity: 'MoreCheese: People', JoinField: 'InstructorID', DisplayName: 'Instructors' },
+            { Entity: 'MoreCheese: People', JoinField: 'AssistantID', DisplayName: 'Assistants' },
+        ],
+    };
+    const spec = (over: Partial<FormContributionSpec>): FormContributionSpec => ({
+        slot: 'after-fields', presentation: 'panel', title: 'Assistants', relatedEntity: 'MoreCheese: People', ...over,
+    });
+
+    it('reads the claim back against the grid its join field names', () => {
+        const state = PlacementStateFromContribution(spec({ relatedJoinField: 'AssistantID' }), twoGrids, true);
+        expect(state.ReplaceMode).toBe('related');
+        expect(state.ReplaceRelatedIndex).toBe(1);
+    });
+
+    it('matches a bracketed join field', () => {
+        expect(PlacementStateFromContribution(spec({ relatedJoinField: '[AssistantID]' }), twoGrids, true).ReplaceRelatedIndex).toBe(1);
+    });
+
+    it('writes the same grid back when only the title changes', () => {
+        const state = PlacementStateFromContribution(spec({ relatedJoinField: 'AssistantID' }), twoGrids, true);
+        const out = ResolvePlacementDecision({ ...state, Title: 'Helpers' }, twoGrids, null).Contribution;
+        expect(out).toMatchObject({ relatedEntity: 'MoreCheese: People', relatedJoinField: 'AssistantID', title: 'Helpers' });
+    });
+
+    it('does not move the claim to another grid when its own has gone', () => {
+        expect(PlacementStateFromContribution(spec({ relatedJoinField: 'MentorID' }), twoGrids, true).ReplaceMode).toBe('none');
+    });
+});
+
+/**
+ * Before the form has been read the context names no sections and no rail, so a stored claim
+ * cannot be checked. It is kept as stored, so saving the edit does not drop it.
+ */
+describe('PlacementStateFromContribution — before the form has been read', () => {
+    const unread: FormPlacementContext = {
+        ...CONTEXT, Sections: [], Rail: [], SlotsPresent: [], SlotsVerified: false, TargetsVerified: false,
+    };
+    const spec = (over: Partial<FormContributionSpec>): FormContributionSpec => ({
+        slot: 'before-fields', presentation: 'panel', title: 'Stats', ...over,
+    });
+    const roundTrip = (s: FormContributionSpec) =>
+        ResolvePlacementDecision(PlacementStateFromContribution(s, unread, true), unread, null).Contribution;
+
+    it('keeps a claim on one section', () => {
+        expect(PlacementStateFromContribution(spec({ replacesSectionKey: 'details' }), unread, true).ReplaceMode).toBe('section');
+        expect(roundTrip(spec({ replacesSectionKey: 'details' })).replacesSectionKey).toBe('details');
+    });
+
+    it('keeps a claim on the Details tab, with the chrome group it joins', () => {
+        const out = roundTrip(spec({ replacesSectionKey: DETAILS_TAB_KEY }));
+        expect(out.replacesSectionKey).toBe(DETAILS_TAB_KEY);
+        expect(out.chromeGroup).toBe('details');
+    });
+
+    it('keeps a claim on fields', () => {
+        expect(roundTrip(spec({ replacesFieldNames: ['Name', 'Description'] })).replacesFieldNames).toEqual(['Name', 'Description']);
+    });
+
+    it('still drops a claim the read form does not draw', () => {
+        expect(PlacementStateFromContribution(spec({ replacesSectionKey: 'gone' }), CONTEXT, true).ReplaceMode).toBe('none');
+        const readWithoutSections: FormPlacementContext = { ...unread, SlotsVerified: true, SlotsPresent: ['after-fields'] };
+        expect(PlacementStateFromContribution(spec({ replacesSectionKey: 'details' }), readWithoutSections, true).ReplaceMode).toBe('none');
+    });
+});
+
+/**
+ * An edited row keeps its own key unless the edit drops the claim that key made. Otherwise a
+ * title change would rename the panel's identity, or undo the replacement of an installed panel.
+ */
+describe('KeepEditedRowKey', () => {
+    const placed: FormContributionSpec = { slot: 'after-fields', presentation: 'panel', title: 'Stats' };
+    const row = (over: Partial<{ ContributionKey: string | null; RelatedEntity: string | null; RelatedJoinField: string | null }> = {}) => ({
+        ContributionKey: 'panel:Stats', RelatedEntity: null, RelatedJoinField: null, ...over,
+    });
+
+    it('keeps the key of a panel that claims no other panel', () => {
+        expect(KeepEditedRowKey(placed, row(), CONTEXT.Existing).contributionKey).toBe('panel:Stats');
+        expect(KeepEditedRowKey(placed, row({ ContributionKey: 'header' }), CONTEXT.Existing).contributionKey).toBe('header');
+    });
+
+    it('drops the key of a listed panel the user stopped replacing', () => {
+        expect(KeepEditedRowKey(placed, row({ ContributionKey: 'skip:health' }), CONTEXT.Existing).contributionKey).toBeUndefined();
+    });
+
+    it('drops the key of the grid the user stopped replacing', () => {
+        const grid = row({
+            ContributionKey: 'related:MoreCheese: Course Enrollments:CourseID',
+            RelatedEntity: 'MoreCheese: Course Enrollments', RelatedJoinField: '[CourseID]',
+        });
+        expect(KeepEditedRowKey(placed, grid, CONTEXT.Existing).contributionKey).toBeUndefined();
+    });
+
+    it('leaves a decision that makes its own keyed claim alone', () => {
+        const replacing = { ...placed, contributionKey: 'skip:health' };
+        expect(KeepEditedRowKey(replacing, row(), CONTEXT.Existing)).toBe(replacing);
+        const grid = { ...placed, relatedEntity: 'MoreCheese: Course Enrollments' };
+        expect(KeepEditedRowKey(grid, row(), CONTEXT.Existing)).toBe(grid);
+    });
+
+    it('leaves a row with no key to the write path', () => {
+        expect(KeepEditedRowKey(placed, row({ ContributionKey: null }), CONTEXT.Existing).contributionKey).toBeUndefined();
     });
 });
 

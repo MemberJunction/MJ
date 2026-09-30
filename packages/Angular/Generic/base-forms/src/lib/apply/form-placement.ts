@@ -18,6 +18,8 @@ import {
     DEFAULT_FORM_CONTRIBUTION_SLOT,
     FORM_CONTRIBUTION_SLOTS,
     GENERATED_FORM_CONTRIBUTION_SLOTS,
+    RelatedContributionKey,
+    StripJoinFieldBrackets,
     type FormContributionPresentation,
     type FormContributionSlot,
     type FormContributionSpec,
@@ -279,6 +281,8 @@ export function FieldsInSection(
  * means a section the form stopped drawing cannot smuggle a claim through.
  */
 export function ChosenFieldNames(state: FormPlacementState, context: FormPlacementContext): string[] {
+    // With no sections known there is nothing to check the names against, so they stand.
+    if (context.Sections.length === 0) return [...state.ReplaceFieldNames];
     const available = FieldsInSection(context, state.ReplaceFieldSectionKey);
     return state.ReplaceFieldNames.filter((name) => available.some((f) => f.Name === name));
 }
@@ -507,9 +511,15 @@ export function PlacementStateFromContribution(
 ): FormPlacementState {
     const railKey = (spec.replacesSectionKey ?? '').trim();
     const listed = (spec.replacesSectionKeys ?? []).map((k) => k.trim()).filter((k) => k.length > 0);
-    const sectionKey = context.Sections.some((s) => s.Key === railKey) ? railKey : (listed[0] ?? '');
+    // Until the form is read the context names no sections and no rail, so a stored claim
+    // cannot be checked and is kept as stored: Details and More are tabs, any other key a section.
+    const unread = context.Sections.length === 0 && !context.SlotsVerified;
+    const unreadTab = unread && RailKeyChromeGroup(railKey) !== null;
+    const sectionKey = context.Sections.some((s) => s.Key === railKey)
+        ? railKey
+        : listed[0] ?? (unread && !unreadTab ? railKey : '');
     const isRailTab = !!railKey && !sectionKey
-        && ReplaceableRailTabs(context).some((tab) => tab.Key === railKey);
+        && (unreadTab || ReplaceableRailTabs(context).some((tab) => tab.Key === railKey));
 
     // A claim is read back against the section holding the first field the form still
     // draws. A claim whose fields have all gone is dropped rather than shown against a
@@ -520,11 +530,9 @@ export function PlacementStateFromContribution(
         .find((section): section is FormPlacementSection => section != null) ?? null;
     const keptFields = fieldSection
         ? claimedFields.filter((name) => (fieldSection.Fields ?? []).some((f) => f.Name === name))
-        : [];
+        : unread ? claimedFields : [];
 
-    const relatedIndex = spec.relatedEntity
-        ? context.Related.findIndex((r) => r.Entity === spec.relatedEntity)
-        : -1;
+    const relatedIndex = relatedTargetIndex(context, spec);
     const contributionIndex = spec.contributionKey
         ? context.Existing.findIndex((e) => e.Key === spec.contributionKey)
         : -1;
@@ -554,6 +562,40 @@ export function PlacementStateFromContribution(
         SortKey: spec.sortKey ?? null,
         ActivateNow: activeNow,
     };
+}
+
+/**
+ * The grid a stored related claim names. Matched on the join field too when the claim has one,
+ * because two grids can show the same entity. -1 when the form shows no such grid.
+ */
+function relatedTargetIndex(context: FormPlacementContext, spec: FormContributionSpec): number {
+    if (!spec.relatedEntity) return -1;
+    const join = StripJoinFieldBrackets(spec.relatedJoinField);
+    return context.Related.findIndex((r) => r.Entity === spec.relatedEntity
+        && (!join || StripJoinFieldBrackets(r.JoinField) === join));
+}
+
+/**
+ * The block an edited row is written back with.
+ *
+ * {@link ResolvePlacementDecision} writes a key only when the user chose to replace a panel, and
+ * the write path derives one otherwise. For a row already saved, that would change its identity
+ * on every edit. So a decision with no key and no grid claim keeps the row's own key, unless that
+ * key was the claim the user just dropped: the key of a panel the dialog listed, or of the grid
+ * the row replaced.
+ *
+ * @param existing The other panels the dialog offered to replace.
+ */
+export function KeepEditedRowKey(
+    contribution: FormContributionSpec,
+    row: { ContributionKey: string | null; RelatedEntity: string | null; RelatedJoinField: string | null },
+    existing: readonly FormPlacementExisting[],
+): FormContributionSpec {
+    const key = row.ContributionKey?.trim();
+    if (!key || contribution.contributionKey || contribution.relatedEntity) return contribution;
+    if (existing.some((e) => e.Key === key)) return contribution;
+    if (row.RelatedEntity && key === RelatedContributionKey(row.RelatedEntity, row.RelatedJoinField)) return contribution;
+    return { ...contribution, contributionKey: key };
 }
 
 /**
@@ -592,8 +634,9 @@ export function ResolvePlacementDecision(
             // Details and More are assembled from their members, so a panel standing in
             // for one has to join it or the emptied tab is left behind. Every other tab
             // IS its members, so emptying it leaves the panel to become the tab itself.
+            // A bare strip is never a rail item, so it joins nothing.
             const group = RailKeyChromeGroup(key);
-            if (group) contribution.chromeGroup = group;
+            if (group && state.Presentation !== 'bare') contribution.chromeGroup = group;
         }
     } else if (state.ReplaceMode === 'section') {
         const keys = ChosenSectionKeys(state, context);
