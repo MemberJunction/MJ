@@ -1236,6 +1236,51 @@ describe('BusinessCentralBaseAction connection resolution', () => {
       .rejects.toThrow(`Values of Credential ${CREDENTIAL_ID} must be a JSON object.`);
   });
 
+  it('should not repeat the JSON parser\'s message, which can quote part of a secret', async () => {
+    mockEntityLoads({ 'MJ: Credentials': credentialRow('{"ClientSecret": s3cr3tVALUE}') });
+
+    const error = await action['resolveBCConnection'](connectorRow() as never, COMPANY_ID, contextUser).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe(`Values of Credential ${CREDENTIAL_ID} is not valid JSON.`);
+    expect((error as Error).message).not.toContain('s3cr3t');
+  });
+
+  it('should load the Credential through the provider the request was run with', async () => {
+    mockEntityLoads({});
+    vi.mocked(Metadata).mockClear();
+    const credential = credentialRow({ ClientId: 'client', ClientSecret: 'secret' });
+    const providerGetEntityObject = vi.fn(async () => ({
+      async Load(this: Row) {
+        Object.assign(this, credential);
+        return true;
+      },
+    }));
+
+    await action.Run({ Params: [], ContextUser: contextUser, Provider: { GetEntityObject: providerGetEntityObject } } as never);
+    await action['resolveBCConnection'](connectorRow() as never, COMPANY_ID, contextUser);
+
+    expect(providerGetEntityObject).toHaveBeenCalledWith('MJ: Credentials', contextUser);
+    expect(Metadata).not.toHaveBeenCalled();
+  });
+
+  it('should encode the tenant, environment and company in the token and API URLs', async () => {
+    mockEntityLoads({
+      'MJ: Company Integrations': connectorRow({
+        Configuration: JSON.stringify({ tenantId: 'ten/ant', environmentName: 'env name', companyId: 'co?1' }),
+      }),
+      'MJ: Credentials': credentialRow({ ClientId: 'client', ClientSecret: 'secret' }),
+    });
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ value: [] })));
+    await action['InternalRunAction']({ Params: inputs({ CompanyID: COMPANY_ID, CompanyIntegrationID: CI_UAT }), ContextUser: contextUser } as never);
+
+    await action['makeBCRequest']('journals', 'GET', undefined, contextUser);
+
+    expect(getAccessTokenMock.mock.calls[0][0].TokenURL).toBe('https://login.microsoftonline.com/ten%2Fant/oauth2/v2.0/token');
+    const [url] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.businesscentral.dynamics.com/v2.0/ten%2Fant/env%20name/api/v2.0/companies(co%3F1)/journals');
+  });
+
   it('should refuse a Credential that cannot be loaded', async () => {
     mockEntityLoads({ 'MJ: Credentials': null });
 

@@ -58,6 +58,22 @@ export abstract class BaseAccountingAction extends BaseAction {
     private _companyIntegration: MJCompanyIntegrationEntity | null = null;
 
     /**
+     * The request's metadata provider (`RunActionParams.Provider`), captured in {@link Run} so the
+     * connection and Credential lookups bind to it even in helpers that only receive the param
+     * array. `undefined` when the caller supplied none, and the lookups fall back to the global
+     * provider.
+     */
+    protected requestProvider: IMetadataProvider | undefined;
+
+    /**
+     * Captures the request's provider, then runs the action.
+     */
+    public override async Run(params: RunActionParams): Promise<ActionResultSimple> {
+        this.requestProvider = params.Provider;
+        return super.Run(params);
+    }
+
+    /**
      * Override of the required abstract method from BaseAction
      */
     protected abstract InternalRunAction(params: RunActionParams): Promise<ActionResultSimple>;
@@ -248,7 +264,7 @@ export abstract class BaseAccountingAction extends BaseAction {
             );
         }
 
-        const md = new Metadata();
+        const md = this.requestProvider ?? new Metadata();
         const record = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', contextUser);
         let loaded: boolean;
         try {
