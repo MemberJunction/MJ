@@ -75,6 +75,10 @@ export interface EscalatedAnswer {
     FeatureValueCacheID?: string;
     /** For the history row's reasoning: that the record escalated, to which pipeline, and from what confidence. */
     Note: string;
+    /** The target pipeline's name, for a failure message. */
+    PipelineName: string;
+    /** The reasoning of the history row that links the superseded decision's prompt run to the process run. */
+    SupersededNote: string;
 }
 
 /** Why an escalation failed. The message carries both reasons: why the record escalated, and why that failed. */
@@ -248,7 +252,12 @@ export class FeaturePipelineEscalator {
     private toOutcome(request: EscalationRequest, result: RecordResult | undefined, target: ResolvedEscalationTarget): EscalationOutcome {
         if (!result || result.Status !== 'Succeeded') {
             return {
-                ErrorMessage: `${this.escalationReason(request.BelowFloor)}; escalation to LLM pipeline '${target.Name}' failed: ${result?.ErrorMessage ?? 'it returned no result'}`,
+                ErrorMessage: DescribeEscalationFailure(
+                    this.settings.BelowConfidence,
+                    request.BelowFloor,
+                    target.Name,
+                    result?.ErrorMessage ?? 'it returned no result'
+                ),
                 AIPromptRunID: result?.AIPromptRunID,
             };
         }
@@ -261,6 +270,8 @@ export class FeaturePipelineEscalator {
             ConstraintHash: target.Processor.ConstraintHash,
             FeatureValueCacheID: result.FeatureValueCacheID,
             Note: BuildEscalationNote(target.Name, this.settings.BelowConfidence, request.BelowFloor, result.ResultPayload),
+            PipelineName: target.Name,
+            SupersededNote: BuildSupersededDecisionNote(target.Name, this.settings.BelowConfidence, request.BelowFloor),
         };
     }
 }
@@ -353,6 +364,26 @@ export function BuildEscalationNote(pipelineName: string, floor: number, belowFl
     const note = `Escalated to LLM pipeline '${pipelineName}': decision confidence below ${floor} (${DescribeBelowFloor(belowFloor)}).`;
     const reasoning = readReasoning(targetPayload);
     return reasoning ? `${note}\n\n${reasoning}` : note;
+}
+
+/**
+ * Why an escalated record failed: why it escalated (the outputs below the floor), and why its escalation
+ * to the named LLM pipeline failed.
+ */
+export function DescribeEscalationFailure(floor: number, belowFloor: BelowFloorOutput[], pipelineName: string, reason: string): string {
+    return `Decision confidence below ${floor} (${DescribeBelowFloor(belowFloor)}); escalation to LLM pipeline '${pipelineName}' failed: ${reason}`;
+}
+
+/**
+ * The reasoning of the history row that records a superseded decision. That row carries the decision
+ * model's prompt run and its confidence, with no values, so the process run accounts for both model calls
+ * an escalated record made; the escalated answer is the record's value.
+ */
+export function BuildSupersededDecisionNote(pipelineName: string, floor: number, belowFloor: BelowFloorOutput[]): string {
+    return (
+        `Superseded: decision confidence below ${floor} (${DescribeBelowFloor(belowFloor)}), so the record escalated to ` +
+        `LLM pipeline '${pipelineName}', whose answer is the record's value. This row records the decision model's prompt run.`
+    );
 }
 
 /** The `reasoning` a payload carries, when it is a non-empty string. */

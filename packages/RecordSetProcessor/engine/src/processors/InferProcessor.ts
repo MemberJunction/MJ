@@ -312,8 +312,7 @@ export class InferProcessor implements IRecordProcessor {
             };
         }
         if (sample.BelowFloor.length > 0) {
-            const outcome = outcomes.get(sample.Sample.RecordID);
-            return this.finalizeEscalated(sample.Sample, context, outcome, computed.AIPromptRunID);
+            return this.finalizeEscalated(sample, computed, outcomes.get(sample.Sample.RecordID), context, run);
         }
         const result = await this.finalizeComputed(sample.Sample, context, run, sample.Group.keyInfo, computed);
         return { Result: result, History: this.missFanOutHistory(result, context, run) };
@@ -681,13 +680,22 @@ export class InferProcessor implements IRecordProcessor {
      * history under the target's prompt, prompt run, hashes and cache entry, with the escalation note as the
      * history row's reasoning. It is not written to this pipeline's Dedup Cache, which holds only answers
      * the decision model gave with confidence; the target caches its own answers.
+     *
+     * The record paid for two model calls, and `MJ: Feature Values` is what links a prompt run to the process
+     * run. So before the answer's row, one more history row records the superseded decision: its prompt run,
+     * prompt, hashes and confidence, with no values (the low-confidence answer is never recorded as a value)
+     * and a reasoning that says it was superseded. It is written once per decision call: a key group's other
+     * records get only the answer's row.
      */
     private async finalizeEscalated(
-        record: RecordRef,
-        context: RecordProcessorContext,
+        sample: ComputedSample,
+        decision: FeaturePipelineComputeSuccess,
         outcome: EscalationOutcome | undefined,
-        decisionRunID: string | undefined
+        context: RecordProcessorContext,
+        run: PipelineRunState
     ): Promise<FinalizedSample> {
+        const record = sample.Sample;
+        const decisionRunID = decision.AIPromptRunID;
         if (!outcome) {
             const message = `Escalation to Feature Pipeline '${this.spec?.Escalation?.PipelineID}' returned no outcome`;
             return { Result: { Status: 'Failed', ErrorMessage: message, AIPromptRunID: decisionRunID } };
@@ -696,6 +704,7 @@ export class InferProcessor implements IRecordProcessor {
             return { Result: { Status: 'Failed', ErrorMessage: outcome.ErrorMessage, AIPromptRunID: outcome.AIPromptRunID ?? decisionRunID } };
         }
         const payload = this.projectEscalatedPayload(outcome);
+        await this.recordSupersededDecision(record, decision, outcome, context, run);
         const history: GroupHistory = {
             context,
             payload,
@@ -717,6 +726,35 @@ export class InferProcessor implements IRecordProcessor {
             },
             History: history,
         };
+    }
+
+    /**
+     * Records the history row of a decision an escalation superseded: the decision model's prompt run and
+     * confidence under this pipeline's prompt and hashes, no values, and a reasoning saying it was superseded.
+     * Nothing is recorded when the decision has no prompt run to link.
+     */
+    private async recordSupersededDecision(
+        record: RecordRef,
+        decision: FeaturePipelineComputeSuccess,
+        outcome: EscalatedAnswer,
+        context: RecordProcessorContext,
+        run: PipelineRunState
+    ): Promise<void> {
+        if (!decision.AIPromptRunID) {
+            return;
+        }
+        await this.recordFeatureValuesHistory({
+            record,
+            context,
+            payload: null,
+            omitValues: true,
+            reasoning: outcome.SupersededNote,
+            promptID: run.Prompt.ID,
+            promptVersionHash: run.PromptVersionHash,
+            constraintHash: run.ConstraintHash,
+            aiPromptRunID: decision.AIPromptRunID,
+            ...(decision.Confidence ? { outputConfidence: decision.Confidence } : {}),
+        });
     }
 
     /**
@@ -795,12 +833,14 @@ export class InferProcessor implements IRecordProcessor {
     /**
      * Records historical audit rows in MJ: Feature Values for all outputs on a record.
      * `outputConfidence` (from a driver that produces confidence) sets each output's confidence by
-     * output name, ahead of the single `confidence`. Records nothing when {@link WritesHistory} is off.
+     * output name, ahead of the single `confidence`. `omitValues` records every output's value as null,
+     * whatever the payload holds (a superseded decision's row). Records nothing when {@link WritesHistory} is off.
      */
     protected async recordFeatureValuesHistory(params: {
         record: RecordRef;
         context: RecordProcessorContext;
         payload: unknown;
+        omitValues?: boolean;
         reasoning?: string | null;
         confidence?: number | null;
         outputConfidence?: Record<string, number>;
@@ -819,7 +859,7 @@ export class InferProcessor implements IRecordProcessor {
         const sources = { $: rawPayload };
 
         for (const output of this.spec.Outputs) {
-            const val = resolveMappingRef(output.Ref, sources);
+            const val = params.omitValues ? null : resolveMappingRef(output.Ref, sources);
             outputsList.push({
                 featureName: output.Name,
                 value: val !== undefined ? val : null,
