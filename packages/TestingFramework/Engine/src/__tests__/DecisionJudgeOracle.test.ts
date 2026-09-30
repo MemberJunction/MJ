@@ -9,7 +9,7 @@
 import { describe, it, expect, vi, beforeEach, type MockInstance } from 'vitest';
 import type { UserInfo } from '@memberjunction/core';
 import type { MJAIPromptRunEntity, MJTestEntity } from '@memberjunction/core-entities';
-import type { DecisionAnswer } from '@memberjunction/ai';
+import type { DecisionAnswer, ScoreAnswer } from '@memberjunction/ai';
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIDecisionRunner, type AIDecisionParams, type AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -336,6 +336,47 @@ describe('DecisionJudgeOracle', () => {
 
             expect(result.passed).toBe(false);
             expect(result.message).toBe('The decision returned no Likelihood answer for criterion 1: A');
+        });
+
+        it('fails on a non-Likelihood answer even when it carries a numeric Probability', async () => {
+            const scoreWithProbability: ScoreAnswer & { Probability: number } = {
+                Kind: 'Score',
+                Value: 1,
+                Probabilities: { low: 0, high: 1 },
+                Confidence: 1,
+                Probability: 0.9,
+            };
+            executeDecision.mockResolvedValue({ success: true, Answers: { criterion_1: scoreWithProbability } });
+
+            const result = await new DecisionJudgeOracle().evaluate(oracleInput(expecting('A')), { passThreshold: 0 });
+
+            expect(result.passed).toBe(false);
+            expect(result.message).toBe('The decision returned no Likelihood answer for criterion 1: A');
+        });
+
+        it.each([
+            ['NaN', Number.NaN],
+            ['Infinity', Number.POSITIVE_INFINITY],
+            ['-Infinity', Number.NEGATIVE_INFINITY],
+            ['below 0', -0.1],
+            ['above 1', 1.1],
+        ])('fails on a probability that is %s, even at a pass threshold of 0', async (_label, probability) => {
+            executeDecision.mockResolvedValue(answered(0.9, probability));
+
+            const result = await new DecisionJudgeOracle().evaluate(oracleInput(expecting('A', 'B')), { passThreshold: 0 });
+
+            expect(result.passed).toBe(false);
+            expect(result.score).toBe(0);
+            expect(result.message).toBe(`The decision returned a probability of ${probability}, not a number from 0 to 1, for criterion 2: B`);
+        });
+
+        it.each([0, 1])('accepts a probability of exactly %s', async (probability) => {
+            executeDecision.mockResolvedValue(answered(probability));
+
+            const result = await new DecisionJudgeOracle().evaluate(oracleInput(expecting('A')), { passThreshold: 0 });
+
+            expect(result.passed).toBe(true);
+            expect(result.score).toBe(probability);
         });
 
         it('fails without asking when the decision prompt is not found', async () => {

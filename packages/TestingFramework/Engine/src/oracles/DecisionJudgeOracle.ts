@@ -3,7 +3,7 @@
  * @module @memberjunction/testing-engine
  */
 
-import { DecisionQuestion } from '@memberjunction/ai';
+import { DecisionAnswer, DecisionQuestion } from '@memberjunction/ai';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIDecisionParams, AIDecisionRunResult, AIDecisionRunner } from '@memberjunction/ai-prompts';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -196,22 +196,38 @@ export class DecisionJudgeOracle implements IOracle {
         };
     }
 
-    /** Each criterion's probability and pass, or the reason an answer is missing. */
+    /** Each criterion's probability and pass, or the reason an answer cannot be scored. */
     private readOutcomes(run: AIDecisionRunResult, criteria: JudgeCriterion[], passThreshold: number): CriterionProbability[] | string {
         const outcomes: CriterionProbability[] = [];
         for (const [index, c] of criteria.entries()) {
-            const answer = run.Answers[this.questionKey(index)];
-            if (answer?.Kind !== 'Likelihood' || !Number.isFinite(answer.Probability)) {
-                return `The decision returned no Likelihood answer for criterion ${index + 1}: ${c.Criterion}`;
+            const probability = this.readProbability(run.Answers[this.questionKey(index)], `criterion ${index + 1}: ${c.Criterion}`);
+            if (typeof probability === 'string') {
+                return probability;
             }
             outcomes.push({
                 criterion: c.Criterion,
-                probability: answer.Probability,
+                probability,
                 weight: c.Weight,
-                passed: answer.Probability >= passThreshold,
+                passed: probability >= passThreshold,
             });
         }
         return outcomes;
+    }
+
+    /**
+     * The answer's probability, or the reason it cannot be scored: the answer is missing, is not a
+     * Likelihood, or its probability is not a number from 0 to 1. The range check also rejects NaN,
+     * which fails both comparisons, and so never lets it reach the pass rule.
+     */
+    private readProbability(answer: DecisionAnswer | undefined, label: string): number | string {
+        if (answer?.Kind !== 'Likelihood') {
+            return `The decision returned no Likelihood answer for ${label}`;
+        }
+        const probability = answer.Probability;
+        if (typeof probability !== 'number' || !(probability >= 0 && probability <= 1)) {
+            return `The decision returned a probability of ${probability}, not a number from 0 to 1, for ${label}`;
+        }
+        return probability;
     }
 
     /** The weighted mean of the probabilities. `ReadJudgeCriteria` guarantees a total weight above 0. */
