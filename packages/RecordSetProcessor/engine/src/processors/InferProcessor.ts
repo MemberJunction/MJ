@@ -704,8 +704,9 @@ export class InferProcessor implements IRecordProcessor {
      * with both reasons, and the low-confidence decision is never cached, recorded or returned. A successful
      * one replaces the decision: the target's validated payload, in this pipeline's shape, is recorded in
      * history under the target's prompt, prompt run, hashes and cache entry, with the escalation note as the
-     * history row's reasoning. It is not written to this pipeline's Dedup Cache, which holds only answers
-     * the decision model gave with confidence; the target caches its own answers.
+     * history row's reasoning, and the record's result names the target's prompt with that prompt run and
+     * hash, so write-back's `$run` provenance describes one run. It is not written to this pipeline's Dedup
+     * Cache, which holds only answers the decision model gave with confidence; the target caches its own answers.
      *
      * The target validated its answer against its own constraints only, and those may be looser than this
      * pipeline's (a wider enum, or none). So the answer, in this pipeline's shape, is validated again against
@@ -758,6 +759,7 @@ export class InferProcessor implements IRecordProcessor {
             Result: {
                 Status: 'Succeeded',
                 ResultPayload: payload,
+                PromptID: outcome.PromptID,
                 AIPromptRunID: outcome.AIPromptRunID,
                 PromptVersionHash: outcome.PromptVersionHash,
                 FeatureValueCacheID: outcome.FeatureValueCacheID,

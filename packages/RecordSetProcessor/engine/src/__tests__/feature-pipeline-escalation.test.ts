@@ -345,6 +345,25 @@ describe('Decision pipeline escalation', () => {
             expect(processor.EscalatedRecordCount).toBe(1);
         });
 
+        it('gives write-back one run\'s provenance: an escalated record\'s $run names the LLM prompt with its run and hash', async () => {
+            decisionAnswers.set('r1', BELOW_FLOOR);
+            const spec = decisionSpec();
+            const provenance = { Title: '$run.PromptID', Seniority: '$run.AIPromptRunID' };
+            const run = { RecordProcessID: DECISION_PIPELINE_ID, PromptID: DECISION_PROMPT.ID };
+            const single = new WriteBackProcessor(new InferProcessor(DECISION_PROMPT.ID, undefined, spec), { fields: provenance }, true, run);
+            const batch = new WriteBackProcessor(new InferProcessor(DECISION_PROMPT.ID, undefined, spec), { fields: provenance }, true, run);
+
+            const escalated = await single.ProcessRecord(makeRecord('r1'), context);
+            const results = await batch.ProcessBatch([makeRecord('r1'), makeRecord('r2')], context);
+
+            const escalatedPreview = { writeBack: { previewFields: { Title: LLM_PROMPT.ID, Seniority: 'LLM-RUN-r1' } } };
+            expect(escalated).toMatchObject({ PromptID: LLM_PROMPT.ID, ResultPayload: escalatedPreview });
+            expect(results.get('r1')).toMatchObject({ PromptID: LLM_PROMPT.ID, ResultPayload: escalatedPreview });
+            // A decision that stands keeps the process's own prompt
+            expect(results.get('r2')?.PromptID).toBeUndefined();
+            expect(results.get('r2')).toMatchObject({ ResultPayload: { writeBack: { previewFields: { Title: DECISION_PROMPT.ID, Seniority: 'DEC-RUN-r2' } } } });
+        });
+
         it('escalates a record when an output has no confidence', async () => {
             decisionAnswers.set('r1', { RawResult: { seniority: 'Manager', isVip: false }, Confidence: { Seniority: 0.99 } });
             const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec()).ProcessRecord(makeRecord('r1'), context);
