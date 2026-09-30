@@ -59,7 +59,9 @@ describe('BaseEngine derived-state idempotency', () => {
         const engine = new GroupingEngine();
         engine.Prepare();
         const result = await engine.VerifyDerivedStateIdempotent();
-        expect(result).toEqual({ EngineClass: 'GroupingEngine', Idempotent: true, AfterFirst: { ChildrenAttached: 2 }, AfterSecond: { ChildrenAttached: 2 } });
+        // `Restored: true` with nothing reloaded: an idempotent rebuild leaves exactly what one run
+        // leaves, so there is nothing to undo. See baseEngine.verifyRestoresState.test.ts.
+        expect(result).toEqual({ EngineClass: 'GroupingEngine', Idempotent: true, AfterFirst: { ChildrenAttached: 2 }, AfterSecond: { ChildrenAttached: 2 }, Restored: true, RestoreError: undefined });
     });
 
     it('reports a rebuild that appends as not idempotent', async () => {
