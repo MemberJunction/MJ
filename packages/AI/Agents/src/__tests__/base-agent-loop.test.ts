@@ -35,8 +35,10 @@
  *      the prompt step itself finalizes 'Completed' (the prompt succeeded); the guardrail
  *      converts the decision into a terminating Failed step and the RUN records the error.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BaseAgent } from '../base-agent';
+import { AgentDecisionService } from '../AgentDecisionService';
+import { ClientToolRequestManager } from '../ClientToolRequestManager';
 import { BaseAgentType } from '../agent-types/base-agent-type';
 // Bare side-effect import: the REAL LoopAgentType must register itself with the ClassFactory
 // (its @RegisterClass decorator) so BaseAgentType.GetAgentTypeInstance resolves DriverClass
@@ -44,9 +46,11 @@ import { BaseAgentType } from '../agent-types/base-agent-type';
 import '../agent-types/loop-agent-type';
 import type { LoopAgentResponse } from '../agent-types/loop-agent-response-type';
 import type { AgentPreExecutionRAGResult } from '../agent-pre-execution-rag';
-import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended, AgentDecisionRequest, AgentFinishIf, BaseAgentNextStep } from '@memberjunction/ai-core-plus';
+import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { RecordToolCallingDecision } from '@memberjunction/ai-prompts';
 import { SanitizeToolName } from '../native-tools/action-tool-builder';
+import { LogStatus } from '@memberjunction/core';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
 // ============================================================================
@@ -441,18 +445,22 @@ class HarnessAgent extends BaseAgent {
 interface AgentInternals {
     _promptRunner: ScriptedPromptRunner;
     _stepSaveQueue: { Flush(): Promise<FlushResult> };
+    /** Stubbed by the sub-agent scenarios: the harness has no sub-agent rows to resolve or run. */
+    validateSubAgentNextStep: (params: ExecuteAgentParams, nextStep: BaseAgentNextStep) => Promise<BaseAgentNextStep>;
+    processSubAgentStep: () => Promise<BaseAgentNextStep>;
 }
 
 function makeAgent(script: Array<(params: AIPromptParams, callIndex: number) => AIPromptRunResult>): {
     agent: HarnessAgent;
     runner: ScriptedPromptRunner;
     flushSteps: () => Promise<FlushResult>;
+    internals: AgentInternals;
 } {
     const agent = new HarnessAgent();
     const runner = new ScriptedPromptRunner(script);
     const internals = agent as unknown as AgentInternals;
     internals._promptRunner = runner;
-    return { agent, runner, flushSteps: () => internals._stepSaveQueue.Flush() };
+    return { agent, runner, flushSteps: () => internals._stepSaveQueue.Flush(), internals };
 }
 
 const TEST_USER = { ID: USER_ID, Name: 'Loop Tester', Email: 'loop@test.mj' };
@@ -645,7 +653,9 @@ describe('BaseAgent.Execute — full loop: prompt → actions → prompt → fin
         const contents = params.conversationMessages.map((m) => (typeof m.content === 'string' ? m.content : ''));
         expect(contents.some((c) => c.includes(`You invoked the **${ACTION_NAME}** action`))).toBe(true);
         expect(contents.some((c) => c.startsWith('Action results:'))).toBe(true);
-        expect(runner.Calls[1].conversationMessages).toBe(params.conversationMessages);
+        // Prompt 2 received the conversation history with the trailing runtime state fragment appended
+        expect(runner.Calls[1].conversationMessages.slice(0, -1)).toEqual(params.conversationMessages);
+        expect(runner.Calls[1].conversationMessages.at(-1)?.metadata?.volatileState).toBe(true);
     });
 });
 
@@ -794,8 +804,9 @@ describe('BaseAgent.Execute — native tool results: call turn → tool turn, no
         // Neither the "[You invoked …]" recap nor the markdown "Action results:" message exists.
         expect(messages.some((m) => textOf(m).includes('You invoked'))).toBe(false);
         expect(messages.some((m) => textOf(m).startsWith('Action results:'))).toBe(false);
-        // Prompt 2 saw the same array.
-        expect(runner.Calls[1].conversationMessages).toBe(params.conversationMessages);
+        // Prompt 2 saw the conversation messages with the trailing runtime state fragment appended.
+        expect(runner.Calls[1].conversationMessages.slice(0, -1)).toEqual(params.conversationMessages);
+        expect(runner.Calls[1].conversationMessages.at(-1)?.metadata?.volatileState).toBe(true);
     });
 
     it('keeps the recap and the markdown results when the catalog did not ask for native results', async () => {
@@ -940,13 +951,12 @@ describe('BaseAgent.Execute — failure finalization', () => {
         expect(result.success).toBe(true);
         expect(harness.run.Status).toBe('Completed');
 
-        // Surprising-but-real behavior: only actions that THROW count toward the
-        // "N of M action(s) failed" header — a returned Success=false still renders
-        // under the plain "Action results:" header (with its FAILED result code).
+        // When an action returns Success=false, it correctly counts toward the
+        // failed actions header and generates failure guidance for the model.
         const contents = params.conversationMessages.map((m) => (typeof m.content === 'string' ? m.content : ''));
-        const resultsMessage = contents.find((c) => c.includes('Action results:'));
+        const resultsMessage = contents.find((c) => c.includes('action(s) failed:'));
         expect(resultsMessage).toBeDefined();
-        expect(contents.some((c) => c.includes('action(s) failed'))).toBe(false);
+        expect(contents.some((c) => c.includes('Action Execution Failure Guidance'))).toBe(true);
     });
 });
 
@@ -1012,5 +1022,339 @@ describe('BaseAgent.Execute — iteration guardrails', () => {
                 (m) => typeof m.content === 'string' && m.content.includes('Retrying due to:'),
             ),
         ).toBe(true);
+    });
+});
+
+describe('BaseAgent.Execute — a While whose condition cannot be evaluated', () => {
+    // `payload.count =` does not parse, so the loop fails before its first iteration.
+    const badWhile = (): LoopAgentResponse => ({
+        taskComplete: false,
+        reasoning: 'Tick until the count reaches 3',
+        nextStep: { type: 'While', while: { condition: 'payload.count =', itemVariable: 'attempt', action: { name: ACTION_NAME, params: {} } } },
+    });
+    const contentOf = (m: { content: unknown }): string => (typeof m.content === 'string' ? m.content : '');
+
+    it('tells the model why on its next turn, so it can correct the loop', async () => {
+        // The trailing runtime-state fragment (metadata.volatileState) rides as the last message of
+        // EVERY request and is rebuilt each time; it is framework state, not a message the loop added,
+        // so it is excluded before the turns are compared.
+        const realMessages = (p: AIPromptParams): string[] =>
+            (p.conversationMessages ?? [])
+                .filter((m) => (m as { metadata?: { volatileState?: boolean } }).metadata?.volatileState !== true)
+                .map(contentOf);
+        const turns: string[][] = [];
+        const { agent, runner } = makeAgent([
+            (p) => { turns.push(realMessages(p)); return llmEnvelope(badWhile()); },
+            (p) => { turns.push(realMessages(p)); return llmEnvelope(successEnvelope()); },
+        ]);
+
+        const result = await agent.Execute(makeParams({ payload: { count: 0 } }));
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(2);
+        expect(harness.runActionCalls).toHaveLength(0); // the loop body never ran
+        // A Failed loop step is answered by another prompt, and nothing on that path reads the
+        // step's errorMessage. Turn 2 saw exactly one new message: the loop result carrying the error.
+        const added = turns[1].slice(turns[0].length);
+        expect(added).toHaveLength(1);
+        expect(added[0]).toContain("While condition 'payload.count =' could not be evaluated");
+        expect(added[0]).toContain('not a parseable single expression');
+        // The While step itself is recorded as failed with the same message.
+        const whileStep = harness.steps.find((s) => s.StepType === 'While');
+        expect(whileStep?.Status).toBe('Failed');
+        expect(whileStep?.ErrorMessage).toContain('could not be evaluated');
+    });
+
+    it('a model that keeps emitting the bad While is stopped by the per-run iteration limit', async () => {
+        // The consecutive-failed-steps breaker cannot catch this: each prompt's While decision
+        // resets it, so the run alternates Prompt → Failed While until an iteration limit trips.
+        harness.agent = makeAgentRow({ MaxIterationsPerRun: 4 });
+        const { agent, runner } = makeAgent([() => llmEnvelope(badWhile())]);
+
+        const result = await agent.Execute(makeParams({ payload: { count: 0 } }));
+
+        expect(result.success).toBe(false);
+        expect(runner.Calls).toHaveLength(4);
+        expect(harness.run.Status).toBe('Failed');
+        expect(harness.run.ErrorMessage).toContain('Maximum iteration limit of 4 exceeded');
+        expect(harness.steps.filter((s) => s.StepType === 'While').map((s) => s.Status)).toEqual(['Failed', 'Failed', 'Failed']);
+    });
+});
+
+describe('BaseAgent.Execute — decisions on a turn', () => {
+    /** The decision call's own prompt run, as AIDecisionRunner returns it once finalized. */
+    const DECISION_RUN = {
+        ID: 'aaaaaaaa-6666-4000-8000-000000000001',
+        TokensUsedRollup: 120,
+        TokensPromptRollup: 100,
+        TokensCompletionRollup: 20,
+        TokensCacheReadRollup: 0,
+        TokensCacheWriteRollup: 0,
+        TotalCost: 0.0042,
+    } satisfies Pick<MJAIPromptRunEntity, 'ID' | 'TokensUsedRollup' | 'TokensPromptRollup' | 'TokensCompletionRollup' | 'TokensCacheReadRollup' | 'TokensCacheWriteRollup' | 'TotalCost'>;
+    const TRIAGE: AgentDecisionRequest = { id: 'triage', state: 'The printer is on fire.', questions: { urgent: { kind: 'Likelihood', instructions: 'Is this urgent?' } } };
+    const FINISH_IF: AgentFinishIf = { questions: ['The results show the action ran.'], message: 'Done, the action ran.' };
+    const textOf = (m: { content: unknown }): string => (typeof m.content === 'string' ? m.content : '');
+    const statusLines = (): string[] => vi.mocked(LogStatus).mock.calls.map(([message]) => String(message));
+
+    /** Answers the finishIf gate (questions q1…) with `gateProbability`, and every decision request with `urgent` 0.8. */
+    function answerDecisions(gateProbability = 0.95) {
+        return vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(async (args) => 'q1' in args.Questions
+            ? { success: true, Answers: { q1: { Kind: 'Likelihood', Probability: gateProbability } } }
+            : { success: true, Answers: { urgent: { Kind: 'Likelihood', Probability: 0.8 } }, promptRun: DECISION_RUN as MJAIPromptRunEntity });
+    }
+
+    /** Asked only the decision requests, never the gate. */
+    const decisionCalls = (ask: ReturnType<typeof answerDecisions>) => ask.mock.calls.filter(([args]) => !('q1' in args.Questions));
+
+    /** Run params for an agent whose finishIf gates are `mode` (gates are opt-in; the default is off). */
+    function gateParams(mode: 'on' | 'shadow'): ExecuteAgentParams {
+        return makeParams({ data: { __agentTypePromptParams: { finishIfMode: mode } } });
+    }
+
+    function gatedActionsEnvelope(): LoopAgentResponse {
+        return {
+            taskComplete: false,
+            nextStep: { type: 'Actions', actions: [{ name: ACTION_NAME, params: { foo: 'bar' } }], finishIf: FINISH_IF },
+            decisions: [TRIAGE],
+        };
+    }
+
+    function clientToolsEnvelope(taskComplete: boolean): LoopAgentResponse {
+        return {
+            taskComplete,
+            message: 'I opened the record.',
+            nextStep: { type: 'ClientTools', clientTools: [{ name: 'OpenRecord', params: {} }] },
+            decisions: [TRIAGE],
+        };
+    }
+
+    function subAgentEnvelope(): LoopAgentResponse {
+        return {
+            taskComplete: false,
+            nextStep: { type: 'Sub-Agent', subAgent: { name: 'Worker', message: 'Handle it', terminateAfter: true } },
+            decisions: [TRIAGE],
+        };
+    }
+
+    beforeEach(() => {
+        vi.mocked(LogStatus).mockClear();
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('answers a turn\'s decisions as Decision steps and hands the results to the next prompt', async () => {
+        const ask = answerDecisions();
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(actionsEnvelope({ decisions: [TRIAGE] })),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(ask).toHaveBeenCalledOnce();
+        expect(ask.mock.calls[0][0].State).toBe('The printer is on fire.');
+        // Answered inline, while the prompt that asked is processed — before the actions run.
+        expect(harness.steps.map((s) => s.StepType)).toEqual(['Validation', 'Prompt', 'Decision', 'Actions', 'Prompt']);
+        expect(harness.steps[2].StepName).toContain('Decision: triage');
+        expect(harness.steps[2].Status).toBe('Completed');
+        const injected = params.conversationMessages.map(textOf).find((c) => c.startsWith('Decision results:'));
+        expect(injected).toContain('"id":"triage"');
+        expect(injected).toContain('"probability":0.8');
+        // The next prompt reads them. It gets a copy with the trailing runtime state appended, not
+        // the same array, so check the content it received.
+        expect(runner.Calls[1].conversationMessages?.map(textOf).some((c) => c.startsWith('Decision results:'))).toBe(true);
+    });
+
+    it('answers a decisions field that is not an array with one failed result, and keeps the rest of the turn', async () => {
+        const ask = answerDecisions();
+        // What a model can send: the envelope parses, but `decisions` is not the array the type promises.
+        const malformed: AIPromptRunResult = {
+            success: true,
+            result: JSON.stringify({ ...actionsEnvelope(), decisions: 'triage' }),
+            chatResult: {} as AIPromptRunResult['chatResult'],
+        };
+        const { agent } = makeAgent([() => malformed, () => llmEnvelope(successEnvelope())]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(ask).not.toHaveBeenCalled();
+        // The turn's Actions step still ran: the prompt was not thrown away and retried.
+        expect(harness.runActionCalls).toHaveLength(1);
+        expect(params.conversationMessages.map(textOf).some((c) => c.startsWith('Decision results:') && c.includes('must be an array'))).toBe(true);
+    });
+
+    it('counts a decision call toward the run\'s tokens and cost, through its step\'s prompt run', async () => {
+        answerDecisions();
+        const { agent } = makeAgent([
+            () => llmEnvelope(actionsEnvelope({ decisions: [TRIAGE] })),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        await agent.Execute(makeParams());
+
+        const decisionStep = harness.steps.find((s) => s.StepType === 'Decision');
+        expect(decisionStep?.TargetLogID).toBe(DECISION_RUN.ID);
+        // The scripted prompts carry no prompt run, so the decision call is the run's whole spend.
+        expect(harness.run.TotalCost).toBe(DECISION_RUN.TotalCost);
+        expect(harness.run.TotalTokensUsed).toBe(DECISION_RUN.TokensUsedRollup);
+        expect(harness.run.TotalPromptTokensUsed).toBe(DECISION_RUN.TokensPromptRollup);
+        expect(harness.run.TotalCompletionTokensUsed).toBe(DECISION_RUN.TokensCompletionRollup);
+    });
+
+    it('stops the run at MaxCostPerRun when the decision calls alone exceed it', async () => {
+        harness.agent = makeAgentRow({ MaxCostPerRun: 0.001 });
+        answerDecisions();
+        const { agent } = makeAgent([
+            () => llmEnvelope(actionsEnvelope({ decisions: [TRIAGE] })),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(false);
+        expect(harness.run.ErrorMessage).toContain('Maximum cost limit of $0.001 exceeded');
+        expect(harness.runActionCalls).toHaveLength(0);
+    });
+
+    it('never asks decisions sent with a finishIf gate that ends the run, and logs that they were skipped', async () => {
+        const ask = answerDecisions(0.95);
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(gatedActionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(gateParams('on'));
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(1);
+        expect(harness.run.Message).toBe(FINISH_IF.message);
+        expect(decisionCalls(ask)).toHaveLength(0);
+        expect(harness.steps.some((s) => s.StepName.includes('Decision: triage'))).toBe(false);
+        expect(statusLines().some((line) => line.includes('Skipped 1 held decision request(s) (triage)') && line.includes('finishIf gate'))).toBe(true);
+    });
+
+    it('asks decisions sent with a finishIf gate that does not pass, before the next prompt reads them', async () => {
+        const ask = answerDecisions(0.4);
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(gatedActionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = gateParams('on');
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(decisionCalls(ask)).toHaveLength(1);
+        // Held through the actions and the gate, then answered ahead of the prompt that reads them.
+        expect(harness.steps.map((s) => s.StepType)).toEqual(['Validation', 'Prompt', 'Actions', 'Decision', 'Decision', 'Prompt']);
+        expect(harness.steps[3].StepName).toContain('Finish check');
+        expect(harness.steps[4].StepName).toContain('Decision: triage');
+        expect(runner.Calls[1].conversationMessages?.map(textOf).some((c) => c.startsWith('Decision results:') && c.includes('"id":"triage"'))).toBe(true);
+    });
+
+    it('in shadow mode, records a passing gate, does not end the run, and asks the decisions for the next prompt', async () => {
+        const ask = answerDecisions(0.95);
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(gatedActionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(gateParams('shadow'));
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(2);
+        expect(harness.run.Message).not.toBe(FINISH_IF.message);
+        expect(decisionCalls(ask)).toHaveLength(1);
+        expect(harness.steps.some((s) => s.StepName.includes('Finish check'))).toBe(true);
+    });
+
+    it('with gates off (the default), asks no gate, and asks the decisions for the next prompt', async () => {
+        const ask = answerDecisions(0.95);
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(gatedActionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(2);
+        expect(ask.mock.calls.some(([args]) => 'q1' in args.Questions)).toBe(false);
+        expect(decisionCalls(ask)).toHaveLength(1);
+        expect(harness.steps.some((s) => s.StepName.includes('Finish check'))).toBe(false);
+    });
+
+    it('never asks decisions sent with client tools and taskComplete, which end the run once the tools return', async () => {
+        const ask = answerDecisions();
+        vi.spyOn(ClientToolRequestManager.Instance, 'RequestClientTool').mockResolvedValue({ RequestID: 'ct-1', Success: true, Result: 'opened' });
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(clientToolsEnvelope(true)),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams({ sessionID: 'session-1' }));
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(1);
+        expect(ask).not.toHaveBeenCalled();
+        expect(harness.steps.some((s) => s.StepType === 'Decision')).toBe(false);
+        expect(statusLines().some((line) => line.includes('Skipped 1 held decision request(s) (triage)') && line.includes('taskComplete'))).toBe(true);
+    });
+
+    it('asks decisions sent with client tools alone at once: the prompt after the tools reads them', async () => {
+        const ask = answerDecisions();
+        vi.spyOn(ClientToolRequestManager.Instance, 'RequestClientTool').mockResolvedValue({ RequestID: 'ct-1', Success: true, Result: 'opened' });
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(clientToolsEnvelope(false)),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams({ sessionID: 'session-1' }));
+
+        expect(result.success).toBe(true);
+        expect(ask).toHaveBeenCalledOnce();
+        expect(harness.steps.map((s) => s.StepType)).toEqual(['Validation', 'Prompt', 'Decision', 'Tool', 'Prompt']);
+        expect(runner.Calls[1].conversationMessages?.map(textOf).some((c) => c.startsWith('Decision results:'))).toBe(true);
+    });
+
+    it('never asks decisions sent with a sub-agent that has terminateAfter, and logs that they were skipped', async () => {
+        const ask = answerDecisions();
+        const { agent, runner, internals } = makeAgent([
+            () => llmEnvelope(subAgentEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        vi.spyOn(internals, 'validateSubAgentNextStep').mockImplementation(async (_params, nextStep) => nextStep);
+        const runSubAgent = vi.spyOn(internals, 'processSubAgentStep').mockResolvedValue({ step: 'Success', terminate: true, newPayload: {} });
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        expect(runSubAgent).toHaveBeenCalledOnce();
+        expect(runner.Calls).toHaveLength(1);
+        expect(ask).not.toHaveBeenCalled();
+        expect(statusLines().some((line) => line.includes('Skipped 1 held decision request(s) (triage)') && line.includes('terminateAfter'))).toBe(true);
+    });
+
+    it('still asks held decisions when the step that carried them does not end the run after all', async () => {
+        // No sub-agent named Worker exists, so validation turns the step into a Retry and the run goes on.
+        const ask = answerDecisions();
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(subAgentEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        expect(ask).toHaveBeenCalledOnce();
+        expect(harness.steps.map((s) => s.StepType)).toEqual(['Validation', 'Prompt', 'Decision', 'Prompt']);
+        expect(runner.Calls[1].conversationMessages?.map(textOf).some((c) => c.startsWith('Decision results:'))).toBe(true);
     });
 });

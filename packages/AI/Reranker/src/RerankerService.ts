@@ -15,6 +15,8 @@ import { MJAIAgentNoteEntity, MJAIAgentRunStepEntity } from '@memberjunction/cor
 import { BaseReranker, RerankDocument, GetAIAPIKey } from '@memberjunction/ai';
 import { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
 import { RerankerConfiguration, ParseRerankerConfiguration, parseRerankerConfiguration } from './config.types';
+import { AIRerankerRunner } from './AIRerankerRunner';
+import type { AIRerankRunResult } from './rerank-runner.types';
 
 // Re-export config types for convenience
 export {
@@ -131,6 +133,9 @@ export class RerankerService extends BaseSingleton<RerankerService> {
     /**
      * Get or create a reranker instance for the specified model.
      * Caches instances for reuse across multiple calls.
+     *
+     * @deprecated Builds a driver directly, so the call gets no failover and writes no
+     * `MJ: AI Prompt Runs` row. Use {@link AIRerankerRunner.RunRerank}, which `RerankNotes` uses.
      *
      * @param modelID - ID of the AIModel with type='Reranker'
      * @param contextUser - User context for operations
@@ -282,9 +287,13 @@ export class RerankerService extends BaseSingleton<RerankerService> {
      * Rerank notes using the configured reranker.
      * Implements two-stage retrieval for semantic relevance ranking.
      *
-     * IMPORTANT: This service does NOT handle fallback logic. If reranking fails,
-     * this method throws an error. The calling code (agent class) is responsible
-     * for deciding whether to fall back to original vector search results.
+     * Reranking goes through {@link AIRerankerRunner}, pinned to `config.rerankerModelId`, so every
+     * call writes an `MJ: AI Prompt Runs` row. The observability step, when there is one, links to
+     * that row through its `TargetLogID`.
+     *
+     * IMPORTANT: This service does NOT handle fallback logic. If reranking fails, this method throws.
+     * The calling code (agent class) decides, from `config.fallbackOnError`, whether to fall back to
+     * the original vector search results.
      *
      * @param notes - Vector search results to rerank
      * @param query - User query for relevance scoring
@@ -292,7 +301,7 @@ export class RerankerService extends BaseSingleton<RerankerService> {
      * @param contextUser - User context for operations
      * @param options - Optional observability parameters
      * @returns Reranked notes sorted by relevance
-     * @throws Error if reranker is unavailable or reranking fails
+     * @throws Error if reranking fails
      */
     public async RerankNotes(
         notes: NoteMatchResult[],
@@ -303,6 +312,7 @@ export class RerankerService extends BaseSingleton<RerankerService> {
     ): Promise<RerankServiceResult> {
         const startTime = Date.now();
         let stepEntity: MJAIAgentRunStepEntity | null = null;
+        let promptRunID: string | undefined;
 
         // Early return if no notes to rerank
         if (notes.length === 0) {
@@ -329,36 +339,13 @@ export class RerankerService extends BaseSingleton<RerankerService> {
         }
 
         try {
-            // Get or create reranker - throws if unavailable
-            const reranker = await this.GetReranker(
-                config.rerankerModelId,
-                contextUser,
-                config.rerankPromptID
-            );
-
-            if (!reranker) {
-                throw new Error(`Reranker not available for model ID: ${config.rerankerModelId}`);
+            // Rerank through the runner, which selects the model, fails over and records the run
+            const run = await this.runReranker(notes, query, config, contextUser, options);
+            promptRunID = run.PromptRunID;
+            if (!run.Success || !run.Response) {
+                throw new Error(run.ErrorMessage || 'Reranking failed');
             }
-
-            // Convert notes to rerank documents
-            const documents: RerankDocument[] = notes.map(match => ({
-                id: match.note.ID,
-                text: this.buildDocumentText(match.note, config.contextFields),
-                metadata: { noteEntity: match.note },
-                originalScore: match.similarity
-            }));
-
-            // Perform reranking - let errors propagate to caller
-            LogStatus(`RerankerService: Reranking ${documents.length} notes`);
-            const response = await reranker.Rerank({
-                query,
-                documents,
-                topK: documents.length // Get all, we'll filter by threshold
-            });
-
-            if (!response.success) {
-                throw new Error(response.errorMessage || 'Reranking failed');
-            }
+            const response = run.Response;
 
             // Map results back to NoteMatchResult format
             // Filter by minimum relevance threshold
@@ -380,7 +367,7 @@ export class RerankerService extends BaseSingleton<RerankerService> {
                     rerankedCount: rerankedNotes.length,
                     durationMs: Date.now() - startTime,
                     rerankedNotes
-                });
+                }, undefined, promptRunID);
             }
 
             return {
@@ -391,15 +378,47 @@ export class RerankerService extends BaseSingleton<RerankerService> {
             };
 
         } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
             // Finalize step on failure
             if (stepEntity) {
                 await this.finalizeRerankRunStep(stepEntity, false, {
                     rerankedCount: 0,
                     durationMs: Date.now() - startTime
-                }, error instanceof Error ? error.message : String(error));
+                }, message, promptRunID);
             }
             throw error;
         }
+    }
+
+    /**
+     * Reranks the notes through {@link AIRerankerRunner}, pinned to the configured model. Asks for
+     * every document back, since the caller filters by threshold.
+     */
+    private runReranker(
+        notes: NoteMatchResult[],
+        query: string,
+        config: RerankerConfiguration,
+        contextUser: UserInfo,
+        options?: RerankObservabilityOptions
+    ): Promise<AIRerankRunResult> {
+        // Convert notes to rerank documents
+        const documents: RerankDocument[] = notes.map(match => ({
+            id: match.note.ID,
+            text: this.buildDocumentText(match.note, config.contextFields),
+            metadata: { noteEntity: match.note },
+            originalScore: match.similarity
+        }));
+
+        LogStatus(`RerankerService: Reranking ${documents.length} notes`);
+        return new AIRerankerRunner().RunRerank({
+            query,
+            documents,
+            topK: documents.length, // Get all, we'll filter by threshold
+            ContextUser: contextUser,
+            ModelID: config.rerankerModelId,
+            ChatPromptID: config.rerankPromptID,
+            AgentRunID: options?.agentRunID
+        });
     }
 
     /** @deprecated Use {@link RerankNotes}. */
@@ -501,18 +520,23 @@ export class RerankerService extends BaseSingleton<RerankerService> {
 
     /**
      * Finalize an AIAgentRunStep record after reranking completes.
+     * When the rerank wrote an `MJ: AI Prompt Runs` row, the step links to it through `TargetLogID`.
      */
     private async finalizeRerankRunStep(
         stepEntity: MJAIAgentRunStepEntity,
         success: boolean,
         output: { rerankedCount: number; durationMs: number; rerankedNotes?: NoteMatchResult[] },
-        errorMessage?: string
+        errorMessage?: string,
+        promptRunID?: string
     ): Promise<void> {
         try {
             stepEntity.Status = success ? 'Completed' : 'Failed';
             stepEntity.CompletedAt = new Date();
             stepEntity.Success = success;
             stepEntity.ErrorMessage = errorMessage || null;
+            if (promptRunID) {
+                stepEntity.TargetLogID = promptRunID;
+            }
             stepEntity.OutputData = JSON.stringify({
                 rerankedCount: output.rerankedCount,
                 durationMs: output.durationMs,

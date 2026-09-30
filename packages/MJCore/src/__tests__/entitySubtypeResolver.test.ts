@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
+import * as logging from '../generic/logging';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseEntity } from '../generic/baseEntity';
 import { EntityInfo } from '../generic/entityInfo';
@@ -28,6 +29,10 @@ class MJTestEntity extends BaseEntity {
 
     public GetTestChildEntity(): BaseEntity | null {
         return (this as unknown as { _childEntity: BaseEntity | null })._childEntity;
+    }
+
+    public SetTestSaved(saved: boolean): void {
+        (this as unknown as { _everSaved: boolean })._everSaved = saved;
     }
 }
 
@@ -106,11 +111,77 @@ function createEntity(entityInfo: EntityInfo): MJTestEntity {
     return entity;
 }
 
+/** A root or child whose own table declares the shared ID, unlike the Products/Meetings fixture. */
+function keyedEntity(entityId: string, name: string, parentId: string | null): Record<string, unknown> {
+    return {
+        ID: entityId, Name: name, BaseTable: name, BaseView: `vw${name}`, SchemaName: 'dbo',
+        VirtualEntity: false, AllowCreateAPI: true, AllowUpdateAPI: true, AllowDeleteAPI: true,
+        IncludeInAPI: true, ParentID: parentId, Status: 'Active',
+        EntityFields: [
+            { ID: `f-${entityId}-id`, EntityID: entityId, Name: 'ID', Type: 'uniqueidentifier',
+              IsPrimaryKey: true, IsSoftPrimaryKey: false, IsSoftForeignKey: false, AllowsNull: false,
+              AutoIncrement: false, IsVirtual: false, IsNameField: false, AllowUpdateAPI: false,
+              ValueListType: 'None', Sequence: 1, Status: 'Active', Entity: name, EntityFieldValues: [] },
+        ],
+        EntityPermissions: [], EntityRelationships: [], EntitySettings: [],
+    };
+}
+
 // ─── Tests ─────────────────────────────────────────────────────────────────
 
 describe('EntitySubtypeResolver & Prospective IsA Resolution (§4.2, §4.4, §9)', () => {
 
     describe('EnsureISAChild create-safety and idempotency (T1, T2)', () => {
+        it('a new record does not load a child row that cannot exist yet (MJ#4859)', async () => {
+            const loadSpy = vi.spyOn(MJTestEntity.prototype, 'InnerLoad');
+            const logSpy = vi.spyOn(logging, 'LogError');
+            const product = createEntity(productEntityInfo);
+            product.NewRecord();
+            const parentKey = product.PrimaryKey.ToString();
+
+            const child = await product.EnsureISAChild('Meetings');
+
+            expect(loadSpy).not.toHaveBeenCalled();
+            expect(logSpy).not.toHaveBeenCalled();
+            expect(child).not.toBeNull();
+            // Meetings keeps the shared key on Products: this fixture gives the child no ID column.
+            expect(child!.Get('ID')).toBe(product.Get('ID'));
+            expect(parentKey.endsWith(String(product.Get('ID')))).toBe(true);
+
+            // A child that does declare the shared key gets that value on its own column.
+            const rootInfo = new EntityInfo(keyedEntity('entity-keyed-root', 'KeyedProducts', null));
+            const childInfo = new EntityInfo(keyedEntity('entity-keyed-child', 'KeyedMeetings', 'entity-keyed-root'));
+            entities.push(rootInfo, childInfo);
+            try {
+                const keyed = createEntity(rootInfo);
+                keyed.NewRecord();
+                const keyedChild = await keyed.EnsureISAChild('KeyedMeetings');
+                expect(loadSpy).not.toHaveBeenCalled();
+                expect(keyedChild).not.toBeNull();
+                expect(keyedChild!.PrimaryKey.ToString()).toBe(keyed.PrimaryKey.ToString());
+                expect(keyedChild!.Fields.find(field => field.Name === 'ID')?.Value).toBe(keyed.Get('ID'));
+            } finally {
+                for (const info of [rootInfo, childInfo]) {
+                    const at = entities.indexOf(info);
+                    if (at >= 0) entities.splice(at, 1);
+                }
+            }
+
+            loadSpy.mockRestore();
+            logSpy.mockRestore();
+        });
+
+        it('a saved parent still loads the child row (MJ#4859)', async () => {
+            const loadSpy = vi.spyOn(MJTestEntity.prototype, 'InnerLoad');
+            const product = createEntity(productEntityInfo);
+            product.NewRecord();
+            product.SetTestSaved(true);
+
+            await expect(product.EnsureISAChild('Meetings')).rejects.toThrow();
+            expect(loadSpy).toHaveBeenCalled();
+            loadSpy.mockRestore();
+        });
+
         it('keeps the linked child on a new record with no database row (unlink regression guard)', async () => {
             const product = createEntity(productEntityInfo);
             expect(product.ISAChild).toBeNull();
