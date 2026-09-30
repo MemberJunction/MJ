@@ -15,7 +15,7 @@
  */
 
 import { IMetadataProvider, UserInfo, RunView, LogError, LogStatus } from '@memberjunction/core';
-import { EscapeSQLString } from '@memberjunction/global';
+import { EscapeSQLString, MJLruCache } from '@memberjunction/global';
 import { MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
 
 /** The conversation `ApplicationScope` values (mirrors the entity union). `'Application'` hides it from the main chat list. */
@@ -79,12 +79,18 @@ export function CreateBridgeRoomTranscriptSink(options: BridgeRoomTranscriptSink
     /** Lazily-resolved owning application id (explicit id wins; else resolved-by-name once and cached). */
     let resolvedApplicationID: string | undefined = options.ApplicationID;
     let applicationResolved = !!options.ApplicationID || !options.ApplicationName;
-    /** roomKey(lower) → resolved ConversationID (populated once get-or-create settles). */
-    const roomToConversation = new Map<string, string>();
+    /**
+     * roomKey(lower) → resolved ConversationID (populated once get-or-create settles).
+     * Bounded with `MJLruCache` rather than a plain `Map`: this closure is bound once at process
+     * startup (`AIBridgeEngine.SetTranscriptSink`) and lives for the process lifetime, with no
+     * "room ended" hook to key eviction off — every meeting room ever transcribed would otherwise
+     * leave an entry here forever.
+     */
+    const roomToConversation = new MJLruCache<string, string>({ maxSize: 10_000, ttlMs: 24 * 60 * 60 * 1000 });
     /** roomKey(lower) → in-flight get-or-create promise (dedupes concurrent first lines for a room). */
     const ensureInFlight = new Map<string, Promise<string | null>>();
-    /** ConversationID → serial write chain (preserves detail ordering, error-isolated). */
-    const writeChains = new Map<string, Promise<void>>();
+    /** ConversationID → serial write chain (preserves detail ordering, error-isolated). Bounded for the same reason as {@link roomToConversation}. */
+    const writeChains = new MJLruCache<string, Promise<void>>({ maxSize: 10_000, ttlMs: 24 * 60 * 60 * 1000 });
 
     return async (line, contextUser, provider) => {
         if (!contextUser || !provider) {
@@ -99,9 +105,9 @@ export function CreateBridgeRoomTranscriptSink(options: BridgeRoomTranscriptSink
         if (!conversationID) {
             return;
         }
-        const prior = writeChains.get(conversationID) ?? Promise.resolve();
+        const prior = writeChains.Get(conversationID) ?? Promise.resolve();
         const next = prior.then(() => writeTranscriptDetail(conversationID, line, contextUser, provider));
-        writeChains.set(conversationID, next.then(() => undefined, () => undefined));
+        writeChains.Set(conversationID, next.then(() => undefined, () => undefined));
         await next;
     };
 }
@@ -112,13 +118,13 @@ async function ensureRoomConversation(
     conversationType: string,
     scope: ConversationApplicationScope,
     applicationID: string | undefined,
-    cache: Map<string, string>,
+    cache: MJLruCache<string, string>,
     inFlight: Map<string, Promise<string | null>>,
     contextUser: UserInfo,
     provider: IMetadataProvider,
 ): Promise<string | null> {
     const key = roomKey.trim().toLowerCase();
-    const cached = cache.get(key);
+    const cached = cache.Get(key);
     if (cached) {
         return cached;
     }
@@ -129,7 +135,7 @@ async function ensureRoomConversation(
     const task = resolveOrCreateConversation(roomKey, conversationType, scope, applicationID, contextUser, provider)
         .then((id) => {
             if (id) {
-                cache.set(key, id);
+                cache.Set(key, id);
             }
             return id;
         })
