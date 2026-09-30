@@ -27,7 +27,8 @@ describe('ConnectGraphQLClient (real provider)', () => {
 
     beforeEach(() => {
         ResetGraphQLProviderSingleton();
-        fetchSpy = vi.spyOn(globalThis, 'fetch');
+        // Fails any request a test did not stub, so a regression cannot reach the network.
+        fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected fetch'));
     });
 
     afterEach(() => {

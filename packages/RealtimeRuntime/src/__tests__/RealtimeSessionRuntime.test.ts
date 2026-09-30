@@ -336,14 +336,14 @@ describe('session lifecycle, driven end to end with fakes', () => {
 });
 
 describe('channel registry on a connect-only provider (#4887)', () => {
-    const fetchChannelDefinitions = (runtime: RealtimeSessionRuntime): Promise<unknown[]> =>
-        (runtime as unknown as { fetchChannelDefinitions(): Promise<unknown[]> }).fetchChannelDefinitions();
+    // Bracket access reaches the private method with its real return type, no cast needed.
+    const fetchChannelDefinitions = (runtime: RealtimeSessionRuntime) => runtime['fetchChannelDefinitions']();
 
     it('returns no channels without touching AIEngineBase when the provider has no entity metadata', async () => {
         const spy = vi.spyOn(AIEngineBase, 'GetProviderInstance');
         try {
             const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
-            runtime.Provider = { Entities: [] } as unknown as IMetadataProvider;
+            runtime.Provider = { Entities: [] } as never; // only Entities is read
 
             await expect(fetchChannelDefinitions(runtime)).resolves.toEqual([]);
             expect(spy).not.toHaveBeenCalled();
@@ -359,7 +359,7 @@ describe('channel registry on a connect-only provider (#4887)', () => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
         try {
             const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
-            runtime.Provider = { Entities: [{}] } as unknown as IMetadataProvider;
+            runtime.Provider = { Entities: [{}] } as never; // only Entities is read
 
             await expect(fetchChannelDefinitions(runtime)).resolves.toEqual([]);
             expect(spy).toHaveBeenCalledTimes(1);
