@@ -1,5 +1,22 @@
 # @memberjunction/archiving-action
 
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [520bd09]
+- Updated dependencies [520bd09]
+- Updated dependencies [a7da50b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/actions-base@6.2.0-edge.1
+  - @memberjunction/actions@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/archiving-engine@6.2.0-edge.1
+
 ## 6.2.0-edge.0
 
 ### Patch Changes
