@@ -3,6 +3,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { EntityInfo, EntityFieldInfo, RunView, LogError } from '@memberjunction/core';
+import { ExportColumn } from '@memberjunction/export-engine';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJUserViewEntityExtended, UserInfoEngine } from '@memberjunction/core-entities';
 import { BuildCompositeKey, BuildPkString } from '../utils/record.util';
@@ -755,7 +756,15 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
 
   /** Title shown in the "no records" empty state — varies with the active filter. */
   get NoRecordsTitle(): string {
-    return this.DebouncedFilterText ? 'No matching records' : 'No records found';
+    if (this.DebouncedFilterText) {
+      return 'No matching records';
+    }
+    // Prefer the entity's business-friendly plural ("No Contacts to display") over the generic
+    // "No records found" so the empty state speaks the user's own domain language. Same wording
+    // as the grid and cards plug-ins so the copy does not shift between view types.
+    // Falls back to "records" when no entity is in scope.
+    const plural = this.EffectiveEntity?.DisplayNamePlural;
+    return plural ? `No ${plural} to display` : 'No records found';
   }
 
   /** True when the "no records" empty state is the result of an active filter. */
@@ -1559,6 +1568,18 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       return false;
     }
     return renderer.exportRecords(format);
+  }
+
+  /**
+   * The active renderer's on-screen columns ({@link IViewRenderer.GetExportColumns}), or an empty
+   * array when no renderer is mounted or the active view type has no column layout.
+   */
+  public GetExportColumns(): ExportColumn[] {
+    const renderer = this.dynamicRendererRef?.instance;
+    if (!renderer || typeof renderer.GetExportColumns !== 'function') {
+      return [];
+    }
+    return renderer.GetExportColumns();
   }
 
   /**

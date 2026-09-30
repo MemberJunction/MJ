@@ -2762,6 +2762,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- AI Prompt Runs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIPromptRuns"
+        SectionName="AI Prompt Runs"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIPromptRuns')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Runs','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Prompt Runs','UserID')"
+                [AllowLoad]="IsSectionExpanded('mJAIPromptRuns')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIPromptRuns', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- AI Skill Permissions Section -->
     <mj-collapsible-panel
         SectionKey="mJAISkillPermissions"
@@ -2781,6 +2806,31 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAISkillPermissions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Projects Section -->
+    <mj-collapsible-panel
+        SectionKey="mJProjects"
+        SectionName="Projects"
+        Icon="fa fa-project-diagram"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJProjects')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Projects','OwnerUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Projects','OwnerUserID')"
+                [AllowLoad]="IsSectionExpanded('mJProjects')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJProjects', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

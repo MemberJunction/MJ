@@ -1,5 +1,119 @@
 # Change Log - @memberjunction/core
 
+## 6.2.0-edge.1
+
+### Minor Changes
+
+- a7da50b: Know a record's IsA subtype on load without a query, for entities that opt in.
+
+  A loaded record whose entity has IsA children finds its subtype with a discovery query across every child table, then loads the child row: in the browser, three round trips to open one record, and two more per row for a `RunView` of entity objects (201 for 100 records). An entity can now opt in to asking its subtype rule first. When the rule names a child, that child's load, which happens anyway, checks the answer, and the discovery query runs only on a miss: two round trips to open a record whose subtype is a leaf, and 101 for 100 records.
+  - `EntitySubtypeResolver.ResolveLoadHint(record)` answers the load-time question, from memory only; `null` means "no hint". The base implementation gives none, so overriding it is the opt-in, and a resolver that doesn't override it is never constructed when records load. `Resolve()` stays the create-time question and may await an engine's `Config()`. A registered resolver owns the rule, so the entity's `SubtypeSelector` isn't consulted on load in its place.
+  - The `SubtypeSelector` JSON (`IEntitySubtypeSelectorConfig`) gains an optional `UseForLoadedRecords`, default `false`. With it, the selector is walked on load through the entity objects that loaded `BaseEngine` caches hold, found through an index over each cached array; a hop that isn't cached gives no hint, never a query. A selector without it, such as the ones bizapps-orders declares today, loads as before.
+  - For well-formed data a hint changes the number of round trips, not which child is linked or whether the load succeeds. A hinted child with no row, where the record has no subtype row at all, is normal: it costs one extra round trip and logs nothing as an error. When the discovery query finds a different child, "the rule and the data disagree" is logged once per entity and pair of subtypes. A promotion (`AttachToParent`) never asks the rule. A failure reading the hinted row falls back to the discovery query; a failure after the row was read fails the load, as without a hint.
+  - `BaseEntity.ClearSubtypeLookupCache()` also clears the load-hint caches and the record of load-hint messages already logged.
+  - `BaseEngineRegistry.FindCachedEntity()` reads each engine's configs through the new `BaseEngine.ReadonlyConfigs` instead of `Configs`, which deep-copies on every read ([#4792](https://github.com/MemberJunction/MJ/issues/4792)). The selector's walk calls it once per hop of every loaded record, and a `RelatedRecordCollection` with `Source: 'cache'` gets faster too. `CachedEntityMatch.config` is typed `Readonly<BaseEnginePropertyConfig>`, since it's now the engine's own object.
+
+### Patch Changes
+
+- a3539d2: Business-user vocabulary: surface the user's own domain nouns instead of platform jargon on the default data-browsing surfaces.
+  - `EntityInfo.DisplayNamePlural` (`@memberjunction/core`): a business-friendly plural of the entity's display name ("Contacts", "Companies", "Addresses"), derived from `DisplayNameOrName` via the existing `GeneratePluralName` helper, so a per-deployment `DisplayName` override ("Member") flows through as "Members". It keeps the name's leading capital, so irregular plurals read "People" and "Children" rather than "people". Display-only; never a lookup key. Unit-tested.
+  - Entity viewer, grid, and cards empty states now say "No Contacts to display" instead of "No records found" / "No data to display", falling back to the generic copy when no entity is in scope.
+  - Data Explorer: the word "entity" is translated out of the default data-browsing app (both search placeholders, the sidebar's "Record Types" heading, loading text, counts, filter pill, empty states, recent section). Bindings, CSS classes, and agent-tool contracts are untouched.
+  - Sharing Center: section headings show friendly labels ("Dashboards", "Artifacts", "Rules") via a display-only label map. The underlying `DomainName` stays as-is because it is the lookup key that drives Revoke, audit mapping, and icon selection. Unmapped custom domains have a trailing " Permissions" stripped. Sections are sorted by the label the user reads.
+  - User Routines: softened the editor loading text.
+
+  Ported from #3043 (the runtime, no-migration half). The stored `Entity.DisplayNamePlural` column, its CodeGen completion, and the non-English plural seam are tracked separately.
+
+- 41274aa: Cache-invalidation events no longer carry row data unless the deployment opts in, and the consumers that needed that row now re-read it through an access-controlled path.
+
+  The `cacheInvalidation` subscription is delivered to every connected client with no per-user filter, and both publish sites attached the full row (`JSON.stringify(entity.GetAll())`) to every save. Row-level security and any consumer-side scoping apply on the read path, which a push bypasses — so every signed-in session received the contents of rows it had no right to read.
+
+  **Server.** `recordData` is populated only for entities named in the new `cacheSettings.recordDataBroadcastEntities`, default `[]`. `['*']` restores the previous behaviour wholesale. `EntityName` and `PrimaryKeyValues` still broadcast unconditionally — they disclose nothing a client cannot already derive, and they are what tells a consumer _which_ record changed.
+
+  **Core.** New `ResolveEntityEventRow(event, provider?, contextUser?)` and `ResolveEntityEventKey(event)`. The first returns the row from the live entity (local events), from `recordData` (allowlisted entities), or by re-reading that one record by primary key through the provider — as the signed-in user, so the server decides what comes back. A session that may not read the record gets `null` rather than an exception or someone else's data. The second reads identity from the primary key, which is always present.
+
+  **Consumers.** `ConversationEngine` hydrates once in its already-async event dispatcher and passes the row to its five handlers, which stay synchronous; identity now comes from the primary key, so a conversation delete and a project delete need no row at all. The dispatcher asks `EntityEventRowIsFree(event)` first — a row that is already in hand, from the live entity or from allowlisted `recordData`, is never worth skipping, and the per-entity skips below it are about avoiding THE READ. The AI Agent Run form resolves `Status` the same way, behind its id match; `AgentRunID` on a step cannot be gated that way (it is the foreign key being matched), so while that form is open on a Running agent every step save in the deployment costs it one keyed read, bounded by the run's lifetime. The Form Builder cockpit resolves `Name` only after its id match has already missed. A conversation whose re-read comes back null — refused, gone, or failed — is left as it was rather than handed to `SetMany`, and a remote delete on the detail path no longer re-reads a row that is guaranteed gone.
+
+  **Cost, stated plainly for whoever sets the allowlist.** `BaseEngine` is unchanged in code and is the broadest behavioural change here: it applies a remote save in place only when `recordData` is present, so with the default `[]` every remote save of an `AutoRefresh` entity falls through to a full `RunView` reload of each matching config (`LoadSingleConfig(..., bypassCache=true)`), not a keyed read. Remote deletes still apply in place from the primary key. Engine-cached reference entities that every signed-in user may read are the ones worth listing.
+
+  Without the consumer half, defaulting `recordDataBroadcastEntities` to `[]` would have made `ConversationEngine`'s remote handling a silent no-op — including the eviction whose own comment warns that a warm cache "would keep serving without this row forever".
+
+- 17cc774: Capture a numeric or single-value `IN (...)` CHECK constraint as an entity field value list (#3978).
+
+  SQL Server renders a numeric or `bit` `IN (...)` CHECK with unquoted literals —
+  `([Level]=(3) OR [Level]=(2) OR [Level]=(1))` — where a string list comes back quoted.
+  `parseCheckConstraintValues` matched only the quoted form, so a numeric IN-list produced no
+  `EntityFieldValue` rows and no `ValueListType='List'`: the field lost its validation _and_ its
+  dropdown in Explorer, and with AI codegen off the constraint yielded nothing at all. The same
+  regexes required at least two values, so a single-value list was never captured for any type.
+
+  CodeGen now matches both literal forms and single-value lists, sorts an all-numeric list
+  numerically, and returns no list rather than an empty one. Two field shapes are excluded after
+  parsing, each no broader than its reason: a `bit` field (`IN (0,1)` is vacuous and `= 1` is a
+  validator, not a dropdown) and a primary key carrying a _single_ value (`CHECK (ID=1)` is a
+  single-row-table guard). A multi-value list on a natural-key primary key is still captured, as
+  it was before.
+
+  `@memberjunction/core` compares a numeric column's value list by numeric value rather than by
+  string form, so `CHECK (Price IN (0.50, 1.00))` accepts the runtime value `1`. Without it the
+  CodeGen change would make `Validate()` refuse values the database accepts.
+
+  **If you regenerate against a schema that has one of these constraints, the generated property
+  narrows.** A value list emits a literal union, so a numeric list now types the property as
+  `1 | 2 | 3` (and its Zod schema as `z.union([z.literal(1), ...])`) instead of `number` — which
+  means `entity.Level = someNumber` stops compiling until the value is a literal or the variable is
+  typed to the union. This is what string value lists have always done; it is newly reachable for
+  numeric and single-value constraints. Nothing in MJ's own generated code changes: across every
+  migration MJ ships there are 292 string `IN (...)` CHECKs and no numeric or single-value ones.
+  `ValueListType='ListOrUserEntry'` is unaffected — it keeps the widened base type.
+
+  **SQL Server only.** PostgreSQL renders these constraints differently (`ARRAY[1, 2, 3]` for a
+  numeric list, and spaced, cast equality such as `((one = 7))` for a single-value one), and
+  `parsePgArrayConstraint` still extracts quoted elements only — so on PostgreSQL a numeric or
+  single-value `IN (...)` CHECK continues to produce no value list. Tracked as #4713.
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [80905a1]
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/sql-dialect@6.2.0-edge.1
+
 ## 6.2.0-edge.0
 
 ### Minor Changes

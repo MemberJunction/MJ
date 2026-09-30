@@ -88,6 +88,7 @@ import {
 import { ServerExtensionLoader, ServerExtensionConfig, mergeServerExtensionConfigs, prepareServerExtensionConfigs, describeServerExtensionMount, InstallMediaUpgradeDispatcher, IsGraphQLWsPath } from '@memberjunction/server-extensions-core';
 import { coreReservedServerExtensionRoots } from './serverExtensionReservedRoots.js';
 import { MetadataCacheRefreshIntervalSeconds } from './providerConfigUnits.js';
+import { CreateMetadataRefreshSignalHandler, METADATA_REFRESH_SIGNAL } from './metadataRefreshSignal.js';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 
@@ -173,6 +174,7 @@ export * from './generic/RunViewResolver.js';
 export * from './resolvers/RunTemplateResolver.js';
 export * from './resolvers/RunAIPromptResolver.js';
 export * from './resolvers/RunAIAgentResolver.js';
+export { AgentRunStatusPublisher } from './resolvers/AgentRunStatusPublisher.js';
 export * from './resolvers/VectorizeEntityResolver.js';
 export * from './resolvers/SearchKnowledgeResolver.js';
 export * from './resolvers/SearchKnowledgeStreamResolver.js';
@@ -1787,6 +1789,8 @@ const setupComplete$ = new ReplaySubject(1);
 
   process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
   process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+  // Operator control: `kill -HUP <pid>` hard-reloads metadata from the DB — see metadataRefreshSignal.ts
+  process.on(METADATA_REFRESH_SIGNAL, CreateMetadataRefreshSignalHandler(() => Metadata.Provider.Refresh())); // global-provider-ok: operator-triggered refresh of the global cache that per-request providers adopt from
 
   // Handle unhandled promise rejections to prevent server crashes
   process.on('unhandledRejection', (reason, promise) => {

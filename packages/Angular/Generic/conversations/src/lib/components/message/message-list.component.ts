@@ -222,6 +222,22 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   public get allowMessageDelete(): boolean {
     return this.AllowMessageDelete;
   }
+  /**
+   * Hides response forms and actionable commands on each message.
+   * Restamped onto already-rendered items — they are created dynamically.
+   */
+  @Input()
+  public set ReadOnly(value: boolean) {
+    if (value === this._readOnly) {
+      return;
+    }
+    this._readOnly = value;
+    this.restampAssistantIdentity();
+  }
+  public get ReadOnly(): boolean {
+    return this._readOnly;
+  }
+  private _readOnly = false;
 
   // ── Windowed-transcript paging state ────────────────────────────────────────
   // The list renders only the LOADED window, not the whole conversation. These two
@@ -1720,7 +1736,9 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     );
     componentRef.instance.Group = group;
     componentRef.instance.Meta = meta;
-    componentRef.instance.UserName = this.CurrentUser?.Name || 'You';
+    // The card says "You" on the viewer's own call and names the caller on anyone else's, which is
+    // why it takes the viewer's id rather than their name.
+    componentRef.instance.CurrentUserID = this.CurrentUser?.ID ?? null;
     componentRef.instance.OpenRequested.subscribe((sessionId: string) => this.RealtimeSessionOpenRequested.emit(sessionId));
     this._renderedMessages.set(key, { kind: 'realtime-session', ref: componentRef });
   }
@@ -1819,6 +1837,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.allowPinning = this.AllowPinning;
     instance.allowMessageEdit = this.AllowMessageEdit;
     instance.allowMessageDelete = this.AllowMessageDelete;
+    instance.ReadOnly = this.ReadOnly;
     instance.assistantDisplayName = this.AssistantDisplayName;
     instance.assistantAvatarUrl = this.AssistantAvatarUrl;
   }

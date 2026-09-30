@@ -170,7 +170,7 @@
         }
 
         <!-- Agent Response Form (shown only for last message by owner) -->
-        @if (isLastMessageInConversation && isConversationOwner && responseForm) {
+        @if (!ReadOnly && isLastMessageInConversation && isConversationOwner && responseForm) {
           <mj-dynamic-form
             [FormDefinition]="responseForm"
             [Disabled]="isProcessing"
@@ -179,7 +179,7 @@
         }
 
         <!-- Actionable Commands (shown only for last message by owner) -->
-        @if (isLastMessageInConversation && isConversationOwner && actionableCommands.length > 0) {
+        @if (!ReadOnly && isLastMessageInConversation && isConversationOwner && actionableCommands.length > 0) {
           <mj-actionable-commands
             [commands]="actionableCommands"
             [disabled]="isProcessing"
@@ -233,7 +233,7 @@
                 [currentUser]="currentUser"
                 [ratingEntityName]="message.EntityInfo.Name || 'MJ: Conversation Details'"
                 [ratingsData]="ratings"
-                [canEdit]="isConversationOwner">
+                [canEdit]="isConversationOwner && !ReadOnly">
               </mj-conversation-message-rating>
             }
             @if (allowPinning) {
@@ -336,7 +336,7 @@
                       [conversationDetailId]="message.ID"
                       [currentUser]="currentUser"
                       [ratingsData]="ratings"
-                      [canEdit]="isConversationOwner">
+                      [canEdit]="isConversationOwner && !ReadOnly">
                     </mj-conversation-message-rating>
                   }
                   @if (allowPinning) {

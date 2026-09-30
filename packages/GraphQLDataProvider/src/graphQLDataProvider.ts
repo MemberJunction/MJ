@@ -2296,6 +2296,19 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     public async Delete(entity: BaseEntity, options: EntityDeleteOptions, user: UserInfo) : Promise<boolean> {
+        // IS-A parent delete: the leaf's delete mutation already deleted the whole chain on the
+        // server, so the parent has nothing left to send. Record the success and return, as
+        // Save() does for IsParentEntitySave (MJ#4864).
+        if (options?.IsParentEntityDelete) {
+            const parentResult = new BaseEntityResult();
+            parentResult.StartedAt = new Date();
+            parentResult.EndedAt = new Date();
+            parentResult.Type = 'delete';
+            parentResult.Success = true;
+            entity.RegisterResultHistoryEntry(parentResult);
+            return true;
+        }
+
         const result = new BaseEntityResult();
         try {
             entity.RegisterTransactionPreprocessing();
