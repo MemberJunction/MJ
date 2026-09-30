@@ -88,6 +88,14 @@ export class UserCache extends BaseSingleton<UserCache> {
      * wrong provider is the same as not waiting at all (plan §22).
      */
     private readonly _pendingWriters = new Set<DatabaseProviderBase>();
+    /**
+     * Whether the pending reload has a change of OUR OWN to announce. Sticky, because a local
+     * change and an incoming peer notice collapse into one reload: carrying the intent on the timer
+     * meant whichever event scheduled last decided it, so a peer notice landing inside the debounce
+     * window demoted a local write to "someone else's change" and no peer ever heard about it. The
+     * transaction wait stretches that window to seconds (plan §22.3).
+     */
+    private _announcePending: boolean = false;
     private _stalenessTimer: ReturnType<typeof setInterval> | null = null;
     /** In-flight reload, so a burst of events costs one database read. */
     private _refreshInFlight: Promise<void> | null = null;
@@ -445,6 +453,7 @@ export class UserCache extends BaseSingleton<UserCache> {
      * @param publishToPeers - true when this process made the change, so other processes are told.
      */
     private scheduleRefresh(delayMs: number, publishToPeers: boolean): void {
+      this._announcePending ||= publishToPeers; // never cleared by a later event, only by publishing
       if (this._refreshTimer) {
         clearTimeout(this._refreshTimer);
       }
@@ -458,13 +467,19 @@ export class UserCache extends BaseSingleton<UserCache> {
         // every other server reload too early. Wait for the transaction to settle (plan §16.3 #7).
         if (this.transactionStillOpen()) {
           this._transactionWaits++;
-          this.scheduleRefresh(UserCache.TransactionWaitMs, publishToPeers);
+          this.scheduleRefresh(UserCache.TransactionWaitMs, false); // the flag already carries the intent
           return;
         }
         this._transactionWaits = 0;
         this._pendingWriters.clear();
+        const announce = this._announcePending;
         this.RefreshNow()
-          .then(() => (publishToPeers ? this.publishStamp() : undefined))
+          .then(async () => {
+            if (announce) {
+              await this.publishStamp();
+              this._announcePending = false; // cleared only once peers have actually been told
+            }
+          })
           .catch((e: unknown) => LogError(`UserCache refresh failed: ${e instanceof Error ? e.message : String(e)}`));
       }, delayMs);
       if (typeof timer === 'object' && timer !== null && 'unref' in timer) {
