@@ -494,6 +494,8 @@ const GOLDEN: Record<string, unknown> = {
     planApproved: false,
     appContext: '',
     __agentTypePromptParams: {
+        // finishIf gates are opt-in (finishIfMode defaults to 'off'), so BaseAgent leaves their docs out.
+        includeFinishIfDocs: false,
         includeResponseTypeDefinition: {
             payload: true,
             responseForms: true,
@@ -502,7 +504,7 @@ const GOLDEN: Record<string, unknown> = {
             while: true,
             scratchpad: true,
             decisions: true,
-            finishIf: true,
+            finishIf: false,
             artifactToolCalls: true,
             conversationToolCalls: true,
             pipeline: true,
