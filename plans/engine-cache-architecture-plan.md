@@ -2341,8 +2341,10 @@ by the same budget as the member-refresh path.
 
 ### Tests
 
-14 in `cacheHardening.reviewRound2.test.ts`, plus 2 real-Redis tests for lock renewal and
-lease ownership. Each verified against the un-fixed code:
+11 `it` blocks in `cacheHardening.reviewRound2.test.ts` — 15 cases, since several assert more than
+one — plus 2 real-Redis tests for lock renewal and lease ownership. (This line used to say "14",
+which matched neither count; §25 has since added 2 more `it` blocks, so the file now holds 13 / 17.)
+Each verified against the un-fixed code:
 
 | Fix reverted | Result |
 |---|---|
@@ -2748,3 +2750,84 @@ clears nothing while reporting success. Fixing it switches on code that has not 
 including a freshness comparison whose bugs have been masked by the cache never hitting, so it is its
 own branch: `dataset-cache-category` (worktree `MJ-worktrees/dataset-cache-category`, cut from
 `origin/next`), briefed in `plans/dataset-cache-category-jumpstart.md` there.
+
+### 25.2 The rest of §22.3 (2026-09-30)
+
+**CA6 left every engine it inspected in whatever state it induced.** `VerifyDerivedStateIdempotent`
+runs `AdditionalLoading` twice on a live engine. For an idempotent engine that is harmless by
+definition; for a drifting one — the case the check exists to find — the engine keeps two extra runs
+of whatever it does wrong, and nothing else corrects it. In the tier that matters most: every later
+check shares the process, so one finding became a spray of unrelated failures. A diagnostic that
+damages what it measures is not a diagnostic.
+
+The restore belongs to the API, not to the check, because any caller inherits the problem. On drift
+the engine now reloads its configs **bypassing the cache** (a cached copy can be the very state we
+are leaving) and runs `AdditionalLoading` once, which is exactly what a normal load produces.
+Re-running `AdditionalLoading` alone could not restore anything — it is the operation that drifted,
+over the same row objects it already mutated. It calls `AdditionalLoading` directly rather than
+`RebuildDerivedState`, which would queue behind the verification it runs inside and deadlock. The
+result carries `Restored` / `RestoreError`, and CA6 now fails on an engine it could not put back,
+because from that point the run is unreliable. Before the fix: `expected 6 to be 2`.
+
+**`mj migrate` cleared nothing on the throw path, or when the failure carried no details.** The
+detail list can be empty precisely because the run died before assembling it, so emptiness is not
+evidence that nothing happened; and DDL is not transactional across batches on SQL Server, so a
+migration that began and failed can still have committed. The honest signal is whether a migration
+*started*: a bad connection string or a config error leaves the fleet alone, anything that touched
+the database clears. Extracted as `MigrationChangedDatabase`, which is testable without driving
+oclif. Six tests; three fail against the old policy (the throw, the empty-details failure, and the
+all-failed run), the other three pin behaviour that must not change.
+
+**A per-entry expiry was still swept locally on a shared store.** The TTL branch was gated on the
+store being shared; the `expiresAt` branch was not — so every server deleted the same expired key on
+its own clock and published a `removed` for it, and every peer reloaded. Every `expiresAt` write
+already hands the store a matching TTL, so the store expires the key itself. The sweep now *forgets*
+such an entry locally (registry and index, so bookkeeping does not grow) without touching the store.
+Three tests; one fails against the old code: `expected [ 'MJ: AI Models|||-1|0||' ] to deeply equal []`.
+
+**The peer-notice budgets.** Two bounds exist: a wall-clock deferral budget and a retry count. The
+retry count was cleared only when a *re-armed* check ran, never when one ran on the direct path —
+which is how it runs whenever a fresh notice arrives after the transaction closed — so the count
+persisted and the next deferral started part-way to the cap, dropping a check the re-arm exists to
+preserve. The wall-clock budget was cleared as the timer *fired*, before discovering the provider was
+mid-transaction, which ended the budget exactly when deferral began and left the count as the only
+real bound. Both are now closed out in one place, when the check actually runs. Two tests; before the
+fix: `expected 4 to be +0` and `expected null not to be null`.
+
+> A note on the second test, because it cost real time: its first draft left a provider stuck
+> in-transaction when its assertion threw, and the self-re-arming retry chain it left in the shared
+> fake-timer queue made an *earlier* test in the same file fail. The test was wrong, not the code.
+> It now unwinds in a `finally`. Worth remembering: with fake timers, a test that leaves a
+> re-arming chain pending can corrupt tests that appear before it in the file.
+
+**`light-commands.ids.test.ts` described a hook that does not exist.** Its comment said the prerun
+hook matches topic prefixes, so a topic entry would keep every command under it light. The hook does
+`LIGHT_COMMANDS.has(options.Command.id)` — exact membership, nothing else. The allowance was inert
+today (no entry is topic-only, verified against the manifest) but would have hidden exactly the dead
+entries this file exists to catch. Removed, and the comment now states the real rule. The manifest
+half also `return`ed when `oclif.manifest.json` was absent, reporting a pass it never earned; it now
+skips **visibly** (`3 tests | 1 skipped` instead of `3 passed`).
+
+**§21's test count** said 14, which matched neither the `it` blocks (11) nor the cases (15). Both
+numbers are now stated, along with what §25 added.
+
+### 25.3 The caching guide
+
+`guides/CACHING_AND_PUBSUB_GUIDE.md` was missing the section added in §21 from its table of contents,
+and three things this branch introduced were undocumented. Added:
+
+- **Categories and expiry** — a table of what lives in each category, why `default` never expires
+  (it holds proxy keys, and a proxy outliving its subject is the failure mode §16.3 #3 fixed), why
+  `categoryTTLSeconds` merges rather than replaces, how a per-write TTL takes precedence, and the
+  dataset blob/`_date` asymmetry. Includes the `DatasetCache`/`default` mismatch as a stated known
+  asymmetry, so nobody assumes that category holds anything today.
+- **Clearing the shared cache from a tool** — the per-command policy table for `mj sync push`,
+  `mj codegen`, `mj migrate` and `mj cache clear`, including the #4566 rollback rule and the
+  "did a migration start" rule.
+- **Lease renewal, the wait multiple, and the deferred-engine release**, plus the key lock
+  (`WithKeyLock`): what it protects, that it renews and is capped, and what happens when the lock is
+  lost or unverifiable.
+
+All 26 TOC entries now resolve to real headings, and no `##` section is missing from the TOC
+(checked with GitHub's own anchor rule — each space becomes one hyphen, punctuation is dropped,
+which matters for `Client-Side Fast-Start & Pre-Validation`).

@@ -30,7 +30,10 @@ This guide covers the complete caching, pub/sub, and real-time data synchronizat
 20. [Troubleshooting](#troubleshooting)
 21. [Server-Side Dataset Caching](#server-side-dataset-caching)
 22. [The User Cache](#the-user-cache)
-23. [Process-local caches: a miss is not a negative fact](#process-local-caches-a-miss-is-not-a-negative-fact)
+23. [Publish modes, leases and the sweep](#publish-modes-leases-and-the-sweep)
+24. [Categories and expiry](#categories-and-expiry)
+25. [Clearing the shared cache from a tool](#clearing-the-shared-cache-from-a-tool)
+26. [Process-local caches: a miss is not a negative fact](#process-local-caches-a-miss-is-not-a-negative-fact)
 
 ---
 
@@ -2294,14 +2297,97 @@ entity:
   so a peer adopts them without a query), `'notice'` carries only the key (the metadata snapshot and
   the user-cache stamp), `'none'` publishes nothing. Category clears and group invalidations are
   always published.
-- **Leases** (`ILocalStorageProvider.TryAcquireLease` / `ReleaseLease`, `SET NX PX` on Redis) make a
-  fleet do a periodic job once rather than once per server: the engine sweep takes one per engine
-  per interval, and startup takes a warm-up lease so servers starting together load their engines in
-  turn instead of all querying the database.
+- **Leases** (`ILocalStorageProvider.TryAcquireLease` / `RenewLease` / `ReleaseLease`, `SET NX PX` on
+  Redis) make a fleet do a periodic job once rather than once per server: the engine sweep takes one
+  per engine per interval, and startup takes a warm-up lease so servers starting together load their
+  engines in turn instead of all querying the database.
+
+  A lease **expires**, which is what makes it safe — a holder that dies does not block the fleet
+  forever. That means a holder still working must **renew**: `StartupManager` renews the warm-up
+  lease on a timer while engines load, so a slow but healthy startup is not overtaken by a peer that
+  assumed it had died. It follows that the waiters' patience must not equal the lease TTL, or a
+  renewed lease would outlast everyone waiting on it; `WarmupWaitLeaseMultiple` (4) sets how much
+  longer a waiter waits than one lease period.
+
+  The warm-up lease is **released before deferred engines load**, not held across them. Deferred
+  engines are by definition not needed to serve traffic, so holding the lease through them would
+  make every other server wait on work that is not on anyone's critical path.
+
+- **The key lock** (`ILocalStorageProvider.WithKeyLock`) serialises a read-modify-write of one cache
+  slot across processes, which a shared store otherwise cannot: two servers updating the same slot
+  from a save would each read, merge and write, and one update would be lost. The lock is held for
+  the work, renewed while it runs, and capped (`KEY_LOCK_MAX_HOLD_MS`, 60 s) so a hung caller
+  eventually releases it. If the lock turns out to have been lost, the write is rejected with
+  `KeyLockLostError` rather than applied on top of a peer's — and when Redis cannot be read at all to
+  check, the answer comes from the clock: a lock cannot outlive its TTL measured from the last
+  renewal that landed.
 - **The engine sweep** (`BaseEngineSweeper`, MJAPI's `cacheSettings.engineSweepIntervalSeconds`,
   default 300 s) compares each loaded engine config's row count and newest `__mj_UpdatedAt` with the
   database and reloads only what differs — the safety net for changes made outside MJ. It writes a
   refreshed slot under the slot's cross-process lock, so it cannot clobber a peer's in-flight update.
+
+## Categories and expiry
+
+Every cache entry is written to a **category**, which the store turns into a namespace — a Redis key
+is `{prefix}:{category}:{key}`, browser localStorage is `[mj]:[category]:[key]`, and the in-memory
+and IndexedDB providers keep a map per category. A category is therefore not a label: a read with
+the wrong one finds nothing.
+
+| Category | Holds | Expiry |
+|---|---|---|
+| `RunViewCache` | RunView results, keyed by fingerprint | `sharedCacheTTLSeconds` (default 3600) |
+| `RunQueryCache` | RunQuery results | as above |
+| `DatasetCache` | *(reserved — see the note below)* | as above |
+| `Metadata` | metadata payloads | as above |
+| `default` | the metadata snapshot, the user-cache stamp, dataset blobs | **never expires**, except per entry |
+
+**Why `default` never expires.** It holds **proxy keys**: entries that vouch for other entries. The
+metadata snapshot's timestamps key is written *after* the payload it describes, and a dataset's
+`_date` key *after* its blob, so that a half-written snapshot reads as obsolete rather than as
+current. Under one blanket expiry that ordering inverts — the proxy is written last, so it expires
+last, and a reader finds a freshness claim with nothing behind it. A process booting into that
+window adopted the timestamps and then served empty metadata as current.
+
+So the rule is **a proxy must never outlive its subject**, and the cheapest way to guarantee it is
+for the category not to expire on its own clock. `categoryTTLSeconds` is *merged over* that default
+rather than replacing it, so configuring another category cannot silently switch it back on; naming
+`default` explicitly still overrides it.
+
+**Entries in that category may still carry their own expiry**, and a per-write TTL takes precedence
+over the category. Dataset blobs use this: `ProviderBase.DatasetCacheTTLSeconds` (3600) for the blob
+and `DatasetDateCacheTTLSeconds` (3300) for its `_date` key — deliberately shorter, so the pair
+expires in the safe direction and the cache reads as absent rather than as "fresh, but empty".
+
+> **Known asymmetry.** `CacheDataset` writes dataset blobs to `default`, and `GetCachedDataset`,
+> `IsDatasetCached` and `ClearDatasetCache` read them there — but `GetAndCacheDatasetByName` reads
+> the `DatasetCache` category, so its warm-serve path never hits, and `mj cache clear --category
+> DatasetCache` clears nothing. Dataset keys are in fact removed by the snapshot sweep, which matches
+> them by key marker. This predates the cross-process work and is tracked separately; do not assume
+> `DatasetCache` holds anything today.
+
+**On a shared store, expiry belongs to the store.** A process must not age entries out by its own
+clock: every server would delete the same keys on its own schedule, publish a `removed` for each,
+and make every peer reload — a fleet-wide storm for keys Redis expires by itself. `LocalCacheManager`
+therefore applies its local TTL only to a process-private store, and on a shared one merely *forgets*
+an entry whose own expiry has passed, leaving the key to the store.
+
+## Clearing the shared cache from a tool
+
+Anything that changes the database without going through a running server leaves every server's
+engines holding rows that no longer match it. The CLI closes that gap when `REDIS_URL` is set
+(prefix `REDIS_KEY_PREFIX`): each cleared category publishes `category_cleared`, so every subscribed
+server drops what it holds and reloads, and removing the metadata snapshot makes each one re-check
+its metadata against the database.
+
+| Command | Clears when |
+|---|---|
+| `mj sync push` | the push succeeded, or it failed **and left rows behind**. Since #4566 an atomic push (the default) rolls its own writes back and says so, and clearing after a clean rollback would cost the fleet a full reload for a run that changed nothing. An outcome the CLI cannot read clears. |
+| `mj codegen` | any run that was not `--skipdb`, including a failed one — CodeGen writes as it goes. |
+| `mj migrate` | migrations were applied; or the run failed or threw **after a migration started**. DDL is not transactional across batches, so a migration that began and failed can still have committed. A run that never started one leaves the fleet alone. |
+| `mj cache clear` | on demand — for direct SQL, another application, or a restore. `--dry-run` reports what it would remove; `--category` (repeatable, case-insensitive) narrows it, and with no `--category` the metadata snapshot goes too. |
+
+Opt out with `--skip-cache-clear` or `MJ_SKIP_SHARED_CACHE_CLEAR=1`. Each category reports its own
+success: a partial failure is reported as one, not swallowed into an overall "done".
 
 ## Process-local caches: a miss is not a negative fact
 
