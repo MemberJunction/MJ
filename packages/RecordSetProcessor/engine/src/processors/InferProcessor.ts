@@ -30,6 +30,7 @@ import {
     DataFeatureOutput,
     FeatureValueCacheService,
     type CacheKeyResult,
+    IsDecisionPipelineType,
     IsLLMPipelineType,
     LLM_PIPELINE_TYPE,
     renderConstraintBlock,
@@ -585,9 +586,13 @@ export class InferProcessor implements IRecordProcessor {
     // Escalation (DataFeatureSpec.Escalation): below-floor decisions re-run through an LLM pipeline
     // -------------------------------------------------------------------------------------------------
 
-    /** The escalation of below-floor decisions, when the spec has `Escalation`; created once. */
+    /**
+     * The escalation of below-floor decisions, when the spec is a Decision pipeline's and has `Escalation`;
+     * created once. `ValidateSpec` already refuses `Escalation` on any other type, but a processor built
+     * directly from a spec skips it, and an LLM pipeline returns no confidence, so every record would escalate.
+     */
     private get escalator(): FeaturePipelineEscalator | undefined {
-        if (!this.spec?.Escalation) {
+        if (!this.spec?.Escalation || !IsDecisionPipelineType(this.spec.PipelineType)) {
             return undefined;
         }
         this._escalator ??= new FeaturePipelineEscalator(

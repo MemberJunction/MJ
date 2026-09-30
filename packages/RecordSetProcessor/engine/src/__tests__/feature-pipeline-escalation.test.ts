@@ -881,6 +881,19 @@ describe('Decision pipeline escalation', () => {
         });
     });
 
+    describe('a pipeline that is not a Decision pipeline', () => {
+        it('never escalates, even when a spec built without ValidateSpec carries Escalation', async () => {
+            const spec = llmSpec({ Escalation: { PipelineID: LLM_PIPELINE_ID, BelowConfidence: 0.7 } });
+            const processor = new InferProcessor(LLM_PROMPT.ID, undefined, spec);
+            const results = await processor.ProcessBatch([makeRecord('r1'), makeRecord('r2')], context);
+
+            expect(results.get('r1')).toMatchObject({ Status: 'Succeeded', ResultPayload: { seniority: 'Executive', isVip: true }, AIPromptRunID: 'LLM-RUN-r1' });
+            expect(llmCalls).toEqual(['r1', 'r2']);
+            expect(getEntityObject).not.toHaveBeenCalled();
+            expect(processor.EscalatedRecordCount).toBe(0);
+        });
+    });
+
     describe('FindEscalationTargetSpecProblem', () => {
         it('treats a target without a spec as producing no outputs', () => {
             expect(FindEscalationTargetSpecProblem(undefined, outputs())).toBe(
