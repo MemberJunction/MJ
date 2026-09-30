@@ -2,8 +2,9 @@
 import { LogError, type EntityInfo, type IMetadataProvider } from '@memberjunction/core';
 import { InteractiveFormsEngine, ParseClaimedFieldNames, type MJEntityFormContributionEntity } from '@memberjunction/core-entities';
 import { MJGlobal, SafeJSONParse } from '@memberjunction/global';
-import { BaseFormPanel, type FormPanelRegistrationMetadata, type FormPanelSlot } from './base-form-panel';
-import type { FormContributionRegistration } from './form-contribution';
+import type { FormContributionSpec } from '@memberjunction/interactive-component-types/forms';
+import { BaseFormPanel, type FormPanelRegistrationMetadata } from './base-form-panel';
+import { ContributionSpecToRegistration, type FormContributionRegistration } from './form-contribution';
 import { HiddenPanelsSetting, ParseHiddenPanelKeys, WithoutHiddenPanels } from './panel-hides';
 import { WithPlacementPreview, type FormPlacementPreview } from './placement-preview';
 
@@ -104,38 +105,39 @@ export function CollectClassFormPanelRegistrations(): FormContributionRegistrati
     }));
 }
 
-/** Project one `MJ: Entity Form Contributions` row onto the compiled metadata shape. */
+/** One `MJ: Entity Form Contributions` row as a registration, through {@link ContributionSpecToRegistration}. */
 export function MetadataContributionToRegistration(row: MJEntityFormContributionEntity): FormContributionRegistration {
-    const metadata: FormPanelRegistrationMetadata = {
-        entity: row.Entity,
-        slot: row.Slot as FormPanelSlot,
-        sortKey: row.SortKey ?? 0,
-        presentation: row.Presentation,
-    };
-    if (row.ContributionKey) metadata.contributionKey = row.ContributionKey;
-    if (row.RelatedEntity) metadata.relatedEntity = row.RelatedEntity;
-    if (row.RelatedJoinField) metadata.relatedJoinField = row.RelatedJoinField;
-    if (row.ReplacesSectionKey) metadata.replacesSectionKey = row.ReplacesSectionKey;
-    const claimedFields = ParseClaimedFieldNames(row.ReplacesFieldNames);
-    if (claimedFields.length > 0) metadata.replacesFieldNames = claimedFields;
-    const claimedSections = ParseClaimedFieldNames(row.ReplacesSectionKeys);
-    if (claimedSections.length > 0) metadata.replacesSectionKeys = claimedSections;
-    if (row.InSectionKey) metadata.inSectionKey = row.InSectionKey;
-    if (row.SectionPosition) metadata.sectionPosition = row.SectionPosition;
-    if (row.Inclusion) metadata.inclusion = row.Inclusion;
-    if (row.ChromeGroup) metadata.chromeGroup = row.ChromeGroup;
     return {
+        ...ContributionSpecToRegistration(row.Entity, contributionRowSpec(row), row.ComponentID),
         Priority: row.Precedence ?? 0,
-        Metadata: metadata,
-        Source: 'metadata',
-        ComponentID: row.ComponentID,
         RowID: row.ID,
         Scope: row.Scope,
-        Title: row.Title ?? row.Name,
-        Icon: row.Icon ?? undefined,
-        Presentation: row.Presentation,
-        Configuration: SafeJSONParse<Record<string, unknown>>(row.Configuration ?? '', false) ?? {},
     };
+}
+
+/** The spec a stored row holds. */
+function contributionRowSpec(row: MJEntityFormContributionEntity): FormContributionSpec {
+    const spec: FormContributionSpec = {
+        slot: row.Slot,
+        sortKey: row.SortKey ?? 0,
+        presentation: row.Presentation,
+        title: row.Title ?? row.Name,
+        configuration: SafeJSONParse<Record<string, unknown>>(row.Configuration ?? '', false) ?? {},
+    };
+    if (row.Icon) spec.icon = row.Icon;
+    if (row.ContributionKey) spec.contributionKey = row.ContributionKey;
+    if (row.RelatedEntity) spec.relatedEntity = row.RelatedEntity;
+    if (row.RelatedJoinField) spec.relatedJoinField = row.RelatedJoinField;
+    if (row.ReplacesSectionKey) spec.replacesSectionKey = row.ReplacesSectionKey;
+    const claimedFields = ParseClaimedFieldNames(row.ReplacesFieldNames);
+    if (claimedFields.length > 0) spec.replacesFieldNames = claimedFields;
+    const claimedSections = ParseClaimedFieldNames(row.ReplacesSectionKeys);
+    if (claimedSections.length > 0) spec.replacesSectionKeys = claimedSections;
+    if (row.InSectionKey) spec.inSectionKey = row.InSectionKey;
+    if (row.SectionPosition) spec.sectionPosition = row.SectionPosition;
+    if (row.Inclusion) spec.inclusion = row.Inclusion;
+    if (row.ChromeGroup) spec.chromeGroup = row.ChromeGroup;
+    return spec;
 }
 
 export interface CollectFormContributionOptions {

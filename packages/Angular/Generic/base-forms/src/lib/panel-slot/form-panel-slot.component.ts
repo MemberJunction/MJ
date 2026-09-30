@@ -9,23 +9,21 @@ import {
     OnInit,
     Optional,
     SimpleChanges,
-    Type,
     ViewChild,
     ViewContainerRef,
     inject,
 } from '@angular/core';
-import { Subject, takeUntil } from 'rxjs';
+import { Subject, filter, take, takeUntil, type Observable, type Subscription } from 'rxjs';
 import { BaseEntity, LogError } from '@memberjunction/core';
 import { InteractiveFormsEngine } from '@memberjunction/core-entities';
-import { firstValueFrom } from 'rxjs';
 import { BaseFormComponent } from '../base-form-component';
 import { FormContext } from '../types/form-types';
-import { BaseFormPanel, FormPanelRegistrationMetadata, FormPanelSlot } from './base-form-panel';
+import { BaseFormPanel, FormPanelSlot } from './base-form-panel';
 import { FormSlotCoordinator } from './form-slot-coordinator.service';
 import {
-    CollapseFormPanelRegistrations,
     ContributionDrawsInSection,
     FormContributionEntityMatches,
+    ResolveFormContributionWinners,
     type FormContributionRegistration,
 } from './form-contribution';
 import { CollectFormContributionRegistrations } from './collect-form-contribution-registrations';
@@ -215,17 +213,7 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
         }
         this.unmountAll();
 
-        // 1. Direct matches: panels registered for THIS slot.
-        const direct = this.findRegistrations(this.Slot);
-
-        // 2. Orphans: panels registered for some OTHER slot whose preferred
-        //    slot doesn't exist in this form, AND this slot host is the
-        //    coordinator-resolved fallback for them. Without a coordinator
-        //    (no parent container), no orphan handling — panels just bind
-        //    to their literal slot.
-        const orphans = this.findOrphans();
-
-        const all = CollapseFormPanelRegistrations([...direct, ...orphans]);
+        const all = this.winnersForThisSlot();
         if (all.length === 0) {
             this.remountDepth--;
             return;
@@ -274,22 +262,27 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
     }
 
     /**
-     * Find registrations whose metadata declares this exact entity (or the
-     * `'*'` wildcard) + slot. A panel registered with `entity: '*'` is
-     * entity-agnostic — it mounts on EVERY entity's form. Such panels are
-     * expected to self-hide (render nothing) when they don't apply to the
-     * current record, so the cross-cutting registration stays unobtrusive.
+     * The form's winning registrations that this slot mounts.
+     *
+     * The collapse runs once over every registration on the form (see
+     * `ResolveFormContributionWinners`), then this slot keeps the winners it hosts: those
+     * registered for this slot, and those whose slot is missing from the form when the
+     * coordinator resolves them to this one. A winner drawn inside a section is mounted by that
+     * section, not by a slot. A wildcard (`entity: '*'`) panel mounts on every form and is
+     * expected to hide itself where it does not apply.
      */
-    private allForEntity(): FormContributionRegistration[] {
+    private winnersForThisSlot(): FormContributionRegistration[] {
         const entity = this.Record?.EntityInfo ?? null;
         const provider = this.FormComponent?.ProviderToUse ?? null;
         const all = CollectFormContributionRegistrations(entity, provider, { Preview: this.preview });
-        const strict = all.filter((reg) => FormContributionEntityMatches(reg.Metadata?.entity, this.Entity));
-        this.warnOnLooseRegistrations(all, strict);
-        // A contribution drawn inside a section — standing in for fields, or placed in one — is
-        // mounted by that section, not by a slot. It still carries a slot, as every row does,
-        // so leaving it here would put the same panel on the form twice.
-        return strict.filter((reg) => !ContributionDrawsInSection(reg.Metadata));
+        this.warnOnLooseRegistrations(all);
+        return ResolveFormContributionWinners(this.Entity, all).Winners.filter((reg) => {
+            if (ContributionDrawsInSection(reg.Metadata)) return false;
+            const slot = reg.Metadata.slot;
+            if (slot === this.Slot) return true;
+            // Without a coordinator (no parent container) a panel binds to its literal slot only.
+            return !!slot && !!this.coordinator && this.coordinator.resolveSlot(slot) === this.Slot;
+        });
     }
 
     /**
@@ -301,15 +294,12 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
      * "nothing matched" would miss the likeliest case: a form where some panels are named
      * correctly and one is not, where the broken one would vanish with no warning at all.
      */
-    private warnOnLooseRegistrations(
-        all: readonly FormContributionRegistration[],
-        strict: readonly FormContributionRegistration[],
-    ): void {
+    private warnOnLooseRegistrations(all: readonly FormContributionRegistration[]): void {
         if (this.warnedLooseEntities.has(this.Entity)) return;
         const strip = (v: string) => v.replace(/^mj[:_\s]+/i, '').replace(/[\s_]+/g, '').toLowerCase();
         const loose = all.filter((reg) => {
             const name = reg.Metadata?.entity;
-            return !!name && name !== '*' && !strict.includes(reg) && strip(name) === strip(this.Entity);
+            return !!name && !FormContributionEntityMatches(name, this.Entity) && strip(name) === strip(this.Entity);
         });
         if (loose.length === 0) return;
         this.warnedLooseEntities.add(this.Entity);
@@ -318,18 +308,6 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
             `[mj-form-panel-slot] ${loose.length} BaseFormPanel registration(s) name "${names}" but the form entity is ` +
             `"${this.Entity}". Entity names must match exactly; these panels will not mount.`,
         );
-    }
-
-    private findRegistrations(slot: FormPanelSlot): FormContributionRegistration[] {
-        return this.allForEntity().filter((reg) => reg.Metadata?.slot === slot);
-    }
-
-    private findOrphans(): FormContributionRegistration[] {
-        if (!this.coordinator) return [];
-        return this.allForEntity().filter((reg) => {
-            const slot = reg.Metadata?.slot;
-            return !!slot && slot !== this.Slot && this.coordinator!.resolveSlot(slot) === this.Slot;
-        });
     }
 
     /**
@@ -362,22 +340,21 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
     }
 
     /**
-     * Wait for the contribution cache, then remount once. Falls through on a timeout so a
-     * slow or unreachable engine degrades to today's behavior (compiled panels only) rather
-     * than leaving the slot empty.
+     * Wait for the engine's load to finish, then remount once. Falls through on a timeout so a
+     * slow or unreachable engine degrades to compiled panels only rather than leaving the slot
+     * empty.
      */
     private async awaitContributionsThenRemount(): Promise<void> {
         if (this.awaitingContributions) return;
         this.awaitingContributions = true;
         try {
             const engine = InteractiveFormsEngine.Instance;
-            await Promise.race([
-                firstValueFrom(engine.Contributions$),
-                new Promise<void>((resolve) => setTimeout(resolve, FormPanelSlotComponent.READINESS_TIMEOUT_MS)),
-            ]);
+            const outcome = await FormPanelSlotComponent.loadFinishedOrTimeout(engine.LoadingSubject);
             if (!engine.ContributionsReady) {
                 // Once — the gate closes process-wide below, so this cannot become log spam.
-                LogError(`[mj-form-panel-slot] contribution cache not ready after ${FormPanelSlotComponent.READINESS_TIMEOUT_MS}ms; mounting compiled panels only from here on.`);
+                LogError(outcome === 'timeout'
+                    ? `[mj-form-panel-slot] contribution cache not ready after ${FormPanelSlotComponent.READINESS_TIMEOUT_MS}ms; mounting compiled panels only from here on.`
+                    : '[mj-form-panel-slot] contribution cache failed to load; mounting compiled panels only from here on.');
             }
         } catch (e) {
             LogError(`[mj-form-panel-slot] waiting on contributions failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -388,6 +365,21 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
             FormPanelSlotComponent.contributionGateResolved = true;
         }
         this.remount();
+    }
+
+    /** Resolves when `loading` emits false, or after the readiness timeout, whichever is first. */
+    private static loadFinishedOrTimeout(loading: Observable<boolean>): Promise<'loaded' | 'timeout'> {
+        return new Promise((resolve) => {
+            let subscription: Subscription | null = null;
+            const timer = setTimeout(() => {
+                subscription?.unsubscribe();
+                resolve('timeout');
+            }, FormPanelSlotComponent.READINESS_TIMEOUT_MS);
+            subscription = loading.pipe(filter((busy) => !busy), take(1)).subscribe(() => {
+                clearTimeout(timer);
+                resolve('loaded');
+            });
+        });
     }
 
     private unmountAll(): void {

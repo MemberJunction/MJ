@@ -298,10 +298,3 @@ export class InteractiveFormPanelComponent extends BaseFormPanel implements OnIn
         this.cdr.markForCheck();
     }
 }
-
-/** Tree-shaking guard, mirrors LoadInteractiveFormComponent. */
-export function LoadInteractiveFormPanelComponent(): void {
-    if (false as boolean) {
-        const _: unknown = InteractiveFormPanelComponent;
-    }
-}

@@ -13,14 +13,16 @@
 import type { ClassRegistration } from '@memberjunction/global';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import {
+    DEFAULT_FORM_CONTRIBUTION_SLOT,
     FormSectionCamelCase as SharedFormSectionCamelCase,
     RelatedContributionKey as SharedRelatedContributionKey,
     RelatedGridSectionKey,
     ResolveContributionWriteKey,
     StripJoinFieldBrackets as SharedStripJoinFieldBrackets,
+    type FormContributionSpec,
 } from '@memberjunction/interactive-component-types/forms';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
-import type { MJEntityFormContributionEntity } from '@memberjunction/core-entities';
+import { ContributionScopeRank, type MJEntityFormContributionEntity } from '@memberjunction/core-entities';
 import { FormPanelRegistrationMetadata, FormPanelSlot } from './base-form-panel';
 
 /** Minimum relationship shape the composer reads. Satisfied by EntityRelationshipInfo. */
@@ -154,6 +156,45 @@ export function ResolveContributionKey(meta: FormPanelRegistrationMetadata): str
 }
 
 /**
+ * A contribution spec as a registration: the one mapping for a saved row, the placement preview
+ * and the artifact viewer's preview. Ranked 0 and keyed only by the spec's own key; a caller that
+ * knows more (a row's precedence, a preview's derived key) sets it on the result.
+ */
+export function ContributionSpecToRegistration(
+    entityName: string,
+    spec: FormContributionSpec,
+    componentID?: string,
+): FormContributionRegistration {
+    const metadata: FormPanelRegistrationMetadata = {
+        entity: entityName,
+        slot: spec.slot ?? DEFAULT_FORM_CONTRIBUTION_SLOT,
+        sortKey: spec.sortKey ?? 0,
+        presentation: spec.presentation,
+    };
+    if (spec.contributionKey) metadata.contributionKey = spec.contributionKey;
+    if (spec.relatedEntity) metadata.relatedEntity = spec.relatedEntity;
+    if (spec.relatedJoinField) metadata.relatedJoinField = spec.relatedJoinField;
+    if (spec.replacesSectionKey) metadata.replacesSectionKey = spec.replacesSectionKey;
+    if (spec.replacesFieldNames?.length) metadata.replacesFieldNames = [...spec.replacesFieldNames];
+    if (spec.replacesSectionKeys?.length) metadata.replacesSectionKeys = [...spec.replacesSectionKeys];
+    if (spec.inSectionKey) metadata.inSectionKey = spec.inSectionKey;
+    if (spec.sectionPosition) metadata.sectionPosition = spec.sectionPosition;
+    if (spec.inclusion) metadata.inclusion = spec.inclusion;
+    if (spec.chromeGroup) metadata.chromeGroup = spec.chromeGroup;
+    const registration: FormContributionRegistration = {
+        Priority: 0,
+        Metadata: metadata,
+        Source: 'metadata',
+        Title: spec.title,
+        Icon: spec.icon,
+        Presentation: spec.presentation,
+        Configuration: spec.configuration ?? {},
+    };
+    if (componentID) registration.ComponentID = componentID;
+    return registration;
+}
+
+/**
  * SectionKey CodeGen emits for a related-entity panel. When more than one
  * DisplayInForm relationship points at the same entity, the join field is
  * appended so BillTo / ShipTo do not collide.
@@ -236,41 +277,44 @@ export function FormContributionEntityMatches(registeredEntity: string | null | 
     return registeredEntity === '*' || registeredEntity === formEntity;
 }
 
-function applicableRegistrations(
+/**
+ * The registrations that act on one entity's form: its own, and wildcard ones that claim nothing.
+ * A wildcard that claims a grid, a section or fields would take it from every form, so it is left out.
+ */
+function applicableRegistrations<T extends FormContributionRegistration>(
     entityName: string,
-    registrations: readonly FormContributionRegistration[],
-): FormContributionRegistration[] {
+    registrations: readonly T[],
+): T[] {
     return registrations.filter((reg) => {
-        const entity = reg.Metadata.entity;
-        if (!entity || !FormContributionEntityMatches(entity, entityName)) return false;
-        // A related claim on entity:'*' would hide that grid on every form.
-        // Claims must name the form entity.
-        // Related / field-section claims on entity:'*' would hide panels on every
-        // form. Those claims must name the form entity.
-        if ((reg.Metadata.relatedEntity || ReplacedSectionKeys(reg.Metadata).length > 0 || reg.Metadata.inSectionKey)
-            && entity === '*') {
-            return false;
-        }
-        return true;
+        const meta = reg.Metadata;
+        if (!meta?.entity || !FormContributionEntityMatches(meta.entity, entityName)) return false;
+        if (meta.entity !== '*') return true;
+        return !meta.relatedEntity && ReplacedSectionKeys(meta).length === 0 && !ContributionDrawsInSection(meta);
     });
 }
 
-function sourceRank(source: FormContributionRegistrationSource | undefined): number {
-    // Compiled registrations win ties. A metadata row replaces an installed piece only
-    // when someone set it strictly higher, which the apply flow does after the user
-    // confirms the replacement.
-    return source === 'metadata' ? 0 : 1;
+/**
+ * Tie-break rank at equal priority, higher wins. A compiled registration beats any row; between
+ * rows the narrower audience wins ({@link ContributionScopeRank}: User over Role over Global).
+ */
+function sourceRank(reg: { Source?: FormContributionRegistrationSource; Scope?: FormContributionRegistration['Scope'] }): number {
+    return reg.Source === 'metadata' ? ContributionScopeRank(reg.Scope) : Number.POSITIVE_INFINITY;
 }
 
 /**
- * Last-wins collapse by contributionKey (or derived related key).
- * Highest Priority keeps the slot; ties go to the compiled registration. Registrations
- * without a key never collapse.
+ * Collapse by key ({@link ResolveContributionKey}, compared exactly). Highest Priority wins; on a
+ * tie the compiled registration wins, and between rows the narrower scope. Registrations without
+ * a key never collapse.
  *
- * The tie-break is an explicit comparator rather than input ordering, so the result does
- * not depend on which source the caller concatenated first.
+ * The tie-break is an explicit comparator rather than input ordering, so the result does not
+ * depend on which source the caller concatenated first.
  */
-export function CollapseFormPanelRegistrations<T extends { Priority: number; Metadata: FormPanelRegistrationMetadata; Source?: FormContributionRegistrationSource }>(
+export function CollapseFormPanelRegistrations<T extends {
+    Priority: number;
+    Metadata: FormPanelRegistrationMetadata;
+    Source?: FormContributionRegistrationSource;
+    Scope?: FormContributionRegistration['Scope'];
+}>(
     registrations: readonly T[],
 ): T[] {
     const winners = new Map<string, T>();
@@ -280,7 +324,7 @@ export function CollapseFormPanelRegistrations<T extends { Priority: number; Met
         const incumbent = winners.get(key);
         const beats = !incumbent
             || reg.Priority > incumbent.Priority
-            || (reg.Priority === incumbent.Priority && sourceRank(reg.Source) > sourceRank(incumbent.Source));
+            || (reg.Priority === incumbent.Priority && sourceRank(reg) > sourceRank(incumbent));
         if (beats) {
             winners.set(key, reg);
         }
@@ -288,15 +332,51 @@ export function CollapseFormPanelRegistrations<T extends { Priority: number; Met
     return [...winners.values()];
 }
 
-function collapseRegistrations(
+/** One form's contributions after the collapse. */
+export interface ResolvedFormContributions {
+    /** The winners that act on the form: one per key, and each registration that has no key. */
+    readonly Winners: readonly FormContributionRegistration[];
+    /**
+     * The winners the rail files, by {@link ResolveContributionKey}: they name the entity rather
+     * than the wildcard, have a key, and draw a section rather than a bare strip. For a metadata
+     * row the key is also the section key its panel draws under.
+     */
+    readonly RailItems: ReadonlyMap<string, FormContributionRegistration>;
+}
+
+const resolvedMemo = new WeakMap<readonly FormContributionRegistration[], Map<string, ResolvedFormContributions>>();
+
+/**
+ * The winning registrations on one entity's form, resolved once for the whole form.
+ *
+ * Every host that draws contributions filters these winners by its own slot or section, so a row
+ * that takes a key from a compiled panel draws where the row says, and the compiled panel draws
+ * nowhere. Memoized per input list, which the collector returns as a stable reference until
+ * something changes, so a caller must not change a list after passing it. The result is shared:
+ * callers must not mutate it.
+ */
+export function ResolveFormContributionWinners(
+    entityName: string,
     registrations: readonly FormContributionRegistration[],
-): Map<string, FormContributionRegistration> {
-    const winners = new Map<string, FormContributionRegistration>();
-    for (const reg of CollapseFormPanelRegistrations(registrations)) {
-        const key = ResolveContributionKey(reg.Metadata) || `${reg.Metadata.entity}:${reg.Metadata.slot}:${reg.Priority}`;
-        winners.set(key, reg);
+): ResolvedFormContributions {
+    let byEntity = resolvedMemo.get(registrations);
+    const hit = byEntity?.get(entityName);
+    if (hit) return hit;
+    const winners = CollapseFormPanelRegistrations(applicableRegistrations(entityName, registrations));
+    const railItems = new Map<string, FormContributionRegistration>();
+    for (const reg of winners) {
+        const meta = reg.Metadata;
+        if (meta.entity !== entityName || reg.Presentation === 'bare' || meta.presentation === 'bare') continue;
+        const key = ResolveContributionKey(meta);
+        if (key) railItems.set(key, reg);
     }
-    return winners;
+    const resolved: ResolvedFormContributions = { Winners: winners, RailItems: railItems };
+    if (!byEntity) {
+        byEntity = new Map();
+        resolvedMemo.set(registrations, byEntity);
+    }
+    byEntity.set(entityName, resolved);
+    return resolved;
 }
 
 function stockWinner(relationship: FormContributionRelationship, sectionKey: string): FormContributionWinner {
@@ -355,13 +435,14 @@ function sortWinners(winners: FormContributionWinner[]): FormContributionWinner[
  */
 export function ResolveFormContributions(input: ResolveFormContributionsInput): ResolveFormContributionsResult {
     const peers = visibleRelationships(input.RelatedEntities, input.IsaChildEntityIDs);
-    const collapsed = collapseRegistrations(applicableRegistrations(input.EntityName, input.Registrations));
+    const winners = ResolveFormContributionWinners(input.EntityName, input.Registrations).Winners;
     const baked = new Set(input.BakedSectionKeys);
     const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(peers);
 
     const claimedKeys = new Set<string>();
     const registered: FormContributionWinner[] = [];
-    for (const [key, reg] of collapsed) {
+    for (const reg of winners) {
+        const key = ResolveContributionKey(reg.Metadata) || `${reg.Metadata.entity}:${reg.Metadata.slot}:${reg.Priority}`;
         const related = reg.Metadata.relatedEntity?.trim();
         const peer = related
             ? peers.find((rel) => {
@@ -373,7 +454,7 @@ export function ResolveFormContributions(input: ResolveFormContributionsInput): 
             : undefined;
         const sectionKey = peer ? sectionKeyOf(peer) : '';
         if (related) {
-            claimedKeys.add(key);
+            claimedKeys.add(RelatedContributionKey(related, reg.Metadata.relatedJoinField));
             // A claim that omits the join field covers every FK to that entity.
             if (!StripJoinFieldBrackets(reg.Metadata.relatedJoinField)) {
                 for (const match of peers.filter((rel) => rel.RelatedEntity === related)) {

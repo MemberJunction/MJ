@@ -96,6 +96,14 @@ describe('WithPlacementPreview', () => {
         expect(list.map((r) => r.RowID ?? 'preview')).toEqual(['row-2', 'preview']);
     });
 
+    it('compares keys the way the form does: exactly, after trimming', () => {
+        const list = WithPlacementPreview(
+            [saved('panel:A'), saved('panel:a', 'row-2')],
+            previewOf({ presentation: 'panel', title: 'New', contributionKey: ' panel:A ' }),
+        );
+        expect(list.map((r) => r.RowID ?? 'preview')).toEqual(['row-2', 'preview']);
+    });
+
     it('drops the saved row being edited, even when the edit changes its key', () => {
         const list = WithPlacementPreview(
             [saved('panel:A', 'row-edit'), saved('panel:B', 'row-2')],

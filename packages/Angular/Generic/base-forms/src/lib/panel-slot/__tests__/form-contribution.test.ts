@@ -3,12 +3,14 @@ import type { FormPanelRegistrationMetadata, FormPanelSlot } from '../base-form-
 import {
     CollapseFormPanelRegistrations,
     ContributionClaimedFieldNames,
+    ContributionSpecToRegistration,
     ContributionHiddenSectionKeys,
     FormContributionEntityMatches,
     FormSectionCamelCase,
     RelatedContributionKey,
     RelatedEntitySectionKey,
     ResolveContributionKey,
+    ResolveFormContributionWinners,
     ResolveFormContributions,
     StripJoinFieldBrackets,
     type FormContributionRegistration,
@@ -429,6 +431,122 @@ describe('CollapseFormPanelRegistrations — source tie-break', () => {
         const legacy = { Priority: 0, Metadata: meta };
         const row = { Priority: 0, Metadata: meta, Source: 'metadata' as const, ComponentID: 'c1' };
         expect(CollapseFormPanelRegistrations([row, legacy])).toEqual([legacy]);
+    });
+});
+
+/**
+ * Between two rows at the same precedence, the narrower audience wins: the user's own row over a
+ * role's, a role's over everyone's. A compiled panel still wins a tie with any row.
+ */
+describe('CollapseFormPanelRegistrations — scope tie-break', () => {
+    const meta: FormPanelRegistrationMetadata = { entity: PEOPLE, slot: 'after-fields' as FormPanelSlot, contributionKey: 'skip:ltv' };
+    const row = (scope: 'User' | 'Role' | 'Global', priority = 0): FormContributionRegistration =>
+        ({ Priority: priority, Metadata: meta, Source: 'metadata', Scope: scope, RowID: scope });
+
+    it('lets the user\'s own row beat an everyone row at equal precedence, whichever comes first', () => {
+        const mine = row('User');
+        const everyone = row('Global');
+        expect(CollapseFormPanelRegistrations([everyone, mine])).toEqual([mine]);
+        expect(CollapseFormPanelRegistrations([mine, everyone])).toEqual([mine]);
+    });
+
+    it('lets a role row beat an everyone row at equal precedence', () => {
+        const role = row('Role');
+        expect(CollapseFormPanelRegistrations([row('Global'), role])).toEqual([role]);
+        expect(CollapseFormPanelRegistrations([role, row('Global')])).toEqual([role]);
+    });
+
+    it('keeps the compiled panel over a row of any scope at equal precedence', () => {
+        const compiled: FormContributionRegistration = { Priority: 0, Metadata: meta, Source: 'class' };
+        expect(CollapseFormPanelRegistrations([row('User'), compiled, row('Role')])).toEqual([compiled]);
+    });
+
+    it('still lets a higher precedence win over a narrower scope', () => {
+        const everyone = row('Global', 2);
+        expect(CollapseFormPanelRegistrations([row('User', 1), everyone])).toEqual([everyone]);
+    });
+});
+
+/**
+ * One collapse for the whole form. A row that takes key K from a compiled panel may name another
+ * slot; every host filters the same winners by its own slot, so K draws once, where the row says.
+ */
+describe('ResolveFormContributionWinners', () => {
+    const compiledK: FormContributionRegistration = {
+        Priority: 3, Source: 'class',
+        Metadata: { entity: PEOPLE, slot: 'after-fields', contributionKey: 'header' },
+    };
+    const rowK: FormContributionRegistration = {
+        Priority: 4, Source: 'metadata', Scope: 'User', RowID: 'row-k',
+        Metadata: { entity: PEOPLE, slot: 'before-fields', contributionKey: 'header' },
+    };
+    const inSlot = (slot: FormPanelSlot) =>
+        ResolveFormContributionWinners(PEOPLE, [compiledK, rowK]).Winners.filter((r) => r.Metadata.slot === slot);
+
+    it('keeps only the row, which outranks the compiled panel on the key', () => {
+        expect(ResolveFormContributionWinners(PEOPLE, [compiledK, rowK]).Winners).toEqual([rowK]);
+    });
+
+    it('draws the key once, in the row\'s slot, and the compiled panel\'s slot gets nothing for it', () => {
+        expect(inSlot('before-fields')).toEqual([rowK]);
+        expect(inSlot('after-fields')).toEqual([]);
+    });
+
+    it('drops registrations for another entity and wildcard claims', () => {
+        const other = reg({ entity: 'Other', slot: 'after-fields', contributionKey: 'x' });
+        const wildcardClaim = reg({ entity: '*', slot: 'after-fields', replacesFieldNames: ['Name'] });
+        const wildcardExtra = reg({ entity: '*', slot: 'after-fields' });
+        expect(ResolveFormContributionWinners(PEOPLE, [other, wildcardClaim, wildcardExtra]).Winners).toEqual([wildcardExtra]);
+    });
+
+    it('files as rail items only this entity\'s keyed winners that draw a section', () => {
+        const bare = reg({ entity: PEOPLE, slot: 'before-fields', contributionKey: 'hero', presentation: 'bare' });
+        const wildcard = reg({ entity: '*', slot: 'after-fields', contributionKey: 'fleet' });
+        const keyless = reg({ entity: PEOPLE, slot: 'after-fields' });
+        const resolved = ResolveFormContributionWinners(PEOPLE, [compiledK, rowK, bare, wildcard, keyless]);
+        expect([...resolved.RailItems.keys()]).toEqual(['header']);
+        expect(resolved.RailItems.get('header')).toBe(rowK);
+    });
+
+    it('returns the same value for the same list, so a form resolves it once', () => {
+        const list = [compiledK, rowK];
+        expect(ResolveFormContributionWinners(PEOPLE, list)).toBe(ResolveFormContributionWinners(PEOPLE, list));
+    });
+
+    it('compares keys exactly: a key differing only in case is another key', () => {
+        const lower: FormContributionRegistration = { ...rowK, Metadata: { ...rowK.Metadata, contributionKey: 'Header' } };
+        expect(ResolveFormContributionWinners(PEOPLE, [compiledK, lower]).Winners).toHaveLength(2);
+    });
+});
+
+/** One mapping from a spec to a registration, for a saved row and for both previews. */
+describe('ContributionSpecToRegistration', () => {
+    it('carries every claim and placement the spec makes', () => {
+        const reg = ContributionSpecToRegistration(PEOPLE, {
+            presentation: 'panel', title: 'Address', slot: 'after-fields', sortKey: 5, icon: 'fa-solid fa-house',
+            replacesFieldNames: ['Street', 'City'], replacesSectionKeys: ['identity', 'profile'],
+            inSectionKey: 'profile', sectionPosition: 'end', inclusion: 'More', chromeGroup: 'details',
+            configuration: { compact: true },
+        }, 'COMP-1');
+        expect(reg).toEqual({
+            Priority: 0, Source: 'metadata', ComponentID: 'COMP-1', Title: 'Address', Icon: 'fa-solid fa-house',
+            Presentation: 'panel', Configuration: { compact: true },
+            Metadata: {
+                entity: PEOPLE, slot: 'after-fields', sortKey: 5, presentation: 'panel',
+                replacesFieldNames: ['Street', 'City'], replacesSectionKeys: ['identity', 'profile'],
+                inSectionKey: 'profile', sectionPosition: 'end', inclusion: 'More', chromeGroup: 'details',
+            },
+        });
+    });
+
+    it('keeps only the spec\'s own key and falls back to the default slot', () => {
+        const reg = ContributionSpecToRegistration(PEOPLE, {
+            presentation: 'panel', title: 'Tickets', relatedEntity: TICKETS, relatedJoinField: 'PersonID',
+        });
+        expect(reg.Metadata).toEqual({
+            entity: PEOPLE, slot: 'after-fields', sortKey: 0, presentation: 'panel', relatedEntity: TICKETS, relatedJoinField: 'PersonID',
+        });
+        expect(reg.ComponentID).toBeUndefined();
     });
 });
 

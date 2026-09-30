@@ -17,9 +17,9 @@ import { BaseFormComponent } from '../base-form-component';
 import { FormContext } from '../types/form-types';
 import { BaseFormPanel } from './base-form-panel';
 import {
-    CollapseFormPanelRegistrations,
     ContributionSectionPosition,
-    FormContributionEntityMatches,
+    ResolveFormContributionWinners,
+    type FormContributionRegistration,
 } from './form-contribution';
 import { CollectFormContributionRegistrations } from './collect-form-contribution-registrations';
 import { FORM_PLACEMENT_PREVIEW } from './placement-preview';
@@ -134,10 +134,12 @@ export class FormFieldPanelSlotComponent implements OnInit, OnChanges, OnDestroy
     }
 
     /**
-     * The winning registrations drawn at this end of this section, highest sort first: those
-     * standing in for a field the section draws, and those placed in the section by its key.
+     * The form's winning registrations drawn at this end of this section, highest sort first:
+     * those standing in for a field the section draws, and those placed in the section by its
+     * key. The collapse runs once over every registration on the form, so a key a row took from
+     * a compiled panel draws where the row says.
      */
-    private claimsForFields(): ReturnType<typeof CollapseFormPanelRegistrations> {
+    private claimsForFields(): FormContributionRegistration[] {
         const fields = new Set(this.FieldNames.filter((name) => !!name));
         const sectionKey = this.SectionKey.trim();
         if (fields.size === 0 && !sectionKey) return [];
@@ -147,21 +149,18 @@ export class FormFieldPanelSlotComponent implements OnInit, OnChanges, OnDestroy
         // Any, not every: a claim naming a field the form stopped drawing still belongs where its
         // remaining fields are, and dropping it there would leave the panel nowhere while its
         // other fields stayed hidden.
-        const matching = all.filter((reg) => {
-            if (!FormContributionEntityMatches(reg.Metadata?.entity, this.Entity)) return false;
+        const matching = ResolveFormContributionWinners(this.Entity, all).Winners.filter((reg) => {
             if (ContributionSectionPosition(reg.Metadata) !== this.Position) return false;
-            if (sectionKey && reg.Metadata?.inSectionKey?.trim() === sectionKey) return true;
-            const claimed = reg.Metadata?.replacesFieldNames ?? [];
+            if (sectionKey && reg.Metadata.inSectionKey?.trim() === sectionKey) return true;
+            const claimed = reg.Metadata.replacesFieldNames ?? [];
             return claimed.some((name) => fields.has(name.trim()));
         });
-        const collapsed = CollapseFormPanelRegistrations(matching);
-        collapsed.sort((a, b) => {
-            const aSort = a.Metadata?.sortKey ?? 0;
-            const bSort = b.Metadata?.sortKey ?? 0;
+        return matching.sort((a, b) => {
+            const aSort = a.Metadata.sortKey ?? 0;
+            const bSort = b.Metadata.sortKey ?? 0;
             if (aSort !== bSort) return bSort - aSort;
             return b.Priority - a.Priority;
         });
-        return collapsed;
     }
 
     private unmountAll(): void {

@@ -76,7 +76,6 @@ export * from './lib/panel-slot/form-field-panel-slot.component';
 export * from './lib/panel-slot/mount-form-contribution';
 export * from './lib/panel-slot/form-slot-coordinator.service';
 export * from './lib/panel-slot/form-contribution';
-export * from './lib/panel-slot/collect-form-panel-registrations';
 export * from './lib/panel-slot/collect-form-contribution-registrations';
 export * from './lib/panel-slot/panel-hides';
 export * from './lib/panel-slot/placement-preview';
