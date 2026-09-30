@@ -710,10 +710,11 @@ export function BuildDiscoveryDecisionParams(
 
 /**
  * What a discovery decision run records as its `ActualOutput`: the options, the summarized answers,
- * the chosen agent with its confidence, the `anyApplies` probability, `JudgeDecisionDiscovery`'s
- * verdict at production's threshold, whether the labelled agent was an option, the model and
- * sampling records, the call's latency and the whole discovery's, the prompt run and its cost, and
- * the error when there are no answers.
+ * the chosen agent with its raw confidence, the raw `anyApplies` probability, production's own
+ * verdict (`DecisionDiscoveryFromResult`: calibrated for the answering model, at production's
+ * threshold), whether the labelled agent was an option, the model and sampling records, the call's
+ * latency and the whole discovery's, the prompt run and its cost, and the error when there are no
+ * answers.
  *
  * A discovery that took longer than {@link DECISION_DISCOVERY_TIMEOUT_MS} is recorded as not
  * injected, with a "timed out" reason, whatever its answer: production would have given up by then.

@@ -194,6 +194,8 @@ describe('Agent-discovery scorecard', () => {
             expect(markdown).toContain("## Baseline cells (Find Candidate Agents' semantic search)");
             expect(markdown).toContain('### Injection (on time within 1500 ms, confidence ≥ T and anyApplies ≥ T)');
             expect(markdown).toContain('On time (≤ 1500 ms)');
+            // Production's rule uses calibration fitted on the eval's corpus, so its columns say when they are in-sample.
+            expect(markdown).toContain('On the corpus that calibration was fitted on, these columns are in-sample');
             expect(markdown).toContain('### Reliability: Choice confidence as P(correct)');
             expect(markdown).toContain('### Reliability: anyApplies as P(label is agent)');
             expect(markdown).toContain('Catalog drift since the corpus snapshot: 1 added, 0 removed, 2 changed.');

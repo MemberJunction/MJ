@@ -10,7 +10,7 @@
  * @module @memberjunction/testing-engine
  */
 
-import { DECISION_DISCOVERY_TIMEOUT_MS } from '@memberjunction/ai-agents';
+import { DECISION_DISCOVERY_MIN_CONFIDENCE, DECISION_DISCOVERY_TIMEOUT_MS } from '@memberjunction/ai-agents';
 import {
     DECISION_EVAL_BOOTSTRAP_RESAMPLES,
     DECISION_EVAL_CALIBRATION_FOLDS,
@@ -337,6 +337,10 @@ function renderDecisionSummary(cells: ReadonlyArray<DiscoveryEvalScorecardCell &
             num(m.Latency.Discovery.P50, 0), num(m.Latency.Discovery.P95, 0), num(m.Latency.WithinProductionTimeoutRate),
             num(m.Cost.CostPer1kUSD, 4), `${m.Counts.FailoverRuns} (${m.Counts.ExcludedFailoverRuns} excluded)`, String(m.Counts.LabelledAgentNotOffered)
         ])),
+        '',
+        `Prod.: production's rule as shipped (\`DecisionDiscoveryFromResult\`): each answering model's discovery calibration, `
+            + `a calibrated ${DECISION_DISCOVERY_MIN_CONFIDENCE} on both answers, and on time; an answer from a model with no calibration injects nothing. `
+            + 'On the corpus that calibration was fitted on, these columns are in-sample: use the out-of-fold calibrated injection table instead.',
         ''
     ];
 }
