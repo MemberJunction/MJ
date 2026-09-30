@@ -417,7 +417,7 @@ describe('finishIf', () => {
         });
 
         it('records a passing gate in shadow mode, and returns the sub-agent step unchanged, so the run continues', async () => {
-            internals._agentTypePromptParams = { finishIfMode: 'shadow' };
+            agent['_agentTypePromptParams'] = { finishIfMode: 'shadow' };
             subAgentSucceeded();
             const ask = vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(likelihoods(0.97));
 
