@@ -11,6 +11,10 @@
  * `Decision`-mode set is never auto-merge eligible (typed-decision plan §3.6, rule 8). Survivor and
  * field choices remain LLM work: see `DecisionThenPromptReasoningProvider`.
  *
+ * A failed decision is a failed reasoning call, handled as the `Prompt` mode handles one: the
+ * detector saves the set's match rows with empty LLM columns, so every candidate stays `Pending`
+ * for review and none is auto-merge eligible.
+ *
  * @module @memberjunction/ai-vector-dupe
  */
 
@@ -77,7 +81,8 @@ export class DecisionReasoningProvider extends DuplicateReasoningProvider {
 
     /**
      * Reason over a matched set with one decision call. A failed call returns `Success: false` with
-     * every candidate `Uncertain` (never `NotDuplicate`), so a failure never hides a candidate.
+     * the error and the decision's run id, and no verdicts: the detector writes no LLM columns for a
+     * failed set, so no candidate is marked `NotDuplicate` and none is merged.
      */
     public async Reason(
         input: DuplicateReasoningInput,
@@ -86,7 +91,7 @@ export class DecisionReasoningProvider extends DuplicateReasoningProvider {
         const decision = await this.DecideCandidates(input, context);
         return decision.Success
             ? this.RecommendFromDecision(decision)
-            : this.failedDecisionOutput(input, decision);
+            : this.failedDecisionOutput(decision);
     }
 
     /**
@@ -226,16 +231,9 @@ export class DecisionReasoningProvider extends DuplicateReasoningProvider {
         return { Success: false, ErrorMessage: message, Candidates: [], AIPromptRunID: runID };
     }
 
-    /** A failed decision: `Success: false`, with every candidate `Uncertain` and the error recorded. */
-    private failedDecisionOutput(input: DuplicateReasoningInput, decision: DuplicateDecisionResult): DuplicateReasoningOutput {
-        const message = `Decision failed: ${decision.ErrorMessage ?? 'unknown error'}`;
-        const output = this.failedOutput(message);
-        output.CandidateVerdicts = input.Candidates.map(candidate => ({
-            RecordID: candidate.RecordID,
-            Recommendation: 'Uncertain',
-            Confidence: null,
-            Reasoning: `${message}. Flagged for review.`
-        }));
+    /** A failed decision: `Success: false`, with the error and the decision's run id. */
+    private failedDecisionOutput(decision: DuplicateDecisionResult): DuplicateReasoningOutput {
+        const output = this.failedOutput(`Decision failed: ${decision.ErrorMessage ?? 'unknown error'}`);
         output.AIPromptRunID = decision.AIPromptRunID;
         return output;
     }
