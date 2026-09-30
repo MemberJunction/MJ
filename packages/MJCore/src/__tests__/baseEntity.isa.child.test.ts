@@ -14,6 +14,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { BaseEntity } from '../generic/baseEntity';
+import { CompositeKey } from '../generic/compositeKey';
 import { EntityInfo, EntityPermissionType } from '../generic/entityInfo';
 import { EntitySaveOptions } from '../generic/interfaces';
 import { Metadata } from '../generic/metadata';
@@ -372,16 +373,15 @@ describe('BaseEntity NewRecord clears child entity', () => {
         expect(product.GetTestChildDiscoveryDone()).toBe(false);
     });
 
-    it('NewRecord on middle entity clears its own child and propagates to parent', () => {
+    it('NewRecord on middle entity clears its own child and keeps its parent linked to it', () => {
         const { product, meeting } = createFullChain();
 
         (meeting as MJTestEntity).NewRecord();
 
-        // Meeting's child should be cleared
+        // This NewRecord is meeting's, so the webinar it used to point at is gone.
         expect(meeting.GetTestChildEntity()).toBeNull();
-        // Product's child is also cleared because NewRecord propagates up the parent chain
-        // and product.NewRecord() clears product._childEntity too
-        expect(product.GetTestChildEntity()).toBeNull();
+        // product.NewRecord() cleared the back-link; meeting puts itself back (MJ#4870).
+        expect(product.GetTestChildEntity()).toBe(meeting);
     });
 });
 
@@ -568,10 +568,13 @@ class SpyMeeting extends MJTestEntity {
     }
 }
 
-function chainBuildingProvider(): { GetEntityObject(name: string, user?: UserInfo): Promise<BaseEntity> } {
+function chainBuildingProvider(options?: { parentRow: Record<string, unknown> | null }): { GetEntityObject(name: string, user?: UserInfo): Promise<BaseEntity> } {
     const provider = {
         Entities: entities,
         CurrentUser: mockUser,
+        // Present only for AttachToParent, which loads the parent. Plain function, not vi.fn():
+        // the shared vitest config sets restoreMocks, which would strip a mock after each test.
+        ...(options ? { Load: async () => options.parentRow } : {}),
         GetEntityObject: async (name: string, user?: UserInfo): Promise<BaseEntity> => {
             const info = entities.find(entity => entity.Name.toLowerCase() === name.toLowerCase());
             if (!info) {
@@ -618,6 +621,70 @@ describe('IS-A parent built by its child links back to that child (MJ#4870)', ()
         expect(seen).toBeDefined();
         expect(seen!.value).toBe('https://example.test/room');
         expect(seen!.oldValue).toBe('https://old.example/room');
+    });
+
+    it('NewRecord keeps meeting.LeafEntity and product.LeafEntity on the webinar', async () => {
+        const provider = chainBuildingProvider();
+        const webinar = await provider.GetEntityObject('Webinars', mockUser);
+        webinar.NewRecord();
+        const meeting = webinar.ISAParent;
+        const product = meeting?.ISAParent;
+
+        expect(meeting).not.toBeNull();
+        expect(meeting!.LeafEntity).toBe(webinar);
+        expect(product!.LeafEntity).toBe(webinar);
+    });
+
+    it('a create Save lets the parent hook see the child dirty field', async () => {
+        const provider = chainBuildingProvider();
+        const webinar = await provider.GetEntityObject('Webinars', mockUser);
+        const meeting = webinar.ISAParent as SpyMeeting;
+        webinar.NewRecord();
+        // The first Set on a new field records the initial value, so it is not a change.
+        // A second Set is the edit a parent save hook has to see: old value and new value.
+        webinar.Set('PlatformURL', 'https://old.example/room');
+        webinar.Set('PlatformURL', 'https://example.test/room');
+
+        try {
+            await webinar.Save();
+        } catch {
+            // The chain has no database provider past the parent hook. The hook already ran.
+        }
+
+        expect(meeting.SeenDirty).not.toHaveLength(0);
+        const seen = meeting.SeenDirty.find(field => field.name === 'PlatformURL');
+        expect(seen).toBeDefined();
+        expect(seen!.value).toBe('https://example.test/room');
+        expect(seen!.oldValue).toBe('https://old.example/room');
+    });
+
+    it('AttachToParent keeps the parent linked to this child when the parent row loads', async () => {
+        const existingId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+        const provider = chainBuildingProvider({
+            parentRow: { ID: existingId, Name: 'Existing Product', Price: 10 },
+        });
+        const webinar = await provider.GetEntityObject('Webinars', mockUser);
+        webinar.NewRecord();
+
+        const attached = await webinar.AttachToParent(CompositeKey.FromID(existingId));
+
+        expect(attached).toBe(true);
+        expect(webinar.ISAParent!.LeafEntity).toBe(webinar);
+        expect(webinar.ISAParent!.ISAParent!.LeafEntity).toBe(webinar);
+    });
+
+    it('AttachToParent keeps the parent linked to this child when the parent row is missing', async () => {
+        const provider = chainBuildingProvider({ parentRow: null });
+        const webinar = await provider.GetEntityObject('Webinars', mockUser);
+        webinar.NewRecord();
+        const freshId = webinar.Get('ID');
+
+        const attached = await webinar.AttachToParent(CompositeKey.FromID('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'));
+
+        expect(attached).toBe(false);
+        expect(webinar.Get('ID')).toBe(freshId);
+        expect(webinar.ISAParent!.LeafEntity).toBe(webinar);
+        expect(webinar.ISAParent!.ISAParent!.LeafEntity).toBe(webinar);
     });
 
     it('a parent that allows several subtypes still returns itself as LeafEntity', async () => {
