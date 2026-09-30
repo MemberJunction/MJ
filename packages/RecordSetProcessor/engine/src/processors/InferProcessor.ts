@@ -32,6 +32,7 @@ import {
     ResolveConstraint,
     BuildEntityFieldValueLookup,
     type CacheKeyResult,
+    IsDecisionPipelineType,
     IsLLMPipelineType,
     LLM_PIPELINE_TYPE,
     renderConstraintBlock,
@@ -52,6 +53,7 @@ import {
 } from '../feature-pipeline-drivers/BaseFeaturePipelineDriver';
 import { LLMFeaturePipelineDriver } from '../feature-pipeline-drivers/LLMFeaturePipelineDriver';
 import {
+    DescribeEscalationFailure,
     FeaturePipelineEscalator,
     type BelowFloorOutput,
     type EscalatedAnswer,
@@ -276,8 +278,7 @@ export class InferProcessor implements IRecordProcessor {
         // The pipeline type's driver turns the record's context into its outputs (for LLM: the prompt run and its hooks)
         const sample = await this.computeSample({ keyInfo, records: [record] }, context, run);
         // A decision below the escalation floor escalates; any other answer is validated and recorded as it is
-        const outcomes = await this.escalateBelowFloor([sample], context);
-        const finalized = await this.finalizeSample(sample, outcomes, context, run);
+        const [finalized] = await this.finalizeSamples([sample], context, run);
         return finalized.Result;
     }
 
@@ -317,8 +318,7 @@ export class InferProcessor implements IRecordProcessor {
             };
         }
         if (sample.BelowFloor.length > 0) {
-            const outcome = outcomes.get(sample.Sample.RecordID);
-            return this.finalizeEscalated(sample.Sample, context, outcome, computed.AIPromptRunID);
+            return this.finalizeEscalated(sample, computed, outcomes.get(sample.Sample.RecordID), context, run);
         }
         const result = await this.finalizeComputed(sample.Sample, context, run, sample.Group.keyInfo, computed);
         return { Result: result, History: this.missFanOutHistory(result, context, run) };
@@ -592,9 +592,13 @@ export class InferProcessor implements IRecordProcessor {
     // Escalation (DataFeatureSpec.Escalation): below-floor decisions re-run through an LLM pipeline
     // -------------------------------------------------------------------------------------------------
 
-    /** The escalation of below-floor decisions, when the spec has `Escalation`; created once. */
+    /**
+     * The escalation of below-floor decisions, when the spec is a Decision pipeline's and has `Escalation`;
+     * created once. `ValidateSpec` already refuses `Escalation` on any other type, but a processor built
+     * directly from a spec skips it, and an LLM pipeline returns no confidence, so every record would escalate.
+     */
     private get escalator(): FeaturePipelineEscalator | undefined {
-        if (!this.spec?.Escalation) {
+        if (!this.spec?.Escalation || !IsDecisionPipelineType(this.spec.PipelineType)) {
             return undefined;
         }
         this._escalator ??= new FeaturePipelineEscalator(
@@ -640,16 +644,30 @@ export class InferProcessor implements IRecordProcessor {
         for (const group of groups) {
             samples.push(await this.computeSample(group, context, run));
         }
-        const outcomes = await this.escalateBelowFloor(samples, context);
-        for (const sample of samples) {
-            const finalized = await this.finalizeSample(sample, outcomes, context, run);
-            await this.fanOutGroupResult(sample.Group, sample.Sample, finalized.Result, finalized.History, results);
+        const finalized = await this.finalizeSamples(samples, context, run);
+        for (let i = 0; i < samples.length; i++) {
+            await this.fanOutGroupResult(samples[i].Group, samples[i].Sample, finalized[i].Result, finalized[i].History, results);
         }
     }
 
     /**
-     * Escalates, together, the samples whose decision was below the floor, and counts and logs the records
-     * that escalated. Returns each escalated sample's outcome by record ID; empty when none escalated.
+     * Escalates the below-floor samples together, then finalizes every sample, in order. The escalations are
+     * counted and logged by each escalated sample's final result, so an escalated answer that fails this
+     * pipeline's own constraints counts as failed.
+     */
+    private async finalizeSamples(samples: ComputedSample[], context: RecordProcessorContext, run: PipelineRunState): Promise<FinalizedSample[]> {
+        const outcomes = await this.escalateBelowFloor(samples, context);
+        const finalized: FinalizedSample[] = [];
+        for (const sample of samples) {
+            finalized.push(await this.finalizeSample(sample, outcomes, context, run));
+        }
+        this.countEscalations(samples, finalized);
+        return finalized;
+    }
+
+    /**
+     * Escalates, together, the samples whose decision was below the floor. Returns each escalated sample's
+     * outcome by record ID; empty when none escalated.
      */
     private async escalateBelowFloor(samples: ComputedSample[], context: RecordProcessorContext): Promise<Map<string, EscalationOutcome>> {
         const escalator = this.escalator;
@@ -657,21 +675,28 @@ export class InferProcessor implements IRecordProcessor {
         if (!escalator || escalating.length === 0) {
             return new Map<string, EscalationOutcome>();
         }
-        const outcomes = await escalator.Escalate(escalating.map((s) => ({ Record: s.Sample, BelowFloor: s.BelowFloor })), context);
-        this.countEscalations(escalating, outcomes, escalator);
-        return outcomes;
+        return escalator.Escalate(escalating.map((s) => ({ Record: s.Sample, BelowFloor: s.BelowFloor })), context);
     }
 
-    /** Adds a pass's escalated records (each group's records, fan-out included) to the run's count, and logs it. */
-    private countEscalations(escalating: ComputedSample[], outcomes: Map<string, EscalationOutcome>, escalator: FeaturePipelineEscalator): void {
+    /**
+     * Adds a pass's escalated records (each group's records, fan-out included) to the run's count, and logs
+     * it, counting as failed each escalated group whose final result failed.
+     */
+    private countEscalations(samples: ComputedSample[], finalized: FinalizedSample[]): void {
+        const escalator = this.escalator;
         let escalated = 0;
         let failed = 0;
-        for (const sample of escalating) {
-            const outcome = outcomes.get(sample.Sample.RecordID);
+        samples.forEach((sample, i) => {
+            if (sample.BelowFloor.length === 0) {
+                return;
+            }
             escalated += sample.Group.records.length;
-            if (!outcome || 'ErrorMessage' in outcome) {
+            if (finalized[i].Result.Status !== 'Succeeded') {
                 failed += sample.Group.records.length;
             }
+        });
+        if (!escalator || escalated === 0) {
+            return;
         }
         this.escalatedRecordCount += escalated;
         LogStatus(
@@ -685,15 +710,31 @@ export class InferProcessor implements IRecordProcessor {
      * with both reasons, and the low-confidence decision is never cached, recorded or returned. A successful
      * one replaces the decision: the target's validated payload, in this pipeline's shape, is recorded in
      * history under the target's prompt, prompt run, hashes and cache entry, with the escalation note as the
-     * history row's reasoning. It is not written to this pipeline's Dedup Cache, which holds only answers
-     * the decision model gave with confidence; the target caches its own answers.
+     * history row's reasoning, and the record's result names the target's prompt with that prompt run and
+     * hash, so write-back's `$run` provenance describes one run. It is not written to this pipeline's Dedup
+     * Cache, which holds only answers the decision model gave with confidence; the target caches its own answers.
+     *
+     * The target validated its answer against its own constraints only, and those may be looser than this
+     * pipeline's (a wider enum, or none). So the answer, in this pipeline's shape, is validated again against
+     * this pipeline's own output constraints, with each output's OnViolation policy, exactly as a decision's
+     * answer is: `fail` fails the record with both reasons, `null` and `coerce-to-other` apply. A value
+     * outside the Decision pipeline's domain is never recorded or written back.
+     *
+     * The record paid for two model calls, and `MJ: Feature Values` is what links a prompt run to the process
+     * run. So before the answer's row, one more history row records the superseded decision: its prompt run,
+     * prompt, hashes and confidence, with no values (the low-confidence answer is never recorded as a value)
+     * and a reasoning that says it was superseded. It is written once per decision call: a key group's other
+     * records get only the answer's row.
      */
     private async finalizeEscalated(
-        record: RecordRef,
-        context: RecordProcessorContext,
+        sample: ComputedSample,
+        decision: FeaturePipelineComputeSuccess,
         outcome: EscalationOutcome | undefined,
-        decisionRunID: string | undefined
+        context: RecordProcessorContext,
+        run: PipelineRunState
     ): Promise<FinalizedSample> {
+        const record = sample.Sample;
+        const decisionRunID = decision.AIPromptRunID;
         if (!outcome) {
             const message = `Escalation to Feature Pipeline '${this.spec?.Escalation?.PipelineID}' returned no outcome`;
             return { Result: { Status: 'Failed', ErrorMessage: message, AIPromptRunID: decisionRunID } };
@@ -701,7 +742,14 @@ export class InferProcessor implements IRecordProcessor {
         if ('ErrorMessage' in outcome) {
             return { Result: { Status: 'Failed', ErrorMessage: outcome.ErrorMessage, AIPromptRunID: outcome.AIPromptRunID ?? decisionRunID } };
         }
-        const payload = this.projectEscalatedPayload(outcome);
+        const checked = await this.validateOutputs(this.spec?.Outputs ?? [], this.projectEscalatedPayload(outcome), record, context);
+        if (!checked.valid) {
+            const reason = `its answer is outside this Decision pipeline's own constraints: ${checked.errorMessage ?? 'Constraint violation'}`;
+            const message = DescribeEscalationFailure(outcome.EscalationReason, outcome.PipelineName, reason);
+            return { Result: { Status: 'Failed', ErrorMessage: message, AIPromptRunID: outcome.AIPromptRunID ?? decisionRunID } };
+        }
+        const payload = checked.payload;
+        await this.recordSupersededDecision(record, decision, outcome, context, run);
         const history: GroupHistory = {
             context,
             payload,
@@ -717,12 +765,42 @@ export class InferProcessor implements IRecordProcessor {
             Result: {
                 Status: 'Succeeded',
                 ResultPayload: payload,
+                PromptID: outcome.PromptID,
                 AIPromptRunID: outcome.AIPromptRunID,
                 PromptVersionHash: outcome.PromptVersionHash,
                 FeatureValueCacheID: outcome.FeatureValueCacheID,
             },
             History: history,
         };
+    }
+
+    /**
+     * Records the history row of a decision an escalation superseded: the decision model's prompt run and
+     * confidence under this pipeline's prompt and hashes, no values, and a reasoning saying it was superseded.
+     * Nothing is recorded when the decision has no prompt run to link.
+     */
+    private async recordSupersededDecision(
+        record: RecordRef,
+        decision: FeaturePipelineComputeSuccess,
+        outcome: EscalatedAnswer,
+        context: RecordProcessorContext,
+        run: PipelineRunState
+    ): Promise<void> {
+        if (!decision.AIPromptRunID) {
+            return;
+        }
+        await this.recordFeatureValuesHistory({
+            record,
+            context,
+            payload: null,
+            omitValues: true,
+            reasoning: outcome.SupersededNote,
+            promptID: run.Prompt.ID,
+            promptVersionHash: run.PromptVersionHash,
+            constraintHash: run.ConstraintHash,
+            aiPromptRunID: decision.AIPromptRunID,
+            ...(decision.Confidence ? { outputConfidence: decision.Confidence } : {}),
+        });
     }
 
     /**
@@ -801,12 +879,14 @@ export class InferProcessor implements IRecordProcessor {
     /**
      * Records historical audit rows in MJ: Feature Values for all outputs on a record.
      * `outputConfidence` (from a driver that produces confidence) sets each output's confidence by
-     * output name, ahead of the single `confidence`. Records nothing when {@link WritesHistory} is off.
+     * output name, ahead of the single `confidence`. `omitValues` records every output's value as null,
+     * whatever the payload holds (a superseded decision's row). Records nothing when {@link WritesHistory} is off.
      */
     protected async recordFeatureValuesHistory(params: {
         record: RecordRef;
         context: RecordProcessorContext;
         payload: unknown;
+        omitValues?: boolean;
         reasoning?: string | null;
         confidence?: number | null;
         outputConfidence?: Record<string, number>;
@@ -825,7 +905,7 @@ export class InferProcessor implements IRecordProcessor {
         const sources = { $: rawPayload };
 
         for (const output of this.spec.Outputs) {
-            const val = resolveMappingRef(output.Ref, sources);
+            const val = params.omitValues ? null : resolveMappingRef(output.Ref, sources);
             outputsList.push({
                 featureName: output.Name,
                 value: val !== undefined ? val : null,
