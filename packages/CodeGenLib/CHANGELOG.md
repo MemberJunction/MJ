@@ -1,5 +1,137 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 17cc774: Capture a numeric or single-value `IN (...)` CHECK constraint as an entity field value list (#3978).
+
+  SQL Server renders a numeric or `bit` `IN (...)` CHECK with unquoted literals —
+  `([Level]=(3) OR [Level]=(2) OR [Level]=(1))` — where a string list comes back quoted.
+  `parseCheckConstraintValues` matched only the quoted form, so a numeric IN-list produced no
+  `EntityFieldValue` rows and no `ValueListType='List'`: the field lost its validation _and_ its
+  dropdown in Explorer, and with AI codegen off the constraint yielded nothing at all. The same
+  regexes required at least two values, so a single-value list was never captured for any type.
+
+  CodeGen now matches both literal forms and single-value lists, sorts an all-numeric list
+  numerically, and returns no list rather than an empty one. Two field shapes are excluded after
+  parsing, each no broader than its reason: a `bit` field (`IN (0,1)` is vacuous and `= 1` is a
+  validator, not a dropdown) and a primary key carrying a _single_ value (`CHECK (ID=1)` is a
+  single-row-table guard). A multi-value list on a natural-key primary key is still captured, as
+  it was before.
+
+  `@memberjunction/core` compares a numeric column's value list by numeric value rather than by
+  string form, so `CHECK (Price IN (0.50, 1.00))` accepts the runtime value `1`. Without it the
+  CodeGen change would make `Validate()` refuse values the database accepts.
+
+  **If you regenerate against a schema that has one of these constraints, the generated property
+  narrows.** A value list emits a literal union, so a numeric list now types the property as
+  `1 | 2 | 3` (and its Zod schema as `z.union([z.literal(1), ...])`) instead of `number` — which
+  means `entity.Level = someNumber` stops compiling until the value is a literal or the variable is
+  typed to the union. This is what string value lists have always done; it is newly reachable for
+  numeric and single-value constraints. Nothing in MJ's own generated code changes: across every
+  migration MJ ships there are 292 string `IN (...)` CHECKs and no numeric or single-value ones.
+  `ValueListType='ListOrUserEntry'` is unaffected — it keeps the widened base type.
+
+  **SQL Server only.** PostgreSQL renders these constraints differently (`ARRAY[1, 2, 3]` for a
+  numeric list, and spaced, cast equality such as `((one = 7))` for a single-value one), and
+  `parsePgArrayConstraint` still extracts quoted elements only — so on PostgreSQL a numeric or
+  single-value `IN (...)` CHECK continues to produce no value list. Tracked as #4713.
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [ddcd666]
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [15a4333]
+- Updated dependencies [48f77ea]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [5da3ad2]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [9b8a84e]
+- Updated dependencies [c261eb8]
+- Updated dependencies [520bd09]
+- Updated dependencies [520bd09]
+- Updated dependencies [307da67]
+- Updated dependencies [7110019]
+- Updated dependencies [a7da50b]
+- Updated dependencies [1d43161]
+- Updated dependencies [7110019]
+- Updated dependencies [f2a4171]
+- Updated dependencies [e482249]
+- Updated dependencies [37e2f6b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [351ba9f]
+  - @memberjunction/aiengine@6.2.0-edge.1
+  - @memberjunction/ai@6.2.0-edge.1
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.1
+  - @memberjunction/ai-core-plus@6.2.0-edge.1
+  - @memberjunction/ai-prompts@6.2.0-edge.1
+  - @memberjunction/core-entities-server@6.2.0-edge.1
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/actions-base@6.2.0-edge.1
+  - @memberjunction/actions@6.2.0-edge.1
+  - @memberjunction/config@6.2.0-edge.1
+  - @memberjunction/external-data-source-mongodb@6.2.0-edge.1
+  - @memberjunction/external-data-sources@6.2.0-edge.1
+  - @memberjunction/generic-database-provider@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/postgresql-dataprovider@6.2.0-edge.1
+  - @memberjunction/query-processor@6.2.0-edge.1
+  - @memberjunction/sql-dialect@6.2.0-edge.1
+  - @memberjunction/sql-parser@6.2.0-edge.1
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.1
+  - @memberjunction/external-data-source-databricks@6.2.0-edge.1
+  - @memberjunction/external-data-source-mysql@6.2.0-edge.1
+  - @memberjunction/external-data-source-oracle@6.2.0-edge.1
+  - @memberjunction/external-data-source-postgres@6.2.0-edge.1
+  - @memberjunction/external-data-source-sqlserver@6.2.0-edge.1
+  - @memberjunction/external-data-source-snowflake@6.2.0-edge.1
+  - @memberjunction/cli-core@6.2.0-edge.1
+
 ## 6.2.0-edge.0
 
 ### Minor Changes

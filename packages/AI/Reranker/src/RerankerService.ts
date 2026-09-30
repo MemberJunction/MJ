@@ -135,6 +135,9 @@ export class RerankerService extends BaseSingleton<RerankerService> {
      * Get or create a reranker instance for the specified model.
      * Caches instances for reuse across multiple calls.
      *
+     * @deprecated Builds a driver directly, so the call gets no failover and writes no
+     * `MJ: AI Prompt Runs` row. Use {@link AIRerankerRunner.RunRerank}, which `RerankNotes` uses.
+     *
      * @param modelID - ID of the AIModel with type='Reranker'
      * @param contextUser - User context for operations
      * @param promptID - Prompt ID for prompt-backed rerankers (`LLMReranker`, `DecisionReranker`), which require one

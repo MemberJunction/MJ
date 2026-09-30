@@ -64,6 +64,12 @@ describe('FlowExecutionState', () => {
     });
 });
 
+describe('FlowAgentType — action circuit breaker opt-out', () => {
+    it('opts out of the run-scoped action circuit breaker: graph-chosen retries must not be blocked and no model reads a directive', () => {
+        expect(new FlowAgentType().UsesActionCircuitBreaker).toBe(false);
+    });
+});
+
 describe('FlowAgentType', () => {
     let agent: FlowAgentType;
 

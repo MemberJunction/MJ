@@ -9,8 +9,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MJGlobal } from '@memberjunction/global';
 import { Metadata, UserInfo } from '@memberjunction/core';
-import { BaseReranker } from '@memberjunction/ai';
-import type { RerankParams, RerankResult } from '@memberjunction/ai';
+import { BaseReranker, ModelUsage } from '@memberjunction/ai';
+import type { RerankParams, RerankResponse, RerankResult } from '@memberjunction/ai';
+import type { AIPromptRunResult } from '@memberjunction/ai-core-plus';
+import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIRerankerRunner } from '../AIRerankerRunner';
 import type { AIRerankParams } from '../rerank-runner.types';
 import { RerankerService } from '../RerankerService';
@@ -93,10 +95,22 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 // ---------------------------------------------------------------------------
 // A controllable driver
 // ---------------------------------------------------------------------------
-/** Scores documents in the order given (0.9, 0.4, ...), or fails for the model names listed. */
+/**
+ * Scores documents in the order given (0.9, 0.4, ...), or fails for the model names listed. When
+ * `Usage` is set, every response reports it, as a driver that knows its cost does.
+ */
 class MockReranker extends BaseReranker {
     public static Calls: string[] = [];
     public static FailingModels = new Set<string>();
+    public static Usage: ModelUsage | undefined;
+
+    public override async Rerank(params: RerankParams): Promise<RerankResponse> {
+        const response = await super.Rerank(params);
+        if (MockReranker.Usage) {
+            response.Usage = MockReranker.Usage;
+        }
+        return response;
+    }
 
     protected async doRerank(params: RerankParams): Promise<RerankResult[]> {
         MockReranker.Calls.push(this.ModelName);
@@ -130,7 +144,14 @@ class FakePromptRun {
     public ErrorMessage?: string;
     public TokensPrompt?: number | null;
     public Cost?: number | null;
+    public DescendantCost?: number | null;
+    public TotalCost?: number | null;
+    public CostCurrency?: string | null;
     public LatestResult: { CompleteMessage: string } | null = null;
+    /** Whether a Save has succeeded, as `BaseEntity.IsSaved` reports it. */
+    public IsSaved = false;
+    /** When set, every Save fails, as the INSERT of a run with no VendorID does. */
+    public static FailSaves = false;
     [key: string]: unknown;
 
     public NewRecord(): boolean {
@@ -139,6 +160,11 @@ class FakePromptRun {
     }
 
     public async Save(): Promise<boolean> {
+        if (FakePromptRun.FailSaves) {
+            this.LatestResult = { CompleteMessage: 'Vendor cannot be null' };
+            return false;
+        }
+        this.IsSaved = true;
         return true;
     }
 }
@@ -265,6 +291,8 @@ beforeEach(() => {
     promptRuns = [];
     MockReranker.Calls = [];
     MockReranker.FailingModels = new Set();
+    MockReranker.Usage = undefined;
+    FakePromptRun.FailSaves = false;
     stubDriverFactory();
     // BaseReranker logs a driver's exception to console.error; keep the test output clean.
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -441,6 +469,143 @@ describe('AIRerankerRunner', () => {
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toMatch(/is type "LLM", but this runner requires "Reranker"/);
     });
+
+    describe("a rerank answered through a child run carries that run's cost", () => {
+        it("an LLMReranker built by the runner runs its chat prompt as a child of the rerank's run", async () => {
+            // The real ClassFactory, so the runner builds a real LLMReranker.
+            vi.mocked(MJGlobal.Instance.ClassFactory.TryCreateInstance).mockRestore();
+            const executePrompt = vi.spyOn(AIPromptRunner.prototype, 'ExecutePrompt').mockResolvedValue(
+                chatRunResult({
+                    success: true,
+                    result: [{ index: 1, score: 0.8 }, { index: 0, score: 0.3 }],
+                    promptTokens: 300,
+                    completionTokens: 20,
+                    promptRun: asPromptRun({ Cost: 0.0007, DescendantCost: null, TotalCost: 0.0007, CostCurrency: 'USD' }),
+                })
+            );
+            const runner = newRunner();
+
+            const result = await runner.RunRerank(rerankParams({ ModelID: LLM_MODEL_ID }));
+            await runner.WaitForPendingPromptRunSaves();
+
+            expect(result.Success).toBe(true);
+            expect(result.DriverClass).toBe(LLM_DRIVER);
+            expect(result.Response?.results.map(r => r.id)).toEqual(['doc-2', 'doc-1']);
+            expect(executePrompt).toHaveBeenCalledTimes(1);
+            expect(executePrompt.mock.calls[0][0].parentPromptRunId).toBe(promptRuns[0].ID);
+            // The chat run's cost is the rerank run's descendant cost, not its own.
+            expect(promptRuns[0].DescendantCost).toBe(0.0007);
+            expect(promptRuns[0].TotalCost).toBe(0.0007);
+            expect(promptRuns[0].Cost).toBeUndefined();
+            expect(result.Response?.Usage?.cost).toBe(0.0007);
+        });
+
+        it("leaves the chat run unlinked when the rerank run's INSERT failed, so the chat run can still be saved", async () => {
+            // The seeded LLM Reranker model has no model-vendor row, so its rerank run fails validation. A
+            // chat run naming that missing row as its ParentID would fail its foreign key too.
+            FakePromptRun.FailSaves = true;
+            vi.mocked(MJGlobal.Instance.ClassFactory.TryCreateInstance).mockRestore();
+            const executePrompt = vi.spyOn(AIPromptRunner.prototype, 'ExecutePrompt').mockResolvedValue(
+                chatRunResult({
+                    success: true,
+                    result: [{ index: 1, score: 0.8 }, { index: 0, score: 0.3 }],
+                    promptRun: asPromptRun({ Cost: 0.0007, DescendantCost: null, TotalCost: 0.0007, CostCurrency: 'USD' }),
+                })
+            );
+            const runner = newRunner();
+
+            const result = await runner.RunRerank(rerankParams({ ModelID: LLM_MODEL_ID }));
+            await runner.WaitForPendingPromptRunSaves();
+
+            expect(result.Success).toBe(true);
+            expect(executePrompt).toHaveBeenCalledTimes(1);
+            expect(executePrompt.mock.calls[0][0].parentPromptRunId).toBeUndefined();
+            expect(result.Response?.Usage?.cost).toBe(0.0007);
+        });
+
+        it('for LLMReranker the runner records DescendantCost and TotalCost, and not Cost', async () => {
+            MockReranker.Usage = new ModelUsage(120, 45, 0.002, 'USD');
+            const runner = newRunner();
+
+            const result = await runner.RunRerank(rerankParams({ ModelID: LLM_MODEL_ID }));
+            await runner.WaitForPendingPromptRunSaves();
+
+            expect(result.DriverClass).toBe(LLM_DRIVER);
+            expect(promptRuns[0].DescendantCost).toBe(0.002);
+            expect(promptRuns[0].TotalCost).toBe(0.002);
+            expect(promptRuns[0].Cost).toBeUndefined();
+            expect(promptRuns[0].CostCurrency).toBe('USD');
+            // The tokens are the chat run's, recorded on that run.
+            expect(promptRuns[0].TokensPrompt).toBeUndefined();
+        });
+
+        it("for LLMReranker the runner records a failed call's cost, because the call still cost money", async () => {
+            setDefaultPrompt('FailoverStrategy', 'None');
+            MockReranker.FailingModels.add('llm-rerank-model');
+            MockReranker.Usage = new ModelUsage(120, 45, 0.002, 'USD');
+            const runner = newRunner();
+
+            const result = await runner.RunRerank(rerankParams({ ModelID: LLM_MODEL_ID }));
+            await runner.WaitForPendingPromptRunSaves();
+
+            expect(result.Success).toBe(false);
+            expect(promptRuns[0].Status).toBe('Failed');
+            expect(promptRuns[0].DescendantCost).toBe(0.002);
+            expect(promptRuns[0].TotalCost).toBe(0.002);
+            expect(promptRuns[0].Cost).toBeUndefined();
+        });
+
+        it('for a driver that calls its model directly the runner records Cost', async () => {
+            MockReranker.Usage = new ModelUsage(0, 0, 0.002, 'USD');
+            const runner = newRunner();
+
+            const result = await runner.RunRerank(rerankParams());
+            await runner.WaitForPendingPromptRunSaves();
+
+            expect(result.DriverClass).toBe(NATIVE_DRIVER);
+            expect(promptRuns[0].Cost).toBe(0.002);
+            expect(promptRuns[0].TotalCost).toBe(0.002);
+            expect(promptRuns[0].DescendantCost).toBeUndefined();
+            expect(promptRuns[0].CostCurrency).toBe('USD');
+        });
+
+        it('with no cost the runner records neither Cost nor DescendantCost', async () => {
+            MockReranker.Usage = new ModelUsage(120, 45);
+            const runner = newRunner();
+
+            const result = await runner.RunRerank(rerankParams({ ModelID: LLM_MODEL_ID }));
+            await runner.WaitForPendingPromptRunSaves();
+
+            expect(result.Success).toBe(true);
+            expect(promptRuns[0].Cost).toBeUndefined();
+            expect(promptRuns[0].DescendantCost).toBeUndefined();
+            expect(promptRuns[0].TotalCost).toBeUndefined();
+            expect(promptRuns[0].CostCurrency).toBeUndefined();
+        });
+
+        it("the rerank run's INSERT lands before an LLMReranker driver runs, because its chat run names it as parent", async () => {
+            const runner = newRunner();
+            const waitForSaves = vi.spyOn(runner, 'WaitForPendingPromptRunSaves');
+            const rerank = vi.spyOn(MockReranker.prototype, 'Rerank');
+
+            const result = await runner.RunRerank(rerankParams({ ModelID: LLM_MODEL_ID }));
+
+            expect(result.DriverClass).toBe(LLM_DRIVER);
+            expect(waitForSaves).toHaveBeenCalledTimes(1);
+            expect(rerank).toHaveBeenCalledTimes(1);
+            expect(waitForSaves.mock.invocationCallOrder[0]).toBeLessThan(rerank.mock.invocationCallOrder[0]);
+        });
+
+        it('a driver that calls its model directly does not wait for the run to be saved', async () => {
+            const runner = newRunner();
+            const waitForSaves = vi.spyOn(runner, 'WaitForPendingPromptRunSaves');
+
+            const result = await runner.RunRerank(rerankParams());
+
+            expect(result.DriverClass).toBe(NATIVE_DRIVER);
+            expect(waitForSaves).not.toHaveBeenCalled();
+        });
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -513,3 +678,19 @@ describe('RerankerService.RerankNotes through the runner', () => {
         )).rejects.toThrow('Cohere is down');
     });
 });
+
+/** The chat prompt's result fields an LLMReranker reads. */
+type ChatRunResultFields = Pick<AIPromptRunResult, 'success' | 'result' | 'promptTokens' | 'completionTokens' | 'promptRun'>;
+
+/** The seam onto the full `AIPromptRunResult` that `AIPromptRunner.ExecutePrompt` returns. */
+function chatRunResult(fields: ChatRunResultFields): AIPromptRunResult {
+    return fields as AIPromptRunResult;
+}
+
+/** The prompt-run entity an `AIPromptRunResult` carries. */
+type ChatPromptRun = NonNullable<AIPromptRunResult['promptRun']>;
+
+/** The seam onto the full prompt-run entity, from the cost columns LLMReranker reads. */
+function asPromptRun(run: Pick<ChatPromptRun, 'Cost' | 'DescendantCost' | 'TotalCost' | 'CostCurrency'>): ChatPromptRun {
+    return run as ChatPromptRun;
+}
