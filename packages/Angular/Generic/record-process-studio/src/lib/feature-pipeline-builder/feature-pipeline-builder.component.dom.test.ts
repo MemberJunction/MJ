@@ -718,10 +718,10 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     });
 
     it('loads nothing when the pipeline has no entity, and escapes the entity ID in the filter', async () => {
-      const filters: string[] = [];
+      const filters: Array<RunViewParams['ExtraFilter']> = [];
       const provider = providerWithRunView(async (params) => {
         if (params.EntityName === 'MJ: Record Processes') {
-          filters.push(params.ExtraFilter ?? '');
+          filters.push(params.ExtraFilter);
         }
         return runViewResult([]);
       });
