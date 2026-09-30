@@ -202,6 +202,32 @@ Hierarchical credential resolution for API keys:
 
 When a model fails due to rate limiting, authentication errors, or other transient issues, the runner can automatically retry with alternate models from the selection candidates.
 
+### Media Runners
+
+Non-chat models run through runners built on the same `BaseModelRunner`, so they get the same model selection, credential resolution, failover and `MJ: AI Prompt Runs` row as a chat prompt. Each requires one model type, and uses a default carrier prompt, found by name, unless the caller passes a `PromptID`. A `ModelID` pins the model, and failover then stays within its vendors. The run row never holds media bytes.
+
+| Runner | Model type | Method | Default prompt | Usage recorded |
+|---|---|---|---|---|
+| `AIImageGenerationRunner` | `Image Generator` | `RunImageGeneration`, `RunImageEdit` | `Default Image Generation` | the driver's, else images returned (`Images`) |
+| `AITextToSpeechRunner` | `TTS` | `RunTextToSpeech` | `Default Text To Speech` | the driver's, else characters sent (`Characters`) |
+
+`AITextToSpeechRunner`, and the runners after it, share their lifecycle through `BaseMediaRunner`. It follows the carrier prompt's `FailoverStrategy`, narrowing `SameModelDifferentVendor` to the selected model's vendors. A driver that reports a failure with only a message gets the vendor's classification of that message, so an outage fails over and a bad request does not.
+
+Usage is recorded with `BaseModelRunner.ApplyUsageToRunRecord`, which writes non-token quantities as `InputUnitsUsed` / `OutputUnitsUsed` with the `MJ: AI Usage Types` row that names their measure. The runners never set a cost. The row's save prices it from the model's cost rows, and declines when no price unit type claims the measure, as none yet does for `Characters`.
+
+```typescript
+import { AITextToSpeechRunner } from '@memberjunction/ai-prompts';
+
+const result = await new AITextToSpeechRunner().RunTextToSpeech({
+  text: 'Your report is ready.',
+  voice: 'alloy',
+  ContextUser: contextUser,
+});
+if (result.Success) {
+  const audio = result.SpeechResult?.data; // the run row describes the audio but never stores it
+}
+```
+
 ## Usage
 
 ### Basic Prompt Execution

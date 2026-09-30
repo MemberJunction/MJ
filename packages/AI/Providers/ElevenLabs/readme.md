@@ -43,7 +43,7 @@ For the full architecture (topologies, co-agent model, capability matrix across 
 
 ## Audio generation — `ElevenLabsAudioGenerator`
 
-This driver implements `BaseTextToSpeech` to provide high-quality voice synthesis, voice management, and pronunciation dictionary support. It still extends the deprecated `BaseAudioGenerator`, so existing callers keep working.
+This driver implements `BaseTextToSpeech` to provide high-quality voice synthesis, voice management, and pronunciation dictionary support. It still extends the deprecated `BaseAudioGenerator`, so existing callers keep working. `AITextToSpeechRunner` in `@memberjunction/ai-prompts` runs it with model selection, failover and an `MJ: AI Prompt Runs` row.
 
 ## Architecture
 
