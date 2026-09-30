@@ -15,7 +15,13 @@ export {
     DECISION_THEN_PROMPT_REASONING_PROVIDER_KEY,
 } from './reasoning/DuplicateReasoningProvider';
 export { PromptReasoningProvider } from './reasoning/PromptReasoningProvider';
-export { DecisionReasoningProvider } from './reasoning/DecisionReasoningProvider';
+export {
+    DecisionReasoningProvider,
+    DUPLICATE_DECISION_CALIBRATION,
+    DuplicateDecisionCalibrationFor,
+    CalibratedDuplicateProbability,
+    UNNAMED_DECISION_MODEL,
+} from './reasoning/DecisionReasoningProvider';
 export type { DuplicateCandidateProbability, DuplicateDecisionResult } from './reasoning/DecisionReasoningProvider';
 export { DecisionThenPromptReasoningProvider } from './reasoning/DecisionThenPromptReasoningProvider';
 export { MatchedSetDeltaBuilder } from './reasoning/MatchedSetDeltaBuilder';

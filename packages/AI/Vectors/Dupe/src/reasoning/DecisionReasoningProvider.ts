@@ -52,8 +52,13 @@ export interface DuplicateCandidateProbability {
  * the new record"), per decision model, keyed by the name MJ gives the model that answered
  * (`modelInfo.modelName`). A model's raw probabilities are not calibrated: Jev ranks candidates almost
  * perfectly (AUC 0.99) but its raw probabilities run high for similar records that are not
- * duplicates. A model with no entry gives no probability, and its candidates are flagged, since a
- * missing probability fails toward inclusion.
+ * duplicates.
+ *
+ * A model with no entry gives no calibrated probability, since its raw one can't be banded. The
+ * entry check then flags nothing, as it does for a failed decision; batch `Decision` mode bands its
+ * candidates `Uncertain` for review; and `DecisionThenPrompt` sends them all to the prompt. The
+ * provider logs the missing calibration once per model. An app that binds another decision model
+ * supplies its calibration by overriding {@link DecisionReasoningProvider.CalibrationFor}.
  *
  * Fitted on the duplicate-check measurement (plan Task 3.8, 2026-09-29): 160 labelled new records for
  * MJ: Actions (80 rewrites of an existing action, 80 similar actions that don't exist), five vector
@@ -64,14 +69,26 @@ export const DUPLICATE_DECISION_CALIBRATION: Readonly<Record<string, PlattCalibr
     'LLM Decision': Object.freeze({ A: 0.9918, B: -1.4843 })
 });
 
+/** The shipped calibration for the model that answered, or null when it has none. */
+export function DuplicateDecisionCalibrationFor(modelName: string | undefined): PlattCalibration | null {
+    const name = modelName?.trim();
+    return (name && DUPLICATE_DECISION_CALIBRATION[name]) || null;
+}
+
 /**
  * The duplicate Likelihood calibrated for the model that answered, or null when that model has no
  * calibration.
  */
 export function CalibratedDuplicateProbability(probability: number, modelName: string | undefined): number | null {
-    const calibration = modelName ? DUPLICATE_DECISION_CALIBRATION[modelName.trim()] : undefined;
+    const calibration = DuplicateDecisionCalibrationFor(modelName);
     return calibration ? ApplyPlattCalibration(probability, calibration) : null;
 }
+
+/** What {@link DuplicateDecisionResult.UncalibratedModel} holds when the run named no model. */
+export const UNNAMED_DECISION_MODEL = '(unnamed model)';
+
+/** Models already logged as having no calibration, so each is logged once per process. */
+const loggedUncalibratedModels = new Set<string>();
 
 /** The outcome of one decision call over a matched set. */
 export interface DuplicateDecisionResult {
@@ -83,6 +100,13 @@ export interface DuplicateDecisionResult {
     Candidates: DuplicateCandidateProbability[];
     /** The decision's `MJ: AI Prompt Runs` row id, when the runner wrote one. */
     AIPromptRunID: string | null;
+    /**
+     * Set when the model that answered has no calibration: its name, or
+     * {@link UNNAMED_DECISION_MODEL} when the run named none. Every candidate's `Probability` is then
+     * null and its `RawProbability` holds the model's own answer. The entry check treats such a
+     * result like a failed decision and flags nothing.
+     */
+    UncalibratedModel?: string;
 }
 
 /**
@@ -175,7 +199,7 @@ export class DecisionReasoningProvider extends DuplicateReasoningProvider {
             RecordID: candidate.RecordID,
             Recommendation: flagged ? 'Uncertain' : 'NotDuplicate',
             Confidence: candidate.Probability,
-            Reasoning: this.describeBand(candidate.Probability, flagged)
+            Reasoning: this.describeBand(candidate.Probability, flagged, candidate.RawProbability)
         };
     }
 
@@ -251,22 +275,49 @@ export class DecisionReasoningProvider extends DuplicateReasoningProvider {
         return params;
     }
 
+    /**
+     * The calibration for the model that answered, by the name MJ gives it, or null when it has
+     * none. Defaults to {@link DUPLICATE_DECISION_CALIBRATION}; override to calibrate another model.
+     */
+    protected CalibrationFor(modelName: string | undefined): PlattCalibration | null {
+        return DuplicateDecisionCalibrationFor(modelName);
+    }
+
     /** Read each candidate's probability from the run, in input order, calibrated for the model that answered. */
     private readProbabilities(input: DuplicateReasoningInput, run: AIDecisionRunResult): DuplicateDecisionResult {
         const runID = run.promptRun?.ID ?? null;
         if (!run.success) {
             return this.failedDecision(run.errorMessage ?? 'Decision execution failed', runID);
         }
-        const modelName = run.modelInfo?.modelName;
+        const modelName = run.modelInfo?.modelName?.trim() || undefined;
+        const calibration = this.CalibrationFor(modelName);
         const candidates = input.Candidates.map((candidate, index) => {
             const raw = this.likelihoodOf(run.Answers[this.QuestionKey(index)]);
             return {
                 RecordID: candidate.RecordID,
-                Probability: raw == null ? null : CalibratedDuplicateProbability(raw, modelName),
+                Probability: raw == null || !calibration ? null : ApplyPlattCalibration(raw, calibration),
                 RawProbability: raw
             };
         });
-        return { Success: true, Candidates: candidates, AIPromptRunID: runID };
+        const result: DuplicateDecisionResult = { Success: true, Candidates: candidates, AIPromptRunID: runID };
+        if (!calibration) {
+            result.UncalibratedModel = modelName ?? UNNAMED_DECISION_MODEL;
+            this.logUncalibratedOnce(result.UncalibratedModel);
+        }
+        return result;
+    }
+
+    /** Log a model with no calibration the first time it answers, not on every decision. */
+    private logUncalibratedOnce(modelName: string): void {
+        if (loggedUncalibratedModels.has(modelName)) {
+            return;
+        }
+        loggedUncalibratedModels.add(modelName);
+        LogError(
+            `Duplicate decision: the model "${modelName}" has no calibration, so its probabilities can't be banded. ` +
+            'The entry check flags nothing for it, and Decision mode flags its candidates for review. ' +
+            'Add its calibration (DUPLICATE_DECISION_CALIBRATION, or override CalibrationFor).'
+        );
     }
 
     private likelihoodOf(answer: DecisionAnswer | undefined): number | null {
@@ -291,7 +342,10 @@ export class DecisionReasoningProvider extends DuplicateReasoningProvider {
         return output;
     }
 
-    private describeBand(probability: number | null, flagged: boolean): string {
+    private describeBand(probability: number | null, flagged: boolean, rawProbability?: number | null): string {
+        if (probability == null && rawProbability != null) {
+            return `The decision model has no calibration (raw probability ${rawProbability.toFixed(2)}). Flagged for review.`;
+        }
         if (probability == null) {
             return 'The decision model returned no answer for this candidate. Flagged for review.';
         }

@@ -100,6 +100,11 @@ export interface ArmCallResult {
 export interface DecisionCallResult extends ArmCallResult {
     /** The model that answered (`MJ: AI Prompt Runs.Model`), backfilled after the run. */
     Model: string;
+    /**
+     * Set when the answering model has no calibration: production's entry check flags nothing for
+     * it, so no candidate of the check is flagged. Its raw probabilities are still recorded.
+     */
+    UncalibratedModel?: string;
 }
 
 /** The results of running one entry check for a corpus record across all arms. */

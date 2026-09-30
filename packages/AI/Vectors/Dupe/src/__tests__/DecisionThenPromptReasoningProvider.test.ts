@@ -233,6 +233,24 @@ describe('DecisionThenPromptReasoningProvider', () => {
         });
     });
 
+    describe('a decision model with no calibration', () => {
+        it('passes every candidate to the prompt provider, which reasons over them as in Prompt mode', async () => {
+            // Raw answers that would drop two candidates, from a model whose answers can't be banded
+            mockExecuteDecision.mockResolvedValue({
+                success: true,
+                Answers: {
+                    candidate_1: { Kind: 'Likelihood', Probability: 0.95 },
+                    candidate_2: { Kind: 'Likelihood', Probability: 0.01 },
+                    candidate_3: { Kind: 'Likelihood', Probability: 0.01 },
+                },
+                modelInfo: { modelId: 'model-new', modelName: 'Some New Decision Model' },
+            });
+            await chainedWithStub().Reason(input(), CONTEXT);
+
+            expect(promptStageInput().Candidates.map(c => c.RecordID)).toEqual(['ID|c1', 'ID|c2', 'ID|c3']);
+        });
+    });
+
     describe('a failed decision', () => {
         it('passes every candidate to the prompt provider when the runner fails', async () => {
             mockExecuteDecision.mockResolvedValue({ success: false, errorMessage: 'model overloaded', Answers: {} });

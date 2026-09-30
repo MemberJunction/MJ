@@ -5,7 +5,8 @@
  * Production's entry check (`DuplicateRecordDetector.CheckRecordValues`) flags a candidate when the
  * decision provider bands it `Uncertain` (`BandCandidate`), so a candidate a successful decision gave
  * no answer for is flagged: a missing probability fails toward inclusion. A failed decision flags
- * nothing. These readers apply the same rules, so the rig scores what production would show.
+ * nothing, and neither does a decision from a model with no calibration. These readers apply the
+ * same rules, so the rig scores what production would show.
  *
  * @module @memberjunction/integration-test-suite
  */
@@ -37,6 +38,11 @@ export interface DecisionArmReading {
     Flagged: Map<string, boolean>;
     /** Candidates the successful call gave no answer for. */
     MissingAnswers: number;
+    /**
+     * The answering model, when it has no calibration: the entry check flags nothing for it. Its raw
+     * probabilities are still recorded, so the report's calibration section can fit one.
+     */
+    UncalibratedModel?: string;
 }
 
 /** The prompt arm's call, with its failures and missing verdicts counted. */
@@ -51,9 +57,10 @@ export interface PromptArmReading {
 }
 
 /**
- * Read one decision call as production's entry check does: a failed call flags nothing; a
- * successful one flags each candidate the provider bands `Uncertain` on its calibrated probability,
- * which includes every candidate it gave no answer for. The raw probability is what is recorded.
+ * Read one decision call as production's entry check does: a failed call flags nothing, and so does
+ * a call answered by a model with no calibration; otherwise each candidate the provider bands
+ * `Uncertain` on its calibrated probability is flagged, which includes every candidate it gave no
+ * answer for. The raw probability is what is recorded.
  *
  * @param decision the provider's `DecideCandidates` result
  * @param provider the provider that made it, whose band decides the flags
@@ -74,11 +81,13 @@ export function ReadDecisionArm(
         reading.ErrorMessage = WithholdRecordText(decision.ErrorMessage ?? 'Decision failed', recordTexts);
         return reading;
     }
+    reading.UncalibratedModel = decision.UncalibratedModel;
     for (const candidate of decision.Candidates) {
         const id = NormalizeUUID(candidate.RecordID);
         const raw = candidate.RawProbability ?? null;
         reading.Probabilities.set(id, raw);
-        reading.Flagged.set(id, provider.BandCandidate(candidate).Recommendation === 'Uncertain');
+        // The entry check flags nothing for a model with no calibration, as for a failed decision.
+        reading.Flagged.set(id, !decision.UncalibratedModel && provider.BandCandidate(candidate).Recommendation === 'Uncertain');
         if (raw === null) {
             reading.MissingAnswers++;
         }

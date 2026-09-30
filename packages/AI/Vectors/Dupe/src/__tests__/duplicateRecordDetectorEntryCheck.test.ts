@@ -181,7 +181,7 @@ vi.mock('@memberjunction/ai-core-plus', () => ({
 // Imports after mocks. The provider modules register the reasoning modes, as the package index does.
 // ─────────────────────────────────────────────
 
-import { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, LogError, UserInfo } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseEmbeddings } from '@memberjunction/ai';
 import { VectorDBBase } from '@memberjunction/ai-vectordb';
@@ -436,6 +436,27 @@ describe('DuplicateRecordDetector.CheckRecordValues', () => {
 
             // Calibrated 0.774, 0.509 and 0.095: only cand-a reaches 0.7.
             expect(result.Candidates.map(c => [c.RecordID, c.Probability])).toEqual([['cand-a', expect.closeTo(0.77424, 4)]]);
+        });
+
+        it('flags nothing, and says why, when the answering model has no calibration', async () => {
+            // Without a calibration the raw answers can't be banded; flagging every candidate would be
+            // the vector threshold alone.
+            answerRawByRecord(
+                { 'cand-a': 0.01, 'cand-b': 0.01, 'cand-c': 0.01 },
+                { modelId: 'model-new', modelName: 'Some New Decision Model' }
+            );
+
+            const first = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, undefined, USER);
+            const second = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, undefined, USER);
+
+            for (const result of [first, second]) {
+                expect(result.Status).toBe('Failed');
+                expect(result.Candidates).toEqual([]);
+                expect(result.ErrorMessage).toContain('"Some New Decision Model" has no calibration');
+            }
+            // Logged once for the model, not once per check.
+            const mentions = vi.mocked(LogError).mock.calls.filter(([message]) => String(message).includes('Some New Decision Model'));
+            expect(mentions).toHaveLength(1);
         });
 
         it('flags nothing, and says why, when the decision fails', async () => {

@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AIDecisionParams, AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import type { ModelInfo } from '@memberjunction/ai-core-plus';
-import type { DecisionAnswer } from '@memberjunction/ai';
-import type { UserInfo } from '@memberjunction/core';
+import type { DecisionAnswer, PlattCalibration } from '@memberjunction/ai';
+import { LogError, type UserInfo } from '@memberjunction/core';
 import type { MJAIPromptRunEntity, MJEntityDocumentEntity } from '@memberjunction/core-entities';
 
 // ─────────────────────────────────────────────
@@ -40,6 +40,7 @@ import {
     DecisionReasoningProvider,
     DUPLICATE_DECISION_CALIBRATION,
     DuplicateDecisionResult,
+    UNNAMED_DECISION_MODEL,
 } from '../reasoning/DecisionReasoningProvider';
 import { DuplicateReasoningInput, DuplicateReasoningOutput } from '../reasoning/DuplicateReasoningTypes';
 import { ANSWERING_MODEL, RawFor } from './helpers/decisionCalibration';
@@ -306,29 +307,71 @@ describe('DecisionReasoningProvider', () => {
             ]);
         });
 
-        const uncalibratedModels: [string, ModelInfo | null][] = [
-            ['a model with no calibration', { modelId: 'model-other', modelName: 'Some Other Model' }],
-            ['a model with an empty name', { modelId: 'model-other', modelName: '' }],
-            ['a run that names no model', null],
+        const uncalibratedModels: [string, ModelInfo | null, string][] = [
+            ['a model with no calibration', { modelId: 'model-other', modelName: 'Some Other Model' }, 'Some Other Model'],
+            ['a model with an empty name', { modelId: 'model-other', modelName: '' }, UNNAMED_DECISION_MODEL],
+            ['a run that names no model', null, UNNAMED_DECISION_MODEL],
         ];
 
         it.each(uncalibratedModels)(
-            'gives no Probability for %s, keeps the raw one, and flags every candidate',
-            async (_label, model) => {
+            'gives no Probability for %s, keeps the raw one, names the model, and bands every candidate for review',
+            async (_label, model, named) => {
                 answerRawByRecord({ 'ID|c1': 0.95, 'ID|c2': 0.05, 'ID|c3': 0.6 }, model);
                 const provider = new DecisionReasoningProvider();
                 const decision = await decide(provider);
 
+                expect(decision.Success).toBe(true);
+                expect(decision.UncalibratedModel).toBe(named);
                 expect(decision.Candidates).toEqual([
                     { RecordID: 'ID|c1', Probability: null, RawProbability: 0.95 },
                     { RecordID: 'ID|c2', Probability: null, RawProbability: 0.05 },
                     { RecordID: 'ID|c3', Probability: null, RawProbability: 0.6 },
                 ]);
+                // Batch Decision mode: every candidate goes to a person, and says why.
                 const verdicts = provider.RecommendFromDecision(decision).CandidateVerdicts;
                 expect(verdicts.map(v => v.Recommendation)).toEqual(['Uncertain', 'Uncertain', 'Uncertain']);
                 expect(verdicts.map(v => v.Confidence)).toEqual([null, null, null]);
+                expect(verdicts[1].Reasoning).toContain('no calibration (raw probability 0.05)');
             }
         );
+
+        it('names no uncalibrated model when the answering model has a calibration', async () => {
+            answerByRecord({ 'ID|c1': 0.9, 'ID|c2': 0.2, 'ID|c3': 0.6 });
+            const decision = await decide(new DecisionReasoningProvider());
+
+            expect(decision.UncalibratedModel).toBeUndefined();
+            expect(LogError).not.toHaveBeenCalled();
+        });
+
+        it('logs a model with no calibration once, not on every decision', async () => {
+            const provider = new DecisionReasoningProvider();
+            answerRawByRecord({ 'ID|c1': 0.9 }, { modelId: 'model-once', modelName: 'Logged Once Model' });
+            await decide(provider);
+            await decide(new DecisionReasoningProvider());
+
+            const mentions = (name: string) => vi.mocked(LogError).mock.calls.filter(([message]) => String(message).includes(`"${name}"`));
+            expect(mentions('Logged Once Model')).toHaveLength(1);
+
+            answerRawByRecord({ 'ID|c1': 0.9 }, { modelId: 'model-next', modelName: 'Another Uncalibrated Model' });
+            await decide(provider);
+            expect(mentions('Another Uncalibrated Model')).toHaveLength(1);
+        });
+
+        it('calibrates another model through a CalibrationFor override', async () => {
+            class CalibratedForMore extends DecisionReasoningProvider {
+                protected override CalibrationFor(modelName: string | undefined): PlattCalibration | null {
+                    return modelName === 'Some Other Model' ? { A: 1, B: 0 } : super.CalibrationFor(modelName);
+                }
+            }
+            answerRawByRecord({ 'ID|c1': 0.95, 'ID|c2': 0.05, 'ID|c3': 0.6 }, { modelId: 'model-other', modelName: 'Some Other Model' });
+            const decision = await decide(new CalibratedForMore());
+
+            expect(decision.UncalibratedModel).toBeUndefined();
+            // A = 1, B = 0 is the identity
+            expect(decision.Candidates.map(c => c.Probability)).toEqual([
+                expect.closeTo(0.95, 10), expect.closeTo(0.05, 10), expect.closeTo(0.6, 10),
+            ]);
+        });
     });
 
     // Literal values, not read from the constants, so a change to the shipped band, the pre-filter or

@@ -1023,4 +1023,23 @@ describe('The decision arm on calibrated flags, over raw probabilities', () => {
         expect(ComputeArmPerformance([check], 'decision · production', { BootstrapResamples: 10 }).Recall).toBe(0);
     });
 
+    it('notes decision calls from a model with no calibration', () => {
+        const check = decisionCheck('n1', 'new', [{ Id: 'c1', Probability: 0.9 }]);
+        check.Candidates[0].DecisionFlagged = false;
+        if (check.DecisionResult) {
+            check.DecisionResult.UncalibratedModel = 'Some New Decision Model';
+        }
+
+        const report = BuildMeasurementReport([check], {
+            EntityName: 'MJ: Actions',
+            CorpusPath: '/mock/outside/corpus',
+            DuplicatesCount: 0,
+            NewCount: 1,
+            Reps: 1,
+            TopK: 5,
+            DecisionPrompt: 'Default Decision',
+        });
+
+        expect(report.Notes.some(note => note.includes('no calibration (Some New Decision Model)'))).toBe(true);
+    });
 });

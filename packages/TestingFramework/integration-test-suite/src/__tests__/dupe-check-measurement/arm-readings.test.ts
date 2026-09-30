@@ -50,6 +50,28 @@ describe('ReadDecisionArm', () => {
         expect(provider.BandCandidate({ RecordID: UNANSWERED_ID, Probability: null }).Recommendation).toBe('Uncertain');
     });
 
+    it('flags nothing for a model with no calibration, as the entry check does, and keeps its raw answers', () => {
+        const decision: DuplicateDecisionResult = {
+            Success: true,
+            AIPromptRunID: 'run-2',
+            UncalibratedModel: 'Some New Decision Model',
+            Candidates: [
+                { RecordID: SOURCE_ID, Probability: null, RawProbability: 0.97 },
+                { RecordID: OTHER_ID, Probability: null, RawProbability: 0.01 },
+            ],
+        };
+
+        const reading = ReadDecisionArm(decision, provider);
+
+        expect(reading.Success).toBe(true);
+        expect(reading.UncalibratedModel).toBe('Some New Decision Model');
+        // The provider's band alone would flag both (no calibrated probability fails toward inclusion).
+        expect(provider.BandCandidate(decision.Candidates[0]).Recommendation).toBe('Uncertain');
+        expect([...reading.Flagged.values()]).toEqual([false, false]);
+        expect(reading.Probabilities.get(SOURCE_ID.toLowerCase())).toBe(0.97);
+        expect(reading.MissingAnswers).toBe(0);
+    });
+
     it('flags nothing when the decision failed, and keeps the reason', () => {
         const decision: DuplicateDecisionResult = {
             Success: false,

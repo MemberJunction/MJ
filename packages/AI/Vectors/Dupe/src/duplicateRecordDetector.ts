@@ -382,7 +382,11 @@ export class DuplicateRecordDetector extends VectorBase {
      * 4. **Decision.** One {@link DecisionReasoningProvider.DecideCandidates} call over the readable
      *    candidates, in either mode: the prompt half of `'DecisionThenPrompt'` is too slow for entry,
      *    and it can recommend a merge. A candidate is flagged when the provider bands it `Uncertain`,
-     *    by its own threshold. A failed decision flags nothing.
+     *    by its own threshold, on the probability calibrated for the model that answered. A
+     *    candidate the decision gave no answer for is flagged. A failed decision flags nothing, and
+     *    neither does a decision from a model with no calibration: its probabilities can't be
+     *    banded, and flagging every candidate would be the vector threshold alone. Both give a
+     *    `Failed` result with the reason.
      *
      * Never throws: any failure is a `Failed` result with the reason.
      *
@@ -592,6 +596,10 @@ export class DuplicateRecordDetector extends VectorBase {
             const message = `Decision failed: ${decision.ErrorMessage ?? 'unknown error'}`;
             LogError(`Duplicate entry check for ${state.EntityInfo.Name}: ${message}. Nothing is flagged.`);
             return { Error: message };
+        }
+        if (decision.UncalibratedModel) {
+            // Not logged here: the provider logs a missing calibration once per model, not per check.
+            return { Error: `The decision model "${decision.UncalibratedModel}" has no calibration, so nothing is flagged` };
         }
         return { Candidates: this.flagEntryCandidates(provider, decision.Candidates, state) };
     }

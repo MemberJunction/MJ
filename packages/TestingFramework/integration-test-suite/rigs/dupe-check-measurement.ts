@@ -11,8 +11,10 @@
  * PotentialMatchThreshold; the `· production` views filter their verdicts afterwards.
  *
  * The decision arm flags as production's entry check does: a candidate a successful decision gave
- * no answer for is flagged, and a failed decision flags nothing. Each call's success, error (withheld
- * when it quotes record text) and missing answers are recorded, and a failure is logged.
+ * no answer for is flagged, and a failed decision flags nothing, nor does one answered by a model with
+ * no calibration (production logs that once per model; the rig still records its raw probabilities,
+ * which the report's calibration section fits). Each call's success, error (withheld when it quotes
+ * record text) and missing answers are recorded, and a failure is logged.
  *
  * The entry check's latency is timed from building the unsaved record through the decision call:
  * PreparationLatencyMs (record, retrieval, permission narrowing, candidate load) plus the decision.
@@ -477,6 +479,7 @@ async function executeSingleEntryCheck(
                   Success: decision.Reading.Success,
                   ErrorMessage: decision.Reading.ErrorMessage,
                   MissingAnswers: decision.Reading.MissingAnswers,
+                  UncalibratedModel: decision.Reading.UncalibratedModel,
               }
             : undefined,
         PromptResult: prompt
