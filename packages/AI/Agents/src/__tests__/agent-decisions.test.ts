@@ -1202,6 +1202,23 @@ describe('Agent Decisions', () => {
             expect(results[2].error).toContain('at most 5 decision calls in total');
         });
 
+        it('caps what a forEachItemIn request claims from the budget at decisionsMaxItems, so the requests after it still run', async () => {
+            const ask = vi.spyOn(mockService, 'Ask').mockResolvedValue(answered());
+
+            const results = await agent.testExecuteDecisionRequestsAsSteps([
+                { id: 'items', forEachItemIn: 'payload.items', questions: QUESTIONS },
+                { id: 'after', state: 'Something else.', questions: QUESTIONS },
+            ], { items: itemsOf(10) }, { decisionsMaxCallsPerTurn: 5, decisionsMaxItems: 2 }, stepParams());
+
+            // Ten items, but decisionsMaxItems lets the request make only 2 calls, so it claims 2 of
+            // the 5, not all of them, and the single request after it gets its call.
+            expect(ask).toHaveBeenCalledTimes(3);
+            expect(results.map(r => [r.id, r.success])).toEqual([['items', true], ['after', true]]);
+            expect(results[0].answers).toHaveLength(2);
+            expect(results[0].skippedCount).toBe(8);
+            expect(stepNamed('after')).toBeDefined();
+        });
+
         it('with a budget of 0, makes no call and records no step, and every request says why', async () => {
             const ask = vi.spyOn(mockService, 'Ask').mockResolvedValue(answered());
 
