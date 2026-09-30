@@ -24,6 +24,29 @@ const DEFAULT_DECISION_PROMPT_NAME = 'Default Decision';
 const QUESTION_STATEMENT = 'This note bears on the request: ';
 
 /**
+ * How long a rerank's decision calls may take, all together, in milliseconds, unless the caller sets
+ * `DecisionRerankOptions.TimeoutMS`. Memory injection waits for the rerank before an agent's first
+ * prompt, so the budget is short, but it leaves room for a chat-model fallback such as `LLM Decision`
+ * to answer a full batch.
+ */
+export const DEFAULT_DECISION_RERANK_TIMEOUT_MS = 15_000;
+
+/**
+ * Settings a caller can give one `DecisionReranker` rerank, in `RerankParams.options`. Other rerankers
+ * ignore them. `RerankerService` fills them from the agent's `RerankerConfiguration`. A setting that is
+ * not a positive number is ignored, and its default applies.
+ *
+ * A type rather than an interface, so that it is assignable to `RerankParams.options`.
+ */
+export type DecisionRerankOptions = {
+    /**
+     * The time budget for the rerank's decision calls, all together, in milliseconds. When it runs out
+     * the calls are aborted and the rerank fails. Default: {@link DEFAULT_DECISION_RERANK_TIMEOUT_MS}.
+     */
+    TimeoutMS?: number;
+};
+
+/**
  * The decision runner the reranker calls. It adds one thing to `AIDecisionRunner`: the per-call
  * question limit of the models a decision prompt can run on.
  */
@@ -82,9 +105,11 @@ class DecisionRerankRunner extends AIDecisionRunner {
  * - It needs no API key: the decision runner resolves its own models' keys.
  * - When there are more documents than the smallest `MaxQuestionsPerCall` among the prompt's models,
  *   they are split across parallel calls.
+ * - The decision calls share one time budget, `DecisionRerankOptions.TimeoutMS` in the rerank's
+ *   `options`, or {@link DEFAULT_DECISION_RERANK_TIMEOUT_MS}.
  *
- * A failed decision call, or an answer missing for any document, fails the whole rerank. No score is
- * ever invented.
+ * A failed decision call, an answer missing for any document, or a budget that runs out fails the
+ * whole rerank. No score is ever invented.
  *
  * Usage:
  * ```typescript
@@ -134,7 +159,8 @@ export class DecisionReranker extends BasePromptBackedReranker {
         const runner = new DecisionRerankRunner();
         const batches = this.splitIntoBatches(params.documents, runner.GetMaxQuestionsPerCall(prompt));
         LogStatus(`DecisionReranker: Scoring ${params.documents.length} documents in ${batches.length} decision call(s)`);
-        const results = await Promise.all(batches.map(batch => runner.ExecuteDecision(this.buildDecisionParams(prompt, params.query, batch))));
+        const timeoutMS = this.positiveOption(params, 'TimeoutMS') ?? DEFAULT_DECISION_RERANK_TIMEOUT_MS;
+        const results = await this.askWithinBudget(runner, prompt, params.query, batches, timeoutMS);
         // The decision runner saves its runs fire-and-forget, and the server prices a run when it saves
         // it. Wait for the saves, so UsageOf can read each run's cost, and so each save's cost rollup to
         // the parent run lands before the parent run is finalized.
@@ -162,6 +188,42 @@ export class DecisionReranker extends BasePromptBackedReranker {
         return fallback;
     }
 
+    /** A setting the caller gave in `params.options`, when it is a positive number. */
+    private positiveOption(params: RerankParams, key: keyof DecisionRerankOptions): number | undefined {
+        const value = params.options?.[key];
+        return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
+    }
+
+    /**
+     * Asks every batch's decision call in parallel, within one time budget. When the budget runs out
+     * it aborts the calls, through the cancellation token they share (the decision runner hands it to
+     * each driver call, failover included), and throws, so the rerank fails like any other error and
+     * the caller falls back. It does not wait for the aborted calls; their runs are still recorded.
+     */
+    private async askWithinBudget(
+        runner: DecisionRerankRunner,
+        prompt: MJAIPromptEntityExtended,
+        query: string,
+        batches: RerankDocument[][],
+        timeoutMS: number
+    ): Promise<AIDecisionRunResult[]> {
+        const budget = new AbortController();
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const expired = new Promise<never>((_resolve, reject) => {
+            timer = setTimeout(() => {
+                const error = new Error(`DecisionReranker: The decision calls did not finish within ${timeoutMS} ms`);
+                budget.abort(error);
+                reject(error);
+            }, timeoutMS);
+        });
+        const calls = Promise.all(batches.map(batch => runner.ExecuteDecision(this.buildDecisionParams(prompt, query, batch, budget.signal))));
+        try {
+            return await Promise.race([calls, expired]);
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
     /** Splits the documents into batches of at most `limit`, or one batch when there is no limit. */
     private splitIntoBatches(documents: RerankDocument[], limit: number | undefined): RerankDocument[][] {
         if (limit === undefined || documents.length <= limit) {
@@ -182,8 +244,16 @@ export class DecisionReranker extends BasePromptBackedReranker {
         return documents.map((document, index) => this.toRerankResult(document, result.Answers[this.questionKey(index)]));
     }
 
-    /** The decision call for a batch: the query as the state, and one Likelihood question per document. */
-    private buildDecisionParams(prompt: MJAIPromptEntityExtended, query: string, documents: RerankDocument[]): AIDecisionParams {
+    /**
+     * The decision call for a batch: the query as the state, one Likelihood question per document, and
+     * the rerank's shared cancellation token.
+     */
+    private buildDecisionParams(
+        prompt: MJAIPromptEntityExtended,
+        query: string,
+        documents: RerankDocument[],
+        cancellationToken: AbortSignal
+    ): AIDecisionParams {
         const questions: Record<string, DecisionQuestion> = {};
         documents.forEach((document, index) => {
             questions[this.questionKey(index)] = { Kind: 'Likelihood', Instructions: `${QUESTION_STATEMENT}${document.text}` };
@@ -193,6 +263,7 @@ export class DecisionReranker extends BasePromptBackedReranker {
         decisionParams.contextUser = this._contextUser;
         decisionParams.State = query;
         decisionParams.Questions = questions;
+        decisionParams.cancellationToken = cancellationToken;
         if (this.ParentPromptRunID) {
             decisionParams.parentPromptRunId = this.ParentPromptRunID;
         }

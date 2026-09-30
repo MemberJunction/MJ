@@ -56,7 +56,8 @@ export {
 } from './LLMReranker';
 
 // Decision Reranker
-export { DecisionReranker } from './DecisionReranker';
+export { DecisionReranker, DEFAULT_DECISION_RERANK_TIMEOUT_MS } from './DecisionReranker';
+export type { DecisionRerankOptions } from './DecisionReranker';
 
 // Runner
 export { AIRerankerRunner } from './AIRerankerRunner';

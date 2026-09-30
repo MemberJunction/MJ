@@ -384,12 +384,21 @@ describe('RerankerService', () => {
                     { id: 'e2', text: 'Input: Where is my invoice?\nOutput: Under Billing.', originalScore: 0.7 }
                 ],
                 topK: 2,
+                options: { TimeoutMS: undefined },
                 ContextUser: mockUser,
                 ModelID: 'model-1',
                 ChatPromptID: 'prompt-9',
                 AgentRunID: undefined
             });
             expect(result).toEqual([{ example: invoice.example, similarity: 0.9 }]);
+        });
+
+        it("passes the configuration's decisionTimeoutMS to the reranker as options.TimeoutMS", async () => {
+            mockRunRerank.mockResolvedValue({ Success: true, ExecutionTimeMS: 1, Response: { success: true, durationMs: 1, results: [] } });
+
+            await RerankerService.Instance.RerankExamples([reset], 'query', makeConfig({ decisionTimeoutMS: 5000 }), mockUser);
+
+            expect(mockRunRerank).toHaveBeenCalledWith(expect.objectContaining({ options: { TimeoutMS: 5000 } }));
         });
 
         it('throws when reranking fails, so the caller decides whether to fall back', async () => {

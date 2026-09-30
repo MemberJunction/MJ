@@ -19,6 +19,7 @@ import { RerankerConfiguration, ParseRerankerConfiguration, parseRerankerConfigu
 import { AIRerankerRunner } from './AIRerankerRunner';
 import { IsPromptBackedReranker } from './prompt-backed-rerankers';
 import type { AIRerankRunResult } from './rerank-runner.types';
+import type { DecisionRerankOptions } from './DecisionReranker';
 
 // Re-export config types for convenience
 export {
@@ -439,11 +440,17 @@ export class RerankerService extends BaseSingleton<RerankerService> {
             query,
             documents,
             topK: documents.length, // Get all, we'll filter by threshold
+            options: this.decisionRerankOptions(config),
             ContextUser: contextUser,
             ModelID: config.rerankerModelId,
             ChatPromptID: config.rerankPromptID,
             AgentRunID: agentRunID
         });
+    }
+
+    /** The settings a DecisionReranker takes from the configuration. Other rerankers ignore them. */
+    private decisionRerankOptions(config: RerankerConfiguration): DecisionRerankOptions {
+        return { TimeoutMS: config.decisionTimeoutMS };
     }
 
     /**

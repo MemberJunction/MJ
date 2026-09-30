@@ -8,7 +8,7 @@
  * (`AIDecisionRunner.ExecuteDecision`), and the provider that hands out `MJ: AI Prompt Runs` rows.
  * Follows AIRerankerRunner.test.ts.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MJGlobal } from '@memberjunction/global';
 import { UserInfo } from '@memberjunction/core';
 import type { IMetadataProvider } from '@memberjunction/core';
@@ -17,7 +17,7 @@ import type { AIModelConfiguration, DecisionAnswer, RerankDocument, RerankRespon
 import { AIDecisionRunner } from '@memberjunction/ai-prompts';
 import type { AIDecisionParams, AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
-import { DecisionReranker } from '../DecisionReranker';
+import { DecisionReranker, DEFAULT_DECISION_RERANK_TIMEOUT_MS } from '../DecisionReranker';
 import { LLMReranker } from '../LLMReranker';
 import { AIRerankerRunner } from '../AIRerankerRunner';
 import { RerankerService } from '../RerankerService';
@@ -270,8 +270,23 @@ function stubDecisions(answer: (params: AIDecisionParams) => Promise<AIDecisionR
     });
 }
 
-function rerank(reranker: DecisionReranker, documents: RerankDocument[]): Promise<RerankResponse> {
-    return reranker.Rerank({ query: QUERY, documents });
+function rerank(reranker: DecisionReranker, documents: RerankDocument[], options?: Record<string, number | string>): Promise<RerankResponse> {
+    return reranker.Rerank({ query: QUERY, documents, options });
+}
+
+/** A decision call that never answers, as a hung model call does. */
+function neverAnswer(): Promise<AIDecisionRunResult> {
+    return new Promise<AIDecisionRunResult>(() => undefined);
+}
+
+/** Starts a rerank and reports whether it has settled, for tests that move fake time. */
+function startRerank(reranker: DecisionReranker, documents: RerankDocument[], options?: Record<string, number | string>): { Settled: () => boolean; Response: Promise<RerankResponse> } {
+    let settled = false;
+    const response = rerank(reranker, documents, options).then(result => {
+        settled = true;
+        return result;
+    });
+    return { Settled: () => settled, Response: response };
 }
 
 /** The number of questions in each decision call. */
@@ -561,6 +576,76 @@ describe('DecisionReranker', () => {
         });
     });
 
+    describe('its time budget', () => {
+        beforeEach(() => {
+            vi.useFakeTimers();
+        });
+
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        it('fails, and aborts its decision calls, when they are still running when its budget runs out', async () => {
+            stubDecisions(neverAnswer);
+            const rerankInFlight = startRerank(new DecisionReranker('', '', '', contextUser), notes(2));
+
+            await vi.advanceTimersByTimeAsync(DEFAULT_DECISION_RERANK_TIMEOUT_MS - 1);
+            expect(rerankInFlight.Settled()).toBe(false);
+            expect(decisionCalls[0].cancellationToken?.aborted).toBe(false);
+            await vi.advanceTimersByTimeAsync(1);
+            const response = await rerankInFlight.Response;
+
+            expect(response.success).toBe(false);
+            expect(response.errorMessage).toBe(`DecisionReranker: The decision calls did not finish within ${DEFAULT_DECISION_RERANK_TIMEOUT_MS} ms`);
+            expect(response.results).toEqual([]);
+            expect(decisionCalls[0].cancellationToken?.aborted).toBe(true);
+        });
+
+        it('gives its parallel calls one budget and one cancellation token', async () => {
+            setModelLimit(PRIMARY_DECISION_MODEL_ID, 2);
+            stubDecisions(neverAnswer);
+            const rerankInFlight = startRerank(new DecisionReranker('', '', '', contextUser), notes(5));
+
+            await vi.advanceTimersByTimeAsync(DEFAULT_DECISION_RERANK_TIMEOUT_MS);
+            await rerankInFlight.Response;
+
+            const tokens = new Set(decisionCalls.map(call => call.cancellationToken));
+            expect(decisionCalls).toHaveLength(3);
+            expect(tokens.size).toBe(1);
+            expect(decisionCalls.every(call => call.cancellationToken?.aborted)).toBe(true);
+        });
+
+        it('takes its budget from options.TimeoutMS', async () => {
+            stubDecisions(neverAnswer);
+            const rerankInFlight = startRerank(new DecisionReranker('', '', '', contextUser), notes(2), { TimeoutMS: 50 });
+
+            await vi.advanceTimersByTimeAsync(50);
+            const response = await rerankInFlight.Response;
+
+            expect(response.errorMessage).toBe('DecisionReranker: The decision calls did not finish within 50 ms');
+        });
+
+        it.each([0, -50, Number.NaN, '50'])('ignores a TimeoutMS of %s, which is not a positive number, and keeps the default', async timeoutMS => {
+            stubDecisions(neverAnswer);
+            const rerankInFlight = startRerank(new DecisionReranker('', '', '', contextUser), notes(2), { TimeoutMS: timeoutMS });
+
+            await vi.advanceTimersByTimeAsync(DEFAULT_DECISION_RERANK_TIMEOUT_MS - 1);
+            expect(rerankInFlight.Settled()).toBe(false);
+            await vi.advanceTimersByTimeAsync(1);
+
+            expect((await rerankInFlight.Response).errorMessage).toContain(`within ${DEFAULT_DECISION_RERANK_TIMEOUT_MS} ms`);
+        });
+
+        it('clears its timer when the calls finish in time', async () => {
+            stubDecisions();
+
+            const response = await rerank(new DecisionReranker('', '', '', contextUser), notes(2));
+
+            expect(response.success).toBe(true);
+            expect(vi.getTimerCount()).toBe(0);
+        });
+    });
+
     it("is registered with the ClassFactory as 'DecisionReranker'", () => {
         const resolution = MJGlobal.Instance.ClassFactory.TryCreateInstance<BaseReranker>(
             BaseReranker, 'DecisionReranker', '', '', CUSTOM_DECISION_PROMPT_ID, contextUser
@@ -668,6 +753,21 @@ describe('AIRerankerRunner, prompt-backed branch', () => {
         expect(run?.TokensCompletionRollup).toBe(20);
         expect(run?.TokensUsedRollup).toBe(420);
         expect(run?.TokensUsed).toBeUndefined();
+    });
+
+    it('reports a rerank that runs out of time as a failed rerank, so the caller falls back', async () => {
+        stubDecisions(neverAnswer);
+
+        const result = await newRerankerRunner().RunRerank({
+            query: QUERY,
+            documents: notes(2),
+            options: { TimeoutMS: 20 },
+            ContextUser: contextUser,
+            ModelID: DECISION_RERANKER_MODEL_ID,
+        });
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toBe('DecisionReranker: The decision calls did not finish within 20 ms');
     });
 
     it('reports a failed decision call as a failed rerank, with no scores', async () => {

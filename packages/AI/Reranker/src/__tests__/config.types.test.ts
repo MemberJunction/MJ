@@ -99,4 +99,16 @@ describe('parseRerankerConfiguration', () => {
             expect(result?.rerankExamples).toBe(true);
         });
     });
+
+    describe('DecisionReranker settings', () => {
+        it('should leave decisionTimeoutMS unset, so the reranker applies its default, when the config omits it', () => {
+            const result = ParseRerankerConfiguration(JSON.stringify({ rerankerModelId: 'model-1' }));
+            expect(result?.decisionTimeoutMS).toBeUndefined();
+        });
+
+        it('should pass decisionTimeoutMS through when it is set', () => {
+            const result = ParseRerankerConfiguration(JSON.stringify({ rerankerModelId: 'model-1', decisionTimeoutMS: 5000 }));
+            expect(result?.decisionTimeoutMS).toBe(5000);
+        });
+    });
 });

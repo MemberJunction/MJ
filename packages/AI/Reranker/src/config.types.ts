@@ -68,6 +68,15 @@ export interface RerankerConfiguration {
      */
     // case-violation-ok-legacy-back-compat: a key of the camelCase JSON stored in AIAgent.RerankerConfiguration
     rerankExamples?: boolean;
+
+    /**
+     * Optional: the time budget, in milliseconds, for a DecisionReranker's decision calls, all together.
+     * When it runs out the calls are aborted and the rerank fails, so the caller falls back as
+     * fallbackOnError says. Other rerankers ignore it.
+     * Default: 15000 (DEFAULT_DECISION_RERANK_TIMEOUT_MS)
+     */
+    // case-violation-ok-legacy-back-compat: a key of the camelCase JSON stored in AIAgent.RerankerConfiguration
+    decisionTimeoutMS?: number;
 }
 
 /**
@@ -105,7 +114,8 @@ export function ParseRerankerConfiguration(configJson: string | null | undefined
             rerankPromptID: parsed.rerankPromptID,
             contextFields: parsed.contextFields ?? [],
             fallbackOnError: parsed.fallbackOnError ?? true,
-            rerankExamples: parsed.rerankExamples
+            rerankExamples: parsed.rerankExamples,
+            decisionTimeoutMS: parsed.decisionTimeoutMS
         };
     } catch {
         return null;

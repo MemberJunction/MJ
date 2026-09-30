@@ -1,25 +1,28 @@
 /**
- * The examples reranking stage: `AgentContextInjector.GetExamplesForContext` reranks examples only when
- * the agent's reranker configuration sets `rerankExamples`, and `AgentMemoryContextBuilder` passes that
- * configuration through.
+ * The reranking stages of `AgentContextInjector`: examples are reranked only when the agent's reranker
+ * configuration sets `rerankExamples`, and `AgentMemoryContextBuilder` passes that configuration
+ * through; a failed notes rerank falls back to the vector search results.
  *
  * The injector, the builder and `RerankerService.parseConfiguration` are real. Only the vector search
- * (`AIEngine.FindSimilarAgentExamples`), core logging and pre-execution RAG are mocked, and
- * `RerankerService.RerankExamples` is spied on, so a test shows whether the reranker was called at all.
+ * (`AIEngine.FindSimilarAgentExamples` and `FindSimilarAgentNotes`), core logging and pre-execution RAG
+ * are mocked, and `RerankerService.RerankExamples` and `rerankNotes` are spied on, so a test shows
+ * whether the reranker was called at all.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { UserInfo } from '@memberjunction/core';
-import type { MJAIAgentExampleEntity } from '@memberjunction/core-entities';
-import type { ExampleMatchResult } from '@memberjunction/aiengine';
+import type { MJAIAgentExampleEntity, MJAIAgentNoteEntity } from '@memberjunction/core-entities';
+import type { ExampleMatchResult, NoteMatchResult } from '@memberjunction/aiengine';
 import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { RerankerService } from '@memberjunction/ai-reranker';
-import type { RerankerConfiguration } from '@memberjunction/ai-reranker';
+import type { RerankerConfiguration, RerankServiceResult } from '@memberjunction/ai-reranker';
 import { AgentContextInjector } from '../agent-context-injector';
 import { AgentMemoryContextBuilder } from '../agent-memory-context-builder';
 
 const h = vi.hoisted(() => ({
     /** The examples the vector search ranks, most similar first. */
     candidates: [] as ExampleMatchResult[],
+    /** The notes the vector search ranks, most similar first. */
+    noteCandidates: [] as NoteMatchResult[],
     /** The `topK` of each vector search. */
     fetchCounts: [] as number[],
 }));
@@ -33,6 +36,10 @@ vi.mock('@memberjunction/aiengine', async (importOriginal) => {
                 FindSimilarAgentExamples: async (_query: string, _agentId?: string, _userId?: string, _companyId?: string, topK = 3): Promise<ExampleMatchResult[]> => {
                     h.fetchCounts.push(topK);
                     return h.candidates.slice(0, topK);
+                },
+                FindSimilarAgentNotes: async (_query: string, _agentId?: string, _userId?: string, _companyId?: string, topK = 5): Promise<NoteMatchResult[]> => {
+                    h.fetchCounts.push(topK);
+                    return h.noteCandidates.slice(0, topK);
                 },
             },
         },
@@ -102,8 +109,38 @@ function getExamples(config: RerankerConfiguration | null | undefined): Promise<
     });
 }
 
-function ids(examples: MJAIAgentExampleEntity[]): string[] {
-    return examples.map(e => e.ID);
+function ids(records: Array<MJAIAgentExampleEntity | MJAIAgentNoteEntity>): string[] {
+    return records.map(r => r.ID);
+}
+
+/** The note fields the injector reads: all a test has to supply. */
+type NoteFields = Pick<MJAIAgentNoteEntity, 'ID' | 'Note'>;
+
+/** A vector search match for a note, through the seam onto the full entity the injector is declared to return. */
+function noteMatch(id: string, similarity: number): NoteMatchResult {
+    const fields: NoteFields = { ID: id, Note: `Note ${id}` };
+    return { note: fields as MJAIAgentNoteEntity, similarity };
+}
+
+function getNotes(config: RerankerConfiguration | null | undefined): Promise<MJAIAgentNoteEntity[]> {
+    return new AgentContextInjector().GetNotesForContext({
+        agentId: 'agent-1',
+        currentInput: INPUT,
+        strategy: 'Relevant',
+        maxNotes: 2,
+        contextUser,
+        rerankerConfig: config,
+    });
+}
+
+/** Spies on the notes reranker, answering with `notes` (or rejecting with it when it is an Error). */
+function spyOnRerankNotes(result: NoteMatchResult[] | Error = []) {
+    return vi.spyOn(RerankerService.Instance, 'rerankNotes').mockImplementation(async (): Promise<RerankServiceResult> => {
+        if (result instanceof Error) {
+            throw result;
+        }
+        return { notes: result, success: true, durationMs: 1 };
+    });
 }
 
 /** Spies on the examples reranker, answering with `result` (or rejecting with it when it is an Error). */
@@ -118,6 +155,7 @@ function spyOnRerankExamples(result: ExampleMatchResult[] | Error = []) {
 
 beforeEach(() => {
     h.candidates = ['e0', 'e1', 'e2', 'e3', 'e4', 'e5'].map((id, i) => exampleMatch(id, 0.9 - i * 0.05));
+    h.noteCandidates = ['n0', 'n1', 'n2', 'n3', 'n4', 'n5'].map((id, i) => noteMatch(id, 0.9 - i * 0.05));
     h.fetchCounts = [];
 });
 
@@ -178,6 +216,34 @@ describe('AgentContextInjector examples reranking stage', () => {
         spyOnRerankExamples(new Error('Decision model is down'));
 
         await expect(getExamples(rerankerConfig({ rerankExamples: true, fallbackOnError: false }))).rejects.toThrow('Decision model is down');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// AgentContextInjector, notes
+// ---------------------------------------------------------------------------
+describe('AgentContextInjector notes reranking stage', () => {
+    it('returns the top N reranked notes', async () => {
+        spyOnRerankNotes([h.noteCandidates[3], h.noteCandidates[1], h.noteCandidates[0]]);
+
+        const notes = await getNotes(rerankerConfig());
+
+        expect(h.fetchCounts).toEqual([6]);
+        expect(ids(notes)).toEqual(['n3', 'n1']);
+    });
+
+    it('falls back to the vector search results when the rerank runs out of time and fallbackOnError is true', async () => {
+        spyOnRerankNotes(new Error('DecisionReranker: The decision calls did not finish within 15000 ms'));
+
+        const notes = await getNotes(rerankerConfig({ fallbackOnError: true }));
+
+        expect(ids(notes)).toEqual(['n0', 'n1']);
+    });
+
+    it('throws when the rerank runs out of time and fallbackOnError is false', async () => {
+        spyOnRerankNotes(new Error('DecisionReranker: The decision calls did not finish within 15000 ms'));
+
+        await expect(getNotes(rerankerConfig({ fallbackOnError: false }))).rejects.toThrow('did not finish within 15000 ms');
     });
 });
 
