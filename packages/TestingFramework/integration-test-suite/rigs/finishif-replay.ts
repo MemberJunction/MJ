@@ -181,10 +181,15 @@ function corpusReader(pool: sql.ConnectionPool, schema: string): CorpusReader {
     }
     return {
         ReadSteps: async () => {
+            // ParentID marks a ForEach or While loop's iterations, and the agent type a Loop agent's
+            // runs: production gates neither an iteration nor a non-Loop agent's actions.
             const result = await pool.request().query<ReplayStepRow>(
-                `SELECT s.ID, s.AgentRunID, s.StepNumber, s.StepType, s.Status,
+                `SELECT s.ID, s.AgentRunID, s.ParentID, t.Name AS AgentType, s.StepNumber, s.StepType, s.Status,
                         CASE WHEN s.StepType = 'Actions' THEN s.InputData END AS InputData, s.OutputData, s.TargetLogID
                  FROM [${schema}].[AIAgentRunStep] s
+                 LEFT JOIN [${schema}].[AIAgentRun] r ON r.ID = s.AgentRunID
+                 LEFT JOIN [${schema}].[AIAgent] a ON a.ID = r.AgentID
+                 LEFT JOIN [${schema}].[AIAgentType] t ON t.ID = a.TypeID
                  WHERE s.StepType IN ('Prompt', 'Actions')
                  ORDER BY s.AgentRunID, s.StepNumber, s.StartedAt, s.__mj_CreatedAt`);
             return result.recordset;

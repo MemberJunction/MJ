@@ -5,9 +5,11 @@ import {
     BuildRoundState,
     ExtractRounds,
     LabelNextStep,
+    LOOP_AGENT_TYPE_NAME,
     ReadRecordedAction,
     RoundSavingsOf,
-    SampleRounds
+    SampleRounds,
+    StructuralGateStatus
 } from '../../finishif-replay/rounds';
 import type { ReplayStepRow } from '../../finishif-replay/types';
 import {
@@ -15,6 +17,8 @@ import {
     AsksForActions,
     Chats,
     Guid,
+    LoopsOver,
+    LoopsWhile,
     OddStep,
     PromptRun,
     PromptStep,
@@ -115,6 +119,66 @@ describe('ExtractRounds', () => {
         it('never gates a round whose recorded result carries AIDirectives', () => {
             const step = ActionStep(RUN_A, 2, { Directives: [{ Message: 'follow up', Type: 'instruction' }] });
             expect(roundWith(step).GateStatus).toBe('may-have-directives');
+        });
+    });
+
+    describe('what production never gates, whatever the results', () => {
+        /** The ForEach step the loop's iterations run under; the corpus query does not select it. */
+        const FOR_EACH_STEP = Guid(4, 1);
+
+        it("never gates a ForEach loop's iterations, which production runs with no conversation message", () => {
+            // The reviewer's probe: before the fix this was one gated `finish` round, asked for no action.
+            const { Rounds, Excluded } = ExtractRounds([
+                PromptStep(RUN_A, 1, LoopsOver()),
+                ActionStep(RUN_A, 3, { ParentID: FOR_EACH_STEP }),
+                ActionStep(RUN_A, 4, { ParentID: FOR_EACH_STEP }),
+                PromptStep(RUN_A, 5, Succeeds())
+            ]);
+            expect(Excluded).toEqual([]);
+            expect(Rounds.map(r => ({ gate: r.GateStatus, label: r.Label, requested: r.RequestedActions.length, actions: r.Actions.length })))
+                .toEqual([{ gate: 'loop-iteration', label: 'finish', requested: 0, actions: 2 }]);
+        });
+
+        it("never gates a While loop's iterations", () => {
+            const { Rounds } = ExtractRounds([
+                PromptStep(RUN_A, 1, LoopsWhile()),
+                ActionStep(RUN_A, 3, { ParentID: FOR_EACH_STEP }),
+                PromptStep(RUN_A, 4, AsksForActions())
+            ]);
+            expect(Rounds.map(r => r.GateStatus)).toEqual(['loop-iteration']);
+        });
+
+        it('knows an iteration by its parent step alone, or by the loop turn alone', () => {
+            const underParent = ExtractRounds([PromptStep(RUN_A, 1, AsksForActions()), ActionStep(RUN_A, 2, { ParentID: FOR_EACH_STEP }), PromptStep(RUN_A, 3, Succeeds())]);
+            const afterLoopTurn = ExtractRounds([PromptStep(RUN_A, 1, LoopsOver()), ActionStep(RUN_A, 2), PromptStep(RUN_A, 3, Succeeds())]);
+            expect(underParent.Rounds[0].GateStatus).toBe('loop-iteration');
+            expect(afterLoopTurn.Rounds[0].GateStatus).toBe('loop-iteration');
+        });
+
+        it('never gates actions after a turn that did not ask for an Actions step, or has no readable next step', () => {
+            expect(ExtractRounds([PromptStep(RUN_A, 1, Retries()), ActionStep(RUN_A, 2), PromptStep(RUN_A, 3, Succeeds())]).Rounds[0].GateStatus)
+                .toBe('not-an-actions-turn');
+            expect(ExtractRounds([PromptStep(RUN_A, 1, null), ActionStep(RUN_A, 2), PromptStep(RUN_A, 3, Succeeds())]).Rounds[0].GateStatus)
+                .toBe('not-an-actions-turn');
+        });
+
+        it("never gates a non-Loop agent's actions, since only a Loop agent's turn carries a finishIf", () => {
+            const inRunOf = (agentType: string | null): ReplayStepRow[] =>
+                [PromptStep(RUN_A, 1, AsksForActions()), ActionStep(RUN_A, 2), PromptStep(RUN_A, 3, Succeeds())].map(step => ({ ...step, AgentType: agentType }));
+            expect(ExtractRounds(inRunOf('Flow')).Rounds[0].GateStatus).toBe('not-a-loop-agent');
+            expect(ExtractRounds(inRunOf(null)).Rounds[0].GateStatus).toBe('not-a-loop-agent');
+            expect(ExtractRounds(inRunOf(' loop ')).Rounds[0].GateStatus).toBe('gated');
+            expect(LOOP_AGENT_TYPE_NAME).toBe('Loop');
+        });
+
+        it('checks the structure before the results, as production never reaches the result checks', () => {
+            const failedIteration = ExtractRounds([
+                PromptStep(RUN_A, 1, LoopsOver()),
+                ActionStep(RUN_A, 2, { ParentID: FOR_EACH_STEP, Success: false }),
+                PromptStep(RUN_A, 3, Retries())
+            ]);
+            expect(failedIteration.Rounds[0].GateStatus).toBe('loop-iteration');
+            expect(StructuralGateStatus(AsksForActions(), [{ ParentID: null }], 'Loop')).toBeNull();
         });
     });
 });

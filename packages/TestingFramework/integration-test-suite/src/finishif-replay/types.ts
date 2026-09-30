@@ -20,8 +20,19 @@ export type FinishIfReplayLabel = 'finish' | 'continue';
 /** The two ways the replay writes the gate's questions. */
 export type FinishIfReplayArm = 'authored' | 'generic';
 
-/** Whether production's code checks let a round reach the decision, and if not, why. */
-export type FinishIfGateStatus = 'gated' | 'action-failed' | 'may-have-directives';
+/**
+ * Whether production's code checks let a round reach the decision, and if not, why, in the order
+ * production applies them:
+ * - `loop-iteration`: the actions are a ForEach or While loop's iterations, which production runs
+ *   without a conversation message and never gates;
+ * - `not-an-actions-turn`: the turn before the actions did not ask for an Actions step, so it could
+ *   not have carried a `finishIf`;
+ * - `not-a-loop-agent`: the run's agent is not a Loop agent, whose turns are the only ones that
+ *   carry a `finishIf`;
+ * - `action-failed`: an action failed;
+ * - `may-have-directives`: an action may have returned AIDirectives.
+ */
+export type FinishIfGateStatus = 'gated' | 'loop-iteration' | 'not-an-actions-turn' | 'not-a-loop-agent' | 'action-failed' | 'may-have-directives';
 
 /** Why a stretch of Actions steps is not a round. */
 export type FinishIfExclusionReason = 'no-next-prompt' | 'no-previous-prompt' | 'label-unreadable';
@@ -36,6 +47,10 @@ export type FinishIfNextStepName = NonNullable<MJAIAgentRunEntity['FinalStep']> 
 export interface ReplayStepRow {
     ID: string;
     AgentRunID: string;
+    /** The step this one ran under: a ForEach or While step for a loop's iterations, null at the top level. */
+    ParentID: string | null;
+    /** The name of the run's agent's type (`MJ: AI Agent Types`), null when the run's agent has none. */
+    AgentType: string | null;
     StepNumber: number;
     StepType: string;
     Status: string;

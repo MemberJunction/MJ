@@ -5,9 +5,13 @@
  * asked for the actions; the Prompt step after them is the model's next turn, and gives the label:
  * `finish` when that turn ended the run without asking for more actions, `continue` otherwise.
  *
- * Production's code checks come first, exactly as `BaseAgent.finishAfterActions` applies them: a
- * round where any action failed, or where an action may have returned AIDirectives, never reaches
- * the decision. The state is the round's actions through the same formatter production uses.
+ * Production's code checks come first, as `BaseAgent` applies them. Production gates only the
+ * Actions step a Loop agent's turn asked for, which `executeNextStep` dispatches with a conversation
+ * message: a ForEach or While loop's iterations (recorded as Actions steps under the loop's step),
+ * actions another kind of turn led to, and a non-Loop agent's actions never reach the decision.
+ * Then, as `BaseAgent.finishAfterActions` checks, neither does a round where any action failed, or
+ * where an action may have returned AIDirectives. The state is the round's actions through the same
+ * formatter production uses.
  */
 import type { ActionParam } from '@memberjunction/actions-base';
 import type { JSONObject, JSONValue } from '@memberjunction/ai';
@@ -33,6 +37,12 @@ import type {
  * returned some: never gated. `Search Query Catalog` is the only core action that returns them.
  */
 export const AI_DIRECTIVE_ACTION_NAMES: readonly string[] = ['Search Query Catalog'];
+
+/** The agent type whose turns carry a `finishIf`: only the Loop agent type writes one. */
+export const LOOP_AGENT_TYPE_NAME = 'Loop';
+
+/** The `nextStep.step` values that run a loop: their Actions steps are iterations, never gated. */
+const LOOP_STEPS: readonly string[] = ['ForEach', 'While'];
 
 /** The `nextStep.step` values reported by name; anything else is reported as `Other`. */
 const KNOWN_NEXT_STEPS: readonly FinishIfNextStepName[] = [
@@ -143,7 +153,34 @@ export function ReadRecordedAction(step: ReplayStepRow): ReplayAction {
     };
 }
 
-/** Production's code checks, in its order: every action succeeded, then none returned AIDirectives. */
+/**
+ * Why production would never gate a stretch of Actions steps whatever its results, or null when it
+ * would reach the result checks. In order:
+ * - an iteration of a ForEach or While loop: an Actions step under another step, or after a turn
+ *   that asked for a loop (production runs these with no conversation message, and never gates them);
+ * - after a turn that did not ask for an Actions step;
+ * - a run whose agent is not a Loop agent.
+ *
+ * @param request The `nextStep` of the turn before the actions, or null when it has none.
+ * @param actionSteps The stretch's Actions steps.
+ * @param agentType The name of the run's agent's type.
+ */
+export function StructuralGateStatus(
+    request: JSONObject | null,
+    actionSteps: ReadonlyArray<Pick<ReplayStepRow, 'ParentID'>>,
+    agentType: string | null
+): FinishIfGateStatus | null {
+    const step = request?.step;
+    if (actionSteps.some(s => !!s.ParentID) || (typeof step === 'string' && LOOP_STEPS.includes(step))) {
+        return 'loop-iteration';
+    }
+    if (step !== 'Actions') {
+        return 'not-an-actions-turn';
+    }
+    return (agentType ?? '').trim().toLowerCase() === LOOP_AGENT_TYPE_NAME.toLowerCase() ? null : 'not-a-loop-agent';
+}
+
+/** Production's result checks, in its order: every action succeeded, then none returned AIDirectives. */
 export function GateStatusOf(actions: readonly ReplayAction[]): FinishIfGateStatus {
     if (!actions.every(action => action.Succeeded)) {
         return 'action-failed';
@@ -174,7 +211,7 @@ function buildRound(before: ReplayStepRow, actionSteps: readonly ReplayStepRow[]
         Reasoning: readString(request?.reasoning) ?? '',
         RequestedActions: ReadRequestedActions(request),
         Actions: actions,
-        GateStatus: GateStatusOf(actions)
+        GateStatus: StructuralGateStatus(request, actionSteps, before.AgentType) ?? GateStatusOf(actions)
     };
 }
 

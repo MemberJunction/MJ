@@ -51,6 +51,9 @@ export interface CorpusSummary {
     Rounds: number;
     Labels: LabelCounts;
     ByNextStep: NextStepCount[];
+    NeverGatedLoopIteration: LabelCounts;
+    NeverGatedNotAnActionsTurn: LabelCounts;
+    NeverGatedNotALoopAgent: LabelCounts;
     NeverGatedActionFailed: LabelCounts;
     NeverGatedMayHaveDirectives: LabelCounts;
     Gated: LabelCounts;
@@ -119,6 +122,7 @@ export const FINISH_IF_REPLAY_NOTES: readonly string[] = [
     'The corpus is simulated users talking to real MJ agents.',
     "The authored arm's questions are an LLM's reconstruction from the turn that asked for the actions, not what the loop model would have written live.",
     'A label is `finish` when the next turn is Success, or terminates without asking for actions (a Chat reply included); every other next turn is `continue`.',
+    "Production gates only the Actions step a Loop agent's turn asked for: a ForEach or While loop's iterations, actions after any other kind of turn, and a non-Loop agent's actions are never gated.",
     'Recorded Actions steps do not keep AIDirectives. A round with an action that can return them is treated as never gated.',
     'The state is formatted from the recorded, JSON-serialized results; media outputs keep their data instead of the placeholder production would show.',
     'A false finish saves nothing: net savings count the skipped turns of `finish` rounds only, less the gate on every decided round.',
@@ -152,6 +156,9 @@ export function SummarizeCorpus(extraction: RoundExtraction, sampled: readonly R
         Rounds: rounds.length,
         Labels: counts(rounds),
         ByNextStep: byNextStep(rounds),
+        NeverGatedLoopIteration: counts(rounds.filter(r => r.GateStatus === 'loop-iteration')),
+        NeverGatedNotAnActionsTurn: counts(rounds.filter(r => r.GateStatus === 'not-an-actions-turn')),
+        NeverGatedNotALoopAgent: counts(rounds.filter(r => r.GateStatus === 'not-a-loop-agent')),
         NeverGatedActionFailed: counts(rounds.filter(r => r.GateStatus === 'action-failed')),
         NeverGatedMayHaveDirectives: counts(rounds.filter(r => r.GateStatus === 'may-have-directives')),
         Gated: counts(rounds.filter(r => r.GateStatus === 'gated')),
@@ -246,6 +253,9 @@ function renderCorpus(corpus: CorpusSummary): string[] {
         '|---|---|',
         `| Agent runs with a round | ${corpus.AgentRuns} |`,
         `| Rounds | ${corpus.Rounds} (${labels(corpus.Labels)}) |`,
+        `| Never gated: a ForEach or While loop's iterations | ${labels(corpus.NeverGatedLoopIteration)} |`,
+        `| Never gated: the turn before did not ask for an Actions step | ${labels(corpus.NeverGatedNotAnActionsTurn)} |`,
+        `| Never gated: not a Loop agent's run | ${labels(corpus.NeverGatedNotALoopAgent)} |`,
         `| Never gated: an action failed | ${labels(corpus.NeverGatedActionFailed)} |`,
         `| Never gated: an action may have returned AIDirectives | ${labels(corpus.NeverGatedMayHaveDirectives)} |`,
         `| Gated | ${labels(corpus.Gated)} |`,

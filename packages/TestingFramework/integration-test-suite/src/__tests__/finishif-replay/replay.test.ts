@@ -19,7 +19,7 @@ import {
 import { GENERIC_FINISH_IF_QUESTION, type FinishIfReplaySettings } from '../../finishif-replay/report';
 import { ExtractRounds } from '../../finishif-replay/rounds';
 import type { AuthoredFinishIf, FinishIfReplayArm, GateObservation, ReplayPromptRunRow, ReplayRound, ReplayStepRow } from '../../finishif-replay/types';
-import { BuildCorpus, Guid, SENTINEL, type FixtureCorpus } from './fixtures';
+import { ActionStep, BuildCorpus, Guid, LoopsOver, PromptStep, SENTINEL, Succeeds, type FixtureCorpus } from './fixtures';
 
 function settings(arms: FinishIfReplayArm[] = ['authored', 'generic'], reps = 2): FinishIfReplaySettings {
     return {
@@ -188,6 +188,19 @@ describe('RunFinishIfReplay', () => {
         const result = await RunFinishIfReplay(options({ Settings: settings(['generic'], 1) }), { ...h.Deps, Author: null });
         expect(h.Decide).toHaveBeenCalledTimes(3);
         expect(result.Report?.Arms.map(a => a.Arm)).toEqual(['generic']);
+    });
+
+    it("never decides a ForEach loop's iterations, and counts them as never gated", async () => {
+        const corpus = BuildCorpus();
+        const loopRun = Guid(9, 16);
+        const loopTurn = PromptStep(loopRun, 1, LoopsOver());
+        corpus.Steps.push(loopTurn, ActionStep(loopRun, 3, { ParentID: Guid(4, 1) }), ActionStep(loopRun, 4, { ParentID: Guid(4, 1) }), PromptStep(loopRun, 5, Succeeds(), Guid(3, 6)));
+        const h = harness(corpus);
+        const result = await RunFinishIfReplay(options(), h.Deps);
+
+        expect(h.Decisions.some(d => d.RoundId === loopTurn.ID)).toBe(false);
+        expect(result.Report?.Corpus).toMatchObject({ Rounds: 6, NeverGatedLoopIteration: { Finish: 1, Continue: 0 }, Gated: { Finish: 2, Continue: 1 } });
+        expect(result.Plan.NeverGated).toBe(3);
     });
 });
 

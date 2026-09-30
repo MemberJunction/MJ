@@ -13,11 +13,16 @@ export function Guid(prefix: number, n: number): string {
     return `${String(prefix).padStart(8, '0')}-0000-0000-0000-${String(n).padStart(12, '0')}`;
 }
 
-/** A Prompt step whose output is `{ nextStep, scratchpad }`, or has no output at all. */
+/** The agent type of every fixture run, unless a test says otherwise. */
+export const LOOP = 'Loop';
+
+/** A Prompt step of a Loop agent's run, whose output is `{ nextStep, scratchpad }`, or has no output at all. */
 export function PromptStep(run: string, stepNumber: number, nextStep: JSONObject | null, promptRunId: string | null = null): ReplayStepRow {
     return {
         ID: Guid(1, Number(`${run.slice(-2)}${String(stepNumber).padStart(3, '0')}`)),
         AgentRunID: run,
+        ParentID: null,
+        AgentType: LOOP,
         StepNumber: stepNumber,
         StepType: 'Prompt',
         Status: nextStep ? 'Completed' : 'Failed',
@@ -37,6 +42,8 @@ export interface RecordedActionFixture {
     ExtraParams?: JSONObject[];
     /** AIDirectives on the recorded result, which production does not record today. */
     Directives?: JSONValue[];
+    /** The step it ran under: a ForEach or While step for a loop's iterations. */
+    ParentID?: string;
 }
 
 /** An Actions step: `{ actionName, actionParams }` in, `{ actionResult }` out, with an Input and an Output param. */
@@ -45,6 +52,8 @@ export function ActionStep(run: string, stepNumber: number, fixture: RecordedAct
     return {
         ID: Guid(2, Number(`${run.slice(-2)}${String(stepNumber).padStart(3, '0')}`)),
         AgentRunID: run,
+        ParentID: fixture.ParentID ?? null,
+        AgentType: LOOP,
         StepNumber: stepNumber,
         StepType: 'Actions',
         Status: fixture.Status ?? (success ? 'Completed' : 'Failed'),
@@ -73,6 +82,26 @@ export function AsksForActions(): JSONObject {
         terminate: false,
         reasoning: `${SENTINEL} reasoning before the actions`,
         actions: [{ name: 'Web Search', params: { Query: `${SENTINEL} requested params` } }]
+    };
+}
+
+/** A turn that runs one action over each item of a list: a ForEach loop. */
+export function LoopsOver(): JSONObject {
+    return {
+        step: 'ForEach',
+        terminate: false,
+        reasoning: `${SENTINEL} loop over the items`,
+        forEach: { collectionPath: 'payload.items', itemVariable: 'item', action: { name: 'Web Search', params: { Query: '{{item}}' } } }
+    };
+}
+
+/** A turn that runs one action while a condition holds: a While loop. */
+export function LoopsWhile(): JSONObject {
+    return {
+        step: 'While',
+        terminate: false,
+        reasoning: `${SENTINEL} loop while more pages`,
+        while: { condition: 'payload.hasMore', action: { name: 'Web Search', params: { Query: 'next' } } }
     };
 }
 
