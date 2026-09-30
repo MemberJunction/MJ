@@ -222,7 +222,7 @@ function warnings(suite: GeneratedSuite): string[] {
     const undecidable = suite.Cases.filter(c => !IsDecidableOffline(c.Point)).length;
     if (undecidable > 0) {
         out.push(`${undecidable} point(s) have nothing to decide (the previous agent never answered in the history): `
-            + 'production makes no call there, so their runs will be Errors with no model call.');
+            + 'production makes no call there, so their runs will be Skipped, with no model call.');
     }
     if (suite.UnlabelledCount > 0) {
         out.push(`${suite.UnlabelledCount} point(s) have no label from this source and are left out.`);

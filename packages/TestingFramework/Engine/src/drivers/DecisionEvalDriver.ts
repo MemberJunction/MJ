@@ -95,8 +95,8 @@ const SAMPLING_NOT_APPLIED = 'The decision path has no sampling parameters: AIDe
  * **Sampling.** `temperature` and `seed` are recorded but do not reach the model: the decision path
  * has no parameter for them (see {@link SAMPLING_NOT_APPLIED}).
  *
- * **Never throws.** A bad test, a missing prompt, a point with nothing to decide, and a failed
- * decision all come back as an `Error` run with the reason.
+ * **Never throws.** A bad test, a missing prompt and a failed decision come back as an `Error` run
+ * with the reason. A point with nothing to decide is `Skipped`: production makes no call there.
  */
 @RegisterClass(BaseTestDriver, 'DecisionEvalDriver')
 export class DecisionEvalDriver extends BaseTestDriver {
