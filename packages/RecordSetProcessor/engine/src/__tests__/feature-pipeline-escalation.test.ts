@@ -94,8 +94,16 @@ RegisterClass(BaseFeaturePipelineDriver, 'EscalationTest_LLMStub')(LLMStubDriver
 /** The decision runner's results, one per call, in call order. */
 const decisionRunnerResults: AIDecisionRunResult[] = [];
 
-/** The real Decision driver, with only its decision runner replaced by one returning `decisionRunnerResults`. */
+/**
+ * The real Decision driver, with its decision runner replaced by one returning `decisionRunnerResults`.
+ * The prompt is taken as a Decision prompt: the driver's own tests cover that check, and these fixtures
+ * carry no model types.
+ */
 class MockedRunnerDecisionDriver extends DecisionFeaturePipelineDriver {
+    protected override IsDecisionPrompt(): boolean {
+        return true;
+    }
+
     protected override CreateDecisionRunner(): AIDecisionRunner {
         const runner: Pick<AIDecisionRunner, 'ExecuteDecision'> = {
             ExecuteDecision: async () => {
