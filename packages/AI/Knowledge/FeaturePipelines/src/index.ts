@@ -11,3 +11,4 @@ export * from './spec/feature-pipeline-driver-capabilities.js';
 export * from './validation/constraint-validator.js';
 export * from './materialization/target-validator.js';
 export * from './cache/FeatureValueCacheService.js';
+export * from './entities/MJRecordProcessEntityExtended.js';

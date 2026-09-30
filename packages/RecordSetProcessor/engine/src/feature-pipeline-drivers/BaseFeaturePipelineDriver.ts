@@ -8,13 +8,14 @@
  * @module @memberjunction/record-set-processor
  */
 
-import type { IMetadataProvider } from '@memberjunction/core';
 import type { AIPromptParams, AIPromptRunResult, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import type { RecordProcessorContext, RecordRef } from '@memberjunction/record-set-processor-base';
-import type {
-    DataFeatureOutput,
-    DataFeatureSpec,
-    FeaturePipelineDriverCapabilities,
+import {
+    ValidateOutputsAgainstCapabilities,
+    type DataFeatureOutput,
+    type DataFeatureSpec,
+    type FeaturePipelineDriverCapabilities,
+    type FeaturePipelineFieldValueLookup,
 } from '@memberjunction/feature-pipelines';
 
 /**
@@ -54,6 +55,8 @@ export interface FeaturePipelineComputeRequest {
     Spec?: DataFeatureSpec;
     /** Callbacks into the processor's overridable steps. */
     Hooks: FeaturePipelineComputeHooks;
+    /** Optional field values lookup scoped to the pipeline's entity. */
+    FieldValues?: FeaturePipelineFieldValueLookup;
 }
 
 /** A driver computed the record's outputs. */
@@ -92,39 +95,14 @@ export abstract class BaseFeaturePipelineDriver {
     public abstract get Capabilities(): FeaturePipelineDriverCapabilities;
 
     /**
-     * Checks each output's constraint type and target mode against {@link Capabilities}.
-     * An output with no constraint is not checked for its constraint type.
-     * @param spec - The pipeline's spec
-     * @param provider - The run's metadata provider, for a driver that reads entity metadata to check an
-     *   output. The base check doesn't use it.
-     * @returns One message per output this driver cannot produce; empty when it can produce them all.
+     * Checks each output's constraint type, target mode, and rules against {@link Capabilities}.
+     * An output with no constraint is not checked for its constraint type unless the type requires constraints.
+     * @returns One message per output or rule this driver cannot satisfy; empty when it can produce them all.
      */
-    public ValidateOutputs(spec: DataFeatureSpec, provider?: IMetadataProvider): string[] {
-        const messages: string[] = [];
-        for (const output of spec.Outputs ?? []) {
-            const reasons = this.unsupportedReasons(output);
-            if (reasons.length > 0) {
-                messages.push(`Output '${output.Name}' ${reasons.join(' and ')}.`);
-            }
-        }
-        return messages;
+    public ValidateOutputs(spec: DataFeatureSpec, fieldValues?: FeaturePipelineFieldValueLookup): string[] {
+        return ValidateOutputsAgainstCapabilities(spec, this.Capabilities, fieldValues);
     }
 
     /** Computes one record's output values. */
     public abstract ComputeOutputs(request: FeaturePipelineComputeRequest): Promise<FeaturePipelineComputeResult>;
-
-    /** Lists why this driver cannot produce one output. */
-    private unsupportedReasons(output: DataFeatureOutput): string[] {
-        const capabilities = this.Capabilities;
-        const reasons: string[] = [];
-        const constraintType = output.Constraint?.Type;
-        if (constraintType && !capabilities.ConstraintTypes.includes(constraintType)) {
-            reasons.push(`has constraint type '${constraintType}', which this pipeline type cannot produce`);
-        }
-        const targetMode = output.Target?.Mode;
-        if (targetMode && !capabilities.TargetModes.includes(targetMode)) {
-            reasons.push(`has target mode '${targetMode}', which this pipeline type does not support`);
-        }
-        return reasons;
-    }
 }

@@ -19,7 +19,7 @@
  */
 
 import { RegisterClass, Canonicalize, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
-import { IMetadataProvider, Metadata } from '@memberjunction/core';
+import { Metadata } from '@memberjunction/core';
 import { AIEngine } from '@memberjunction/aiengine';
 import {
     AIDecisionRunner,
@@ -34,10 +34,12 @@ import {
 } from '@memberjunction/ai';
 import type { MJAIModelEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import {
+    BuildEntityFieldValueLookup,
     DECISION_FEATURE_PIPELINE_CAPABILITIES,
+    ResolveEnumChoices,
     type DataFeatureOutput,
-    type DataFeatureSpec,
     type FeaturePipelineDriverCapabilities,
+    type FeaturePipelineFieldValueLookup,
 } from '@memberjunction/feature-pipelines';
 import {
     BaseFeaturePipelineDriver,
@@ -58,83 +60,6 @@ export class DecisionFeaturePipelineDriver extends BaseFeaturePipelineDriver {
     /** Supported constraint types (boolean, enum, numeric) and field targets; produces confidence, no reasoning. */
     public get Capabilities(): FeaturePipelineDriverCapabilities {
         return DECISION_FEATURE_PIPELINE_CAPABILITIES;
-    }
-
-    /**
-     * Validates that the spec conforms to Decision pipeline requirements:
-     * - Rejects pipelines with `CaptureReasoning: true` (decision models do not produce reasoning).
-     * - Enforces that every output has a valid constraint (boolean, enum, or leveled numeric).
-     * - Validates numeric constraints require between 2 and 10 Level descriptions.
-     * - Validates enum constraints have <= 255 values, each with a description.
-     */
-    public override ValidateOutputs(spec: DataFeatureSpec, provider?: IMetadataProvider): string[] {
-        const messages: string[] = [];
-
-        if (spec.CaptureReasoning) {
-            messages.push('Decision pipelines do not produce reasoning; remove CaptureReasoning or use an LLM pipeline.');
-        }
-
-        messages.push(...super.ValidateOutputs(spec, provider));
-
-        for (const output of spec.Outputs ?? []) {
-            if (!output.Constraint) {
-                messages.push(`Output '${output.Name}' has no constraint; Decision pipelines require boolean, enum, or leveled numeric constraints.`);
-                continue;
-            }
-
-            if (output.Constraint.Type === 'numeric') {
-                const levels = output.Constraint.Levels;
-                if (!levels || !Array.isArray(levels) || levels.length < 2 || levels.length > 10) {
-                    messages.push(`Numeric output '${output.Name}' requires between 2 and 10 Level descriptions.`);
-                }
-            } else if (output.Constraint.Type === 'enum') {
-                let values = output.Constraint.Values ? [...output.Constraint.Values] : [];
-                const descriptions: Record<string, string> = { ...(output.Constraint.ValueDescriptions ?? {}) };
-
-                if (output.Target?.Mode === 'field') {
-                    const fieldName = output.Target.EntityFieldName ?? (output.Target as { Field?: string }).Field;
-                    if (fieldName) {
-                        try {
-                            const md = provider ?? Metadata.Provider;
-                            if (md?.Entities) {
-                                for (const entity of md.Entities) {
-                                    const field = entity.Fields?.find((f) => f.Name.toLowerCase() === fieldName.toLowerCase());
-                                    if (field?.EntityFieldValues && field.EntityFieldValues.length > 0) {
-                                        if (values.length === 0) {
-                                            values = field.EntityFieldValues.map((v) => v.Value);
-                                        }
-                                        for (const efv of field.EntityFieldValues) {
-                                            if (efv.Description && !descriptions[efv.Value]) {
-                                                descriptions[efv.Value] = efv.Description;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        } catch {
-                            // metadata lookup failure will be checked below against values & descriptions
-                        }
-                    }
-                }
-
-                if (values.length > 255) {
-                    messages.push(`Enum output '${output.Name}' has ${values.length} values; maximum supported for Decision is 255.`);
-                }
-
-                if (values.length === 0) {
-                    messages.push(`Enum output '${output.Name}' has no values defined.`);
-                } else {
-                    const missingDesc = values.filter((v) => !descriptions[v] || descriptions[v].trim().length === 0);
-                    if (missingDesc.length > 0) {
-                        messages.push(
-                            `Enum output '${output.Name}' values missing descriptions: ${missingDesc.join(', ')}. Decision models require a description for every choice option.`
-                        );
-                    }
-                }
-            }
-        }
-
-        return messages;
     }
 
     /**
@@ -285,34 +210,14 @@ export class DecisionFeaturePipelineDriver extends BaseFeaturePipelineDriver {
                 };
                 questions[output.Name] = question;
             } else if (constraint.Type === 'enum') {
-                let values = constraint.Values ? [...constraint.Values] : [];
-                const descriptions: Record<string, string> = { ...(constraint.ValueDescriptions ?? {}) };
-
-                if (output.Target?.Mode === 'field') {
-                    const fieldName = output.Target.EntityFieldName;
-                    if (fieldName) {
-                        const entity = request.Context.provider?.EntityByID(request.Record.EntityID)
-                            ?? Metadata.Provider?.EntityByID(request.Record.EntityID);
-                        const field = entity?.Fields?.find((f) => f.Name.toLowerCase() === fieldName.toLowerCase());
-                        if (field?.EntityFieldValues) {
-                            if (values.length === 0) {
-                                values = field.EntityFieldValues.map((v) => v.Value);
-                            }
-                            for (const efv of field.EntityFieldValues) {
-                                if (efv.Description && !descriptions[efv.Value]) {
-                                    descriptions[efv.Value] = efv.Description;
-                                }
-                            }
-                        }
-                    }
-                }
-
+                // The same choices the output check resolved, so the options asked are the values allowed
+                const choices = ResolveEnumChoices(output, request.FieldValues ?? this.recordEntityFieldValues(request));
                 const question: ChoiceQuestion = {
                     Kind: 'Choice',
                     Instructions: instructions,
-                    Options: values.map((v) => ({
+                    Options: (choices?.Values ?? []).map((v) => ({
                         Value: v,
-                        Description: descriptions[v] || v,
+                        Description: choices?.Descriptions[v] || v,
                     })),
                 };
                 questions[output.Name] = question;
@@ -327,6 +232,16 @@ export class DecisionFeaturePipelineDriver extends BaseFeaturePipelineDriver {
         }
 
         return questions;
+    }
+
+    /**
+     * The value lists of the record's entity, for a request the processor sent without its lookup (a driver
+     * called on its own). Reads the run's provider, and the global one only when the run has none.
+     */
+    private recordEntityFieldValues(request: FeaturePipelineComputeRequest): FeaturePipelineFieldValueLookup | undefined {
+        const entityID = request.Context.entityID ?? request.Record.EntityID;
+        const provider = request.Context.provider ?? Metadata.Provider; // global-provider-ok: last-resort fallback for a context built without its provider
+        return entityID && provider ? BuildEntityFieldValueLookup(provider.EntityByID(entityID)) : undefined;
     }
 
     /** Maps the decision model's answers back to structured output values and per-output confidences. */

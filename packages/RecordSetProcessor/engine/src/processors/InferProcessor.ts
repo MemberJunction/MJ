@@ -12,7 +12,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { IMetadataProvider, LogError, Metadata, RunQuery, RunView } from '@memberjunction/core';
+import { LogError, Metadata, RunQuery, RunView } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual, Canonicalize, ComputeContentHashAsync, EscapeSQLString, resolveMappingRef, resolveValueMapping } from '@memberjunction/global';
 import { KnowledgeHubMetadataEngine, type MJFeaturePipelineTypeEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -28,10 +28,12 @@ import {
     DataFeatureOutput,
     FeatureValueCacheService,
     ResolveConstraint,
+    BuildEntityFieldValueLookup,
     type CacheKeyResult,
     renderConstraintBlock,
     validateOutputValue,
     type ViolationPolicy,
+    type FeaturePipelineFieldValueLookup,
 } from '@memberjunction/feature-pipelines';
 import { EntityDocumentCache, EntityDocumentTemplateParser } from '@memberjunction/entity-documents';
 import type { OutputMappingConfig } from '../writeBack';
@@ -135,6 +137,7 @@ export class InferProcessor implements IRecordProcessor {
             }
         }
 
+        const fieldValues = this.buildFieldValuesLookup(context);
         // The pipeline type's driver turns the record's context into its outputs (for LLM: the prompt run and its hooks)
         const computed = await resolution.Driver.ComputeOutputs({
             Record: record,
@@ -142,6 +145,7 @@ export class InferProcessor implements IRecordProcessor {
             Prompt: prompt,
             Spec: this.spec,
             Hooks: this.buildComputeHooks(),
+            FieldValues: fieldValues,
         });
 
         const aiPromptRunID = computed.AIPromptRunID;
@@ -500,7 +504,7 @@ export class InferProcessor implements IRecordProcessor {
         const pipelineType = await this.findPipelineType(typeName, context);
         const driver = pipelineType ? this.createDriver(pipelineType) : this.createDriverWithoutCatalogRow(typeName);
         if (this.spec) {
-            this.assertDriverProducesOutputs(driver, typeName, this.spec, context.provider);
+            this.assertDriverProducesOutputs(driver, typeName, this.spec, context);
         }
         return driver;
     }
@@ -548,14 +552,28 @@ export class InferProcessor implements IRecordProcessor {
         return driver;
     }
 
+    /**
+     * The value lists of the pipeline's own entity (`context.entityID`), for the output check and the
+     * driver. Consults only that entity's fields, so a same-named field elsewhere is never read; undefined
+     * when the run names no entity or the provider does not know it.
+     */
+    private buildFieldValuesLookup(context: RecordProcessorContext): FeaturePipelineFieldValueLookup | undefined {
+        if (!context.entityID) {
+            return undefined;
+        }
+        const provider = context.provider ?? Metadata.Provider; // global-provider-ok: last-resort fallback for a context built without its provider
+        return typeof provider?.EntityByID === 'function' ? BuildEntityFieldValueLookup(provider.EntityByID(context.entityID)) : undefined;
+    }
+
     /** Fails when the driver cannot produce one or more of the spec's outputs, naming every one. */
     private assertDriverProducesOutputs(
         driver: BaseFeaturePipelineDriver,
         typeName: string,
         spec: DataFeatureSpec,
-        provider: IMetadataProvider | undefined
+        context: RecordProcessorContext
     ): void {
-        const messages = driver.ValidateOutputs(spec, provider);
+        const fieldValues = this.buildFieldValuesLookup(context);
+        const messages = driver.ValidateOutputs(spec, fieldValues);
         if (messages.length > 0) {
             throw new Error(`Feature Pipeline type '${typeName}' cannot produce every output: ${messages.join(' ')}`);
         }
