@@ -746,29 +746,20 @@ export class PushService {
 
   /**
    * When a directory wrote a metadata-dataset entity, reload inside the push transaction so the
-   * next directory sees those rows (MJ#4836). Dry runs never reload. A host that predates the
-   * reload API (unit-test fakes) is left alone.
+   * next directory sees those rows (MJ#4836). Dry runs never reload.
    *
    * `since` is an index into `changeDetails`. Pass the index from before one directory to reload
-   * only for that directory; pass 0 before Phase 2 / 2.5 to reload again even if the last
-   * directory already did.
+   * only for that directory. Pass the index from the start of Phase 2 before Phase 2.5 so a
+   * deletion recorded after the per-directory reloads still reloads, without repeating them.
    */
   private async reloadMetadataIfTouched(since: number, dryRun: boolean): Promise<void> {
     if (dryRun) {
       return;
     }
-    const host = this.hostProvider() as DatabaseProviderBase & {
-      IsMetadataDatasetMember?: (entityName: string) => boolean;
-      RefreshWithinTransaction?: () => Promise<boolean>;
-    };
-    const isMember = host.IsMetadataDatasetMember;
-    const refresh = host.RefreshWithinTransaction;
-    if (typeof isMember !== 'function' || typeof refresh !== 'function') {
-      return;
-    }
-    const touched = this.changeDetails.slice(since).some((change) => isMember.call(host, change.entityName));
+    const host = this.hostProvider();
+    const touched = this.changeDetails.slice(since).some((change) => host.IsMetadataDatasetMember(change.entityName));
     if (touched) {
-      await refresh.call(host);
+      await host.RefreshWithinTransaction();
     }
   }
 
@@ -777,12 +768,8 @@ export class PushService {
    * sees only committed rows. A failure here must not hide the rollback error.
    */
   private async refreshHostMetadataAfterRollback(callbacks?: PushCallbacks): Promise<void> {
-    const host = this.hostProvider() as DatabaseProviderBase & { Refresh?: () => Promise<boolean> };
-    if (typeof host.Refresh !== 'function') {
-      return;
-    }
     try {
-      await host.Refresh();
+      await this.hostProvider().Refresh();
     } catch (refreshError) {
       const message = refreshError instanceof Error ? refreshError.message : String(refreshError);
       callbacks?.onWarn?.(`⚠️  Metadata could not be reloaded after the push rolled back: ${message}`);
@@ -824,21 +811,23 @@ export class PushService {
     // PHASE 1: creates and updates
     const totals = await this.processAllEntityDirectories(run);
 
+    // Taken before any Phase 2 write. Each directory already reloaded after its own writes,
+    // so Phase 2 does not reload again. Phase 2.5 uses this index: a deletion lands in
+    // changeDetails after it, and that is the only reason to reload again (MJ#4836).
+    const changesBeforePhase2 = this.changeDetails.length;
+
     // PHASE 2: deletions in reverse dependency order.
-    // Reload even when the last directory already did: a deletion reads the metadata the
-    // creates just wrote, and that reload has to land before this phase starts (MJ#4836).
     if (run.deletionAudit && totals.errors === 0) {
-      await this.reloadMetadataIfTouched(0, options.dryRun);
       const deletionResult = await this.processDeletionsFromAudit(run.deletionAudit, options, callbacks);
       totals.deleted += deletionResult.deleted;
       totals.errors += deletionResult.errors;
     }
 
     // PHASE 2.5: deferred records (circular dependencies).
-    // Same reload as between directories: deferred saves must see metadata written above,
-    // including a metadata row Phase 2 just deleted (MJ#4836).
+    // Reload when a deletion since the start of Phase 2 touched a metadata dataset, so a
+    // deferred save sees that row gone. Directories already reloaded their own writes (MJ#4836).
     if (this.deferredRecords.length > 0 && totals.errors === 0) {
-      await this.reloadMetadataIfTouched(0, options.dryRun);
+      await this.reloadMetadataIfTouched(changesBeforePhase2, options.dryRun);
       const deferredResult = await this.processDeferredRecords(options, callbacks);
       totals.created += deferredResult.created;
       totals.updated += deferredResult.updated;

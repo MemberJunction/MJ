@@ -15,6 +15,8 @@ import type { PushCallbacks, PushOptions } from '../services/PushService';
 
 class Host {
     events: string[] = [];
+    /** Entity names passed to IsMetadataDatasetMember, in call order. */
+    membershipChecks: string[] = [];
     TransactionDepth = 0;
     readonly PlatformKey = 'sqlserver';
 
@@ -23,7 +25,9 @@ class Host {
     async RollbackTransaction(): Promise<void> {}
 
     IsMetadataDatasetMember(entityName: string): boolean {
-        return entityName.trim().toLowerCase() === 'mj: authorizations';
+        this.membershipChecks.push(entityName);
+        const name = entityName.trim().toLowerCase();
+        return name === 'mj: authorizations' || name === 'mj: entities';
     }
 
     async RefreshWithinTransaction(): Promise<boolean> {
@@ -38,6 +42,8 @@ class Host {
 }
 
 let host = new Host();
+/** When set, the deletion-auditor mock reports this one record for Phase 2. */
+let plannedDeletion: FlattenedRecord | undefined;
 
 vi.mock('@memberjunction/core', async () => {
     const actual = await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core');
@@ -64,6 +70,7 @@ vi.mock('../lib/sync-metadata-engine', () => ({
         async Config(): Promise<void> {}
         drainWarnings(): string[] { return []; }
         getDelegationSummary(): never[] { return []; }
+        removeEntityFromCache(): void {}
     },
 }));
 
@@ -104,20 +111,42 @@ vi.mock('../lib/record-dependency-analyzer', async () => {
     return { ...actual, RecordDependencyAnalyzer: FlatAnalyzer };
 });
 
+vi.mock('../lib/deletion-auditor', () => ({
+    DeletionAuditor: class {
+        async auditDeletions() {
+            const record = plannedDeletion;
+            return {
+                explicitDeletes: new Map(record ? [[record.id, record]] : []),
+                implicitDeletes: new Map(),
+                alreadyDeleted: new Map(),
+                databaseOnlyReferences: [],
+                databaseOnlyDeletions: [],
+                reverseDependencies: new Map(),
+                deletionLevels: record ? [[record]] : [],
+                circularDependencies: [],
+                orphanedReferences: [],
+            };
+        }
+    },
+}));
+
 import { PushService } from '../services/PushService';
 import { PushAbortedError } from '../lib/push-outcome';
 
 class ReloadProbe extends PushService {
     protected override async processFlattenedRecord(
         flattenedRecord: FlattenedRecord,
-        _entityDir: string,
+        entityDir: string,
         _options: PushOptions,
         _batchContext: BatchContext,
         _callbacks?: PushCallbacks,
-        _entityConfig?: EntityConfig,
-        _allowDefer: boolean = true,
+        entityConfig?: EntityConfig,
+        allowDefer: boolean = true,
         _recordProvider?: IMetadataProvider
     ) {
+        if (flattenedRecord.record.deleteRecord?.delete === true) {
+            return { status: 'skipped' as const }; // Phase 2 owns deletes
+        }
         const name = String(flattenedRecord.record.fields?.Name ?? '');
         host.events.push(`save:${name}`);
         // A nested relatedEntities row is recorded under its own entity name, not the directory's.
@@ -132,6 +161,15 @@ class ReloadProbe extends PushService {
         if (flattenedRecord.record.fields?.Behavior === 'throw') {
             throw new Error(`boom at ${name}`);
         }
+        if (flattenedRecord.record.fields?.Behavior === 'defer') {
+            if (allowDefer) {
+                return {
+                    status: 'deferred' as const,
+                    deferredRecord: { flattenedRecord, entityDir, entityConfig: entityConfig as EntityConfig },
+                };
+            }
+            return { status: 'updated' as const };
+        }
         return { status: 'created' as const };
     }
 }
@@ -142,11 +180,19 @@ function makeSyncEngine(): SyncEngine {
         getProvider: () => host,
         calculateChecksum: () => 'checksum',
         WarningSink: undefined,
+        getEntityInfo: () => ({ PrimaryKeys: [{ Name: 'ID' }] }),
+        loadEntity: async () => ({
+            Get: () => 'id-1',
+            Delete: async () => {
+                host.events.push('delete:metadata');
+                return true;
+            },
+        }),
     };
     return stub as unknown as SyncEngine;
 }
 
-type Folder = { name: string; records: Array<Record<string, unknown>> };
+type Folder = { name: string; records: Array<Record<string, unknown>>; includeDelete?: boolean };
 
 async function writeFixture(root: string, folders: Folder[]): Promise<void> {
     await fs.writeJson(path.join(root, '.mj-sync.json'), {
@@ -158,7 +204,15 @@ async function writeFixture(root: string, folders: Folder[]): Promise<void> {
         const dir = path.join(root, folder.name);
         await fs.ensureDir(dir);
         await fs.writeJson(path.join(dir, '.mj-sync.json'), { entity: `Entity ${folder.name}` });
-        await fs.writeJson(path.join(dir, '.records.json'), folder.records.map((fields) => ({ fields })));
+        const rows: unknown[] = folder.records.map((fields) => ({ fields }));
+        if (folder.includeDelete) {
+            rows.push({
+                primaryKey: { ID: 'del-1' },
+                fields: { Name: 'gone' },
+                deleteRecord: { delete: true },
+            });
+        }
+        await fs.writeJson(path.join(dir, '.records.json'), rows);
     }
 }
 
@@ -168,6 +222,7 @@ describe('PushService reloads metadata between directories (MJ#4836)', () => {
 
     beforeEach(async () => {
         host = new Host();
+        plannedDeletion = undefined;
         root = await fs.mkdtemp(path.join(os.tmpdir(), 'mj-push-reload-'));
         service = new ReloadProbe(makeSyncEngine(), {} as UserInfo);
     });
@@ -224,5 +279,45 @@ describe('PushService reloads metadata between directories (MJ#4836)', () => {
         expect(host.events.slice(0, secondSave)).toEqual(['save:a1', 'refresh']);
         expect(host.events).toContain('pool-refresh');
         expect(host.events.indexOf('pool-refresh')).toBeGreaterThan(secondSave);
+    });
+
+    it('does not reload again at the start of Phase 2, and reloads before Phase 2.5 when a later deletion touches metadata', async () => {
+        plannedDeletion = {
+            record: {
+                primaryKey: { ID: 'del-1' },
+                fields: { Name: 'gone' },
+                deleteRecord: { delete: true },
+            },
+            entityName: 'MJ: Entities',
+            depth: 0,
+            path: 'MJ: Entities[0]',
+            dependencies: new Set<string>(),
+            id: 'del-1',
+            originalIndex: 0,
+            graphId: 'del-g0',
+        };
+        await writeFixture(root, [
+            {
+                name: 'a',
+                includeDelete: true,
+                records: [
+                    { Name: 'a1', TouchesMetadata: true },
+                    { Name: 'later', Behavior: 'defer' },
+                ],
+            },
+        ]);
+        await service.push({ dir: root }, {});
+
+        // One refresh after the directory. None before the deletion. One more after it,
+        // before the deferred pass — and that check is the deletion, not the directory write.
+        expect(host.events).toEqual([
+            'save:a1',
+            'save:later',
+            'refresh',
+            'delete:metadata',
+            'refresh',
+            'save:later',
+        ]);
+        expect(host.membershipChecks).toEqual(['MJ: Authorizations', 'MJ: Entities']);
     });
 });
