@@ -113,6 +113,36 @@ describe('Architect Agent Example Output and Decision Step Validation', () => {
         change(spec);
         expect((await validateSpec(spec)).join('\n')).toContain(code);
     });
+
+    it('validates the Decision steps of a Flow child sub-agent', async () => {
+        const child: AgentSpec = {
+            ID: '',
+            Name: 'Ticket Router',
+            TypeID: FLOW_TYPE_ID,
+            StartingPayloadValidationMode: 'Fail',
+            Prompts: [],
+            Steps: [
+                { ID: '', Name: 'Route', StepType: 'Decision', StartingStep: true, Configuration: { key: '1bad' } },
+                { ID: '', Name: 'Escalate', StepType: 'Action', StartingStep: false, ActionID: 'escalate-action-guid' },
+            ],
+            Paths: [{ ID: '', OriginStepID: 'Route', DestinationStepID: 'Escalate', Condition: 'decisions.nope.q', Priority: 0 }],
+        };
+        const parent: AgentSpec = {
+            ID: '',
+            Name: 'Support Desk',
+            TypeID: LOOP_TYPE_ID,
+            StartingPayloadValidationMode: 'Fail',
+            Prompts: [{ ID: '', PromptID: '', PromptName: 'Support Desk', PromptDescription: '', PromptText: 'Help the customer.', PromptTypeID: '' }],
+            SubAgents: [{ Type: 'child', SubAgent: child }],
+        };
+
+        const errors = await validateSpec(parent);
+        const childErrors = errors.filter(e => e.startsWith('Flow SubAgent[0] "Ticket Router" -> '));
+        expect(childErrors.join('\n')).toContain('[InvalidDecisionStep]');
+        expect(childErrors.join('\n')).toContain('it asks no questions');
+        expect(childErrors.join('\n')).toContain('[UnknownDecisionKey]');
+        expect(childErrors).toHaveLength(errors.length);
+    });
 });
 
 /** example_4's triage, asking a Likelihood as well as the Choice. */

@@ -339,6 +339,11 @@ export class AgentArchitectAgent extends BaseAgent {
                         if (!subAgent.SubAgent.Steps || subAgent.SubAgent.Steps.length === 0) {
                             errors.push(`❌ Flow SubAgent[${i}] "${subAgent.SubAgent.Name}" requires at least ONE step in Steps array`);
                         }
+
+                        // A Flow child runs its steps exactly as a Flow agent does, so they get the same checks.
+                        errors.push(...this.validateFlowSteps(subAgent.SubAgent).map(
+                            err => `Flow SubAgent[${i}] "${subAgent.SubAgent.Name}" -> ${err}`
+                        ));
                     }
                 }
             } else if (subAgent.Type === 'related') {
@@ -408,7 +413,8 @@ export class AgentArchitectAgent extends BaseAgent {
 
     /**
      * Every problem with a Flow agent's steps and paths: a starting step, each step on its own, and
-     * then the flow as the runtime compiles and validates it ({@link ValidateFlowGraph}).
+     * then the flow as the runtime compiles and validates it ({@link ValidateFlowGraph}). Used for the
+     * agent itself and for each Flow child sub-agent, which runs its steps the same way.
      */
     private validateFlowSteps(spec: Pick<AgentSpec, 'Name' | 'Steps' | 'Paths'>): string[] {
         const steps = spec.Steps ?? [];
