@@ -2666,3 +2666,85 @@ credentials with DDL rights). Without them the run is not a weaker version of th
 a different run: 28 bundles skip on the mutation gate and on an unreachable API, and the two
 materialized-entity bundles *fail* on `CREATE TABLE permission denied` rather than skipping. A
 `50 passed / 2 failed / 28 skipped` result means the environment was wrong, not the branch.
+
+## 25. §22.3 should-fix items (2026-09-29)
+
+Worked in order of how quietly each one undoes something already fixed. Every test below was run
+against the un-fixed code first; the failure message is quoted.
+
+**`categoryTTLSeconds` replaced the built-in map instead of merging over it.** `{ default: 0 }` is an
+invariant of what the `default` category *holds* — proxy keys, which must never outlive their
+subject — so a host that only wanted a dataset TTL silently reinstated the §16.3 #3 bug and gave the
+metadata timestamps key a 60 s expiry. Now merged, with `default` still overridable by naming it.
+The existing test could not see this because it passed `default: 0` explicitly; the new one configures
+only *another* category. Before the fix: `expected 60 to be -1`.
+
+**A peer notice arriving during a local change's wait erased the local change.** `UserCache.
+scheduleRefresh` carried "announce this to peers" on the timer, and each call replaced the pending
+timer, so an incoming peer notice inside the debounce window demoted a local write to "someone
+else's change" and no peer was ever told a user had changed. The transaction wait stretches that
+window to seconds, so it is not a thin race. The intent is now sticky on the instance (`_announcePending`),
+OR-ed in by each event and cleared only once peers have actually been told — so a failed publish
+retries on the next refresh rather than being lost. Before the fix: `expected [] to deeply equal [{…}]`.
+
+**`stillHoldsLock` answered "still mine" when it could not tell.** The post-work check and the lock
+renewals share one connection, so a read that throws means the renewals have been throwing too and
+the lock has most likely expired — the single case where "still mine" is both unverifiable and
+probably false, which is exactly the lost update `WithKeyLock` exists to prevent. The clock is the
+evidence that remains: a lock cannot outlive its TTL measured from the last renewal that actually
+landed, so `confirmedAt` is now tracked and the fallback compares against it. A short outage still
+trusts the lock (second test, unchanged behaviour). Before the fix: `promise resolved "'wrote'"
+instead of rejecting`.
+
+**`--category runviewcache` cleared nothing and said it succeeded.** Category names are matched
+case-insensitively — nobody should have to remember `RunViewCache` — but the accepted spelling was
+then handed to the store, which scanned `{prefix}:runviewcache:*`, matched nothing, and reported a
+successful clear of 0 keys while telling the operator the fleet would reload. Extracted
+`ResolveCacheCategories` (canonicalise, trim, de-duplicate, report unknowns in the user's spelling)
+into `lib/shared-cache.ts`, which also makes it unit-testable without oclif plumbing. Before the fix
+(pass-through reinstated): 2 failures, `canonicalises a case-insensitive spelling` and `trims,
+de-duplicates, and keeps the order asked for`.
+
+**The stale comment at the `Initialize` call site** now says what actually happens: a later caller
+that has settings is not a no-op, it applies them (§16 N5), which is the whole reason `cacheSettings`
+work at all.
+
+Suites after these: RedisProvider 87 (+21 real-Redis skipped), GenericDatabaseProvider 1,187,
+MJCLI 907. Remaining from §22.3: CA6's missing restore, the `mj migrate` throw path, local eviction
+of `expiresAt` on a shared store, the `default` category's unbounded growth + the dataset category
+mismatch (a decision — it is pre-existing upstream behaviour), the docs/test-comment list, and the
+F9 `_changeCallbacks` union, which is the largest and comes last.
+
+### 25.1 Dataset cache growth (the half of §22.3's last item that is ours)
+
+`CacheDataset` writes to the `default` category, which this branch made never-expire because that
+category holds **proxy keys** — entries that vouch for other entries, where a proxy outliving its
+subject leaves a reader holding a freshness claim with nothing behind it (§16.3 #3). Datasets are not
+proxies; they inherited "never expire" as a side effect, and `GetDatasetCacheKey` includes the item
+filters, so every distinct filter set left a blob nothing would ever remove. Before this branch they
+expired on the provider's default hour.
+
+Fixed with an explicit per-write TTL, which the store already prefers over its category default
+(`resolveWriteOptions`), so the `default` category keeps its no-expiry for the keys that actually
+need it:
+
+- `ProviderBase.DatasetCacheTTLSeconds = 3600` for the blob
+- `ProviderBase.DatasetDateCacheTTLSeconds = 3300` for its `_date` key — **deliberately shorter**
+
+The asymmetry is the point. The `_date` key is written second, so with equal lifetimes it would
+usually be the survivor, and `IsDatasetCached` (which probes only that key) would answer true with
+the blob gone. Expiring the claim first makes the pair fail in the safe direction: the cache reads as
+absent and is refetched. Providers without expiry ignore the option.
+
+Two tests, both verified to fail first — `actual value must be number or bigint, received
+"undefined"` and `Cannot read properties of undefined (reading 'TTLSeconds')`. Confirmed end to end
+against a restarted server on a flushed keyspace: dataset blobs `TTL 3592`, their date keys `TTL
+3292`, and the metadata snapshot keys still `-1`. IT07 passes 3/3; MJCore 196 files / 2,851 tests.
+
+**The category mismatch itself is not fixed here, by decision.** `GetAndCacheDatasetByName` reads
+`DatasetCache` while everything else uses `default`, so its warm-serve path has been dead on every
+transport since `987a126aab` (2026-05-02) — five months — and `mj cache clear --category DatasetCache`
+clears nothing while reporting success. Fixing it switches on code that has not run in that time,
+including a freshness comparison whose bugs have been masked by the cache never hitting, so it is its
+own branch: `dataset-cache-category` (worktree `MJ-worktrees/dataset-cache-category`, cut from
+`origin/next`), briefed in `plans/dataset-cache-category-jumpstart.md` there.

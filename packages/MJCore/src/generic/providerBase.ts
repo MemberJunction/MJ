@@ -4764,8 +4764,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // pre-validation that follows a Config which loaded nothing skip its check.
         this._configLoadedFromServer = false;
 
-        // Initialize LocalCacheManager early so dataset loading can use the cache.
-        // Initialize() is idempotent — subsequent calls (e.g. from StartupManager) are no-ops.
+        // Initialize LocalCacheManager early so dataset loading can use the cache. This call has no
+        // settings to give it, so a LATER caller that does (StartupManager, passing the host's
+        // cacheSettings) is not a no-op: Initialize applies that configuration to the already
+        // initialized manager rather than discarding it, which is what made cacheSettings inert
+        // before (plan §16 N5, §18).
         if (!LocalCacheManager.Instance.IsInitialized) {
             const storageProvider = this.LocalStorageProvider;
             await LocalCacheManager.Instance.Initialize(storageProvider);
@@ -5978,10 +5981,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (ls) {
             const key = this.GetDatasetCacheKey(datasetName, itemFilters);
             // Native object storage — no JSON.stringify on the hot path.
-            await ls.SetItem<DatasetResultType>(key, dataset);
+            await ls.SetItem<DatasetResultType>(key, dataset, undefined, { TTLSeconds: ProviderBase.DatasetCacheTTLSeconds });
             // Date is stored as ISO string for forward-compatibility across providers
             // (Redis can't natively round-trip Date; localStorage requires string).
-            await ls.SetItem<string>(key + '_date', dataset.LatestUpdateDate.toISOString());
+            await ls.SetItem<string>(key + '_date', dataset.LatestUpdateDate.toISOString(), undefined,
+                { TTLSeconds: ProviderBase.DatasetDateCacheTTLSeconds });
         }
     }
 
@@ -6010,6 +6014,28 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param itemFilters 
      * @returns 
      */
+    /**
+     * How long a cached dataset lives.
+     *
+     * Datasets share the `default` category with the metadata snapshot's proxy keys, and that
+     * category deliberately never expires — a proxy that outlives its subject is worse than one that
+     * never expires at all. Datasets are not proxies, so inheriting that was an accident: every
+     * distinct filter set (`GetDatasetCacheKey` includes the filters) left a blob nothing removed.
+     * An explicit per-write TTL restores the hour they had before, and the store prefers it over the
+     * category's own setting. Providers that do not implement expiry ignore it (plan §22.3, §25).
+     */
+    public static readonly DatasetCacheTTLSeconds = 3600;
+
+    /**
+     * How long the `_date` key lives — deliberately SHORTER than the blob it vouches for.
+     *
+     * It is written second, so with equal lifetimes it would usually be the one to survive, leaving
+     * a freshness claim with nothing behind it: `IsDatasetCached` answers true and the blob is gone.
+     * Expiring the claim first makes the pair fail in the safe direction — the cache reads as
+     * absent and is refetched.
+     */
+    public static readonly DatasetDateCacheTTLSeconds = ProviderBase.DatasetCacheTTLSeconds - 300;
+
     public GetDatasetCacheKey(datasetName: string, itemFilters?: DatasetItemFilterType[]): string {
         return this.LocalStoragePrefix + ProviderBase.localStorageRootKey + this.InstanceConnectionString + '__DATASET__' + datasetName + this.ConvertItemFiltersToUniqueKey(itemFilters);
     }
