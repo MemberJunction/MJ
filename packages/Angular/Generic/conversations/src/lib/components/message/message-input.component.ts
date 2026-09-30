@@ -2118,7 +2118,10 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       }
       input.ArtifactVersions = await this.loadRoutingArtifactVersions(message.ConversationID, input.Participants);
       const outcome = await RunRoutingDecision(input, params => this.agentService.RunDecision(params));
-      LogStatusEx({ message: `Decision routing: ${outcome.Verdict}, ${outcome.Reason}`, verboseOnly: true });
+      LogStatusEx({
+        message: `Decision routing: ${outcome.Verdict}, ${outcome.Reason} (prompt run ${outcome.PromptRunID ?? 'none'})`,
+        verboseOnly: true
+      });
       return outcome;
     } catch (error) {
       console.warn('Decision routing failed, so the message keeps continuity:', error);

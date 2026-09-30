@@ -49,6 +49,7 @@ const findAgent = (id: string): RoutingCatalogAgent | undefined => CATALOG.find(
 
 const VERSION_1 = 'BBBBBBBB-0000-0000-0000-000000000001';
 const VERSION_2 = 'BBBBBBBB-0000-0000-0000-000000000002';
+const PROMPT_RUN = 'EEEEEEEE-0000-0000-0000-000000000001';
 
 function userRow(id: string, message: string): RoutingHistoryRow {
     return { ID: id, Role: 'User', AgentID: null, Message: message };
@@ -436,7 +437,8 @@ describe('decision routing', () => {
 
         it('keeps continuity when the answer takes more than 250 ms, and ignores it when it arrives', async () => {
             vi.useFakeTimers();
-            const run = runner(() => new Promise(resolve => setTimeout(() => resolve(leaves(WRITER.ID)), DECISION_ROUTING_TIMEOUT_MS + 50)));
+            const late = { ...leaves(WRITER.ID), PromptRunID: PROMPT_RUN };
+            const run = runner(() => new Promise(resolve => setTimeout(() => resolve(late), DECISION_ROUTING_TIMEOUT_MS + 50)));
 
             const pending = RunRoutingDecision(input(), run);
             await vi.advanceTimersByTimeAsync(DECISION_ROUTING_TIMEOUT_MS + 1);
@@ -445,6 +447,17 @@ describe('decision routing', () => {
 
             expect(outcome.Verdict).toBe('KeptContinuity');
             expect(outcome.Reason).toContain('250 ms');
+            expect(outcome.PromptRunID).toBeNull();
+        });
+
+        it('carries the decision\'s prompt run, answered or failed, so a turn can be traced to it', async () => {
+            const answeredRun = await RunRoutingDecision(input(), runner({ ...leaves(WRITER.ID), PromptRunID: PROMPT_RUN }));
+            const failedRun = await RunRoutingDecision(input(), runner({ Success: false, ErrorMessage: 'unreadable answer', Answers: {}, PromptRunID: PROMPT_RUN }));
+            const noRun = await RunRoutingDecision(input(), runner({ Success: false, ErrorMessage: 'no model', Answers: {} }));
+
+            expect(answeredRun).toMatchObject({ Verdict: 'Routed', PromptRunID: PROMPT_RUN });
+            expect(failedRun).toMatchObject({ Verdict: 'KeptContinuity', PromptRunID: PROMPT_RUN });
+            expect(noRun.PromptRunID).toBeNull();
         });
 
         it('uses an answer that arrives in time', async () => {
@@ -495,7 +508,7 @@ describe('decision routing', () => {
 
     describe('ApplyRoutingDecision, then ResolveAgentTurn', () => {
         const outcome = (overrides: Partial<RoutingDecisionOutcome>): RoutingDecisionOutcome => ({
-            Verdict: 'KeptContinuity', RoutedAgentId: null, TargetArtifact: null, Reason: '', ...overrides,
+            Verdict: 'KeptContinuity', RoutedAgentId: null, TargetArtifact: null, Reason: '', PromptRunID: null, ...overrides,
         });
 
         it('a routed agent takes continuity\'s place, labelled DecisionRouted', () => {

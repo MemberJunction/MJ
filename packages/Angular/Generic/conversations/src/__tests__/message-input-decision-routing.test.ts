@@ -39,6 +39,7 @@ const INTERNAL = { ID: 'AAAAAAAA-0000-0000-0000-000000000005', Name: 'Scheduler'
 const AGENTS = [MANAGER, RESEARCH, WRITER, RETIRED, INTERNAL];
 
 const VERSION = 'BBBBBBBB-0000-0000-0000-000000000001';
+const PROMPT_RUN = 'EEEEEEEE-0000-0000-0000-000000000001';
 
 type Fn = ReturnType<typeof vi.fn>;
 type RunDecisionMock = Mock<(params: RunDecisionParams) => Promise<RunDecisionResult>>;
@@ -241,6 +242,7 @@ describe('MessageInputComponent — decision routing', () => {
 
     afterEach(() => {
         vi.useRealTimers();
+        vi.unstubAllEnvs();
         vi.restoreAllMocks();
     });
 
@@ -297,6 +299,17 @@ describe('MessageInputComponent — decision routing', () => {
             expect(routeOptionValues(params)).toEqual([WRITER.ID, RESEARCH.ID, MANAGER.ID]);
             expect(params.State).toContain('Writer: Summary drafted.');
             expect(params.State).toContain('Now turn it into a press release');
+        });
+
+        it('logs the verdict with the decision\'s prompt run, in verbose mode', async () => {
+            vi.stubEnv('MJ_VERBOSE', 'true');
+            const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+            h.runDecision.mockResolvedValue({ ...leavesTo(RESEARCH), PromptRunID: PROMPT_RUN });
+
+            await h.route(userMessage());
+
+            const lines = log.mock.calls.map(args => args.join(' '));
+            expect(lines).toContain(`Decision routing: Routed, routed to Research (prompt run ${PROMPT_RUN})`);
         });
 
         it('choosing the conversation manager sends the turn down the manager path', async () => {

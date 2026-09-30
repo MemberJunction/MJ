@@ -138,7 +138,15 @@ export interface RoutingDecisionOutcome {
     TargetArtifact: RoutingArtifactTarget | null;
     /** Why, for logs. */
     Reason: string;
+    /**
+     * The `MJ: AI Prompt Runs` row the decision wrote, which records its model and cost. Null when
+     * the server wrote none or the answer didn't arrive in time.
+     */
+    PromptRunID: string | null;
 }
+
+/** The verdict half of an outcome: what the agent Choice and thread Likelihood concluded. */
+type RouteVerdict = Pick<RoutingDecisionOutcome, 'Verdict' | 'RoutedAgentId' | 'Reason'>;
 
 /** Runs a decision on the server: `ConversationAgentService.RunDecision` in the chat. */
 export type RoutingDecisionRunner = (params: RunDecisionParams) => Promise<RunDecisionResult>;
@@ -338,11 +346,19 @@ export async function RunRoutingDecision(
  * @param result The decision's result.
  */
 export function InterpretRoutingAnswers(input: RoutingDecisionInput, result: RunDecisionResult): RoutingDecisionOutcome {
+    const promptRunId = result.PromptRunID ?? null;
     if (!result.Success) {
-        return keptContinuity(`the decision failed: ${result.ErrorMessage ?? 'no reason given'}`);
+        const failed = keptContinuity(`the decision failed: ${result.ErrorMessage ?? 'no reason given'}`);
+        return { ...failed, PromptRunID: promptRunId };
     }
     const verdict = readRouteVerdict(input, result.Answers[ROUTE_QUESTION], result.Answers[CONTINUES_QUESTION]);
-    return { ...verdict, TargetArtifact: readArtifactTarget(input, result.Answers[ARTIFACT_QUESTION]) };
+    return {
+        Verdict: verdict.Verdict,
+        RoutedAgentId: verdict.RoutedAgentId,
+        Reason: verdict.Reason,
+        TargetArtifact: readArtifactTarget(input, result.Answers[ARTIFACT_QUESTION]),
+        PromptRunID: promptRunId
+    };
 }
 
 /**
@@ -476,7 +492,7 @@ function readRouteVerdict(
     input: RoutingDecisionInput,
     route: DecisionAnswer | undefined,
     continues: DecisionAnswer | undefined
-): Omit<RoutingDecisionOutcome, 'TargetArtifact'> {
+): RouteVerdict {
     if (route?.Kind !== 'Choice' || continues?.Kind !== 'Likelihood') {
         return keptContinuity('the answer is missing the agent choice or the thread likelihood');
     }
@@ -493,7 +509,7 @@ function readRouteVerdict(
 }
 
 /** The verdict for an agent Choice that confidently left the thread. */
-function verdictForChoice(input: RoutingDecisionInput, value: string): Omit<RoutingDecisionOutcome, 'TargetArtifact'> {
+function verdictForChoice(input: RoutingDecisionInput, value: string): RouteVerdict {
     const manager = input.ConversationManager;
     if (manager && UUIDsEqual(value, manager.ID) && IsAgentAllowed(manager.ID, input.AllowedAgentIDs)) {
         return { Verdict: 'SomeoneElse', RoutedAgentId: null, Reason: 'the message moves to someone else' };
@@ -516,7 +532,7 @@ function readArtifactTarget(input: RoutingDecisionInput, answer: DecisionAnswer 
 
 /** An outcome that keeps today's routing. */
 function keptContinuity(reason: string): RoutingDecisionOutcome {
-    return { Verdict: 'KeptContinuity', RoutedAgentId: null, TargetArtifact: null, Reason: reason };
+    return { Verdict: 'KeptContinuity', RoutedAgentId: null, TargetArtifact: null, Reason: reason, PromptRunID: null };
 }
 
 /**
