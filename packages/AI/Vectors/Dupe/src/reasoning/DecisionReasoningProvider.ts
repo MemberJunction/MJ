@@ -60,9 +60,14 @@ export interface DuplicateCandidateProbability {
  * provider logs the missing calibration once per model. An app that binds another decision model
  * supplies its calibration by overriding {@link DecisionReasoningProvider.CalibrationFor}.
  *
- * Fitted on the duplicate-check measurement (plan Task 3.8, 2026-09-29): 160 labelled new records for
- * MJ: Actions (80 rewrites of an existing action, 80 similar actions that don't exist), five vector
- * candidates each, two repeats per model. Refit whenever a model, its version or the question changes.
+ * Fitted on the duplicate-check measurement (plan Task 3.8, 2026-09-29), on every candidate: 160
+ * labelled new records for MJ: Actions (80 rewrites of an existing action, 80 similar actions that
+ * don't exist), five vector candidates each. Fitted on these model versions:
+ * - `Jev`: the OpenRouter model `typesafe/jev-1.13-20260917`;
+ * - `LLM Decision`: delegating through its `LLM Decision` prompt, whose top binding was GPT-OSS-120B.
+ *
+ * The table is keyed by model name, not version, so refit whenever a model's pinned version, its
+ * delegated chat model or the question changes.
  */
 export const DUPLICATE_DECISION_CALIBRATION: Readonly<Record<string, PlattCalibration>> = Object.freeze({
     'Jev': Object.freeze({ A: 2.5855, B: -4.4485 }),
@@ -118,16 +123,18 @@ export class DecisionReasoningProvider extends DuplicateReasoningProvider {
      * The flagging threshold used when none is passed, as it is when the class factory builds the
      * provider, on **calibrated** probabilities. A flag asks a person to look, so it favours precision:
      * a missed duplicate is only today's behaviour, and needless flags teach people to ignore them.
-     * At a calibrated 0.7, Jev flagged the true source at 96.6% precision, caught 71% of duplicates, and
-     * flagged 2.5% of new records; LLM Decision scored 74%, 40% and 14%. The vector threshold alone
-     * flagged every candidate. (Duplicate-check measurement, plan Task 3.8, 2026-09-29.)
+     * At a calibrated 0.7, scored out of fold, Jev flagged the true source at 96.6% precision, caught
+     * 70% of duplicates, and flagged 2.5% of new records; LLM Decision scored 74%, 36% and 12.5%. The
+     * vector threshold alone flagged every candidate. (Duplicate-check measurement, plan Task 3.8,
+     * 2026-09-29, re-scored 2026-09-30.)
      */
     public static readonly DEFAULT_UNCERTAIN_ABOVE = 0.7;
 
     /**
      * The threshold for the decision stage of `DecisionThenPrompt`, on calibrated probabilities. There
      * the decision only drops implausible candidates before the prompt reasons over the rest, so it
-     * keeps recall: at a calibrated 0.3, Jev kept 98.8% of true duplicates and passed 14.5% of candidates.
+     * keeps recall: at a calibrated 0.3, scored out of fold, Jev kept 98.8% of true duplicates and passed
+     * 14.8% of candidates.
      */
     public static readonly PRE_FILTER_UNCERTAIN_ABOVE = 0.3;
     /** The seeded decision prompt whose model bindings choose the decision model. */
