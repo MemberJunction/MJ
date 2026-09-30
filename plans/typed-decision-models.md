@@ -51,9 +51,9 @@ retargeted to `next` when #4814 merged; before that they were stacked on `train/
 | 0.3 (4/4) Enforce `RequiredModelType` | #4801 | Merged |
 | 0.4 Deprecate `ClassifyText` / `SummarizeText` | #4714 | Merged |
 | 0.5 `AIEmbeddingRunner` and its call sites | #4843 | In review. Three call sites stay on the drivers on purpose, each with a comment: `AIEngine` (it sits below `ai-prompts`), DBAutoDoc (it has no MJ metadata), and the vectorize worker thread (it has no `AIEngine`). |
-| 0.6 Reranker runner | #4842 | In review |
-| 0.6 Image generation runner | #4844 | In review |
-| 0.6 Audio (TTS and STT runners, `BaseAudioGenerator` split) and video runner | #4909 | In review, stacked on #4844. The three runners share a `BaseMediaRunner`. Nothing in MJ called these drivers before, so no existing call site changes. |
+| 0.6 Reranker runner | #4842 | Merged |
+| 0.6 Image generation runner | #4844 | Merged |
+| 0.6 Audio (TTS and STT runners, `BaseAudioGenerator` split) and video runner | #4909 | In review. It builds on #4844, now merged. The three runners share a `BaseMediaRunner`. Nothing in MJ called these drivers before, so no existing call site changes. |
 | 0.7 Delete the in-run flow walker | — | Withdrawn (see Task 0.7) |
 | 0.8 An unevaluable `While` condition fails | #4765 | Merged |
 
