@@ -32,7 +32,7 @@ import {
 } from "./search-guardrails";
 import { MapExternalNativeTypeToMJ } from "../Misc/externalTypeMapping";
 import { SQLParser } from "@memberjunction/sql-parser";
-import { createDisplayName, generatePluralName, MJGlobal, RegisterClass, ResolveSingleEntityResourceTarget, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
+import { createDisplayName, EscapeSQLString, generatePluralName, MJGlobal, RegisterClass, ResolveSingleEntityResourceTarget, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
 import { v4 as uuidv4, v5 as uuidv5 } from 'uuid';
 
 import * as fs from 'fs';
@@ -894,6 +894,30 @@ export class ManageMetadataBase {
    }
 
    /**
+    * Schema a VirtualEntities entry resolves to when it names none. Same default as table entries.
+    */
+   protected resolveVirtualEntitySchema(ve: VirtualEntityConfig): string {
+      const schema = ve.SchemaName?.trim();
+      return schema && schema.length > 0 ? schema : 'dbo';
+   }
+
+   /**
+    * VirtualEntities entries that declare keys, in the table-entry shape the soft key writer consumes.
+    * A virtual entity stores its view name in BaseTable, so the existing SchemaName + BaseTable lookup applies.
+    */
+   protected virtualEntityConfigsAsTableConfigs(config: Record<string, unknown>): SoftPKFKTableConfig[] {
+      return this.extractVirtualEntitiesFromConfig(config)
+         .filter(ve => (ve.PrimaryKey?.length ?? 0) > 0 || (ve.ForeignKeys?.length ?? 0) > 0)
+         .map(ve => ({
+            SchemaName: this.resolveVirtualEntitySchema(ve),
+            TableName: ve.ViewName,
+            Description: ve.Description,
+            PrimaryKey: (ve.PrimaryKey ?? []).map(fieldName => ({ FieldName: fieldName })),
+            ForeignKeys: ve.ForeignKeys ?? [],
+         }));
+   }
+
+   /**
     * Extracts the MaterializedBaseViews array from the additionalSchemaInfo config file.
     * Each entry declares a 1:1 base-view materialization of an existing entity (plan §4.1).
     */
@@ -1589,26 +1613,28 @@ export class ManageMetadataBase {
    }
 
    /**
-    * Processes virtual entity configurations from the additionalSchemaInfo config.
-    * For each configured virtual entity, checks if it already exists and creates
-    * it if not. Uses the spCreateVirtualEntity stored procedure.
-    * Must run BEFORE manageVirtualEntities() so newly created entities get field-synced.
+    * Creates the virtual entities declared in additionalSchemaInfo that do not exist yet.
+    * Creation is two logged statements (Entity row with a CodeGen-generated ID, then the first key
+    * column) so the CodeGen_Run capture replays on any database. Each new entity joins its schema's
+    * application, gets the default permissions, and is registered in NewEntityList so pass 2 and
+    * file generation include it in this same run. Must run BEFORE manageVirtualEntities().
+    * An entry whose EntityName is already in use is skipped before anything is written to the capture.
     */
-   protected async processVirtualEntityConfig(pool: CodeGenConnection, currentUser: UserInfo): Promise<{ success: boolean; createdCount: number }> {
-      const config = ManageMetadataBase.getSoftPKFKConfig();
-      if (!config) return { success: true, createdCount: 0 };
+   protected async processVirtualEntityConfig(pool: CodeGenConnection, currentUser: UserInfo, md: Metadata): Promise<{ success: boolean; createdCount: number; createdEntityNames: string[] }> {
+      const config = ManageMetadataBase.GetSoftPKFKConfig();
+      if (!config) return { success: true, createdCount: 0, createdEntityNames: [] };
 
       const virtualEntities = this.extractVirtualEntitiesFromConfig(config as Record<string, unknown>);
-      if (virtualEntities.length === 0) return { success: true, createdCount: 0 };
+      if (virtualEntities.length === 0) return { success: true, createdCount: 0, createdEntityNames: [] };
 
-      let createdCount = 0;
+      const createdEntityNames: string[] = [];
+      const existingEntityNames = md.Entities.map(e => e.Name);
       const schema = MjCoreSchema();
 
       for (const ve of virtualEntities) {
-         const viewSchema = ve.SchemaName || schema;
+         const viewSchema = this.resolveVirtualEntitySchema(ve);
          const viewName = ve.ViewName;
-         const entityName = ve.EntityName || this.deriveEntityNameFromView(viewName);
-         const pkField = ve.PrimaryKey?.[0] || 'ID';
+         const configuredName = ve.EntityName || this.deriveEntityNameFromView(viewName);
 
          // Check if entity already exists for this view
          const existsResult = await this.runQueryWithParams(pool, `SELECT ID FROM ${this.qs(schema, 'vwEntities')} WHERE BaseView = @ViewName AND SchemaName = @SchemaName`,
@@ -1616,7 +1642,7 @@ export class ManageMetadataBase {
                );
 
          if (existsResult.recordset.length > 0) {
-            logStatus(`    > Virtual entity "${entityName}" already exists for view [${viewSchema}].[${viewName}], skipping creation`);
+            logStatus(`    > Virtual entity "${configuredName}" already exists for view [${viewSchema}].[${viewName}], skipping creation`);
             continue;
          }
 
@@ -1627,36 +1653,67 @@ export class ManageMetadataBase {
                );
 
          if (viewExistsResult.recordset.length === 0) {
-            logError(`    > View [${viewSchema}].[${viewName}] does not exist — skipping virtual entity creation for "${entityName}"`);
+            logError(`    > View [${viewSchema}].[${viewName}] does not exist — skipping virtual entity creation for "${configuredName}"`);
             continue;
          }
 
-         // Create the virtual entity via the stored procedure
-         try {
-            const createResult = await pool.executeStoredProcedure(`${this.qs(schema, 'spCreateVirtualEntity')}`,
-               { 'Name': entityName, 'BaseView': viewName, 'SchemaName': viewSchema, 'PrimaryKeyFieldName': pkField, 'Description': ve.Description || null }
-               );
+         const entityName = this.resolveVirtualEntityName(ve, viewSchema, existingEntityNames);
+         if (!entityName) {
+            logError(`    > Entity name "${configuredName}" is already in use — skipping virtual entity creation for view [${viewSchema}].[${viewName}]. Set a different EntityName.`);
+            continue;
+         }
+         if (entityName !== configuredName) {
+            logStatus(`    > Entity name "${configuredName}" is already in use; using "${entityName}" for view [${viewSchema}].[${viewName}]`);
+         }
 
-            const newEntityId = createResult.recordset?.[0]?.['']
-               || createResult.recordset?.[0]?.ID
-               || createResult.recordset?.[0]?.Column0;
-
-            logStatus(`    > Created virtual entity "${entityName}" (ID: ${newEntityId}) for view [${viewSchema}].[${viewName}]`);
-            createdCount++;
-
-            // Add virtual entity to the application for its schema and set default permissions
-            // (same logic as table-backed entities)
-            if (newEntityId) {
-               await this.addEntityToApplicationForSchema(pool, newEntityId, entityName, viewSchema, currentUser);
-               await this.addDefaultPermissionsForEntity(pool, newEntityId, entityName);
-            }
-         } catch (err) {
-            const errMessage = err instanceof Error ? err.message : String(err);
-            logError(`    > Failed to create virtual entity "${entityName}": ${errMessage}`);
+         if (await this.createVirtualEntityFromConfig(pool, ve, entityName, viewSchema, currentUser)) {
+            createdEntityNames.push(entityName);
          }
       }
 
-      return { success: true, createdCount };
+      return { success: true, createdCount: createdEntityNames.length, createdEntityNames };
+   }
+
+   /**
+    * Name for a new config-declared virtual entity, or null when its EntityName is already in use.
+    * A name derived from the view gets the same collision suffix as a table-backed entity. Names are
+    * compared without case, as UQ_Entity_Name does, and include the names created earlier in this run.
+    */
+   protected resolveVirtualEntityName(ve: VirtualEntityConfig, viewSchema: string, existingEntityNames: string[]): string | null {
+      if (ve.EntityName) {
+         return this.ResolveUniqueEntityName(ve.EntityName, viewSchema, existingEntityNames).suffix === '' ? ve.EntityName : null;
+      }
+      return this.ResolveUniqueEntityName(this.deriveEntityNameFromView(ve.ViewName), viewSchema, existingEntityNames).name;
+   }
+
+   /**
+    * Writes the logged Entity INSERT and key seed for one config-declared virtual entity, registers it
+    * in NewEntityList, adds it to its schema's application and grants the default permissions.
+    * @returns true when the entity rows were written, even if the application or permission step failed
+    */
+   protected async createVirtualEntityFromConfig(pool: CodeGenConnection, ve: VirtualEntityConfig, entityName: string, viewSchema: string, currentUser: UserInfo): Promise<boolean> {
+      const pkFields = ve.PrimaryKey && ve.PrimaryKey.length > 0 ? ve.PrimaryKey : ['ID'];
+      let created = false;
+      try {
+         const newEntityId = this.createNewUUID();
+         await this.logSQLAndExecute(pool,
+            this.buildVirtualEntityInsertSQL(newEntityId, entityName, viewSchema, ve.ViewName, ve.Description ?? null),
+            `SQL generated to create new virtual entity ${entityName}`);
+         await this.logSQLAndExecute(pool,
+            this.buildVirtualEntityPlaceholderPKSQL(this.createNewUUID(), newEntityId, pkFields[0], pkFields.length === 1),
+            `SQL generated to seed primary key field ${pkFields[0]} for virtual entity ${entityName}`);
+
+         logStatus(`    > Created virtual entity "${entityName}" (ID: ${newEntityId}) for view [${viewSchema}].[${ve.ViewName}]`);
+         ManageMetadataBase.NewEntityList.push(entityName);
+         created = true;
+
+         await this.addEntityToApplicationForSchema(pool, newEntityId, entityName, viewSchema, currentUser);
+         await this.addDefaultPermissionsForEntity(pool, newEntityId, entityName);
+      } catch (err) {
+         const errMessage = err instanceof Error ? err.message : String(err);
+         logError(`    > Failed to create virtual entity "${entityName}": ${errMessage}`);
+      }
+      return created;
    }
 
    /**
@@ -2619,7 +2676,7 @@ export class ManageMetadataBase {
 
       // Config-driven virtual entity creation — run BEFORE manageVirtualEntities
       // so newly created entities get their fields synced in the next step
-      const vecResult = await this.processVirtualEntityConfig(pool, currentUser);
+      const vecResult = await this.processVirtualEntityConfig(pool, currentUser, md);
       if (vecResult.createdCount > 0) {
          logStatus(`    > Created ${vecResult.createdCount} virtual entit${vecResult.createdCount === 1 ? 'y' : 'ies'} from config`);
          // Refresh metadata so manageVirtualEntities can find the newly-created entities
@@ -2639,6 +2696,12 @@ export class ManageMetadataBase {
       const veResult = await this.manageVirtualEntities(pool)
       if (! veResult.success) {
          logError('   Error managing virtual entities');
+         bSuccess = false;
+      }
+
+      // VirtualEntities keys apply after the view-column sync, so a new entity or a new view column
+      // gets its configured key in this run — the same second pass external entities get below.
+      if (! await this.applyConfiguredVirtualEntityKeys(pool, excludeSchemas, md)) {
          bSuccess = false;
       }
 
@@ -3147,8 +3210,9 @@ export class ManageMetadataBase {
             const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
             const entity = md.EntityByName(virtualEntity.Name)
             if (entity) {
-               const removeList = [];
-               const fieldsToRemove = entity.Fields.filter(f => !veFields.find((vf: any) => vf.FieldName === f.Name));
+               const removeList: string[] = [];
+               // Same case-insensitive match as manageSingleVirtualEntityField, which keeps the row and fixes its casing
+               const fieldsToRemove = entity.Fields.filter(f => !veFields.find((vf: { FieldName: string }) => vf.FieldName.trim().toLowerCase() === f.Name.trim().toLowerCase()));
                for (const f of fieldsToRemove) {
                   removeList.push(f.ID);
                }
@@ -3160,9 +3224,11 @@ export class ManageMetadataBase {
                   bUpdated = true;
                }
 
-               // check to see if any of the fields in the virtual entity have Pkey attribute set. If not, we will default to the first field
-               // as pkey and user can change this.
-               const hasPkey = entity.Fields.find(f => f.IsPrimaryKey) !== undefined;
+               // A key must survive the removal above; otherwise the first view column becomes the key.
+               const hasPkey = this.virtualEntityHasPrimaryKey(entity.Fields, new Set(removeList));
+               if (!hasPkey) {
+                  logStatus(`      ⚠️  Virtual entity ${virtualEntity.Name} has no primary key; using first view column ${veFields[0].FieldName}. Set PrimaryKey in additionalSchemaInfo to choose the key.`);
+               }
 
                // now create/update the fields that are in the view
                for (let i = 0; i < veFields.length; i++) {
@@ -3198,6 +3264,14 @@ export class ManageMetadataBase {
     */
    protected resolvePrimaryKeyFlags(makePrimaryKey: boolean, singleColumnPrimaryKey: boolean): { wantPrimaryKey: boolean; wantUnique: boolean } {
       return { wantPrimaryKey: makePrimaryKey, wantUnique: makePrimaryKey && singleColumnPrimaryKey };
+   }
+
+   /**
+    * True when a key field survives the removal of view columns that no longer exist.
+    * The cached field list still holds rows the sync just deleted, so they must be excluded.
+    */
+   protected virtualEntityHasPrimaryKey(fields: ReadonlyArray<Pick<EntityFieldInfo, 'ID' | 'IsPrimaryKey'>>, removedFieldIDs: ReadonlySet<string>): boolean {
+      return fields.some(f => f.IsPrimaryKey && !removedFieldIDs.has(f.ID));
    }
 
    /**
@@ -3252,7 +3326,9 @@ export class ManageMetadataBase {
             const pkFlagsChanged = this.primaryKeyFlagsChanged(
                { isPrimaryKey: field.IsPrimaryKey, isUnique: field.IsUnique },
                { wantPrimaryKey, wantUnique }, makePrimaryKey, reconcilePrimaryKey);
-            if (pkFlagsChanged ||
+            // The match above ignores case; the stored name takes the view column's exact casing.
+            const nameChanged = field.Name !== veField.FieldName;
+            if (pkFlagsChanged || nameChanged ||
                 field.Type.trim().toLowerCase() !== veField.Type.trim().toLowerCase() ||
                 field.Length !== veField.Length ||
                 field.AllowsNull !== veField.AllowsNull ||
@@ -3263,6 +3339,7 @@ export class ManageMetadataBase {
                const sqlUpdate = `UPDATE
                                     ${this.qs(MjCoreSchema(), 'EntityField')}
                                   SET
+                                    ${nameChanged ? `Name='${EscapeSQLString(veField.FieldName)}',` : ''}
                                     Sequence=${fieldSequence},
                                     Type='${veField.Type}',
                                     AllowsNull=${this.boolLit(veField.AllowsNull)},
@@ -4644,6 +4721,8 @@ export class ManageMetadataBase {
     * For soft PKs: Sets BOTH IsPrimaryKey=1 AND IsSoftPrimaryKey=1 (IsPrimaryKey is source of truth, IsSoftPrimaryKey protects from schema sync).
     * For soft FKs: Sets RelatedEntityID/RelatedEntityFieldName + IsSoftForeignKey=1 (RelatedEntityID is source of truth, IsSoftForeignKey protects from schema sync).
     * All UPDATE statements are logged to migration files via LogSQLAndExecute() for CI/CD traceability.
+    * Covers table entries only. VirtualEntities entries are applied after the view-column sync by
+    * {@link applyVirtualEntitySoftKeys}.
     */
    protected async applySoftPKFKConfig(pool: CodeGenConnection): Promise<boolean> {
       // Check if additionalSchemaInfo is configured in mj.config.cjs
@@ -4666,122 +4745,196 @@ export class ManageMetadataBase {
             return true;
          }
 
-         let totalPKs = 0;
-         let totalFKs = 0;
-         const schema = MjCoreSchema();
-
          // Config supports two formats:
          //   1. Schema-as-key (template format): { "dbo": [{ "TableName": "Orders", ... }] }
          //   2. Flat tables array (legacy format): { "tables": [{ "SchemaName": "dbo", "TableName": "Orders", ... }] }
          // Both use PascalCase property names.
-         const tables = this.extractTablesFromConfig(config);
-
-         for (const table of tables) {
-            const tableSchema = table.SchemaName;
-            const tableName = table.TableName;
-
-            // Look up entity ID (SELECT query - no need to log to migration file)
-            const entityLookupSQL = `SELECT ID FROM ${this.qs(schema, 'Entity')} WHERE SchemaName = '${tableSchema}' AND BaseTable = '${tableName}'`;
-            const entityResult = await this.runQuery(pool, entityLookupSQL);
-
-            if (entityResult.recordset.length === 0) {
-               logStatus(`         ⚠️  Entity not found for ${tableSchema}.${tableName} - skipping`);
-               continue;
-            }
-
-            const entityId = entityResult.recordset[0].ID;
-
-            // Process primary keys - set BOTH IsPrimaryKey = 1 AND IsSoftPrimaryKey = 1
-            // IsPrimaryKey is the source of truth, IsSoftPrimaryKey protects it from schema sync
-            const primaryKeys = table.PrimaryKey || [];
-            if (primaryKeys.length > 0) {
-               for (const pk of primaryKeys) {
-                  const checkSQL = `SELECT ${this.qi('IsPrimaryKey')}, ${this.qi('IsSoftPrimaryKey')}
-                                    FROM ${this.qs(schema, 'EntityField')}
-                                    WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = '${pk.FieldName}'`;
-                  const checkRes = await this.runQuery(pool, checkSQL);
-                  if (checkRes.recordset.length > 0) {
-                     const row = checkRes.recordset[0];
-                     const isPk = row.IsPrimaryKey === true || row.IsPrimaryKey === 1 || row.IsPrimaryKey === '1';
-                     const isSoftPk = row.IsSoftPrimaryKey === true || row.IsSoftPrimaryKey === 1 || row.IsSoftPrimaryKey === '1';
-                     if (isPk && isSoftPk) {
-                        continue; // Already correctly set, skip write
-                     }
-                  }
-
-                  const sSQL = `UPDATE ${this.qs(schema, 'EntityField')}
-                                SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()},
-                                    ${this.qi('IsPrimaryKey')} = ${this.boolLit(true)},
-                                    ${this.qi('IsSoftPrimaryKey')} = ${this.boolLit(true)}
-                                WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = '${pk.FieldName}'`;
-                  const result = await this.logSQLAndExecute(pool, sSQL, `Set soft PK for ${tableSchema}.${tableName}.${pk.FieldName}`);
-
-                  if (result !== null) {
-                     logStatus(`         ✓ Set IsPrimaryKey=1, IsSoftPrimaryKey=1 for ${tableName}.${pk.FieldName}`);
-                     totalPKs++;
-                  }
-               }
-            }
-
-            // Process foreign keys - set RelatedEntityID, RelatedEntityFieldName, and IsSoftForeignKey = 1
-            const foreignKeys = table.ForeignKeys || [];
-            if (foreignKeys.length > 0) {
-               for (const fk of foreignKeys) {
-                  const fkSchema = fk.SchemaName || tableSchema;
-                  // Look up related entity ID (SELECT query - no need to log to migration file)
-                  const relatedLookupSQL = `SELECT ID FROM ${this.qs(schema, 'Entity')} WHERE SchemaName = '${fkSchema}' AND BaseTable = '${fk.RelatedTable}'`;
-                  const relatedEntityResult = await this.runQuery(pool, relatedLookupSQL);
-
-                  if (relatedEntityResult.recordset.length === 0) {
-                     logStatus(`         ⚠️  Related entity not found for ${fkSchema}.${fk.RelatedTable} - skipping FK ${fk.FieldName}`);
-                     continue;
-                  }
-
-                  const relatedEntityId = relatedEntityResult.recordset[0].ID;
-
-                  const checkSQL = `SELECT ${this.qi('RelatedEntityID')}, ${this.qi('RelatedEntityFieldName')}, ${this.qi('IsSoftForeignKey')}, ${this.qi('AutoUpdateRelatedEntityInfo')}
-                                    FROM ${this.qs(schema, 'EntityField')}
-                                    WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = '${fk.FieldName}'`;
-                  const checkRes = await this.runQuery(pool, checkSQL);
-                  if (checkRes.recordset.length > 0) {
-                     const row = checkRes.recordset[0];
-                     const curRelId = String(row.RelatedEntityID ?? '').trim().toLowerCase();
-                     const curRelField = String(row.RelatedEntityFieldName ?? '').trim().toLowerCase();
-                     const curSoftFk = row.IsSoftForeignKey === true || row.IsSoftForeignKey === 1 || row.IsSoftForeignKey === '1';
-                     const curAutoUpdate = row.AutoUpdateRelatedEntityInfo === true || row.AutoUpdateRelatedEntityInfo === 1 || row.AutoUpdateRelatedEntityInfo === '1';
-                     if (
-                        curRelId === String(relatedEntityId).trim().toLowerCase() &&
-                        curRelField === String(fk.RelatedField).trim().toLowerCase() &&
-                        curSoftFk &&
-                        !curAutoUpdate
-                     ) {
-                        continue; // Already correctly set, skip write
-                     }
-                  }
-
-                  const sSQL = `UPDATE ${this.qs(schema, 'EntityField')}
-                                SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()},
-                                    ${this.qi('RelatedEntityID')} = '${relatedEntityId}',
-                                    ${this.qi('RelatedEntityFieldName')} = '${fk.RelatedField}',
-                                    ${this.qi('IsSoftForeignKey')} = ${this.boolLit(true)},
-                                    ${this.qi('AutoUpdateRelatedEntityInfo')} = ${this.boolLit(false)}
-                                WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = '${fk.FieldName}'`;
-                  const result = await this.logSQLAndExecute(pool, sSQL, `Set soft FK for ${tableSchema}.${tableName}.${fk.FieldName} → ${fk.RelatedTable}.${fk.RelatedField}`);
-
-                  if (result !== null) {
-                     logStatus(`         ✓ Set soft FK for ${tableName}.${fk.FieldName} → ${fk.RelatedTable}.${fk.RelatedField}`);
-                     totalFKs++;
-                  }
-               }
-            }
-         }
-
-         logStatus(`         Applied ${totalPKs} soft PK(s) and ${totalFKs} soft FK(s) from configuration`);
+         await this.applySoftKeysToTables(pool, this.extractTablesFromConfig(config), false);
          return true;
       } catch (e) {
          logError(`Error applying soft PK/FK configuration: ${e}`);
          return false;
       }
+   }
+
+   /**
+    * Applies the PrimaryKey and ForeignKeys of VirtualEntities entries. Runs after the view-column
+    * sync, so it sees the fields of entities and view columns created in the same run. On a
+    * composite key it also clears IsUnique, which spCreateVirtualEntity set on the first column.
+    * @returns success, and the number of UPDATEs written
+    */
+   protected async applyVirtualEntitySoftKeys(pool: CodeGenConnection): Promise<{ success: boolean; writeCount: number }> {
+      const config = ManageMetadataBase.GetSoftPKFKConfig();
+      const entries = config ? this.virtualEntityConfigsAsTableConfigs(config) : [];
+      if (entries.length === 0) {
+         return { success: true, writeCount: 0 };
+      }
+      try {
+         logStatus(`   Applying configured keys for ${entries.length} virtual entit${entries.length === 1 ? 'y' : 'ies'}...`);
+         return { success: true, writeCount: await this.applySoftKeysToTables(pool, entries, true) };
+      } catch (e) {
+         logError(`Error applying VirtualEntities soft PK/FK configuration: ${e}`);
+         return { success: false, writeCount: 0 };
+      }
+   }
+
+   /**
+    * Applies the VirtualEntities keys, then refreshes metadata and rebuilds relationships when a key
+    * changed. Runs on every CodeGen run, right after the view-column sync.
+    */
+   protected async applyConfiguredVirtualEntityKeys(pool: CodeGenConnection, excludeSchemas: string[], md: Metadata): Promise<boolean> {
+      const { success, writeCount } = await this.applyVirtualEntitySoftKeys(pool);
+      if (!success) {
+         logError('   Error applying soft PK/FK configuration for virtual entities');
+         return false;
+      }
+      if (writeCount === 0) {
+         return true;
+      }
+      await md.Refresh();
+      logStatus('   Managing virtual-entity relationships...');
+      if (!await this.manageEntityRelationships(pool, excludeSchemas, md)) {
+         logError('   Error managing virtual-entity relationships');
+         return false;
+      }
+      return true;
+   }
+
+   /**
+    * Writes the soft keys of each config entry, compare-first: a column that is already set, or that
+    * does not exist, gets no UPDATE.
+    * @param clearUniqueOnCompositeKey clear IsUnique on the columns of a multi-column key. Only for
+    *        virtual entities: no schema sync maintains their IsUnique.
+    * @returns the number of UPDATEs written
+    */
+   protected async applySoftKeysToTables(pool: CodeGenConnection, tables: SoftPKFKTableConfig[], clearUniqueOnCompositeKey: boolean): Promise<number> {
+      let totalPKs = 0;
+      let totalFKs = 0;
+
+      for (const table of tables) {
+         // Look up entity ID (SELECT query - no need to log to migration file)
+         const entityLookupSQL = `SELECT ID FROM ${this.qs(MjCoreSchema(), 'Entity')} WHERE SchemaName = '${EscapeSQLString(table.SchemaName)}' AND BaseTable = '${EscapeSQLString(table.TableName)}'`;
+         const entityResult = await this.runQuery(pool, entityLookupSQL);
+
+         if (entityResult.recordset.length === 0) {
+            logStatus(`         ⚠️  Entity not found for ${table.SchemaName}.${table.TableName} - skipping`);
+            continue;
+         }
+
+         const entityId = entityResult.recordset[0].ID;
+         const primaryKeys = table.PrimaryKey || [];
+         totalPKs += await this.applySoftPrimaryKeys(pool, table, entityId, clearUniqueOnCompositeKey && primaryKeys.length > 1);
+         totalFKs += await this.applySoftForeignKeys(pool, table, entityId);
+      }
+
+      logStatus(`         Applied ${totalPKs} soft PK(s) and ${totalFKs} soft FK(s) from configuration`);
+      return totalPKs + totalFKs;
+   }
+
+   /**
+    * Sets IsPrimaryKey = 1 AND IsSoftPrimaryKey = 1 on each configured key column.
+    * IsPrimaryKey is the source of truth, IsSoftPrimaryKey protects it from schema sync.
+    * @returns the number of UPDATEs written
+    */
+   protected async applySoftPrimaryKeys(pool: CodeGenConnection, table: SoftPKFKTableConfig, entityId: string, clearUnique: boolean): Promise<number> {
+      const schema = MjCoreSchema();
+      let written = 0;
+
+      for (const pk of table.PrimaryKey || []) {
+         const fieldName = EscapeSQLString(pk.FieldName);
+         const checkSQL = `SELECT ${this.qi('IsPrimaryKey')}, ${this.qi('IsSoftPrimaryKey')}, ${this.qi('IsUnique')}
+                           FROM ${this.qs(schema, 'EntityField')}
+                           WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = '${fieldName}'`;
+         const checkRes = await this.runQuery(pool, checkSQL);
+         if (checkRes.recordset.length === 0) {
+            logStatus(`         ⚠️  Field ${table.TableName}.${pk.FieldName} not found - skipping soft PK`);
+            continue;
+         }
+         const row = checkRes.recordset[0];
+         if (this.isFlagSet(row.IsPrimaryKey) && this.isFlagSet(row.IsSoftPrimaryKey) && !(clearUnique && this.isFlagSet(row.IsUnique))) {
+            continue; // Already correctly set, skip write
+         }
+
+         const clearUniqueSQL = clearUnique ? `,
+                           ${this.qi('IsUnique')} = ${this.boolLit(false)}` : '';
+         const sSQL = `UPDATE ${this.qs(schema, 'EntityField')}
+                       SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()},
+                           ${this.qi('IsPrimaryKey')} = ${this.boolLit(true)},
+                           ${this.qi('IsSoftPrimaryKey')} = ${this.boolLit(true)}${clearUniqueSQL}
+                       WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = '${fieldName}'`;
+         const result = await this.logSQLAndExecute(pool, sSQL, `Set soft PK for ${table.SchemaName}.${table.TableName}.${pk.FieldName}`);
+
+         if (result !== null) {
+            logStatus(`         ✓ Set IsPrimaryKey=1, IsSoftPrimaryKey=1 for ${table.TableName}.${pk.FieldName}`);
+            written++;
+         }
+      }
+      return written;
+   }
+
+   /**
+    * Sets RelatedEntityID, RelatedEntityFieldName and IsSoftForeignKey = 1 on each configured foreign
+    * key column. RelatedEntityID is the source of truth, IsSoftForeignKey protects it from schema sync.
+    * @returns the number of UPDATEs written
+    */
+   protected async applySoftForeignKeys(pool: CodeGenConnection, table: SoftPKFKTableConfig, entityId: string): Promise<number> {
+      const schema = MjCoreSchema();
+      let written = 0;
+
+      for (const fk of table.ForeignKeys || []) {
+         const fkSchema = fk.SchemaName || table.SchemaName;
+         // Look up related entity ID (SELECT query - no need to log to migration file)
+         const relatedLookupSQL = `SELECT ID FROM ${this.qs(schema, 'Entity')} WHERE SchemaName = '${EscapeSQLString(fkSchema)}' AND BaseTable = '${EscapeSQLString(fk.RelatedTable)}'`;
+         const relatedEntityResult = await this.runQuery(pool, relatedLookupSQL);
+
+         if (relatedEntityResult.recordset.length === 0) {
+            logStatus(`         ⚠️  Related entity not found for ${fkSchema}.${fk.RelatedTable} - skipping FK ${fk.FieldName}`);
+            continue;
+         }
+
+         const relatedEntityId = relatedEntityResult.recordset[0].ID;
+         const fieldName = EscapeSQLString(fk.FieldName);
+
+         const checkSQL = `SELECT ${this.qi('RelatedEntityID')}, ${this.qi('RelatedEntityFieldName')}, ${this.qi('IsSoftForeignKey')}, ${this.qi('AutoUpdateRelatedEntityInfo')}
+                           FROM ${this.qs(schema, 'EntityField')}
+                           WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = '${fieldName}'`;
+         const checkRes = await this.runQuery(pool, checkSQL);
+         if (checkRes.recordset.length === 0) {
+            logStatus(`         ⚠️  Field ${table.TableName}.${fk.FieldName} not found - skipping soft FK`);
+            continue;
+         }
+         const row = checkRes.recordset[0];
+         const curRelId = String(row.RelatedEntityID ?? '').trim().toLowerCase();
+         const curRelField = String(row.RelatedEntityFieldName ?? '').trim().toLowerCase();
+         if (
+            curRelId === String(relatedEntityId).trim().toLowerCase() &&
+            curRelField === String(fk.RelatedField).trim().toLowerCase() &&
+            this.isFlagSet(row.IsSoftForeignKey) &&
+            !this.isFlagSet(row.AutoUpdateRelatedEntityInfo)
+         ) {
+            continue; // Already correctly set, skip write
+         }
+
+         const sSQL = `UPDATE ${this.qs(schema, 'EntityField')}
+                       SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()},
+                           ${this.qi('RelatedEntityID')} = '${relatedEntityId}',
+                           ${this.qi('RelatedEntityFieldName')} = '${EscapeSQLString(fk.RelatedField)}',
+                           ${this.qi('IsSoftForeignKey')} = ${this.boolLit(true)},
+                           ${this.qi('AutoUpdateRelatedEntityInfo')} = ${this.boolLit(false)}
+                       WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = '${fieldName}'`;
+         const result = await this.logSQLAndExecute(pool, sSQL, `Set soft FK for ${table.SchemaName}.${table.TableName}.${fk.FieldName} → ${fk.RelatedTable}.${fk.RelatedField}`);
+
+         if (result !== null) {
+            logStatus(`         ✓ Set soft FK for ${table.TableName}.${fk.FieldName} → ${fk.RelatedTable}.${fk.RelatedField}`);
+            written++;
+         }
+      }
+      return written;
+   }
+
+   /** True for a bit column value as the SQL Server and PostgreSQL drivers return it. */
+   private isFlagSet(value: unknown): boolean {
+      return value === true || value === 1 || value === '1';
    }
 
    /**
@@ -7149,6 +7302,41 @@ export class ManageMetadataBase {
       takenNames: string[]
    ): { name: string; suffix: string } {
       return this.ResolveUniqueEntityName(desiredName, schemaName, takenNames);
+   }
+
+   /**
+    * INSERT for a config-declared virtual entity's Entity row. Logged rather than a stored-procedure
+    * call so the CodeGen_Run capture replays it with the same ID on every database, exactly like
+    * table-backed entities. Column set and flags match spCreateVirtualEntity, plus Description.
+    */
+   protected buildVirtualEntityInsertSQL(entityId: string, entityName: string, viewSchema: string, viewName: string, description: string | null): string {
+      const q = (name: string) => this.qi(name);
+      const lit = (value: string) => `'${EscapeSQLString(value)}'`;
+      return `INSERT INTO ${this.qs(MjCoreSchema(), 'Entity')} (
+         ${q('ID')}, ${q('Name')}, ${q('Description')}, ${q('BaseTable')}, ${q('BaseView')}, ${q('SchemaName')},
+         ${q('VirtualEntity')}, ${q('IncludeInAPI')}, ${q('AllowCreateAPI')}, ${q('AllowUpdateAPI')}, ${q('AllowDeleteAPI')},
+         ${q('AllowRecordMerge')}, ${q('TrackRecordChanges')}, ${q('__mj_CreatedAt')}, ${q('__mj_UpdatedAt')}
+      ) VALUES (
+         ${this.uuidLit(entityId)}, ${lit(entityName)}, ${description ? lit(description) : 'NULL'}, ${lit(viewName)}, ${lit(viewName)}, ${lit(viewSchema)},
+         ${this.boolLit(true)}, ${this.boolLit(true)}, ${this.boolLit(false)}, ${this.boolLit(false)}, ${this.boolLit(false)},
+         ${this.boolLit(false)}, ${this.boolLit(false)}, ${this.utcNow()}, ${this.utcNow()}
+      )`;
+   }
+
+   /**
+    * Seeds the first configured key column before the view-column sync runs, so the sync sees a key
+    * and does not promote the first view column. Type is a placeholder the sync replaces.
+    */
+   protected buildVirtualEntityPlaceholderPKSQL(fieldId: string, entityId: string, pkFieldName: string, singleColumnPrimaryKey: boolean): string {
+      const q = (name: string) => this.qi(name);
+      const { wantPrimaryKey, wantUnique } = this.resolvePrimaryKeyFlags(true, singleColumnPrimaryKey);
+      return `INSERT INTO ${this.qs(MjCoreSchema(), 'EntityField')} (
+         ${q('ID')}, ${q('EntityID')}, ${q('Sequence')}, ${q('Name')}, ${q('IsPrimaryKey')}, ${q('IsUnique')}, ${q('Type')},
+         ${q('__mj_CreatedAt')}, ${q('__mj_UpdatedAt')}
+      ) VALUES (
+         ${this.uuidLit(fieldId)}, ${this.uuidLit(entityId)}, ${this.applyTimeEntityFieldSequenceSQL(entityId)}, '${EscapeSQLString(pkFieldName)}',
+         ${this.boolLit(wantPrimaryKey)}, ${this.boolLit(wantUnique)}, 'int', ${this.utcNow()}, ${this.utcNow()}
+      )`;
    }
 
    protected createNewEntityInsertSQL(newEntityUUID: string, newEntityName: string, newEntity: any, newEntitySuffix: string, newEntityDisplayName: string | null): string {
