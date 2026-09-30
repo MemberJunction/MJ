@@ -3951,6 +3951,14 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             LogWarning(`LocalCacheManager: defaultTTLSeconds is set but the cache store is shared across processes — expiry is left to the store itself (set the store's own TTL, e.g. REDIS_TTL_SECONDS / cacheSettings.sharedCacheTTLSeconds)`, 'Cache');
         }
         const toDelete: string[] = [];
+        // Entries to drop from this process's bookkeeping WITHOUT touching the store. An entry that
+        // carries its own `expiresAt` always handed the store the matching TTL when it was written,
+        // so a shared store expires the key itself. Deleting it here as well means every server
+        // removes the same key on its own clock and publishes a `removed` for it, and every peer
+        // reloads the affected engine — the storm the TTL branch above already avoids, in miniature.
+        // Forgetting it locally still matters: otherwise this registry records slots the store no
+        // longer has (plan §22.3).
+        const toForget: string[] = [];
 
         for (const [key, entry] of this._registry) {
             // TTL expiry check
@@ -3960,13 +3968,14 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             }
             // expiresAt check (if set individually)
             if (entry.expiresAt && entry.expiresAt < now) {
-                toDelete.push(key);
+                (sharedStore ? toForget : toDelete).push(key);
             }
         }
 
-        if (toDelete.length > 0) {
+        if (toDelete.length > 0 || toForget.length > 0) {
             if (this._config.verboseLogging) {
-                LogStatusEx({ message: `    🗑️ [Cache SWEEP] Evicting ${toDelete.length} TTL-expired entries`, verboseOnly: true });
+                LogStatusEx({ message: `    🗑️ [Cache SWEEP] Evicting ${toDelete.length} TTL-expired entries` +
+                    (toForget.length > 0 ? `, forgetting ${toForget.length} the shared store expires itself` : ''), verboseOnly: true });
             }
 
             for (const key of toDelete) {
@@ -3974,16 +3983,25 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                     const entry = this._registry.get(key);
                     const category = this.getCategoryForType(entry?.type);
                     await this._storageProvider.Remove(key, category);
-                    if (entry?.fingerprint) {
-                        this.removeFromEntityIndex(entry.fingerprint);
-                    }
-                    this._registry.delete(key);
+                    this.forgetRegistryEntry(key);
                 } catch {
                     // Continue
                 }
             }
+            for (const key of toForget) {
+                this.forgetRegistryEntry(key);
+            }
 
             await this.persistRegistry();
         }
+    }
+
+    /** Drops one entry from the registry and the fingerprint index, leaving the store alone. @internal */
+    private forgetRegistryEntry(key: string): void {
+        const entry = this._registry.get(key);
+        if (entry?.fingerprint) {
+            this.removeFromEntityIndex(entry.fingerprint);
+        }
+        this._registry.delete(key);
     }
 }

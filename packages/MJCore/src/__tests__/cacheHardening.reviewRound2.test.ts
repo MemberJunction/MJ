@@ -217,6 +217,58 @@ describe('#22 — a debounced metadata check cannot be starved', () => {
         expect(provider.Checks).toBeGreaterThan(0);
     });
 
+    it('does not carry retries from one deferred check into the next', async () => {
+        // The retry counter bounds how long ONE check may be re-armed while a transaction is open.
+        // It is reset when a RE-ARMED check finally runs — but not when a check runs on the direct
+        // path, which is how it runs whenever a fresh notice arrives after the transaction closed.
+        // The count then persists: the next transaction starts part-way to the cap and gives up
+        // after fewer windows than the bound promises, dropping a metadata check the re-arm exists
+        // to preserve. It takes a deferral followed by a *new* notice to see, which is why a
+        // single-burst test does not.
+        const provider = new NoticeProvider();
+        const retries = () => (provider as unknown as { _peerMetadataNoticeRetries: number })._peerMetadataNoticeRetries;
+
+        // A notice arrives while a transaction is open: the check re-arms and the counter climbs.
+        provider.InTransaction = true;
+        provider.HandlePeerMetadataNotice(notice());
+        await vi.advanceTimersByTimeAsync(ProviderBase.MetadataDatasetRefreshDebounceMs + ProviderBase.PeerMetadataNoticeJitterMs + 50);
+        expect(retries()).toBeGreaterThan(0);
+
+        // The transaction closes, and a NEW notice arrives — so the check runs on the direct path,
+        // never touching the counter.
+        provider.InTransaction = false;
+        provider.HandlePeerMetadataNotice(notice());
+        await vi.advanceTimersByTimeAsync(ProviderBase.MetadataDatasetRefreshDebounceMs + ProviderBase.PeerMetadataNoticeJitterMs + 50);
+
+        expect(provider.Checks).toBeGreaterThan(0);
+        expect(retries()).toBe(0); // the next deferral gets the full budget
+    });
+
+    it('measures the deferral budget to when the check RUNS, not to when the timer fires', async () => {
+        // `_peerMetadataNoticeFirstAt` is the wall-clock bound on how long one check may be put off.
+        // Clearing it as the timer fires — before discovering the provider is mid-transaction —
+        // ended the budget at the moment deferral actually began, leaving the retry COUNT as the
+        // only real bound. The two budgets measure different things and both should hold.
+        const provider = new NoticeProvider();
+        const firstAt = () => (provider as unknown as { _peerMetadataNoticeFirstAt: number | null })._peerMetadataNoticeFirstAt;
+        let deferring: number | null = null;
+        try {
+            provider.InTransaction = true;
+            provider.HandlePeerMetadataNotice(notice());
+            await vi.advanceTimersByTimeAsync(ProviderBase.MetadataDatasetRefreshDebounceMs + ProviderBase.PeerMetadataNoticeJitterMs + 50);
+            deferring = firstAt();
+        } finally {
+            // Always let the provider finish, so no self-re-arming retry chain is left pending in
+            // the shared fake-timer queue for the rest of this file.
+            provider.InTransaction = false;
+            await vi.advanceTimersByTimeAsync(provider.MetadataMemberRefreshDelayMs * 2);
+        }
+
+        expect(deferring).not.toBeNull();  // still deferring, so the budget was still running
+        expect(provider.Checks).toBe(1);
+        expect(firstAt()).toBeNull();      // ran, so the next burst starts from a fresh budget
+    });
+
     it('re-arms instead of dropping the check when the provider is inside a transaction', async () => {
         const provider = new NoticeProvider();
         provider.InTransaction = true;
