@@ -480,9 +480,14 @@ export const RecordCloningChecks: NamedCheck[] = [
             Assert(!first.Blocked, `RC3: the plan is blocked — ${first.Warnings.filter((w) => w.Severity === 'Error').map((w) => w.Message).join('; ')}`);
             Assert(first.Nodes.length > 0 && first.Counts.Create > 0, 'RC3: the plan must be non-empty and create at least one row');
 
-            const watched = [...new Set([...first.Nodes.map((n) => n.EntityName), CLONE_LOGS, CLONE_LOG_ITEMS, RECORD_LINKS, RECORD_CHANGES])];
+            const graphEntities = [...new Set(first.Nodes.map((n) => n.EntityName))];
+            const watched = [...graphEntities, CLONE_LOGS, CLONE_LOG_ITEMS, RECORD_LINKS, RECORD_CHANGES];
+            // Record Changes only for the graph's entities: a server that just started writes its own
+            // (vectorizing Entity Record Documents, say) while the check runs.
+            const graphEntityIds = graphEntities.map((name) => md.EntityByName(name)?.ID).filter((id): id is string => !!id);
+            const filterFor = (e: string) => (e === RECORD_CHANGES ? `EntityID IN (${graphEntityIds.map((id) => `'${id}'`).join(', ')})` : '');
             const before = new Map<string, number>();
-            for (const e of watched) before.set(e, await countRows(md, e));
+            for (const e of watched) before.set(e, await countRows(md, e, filterFor(e)));
 
             const dry = await executeClone(md, { ...input, Options: { DryRun: true } }, 'RC3');
             Assert(dry.Success && dry.ResultCode === 'SUCCESS', `RC3: the dry run failed — ${describeFailure(dry)}`);
@@ -492,7 +497,7 @@ export const RecordCloningChecks: NamedCheck[] = [
             await planClone(md, input, 'RC3 second plan');
 
             for (const e of watched) {
-                AssertEqual(await countRows(md, e), before.get(e), `RC3: the dry run wrote to ${e}`);
+                AssertEqual(await countRows(md, e, filterFor(e)), before.get(e), `RC3: the dry run wrote to ${e}`);
             }
         },
     },
