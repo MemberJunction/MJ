@@ -1100,11 +1100,6 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         return parsed && typeof parsed === 'object' ? parsed : undefined;
     }
 
-    /** @deprecated Use {@link LoadEscalationTargets}. */
-    public async loadEscalationTargets(): Promise<void> {
-        return this.LoadEscalationTargets();
-    }
-
     /**
      * Why a pipeline cannot be this pipeline's escalation target, or null when it can. Beyond the shared row and
      * output checks, its own spec must pass `ValidateSpec`, as the engine requires before it builds the target.
