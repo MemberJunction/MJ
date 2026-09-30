@@ -12,7 +12,13 @@ import type { AIPromptParams, AIPromptRunResult, MJAIPromptEntityExtended } from
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIEngine } from '@memberjunction/aiengine';
 import { LLMJudgeOracle } from '../oracles/LLMJudgeOracle';
-import { BuildJudgeTrace, ReadJudgeCriteria, type JudgeCriterion } from '../oracles/judge-trace';
+import {
+    BuildJudgeTrace,
+    DEFAULT_JUDGE_TIMEOUT_MS,
+    ReadJudgeCriteria,
+    ReadJudgeTimeoutMS,
+    type JudgeCriterion,
+} from '../oracles/judge-trace';
 import type { OracleConfig, OracleInput } from '../types';
 
 const USER = { ID: 'user-1' } satisfies Pick<UserInfo, 'ID'>;
@@ -141,6 +147,31 @@ describe('ReadJudgeCriteria', () => {
     });
 });
 
+describe('ReadJudgeTimeoutMS', () => {
+    it('defaults to two minutes when the config sets none', () => {
+        expect(ReadJudgeTimeoutMS({})).toEqual({ Success: true, Value: DEFAULT_JUDGE_TIMEOUT_MS });
+        expect(DEFAULT_JUDGE_TIMEOUT_MS).toBe(120_000);
+    });
+
+    it("reads the config's timeoutMS", () => {
+        expect(ReadJudgeTimeoutMS({ timeoutMS: 30_000 })).toEqual({ Success: true, Value: 30_000 });
+    });
+
+    it.each([
+        [0, '0'],
+        [-5, '-5'],
+        [Number.NaN, 'NaN'],
+        [Number.POSITIVE_INFINITY, 'Infinity'],
+        ['30s', '"30s"'],
+        [true, 'true'],
+    ])('rejects a timeoutMS of %s', (timeoutMS, shown) => {
+        expect(ReadJudgeTimeoutMS({ timeoutMS })).toEqual({
+            Success: false,
+            ErrorMessage: `timeoutMS must be a positive number of milliseconds, not ${shown}`,
+        });
+    });
+});
+
 describe('LLMJudgeOracle.evaluate — the prompt data it sends', () => {
     let executePrompt: MockInstance<AIPromptRunner['ExecutePrompt']>;
 
@@ -183,6 +214,30 @@ describe('LLMJudgeOracle.evaluate — the prompt data it sends', () => {
         expect(executePrompt).not.toHaveBeenCalled();
         expect(result.passed).toBe(false);
         expect(result.message).toMatch(/^Criterion 2 must be a non-empty string/);
+    });
+
+    it('bounds the judge call with the default judge timeout', async () => {
+        await new LLMJudgeOracle().evaluate(oracleInput(null, { judgeValidationCriteria: ['C'] }, 'out'), {});
+
+        expect(executePrompt.mock.calls[0][0].timeoutMS).toBe(DEFAULT_JUDGE_TIMEOUT_MS);
+    });
+
+    it("applies the config's timeoutMS to the judge call", async () => {
+        await new LLMJudgeOracle().evaluate(oracleInput(null, { judgeValidationCriteria: ['C'] }, 'out'), { timeoutMS: 45_000 });
+
+        expect(executePrompt.mock.calls[0][0].timeoutMS).toBe(45_000);
+    });
+
+    it('fails without calling the model when timeoutMS is invalid', async () => {
+        const result = await new LLMJudgeOracle().evaluate(oracleInput(null, { judgeValidationCriteria: ['C'] }, 'out'), { timeoutMS: 0 });
+
+        expect(executePrompt).not.toHaveBeenCalled();
+        expect(result).toEqual({
+            oracleType: 'llm-judge',
+            passed: false,
+            score: 0,
+            message: 'timeoutMS must be a positive number of milliseconds, not 0',
+        });
     });
 
     it('sends an empty object as the input when the test has no input definition', async () => {

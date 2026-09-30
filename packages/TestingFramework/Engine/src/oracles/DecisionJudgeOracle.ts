@@ -8,13 +8,14 @@ import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIDecisionParams, AIDecisionRunResult, AIDecisionRunner } from '@memberjunction/ai-prompts';
 import { AIEngine } from '@memberjunction/aiengine';
 import { IOracle } from './IOracle';
-import { BuildJudgeTrace, JudgeCriterion, JudgeTrace, ReadJudgeCriteria } from './judge-trace';
+import { BuildJudgeTrace, JudgeCriterion, JudgeTrace, ReadJudgeCriteria, ReadJudgeTimeoutMS } from './judge-trace';
 import { OracleInput, OracleConfig, OracleResult } from '../types';
 
 /** The settings read from the oracle's config. */
 interface JudgeSettings {
     passThreshold: number;
     promptName: string;
+    timeoutMS: number;
 }
 
 /** One criterion's outcome, as reported in `details.criteriaProbabilities`. */
@@ -50,6 +51,8 @@ interface DecisionRunDetails {
  *   placeholder: calibration (Task 2.4) sets real values.
  * - promptName: The decision prompt whose model bindings choose the decision model
  *   (default: 'Default Decision')
+ * - timeoutMS: How long to wait for each decision model call, in milliseconds (default: 120000, two
+ *   minutes). A call that runs over fails the oracle.
  *
  * Result:
  * - passed: every criterion's probability is at or above `passThreshold`
@@ -111,14 +114,14 @@ export class DecisionJudgeOracle implements IOracle {
                 return this.failed(`Decision prompt "${settings.promptName}" not found in AIEngine.Instance.Prompts`);
             }
 
-            const run = await new AIDecisionRunner().ExecuteDecision(this.buildParams(input, prompt, criteria.Value));
+            const run = await new AIDecisionRunner().ExecuteDecision(this.buildParams(input, prompt, criteria.Value, settings.timeoutMS));
             return this.judge(run, criteria.Value, settings);
         } catch (error) {
             return this.failed(`Decision judge error: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 
-    /** The pass threshold and prompt name, defaulted, or the reason the config is invalid. */
+    /** The pass threshold, prompt name and timeout, defaulted, or the reason the config is invalid. */
     private readSettings(config: OracleConfig): JudgeSettings | string {
         const passThreshold = config.passThreshold ?? DecisionJudgeOracle.DEFAULT_PASS_THRESHOLD;
         if (typeof passThreshold !== 'number' || !(passThreshold >= 0 && passThreshold <= 1)) {
@@ -128,7 +131,11 @@ export class DecisionJudgeOracle implements IOracle {
         if (typeof promptName !== 'string' || !promptName.trim()) {
             return `promptName must be a non-empty string, not ${JSON.stringify(promptName)}`;
         }
-        return { passThreshold, promptName };
+        const timeout = ReadJudgeTimeoutMS(config);
+        if (!timeout.Success) {
+            return timeout.ErrorMessage;
+        }
+        return { passThreshold, promptName, timeoutMS: timeout.Value };
     }
 
     /** The decision prompt with this name, ignoring case and surrounding spaces. */
@@ -137,11 +144,12 @@ export class DecisionJudgeOracle implements IOracle {
         return AIEngine.Instance.Prompts.find(p => (p.Name ?? '').trim().toLowerCase() === target);
     }
 
-    /** The one decision call: the judge's trace as the state, and a question per criterion. */
-    private buildParams(input: OracleInput, prompt: MJAIPromptEntityExtended, criteria: JudgeCriterion[]): AIDecisionParams {
+    /** The one decision call: the judge's trace as the state, a question per criterion, and the timeout. */
+    private buildParams(input: OracleInput, prompt: MJAIPromptEntityExtended, criteria: JudgeCriterion[], timeoutMS: number): AIDecisionParams {
         const params = new AIDecisionParams();
         params.prompt = prompt;
         params.contextUser = input.contextUser;
+        params.timeoutMS = timeoutMS;
         params.State = this.buildState(BuildJudgeTrace(input));
         params.Questions = this.buildQuestions(criteria);
         return params;

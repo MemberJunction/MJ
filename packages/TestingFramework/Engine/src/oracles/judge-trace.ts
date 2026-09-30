@@ -3,8 +3,8 @@
  * @module @memberjunction/testing-engine
  *
  * `LLMJudgeOracle` and `DecisionJudgeOracle` judge the same trace against the same criteria, so a
- * test can run both side by side. Both read them through these helpers, so both accept, and reject,
- * exactly the same criteria.
+ * test can run both side by side. Both read them, and their model-call timeout, through these
+ * helpers, so both accept, and reject, exactly the same criteria and settings.
  */
 
 import { OracleInput, OracleConfig } from '../types';
@@ -37,6 +37,13 @@ export interface JudgeCriterion {
 export type JudgeReadResult<T> =
     | { Success: true; Value: T }
     | { Success: false; ErrorMessage: string };
+
+/**
+ * How long a judge waits for each model call when the oracle config sets no `timeoutMS`: two minutes.
+ * A judge call is one prompt over one test's trace, so this is generous; it is there so a hung call
+ * fails the oracle instead of hanging the test run.
+ */
+export const DEFAULT_JUDGE_TIMEOUT_MS = 120_000;
 
 /**
  * Builds the trace a judge evaluates from the oracle input.
@@ -73,6 +80,24 @@ export function ReadJudgeCriteria(input: OracleInput, config: OracleConfig): Jud
         return { Success: false, ErrorMessage: `Validation criteria must be an array of criteria, not a ${typeof raw}` };
     }
     return readCriteriaEntries(raw);
+}
+
+/**
+ * Reads how long a judge waits for each model call from the oracle config's `timeoutMS`. The runner
+ * applies it to each model call as `AIPromptParams.timeoutMS`, so a failover to another model gets a
+ * fresh budget, and a call that runs over fails.
+ *
+ * @param config - The oracle config
+ * @returns The timeout in milliseconds, {@link DEFAULT_JUDGE_TIMEOUT_MS} when the config sets none, or
+ *   the reason the config's value is not a positive, finite number
+ */
+export function ReadJudgeTimeoutMS(config: OracleConfig): JudgeReadResult<number> {
+    const timeoutMS = config.timeoutMS ?? DEFAULT_JUDGE_TIMEOUT_MS;
+    if (typeof timeoutMS !== 'number' || !Number.isFinite(timeoutMS) || timeoutMS <= 0) {
+        const shown = typeof timeoutMS === 'number' ? String(timeoutMS) : JSON.stringify(timeoutMS);
+        return { Success: false, ErrorMessage: `timeoutMS must be a positive number of milliseconds, not ${shown}` };
+    }
+    return { Success: true, Value: timeoutMS };
 }
 
 /** The test's input definition, parsed when it is a JSON string, or `{}` when it has none. */

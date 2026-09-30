@@ -15,6 +15,7 @@ import { AIDecisionRunner, type AIDecisionParams, type AIDecisionRunResult } fro
 import { AIEngine } from '@memberjunction/aiengine';
 import { TestEngineBase } from '@memberjunction/testing-engine-base';
 import { DecisionJudgeOracle } from '../oracles/DecisionJudgeOracle';
+import { DEFAULT_JUDGE_TIMEOUT_MS } from '../oracles/judge-trace';
 import { LLMJudgeOracle } from '../oracles/LLMJudgeOracle';
 import { TestEngine } from '../engine/TestEngine';
 import type { OracleConfig, OracleInput } from '../types';
@@ -133,6 +134,33 @@ describe('DecisionJudgeOracle', () => {
             expect(sentParams().Questions).toEqual({
                 criterion_1: { Kind: 'Likelihood', Instructions: 'The response satisfies: From config' },
             });
+        });
+    });
+
+    describe('the timeout', () => {
+        it('bounds the decision call with the default judge timeout of two minutes', async () => {
+            executeDecision.mockResolvedValue(answered(0.9));
+
+            await new DecisionJudgeOracle().evaluate(oracleInput(expecting('A')), {});
+
+            expect(DEFAULT_JUDGE_TIMEOUT_MS).toBe(120_000);
+            expect(sentParams().timeoutMS).toBe(DEFAULT_JUDGE_TIMEOUT_MS);
+        });
+
+        it("applies the config's timeoutMS", async () => {
+            executeDecision.mockResolvedValue(answered(0.9));
+
+            await new DecisionJudgeOracle().evaluate(oracleInput(expecting('A')), { timeoutMS: 30_000 });
+
+            expect(sentParams().timeoutMS).toBe(30_000);
+        });
+
+        it.each([0, -1, '30s'])('rejects a timeoutMS of %s without asking', async (timeoutMS) => {
+            const result = await new DecisionJudgeOracle().evaluate(oracleInput(expecting('A')), { timeoutMS });
+
+            expect(executeDecision).not.toHaveBeenCalled();
+            expect(result.passed).toBe(false);
+            expect(result.message).toMatch(/^timeoutMS must be a positive number of milliseconds/);
         });
     });
 
