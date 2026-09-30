@@ -6238,6 +6238,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.2.0-edge.1
         version: link:../../../MJGlobal
+      '@memberjunction/graphql-dataprovider':
+        specifier: 6.2.0-edge.1
+        version: link:../../../GraphQLDataProvider
       '@memberjunction/interactive-component-types':
         specifier: 6.2.0-edge.1
         version: link:../../../InteractiveComponents
@@ -12363,6 +12366,9 @@ importers:
       '@memberjunction/ai-provider-bundle':
         specifier: 6.2.0-edge.1
         version: link:../AI/Providers/Bundle
+      '@memberjunction/ai-vector-dupe':
+        specifier: 6.2.0-edge.1
+        version: link:../AI/Vectors/Dupe
       '@memberjunction/ai-vector-sync':
         specifier: 6.2.0-edge.1
         version: link:../AI/Vectors/Sync
