@@ -353,6 +353,16 @@ describe('MessageInputComponent — decision routing', () => {
             expect(h.invokeSubAgent.mock.calls[0][0]).toBe('Writer');
         });
 
+        it('a failure while loading the artifacts keeps continuity, and makes no call', async () => {
+            h.findArtifacts.mockRejectedValue(new Error('artifact query failed'));
+
+            await h.route(userMessage());
+
+            expect(h.runDecision).not.toHaveBeenCalled();
+            expect(h.before.map(e => [e.Route, e.AgentId])).toEqual([['Continuity', WRITER.ID]]);
+            expect(h.invokeSubAgent.mock.calls[0][0]).toBe('Writer');
+        });
+
         describe('when the person opens another conversation during the call', () => {
             it('a kept thread still goes to the last agent', async () => {
                 switchesAwayThenAnswers(answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.9) }));
