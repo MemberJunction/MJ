@@ -14,14 +14,32 @@
  */
 import { SafeExpressionEvaluator } from '@memberjunction/global';
 import { CONDITION_ROOTS, UnknownConditionRoots } from './condition-roots';
-import { DetectCycle, type TaskGraphEdge, type TaskGraphNode } from './graph-algorithms';
 import {
+    DecisionChoiceTestOf,
+    DecisionReferencesIn,
+    DecisionsReadAsProperty,
+    DecisionValueComparisonsIn,
+    type DecisionReference,
+} from './decision-conditions';
+import {
+    ComputeCertainlyRun,
+    ComputeDownstream,
+    ComputeUpstream,
+    DetectCycle,
+    type RoutedTaskGraphEdge,
+    type TaskGraphEdge,
+    type TaskGraphNode,
+} from './graph-algorithms';
+import {
+    ConfigOf,
+    DECISION_ANSWER_FIELDS,
     MAX_TASKS_PER_GRAPH,
     TaskGraphSpec,
     TaskGraphSpecNode,
     TaskGraphValidationError,
     TaskGraphValidationResult,
     NormalizeDependency,
+    type TaskGraphDecisionQuestion,
     type TaskGraphNodeConfigMap,
     type TaskGraphNodeKind,
 } from './task-graph-spec';
@@ -34,8 +52,78 @@ const CONDITION_SYNTAX = new SafeExpressionEvaluator();
 
 /** Kinds this build knows how to configure. Derived from the map so the two can never drift. */
 const KNOWN_KINDS: readonly TaskGraphNodeKind[] = [
-    'Agent', 'Action', 'Human', 'Prompt', 'ForEach', 'While', 'External',
+    'Agent', 'Action', 'Human', 'Prompt', 'ForEach', 'While', 'External', 'Decision',
 ];
+
+/** A graph's Decision steps by `tempId`, with their configuration already narrowed. */
+type DecisionSteps = ReadonlyMap<string, { Name: string; Config: TaskGraphNodeConfigMap['Decision'] }>;
+
+/** Where a condition sits, for messages that name it the way its author would. */
+type ConditionSite = {
+    Label: string;
+    Where: string;
+    TempId: string;
+    /** A While loop's condition, which is evaluated per iteration and has no `decisions` root. */
+    IsLoopCondition: boolean;
+    /** For an edge condition, the step the edge leaves: its condition is decided when that step finishes. */
+    Origin?: string;
+};
+
+/**
+ * Where the steps sit relative to one another, which is what decides whether a decision a condition
+ * reads can have answered by the time the condition is decided. Computed once per graph, lazily.
+ */
+type StepOrder = {
+    /** The steps certain to have run whenever this one has, itself included; `null` in a cyclic graph. */
+    CertainBy(tempId: string): ReadonlySet<string> | null;
+    /** Every step that depends on this one, directly or not. */
+    Downstream(tempId: string): ReadonlySet<string>;
+    /** Every step this one depends on, directly or not. */
+    Upstream(tempId: string): ReadonlySet<string>;
+};
+
+/** What checking a condition's decision references needs to know about the graph. */
+type DecisionContext = {
+    Steps: DecisionSteps;
+    Order: StepOrder;
+    NameOf: (tempId: string) => string;
+};
+
+/** The graph's step order, from its dependencies. An edge with a condition or an exclusive group can be cut. */
+function buildStepOrder(tasks: readonly TaskGraphSpecNode[]): StepOrder {
+    const ids = tasks.map((t) => t.tempId).filter((id): id is string => !!id);
+    const known = new Set(ids);
+    const edges: RoutedTaskGraphEdge[] = tasks.flatMap((t) =>
+        (t.dependsOn ?? [])
+            .map(NormalizeDependency)
+            .filter((d) => known.has(d.tempId) && d.tempId !== t.tempId)
+            .map((d) => ({
+                taskId: t.tempId,
+                dependsOnTaskId: d.tempId,
+                dependencyType: d.dependencyType,
+                mayBeCut: !!d.condition?.trim() || !!d.exclusiveGroup,
+            })),
+    );
+
+    let certain: Map<string, ReadonlySet<string>> | null | undefined;
+    const downstream = new Map<string, ReadonlySet<string>>();
+    const upstream = new Map<string, ReadonlySet<string>>();
+    const cached = (cache: Map<string, ReadonlySet<string>>, id: string, compute: () => ReadonlySet<string>): ReadonlySet<string> => {
+        const hit = cache.get(id);
+        if (hit) return hit;
+        const value = compute();
+        cache.set(id, value);
+        return value;
+    };
+    return {
+        CertainBy: (id) => {
+            if (certain === undefined) certain = ComputeCertainlyRun(ids, edges);
+            return certain?.get(id) ?? null;
+        },
+        Downstream: (id) => cached(downstream, id, () => ComputeDownstream(id, edges)),
+        Upstream: (id) => cached(upstream, id, () => ComputeUpstream(id, edges)),
+    };
+}
 
 /**
  * Refuses an edge condition that cannot parse, at the door.
@@ -60,7 +148,7 @@ const KNOWN_KINDS: readonly TaskGraphNodeKind[] = [
  */
 function checkConditionSyntax(
     task: TaskGraphSpecNode,
-    nameByTempId: ReadonlyMap<string, string>,
+    decisions: DecisionContext,
     errors: TaskGraphValidationError[],
 ): void {
     // C7: name steps the way their author does. On the compiled-flow path `tempId` is a UUID, and a
@@ -68,8 +156,8 @@ function checkConditionSyntax(
     // in exactly the place it has to explain itself — to somebody editing an unrelated step in an
     // old flow who has just been told their save failed.
     const label = task.name?.trim() || task.tempId;
-    const nameOf = (tempId: string): string => nameByTempId.get(tempId) || tempId;
-    const report = (where: string, condition: string): void => {
+    const nameOf = decisions.NameOf;
+    const report = (where: string, condition: string, origin?: string): void => {
         const verdict = CONDITION_SYNTAX.validateSyntax(condition);
         // Undecidable means this host cannot compile at all (a strict CSP) — not that the condition
         // is wrong. Refusing then would reject every condition in the browser while the same spec
@@ -99,11 +187,21 @@ function checkConditionSyntax(
                 TempId: task.tempId,
             });
         }
+
+        // A DECISION REFERENCE IS DECIDABLE NOW TOO. The graph's Decision steps and their questions
+        // are all in the spec, so `decisions.triage.intnet.value` is a typo we can name at the door
+        // rather than an answer that never arrives and holds the branch forever.
+        checkDecisionReferences(
+            condition,
+            { Label: label, Where: where, TempId: task.tempId, IsLoopCondition: origin === undefined, Origin: origin },
+            decisions,
+            errors,
+        );
     };
 
     for (const raw of task.dependsOn ?? []) {
         const dep = NormalizeDependency(raw);
-        if (dep.condition?.trim()) report(`a condition on its dependency "${nameOf(dep.tempId)}"`, dep.condition);
+        if (dep.condition?.trim()) report(`a condition on its dependency "${nameOf(dep.tempId)}"`, dep.condition, dep.tempId);
     }
 
     // A While step's loop condition is the same grammar evaluated by the same evaluator, and a typo
@@ -115,6 +213,163 @@ function checkConditionSyntax(
             report('a loop condition', loopCondition);
         }
     }
+}
+
+/**
+ * Refuses a condition that reads a decision the graph does not make, or cannot have made in time.
+ *
+ * Every way to be wrong here is answerable from the spec alone:
+ *
+ * - a use of `decisions` that names no step and question;
+ * - a step that is not a Decision step in this graph, a question that step does not ask, or an
+ *   answer field that question's kind does not have — which would read `undefined` and turn every
+ *   comparison into a silent `false`;
+ * - a Choice compared with a value that is not one of its options, which can never match;
+ * - a decision that cannot have answered by the time the edge is decided — the edge's own target, a
+ *   step after it, or one on a branch that may be skipped. The edge would hold waiting for it, and
+ *   the graph would stall forever;
+ * - an answer read through a step's OUTPUT (`payload.decisions…`) rather than the root. That copy is
+ *   for later steps to read, and a condition reading it is never held: a below-threshold answer is
+ *   missing from it, and a missing answer reads as `false`.
+ *
+ * A loop condition may not read `decisions` at all. It is evaluated between iterations against the
+ * loop's own payload, where there is no `decisions` root, and none of the hold rules apply there.
+ */
+function checkDecisionReferences(
+    condition: string,
+    site: ConditionSite,
+    decisions: DecisionContext,
+    errors: TaskGraphValidationError[],
+): void {
+    const scan = DecisionReferencesIn(condition);
+    const refuse = (problem: string): void => {
+        errors.push({
+            Code: 'InvalidCondition',
+            Message: `Task "${site.Label}" has ${site.Where} that ${problem}. The condition was: ${condition}`,
+            TempId: site.TempId,
+        });
+    };
+
+    // Only where a Decision step exists can a `decisions` property be one's answers; elsewhere it is
+    // an ordinary payload field, and refusing it would reject workflows that have nothing to do with
+    // decisions.
+    if (decisions.Steps.size > 0) {
+        for (const read of new Set(DecisionsReadAsProperty(condition))) {
+            refuse(site.IsLoopCondition
+                ? `reads Decision answers through "${read}". Only an edge condition can read a Decision step's answers, `
+                    + 'through the decisions root; route on the decision with a conditional dependency instead'
+                : `reads Decision answers through "${read}", a copy a condition cannot hold on: an answer below its `
+                    + 'minConfidence, or from a failed call, is missing there and reads as false. '
+                    + 'Read it through the decisions root instead, for example decisions.<step>.<question>.value');
+        }
+    }
+
+    if (site.IsLoopCondition) {
+        if (scan.References.length > 0 || scan.Malformed.length > 0) {
+            refuse('reads "decisions". Only an edge condition can read a Decision step\'s answers; route on the decision with a conditional dependency instead');
+        }
+        return;
+    }
+    for (const malformed of scan.Malformed) {
+        refuse(`reads "decisions" without naming a Decision step and one of its questions (${malformed}). `
+            + 'Write it as decisions.<step>.<question>, for example decisions.triage.intent.value');
+    }
+    const timed = new Set<string>();
+    for (const reference of scan.References) {
+        const problem = decisionReferenceProblem(reference, decisions.Steps);
+        if (problem) {
+            refuse(problem);
+            continue;
+        }
+        // One message per decision, however many of its questions the condition reads.
+        if (site.Origin === undefined || timed.has(reference.NodeId)) continue;
+        timed.add(reference.NodeId);
+        const late = decisionTimingProblem(reference.NodeId, site.Origin, site.TempId, decisions);
+        if (late) refuse(late);
+    }
+    const compared = new Set<string>();
+    for (const comparison of DecisionValueComparisonsIn(condition)) {
+        const key = JSON.stringify([comparison.NodeId, comparison.QuestionKey, comparison.Value]);
+        if (compared.has(key)) continue;
+        compared.add(key);
+        const problem = choiceValueProblem(comparison.NodeId, comparison.QuestionKey, comparison.Value, decisions.Steps);
+        if (problem) refuse(problem);
+    }
+}
+
+/**
+ * Why a decision cannot have answered by the time an edge's condition is decided, or `null` when it
+ * certainly has.
+ *
+ * A condition is decided when the edge's origin finishes, so the decision must be certain to have
+ * run by then: the origin itself, or a step the origin cannot run without. Anything else is a hold
+ * that may never end — which the dispatcher cannot tell from a slow decision, so it is refused here.
+ */
+function decisionTimingProblem(
+    decisionID: string,
+    originID: string,
+    targetID: string,
+    decisions: DecisionContext,
+): string | null {
+    const certain = decisions.Order.CertainBy(originID);
+    // A cyclic graph has no order to reason about; the cycle is refused on its own.
+    if (!certain || certain.has(decisionID)) return null;
+
+    const decision = decisions.NameOf(decisionID);
+    const origin = decisions.NameOf(originID);
+    const target = decisions.NameOf(targetID);
+    const forever = 'so the edge would wait for it forever';
+    if (decisionID === targetID) {
+        return `reads the decision of "${decision}", the step this edge leads to. It can only answer after this `
+            + `condition lets it run, ${forever}`;
+    }
+    if (decisions.Order.Downstream(targetID).has(decisionID)) {
+        return `reads the decision of "${decision}", which comes after "${target}". It can only answer once this `
+            + `condition has let "${target}" run, ${forever}`;
+    }
+    if (decisions.Order.Upstream(originID).has(decisionID)) {
+        return `reads the decision of "${decision}", which is on a branch that can be skipped while "${origin}" still `
+            + `runs. A skipped decision never answers, ${forever}. Read it only from a step that cannot run without it`;
+    }
+    return `reads the decision of "${decision}", which "${origin}" does not wait for: it may not have answered when `
+        + `this condition is decided, and if its branch is skipped it never will. Make "${origin}" depend on `
+        + `"${decision}" through steps that cannot be skipped, or read the decision from a step that does`;
+}
+
+/** Why a Choice compared with `value` can never match, or `null` when `value` is one of its options. */
+function choiceValueProblem(nodeID: string, questionKey: string, value: string, decisionSteps: DecisionSteps): string | null {
+    const step = decisionSteps.get(nodeID);
+    const questions = step?.Config.questions ?? {};
+    const question = Object.prototype.hasOwnProperty.call(questions, questionKey) ? questions[questionKey] : undefined;
+    // Anything but a well-formed Choice is reported by the reference and configuration checks.
+    if (!step || question?.kind !== 'Choice' || !Array.isArray(question.options)) return null;
+    const options = question.options.map((o) => o.value);
+    if (options.includes(value)) return null;
+    return `compares the Choice question "${questionKey}" of Decision step "${step.Name}" with "${value}", which is not `
+        + `one of its options (${options.map((o) => `"${o}"`).join(', ')}), so the comparison can never be true`;
+}
+
+/** What is wrong with one `decisions.<step>.<question>[.<field>]` reference, or `null`. */
+function decisionReferenceProblem(reference: DecisionReference, decisionSteps: DecisionSteps): string | null {
+    const step = decisionSteps.get(reference.NodeId);
+    if (!step) {
+        const known = [...decisionSteps.keys()].map((id) => `"${id}"`).join(', ') || 'none';
+        return `reads the decision "${reference.NodeId}", but no Decision step has that tempId (Decision steps in this graph: ${known})`;
+    }
+    const questions = step.Config.questions ?? {};
+    const question = Object.prototype.hasOwnProperty.call(questions, reference.QuestionKey)
+        ? questions[reference.QuestionKey]
+        : undefined;
+    if (!question) {
+        const asked = Object.keys(questions).map((k) => `"${k}"`).join(', ') || 'nothing';
+        return `reads the question "${reference.QuestionKey}" of Decision step "${step.Name}", which asks only ${asked}`;
+    }
+    const fields = DECISION_ANSWER_FIELDS[question.kind];
+    if (reference.Field && fields && !fields.includes(reference.Field)) {
+        return `reads "${reference.Field}" from the ${question.kind} question "${reference.QuestionKey}" of Decision step "${step.Name}", `
+            + `whose answer has only ${fields.map((f) => `"${f}"`).join(', ')}`;
+    }
+    return null;
 }
 
 /**
@@ -137,7 +392,194 @@ const REQUIRED_CONFIG_FIELDS: Record<TaskGraphNodeKind, readonly string[]> = {
     // about a setting that does not apply to it.
     While: ['condition'],
     External: ['domain'],
+    // `promptName` and `state` both have defaults (`Default Decision`, the whole payload); nothing
+    // can default the questions.
+    Decision: ['questions'],
 };
+
+/** `payload`, or `payload.<path>` — the only states a Decision step can resolve at run time. */
+const PAYLOAD_PATH = /^payload(?:\.[^.\s]+)*$/;
+
+/**
+ * Reports a Decision step whose configuration could not run, or could not be checked.
+ *
+ * Checked here rather than left to the decision driver because the rest of the graph depends on it
+ * at submit: an exhaustive fork is only as sound as the options it is checked against, and a
+ * question the driver will refuse fails the step after the graph has started.
+ */
+function checkDecisionConfiguration(task: TaskGraphSpecNode, errors: TaskGraphValidationError[]): void {
+    const config = ConfigOf(task, 'Decision');
+    if (!config) return;
+
+    const problems: string[] = [];
+    if (config.promptName !== undefined && !(typeof config.promptName === 'string' && config.promptName.trim())) {
+        problems.push('its promptName is empty; omit it to use the Default Decision prompt');
+    }
+    if (config.state !== undefined && !(typeof config.state === 'string' && PAYLOAD_PATH.test(config.state.trim()))) {
+        problems.push(`its state "${String(config.state)}" is not "payload" or "payload.<path>"`);
+    }
+    // Absent questions are already reported as missing configuration; only a present-but-empty or
+    // malformed set is reported here.
+    const questions: unknown = config.questions;
+    if (questions !== undefined && questions !== null) {
+        if (typeof questions !== 'object' || Array.isArray(questions) || Object.keys(questions).length === 0) {
+            problems.push('it asks no questions');
+        } else {
+            for (const [key, question] of Object.entries(config.questions)) problems.push(...questionProblems(key, question));
+        }
+    }
+
+    if (problems.length > 0) {
+        errors.push({
+            Code: 'InvalidConfiguration',
+            Message: `Decision step "${task.name?.trim() || task.tempId}" cannot run: ${problems.join('; ')}.`,
+            TempId: task.tempId,
+        });
+    }
+}
+
+/** What is wrong with one question, as phrases naming it. Empty when it is well formed. */
+function questionProblems(key: string, question: TaskGraphDecisionQuestion): string[] {
+    const problems: string[] = [];
+    // Read through `unknown`: a spec arrives as JSON from a model or a canvas, and nothing but this
+    // check stands between a malformed question and the decision driver.
+    const value: unknown = question;
+    if (!value || typeof value !== 'object') return [`question "${key}" is not an object`];
+    const raw = value as Record<string, unknown>;
+    if (typeof raw.instructions !== 'string' || !raw.instructions.trim()) {
+        problems.push(`question "${key}" has no instructions`);
+    }
+    if (raw.kind === 'Choice') problems.push(...choiceOptionProblems(key, raw.options));
+    else if (raw.kind === 'Score') problems.push(...scoreLevelProblems(key, raw.levels));
+    else if (raw.kind !== 'Likelihood') {
+        problems.push(`question "${key}" has kind "${String(raw.kind)}"; use Likelihood, Choice or Score`);
+    }
+    const min = raw.minConfidence;
+    if (min !== undefined && !(typeof min === 'number' && min >= 0 && min <= 1)) {
+        problems.push(`question "${key}" has minConfidence ${String(min)}; use a number from 0 to 1`);
+    }
+    return problems;
+}
+
+/** A Choice needs two or more options, each with a distinct value and a description. */
+function choiceOptionProblems(key: string, options: unknown): string[] {
+    if (!Array.isArray(options) || options.length < 2) return [`Choice question "${key}" needs at least two options`];
+    const problems: string[] = [];
+    const seen = new Set<string>();
+    options.forEach((option: unknown, index) => {
+        const record = option && typeof option === 'object' ? option as Record<string, unknown> : {};
+        const value = record.value;
+        if (typeof value !== 'string' || !value.trim()) {
+            problems.push(`option ${index + 1} of Choice question "${key}" has no value`);
+        } else if (seen.has(value)) {
+            problems.push(`Choice question "${key}" has the option value "${value}" twice`);
+        } else {
+            seen.add(value);
+        }
+        if (typeof record.description !== 'string' || !record.description.trim()) {
+            problems.push(`option ${index + 1} of Choice question "${key}" has no description`);
+        }
+    });
+    return problems;
+}
+
+/** A Score needs two or more levels, each a description. */
+function scoreLevelProblems(key: string, levels: unknown): string[] {
+    if (!Array.isArray(levels) || levels.length < 2) return [`Score question "${key}" needs at least two levels`];
+    return levels.some((level: unknown) => typeof level !== 'string' || !level.trim())
+        ? [`Score question "${key}" has an empty level`]
+        : [];
+}
+
+/**
+ * A fork on a Choice must have a path for every option.
+ *
+ * **The one correctness property here that ordinary conditions cannot have.** A condition is
+ * untyped truthiness over whatever lands in the payload, so an `exclusiveGroup` has no notion of
+ * coverage: when no edge is satisfied every edge loses and the fork silently ends the branch. A
+ * Choice enumerates its options when the graph is written, so when every edge of a group tests one
+ * Choice question's `value`, which options have no path is known before anything runs.
+ *
+ * Applies only to that shape. A group with an unconditional (default) edge, an edge testing anything
+ * else, or edges testing different questions is left alone — it either covers everything by
+ * construction or cannot be checked.
+ */
+function checkExhaustiveForks(
+    tasks: readonly TaskGraphSpecNode[],
+    decisionSteps: DecisionSteps,
+    errors: TaskGraphValidationError[],
+): void {
+    for (const [group, edges] of exclusiveEdgesByGroup(tasks)) {
+        const fork = choiceForkOf(edges, decisionSteps);
+        if (!fork) continue;
+        const missing = fork.Options.filter((option) => !fork.Covered.has(option));
+        if (missing.length === 0) continue;
+
+        const unknown = [...fork.Covered].filter((value) => !fork.Options.includes(value));
+        const quoted = (values: readonly string[]): string => values.map((v) => `"${v}"`).join(', ');
+        errors.push({
+            Code: 'IncompleteFork',
+            Message: `Exclusive group "${group}" routes on the Choice question "${fork.QuestionKey}" of Decision step `
+                + `"${fork.StepName}" but has no path for ${quoted(missing)}. A choice always picks one of its options, `
+                + 'so whenever the model picks a missing one every path loses and the branch ends silently. '
+                + 'Add a path for each missing option, or an unconditional path in the group as the default.'
+                + (unknown.length > 0 ? ` Its paths also test ${quoted(unknown)}, which the question does not offer (its options: ${quoted(fork.Options)}).` : ''),
+            TempId: edges[0].Origin,
+        });
+    }
+}
+
+/** Every exclusive edge's origin and condition, grouped by `exclusiveGroup`. */
+function exclusiveEdgesByGroup(
+    tasks: readonly TaskGraphSpecNode[],
+): Map<string, Array<{ Origin: string; Condition: string | undefined }>> {
+    const groups = new Map<string, Array<{ Origin: string; Condition: string | undefined }>>();
+    for (const task of tasks) {
+        for (const raw of task.dependsOn ?? []) {
+            const dep = NormalizeDependency(raw);
+            if (!dep.exclusiveGroup) continue;
+            const edges = groups.get(dep.exclusiveGroup) ?? [];
+            edges.push({ Origin: dep.tempId, Condition: dep.condition });
+            groups.set(dep.exclusiveGroup, edges);
+        }
+    }
+    return groups;
+}
+
+/**
+ * The Choice a group forks on and the options its edges cover, or `null` when the group is not a
+ * fork on exactly one Choice question.
+ */
+function choiceForkOf(
+    edges: ReadonlyArray<{ Condition: string | undefined }>,
+    decisionSteps: DecisionSteps,
+): { StepName: string; QuestionKey: string; Options: string[]; Covered: Set<string> } | null {
+    const tests = edges.map((e) => (e.Condition?.trim() ? DecisionChoiceTestOf(e.Condition) : null));
+    const first = tests[0];
+    if (!first || tests.some((t) => !t || t.NodeId !== first.NodeId || t.QuestionKey !== first.QuestionKey)) return null;
+
+    const step = decisionSteps.get(first.NodeId);
+    const questions = step?.Config.questions ?? {};
+    const question = Object.prototype.hasOwnProperty.call(questions, first.QuestionKey) ? questions[first.QuestionKey] : undefined;
+    if (!step || question?.kind !== 'Choice' || !Array.isArray(question.options)) return null;
+
+    return {
+        StepName: step.Name,
+        QuestionKey: first.QuestionKey,
+        Options: question.options.map((o) => o.value),
+        Covered: new Set(tests.flatMap((t) => t?.Values ?? [])),
+    };
+}
+
+/** The graph's Decision steps by `tempId`. */
+function collectDecisionSteps(tasks: readonly TaskGraphSpecNode[]): DecisionSteps {
+    const steps = new Map<string, { Name: string; Config: TaskGraphNodeConfigMap['Decision'] }>();
+    for (const task of tasks) {
+        const config = ConfigOf(task, 'Decision');
+        if (config && task.tempId) steps.set(task.tempId, { Name: task.name?.trim() || task.tempId, Config: config });
+    }
+    return steps;
+}
 
 /** Reports a node whose `configuration` is missing something its `kind` needs. */
 function checkConfiguration(task: TaskGraphSpecNode, errors: TaskGraphValidationError[]): void {
@@ -228,6 +670,14 @@ export function ValidateTaskGraphSpec(spec: TaskGraphSpec): TaskGraphValidationR
     const nameByTempId = new Map<string, string>(
         tasks.filter((t) => t.tempId && t.name?.trim()).map((t) => [t.tempId, t.name.trim()]),
     );
+    // Built once, before any condition is read: a condition may read a Decision step declared
+    // anywhere in the graph, including after the task that carries it.
+    const decisionSteps = collectDecisionSteps(tasks);
+    const decisionContext: DecisionContext = {
+        Steps: decisionSteps,
+        Order: buildStepOrder(tasks),
+        NameOf: (tempId: string): string => nameByTempId.get(tempId) || tempId,
+    };
     const seen = new Set<string>();
     for (const task of tasks) {
         if (!task.tempId || task.tempId.trim().length === 0) {
@@ -255,7 +705,8 @@ export function ValidateTaskGraphSpec(spec: TaskGraphSpec): TaskGraphValidationR
         }
 
         checkConfiguration(task, errors);
-        checkConditionSyntax(task, nameByTempId, errors);
+        checkDecisionConfiguration(task, errors);
+        checkConditionSyntax(task, decisionContext, errors);
 
         for (const raw of task.dependsOn ?? []) {
             // NORMALISE before comparing. The object form `{ tempId: <own> }` used to slip past this
@@ -274,6 +725,7 @@ export function ValidateTaskGraphSpec(spec: TaskGraphSpec): TaskGraphValidationR
     }
 
     checkExclusiveGroups(tasks, errors);
+    checkExhaustiveForks(tasks, decisionSteps, errors);
 
     // --- graph-level checks --------------------------------------------------
     const known = new Set(tasks.map((t) => t.tempId).filter(Boolean));
