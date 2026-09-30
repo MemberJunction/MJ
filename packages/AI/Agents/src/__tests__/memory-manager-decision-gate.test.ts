@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { EntityInfo, UserInfo } from '@memberjunction/core';
-import type { DecisionAnswer } from '@memberjunction/ai';
-import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
+import { EntityInfo, LogStatus, UserInfo } from '@memberjunction/core';
+import { DecisionResult, type DecisionAnswer } from '@memberjunction/ai';
+import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, type DecisionAnsweringModel } from '@memberjunction/ai-core-plus';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { MemoryManagerAgent } from '../memory-manager-agent';
@@ -90,13 +90,28 @@ class ScriptedDecisionService extends AgentDecisionService {
     }
 }
 
-/** A successful decision answering each question key with its probability, from the named model. */
-function answered(modelName: string, probabilities: Record<string, number>, promptRun?: MJAIPromptRunEntity): AIDecisionRunResult {
+/** Jev at the version the memory-note calibration was fitted on. */
+const JEV: DecisionAnsweringModel = { ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.13-20260917' };
+
+/**
+ * A successful decision answering each question key with its probability, from the given model: the
+ * MJ decision model on `modelInfo`, the model its driver resolved on `DecisionResult`.
+ */
+function answered(model: DecisionAnsweringModel, probabilities: Record<string, number>, promptRun?: MJAIPromptRunEntity): AIDecisionRunResult {
     const Answers: Record<string, DecisionAnswer> = {};
     for (const [key, probability] of Object.entries(probabilities)) {
         Answers[key] = { Kind: 'Likelihood', Probability: probability };
     }
-    return { success: true, Answers, modelInfo: { modelId: `model-${modelName}`, modelName }, promptRun };
+    const driverResult = new DecisionResult(true, new Date(0), new Date(1));
+    driverResult.Answers = Answers;
+    driverResult.ResolvedModel = model.ResolvedModel ?? undefined;
+    const modelName = model.ModelName ?? undefined;
+    return { success: true, Answers, modelInfo: modelName ? { modelId: `model-${modelName}`, modelName } : undefined, DecisionResult: driverResult, promptRun };
+}
+
+/** The Memory Manager's log lines that name `text`. */
+function loggedLines(text: string): string[] {
+    return vi.mocked(LogStatus).mock.calls.map(call => String(call[0])).filter(line => line.includes(text));
 }
 
 /** The Memory Manager, with its run, its run steps and its decision service standing in for the database. */
@@ -176,7 +191,7 @@ describe('MemoryManagerAgent - Decision Gate Integration', () => {
     });
 
     it('filters by self-confidence and length when EnableDecisionGate is false (default)', async () => {
-        const decisions = new ScriptedDecisionService(() => answered('Jev', {}));
+        const decisions = new ScriptedDecisionService(() => answered(JEV, {}));
         agent.SetDecisionService(decisions);
 
         const filtered = await agent.RunGate(sampleNotes, oneThread, user);
@@ -188,7 +203,7 @@ describe('MemoryManagerAgent - Decision Gate Integration', () => {
 
     it("never gates a failed run's corrective notes, which the gate was not measured on", async () => {
         agent.EnableDecisionGate = true;
-        const decisions = new ScriptedDecisionService(() => answered('Jev', { n1: 0.01, n2: 0.01, n3: 0.99 }));
+        const decisions = new ScriptedDecisionService(() => answered(JEV, { n1: 0.01, n2: 0.01, n3: 0.99 }));
         agent.SetDecisionService(decisions);
 
         const filtered = await agent.RunGate(sampleNotes, oneThread, user, false);
@@ -208,9 +223,15 @@ describe('MemoryManagerAgent - Decision Gate Integration', () => {
         expect(filtered.map(n => n.content)).toEqual(['Prefers dark mode theme', 'Do not touch production DB']);
     });
 
-    it('falls back to the confidence filter when the answering model has no calibration', async () => {
+    it.each<[string, DecisionAnsweringModel]>([
+        ['a model with no calibration', { ModelName: 'uncalibrated-model-v1', ResolvedModel: 'vendor/uncalibrated-model-v1' }],
+        ['Jev at another version', { ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.14-20261101' }],
+        ['Jev with no resolved model reported', { ModelName: 'Jev' }],
+        ['a model named constructor', { ModelName: 'constructor', ResolvedModel: 'constructor' }]
+    ])('falls back to the confidence filter when %s answers', async (_label, model) => {
         agent.EnableDecisionGate = true;
-        const decisions = new ScriptedDecisionService(() => answered('uncalibrated-model-v1', { n1: 0.99, n2: 0.95, n3: 0.99 }));
+        // Raw answers that would clear Jev's calibrated threshold for every note, n3 (self 70) included.
+        const decisions = new ScriptedDecisionService(() => answered(model, { n1: 0.99, n2: 0.95, n3: 0.99 }));
         agent.SetDecisionService(decisions);
 
         const filtered = await agent.RunGate(sampleNotes, oneThread, user);
@@ -221,12 +242,33 @@ describe('MemoryManagerAgent - Decision Gate Integration', () => {
         expect(filtered.map(n => n.content)).toEqual(['Prefers dark mode theme', 'Do not touch production DB']);
     });
 
+    it('logs an uncalibrated answering model once, however many batches and runs it answers', async () => {
+        // One note per call: the three notes that pass the length check make three batches per run.
+        vi.spyOn(MemoryNoteGate, 'MemoryNotePromptQuestionCap').mockReturnValue(1);
+        const model: DecisionAnsweringModel = { ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.13-logged-once' };
+        const decisions = new ScriptedDecisionService(() => answered(model, { n1: 0.99 }));
+        const secondRun = new TestMemoryManagerAgent();
+        for (const run of [agent, secondRun]) {
+            run.EnableDecisionGate = true;
+            run.SetDecisionService(decisions);
+        }
+
+        await agent.RunGate(sampleNotes, oneThread, user);
+        await agent.RunGate(sampleNotes, oneThread, user);
+        await secondRun.RunGate(sampleNotes, oneThread, user);
+
+        expect(decisions.Calls).toHaveLength(9);
+        expect(loggedLines('typesafe/jev-1.13-logged-once')).toEqual([
+            'Memory Manager: Jev (typesafe/jev-1.13-logged-once) has no memory-note calibration (MEMORY_NOTE_DECISION_CALIBRATION), so the decision gate falls back to the confidence filter for its batches'
+        ]);
+    });
+
     it('keeps the notes whose calibrated probability reaches the threshold when a calibrated model answers', async () => {
         agent.EnableDecisionGate = true;
         // After the length check: n1 "Prefers dark mode theme" (self 95), n2 "Do not touch production DB"
         // (self 85), n3 "Build failed on missing module" (self 70). Jev's raw 0.95 and 0.9 calibrate
         // above the threshold, its raw 0.6 well below it, so the gate overrides the self-report both ways.
-        agent.SetDecisionService(new ScriptedDecisionService(() => answered('Jev', { n1: 0.95, n2: 0.6, n3: 0.9 })));
+        agent.SetDecisionService(new ScriptedDecisionService(() => answered(JEV, { n1: 0.95, n2: 0.6, n3: 0.9 })));
 
         const filtered = await agent.RunGate(sampleNotes, oneThread, user);
 
@@ -241,7 +283,7 @@ describe('MemoryManagerAgent - Decision Gate Integration', () => {
             { type: 'Preference', content: 'Prefers weekly summaries', confidence: 70 },
             { type: 'Preference', content: 'Prefers metric units', confidence: 95 }
         ];
-        agent.SetDecisionService(new ScriptedDecisionService(() => answered('Jev', { n1: 0.85, n2: 0.835 })));
+        agent.SetDecisionService(new ScriptedDecisionService(() => answered(JEV, { n1: 0.85, n2: 0.835 })));
 
         const filtered = await agent.RunGate(notes, oneThread, user);
 
@@ -255,7 +297,7 @@ describe('MemoryManagerAgent - Decision Gate Integration', () => {
             { type: 'Preference', content: 'Prefers metric units', confidence: 95 },
             { type: 'Context', content: 'Works on the billing team', confidence: 70 }
         ];
-        agent.SetDecisionService(new ScriptedDecisionService(() => answered('Jev', { n1: 0.95 })));
+        agent.SetDecisionService(new ScriptedDecisionService(() => answered(JEV, { n1: 0.95 })));
 
         const filtered = await agent.RunGate(notes, oneThread, user);
 
@@ -268,7 +310,7 @@ describe('MemoryManagerAgent - Decision Gate Integration', () => {
             agent.EnableDecisionGate = true;
             agent.Run = agentRun();
             const promptRun = decisionPromptRun();
-            agent.SetDecisionService(new ScriptedDecisionService(() => answered('Jev', { n1: 0.95, n2: 0.9, n3: 0.2 }, promptRun)));
+            agent.SetDecisionService(new ScriptedDecisionService(() => answered(JEV, { n1: 0.95, n2: 0.9, n3: 0.2 }, promptRun)));
 
             await agent.RunGate(sampleNotes, oneThread, user);
 
@@ -306,7 +348,7 @@ describe('MemoryManagerAgent - Decision Gate Integration', () => {
 
         it('asks about each conversation separately, with only that conversation as the excerpt', async () => {
             agent.EnableDecisionGate = true;
-            const decisions = new ScriptedDecisionService(args => answered('Jev', Object.fromEntries(Object.keys(args.Questions).map(k => [k, 0.95]))));
+            const decisions = new ScriptedDecisionService(args => answered(JEV, Object.fromEntries(Object.keys(args.Questions).map(k => [k, 0.95]))));
             agent.SetDecisionService(decisions);
 
             const filtered = await agent.RunGate([fromA, fromB], [longA, shortB], user);
@@ -329,7 +371,7 @@ describe('MemoryManagerAgent - Decision Gate Integration', () => {
 
         it("quotes the conversation exactly as the measurement's corpus did", async () => {
             agent.EnableDecisionGate = true;
-            const decisions = new ScriptedDecisionService(() => answered('Jev', { n1: 0.95 }));
+            const decisions = new ScriptedDecisionService(() => answered(JEV, { n1: 0.95 }));
             agent.SetDecisionService(decisions);
 
             await agent.RunGate([fromB], [longA, shortB], user);
@@ -342,7 +384,7 @@ describe('MemoryManagerAgent - Decision Gate Integration', () => {
 
         it('never judges a note against another conversation when it names none of them', async () => {
             agent.EnableDecisionGate = true;
-            const decisions = new ScriptedDecisionService(() => answered('Jev', { n1: 0.01 }));
+            const decisions = new ScriptedDecisionService(() => answered(JEV, { n1: 0.01 }));
             agent.SetDecisionService(decisions);
             const unnamed: NoteShape = { type: 'Preference', content: 'Prefers concise replies', confidence: 90 };
 

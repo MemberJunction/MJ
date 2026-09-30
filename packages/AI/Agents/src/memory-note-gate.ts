@@ -14,7 +14,13 @@ import {
     type LikelihoodQuestion,
     type PlattCalibration
 } from '@memberjunction/ai';
-import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import {
+    DescribeAnsweringModel,
+    FindDecisionCalibration,
+    type DecisionAnsweringModel,
+    type DecisionModelCalibration,
+    type MJAIPromptEntityExtended
+} from '@memberjunction/ai-core-plus';
 import type { MJAIModelVendorEntity, MJAIPromptModelEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 
@@ -47,19 +53,22 @@ export const MEMORY_NOTE_MAX_EXCERPT_CHARS = 4000;
 export const MEMORY_NOTE_MIN_PROBABILITY = 0.6;
 
 /**
- * Per-model Platt calibration of the memory-note Likelihood, keyed by the name MJ gives the model
- * that answered (`modelInfo.modelName`). Fitted on the memory-note gate measurement.
+ * Platt calibration of the memory-note Likelihood, each tied to the exact model it was fitted on (see
+ * `FindDecisionCalibration` in `@memberjunction/ai-core-plus`): the MJ decision model that answered
+ * (`ModelName`, from `modelInfo.modelName`) and the model its driver reports behind it
+ * (`ResolvedModel`, from `DecisionResult.ResolvedModel`). Fitted on the memory-note gate measurement:
+ * - **Jev** at its pinned `APIName`, `typesafe/jev-1.13-20260917`, which it reports back as the
+ *   resolved model.
  *
  * Only models that beat the self-reported confidence are listed. LLM Decision was measured and left
  * out: at any threshold it kept more wrong and speculative notes than today's rule (at a calibrated
- * 0.6, 11.5% of wrong notes). A batch answered by a model with no entry here falls back to the
- * self-reported confidence rule, as a failed decision does. Refit whenever a model, its version or
- * the question changes.
+ * 0.6, 11.5% of wrong notes). A batch answered by any other model, including Jev at another version,
+ * falls back to the self-reported confidence rule, as a failed decision does. Refit, and add the new
+ * pair, whenever a model, its version or the question changes.
  */
-export const MEMORY_NOTE_DECISION_CALIBRATION: Readonly<Record<string, PlattCalibration>> =
-    Object.freeze({
-        'Jev': Object.freeze({ A: 3.6391, B: -5.7059 })
-    });
+export const MEMORY_NOTE_DECISION_CALIBRATION: readonly DecisionModelCalibration<PlattCalibration>[] = Object.freeze([
+    Object.freeze({ ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.13-20260917', Calibration: Object.freeze({ A: 3.6391, B: -5.7059 }) })
+]);
 
 /**
  * Shape of a candidate note evaluated by the decision gate.
@@ -138,7 +147,8 @@ export interface JudgedMemoryNote<T extends MemoryNoteCandidate = MemoryNoteCand
 export interface MemoryNoteGateVerdict<T extends MemoryNoteCandidate = MemoryNoteCandidate> {
     readonly KeptNotes: T[];
     readonly JudgedNotes: JudgedMemoryNote<T>[];
-    readonly ModelName?: string;
+    /** The model that answered, as the decision result reported it. */
+    readonly AnsweredBy: DecisionAnsweringModel;
     readonly Calibrated: boolean;
 }
 
@@ -277,29 +287,6 @@ export function BuildMemoryNoteState(
 }
 
 /**
- * Finds the Platt calibration configuration for a model name (case-insensitive).
- */
-function findModelCalibration(
-    modelName: string | undefined,
-    calibrations: Readonly<Record<string, PlattCalibration>>
-): PlattCalibration | undefined {
-    if (!modelName) {
-        return undefined;
-    }
-    const direct = calibrations[modelName];
-    if (direct) {
-        return direct;
-    }
-    const target = modelName.trim().toLowerCase();
-    for (const [key, value] of Object.entries(calibrations)) {
-        if (key.trim().toLowerCase() === target) {
-            return value;
-        }
-    }
-    return undefined;
-}
-
-/**
  * Extracts raw probability from a decision answer if it is a valid Likelihood.
  */
 function extractRawProbability(answer: DecisionAnswer | undefined): number | undefined {
@@ -319,10 +306,10 @@ function judgeUncalibratedNote<T extends MemoryNoteCandidate>(
     note: T,
     key: string,
     rawProb: number | undefined,
-    modelName?: string
+    answeredBy: DecisionAnsweringModel
 ): JudgedMemoryNote<T> {
-    const reason = modelName
-        ? `Model '${modelName}' has no memory-note calibration, so the gate keeps nothing`
+    const reason = answeredBy.ModelName?.trim() || answeredBy.ResolvedModel?.trim()
+        ? `The answering model ${DescribeAnsweringModel(answeredBy)} has no memory-note calibration, so the gate keeps nothing`
         : 'No answering model was reported, so the gate keeps nothing';
     return {
         Note: note,
@@ -369,22 +356,24 @@ function judgeCalibratedNote<T extends MemoryNoteCandidate>(
 /**
  * Evaluates decision answers against candidate notes using Platt calibration.
  *
- * An uncalibrated model keeps nothing (fails safe toward writing no durable memory).
+ * The calibration is the one fitted on the exact model that answered (`FindDecisionCalibration`).
+ * An answer from any other model, including a calibrated model at another version, is uncalibrated
+ * and keeps nothing (fails safe toward writing no durable memory).
  *
  * @param answers The answers returned by the decision runner.
  * @param notes The candidate notes evaluated.
- * @param modelName The answering model name.
+ * @param answeredBy The model that answered: the MJ decision model and the model its driver resolved.
  * @param threshold The calibrated probability at which a note is kept (default: {@link MEMORY_NOTE_MIN_PROBABILITY}, 0.6).
- * @param calibrations Optional calibration map override (defaults to MEMORY_NOTE_DECISION_CALIBRATION).
+ * @param calibrations Optional calibration table override (defaults to {@link MEMORY_NOTE_DECISION_CALIBRATION}).
  */
 export function JudgeMemoryNotes<T extends MemoryNoteCandidate = MemoryNoteCandidate>(
     answers: Record<string, DecisionAnswer> | undefined,
     notes: ReadonlyArray<T>,
-    modelName?: string,
+    answeredBy: DecisionAnsweringModel = {},
     threshold: number = MEMORY_NOTE_MIN_PROBABILITY,
-    calibrations: Readonly<Record<string, PlattCalibration>> = MEMORY_NOTE_DECISION_CALIBRATION
+    calibrations: readonly DecisionModelCalibration<PlattCalibration>[] = MEMORY_NOTE_DECISION_CALIBRATION
 ): MemoryNoteGateVerdict<T> {
-    const calibration = findModelCalibration(modelName, calibrations);
+    const calibration = FindDecisionCalibration(calibrations, answeredBy);
     const judgedNotes: JudgedMemoryNote<T>[] = [];
 
     for (let i = 0; i < notes.length; i++) {
@@ -394,7 +383,7 @@ export function JudgeMemoryNotes<T extends MemoryNoteCandidate = MemoryNoteCandi
 
         const judged = calibration
             ? judgeCalibratedNote(note, key, rawProb, calibration, threshold)
-            : judgeUncalibratedNote(note, key, rawProb, modelName);
+            : judgeUncalibratedNote(note, key, rawProb, answeredBy);
 
         judgedNotes.push(judged);
     }
@@ -403,8 +392,8 @@ export function JudgeMemoryNotes<T extends MemoryNoteCandidate = MemoryNoteCandi
     return {
         KeptNotes: keptNotes,
         JudgedNotes: judgedNotes,
-        ModelName: modelName,
-        Calibrated: calibration !== undefined
+        AnsweredBy: answeredBy,
+        Calibrated: calibration !== null
     };
 }
 

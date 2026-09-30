@@ -18,7 +18,9 @@ import {
     BaseAgentNextStep,
     MJAIAgentEntityExtended,
     MJAIPromptEntityExtended,
-    MJAIAgentRunStepEntityExtended
+    MJAIAgentRunStepEntityExtended,
+    DescribeAnsweringModel,
+    type DecisionAnsweringModel
 } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -1295,7 +1297,8 @@ export class MemoryManagerAgent extends BaseAgent {
             return this.filterByConfidenceAndLength(batch);
         }
 
-        return this.evaluateDecisionVerdict(batch, result.Answers, result.modelInfo?.modelName);
+        const answeredBy: DecisionAnsweringModel = { ModelName: result.modelInfo?.modelName, ResolvedModel: result.DecisionResult?.ResolvedModel };
+        return this.evaluateDecisionVerdict(batch, result.Answers, answeredBy);
     }
 
     /**
@@ -1311,10 +1314,27 @@ export class MemoryManagerAgent extends BaseAgent {
         await this.finalizeRunStep(
             step,
             result.success,
-            { answers: result.Answers, model: result.modelInfo?.modelName },
+            { answers: result.Answers, model: result.modelInfo?.modelName, resolvedModel: result.DecisionResult?.ResolvedModel },
             result.promptRun?.ID,
             result.errorMessage
         );
+    }
+
+    /** The answering models already logged as having no memory-note calibration, so each is logged once per process. */
+    private static readonly _uncalibratedGateModelsLogged = new Set<string>();
+
+    /**
+     * Logs, once per model, that the decision gate fell back to the confidence filter because the
+     * model that answered has no memory-note calibration. That happens on a failover, when a decision
+     * model is added or renamed, or when a vendor model moves to another version (Jev's `APIName`).
+     */
+    private static logUncalibratedGateModel(answeredBy: DecisionAnsweringModel): void {
+        const described = DescribeAnsweringModel(answeredBy);
+        if (MemoryManagerAgent._uncalibratedGateModelsLogged.has(described)) {
+            return;
+        }
+        MemoryManagerAgent._uncalibratedGateModelsLogged.add(described);
+        LogStatus(`Memory Manager: ${described} has no memory-note calibration (MEMORY_NOTE_DECISION_CALIBRATION), so the decision gate falls back to the confidence filter for its batches`);
     }
 
     /**
@@ -1324,18 +1344,19 @@ export class MemoryManagerAgent extends BaseAgent {
     private evaluateDecisionVerdict(
         batch: ExtractedNote[],
         answers: Record<string, DecisionAnswer> | undefined,
-        modelName?: string
+        answeredBy: DecisionAnsweringModel
     ): ExtractedNote[] {
         const verdict = JudgeMemoryNotes(
             answers,
             batch,
-            modelName,
+            answeredBy,
             MEMORY_NOTE_MIN_PROBABILITY
         );
         // Only a calibrated model replaces the self-reported confidence: one that answered without a
-        // calibration (a failover, say) has not been shown to beat it, so the batch falls back to it.
+        // calibration (a failover, or a calibrated model at another version) has not been shown to
+        // beat it, so the batch falls back to it.
         if (!verdict.Calibrated) {
-            LogStatus(`Memory Manager: '${modelName ?? 'unknown'}' has no memory-note calibration, falling back to confidence filter for batch`);
+            MemoryManagerAgent.logUncalibratedGateModel(answeredBy);
             return this.filterByConfidenceAndLength(batch);
         }
 
@@ -1350,7 +1371,7 @@ export class MemoryManagerAgent extends BaseAgent {
         if (unanswered.length === 0) {
             return verdict.KeptNotes;
         }
-        LogStatus(`Memory Manager: '${modelName}' gave no usable answer for ${unanswered.length} of ${batch.length} note(s), which keep the confidence filter`);
+        LogStatus(`Memory Manager: ${DescribeAnsweringModel(answeredBy)} gave no usable answer for ${unanswered.length} of ${batch.length} note(s), which keep the confidence filter`);
         const kept = new Set<ExtractedNote>([...verdict.KeptNotes, ...this.filterByConfidenceAndLength(unanswered)]);
         return batch.filter(note => kept.has(note));
     }
