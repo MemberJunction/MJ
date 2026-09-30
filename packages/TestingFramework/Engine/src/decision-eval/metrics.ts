@@ -23,6 +23,7 @@
  * @module @memberjunction/testing-engine
  */
 
+import { ApplyPlattCalibration, PLATT_LOGIT_CLAMP } from '@memberjunction/ai';
 import type { DecisionEvalLabel } from './types';
 
 /** The threshold the metrics use unless told otherwise. */
@@ -40,8 +41,12 @@ export const DECISION_EVAL_CALIBRATION_FOLDS = 5;
 /** The number of equal-width reliability bins. */
 export const DECISION_EVAL_ECE_BINS = 10;
 
-/** How far a probability is clamped from 0 and 1 before its logit is taken. */
-export const DECISION_EVAL_LOGIT_CLAMP = 1e-6;
+/**
+ * How far a probability is clamped from 0 and 1 before its logit is taken: production's
+ * `PLATT_LOGIT_CLAMP` (`@memberjunction/ai`), so parameters fitted here are applied there on the
+ * same scale.
+ */
+export const DECISION_EVAL_LOGIT_CLAMP = PLATT_LOGIT_CLAMP;
 
 /** The operating-point thresholds: 0.30 to 0.90 in steps of 0.05. */
 export const DECISION_EVAL_OPERATING_THRESHOLDS: readonly number[] =
@@ -432,13 +437,14 @@ export function FitPlatt(points: readonly LabelledProbability[]): PlattParameter
 }
 
 /**
- * A probability through fitted Platt parameters.
+ * A probability through fitted Platt parameters, by production's own `ApplyPlattCalibration`
+ * (`@memberjunction/ai`), so the eval scores exactly the transform a consumer applies.
  *
  * @param probability The raw probability.
  * @param parameters The fit.
  */
 export function ApplyPlatt(probability: number, parameters: Pick<PlattParameters, 'A' | 'B'>): number {
-    return sigmoid(parameters.A * ClampedLogit(probability) + parameters.B);
+    return ApplyPlattCalibration(probability, parameters);
 }
 
 /**
