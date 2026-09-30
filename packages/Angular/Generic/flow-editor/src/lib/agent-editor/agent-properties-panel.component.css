@@ -505,8 +505,13 @@ select.mj-agent-props-input {
   color: var(--mj-text-primary);
 }
 
-.mj-agent-props-btn:hover {
+.mj-agent-props-btn:hover:not(:disabled) {
   background: var(--mj-bg-surface-sunken);
+}
+
+.mj-agent-props-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .mj-agent-props-btn--sm {
@@ -530,7 +535,7 @@ select.mj-agent-props-input {
   margin-top: 4px;
 }
 
-.mj-agent-props-btn--secondary:hover {
+.mj-agent-props-btn--secondary:hover:not(:disabled) {
   background: var(--mj-bg-surface-sunken);
 }
 

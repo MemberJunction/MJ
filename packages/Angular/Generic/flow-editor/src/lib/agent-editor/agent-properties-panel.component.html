@@ -305,10 +305,15 @@
                         @if (!ReadOnly) {
                           <input type="text" [value]="item.key"
                             (change)="OnDecisionQuestionKeyChange(item.key, InputValue($event))"
-                            class="mj-agent-props-input">
+                            (keydown.enter)="BlurTarget($event)"
+                            class="mj-agent-props-input"
+                            [class.mj-agent-props-input--error]="!!QuestionKeyError(item.key)">
                         }
                         @if (ReadOnly) {
                           <div class="mj-agent-props-readonly-value">{{ item.key }}</div>
+                        }
+                        @if (QuestionKeyError(item.key); as keyError) {
+                          <span class="mj-agent-props-error">{{ keyError }}</span>
                         }
                       </div>
 
@@ -317,7 +322,7 @@
                         <label>Kind</label>
                         @if (!ReadOnly) {
                           <select [value]="item.question.kind"
-                            (change)="OnDecisionQuestionKindChange(item.key, $any(InputValue($event)))"
+                            (change)="OnDecisionQuestionKindSelect(item.key, InputValue($event))"
                             class="mj-agent-props-input">
                             <option value="Likelihood">Likelihood (yes/no probability)</option>
                             <option value="Choice">Choice (pick one option)</option>
@@ -369,7 +374,7 @@
                               </button>
                             }
                           </div>
-                          @for (opt of AsChoiceQuestion(item.question).options; track $index) {
+                          @for (opt of ChoiceOptionsOf(item.question); track $index) {
                             <div class="mj-agent-props-option-row">
                               <input type="text" [value]="opt.value"
                                 [readonly]="ReadOnly"
@@ -391,7 +396,7 @@
                           <!-- Choice Coverage Hint -->
                           <div class="mj-agent-props-coverage-hint">
                             <i class="fa-solid fa-code-fork"></i>
-                            <span>{{ GetChoiceCoverageHint(item.key, AsChoiceQuestion(item.question).options) }}</span>
+                            <span>{{ GetChoiceCoverageHint(item.key, ChoiceOptionsOf(item.question)) }}</span>
                           </div>
                         </div>
                       }
@@ -408,7 +413,7 @@
                               </button>
                             }
                           </div>
-                          @for (level of AsScoreQuestion(item.question).levels; track $index) {
+                          @for (level of ScoreLevelsOf(item.question); track $index) {
                             <div class="mj-agent-props-level-row">
                               <span class="mj-agent-props-level-badge">{{ $index }}</span>
                               <input type="text" [value]="level"
@@ -708,9 +713,10 @@
                   <div class="mj-agent-props-field">
                     <label>Probability Threshold (0..1)</label>
                     <input type="number" min="0" max="1" step="0.05"
-                      [value]="routeLikelihoodThreshold"
-                      (input)="OnRouteLikelihoodThresholdChange(NumericValue($event))"
-                      class="mj-agent-props-input">
+                      [value]="RouteThresholdText"
+                      (input)="OnRouteLikelihoodThresholdChange(InputValue($event))"
+                      class="mj-agent-props-input"
+                      [class.mj-agent-props-input--error]="RouteLikelihoodThreshold === null">
                     <span class="mj-agent-props-hint">Route taken when probability &gt;= threshold</span>
                   </div>
                 }
@@ -718,7 +724,7 @@
                 @if (RouteSelectedQuestion?.kind === 'Score') {
                   <div class="mj-agent-props-field">
                     <label>Minimum Level (Score &gt;= Index)</label>
-                    <select [value]="routeScoreLevelIndex"
+                    <select [value]="RouteScoreLevelIndex"
                       (change)="OnRouteScoreLevelChange(NumericValue($event))"
                       class="mj-agent-props-input">
                       @for (level of RouteScoreLevels; track $index) {
@@ -728,8 +734,13 @@
                   </div>
                 }
 
+                @if (RouteConditionProblem; as routeProblem) {
+                  <span class="mj-agent-props-error">{{ routeProblem }}</span>
+                }
+
                 @if (!ReadOnly) {
                   <button type="button" class="mj-agent-props-btn mj-agent-props-btn--secondary"
+                    [disabled]="!GetGeneratedRouteCondition()"
                     (click)="ApplyRouteCondition()">
                     <i class="fa-solid fa-code"></i> Apply to Condition
                   </button>

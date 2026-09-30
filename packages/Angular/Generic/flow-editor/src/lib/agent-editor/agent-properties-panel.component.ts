@@ -8,10 +8,12 @@ import {
   ReadFlowDecisionStepConfiguration,
   RewriteDecisionReferences,
   DecisionChoiceTestOf,
+  DecisionConditionLiteral,
+  DecisionReferenceText,
   IsDecisionPrompt
 } from '@memberjunction/ai-core-plus';
 import type { TaskGraphDecisionQuestion } from '@memberjunction/ai-core-plus';
-import { ReadDecisionStepKey, ReadEditableDecisionConfig } from './decision-step-config';
+import { DECISION_QUESTION_KEY_PATTERN, ReadDecisionStepKey, ReadEditableDecisionConfig } from './decision-step-config';
 
 /** Step type accent color mapping */
 const STEP_TYPE_COLORS: Record<string, string> = {
@@ -32,6 +34,15 @@ const STEP_TYPE_ICONS: Record<string, string> = {
   ForEach: 'fa-arrows-spin',
   While: 'fa-rotate'
 };
+
+/** What a Decision question asks for. */
+type DecisionQuestionKind = TaskGraphDecisionQuestion['kind'];
+
+/** One option of a Choice question. */
+type ChoiceOption = Extract<TaskGraphDecisionQuestion, { kind: 'Choice' }>['options'][number];
+
+/** The kinds the question editor offers, in the order it lists them. */
+const DECISION_QUESTION_KINDS: readonly DecisionQuestionKind[] = ['Likelihood', 'Choice', 'Score'];
 
 /** A runtime problem phrase ("its key ... cannot be named ...") as a sentence on its own. */
 function capitalize(phrase: string): string {
@@ -331,12 +342,26 @@ export class AgentPropertiesPanelComponent {
     return Object.entries(questions).map(([key, question]) => ({ key, question }));
   }
 
-  AsChoiceQuestion(question: TaskGraphDecisionQuestion): { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } {
-    return question as { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number };
+  /** A Choice question's options; empty for any other kind, or a Choice stored without them. */
+  ChoiceOptionsOf(question: TaskGraphDecisionQuestion): ChoiceOption[] {
+    return question.kind === 'Choice' && Array.isArray(question.options) ? question.options : [];
   }
 
-  AsScoreQuestion(question: TaskGraphDecisionQuestion): { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number } {
-    return question as { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number };
+  /** A Score question's levels, lowest first; empty for any other kind, or a Score stored without them. */
+  ScoreLevelsOf(question: TaskGraphDecisionQuestion): string[] {
+    return question.kind === 'Score' && Array.isArray(question.levels) ? question.levels : [];
+  }
+
+  /**
+   * What is wrong with question `questionKey`'s key: why the last rename of it was refused, or — for a
+   * key stored before the editor held keys to a shape — that a condition cannot name it with dots.
+   */
+  QuestionKeyError(questionKey: string): string | null {
+    const refused = this.questionKeyErrors.get(questionKey);
+    if (refused) return refused;
+    return DECISION_QUESTION_KEY_PATTERN.test(questionKey)
+      ? null
+      : `Question key "${questionKey}" cannot be named in a path condition with dots; rename it using letters, digits and underscores, not starting with a digit`;
   }
 
   // ── Decision Step Mutators ────────────────────────────────
@@ -438,19 +463,43 @@ export class AgentPropertiesPanelComponent {
     this.updateDecisionConfig({ ...currentConfig, questions });
   }
 
-  OnDecisionQuestionKeyChange(oldKey: string, newKey: string): void {
-    if (!this.Step || this.ReadOnly || oldKey === newKey) return;
-    const currentConfig = this.DecisionConfig;
-    const questions = { ...currentConfig.questions };
-    if (!questions[oldKey]) return;
-    if (questions[newKey]) return;
-    const question = questions[oldKey];
-    delete questions[oldKey];
-    questions[newKey] = question;
-    this.updateDecisionConfig({ ...currentConfig, questions });
+  /**
+   * The question key field's `change` event: renames the question, keeping its place in the list.
+   *
+   * Refused — nothing stored — when the key is empty, is not the identifier shape a step key has, or is
+   * another question's key. A refused key stays in the field with {@link QuestionKeyError} beneath it.
+   *
+   * @returns why the key was refused, or `null`
+   */
+  OnDecisionQuestionKeyChange(oldKey: string, newKey: string): string | null {
+    if (!this.Step || this.ReadOnly) return null;
+    const config = this.DecisionConfig;
+    if (!Object.prototype.hasOwnProperty.call(config.questions, oldKey)) return null;
+    const key = newKey.trim();
+    const problem = key === oldKey ? null : this.questionKeyProblem(key, config);
+    if (problem) {
+      this.questionKeyErrors.set(oldKey, problem);
+      return problem;
+    }
+    this.questionKeyErrors.delete(oldKey);
+    if (key === oldKey) return null;
+
+    const questions = Object.fromEntries(
+      Object.entries(config.questions).map(([k, question]) => [k === oldKey ? key : k, question])
+    );
+    this.updateDecisionConfig({ ...config, questions });
+    return null;
   }
 
-  OnDecisionQuestionKindChange(key: string, kind: 'Likelihood' | 'Choice' | 'Score'): void {
+  /** The kind select's `change` event. A value the editor does not offer is ignored. */
+  OnDecisionQuestionKindSelect(key: string, value: string): void {
+    const kind = DECISION_QUESTION_KINDS.find(k => k === value);
+    if (kind) {
+      this.OnDecisionQuestionKindChange(key, kind);
+    }
+  }
+
+  OnDecisionQuestionKindChange(key: string, kind: DecisionQuestionKind): void {
     if (!this.Step || this.ReadOnly) return;
     const currentConfig = this.DecisionConfig;
     const questions = { ...currentConfig.questions };
@@ -519,7 +568,10 @@ export class AgentPropertiesPanelComponent {
     const q = questions[questionKey];
     if (!q || q.kind !== 'Choice') return;
     const options = [...(q.options || [])];
-    const newIdx = options.length + 1;
+    let newIdx = options.length + 1;
+    while (options.some(o => o.value === `option_${newIdx}`)) {
+      newIdx++;
+    }
     options.push({ value: `option_${newIdx}`, description: '' });
     questions[questionKey] = { ...q, options };
     this.updateDecisionConfig({ ...currentConfig, questions });
@@ -618,9 +670,26 @@ export class AgentPropertiesPanelComponent {
     return step && this.keyDraft && UUIDsEqual(this.keyDraft.StepID, step.ID) ? this.keyDraft.Value : null;
   }
 
+  /** Why the last rename of each question was refused, by the question's current key. */
+  private questionKeyErrors = new Map<string, string>();
+
   /** Forgets everything typed but not committed. */
   private clearDecisionDrafts(): void {
     this.keyDraft = null;
+    this.questionKeyErrors.clear();
+  }
+
+  /** Why `key` cannot be a question key on this step, or `null`. */
+  private questionKeyProblem(key: string, config: FlowDecisionStepConfiguration): string | null {
+    if (!key) {
+      return 'A question needs a key; path conditions read its answer by it';
+    }
+    if (!DECISION_QUESTION_KEY_PATTERN.test(key)) {
+      return `Question key "${key}" cannot be named in a path condition; use letters, digits and underscores, not starting with a digit`;
+    }
+    return Object.prototype.hasOwnProperty.call(config.questions, key)
+      ? `This step already asks a question keyed "${key}"`
+      : null;
   }
 
   /** Why `key` cannot be this step's key, or `null`. The shape is the runtime's rule and wording. */
@@ -658,10 +727,10 @@ export class AgentPropertiesPanelComponent {
 
   // ── Route on Answer (Path Helper) ─────────────────────────
 
-  protected routeQuestionKey: string = '';
-  protected routeChoiceOption: string = '';
-  protected routeLikelihoodThreshold: number = 0.8;
-  protected routeScoreLevelIndex: number = 0;
+  private routeQuestionKey = '';
+  private routeChoiceOption = '';
+  private routeThresholdText = '0.8';
+  private routeScoreLevelIndex = 0;
 
   get OriginDecisionStep(): MJAIAgentStepEntity | null {
     if (!this.PathEntity?.OriginStepID) return null;
@@ -670,17 +739,7 @@ export class AgentPropertiesPanelComponent {
   }
 
   get OriginDecisionConfig(): FlowDecisionStepConfiguration | null {
-    const origin = this.OriginDecisionStep;
-    if (!origin?.Configuration) return null;
-    const read = ReadFlowDecisionStepConfiguration(origin.Configuration);
-    if ('Config' in read) return read.Config;
-    try {
-      const parsed = JSON.parse(origin.Configuration);
-      if (parsed && typeof parsed === 'object') return parsed;
-    } catch {
-      // ignore
-    }
-    return null;
+    return ReadEditableDecisionConfig(this.OriginDecisionStep?.Configuration);
   }
 
   get OriginDecisionQuestions(): Array<{ key: string; question: TaskGraphDecisionQuestion }> {
@@ -705,12 +764,9 @@ export class AgentPropertiesPanelComponent {
     return config?.questions?.[key] ?? null;
   }
 
-  get RouteChoiceOptions(): Array<{ value: string; description: string }> {
+  get RouteChoiceOptions(): ChoiceOption[] {
     const q = this.RouteSelectedQuestion;
-    if (q && q.kind === 'Choice' && Array.isArray(q.options)) {
-      return q.options;
-    }
-    return [];
+    return q ? this.ChoiceOptionsOf(q) : [];
   }
 
   get SelectedRouteChoiceOption(): string {
@@ -724,10 +780,28 @@ export class AgentPropertiesPanelComponent {
 
   get RouteScoreLevels(): string[] {
     const q = this.RouteSelectedQuestion;
-    if (q && q.kind === 'Score' && Array.isArray(q.levels)) {
-      return q.levels;
-    }
-    return [];
+    return q ? this.ScoreLevelsOf(q) : [];
+  }
+
+  /** The threshold field's text, as typed — kept as text so an unfinished entry is not rewritten under the author. */
+  get RouteThresholdText(): string {
+    return this.routeThresholdText;
+  }
+
+  /** The chosen minimum Score level. */
+  get RouteScoreLevelIndex(): number {
+    return this.routeScoreLevelIndex;
+  }
+
+  /**
+   * The Likelihood threshold typed, or `null` when there is none to use: an empty field is no threshold,
+   * not zero (`probability >= 0` would take the path on every answer), and a probability outside 0..1
+   * could never, or would always, be met.
+   */
+  get RouteLikelihoodThreshold(): number | null {
+    const text = this.routeThresholdText.trim();
+    const threshold = text === '' ? NaN : Number(text);
+    return Number.isFinite(threshold) && threshold >= 0 && threshold <= 1 ? threshold : null;
   }
 
   get RouteChoiceCoverageHint(): string {
@@ -737,6 +811,14 @@ export class AgentPropertiesPanelComponent {
     const q = this.RouteSelectedQuestion;
     if (!origin || !config || !qKey || !q || q.kind !== 'Choice') return '';
     return this.computeChoiceCoverageHint(origin.ID, config.key, qKey, q.options || []);
+  }
+
+  /**
+   * Why the helper cannot write a condition for the current choices, or `null` when it can (or there is
+   * nothing to route on yet).
+   */
+  get RouteConditionProblem(): string | null {
+    return this.buildRouteCondition().Problem;
   }
 
   OnRouteQuestionChange(key: string): void {
@@ -749,33 +831,18 @@ export class AgentPropertiesPanelComponent {
     this.routeChoiceOption = option;
   }
 
-  OnRouteLikelihoodThresholdChange(threshold: number): void {
-    this.routeLikelihoodThreshold = threshold;
+  /** The threshold field's `input` event, with the text as typed. */
+  OnRouteLikelihoodThresholdChange(text: string): void {
+    this.routeThresholdText = text;
   }
 
   OnRouteScoreLevelChange(index: number): void {
     this.routeScoreLevelIndex = index;
   }
 
+  /** The condition the helper would write, or `''` when it cannot write one ({@link RouteConditionProblem} says why). */
   GetGeneratedRouteCondition(): string {
-    const config = this.OriginDecisionConfig;
-    const qKey = this.SelectedRouteQuestionKey;
-    const q = this.RouteSelectedQuestion;
-    if (!config || !qKey || !q) return '';
-
-    if (q.kind === 'Choice') {
-      const opt = this.SelectedRouteChoiceOption;
-      return `decisions.${config.key}.${qKey}.value === '${opt}'`;
-    }
-    if (q.kind === 'Likelihood') {
-      const prob = this.routeLikelihoodThreshold ?? 0.8;
-      return `decisions.${config.key}.${qKey}.probability >= ${prob}`;
-    }
-    if (q.kind === 'Score') {
-      const idx = this.routeScoreLevelIndex ?? 0;
-      return `decisions.${config.key}.${qKey}.value >= ${idx}`;
-    }
-    return '';
+    return this.buildRouteCondition().Condition;
   }
 
   ApplyRouteCondition(): void {
@@ -785,6 +852,52 @@ export class AgentPropertiesPanelComponent {
       this.PathEntity.Condition = cond;
       this.PathChanged.emit(this.PathEntity);
     }
+  }
+
+  /**
+   * The condition for the current choices, written with the runtime's own writers so the runtime reads
+   * back exactly the step, question and option chosen: a name that cannot follow a dot is bracketed,
+   * and an option is quoted with a quote it does not contain.
+   */
+  private buildRouteCondition(): { Condition: string; Problem: string | null } {
+    const none = (problem: string | null = null): { Condition: string; Problem: string | null } => ({ Condition: '', Problem: problem });
+    const config = this.OriginDecisionConfig;
+    const qKey = this.SelectedRouteQuestionKey;
+    const q = this.RouteSelectedQuestion;
+    if (!config || !qKey || !q) return none();
+    if (!config.key) return none('This Decision step has no key yet; give it one before routing on its answers');
+
+    const field = q.kind === 'Likelihood' ? 'probability' : 'value';
+    const reference = DecisionReferenceText(config.key, qKey, field);
+    if (!reference) {
+      return none(`The key "${config.key}" or question "${qKey}" cannot be written in a condition; rename it using letters, digits and underscores`);
+    }
+    switch (q.kind) {
+      case 'Choice': return this.choiceRouteCondition(reference);
+      case 'Likelihood': {
+        const threshold = this.RouteLikelihoodThreshold;
+        return threshold === null
+          ? none('Enter a probability threshold from 0 to 1')
+          : { Condition: `${reference} >= ${threshold}`, Problem: null };
+      }
+      case 'Score': {
+        const index = this.routeScoreLevelIndex;
+        return index >= 0 && index < this.RouteScoreLevels.length
+          ? { Condition: `${reference} >= ${index}`, Problem: null }
+          : none('Choose the lowest level this path takes');
+      }
+      default:
+        return none();
+    }
+  }
+
+  private choiceRouteCondition(reference: string): { Condition: string; Problem: string | null } {
+    const option = this.SelectedRouteChoiceOption;
+    if (!option) return { Condition: '', Problem: 'This question has no options to route on yet' };
+    const literal = DecisionConditionLiteral(option);
+    return literal
+      ? { Condition: `${reference} === ${literal}`, Problem: null }
+      : { Condition: '', Problem: `The option "${option}" cannot be written in a condition: it holds a backslash, a line break, or both kinds of quote. Rename the option to route on it` };
   }
 
   private computeChoiceCoverageHint(
@@ -952,6 +1065,11 @@ export class AgentPropertiesPanelComponent {
   /** Safely extract checked state from a checkbox change event */
   protected CheckedValue(event: Event): boolean {
     return (event.target as HTMLInputElement).checked;
+  }
+
+  /** Blurs the event's target, so Enter commits a field the way leaving it does. */
+  protected BlurTarget(event: Event): void {
+    (event.target as HTMLElement).blur();
   }
 
   /** Safely extract numeric value from a number input event */

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { MJAIAgentStepPathEntity } from '@memberjunction/core-entities';
+import { DecisionChoiceTestOf, DecisionReferencesIn } from '@memberjunction/ai-core-plus';
 import { AgentFlowTransformerService, AGENT_STEP_TYPE_CONFIGS } from '../lib/agent-editor/agent-flow-transformer.service';
 import { AgentPropertiesPanelComponent } from '../lib/agent-editor/agent-properties-panel.component';
 import { GenerateUniqueDecisionKey } from '../lib/agent-editor/flow-agent-editor.component';
@@ -168,9 +169,8 @@ describe('AgentPropertiesPanelComponent — Decision step properties', () => {
     expect(panel.DecisionQuestionsList[0].question.kind).toBe('Likelihood');
 
     panel.OnDecisionQuestionKindChange('question_1', 'Choice');
-    const choiceQ = panel.AsChoiceQuestion(panel.DecisionQuestionsList[0].question);
-    expect(choiceQ.kind).toBe('Choice');
-    expect(choiceQ.options.length).toBe(2);
+    expect(panel.DecisionQuestionsList[0].question.kind).toBe('Choice');
+    expect(panel.ChoiceOptionsOf(panel.DecisionQuestionsList[0].question).length).toBe(2);
 
     panel.OnDecisionQuestionKeyChange('question_1', 'route');
     expect(panel.DecisionQuestionsList[0].key).toBe('route');
@@ -193,27 +193,48 @@ describe('AgentPropertiesPanelComponent — Decision step properties', () => {
       }
     });
 
+    const options = (): Array<{ value: string; description: string }> => panel.ChoiceOptionsOf(panel.DecisionConfig.questions['intent']);
+    const levels = (): string[] => panel.ScoreLevelsOf(panel.DecisionConfig.questions['urgency']);
+
     panel.OnAddChoiceOption('intent');
-    let choiceQ = panel.AsChoiceQuestion(panel.DecisionConfig.questions['intent']);
-    expect(choiceQ.options.length).toBe(3);
+    expect(options().length).toBe(3);
 
     panel.OnChoiceOptionChange('intent', 2, 'value', 'sales');
     panel.OnChoiceOptionChange('intent', 2, 'description', 'Sales queries');
-    choiceQ = panel.AsChoiceQuestion(panel.DecisionConfig.questions['intent']);
-    expect(choiceQ.options[2]).toEqual({ value: 'sales', description: 'Sales queries' });
+    expect(options()[2]).toEqual({ value: 'sales', description: 'Sales queries' });
 
     panel.OnRemoveChoiceOption('intent', 0);
-    choiceQ = panel.AsChoiceQuestion(panel.DecisionConfig.questions['intent']);
-    expect(choiceQ.options.length).toBe(2);
-    expect(choiceQ.options[0].value).toBe('billing');
+    expect(options().length).toBe(2);
+    expect(options()[0].value).toBe('billing');
 
     panel.OnMoveScoreLevel('urgency', 2, 'up');
-    let scoreQ = panel.AsScoreQuestion(panel.DecisionConfig.questions['urgency']);
-    expect(scoreQ.levels).toEqual(['Low', 'High', 'Medium']);
+    expect(levels()).toEqual(['Low', 'High', 'Medium']);
 
     panel.OnMoveScoreLevel('urgency', 0, 'down');
-    scoreQ = panel.AsScoreQuestion(panel.DecisionConfig.questions['urgency']);
-    expect(scoreQ.levels).toEqual(['High', 'Low', 'Medium']);
+    expect(levels()).toEqual(['High', 'Low', 'Medium']);
+  });
+
+  it('adds an option under a value no other option has', () => {
+    panel.Step = MakeDecisionStep('s1', {
+      key: 'triage',
+      questions: {
+        intent: {
+          kind: 'Choice',
+          instructions: 'Select intent',
+          options: [{ value: 'option_1', description: 'One' }, { value: 'option_3', description: 'Three' }]
+        }
+      }
+    });
+    panel.OnAddChoiceOption('intent');
+    expect(panel.ChoiceOptionsOf(panel.DecisionConfig.questions['intent']).map(o => o.value)).toEqual(['option_1', 'option_3', 'option_4']);
+  });
+
+  it('changes a question\'s kind only to a kind the editor offers', () => {
+    panel.Step = MakeDecisionStep('s1', { key: 'triage', questions: { q: { kind: 'Likelihood', instructions: 'Is it?' } } });
+    panel.OnDecisionQuestionKindSelect('q', 'Verdict');
+    expect(panel.DecisionConfig.questions['q'].kind).toBe('Likelihood');
+    panel.OnDecisionQuestionKindSelect('q', 'Score');
+    expect(panel.DecisionConfig.questions['q'].kind).toBe('Score');
   });
 });
 
@@ -415,7 +436,7 @@ describe('AgentPropertiesPanelComponent — Route on Answer & Coverage hint', ()
     const path = MakePath('path-1', 'step-dec-1');
     panel.PathEntity = path;
     panel.OnRouteQuestionChange('urgent');
-    panel.OnRouteLikelihoodThresholdChange(0.85);
+    panel.OnRouteLikelihoodThresholdChange('0.85');
 
     expect(panel.GetGeneratedRouteCondition()).toBe('decisions.triage.urgent.probability >= 0.85');
     panel.ApplyRouteCondition();
@@ -445,5 +466,121 @@ describe('AgentPropertiesPanelComponent — Route on Answer & Coverage hint', ()
     const path3 = MakePath('path-3', 'step-dec-1', { Condition: "decisions.triage.team.value === 'sales'" });
     panel.AllPaths = [path1, path2, path3];
     expect(panel.RouteChoiceCoverageHint).toBe('Paths cover all 3 options');
+  });
+});
+
+describe('AgentPropertiesPanelComponent — question keys a condition can name (review should-fix 1)', () => {
+  let panel: AgentPropertiesPanelComponent;
+
+  beforeEach(() => {
+    panel = new AgentPropertiesPanelComponent();
+    panel.Step = MakeDecisionStep('s1', {
+      key: 'triage',
+      questions: {
+        intent: { kind: 'Choice', instructions: 'Which team?', options: [{ value: 'a', description: 'A' }, { value: 'b', description: 'B' }] },
+        urgent: { kind: 'Likelihood', instructions: 'Is it urgent?' }
+      }
+    });
+  });
+
+  it.each([
+    ['my question', /cannot be named in a path condition/],
+    ['bad-key', /cannot be named in a path condition/],
+    ['1st', /cannot be named in a path condition/],
+    ['', /needs a key/],
+    ['   ', /needs a key/],
+    ['urgent', /already asks a question keyed "urgent"/]
+  ])('refuses the question key %p and keeps the question as it was', (typed, message) => {
+    expect(panel.OnDecisionQuestionKeyChange('intent', typed)).toMatch(message);
+    expect(panel.DecisionQuestionsList.map(q => q.key)).toEqual(['intent', 'urgent']);
+    expect(panel.QuestionKeyError('intent')).toMatch(message);
+    expect(panel.DecisionValidationError).toBeNull();
+  });
+
+  it('renames a question in place, and clears a refusal once a good key is committed', () => {
+    panel.OnDecisionQuestionKeyChange('intent', 'my question');
+    expect(panel.OnDecisionQuestionKeyChange('intent', ' category ')).toBeNull();
+    expect(panel.DecisionQuestionsList.map(q => q.key)).toEqual(['category', 'urgent']);
+    expect(panel.QuestionKeyError('category')).toBeNull();
+    expect(panel.QuestionKeyError('intent')).toBeNull();
+  });
+
+  it('flags a stored question key a condition cannot name with dots', () => {
+    panel.Step = MakeDecisionStep('s2', { key: 'triage', questions: { 'my question': { kind: 'Likelihood', instructions: 'Is it?' } } });
+    expect(panel.QuestionKeyError('my question')).toMatch(/cannot be named in a path condition with dots/);
+  });
+});
+
+describe('AgentPropertiesPanelComponent — Route on Answer writes conditions the runtime reads back (review should-fix 1)', () => {
+  let panel: AgentPropertiesPanelComponent;
+
+  const routeFrom = (questions: object): MJAIAgentStepPathEntity => {
+    const origin = MakeDecisionStep('dec', { key: 'triage', questions });
+    const path = MakePath('p1', 'dec', { Condition: 'payload.kept === true' });
+    panel.AllSteps = [origin];
+    panel.AllPaths = [path];
+    panel.PathEntity = path;
+    return path;
+  };
+
+  beforeEach(() => {
+    panel = new AgentPropertiesPanelComponent();
+  });
+
+  it('writes a stored question key with a space in brackets, which the scanner reads as that question and not "my"', () => {
+    routeFrom({ 'my question': { kind: 'Choice', instructions: 'Which?', options: [{ value: 'a', description: 'A' }, { value: 'b', description: 'B' }] } });
+    panel.OnRouteChoiceOptionChange('a');
+
+    const condition = panel.GetGeneratedRouteCondition();
+    expect(condition).toBe("decisions.triage['my question'].value === 'a'");
+    expect(DecisionReferencesIn(condition).References).toEqual([{ NodeId: 'triage', QuestionKey: 'my question', Field: 'value' }]);
+    expect(DecisionChoiceTestOf(condition)).toEqual({ NodeId: 'triage', QuestionKey: 'my question', Values: ['a'] });
+  });
+
+  it('quotes an option holding an apostrophe with double quotes, so the Choice test and the coverage hint see it', () => {
+    const path = routeFrom({
+      intent: { kind: 'Choice', instructions: 'Which?', options: [{ value: "don't know", description: 'Unsure' }, { value: 'billing', description: 'Billing' }] }
+    });
+    panel.OnRouteChoiceOptionChange("don't know");
+
+    expect(panel.GetGeneratedRouteCondition()).toBe('decisions.triage.intent.value === "don\'t know"');
+    panel.ApplyRouteCondition();
+    expect(DecisionChoiceTestOf(path.Condition ?? '')?.Values).toEqual(["don't know"]);
+    expect(panel.RouteChoiceCoverageHint).toBe('Paths cover 1 of 2 options (missing: billing)');
+  });
+
+  it('refuses to write an option no literal can carry verbatim, and says why', () => {
+    const path = routeFrom({
+      intent: { kind: 'Choice', instructions: 'Which?', options: [{ value: 'both \' and "', description: 'Odd' }, { value: 'b', description: 'B' }] }
+    });
+    panel.OnRouteChoiceOptionChange('both \' and "');
+
+    expect(panel.GetGeneratedRouteCondition()).toBe('');
+    expect(panel.RouteConditionProblem).toMatch(/cannot be written in a condition/);
+    panel.ApplyRouteCondition();
+    expect(path.Condition).toBe('payload.kept === true');
+  });
+
+  it('writes nothing for a cleared threshold rather than probability >= 0 (review minor 3)', () => {
+    const path = routeFrom({ urgent: { kind: 'Likelihood', instructions: 'Is it urgent?' } });
+
+    panel.OnRouteLikelihoodThresholdChange('');
+    expect(panel.RouteLikelihoodThreshold).toBeNull();
+    expect(panel.GetGeneratedRouteCondition()).toBe('');
+    expect(panel.RouteConditionProblem).toBe('Enter a probability threshold from 0 to 1');
+    panel.ApplyRouteCondition();
+    expect(path.Condition).toBe('payload.kept === true');
+  });
+
+  it.each(['1.5', '-0.1', 'abc'])('writes nothing for the threshold %p, which no probability can sensibly meet', (text) => {
+    routeFrom({ urgent: { kind: 'Likelihood', instructions: 'Is it urgent?' } });
+    panel.OnRouteLikelihoodThresholdChange(text);
+    expect(panel.GetGeneratedRouteCondition()).toBe('');
+  });
+
+  it('writes the threshold as typed when it is a probability', () => {
+    routeFrom({ urgent: { kind: 'Likelihood', instructions: 'Is it urgent?' } });
+    panel.OnRouteLikelihoodThresholdChange(' 0.6 ');
+    expect(panel.GetGeneratedRouteCondition()).toBe('decisions.triage.urgent.probability >= 0.6');
   });
 });
