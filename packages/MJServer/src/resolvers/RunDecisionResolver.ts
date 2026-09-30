@@ -51,10 +51,11 @@ interface DecisionPromptReference {
     Value: string;
 }
 
-/** The validated state and questions of one request. */
+/** The validated state and questions of one request, and the model-call timeout to use. */
 interface DecisionInputs {
     State: string | Record<string, unknown>;
     Questions: Record<string, DecisionQuestion>;
+    TimeoutMS: number;
 }
 
 /**
@@ -68,6 +69,33 @@ interface DecisionInputs {
 export class RunDecisionResolver extends ResolverBase {
     /** The prompt used when the caller names none, as for the `Run Decision` action. */
     public static readonly DEFAULT_PROMPT_NAME = 'Default Decision';
+
+    // Server-side bounds on a request. They are cheap backstops, checked before the model is
+    // called. Each decision model's own declared limits are the runner's to check.
+
+    /**
+     * The most characters the state may have: about 32,000 tokens at four characters a token, which
+     * is Jev's declared input limit. Checked before the state is parsed.
+     */
+    public static readonly MAX_STATE_CHARACTERS = 128_000;
+
+    /** The most characters the questions' JSON may have. Checked before it is parsed. */
+    public static readonly MAX_QUESTIONS_CHARACTERS = 128_000;
+
+    /** The most questions one request may carry. */
+    public static readonly MAX_QUESTIONS = 32;
+
+    /**
+     * The most options a Choice question, or levels a Score question, may list: Jev's declared
+     * `MaxChoiceOptions`.
+     */
+    public static readonly MAX_OPTIONS_PER_QUESTION = 255;
+
+    /** The model-call timeout used when the caller sends none, or one that is not positive. */
+    public static readonly DEFAULT_TIMEOUT_MS = 30_000;
+
+    /** The longest model-call timeout a caller may ask for. A longer one is cut to it. */
+    public static readonly MAX_TIMEOUT_MS = 120_000;
 
     /**
      * Answers typed questions about a state with a Decision-typed prompt.
@@ -87,7 +115,8 @@ export class RunDecisionResolver extends ResolverBase {
      * @param questions The `DecisionQuestion` map by question key, as JSON: the shape `Run Decision` accepts.
      * @param promptId The decision prompt's ID. Takes precedence over `promptName`.
      * @param promptName The decision prompt's name, matched case-insensitively. Defaults to `Default Decision`.
-     * @param timeoutMS Bounds each model call, as the runner's `timeoutMS`. Unset or not positive means unbounded.
+     * @param timeoutMS Bounds each model call, as the runner's `timeoutMS`. Unset or not positive, it is
+     *        `DEFAULT_TIMEOUT_MS`; above `MAX_TIMEOUT_MS`, it is cut to it. A call is never unbounded.
      */
     @Mutation(() => DecisionRunResult)
     async RunDecision(
@@ -132,7 +161,7 @@ export class RunDecisionResolver extends ResolverBase {
         if (typeof prompt === 'string') {
             return this.failure(prompt, startTime);
         }
-        const result = await runner.ExecuteDecision(this.buildDecisionParams(prompt, inputs, currentUser, request.TimeoutMS));
+        const result = await runner.ExecuteDecision(this.buildDecisionParams(prompt, inputs, currentUser));
         return this.mapRunResult(result, prompt, startTime);
     }
 
@@ -176,8 +205,15 @@ export class RunDecisionResolver extends ResolverBase {
         }
     }
 
-    /** Validates the state and the questions, or returns the first problem found. */
+    /**
+     * Validates the state and the questions and bounds their size, or returns the first problem
+     * found. Settles the model-call timeout too.
+     */
     private validateInputs(request: DecisionRequest): DecisionInputs | { Error: string } {
+        const tooLong = this.checkInputLengths(request);
+        if (tooLong) {
+            return { Error: tooLong };
+        }
         const state = this.parseState(request.State);
         if ('Error' in state) {
             return state;
@@ -186,7 +222,53 @@ export class RunDecisionResolver extends ResolverBase {
         if (!questions.Valid) {
             return { Error: questions.Message };
         }
-        return { State: state.State, Questions: questions.Questions };
+        const tooMany = this.checkQuestionCounts(questions.Questions);
+        if (tooMany) {
+            return { Error: tooMany };
+        }
+        return { State: state.State, Questions: questions.Questions, TimeoutMS: this.effectiveTimeoutMS(request.TimeoutMS) };
+    }
+
+    /** Refuses a state or questions text over its character limit, before either is parsed. */
+    private checkInputLengths(request: DecisionRequest): string | undefined {
+        const stateLength = typeof request.State === 'string' ? request.State.length : 0;
+        if (stateLength > RunDecisionResolver.MAX_STATE_CHARACTERS) {
+            return `State has ${stateLength} characters, over the limit of ${RunDecisionResolver.MAX_STATE_CHARACTERS}`;
+        }
+        const questionsLength = typeof request.Questions === 'string' ? request.Questions.length : 0;
+        if (questionsLength > RunDecisionResolver.MAX_QUESTIONS_CHARACTERS) {
+            return `Questions JSON has ${questionsLength} characters, over the limit of ${RunDecisionResolver.MAX_QUESTIONS_CHARACTERS}`;
+        }
+        return undefined;
+    }
+
+    /** Refuses more questions than one request may carry, or more options or levels than one question may list. */
+    private checkQuestionCounts(questions: Record<string, DecisionQuestion>): string | undefined {
+        const questionCount = Object.keys(questions).length;
+        if (questionCount > RunDecisionResolver.MAX_QUESTIONS) {
+            return `${questionCount} questions exceed the limit of ${RunDecisionResolver.MAX_QUESTIONS} per request`;
+        }
+        const maxOptions = RunDecisionResolver.MAX_OPTIONS_PER_QUESTION;
+        for (const [key, question] of Object.entries(questions)) {
+            if (question.Kind === 'Choice' && question.Options.length > maxOptions) {
+                return `Choice '${key}' has ${question.Options.length} options, over the limit of ${maxOptions}`;
+            }
+            if (question.Kind === 'Score' && question.Levels.length > maxOptions) {
+                return `Score '${key}' has ${question.Levels.length} levels, over the limit of ${maxOptions}`;
+            }
+        }
+        return undefined;
+    }
+
+    /**
+     * The caller's timeout, cut to `MAX_TIMEOUT_MS`, or `DEFAULT_TIMEOUT_MS` when it sent none or one
+     * that is not positive.
+     */
+    private effectiveTimeoutMS(requested: number | undefined): number {
+        if (requested == null || !(requested > 0)) {
+            return RunDecisionResolver.DEFAULT_TIMEOUT_MS;
+        }
+        return Math.min(requested, RunDecisionResolver.MAX_TIMEOUT_MS);
     }
 
     /**
@@ -306,20 +388,13 @@ export class RunDecisionResolver extends ResolverBase {
         return !!decisionType && UUIDsEqual(prompt.AIModelTypeID, decisionType.ID);
     }
 
-    private buildDecisionParams(
-        prompt: MJAIPromptEntityExtended,
-        inputs: DecisionInputs,
-        contextUser: UserInfo,
-        timeoutMS: number | undefined
-    ): AIDecisionParams {
+    private buildDecisionParams(prompt: MJAIPromptEntityExtended, inputs: DecisionInputs, contextUser: UserInfo): AIDecisionParams {
         const params = new AIDecisionParams();
         params.prompt = prompt;
         params.contextUser = contextUser;
         params.State = inputs.State;
         params.Questions = inputs.Questions;
-        if (timeoutMS != null) {
-            params.timeoutMS = timeoutMS;
-        }
+        params.timeoutMS = inputs.TimeoutMS;
         return params;
     }
 

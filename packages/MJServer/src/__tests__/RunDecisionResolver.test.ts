@@ -396,11 +396,99 @@ describe('RunDecision: input validation', () => {
     expect(params.timeoutMS).toBe(250);
     expect(params.contextUser).toBe(USER);
   });
+});
 
-  it('leaves the timeout unset when the caller gives none', async () => {
-    await runDecision();
+// ─── Input bounds ────────────────────────────────────────────────────────────
 
-    expect(sentParams().timeoutMS).toBeUndefined();
+describe('RunDecision: input bounds', () => {
+  /** A map of `count` Likelihood questions. */
+  const likelihoodQuestions = (count: number): Record<string, DecisionQuestion> =>
+    Object.fromEntries(
+      Array.from({ length: count }, (_, i): [string, DecisionQuestion] => [`q${i}`, { Kind: 'Likelihood', Instructions: `Is statement ${i} true?` }])
+    );
+
+  /** One Choice question with `count` options. */
+  const choiceWithOptions = (count: number): Record<string, DecisionQuestion> => ({
+    route: {
+      Kind: 'Choice',
+      Instructions: 'Which queue should take this?',
+      Options: Array.from({ length: count }, (_, i) => ({ Value: `queue-${i}`, Description: `Queue ${i}` })),
+    },
+  });
+
+  /** One Score question with `count` levels. */
+  const scoreWithLevels = (count: number): Record<string, DecisionQuestion> => ({
+    urgency: { Kind: 'Score', Instructions: 'How urgent is this?', Levels: Array.from({ length: count }, (_, i) => `Level ${i}`) },
+  });
+
+  it('runs a state at the character limit and refuses one character more', async () => {
+    const max = RunDecisionResolver.MAX_STATE_CHARACTERS;
+
+    const atLimit = await runDecision({ State: 'x'.repeat(max) });
+    const overLimit = await runDecision({ State: 'x'.repeat(max + 1) });
+
+    expect(atLimit.success).toBe(true);
+    expect(overLimit).toMatchObject({ success: false, errorMessage: `State has ${max + 1} characters, over the limit of ${max}` });
+    expect(executeDecision).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses questions JSON over its character limit before parsing it', async () => {
+    const max = RunDecisionResolver.MAX_QUESTIONS_CHARACTERS;
+    const unparseable = '{'.repeat(max + 1);
+    const oneLongQuestion = JSON.stringify({ q: { Kind: 'Likelihood', Instructions: 'x'.repeat(max) } });
+
+    const refusedUnparsed = await runDecision({ Questions: unparseable });
+    const refusedLong = await runDecision({ Questions: oneLongQuestion });
+
+    // The length message, not the parser's: the text was never parsed.
+    expect(refusedUnparsed).toMatchObject({ success: false, errorMessage: `Questions JSON has ${max + 1} characters, over the limit of ${max}` });
+    expect(refusedLong).toMatchObject({ success: false, errorMessage: `Questions JSON has ${oneLongQuestion.length} characters, over the limit of ${max}` });
+    expect(executeDecision).not.toHaveBeenCalled();
+  });
+
+  it('runs the most questions a request may carry and refuses one more', async () => {
+    const max = RunDecisionResolver.MAX_QUESTIONS;
+
+    const atLimit = await runDecision({ Questions: JSON.stringify(likelihoodQuestions(max)) });
+    const overLimit = await runDecision({ Questions: JSON.stringify(likelihoodQuestions(max + 1)) });
+
+    expect(atLimit.success).toBe(true);
+    expect(overLimit).toMatchObject({ success: false, errorMessage: `${max + 1} questions exceed the limit of ${max} per request` });
+    expect(executeDecision).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs a Choice at the option limit and refuses one more option', async () => {
+    const max = RunDecisionResolver.MAX_OPTIONS_PER_QUESTION;
+
+    const atLimit = await runDecision({ Questions: JSON.stringify(choiceWithOptions(max)) });
+    const overLimit = await runDecision({ Questions: JSON.stringify(choiceWithOptions(max + 1)) });
+
+    expect(atLimit.success).toBe(true);
+    expect(overLimit).toMatchObject({ success: false, errorMessage: `Choice 'route' has ${max + 1} options, over the limit of ${max}` });
+    expect(executeDecision).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a Score with more levels than a question may list', async () => {
+    const max = RunDecisionResolver.MAX_OPTIONS_PER_QUESTION;
+
+    const result = await runDecision({ Questions: JSON.stringify(scoreWithLevels(max + 1)) });
+
+    expect(result).toMatchObject({ success: false, errorMessage: `Score 'urgency' has ${max + 1} levels, over the limit of ${max}` });
+    expect(executeDecision).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['none', undefined, RunDecisionResolver.DEFAULT_TIMEOUT_MS],
+    ['zero', 0, RunDecisionResolver.DEFAULT_TIMEOUT_MS],
+    ['a negative value', -5, RunDecisionResolver.DEFAULT_TIMEOUT_MS],
+    ['a value within the maximum', 250, 250],
+    ['the maximum', RunDecisionResolver.MAX_TIMEOUT_MS, RunDecisionResolver.MAX_TIMEOUT_MS],
+    ['a value over the maximum', RunDecisionResolver.MAX_TIMEOUT_MS + 1, RunDecisionResolver.MAX_TIMEOUT_MS],
+    ['a far larger value', 3_600_000, RunDecisionResolver.MAX_TIMEOUT_MS],
+  ])('bounds every model call when the caller sends %s as the timeout', async (_label, requested, expected) => {
+    await runDecision({ TimeoutMS: requested });
+
+    expect(sentParams().timeoutMS).toBe(expected);
   });
 });
 
