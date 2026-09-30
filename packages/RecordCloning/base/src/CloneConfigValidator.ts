@@ -292,15 +292,19 @@ export class CloneConfigValidator {
                 if (relMap.has(relKey.toLowerCase())) continue;
                 const entityPart = relKey.includes('.') && knownEntities && !knownEntities.has(relKey.toLowerCase()) ? relKey.slice(0, relKey.lastIndexOf('.')) : relKey;
                 const exists = knownEntities?.has(entityPart.toLowerCase());
+                // A qualified key also applies to rows further down the graph, so an entity that exists
+                // may still be reached through a descendant. A bare entity name applies only to the
+                // root's own relationships, so one that isn't among them matches nothing.
+                const qualified = entityPart !== relKey;
                 errors.push({
                     EntityName: entity.Name,
                     PropertyPath: `Relationships[${relKey}]`,
-                    // A root's keys also apply to rows further down the graph, so an entity that
-                    // exists may still be reached through a descendant.
-                    Message: exists
-                        ? `'${relKey}' is not a direct relationship of '${entity.Name}'; it applies only where the clone reaches it through a descendant.`
-                        : `Relationship key '${relKey}' does not match any known relationship or related entity on '${entity.Name}'.`,
-                    Severity: exists ? 'Warning' : 'Error',
+                    Message: !exists
+                        ? `Relationship key '${relKey}' does not match any known relationship or related entity on '${entity.Name}'.`
+                        : qualified
+                          ? `'${relKey}' is not a direct relationship of '${entity.Name}'; it applies only where the clone reaches it through a descendant.`
+                          : `'${relKey}' is not a relationship of '${entity.Name}', and a bare entity name applies only to the root's own relationships. Name the join column ('${relKey}.<JoinField>') for rows reached through a descendant.`,
+                    Severity: exists && qualified ? 'Warning' : 'Error',
                 });
             }
         }

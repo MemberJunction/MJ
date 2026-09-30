@@ -240,7 +240,7 @@ describe('CloneConfigValidator', () => {
             expect(found.some((e) => e.PropertyPath === 'Fields.JsonRemap')).toBe(true);
         });
 
-        it('accepts qualified keys and FK targets, and only warns for an entity reached further down', () => {
+        it('accepts qualified keys and FK targets, warns for a qualified key reached further down, and refuses a bare one', () => {
             const entity: CloneConfigEntityMeta = {
                 Name: 'Orders',
                 Fields: [{ Name: 'ID', IsPrimaryKey: true }, { Name: 'CustomerID', IsPrimaryKey: false, RelatedEntity: 'Customers' }],
@@ -250,6 +250,7 @@ describe('CloneConfigValidator', () => {
                     Relationships: {
                         'Order Lines.OrderID': { Policy: 'Deep' },
                         Customers: { Policy: 'Reference' },
+                        'Line Notes.LineID': { Policy: 'Skip' },
                         'Line Notes': { Policy: 'Skip' },
                         Nonsense: { Policy: 'Skip' },
                     },
@@ -258,7 +259,9 @@ describe('CloneConfigValidator', () => {
             const all = [entity, { Name: 'Order Lines', Fields: [] }, { Name: 'Customers', Fields: [] }, { Name: 'Line Notes', Fields: [] }] as CloneConfigEntityMeta[];
             const found = CloneConfigValidator.Validate(entity, all);
             expect(found.map((e) => [e.PropertyPath, e.Severity])).toEqual([
-                ['Relationships[Line Notes]', 'Warning'],
+                ['Relationships[Line Notes.LineID]', 'Warning'],
+                // A bare key applies only to the root's own relationships, so this one matches nothing.
+                ['Relationships[Line Notes]', 'Error'],
                 ['Relationships[Nonsense]', 'Error'],
             ]);
         });
