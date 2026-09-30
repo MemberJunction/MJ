@@ -1096,6 +1096,8 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
     const FINISH_IF: AgentFinishIf = { questions: ['The results show the action ran.'], message: 'Done, the action ran.' };
     const textOf = (m: { content: unknown }): string => (typeof m.content === 'string' ? m.content : '');
     const statusLines = (): string[] => vi.mocked(LogStatus).mock.calls.map(([message]) => String(message));
+    /** The log lines that skip held decision requests. Every way out of the run must log them exactly once. */
+    const skippedLines = (): string[] => statusLines().filter((line) => line.startsWith('[Decisions] Skipped') && line.includes('held decision request(s)'));
 
     /** Answers the finishIf gate (questions q1…) with `gateProbability`, and every decision request with `urgent` 0.8. */
     function answerDecisions(gateProbability = 0.95) {
@@ -1237,7 +1239,9 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
         expect(harness.run.Message).toBe(FINISH_IF.message);
         expect(decisionCalls(ask)).toHaveLength(0);
         expect(harness.steps.some((s) => s.StepName.includes('Decision: triage'))).toBe(false);
-        expect(statusLines().some((line) => line.includes('Skipped 1 held decision request(s) (triage)') && line.includes('finishIf gate'))).toBe(true);
+        expect(skippedLines()).toEqual([expect.stringContaining('Skipped 1 held decision request(s) (triage)')]);
+        expect(skippedLines()[0]).toContain('the run ended after the step that carried them');
+        expect(skippedLines()[0]).toContain('finishIf gate');
     });
 
     it('asks decisions sent with a finishIf gate that does not pass, before the next prompt reads them', async () => {
@@ -1305,7 +1309,8 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
         expect(runner.Calls).toHaveLength(1);
         expect(ask).not.toHaveBeenCalled();
         expect(harness.steps.some((s) => s.StepType === 'Decision')).toBe(false);
-        expect(statusLines().some((line) => line.includes('Skipped 1 held decision request(s) (triage)') && line.includes('taskComplete'))).toBe(true);
+        expect(skippedLines()).toEqual([expect.stringContaining('Skipped 1 held decision request(s) (triage)')]);
+        expect(skippedLines()[0]).toContain('taskComplete');
     });
 
     it('asks decisions sent with client tools alone at once: the prompt after the tools reads them', async () => {
@@ -1339,7 +1344,8 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
         expect(runSubAgent).toHaveBeenCalledOnce();
         expect(runner.Calls).toHaveLength(1);
         expect(ask).not.toHaveBeenCalled();
-        expect(statusLines().some((line) => line.includes('Skipped 1 held decision request(s) (triage)') && line.includes('terminateAfter'))).toBe(true);
+        expect(skippedLines()).toEqual([expect.stringContaining('Skipped 1 held decision request(s) (triage)')]);
+        expect(skippedLines()[0]).toContain('terminateAfter');
     });
 
     it('still asks held decisions when the step that carried them does not end the run after all', async () => {
@@ -1356,6 +1362,51 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
         expect(ask).toHaveBeenCalledOnce();
         expect(harness.steps.map((s) => s.StepType)).toEqual(['Validation', 'Prompt', 'Decision', 'Prompt']);
         expect(runner.Calls[1].conversationMessages?.map(textOf).some((c) => c.startsWith('Decision results:'))).toBe(true);
+    });
+
+    it('logs held decisions exactly once when the run is cancelled before they are asked', async () => {
+        // The gate does not pass, so the decisions stay held for the next prompt, which the cancellation stops.
+        const ask = answerDecisions(0.4);
+        const controller = new AbortController();
+        harness.runAction = () => {
+            controller.abort('user cancelled mid-action');
+            return { Success: true, Message: 'Action completed', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null };
+        };
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(gatedActionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute({ ...gateParams('on'), cancellationToken: controller.signal });
+
+        expect(result.success).toBe(false);
+        expect(harness.run.Status).toBe('Cancelled');
+        expect(runner.Calls).toHaveLength(1);
+        expect(decisionCalls(ask)).toHaveLength(0);
+        expect(skippedLines()).toEqual([expect.stringContaining('Skipped 1 held decision request(s) (triage)')]);
+        expect(skippedLines()[0]).toContain('the run was cancelled before they were asked');
+        expect(skippedLines()[0]).toContain('finishIf gate');
+    });
+
+    it('logs held decisions exactly once when a step throws out of the loop', async () => {
+        const ask = answerDecisions();
+        const { agent, runner, internals } = makeAgent([
+            () => llmEnvelope(subAgentEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        vi.spyOn(internals, 'validateSubAgentNextStep').mockImplementation(async (_params, nextStep) => nextStep);
+        vi.spyOn(internals, 'processSubAgentStep').mockRejectedValue(new Error('sub-agent host crashed'));
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(false);
+        expect(harness.run.Status).toBe('Failed');
+        expect(harness.run.ErrorMessage).toContain('sub-agent host crashed');
+        expect(runner.Calls).toHaveLength(1);
+        expect(ask).not.toHaveBeenCalled();
+        expect(skippedLines()).toEqual([expect.stringContaining('Skipped 1 held decision request(s) (triage)')]);
+        expect(skippedLines()[0]).toContain('the run failed before they were asked');
+        expect(skippedLines()[0]).toContain('terminateAfter');
     });
 });
 

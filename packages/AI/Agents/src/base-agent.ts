@@ -2314,6 +2314,9 @@ export class BaseAgent {
             // consumers that re-read `params` after the call see what they
             // passed in, not our chained signal.
             params.cancellationToken = upstreamToken;
+            // A cancellation, or an error thrown out of the step loop, leaves any held decision
+            // requests unasked. The terminate path has already logged and cleared its own.
+            this.skipHeldDecisions(params, this.runEndForHeldDecisions());
             this.releasePerRunDataCache();
             await this.finalizeRun(this.deriveRunOutcome());
         }
@@ -3580,7 +3583,7 @@ export class BaseAgent {
             // Check if we should continue or terminate
             if (nextStep.terminate) {
                 continueExecution = false;
-                this.skipHeldDecisions(params);
+                this.skipHeldDecisions(params, 'the run ended after the step that carried them');
                 this.logStatus(`🏁 Agent '${params.agent.Name}' terminating after ${stepCount} steps with result: ${nextStep.step}`, true, params);
             } else {
                 currentNextStep = nextStep;
@@ -8244,15 +8247,35 @@ The context is now within limits. Please retry your request with the recovered c
         this.injectDecisionResultsMessage(params, results);
     }
 
-    /** Skips the decision requests a prompt held back, because the step that carried them ended the run. */
-    private skipHeldDecisions(params: ExecuteAgentParams): void {
+    /**
+     * Skips the decision requests a prompt held back, because the run ended before they could be
+     * asked: the step that carried them ended it, or it was cancelled, or an error was thrown out of
+     * the step loop. Called from the loop's terminate branch and from `Execute()`'s `finally`, so
+     * every way out logs them. The held state is cleared before the log line, so the second call on
+     * the terminate path logs nothing and each held request is logged exactly once.
+     *
+     * @param runEnd How the run ended, as a clause for the log line.
+     */
+    private skipHeldDecisions(params: ExecuteAgentParams, runEnd: string): void {
         const held = this._heldDecisions;
         if (!held) {
             return;
         }
         this._heldDecisions = undefined;
         const ids = held.Requests.map((d, i) => this.decisionRequestId(d, i)).join(', ');
-        this.logStatus(`[Decisions] Skipped ${held.Requests.length} held decision request(s) (${ids}) without asking them: the run ended after the step that carried them (${held.Reason}), so no turn would read the answers`, false, params);
+        this.logStatus(`[Decisions] Skipped ${held.Requests.length} held decision request(s) (${ids}) without asking them: ${runEnd}, so no turn would read the answers (they were held because ${held.Reason})`, false, params);
+    }
+
+    /** How the run ended, as a clause for held decision requests that a cancellation or an error left unasked. */
+    private runEndForHeldDecisions(): string {
+        switch (this.deriveRunOutcome()) {
+            case 'cancelled':
+                return 'the run was cancelled before they were asked';
+            case 'failure':
+                return 'the run failed before they were asked';
+            default:
+                return 'the run ended before they were asked';
+        }
     }
 
     /**
