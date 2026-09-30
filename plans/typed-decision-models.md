@@ -113,6 +113,15 @@ retargeted to `next` when #4814 merged; before that they were stacked on `train/
 | 5.4 Escalating borderline records | #4872 | In review |
 | 5.5 The measurement | #4890 | In review |
 
+**Phase 0's exit grep, checked on the runner branches (2026-09-30).** Apart from drivers and
+runners, `CreateInstance<Base(Embeddings|Reranker|ImageGenerator)>` still appears in two groups:
+- the three embedding call sites in the Task 0.5 row;
+- `@deprecated` compatibility paths that nothing in MJ calls: `RerankerService.GetReranker`, and the
+  lazy getters behind the deprecated `embedding` fields on `VectorEmeddingData` and
+  `ResolvedVectorInfrastructure`.
+
+Removing those paths is a next-major-version job.
+
 **Known gaps outside the plan's tasks:** issue #4907 (whether the chat runner should honor
 `FailoverStrategy`). Model metadata also names `GeminiAudioGenerator` and `VertexAudioGenerator`
 driver classes that don't exist in the repo.
