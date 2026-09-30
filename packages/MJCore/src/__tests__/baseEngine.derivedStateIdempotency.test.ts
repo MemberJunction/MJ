@@ -1,15 +1,23 @@
 /**
  * Derived-state rebuilds must be idempotent (plan §10, Phase 5).
  *
- * `AdditionalLoading` runs again after every reload and cross-server payload, against the parent
- * objects already in place. A rebuild that appends instead of replacing grows derived state on
- * every event; one that clears before an early return loses it. Both are invisible to row counts.
+ * `AdditionalLoading` runs again after every reload and cross-server cache payload, against the
+ * parent objects already in place. A rebuild that appends instead of replacing grows derived state
+ * on every event; one that clears before an early return loses it. Both are invisible to row counts,
+ * because the cached arrays are unchanged — only what the engine derives from them is wrong.
+ *
+ * This is not hypothetical. #4470 fixed exactly this in `AIEngineBase`: children were associated by
+ * appending, so one cross-server cache event left every agent holding its Actions twice, five events
+ * left them six times over, and nothing in the row counts or identity hashes showed it.
+ *
+ * The check lives here, at the engine level, where a subclass can reach `AdditionalLoading` and
+ * `GetStateCensus` directly. An engine with non-trivial derived state should own a test of this
+ * shape; there is deliberately no product API for asking an engine to verify itself.
  */
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { BaseEngine, BaseEnginePropertyConfig } from '../generic/baseEngine';
 import { UserInfo } from '../generic/securityInfo';
 import { IMetadataProvider, RunViewResult } from '../generic/interfaces';
-import * as Logging from '../generic/logging';
 
 type Parent = { ID: string; Children: string[] };
 
@@ -34,6 +42,16 @@ class GroupingEngine extends BaseEngine<GroupingEngine> {
         return this.RebuildDerivedState();
     }
 
+    /** One rebuild, reaching the protected hook directly — no product API needed. */
+    public RebuildOnce(): Promise<void> {
+        return this.AdditionalLoading();
+    }
+
+    /** The derived counts, which are what a drifting rebuild changes and row counts do not. */
+    public get DerivedCounts(): Record<string, number> {
+        return this.GetStateCensus().Derived;
+    }
+
     protected override async AdditionalLoading(_contextUser?: UserInfo): Promise<void> {
         for (const parent of this._parents) {
             if (this.Appends) {
@@ -50,43 +68,43 @@ class GroupingEngine extends BaseEngine<GroupingEngine> {
 }
 
 describe('BaseEngine derived-state idempotency', () => {
-    afterEach(() => {
-        BaseEngine.VerifyDerivedStateOnRebuild = false;
-        vi.restoreAllMocks();
-    });
-
-    it('reports a rebuild that replaces its derived state as idempotent', async () => {
+    it('converges when the rebuild REPLACES its derived state', async () => {
         const engine = new GroupingEngine();
         engine.Prepare();
-        const result = await engine.VerifyDerivedStateIdempotent();
-        // `Restored: true` with nothing reloaded: an idempotent rebuild leaves exactly what one run
-        // leaves, so there is nothing to undo. See baseEngine.verifyRestoresState.test.ts.
-        expect(result).toEqual({ EngineClass: 'GroupingEngine', Idempotent: true, AfterFirst: { ChildrenAttached: 2 }, AfterSecond: { ChildrenAttached: 2 }, Restored: true, RestoreError: undefined });
+
+        await engine.RebuildOnce();
+        const afterFirst = engine.DerivedCounts;
+        await engine.RebuildOnce();
+
+        expect(afterFirst).toEqual({ ChildrenAttached: 2 });
+        expect(engine.DerivedCounts).toEqual(afterFirst);
     });
 
-    it('reports a rebuild that appends as not idempotent', async () => {
-        const engine = new GroupingEngine();
-        engine.Prepare();
-        engine.Appends = true;
-        const result = await engine.VerifyDerivedStateIdempotent();
-        expect(result.Idempotent).toBe(false);
-        expect(result.AfterFirst.ChildrenAttached).toBe(2);
-        expect(result.AfterSecond.ChildrenAttached).toBe(4);
-    });
-
-    it('logs the engine by name on rebuild when verification is on, and runs once when it is off', async () => {
-        const logError = vi.spyOn(Logging, 'LogError').mockImplementation(() => undefined);
+    it('grows without bound when the rebuild APPENDS — the #4470 shape', async () => {
         const engine = new GroupingEngine();
         engine.Prepare();
         engine.Appends = true;
 
-        await engine.Rebuild();
-        expect(engine._parents[0].Children).toHaveLength(1);
-        expect(logError).not.toHaveBeenCalled();
+        await engine.RebuildOnce();
+        expect(engine.DerivedCounts).toEqual({ ChildrenAttached: 2 });
+        await engine.RebuildOnce();
+        expect(engine.DerivedCounts).toEqual({ ChildrenAttached: 4 });   // one cache event: doubled
+        await engine.RebuildOnce();
+        expect(engine.DerivedCounts).toEqual({ ChildrenAttached: 6 });   // two events: tripled
 
-        BaseEngine.VerifyDerivedStateOnRebuild = true;
+        // And the row count — the thing most tests assert — never moved.
+        expect(engine._parents.length).toBe(2);
+    });
+
+    it('rebuilds through the cache-event path without touching the database', async () => {
+        // RebuildDerivedState is what a cross-server payload triggers. It runs AdditionalLoading
+        // once, in a queue that serializes bursts; it does NOT reload rows.
+        const engine = new GroupingEngine();
+        engine.Prepare();
+
         await engine.Rebuild();
-        expect(engine._parents[0].Children).toHaveLength(3);
-        expect(logError).toHaveBeenCalledWith(expect.stringContaining('GroupingEngine: AdditionalLoading is not idempotent'));
+        await engine.Rebuild();
+
+        expect(engine.DerivedCounts).toEqual({ ChildrenAttached: 2 });
     });
 });

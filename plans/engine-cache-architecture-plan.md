@@ -2831,3 +2831,40 @@ and three things this branch introduced were undocumented. Added:
 All 26 TOC entries now resolve to real headings, and no `##` section is missing from the TOC
 (checked with GitHub's own anchor rule — each space becomes one hyphen, punctuation is dropped,
 which matters for `Client-Side Fast-Start & Pre-Validation`).
+
+### 25.4 `VerifyDerivedStateIdempotent` removed, both forms (2026-09-30)
+
+Removed at the owner's direction, and the reasoning is worth keeping because it reverses §25.2.
+
+The API was **mine**, added on this branch (`fd03503dd6`), never on `next`, with **no production
+caller** — only CA6 and unit tests. And there were *two* mechanisms for one question:
+`VerifyDerivedStateIdempotent()`, returning a result, and the static `VerifyDerivedStateOnRebuild`
+flag, which made every rebuild run twice and log. A mutating diagnostic on the base class of every
+engine in the product, carried for the benefit of one integration check, is not a product API.
+
+§25.2 fixed the wrong level. The complaint was that the check corrupted the engines it inspected, and
+I answered by teaching the check to repair them — more machinery on the public surface to make an
+API safe that need not exist. Deleting it removes the defect and the API together.
+
+**What went:** `VerifyDerivedStateIdempotent`, `compareRebuilds`, `restoreAfterVerification`,
+`DerivedStateIdempotencyResult`, `censusFingerprint`, `VerifyDerivedStateOnRebuild`,
+`reportNonIdempotentRebuild`, the hook inside `RebuildDerivedState`, integration check CA6, and
+`baseEngine.verifyRestoresState.test.ts`. `GetStateCensus` stays — it is read-only and deliberately
+public (the `EngineStateCensus` GraphQL query).
+
+**What replaces the coverage.** The bug class is real and shipped once (#4470: children associated by
+appending, so one cross-server cache event left every agent holding its Actions twice, five events
+six times over, with row counts and identity hashes unchanged throughout). It is now pinned where it
+belongs — at the engine level, in a unit test whose subclass reaches `AdditionalLoading` and
+`GetStateCensus` directly, with no product API involved. `baseEngine.derivedStateIdempotency.test.ts`
+covers the converging case, the appending case (2 → 4 → 6 while the row count stays 2), and the
+cache-event path itself.
+
+What is lost is CA6's generic sweep over *every loaded engine* in a live process, which no unit test
+reproduces. That is a real reduction in coverage, and the honest trade is: a sweep that can only run
+by mutating live engines is not worth a permanent public API on `BaseEngine`. An engine with
+non-trivial derived state should carry its own test of that shape — recorded in the changeset so the
+expectation is visible to whoever writes the next engine.
+
+**Registry:** `cache-architecture` drops 6 → 5 checks (CA1–CA5); the snapshot test and the IT96
+bundle description are updated to match.

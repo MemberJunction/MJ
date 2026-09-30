@@ -9,8 +9,8 @@
  * Every check asserts on observable cache state (LocalCacheManager's fingerprint index, the storage
  * provider's keys) or on derived engine state, never on row counts alone.
  */
-import { BaseEngine, BaseEngineRegistry, LocalCacheManager, RunInEntityTransaction, RunView } from '@memberjunction/core';
-import type { DerivedStateIdempotencyResult, EngineStateCensus, IEntityDataProvider, RunViewParams } from '@memberjunction/core';
+import { LocalCacheManager, RunInEntityTransaction, RunView } from '@memberjunction/core';
+import type { EngineStateCensus, IEntityDataProvider, RunViewParams } from '@memberjunction/core';
 import { uuidv4 } from '@memberjunction/global';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import type { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
@@ -295,34 +295,6 @@ export const CacheArchitectureChecks: NamedCheck[] = [
             }
             AssertEqual(provider.TransactionDepth, 0, 'the rollback leaves no ambient transaction');
             await assertProbeSucceeds(provider, 'after a rolled-back transaction');
-        }
-    },
-    {
-        Id: 'cache-architecture.CA6',
-        Name: 'CA6: every loaded engine rebuilds its derived state idempotently (plan §10, Phase 5)',
-        Fn: async (ctx): Promise<void> => {
-            const engines = BaseEngineRegistry.Instance.GetAllEngines()
-                .filter((engine): engine is BaseEngine<object> => engine instanceof BaseEngine && engine.Loaded);
-            Assert(engines.some(e => e instanceof AIEngineBase), 'precondition: AIEngineBase is among the loaded engines');
-            const results: DerivedStateIdempotencyResult[] = [];
-            for (const engine of engines) {
-                results.push(await engine.VerifyDerivedStateIdempotent(ctx.User));
-            }
-            // This check MUTATES every engine it inspects: VerifyDerivedStateIdempotent runs
-            // AdditionalLoading twice on the live engine. It now puts a drifting engine back
-            // (BaseEngine.restoreAfterVerification), which matters here more than anywhere — every
-            // later check in the tier shares this process, so an engine left carrying two extra
-            // rebuilds would turn one finding into a spray of unrelated failures. Report a restore
-            // that did NOT happen, because from that point on the process is suspect.
-            const unrestored = results.filter(r => !r.Restored)
-                .map(r => `${r.EngineClass} (${r.RestoreError ?? 'no reason given'})`);
-            AssertEqual(unrestored.length, 0,
-                `every engine this check rebuilt must be left as a normal load would leave it; these were not, so later checks in this run are unreliable: ${unrestored.join('; ')}`);
-
-            const drifting = results.filter(r => !r.Idempotent)
-                .map(r => `${r.EngineClass} (${JSON.stringify(r.AfterFirst)} → ${JSON.stringify(r.AfterSecond)})`);
-            AssertEqual(drifting.length, 0,
-                `AdditionalLoading must converge when run again — a second run changed: ${drifting.join('; ')} (checked ${results.length} engines)`);
         }
     },
 ];
