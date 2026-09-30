@@ -1,4 +1,4 @@
-import { EntityInfo, IMetadataProvider, RoleInfo, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
+import { EntityInfo, IMetadataProvider, RoleInfo, RunQueryParams, RunQueryResult, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
 
 /**
  * Options for {@link createFakeProvider}.
@@ -11,6 +11,10 @@ export interface FakeProviderOptions<T = unknown> {
    * function of the params (to vary by `EntityName` / `ExtraFilter`).
    */
   runViewResults?: T[] | ((params: RunViewParams) => T[]);  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /**
+   * Rows any `RunQuery` / `RunQueries` call returns — a fixed array or a function of the params.
+   */
+  RunQueryResults?: unknown[] | ((params: RunQueryParams) => unknown[]);
   /** The provider's `CurrentUser`. Merged over a stub default. */
   currentUser?: Partial<UserInfo>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
@@ -52,12 +56,20 @@ export function CreateFakeProvider<T = unknown>(options: FakeProviderOptions<T> 
 
   const toResult = (rows: T[]): RunViewResult => ({ Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length }) as RunViewResult;
 
+  const queryRowsFor = (params: RunQueryParams): unknown[] =>
+    typeof options.RunQueryResults === 'function' ? options.RunQueryResults(params) : (options.RunQueryResults ?? []);
+
+  const toQueryResult = (rows: unknown[]): RunQueryResult =>
+    ({ Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ExecutionTimeMS: 1 } as unknown as RunQueryResult);
+
   const fake = {
     CurrentUser: { ID: 'test-user-id', Name: 'Test User', Email: 'test@example.com', ...options.currentUser },
     Entities: options.entities ?? [],
     Roles: options.roles ?? [],
     RunView: async (params: RunViewParams): Promise<RunViewResult> => toResult(rowsFor(params)),
     RunViews: async (paramsList: RunViewParams[]): Promise<RunViewResult[]> => paramsList.map((p) => toResult(rowsFor(p))),
+    RunQuery: async (params: RunQueryParams): Promise<RunQueryResult> => toQueryResult(queryRowsFor(params)),
+    RunQueries: async (paramsList: RunQueryParams[]): Promise<RunQueryResult[]> => paramsList.map((p) => toQueryResult(queryRowsFor(p))),
     EntityByName: (name: string): EntityInfo | undefined => options.entityByName?.(name),
   };
 

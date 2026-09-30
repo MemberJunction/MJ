@@ -105,7 +105,8 @@ export interface ResponseTypeInclusionRules {
 
     /**
      * Include finishIf field in the nextStep response interface.
-     * Auto-aligns with includeFinishIfDocs unless explicitly set.
+     * Auto-aligns with includeFinishIfDocs unless explicitly set, and so is off whenever
+     * `finishIfMode` is `'off'`, the default.
      * @default true
      */
     finishIf?: boolean;
@@ -195,6 +196,78 @@ export const DEFAULT_RESPONSE_TYPE_INCLUSION_RULES: Required<ResponseTypeInclusi
  * };
  * ```
  */
+/**
+ * Where the agent's specialization (its child prompt) is placed.
+ *
+ * Background: the loop agent's per-iteration ("volatile") state — current date/time, Scratchpad
+ * State, and the Payload — is never rendered in the system prompt. It is delivered as a single
+ * framework-authored `user`-role message appended as the **final** message of the request, wrapped
+ * in `<mj-runtime-state>` tags, with a static pointer in the system prompt telling the model where
+ * to find it. This is not configurable: provider prompt caching is a prefix match over
+ * `tools → system → messages`, and anything volatile in `system` renders ahead of the entire
+ * message history, so the whole (growing) history would miss the cache on every iteration.
+ * Measured on Sage, 2026-09-14: cache reads plateaued at ~21.5K tokens while uncached input grew
+ * to 73K per call. Moving the volatile tail after the history lets the history cache incrementally.
+ *
+ * - `'auto'` (default): relocate the specialization into the trailing message ONLY if its template
+ *   references a volatile placeholder (`_CURRENT_DATE*`, `_CURRENT_TIME*`, `_CURRENT_PAYLOAD`,
+ *   `_SCRATCHPAD_*`). A static child prompt stays in the cached system prompt.
+ * - `'systemPrompt'`: never relocate.
+ * - `'trailingMessage'`: always relocate.
+ *
+ * Why: the OS prompt cannot control what an agent designer puts in a child prompt. Six active
+ * Loop agents embed a volatile placeholder in theirs, which mutates the system prompt every
+ * iteration from a position ahead of the catalogs and the whole history — moving the runtime-state
+ * tail does nothing for them. Measured (Gemini 2.5 Flash, volatile specialization): keeping it in
+ * the system prompt caches 19%; relocating it caches 70%. For a STATIC child prompt, relocation
+ * costs ≈3,100 uncached tokens per call for nothing, hence `'auto'`. Decided once per run so the
+ * layout never flips mid-run. Resolved through {@link ResolveSpecializationPlacement}.
+ */
+export type SpecializationPlacement = 'auto' | 'systemPrompt' | 'trailingMessage';
+
+/**
+ * How the trailing runtime-state message is carried across loop iterations.
+ *
+ * Background: the fragment described under {@link SpecializationPlacement} is rebuilt every
+ * iteration. Providers with block-level or sliding prefix caches (Anthropic, Gemini, Cerebras) are
+ * happiest when the previous iteration's fragment is REPLACED, so the history stays compact.
+ * OpenAI's automatic cache is different: it reuses a prior request only when that request's
+ * entire prompt is a byte prefix of the new one, so replacing the fragment breaks the prefix
+ * right after the system prompt and caps the cached share at the system prompt (~22% measured).
+ * Retaining prior fragments and APPENDING the new one makes each request an exact prefix
+ * extension of the last (~93% measured).
+ *
+ * - `'auto'` (default): append-only when the model catalog says the serving path's cache is a
+ *   byte-prefix cache — the `PrefixPromptCache` flag in `ModelConfiguration.LLM`, resolved
+ *   through the catalog cascade (Model Types < Models < Vendors' `Configuration.ModelDefaults` <
+ *   Model Vendors: the vendor's defaults beat the model's own bag and the inference provider's
+ *   model-vendor row is the tie-breaker) is `true` — otherwise replace-in-place. Nothing about a
+ *   provider is hard-coded: a new host, or one model on a host that caches differently from the
+ *   rest, is a metadata change. The answer is taken from a runtime model override, else the FIRST
+ *   iteration's model selection, and then frozen for the rest of the run so a failover cannot flip
+ *   the layout mid-run. On turn 1, before any selection is known, the layout is replace-in-place;
+ *   if turn 2 resolves to append-only, turn 1's fragment is restored at the turn-1 boundary, so
+ *   deferring loses nothing. The prompt's bound models are deliberately not consulted: prompts
+ *   commonly bind several vendors for failover.
+ * - `'appendOnly'`: always retain prior fragments. Use this for a serving path whose catalog rows
+ *   carry no flag yet — an OpenAI-compatible gateway, say — until its metadata is filled in.
+ * - `'replace'`: always replace. Use this to keep context compact on a run whose catalog rows say
+ *   `true` but where context growth matters more than cache hits.
+ *
+ * Resolved by `BaseAgent.shouldUseAppendOnlyTrailingState` via `BaseAgent.resolvePrefixPromptCache`.
+ */
+export type TrailingStateMode = 'auto' | 'appendOnly' | 'replace';
+
+/**
+ * How a loop agent treats `finishIf` gates.
+ * - `'off'`: the model is not taught `finishIf`, and a gate it writes anyway is ignored.
+ * - `'shadow'`: the model is taught `finishIf`, and every gate is evaluated and recorded as a
+ *   `Finish check` step, but it never ends the run: the model always gets its next turn. This
+ *   measures an agent's gates on its real traffic at the cost of one decision call per gate.
+ * - `'on'`: a passing gate ends the run with the model's pre-written message.
+ */
+export type FinishIfMode = 'off' | 'shadow' | 'on';
+
 export interface LoopAgentTypePromptParams {
     // === Section Inclusion Flags ===
 
@@ -291,6 +364,22 @@ export interface LoopAgentTypePromptParams {
     includeScratchpadDocs?: boolean;
 
     /**
+     * Where the child prompt goes: `'auto'` relocates it into the trailing runtime-state message only
+     * when its template is volatile; `'systemPrompt'` never; `'trailingMessage'` always.
+     * See {@link SpecializationPlacement}.
+     * @default 'auto'
+     */
+    specializationPlacement?: SpecializationPlacement;
+
+    /**
+     * How the trailing runtime-state message is carried across iterations: `'auto'` appends for
+     * OpenAI and replaces otherwise; `'appendOnly'` and `'replace'` force one behaviour.
+     * See {@link TrailingStateMode}.
+     * @default 'auto'
+     */
+    trailingStateMode?: TrailingStateMode;
+
+    /**
      * Maximum number of tasks allowed in the scratchpad task list.
      * When exceeded, completed tasks are auto-pruned oldest first.
      * @default 50
@@ -338,14 +427,33 @@ export interface LoopAgentTypePromptParams {
     decisionsMaxItems?: number;
 
     /**
+     * Maximum number of decision requests answered from one agent turn. Requests beyond this
+     * limit are not run; each gets a failed result saying why.
+     * @default MAX_DECISION_REQUESTS_PER_TURN (8)
+     */
+    decisionsMaxRequests?: number;
+
+    /**
      * Name of the decision prompt used for evaluating decisions.
      * @default 'Default Decision'
      */
     decisionPromptName?: string;
 
     /**
-     * Include conditional completion (finishIf) documentation in the prompt.
-     * Disable for agents that should never request inline completion gates.
+     * Whether this agent writes finishIf gates, and whether they act. See {@link FinishIfMode}.
+     *
+     * **Defaults to `'off'`: gates are opt-in per agent.** A replay of recorded action rounds (plan
+     * Task 4.6) found that a gate at the 0.9 threshold would have ended 22% of the rounds where the
+     * agent went on to act, and neither a stricter threshold nor calibration fixed that. Use
+     * `'shadow'` to measure an agent's own gates on real traffic before turning them `'on'`.
+     * @default 'off'
+     */
+    finishIfMode?: FinishIfMode;
+
+    /**
+     * Include conditional completion (finishIf) documentation in the prompt. Takes effect only when
+     * `finishIfMode` is `'shadow'` or `'on'`; with `'off'` the documentation is always omitted.
+     * Set false to keep the documentation out even then.
      * @default true
      */
     includeFinishIfDocs?: boolean;
@@ -400,9 +508,24 @@ export interface LoopAgentTypePromptParams {
 }
 
 /**
+ * The most decision requests answered from one agent turn, unless `decisionsMaxRequests` overrides
+ * it. Each request can itself make up to `decisionsMaxItems` calls through `forEachItemIn`, so this
+ * bounds how many decision calls one turn can start.
+ */
+export const MAX_DECISION_REQUESTS_PER_TURN = 8;
+
+/**
  * Default values for LoopAgentTypePromptParams.
  * All section flags default to true (include), limits default to -1 (include all).
  */
+/** Every {@link FinishIfMode}, for validation. */
+export const FINISH_IF_MODES: readonly FinishIfMode[] = ['off', 'shadow', 'on'];
+
+/** The mode a prompt-param value names; anything else, an absent value included, is `'off'`. */
+export function ResolveFinishIfMode(value: unknown): FinishIfMode {
+    return value === 'shadow' || value === 'on' ? value : 'off';
+}
+
 export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParams> = {
     includeResponseTypeDefinition: { ...DEFAULT_RESPONSE_TYPE_INCLUSION_RULES },
     includeForEachDocs: true,
@@ -414,13 +537,17 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     includePayloadInPrompt: true,
     includeDateTimeInPrompt: true,
     includeScratchpadDocs: true,
+    specializationPlacement: 'auto',
+    trailingStateMode: 'auto',
     scratchpadMaxTasks: 50,
     includeArtifactToolsDocs: true,
     includeConversationToolsDocs: true,
     includePipelineDocs: true,
     includeDecisionsDocs: true,
     decisionsMaxItems: 100,
+    decisionsMaxRequests: MAX_DECISION_REQUESTS_PER_TURN,
     decisionPromptName: 'Default Decision',
+    finishIfMode: 'off',
     includeFinishIfDocs: true,
     finishIfThreshold: 0.9,
     // Deliberately false — a capability gate, not a token-savings flag (D3).
