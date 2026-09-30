@@ -919,8 +919,9 @@ import {
     ParallelExecutionCoordinator,
 } from '@memberjunction/ai-prompts';
 
-// @memberjunction/ai-reranker (1 classes)
+// @memberjunction/ai-reranker (2 classes)
 import {
+    DecisionReranker,
     LLMReranker,
 } from '@memberjunction/ai-reranker';
 
@@ -1961,6 +1962,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     TemplateRunServerOperation,
     LLMDecision,
     ParallelExecutionCoordinator,
+    DecisionReranker,
     LLMReranker,
     PromptReasoningProvider,
     AISkillExportMarkdownServerOperation,
@@ -2084,11 +2086,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJRoleEntityServer,
     MJRowLevelSecurityFilterEntityServer,
     MJSearchScopeEntityServer,
-    MJTagEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    MJTagEntityServer,
     MJTagScopeEntityServer,
     MJTemplateContentEntityServer,
     MJUserEntityServer,
@@ -2269,7 +2271,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 965;
+export const CLASS_REGISTRATIONS_COUNT = 966;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
