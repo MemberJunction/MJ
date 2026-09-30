@@ -137,7 +137,7 @@ import { ScratchpadManager } from './ScratchpadManager';
 import { ArtifactToolManager, ArtifactToolCall, StoredToolResult } from './ArtifactToolManager';
 import { MemoryWriteManager, MemoryWriteRequest, MemoryWriteResult } from './MemoryWriteManager';
 import { AgentDecisionService, DecisionQuestionMapping } from './AgentDecisionService';
-import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS, MAX_DECISION_REQUESTS_PER_TURN } from './agent-types/loop-agent-prompt-params';
+import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS, MAX_DECISION_REQUESTS_PER_TURN, ResolveFinishIfMode, type FinishIfMode } from './agent-types/loop-agent-prompt-params';
 import {
     ApplyCatalogNarrowing,
     BuildCatalogNarrowingQuestions,
@@ -461,7 +461,10 @@ interface AgentBaseCatalog {
 
 /** The finishIf settings of the current step. */
 interface FinishIfSettings {
+    /** Whether a gate is evaluated: `finishIfMode` is `shadow` or `on`, and the response field is on. */
     Enabled: boolean;
+    /** The agent's `finishIfMode`. Only `on` lets a passing gate end the run. */
+    Mode: FinishIfMode;
     Threshold: number;
     PromptName: string;
 }
@@ -8566,7 +8569,7 @@ The context is now within limits. Please retry your request with the recovered c
      */
     private decisionsHoldReason(step: BaseAgentNextStep): string | undefined {
         const isSingleSubAgent = step.step === 'Sub-Agent' && !!step.subAgent && !step.subAgents?.length;
-        if (step.finishIf && (step.step === 'Actions' || isSingleSubAgent) && this.finishIfSettings().Enabled) {
+        if (step.finishIf && (step.step === 'Actions' || isSingleSubAgent) && this.finishIfActs()) {
             return `the ${step.step} step carries a finishIf gate, and a passing gate ends the run`;
         }
         if (step.step === 'Sub-Agent' && this.getRequestedSubAgents(step).some(r => r.terminateAfter === true)) {
@@ -9230,6 +9233,12 @@ The context is now within limits. Please retry your request with the recovered c
 
         const responseType = params.includeResponseTypeDefinition as Record<string, unknown>;
 
+        // finishIf gates are opt-in (`finishIfMode`). While off, the model is not taught to write one,
+        // whatever includeFinishIfDocs says, so the response field below follows it off too.
+        if (ResolveFinishIfMode(params.finishIfMode) === 'off') {
+            params.includeFinishIfDocs = false;
+        }
+
         // Auto-alignment mappings: docs flag → response type property
         const alignmentMappings: Array<{ docsFlag: string; responseTypeKey: string }> = [
             { docsFlag: 'includePayloadInPrompt', responseTypeKey: 'payload' },
@@ -9314,15 +9323,18 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * The finishIf settings of the current step, from its merged agent-type prompt params. The gate is
-     * on unless `includeResponseTypeDefinition.finishIf` is `false`.
+     * The finishIf settings of the current step, from its merged agent-type prompt params. A gate is
+     * evaluated when `finishIfMode` is `shadow` or `on` and `includeResponseTypeDefinition.finishIf`
+     * is not `false`; it ends the run only in `on`.
      */
     private finishIfSettings(): FinishIfSettings {
         const promptParams = this._agentTypePromptParams;
         const rules = promptParams?.includeResponseTypeDefinition as Record<string, unknown> | undefined;
         const threshold = promptParams?.finishIfThreshold;
+        const mode = ResolveFinishIfMode(promptParams?.finishIfMode);
         return {
-            Enabled: rules?.finishIf !== false,
+            Enabled: mode !== 'off' && rules?.finishIf !== false,
+            Mode: mode,
             Threshold: typeof threshold === 'number' && threshold > 0 && threshold <= 1
                 ? threshold
                 : DEFAULT_LOOP_AGENT_PROMPT_PARAMS.finishIfThreshold,
@@ -9330,6 +9342,27 @@ The context is now within limits. Please retry your request with the recovered c
                 ? promptParams.decisionPromptName
                 : AgentDecisionService.DEFAULT_PROMPT_NAME,
         };
+    }
+
+    /** Whether a passing finishIf gate ends the run: only in `on` mode. */
+    private finishIfActs(): boolean {
+        const settings = this.finishIfSettings();
+        return settings.Enabled && settings.Mode === 'on';
+    }
+
+    /**
+     * Whether an evaluated gate ends the run. In shadow mode a passing gate is only logged: the
+     * outcome is already recorded on its `Finish check` step, and the model takes its next turn.
+     */
+    private gateEndsRun(outcome: FinishIfOutcome, params: ExecuteAgentParams): boolean {
+        if (!outcome.Passed) {
+            return false;
+        }
+        if (!this.finishIfActs()) {
+            this.logStatus('[finishIf] Shadow mode: the gate passed, and the run continues as it would have', true, params);
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -9349,6 +9382,7 @@ The context is now within limits. Please retry your request with the recovered c
         if (!finishIf || !addConversationMessage || !this.finishIfSettings().Enabled) {
             return undefined;
         }
+        // (In shadow mode the gate below is still evaluated and recorded; it just never ends the run.)
         // `success` means only that the action did not throw; `result.Success` is its outcome.
         if (!actionResults.every(r => r.success && r.result?.Success === true)) {
             return undefined;
@@ -9361,7 +9395,7 @@ The context is now within limits. Please retry your request with the recovered c
         }
         const state = capFinishIfState(actionSummaries.map(formatActionForFinishIf).join('\n\n'));
         const outcome = await this.evaluateFinishIf(finishIf, state, params, decision, payload, parentStepId);
-        return outcome.Passed
+        return this.gateEndsRun(outcome, params)
             ? { ...this.finishIfSuccessStep(finishIf, decision, payload), priorStepResult: actionSummaries }
             : undefined;
     }
@@ -9380,7 +9414,7 @@ The context is now within limits. Please retry your request with the recovered c
             return undefined;
         }
         const outcome = await this.evaluateFinishIf(finishIf, formatSubAgentForFinishIf(result), params, decision, result.newPayload);
-        return outcome.Passed ? { ...result, terminate: true, message: finishIf.message } : undefined;
+        return this.gateEndsRun(outcome, params) ? { ...result, terminate: true, message: finishIf.message } : undefined;
     }
 
     /**
@@ -9525,6 +9559,8 @@ The context is now within limits. Please retry your request with the recovered c
         try {
             await this.finalizeStepEntity(step, true, undefined, {
                 passed: outcome.Passed,
+                mode: settings.Mode,
+                endedRun: outcome.Passed && settings.Mode === 'on',
                 threshold: settings.Threshold,
                 probabilities: outcome.Probabilities,
                 reason: outcome.Reason
