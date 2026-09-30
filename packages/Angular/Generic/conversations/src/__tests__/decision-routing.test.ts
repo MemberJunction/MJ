@@ -71,9 +71,9 @@ function likelihood(probability: number): LikelihoodAnswer {
     return { Kind: 'Likelihood', Probability: probability };
 }
 
-/** A successful decision, answered by Jev, whose thread likelihood routing has a calibration for. */
+/** A successful decision, answered by Jev at the version routing's thread-likelihood calibration was fitted on. */
 function answered(answers: Record<string, DecisionAnswer>): RunDecisionResult {
-    return { Success: true, Answers: answers, ModelName: 'Jev' };
+    return { Success: true, Answers: answers, ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.13-20260917' };
 }
 
 /** A confident move away from Research, to the given agent. */
@@ -193,6 +193,17 @@ describe('decision routing', () => {
             // Ambiguous after calibration: Jev's raw 0.87 is a calibrated 0.51 (a raw 0.5 is 0.03, a clear "leaves")
             const ambiguous = answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.87) });
             expect((await RunRoutingDecision(input(), runner(ambiguous))).Verdict).toBe('KeptContinuity');
+        });
+
+        it('keeps continuity for an answer from a model its calibration was not fitted on', async () => {
+            // A server that reports no resolved model, Jev at another version, and LLM Decision
+            // answered by a chat model other than GPT-OSS-120B: each is uncalibrated, so unsure.
+            const moves = leaves(WRITER.ID);
+            for (const answeredBy of [{ ResolvedModel: undefined }, { ResolvedModel: 'typesafe/jev-1.14-20261101' }, { ModelName: 'LLM Decision', ResolvedModel: 'GPT 5.5 Instant' }]) {
+                const outcome = await RunRoutingDecision(input(), runner({ ...moves, ...answeredBy }));
+                expect(outcome.Verdict).toBe('KeptContinuity');
+                expect(outcome.Reason).toContain('uncalibrated');
+            }
         });
 
         it('keeps continuity when the Likelihood says the thread continues', async () => {

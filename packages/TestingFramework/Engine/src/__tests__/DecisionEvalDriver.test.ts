@@ -32,6 +32,7 @@ const POINTS = ParseDecisionCorpus(readFileSync(join(FIXTURE_DIR, 'corpus.jsonl'
 const POINT = POINTS[1];
 
 const CALENDAR_ID = 'A1000000-0000-4000-8000-000000000002';
+const LEDGER_ID = 'A1000000-0000-4000-8000-000000000001';
 const PINNED_MODEL = '0B000000-0000-4000-8000-000000000001';
 const PINNED_VENDOR = '0C000000-0000-4000-8000-000000000001';
 const OTHER_MODEL = '0B000000-0000-4000-8000-000000000002';
@@ -106,6 +107,24 @@ function decided(probability: number, answeredModel: string = PINNED_MODEL): AID
         Answers: answers(probability),
         DecisionResult: driverResult,
         DriverClass: 'JevDecision'
+    };
+}
+
+/**
+ * A pinned run whose agent Choice confidently names the Ledger Helper, which took part earlier, and
+ * whose thread Likelihood says the message leaves: a confident move away, from the given model.
+ */
+function movedAway(modelName: string, resolvedModel: string): AIDecisionRunResult {
+    const driverResult = new DecisionResult(true, new Date(0), new Date(1));
+    driverResult.ResolvedModel = resolvedModel;
+    return {
+        ...decided(0.05),
+        modelInfo: { modelId: PINNED_MODEL, modelName, vendorId: PINNED_VENDOR, vendorName: 'Relay' },
+        Answers: {
+            route: { Kind: 'Choice', Value: LEDGER_ID, Confidence: 0.95, Probabilities: { [LEDGER_ID]: 0.95, [CALENDAR_ID]: 0.05 } },
+            continues: { Kind: 'Likelihood', Probability: 0.05 }
+        },
+        DecisionResult: driverResult
     };
 }
 
@@ -224,6 +243,26 @@ describe('DecisionEvalDriver', () => {
             expect(actual).toMatchObject({ PromptRunId: 'prun-1', CostUSD: 0.002, Error: null, StateLayout: 'production', PromptName: 'Default Decision' });
         });
 
+        it('records production\'s verdict: a confident move away, answered by a calibrated model, is Routed', async () => {
+            // The review's probe. Without the model that answered, routing reads the Likelihood as
+            // uncalibrated and keeps continuity, so every confident move away was recorded as kept.
+            const { result } = await run({ modelId: PINNED_MODEL, vendorId: PINNED_VENDOR }, async () => movedAway('Jev', 'typesafe/jev-1.13-20260917'));
+            const actual = actualOf(result);
+            expect(actual.RoutingVerdict).toBe('Routed');
+            expect(actual.RoutingPolicy).toEqual({ MinConfidence: 0.7, TimeoutMs: 350, Calibration: { A: 1.7757, B: -3.3506 } });
+        });
+
+        it('records the move away as kept, as production would, when the exact model has no calibration', async () => {
+            for (const [modelName, resolvedModel] of [['Jev', 'typesafe/jev-1.14-20261101'], ['LLM Decision', 'GPT 5.5 Instant']]) {
+                const { result } = await run({ modelId: PINNED_MODEL }, async () => movedAway(modelName, resolvedModel));
+                const actual = actualOf(result);
+                expect(actual.RoutingVerdict).toBe('KeptContinuity');
+                expect(actual.RoutingPolicy?.Calibration).toBeNull();
+            }
+            const { result } = await run({ modelId: PINNED_MODEL }, async () => movedAway('LLM Decision', 'GPT-OSS-120B'));
+            expect(actualOf(result)).toMatchObject({ RoutingVerdict: 'Routed', RoutingPolicy: { Calibration: { A: 1.6508, B: -2.911 } } });
+        });
+
         it('links the prompt run as the target, so cost comes from it', async () => {
             const { result } = await run({}, async () => decided(0.2));
             expect(result).toMatchObject({ targetType: 'AI Prompt', targetLogId: 'prun-1', totalCost: 0.002 });
@@ -272,7 +311,7 @@ describe('DecisionEvalDriver', () => {
             const { result } = await run({}, async () => ({ success: false, errorMessage: 'model unavailable', Answers: {} }));
             expect(result.status).toBe('Error');
             expect(result.errorMessage).toBe('The decision failed: model unavailable');
-            expect(actualOf(result)).toMatchObject({ Error: 'model unavailable', ContinuesProbability: null, RoutingVerdict: null });
+            expect(actualOf(result)).toMatchObject({ Error: 'model unavailable', ContinuesProbability: null, RoutingVerdict: null, RoutingPolicy: null });
         });
 
         it('makes a runner that throws an Error run', async () => {
