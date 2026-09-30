@@ -2082,6 +2082,16 @@ export class FlowAgentType extends BaseAgentType {
     }
 
     /**
+     * Flow action nodes are chosen by the graph, not by a model: failure paths may re-run a node
+     * with the same mapped inputs, and no model reads a failure directive. The breaker's rules
+     * would only block those retries, so Flow opts out (see BaseAgentType.UsesActionCircuitBreaker).
+     * @override
+     */
+    public get UsesActionCircuitBreaker(): boolean {
+        return false;
+    }
+
+    /**
      * Provides Flow-specific guidance for prompt configuration
      * @override
      */
