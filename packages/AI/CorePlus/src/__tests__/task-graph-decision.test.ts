@@ -626,6 +626,8 @@ describe('Save as Workflow — a Decision node', () => {
         expect(result.Losses).toEqual([]);
         const step = result.Spec?.Steps?.find((s) => s.StepType === 'Decision');
         expect(step?.Name).toBe('Triage the ticket');
-        expect(JSON.parse(step?.Configuration ?? '{}')).toEqual({ key: 'triage', questions: TRIAGE.questions });
+        const stored = step?.Configuration;
+        expect(typeof stored).toBe('string');
+        expect(JSON.parse(typeof stored === 'string' ? stored : '{}')).toEqual({ key: 'triage', questions: TRIAGE.questions });
     });
 });
