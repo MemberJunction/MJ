@@ -448,7 +448,7 @@ describe('IsDecisionPrompt', () => {
     });
 
     it('matches when both decisionModelTypeID and prompt.AIModelTypeID are set and match', () => {
-        expect(IsDecisionPrompt({ AIModelTypeID: decisionTypeId }, decisionTypeId)).toBe(true);
+        expect(IsDecisionPrompt({ AIModelTypeID: decisionTypeId, AIModelType: null }, decisionTypeId)).toBe(true);
         expect(IsDecisionPrompt({ AIModelTypeID: decisionTypeId, AIModelType: 'Decision' }, decisionTypeId)).toBe(true);
     });
 
@@ -460,10 +460,10 @@ describe('IsDecisionPrompt', () => {
 
     it('falls back to AIModelType when either ID is absent', () => {
         // No decisionModelTypeID passed
-        expect(IsDecisionPrompt({ AIModelType: 'Decision' })).toBe(true);
-        expect(IsDecisionPrompt({ AIModelType: 'decision' })).toBe(true);
-        expect(IsDecisionPrompt({ AIModelType: '  DECISION  ' })).toBe(true);
-        expect(IsDecisionPrompt({ AIModelType: 'Chat' })).toBe(false);
+        expect(IsDecisionPrompt({ AIModelType: 'Decision', AIModelTypeID: null })).toBe(true);
+        expect(IsDecisionPrompt({ AIModelType: 'decision', AIModelTypeID: null })).toBe(true);
+        expect(IsDecisionPrompt({ AIModelType: '  DECISION  ', AIModelTypeID: null })).toBe(true);
+        expect(IsDecisionPrompt({ AIModelType: 'Chat', AIModelTypeID: null })).toBe(false);
 
         // decisionModelTypeID passed, but prompt has no AIModelTypeID
         expect(IsDecisionPrompt({ AIModelType: 'Decision', AIModelTypeID: null }, decisionTypeId)).toBe(true);
