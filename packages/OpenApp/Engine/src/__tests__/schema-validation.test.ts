@@ -4,7 +4,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { DatabaseProviderBase, DatabasePlatform } from '@memberjunction/core';
 import { GetDialect } from '@memberjunction/sql-dialect';
-import { CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName } from '../install/schema-manager.js';
+import { CheckCanMigrateAppSchema, CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName } from '../install/schema-manager.js';
 
 describe('ValidateSchemaName', () => {
     it('accepts a normal schema name', () => {
@@ -475,6 +475,66 @@ describe('CreateAppSchema — SQL Server schema owner (#4756)', () => {
         for (const call of executeSql.mock.calls) {
             expect(call[0] as string).not.toContain('sys.schemas');
         }
+    });
+});
+
+describe('CheckCanMigrateAppSchema — SQL Server (#4756)', () => {
+    // An app's migrations write its Skyway history table and GRANT on the objects they create.
+    // Both need CONTROL on the app schema, which its owner (and db_owner) has. After the README
+    // retrofit hands an installer-owned schema to dbo, a db_ddladmin login loses it: verified on
+    // SQL Server 2022, the history INSERT is denied and GRANT fails with Msg 15151.
+
+    it('allows a login with CONTROL on the existing app schema', async () => {
+        const { provider, executeSql } = makeMockProvider([[{ OwnerName: 'dbo', CurrentUser: 'mj_installer', CanControlSchema: 1 }]]);
+        const result = await CheckCanMigrateAppSchema('bcsaas', provider);
+        expect(result.Success).toBe(true);
+        const probe = executeSql.mock.calls[0][0] as string;
+        expect(probe).toContain('sys.schemas');
+        expect(probe).toContain("s.name = 'bcsaas'");
+        // Quoted like the other HAS_PERMS_BY_NAME probes: the securable is parsed as an identifier.
+        expect(probe).toContain("HAS_PERMS_BY_NAME(QUOTENAME(s.name), 'SCHEMA', 'CONTROL')");
+    });
+
+    it('fails with the owner, the login and both remedies when the login lacks CONTROL', async () => {
+        const { provider } = makeMockProvider([[{ OwnerName: 'dbo', CurrentUser: 'mj_ddl', CanControlSchema: 0 }]]);
+        const result = await CheckCanMigrateAppSchema('bcsaas', provider);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain("'bcsaas'");
+        expect(result.ErrorMessage).toContain("'dbo'");
+        expect(result.ErrorMessage).toContain("'mj_ddl'");
+        expect(result.ErrorMessage).toMatch(/db_owner/);
+        expect(result.ErrorMessage).toContain('GRANT CONTROL ON SCHEMA::[bcsaas] TO [mj_ddl]');
+    });
+
+    it('escapes the schema name as a string literal and brackets in the GRANT remedy', async () => {
+        const { provider, executeSql } = makeMockProvider([[{ OwnerName: 'dbo', CurrentUser: 'odd]login', CanControlSchema: 0 }]]);
+        const result = await CheckCanMigrateAppSchema("o'app", provider);
+        expect(executeSql.mock.calls[0][0] as string).toContain("s.name = 'o''app'");
+        expect(result.ErrorMessage).toContain("GRANT CONTROL ON SCHEMA::[o'app] TO [odd]]login]");
+    });
+
+    it('allows the migration when the schema does not exist yet (nothing to check)', async () => {
+        // HAS_PERMS_BY_NAME returns 0 — not NULL — for a missing schema (verified on SQL Server
+        // 2022), so existence must come from sys.schemas, never from the permission bit.
+        const { provider } = makeMockProvider([[]]);
+        const result = await CheckCanMigrateAppSchema('bcsaas', provider);
+        expect(result.Success).toBe(true);
+    });
+
+    it('returns a failure with context when the probe itself fails', async () => {
+        const executeSql = vi.fn(async () => { throw new Error('login timeout'); });
+        const provider = { ExecuteSQL: executeSql, Dialect: GetDialect('sqlserver') } as unknown as DatabaseProviderBase;
+        const result = await CheckCanMigrateAppSchema('bcsaas', provider);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('bcsaas');
+        expect(result.ErrorMessage).toContain('login timeout');
+    });
+
+    it('PostgreSQL issues no probe', async () => {
+        const { provider, executeSql } = makeMockProvider([], 'postgresql');
+        const result = await CheckCanMigrateAppSchema('bcsaas', provider);
+        expect(result.Success).toBe(true);
+        expect(executeSql).not.toHaveBeenCalled();
     });
 });
 

@@ -427,6 +427,63 @@ async function ResolveCoreSchemaOwner(
 }
 
 /**
+ * SQL Server only. Checks, before an app's migrations run against an EXISTING schema, that the
+ * executing login may run them: migrations write the schema's Skyway history table and `GRANT`
+ * on the objects they create, and both need CONTROL on the schema. Its owner and db_owner members
+ * have that; a login that neither owns the schema nor was granted CONTROL does not. That is the
+ * state the README retrofit (MJ#4756) leaves a db_ddladmin installer in once `dbo` owns the
+ * schema. Verified on SQL Server 2022: its history INSERT is denied, its `GRANT` fails with
+ * Msg 15151, and `HAS_PERMS_BY_NAME(…, 'SCHEMA', 'CONTROL')` predicted both outcomes for owner,
+ * db_owner, db_ddladmin (with and without db_datawriter) and an explicit `GRANT CONTROL ON SCHEMA`.
+ *
+ * Install's create path does not need this: {@link CreateAppSchema} leaves the installer as owner
+ * unless it has CONTROL on the database.
+ *
+ * @param schemaName - The app schema the migrations will run in
+ * @param provider - MJ database provider
+ * @returns `Success: false` with the owner, the login and the remedies when the login lacks
+ *   CONTROL; `Success: true` when it has it, when the schema does not exist yet, or on PostgreSQL
+ */
+export async function CheckCanMigrateAppSchema(
+  schemaName: string,
+  provider: DatabaseProviderBase
+): Promise<SchemaOperationResult> {
+  if (provider.Dialect.PlatformKey !== 'sqlserver') {
+    return { Success: true };
+  }
+  try {
+    // Existence comes from the sys.schemas row, not the permission bit: HAS_PERMS_BY_NAME returns
+    // 0 (not NULL) for a schema that does not exist (verified on SQL Server 2022).
+    const rows = await provider.ExecuteSQL<{ OwnerName: string | null; CurrentUser: string | null; CanControlSchema: number | null }>(
+      `SELECT USER_NAME(s.principal_id) AS OwnerName, USER_NAME() AS CurrentUser, ` +
+      `HAS_PERMS_BY_NAME(QUOTENAME(s.name), 'SCHEMA', 'CONTROL') AS CanControlSchema ` +
+      `FROM sys.schemas s WHERE s.name = '${EscapeSQLString(schemaName)}'`
+    );
+    const row = rows[0];
+    if (!row || row.CanControlSchema === 1) {
+      return { Success: true };
+    }
+    const login = row.CurrentUser ?? 'the installing login';
+    return {
+      Success: false,
+      ErrorMessage:
+        `Cannot run migrations in schema '${schemaName}': it is owned by '${row.OwnerName}', not by '${login}', ` +
+        `and '${login}' lacks CONTROL on it, so the migrations could neither record their history in the schema ` +
+        `nor grant on its objects. Run the install or upgrade as a member of db_owner, or grant the login ` +
+        `CONTROL on the schema: GRANT CONTROL ON SCHEMA::[${schemaName.replace(/]/g, ']]')}] TO ` +
+        `[${login.replace(/]/g, ']]')}]; — see the Open App README section "Schema ownership on SQL Server".`
+    };
+  }
+  catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      Success: false,
+      ErrorMessage: `Could not check whether the installing login may run migrations in schema '${schemaName}': ${message}`
+    };
+  }
+}
+
+/**
  * Drops an app schema and all contained objects.
  *
  * @param schemaName - The schema name to drop
