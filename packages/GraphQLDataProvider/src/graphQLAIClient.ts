@@ -1987,7 +1987,9 @@ export interface RunDecisionParams {
     PromptName?: string;
 
     /**
-     * Bounds each model call on the server, in milliseconds. Unset means unbounded.
+     * Bounds each model call on the server, in milliseconds. Unset or not positive, the server uses
+     * its default, `RunDecisionResolver.DEFAULT_TIMEOUT_MS`; a value over
+     * `RunDecisionResolver.MAX_TIMEOUT_MS` is cut to it. A call is never unbounded.
      */
     TimeoutMS?: number;
 }
