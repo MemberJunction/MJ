@@ -22,6 +22,15 @@ import {
  * How a driver calls back into `InferProcessor`'s overridable steps, so that a processor extension
  * registered under `DataFeatureSpec.ProcessorExtensionKey` keeps working whichever driver runs.
  * `InferProcessor` builds this from closures over its own protected hooks.
+ *
+ * **The contract for drivers.** Every driver must call `BeforeBuildContext` and then `BuildPromptData`
+ * once per record, before computing anything, so that an extension's context shaping applies to
+ * every pipeline type. `BeforePromptExecute` and `AfterPromptExecute` are LLM-shaped: they take the
+ * chat prompt's `AIPromptParams` and `AIPromptRunResult`. A driver that runs an `AIPromptRunner`
+ * chat prompt must call both. A driver that doesn't (a Decision model, for example) doesn't call
+ * them. An extension that overrides `beforePromptExecute` or `afterPromptExecute` therefore stops
+ * firing once its pipeline switches to such a type, and should move that logic into
+ * `buildPromptData` or into the driver.
  */
 export interface FeaturePipelineComputeHooks {
     /** Builds the data object passed to the prompt (`InferProcessor.buildPromptData`). */
