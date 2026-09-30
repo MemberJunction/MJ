@@ -2,7 +2,7 @@
 
 MemberJunction AI provider for ElevenLabs. The package ships two drivers:
 
-- **`ElevenLabsAudioGenerator`** — `BaseAudioGenerator` implementation for text-to-speech, voice management, and pronunciation dictionaries (documented below).
+- **`ElevenLabsAudioGenerator`** — `BaseTextToSpeech` implementation for text-to-speech, voice management, and pronunciation dictionaries (documented below).
 - **`ElevenLabsRealtime`** — `BaseRealtimeModel` driver for the **ElevenLabs Agents Platform**, powering realtime full-duplex voice sessions (see the next section).
 
 ## Realtime driver — `ElevenLabsRealtime` (Agents Platform)
@@ -43,7 +43,7 @@ For the full architecture (topologies, co-agent model, capability matrix across 
 
 ## Audio generation — `ElevenLabsAudioGenerator`
 
-This driver implements the `BaseAudioGenerator` interface to provide high-quality voice synthesis, voice management, and pronunciation dictionary support.
+This driver implements `BaseTextToSpeech` to provide high-quality voice synthesis, voice management, and pronunciation dictionary support. It still extends the deprecated `BaseAudioGenerator`, so existing callers keep working.
 
 ## Architecture
 
@@ -137,7 +137,7 @@ for (const model of models) {
 
 ## Class Registration
 
-- `ElevenLabsAudioGenerator` via `@RegisterClass(BaseAudioGenerator, 'ElevenLabsAudioGenerator')`
+- `ElevenLabsAudioGenerator` via `@RegisterClass(BaseTextToSpeech, 'ElevenLabsAudioGenerator')`, and via `@RegisterClass(BaseAudioGenerator, 'ElevenLabsAudioGenerator')` for callers of the deprecated base
 - `ElevenLabsRealtime` via `@RegisterClass(BaseRealtimeModel, 'ElevenLabsRealtime')`
 
 ## Dependencies

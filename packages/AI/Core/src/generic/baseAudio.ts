@@ -1,5 +1,8 @@
 import { BaseModel, BaseParams, ModelUsage } from "./baseModel";
 import { ChatResult } from "./chat.types";
+import { TranscribeAudioWithSplitting } from "./baseSpeechToText";
+import type { BaseSpeechToText } from "./baseSpeechToText";
+import type { BaseTextToSpeech } from "./baseTextToSpeech";
 
 /**
  * One piece of a transcription: the text, plus the audio duration the provider reported for it.
@@ -14,11 +17,20 @@ export type TranscriptionPiece = {
 };
 
 /**
- * Base class for all audio generation models. Each AI model will have a sub-class implementing the abstract methods in this base class. Not all
- * sub-classes will support all methods. If a method is not supported an exception will be thrown, use the GetSupportedMethods method to determine
- * what methods are supported by a specific sub-class.
+ * Base class for audio models that carries both text-to-speech and speech-to-text. Not all
+ * sub-classes support all methods: an unsupported method throws, and `GetSupportedMethods` names
+ * the ones a sub-class implements.
+ *
+ * It spans two model types (`TTS` and `Speech to Text`), so it has been split. It stays, and keeps
+ * working, for drivers and callers that already use it: it implements both halves, so any of its
+ * drivers can be used where either new base class is expected. The drivers MemberJunction ships
+ * still extend it and are also registered against the new class or classes they implement, under
+ * the same keys.
+ *
+ * @deprecated Use {@link BaseTextToSpeech} for text-to-speech and {@link BaseSpeechToText} for
+ * speech-to-text.
  */
-export abstract class BaseAudioGenerator extends BaseModel {
+export abstract class BaseAudioGenerator extends BaseModel implements BaseTextToSpeech, BaseSpeechToText {
     public abstract CreateSpeech(params: TextToSpeechParams): Promise<SpeechResult>;
     public abstract SpeechToText(params: SpeechToTextParams): Promise<SpeechResult>;
     public abstract GetVoices(): Promise<VoiceInfo[]>;
@@ -27,16 +39,8 @@ export abstract class BaseAudioGenerator extends BaseModel {
     public abstract GetSupportedMethods(): Promise<string[]>
 
     /**
-     * Transcribes audio that may exceed the provider's upload ceiling, splitting it first when
-     * it does, and joins the pieces back into one transcript and one duration.
-     *
-     * Pieces are transcribed **sequentially**, not in parallel: transcription providers rate limit
-     * by audio-seconds per minute, so firing an hour of audio at once buys nothing but 429s, and a
-     * partial failure mid-way would leave a transcript with an unmarked hole in it.
-     *
-     * The returned `durationSeconds` is the sum across pieces — which is what the provider bills —
-     * and is left undefined if ANY piece failed to report one, since a partial sum would understate
-     * the bill while looking like a complete answer.
+     * Transcribes audio that may exceed the provider's upload ceiling, splitting it first when it
+     * does. See {@link TranscribeAudioWithSplitting}, which this calls, for the behavior.
      *
      * @param audio The full audio to transcribe
      * @param maxUploadBytes The provider's hard upload ceiling
@@ -53,51 +57,7 @@ export abstract class BaseAudioGenerator extends BaseModel {
         providerLabel: string,
         transcribeOne: (piece: Buffer) => Promise<TranscriptionPiece>
     ): Promise<TranscriptionPiece> {
-        const limitMB = (maxUploadBytes / (1024 * 1024)).toFixed(0);
-
-        if (audio.byteLength <= maxUploadBytes) {
-            return await transcribeOne(audio);
-        }
-
-        if (!splitter) {
-            throw new Error(
-                `Audio is ${(audio.byteLength / (1024 * 1024)).toFixed(1)}MB, above ${providerLabel}'s ${limitMB}MB ` +
-                    `transcription limit. Assign an AudioSplitter to the Splitter property to transcribe ` +
-                    `audio this size.`,
-            );
-        }
-
-        const pieces = await splitter.Split(audio, splitTargetBytes);
-        if (pieces.length === 0) {
-            throw new Error('The configured AudioSplitter returned no pieces');
-        }
-
-        const transcripts: string[] = [];
-        let totalDurationSeconds = 0;
-        let everyPieceReportedDuration = true;
-
-        for (const piece of pieces) {
-            // A piece the splitter left oversized would fail at the API with a size error naming
-            // neither the splitter nor which piece; say so here instead.
-            if (piece.byteLength > maxUploadBytes) {
-                throw new Error(
-                    `The configured AudioSplitter produced a ${(piece.byteLength / (1024 * 1024)).toFixed(1)}MB ` +
-                        `piece, above ${providerLabel}'s ${limitMB}MB limit`,
-                );
-            }
-            const transcribed = await transcribeOne(piece);
-            transcripts.push(transcribed.text);
-            if (transcribed.durationSeconds == null) {
-                everyPieceReportedDuration = false;
-            } else {
-                totalDurationSeconds += transcribed.durationSeconds;
-            }
-        }
-
-        return {
-            text: transcripts.filter((t) => t.length > 0).join(' '),
-            durationSeconds: everyPieceReportedDuration ? totalDurationSeconds : undefined,
-        };
+        return TranscribeAudioWithSplitting(audio, maxUploadBytes, splitTargetBytes, splitter, providerLabel, transcribeOne);
     }
 }
 

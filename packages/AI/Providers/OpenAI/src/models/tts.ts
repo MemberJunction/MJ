@@ -1,5 +1,5 @@
 import { RegisterClass } from "@memberjunction/global";
-import { AudioSplitter, BaseAudioGenerator, TextToSpeechParams, SpeechResult, SpeechToTextParams, TranscriptionPiece, VoiceInfo, AudioModel, ModelUsage, PronounciationDictionary, ErrorAnalyzer } from "@memberjunction/ai";
+import { AudioSplitter, BaseAudioGenerator, BaseSpeechToText, BaseTextToSpeech, TextToSpeechParams, SpeechResult, SpeechToTextParams, TranscriptionPiece, VoiceInfo, AudioModel, ModelUsage, PronounciationDictionary, ErrorAnalyzer } from "@memberjunction/ai";
 import { OpenAI, toFile } from "openai";
 
 /**
@@ -33,7 +33,16 @@ function supportsVerboseJson(model: string): boolean {
     return model.toLowerCase().startsWith("whisper");
 }
 
+/**
+ * OpenAI audio: text-to-speech (`gpt-4o-mini-tts`) and speech-to-text (Whisper).
+ *
+ * It does both, so it is registered against {@link BaseTextToSpeech} and {@link BaseSpeechToText}
+ * under the key model metadata names. It still extends, and is registered against,
+ * `BaseAudioGenerator`, so callers that resolve it through the old base keep working.
+ */
 @RegisterClass(BaseAudioGenerator, "OpenAIAudioGenerator")
+@RegisterClass(BaseTextToSpeech, "OpenAIAudioGenerator")
+@RegisterClass(BaseSpeechToText, "OpenAIAudioGenerator")
 export class OpenAIAudioGenerator extends BaseAudioGenerator {
     private _openAI: OpenAI;
 
