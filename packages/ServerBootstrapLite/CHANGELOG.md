@@ -1,5 +1,145 @@
 # @memberjunction/server-bootstrap-lite
 
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 48f77ea: Add `@memberjunction/ai-betty` — a `BaseLLM` provider for **Betty**, the MJ-native
+  organization-scoped assistant, registered as `BettyLLM`.
+
+  This sits **alongside** `@memberjunction/ai-betty-bot` rather than replacing it. The two target
+  different services with different wire protocols: `BettyBotLLM` exchanges its key for a JWT at
+  `POST /settings` and posts `{ input }` to `POST /response`; `BettyLLM` uses the API key directly as
+  a bearer and posts `{ message, conversationId }` to `POST /messages`.
+
+  **No breaking change.** `@memberjunction/ai-betty-bot` is untouched, so no existing deployment has
+  to move and nobody needs to be contacted or given a deadline. Both can run in one instance;
+  migrating a deployment is repointing one `AIModelVendor.DriverClass` from `BettyBotLLM` to
+  `BettyLLM`, and rolling back is repointing it back.
+
+  A separate driver class rather than a configuration mode on the existing one, because
+  `GetAIAPIKey()` is keyed by driver class — one class serving both protocols would read a single
+  `AI_VENDOR_API_KEY__BETTYBOTLLM` for two unrelated services, and a misconfiguration would silently
+  send a customer's key to the wrong host.
+
+  Configuration: `BETTY_API_BASE_URL` (required, no default — Betty is deployed per customer, so a
+  default risks answering from the wrong tenant) and `AI_VENDOR_API_KEY__BETTYLLM`.
+
+  Notes:
+  - Citations keep the legacy response shape (`choices[1]` formatted, `choices[2]` raw JSON with
+    `finish_reason: 'references_json'`), so anything already parsing `BettyBotLLM` output survives a
+    `DriverClass` repoint.
+  - Multi-turn is handled correctly. The legacy provider uses `messages.find(m => m.role === user)`,
+    which returns the _first_ match and silently discards follow-ups; this provider sends the latest
+    user turn and passes the earlier ones as advisory, non-authorizing `context.text`.
+  - Streaming is not implemented yet (`SupportsStreaming` is `false`). The API does support SSE via
+    `Accept: text/event-stream`, so this is a follow-up rather than a dead end.
+
+- Updated dependencies [ddcd666]
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [48f77ea]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [5da3ad2]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [520bd09]
+- Updated dependencies [520bd09]
+- Updated dependencies [307da67]
+- Updated dependencies [7110019]
+- Updated dependencies [9d4a28a]
+- Updated dependencies [a7da50b]
+- Updated dependencies [1d43161]
+- Updated dependencies [7110019]
+- Updated dependencies [f2a4171]
+- Updated dependencies [e482249]
+- Updated dependencies [37e2f6b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [351ba9f]
+- Updated dependencies [c4993f3]
+  - @memberjunction/ai-elevenlabs@6.2.0-edge.1
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/ai-deepinfra@6.2.0-edge.1
+  - @memberjunction/ai-siliconflow@6.2.0-edge.1
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.1
+  - @memberjunction/ai-agent-harness@6.2.0-edge.1
+  - @memberjunction/ai-agents@6.2.0-edge.1
+  - @memberjunction/ai-core-plus@6.2.0-edge.1
+  - @memberjunction/ai-prompts@6.2.0-edge.1
+  - @memberjunction/core-entities-server@6.2.0-edge.1
+  - @memberjunction/ai-betty@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/actions-base@6.2.0-edge.1
+  - @memberjunction/actions@6.2.0-edge.1
+  - @memberjunction/task-graph@6.2.0-edge.1
+  - @memberjunction/storage@6.2.0-edge.1
+  - @memberjunction/ai-anthropic@6.2.0-edge.1
+  - @memberjunction/actions-apollo@6.2.0-edge.1
+  - @memberjunction/actions-bizapps-accounting@6.2.0-edge.1
+  - @memberjunction/actions-bizapps-formbuilders@6.2.0-edge.1
+  - @memberjunction/ai-agent-manager@6.2.0-edge.1
+  - @memberjunction/ai-blackforestlabs@6.2.0-edge.1
+  - @memberjunction/ai-cerebras@6.2.0-edge.1
+  - @memberjunction/ai-cohere@6.2.0-edge.1
+  - @memberjunction/ai-groq@6.2.0-edge.1
+  - @memberjunction/ai-lmstudio@6.2.0-edge.1
+  - @memberjunction/ai-local-embeddings@6.2.0-edge.1
+  - @memberjunction/ai-ollama@6.2.0-edge.1
+  - @memberjunction/ai-reranker@6.2.0-edge.1
+  - @memberjunction/ai-vectors-pinecone@6.2.0-edge.1
+  - @memberjunction/communication-types@6.2.0-edge.1
+  - @memberjunction/content-autotagging@6.2.0-edge.1
+  - @memberjunction/core-actions@6.2.0-edge.1
+  - @memberjunction/generic-database-provider@6.2.0-edge.1
+  - @memberjunction/predictive-studio@6.2.0-edge.1
+  - @memberjunction/react-linter@6.2.0-edge.1
+  - @memberjunction/record-set-processor@6.2.0-edge.1
+  - @memberjunction/search-engine@6.2.0-edge.1
+  - @memberjunction/tag-engine-base@6.2.0-edge.1
+  - @memberjunction/templates@6.2.0-edge.1
+  - @memberjunction/testing-engine@6.2.0-edge.1
+  - @memberjunction/ai-form-builder@6.2.0-edge.1
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.1
+  - @memberjunction/queue@6.2.0-edge.1
+  - @memberjunction/ai-engine-base@6.2.0-edge.1
+  - @memberjunction/ai-assemblyai@6.2.0-edge.1
+  - @memberjunction/ai-azure@6.2.0-edge.1
+  - @memberjunction/ai-bedrock@6.2.0-edge.1
+  - @memberjunction/ai-betty-bot@6.2.0-edge.1
+  - @memberjunction/ai-fireworks@6.2.0-edge.1
+  - @memberjunction/ai-gemini@6.2.0-edge.1
+  - @memberjunction/ai-heygen@6.2.0-edge.1
+  - @memberjunction/ai-inception@6.2.0-edge.1
+  - @memberjunction/ai-inworld@6.2.0-edge.1
+  - @memberjunction/ai-llamacpp@6.2.0-edge.1
+  - @memberjunction/ai-minimax@6.2.0-edge.1
+  - @memberjunction/ai-mistral@6.2.0-edge.1
+  - @memberjunction/ai-openai@6.2.0-edge.1
+  - @memberjunction/ai-openrouter@6.2.0-edge.1
+  - @memberjunction/ai-recommendations-rex@6.2.0-edge.1
+  - @memberjunction/ai-vertex@6.2.0-edge.1
+  - @memberjunction/ai-zhipu@6.2.0-edge.1
+  - @memberjunction/ai-xai@6.2.0-edge.1
+  - @memberjunction/actions-bizapps-crm@6.2.0-edge.1
+  - @memberjunction/actions-bizapps-lms@6.2.0-edge.1
+  - @memberjunction/actions-bizapps-social@6.2.0-edge.1
+  - @memberjunction/doc-utils@6.2.0-edge.1
+  - @memberjunction/encryption@6.2.0-edge.1
+  - @memberjunction/record-comparison@6.2.0-edge.1
+  - @memberjunction/scheduling-actions@6.2.0-edge.1
+  - @memberjunction/scheduling-engine-base@6.2.0-edge.1
+  - @memberjunction/scheduling-engine@6.2.0-edge.1
+  - @memberjunction/geo-core@6.2.0-edge.1
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.1
+  - @memberjunction/ai-vectors-qdrant@6.2.0-edge.1
+  - @memberjunction/ai-vectors-sqlserver@6.2.0-edge.1
+  - @memberjunction/ai-vectors-pgvector@6.2.0-edge.1
+  - @memberjunction/data-context-server@6.2.0-edge.1
+
 ## 6.2.0-edge.0
 
 ### Minor Changes

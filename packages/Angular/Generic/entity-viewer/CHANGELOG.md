@@ -1,5 +1,119 @@
 # @memberjunction/ng-entity-viewer
 
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- a3539d2: Business-user vocabulary: surface the user's own domain nouns instead of platform jargon on the default data-browsing surfaces.
+  - `EntityInfo.DisplayNamePlural` (`@memberjunction/core`): a business-friendly plural of the entity's display name ("Contacts", "Companies", "Addresses"), derived from `DisplayNameOrName` via the existing `GeneratePluralName` helper, so a per-deployment `DisplayName` override ("Member") flows through as "Members". It keeps the name's leading capital, so irregular plurals read "People" and "Children" rather than "people". Display-only; never a lookup key. Unit-tested.
+  - Entity viewer, grid, and cards empty states now say "No Contacts to display" instead of "No records found" / "No data to display", falling back to the generic copy when no entity is in scope.
+  - Data Explorer: the word "entity" is translated out of the default data-browsing app (both search placeholders, the sidebar's "Record Types" heading, loading text, counts, filter pill, empty states, recent section). Bindings, CSS classes, and agent-tool contracts are untouched.
+  - Sharing Center: section headings show friendly labels ("Dashboards", "Artifacts", "Rules") via a display-only label map. The underlying `DomainName` stays as-is because it is the lookup key that drives Revoke, audit mapping, and icon selection. Unmapped custom domains have a trailing " Permissions" stripped. Sections are sorted by the label the user reads.
+  - User Routines: softened the editor loading text.
+
+  Ported from #3043 (the runtime, no-migration half). The stored `Entity.DisplayNamePlural` column, its CodeGen completion, and the non-English plural seam are tracked separately.
+
+- beacbb2: fix(ng-entity-viewer): Configure View "Save" on the default view no longer silently drops Smart/Traditional filters
+
+  Fixes #4220. In the Data Explorer, opening **Configure View → Filters** while the entity's default (unsaved) view was selected, setting a Smart Filter prompt or building a Traditional Filter, and clicking **Save** did nothing visible: no view was created, no error shown, the grid stayed unfiltered. Data Explorer lands users on the default view, so this was the first thing a new user hit.
+  - **A default-view Save that carries a filter now creates a named view.** The config panel always emitted `SmartFilterEnabled` / `SmartFilterPrompt` / `FilterState`; `OnSaveDefaultViewSettings` discarded them, because the `default-view-setting/<Entity>` user setting it writes is an `IGridState` with nowhere to put a filter. Such a save is really a view creation missing a name, so it now stages the panel's full configuration and opens the quick-save dialog to collect one, then routes through `OnSaveView` → `persistNewView`. Because it rejoins the normal save path, hosts that own their own persistence (`AutoSaveView` false) receive `SaveViewRequested` with the filter intact rather than a `SaveDefaultsRequested` that would drop it. A Save with no filter still writes the per-user preference exactly as before.
+  - **The quick-save path no longer discards a smart filter.** `executeQuickSave` hard-coded `SmartFilterEnabled: false` and `SmartFilterPrompt: ''` when building its `ViewSaveEvent`, so a smart filter was lost on that route too, independently of the default-view bug.
+  - **The name prompt suggests a name.** A smart filter describes the view better than anything generated, so the prompt becomes the name (`Accounts — active west coast accounts`, elided past 60 characters); a traditional filter gets `Accounts — Filtered`. The field is focused with its text selected, so the suggestion is one click to accept and one keystroke to replace. `QuickSaveDialogComponent` gains a `SuggestedName` input, which is ignored when editing an existing view.
+  - **The dialog's "Customize columns, filters & sorting…" escape hatch keeps the filter.** The config panel resets its filter state whenever it opens without a `ViewEntity`, so returning to it from the name prompt would have dropped the filter that had just been configured — the same failure this fix exists to remove. `ViewConfigPanelComponent` gains `PendingNewViewFilterState`, `PendingNewViewSmartFilterEnabled` and `PendingNewViewSmartFilterPrompt`, alongside the `PendingNewView*` inputs already used for name, description and sharing, and reopens in the matching filter mode (traditional or smart). `ExternalFilterState` can't do this job: the staged filter is the same object the panel is already bound to, so the input never registers a change. This also repairs the pre-existing quick-save → Customize round trip, where a smart filter was lost the same way.
+  - Abandoning the name prompt, or switching the workspace to a different entity, discards the staged configuration, so an abandoned filter cannot surface on the next save.
+  - If the save fails or a host cancels it via `BeforeViewSave`, the name prompt reopens with the staged filter intact so the user can retry or cancel. `ViewWorkspaceComponent.OnSaveView` (and its deprecated `onSaveView` alias) now resolves `true`/`false` to report whether the view was saved.
+
+- 2d4bf8d: Grid exports now carry the columns the grid shows, and "Send Message" is offered only for entities that support communication.
+  - `EntityDataGridComponent.GetExportColumns()` (now public) reads the rendered AG Grid columns: on-screen order, visible columns only, on-screen headers, entity field spelling. It used to read the host-declared `Columns`, so a grid drawn from a saved grid state, or with a column the user had dragged, exported a different column set in a different order. The row-number and width-filler columns are left out. Columns no longer carry grid pixel widths, which Excel read as characters; Excel auto-fits them instead.
+  - The workspace toolbar's Export uses the active renderer's columns through the new optional `IViewRenderer.GetExportColumns()` (implemented by the grid renderer, exposed as `EntityViewerComponent.GetExportColumns()`). For view types without a column layout it falls back to the view's saved columns, now sorted by `orderIndex`, headed by the user's rename, and matched to entity fields regardless of case. Settings for fields that no longer exist, and fields the user is denied read access to, are dropped, as the grid drops them.
+  - "Send Message", in the toolbar and in the overflow menu, now shows only when the entity has an active Entity Communication Message Type (read from the `CommunicationEngineBase` instance for the grid's provider). Before, the overflow item appeared on every entity whenever a row was selected. Nothing in `ng-entity-viewer` handles `CommunicationRequested` yet, so hosts that show the button still own the dialog.
+  - The grid's entity-action auto-load also reads `EntityActionEngineBase` for the grid's provider instead of the global singleton.
+
+- d67c8c0: Reveal hover-gated row actions on keyboard focus, and stop a card collapsing under
+  its own content.
+  - `view-selector` and `home-dashboard` gated row/pin actions on `:hover` alone. At
+    `opacity: 0` they were pointer-only — invisible to a tabbing keyboard user and
+    unreachable without a mouse. Added `:focus-within`.
+  - `ps-catalog` cards had no `flex-shrink: 0`. The default shrink compressed the guide
+    card below its own content at 1280x720 (46px vs 166px) and the overflow landed
+    _behind_ the `position: relative` gallery cards, making filter chips genuinely
+    unclickable.
+
+  Note: roughly 20 other stylesheets still gate row actions on `:hover` alone. Not
+  addressed here — worth a dedicated sweep.
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [520bd09]
+- Updated dependencies [307da67]
+- Updated dependencies [a7da50b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [920bef8]
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/actions-base@6.2.0-edge.1
+  - @memberjunction/communication-types@6.2.0-edge.1
+  - @memberjunction/export-engine@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/ng-entity-action-ux@6.2.0-edge.1
+  - @memberjunction/ng-export-service@6.2.0-edge.1
+  - @memberjunction/ng-filter-builder@6.2.0-edge.1
+  - @memberjunction/ng-list-management@6.2.0-edge.1
+  - @memberjunction/ng-notifications@6.2.0-edge.1
+  - @memberjunction/ng-record-changes@6.2.0-edge.1
+  - @memberjunction/ng-shared-generic@6.2.0-edge.1
+  - @memberjunction/ng-timeline@6.2.0-edge.1
+  - @memberjunction/ng-ui-components@6.2.0-edge.1
+  - @memberjunction/ng-base-types@6.2.0-edge.1
+  - @memberjunction/ng-map-view@6.2.0-edge.1
+  - @memberjunction/ng-record-merge@6.2.0-edge.1
+  - @memberjunction/ng-pagination@6.2.0-edge.1
+
 ## 6.2.0-edge.0
 
 ### Patch Changes
