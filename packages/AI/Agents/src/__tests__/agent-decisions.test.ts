@@ -14,12 +14,13 @@ import {
     MJAIAgentRunEntityExtended,
     MJAIPromptEntityExtended,
 } from '@memberjunction/ai-core-plus';
-import { AgentDecisionService } from '../AgentDecisionService';
+import { AgentDecisionService, AgentDecisionAskParams } from '../AgentDecisionService';
 import { BaseAgent } from '../base-agent';
 import { LoopAgentType } from '../agent-types/loop-agent-type';
 import {
     DEFAULT_LOOP_AGENT_PROMPT_PARAMS,
     DEFAULT_RESPONSE_TYPE_INCLUSION_RULES,
+    MAX_DECISION_REQUESTS_PER_TURN,
 } from '../agent-types/loop-agent-prompt-params';
 
 // Quiet logging
@@ -47,6 +48,9 @@ class MockStepEntity {
     public ErrorMessage?: string;
     public InputData?: unknown;
     public OutputData?: unknown;
+    public ParentID?: string | null;
+    public TargetLogID?: string | null;
+    public PromptRun?: MJAIPromptRunEntity;
 
     constructor(id: string) {
         this.ID = id;
@@ -195,8 +199,10 @@ describe('Agent Decisions', () => {
                 },
             };
 
-            const mapped = AgentDecisionService.ToDecisionQuestions(input);
+            const mapping = AgentDecisionService.ToDecisionQuestions(input);
+            const mapped = mapping.Questions;
 
+            expect(mapping.Invalid).toEqual([]);
             expect(mapped.likeQ).toEqual({
                 Kind: 'Likelihood',
                 Instructions: 'Is this high priority?',
@@ -936,6 +942,201 @@ describe('Agent Decisions', () => {
             };
 
             expect(mergedParamsWithEnabled.includeResponseTypeDefinition.decisions !== false).toBe(true);
+        });
+    });
+
+    describe('12. Malformed decision requests never throw away the turn', () => {
+        let agent: TestAgent;
+        let createdSteps: MockStepEntity[];
+        let mockService: AgentDecisionService;
+
+        /** Decision requests as the loop hands them over: parsed from the model's JSON, their shapes unchecked. */
+        const modelRequests = (json: string): AgentDecisionRequest[] => JSON.parse(json);
+        const stepParams = (): DecisionStepParams => ({ contextUser: {} as UserInfo, conversationMessages: [] });
+        const answered = (): AIDecisionRunResult => ({ success: true, Answers: { ok: { Kind: 'Likelihood', Probability: 0.7 } } });
+        const stepNamed = (name: string): MockStepEntity | undefined => createdSteps.find(s => s.StepName?.endsWith(`Decision: ${name}`));
+
+        beforeEach(() => {
+            agent = new TestAgent();
+            createdSteps = [];
+            seedDecisionRun(agent, createdSteps);
+            mockService = new AgentDecisionService();
+            agent.setAgentDecisionService(mockService);
+        });
+
+        it('ToDecisionQuestions drops each invalid question with a reason naming it, and keeps the valid ones', () => {
+            const mapping = AgentDecisionService.ToDecisionQuestions({
+                ok: { kind: 'Likelihood', instructions: 'Is it fine?' },
+                nothing: null,
+                words: 'Is it fine?',
+                noInstructions: { kind: 'Likelihood' },
+                unknownKind: { kind: 'Maybe', instructions: 'Is it fine?' },
+                choiceNoOptions: { kind: 'Choice', instructions: 'Pick one' },
+                choiceEmptyOptions: { kind: 'Choice', instructions: 'Pick one', options: [] },
+                choiceBadOption: { kind: 'Choice', instructions: 'Pick one', options: [{ value: 'a' }] },
+                scoreNoLevels: { kind: 'Score', instructions: 'Rate it' },
+                scoreEmptyLevels: { kind: 'Score', instructions: 'Rate it', levels: [] },
+            });
+
+            expect(Object.keys(mapping.Questions)).toEqual(['ok']);
+            const invalidKeys = ['nothing', 'words', 'noInstructions', 'unknownKind', 'choiceNoOptions', 'choiceEmptyOptions', 'choiceBadOption', 'scoreNoLevels', 'scoreEmptyLevels'];
+            expect(mapping.Invalid).toHaveLength(invalidKeys.length);
+            for (const key of invalidKeys) {
+                expect(mapping.Invalid.some(reason => reason.startsWith(`Question "${key}"`))).toBe(true);
+            }
+            expect(mapping.Invalid.find(reason => reason.includes('unknownKind'))).toContain('unknown kind "Maybe"');
+        });
+
+        it('fails a request with no valid question, giving the reasons, while its siblings still run', async () => {
+            const ask = vi.spyOn(mockService, 'Ask').mockResolvedValue(answered());
+
+            const results = await agent.testExecuteDecisionRequestsAsSteps(modelRequests(JSON.stringify([
+                { id: 'broken', state: 's', questions: { bad: null, pick: { kind: 'Choice', instructions: 'Pick one' } } },
+                { id: 'fine', state: 's', questions: { ok: { kind: 'Likelihood', instructions: 'Fine?' } } },
+            ])), {}, undefined, stepParams());
+
+            expect(results.map(r => [r.id, r.success])).toEqual([['broken', false], ['fine', true]]);
+            expect(results[0].error).toContain('No valid questions');
+            expect(results[0].error).toContain('Question "bad"');
+            expect(results[0].error).toContain('Question "pick"');
+            expect(ask).toHaveBeenCalledOnce();
+            expect(stepNamed('broken')?.Status).toBe('Failed');
+            expect(stepNamed('fine')?.Status).toBe('Completed');
+        });
+
+        it('asks only the valid questions of a request, and records the dropped ones on its step', async () => {
+            const ask = vi.spyOn(mockService, 'Ask').mockResolvedValue(answered());
+
+            const results = await agent.testExecuteDecisionRequestsAsSteps(modelRequests(JSON.stringify([
+                { id: 'mixed', state: 's', questions: { ok: { kind: 'Likelihood', instructions: 'Fine?' }, bad: { kind: 'Score', instructions: 'Rate it', levels: [] } } },
+            ])), {}, undefined, stepParams());
+
+            expect(results[0].success).toBe(true);
+            expect(Object.keys(ask.mock.calls[0][0].Questions)).toEqual(['ok']);
+            const output = typeof createdSteps[0].OutputData === 'string' ? JSON.parse(createdSteps[0].OutputData) : createdSteps[0].OutputData;
+            expect(output.droppedQuestions).toEqual([expect.stringContaining('Question "bad"')]);
+        });
+
+        it('finishes the step as failed when anything throws after it is created, and never leaves it Running', async () => {
+            vi.spyOn(mockService, 'Ask').mockImplementation(async (args) => {
+                if (args.State === 'explodes') {
+                    throw new Error('socket hang up');
+                }
+                return answered();
+            });
+
+            const results = await agent.testExecuteDecisionRequestsAsSteps([
+                { id: 'throws', state: 'explodes', questions: { ok: { kind: 'Likelihood', instructions: 'Fine?' } } },
+                { id: 'fine', state: 'calm', questions: { ok: { kind: 'Likelihood', instructions: 'Fine?' } } },
+            ], {}, undefined, stepParams());
+
+            expect(results[0]).toMatchObject({ id: 'throws', success: false });
+            expect(results[0].error).toContain('socket hang up');
+            expect(results[1]).toMatchObject({ id: 'fine', success: true });
+            expect(stepNamed('throws')?.Status).toBe('Failed');
+            expect(stepNamed('throws')?.ErrorMessage).toContain('socket hang up');
+        });
+
+        it('settles a request that cannot even start as a failed result, without rejecting its siblings', async () => {
+            vi.spyOn(mockService, 'Ask').mockResolvedValue(answered());
+
+            const results = await agent.testExecuteDecisionRequestsAsSteps(modelRequests(JSON.stringify([
+                null,
+                { id: 'fine', state: 's', questions: { ok: { kind: 'Likelihood', instructions: 'Fine?' } } },
+            ])), {}, undefined, stepParams());
+
+            expect(results).toHaveLength(2);
+            expect(results[0]).toMatchObject({ id: 'request 1', success: false });
+            expect(results[0].error).toContain('The decision request failed');
+            expect(results[1]).toMatchObject({ id: 'fine', success: true });
+        });
+
+        it('Ask returns a failed result, never a throw, when the AI metadata cannot load', async () => {
+            const configSpy = vi.spyOn(AIEngine.Instance, 'Config').mockRejectedValueOnce(new Error('metadata unavailable'));
+            try {
+                const result = await new AgentDecisionService().Ask({ State: 's', Questions: {}, ContextUser: {} as UserInfo });
+
+                expect(result.success).toBe(false);
+                expect(result.errorMessage).toContain('metadata unavailable');
+                expect(result.Answers).toEqual({});
+            } finally {
+                configSpy.mockRestore();
+            }
+        });
+
+        it('answers at most MAX_DECISION_REQUESTS_PER_TURN (8) requests per turn; each one over the cap gets a failed result saying why', async () => {
+            const ask = vi.spyOn(mockService, 'Ask').mockResolvedValue(answered());
+            const requests: AgentDecisionRequest[] = Array.from({ length: 10 }, (_, i) => ({ id: `r${i}`, state: 's', questions: { ok: { kind: 'Likelihood', instructions: 'Fine?' } } }));
+
+            const results = await agent.testExecuteDecisionRequestsAsSteps(requests, {}, undefined, stepParams());
+
+            expect(MAX_DECISION_REQUESTS_PER_TURN).toBe(8);
+            expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.decisionsMaxRequests).toBe(MAX_DECISION_REQUESTS_PER_TURN);
+            expect(ask).toHaveBeenCalledTimes(8);
+            expect(createdSteps).toHaveLength(8);
+            expect(results.map(r => r.success)).toEqual([true, true, true, true, true, true, true, true, false, false]);
+            expect(results.slice(8).map(r => r.id)).toEqual(['r8', 'r9']);
+            expect(results[9].error).toContain('at most 8 decision requests');
+        });
+
+        it('reads the per-turn cap from decisionsMaxRequests', async () => {
+            const ask = vi.spyOn(mockService, 'Ask').mockResolvedValue(answered());
+            const requests: AgentDecisionRequest[] = Array.from({ length: 5 }, (_, i) => ({ id: `r${i}`, state: 's', questions: { ok: { kind: 'Likelihood', instructions: 'Fine?' } } }));
+
+            const results = await agent.testExecuteDecisionRequestsAsSteps(requests, {}, { decisionsMaxRequests: 2 }, stepParams());
+
+            expect(ask).toHaveBeenCalledTimes(2);
+            expect(results.filter(r => r.success).map(r => r.id)).toEqual(['r0', 'r1']);
+            expect(results[4].error).toContain('at most 2 decision requests');
+        });
+    });
+
+    describe('13. Decision calls link their prompt runs', () => {
+        let agent: TestAgent;
+        let createdSteps: MockStepEntity[];
+        let mockService: AgentDecisionService;
+
+        /** Every call answers, and carries a prompt run named after the state it was asked about. */
+        const answerWithRun = async (args: AgentDecisionAskParams): Promise<AIDecisionRunResult> => {
+            const promptRun = { ID: `prun-${String(args.State)}` } satisfies Pick<MJAIPromptRunEntity, 'ID'>;
+            return { success: true, Answers: { ok: { Kind: 'Likelihood', Probability: 0.7 } }, promptRun: promptRun as MJAIPromptRunEntity };
+        };
+
+        beforeEach(() => {
+            agent = new TestAgent();
+            createdSteps = [];
+            seedDecisionRun(agent, createdSteps);
+            mockService = new AgentDecisionService();
+            agent.setAgentDecisionService(mockService);
+            vi.spyOn(mockService, 'Ask').mockImplementation(answerWithRun);
+        });
+
+        it("links a single-state request's prompt run to its Decision step", async () => {
+            await agent.testExecuteDecisionRequestsAsSteps(
+                [{ id: 'once', state: 'only', questions: { ok: { kind: 'Likelihood', instructions: 'Fine?' } } }],
+                {}, undefined, { contextUser: {} as UserInfo, conversationMessages: [] },
+            );
+
+            expect(createdSteps).toHaveLength(1);
+            expect(createdSteps[0].TargetLogID).toBe('prun-only');
+            expect(createdSteps[0].PromptRun?.ID).toBe('prun-only');
+        });
+
+        it('gives each forEachItemIn item its own child step carrying that call\'s prompt run, and the parent none', async () => {
+            const results = await agent.testExecuteDecisionRequestsAsSteps(
+                [{ id: 'batch', forEachItemIn: 'payload.items', questions: { ok: { kind: 'Likelihood', instructions: 'Fine?' } } }],
+                { items: ['a', 'b', 'c'] }, undefined, { contextUser: {} as UserInfo, conversationMessages: [] },
+            );
+
+            expect(results[0].success).toBe(true);
+            const [parent, ...items] = createdSteps;
+            expect(parent.StepName).toContain('Decision: batch');
+            expect(parent.PromptRun).toBeUndefined();
+            expect(parent.Status).toBe('Completed');
+            expect(items).toHaveLength(3);
+            expect(items.every(s => s.StepType === 'Decision' && s.ParentID === parent.ID && s.Status === 'Completed')).toBe(true);
+            expect(items.map(s => s.TargetLogID).sort()).toEqual(['prun-a', 'prun-b', 'prun-c']);
+            expect(items.map(s => s.PromptRun?.ID).sort()).toEqual(['prun-a', 'prun-b', 'prun-c']);
         });
     });
 });

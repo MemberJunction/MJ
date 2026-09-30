@@ -77,6 +77,8 @@ export const SEED_WORKFLOW_NAME = 'Build and publish new package versions';
 export const SEED_DISPATCH_INPUT = 'seed_package';
 /** The matching double-entry input; must repeat the package name exactly. */
 export const SEED_CONFIRM_INPUT = 'confirm_seed_package';
+/** Human-run helper that performs the create, trust and seed steps, skipping any already done. */
+export const SEED_SCRIPT_PATH = '.github/scripts/seed-new-npm-package.sh';
 
 /** The repository provenance must name, as `owner/repo`. */
 export const GITHUB_REPO = 'MemberJunction/MJ';
@@ -294,6 +296,11 @@ token may satisfy. Doing it here, at PR time, keeps it off the release critical 
 HOW TO FIX (about 5 minutes, plus one 2FA prompt)
 --------------------------------------------------------------------------------
 
+Shortcut: after steps 1 and 2, run steps 3 to 5 in one go from a checkout of this repo.
+It skips any step already done, so it is safe to re-run, and waits for the attestation:
+
+     ${SEED_SCRIPT_PATH} ${names.join(' ')}
+
 1. Upgrade your npm CLI. \`npm trust\` requires ${MIN_NPM_VERSION} or newer:
 
      npm install -g npm@^11.15.0
@@ -345,6 +352,7 @@ ${names.map((name) => `       ${name}`).join('\n')}
      Repo ${GITHUB_REPO}, workflow ${PUBLISH_WORKFLOW_FILE}, allow-publish, no environment.
      Then run the "${SEED_WORKFLOW_NAME}" workflow for each, with ${SEED_DISPATCH_INPUT}
      and ${SEED_CONFIRM_INPUT} both set to the package name.
+     Or all of it: ${SEED_SCRIPT_PATH} ${names.join(' ')}
 
 2. If nobody responds within one working day, escalate to any MemberJunction npm org
    owner or admin. The current list is visible to org members via:
