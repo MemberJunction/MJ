@@ -307,7 +307,7 @@ function withDecisionStepIDs(
 
     const rewrite = RewriteDecisionReferences(path.Condition, (key) => stepIDByKey.get(key));
     if (rewrite.Unknown.length > 0) {
-        const origin = steps.find((s) => s.ID === path.OriginStepID)?.Name ?? path.OriginStepID;
+        const origin = steps.find((s) => UUIDsEqual(s.ID, path.OriginStepID))?.Name ?? path.OriginStepID;
         const known = [...stepIDByKey.keys()].map((k) => `"${k}"`).join(', ') || 'none';
         for (const key of rewrite.Unknown) {
             errors.push({
