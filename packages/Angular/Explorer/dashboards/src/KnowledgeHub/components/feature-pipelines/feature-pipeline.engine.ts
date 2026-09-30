@@ -5,7 +5,7 @@ import {
   Metadata,
   UserInfo,
 } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { MJRecordProcessEntity, MJProcessRunEntity } from '@memberjunction/core-entities';
 import type { Observable } from 'rxjs';
 
@@ -65,9 +65,20 @@ export interface FeaturePipelineSummary {
   LastRunSuccess: number | null;
   /** Records that errored in the most recent run, or null. */
   LastRunErrors: number | null;
-  /** The pipeline type ('LLM' or 'Decision' or custom). Defaults to 'LLM' when unset. */
+  /**
+   * The pipeline type ('LLM' or 'Decision' or custom). Defaults to 'LLM' when unset. The two built-in
+   * names are given in their canonical case whatever case the spec uses, as the processor matches them.
+   */
   PipelineType: string;
 }
+
+/** The one DataFeatureSpec property the summary reads from a Record Process `Configuration`. */
+interface ConfigurationPipelineType {
+  PipelineType?: string | null;
+}
+
+/** The built-in pipeline type names, by their lower-case form. */
+const BUILT_IN_PIPELINE_TYPES: Record<string, string> = { llm: 'LLM', decision: 'Decision' };
 
 /**
  * **FeaturePipelineEngine** (Knowledge Hub, Angular) — the discovery + monitoring
@@ -262,19 +273,16 @@ export class FeaturePipelineEngine extends BaseEngine<FeaturePipelineEngine> {
 
   /**
    * Best-effort pipeline type derived from the Record Process `Configuration` JSON
-   * (which serializes `DataFeatureSpec`). Returns 'LLM' when unset, empty, or unparseable.
+   * (which serializes `DataFeatureSpec`). Returns 'LLM' when unset, empty, or unparseable, and a built-in
+   * name ('decision') in its canonical case ('Decision').
    */
   private static derivePipelineType(config: string | null): string {
-    if (!config) return 'LLM';
-    try {
-      const parsed = JSON.parse(config);
-      if (parsed && typeof parsed === 'object' && typeof parsed.PipelineType === 'string' && parsed.PipelineType.trim().length > 0) {
-        return parsed.PipelineType.trim();
-      }
-    } catch {
-      // malformed JSON, default to LLM
+    const parsed = config ? SafeJSONParse<ConfigurationPipelineType>(config) : null;
+    const typeName = parsed && typeof parsed === 'object' && typeof parsed.PipelineType === 'string' ? parsed.PipelineType.trim() : '';
+    if (typeName.length === 0) {
+      return 'LLM';
     }
-    return 'LLM';
+    return BUILT_IN_PIPELINE_TYPES[typeName.toLowerCase()] ?? typeName;
   }
 }
 
