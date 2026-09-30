@@ -81,13 +81,17 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 });
 
 // The decision provider calibrates with the real Platt scaling.
-vi.mock('@memberjunction/ai', async (importOriginal) => ({
-    ApplyPlattCalibration: (await importOriginal<typeof import('@memberjunction/ai')>()).ApplyPlattCalibration,
-    BaseEmbeddings: class {
-        EmbedTexts = mocks.EmbedTexts;
-    },
-    GetAIAPIKey: vi.fn().mockReturnValue(''),
-}));
+vi.mock('@memberjunction/ai', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/ai')>();
+    return {
+        ApplyPlattCalibration: actual.ApplyPlattCalibration,
+        DecisionResult: actual.DecisionResult,
+        BaseEmbeddings: class {
+            EmbedTexts = mocks.EmbedTexts;
+        },
+        GetAIAPIKey: vi.fn().mockReturnValue(''),
+    };
+});
 
 vi.mock('@memberjunction/ai-vectordb', () => ({
     VectorDBBase: class {
@@ -173,7 +177,12 @@ vi.mock('@memberjunction/ai-prompts', () => ({
     AIPromptRunner: class { ExecutePrompt = mocks.ExecutePrompt; },
 }));
 
-vi.mock('@memberjunction/ai-core-plus', () => ({
+// The real decision-calibration helpers, loaded on their own: the package index extends entity
+// classes these specs mock.
+vi.mock('@memberjunction/ai-core-plus', async () => ({
+    ...(await vi.importActual<typeof import('@memberjunction/ai-core-plus/dist/decision-calibration.js')>(
+        '@memberjunction/ai-core-plus/dist/decision-calibration.js'
+    )),
     AIPromptParams: class {},
 }));
 
@@ -196,7 +205,7 @@ import {
 import '../reasoning/PromptReasoningProvider';
 import '../reasoning/DecisionReasoningProvider';
 import '../reasoning/DecisionThenPromptReasoningProvider';
-import { ANSWERING_MODEL, RawFor } from './helpers/decisionCalibration';
+import { ANSWERING_MODEL, AnsweredBy, RawFor } from './helpers/decisionCalibration';
 
 // The mocked embedding and vector-database base classes are the doubles; register them under the
 // driver keys the fixtures name, as a provider package registers its real subclass.
@@ -290,7 +299,7 @@ async function loadedAccount(row: object): Promise<AccountRecord> {
  * Answers each Likelihood, as `model`, with the **raw** probability given here for the candidate its
  * instructions name; unnamed ones get no answer.
  */
-function answerRawByRecord(raw: Record<string, number>, model: ModelInfo = ANSWERING_MODEL): void {
+function answerRawByRecord(raw: Record<string, number>, model: ModelInfo = ANSWERING_MODEL, resolvedModel?: string): void {
     mocks.ExecuteDecision.mockImplementation(async (params: AIDecisionParams) => {
         const answers: Record<string, DecisionAnswer> = {};
         for (const [key, question] of Object.entries(params.Questions)) {
@@ -299,7 +308,7 @@ function answerRawByRecord(raw: Record<string, number>, model: ModelInfo = ANSWE
                 answers[key] = { Kind: 'Likelihood', Probability: raw[recordID] };
             }
         }
-        return { success: true, Answers: answers, modelInfo: model };
+        return { success: true, Answers: answers, ...AnsweredBy(model, resolvedModel) };
     });
 }
 
@@ -511,7 +520,8 @@ describe('DuplicateRecordDetector.CheckRecordValues', () => {
             // the vector threshold alone.
             answerRawByRecord(
                 { 'cand-a': 0.01, 'cand-b': 0.01, 'cand-c': 0.01 },
-                { modelId: 'model-new', modelName: 'Some New Decision Model' }
+                { modelId: 'model-new', modelName: 'Some New Decision Model' },
+                'some-vendor/new-model'
             );
 
             const first = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, USER);
@@ -520,11 +530,21 @@ describe('DuplicateRecordDetector.CheckRecordValues', () => {
             for (const result of [first, second]) {
                 expect(result.Status).toBe('Failed');
                 expect(result.Candidates).toEqual([]);
-                expect(result.ErrorMessage).toContain('"Some New Decision Model" has no calibration');
+                expect(result.ErrorMessage).toContain('"Some New Decision Model (some-vendor/new-model)" has no calibration');
             }
             // Logged once for the model, not once per check.
             const mentions = vi.mocked(LogError).mock.calls.filter(([message]) => String(message).includes('Some New Decision Model'));
             expect(mentions).toHaveLength(1);
+        });
+
+        it('flags nothing for Jev at a version its calibration wasn\'t fitted on', async () => {
+            answerRawByRecord({ 'cand-a': 0.99, 'cand-b': 0.99, 'cand-c': 0.99 }, ANSWERING_MODEL, 'typesafe/jev-1.14-20261101');
+
+            const result = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, USER);
+
+            expect(result.Status).toBe('Failed');
+            expect(result.Candidates).toEqual([]);
+            expect(result.ErrorMessage).toContain('"Jev (typesafe/jev-1.14-20261101)" has no calibration');
         });
 
         it('flags nothing, and says why, when the decision fails', async () => {

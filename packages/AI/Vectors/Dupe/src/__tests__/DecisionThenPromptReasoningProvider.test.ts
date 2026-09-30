@@ -36,7 +36,12 @@ vi.mock('@memberjunction/ai-prompts', () => ({
     AIDecisionParams: class { Questions = {}; },
     AIPromptRunner: class { ExecutePrompt = mockExecutePrompt; },
 }));
-vi.mock('@memberjunction/ai-core-plus', () => ({
+// The real decision-calibration helpers, loaded on their own: the package index extends entity
+// classes these specs mock.
+vi.mock('@memberjunction/ai-core-plus', async () => ({
+    ...(await vi.importActual<typeof import('@memberjunction/ai-core-plus/dist/decision-calibration.js')>(
+        '@memberjunction/ai-core-plus/dist/decision-calibration.js'
+    )),
     AIPromptParams: class {},
 }));
 
@@ -51,7 +56,7 @@ import {
     DuplicateReasoningOutput,
     DuplicateReasoningContext,
 } from '../reasoning/DuplicateReasoningTypes';
-import { ANSWERING_MODEL, RawFor } from './helpers/decisionCalibration';
+import { AnsweredBy, RawFor } from './helpers/decisionCalibration';
 
 // ─────────────────────────────────────────────
 // Fixtures
@@ -113,7 +118,7 @@ function promptRunResult(result: Record<string, unknown>, runID: string): AIProm
 }
 
 /**
- * Answers each question, as {@link ANSWERING_MODEL}, so that the candidate its instructions name
+ * Answers each question, as the calibrated Jev ({@link AnsweredBy}), so that the candidate its instructions name
  * gets the **calibrated** probability given here.
  */
 function answerByRecord(probabilities: Record<string, number>): void {
@@ -125,7 +130,7 @@ function answerByRecord(probabilities: Record<string, number>): void {
                 answers[key] = { Kind: 'Likelihood', Probability: RawFor(probabilities[recordID]) };
             }
         }
-        return { success: true, Answers: answers, promptRun: runRow('decision-run-1'), modelInfo: ANSWERING_MODEL };
+        return { success: true, Answers: answers, promptRun: runRow('decision-run-1'), ...AnsweredBy() };
     });
 }
 
@@ -255,7 +260,7 @@ describe('DecisionThenPromptReasoningProvider', () => {
                     candidate_2: { Kind: 'Likelihood', Probability: 0.01 },
                     candidate_3: { Kind: 'Likelihood', Probability: 0.01 },
                 },
-                modelInfo: { modelId: 'model-new', modelName: 'Some New Decision Model' },
+                ...AnsweredBy({ modelId: 'model-new', modelName: 'Some New Decision Model' }, 'some-vendor/new-model'),
             });
             await chainedWithStub().Reason(input(), CONTEXT);
 

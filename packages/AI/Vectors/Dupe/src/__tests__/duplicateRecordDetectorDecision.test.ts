@@ -69,11 +69,15 @@ vi.mock('@memberjunction/core', () => {
 });
 
 // The decision provider calibrates with the real Platt scaling.
-vi.mock('@memberjunction/ai', async (importOriginal) => ({
-    ApplyPlattCalibration: (await importOriginal<typeof import('@memberjunction/ai')>()).ApplyPlattCalibration,
-    BaseEmbeddings: vi.fn(),
-    GetAIAPIKey: vi.fn().mockReturnValue('mock-api-key'),
-}));
+vi.mock('@memberjunction/ai', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/ai')>();
+    return {
+        ApplyPlattCalibration: actual.ApplyPlattCalibration,
+        DecisionResult: actual.DecisionResult,
+        BaseEmbeddings: vi.fn(),
+        GetAIAPIKey: vi.fn().mockReturnValue('mock-api-key'),
+    };
+});
 
 vi.mock('@memberjunction/ai-vectordb', () => ({
     VectorDBBase: vi.fn(),
@@ -126,7 +130,12 @@ vi.mock('@memberjunction/ai-prompts', () => ({
     AIPromptRunner: class { ExecutePrompt = mockExecutePrompt; },
 }));
 
-vi.mock('@memberjunction/ai-core-plus', () => ({
+// The real decision-calibration helpers, loaded on their own: the package index extends entity
+// classes these specs mock.
+vi.mock('@memberjunction/ai-core-plus', async () => ({
+    ...(await vi.importActual<typeof import('@memberjunction/ai-core-plus/dist/decision-calibration.js')>(
+        '@memberjunction/ai-core-plus/dist/decision-calibration.js'
+    )),
     AIPromptParams: class {},
 }));
 
@@ -136,7 +145,7 @@ import { DecisionReasoningProvider } from '../reasoning/DecisionReasoningProvide
 import { DecisionThenPromptReasoningProvider } from '../reasoning/DecisionThenPromptReasoningProvider';
 import { DuplicateReasoningProvider } from '../reasoning/DuplicateReasoningProvider';
 import { DuplicateReasoningOutput } from '../reasoning/DuplicateReasoningTypes';
-import { ANSWERING_MODEL, RawFor } from './helpers/decisionCalibration';
+import { AnsweredBy, RawFor } from './helpers/decisionCalibration';
 
 // ─────────────────────────────────────────────
 // Fixtures. Each is a partial double of the type the detector reads, holding only the members
@@ -235,7 +244,7 @@ function promptVerdicts(verdicts: Record<string, string>): void {
 }
 
 /**
- * Answers each question, as {@link ANSWERING_MODEL}, so that the candidate its instructions name
+ * Answers each question, as the calibrated Jev ({@link AnsweredBy}), so that the candidate its instructions name
  * gets the **calibrated** probability given here.
  */
 function answerByRecord(probabilities: Record<string, number>): void {
@@ -247,7 +256,7 @@ function answerByRecord(probabilities: Record<string, number>): void {
                 answers[key] = { Kind: 'Likelihood', Probability: RawFor(probabilities[recordID]) };
             }
         }
-        return { success: true, Answers: answers, promptRun: runRow('decision-run-1'), modelInfo: ANSWERING_MODEL };
+        return { success: true, Answers: answers, promptRun: runRow('decision-run-1'), ...AnsweredBy() };
     });
 }
 

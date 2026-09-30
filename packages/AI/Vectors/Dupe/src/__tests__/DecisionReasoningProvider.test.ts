@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AIDecisionParams, AIDecisionRunResult } from '@memberjunction/ai-prompts';
-import type { ModelInfo } from '@memberjunction/ai-core-plus';
+import type { DecisionAnsweringModel, ModelInfo } from '@memberjunction/ai-core-plus';
 import type { DecisionAnswer, PlattCalibration } from '@memberjunction/ai';
 import { LogError, type UserInfo } from '@memberjunction/core';
 import type { MJAIPromptRunEntity, MJEntityDocumentEntity } from '@memberjunction/core-entities';
@@ -30,6 +30,11 @@ vi.mock('@memberjunction/aiengine', () => ({
         },
     },
 }));
+// The real decision-calibration helpers, loaded on their own: the package index needs the parts of
+// @memberjunction/core this spec mocks away.
+vi.mock('@memberjunction/ai-core-plus', async () => vi.importActual<typeof import('@memberjunction/ai-core-plus/dist/decision-calibration.js')>(
+    '@memberjunction/ai-core-plus/dist/decision-calibration.js'
+));
 vi.mock('@memberjunction/ai-prompts', () => ({
     AIDecisionRunner: class { ExecuteDecision = mockExecuteDecision; },
     AIDecisionParams: class { Questions = {}; },
@@ -40,10 +45,9 @@ import {
     DecisionReasoningProvider,
     DUPLICATE_DECISION_CALIBRATION,
     DuplicateDecisionResult,
-    UNNAMED_DECISION_MODEL,
 } from '../reasoning/DecisionReasoningProvider';
 import { DuplicateReasoningInput, DuplicateReasoningOutput } from '../reasoning/DuplicateReasoningTypes';
-import { ANSWERING_MODEL, RawFor } from './helpers/decisionCalibration';
+import { ANSWERING_MODEL, ANSWERING_RESOLVED_MODEL, AnsweredBy, RawFor } from './helpers/decisionCalibration';
 
 // ─────────────────────────────────────────────
 // Fixtures
@@ -93,10 +97,15 @@ function probabilityNamedIn(instructions: string, probabilities: Record<string, 
 }
 
 /**
- * Answers each question, as `model`, with the **raw** probability of the candidate it names. Unnamed
- * candidates get no answer. A null `model` is a run that names no model.
+ * Answers each question, as `model` at `resolvedModel`, with the **raw** probability of the candidate
+ * it names. Unnamed candidates get no answer. A null `model` or `resolvedModel` is a run that does
+ * not report it.
  */
-function answerRawByRecord(probabilities: Record<string, number>, model: ModelInfo | null = ANSWERING_MODEL): void {
+function answerRawByRecord(
+    probabilities: Record<string, number>,
+    model: ModelInfo | null = ANSWERING_MODEL,
+    resolvedModel: string | null = ANSWERING_RESOLVED_MODEL
+): void {
     mockExecuteDecision.mockImplementation(async (params: AIDecisionParams) => {
         const answers: Record<string, DecisionAnswer> = {};
         for (const [key, question] of Object.entries(params.Questions)) {
@@ -105,7 +114,7 @@ function answerRawByRecord(probabilities: Record<string, number>, model: ModelIn
                 answers[key] = { Kind: 'Likelihood', Probability: probability };
             }
         }
-        return { success: true, Answers: answers, promptRun: runRow('decision-run-1'), modelInfo: model ?? undefined };
+        return { success: true, Answers: answers, promptRun: runRow('decision-run-1'), ...AnsweredBy(model, resolvedModel) };
     });
 }
 
@@ -292,28 +301,32 @@ describe('DecisionReasoningProvider', () => {
     });
 
     describe('calibration', () => {
-        it.each(Object.entries(DUPLICATE_DECISION_CALIBRATION))(
-            'CalibratedDuplicateProbability applies the Platt parameters of %s',
-            (modelName, calibration) => {
+        it.each(DUPLICATE_DECISION_CALIBRATION.map(entry => [entry.ModelName, entry] as const))(
+            'CalibratedDuplicateProbability applies the Platt parameters of %s at the model it was fitted on',
+            (_modelName, entry) => {
+                const answeredBy: DecisionAnsweringModel = { ModelName: entry.ModelName, ResolvedModel: entry.ResolvedModel };
                 // At a raw 0.5 the logit is 0, so the calibrated value is sigmoid(B).
-                expect(CalibratedDuplicateProbability(0.5, modelName)).toBeCloseTo(1 / (1 + Math.exp(-calibration.B)), 10);
-                expect(CalibratedDuplicateProbability(RawFor(0.8, calibration), modelName)).toBeCloseTo(0.8, 10);
+                expect(CalibratedDuplicateProbability(0.5, answeredBy)).toBeCloseTo(1 / (1 + Math.exp(-entry.Calibration.B)), 10);
+                expect(CalibratedDuplicateProbability(RawFor(0.8, entry.Calibration), answeredBy)).toBeCloseTo(0.8, 10);
             }
         );
 
-        it('CalibratedDuplicateProbability trims the model name', () => {
-            const calibrated = CalibratedDuplicateProbability(0.9, 'Jev');
+        it('CalibratedDuplicateProbability trims both names', () => {
+            const calibrated = CalibratedDuplicateProbability(0.9, { ModelName: 'Jev', ResolvedModel: ANSWERING_RESOLVED_MODEL });
 
             expect(calibrated).not.toBeNull();
-            expect(CalibratedDuplicateProbability(0.9, '  Jev \n')).toBe(calibrated);
+            expect(CalibratedDuplicateProbability(0.9, { ModelName: '  Jev \n', ResolvedModel: ` ${ANSWERING_RESOLVED_MODEL} ` })).toBe(calibrated);
         });
 
-        it.each([
-            ['an unknown model', 'Some Other Model'],
-            ['an empty model name', ''],
-            ['no model name', undefined],
-        ])('CalibratedDuplicateProbability returns null for %s', (_label, modelName) => {
-            expect(CalibratedDuplicateProbability(0.9, modelName)).toBeNull();
+        it.each<[string, DecisionAnsweringModel]>([
+            ['an unknown model', { ModelName: 'Some Other Model', ResolvedModel: 'some-vendor/other' }],
+            ['Jev at another version', { ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.14-20261101' }],
+            ['LLM Decision answered by another chat model', { ModelName: 'LLM Decision', ResolvedModel: 'GPT 5.5 Instant' }],
+            ['no resolved model', { ModelName: 'Jev' }],
+            ['an empty model name', { ModelName: '', ResolvedModel: ANSWERING_RESOLVED_MODEL }],
+            ['no model name', { ResolvedModel: ANSWERING_RESOLVED_MODEL }],
+        ])('CalibratedDuplicateProbability returns null for %s', (_label, answeredBy) => {
+            expect(CalibratedDuplicateProbability(0.9, answeredBy)).toBeNull();
         });
 
         it('DecideCandidates returns the calibrated Probability and the model\'s own RawProbability', async () => {
@@ -328,16 +341,18 @@ describe('DecisionReasoningProvider', () => {
             ]);
         });
 
-        const uncalibratedModels: [string, ModelInfo | null, string][] = [
-            ['a model with no calibration', { modelId: 'model-other', modelName: 'Some Other Model' }, 'Some Other Model'],
-            ['a model with an empty name', { modelId: 'model-other', modelName: '' }, UNNAMED_DECISION_MODEL],
-            ['a run that names no model', null, UNNAMED_DECISION_MODEL],
+        const uncalibratedModels: [string, ModelInfo | null, string | null, string][] = [
+            ['a model with no calibration', { modelId: 'model-other', modelName: 'Some Other Model' }, 'some-vendor/other', 'Some Other Model (some-vendor/other)'],
+            ['Jev at another version', ANSWERING_MODEL, 'typesafe/jev-1.14-20261101', 'Jev (typesafe/jev-1.14-20261101)'],
+            ['a run that reports no resolved model', ANSWERING_MODEL, null, 'Jev (resolved model not reported)'],
+            ['a model with an empty name', { modelId: 'model-other', modelName: '' }, ANSWERING_RESOLVED_MODEL, `an unnamed model (${ANSWERING_RESOLVED_MODEL})`],
+            ['a run that names no model', null, ANSWERING_RESOLVED_MODEL, `an unnamed model (${ANSWERING_RESOLVED_MODEL})`],
         ];
 
         it.each(uncalibratedModels)(
             'gives no Probability for %s, keeps the raw one, names the model, and bands every candidate for review',
-            async (_label, model, named) => {
-                answerRawByRecord({ 'ID|c1': 0.95, 'ID|c2': 0.05, 'ID|c3': 0.6 }, model);
+            async (_label, model, resolvedModel, named) => {
+                answerRawByRecord({ 'ID|c1': 0.95, 'ID|c2': 0.05, 'ID|c3': 0.6 }, model, resolvedModel);
                 const provider = new DecisionReasoningProvider();
                 const decision = await decide(provider);
 
@@ -366,25 +381,29 @@ describe('DecisionReasoningProvider', () => {
 
         it('logs a model with no calibration once, not on every decision', async () => {
             const provider = new DecisionReasoningProvider();
-            answerRawByRecord({ 'ID|c1': 0.9 }, { modelId: 'model-once', modelName: 'Logged Once Model' });
+            answerRawByRecord({ 'ID|c1': 0.9 }, { modelId: 'model-once', modelName: 'Logged Once Model' }, 'vendor/once');
             await decide(provider);
             await decide(new DecisionReasoningProvider());
 
             const mentions = (name: string) => vi.mocked(LogError).mock.calls.filter(([message]) => String(message).includes(`"${name}"`));
-            expect(mentions('Logged Once Model')).toHaveLength(1);
+            expect(mentions('Logged Once Model (vendor/once)')).toHaveLength(1);
 
-            answerRawByRecord({ 'ID|c1': 0.9 }, { modelId: 'model-next', modelName: 'Another Uncalibrated Model' });
+            // The same MJ model at another version is another model, logged once too.
+            answerRawByRecord({ 'ID|c1': 0.9 }, { modelId: 'model-once', modelName: 'Logged Once Model' }, 'vendor/once-v2');
             await decide(provider);
-            expect(mentions('Another Uncalibrated Model')).toHaveLength(1);
+            await decide(provider);
+            expect(mentions('Logged Once Model (vendor/once-v2)')).toHaveLength(1);
         });
 
         it('calibrates another model through a CalibrationFor override', async () => {
             class CalibratedForMore extends DecisionReasoningProvider {
-                protected override CalibrationFor(modelName: string | undefined): PlattCalibration | null {
-                    return modelName === 'Some Other Model' ? { A: 1, B: 0 } : super.CalibrationFor(modelName);
+                protected override CalibrationFor(answeredBy: DecisionAnsweringModel): PlattCalibration | null {
+                    return answeredBy.ModelName === 'Some Other Model' && answeredBy.ResolvedModel === 'some-vendor/other'
+                        ? { A: 1, B: 0 }
+                        : super.CalibrationFor(answeredBy);
                 }
             }
-            answerRawByRecord({ 'ID|c1': 0.95, 'ID|c2': 0.05, 'ID|c3': 0.6 }, { modelId: 'model-other', modelName: 'Some Other Model' });
+            answerRawByRecord({ 'ID|c1': 0.95, 'ID|c2': 0.05, 'ID|c3': 0.6 }, { modelId: 'model-other', modelName: 'Some Other Model' }, 'some-vendor/other');
             const decision = await decide(new CalibratedForMore());
 
             expect(decision.UncalibratedModel).toBeUndefined();
@@ -404,23 +423,23 @@ describe('DecisionReasoningProvider', () => {
             expect(new DecisionReasoningProvider().UncertainAbove).toBe(0.7);
         });
 
-        it('ships the fitted Platt parameters for Jev and LLM Decision, and no others', () => {
-            expect(DUPLICATE_DECISION_CALIBRATION).toEqual({
-                'Jev': { A: 2.5855, B: -4.4485 },
-                'LLM Decision': { A: 0.9918, B: -1.4843 },
-            });
+        it('ships the fitted Platt parameters for Jev and LLM Decision at the models they were fitted on, and no others', () => {
+            expect(DUPLICATE_DECISION_CALIBRATION).toEqual([
+                { ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.13-20260917', Calibration: { A: 2.5855, B: -4.4485 } },
+                { ModelName: 'LLM Decision', ResolvedModel: 'GPT-OSS-120B', Calibration: { A: 0.9918, B: -1.4843 } },
+            ]);
         });
 
         it.each([
-            // model, raw, calibrated
-            ['Jev', 0.5, 0.01156],
-            ['Jev', 0.9, 0.77424],
-            ['Jev', 0.85, 0.50908],
-            ['LLM Decision', 0.5, 0.18478],
-            ['LLM Decision', 0.9, 0.66706],
-            ['LLM Decision', 0.95, 0.80783],
-        ])('calibrates %s\'s raw %s to %s', (model, raw, calibrated) => {
-            expect(CalibratedDuplicateProbability(raw, model)).toBeCloseTo(calibrated, 4);
+            // model, the model behind it, raw, calibrated
+            ['Jev', 'typesafe/jev-1.13-20260917', 0.5, 0.01156],
+            ['Jev', 'typesafe/jev-1.13-20260917', 0.9, 0.77424],
+            ['Jev', 'typesafe/jev-1.13-20260917', 0.85, 0.50908],
+            ['LLM Decision', 'GPT-OSS-120B', 0.5, 0.18478],
+            ['LLM Decision', 'GPT-OSS-120B', 0.9, 0.66706],
+            ['LLM Decision', 'GPT-OSS-120B', 0.95, 0.80783],
+        ])('calibrates %s (%s)\'s raw %s to %s', (model, resolvedModel, raw, calibrated) => {
+            expect(CalibratedDuplicateProbability(raw, { ModelName: model, ResolvedModel: resolvedModel })).toBeCloseTo(calibrated, 4);
         });
 
         it.each([

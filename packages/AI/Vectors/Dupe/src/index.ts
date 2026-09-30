@@ -26,7 +26,6 @@ export {
     DUPLICATE_DECISION_CALIBRATION,
     DuplicateDecisionCalibrationFor,
     CalibratedDuplicateProbability,
-    UNNAMED_DECISION_MODEL,
 } from './reasoning/DecisionReasoningProvider';
 export type { DuplicateCandidateProbability, DuplicateDecisionResult } from './reasoning/DecisionReasoningProvider';
 export { DecisionThenPromptReasoningProvider } from './reasoning/DecisionThenPromptReasoningProvider';
