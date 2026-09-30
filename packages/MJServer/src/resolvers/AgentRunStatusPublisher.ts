@@ -56,6 +56,8 @@ export class AgentRunStatusPublisher {
             }
             const agentRun = fromEvent || this.run;
             if (!agentRun?.ID) {
+                // A host that streams before the first progress event otherwise sees nothing and no reason.
+                console.error('❌ No agent run available for progress callback');
                 return;
             }
             this.publish('ExecutionProgress', {
@@ -82,6 +84,7 @@ export class AgentRunStatusPublisher {
         return (chunk) => {
             const agentRun = this.run;
             if (!agentRun?.ID) {
+                console.error('❌ No agent run available for streaming callback');
                 return;
             }
             this.publish('StreamingContent', {
@@ -133,6 +136,23 @@ export class AgentRunStatusPublisher {
             success: result.success,
             errorMessage: agentRun?.ErrorMessage || undefined,
             result: resultJson || undefined,
+        });
+    }
+
+    /**
+     * Completion for a failure that has no run. The fire-and-forget path uses this when
+     * `executeAIAgent` rejects, which is the only message that tells the client the run failed.
+     */
+    public PublishFailure(conversationDetailId: string | undefined, errorMessage: string): void {
+        this.publish('StreamingContent', {
+            sessionId: this.sessionId,
+            agentRunId: 'unknown',
+            type: 'complete',
+            timestamp: new Date(),
+            conversationDetailId,
+            success: false,
+            errorMessage,
+            result: JSON.stringify({ success: false, errorMessage }),
         });
     }
 

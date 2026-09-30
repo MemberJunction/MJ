@@ -26,6 +26,11 @@ import { NotificationEngine } from '@memberjunction/notifications';
  */
 const INLINE_SIZE_CAP = 100 * 1024;
 
+/** Progress metadata is an untyped bag. A run is an object that carries an ID field. */
+function isAgentRunEntity(value: unknown): value is MJAIAgentRunEntityExtended {
+    return typeof value === 'object' && value !== null && 'ID' in value;
+}
+
 @ObjectType()
 export class AIAgentRunResult {
     @Field()
@@ -343,8 +348,9 @@ export class RunAIAgentResolver extends ResolverBase {
                 contextUser: currentUser,
                 sessionID: sessionId,
                 onProgress: (progress) => {
-                    if (progress.metadata?.agentRun) {
-                        agentRunRef.current = progress.metadata.agentRun;
+                    const fromEvent = progress.metadata?.agentRun;
+                    if (isAgentRunEntity(fromEvent)) {
+                        agentRunRef.current = fromEvent;
                     }
                     publishProgress(progress);
                 },
@@ -1235,18 +1241,9 @@ export class RunAIAgentResolver extends ResolverBase {
             const errorMessage = (error instanceof Error) ? error.message : 'Unknown background execution error';
             LogError(`🔥 Fire-and-forget background execution failed: ${errorMessage}`, undefined, error);
 
-            // Publish error completion event so the client knows the agent failed
-            const errorCompletionData: Record<string, unknown> = {
-                sessionId,
-                agentRunId: 'unknown',
-                type: 'complete',
-                timestamp: new Date(),
-                conversationDetailId,
-                success: false,
-                errorMessage,
-                result: JSON.stringify({ success: false, errorMessage })
-            };
-            this.publishStreamingUpdate(pubSub, errorCompletionData, userPayload);
+            // Publish error completion event so the client knows the agent failed.
+            // The publisher is created inside executeAIAgent, which rejected before returning one.
+            new AgentRunStatusPublisher(pubSub, userPayload, sessionId).PublishFailure(conversationDetailId, errorMessage);
         }).finally(() => pulse.Stop());
     }
 

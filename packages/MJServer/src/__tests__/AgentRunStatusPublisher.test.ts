@@ -27,8 +27,7 @@ vi.mock('@memberjunction/graphql-dataprovider', () => ({
 }));
 
 import type { ExecuteAgentResult } from '@memberjunction/ai-core-plus';
-import { ConversationStreaming } from '../../../ConversationsRuntime/src/streaming/ConversationStreaming.js';
-import type { IConversationsRuntimeContext } from '../../../ConversationsRuntime/src/context/IConversationsRuntimeContext.js';
+import { ConversationStreaming, type IConversationsRuntimeContext } from '@memberjunction/conversations-runtime';
 import { AgentRunStatusPublisher } from '../resolvers/AgentRunStatusPublisher.js';
 import type { UserPayload } from '../types.js';
 
@@ -85,6 +84,60 @@ describe('AgentRunStatusPublisher', () => {
         expect(completion.conversationDetailId).toBe('detail-1');
         expect(completion.agentRunId).toBe('run-1');
         expect(completion.result).toBe('{"text":"Hello"}');
+    });
+
+    it('stamps the reply row on the completion when that id differs from the run', () => {
+        const { publish, made } = publisher();
+        made.PublishFinal(
+            { success: true, agentRun: run, payload: { text: 'Hello' } } as ExecuteAgentResult,
+            'reply-9',
+            '{"text":"Hello"}',
+        );
+
+        const sent = envelopes(publish);
+        const completion = sent[sent.length - 1].data as { type: string; conversationDetailId: string; agentRunId: string };
+        expect(completion.type).toBe('complete');
+        expect(completion.conversationDetailId).toBe('reply-9');
+        expect(completion.agentRunId).toBe('run-1');
+        expect(run.ConversationDetailID).toBe('detail-1');
+    });
+
+    it('publishes a failure completion when there is no run', () => {
+        const { publish, made } = publisher();
+        made.PublishFailure('detail-1', 'background blew up');
+
+        const sent = envelopes(publish);
+        expect(sent).toHaveLength(1);
+        expect(sent[0].type).toBe('StreamingContent');
+        const completion = sent[0].data as {
+            type: string;
+            agentRunId: string;
+            conversationDetailId: string;
+            success: boolean;
+            errorMessage: string;
+            result: string;
+        };
+        expect(completion.type).toBe('complete');
+        expect(completion.agentRunId).toBe('unknown');
+        expect(completion.conversationDetailId).toBe('detail-1');
+        expect(completion.success).toBe(false);
+        expect(completion.errorMessage).toBe('background blew up');
+        expect(completion.result).toBe(JSON.stringify({ success: false, errorMessage: 'background blew up' }));
+    });
+
+    it('logs when a significant step or a streamed chunk arrives before any run', () => {
+        const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const { publish, made } = publisher();
+
+        made.OnProgress({ step: 'initialization', message: 'noise' });
+        made.OnProgress({ step: 'prompt_execution', message: 'Writing' });
+        made.OnStreaming({ content: 'Hel', isComplete: false });
+
+        expect(publish).not.toHaveBeenCalled();
+        expect(error).toHaveBeenCalledWith('❌ No agent run available for progress callback');
+        expect(error).toHaveBeenCalledWith('❌ No agent run available for streaming callback');
+        expect(error).toHaveBeenCalledTimes(2);
+        error.mockRestore();
     });
 
     it('routes a host publisher progress and completion to the reply row', async () => {
