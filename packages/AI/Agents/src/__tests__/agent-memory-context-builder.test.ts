@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { GetExamplesParams, GetNotesParams } from '../agent-context-injector';
 
 // ---- Mocks for the underlying retrieval collaborators ------------------------------------------
 // The builder is the thin orchestration wrapper; we mock the collaborators so the tests are
 // deterministic and never touch DB/network.
 
-const getNotes = vi.fn(async () => [] as unknown[]);
-const getExamples = vi.fn(async () => [] as unknown[]);
+const getNotes = vi.fn(async (_params: GetNotesParams) => [] as unknown[]);
+const getExamples = vi.fn(async (_params: GetExamplesParams) => [] as unknown[]);
 const formatNotes = vi.fn((notes: unknown[]) => (notes.length ? `NOTES(${notes.length})` : ''));
 const formatExamples = vi.fn((examples: unknown[]) => (examples.length ? `EXAMPLES(${examples.length})` : ''));
 
@@ -162,6 +163,19 @@ describe('AgentMemoryContextBuilder', () => {
             expect(getNotes).toHaveBeenCalledTimes(1);
             const arg = getNotes.mock.calls[0][0] as { observability?: { agentRunID: string; stepNumber: number } };
             expect(arg.observability).toEqual({ agentRunID: 'run-9', stepNumber: 3 });
+        });
+
+        it("passes the caller's OnStepCreated through to the notes retrieval call", async () => {
+            getNotes.mockResolvedValueOnce([{ ID: 'n1' }]);
+            const onStepCreated = vi.fn();
+
+            await new AgentMemoryContextBuilder().InjectContextMemory(
+                'hi', makeAgent({ InjectNotes: true }), undefined, undefined, fakeUser, [],
+                undefined, undefined, undefined, undefined,
+                { agentRunID: 'run-9', stepNumber: 3, OnStepCreated: onStepCreated }
+            );
+
+            expect(getNotes.mock.calls[0][0].observability?.OnStepCreated).toBe(onStepCreated);
         });
 
         it('injects an examples-only system message when only InjectExamples is enabled', async () => {

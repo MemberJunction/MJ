@@ -11,9 +11,10 @@
 import { IMetadataProvider, LogError, LogStatus, Metadata, UserInfo } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual, BaseSingleton } from '@memberjunction/global';
 import { AIEngine, ExampleMatchResult, NoteMatchResult } from '@memberjunction/aiengine';
-import { MJAIAgentExampleEntity, MJAIAgentNoteEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
+import { MJAIAgentExampleEntity, MJAIAgentNoteEntity } from '@memberjunction/core-entities';
 import { BaseReranker, RerankDocument, GetAIAPIKey } from '@memberjunction/ai';
 import { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
+import type { MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
 import { RerankerConfiguration, ParseRerankerConfiguration, parseRerankerConfiguration } from './config.types';
 import { AIRerankerRunner } from './AIRerankerRunner';
 import { IsPromptBackedReranker } from './prompt-backed-rerankers';
@@ -79,6 +80,15 @@ export interface RerankObservabilityOptions {
      * Step sequence number
      */
     stepNumber?: number;
+
+    /**
+     * Called with the rerank's run step as soon as it is created, so the agent can add it to its run's
+     * steps. When the rerank finishes, the step's `PromptRun` is the rerank's `MJ: AI Prompt Runs` row,
+     * whose `TotalCost` and token rollups include a prompt-backed reranker's own prompt runs, so the
+     * agent run's cost and token totals, and its `MaxCostPerRun` / `MaxTokensPerRun` guardrails, count
+     * the rerank.
+     */
+    OnStepCreated?: (step: MJAIAgentRunStepEntityExtended) => void;
 }
 
 /**
@@ -312,8 +322,8 @@ export class RerankerService extends BaseSingleton<RerankerService> {
         options?: RerankObservabilityOptions
     ): Promise<RerankServiceResult> {
         const startTime = Date.now();
-        let stepEntity: MJAIAgentRunStepEntity | null = null;
-        let promptRunID: string | undefined;
+        let stepEntity: MJAIAgentRunStepEntityExtended | null = null;
+        let run: AIRerankRunResult | undefined;
 
         // Early return if no notes to rerank
         if (notes.length === 0) {
@@ -333,6 +343,7 @@ export class RerankerService extends BaseSingleton<RerankerService> {
                     { query, noteCount: notes.length, config, notes },
                     startTime
                 );
+                options.OnStepCreated?.(stepEntity);
             } catch (e) {
                 // Don't fail the reranking operation if step creation fails
                 LogError(`RerankerService: Failed to create observability step: ${e instanceof Error ? e.message : String(e)}`);
@@ -341,8 +352,7 @@ export class RerankerService extends BaseSingleton<RerankerService> {
 
         try {
             // Rerank through the runner, which selects the model, fails over and records the run
-            const run = await this.runReranker(notes, query, config, contextUser, options);
-            promptRunID = run.PromptRunID;
+            run = await this.runReranker(notes, query, config, contextUser, options);
             if (!run.Success || !run.Response) {
                 throw new Error(run.ErrorMessage || 'Reranking failed');
             }
@@ -368,7 +378,7 @@ export class RerankerService extends BaseSingleton<RerankerService> {
                     rerankedCount: rerankedNotes.length,
                     durationMs: Date.now() - startTime,
                     rerankedNotes
-                }, undefined, promptRunID);
+                }, undefined, run);
             }
 
             return {
@@ -385,7 +395,7 @@ export class RerankerService extends BaseSingleton<RerankerService> {
                 await this.finalizeRerankRunStep(stepEntity, false, {
                     rerankedCount: 0,
                     durationMs: Date.now() - startTime
-                }, message, promptRunID);
+                }, message, run);
             }
             throw error;
         }
@@ -547,9 +557,9 @@ export class RerankerService extends BaseSingleton<RerankerService> {
         input: { query: string; noteCount: number; config: RerankerConfiguration; notes: NoteMatchResult[] },
         startTime: number,
         provider?: IMetadataProvider
-    ): Promise<MJAIAgentRunStepEntity> {
+    ): Promise<MJAIAgentRunStepEntityExtended> {
         const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
-        const stepEntity = await md.GetEntityObject<MJAIAgentRunStepEntity>(
+        const stepEntity = await md.GetEntityObject<MJAIAgentRunStepEntityExtended>(
             'MJ: AI Agent Run Steps',
             contextUser
         );
@@ -588,22 +598,26 @@ export class RerankerService extends BaseSingleton<RerankerService> {
 
     /**
      * Finalize an AIAgentRunStep record after reranking completes.
-     * When the rerank wrote an `MJ: AI Prompt Runs` row, the step links to it through `TargetLogID`.
+     * When the rerank wrote an `MJ: AI Prompt Runs` row, the step links to it through `TargetLogID`,
+     * and carries it as its `PromptRun`, which is how an agent run counts a step's cost and tokens.
      */
     private async finalizeRerankRunStep(
-        stepEntity: MJAIAgentRunStepEntity,
+        stepEntity: MJAIAgentRunStepEntityExtended,
         success: boolean,
         output: { rerankedCount: number; durationMs: number; rerankedNotes?: NoteMatchResult[] },
         errorMessage?: string,
-        promptRunID?: string
+        run?: AIRerankRunResult
     ): Promise<void> {
         try {
             stepEntity.Status = success ? 'Completed' : 'Failed';
             stepEntity.CompletedAt = new Date();
             stepEntity.Success = success;
             stepEntity.ErrorMessage = errorMessage || null;
-            if (promptRunID) {
-                stepEntity.TargetLogID = promptRunID;
+            if (run?.PromptRunID) {
+                stepEntity.TargetLogID = run.PromptRunID;
+            }
+            if (run?.PromptRun) {
+                stepEntity.PromptRun = run.PromptRun;
             }
             stepEntity.OutputData = JSON.stringify({
                 rerankedCount: output.rerankedCount,

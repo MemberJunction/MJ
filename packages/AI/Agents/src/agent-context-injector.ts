@@ -3,6 +3,7 @@ import { ToEpochMs, UUIDsEqual } from "@memberjunction/global";
 import { MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJAIAgentNoteTypeEntity, InjectableNoteStatusSQLList } from "@memberjunction/core-entities";
 import { AIEngine, NoteEmbeddingMetadata, ExampleEmbeddingMetadata, ExampleMatchResult } from "@memberjunction/aiengine";
 import { SecondaryScopeConfig, SecondaryDimension, SecondaryScopeValue } from "@memberjunction/ai-core-plus";
+import type { MJAIAgentRunStepEntityExtended } from "@memberjunction/ai-core-plus";
 import { RerankerConfiguration, RerankerService } from "@memberjunction/ai-reranker";
 
 /**
@@ -21,6 +22,11 @@ export interface NotesObservabilityOptions {
      * Step sequence number for the rerank step
      */
     stepNumber?: number;
+    /**
+     * Receives the rerank step as soon as it is created, so the agent run can count it. See
+     * `RerankObservabilityOptions.OnStepCreated`.
+     */
+    OnStepCreated?: (step: MJAIAgentRunStepEntityExtended) => void;
 }
 
 /**
@@ -174,7 +180,8 @@ export class AgentContextInjector {
                 params.observability ? {
                     agentRunID: params.observability.agentRunID,
                     parentStepID: params.observability.parentStepID,
-                    stepNumber: params.observability.stepNumber
+                    stepNumber: params.observability.stepNumber,
+                    OnStepCreated: params.observability.OnStepCreated
                 } : undefined
             );
 

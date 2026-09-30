@@ -18,6 +18,7 @@ import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJAIAgentNoteEntity, MJAIAgentExampleEntity } from '@memberjunction/core-entities';
 import { ChatMessage } from '@memberjunction/ai';
 import { SecondaryScopeConfig, SecondaryScopeValue } from '@memberjunction/ai-core-plus';
+import type { MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
 
 import { AgentContextInjector } from './agent-context-injector';
 import { AgentPreExecutionRAG, AgentPreExecutionRAGResult } from './agent-pre-execution-rag';
@@ -44,6 +45,11 @@ export interface AgentMemoryObservability {
     agentRunID: string;
     /** Step sequence number for the rerank step. */
     stepNumber: number;
+    /**
+     * Receives each rerank step as soon as it is created, so the agent run can add it to its steps and
+     * count the rerank's cost and tokens. See `RerankObservabilityOptions.OnStepCreated`.
+     */
+    OnStepCreated?: (step: MJAIAgentRunStepEntityExtended) => void;
 }
 
 /**
@@ -116,7 +122,8 @@ export class AgentMemoryContextBuilder {
                 // Pass observability context for run step tracking
                 observability: observability ? {
                     agentRunID: observability.agentRunID,
-                    stepNumber: observability.stepNumber
+                    stepNumber: observability.stepNumber,
+                    OnStepCreated: observability.OnStepCreated
                 } : undefined
             })
             : [];
