@@ -53,7 +53,9 @@ function rig(database: string) {
     const lines: string[] = [];
     const settings: FullDbSettings = { Host: 'localhost', Port: 1436, User: 'SECRET-USER', Password: 'SECRET-PASSWORD', Database: database, Platform: 'sqlserver' };
     const close = vi.fn<RigSession['Close']>(async () => undefined);
-    const io: MeasurementIO = { Log: (line) => lines.push(line), Now: () => 0, Timestamp: () => '2026-09-30T00:00:00.000Z', WriteFile: () => undefined };
+    const io: MeasurementIO = {
+        Log: (line) => lines.push(line), Now: () => 0, Timestamp: () => '2026-09-30T00:00:00.000Z', WriteFile: () => undefined, PrepareOutputDirectory: () => undefined,
+    };
     const deps = {
         LoadDatabaseTarget: vi.fn<RigDependencies<FullDbSettings>['LoadDatabaseTarget']>(async () => settings),
         Connect: vi.fn<RigDependencies<FullDbSettings>['Connect']>(async () => ({ Backend: dryRunBackend(), Close: close })),

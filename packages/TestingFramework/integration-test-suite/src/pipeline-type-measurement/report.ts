@@ -29,6 +29,8 @@ export interface ReportInput {
     Costs: ReadonlyMap<string, PromptRunCost>;
     /** The model each arm is meant to measure. */
     ExpectedModels: Record<MeasuredPipelineType, ExpectedModel>;
+    /** How many records had one of the values, before sampling. */
+    CandidateCount: number;
     /** ISO timestamp, passed in so the report is deterministic under test. */
     GeneratedAt: string;
 }
@@ -82,7 +84,14 @@ export interface MeasurementReport {
         /** The description each value had, as both arms saw it (the value itself for a fallback). */
         ValueDescriptions: Record<string, string>;
     };
-    Sample: { Size: number; PerValue: Record<string, number> };
+    Sample: {
+        Size: number;
+        PerValue: Record<string, number>;
+        /** Records with one of the values, before sampling. */
+        Candidates: number;
+        /** Whether the sample is smaller than the candidates, and so drawn as evenly per value as the data allows, not in the population's mix. */
+        Balanced: boolean;
+    };
     FallbackDescriptionValues: string[];
     Types: Record<MeasuredPipelineType, TypeReport>;
     Agreement: TypeAgreement;
@@ -101,7 +110,10 @@ export function BuildMeasurementReport(input: ReportInput): MeasurementReport {
         GeneratedAt: input.GeneratedAt,
         Warnings: ModelWarnings(models),
         Setup: buildSetup(input),
-        Sample: { Size: input.Sample.length, PerValue: CountPerValue(input.Sample, input.Options.Values) },
+        Sample: {
+            Size: input.Sample.length, PerValue: CountPerValue(input.Sample, input.Options.Values),
+            Candidates: input.CandidateCount, Balanced: input.Sample.length < input.CandidateCount,
+        },
         FallbackDescriptionValues: [...input.Descriptions.FallbackValues],
         Types: { LLM: buildTypeReport(input, ctx, 'LLM', models.LLM), Decision: buildTypeReport(input, ctx, 'Decision', models.Decision) },
         Agreement: AgreementBetweenTypes(ctx),
@@ -178,6 +190,9 @@ export function BuildReportNotes(report: MeasurementReport): string[] {
         'Cost is each prompt run\'s TotalCost (its own cost plus descendant cost), falling back to Cost, read after the runs\' saves finished. A Decision failover or delegated chat run is a child prompt run, and its cost reaches the parent\'s TotalCost only on branches that carry #4880. On a branch without #4880, the Decision cost can be missing that delegated cost.',
         `Wall time is measured around each ProcessBatch call (batches of up to ${report.Setup.BatchSize} records; one InferProcessor per type per rep; no caching; WritesHistory off; nothing written back). Latency is each prompt run's ExecutionTimeMS.`,
         'A failed or missing answer counts as wrong. Agreement and repeatability count a record only when both answers succeeded and match.',
+        report.Sample.Balanced
+            ? `The sample is ${report.Sample.Size} of ${report.Sample.Candidates} candidate records, drawn as evenly per value as the data allows, so accuracy is over that balanced mix, not the population's.`
+            : `The sample is every one of the ${report.Sample.Candidates} candidate records, so accuracy is over the population's mix of values.`,
         'The escalation simulation follows InferProcessor: a Decision answer below the floor (or with no confidence) takes the same rep\'s LLM answer, and a failed Decision answer fails without escalating.',
         'Records are identified by ID only. No measured record\'s text is in this report.',
     ];

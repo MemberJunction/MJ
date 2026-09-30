@@ -113,6 +113,7 @@ import { IsPromptRunFinished, PROMPT_RUN_COST_FIELDS, ToPromptRunCost } from '..
 import type { PromptRunCostRow } from '../src/pipeline-type-measurement/cost-and-time';
 import { FirstChoiceModel } from '../src/pipeline-type-measurement/models';
 import { CreateMeasurementProcessor } from '../src/pipeline-type-measurement/processors';
+import { PrepareOutputDirectory } from '../src/pipeline-type-measurement/repo-guard';
 import { RunMeasurementRig } from '../src/pipeline-type-measurement/rig';
 import type { RigSession } from '../src/pipeline-type-measurement/rig';
 import type { BatchProcessor, MeasurementBackend, MeasurementIO } from '../src/pipeline-type-measurement/run';
@@ -142,6 +143,7 @@ const CONSOLE_IO: MeasurementIO = {
         mkdirSync(dirname(path), { recursive: true });
         writeFileSync(path, content, 'utf8');
     },
+    PrepareOutputDirectory,
 };
 
 /** The live backend: MJ metadata, `RunView`, `AIEngine` and `InferProcessor`. It keeps record text to itself. */

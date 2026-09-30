@@ -90,13 +90,15 @@ function mockIO() {
     let clock = 0;
     const lines: string[] = [];
     const files = new Map<string, string>();
+    const prepared: string[] = [];
     const io: MeasurementIO = {
         Log: (line) => lines.push(line),
         Now: () => (clock += 10),
         Timestamp: () => '2026-09-29T00:00:00.000Z',
         WriteFile: (path, content) => files.set(path, content),
+        PrepareOutputDirectory: (dir) => prepared.push(dir),
     };
-    return { io, lines, files };
+    return { io, lines, files, prepared };
 }
 
 describe('PlanRuns', () => {
@@ -131,6 +133,23 @@ describe('RunMeasurement --dry-run', () => {
         expect(backend.CreateBatchProcessor).not.toHaveBeenCalled();
         expect(backend.ReadPromptRunCosts).not.toHaveBeenCalled();
         expect(files.size).toBe(0);
+    });
+
+    it('prepares the output directory before loading anything', async () => {
+        const { backend } = mockBackend();
+        const { io, prepared } = mockIO();
+        const opts = options({ DryRun: true });
+        await RunMeasurement(opts, backend, io);
+        expect(prepared).toEqual([opts.OutDir]);
+    });
+
+    it('stops before loading anything when the output directory cannot be written', async () => {
+        const { backend } = mockBackend();
+        const { io } = mockIO();
+        const unwritable: MeasurementIO = { ...io, PrepareOutputDirectory: () => { throw new Error('--out \'/x\' cannot be written: ENOTDIR'); } };
+        await expect(RunMeasurement(options(), backend, unwritable)).rejects.toThrow(/cannot be written/);
+        expect(backend.LoadCandidates).not.toHaveBeenCalled();
+        expect(backend.CreateBatchProcessor).not.toHaveBeenCalled();
     });
 
     it('refuses an output directory inside this repository before loading anything', async () => {

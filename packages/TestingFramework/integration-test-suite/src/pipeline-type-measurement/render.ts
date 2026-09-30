@@ -64,7 +64,8 @@ function renderSetup(report: MeasurementReport): string {
         ...report.Warnings.map((warning) => `> **Warning:** ${warning}`),
         table(['Setting', 'Value'], [
             ['Entity', s.EntityName], ['Label', `${s.LabelField} (column ${s.LabelColumn})`], ['Text fields', s.TextFields.join(', ')],
-            ['Values', s.Values.join(', ')], ['Sample', `${report.Sample.Size} of ${s.RequestedSampleSize} requested (${perValue})`],
+            ['Values', s.Values.join(', ')],
+            ['Sample', `${report.Sample.Size} of ${s.RequestedSampleSize} requested (${perValue}), from ${report.Sample.Candidates} candidates${report.Sample.Balanced ? ', balanced per value' : ''}`],
             ['Reps', String(s.Reps)], ['Seed', String(s.Seed)], ['Batch size', String(s.BatchSize)],
             ['LLM prompt', s.LLMPrompt], ['LLM model expected', FormatExpectedModel(report.Types.LLM.Models.Expected)],
             ['Decision prompt', s.DecisionPrompt], ['Decision model expected', FormatExpectedModel(report.Types.Decision.Models.Expected)],
@@ -90,7 +91,7 @@ function renderHeadline(report: MeasurementReport): string {
     };
     return ['## Results', table(['Metric', ...MEASURED_PIPELINE_TYPES], [
         ['Answered by (answers)', ...cell((type) => TableCellText(FormatModelCounts(t[type].Models.Answered)))],
-        ['Accuracy against labels', ...cell(ci)],
+        [report.Sample.Balanced ? 'Accuracy against labels (sample balanced per value)' : 'Accuracy against labels', ...cell(ci)],
         ['Accuracy per rep', ...cell((type) => t[type].Accuracy.PerRep.map(FormatPercent).join(', '))],
         ['Failed answers per rep', ...cell((type) => t[type].Accuracy.FailuresPerRep.join(', '))],
         ['Repeatability (rep 1 against rep 2)', ...cell((type) => FormatPercent(t[type].Repeatability))],

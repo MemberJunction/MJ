@@ -52,6 +52,8 @@ export interface MeasurementIO {
     Timestamp(): string;
     /** Writes a file, creating its directory. */
     WriteFile(path: string, content: string): void;
+    /** Creates the output directory and checks it can be written (the rig's is `PrepareOutputDirectory`). */
+    PrepareOutputDirectory(outDir: string): void;
 }
 
 /** One type's pass over the sample in one rep. */
@@ -146,12 +148,14 @@ export function FormatPlan(setup: MeasurementSetup, options: MeasurementOptions)
 
 /**
  * Runs the measurement. A dry run prints the sample and the planned calls and makes none.
- * @throws Error when `--out` is inside a git working tree (checked before anything else), or no record
- * matches; with `--require-model`, when an arm has no expected model, or an answer came from another
+ * @throws Error when `--out` is inside a git working tree or cannot be written (both checked before
+ * anything else), or no record matches; with `--require-model`, when an arm has no expected model, or an answer came from another
  * model (after its first batch, or at the end, once the report is written).
  */
 export async function RunMeasurement(options: MeasurementOptions, backend: MeasurementBackend, io: MeasurementIO): Promise<MeasurementOutcome> {
     const outDir = AssertOutputOutsideRepo(options.OutDir);
+    // Before anything is spent: an unwritable --out would otherwise fail only once the report is written.
+    io.PrepareOutputDirectory(outDir);
     const setup = await PrepareMeasurement(options, backend);
     FormatPlan(setup, options).forEach((line) => io.Log(line));
     if (options.DryRun) {
@@ -164,7 +168,7 @@ export async function RunMeasurement(options: MeasurementOptions, backend: Measu
     const costs = await backend.ReadPromptRunCosts(runIDs);
     const report = BuildMeasurementReport({
         Options: options, LabelColumn: setup.LabelColumn, Sample: setup.Sample, Descriptions: setup.Descriptions,
-        Predictions, Timings, Costs: costs, ExpectedModels: setup.ExpectedModels, GeneratedAt: io.Timestamp(),
+        Predictions, Timings, Costs: costs, ExpectedModels: setup.ExpectedModels, CandidateCount: setup.CandidateCount, GeneratedAt: io.Timestamp(),
     });
     const paths = writeReport(report, outDir, io);
     report.Warnings.forEach((warning) => io.Log(`WARNING: ${warning}`));

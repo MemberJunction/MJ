@@ -27,6 +27,7 @@ const INPUT: ReportInput = {
     ],
     Costs: COSTS,
     ExpectedModels: EXPECTED_MODELS,
+    CandidateCount: 4,
     GeneratedAt: '2026-09-29T00:00:00.000Z',
 };
 
@@ -43,7 +44,7 @@ describe('BuildMeasurementReport', () => {
     const report = BuildMeasurementReport(INPUT);
 
     it('wires every metric through', () => {
-        expect(report.Sample).toEqual({ Size: 4, PerValue: { A: 2, B: 2 } });
+        expect(report.Sample).toEqual({ Size: 4, PerValue: { A: 2, B: 2 }, Candidates: 4, Balanced: false });
         expect(report.Types.LLM.Accuracy.Accuracy).toBe(0.75);
         expect(report.Types.Decision.Accuracy.Accuracy).toBe(0.625);
         expect(report.Types.LLM.Repeatability).toBe(0.5);
@@ -76,6 +77,21 @@ describe('BuildMeasurementReport', () => {
         partial.set('LLM-1-r1', RunCost('LLM-1-r1', null));
         const notes = BuildMeasurementReport({ ...INPUT, Costs: partial }).Notes.join('\n');
         expect(notes).toMatch(/LLM: 7 of 8 answers have a prompt run with a known cost/);
+    });
+
+    it('says the sample is the population when it took every candidate', () => {
+        expect(report.Sample).toMatchObject({ Candidates: 4, Balanced: false });
+        expect(report.Notes.join('\n')).toMatch(/every one of the 4 candidate records/);
+        expect(RenderReportMarkdown(report)).toContain('| Accuracy against labels | 75.0% (95% CI');
+    });
+
+    it('says accuracy is over a balanced sample when the sample is smaller than the candidates', () => {
+        const balanced = BuildMeasurementReport({ ...INPUT, CandidateCount: 10 });
+        expect(balanced.Sample).toMatchObject({ Size: 4, Candidates: 10, Balanced: true });
+        expect(balanced.Notes.join('\n')).toMatch(/4 of 10 candidate records, drawn as evenly per value as the data allows, so accuracy is over that balanced mix/);
+        const markdown = RenderReportMarkdown(balanced);
+        expect(markdown).toContain('| Accuracy against labels (sample balanced per value) | 75.0% (95% CI');
+        expect(markdown).toContain('from 10 candidates, balanced per value');
     });
 
     it('records the value descriptions both types saw', () => {
