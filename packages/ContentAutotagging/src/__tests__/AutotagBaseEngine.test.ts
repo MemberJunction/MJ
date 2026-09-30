@@ -958,7 +958,7 @@ describe('AutotagBaseEngine', () => {
       expect(records[0].metadata.Tags).toEqual(['ai']);
     });
 
-    it('threads the vector index Dimensions through to the embedding call', async () => {
+    it("pins the vector index's embedding model and threads its Dimensions through to the embedding call", async () => {
       await setupVectorMocks();
       const { KnowledgeHubMetadataEngine } = await import('@memberjunction/core-entities');
       const index = KnowledgeHubMetadataEngine.Instance.VectorIndexes[0] as { Dimensions?: number | null };
@@ -970,6 +970,8 @@ describe('AutotagBaseEngine', () => {
         // RunEmbedding so the provider produces reduced-dimension vectors.
         expect(mockRunEmbeddingFn).toHaveBeenCalled();
         const embedArgs = mockRunEmbeddingFn.mock.calls[0][0];
+        // ModelID keeps the index single-model: unpinned, the runner may answer from another model.
+        expect(embedArgs.ModelID).toBe('embed-model-1');
         expect(embedArgs.Dimensions).toBe(1024);
       } finally {
         index.Dimensions = original;
