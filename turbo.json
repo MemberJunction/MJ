@@ -24,6 +24,7 @@
     "test": {
       "dependsOn": ["build"],
       "outputs": ["coverage/**"],
+      "env": ["REDIS_URL"],
       "inputs": [
         "src/**/*.ts",
         "src/**/*.tsx",

@@ -21,6 +21,7 @@ on:
       # The native-ESM import guard + its vitest suite run in this workflow (see the
       # "Native-ESM import guard" step), so changes to them must trigger it.
       - '.github/scripts/check-esm-imports.mjs'
+      - '.github/scripts/check-redis-suites-ran.mjs'
       # The shard planner decides what the test matrix runs; a break in it silently
       # narrows or empties the test tier, so it must run its own suite.
       - '.github/scripts/plan-test-shards.mjs'
@@ -642,11 +643,15 @@ jobs:
       fail-fast: false
       matrix:
         shard: ${{ fromJSON(needs.build.outputs.shards) }}
-    # A real Redis for the shard that draws @memberjunction/redis-provider. Its two integration
-    # files are `describe.skipIf(!REDIS_URL)`, so without a server they execute-and-skip — the
-    # index-group pruning, TTL, key-lock and lease behaviour they pin had NO CI coverage at all,
-    # and a fail-open pruning bug that silently disables cross-server invalidation shipped through
-    # a green run (plan §16.3 #2, §16.7). Every other shard ignores the service; it costs seconds.
+    # A real Redis for the shard that draws @memberjunction/redis-provider. Its `integration-*`
+    # test files are `describe.skipIf(!REDIS_URL)`, so without a server they execute-and-skip — the
+    # pub/sub, TTL, key-lock and lease behaviour they pin had NO CI coverage at all, and a
+    # fail-open pruning bug that silently disables cross-server invalidation shipped through a
+    # green run. Every other shard ignores the service; it costs seconds.
+    #
+    # `REDIS_URL` must ALSO be declared on the `test` task in turbo.json: turbo 2.x runs tasks in
+    # strict env mode and strips anything undeclared, so without that the main test step still
+    # skips these suites, and turbo could replay a cached result from a run that had no Redis.
     services:
       redis:
         image: redis:7-alpine
@@ -662,10 +667,10 @@ jobs:
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
       TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
-      # Consumed only by the Redis-gated suites; a per-run key prefix keeps concurrent shards and
-      # re-runs from sharing a keyspace.
+      # Consumed by the Redis-gated suites. No key prefix is set here: those suites choose their
+      # own (`test-integration`), and each job gets its own Redis service container, so there is no
+      # keyspace to share with anyone.
       REDIS_URL: redis://127.0.0.1:6379
-      REDIS_KEY_PREFIX: ci-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       # fetch-depth 1: a shard runs tests against the working tree and never diffs a base ref.
       - name: Checkout repo
@@ -740,8 +745,9 @@ jobs:
           npx turbo run test --concurrency=4 "${FILTER_ARGS[@]}"
 
       # A skipped suite and a passing suite look identical in the summary, which is how the
-      # Redis-gated files stayed dormant for a whole release. If this shard drew the Redis
-      # provider, assert the gated bodies actually ran.
+      # Redis-gated files stayed dormant for a whole release. The step above now runs them for
+      # real; this asserts they were not skipped, which is the one thing a green summary cannot
+      # tell you by itself.
       - name: Assert the Redis-gated suites really ran
         if: contains(matrix.shard.packages, '@memberjunction/redis-provider')
         run: node .github/scripts/check-redis-suites-ran.mjs
