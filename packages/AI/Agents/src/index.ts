@@ -33,6 +33,7 @@ export * from './ArtifactToolManager';
 export * from './ConversationCompactionManager';
 export * from './ConversationToolManager';
 export * from './AgentDecisionService';
+export * from './finish-if-state';
 export * from './MemoryWriteManager';
 export * from './SkillMarkdownConverter';
 export * from './SkillImportExportService';

@@ -179,6 +179,16 @@ import {
     MentionsAgent,
 } from './decision-discovery';
 import {
+    BuildFinishIfQuestions,
+    CapFinishIfState,
+    FINISH_IF_STATE_EXCERPT,
+    FormatActionForFinishIf,
+    FormatSubAgentForFinishIf,
+    JudgeFinishIf,
+    type FinishIfOutcome,
+    type SubAgentStepResult
+} from './finish-if-state';
+import {
     PipelineExecutor,
     PipelineToolRegistry,
     PipelineInvocable,
@@ -472,59 +482,6 @@ interface FinishIfSettings {
     Mode: FinishIfMode;
     Threshold: number;
     PromptName: string;
-}
-
-/** The outcome of a finishIf gate. */
-interface FinishIfOutcome {
-    Passed: boolean;
-    Probabilities: Record<string, number>;
-    Reason: string;
-}
-
-/**
- * A Sub-Agent step's result. The child and related paths spread the sub-agent's own
- * `ExecuteAgentResult` into it, so its final message and returned payload are there too.
- */
-type SubAgentStepResult<P> = BaseAgentNextStep<P> & Partial<Pick<ExecuteAgentResult, 'agentRun' | 'payload'>>;
-
-/** The most text of a step's results the finishIf gate sends to the decision model. */
-const FINISH_IF_STATE_MAX = 16000;
-
-/** How much of the finishIf state the `Finish check` step records. */
-const FINISH_IF_STATE_EXCERPT = 2000;
-
-function capFinishIfState(text: string): string {
-    return text.length > FINISH_IF_STATE_MAX ? text.slice(0, FINISH_IF_STATE_MAX) : text;
-}
-
-function jsonExcerpt(value: unknown, max: number): string {
-    let text: string;
-    try {
-        text = typeof value === 'string' ? value : JSON.stringify(value) ?? '';
-    } catch {
-        text = String(value);
-    }
-    return text.slice(0, max);
-}
-
-/** One action's result as finishIf text: its name, outcome, message and sanitized output params. */
-function formatActionForFinishIf(summary: ActionResultSummary): string {
-    const lines = [`Action: ${summary.actionName}`, `Message: ${String(summary.message ?? '').slice(0, 1000)}`];
-    for (const param of summary.params ?? []) {
-        lines.push(`Output ${param.Name}: ${jsonExcerpt(param.Value, 2000)}`);
-    }
-    return lines.join('\n');
-}
-
-/** A sub-agent's result as finishIf text: its final message and the payload it returned. */
-function formatSubAgentForFinishIf<P>(result: SubAgentStepResult<P>): string {
-    const message = result.agentRun?.Message ?? result.message ?? '';
-    const payload = result.payload ?? result.newPayload;
-    const lines = [`Final message: ${String(message).slice(0, 4000)}`];
-    if (payload !== undefined && payload !== null) {
-        lines.push(`Payload: ${jsonExcerpt(payload, 4000)}`);
-    }
-    return capFinishIfState(lines.join('\n\n'));
 }
 
 /** The top-level `reasoning` and `message` of a prompt's JSON response, when it has them. */
@@ -9552,7 +9509,7 @@ The context is now within limits. Please retry your request with the recovered c
             this.logStatus(`[finishIf] Gate skipped: ${withDirectives.join(', ')} returned AIDirectives, which the model must see on its next turn`, false, params);
             return undefined;
         }
-        const state = capFinishIfState(actionSummaries.map(formatActionForFinishIf).join('\n\n'));
+        const state = CapFinishIfState(actionSummaries.map(FormatActionForFinishIf).join('\n\n'));
         const outcome = await this.evaluateFinishIf(finishIf, state, params, decision, payload, parentStepId);
         return this.gateEndsRun(outcome, params)
             ? { ...this.finishIfSuccessStep(finishIf, decision, payload), priorStepResult: actionSummaries }
@@ -9572,7 +9529,7 @@ The context is now within limits. Please retry your request with the recovered c
         if (!finishIf || result.terminate || result.step !== 'Success' || !this.finishIfSettings().Enabled) {
             return undefined;
         }
-        const outcome = await this.evaluateFinishIf(finishIf, formatSubAgentForFinishIf(result), params, decision, result.newPayload);
+        const outcome = await this.evaluateFinishIf(finishIf, FormatSubAgentForFinishIf(result), params, decision, result.newPayload);
         return this.gateEndsRun(outcome, params) ? { ...result, terminate: true, message: finishIf.message } : undefined;
     }
 
@@ -9626,10 +9583,7 @@ The context is now within limits. Please retry your request with the recovered c
         params: ExecuteAgentParams,
         step: MJAIAgentRunStepEntityExtended
     ): Promise<FinishIfOutcome> {
-        const questions: Record<string, DecisionQuestion> = {};
-        finishIf.questions.forEach((question, i) => {
-            questions[`q${i + 1}`] = { Kind: 'Likelihood', Instructions: question };
-        });
+        const questions = BuildFinishIfQuestions(finishIf);
         const result = await this._agentDecisionService.Ask({
             State: state,
             Questions: questions,
@@ -9642,23 +9596,7 @@ The context is now within limits. Please retry your request with the recovered c
         if (!result.success) {
             return { Passed: false, Probabilities: {}, Reason: `The decision call failed: ${result.errorMessage ?? 'no error message'}` };
         }
-        const probabilities: Record<string, number> = {};
-        const failures: string[] = [];
-        for (const key of Object.keys(questions)) {
-            const answer = result.Answers[key];
-            if (answer?.Kind !== 'Likelihood') {
-                failures.push(`${key} has no answer`);
-                continue;
-            }
-            probabilities[key] = answer.Probability;
-            // Written so that a non-numeric probability fails too.
-            if (!(answer.Probability >= settings.Threshold)) {
-                failures.push(`${key} is ${answer.Probability}`);
-            }
-        }
-        return failures.length === 0
-            ? { Passed: true, Probabilities: probabilities, Reason: `Every question reached ${settings.Threshold}` }
-            : { Passed: false, Probabilities: probabilities, Reason: `Below the threshold of ${settings.Threshold}: ${failures.join('; ')}` };
+        return JudgeFinishIf(result.Answers, questions, settings.Threshold);
     }
 
     /**

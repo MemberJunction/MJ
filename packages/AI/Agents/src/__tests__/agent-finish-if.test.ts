@@ -1,9 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { UserInfo, LogStatus } from '@memberjunction/core';
-import { ActionResult } from '@memberjunction/actions-base';
+import { UserInfo, LogStatus, type IMetadataProvider } from '@memberjunction/core';
+import { ActionResult, type MJActionEntityExtended } from '@memberjunction/actions-base';
 import { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
-import { AIPromptRunResult, BaseAgentNextStep, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
+import {
+    AIPromptRunResult,
+    BaseAgentNextStep,
+    ExecuteAgentParams,
+    type MJAIAgentEntityExtended,
+    type MJAIAgentRunEntityExtended,
+    type MJAIAgentRunStepEntityExtended,
+} from '@memberjunction/ai-core-plus';
 import { AgentDecisionService, AgentDecisionAskParams } from '../AgentDecisionService';
 import { BaseAgent } from '../base-agent';
 import { LoopAgentType } from '../agent-types/loop-agent-type';
@@ -24,11 +31,11 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 });
 
 /** A step entity that records what the agent writes to it. */
-class MockStepEntity {
+class MockStepEntity implements Partial<MJAIAgentRunStepEntityExtended> {
     public ID: string;
-    public StepType?: string;
+    public StepType?: MJAIAgentRunStepEntityExtended['StepType'];
     public StepName?: string;
-    public Status?: string;
+    public Status?: MJAIAgentRunStepEntityExtended['Status'];
     public StartedAt = new Date();
     public CompletedAt?: Date;
     public Success?: boolean;
@@ -41,32 +48,22 @@ class MockStepEntity {
     constructor(id: string) {
         this.ID = id;
     }
-    public NewRecord(): void {}
+    public NewRecord(): boolean {
+        return true;
+    }
     public async Save(): Promise<boolean> {
         return true;
     }
 }
 
-/** The BaseAgent members these tests reach. */
-interface AgentInternals {
-    _agentTypePromptParams?: Record<string, unknown>;
-    _generalValidationRetryCount: number;
-    _validationRetryCount: number;
-    _agentRun: { ID: string; AgentID: string; Steps: unknown[] };
-    _agentTypeInstance: LoopAgentType;
-    _effectiveActions: Array<{ ID: string; Name: string }>;
-    _activeProvider: { GetEntityObject: () => Promise<MockStepEntity> };
-    ExecuteSingleAction: () => Promise<ActionResult>;
-    processSubAgentStep: () => Promise<BaseAgentNextStep>;
-    validateSuccessNextStep: (params: ExecuteAgentParams, nextStep: BaseAgentNextStep) => Promise<BaseAgentNextStep>;
-    finalizeStepEntity: (step: MockStepEntity, success: boolean, error?: string, output?: Record<string, unknown>) => Promise<void>;
-    executeActionsStep: (
-        params: ExecuteAgentParams,
-        decision: BaseAgentNextStep,
-        parentStepId: string | undefined,
-        addConversationMessage: boolean,
-        stepCount: number
-    ) => Promise<BaseAgentNextStep>;
+class MockAgentRun implements Partial<MJAIAgentRunEntityExtended> {
+    public ID = 'run-1';
+    public AgentID = 'agent-1';
+    public Steps: MJAIAgentRunStepEntityExtended[] = [];
+}
+
+class MockMetadataProvider implements Partial<IMetadataProvider> {
+    constructor(public readonly GetEntityObject: (entityName: string) => Promise<MJAIAgentRunStepEntityExtended>) {}
 }
 
 class TestAgent extends BaseAgent {
@@ -77,9 +74,28 @@ class TestAgent extends BaseAgent {
         this.applyResponseTypeAutoAlignment(params, explicit);
     }
     public TestExecuteNextStep(params: ExecuteAgentParams, decision: BaseAgentNextStep): Promise<BaseAgentNextStep> {
-        return this.executeNextStep(params, {} as never, decision, 1);
+        return this.executeNextStep(params, { success: true }, decision, 1);
+    }
+    public override validateSuccessNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P,
+        agentRun: MJAIAgentRunEntityExtended,
+        currentStep: MJAIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>> {
+        return super.validateSuccessNextStep(params, nextStep, currentPayload, agentRun, currentStep);
+    }
+    public override finalizeStepEntity(
+        stepEntity: MJAIAgentRunStepEntityExtended,
+        success: boolean,
+        errorMessage?: string,
+        outputData?: Record<string, unknown>
+    ): Promise<void> {
+        return super.finalizeStepEntity(stepEntity, success, errorMessage, outputData);
     }
 }
+
+const actionResult = (fields: Partial<ActionResult>): ActionResult => Object.assign(new ActionResult(), fields);
 
 const FINISH_IF = { questions: ['The results show the task was created.'], message: 'Done. I added the task.' };
 
@@ -95,8 +111,8 @@ function makeParams(): ExecuteAgentParams {
     return {
         contextUser: { ID: 'user-1' } as UserInfo,
         conversationMessages: [],
-        agent: { ID: 'agent-1', Name: 'TestAgent' },
-    } as unknown as ExecuteAgentParams;
+        agent: { ID: 'agent-1', Name: 'TestAgent' } as MJAIAgentEntityExtended,
+    };
 }
 
 function actionsDecision(finishIf = FINISH_IF): BaseAgentNextStep {
@@ -109,26 +125,24 @@ function subAgentDecision(): BaseAgentNextStep {
 
 describe('finishIf', () => {
     let agent: TestAgent;
-    let internals: AgentInternals;
     let decisions: AgentDecisionService;
     let finishChecks: Array<Record<string, unknown>>;
 
     beforeEach(() => {
         vi.restoreAllMocks();
         agent = new TestAgent();
-        internals = agent as unknown as AgentInternals;
-        internals._agentTypeInstance = new LoopAgentType();
-        internals._effectiveActions = [{ ID: '11111111-1111-1111-1111-111111111111', Name: 'Create Record' }];
-        internals._activeProvider = { GetEntityObject: vi.fn(async () => new MockStepEntity('step-1')) };
-        internals._agentRun = { ID: 'run-1', AgentID: 'agent-1', Steps: [] };
+        agent['_agentTypeInstance'] = new LoopAgentType();
+        agent['_effectiveActions'] = [{ ID: '11111111-1111-1111-1111-111111111111', Name: 'Create Record' }] as MJActionEntityExtended[];
+        agent['_activeProvider'] = new MockMetadataProvider(async () => new MockStepEntity('step-1') as MJAIAgentRunStepEntityExtended) as IMetadataProvider;
+        agent['_agentRun'] = new MockAgentRun() as MJAIAgentRunEntityExtended;
         // These tests exercise a live gate; gates are opt-in (finishIfMode defaults to 'off').
-        internals._agentTypePromptParams = { finishIfMode: 'on' };
+        agent['_agentTypePromptParams'] = { finishIfMode: 'on' };
         decisions = new AgentDecisionService();
         agent.SetDecisionService(decisions);
-        vi.spyOn(internals, 'validateSuccessNextStep').mockImplementation(async (_params, nextStep) => nextStep);
+        vi.spyOn(agent, 'validateSuccessNextStep').mockImplementation(async (_params, nextStep) => nextStep);
         finishChecks = [];
-        const finalize = internals.finalizeStepEntity.bind(agent);
-        vi.spyOn(internals, 'finalizeStepEntity').mockImplementation(async (step, success, error, output) => {
+        const finalize = agent.finalizeStepEntity.bind(agent);
+        vi.spyOn(agent, 'finalizeStepEntity').mockImplementation(async (step, success, error, output) => {
             if (output && 'passed' in output) {
                 finishChecks.push(output);
             }
@@ -136,13 +150,13 @@ describe('finishIf', () => {
         });
     });
 
-    /** executeActionsStep is private on BaseAgent, so it is reached through the internals seam. */
+    /** executeActionsStep is private on BaseAgent, so it is reached through bracket access. */
     function executeActions(params: ExecuteAgentParams, decision: BaseAgentNextStep, addConversationMessage = true): Promise<BaseAgentNextStep> {
-        return internals.executeActionsStep(params, decision, undefined, addConversationMessage, 1);
+        return agent['executeActionsStep'](params, decision, undefined, addConversationMessage, 1);
     }
 
     function actionSucceeds(params: ActionResult['Params'] = []): void {
-        vi.spyOn(internals, 'ExecuteSingleAction').mockResolvedValueOnce({ Success: true, Message: 'Created', Params: params } as unknown as ActionResult);
+        vi.spyOn(agent, 'ExecuteSingleAction').mockResolvedValueOnce(actionResult({ Success: true, Message: 'Created', Params: params }));
     }
 
     describe('prompt params', () => {
@@ -180,7 +194,12 @@ describe('finishIf', () => {
     describe('LoopAgentType carries finishIf', () => {
         const loop = new LoopAgentType();
         const determine = (response: Record<string, unknown>): Promise<BaseAgentNextStep> =>
-            loop.DetermineNextStep({ success: true, result: JSON.stringify(response) } as unknown as AIPromptRunResult, {} as never, {}, {});
+            loop.DetermineNextStep(
+                Object.assign({} as AIPromptRunResult, { success: true, result: JSON.stringify(response) }),
+                makeParams(),
+                {},
+                {}
+            );
 
         it('carries a valid finishIf on Actions and Sub-Agent steps', async () => {
             const actions = await determine({ taskComplete: false, nextStep: { type: 'Actions', actions: [{ name: 'Create Record' }], finishIf: FINISH_IF } });
@@ -238,7 +257,7 @@ describe('finishIf', () => {
         });
 
         it('records a passing gate in shadow mode, and continues as it would have without the gate', async () => {
-            internals._agentTypePromptParams = { finishIfMode: 'shadow' };
+            agent['_agentTypePromptParams'] = { finishIfMode: 'shadow' };
             actionSucceeds();
             const ask = vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(likelihoods(0.95));
 
@@ -262,7 +281,7 @@ describe('finishIf', () => {
             ['unset', undefined],
             ['off', { finishIfMode: 'off' }],
         ])('never asks, and records nothing, with finishIfMode %s', async (_label, promptParams) => {
-            internals._agentTypePromptParams = promptParams;
+            agent['_agentTypePromptParams'] = promptParams;
             actionSucceeds();
             const ask = vi.spyOn(decisions, 'Ask');
 
@@ -284,7 +303,7 @@ describe('finishIf', () => {
         });
 
         it('never asks when an action returned Success: false without throwing', async () => {
-            vi.spyOn(internals, 'ExecuteSingleAction').mockResolvedValueOnce({ Success: false, Message: 'Denied', Params: [] } as unknown as ActionResult);
+            vi.spyOn(agent, 'ExecuteSingleAction').mockResolvedValueOnce(actionResult({ Success: false, Message: 'Denied', Params: [] }));
             const ask = vi.spyOn(decisions, 'Ask');
 
             const result = await executeActions(makeParams(), actionsDecision());
@@ -313,12 +332,12 @@ describe('finishIf', () => {
         it('does not pass when Success validation would refuse, and never counts as a validation retry', async () => {
             actionSucceeds();
             vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(likelihoods(0.99));
-            internals._generalValidationRetryCount = 1;
-            internals._validationRetryCount = 2;
-            vi.mocked(internals.validateSuccessNextStep).mockImplementationOnce(async () => {
+            agent['_generalValidationRetryCount'] = 1;
+            agent['_validationRetryCount'] = 2;
+            vi.mocked(agent.validateSuccessNextStep).mockImplementationOnce(async () => {
                 // What the real validation does when it demotes Success to Retry.
-                internals._generalValidationRetryCount++;
-                internals._validationRetryCount++;
+                agent['_generalValidationRetryCount']++;
+                agent['_validationRetryCount']++;
                 return { step: 'Retry', terminate: false, errorMessage: 'Minimum execution requirements not met' };
             });
 
@@ -326,8 +345,8 @@ describe('finishIf', () => {
 
             expect(result.step).toBe('Retry');
             expect(finishChecks[0]).toMatchObject({ passed: false, reason: 'Minimum execution requirements not met' });
-            expect(internals._generalValidationRetryCount).toBe(1);
-            expect(internals._validationRetryCount).toBe(2);
+            expect(agent['_generalValidationRetryCount']).toBe(1);
+            expect(agent['_validationRetryCount']).toBe(2);
         });
 
         it('is never evaluated inside ForEach or While iterations', async () => {
@@ -341,7 +360,7 @@ describe('finishIf', () => {
         });
 
         it('is never evaluated when includeResponseTypeDefinition.finishIf is false', async () => {
-            internals._agentTypePromptParams = { finishIfMode: 'on', includeResponseTypeDefinition: { finishIf: false } };
+            agent['_agentTypePromptParams'] = { finishIfMode: 'on', includeResponseTypeDefinition: { finishIf: false } };
             actionSucceeds();
             const ask = vi.spyOn(decisions, 'Ask');
 
@@ -352,7 +371,7 @@ describe('finishIf', () => {
         });
 
         it('reads the threshold and the decision prompt from the merged prompt params', async () => {
-            internals._agentTypePromptParams = { finishIfMode: 'on', finishIfThreshold: 0.8, decisionPromptName: 'Custom Decision' };
+            agent['_agentTypePromptParams'] = { finishIfMode: 'on', finishIfThreshold: 0.8, decisionPromptName: 'Custom Decision' };
             actionSucceeds();
             const ask = vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(likelihoods(0.85));
 
@@ -365,12 +384,12 @@ describe('finishIf', () => {
 
     describe('after a sub-agent', () => {
         const subAgentSucceeded = (overrides: Partial<BaseAgentNextStep> & Record<string, unknown> = {}): void => {
-            vi.spyOn(internals, 'processSubAgentStep').mockResolvedValueOnce({
+            agent['processSubAgentStep'] = vi.fn().mockResolvedValueOnce({
                 step: 'Success',
                 terminate: false,
                 newPayload: { merged: true },
                 // The child and related paths spread the sub-agent's ExecuteAgentResult into the step.
-                agentRun: { Message: 'I created task T-42.' },
+                agentRun: { Message: 'I created task T-42.' } as MJAIAgentRunEntityExtended,
                 payload: { taskId: 'T-42' },
                 ...overrides,
             } as BaseAgentNextStep);
@@ -437,7 +456,7 @@ describe('finishIf', () => {
             ['returns Success: false', (): Promise<ActionResult> => Promise.resolve(actionResult({ Success: false, Message: 'Denied', Params: [] }))],
             ['throws', (): Promise<ActionResult> => Promise.reject(new Error('Action timed out'))],
         ])('never asks when one of two actions %s, so one success cannot end the run', async (_label, second) => {
-            vi.spyOn(internals, 'ExecuteSingleAction')
+            vi.spyOn(agent, 'ExecuteSingleAction')
                 .mockResolvedValueOnce(actionResult({ Success: true, Message: 'Created', Params: [] }))
                 .mockImplementationOnce(second);
             const ask = vi.spyOn(decisions, 'Ask').mockResolvedValue(likelihoods(0.99));
@@ -449,7 +468,7 @@ describe('finishIf', () => {
         });
 
         it('ends the run when both of two actions succeed', async () => {
-            vi.spyOn(internals, 'ExecuteSingleAction')
+            vi.spyOn(agent, 'ExecuteSingleAction')
                 .mockResolvedValueOnce(actionResult({ Success: true, Message: 'Created', Params: [] }))
                 .mockResolvedValueOnce(actionResult({ Success: true, Message: 'Created', Params: [] }));
             vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(likelihoods(0.99));
@@ -463,7 +482,7 @@ describe('finishIf', () => {
             ['the default threshold', undefined, 0.9],
             ['a configured threshold', 0.8, 0.8],
         ])('passes a probability exactly at %s', async (_label, configured, probability) => {
-            internals._agentTypePromptParams = configured === undefined ? { finishIfMode: 'on' } : { finishIfMode: 'on', finishIfThreshold: configured };
+            agent['_agentTypePromptParams'] = configured === undefined ? { finishIfMode: 'on' } : { finishIfMode: 'on', finishIfThreshold: configured };
             actionSucceeds();
             vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(likelihoods(probability));
 
@@ -480,7 +499,7 @@ describe('finishIf', () => {
             ['a negative number', -0.2],
             ['a number above 1', 1.5],
         ])('falls back to the 0.9 threshold when finishIfThreshold is %s', async (_label, threshold) => {
-            internals._agentTypePromptParams = { finishIfMode: 'on', finishIfThreshold: threshold };
+            agent['_agentTypePromptParams'] = { finishIfMode: 'on', finishIfThreshold: threshold };
             actionSucceeds();
             vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(likelihoods(0.85));
 
@@ -493,7 +512,7 @@ describe('finishIf', () => {
         it('does not end the run when checking Success validation throws', async () => {
             actionSucceeds();
             vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(likelihoods(0.99));
-            vi.mocked(internals.validateSuccessNextStep).mockRejectedValueOnce(new Error('validator crashed'));
+            vi.mocked(agent.validateSuccessNextStep).mockRejectedValueOnce(new Error('validator crashed'));
 
             const result = await executeActions(makeParams(), actionsDecision());
 
@@ -504,7 +523,7 @@ describe('finishIf', () => {
 
         it('skips the gate, and logs why, when an action returned AIDirectives the model must read', async () => {
             vi.mocked(LogStatus).mockClear();
-            vi.spyOn(internals, 'ExecuteSingleAction').mockResolvedValueOnce(actionResult({
+            vi.spyOn(agent, 'ExecuteSingleAction').mockResolvedValueOnce(actionResult({
                 Success: true,
                 Message: 'Found a stored query',
                 Params: [],
@@ -524,13 +543,11 @@ describe('finishIf', () => {
 
         it("links the decision call's prompt run to the Finish check step, so the run counts its cost", async () => {
             const steps: MockStepEntity[] = [];
-            internals._activeProvider = {
-                GetEntityObject: vi.fn(async () => {
-                    const step = new MockStepEntity(`step-${steps.length + 1}`);
-                    steps.push(step);
-                    return step;
-                }),
-            };
+            agent['_activeProvider'] = new MockMetadataProvider(async () => {
+                const step = new MockStepEntity(`step-${steps.length + 1}`);
+                steps.push(step);
+                return step as MJAIAgentRunStepEntityExtended;
+            }) as IMetadataProvider;
             actionSucceeds();
             const promptRun = { ID: 'prun-gate' } satisfies Pick<MJAIPromptRunEntity, 'ID'>;
             vi.spyOn(decisions, 'Ask').mockResolvedValueOnce({ ...likelihoods(0.95), promptRun: promptRun as MJAIPromptRunEntity });
