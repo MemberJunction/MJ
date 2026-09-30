@@ -261,6 +261,17 @@ describe('MessageInputComponent — decision routing', () => {
     describe('on', () => {
         beforeEach(() => h.set({ EnableDecisionRouting: true }));
 
+        /**
+         * Composers are cached per conversation. Opening another conversation rebinds this hidden
+         * composer's history to [] and its pinned agent to null; the call does that, then answers.
+         */
+        function switchesAwayThenAnswers(result: RunDecisionResult): void {
+            h.runDecision.mockImplementation(async () => {
+                h.set({ ConversationHistory: [], ConversationDefaultAgentId: null });
+                return result;
+            });
+        }
+
         it('a confident Choice of another agent routes the turn to it, labelled DecisionRouted', async () => {
             h.runDecision.mockResolvedValue(leavesTo(RESEARCH));
 
@@ -315,6 +326,26 @@ describe('MessageInputComponent — decision routing', () => {
 
             expect(h.before.map(e => [e.Route, e.AgentId])).toEqual([['Continuity', WRITER.ID]]);
             expect(h.invokeSubAgent.mock.calls[0][0]).toBe('Writer');
+        });
+
+        describe('when the person opens another conversation during the call', () => {
+            it('a kept thread still goes to the last agent', async () => {
+                switchesAwayThenAnswers(answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.9) }));
+
+                await h.route(userMessage());
+
+                expect(h.before.map(e => [e.Route, e.AgentId])).toEqual([['Continuity', WRITER.ID]]);
+                expect(h.invokeSubAgent.mock.calls[0][0]).toBe('Writer');
+            });
+
+            it('someone else still goes to the conversation\'s pinned agent', async () => {
+                h.set({ ConversationDefaultAgentId: RESEARCH.ID });
+                switchesAwayThenAnswers(leavesTo(MANAGER));
+
+                await h.route(userMessage());
+
+                expect(h.before.map(e => [e.Route, e.AgentId])).toEqual([['ConversationDefault', RESEARCH.ID]]);
+            });
         });
 
         it('an answer slower than 250 ms keeps continuity', async () => {
@@ -412,6 +443,17 @@ describe('MessageInputComponent — decision routing', () => {
 
                 expect(h.findVersion).not.toHaveBeenCalled();
                 expect(h.invokeSubAgent.mock.calls[0][9]).toBeUndefined();
+            });
+
+            it('keeps the version when the person opens another conversation during the call', async () => {
+                switchesAwayThenAnswers(answered({
+                    route: choice(WRITER.ID, 0.9), continues: likelihood(0.9), artifact: choice(VERSION, 0.9),
+                }));
+
+                await h.route(userMessage());
+
+                expect(h.invokeSubAgent.mock.calls[0][0]).toBe('Writer');
+                expect(h.invokeSubAgent.mock.calls[0][9]).toBe(VERSION);
             });
 
             it('does not hand one agent\'s version to another agent\'s turn', async () => {

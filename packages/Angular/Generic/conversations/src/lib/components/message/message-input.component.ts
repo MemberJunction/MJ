@@ -2070,8 +2070,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         .catch(error => console.error('Conversation naming failed:', error));
     }
 
-    const routing = await this.decideAgentRouting(messageDetail, mentionResult);
-    const target = this.resolveAgentTurnTarget(mentionResult, routing);
+    // Read the candidates before any await. This composer stays cached while the person opens
+    // another conversation, and the chat area then rebinds its history and pinned agent, so a
+    // read after the routing decision could see another conversation's state (or none).
+    const candidates = this.agentTurnCandidates(this.agentMentionIds(mentionResult));
+    const routing = await this.decideAgentRouting(messageDetail, candidates);
+    const target = this.resolveAgentTurnTarget(candidates, routing);
     if (!target) {
       await this.finishWithoutAgentTurn(messageDetail, 'NoAgent');
       return;
@@ -2088,16 +2092,18 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * Asks the routing decision for this message when {@link EnableDecisionRouting} is on and the
    * message qualifies (see `ShouldRunRoutingDecision`). Returns null, with no call, otherwise, and
    * when anything fails: the message then keeps today's routing.
+   *
+   * @param candidates The turn's candidates, read before any await (see {@link routeMessage}).
    */
   private async decideAgentRouting(
     message: MJConversationDetailEntity,
-    mentionResult: MentionParseResult
+    candidates: AgentTurnCandidates
   ): Promise<RoutingDecisionOutcome | null> {
-    const continuityAgentId = this.findLastNonSageAgentId();
+    const continuityAgentId = candidates.ContinuityAgentId;
     const qualifies = ShouldRunRoutingDecision({
       Enabled: this.EnableDecisionRouting,
       ReplyMode: this.AgentReplyMode,
-      MentionedAgentIds: this.agentMentionIds(mentionResult),
+      MentionedAgentIds: candidates.MentionedAgentIds,
       Message: message.Message ?? '',
       ContinuityAgentId: continuityAgentId
     });
@@ -2105,6 +2111,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       return null;
     }
     try {
+      // Built before the first await, so it reads the same conversation as the candidates.
       const input = this.buildRoutingDecisionInput(message, continuityAgentId);
       if (!CanAskRoutingDecision(input)) {
         return null;
@@ -2172,11 +2179,11 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * A routing decision, when there was one, is applied to the candidates first.
    */
   private resolveAgentTurnTarget(
-    mentionResult: MentionParseResult,
-    routing: RoutingDecisionOutcome | null = null
+    candidates: AgentTurnCandidates,
+    routing: RoutingDecisionOutcome | null
   ): AgentTurnTarget | null {
     return ResolveAgentTurn(
-      ApplyRoutingDecision(this.agentTurnCandidates(this.agentMentionIds(mentionResult)), routing),
+      ApplyRoutingDecision(candidates, routing),
       this.agentTurnRules,
       agentId => this.isKnownAgent(agentId)
     );
