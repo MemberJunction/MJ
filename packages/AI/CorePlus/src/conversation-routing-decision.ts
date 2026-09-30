@@ -23,11 +23,18 @@ import type { MJAIAgentEntityExtended } from './MJAIAgentEntityExtended';
  * The call is abandoned client-side at this point, and the server is asked to bound its model call
  * to the same figure.
  *
- * Set from the Phase 2 Decision Eval (plan Task 2.4, 2026-09-29). There, Jev answered this decision
- * in 187 ms at p50 and 258 ms at p95 over 301 points, measured in-process on the server. At 250 ms,
- * routing gave up on about 1 call in 20 before any network time; 350 ms leaves room for the network. LLM Decision,
- * the failover, answered in about 520 ms at p50, so while Jev is unavailable routing times out and
- * keeps continuity, which is the safe outcome.
+ * **The budget.** The prompt-based intent check this replaces was removed at about 300 ms, so the
+ * decision has to come in under that, network included (plan Task 3.9).
+ *
+ * **This value is over that budget, deliberately.** In the Phase 2 Decision Eval (plan Task 2.4,
+ * 2026-09-29) Jev answered this decision in 187 ms at p50 and 258 ms at p95 over 301 points,
+ * measured in-process on the server. At 250 ms routing gave up on about 1 call in 20 before any
+ * network time, and a budget under 300 ms, network included, would give up on more. 350 ms leaves
+ * room for the network. The cost is bounded and safe: a call that misses the deadline keeps
+ * continuity, as if routing were off; the wait falls only on an unmentioned message in a chat with
+ * `EnableDecisionRouting` on, which is off by default; and it is at most this long. LLM Decision, the
+ * failover, answered in about 520 ms at p50, so while Jev is unavailable routing times out and keeps
+ * continuity. Revisit the figure, or the plan's budget, once client-side latency is measured.
  */
 export const DECISION_ROUTING_TIMEOUT_MS = 350;
 
@@ -41,6 +48,13 @@ export const DECISION_ROUTING_TIMEOUT_MS = 350;
  * a calibrated 0.30, Jev routed away correctly 96.8% of the time, caught 86.2% of real switches, and
  * kept 96.1% of real continuations. LLM Decision scored 96.2%, 72.4% and 96.1%. At a 90%-continue
  * prior that is 95.1% (Jev) and 93.7% (LLM Decision) accurate, against 90.0% for always-continue.
+ *
+ * **Those figures are an upper bound on what routing does.** They score the thread Likelihood
+ * alone, on each point's mean over five repeats. Routing makes one call, and leaves the thread only
+ * when the agent Choice also reaches this confidence and names another agent the chat allows, and
+ * the answer arrives within {@link DECISION_ROUTING_TIMEOUT_MS}; and a switch counted here may have
+ * gone to the wrong agent. The Decision Eval scorecard's production-verdict table measures routing
+ * end to end, per run; it needs a re-run of the eval, since the stored runs predate calibration.
  * The agent Choice's confidence is not calibrated yet: the corpus labels continue or switch, not
  * which agent.
  */
