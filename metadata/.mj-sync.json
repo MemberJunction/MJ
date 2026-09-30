@@ -73,6 +73,8 @@
     "test-types",
     "tests",
     "test-suites",
+    "work-queue-transports",
+    "work-queue-topics",
     "entities",
     "datasets",
     "archiving",

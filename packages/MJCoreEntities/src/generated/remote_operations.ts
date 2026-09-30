@@ -814,6 +814,205 @@ export interface WebSearchQueryOutput {
     attempts: WebSearchQueryAttempt[];
 }
 
+/** Input for `WorkQueue.DiscardDelivery`. */
+export interface WorkQueueDiscardDeliveryInput {
+    subscriptionName: string;
+    /** A pending, dead-lettered or in-flight delivery. */
+    deliveryID: string;
+    /** Why the work is being dropped. Required; at most 1000 characters. */
+    reason: string;
+}
+
+/** Output of `WorkQueue.DiscardDelivery`. */
+export interface WorkQueueDiscardDeliveryOutput {
+    /** False when the transport cannot discard this kind of delivery (for example any SQS message). */
+    supported: boolean;
+    /** True when the delivery is now Discarded, or (for an in-flight delivery) its cancel was recorded. */
+    discarded: boolean;
+    /**
+     * True when the delivery was in flight: CancelRequestedAt is set, the running handler's next heartbeat (30 s at
+     * most) aborts it with reason 'Cancelled', and the row becomes Discarded when the handler acknowledges — or at
+     * lease expiry if its worker is gone (03 §7).
+     */
+    cancelRequested: boolean;
+}
+
+/** Input for `WorkQueue.GetBacklog`. */
+export interface WorkQueueGetBacklogInput {
+    subscriptionName: string;
+}
+
+/** Output of `WorkQueue.GetBacklog` — the autoscaler metric for one subscription. */
+export interface WorkQueueGetBacklogOutput {
+    /** False when the subscription's transport cannot report a backlog (AWS — scale Lambda from the queue's own metrics). */
+    supported: boolean;
+    /** Pending deliveries that a worker could claim right now (partition rules applied). */
+    claimable: number;
+    /** Deliveries currently leased by a worker. */
+    inFlight: number;
+    /** claimable + inFlight — the value a scheduler should scale on. */
+    total: number;
+    /** True when either count hit its cap of 1000: the real backlog is at least this large. */
+    capped: boolean;
+}
+
+/** Input for `WorkQueue.GetSubscriptionStats`. */
+export interface WorkQueueGetSubscriptionStatsInput {
+    /** One subscription by name (case-insensitive). Omit for every subscription. */
+    subscriptionName?: string;
+}
+
+/** One subscription's counts, read from its transport. */
+export interface WorkQueueSubscriptionStatsRow {
+    SubscriptionName: string;
+    Pending: number;
+    InFlight: number;
+    DeadLettered: number;
+    /** Null when the transport cannot count blocked keys. */
+    BlockedKeys: number | null;
+    /** Null when unknown (always null on AWS in Phase 1). */
+    OldestPendingAgeSeconds: number | null;
+    /** Null unless the transport keeps completed rows. */
+    CompletedLastHour: number | null;
+    /** ISO 8601 time the counts were read. */
+    AsOf: string;
+}
+
+/** A subscription whose stats could not be read. camelCase, as 03 §8 writes it. */
+export interface WorkQueueStatsFailureRow {
+    subscriptionName: string;
+    /** A sanitised message — never raw driver or SQL text. */
+    error: string;
+}
+
+/** Output of `WorkQueue.GetSubscriptionStats`. */
+export interface WorkQueueGetSubscriptionStatsOutput {
+    subscriptions: WorkQueueSubscriptionStatsRow[];
+    /** Populated only when no subscriptionName was given; a named subscription that fails fails the operation. */
+    failures: WorkQueueStatsFailureRow[];
+}
+
+/** Input for `WorkQueue.ListDeadLetters`. */
+export interface WorkQueueListDeadLettersInput {
+    /** The subscription to read (case-insensitive). */
+    subscriptionName: string;
+    /** The nextCursor of a previous page. Omit for the first page. */
+    cursor?: string;
+    /** 1–500; default 50. */
+    pageSize?: number;
+}
+
+/** Reference to data held outside the queue (claim-check). */
+export interface WorkQueuePayloadRefRow {
+    Uri: string;
+    ContentType?: string;
+    SizeBytes?: number;
+    Checksum?: string;
+}
+
+/** The dead-lettered message envelope. */
+export interface WorkQueueDeadLetterMessageRow {
+    MessageID: string;
+    Topic: string;
+    PartitionKey?: string;
+    Attributes: Record<string, string>;
+    /** The inline payload serialized as JSON, or null when the message carries none. */
+    PayloadJSON: string | null;
+    PayloadRef?: WorkQueuePayloadRefRow;
+    CorrelationID?: string;
+    /** ISO 8601 publish time. */
+    PublishedAt: string;
+}
+
+/** One dead-lettered delivery. */
+export interface WorkQueueDeadLetterRow {
+    /** Database: MJ: Work Queue Deliveries ID. AWS: the envelope MessageID. */
+    DeliveryID: string;
+    Message: WorkQueueDeadLetterMessageRow;
+    PartitionKey: string | null;
+    Attempts: number;
+    /** Handler reason, MaxAttemptsExceeded, LeaseExpired, HandlerNotRegistered, RedrivePolicy, InvalidEnvelope, … */
+    Reason: string;
+    LastError: string | null;
+    DeadLetteredAt: string | null;
+    /** True when this delivery is the dead-lettered head of an Ordered key (Database transport). */
+    BlocksKey: boolean;
+}
+
+/** Output of `WorkQueue.ListDeadLetters`. */
+export interface WorkQueueListDeadLettersOutput {
+    /** False when the subscription's transport cannot list dead letters; items is then empty. */
+    supported: boolean;
+    items: WorkQueueDeadLetterRow[];
+    nextCursor: string | null;
+}
+
+/** Input for `WorkQueue.ListPartitions`. */
+export interface WorkQueueListPartitionsInput {
+    /** The subscription to read (case-insensitive). */
+    subscriptionName: string;
+    /** Only keys in this condition. Omit for every non-idle key. */
+    condition?: 'Idle' | 'InFlight' | 'Blocked';
+    /** The nextCursor of a previous page. Omit for the first page. */
+    cursor?: string;
+    /** 1–500; default 50. */
+    pageSize?: number;
+}
+
+/** One partition key's derived condition. */
+export interface WorkQueuePartitionStateRow {
+    PartitionKey: string;
+    Condition: 'Idle' | 'InFlight' | 'Blocked';
+    /** The head delivery: in flight, or dead-lettered when Blocked. */
+    HeadDeliveryID: string | null;
+    /** Deliveries waiting behind the head. */
+    WaitingItems: number;
+}
+
+/** Output of `WorkQueue.ListPartitions`. */
+export interface WorkQueueListPartitionsOutput {
+    /** False when the subscription's transport cannot list partitions (AWS); items is then empty. */
+    supported: boolean;
+    items: WorkQueuePartitionStateRow[];
+    nextCursor: string | null;
+}
+
+/** Input for `WorkQueue.ReplayDeadLetter`. */
+export interface WorkQueueReplayDeadLetterInput {
+    subscriptionName: string;
+    /** A DeliveryID from WorkQueue.ListDeadLetters. */
+    deliveryID: string;
+    /** Optional operator note stored with the resolution; at most 1000 characters. */
+    note?: string;
+}
+
+/** Output of `WorkQueue.ReplayDeadLetter`. */
+export interface WorkQueueReplayDeadLetterOutput {
+    /** False when the subscription's transport cannot replay a single dead letter. */
+    supported: boolean;
+    /** False when the delivery does not exist or is not dead-lettered. */
+    replayed: boolean;
+}
+
+/** Input for `WorkQueue.ValidateBindings`. */
+export interface WorkQueueValidateBindingsInput {
+    /** Validate only this transport's bindings against its resources. Omit to validate the whole topology. */
+    transportName?: string;
+}
+
+/** One validation finding. */
+export interface WorkQueueBindingIssueRow {
+    Severity: 'Error' | 'Warning';
+    /** The topic, subscription or resource the finding is about. */
+    Subject: string;
+    Message: string;
+}
+
+/** Output of `WorkQueue.ValidateBindings`. */
+export interface WorkQueueValidateBindingsOutput {
+    issues: WorkQueueBindingIssueRow[];
+}
+
 /** Input for `Workflow.Draft`. */
 export interface WorkflowDraftInput {
     /** What the person wants done, in their own words. */
@@ -1405,6 +1604,118 @@ export class WebSearchQueryOperation extends BaseRemotableOperation<WebSearchQue
     public readonly OperationKey = "WebSearch.Query";
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "websearch:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// WorkQueue.DiscardDelivery — Discard Work Queue Delivery
+// ============================================================
+/**
+ * Discard Work Queue Delivery
+ * Resolves one delivery without processing it, with a required reason. A pending or dead-lettered delivery becomes Discarded immediately; discarding a dead-lettered Ordered head unblocks its key. An in-flight delivery is cancelled instead (cancelRequested = true): the running handler is told to stop within one heartbeat interval (30 s at most) and the delivery becomes Discarded as soon as the handler acknowledges, or at lease expiry if its worker is gone. Implemented by WorkQueueDiscardDeliveryServerOperation in @memberjunction/work-queue-engine.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'WorkQueue.DiscardDelivery'. This generated base provides the typed contract only (client-safe).
+ */
+export class WorkQueueDiscardDeliveryOperation extends BaseRemotableOperation<WorkQueueDiscardDeliveryInput, WorkQueueDiscardDeliveryOutput> {
+    public readonly OperationKey = "WorkQueue.DiscardDelivery";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "workqueue:operate";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// WorkQueue.GetBacklog — Get Work Queue Backlog
+// ============================================================
+/**
+ * Get Work Queue Backlog
+ * Returns the autoscaler metric for one subscription: claimable pending deliveries (partition rules applied) plus in-flight deliveries. Both counts matter — schedulers such as KEDA subtract running executions from the metric, so a pending-only count starves the queue. Each count is capped at 1000 (capped = true). Implemented by WorkQueueGetBacklogServerOperation in @memberjunction/work-queue-engine.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'WorkQueue.GetBacklog'. This generated base provides the typed contract only (client-safe).
+ */
+export class WorkQueueGetBacklogOperation extends BaseRemotableOperation<WorkQueueGetBacklogInput, WorkQueueGetBacklogOutput> {
+    public readonly OperationKey = "WorkQueue.GetBacklog";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "workqueue:read";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// WorkQueue.GetSubscriptionStats — Get Work Queue Subscription Stats
+// ============================================================
+/**
+ * Get Work Queue Subscription Stats
+ * Returns pending, in-flight and dead-lettered counts (plus blocked keys, oldest pending age and recent completions where the transport supports them) for one work-queue subscription or all of them. Implemented by WorkQueueGetSubscriptionStatsServerOperation in @memberjunction/work-queue-engine.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'WorkQueue.GetSubscriptionStats'. This generated base provides the typed contract only (client-safe).
+ */
+export class WorkQueueGetSubscriptionStatsOperation extends BaseRemotableOperation<WorkQueueGetSubscriptionStatsInput, WorkQueueGetSubscriptionStatsOutput> {
+    public readonly OperationKey = "WorkQueue.GetSubscriptionStats";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "workqueue:read";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// WorkQueue.ListDeadLetters — List Work Queue Dead Letters
+// ============================================================
+/**
+ * List Work Queue Dead Letters
+ * Pages through one subscription's dead-lettered deliveries with their message, attempts, reason, last error and whether each blocks its partition key. Implemented by WorkQueueListDeadLettersServerOperation in @memberjunction/work-queue-engine.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'WorkQueue.ListDeadLetters'. This generated base provides the typed contract only (client-safe).
+ */
+export class WorkQueueListDeadLettersOperation extends BaseRemotableOperation<WorkQueueListDeadLettersInput, WorkQueueListDeadLettersOutput> {
+    public readonly OperationKey = "WorkQueue.ListDeadLetters";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "workqueue:read";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// WorkQueue.ListPartitions — List Work Queue Partitions
+// ============================================================
+/**
+ * List Work Queue Partitions
+ * Pages through one subscription's partition keys that are in flight or blocked by a dead-lettered Ordered head, optionally filtered to one condition. Implemented by WorkQueueListPartitionsServerOperation in @memberjunction/work-queue-engine.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'WorkQueue.ListPartitions'. This generated base provides the typed contract only (client-safe).
+ */
+export class WorkQueueListPartitionsOperation extends BaseRemotableOperation<WorkQueueListPartitionsInput, WorkQueueListPartitionsOutput> {
+    public readonly OperationKey = "WorkQueue.ListPartitions";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "workqueue:read";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// WorkQueue.ReplayDeadLetter — Replay Work Queue Dead Letter
+// ============================================================
+/**
+ * Replay Work Queue Dead Letter
+ * Returns one dead-lettered delivery to Pending with its attempts reset; an Ordered head keeps its position, so its key resumes once the replay completes. Implemented by WorkQueueReplayDeadLetterServerOperation in @memberjunction/work-queue-engine.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'WorkQueue.ReplayDeadLetter'. This generated base provides the typed contract only (client-safe).
+ */
+export class WorkQueueReplayDeadLetterOperation extends BaseRemotableOperation<WorkQueueReplayDeadLetterInput, WorkQueueReplayDeadLetterOutput> {
+    public readonly OperationKey = "WorkQueue.ReplayDeadLetter";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "workqueue:operate";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// WorkQueue.ValidateBindings — Validate Work Queue Bindings
+// ============================================================
+/**
+ * Validate Work Queue Bindings
+ * Validates work-queue topology and cloud resource bindings: with no transport name, the whole topology; with one, every topic and subscription bound to that transport against the resources it names. Implemented by WorkQueueValidateBindingsServerOperation in @memberjunction/work-queue-engine.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'WorkQueue.ValidateBindings'. This generated base provides the typed contract only (client-safe).
+ */
+export class WorkQueueValidateBindingsOperation extends BaseRemotableOperation<WorkQueueValidateBindingsInput, WorkQueueValidateBindingsOutput> {
+    public readonly OperationKey = "WorkQueue.ValidateBindings";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "workqueue:read";
     public readonly RequiresSystemUser = false;
 }
 

@@ -404,6 +404,12 @@ import { MJVersionLabelItemFormComponent } from "./Entities/MJVersionLabelItem/m
 import { MJVersionLabelRestoreFormComponent } from "./Entities/MJVersionLabelRestore/mjversionlabelrestore.form.component";
 import { MJViewTypeFormComponent } from "./Entities/MJViewType/mjviewtype.form.component";
 import { MJWebSearchProviderFormComponent } from "./Entities/MJWebSearchProvider/mjwebsearchprovider.form.component";
+import { MJWorkQueueDeduplicationFormComponent } from "./Entities/MJWorkQueueDeduplication/mjworkqueuededuplication.form.component";
+import { MJWorkQueueDeliveryFormComponent } from "./Entities/MJWorkQueueDelivery/mjworkqueuedelivery.form.component";
+import { MJWorkQueueMessageFormComponent } from "./Entities/MJWorkQueueMessage/mjworkqueuemessage.form.component";
+import { MJWorkQueueSubscriptionFormComponent } from "./Entities/MJWorkQueueSubscription/mjworkqueuesubscription.form.component";
+import { MJWorkQueueTopicFormComponent } from "./Entities/MJWorkQueueTopic/mjworkqueuetopic.form.component";
+import { MJWorkQueueTransportFormComponent } from "./Entities/MJWorkQueueTransport/mjworkqueuetransport.form.component";
 import { MJWorkspaceFormComponent } from "./Entities/MJWorkspace/mjworkspace.form.component";
 import { MJWorkspaceItemFormComponent } from "./Entities/MJWorkspaceItem/mjworkspaceitem.form.component";
 import { JoinGridModule } from "@memberjunction/ng-join-grid"   
@@ -418,7 +424,9 @@ declarations: [
     MJEntityActionFormComponent,
     MJQueryDependencyFormComponent,
     MJStateProvinceFormComponent,
-    MJViewTypeFormComponent
+    MJViewTypeFormComponent,
+    MJWorkQueueSubscriptionFormComponent,
+    MJWorkQueueTransportFormComponent
 ],
 imports: [
     CommonModule,
@@ -976,7 +984,8 @@ declarations: [
     MJTagScopeFormComponent,
     MJUserNotificationFormComponent,
     MJVersionInstallationFormComponent,
-    MJVersionLabelRestoreFormComponent
+    MJVersionLabelRestoreFormComponent,
+    MJWorkQueueDeliveryFormComponent
 ],
 imports: [
     CommonModule,
@@ -1003,7 +1012,8 @@ declarations: [
     MJEntitySettingFormComponent,
     MJMagicLinkInviteAllowedPathFormComponent,
     MJTaskFormComponent,
-    MJTestSuiteRunFormComponent
+    MJTestSuiteRunFormComponent,
+    MJWorkQueueDeduplicationFormComponent
 ],
 imports: [
     CommonModule,
@@ -1067,7 +1077,8 @@ declarations: [
     MJSearchScopeEntityFormComponent,
     MJSignatureRequestLogFormComponent,
     MJUserApplicationFormComponent,
-    MJUserViewRunFormComponent
+    MJUserViewRunFormComponent,
+    MJWorkQueueMessageFormComponent
 ],
 imports: [
     CommonModule,
@@ -1189,7 +1200,8 @@ declarations: [
     MJQueryPermissionFormComponent,
     MJRecordMergeLogFormComponent,
     MJRemoteOperationFormComponent,
-    MJTagAuditLogFormComponent
+    MJTagAuditLogFormComponent,
+    MJWorkQueueTopicFormComponent
 ],
 imports: [
     CommonModule,

@@ -26,6 +26,9 @@ import { FindWorkspacePackageDir, LoadDynamicPackages, resolvePackageJsonFromHos
 import path from 'node:path';
 import { cosmiconfigSync } from 'cosmiconfig';
 import { readFileSync } from 'node:fs';
+// Registers the AWS work-queue transport (driver factory + manifest enricher). Deliberately NOT in
+// ServerBootstrapLite: CodeGen, MetadataSync and the data providers must never load AWS clients (work-queue 03 §0).
+import '@memberjunction/work-queue-engine/aws';
 
 /** Process ID MJAPI identifies itself with to the dynamic-package loader (entry `Processes` filters match it). */
 export const MJAPI_PROCESS_ID = 'mjapi';

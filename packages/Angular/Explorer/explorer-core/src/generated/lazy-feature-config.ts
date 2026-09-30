@@ -113,6 +113,12 @@ const loadNgDashboardsTestingDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/testing-dashboards.module').then(() => {})
 };
 
+// --- @memberjunction/ng-dashboards → ./work-queue-dashboards.module (1 entries) ---
+const loadNgDashboardsWorkQueueDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/work-queue-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/work-queue-dashboards.module').then(() => {})
+};
+
 // --- @memberjunction/ng-dashboards → ./workflows-dashboards.module (3 entries) ---
 const loadNgDashboardsWorkflowsDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/workflows-dashboards.module',
@@ -275,6 +281,9 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::TestingReviewResource': loadNgDashboardsTestingDashboardsModule,
   'BaseResourceComponent::TestingRunsResource': loadNgDashboardsTestingDashboardsModule,
 
+  // @memberjunction/ng-dashboards → ./work-queue-dashboards.module
+  'BaseDashboard::WorkQueueDashboard': loadNgDashboardsWorkQueueDashboardsModule,
+
   // @memberjunction/ng-dashboards → ./workflows-dashboards.module
   'BaseDashboard::WorkflowsDashboard': loadNgDashboardsWorkflowsDashboardsModule,
   'BaseResourceComponent::WorkflowRunsResource': loadNgDashboardsWorkflowsDashboardsModule,
@@ -293,4 +302,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 117;
+export const LAZY_FEATURE_CONFIG_COUNT = 118;
