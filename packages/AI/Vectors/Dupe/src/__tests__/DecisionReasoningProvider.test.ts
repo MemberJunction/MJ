@@ -251,46 +251,46 @@ describe('DecisionReasoningProvider', () => {
     });
 
     describe('a failed decision', () => {
-        function expectUncertainForAll(output: DuplicateReasoningOutput, error: string): void {
+        /**
+         * A failed decision returns no verdicts, as a failed prompt does. The detector writes no LLM
+         * columns for a failed set, so no candidate is marked NotDuplicate and none is merged.
+         */
+        function expectFailed(output: DuplicateReasoningOutput, error: string): void {
             expect(output.Success).toBe(false);
             expect(output.ErrorMessage).toContain(error);
             expect(output.Recommendation).toBe('Uncertain');
-            expect(output.CandidateVerdicts.map(v => v.RecordID)).toEqual(['ID|c1', 'ID|c2', 'ID|c3']);
-            for (const verdict of output.CandidateVerdicts) {
-                expect(verdict.Recommendation).toBe('Uncertain');
-                expect(verdict.Confidence).toBeNull();
-                expect(verdict.Reasoning).toContain(error);
-            }
+            expect(output.Confidence).toBeNull();
+            expect(output.CandidateVerdicts).toEqual([]);
             expect(output.SurvivorRecordID).toBeNull();
             expect(output.FieldChoices).toEqual([]);
         }
 
-        it('gives Uncertain for every candidate when the runner fails', async () => {
+        it('fails with the error and the decision\'s run id when the runner fails', async () => {
             mockExecuteDecision.mockResolvedValue({
                 success: false, errorMessage: 'model overloaded', Answers: {}, promptRun: runRow('decision-run-9'),
             });
             const output = await reason();
 
-            expectUncertainForAll(output, 'model overloaded');
+            expectFailed(output, 'model overloaded');
             expect(output.AIPromptRunID).toBe('decision-run-9');
         });
 
-        it('gives Uncertain for every candidate when the runner throws', async () => {
+        it('fails when the runner throws', async () => {
             mockExecuteDecision.mockRejectedValue(new Error('socket hang up'));
-            expectUncertainForAll(await reason(), 'socket hang up');
+            expectFailed(await reason(), 'socket hang up');
         });
 
-        it('gives Uncertain for every candidate when the decision prompt is missing, without a call', async () => {
+        it('fails without a call when the decision prompt is missing', async () => {
             engineState.Prompts = [];
             const output = await reason();
 
-            expectUncertainForAll(output, 'Default Decision');
+            expectFailed(output, 'Default Decision');
             expect(mockExecuteDecision).not.toHaveBeenCalled();
         });
 
-        it('gives Uncertain for every candidate when the AIEngine cannot load', async () => {
+        it('fails when the AIEngine cannot load', async () => {
             mockEngineConfig.mockRejectedValue(new Error('engine offline'));
-            expectUncertainForAll(await reason(), 'engine offline');
+            expectFailed(await reason(), 'engine offline');
         });
     });
 });

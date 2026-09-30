@@ -20,8 +20,10 @@ import type {
 // Hoisted mocks
 // ─────────────────────────────────────────────
 
-const { mockRunViewFn, mockExecuteDecision, mockExecutePrompt, engineState } = vi.hoisted(() => ({
+const { mockRunViewFn, mockGetEntityObject, mockExecuteDecision, mockExecutePrompt, engineState } = vi.hoisted(() => ({
     mockRunViewFn: vi.fn().mockResolvedValue({ Success: true, Results: [], RowCount: 0 }),
+    // A fresh, empty match row per call. The detector sets its columns and saves it.
+    mockGetEntityObject: vi.fn(async () => ({ NewRecord: () => true })),
     mockExecuteDecision: vi.fn<(params: AIDecisionParams) => Promise<AIDecisionRunResult>>(),
     mockExecutePrompt: vi.fn<(params: AIPromptParams) => Promise<AIPromptRunResult>>(),
     engineState: { Prompts: new Array<{ ID: string; Name: string }>() },
@@ -92,6 +94,8 @@ vi.mock('@memberjunction/ai-vectors', () => ({
         _runView = { RunView: mockRunViewFn };
         _provider = { id: 'request-provider' };
         get RunView() { return this._runView; }
+        get Metadata() { return { GetEntityObject: mockGetEntityObject }; }
+        SaveEntity = vi.fn().mockResolvedValue(true);
     },
 }));
 
@@ -170,12 +174,16 @@ class TestableDetector extends DuplicateRecordDetector {
     public Eligible(dupe: PotentialDuplicate, result: PotentialDuplicateResult, entityDocument: MJEntityDocumentEntity): boolean {
         return this.IsAutoMergeEligible(dupe, result, entityDocument, ABSOLUTE_THRESHOLD);
     }
+    public SaveRows(result: PotentialDuplicateResult, output: DuplicateReasoningOutput): Promise<MJDuplicateRunDetailMatchEntity[]> {
+        return this.CreateMatchRecordsForDetail('detail-1', result, output);
+    }
 }
 
 function candidate(id: string): PotentialDuplicate {
-    const dupe: Pick<PotentialDuplicate, 'ProbabilityScore' | 'Values' | 'VectorMetadata'> = {
+    const dupe: Pick<PotentialDuplicate, 'ProbabilityScore' | 'Values' | 'ToURLSegment' | 'VectorMetadata'> = {
         ProbabilityScore: 0.99,
         Values: () => id,
+        ToURLSegment: () => `ID|${id}`,
         VectorMetadata: { Name: id },
     };
     return dupe as PotentialDuplicate;
@@ -311,6 +319,31 @@ describe('DuplicateRecordDetector — decision reasoning modes', () => {
                 expect(match.LLMProposedSurvivorRecordID).toBeNull();
                 expect(match.LLMProposedFieldMap).toBeNull();
             }
+        });
+
+        it('saves a failed decision\'s rows Pending, with no verdict and no run id', async () => {
+            mockExecuteDecision.mockResolvedValue({ success: false, errorMessage: 'overloaded', Answers: {}, promptRun: runRow('decision-run-9') });
+            const { result, output } = await reasonOverSet('Decision');
+
+            expect(output.Success).toBe(false);
+            expect(output.AIPromptRunID).toBe('decision-run-9');
+            const rows = await detector.SaveRows(result, output);
+            expect(rows).toHaveLength(3);
+            for (const row of rows) {
+                expect(row.ApprovalStatus).toBe('Pending');
+                expect(row.LLMRecommendation).toBeUndefined();
+                expect(row.AIPromptRunID).toBeUndefined();
+            }
+            expect(result.ReasoningRecommendation).toBeUndefined();
+        });
+
+        it('saves a successful decision\'s rows with each candidate\'s band and the decision run', async () => {
+            answerByRecord({ 'cand-a': 0.8, 'cand-b': 0.3, 'cand-c': 0.5 });
+            const { result, output } = await reasonOverSet('Decision');
+
+            const rows = await detector.SaveRows(result, output);
+            expect(rows.map(r => r.LLMRecommendation)).toEqual(['Uncertain', 'NotDuplicate', 'Uncertain']);
+            expect(rows.map(r => r.AIPromptRunID)).toEqual(['decision-run-1', 'decision-run-1', 'decision-run-1']);
         });
 
         it('stamps each candidate with its own band', async () => {
