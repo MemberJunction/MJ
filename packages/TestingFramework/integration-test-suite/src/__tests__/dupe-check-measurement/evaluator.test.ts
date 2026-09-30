@@ -14,6 +14,18 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+    ApplyPlatt,
+    BrierScore,
+    CalibrationBins,
+    DECISION_EVAL_CALIBRATION_FOLDS,
+    DECISION_EVAL_ECE_BINS,
+    DECISION_EVAL_SEED,
+    FitPlatt,
+    LabelledProbability,
+    OutOfFoldPlatt,
+    RocAuc,
+} from '@memberjunction/testing-engine';
+import {
     ComputeArmPerformance,
     ComputeCostSummary,
     ComputeDecisionBandSweep,
@@ -29,6 +41,40 @@ import type {
     CandidatePairObservation,
     RecordCheckObservation,
 } from '../../dupe-check-measurement/types';
+
+/** One candidate of a decision-arm fixture. */
+interface CandidateSpec {
+    Id: string;
+    Source?: boolean;
+    Probability: number;
+}
+
+/** A rep-1 check with a decision call, recorded as the rig records it (flagged at a raw 0.5). */
+function decisionCheck(id: string, label: 'duplicate' | 'new', candidates: readonly CandidateSpec[]): RecordCheckObservation {
+    const sourceId = candidates.find(c => c.Source === true)?.Id ?? `missing-${id}`;
+    return {
+        Rep: 1,
+        RecordId: id,
+        Label: label === 'duplicate'
+            ? { Id: id, Label: 'duplicate', SourceRecordId: sourceId }
+            : { Id: id, Label: 'new', NearRecordId: candidates[0]?.Id ?? `near-${id}` },
+        RetrievalLatencyMs: 10,
+        DecisionResult: { LatencyMs: 100, Model: 'm1', PromptRunId: null, CostUSD: null },
+        Candidates: candidates.map(c => ({
+            RecordId: id,
+            CandidateId: c.Id,
+            IsDuplicatePair: label === 'duplicate' && c.Source === true,
+            VectorScore: 0.9,
+            InTopK: true,
+            PassedThreshold: true,
+            ThresholdFlagged: true,
+            DecisionProbability: c.Probability,
+            DecisionFlagged: c.Probability >= 0.5,
+            PromptRecommendation: null,
+            PromptFlagged: false,
+        })),
+    };
+}
 
 describe('Retrieval Metrics and Miss Accounting', () => {
     it('correctly tallies sources in top-K, sources after threshold, and missed sources', () => {
@@ -518,7 +564,7 @@ describe('ComputeDecisionCalibration and ComputeDecisionBandSweep', () => {
         expect(typeof calibration[0].PlattA).toBe('number');
         expect(typeof calibration[0].PlattB).toBe('number');
 
-        const bandSweep = ComputeDecisionBandSweep(checks, calibration, [0.30, 0.50, 0.70]);
+        const bandSweep = ComputeDecisionBandSweep(checks, [0.30, 0.50, 0.70]);
         expect(bandSweep).toHaveLength(3);
         expect(bandSweep[1].Threshold).toBe(0.50);
         expect(bandSweep[1].RawPrecision).toBe(1.0);
@@ -685,4 +731,118 @@ describe('ComputeRepeatability', () => {
         expect(rep?.DecisionVerdictAgreementRate).toBe(0.0);
         expect(rep?.PromptRecommendationAgreementRate).toBe(0.0);
     });
+});
+
+/**
+ * 12 duplicate and 12 new records, two candidates each, answered by one model whose raw
+ * probabilities run high for similar records that are not duplicates.
+ */
+function calibrationChecks(): RecordCheckObservation[] {
+    const sources = [0.97, 0.95, 0.93, 0.92, 0.9, 0.88, 0.86, 0.85, 0.8, 0.75, 0.7, 0.6];
+    const dupeOthers = [0.1, 0.2, 0.05, 0.3, 0.15, 0.4, 0.1, 0.25, 0.5, 0.2, 0.1, 0.3];
+    const nearNews = [0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.4, 0.3, 0.2];
+    const otherNews = [0.1, 0.05, 0.2, 0.15, 0.1, 0.3, 0.05, 0.1, 0.2, 0.1, 0.05, 0.1];
+    const checks: RecordCheckObservation[] = [];
+    sources.forEach((p, i) => {
+        checks.push(decisionCheck(`d${i}`, 'duplicate', [
+            { Id: `s${i}`, Source: true, Probability: p },
+            { Id: `o${i}`, Probability: dupeOthers[i] },
+        ]));
+    });
+    nearNews.forEach((p, i) => {
+        checks.push(decisionCheck(`n${i}`, 'new', [
+            { Id: `near${i}`, Probability: p },
+            { Id: `far${i}`, Probability: otherNews[i] },
+        ]));
+    });
+    return checks;
+}
+
+/** The answered candidates in check order, the order the evaluator scores them in. */
+function answeredPoints(checks: readonly RecordCheckObservation[]): { Check: RecordCheckObservation; Candidate: CandidatePairObservation; Point: LabelledProbability }[] {
+    const points: { Check: RecordCheckObservation; Candidate: CandidatePairObservation; Point: LabelledProbability }[] = [];
+    for (const check of checks) {
+        for (const candidate of check.Candidates) {
+            if (candidate.DecisionProbability !== null) {
+                points.push({ Check: check, Candidate: candidate, Point: { Probability: candidate.DecisionProbability, Positive: candidate.IsDuplicatePair } });
+            }
+        }
+    }
+    return points;
+}
+
+/** Precision, recall, false flags on new records and share flagged, counted by hand from given probabilities. */
+function bandByHand(
+    checks: readonly RecordCheckObservation[],
+    probabilities: readonly number[],
+    threshold: number
+): { Precision: number; Recall: number; FalseFlagRateOnNew: number; Share: number } {
+    const answered = answeredPoints(checks);
+    let tp = 0;
+    let fp = 0;
+    const newFlagged = new Set<string>();
+    answered.forEach((a, i) => {
+        if (probabilities[i] < threshold) {
+            return;
+        }
+        if (a.Candidate.IsDuplicatePair) {
+            tp++;
+        } else {
+            fp++;
+        }
+        if (a.Check.Label.Label === 'new') {
+            newFlagged.add(a.Check.RecordId);
+        }
+    });
+    const duplicates = checks.filter(c => c.Label.Label === 'duplicate').length;
+    const news = checks.filter(c => c.Label.Label === 'new').length;
+    return { Precision: tp / (tp + fp), Recall: tp / duplicates, FalseFlagRateOnNew: newFlagged.size / news, Share: (tp + fp) / answered.length };
+}
+
+describe('Decision calibration is scored out of fold', () => {
+    const checks = calibrationChecks();
+    const points = answeredPoints(checks).map(a => a.Point);
+    const outOfFold = OutOfFoldPlatt(points, DECISION_EVAL_CALIBRATION_FOLDS, DECISION_EVAL_SEED) ?? [];
+    const shippedFit = FitPlatt(points);
+    const inSample = points.map(p => ApplyPlatt(p.Probability, shippedFit));
+
+    it('bands each candidate by a Platt fit that never saw it, where calibration moves the cut', () => {
+        const sweep = ComputeDecisionBandSweep(checks, [0.3, 0.6]);
+        for (const row of sweep) {
+            const expected = bandByHand(checks, outOfFold, row.Threshold);
+            expect(row.CalibratedPrecision).toBeCloseTo(expected.Precision, 10);
+            expect(row.CalibratedRecall).toBeCloseTo(expected.Recall, 10);
+            expect(row.CalibratedFalseFlagRateOnNew).toBeCloseTo(expected.FalseFlagRateOnNew, 10);
+            expect(row.CalibratedShareCandidatesFlagged).toBeCloseTo(expected.Share, 10);
+
+            // The in-sample fit flags differently here, so an in-sample sweep fails the checks above.
+            expect(bandByHand(checks, inSample, row.Threshold)).not.toEqual(expected);
+            // And calibration moves the cut: the raw band flags differently again.
+            expect(row.CalibratedPrecision).not.toBeCloseTo(row.RawPrecision, 3);
+        }
+
+        // The raw columns, by hand: at 0.3, 12 sources and 16 other candidates, 11 of 12 new records.
+        expect(sweep[0].RawPrecision).toBeCloseTo(12 / 28, 10);
+        expect(sweep[0].RawRecall).toBe(1);
+        expect(sweep[0].RawFalseFlagRateOnNew).toBeCloseTo(11 / 12, 10);
+    });
+
+    it('scores calibrated AUC, Brier and ECE out of fold, and fits the shipped parameters on every candidate', () => {
+        const [calibration] = ComputeDecisionCalibration(checks);
+        const outOfFoldPoints = outOfFold.map((p, i) => ({ Probability: p, Positive: points[i].Positive }));
+        const inSamplePoints = inSample.map((p, i) => ({ Probability: p, Positive: points[i].Positive }));
+
+        expect(calibration.CalibratedAuc).not.toBeNull();
+        expect(calibration.CalibratedEce).not.toBeNull();
+        expect(calibration.CalibratedAuc).toBeCloseTo(RocAuc(outOfFoldPoints) ?? -1, 10);
+        expect(calibration.CalibratedBrier).toBeCloseTo(BrierScore(outOfFoldPoints) ?? -1, 10);
+        expect(calibration.CalibratedEce).toBeCloseTo(CalibrationBins(outOfFoldPoints, DECISION_EVAL_ECE_BINS).ECE ?? -1, 10);
+        // An in-sample Platt fit is monotonic, so it keeps the raw AUC; out of fold, it moves.
+        expect(calibration.CalibratedAuc).not.toBeCloseTo(calibration.RawAuc ?? -1, 3);
+        expect(calibration.CalibratedEce).not.toBeCloseTo(CalibrationBins(inSamplePoints, DECISION_EVAL_ECE_BINS).ECE ?? -1, 3);
+
+        expect(calibration.PlattA).toBeCloseTo(shippedFit.A, 10);
+        expect(calibration.PlattB).toBeCloseTo(shippedFit.B, 10);
+    });
+
 });

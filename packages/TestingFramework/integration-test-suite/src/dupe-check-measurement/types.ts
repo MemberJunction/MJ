@@ -130,7 +130,11 @@ export interface ThresholdSweepRow {
     FlagsPerCheck: number;
 }
 
-/** Model probability calibration metrics (raw vs 5-fold OOF Platt). */
+/**
+ * Model probability calibration metrics: raw, and calibrated out of fold (each candidate by a
+ * 5-fold Platt fit that never saw it). PlattA/PlattB are fitted on every candidate: the parameters
+ * to ship, not the ones scored.
+ */
 export interface DecisionModelCalibration {
     ModelName: string;
     TotalCandidates: number;
@@ -144,7 +148,10 @@ export interface DecisionModelCalibration {
     PlattB: number;
 }
 
-/** One point in the Uncertain band threshold sweep (0.10 to 0.90). */
+/**
+ * One point in the Uncertain band threshold sweep (0.10 to 0.90). The calibrated columns band each
+ * candidate's out-of-fold calibrated probability, so they are scored on data its fit didn't see.
+ */
 export interface DecisionBandSweepRow {
     Threshold: number;
     RawPrecision: number;

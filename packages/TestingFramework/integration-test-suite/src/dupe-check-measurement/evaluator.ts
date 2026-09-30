@@ -5,8 +5,8 @@
  * - Retrieval miss accounting
  * - Pairwise precision, recall, F1 with clustered bootstrap confidence intervals
  * - Vector score threshold sweep (0.60 to 0.95)
- * - Decision probability calibration (ROC AUC, Brier, ECE, Platt A/B)
- * - Band sweep (0.10 to 0.90) for raw and calibrated probabilities
+ * - Decision probability calibration (ROC AUC, Brier, ECE, Platt A/B), scored out of fold
+ * - Band sweep (0.10 to 0.90) for raw and out-of-fold calibrated probabilities
  * - Latency p50/p95 against the 1500ms budget
  * - Cost per 1,000 checks
  * - Repeatability across repetitions
@@ -18,18 +18,17 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-    ApplyPlatt,
     AssertOutputOutsideRepo,
     BrierScore,
     CalibrationBins,
     ConfidenceInterval,
     CreateSeededRandom,
+    DECISION_EVAL_CALIBRATION_FOLDS,
     DECISION_EVAL_ECE_BINS,
     DECISION_EVAL_SEED,
     FitPlatt,
     LabelledProbability,
     OutOfFoldPlatt,
-    PlattParameters,
     Quantile,
     RocAuc,
 } from '@memberjunction/testing-engine';
@@ -343,194 +342,194 @@ export function ComputeThresholdSweep(
     });
 }
 
+/** One answered decision candidate from rep 1: its raw probability, and its out-of-fold calibrated one. */
+export interface ScoredDecisionCandidate {
+    Check: RecordCheckObservation;
+    Candidate: CandidatePairObservation;
+    /** The model that answered. */
+    Model: string;
+    RawProbability: number;
+    /**
+     * Calibrated by a Platt fit on the model's other folds, which never saw this candidate. Null when
+     * the model has too few answered candidates to calibrate out of fold.
+     */
+    OutOfFoldProbability: number | null;
+}
+
+/** Rep 1's answered decision candidates, grouped by the model that answered, in check order. */
+function answeredCandidatesByModel(
+    checks: readonly RecordCheckObservation[]
+): Map<string, { Check: RecordCheckObservation; Candidate: CandidatePairObservation; RawProbability: number }[]> {
+    const byModel = new Map<string, { Check: RecordCheckObservation; Candidate: CandidatePairObservation; RawProbability: number }[]>();
+    for (const check of checks.filter(c => c.Rep === 1)) {
+        const model = check.DecisionResult?.Model ?? 'Default';
+        for (const candidate of check.Candidates) {
+            if (candidate.DecisionProbability === null) {
+                continue;
+            }
+            const list = byModel.get(model) ?? [];
+            list.push({ Check: check, Candidate: candidate, RawProbability: candidate.DecisionProbability });
+            byModel.set(model, list);
+        }
+    }
+    return byModel;
+}
+
 /**
- * Computes decision probability calibration per model:
- * ROC AUC, Brier Score, ECE, and fitted Platt parameters A and B.
+ * Scores rep 1's answered decision candidates, each model on its own: the raw probability, and the
+ * probability calibrated out of fold ({@link OutOfFoldPlatt}, 5 folds, seeded), so a calibrated
+ * figure is never scored on the data its fit saw. Candidates with no answer are left out: they have
+ * nothing to calibrate.
+ */
+export function ScoreDecisionCandidates(
+    checks: readonly RecordCheckObservation[],
+    seed: number = DECISION_EVAL_SEED
+): ScoredDecisionCandidate[] {
+    const scored: ScoredDecisionCandidate[] = [];
+    for (const [model, items] of answeredCandidatesByModel(checks)) {
+        const points = items.map(i => ({ Probability: i.RawProbability, Positive: i.Candidate.IsDuplicatePair }));
+        const outOfFold = OutOfFoldPlatt(points, DECISION_EVAL_CALIBRATION_FOLDS, seed);
+        items.forEach((item, index) => {
+            scored.push({ ...item, Model: model, OutOfFoldProbability: outOfFold?.[index] ?? null });
+        });
+    }
+    return scored;
+}
+
+/** Calibration metrics for one model's scored candidates. */
+function calibrationFor(model: string, scored: readonly ScoredDecisionCandidate[]): DecisionModelCalibration {
+    const rawPoints: LabelledProbability[] = scored.map(s => ({ Probability: s.RawProbability, Positive: s.Candidate.IsDuplicatePair }));
+    const outOfFoldPoints: LabelledProbability[] = [];
+    for (const s of scored) {
+        if (s.OutOfFoldProbability !== null) {
+            outOfFoldPoints.push({ Probability: s.OutOfFoldProbability, Positive: s.Candidate.IsDuplicatePair });
+        }
+    }
+    const calibrated = outOfFoldPoints.length === scored.length && scored.length > 0;
+    // The parameters to ship are fitted on every candidate; only the out-of-fold ones are scored.
+    const shippedFit = FitPlatt(rawPoints);
+
+    return {
+        ModelName: model,
+        TotalCandidates: scored.length,
+        RawAuc: RocAuc(rawPoints),
+        CalibratedAuc: calibrated ? RocAuc(outOfFoldPoints) : null,
+        RawBrier: BrierScore(rawPoints),
+        CalibratedBrier: calibrated ? BrierScore(outOfFoldPoints) : null,
+        RawEce: CalibrationBins(rawPoints, DECISION_EVAL_ECE_BINS).ECE,
+        CalibratedEce: calibrated ? CalibrationBins(outOfFoldPoints, DECISION_EVAL_ECE_BINS).ECE : null,
+        PlattA: shippedFit.A,
+        PlattB: shippedFit.B,
+    };
+}
+
+/**
+ * Computes decision probability calibration per model: ROC AUC, Brier score and ECE, raw and
+ * calibrated out of fold, and the Platt parameters fitted on every candidate (the ones to ship).
  */
 export function ComputeDecisionCalibration(
     checks: readonly RecordCheckObservation[],
     seed: number = DECISION_EVAL_SEED
 ): DecisionModelCalibration[] {
-    const rep1Checks = checks.filter(c => c.Rep === 1);
+    const byModel = new Map<string, ScoredDecisionCandidate[]>();
+    for (const s of ScoreDecisionCandidates(checks, seed)) {
+        const list = byModel.get(s.Model) ?? [];
+        list.push(s);
+        byModel.set(s.Model, list);
+    }
+    return [...byModel].map(([model, scored]) => calibrationFor(model, scored));
+}
 
-    // Group candidate pairs by model name
-    const pairsByModel = new Map<string, { cand: CandidatePairObservation; check: RecordCheckObservation }[]>();
+/** One band's outcome over rep 1. */
+interface BandOutcome {
+    Precision: number;
+    Recall: number;
+    FalseFlagRateOnNew: number;
+    ShareCandidatesFlagged: number;
+}
 
+/**
+ * Scores one band over rep 1. Recall's denominator is every duplicate record, so a retrieval miss is
+ * a false negative; the share's is every candidate the decision was asked about.
+ */
+function scoreBand(
+    rep1Checks: readonly RecordCheckObservation[],
+    flags: (check: RecordCheckObservation, candidate: CandidatePairObservation) => boolean
+): BandOutcome {
+    let tp = 0;
+    let fp = 0;
+    let newFlagged = 0;
+    let flaggedCount = 0;
+    let asked = 0;
     for (const check of rep1Checks) {
-        const modelName = check.DecisionResult?.Model ?? 'Default';
-        for (const cand of check.Candidates) {
-            if (cand.DecisionProbability !== null) {
-                const list = pairsByModel.get(modelName) ?? [];
-                list.push({ cand, check });
-                pairsByModel.set(modelName, list);
+        if (check.DecisionResult) {
+            asked += check.Candidates.length;
+        }
+        let checkFlagged = false;
+        for (const candidate of check.Candidates) {
+            if (!flags(check, candidate)) {
+                continue;
+            }
+            flaggedCount++;
+            checkFlagged = true;
+            if (candidate.IsDuplicatePair) {
+                tp++;
+            } else {
+                fp++;
             }
         }
-    }
-
-    const results: DecisionModelCalibration[] = [];
-
-    for (const [modelName, items] of pairsByModel) {
-        if (items.length === 0) {
-            continue;
+        if (checkFlagged && check.Label.Label === 'new') {
+            newFlagged++;
         }
-
-        const rawPoints: LabelledProbability[] = items.map(i => ({
-            Probability: i.cand.DecisionProbability as number,
-            Positive: i.cand.IsDuplicatePair,
-        }));
-        const rawAuc = RocAuc(rawPoints);
-        const rawBrier = BrierScore(rawPoints);
-        const rawBins = CalibrationBins(rawPoints, DECISION_EVAL_ECE_BINS);
-        const rawEce = rawBins.ECE;
-
-        // 5-fold OOF Platt calibration
-        const oofProbs = OutOfFoldPlatt(rawPoints, 5, seed);
-        let calAuc: number | null = null;
-        let calBrier: number | null = null;
-        let calEce: number | null = null;
-
-        if (oofProbs !== null && oofProbs.length === rawPoints.length) {
-            const calPoints: LabelledProbability[] = oofProbs.map((p, idx) => ({
-                Probability: p,
-                Positive: rawPoints[idx].Positive,
-            }));
-            calAuc = RocAuc(calPoints);
-            calBrier = BrierScore(calPoints);
-            const calBins = CalibrationBins(calPoints, DECISION_EVAL_ECE_BINS);
-            calEce = calBins.ECE;
-        }
-
-        // Fit Platt parameters on all data points
-        const plattFit = FitPlatt(rawPoints);
-
-        results.push({
-            ModelName: modelName,
-            TotalCandidates: items.length,
-            RawAuc: rawAuc,
-            CalibratedAuc: calAuc,
-            RawBrier: rawBrier,
-            CalibratedBrier: calBrier,
-            RawEce: rawEce,
-            CalibratedEce: calEce,
-            PlattA: plattFit.A,
-            PlattB: plattFit.B,
-        });
     }
-
-    return results;
+    const dupeCount = rep1Checks.filter(c => c.Label.Label === 'duplicate').length;
+    const newCount = rep1Checks.filter(c => c.Label.Label === 'new').length;
+    return {
+        Precision: tp + fp > 0 ? tp / (tp + fp) : 0,
+        Recall: dupeCount > 0 ? tp / dupeCount : 0,
+        FalseFlagRateOnNew: newCount > 0 ? newFlagged / newCount : 0,
+        ShareCandidatesFlagged: asked > 0 ? flaggedCount / asked : 0,
+    };
 }
 
 /**
  * Sweeps the decision probability threshold ("Uncertain" band lower bound) from 0.10 to 0.90,
- * reporting raw and calibrated precision, recall, false-flag rate on new, and candidate share.
+ * reporting precision, recall, false-flag rate on new records and the share of candidates flagged,
+ * on raw probabilities and on out-of-fold calibrated ones (see {@link ScoreDecisionCandidates}).
+ *
+ * A candidate whose model has too few answers to calibrate out of fold is left out of the
+ * calibrated columns.
  */
 export function ComputeDecisionBandSweep(
     checks: readonly RecordCheckObservation[],
-    plattFits: readonly DecisionModelCalibration[],
-    thresholds: readonly number[] = BAND_SWEEP_THRESHOLDS
+    thresholds: readonly number[] = BAND_SWEEP_THRESHOLDS,
+    seed: number = DECISION_EVAL_SEED
 ): DecisionBandSweepRow[] {
     const rep1Checks = checks.filter(c => c.Rep === 1);
-    const dupeCount = rep1Checks.filter(c => c.Label.Label === 'duplicate').length;
-    const newCount = rep1Checks.filter(c => c.Label.Label === 'new').length;
-
-    const plattMap = new Map<string, Pick<PlattParameters, 'A' | 'B'>>();
-    for (const fit of plattFits) {
-        plattMap.set(fit.ModelName, { A: fit.PlattA, B: fit.PlattB });
-    }
-
-    // Collect all candidates with decision probabilities
-    interface CandidateWithProb {
-        Cand: CandidatePairObservation;
-        Check: RecordCheckObservation;
-        RawProb: number;
-        CalProb: number;
-    }
-
-    const scoredCandidates: CandidateWithProb[] = [];
-    for (const check of rep1Checks) {
-        const modelName = check.DecisionResult?.Model ?? 'Default';
-        const fit = plattMap.get(modelName) ?? { A: 1, B: 0 };
-        for (const cand of check.Candidates) {
-            if (cand.DecisionProbability !== null) {
-                const rawProb = cand.DecisionProbability;
-                const calProb = ApplyPlatt(rawProb, fit);
-                scoredCandidates.push({ Cand: cand, Check: check, RawProb: rawProb, CalProb: calProb });
-            }
+    const outOfFold = new Map<CandidatePairObservation, number>();
+    for (const s of ScoreDecisionCandidates(rep1Checks, seed)) {
+        if (s.OutOfFoldProbability !== null) {
+            outOfFold.set(s.Candidate, s.OutOfFoldProbability);
         }
     }
-
-    const totalScored = scoredCandidates.length;
+    const calibratedFlags = (candidate: CandidatePairObservation, threshold: number): boolean => {
+        const calibrated = outOfFold.get(candidate);
+        return calibrated !== undefined && calibrated >= threshold;
+    };
 
     return thresholds.map(threshold => {
-        // Raw evaluation at threshold
-        let rawTp = 0;
-        let rawFp = 0;
-        let rawNewFlagged = 0;
-        let rawFlaggedCount = 0;
-
-        // Calibrated evaluation at threshold
-        let calTp = 0;
-        let calFp = 0;
-        let calNewFlagged = 0;
-        let calFlaggedCount = 0;
-
-        for (const check of rep1Checks) {
-            const isNew = check.Label.Label === 'new';
-            let checkRawFlagged = false;
-            let checkCalFlagged = false;
-
-            const checkCandidates = scoredCandidates.filter(sc => sc.Check === check);
-            for (const { Cand, RawProb, CalProb } of checkCandidates) {
-                if (RawProb >= threshold) {
-                    rawFlaggedCount++;
-                    checkRawFlagged = true;
-                    if (Cand.IsDuplicatePair) {
-                        rawTp++;
-                    } else {
-                        rawFp++;
-                    }
-                }
-                if (CalProb >= threshold) {
-                    calFlaggedCount++;
-                    checkCalFlagged = true;
-                    if (Cand.IsDuplicatePair) {
-                        calTp++;
-                    } else {
-                        calFp++;
-                    }
-                }
-            }
-
-            if (isNew) {
-                if (checkRawFlagged) {
-                    rawNewFlagged++;
-                }
-                if (checkCalFlagged) {
-                    calNewFlagged++;
-                }
-            }
-        }
-
-        const rawP = rawTp + rawFp > 0 ? rawTp / (rawTp + rawFp) : 0;
-        const rawR = dupeCount > 0 ? rawTp / dupeCount : 0;
-        const rawFalseFlagOnNew = newCount > 0 ? rawNewFlagged / newCount : 0;
-        const rawShare = totalScored > 0 ? rawFlaggedCount / totalScored : 0;
-
-        const calP = calTp + calFp > 0 ? calTp / (calTp + calFp) : 0;
-        const calR = dupeCount > 0 ? calTp / dupeCount : 0;
-        const calFalseFlagOnNew = newCount > 0 ? calNewFlagged / newCount : 0;
-        const calShare = totalScored > 0 ? calFlaggedCount / totalScored : 0;
-
+        const raw = scoreBand(rep1Checks, (_check, candidate) => candidate.DecisionProbability !== null && candidate.DecisionProbability >= threshold);
+        const calibrated = scoreBand(rep1Checks, (_check, candidate) => calibratedFlags(candidate, threshold));
         return {
             Threshold: threshold,
-            RawPrecision: rawP,
-            RawRecall: rawR,
-            RawFalseFlagRateOnNew: rawFalseFlagOnNew,
-            RawShareCandidatesFlagged: rawShare,
-            CalibratedPrecision: calP,
-            CalibratedRecall: calR,
-            CalibratedFalseFlagRateOnNew: calFalseFlagOnNew,
-            CalibratedShareCandidatesFlagged: calShare,
+            RawPrecision: raw.Precision,
+            RawRecall: raw.Recall,
+            RawFalseFlagRateOnNew: raw.FalseFlagRateOnNew,
+            RawShareCandidatesFlagged: raw.ShareCandidatesFlagged,
+            CalibratedPrecision: calibrated.Precision,
+            CalibratedRecall: calibrated.Recall,
+            CalibratedFalseFlagRateOnNew: calibrated.FalseFlagRateOnNew,
+            CalibratedShareCandidatesFlagged: calibrated.ShareCandidatesFlagged,
         };
     });
 }
@@ -727,7 +726,7 @@ export function BuildMeasurementReport(
 
     const thresholdSweep = ComputeThresholdSweep(checks);
     const calibration = ComputeDecisionCalibration(checks, options.Seed);
-    const bandSweep = ComputeDecisionBandSweep(checks, calibration);
+    const bandSweep = ComputeDecisionBandSweep(checks, BAND_SWEEP_THRESHOLDS, options.Seed);
     const latency = ComputeLatencySummary(checks);
     const costs = ComputeCostSummary(checks);
     const repeatability = options.Reps >= 2 ? ComputeRepeatability(checks) : undefined;
@@ -735,6 +734,7 @@ export function BuildMeasurementReport(
     const notes: string[] = [
         'The corpus is synthetic (LLM rewrites of MJ metadata); refit on real labelled duplicates before relying on it.',
         'A duplicate whose source was not retrieved is a false negative for all arms (reported separately in retrieval).',
+        'The calibrated AUC, Brier, ECE and band sweep are out of fold (5-fold Platt, seeded): each candidate is calibrated by a fit that never saw it. The Platt fit shown is on every candidate: the parameters to ship.',
         'Cost notes: a failover or chat model cost may be missing on branches without #4880.',
     ];
 
@@ -843,6 +843,8 @@ export function RenderMarkdownReport(report: DupeMeasurementReport): string {
     if (report.DecisionCalibration.length === 0) {
         lines.push('*(No decision arm data recorded)*');
     } else {
+        lines.push('Calibrated columns are out of fold. The Platt fit is on every candidate: the parameters to ship.');
+        lines.push('');
         lines.push('| Model | Candidates | Raw AUC | Calibrated AUC | Raw Brier | Calibrated Brier | Raw ECE | Calibrated ECE | Platt Fit (A, B) |');
         lines.push('|---|---|---|---|---|---|---|---|---|');
         for (const c of report.DecisionCalibration) {
@@ -855,6 +857,8 @@ export function RenderMarkdownReport(report: DupeMeasurementReport): string {
 
     // Band Sweep
     lines.push('### Decision Band Sweep');
+    lines.push('');
+    lines.push('Calibrated columns band each candidate\'s out-of-fold calibrated probability.');
     lines.push('');
     lines.push('| Band Threshold | Raw Prec | Raw Rec | Raw False-Flag (New) | Raw Share | Cal Prec | Cal Rec | Cal False-Flag (New) | Cal Share |');
     lines.push('|---|---|---|---|---|---|---|---|---|');
