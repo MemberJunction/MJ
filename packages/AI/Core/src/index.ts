@@ -14,6 +14,8 @@ export * from './generic/apiKeyDictionary';
 export * from './generic/embed.types';
 export * from './generic/baseEmbeddings';
 export * from './generic/baseAudio';
+export * from './generic/baseTextToSpeech';
+export * from './generic/baseSpeechToText';
 export * from './generic/baseVideo';
 export * from './generic/baseRealtime';
 export * from './generic/realtimeUsage';
