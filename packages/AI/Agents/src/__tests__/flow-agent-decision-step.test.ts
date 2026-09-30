@@ -583,6 +583,36 @@ describe('a Decision step walked in-run', () => {
         expect(harness.run.ErrorMessage).toContain('Decision step "Triage the ticket" cannot run: it asks no questions.');
     });
 
+    it('refuses an incomplete Choice fork before any step runs, as the dispatched path does', async () => {
+        harness.steps = [triageStep(), subAgentStep('Billing'), subAgentStep('Refund')];
+        harness.paths = intentFork().slice(0, 2);
+        const agent = makeAgent(answered({ value: 'other', confidence: 0.95 }, 0.1));
+
+        const result = await agent.Execute(makeParams());
+
+        // Walked unchecked, the model's "other" matched no path and the flow ended "successfully".
+        expect(result.success).toBe(false);
+        expect(agent.Decisions.Calls).toHaveLength(0);
+        expect(agent.SubAgentCalls).toEqual([]);
+        expect(harness.run.ErrorMessage).toContain('[IncompleteFork] Exclusive group "Triage the ticket"');
+        expect(harness.run.ErrorMessage).toContain('no path for "other"');
+        expect(harness.run.ErrorMessage).not.toContain(TRIAGE_STEP_ID);
+    });
+
+    it('refuses a path that reads the answers through the payload, as the dispatched path does', async () => {
+        harness.paths = [
+            ...intentFork(),
+            path(TRIAGE_STEP_ID, stepID('Other'), "payload.decisions.triage.intent.value === 'other'", 0),
+        ];
+        const agent = makeAgent(answered({ value: 'billing', confidence: 0.92 }, 0.1));
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(false);
+        expect(agent.Decisions.Calls).toHaveLength(0);
+        expect(harness.run.ErrorMessage).toContain('through "payload.decisions"');
+    });
+
     it('refuses a flow whose Decision steps share a key before any step runs', async () => {
         harness.steps.push(triageStep({ ID: 'cccccccc-1000-4000-8000-000000000002', Name: 'Triage again', StartingStep: false }));
         const agent = makeAgent(answered({ value: 'billing', confidence: 0.92 }, 0.1));

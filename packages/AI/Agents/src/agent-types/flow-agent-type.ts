@@ -22,9 +22,11 @@ import {
     ValidateTaskGraphSpec,
     type AgentDecisionAnswerSummary,
     type DecisionStepAnswers,
+    type FlowCompileResult,
     type FlowDecisionStepConfiguration,
     type GraphDecisions,
     type IConditionEvaluator,
+    type TaskGraphSpec,
 } from '@memberjunction/ai-core-plus';
 import { AIEngineGraphRepository, SafeConditionEvaluator } from './flow-graph-adapters';
 import { CompileFlowAgentToTaskGraph, FormatFlowCompileErrors, FormatFlowValidationErrors } from './flow-graph-executor';
@@ -1551,24 +1553,12 @@ export class FlowAgentType extends BaseAgentType {
             });
         }
 
-        const compiled = CompileFlowAgentToTaskGraph(params.agent.ID, params.agent.Name, params.agent.Description ?? undefined);
-        if (!compiled.Success || !compiled.Spec) {
-            return this.createNextStep('Failed', {
-                errorMessage: `Workflow '${params.agent.Name}' could not be prepared to run:\n${FormatFlowCompileErrors(compiled)}`
-            });
+        const prepared = this.compileAndValidateFlow(params);
+        if ('ErrorMessage' in prepared) {
+            return this.createNextStep('Failed', { errorMessage: prepared.ErrorMessage });
         }
 
-        // The same check Submit makes, made here so a refusal names the author's steps. A compiled
-        // graph's tempIds are step IDs, and the validator's messages would otherwise name those —
-        // an incomplete Choice fork, for one, is reported by its group, which is its origin's ID.
-        const validation = ValidateTaskGraphSpec(compiled.Spec);
-        if (!validation.Valid) {
-            return this.createNextStep('Failed', {
-                errorMessage: `Workflow '${params.agent.Name}' could not be prepared to run:\n${FormatFlowValidationErrors(validation.Errors, compiled.Spec)}`
-            });
-        }
-
-        this.logCompiledGraph(params.agent.Name, compiled.Spec.tasks.length, compiled.Excluded);
+        this.logCompiledGraph(params.agent.Name, prepared.Spec.tasks.length, prepared.Excluded);
 
         // 'Tasks' is not in the BaseAgentNextStep step union — it is non-terminal in the same sense
         // as 'ClientTools'/'Plan' (see that type's doc comment), and BaseAgent routes it to
@@ -1576,10 +1566,36 @@ export class FlowAgentType extends BaseAgentType {
         return {
             step: 'Tasks' as BaseAgentNextStep<P>['step'],
             terminate: false,
-            taskGraph: { spec: compiled.Spec, folded: false },
+            taskGraph: { spec: prepared.Spec, folded: false },
             previousPayload: payload,
             newPayload: payload
         };
+    }
+
+    /**
+     * Compiles the flow and holds it to the checks `Submit` makes, or says why it cannot run.
+     *
+     * The dispatched path runs this before it submits, and the in-run walker before its first step
+     * when the flow has a Decision step, so a flow one mode accepts the other cannot refuse — an
+     * incomplete Choice fork, a decision read before it can answer, or one read through the payload
+     * is refused in both. The refusal names the author's steps: a compiled graph's tempIds are step
+     * IDs, and an incomplete fork, for one, is reported by its group, which is its origin's ID.
+     */
+    private compileAndValidateFlow<P>(
+        params: ExecuteAgentParams<P>
+    ): { Spec: TaskGraphSpec; Excluded: FlowCompileResult['Excluded'] } | { ErrorMessage: string } {
+        const compiled = CompileFlowAgentToTaskGraph(params.agent.ID, params.agent.Name, params.agent.Description ?? undefined);
+        if (!compiled.Success || !compiled.Spec) {
+            return { ErrorMessage: `Workflow '${params.agent.Name}' could not be prepared to run:\n${FormatFlowCompileErrors(compiled)}` };
+        }
+
+        const validation = ValidateTaskGraphSpec(compiled.Spec);
+        if (!validation.Valid) {
+            return {
+                ErrorMessage: `Workflow '${params.agent.Name}' could not be prepared to run:\n${FormatFlowValidationErrors(validation.Errors, compiled.Spec)}`
+            };
+        }
+        return { Spec: compiled.Spec, Excluded: compiled.Excluded };
     }
 
     /**
@@ -1625,12 +1641,23 @@ export class FlowAgentType extends BaseAgentType {
         // (startAtStep), so it cannot limit itself to what the entry reaches. A shared key would
         // leave a condition's `decisions.<key>` naming two steps, and the dispatched path refuses
         // the same flow before it starts.
-        const duplicateKeys = CollectDecisionStepKeys(AIEngine.Instance.GetAgentSteps(flowState.agentId, 'Active') ?? []).Errors;
+        const activeSteps = AIEngine.Instance.GetAgentSteps(flowState.agentId, 'Active') ?? [];
+        const duplicateKeys = CollectDecisionStepKeys(activeSteps).Errors;
         if (duplicateKeys.length > 0) {
             return this.stopFlow(
                 `Workflow '${params.agent.Name}' cannot run:\n${FormatFlowCompileErrors({ Success: false, Errors: duplicateKeys, Excluded: [] })}`,
                 payloadToUse
             );
+        }
+
+        // A flow with a Decision step gets the dispatched path's whole check, once, before its first
+        // step: an incomplete Choice fork ends the flow "successfully" on the option nobody drew a
+        // path for, and in-run is the default mode for every sub-agent flow. So such a flow must be
+        // one the dispatcher would accept — which also rules out a loop drawn with a path back. A
+        // flow without a Decision step is walked as it always was.
+        if (activeSteps.some(s => s.StepType === 'Decision')) {
+            const prepared = this.compileAndValidateFlow(params);
+            if ('ErrorMessage' in prepared) return this.stopFlow(prepared.ErrorMessage, payloadToUse);
         }
 
         // Check for startAtStep in agentTypeParams (FlowAgentExecuteParams)
