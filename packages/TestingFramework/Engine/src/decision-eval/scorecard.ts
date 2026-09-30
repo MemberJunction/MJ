@@ -133,7 +133,8 @@ export function ReadDecisionEvalRun(row: DecisionEvalRunRow): DecisionEvalCellOb
 
 /**
  * Builds the scorecard: reads every run, groups the readable ones by cell (sorted by label), and
- * computes each cell's metrics.
+ * computes each cell's metrics. The runs may come in any order: the same runs give the same
+ * scorecard.
  *
  * @param rows The suite's runs.
  * @param options The suite's name, the window, and the metric options.
@@ -159,7 +160,7 @@ export function BuildDecisionEvalScorecard(rows: readonly DecisionEvalRunRow[], 
         CalibrationFolds: options.CalibrationFolds ?? DECISION_EVAL_CALIBRATION_FOLDS,
         Runs: rows.length,
         UnreadableRuns: Object.values(unreadable).reduce((sum, n) => sum + n, 0),
-        UnreadableReasons: unreadable,
+        UnreadableReasons: sortedByKey(unreadable),
         Cells: [...byCell.keys()].sort().map(cell => scorecardCell(cell, byCell.get(cell) ?? [], options))
     };
 }
@@ -237,10 +238,18 @@ function scorecardCell(cell: string, observations: readonly DecisionEvalCellObse
     return {
         Cell: cell,
         Metrics: ComputeCellMetrics(observations.map(o => o.Observation), options),
-        ResolvedModels: resolved,
+        ResolvedModels: sortedByKey(resolved),
         SamplingRequested: observations.some(o => o.SamplingRequested),
         SamplingApplied: observations.some(o => o.SamplingApplied)
     };
+}
+
+/**
+ * The same counts with their keys in ordinal order, so the JSON and the Markdown list them the
+ * same way whatever order the runs were read in.
+ */
+function sortedByKey(counts: Readonly<Record<string, number>>): Record<string, number> {
+    return Object.fromEntries(Object.entries(counts).sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)));
 }
 
 /** A number to a fixed number of places, or an em dash. */

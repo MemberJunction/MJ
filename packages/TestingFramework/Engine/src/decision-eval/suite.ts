@@ -256,7 +256,7 @@ export function EstimateDecisionEvalRun(
 /**
  * Whether a point has something to decide, judged offline with the point's own agents and the
  * conversation manager assumed present. False when the previous agent never answered in the
- * history: production makes no call then, and the driver records the run as an `Error`.
+ * history: production makes no call then, and the driver records the run as `Skipped`.
  *
  * @param point The corpus point.
  */
