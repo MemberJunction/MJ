@@ -16,11 +16,13 @@ export class MJEntityFormContributionFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
-            { sectionKey: 'formIntegration', sectionName: 'Form Integration', isExpanded: true },
-            { sectionKey: 'placementAndLayout', sectionName: 'Placement and Layout', isExpanded: true },
+            { sectionKey: 'targetConfiguration', sectionName: 'Target Configuration', isExpanded: true },
+            { sectionKey: 'generalInformation', sectionName: 'General Information', isExpanded: true },
+            { sectionKey: 'overrideLogic', sectionName: 'Override Logic', isExpanded: true },
             { sectionKey: 'replacementLogic', sectionName: 'Replacement Logic', isExpanded: true },
-            { sectionKey: 'chromeAndPresentation', sectionName: 'Chrome and Presentation', isExpanded: true },
+            { sectionKey: 'displaySettings', sectionName: 'Display Settings', isExpanded: true },
             { sectionKey: 'accessControl', sectionName: 'Access Control', isExpanded: true },
+            { sectionKey: 'lifecycleManagement', sectionName: 'Lifecycle Management', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

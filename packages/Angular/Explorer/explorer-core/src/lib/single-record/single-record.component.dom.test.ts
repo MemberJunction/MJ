@@ -45,6 +45,7 @@ function snapshot(entity: string): FormCompositionSnapshot {
     Sections: [],
     Related: [],
     Contributions: [],
+    Rail: [],
     SlotsPresent: [],
     ChromeRuleCount: 0,
   };

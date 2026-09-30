@@ -14,8 +14,6 @@
  *
  * Everything here is pure (no Angular, no I/O) so it can be unit tested; the
  * container owns the call and the state.
- *
- * @see plans/form-section-counts.md
  */
 import {
     BaseEntity,

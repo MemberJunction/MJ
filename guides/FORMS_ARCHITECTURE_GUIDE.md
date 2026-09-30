@@ -584,7 +584,7 @@ Rules: layout (accordion vs left-nav) is decided **before** empty sections are r
 arriving never flip it. A `'hide'` section is held off the rail until counts arrive (no show-then-yank);
 a section that had rows this session, or the open rail item, is never hidden; a failed count fails
 open. The "show empty fields" toolbar toggle reveals everything. The collapsed More folder shows the
-sum of its children's counts. Plan: [`/plans/form-section-counts.md`](../plans/form-section-counts.md).
+sum of its children's counts.
 
 #### Section indicators — unsaved edits and invalid fields, per section
 

@@ -435,7 +435,7 @@ yours, shared with you, hidden and fixed.
 When a saved record opens, the container fetches the row count of every related section **and**
 the tag / attachment / version toolbar badges in **one** `RunViews` call of `count_only` views
 (the database provider runs an all-`count_only` batch as a single `UNION ALL`). Badges appear
-before any grid loads. Plan: [`/plans/form-section-counts.md`](../../../../plans/form-section-counts.md).
+before any grid loads.
 
 A contribution opts in with three optional keys:
 
