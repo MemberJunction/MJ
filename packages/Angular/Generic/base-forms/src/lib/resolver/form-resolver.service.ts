@@ -25,11 +25,36 @@ export interface EntityFormOverrideRow {
     Description?: string | null;
 }
 
-/** Resolved form kind for a given (entity, user, roles) tuple. */
+/**
+ * Which form a host should mount. `'default'` = the resolver's normal pick
+ * (interactive override, else the highest-priority class form);
+ * `'standard'` = the CodeGen-generated form (see
+ * {@link FormResolverService.ResolveStandardForm}).
+ */
+export type EntityFormMode = 'default' | 'standard';
+
+/**
+ * Resolved form kind for a given (entity, user, roles) tuple. Every variant
+ * also carries `standard` — the CodeGen-generated form class, or null when no
+ * class form is registered — so a host can offer it when a custom form hides it.
+ */
 export type FormResolution =
-    | { kind: 'interactive'; override: EntityFormOverrideRow; variants: EntityFormOverrideRow[] }
-    | { kind: 'class'; subClass: Type<BaseFormComponent>; variants: EntityFormOverrideRow[] }
-    | { kind: 'none'; variants: EntityFormOverrideRow[] };
+    | { kind: 'interactive'; override: EntityFormOverrideRow; variants: EntityFormOverrideRow[]; standard: Type<BaseFormComponent> | null }
+    | { kind: 'class'; subClass: Type<BaseFormComponent>; variants: EntityFormOverrideRow[]; standard: Type<BaseFormComponent> | null }
+    | { kind: 'none'; variants: EntityFormOverrideRow[]; standard: Type<BaseFormComponent> | null };
+
+/**
+ * True when a standard form exists AND the resolution is not already it —
+ * i.e. a custom form (a higher-priority class form or an interactive
+ * override) is hiding the CodeGen form. False for the common case of an
+ * entity whose only registration is the generated form.
+ */
+export function HasStandardFormAlternative(resolution: FormResolution): boolean {
+    if (!resolution.standard) return false;
+    if (resolution.kind === 'interactive') return true;
+    if (resolution.kind === 'class') return resolution.subClass !== resolution.standard;
+    return false;
+}
 
 /**
  * UserInfoEngine setting-key prefix for per-user, per-entity form-variant
@@ -58,6 +83,12 @@ const VARIANT_SETTING_PREFIX = 'mj.formVariant.';
  *      the @RegisterClass + CodeGen-generated path used today.
  *   3. None — caller surfaces the "no form registered" error.
  *
+ * **Standard form.** Every resolution also carries `standard`, the
+ * CodeGen-generated form ({@link ResolveStandardForm}). Tiers 1 and 2 can
+ * both hide it — an override replaces it, and a custom `@RegisterClass` with
+ * a higher priority outranks it — so hosts use it as an escape hatch to reach
+ * every field of the entity.
+ *
  * **Session selection.** If the user previously chose a non-default variant
  * via the variant switcher and that choice is still applicable + Active, that
  * choice wins over the default. Choice is keyed by entity name in
@@ -83,15 +114,41 @@ export class FormResolverService {
     ): Promise<FormResolution> {
         const variants = await this.listApplicableVariants(entity, user, provider);
         const active = this.pickActive(entity, variants);
+        const standard = this.ResolveStandardForm(entity);
 
         if (active) {
-            return { kind: 'interactive', override: active, variants };
+            return { kind: 'interactive', override: active, variants, standard };
         }
 
         const reg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormComponent, entity.Name);
         return reg
-            ? { kind: 'class', subClass: reg.SubClass as Type<BaseFormComponent>, variants }
-            : { kind: 'none', variants };
+            ? { kind: 'class', subClass: reg.SubClass as Type<BaseFormComponent>, variants, standard }
+            : { kind: 'none', variants, standard };
+    }
+
+    /**
+     * The CodeGen-generated ("standard") form class for an entity, or null
+     * when no class form is registered.
+     *
+     * **Why lowest priority = standard.** CodeGen emits
+     * `@RegisterClass(BaseFormComponent, '<Entity>')` with no priority, so
+     * ClassFactory auto-assigns `highest + 1` at registration time. A custom
+     * form either declares a higher explicit priority or extends the
+     * generated class (so it loads after it and gets a higher auto
+     * priority). The generated form is therefore the lowest-priority
+     * registration for the key. On a priority tie the FIRST registered wins
+     * here — the opposite of ClassFactory's winner rule (last wins), which is
+     * what makes a tied custom form outrank the generated one. With exactly
+     * one registration, that registration is the standard form.
+     */
+    ResolveStandardForm(entity: EntityInfo): Type<BaseFormComponent> | null {
+        const regs = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseFormComponent, entity.Name);
+        if (regs.length === 0) return null;
+        let lowest = regs[0];
+        for (const r of regs) {
+            if (r.Priority < lowest.Priority) lowest = r; // strict < keeps the FIRST on ties
+        }
+        return lowest.SubClass as Type<BaseFormComponent>;
     }
 
     /**

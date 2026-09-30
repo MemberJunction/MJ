@@ -8,7 +8,7 @@ import {
 import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
 import { ClaimRedeemComponent } from './lib/identity-claims/claim-redeem.component';
 import { LogError, Metadata, StartupManager, IMetadataProvider, IsNewEntityRecordUrlId, NEW_RECORD_VALUES_QUERY_PARAM, CompositeKey } from '@memberjunction/core';
-import { SharedService, SYSTEM_APP_ID, RECORDS_RESOURCE_TYPE } from '@memberjunction/ng-shared';
+import { SharedService, SYSTEM_APP_ID, RECORDS_RESOURCE_TYPE, RecordTabQueryParams } from '@memberjunction/ng-shared';
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
 import { ApplicationManager, TabService } from '@memberjunction/ng-base-application';
 import { MJGlobal, MJEventType } from '@memberjunction/global';
@@ -322,6 +322,7 @@ export class ResourceResolver implements Resolve<void> {
               recordId: isNew ? '' : recordId,
               isNew: isNew || undefined,
               NewRecordValues: newRecordValues,
+              ...RecordTabQueryParams(route.queryParams),
               appName: appName,
               appId: app.ID
             },
@@ -581,7 +582,8 @@ export class ResourceResolver implements Resolve<void> {
           Entity: entityName,
           recordId: isNew ? '' : recordId,
           isNew: isNew || undefined,
-          NewRecordValues: newRecordValues
+          NewRecordValues: newRecordValues,
+          ...RecordTabQueryParams(route.queryParams)
         },
         ResourceRecordId: isNew ? '' : recordId,
         IsPinned: false

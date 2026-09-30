@@ -49,8 +49,11 @@ vi.mock('@memberjunction/core-entities', () => ({
   },
 }));
 
+// Mirrors the real UUIDsEqual contract (null-safe, trimmed, case-insensitive): the
+// tab identity guard compares record ids through it, so a plain === would hide that.
 vi.mock('@memberjunction/global', () => ({
-  UUIDsEqual: (a: string, b: string) => a === b,
+  UUIDsEqual: (a: string | null | undefined, b: string | null | undefined) =>
+    a == null || b == null ? a == b : a.trim().toLowerCase() === b.trim().toLowerCase(),
 }));
 
 // ---- QueryParamChangeEvent tests ----
@@ -476,7 +479,7 @@ describe('UpdateTabQueryParams guard', () => {
     });
   });
 
-  it('normalizes resourceType and entity but exact-matches canonical fields', () => {
+  it('normalizes resourceType, entity and record id but exact-matches class and nav names', () => {
     const { service, updateTabConfiguration } = createService({
       id: 'tab-1',
       resourceRecordId: 'ID|ABC',
@@ -501,6 +504,7 @@ describe('UpdateTabQueryParams guard', () => {
       }
     );
 
+    // Record ids compare like UUIDs (case-insensitive); nav item names stay exact.
     const exactMismatch = service.UpdateTabQueryParams(
       'tab-1',
       { tab: 'details' },
@@ -509,13 +513,74 @@ describe('UpdateTabQueryParams guard', () => {
         entity: 'invoices',
         recordId: 'id|abc',
         driverClass: 'RecordResource',
-        navItemName: 'Invoice Record'
+        navItemName: 'invoice record'
       }
     );
 
     expect(normalizedMatch).toBe(true);
     expect(exactMismatch).toBe(false);
     expect(updateTabConfiguration).toHaveBeenCalledTimes(1);
+  });
+
+  // A Records tab's persisted config never records a driver class, but the tab
+  // container injects `resourceTypeDriverClass: 'RecordResource'` into the
+  // COMPONENT's Data.Configuration — which is where BaseResourceComponent builds
+  // its guard. Treating that as a mismatch dropped every record resource's
+  // UpdateQueryParams (MJ#4755: the standard-form strip never reached the URL).
+  const recordsTab = (configuration: Record<string, unknown> = {}): TestTab => ({
+    id: 'tab-1',
+    resourceRecordId: '499EB',
+    configuration: { resourceType: 'Records', recordId: '499EB', Entity: 'Caliber: Assessments', ...configuration }
+  });
+  const recordResourceGuard: TabQueryParamUpdateGuard = {
+    resourceType: 'Records',
+    driverClass: 'RecordResource',
+    recordId: '499EB',
+    entity: 'Caliber: Assessments'
+  };
+
+  it('applies writes when the tab records no driver class (identity still held by type, record and entity)', () => {
+    const { service, updateTabConfiguration } = createService(recordsTab());
+
+    const updated = service.UpdateTabQueryParams('tab-1', { form: 'standard' }, recordResourceGuard);
+
+    expect(updated).toBe(true);
+    expect(updateTabConfiguration).toHaveBeenCalledWith('tab-1', { queryParams: { form: 'standard' } });
+  });
+
+  it('still drops writes when the tab records a DIFFERENT driver class', () => {
+    const { service, updateTabConfiguration } = createService(recordsTab({ driverClass: 'Other' }));
+
+    expect(service.UpdateTabQueryParams('tab-1', { form: 'standard' }, recordResourceGuard)).toBe(false);
+    expect(updateTabConfiguration).not.toHaveBeenCalled();
+  });
+
+  it('matches record ids case-insensitively (a save rewrites the component id to the server casing)', () => {
+    const { service, updateTabConfiguration } = createService(recordsTab());
+
+    const updated = service.UpdateTabQueryParams('tab-1', { form: 'standard' }, { ...recordResourceGuard, recordId: ' 499eb ' });
+
+    expect(updated).toBe(true);
+    expect(updateTabConfiguration).toHaveBeenCalledWith('tab-1', { queryParams: { form: 'standard' } });
+  });
+
+  it('still drops writes when the record differs, even without a recorded driver class', () => {
+    const { service, updateTabConfiguration } = createService(recordsTab());
+
+    const updated = service.UpdateTabQueryParams('tab-1', { form: 'standard' }, { ...recordResourceGuard, recordId: 'OTHER' });
+
+    expect(updated).toBe(false);
+    expect(updateTabConfiguration).not.toHaveBeenCalled();
+  });
+
+  it('GetTabRecordIdentity reads the record a tab hosts NOW (entity + record id)', () => {
+    const { service } = createService(recordsTab());
+    expect(service.GetTabRecordIdentity('tab-1')).toEqual({ Entity: 'Caliber: Assessments', RecordId: '499EB' });
+  });
+
+  it('GetTabRecordIdentity is null for a closed tab', () => {
+    const { service } = createService(null);
+    expect(service.GetTabRecordIdentity('tab-1')).toBeNull();
   });
 
   it('quietly ignores writes to closed or removed tabs', () => {

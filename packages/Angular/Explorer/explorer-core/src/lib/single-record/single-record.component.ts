@@ -1,6 +1,6 @@
 import { Component, EventEmitter, inject, Input, Output, ViewChild } from '@angular/core';
 import { CompositeKey, BaseEntity } from '@memberjunction/core';
-import { FormNavigationEvent, FormNotificationEvent, MJFormPresenterService, MjEntityFormHostComponent } from '@memberjunction/ng-base-forms';
+import { EntityFormMode, FormNavigationEvent, FormNotificationEvent, MJFormPresenterService, MjEntityFormHostComponent } from '@memberjunction/ng-base-forms';
 import { NavigationService, RecentAccessService, SharedService } from '@memberjunction/ng-shared';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
@@ -28,6 +28,19 @@ export class SingleRecordComponent extends BaseAngularComponent {
   @Input() public PrimaryKey: CompositeKey = new CompositeKey();
   @Input() public entityName: string | null = '';
   @Input() public NewRecordValues: string | Record<string, unknown> | null = '';
+  /**
+   * `'standard'` asks the host for the CodeGen form even when a custom form is
+   * registered (MJ#4755). The mount-time mode; later changes go through
+   * {@link SwitchFormMode} so the host's unsaved-work guard applies.
+   */
+  @Input() public FormMode: EntityFormMode = 'default';
+
+  /**
+   * Re-emitted host `FormModeChange`: the mode changed inside the host — the
+   * strip, a {@link SwitchFormMode} call, or an interactive-variant pick
+   * (which returns to `'default'`).
+   */
+  @Output() public FormModeChange: EventEmitter<EntityFormMode> = new EventEmitter<EntityFormMode>();
 
   /** @deprecated Use {@link NewRecordValues}. */
   @Input() public set newRecordValues(value: string | Record<string, unknown> | null) {
@@ -71,6 +84,15 @@ export class SingleRecordComponent extends BaseAngularComponent {
   @Output() public recordDismissed = this.RecordDismissed;
 
   @ViewChild(MjEntityFormHostComponent) private formHost?: MjEntityFormHostComponent;
+
+  /**
+   * Switch the mounted form between custom and standard (MJ#4755) through the
+   * host's guarded switch. False when refused (unsaved work — the host has
+   * already raised a warning) or when no host is mounted yet.
+   */
+  public SwitchFormMode(mode: EntityFormMode): boolean {
+    return this.formHost?.SwitchFormMode(mode) ?? false;
+  }
 
   /**
    * True while the hosted form is in edit mode. The host already exposes the
