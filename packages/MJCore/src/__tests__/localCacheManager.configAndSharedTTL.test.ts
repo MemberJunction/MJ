@@ -128,6 +128,57 @@ describe('LocalCacheManager eviction against a shared store', () => {
         expect(store.Removed).toEqual([]); // no delete, therefore no `removed` published to peers
     });
 
+    /** Registers one entry whose own expiry has already passed. */
+    async function cacheOneExpiredEntry(store: ILocalStorageProvider & { Removed: string[] }): Promise<void> {
+        await LocalCacheManager.Instance.SetRunViewResult('MJ: AI Models|||-1|0||', { EntityName: 'MJ: AI Models' },
+            [{ ID: '1' }], new Date().toISOString(), undefined, 1);
+        const registry = (LocalCacheManager.Instance as unknown as {
+            _registry: Map<string, { cachedAt: number; expiresAt?: number }>;
+        })._registry;
+        for (const entry of registry.values()) {
+            entry.expiresAt = Date.now() - 1_000;   // its own expiry, already past
+        }
+        store.Removed.length = 0;
+    }
+
+    it('does not delete a per-entry expiry from a shared store either — same storm, smaller', async () => {
+        // An entry carrying its own `expiresAt` always hands the store the matching TTL when it is
+        // written, so the store expires the key by itself. Deleting it locally as well means every
+        // server in the fleet removes the same key on its own clock and publishes a `removed` for
+        // it, and every peer reloads the affected engine. The TTL branch was already gated on this;
+        // this branch was not (plan §22.3).
+        const store = makeStore(true);
+        await LocalCacheManager.Instance.Initialize(store, { defaultTTLMs: 0, evictionSweepIntervalMs: 0 });
+        await cacheOneExpiredEntry(store);
+
+        await (LocalCacheManager.Instance as unknown as { runEvictionSweep(): Promise<void> }).runEvictionSweep();
+
+        expect(store.Removed).toEqual([]);
+    });
+
+    it('still forgets the expired entry locally, so the registry does not grow forever', async () => {
+        // Not deleting is not the same as not noticing: the local registry entry must go, or this
+        // process keeps a record of a slot the store has already expired.
+        const store = makeStore(true);
+        await LocalCacheManager.Instance.Initialize(store, { defaultTTLMs: 0, evictionSweepIntervalMs: 0 });
+        await cacheOneExpiredEntry(store);
+
+        await (LocalCacheManager.Instance as unknown as { runEvictionSweep(): Promise<void> }).runEvictionSweep();
+
+        const registry = (LocalCacheManager.Instance as unknown as { _registry: Map<string, unknown> })._registry;
+        expect(registry.size).toBe(0);
+    });
+
+    it('still deletes a per-entry expiry from a store private to this process', async () => {
+        const store = makeStore(false);
+        await LocalCacheManager.Instance.Initialize(store, { defaultTTLMs: 0, evictionSweepIntervalMs: 0 });
+        await cacheOneExpiredEntry(store);
+
+        await (LocalCacheManager.Instance as unknown as { runEvictionSweep(): Promise<void> }).runEvictionSweep();
+
+        expect(store.Removed.length).toBe(1);
+    });
+
     it('still deletes expired entries from a store private to this process', async () => {
         const store = makeStore(false);
         await LocalCacheManager.Instance.Initialize(store, { defaultTTLMs: 1_000, evictionSweepIntervalMs: 0 });

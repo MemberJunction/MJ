@@ -792,23 +792,41 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
         const timer = setTimeout(() => {
             this._peerMetadataNoticeTimer = null;
-            this._peerMetadataNoticeFirstAt = null;
             // A provider inside a transaction cannot run the check now (its reads would see the
             // transaction's own uncommitted world, and SQL Server's RefreshIfNeeded refuses
             // outright). Re-arm instead of dropping the notice, which used to lose it entirely.
+            // The deferral budget is deliberately NOT cleared here: it bounds how long one check
+            // may be put off, and the check has not run yet. Clearing it as the timer fires ended
+            // the budget exactly when deferral began, leaving the retry count as the only real
+            // bound (plan §22.3).
             if (this.MetadataMemberRefreshMustWait) {
                 this.handlePeerMetadataNoticeRetry();
                 return;
             }
-            this.RefreshIfNeeded(undefined, true).catch((e: unknown) => {
-                LogError(`Metadata check after another server's change failed: ${e instanceof Error ? e.message : String(e)}`);
-            });
+            this.runPeerMetadataCheck();
         }, ProviderBase.MetadataDatasetRefreshDebounceMs + Math.floor(Math.random() * ProviderBase.PeerMetadataNoticeJitterMs));
         if (typeof timer === 'object' && timer !== null && 'unref' in timer) {
             (timer as { unref(): void }).unref();
         }
         this._peerMetadataNoticeTimer = timer;
         return true;
+    }
+
+    /**
+     * Runs the deferred metadata check and closes out both budgets.
+     *
+     * Both are reset HERE rather than at any earlier point, because both measure deferral of a
+     * check that has now happened. The retry count in particular used to be cleared only on the
+     * re-armed path, so a check that ran on the direct path — which is what happens when a fresh
+     * notice arrives after the transaction closed — left its count behind for the next deferral to
+     * inherit (plan §22.3).
+     */
+    private runPeerMetadataCheck(): void {
+        this._peerMetadataNoticeRetries = 0;
+        this._peerMetadataNoticeFirstAt = null;
+        this.RefreshIfNeeded(undefined, true).catch((e: unknown) => {
+            LogError(`Metadata check after another server's change failed: ${e instanceof Error ? e.message : String(e)}`);
+        });
     }
 
     /**
@@ -822,6 +840,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (this._peerMetadataNoticeRetries > ProviderBase.MaxMetadataMemberRefreshWaits) {
             LogError(`Metadata check after another server's change was dropped: this provider has been inside a transaction for ${this._peerMetadataNoticeRetries} windows. The next notice or the periodic check will pick the change up.`);
             this._peerMetadataNoticeRetries = 0;
+            this._peerMetadataNoticeFirstAt = null; // the next notice starts a fresh budget
             return;
         }
         const timer = setTimeout(() => {
@@ -830,10 +849,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 this.handlePeerMetadataNoticeRetry();
                 return;
             }
-            this._peerMetadataNoticeRetries = 0;
-            this.RefreshIfNeeded(undefined, true).catch((e: unknown) => {
-                LogError(`Metadata check after another server's change failed: ${e instanceof Error ? e.message : String(e)}`);
-            });
+            this.runPeerMetadataCheck();
         }, this.MetadataMemberRefreshDelayMs);
         if (typeof timer === 'object' && timer !== null && 'unref' in timer) {
             (timer as { unref(): void }).unref();
