@@ -333,9 +333,9 @@ select.mj-agent-props-input {
 .mj-agent-props-delete-btn {
   width: 100%;
   padding: 8px 12px;
-  border: 1px solid #fecaca;
+  border: 1px solid color-mix(in srgb, var(--mj-status-error) 30%, transparent);
   border-radius: var(--mj-radius-md);
-  background: var(--mj-status-error-subtle);
+  background: var(--mj-status-error-bg);
   color: var(--mj-status-error);
   font-size: var(--mj-text-sm);
   font-weight: 500;
@@ -347,7 +347,10 @@ select.mj-agent-props-input {
   transition: all 0.15s ease;
 }
 
-.mj-agent-props-delete-btn:hover { background: var(--mj-status-error-subtle); border-color: #fca5a5; }
+.mj-agent-props-delete-btn:hover {
+  background: color-mix(in srgb, var(--mj-status-error) 16%, var(--mj-bg-surface));
+  border-color: var(--mj-status-error-border);
+}
 
 .mj-agent-props-delete-btn i { font-size: var(--mj-text-xs); }
 
@@ -568,7 +571,7 @@ select.mj-agent-props-input {
 }
 
 .mj-agent-props-icon-btn--danger:hover:not(:disabled) {
-  background: var(--mj-status-error-subtle);
+  background: var(--mj-status-error-bg);
 }
 
 .mj-agent-props-coverage-hint {
