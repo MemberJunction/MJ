@@ -4158,6 +4158,9 @@ importers:
       '@memberjunction/entity-communications-base':
         specifier: 6.2.0-edge.1
         version: link:../../Communication/entity-comm-base
+      '@memberjunction/feature-pipelines':
+        specifier: 6.2.0-edge.1
+        version: link:../../AI/Knowledge/FeaturePipelines
       '@memberjunction/graphql-dataprovider':
         specifier: 6.2.0-edge.1
         version: link:../../GraphQLDataProvider
@@ -4268,6 +4271,9 @@ importers:
       '@memberjunction/entity-communications-base':
         specifier: 6.2.0-edge.1
         version: link:../../Communication/entity-comm-base
+      '@memberjunction/feature-pipelines':
+        specifier: 6.2.0-edge.1
+        version: link:../../AI/Knowledge/FeaturePipelines
       '@memberjunction/graphql-dataprovider':
         specifier: 6.2.0-edge.1
         version: link:../../GraphQLDataProvider
@@ -11667,6 +11673,9 @@ importers:
       '@memberjunction/doc-utils':
         specifier: 6.2.0-edge.1
         version: link:../DocUtils
+      '@memberjunction/feature-pipelines':
+        specifier: 6.2.0-edge.1
+        version: link:../AI/Knowledge/FeaturePipelines
       '@memberjunction/generic-database-provider':
         specifier: 6.2.0-edge.1
         version: link:../GenericDatabaseProvider
@@ -12670,6 +12679,9 @@ importers:
         specifier: ^3.25.0
         version: 3.25.76
     devDependencies:
+      '@memberjunction/conversations-runtime':
+        specifier: 6.2.0-edge.1
+        version: link:../ConversationsRuntime
       '@types/express':
         specifier: ^5.0.6
         version: 5.0.6
@@ -14376,6 +14388,9 @@ importers:
       '@memberjunction/external-data-sources':
         specifier: 6.2.0-edge.1
         version: link:../ExternalDataSources/Engine
+      '@memberjunction/feature-pipelines':
+        specifier: 6.2.0-edge.1
+        version: link:../AI/Knowledge/FeaturePipelines
       '@memberjunction/generic-database-provider':
         specifier: 6.2.0-edge.1
         version: link:../GenericDatabaseProvider
@@ -14653,6 +14668,9 @@ importers:
       '@memberjunction/encryption':
         specifier: 6.2.0-edge.1
         version: link:../Encryption
+      '@memberjunction/feature-pipelines':
+        specifier: 6.2.0-edge.1
+        version: link:../AI/Knowledge/FeaturePipelines
       '@memberjunction/generic-database-provider':
         specifier: 6.2.0-edge.1
         version: link:../GenericDatabaseProvider

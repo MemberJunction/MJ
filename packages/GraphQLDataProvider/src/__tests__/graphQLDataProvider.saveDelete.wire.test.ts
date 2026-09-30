@@ -279,6 +279,19 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             expect(entity.LatestResult.Success).toBe(true);
         });
 
+        it('IsParentEntityDelete returns true without any wire call (MJ#4864)', async () => {
+            const entity = loadedCustomer();
+            const options = new EntityDeleteOptions();
+            options.IsParentEntityDelete = true;
+
+            const result = await provider.Delete(entity, options, user);
+
+            expect(GraphQLWire.Requests).toHaveLength(0);
+            expect(result).toBe(true);
+            expect(entity.LatestResult?.Success).toBe(true);
+            expect(entity.LatestResult?.Type).toBe('delete');
+        });
+
         it('surfaces the first GraphQL error message into LatestResult and returns null', async () => {
             const entity = newCustomer();
             entity.Set('Name', 'Acme');

@@ -120,5 +120,18 @@ describe('FeaturePipelineEngine.BuildSummaries (KH)', () => {
     const [sMalformed] = FeaturePipelineEngine.BuildSummaries([rp({ Configuration: '{invalid json' })], []);
     expect(sMalformed.PipelineType).toBe('LLM');
   });
+
+  it('gives the built-in type names in their canonical case, so the Decision badge styles any spelling', () => {
+    const summaries = FeaturePipelineEngine.BuildSummaries(
+      [
+        rp({ Configuration: JSON.stringify({ PipelineType: ' decision ' }) }),
+        rp({ Configuration: JSON.stringify({ PipelineType: 'llm' }) }),
+        rp({ Configuration: JSON.stringify({ PipelineType: 'MyCustomType' }) }),
+        rp({ Configuration: JSON.stringify({ PipelineType: 42 }) }),
+      ],
+      []
+    );
+    expect(summaries.map((s) => s.PipelineType)).toEqual(['Decision', 'LLM', 'MyCustomType', 'LLM']);
+  });
 });
 

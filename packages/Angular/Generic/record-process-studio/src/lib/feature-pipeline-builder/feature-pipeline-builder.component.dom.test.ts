@@ -2,8 +2,9 @@ import '@angular/compiler';
 import { getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { describe, it, expect } from 'vitest';
-import type { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
-import type { MJRecordProcessEntity } from '@memberjunction/core-entities';
+import { EntityInfo } from '@memberjunction/core';
+import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { renderComponentFixture, query, queryAll, createFakeProvider } from '@memberjunction/ng-test-utils';
 import { FeaturePipelineBuilderComponent, type EscalationTargetCandidate } from './feature-pipeline-builder.component';
 import type { DataFeatureSpec } from '@memberjunction/feature-pipelines';
@@ -15,13 +16,14 @@ try {
 }
 
 const ENTITIES = [
-  {
+  new EntityInfo({
     ID: 'e1',
     Name: 'Accounts',
     DisplayName: 'Accounts',
     Fields: [
       {
         Name: 'Rating',
+        Type: 'nvarchar',
         DisplayName: 'Rating',
         EntityFieldValues: [
           { Value: 'Hot', Description: 'High intent prospect' },
@@ -31,50 +33,90 @@ const ENTITIES = [
       },
       {
         Name: 'ChurnRiskScore',
+        Type: 'decimal',
         DisplayName: 'Churn Risk Score',
       },
       {
         Name: 'IsAtRisk',
+        Type: 'bit',
         DisplayName: 'Is At Risk',
       },
+      {
+        Name: 'Summary',
+        Type: 'nvarchar',
+        DisplayName: 'Summary',
+      },
     ],
-  },
-] as Array<Partial<EntityInfo>>;
+  }),
+];
 
-const makeRecord = (spec?: Partial<DataFeatureSpec>): MJRecordProcessEntity =>
-  ({
-    ID: 'rec1',
-    Name: 'Customer Churn Predictor',
-    Status: 'Active',
-    Description: 'Predicts churn risk',
-    EntityID: 'e1',
-    Configuration: JSON.stringify(spec ?? {
-      PipelineType: 'LLM',
-      Outputs: [
-        {
-          Name: 'ChurnRisk',
-          Ref: 'risk',
-          Target: { Mode: 'field', EntityFieldName: 'Rating' },
-          Constraint: { Type: 'enum', Values: ['Hot', 'Warm', 'Cold'], OnViolation: 'fail' },
-        },
-      ],
-    }),
-  } as unknown as MJRecordProcessEntity);
+/** The Record Process columns the builder reads and writes. */
+const RECORD_PROCESS_ENTITY = new EntityInfo({
+  ID: 'rp-entity',
+  Name: 'MJ: Record Processes',
+  Fields: ['ID', 'Name', 'Description', 'EntityID', 'Status', 'WorkType', 'PromptID', 'Configuration', 'OutputMapping', 'WatermarkStrategy', 'SkipUnchanged'].map(
+    (Name) => ({ Name, IsPrimaryKey: Name === 'ID', AllowUpdateAPI: Name !== 'ID' })
+  ),
+});
+
+const makeRecord = (spec?: Partial<DataFeatureSpec>): MJRecordProcessEntity => {
+  const record = new MJRecordProcessEntity(RECORD_PROCESS_ENTITY);
+  record.ID = 'rec1';
+  record.Name = 'Customer Churn Predictor';
+  record.Status = 'Active';
+  record.Description = 'Predicts churn risk';
+  record.EntityID = 'e1';
+  record.PromptID = 'prompt-1';
+  record.Configuration = JSON.stringify(spec ?? {
+    PipelineType: 'LLM',
+    Outputs: [
+      {
+        Name: 'ChurnRisk',
+        Ref: 'risk',
+        Target: { Mode: 'field', EntityFieldName: 'Rating' },
+        Constraint: { Type: 'enum', Values: ['Hot', 'Warm', 'Cold'], OnViolation: 'fail' },
+      },
+    ],
+  });
+  return record;
+};
 
 function fakeProvider() {
-  const p = createFakeProvider({ entities: ENTITIES });
-  Object.assign(p, {
-    EntityByID: (id: string) => ENTITIES.find((e) => e.ID === id),
+  return Object.assign(createFakeProvider({ entities: ENTITIES }), {
+    EntityByID: (id: string) => ENTITIES.find((e) => UUIDsEqual(e.ID, id)),
   });
-  return p;
 }
 
-const render = (record: MJRecordProcessEntity) =>
+/** A change event from a real <select>/<input> holding `value`, as the builder's handlers receive it. */
+function eventWithValue(value: string, tag: 'select' | 'input' = 'select'): Event {
+  const element = document.createElement(tag);
+  if (element instanceof HTMLSelectElement) {
+    const option = document.createElement('option');
+    option.value = value;
+    element.appendChild(option);
+  }
+  element.value = value;
+  const event = new Event('change');
+  element.dispatchEvent(event);
+  return event;
+}
+
+/** The spec the builder last wrote to the record. */
+function savedSpec(record: MJRecordProcessEntity): DataFeatureSpec | null {
+  return SafeJSONParse<DataFeatureSpec>(record.Configuration ?? '');
+}
+
+const render = (record: MJRecordProcessEntity, validity?: boolean[]) =>
   renderComponentFixture(FeaturePipelineBuilderComponent, {
     inputs: {
       Record: record,
       Provider: fakeProvider(),
       EntityID: record.EntityID,
+    },
+    setup: (instance) => {
+      if (validity) {
+        instance.ValidChange.subscribe((valid) => validity.push(valid));
+      }
     },
   });
 
@@ -183,8 +225,7 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     });
     const f = render(rec);
 
-    const makeSelectEvent = (val: string) => ({ target: { value: val } } as unknown as Event);
-    f.componentInstance.OnPipelineTypeSelect(makeSelectEvent('Decision'));
+    f.componentInstance.OnPipelineTypeSelect(eventWithValue('Decision'));
 
     expect(f.componentInstance.ShowTypeSwitchConfirm).toBe(true);
     expect(f.componentInstance.PendingPipelineType).toBe('Decision');
@@ -196,7 +237,7 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     expect(f.componentInstance.CurrentPipelineTypeName).toBe('LLM');
 
     // Select again and confirm
-    f.componentInstance.OnPipelineTypeSelect(makeSelectEvent('Decision'));
+    f.componentInstance.OnPipelineTypeSelect(eventWithValue('Decision'));
     f.componentInstance.OnTypeSwitchConfirmed();
     expect(f.componentInstance.ShowTypeSwitchConfirm).toBe(false);
     expect(f.componentInstance.CurrentPipelineTypeName).toBe('Decision');
@@ -221,8 +262,7 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     });
     const f = render(rec);
 
-    const makeSelectEvent = (val: string) => ({ target: { value: val } } as unknown as Event);
-    f.componentInstance.OnPipelineTypeSelect(makeSelectEvent('Decision'));
+    f.componentInstance.OnPipelineTypeSelect(eventWithValue('Decision'));
     f.detectChanges();
 
     expect(f.componentInstance.ShowTypeSwitchConfirm).toBe(true);
@@ -276,11 +316,10 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     expect(thresholdInput.placeholder).toBe('0.5');
     expect(thresholdInput.value).toBe('');
 
-    const inputEvent = (val: string) => ({ target: { value: val } } as unknown as Event);
-    f.componentInstance.UpdateBooleanThreshold(0, inputEvent('1.5'));
+    f.componentInstance.UpdateBooleanThreshold(0, eventWithValue('1.5', 'input'));
     expect(out.Constraint?.Threshold).toBe(1.5);
 
-    f.componentInstance.UpdateBooleanThreshold(0, inputEvent(''));
+    f.componentInstance.UpdateBooleanThreshold(0, eventWithValue('', 'input'));
     expect(out.Constraint?.Threshold).toBeUndefined();
     expect(f.componentInstance.GetBooleanThreshold(out)).toBeNull();
   });
@@ -535,5 +574,92 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     f.componentInstance.ApplyPipelineTypeChange('LLM');
     expect(f.componentInstance.spec.Escalation).toBeUndefined();
     expect(f.componentInstance.IsEscalationEnabled).toBe(false);
+  });
+
+  describe('the capability rules, live', () => {
+    const REASONING_ERROR = 'This pipeline type does not produce reasoning; turn off CaptureReasoning or use an LLM pipeline.';
+    const isAtRisk = {
+      Name: 'IsAtRisk',
+      Ref: '$.isAtRisk',
+      Target: { Mode: 'field' as const, EntityFieldName: 'IsAtRisk' },
+      Constraint: { Type: 'boolean' as const, OnViolation: 'fail' as const },
+    };
+
+    it('reports a Decision freetext output as an error and emits ValidChange(false)', () => {
+      const validity: boolean[] = [];
+      const rec = makeRecord({
+        PipelineType: 'Decision',
+        Outputs: [
+          {
+            Name: 'Summary',
+            Ref: '$.summary',
+            Target: { Mode: 'field', EntityFieldName: 'Summary' },
+            Constraint: { Type: 'freetext', MaxLength: 500 },
+          },
+        ],
+      });
+
+      const f = render(rec, validity);
+
+      expect(f.componentInstance.ValidationErrors.map((e) => e.Message)).toContain(
+        "Output 'Summary' has constraint type 'freetext', which this pipeline type cannot produce."
+      );
+      expect(validity.length).toBeGreaterThan(0);
+      expect(validity[validity.length - 1]).toBe(false);
+    });
+
+    it('emits ValidChange(true) for the same output on an LLM pipeline', () => {
+      const validity: boolean[] = [];
+      const rec = makeRecord({
+        Outputs: [
+          {
+            Name: 'Summary',
+            Ref: '$.summary',
+            Target: { Mode: 'field', EntityFieldName: 'Summary' },
+            Constraint: { Type: 'freetext', MaxLength: 500 },
+          },
+        ],
+      });
+
+      render(rec, validity);
+
+      expect(validity[validity.length - 1]).toBe(true);
+    });
+
+    it("loads CaptureReasoning, so a Decision pipeline shows the runtime's reasoning error", () => {
+      const f = render(makeRecord({ PipelineType: 'Decision', CaptureReasoning: true, Outputs: [isAtRisk] }));
+
+      expect(f.componentInstance.spec.CaptureReasoning).toBe(true);
+      expect(f.componentInstance.ValidationErrors.map((e) => e.Message)).toContain(REASONING_ERROR);
+      expect(query(f, '.fpb-reasoning-select')).not.toBeNull();
+    });
+
+    it('keeps CaptureReasoning and Watermark on the next edit', () => {
+      const rec = makeRecord({
+        CaptureReasoning: true,
+        Watermark: { Enabled: true, Strategy: 'UpdatedAt' },
+        Outputs: [isAtRisk],
+      });
+      const f = render(rec);
+
+      f.componentInstance.UpdateBooleanThreshold(0, eventWithValue('0.6', 'input'));
+
+      expect(savedSpec(rec)?.CaptureReasoning).toBe(true);
+      expect(savedSpec(rec)?.Watermark).toEqual({ Enabled: true, Strategy: 'UpdatedAt' });
+    });
+
+    it('turning Capture Reasoning off clears the error and removes the flag from the record', () => {
+      const validity: boolean[] = [];
+      const rec = makeRecord({ PipelineType: 'Decision', CaptureReasoning: true, Outputs: [isAtRisk] });
+      const f = render(rec, validity);
+
+      f.componentInstance.UpdateCaptureReasoning(eventWithValue('false'));
+      f.detectChanges();
+
+      expect(f.componentInstance.ValidationErrors.map((e) => e.Message)).not.toContain(REASONING_ERROR);
+      expect(savedSpec(rec)).not.toHaveProperty('CaptureReasoning');
+      expect(validity[validity.length - 1]).toBe(true);
+      expect(query(f, '.fpb-reasoning-select')).toBeNull();
+    });
   });
 });
