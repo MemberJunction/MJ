@@ -24,7 +24,9 @@ import {
     DECISION_ROUTING_TIMEOUT_MS,
     InterpretRoutingAnswers,
     IsAgentAllowed,
+    IsRoutableAgent,
     KeptContinuityOutcome,
+    MAX_ROUTING_ARTIFACT_VERSIONS,
     ROUTING_ARTIFACT_QUESTION,
     ROUTING_CONTINUES_CALIBRATION,
     ROUTING_CONTINUES_QUESTION,
@@ -32,6 +34,7 @@ import {
     ROUTING_ROUTE_QUESTION,
     type RoutingAgent,
     type RoutingArtifactSummary,
+    type RoutingCatalogAgent,
     type RoutingDecisionAnswers,
     type RoutingDecisionInput,
     type RoutingHistoryRow,
@@ -39,15 +42,17 @@ import {
 } from '../conversation-routing-decision';
 import type { DecisionAnsweringModel } from '../decision-calibration';
 
-const MANAGER = { ID: 'AAAAAAAA-0000-0000-0000-000000000001', Name: 'Sage', Description: 'Routes each request.' } satisfies RoutingAgent;
-const RESEARCH = { ID: 'AAAAAAAA-0000-0000-0000-000000000002', Name: 'Research', Description: 'Finds and summarises sources.' } satisfies RoutingAgent;
-const WRITER = { ID: 'AAAAAAAA-0000-0000-0000-000000000003', Name: 'Writer', Description: 'Drafts and edits documents.' } satisfies RoutingAgent;
-const ANALYST = { ID: 'AAAAAAAA-0000-0000-0000-000000000004', Name: 'Analyst', Description: null } satisfies RoutingAgent;
-const CATALOG: RoutingAgent[] = [MANAGER, RESEARCH, WRITER, ANALYST];
-const findAgent = (id: string): RoutingAgent | undefined => CATALOG.find(a => a.ID.toUpperCase() === id.toUpperCase());
+const ACTIVE = { Status: 'Active', IsRestricted: false } as const;
+const MANAGER = { ID: 'AAAAAAAA-0000-0000-0000-000000000001', Name: 'Sage', Description: 'Routes each request.', ...ACTIVE } satisfies RoutingCatalogAgent;
+const RESEARCH = { ID: 'AAAAAAAA-0000-0000-0000-000000000002', Name: 'Research', Description: 'Finds and summarises sources.', ...ACTIVE } satisfies RoutingCatalogAgent;
+const WRITER = { ID: 'AAAAAAAA-0000-0000-0000-000000000003', Name: 'Writer', Description: 'Drafts and edits documents.', ...ACTIVE } satisfies RoutingCatalogAgent;
+const ANALYST = { ID: 'AAAAAAAA-0000-0000-0000-000000000004', Name: 'Analyst', Description: null, ...ACTIVE } satisfies RoutingCatalogAgent;
+const CATALOG: RoutingCatalogAgent[] = [MANAGER, RESEARCH, WRITER, ANALYST];
+const findAgent = (id: string): RoutingCatalogAgent | undefined => CATALOG.find(a => a.ID.toUpperCase() === id.toUpperCase());
 
 const VERSION_1 = 'BBBBBBBB-0000-0000-0000-000000000001';
 const VERSION_2 = 'BBBBBBBB-0000-0000-0000-000000000002';
+const PROMPT_RUN = 'EEEEEEEE-0000-0000-0000-000000000001';
 
 /** The request the questions travel in, as the chat sends it. */
 interface DecisionRequest {
@@ -262,6 +267,21 @@ describe('conversation routing decision', () => {
             expect(participants.map(p => p.Agent.ID)).toEqual([WRITER.ID]);
         });
 
+        it('leaves out agents that are no longer active or are restricted, as the \'@\' list does', () => {
+            const catalog: RoutingCatalogAgent[] = [MANAGER, { ...RESEARCH, Status: 'Disabled' }, { ...WRITER, IsRestricted: true }, ANALYST];
+            const lookup = (id: string): RoutingCatalogAgent | undefined => catalog.find(a => a.ID === id);
+            const rows = [...history, agentRow('a4', ANALYST, 'Figures attached')];
+
+            expect(CollectRoutingParticipants(rows, MANAGER.ID, null, lookup).map(p => p.Agent.ID)).toEqual([ANALYST.ID]);
+        });
+
+        it('IsRoutableAgent needs an active, unrestricted agent', () => {
+            expect(IsRoutableAgent({ Status: 'Active', IsRestricted: false })).toBe(true);
+            expect(IsRoutableAgent({ Status: 'Pending', IsRestricted: false })).toBe(false);
+            expect(IsRoutableAgent({ Status: 'Disabled', IsRestricted: false })).toBe(false);
+            expect(IsRoutableAgent({ Status: 'Active', IsRestricted: true })).toBe(false);
+        });
+
         it('truncates a long reply', () => {
             const long = 'x'.repeat(400);
             const [only] = CollectRoutingParticipants([agentRow('a1', RESEARCH, long)], MANAGER.ID, null, findAgent);
@@ -362,6 +382,51 @@ describe('conversation routing decision', () => {
         });
     });
 
+    describe('BuildRoutingArtifactVersions', () => {
+        /** A version ID for artifact `artifact`, `age` versions older than its latest. */
+        const versionId = (artifact: number, age: number): string =>
+            `CCCCCCCC-0000-0000-${String(artifact).padStart(4, '0')}-${String(age).padStart(12, '0')}`;
+
+        /** An artifact with `count` versions, newest first. */
+        function deepArtifact(name: string, artifact: number, count: number): RoutingArtifactSummary {
+            return artifactSummary(name, Array.from({ length: count }, (_, age): [string, number, string | null] =>
+                [versionId(artifact, age), count - age, null]));
+        }
+
+        const ids = (versions: ReturnType<typeof BuildRoutingArtifactVersions>): string[] => versions.map(v => v.ArtifactVersionId);
+        const range = (artifact: number, count: number): string[] => Array.from({ length: count }, (_, age) => versionId(artifact, age));
+
+        it(`offers at most ${MAX_ROUTING_ARTIFACT_VERSIONS}: every artifact's latest first, then older ones, in their order`, () => {
+            const versions = BuildRoutingArtifactVersions([
+                { Agent: WRITER, Artifacts: [deepArtifact('Press kit', 1, 30)] },
+                { Agent: RESEARCH, Artifacts: [deepArtifact('Sources', 2, 5), deepArtifact('Notes', 3, 1)] },
+            ]);
+
+            expect(versions).toHaveLength(MAX_ROUTING_ARTIFACT_VERSIONS);
+            expect(ids(versions)).toEqual([...range(1, 14), ...range(2, 5), ...range(3, 1)]);
+        });
+
+        it('keeps a crowded conversation under the server\'s option limit, so the agent choice is still asked', () => {
+            const agents = Array.from({ length: 7 }, (_, i): RoutingAgent => ({ ID: `DDDDDDDD-0000-0000-0000-00000000000${i}`, Name: `Agent ${i}`, Description: null }));
+            const versions = BuildRoutingArtifactVersions(agents.map((agent, i) => ({ Agent: agent, Artifacts: [deepArtifact(`Doc ${i}`, i, 40)] })));
+            const questions = BuildRoutingQuestions(input({ ArtifactVersions: versions }));
+            const artifact = questions['artifact'];
+
+            expect(ids(versions)).toEqual(expect.arrayContaining(agents.map((_, i) => versionId(i, 0))));
+            expect(artifact?.Kind === 'Choice' ? artifact.Options.length : 0).toBe(MAX_ROUTING_ARTIFACT_VERSIONS + 1);
+            // RunDecisionResolver.MAX_OPTIONS_PER_QUESTION: over it, the server refuses the whole request.
+            expect(MAX_ROUTING_ARTIFACT_VERSIONS + 1).toBeLessThanOrEqual(255);
+            expect(questions['route']?.Kind).toBe('Choice');
+        });
+
+        it('offers a version once, even when two agents\' replies carry it', () => {
+            const shared = artifactSummary('Press kit', [[VERSION_1, 1, null]]);
+            const versions = BuildRoutingArtifactVersions([{ Agent: WRITER, Artifacts: [shared] }, { Agent: RESEARCH, Artifacts: [shared] }]);
+
+            expect(versions).toEqual([{ AgentId: WRITER.ID, ArtifactVersionId: VERSION_1, Description: expect.stringContaining('made by Writer') }]);
+        });
+    });
+
     describe('BuildRoutingState', () => {
         it('holds the recent turns and the new message', () => {
             expect(BuildRoutingState(input())).toBe([
@@ -437,7 +502,19 @@ describe('conversation routing decision', () => {
 
     describe('KeptContinuityOutcome', () => {
         it('keeps today\'s routing, for the given reason', () => {
-            expect(KeptContinuityOutcome('no answer')).toEqual({ Verdict: 'KeptContinuity', RoutedAgentId: null, TargetArtifact: null, Reason: 'no answer' });
+            expect(KeptContinuityOutcome('no answer')).toEqual({ Verdict: 'KeptContinuity', RoutedAgentId: null, TargetArtifact: null, Reason: 'no answer', PromptRunID: null });
+        });
+    });
+
+    describe('the prompt run', () => {
+        it('is carried, answered or failed, so a turn can be traced to it', () => {
+            const answeredRun = InterpretRoutingAnswers(input(), { ...leaves(WRITER.ID), PromptRunID: PROMPT_RUN });
+            const failedRun = InterpretRoutingAnswers(input(), { Success: false, ErrorMessage: 'unreadable answer', Answers: {}, PromptRunID: PROMPT_RUN });
+            const noRun = InterpretRoutingAnswers(input(), { Success: false, ErrorMessage: 'no model', Answers: {} });
+
+            expect(answeredRun).toMatchObject({ Verdict: 'Routed', PromptRunID: PROMPT_RUN });
+            expect(failedRun).toMatchObject({ Verdict: 'KeptContinuity', PromptRunID: PROMPT_RUN });
+            expect(noRun.PromptRunID).toBeNull();
         });
     });
 
