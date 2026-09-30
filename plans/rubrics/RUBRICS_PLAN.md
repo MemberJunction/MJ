@@ -183,7 +183,7 @@ Add interfaces under `metadata/entities/JSONType-interfaces/` with bridge record
 
 | Column | Interface | Shape (sketch) |
 |---|---|---|
-| `RubricCriterion.EvaluatorConfig` | `IRubricCriterionEvaluatorConfig` | `{ Deterministic?: IRubricDeterministicRule; AI?: { Hints?: string; RequireQuote?: boolean } }` |
+| `RubricCriterion.EvaluatorConfig` | `IRubricCriterionEvaluatorConfig` | `{ Deterministic?: IRubricDeterministicRule; AI?: { Hints?: string; RequireQuote?: boolean }; Extensions?: Record<string, JsonObject> }` — `Extensions` is keyed by consuming app (e.g. `"Caliber"`) so apps can attach per-criterion settings without core knowing their vocabulary; because it lives in `EvaluatorConfig`, changing it is a major bump and it versions with the criterion for free |
 | `RubricEvaluationScore.Evidence` | `IRubricEvidence[]` | discriminated union on `Type`: `Quote {Text, Start?, End?, Verified?}`, `Turn {ConversationDetailID?, TurnIndex, Quote?}`, `File {FileID, Page?, Note?}`, `Url {Url, Title?}`, `Record {EntityName, RecordID, Note?}`, `Media {FileID, StartMs, EndMs}` |
 | `RubricEvaluation.Metadata` | `IRubricEvaluationMetadata` | `{ Evaluator?: {Name, Settings}, Samples?: {Count, Spread}, Timings?, RequestedBy?: {EntityName, RecordID}, DroppedEvidenceCount?, Warnings?: string[] }` |
 | `RubricVersion.ChangeDetails` | `IRubricVersionChangeDetails` | `{ BaseVersionID, Changes: {Path, Property, From, To, Bump}[] }` |
@@ -770,9 +770,10 @@ by their evaluator and by roles the consumer grants.
 - **Caliber** moves its rubric, version, criterion, section and scoring onto core rubrics; its own
   assessment record keeps session, integrity and disposition and references a core evaluation. Its
   score-scale inconsistency and model-chosen disposition are refactored around the §6 rules. Plan-only
-  PR in `bizapps-caliber`.
+  PR: [MemberJunction/bizapps-caliber#513](https://github.com/MemberJunction/bizapps-caliber/pull/513).
 - **ATS** follows through Caliber; its assessment rollup reads the core evaluation instead of
-  re-declaring the per-criterion score type. Plan-only PR in `bizapps-ats`.
+  re-declaring the per-criterion score type. Plan-only PR:
+  [MemberJunction/bizapps-ats#102](https://github.com/MemberJunction/bizapps-ats/pull/102).
 - A future **generic submissions / peer-review application** uses evaluations with a review round as
   the context, the blinding API, and the comparison matrix.
 
