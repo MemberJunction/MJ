@@ -371,7 +371,11 @@ class DecisionFlowAgent extends BaseAgent {
         payload?: SR,
     ): Promise<ExecuteAgentResult<SR>> {
         this.SubAgentCalls.push(subAgentRequest.name);
-        const agentRun = { ID: `run-${subAgentRequest.name}`, FinalStep: 'Success', ErrorMessage: null, Steps: [] } as unknown as MJAIAgentRunEntityExtended;
+        const agentRun = standIn<MJAIAgentRunEntityExtended>(
+            { ID: `run-${subAgentRequest.name}`, FinalStep: 'Success', ErrorMessage: null, Steps: [] },
+            ['ID', 'FinalStep', 'ErrorMessage', 'Steps'],
+            'sub-agent run',
+        );
         return { success: true, payload, agentRun };
     }
 }
@@ -394,25 +398,41 @@ function makeAgent(result: AIDecisionRunResult): DecisionFlowAgent {
     return new DecisionFlowAgent(new ScriptedDecisionService(result));
 }
 
+/** True when `value` has every one of `fields` — the ones the code under test reads off it. */
+function hasFields<T extends object>(value: object, fields: ReadonlyArray<keyof T>): value is T {
+    return fields.every((field) => Reflect.has(value, field));
+}
+
 /**
- * The seam onto BaseAgent's entity-typed parameters. The fakes carry only the fields a run reads;
- * constructing real entity objects would need a live provider.
+ * A stand-in as the entity-typed parameter BaseAgent takes, once it is checked to carry the fields a
+ * run reads. Constructing real entity objects would need a live provider; a stand-in missing a field
+ * the test relies on fails here, by name, rather than as an `undefined` deep inside a run.
  */
+function standIn<T extends object>(value: object, fields: ReadonlyArray<keyof T>, what: string): T {
+    if (!hasFields<T>(value, fields)) {
+        const missing = fields.filter((field) => !Reflect.has(value, field)).map(String);
+        throw new Error(`The ${what} stand-in lacks ${missing.join(', ')}.`);
+    }
+    return value;
+}
+
+/** The seam onto BaseAgent's entity-typed parameters. The fakes carry only the fields a run reads. */
 function makeParams(agentTypeParams: FlowAgentExecuteParams = { executionMode: 'inRun' }, payload: Record<string, unknown> = { ticket: 'I was charged twice' }): ExecuteAgentParams {
-    return {
-        agent: harness.agent as unknown as MJAIAgentEntityExtended,
+    const params: ExecuteAgentParams = {
+        agent: standIn<MJAIAgentEntityExtended>(harness.agent, ['ID', 'Name', 'TypeID', 'Status', 'DefaultStorageAccountID'], 'flow agent'),
         conversationMessages: [{ role: 'user', content: 'Route this ticket' }],
         contextUser: new UserInfo(undefined, { ID: USER_ID, Name: 'Flow Tester', Email: 'flow@test.mj' }),
-        provider: harness.provider as unknown as IMetadataProvider,
+        provider: standIn<IMetadataProvider>(harness.provider, ['GetEntityObject'], 'provider'),
         disableDataPreloading: true,
         payload,
         agentTypeParams,
-    } as ExecuteAgentParams;
+    };
+    return params;
 }
 
 /** A step row as the entity the flow's `skipSteps` takes. The walker reads only its ID. */
 function asStepEntity(row: StepRow): MJAIAgentStepEntity {
-    return row as unknown as MJAIAgentStepEntity;
+    return standIn<MJAIAgentStepEntity>(row, ['ID', 'Name', 'StepType'], 'agent step');
 }
 
 beforeEach(() => {
