@@ -96,6 +96,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     private static readonly DEFAULT_PANEL_WIDTH = 320;
     private static readonly MIN_PANEL_WIDTH = 200;
     private static readonly MAX_PANEL_WIDTH = 600;
+    private static treePanelCount = 0;
 
     public isLoading = true;
     public Categories: MJQueryCategoryEntity[] = [];
@@ -162,6 +163,8 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     }
     public PanelWidth = QueryBrowserResourceComponent.DEFAULT_PANEL_WIDTH;
     public IsResizing = false;
+    /** Unique id of the query list panel, which the splitter names in aria-controls. */
+    public readonly TreePanelId = `query-tree-panel-${++QueryBrowserResourceComponent.treePanelCount}`;
 
     /** Status filter toggles — which statuses to show in the tree */
     public StatusFilters: Record<string, boolean> = {

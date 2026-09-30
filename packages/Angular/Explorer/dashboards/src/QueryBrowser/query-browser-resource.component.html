@@ -1,7 +1,7 @@
 <!-- Query Browser Resource -->
 <div class="query-browser-container" [class.resizing]="IsResizing">
   <!-- Left Panel: Query Tree -->
-  <div class="query-tree-panel" [style.width.px]="PanelWidth">
+  <div class="query-tree-panel" [id]="TreePanelId" [style.width.px]="PanelWidth">
     <!-- Header -->
     <div class="tree-header">
       <div class="header-title">
@@ -94,16 +94,13 @@
     </div>
   </div>
 
-  <!-- Resize Handle. A separator WITHOUT tabindex is a static (decorative) separator per
-       ARIA, so the action-phrased label would announce a control that can't be operated:
-       tabindex + the keydown handler + aria-value* are what make it a real widget. Before
-       this it was a bare <div> whose only handler was (mousedown) — an addEventListener,
-       not an onclick attribute — so a 6px unlabeled target appeared in no accessibility
-       tree and in no automation's element list. -->
+  <!-- Resize Handle. A separator without tabindex is a static (decorative) separator per
+       ARIA, so tabindex, the keydown handler and aria-value* are what make it a widget. -->
   <div class="resize-handle"
     role="separator"
     aria-orientation="vertical"
     aria-label="Resize query list panel"
+    [attr.aria-controls]="TreePanelId"
     tabindex="0"
     [attr.aria-valuenow]="PanelWidth"
     [attr.aria-valuemin]="MinPanelWidth"

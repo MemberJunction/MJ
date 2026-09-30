@@ -405,7 +405,7 @@
 /* The handle is a keyboard-operable widget (arrows/Home/End), so it needs a visible
    focus ring — the 6px hover tint alone is too subtle to serve as one. */
 .resize-handle:focus-visible {
-    outline: 2px solid var(--mj-brand-primary);
+    outline: var(--mj-ring-width) solid var(--mj-focus-ring-color);
     outline-offset: -1px;
 }
 
