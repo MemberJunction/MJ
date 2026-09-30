@@ -28,6 +28,7 @@ import {
     DataFeatureOutput,
     FeatureValueCacheService,
     ResolveConstraint,
+    BuildEntityFieldValueLookup,
     type CacheKeyResult,
     renderConstraintBlock,
     validateOutputValue,
@@ -552,26 +553,16 @@ export class InferProcessor implements IRecordProcessor {
     }
 
     /**
-     * Builds a field values lookup scoped to the pipeline's entity from the processor context.
-     * Consults only that entity's fields; returns undefined if no entity or fields are found.
+     * The value lists of the pipeline's own entity (`context.entityID`), for the output check and the
+     * driver. Consults only that entity's fields, so a same-named field elsewhere is never read; undefined
+     * when the run names no entity or the provider does not know it.
      */
     private buildFieldValuesLookup(context: RecordProcessorContext): FeaturePipelineFieldValueLookup | undefined {
-        const entityID = context.entityID;
-        if (!entityID) {
+        if (!context.entityID) {
             return undefined;
         }
-        const provider = context.provider ?? Metadata.Provider;
-        if (!provider || typeof provider.EntityByID !== 'function') {
-            return undefined;
-        }
-        const entity = provider.EntityByID(entityID);
-        if (!entity || !entity.Fields) {
-            return undefined;
-        }
-        return (fieldName: string) => {
-            const field = entity.Fields?.find((f) => f.Name.toLowerCase() === fieldName.toLowerCase());
-            return field?.EntityFieldValues;
-        };
+        const provider = context.provider ?? Metadata.Provider; // global-provider-ok: last-resort fallback for a context built without its provider
+        return typeof provider?.EntityByID === 'function' ? BuildEntityFieldValueLookup(provider.EntityByID(context.entityID)) : undefined;
     }
 
     /** Fails when the driver cannot produce one or more of the spec's outputs, naming every one. */

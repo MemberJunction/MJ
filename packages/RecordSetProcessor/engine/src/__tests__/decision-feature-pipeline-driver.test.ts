@@ -410,7 +410,7 @@ describe('DecisionFeaturePipelineDriver', () => {
 
         it('rejects specs with CaptureReasoning: true', () => {
             const errors = driver.ValidateOutputs(decisionSpec([booleanOutput('IsUrgent')], { CaptureReasoning: true }));
-            expect(errors.some((e) => e.includes('do not produce reasoning'))).toBe(true);
+            expect(errors.some((e) => e.includes('does not produce reasoning'))).toBe(true);
         });
 
         it('delegates base validations (unsupported constraint types, non-field targets)', () => {
@@ -471,7 +471,7 @@ describe('DecisionFeaturePipelineDriver', () => {
                     }),
                 ])
             );
-            expect(tooMany.some((e) => e.includes('maximum supported for Decision is 255'))).toBe(true);
+            expect(tooMany.some((e) => e.includes('supports at most 255'))).toBe(true);
         });
 
         it('passes a fully valid Decision pipeline spec', () => {
@@ -618,6 +618,31 @@ describe('DecisionFeaturePipelineDriver', () => {
             });
         });
 
+        it("asks only the spec's own Values, without the field's descriptions, when the enum does not set FromFieldMetadata", async () => {
+            const runner = answerWith(decided({ Status: choice('Open', 0.9, { Open: 0.9 }) }));
+
+            await driver.ComputeOutputs(request(decisionSpec([statusOutput({ FromFieldMetadata: false, Values: ['Open'] })])));
+
+            expect(runner.Calls[0].Questions.Status).toEqual({
+                Kind: 'Choice',
+                Instructions: 'The ticket status',
+                Options: [{ Value: 'Open', Description: 'Open' }],
+            });
+        });
+
+        it("asks the field's value list in place of the spec's Values when the enum sets FromFieldMetadata", async () => {
+            const runner = answerWith(decided({ Status: choice('Open', 0.9, { Open: 0.9, Closed: 0.1 }) }));
+
+            await driver.ComputeOutputs(request(decisionSpec([statusOutput({ Values: ['Open'] })])));
+
+            expect(runner.Calls[0].Questions.Status).toEqual(expect.objectContaining({
+                Options: [
+                    { Value: 'Open', Description: 'Waiting for support to act' },
+                    { Value: 'Closed', Description: 'Resolved; nothing left to do' },
+                ],
+            }));
+        });
+
         it('returns failure when ExecuteDecision returns success: false', async () => {
             answerWith({ success: false, errorMessage: 'Decision engine timeout', Answers: {} });
 
@@ -709,6 +734,26 @@ describe('DecisionFeaturePipelineDriver', () => {
 
             expect(driver).toBeInstanceOf(DecisionFeaturePipelineDriver);
             expect(driver.Capabilities.ProducesConfidence).toBe(true);
+        });
+
+        it("checks a FromFieldMetadata enum against the pipeline entity's own value list, not a same-named field elsewhere", async () => {
+            vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'FeaturePipelineTypes', 'get').mockReturnValue([pipelineType('DecisionFeaturePipelineDriver')]);
+            const spec = decisionSpec([statusOutput()]);
+            // Archived tickets have a Status column too, with no value list
+            const archivedTickets = entityInfo('6E0C4F1A-1B2C-4D3E-8F90-A1B2C3D4E5F7', 'Archived Tickets', [{ Name: 'Status', TSType: 'string' }]);
+            const bothEntities = new EntitiesOnlyProvider([TICKETS, archivedTickets]);
+
+            const onTickets = await new DecisionProbeProcessor(PROMPT_ID, undefined, spec).Resolve({ ...context, provider: bothEntities });
+            expect(onTickets).toBeInstanceOf(DecisionFeaturePipelineDriver);
+
+            const onArchived = new DecisionProbeProcessor(PROMPT_ID, undefined, spec).Resolve({
+                ...context,
+                provider: bothEntities,
+                entityID: archivedTickets.ID,
+            });
+            await expect(onArchived).rejects.toThrow(
+                "Feature Pipeline type 'Decision' cannot produce every output: Enum output 'Status' has no values defined"
+            );
         });
 
         it('fans out confidence, to the result and to Feature Values, across records sharing a cache key', async () => {

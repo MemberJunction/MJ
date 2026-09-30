@@ -34,10 +34,12 @@ import {
 } from '@memberjunction/ai';
 import type { MJAIModelEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import {
+    BuildEntityFieldValueLookup,
     DECISION_FEATURE_PIPELINE_CAPABILITIES,
+    ResolveEnumChoices,
     type DataFeatureOutput,
-    type DataFeatureSpec,
     type FeaturePipelineDriverCapabilities,
+    type FeaturePipelineFieldValueLookup,
 } from '@memberjunction/feature-pipelines';
 import {
     BaseFeaturePipelineDriver,
@@ -208,39 +210,14 @@ export class DecisionFeaturePipelineDriver extends BaseFeaturePipelineDriver {
                 };
                 questions[output.Name] = question;
             } else if (constraint.Type === 'enum') {
-                let values = constraint.Values ? [...constraint.Values] : [];
-                const descriptions: Record<string, string> = { ...(constraint.ValueDescriptions ?? {}) };
-
-                if (output.Target?.Mode === 'field') {
-                    const fieldName = output.Target.EntityFieldName;
-                    if (fieldName) {
-                        const efvs = request.FieldValues
-                            ? request.FieldValues(fieldName)
-                            : (() => {
-                                  const entityID = request.Context.entityID ?? request.Record.EntityID;
-                                  const provider = request.Context.provider ?? Metadata.Provider;
-                                  const entity = entityID && provider ? provider.EntityByID(entityID) : undefined;
-                                  return entity?.Fields?.find((f) => f.Name.toLowerCase() === fieldName.toLowerCase())?.EntityFieldValues;
-                              })();
-                        if (efvs && efvs.length > 0) {
-                            if (values.length === 0) {
-                                values = efvs.map((v) => v.Value);
-                            }
-                            for (const efv of efvs) {
-                                if (efv.Description && !descriptions[efv.Value]) {
-                                    descriptions[efv.Value] = efv.Description;
-                                }
-                            }
-                        }
-                    }
-                }
-
+                // The same choices the output check resolved, so the options asked are the values allowed
+                const choices = ResolveEnumChoices(output, request.FieldValues ?? this.recordEntityFieldValues(request));
                 const question: ChoiceQuestion = {
                     Kind: 'Choice',
                     Instructions: instructions,
-                    Options: values.map((v) => ({
+                    Options: (choices?.Values ?? []).map((v) => ({
                         Value: v,
-                        Description: descriptions[v] || v,
+                        Description: choices?.Descriptions[v] || v,
                     })),
                 };
                 questions[output.Name] = question;
@@ -255,6 +232,16 @@ export class DecisionFeaturePipelineDriver extends BaseFeaturePipelineDriver {
         }
 
         return questions;
+    }
+
+    /**
+     * The value lists of the record's entity, for a request the processor sent without its lookup (a driver
+     * called on its own). Reads the run's provider, and the global one only when the run has none.
+     */
+    private recordEntityFieldValues(request: FeaturePipelineComputeRequest): FeaturePipelineFieldValueLookup | undefined {
+        const entityID = request.Context.entityID ?? request.Record.EntityID;
+        const provider = request.Context.provider ?? Metadata.Provider; // global-provider-ok: last-resort fallback for a context built without its provider
+        return entityID && provider ? BuildEntityFieldValueLookup(provider.EntityByID(entityID)) : undefined;
     }
 
     /** Maps the decision model's answers back to structured output values and per-output confidences. */
