@@ -1,74 +1,344 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { UserInfo } from '@memberjunction/core';
-import { MJGlobal } from '@memberjunction/global';
-import { KnowledgeHubMetadataEngine, type MJFeaturePipelineTypeEntity, type MJFeatureValueCacheEntity } from '@memberjunction/core-entities';
+import {
+    BaseEntity,
+    EntityInfo,
+    ProviderBase,
+    UserInfo,
+    type DatasetResultType,
+    type DatasetStatusResultType,
+    type EntityRecordNameResult,
+    type ILocalStorageProvider,
+    type IMetadataProvider,
+    type PotentialDuplicateResponse,
+    type ProviderType,
+    type RecordDependency,
+    type RecordMergeResult,
+    type RunQueryResult,
+    type RunViewResult,
+    type ScoredCandidate,
+    type TransactionGroupBase,
+} from '@memberjunction/core';
+import { MJGlobal, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import {
+    KnowledgeHubMetadataEngine,
+    MJAIModelTypeEntity,
+    MJAIPromptModelEntity,
+    MJAIPromptRunEntity,
+    MJFeaturePipelineTypeEntity,
+    MJFeatureValueCacheEntity,
+} from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
-import {
-    AIDecisionRunner,
-    AIDecisionParams,
-    type AIDecisionRunResult,
-} from '@memberjunction/ai-prompts';
-import {
-    type DecisionAnswer,
-    type LikelihoodAnswer,
-    type ChoiceAnswer,
-    type ScoreAnswer,
-} from '@memberjunction/ai';
-import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { AIDecisionRunner, type AIDecisionParams, type AIDecisionRunResult } from '@memberjunction/ai-prompts';
+import type { AIModelConfiguration, ChoiceAnswer, DecisionAnswer, LikelihoodAnswer, ScoreAnswer } from '@memberjunction/ai';
+import { MJAIModelEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import type { RecordProcessorContext, RecordRef } from '@memberjunction/record-set-processor-base';
 import {
     DECISION_FEATURE_PIPELINE_CAPABILITIES,
-    type DataFeatureSpec,
     FeatureValueCacheService,
+    type DataFeatureOutput,
+    type DataFeatureSpec,
 } from '@memberjunction/feature-pipelines';
 import { InferProcessor } from '../processors/InferProcessor';
 import {
     BaseFeaturePipelineDriver,
+    type FeaturePipelineComputeHooks,
     type FeaturePipelineComputeRequest,
 } from '../feature-pipeline-drivers/BaseFeaturePipelineDriver';
 import { DecisionFeaturePipelineDriver } from '../feature-pipeline-drivers/DecisionFeaturePipelineDriver';
 
 // ---------------------------------------------------------------------------
-// Test harness & Mock Decision Runner
+// Metadata: real EntityInfo and entity objects, holding only the fields a test sets
 // ---------------------------------------------------------------------------
 
-class TestableDecisionDriver extends DecisionFeaturePipelineDriver {
-    public mockExecuteDecision: (params: AIDecisionParams) => Promise<AIDecisionRunResult> = vi.fn();
+interface EntityFieldSeed {
+    Name: string;
+    TSType?: string;
+    EntityFieldValues?: Array<{ Value: string; Description?: string }>;
+}
 
-    protected override CreateDecisionRunner(): AIDecisionRunner {
-        return {
-            ExecuteDecision: this.mockExecuteDecision,
-        } as unknown as AIDecisionRunner;
+/** Metadata for an entity whose primary key is ID, with the given fields. */
+function entityInfo(id: string, name: string, fields: EntityFieldSeed[] = []): EntityInfo {
+    return new EntityInfo({ ID: id, Name: name, Fields: [{ Name: 'ID', IsPrimaryKey: true, TSType: 'string' }, ...fields] });
+}
+
+/** A new entity object whose metadata names only the fields a test sets. */
+function newEntity<T extends BaseEntity>(ctor: new (entity: EntityInfo) => T, entityName: string, fields: string[]): T {
+    return new ctor(entityInfo(`${entityName} entity`, entityName, fields.map((field) => ({ Name: field }))));
+}
+
+function notUsed(): Error {
+    return new Error('not used by these tests');
+}
+
+/** A metadata provider that knows only the entities it is given. */
+class EntitiesOnlyProvider extends ProviderBase {
+    constructor(private readonly entityList: EntityInfo[]) {
+        super();
+    }
+    public override get Entities(): EntityInfo[] {
+        return this.entityList;
+    }
+    public override EntityByID(entityID: string): EntityInfo | undefined {
+        return this.entityList.find((entity) => UUIDsEqual(entity.ID, entityID));
+    }
+    public get ProviderType(): ProviderType {
+        return 'Database';
+    }
+    public get DatabaseConnection(): null {
+        return null;
+    }
+    public get InstanceConnectionString(): string {
+        return '';
+    }
+    public get LocalStorageProvider(): ILocalStorageProvider {
+        throw notUsed();
+    }
+    protected get AllowRefresh(): boolean {
+        return false;
+    }
+    protected get Metadata(): IMetadataProvider {
+        return this;
+    }
+    protected InternalGetEntityRecordName(): Promise<string> {
+        throw notUsed();
+    }
+    protected InternalGetEntityRecordNames(): Promise<EntityRecordNameResult[]> {
+        throw notUsed();
+    }
+    public GetRecordFavoriteStatus(): Promise<boolean> {
+        throw notUsed();
+    }
+    public SetRecordFavoriteStatus(): Promise<void> {
+        throw notUsed();
+    }
+    protected InternalRunView<T>(): Promise<RunViewResult<T>> {
+        throw notUsed();
+    }
+    protected InternalRunViews<T>(): Promise<RunViewResult<T>[]> {
+        throw notUsed();
+    }
+    protected InternalRunQuery(): Promise<RunQueryResult> {
+        throw notUsed();
+    }
+    protected InternalRunQueries(): Promise<RunQueryResult[]> {
+        throw notUsed();
+    }
+    protected searchEntitiesSemanticPass(): Promise<ScoredCandidate[]> {
+        throw notUsed();
+    }
+    protected InternalExecuteQueryFromSpec(): Promise<RunQueryResult> {
+        throw notUsed();
+    }
+    protected GetCurrentUser(): Promise<UserInfo> {
+        throw notUsed();
+    }
+    public GetRecordDependencies(): Promise<RecordDependency[]> {
+        throw notUsed();
+    }
+    public GetRecordDuplicates(): Promise<PotentialDuplicateResponse> {
+        throw notUsed();
+    }
+    public MergeRecords(): Promise<RecordMergeResult> {
+        throw notUsed();
+    }
+    public GetDatasetByName(): Promise<DatasetResultType> {
+        throw notUsed();
+    }
+    public GetDatasetStatusByName(): Promise<DatasetStatusResultType> {
+        throw notUsed();
+    }
+    public CreateTransactionGroup(): Promise<TransactionGroupBase> {
+        throw notUsed();
     }
 }
 
-function makeDummyUser(): UserInfo {
-    return {
-        ID: 'user-1',
-        Name: 'Test User',
-        Email: 'test@example.com',
-    } as unknown as UserInfo;
+const TICKETS_ENTITY_ID = '6E0C4F1A-1B2C-4D3E-8F90-A1B2C3D4E5F6';
+const DECISION_TYPE_ID = 'D1A2B3C4-0000-4000-8000-000000000001';
+const LLM_TYPE_ID = 'D1A2B3C4-0000-4000-8000-000000000002';
+const PROMPT_ID = 'D1A2B3C4-0000-4000-8000-0000000000A1';
+const JEV_MODEL_ID = 'D1A2B3C4-0000-4000-8000-0000000000B1';
+const SMALL_DECISION_MODEL_ID = 'D1A2B3C4-0000-4000-8000-0000000000B2';
+const CHAT_MODEL_ID = 'D1A2B3C4-0000-4000-8000-0000000000B3';
+
+/** Support tickets: Status carries a value list, the way a CHECK-constrained column does. */
+const TICKETS = entityInfo(TICKETS_ENTITY_ID, 'Tickets', [
+    { Name: 'Subject', TSType: 'string' },
+    { Name: 'EmailDomain', TSType: 'string' },
+    { Name: 'IsUrgent', TSType: 'boolean' },
+    { Name: 'IsBillable', TSType: 'boolean' },
+    { Name: 'Priority', TSType: 'number' },
+    {
+        Name: 'Status',
+        TSType: 'string',
+        EntityFieldValues: [
+            { Value: 'Open', Description: 'Waiting for support to act' },
+            { Value: 'Closed', Description: 'Resolved; nothing left to do' },
+        ],
+    },
+]);
+
+function modelType(id: string, name: string): MJAIModelTypeEntity {
+    const type = newEntity(MJAIModelTypeEntity, 'MJ: AI Model Types', ['Name']);
+    type.ID = id;
+    type.Name = name;
+    return type;
 }
 
-function makeDummyContext(): RecordProcessorContext {
-    return {
-        User: makeDummyUser(),
-        ContextUser: makeDummyUser(),
-        ProcessRunID: 'run-1',
-        ProcessID: 'proc-1',
-        TargetEntity: 'TestEntity',
-        Options: {},
-    } as unknown as RecordProcessorContext;
+function aiModel(id: string, name: string, modelTypeID: string): MJAIModelEntityExtended {
+    const model = newEntity(MJAIModelEntityExtended, 'MJ: AI Models', ['Name', 'AIModelTypeID', 'IsActive']);
+    model.ID = id;
+    model.Name = name;
+    model.AIModelTypeID = modelTypeID;
+    model.IsActive = true;
+    return model;
 }
 
-function makeDecisionPrompt(overrides?: Partial<MJAIPromptEntityExtended>): MJAIPromptEntityExtended {
+function binding(modelID: string, status: MJAIPromptModelEntity['Status'] = 'Active'): MJAIPromptModelEntity {
+    const promptModel = newEntity(MJAIPromptModelEntity, 'MJ: AI Prompt Models', ['PromptID', 'ModelID', 'Status']);
+    promptModel.ID = `${modelID}-binding`;
+    promptModel.PromptID = PROMPT_ID;
+    promptModel.ModelID = modelID;
+    promptModel.Status = status;
+    return promptModel;
+}
+
+function aiPrompt(name: string, modelTypeID: string | null): MJAIPromptEntityExtended {
+    const prompt = newEntity(MJAIPromptEntityExtended, 'MJ: AI Prompts', ['Name', 'AIModelTypeID']);
+    prompt.ID = PROMPT_ID;
+    prompt.Name = name;
+    prompt.AIModelTypeID = modelTypeID;
+    return prompt;
+}
+
+function promptRun(id: string): MJAIPromptRunEntity {
+    const run = newEntity(MJAIPromptRunEntity, 'MJ: AI Prompt Runs', []);
+    run.ID = id;
+    return run;
+}
+
+function pipelineType(driverClass: string): MJFeaturePipelineTypeEntity {
+    const type = newEntity(MJFeaturePipelineTypeEntity, 'MJ: Feature Pipeline Types', ['Name', 'DriverClass', 'Status']);
+    type.ID = 'F67FFBFD-94AA-47CF-9867-C3BDF36F30F9';
+    type.Name = 'Decision';
+    type.DriverClass = driverClass;
+    type.Status = 'Active';
+    return type;
+}
+
+function cacheEntry(id: string): MJFeatureValueCacheEntity {
+    const entry = newEntity(MJFeatureValueCacheEntity, 'MJ: Feature Value Caches', []);
+    entry.ID = id;
+    return entry;
+}
+
+// ---------------------------------------------------------------------------
+// Spec, record and answers, in the shapes the processor passes the driver
+// ---------------------------------------------------------------------------
+
+function booleanOutput(name: string, threshold?: number): DataFeatureOutput {
     return {
-        ID: 'prompt-dec-1',
-        Name: 'Test Decision Prompt',
-        AIModelType: 'Decision',
-        AIModelTypeID: 'mt-decision-id',
+        Ref: `$.${name}`,
+        Name: name,
+        Description: `Whether the ticket is ${name}`,
+        Constraint: { Type: 'boolean', Threshold: threshold, OnViolation: 'fail' },
+        Target: { Mode: 'field', EntityFieldName: name },
+    };
+}
+
+function statusOutput(constraint: Partial<Extract<DataFeatureOutput['Constraint'], { Type: 'enum' }>> = {}): DataFeatureOutput {
+    return {
+        Ref: '$.Status',
+        Name: 'Status',
+        Description: 'The ticket status',
+        Constraint: { Type: 'enum', FromFieldMetadata: true, OnViolation: 'fail', ...constraint },
+        Target: { Mode: 'field', EntityFieldName: 'Status' },
+    };
+}
+
+function priorityOutput(levels: string[]): DataFeatureOutput {
+    return {
+        Ref: '$.Priority',
+        Name: 'Priority',
+        Description: 'How urgently the ticket needs attention',
+        Constraint: { Type: 'numeric', Min: 0, Max: 100, Integer: true, Levels: levels, OnViolation: 'fail' },
+        Target: { Mode: 'field', EntityFieldName: 'Priority' },
+    };
+}
+
+function decisionSpec(outputs: DataFeatureOutput[], overrides: Partial<DataFeatureSpec> = {}): DataFeatureSpec {
+    return {
+        Name: 'Ticket triage',
+        Description: 'Triage support tickets',
+        PromptID: PROMPT_ID,
+        PipelineType: 'Decision',
+        Context: { Fields: ['Subject', 'EmailDomain'] },
+        Caching: { Cacheable: false },
+        Outputs: outputs,
         ...overrides,
-    } as unknown as MJAIPromptEntityExtended;
+    };
+}
+
+function ticket(id: string, emailDomain = 'example.com'): RecordRef {
+    return {
+        EntityID: TICKETS_ENTITY_ID,
+        RecordID: id,
+        Record: { ID: id, Subject: 'Cannot sign in since this morning', EmailDomain: emailDomain },
+    };
+}
+
+function likelihood(probability: number): LikelihoodAnswer {
+    return { Kind: 'Likelihood', Probability: probability };
+}
+
+function choice(value: string, confidence: number, probabilities: Record<string, number>): ChoiceAnswer {
+    return { Kind: 'Choice', Value: value, Confidence: confidence, Probabilities: probabilities };
+}
+
+function score(value: number, confidence: number, probabilities: Record<string, number>): ScoreAnswer {
+    return { Kind: 'Score', Value: value, Confidence: confidence, Probabilities: probabilities };
+}
+
+function decided(answers: Record<string, DecisionAnswer>, runID = 'PROMPT-RUN-1'): AIDecisionRunResult {
+    return { success: true, Answers: answers, promptRun: promptRun(runID) };
+}
+
+/** Answers every decision with one result, and keeps the params of each call. */
+class StubDecisionRunner extends AIDecisionRunner {
+    public Calls: AIDecisionParams[] = [];
+
+    constructor(private readonly result: AIDecisionRunResult) {
+        super();
+    }
+
+    public override async ExecuteDecision(params: AIDecisionParams): Promise<AIDecisionRunResult> {
+        this.Calls.push(params);
+        return this.result;
+    }
+}
+
+/** The real Decision driver, with its decision runner replaced by {@link StubDecisionRunner}. */
+class StubRunnerDecisionDriver extends DecisionFeaturePipelineDriver {
+    public static Runner = new StubDecisionRunner(decided({}));
+
+    protected override CreateDecisionRunner(): AIDecisionRunner {
+        return StubRunnerDecisionDriver.Runner;
+    }
+}
+RegisterClass(BaseFeaturePipelineDriver, 'DecisionFeaturePipelineDriverTest_StubRunner')(StubRunnerDecisionDriver);
+
+/** Answers the next decisions with `result`, and returns the runner to inspect its calls. */
+function answerWith(result: AIDecisionRunResult): StubDecisionRunner {
+    StubRunnerDecisionDriver.Runner = new StubDecisionRunner(result);
+    return StubRunnerDecisionDriver.Runner;
+}
+
+function computeHooks(state: Record<string, string>): FeaturePipelineComputeHooks {
+    return {
+        BeforeBuildContext: vi.fn<FeaturePipelineComputeHooks['BeforeBuildContext']>(async () => undefined),
+        BuildPromptData: vi.fn<FeaturePipelineComputeHooks['BuildPromptData']>(async () => state),
+        BeforePromptExecute: vi.fn<FeaturePipelineComputeHooks['BeforePromptExecute']>(async () => undefined),
+        AfterPromptExecute: vi.fn<FeaturePipelineComputeHooks['AfterPromptExecute']>(async (result) => result.result),
+    };
 }
 
 // ---------------------------------------------------------------------------
@@ -76,6 +346,46 @@ function makeDecisionPrompt(overrides?: Partial<MJAIPromptEntityExtended>): MJAI
 // ---------------------------------------------------------------------------
 
 describe('DecisionFeaturePipelineDriver', () => {
+    const provider = new EntitiesOnlyProvider([TICKETS]);
+    const contextUser = new UserInfo(provider, { ID: 'D1A2B3C4-0000-4000-8000-0000000000C1', Name: 'Tester' });
+    const context: RecordProcessorContext = {
+        contextUser,
+        provider,
+        processRunID: 'RUN-1',
+        recordProcessID: 'RP-1',
+        entityID: TICKETS_ENTITY_ID,
+    };
+
+    let modelTypes: MJAIModelTypeEntity[];
+    let models: MJAIModelEntityExtended[];
+    let bindings: MJAIPromptModelEntity[];
+    let prompts: MJAIPromptEntityExtended[];
+    let modelLimits: Map<string, AIModelConfiguration>;
+
+    beforeEach(() => {
+        modelTypes = [modelType(DECISION_TYPE_ID, 'Decision'), modelType(LLM_TYPE_ID, 'LLM')];
+        models = [aiModel(JEV_MODEL_ID, 'Jev', DECISION_TYPE_ID), aiModel(CHAT_MODEL_ID, 'Chat', LLM_TYPE_ID)];
+        bindings = [binding(JEV_MODEL_ID)];
+        prompts = [aiPrompt('Triage', DECISION_TYPE_ID)];
+        modelLimits = new Map();
+
+        vi.spyOn(AIEngine.Instance, 'Config').mockResolvedValue(undefined);
+        vi.spyOn(AIEngine.Instance, 'ModelTypes', 'get').mockImplementation(() => modelTypes);
+        vi.spyOn(AIEngine.Instance, 'Models', 'get').mockImplementation(() => models);
+        vi.spyOn(AIEngine.Instance, 'ModelsByID', 'get').mockImplementation(() => new Map(models.map((m) => [NormalizeUUID(m.ID), m])));
+        vi.spyOn(AIEngine.Instance, 'PromptModels', 'get').mockImplementation(() => bindings);
+        vi.spyOn(AIEngine.Instance, 'Prompts', 'get').mockImplementation(() => prompts);
+        vi.spyOn(AIEngine.Instance, 'GetEffectiveModelConfiguration').mockImplementation((modelID) => modelLimits.get(modelID) ?? null);
+        vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'Config').mockResolvedValue(undefined);
+        vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'FeaturePipelineTypes', 'get').mockReturnValue([
+            pipelineType('DecisionFeaturePipelineDriverTest_StubRunner'),
+        ]);
+    });
+
+    function request(spec: DataFeatureSpec, prompt: MJAIPromptEntityExtended = prompts[0]): FeaturePipelineComputeRequest {
+        return { Record: ticket('T-1'), Context: context, Prompt: prompt, Spec: spec, Hooks: computeHooks({ Subject: 'Cannot sign in' }) };
+    }
+
     describe('Registration & Capabilities', () => {
         it('is registered with BaseFeaturePipelineDriver under key DecisionFeaturePipelineDriver', () => {
             const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseFeaturePipelineDriver>(
@@ -99,492 +409,261 @@ describe('DecisionFeaturePipelineDriver', () => {
         const driver = new DecisionFeaturePipelineDriver();
 
         it('rejects specs with CaptureReasoning: true', () => {
-            const spec: DataFeatureSpec = {
-                Kind: 'decision-derived',
-                CaptureReasoning: true,
-                Target: { Entity: 'Customers', Mode: 'field' },
-                Outputs: [
-                    {
-                        Name: 'IsHighValue',
-                        Target: { Mode: 'field', Field: 'IsHighValue' },
-                        Constraint: { Type: 'boolean' },
-                    },
-                ],
-            };
-            const errors = driver.ValidateOutputs(spec);
+            const errors = driver.ValidateOutputs(decisionSpec([booleanOutput('IsUrgent')], { CaptureReasoning: true }));
             expect(errors.some((e) => e.includes('do not produce reasoning'))).toBe(true);
         });
 
         it('delegates base validations (unsupported constraint types, non-field targets)', () => {
-            const spec: DataFeatureSpec = {
-                Kind: 'decision-derived',
-                Target: { Entity: 'Customers', Mode: 'field' },
-                Outputs: [
+            const errors = driver.ValidateOutputs(
+                decisionSpec([
                     {
-                        Name: 'BioSummary',
-                        Target: { Mode: 'field', Field: 'Bio' },
-                        Constraint: { Type: 'freetext' },
+                        Ref: '$.summary',
+                        Name: 'Summary',
+                        Constraint: { Type: 'freetext', MaxLength: 200 },
+                        Target: { Mode: 'field', EntityFieldName: 'Subject' },
                     },
                     {
-                        Name: 'Interactions',
-                        Target: { Mode: 'child', ChildEntity: 'Interactions' },
-                        Constraint: { Type: 'boolean' },
+                        Ref: '$.notes',
+                        Name: 'Notes',
+                        Constraint: { Type: 'boolean', OnViolation: 'fail' },
+                        Target: { Mode: 'child', EntityName: 'Ticket Notes', ParentField: 'TicketID', Map: { Note: '$.note' } },
                     },
-                ],
-            };
-            const errors = driver.ValidateOutputs(spec);
+                ])
+            );
             expect(errors.some((e) => e.includes("constraint type 'freetext'"))).toBe(true);
             expect(errors.some((e) => e.includes("target mode 'child'"))).toBe(true);
         });
 
         it('rejects outputs without any constraint', () => {
-            const spec: DataFeatureSpec = {
-                Kind: 'decision-derived',
-                Target: { Entity: 'Customers', Mode: 'field' },
-                Outputs: [
-                    {
-                        Name: 'UnconstrainedOut',
-                        Target: { Mode: 'field', Field: 'Score' },
-                    },
-                ],
-            };
-            const errors = driver.ValidateOutputs(spec);
+            const errors = driver.ValidateOutputs(
+                decisionSpec([{ Ref: '$.Priority', Name: 'Priority', Target: { Mode: 'field', EntityFieldName: 'Priority' } }])
+            );
             expect(errors.some((e) => e.includes('has no constraint'))).toBe(true);
         });
 
         it('validates numeric outputs have between 2 and 10 levels', () => {
-            const specNoLevels: DataFeatureSpec = {
-                Kind: 'decision-derived',
-                Target: { Entity: 'Customers', Mode: 'field' },
-                Outputs: [
-                    {
-                        Name: 'ScoreOut',
-                        Target: { Mode: 'field', Field: 'Score' },
-                        Constraint: { Type: 'numeric', Min: 0, Max: 100 },
-                    },
-                ],
-            };
-            const errorsNoLevels = driver.ValidateOutputs(specNoLevels);
-            expect(errorsNoLevels.some((e) => e.includes('between 2 and 10 Level descriptions'))).toBe(true);
+            const oneLevel = driver.ValidateOutputs(decisionSpec([priorityOutput(['Low'])]));
+            expect(oneLevel.some((e) => e.includes('between 2 and 10 Level descriptions'))).toBe(true);
 
-            const specTooManyLevels: DataFeatureSpec = {
-                Kind: 'decision-derived',
-                Target: { Entity: 'Customers', Mode: 'field' },
-                Outputs: [
-                    {
-                        Name: 'ScoreOut',
-                        Target: { Mode: 'field', Field: 'Score' },
-                        Constraint: {
-                            Type: 'numeric',
-                            Min: 0,
-                            Max: 100,
-                            Levels: ['L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'L8', 'L9', 'L10', 'L11'],
-                        },
-                    },
-                ],
-            };
-            const errorsTooMany = driver.ValidateOutputs(specTooManyLevels);
-            expect(errorsTooMany.some((e) => e.includes('between 2 and 10 Level descriptions'))).toBe(true);
+            const elevenLevels = driver.ValidateOutputs(decisionSpec([priorityOutput(Array.from({ length: 11 }, (_, i) => `L${i}`))]));
+            expect(elevenLevels.some((e) => e.includes('between 2 and 10 Level descriptions'))).toBe(true);
         });
 
         it('validates enum outputs have <= 255 values and all have descriptions', () => {
-            const specMissingDesc: DataFeatureSpec = {
-                Kind: 'decision-derived',
-                Target: { Entity: 'Customers', Mode: 'field' },
-                Outputs: [
-                    {
-                        Name: 'StatusOut',
-                        Target: { Mode: 'field', Field: 'Status' },
-                        Constraint: {
-                            Type: 'enum',
-                            Values: ['Active', 'Pending', 'Inactive'],
-                            ValueDescriptions: {
-                                Active: 'Currently active customer',
-                            },
-                        },
-                    },
-                ],
-            };
-            const errorsMissing = driver.ValidateOutputs(specMissingDesc);
-            expect(errorsMissing.some((e) => e.includes('values missing descriptions: Pending, Inactive'))).toBe(true);
+            const missingDescriptions = driver.ValidateOutputs(
+                decisionSpec([
+                    statusOutput({
+                        FromFieldMetadata: false,
+                        Values: ['Open', 'Pending', 'Closed'],
+                        ValueDescriptions: { Open: 'Waiting for support to act' },
+                    }),
+                ])
+            );
+            expect(missingDescriptions.some((e) => e.includes('values missing descriptions: Pending, Closed'))).toBe(true);
 
-            const specTooManyValues: DataFeatureSpec = {
-                Kind: 'decision-derived',
-                Target: { Entity: 'Customers', Mode: 'field' },
-                Outputs: [
-                    {
-                        Name: 'HugeEnum',
-                        Target: { Mode: 'field', Field: 'Huge' },
-                        Constraint: {
-                            Type: 'enum',
-                            Values: Array.from({ length: 256 }, (_, i) => `val_${i}`),
-                            ValueDescriptions: Object.fromEntries(Array.from({ length: 256 }, (_, i) => [`val_${i}`, `desc_${i}`])),
-                        },
-                    },
-                ],
-            };
-            const errorsTooMany = driver.ValidateOutputs(specTooManyValues);
-            expect(errorsTooMany.some((e) => e.includes('maximum supported for Decision is 255'))).toBe(true);
+            const values = Array.from({ length: 256 }, (_, i) => `val_${i}`);
+            const tooMany = driver.ValidateOutputs(
+                decisionSpec([
+                    statusOutput({
+                        FromFieldMetadata: false,
+                        Values: values,
+                        ValueDescriptions: Object.fromEntries(values.map((v) => [v, `desc ${v}`])),
+                    }),
+                ])
+            );
+            expect(tooMany.some((e) => e.includes('maximum supported for Decision is 255'))).toBe(true);
         });
 
         it('passes a fully valid Decision pipeline spec', () => {
-            const spec: DataFeatureSpec = {
-                Kind: 'decision-derived',
-                Target: { Entity: 'Customers', Mode: 'field' },
-                Outputs: [
-                    {
-                        Name: 'IsHighValue',
-                        Target: { Mode: 'field', Field: 'IsHighValue' },
-                        Constraint: { Type: 'boolean', Threshold: 0.7 },
-                    },
-                    {
-                        Name: 'Tier',
-                        Target: { Mode: 'field', Field: 'Tier' },
-                        Constraint: {
-                            Type: 'enum',
-                            Values: ['Bronze', 'Silver', 'Gold'],
-                            ValueDescriptions: {
-                                Bronze: 'Entry level customer',
-                                Silver: 'Mid-tier customer',
-                                Gold: 'VIP customer',
-                            },
-                        },
-                    },
-                    {
-                        Name: 'RiskScore',
-                        Target: { Mode: 'field', Field: 'RiskScore' },
-                        Constraint: {
-                            Type: 'numeric',
-                            Min: 0,
-                            Max: 100,
-                            Integer: true,
-                            Levels: ['Low risk', 'Moderate risk', 'High risk'],
-                        },
-                    },
-                ],
-            };
-            const errors = driver.ValidateOutputs(spec);
+            const errors = driver.ValidateOutputs(
+                decisionSpec([
+                    booleanOutput('IsUrgent', 0.7),
+                    statusOutput({
+                        FromFieldMetadata: false,
+                        Values: ['Open', 'Closed'],
+                        ValueDescriptions: { Open: 'Waiting for support to act', Closed: 'Resolved' },
+                    }),
+                    priorityOutput(['Low', 'Medium', 'High']),
+                ])
+            );
             expect(errors).toEqual([]);
         });
     });
 
     describe('ComputeOutputs', () => {
-        let driver: TestableDecisionDriver;
-        let mockContext: RecordProcessorContext;
+        const driver = new StubRunnerDecisionDriver();
 
-        beforeEach(() => {
-            driver = new TestableDecisionDriver();
-            mockContext = makeDummyContext();
-        });
+        describe('prompt check', () => {
+            it('rejects a prompt whose model type is not Decision, whatever its name', async () => {
+                const runner = answerWith(decided({ IsUrgent: likelihood(0.9) }));
+                const chatPrompt = aiPrompt('Decision triage on a chat model', LLM_TYPE_ID);
 
-        it('rejects a prompt not configured for a Decision model', async () => {
-            const nonDecisionPrompt = {
-                ID: 'p1',
-                Name: 'Regular LLM Prompt',
-                AIModelType: 'LLM',
-            } as unknown as MJAIPromptEntityExtended;
+                const result = await driver.ComputeOutputs(request(decisionSpec([booleanOutput('IsUrgent')]), chatPrompt));
 
-            const request: FeaturePipelineComputeRequest = {
-                Prompt: nonDecisionPrompt,
-                Record: { ID: 'rec-1', EntityName: 'Customers' },
-                Context: mockContext,
-                Hooks: {
-                    BeforeBuildContext: vi.fn(async () => {}),
-                    BuildPromptData: vi.fn(async () => ({ Name: 'Alice' })),
-                    BeforePromptExecute: vi.fn(async () => {}),
-                    AfterPromptExecute: vi.fn(async (r) => r.result),
-                },
-                Spec: {
-                    Kind: 'decision-derived',
-                    Target: { Entity: 'Customers', Mode: 'field' },
-                    Outputs: [{ Name: 'IsVIP', Target: { Mode: 'field', Field: 'IsVIP' }, Constraint: { Type: 'boolean' } }],
-                },
-            };
-
-            const result = await driver.ComputeOutputs(request);
-            expect(result.Success).toBe(false);
-            if (!result.Success) {
-                expect(result.ErrorMessage).toMatch(/not a Decision prompt/i);
-            }
-        });
-
-        it('fails with clear error when state token estimate exceeds MaxStateTokens without truncating', async () => {
-            const prompt = makeDecisionPrompt();
-            (prompt as { AIModelID?: string }).AIModelID = 'model-limited-tokens';
-
-            vi.spyOn(AIEngine.Instance, 'GetEffectiveModelConfiguration').mockReturnValue({
-                Decision: {
-                    MaxStateTokens: 5, // small limit to trigger error
-                },
-            } as unknown as ReturnType<typeof AIEngine.Instance.GetEffectiveModelConfiguration>);
-
-            const request: FeaturePipelineComputeRequest = {
-                Prompt: prompt,
-                Record: { ID: 'rec-1', EntityName: 'Customers' },
-                Context: mockContext,
-                Hooks: {
-                    BeforeBuildContext: vi.fn(async () => {}),
-                    BuildPromptData: vi.fn(async () => ({
-                        LongText: 'This is a long piece of text that easily exceeds five estimated tokens.',
-                    })),
-                    BeforePromptExecute: vi.fn(async () => {}),
-                    AfterPromptExecute: vi.fn(async (r) => r.result),
-                },
-                Spec: {
-                    Kind: 'decision-derived',
-                    Target: { Entity: 'Customers', Mode: 'field' },
-                    Outputs: [{ Name: 'IsVIP', Target: { Mode: 'field', Field: 'IsVIP' }, Constraint: { Type: 'boolean' } }],
-                },
-            };
-
-            const result = await driver.ComputeOutputs(request);
-            expect(result.Success).toBe(false);
-            if (!result.Success) {
-                expect(result.ErrorMessage).toMatch(/exceeds the model's Decision\.MaxStateTokens limit of 5/i);
-            }
-        });
-
-        it('maps Likelihood, Choice, and Score answers, rescales rubric, and preserves confidence', async () => {
-            let capturedParams: AIDecisionParams | undefined;
-            driver.mockExecuteDecision = vi.fn(async (params: AIDecisionParams) => {
-                capturedParams = params;
-                const answers: Record<string, DecisionAnswer> = {
-                    IsVIP: {
-                        Kind: 'Likelihood',
-                        Probability: 0.75,
-                    } as LikelihoodAnswer,
-                    LowThresholdFlag: {
-                        Kind: 'Likelihood',
-                        Probability: 0.4,
-                    } as LikelihoodAnswer,
-                    Tier: {
-                        Kind: 'Choice',
-                        Value: 'Silver',
-                        Confidence: 0.88,
-                        Probabilities: { Bronze: 0.05, Silver: 0.88, Gold: 0.07 },
-                    } as ChoiceAnswer,
-                    RiskScore: {
-                        Kind: 'Score',
-                        Value: 1, // index 1 of 3 levels [0, 1, 2] -> 50% rescaled onto [0, 100] = 50
-                        Confidence: 0.92,
-                        Probabilities: { 'Low risk': 0.04, 'Moderate risk': 0.92, 'High risk': 0.04 },
-                    } as ScoreAnswer,
-                };
-                return {
-                    success: true,
-                    Answers: answers,
-                    promptRun: { ID: 'prompt-run-123' },
-                } as unknown as AIDecisionRunResult;
+                expect(result).toEqual(expect.objectContaining({ Success: false, ErrorMessage: expect.stringMatching(/is not a Decision prompt/) }));
+                expect(runner.Calls).toHaveLength(0);
             });
 
-            const prompt = makeDecisionPrompt();
-            const request: FeaturePipelineComputeRequest = {
-                Prompt: prompt,
-                Record: { ID: 'rec-1', EntityName: 'Customers' },
-                Context: mockContext,
-                Hooks: {
-                    BeforeBuildContext: vi.fn(async () => {}),
-                    BuildPromptData: vi.fn(async () => ({ Name: 'Bob' })),
-                    BeforePromptExecute: vi.fn(async () => {}),
-                    AfterPromptExecute: vi.fn(async (r) => r.result),
-                },
-                Spec: {
-                    Kind: 'decision-derived',
-                    Target: { Entity: 'Customers', Mode: 'field' },
-                    Outputs: [
-                        {
-                            Name: 'IsVIP',
-                            Target: { Mode: 'field', Field: 'IsVIP' },
-                            Constraint: { Type: 'boolean', Threshold: 0.7 }, // 0.75 >= 0.7 -> true
-                        },
-                        {
-                            Name: 'LowThresholdFlag',
-                            Target: { Mode: 'field', Field: 'LowThresholdFlag' },
-                            Constraint: { Type: 'boolean', Threshold: 0.5 }, // 0.4 < 0.5 -> false
-                        },
-                        {
-                            Name: 'Tier',
-                            Target: { Mode: 'field', Field: 'Tier' },
-                            Constraint: {
-                                Type: 'enum',
-                                Values: ['Bronze', 'Silver', 'Gold'],
-                                ValueDescriptions: { Bronze: 'b', Silver: 's', Gold: 'g' },
-                            },
-                        },
-                        {
-                            Name: 'RiskScore',
-                            Target: { Mode: 'field', Field: 'RiskScore' },
-                            Constraint: {
-                                Type: 'numeric',
-                                Min: 0,
-                                Max: 100,
-                                Integer: true,
-                                Levels: ['Low risk', 'Moderate risk', 'High risk'],
-                            },
-                        },
-                    ],
-                },
-            };
+            it('accepts a prompt with no model type when a Decision model is bound to it', async () => {
+                answerWith(decided({ IsUrgent: likelihood(0.9) }));
+                const untyped = aiPrompt('Triage', null);
 
-            const result = await driver.ComputeOutputs(request);
-            expect(result.Success).toBe(true);
-            expect(result.AIPromptRunID).toBe('prompt-run-123');
+                const result = await driver.ComputeOutputs(request(decisionSpec([booleanOutput('IsUrgent')]), untyped));
 
-            // Verify params: State is set, data is not set
-            expect(capturedParams).toBeDefined();
-            expect(capturedParams!.State).toBe(JSON.stringify({ Name: 'Bob' }));
-            expect(capturedParams!.data).toBeUndefined();
-
-            // Verify mapped values in RawResult
-            const raw = result.RawResult as Record<string, unknown>;
-            expect(raw.IsVIP).toBe(true);
-            expect(raw.LowThresholdFlag).toBe(false);
-            expect(raw.Tier).toBe('Silver');
-            expect(raw.RiskScore).toBe(50); // index 1 on 3 levels rescaled to [0, 100] = 50
-
-            // Verify Confidence dictionary
-            expect(result.Confidence).toEqual({
-                IsVIP: 0.75,
-                LowThresholdFlag: 0.6, // written false, so its confidence is P(no) = 1 - 0.4
-                Tier: 0.88,
-                RiskScore: 0.92,
+                expect(result.Success).toBe(true);
             });
 
-            // Verify only context hooks were called (prompt execution hooks are LLM-specific and must not be called)
-            expect(request.Hooks.BeforeBuildContext).toHaveBeenCalledTimes(1);
-            expect(request.Hooks.BuildPromptData).toHaveBeenCalledTimes(1);
-            expect(request.Hooks.BeforePromptExecute).not.toHaveBeenCalled();
-            expect(request.Hooks.AfterPromptExecute).not.toHaveBeenCalled();
+            it('rejects a prompt with no model type when only other model types are bound to it', async () => {
+                bindings = [binding(CHAT_MODEL_ID)];
+                const untyped = aiPrompt('Triage', null);
+
+                const result = await driver.ComputeOutputs(request(decisionSpec([booleanOutput('IsUrgent')]), untyped));
+
+                expect(result.Success).toBe(false);
+            });
+        });
+
+        describe('state size', () => {
+            it('fails, without truncating or calling the model, when the state exceeds the strictest bound model limit', async () => {
+                models.push(aiModel(SMALL_DECISION_MODEL_ID, 'Small decision model', DECISION_TYPE_ID));
+                bindings = [binding(JEV_MODEL_ID), binding(SMALL_DECISION_MODEL_ID)];
+                modelLimits.set(JEV_MODEL_ID, { Decision: { MaxStateTokens: 32000 } });
+                modelLimits.set(SMALL_DECISION_MODEL_ID, { Decision: { MaxStateTokens: 5 } });
+                const runner = answerWith(decided({ IsUrgent: likelihood(0.9) }));
+
+                const result = await driver.ComputeOutputs(request(decisionSpec([booleanOutput('IsUrgent')])));
+
+                expect(result).toEqual(
+                    expect.objectContaining({ Success: false, ErrorMessage: expect.stringMatching(/exceeds the model's Decision\.MaxStateTokens limit of 5\b/) })
+                );
+                expect(runner.Calls).toHaveLength(0);
+            });
+
+            it('checks every active Decision model when the prompt has no bound model', async () => {
+                bindings = [];
+                models.push(aiModel(SMALL_DECISION_MODEL_ID, 'Small decision model', DECISION_TYPE_ID));
+                modelLimits.set(SMALL_DECISION_MODEL_ID, { Decision: { MaxStateTokens: 5 } });
+                modelLimits.set(CHAT_MODEL_ID, { Decision: { MaxStateTokens: 1 } });
+                answerWith(decided({ IsUrgent: likelihood(0.9) }));
+
+                const result = await driver.ComputeOutputs(request(decisionSpec([booleanOutput('IsUrgent')])));
+
+                expect(result).toEqual(expect.objectContaining({ Success: false, ErrorMessage: expect.stringMatching(/limit of 5\b/) }));
+            });
+
+            it('passes the rendered state as-is when it fits every limit', async () => {
+                modelLimits.set(JEV_MODEL_ID, { Decision: { MaxStateTokens: 32000 } });
+                const runner = answerWith(decided({ IsUrgent: likelihood(0.9) }));
+
+                const result = await driver.ComputeOutputs(request(decisionSpec([booleanOutput('IsUrgent')])));
+
+                expect(result.Success).toBe(true);
+                expect(runner.Calls[0].State).toBe(JSON.stringify({ Subject: 'Cannot sign in' }));
+                expect(runner.Calls[0].data).toBeUndefined();
+            });
+        });
+
+        it('maps Likelihood, Choice, and Score answers, rescales the rubric, and keeps each confidence', async () => {
+            answerWith(
+                decided(
+                    {
+                        IsUrgent: likelihood(0.7),
+                        IsBillable: likelihood(0.4),
+                        Status: choice('Closed', 0.88, { Open: 0.12, Closed: 0.88 }),
+                        Priority: score(1, 0.92, { Low: 0.03, Medium: 0.92, High: 0.03, Critical: 0.02 }),
+                    },
+                    'PROMPT-RUN-123'
+                )
+            );
+            const spec = decisionSpec([
+                booleanOutput('IsUrgent', 0.7), // exactly at the threshold -> true
+                booleanOutput('IsBillable', 0.5), // 0.4 < 0.5 -> false
+                statusOutput(),
+                priorityOutput(['Low', 'Medium', 'High', 'Critical']),
+            ]);
+            const req = request(spec);
+
+            const result = await driver.ComputeOutputs(req);
+
+            expect(result).toEqual({
+                Success: true,
+                RawResult: { IsUrgent: true, IsBillable: false, Status: 'Closed', Priority: 33 }, // level 1 of 0..3 on [0, 100], rounded
+                Confidence: {
+                    IsUrgent: 0.7,
+                    IsBillable: 0.6, // written false, so its confidence is P(no) = 1 - 0.4
+                    Status: 0.88,
+                    Priority: 0.92,
+                },
+                AIPromptRunID: 'PROMPT-RUN-123',
+            });
+            expect(req.Hooks.BeforeBuildContext).toHaveBeenCalledTimes(1);
+            expect(req.Hooks.BuildPromptData).toHaveBeenCalledTimes(1);
+            expect(req.Hooks.BeforePromptExecute).not.toHaveBeenCalled();
+            expect(req.Hooks.AfterPromptExecute).not.toHaveBeenCalled();
+        });
+
+        it("asks a field-backed enum's options, with their descriptions, from the record entity's field", async () => {
+            const runner = answerWith(decided({ Status: choice('Open', 0.9, { Open: 0.9, Closed: 0.1 }) }));
+
+            await driver.ComputeOutputs(request(decisionSpec([statusOutput()])));
+
+            const question = runner.Calls[0].Questions.Status;
+            expect(question).toEqual({
+                Kind: 'Choice',
+                Instructions: 'The ticket status',
+                Options: [
+                    { Value: 'Open', Description: 'Waiting for support to act' },
+                    { Value: 'Closed', Description: 'Resolved; nothing left to do' },
+                ],
+            });
         });
 
         it('returns failure when ExecuteDecision returns success: false', async () => {
-            driver.mockExecuteDecision = vi.fn(async () => ({
-                success: false,
-                errorMessage: 'Decision engine timeout',
-            } as unknown as AIDecisionRunResult));
+            answerWith({ success: false, errorMessage: 'Decision engine timeout', Answers: {} });
 
-            const prompt = makeDecisionPrompt();
-            const request: FeaturePipelineComputeRequest = {
-                Prompt: prompt,
-                Record: { ID: 'rec-1', EntityName: 'Customers' },
-                Context: mockContext,
-                Hooks: {
-                    BeforeBuildContext: vi.fn(async () => {}),
-                    BuildPromptData: vi.fn(async () => ({})),
-                    BeforePromptExecute: vi.fn(async () => {}),
-                    AfterPromptExecute: vi.fn(async (r) => r.result),
-                },
-                Spec: {
-                    Kind: 'decision-derived',
-                    Target: { Entity: 'Customers', Mode: 'field' },
-                    Outputs: [{ Name: 'IsVIP', Target: { Mode: 'field', Field: 'IsVIP' }, Constraint: { Type: 'boolean' } }],
-                },
-            };
+            const result = await driver.ComputeOutputs(request(decisionSpec([booleanOutput('IsUrgent')])));
 
-            const result = await driver.ComputeOutputs(request);
-            expect(result.Success).toBe(false);
-            if (!result.Success) {
-                expect(result.ErrorMessage).toContain('Decision engine timeout');
-            }
+            expect(result).toEqual({ Success: false, ErrorMessage: 'Decision engine timeout', AIPromptRunID: undefined });
         });
     });
 
     describe('InferProcessor Integration', () => {
         class DecisionProbeProcessor extends InferProcessor {
-            public Resolve(context: RecordProcessorContext): Promise<BaseFeaturePipelineDriver> {
-                return this.ResolveDriver(context);
+            public Resolve(ctx: RecordProcessorContext): Promise<BaseFeaturePipelineDriver> {
+                return this.ResolveDriver(ctx);
             }
         }
 
-        it('resolves DecisionFeaturePipelineDriver when pipeline type DriverClass is DecisionFeaturePipelineDriver', async () => {
-            const typeEntity = {
-                ID: 'F67FFBFD-94AA-47CF-9867-C3BDF36F30F9',
-                Name: 'Decision',
-                DriverClass: 'DecisionFeaturePipelineDriver',
-                Status: 'Active',
-            } as unknown as MJFeaturePipelineTypeEntity;
-
-            vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'Config').mockResolvedValue();
-            vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'FeaturePipelineTypes', 'get').mockReturnValue([typeEntity]);
-
-            const spec: DataFeatureSpec = {
-                Kind: 'decision-derived',
-                PipelineType: 'Decision',
-                Target: { Entity: 'Customers', Mode: 'field' },
-                Outputs: [{ Name: 'IsVIP', Target: { Mode: 'field', Field: 'IsVIP' }, Constraint: { Type: 'boolean' } }],
-            };
-
-            const processor = new DecisionProbeProcessor('prompt-1', undefined, spec);
-            const context = makeDummyContext();
+        it("resolves the pipeline type's registered Decision driver", async () => {
+            vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'FeaturePipelineTypes', 'get').mockReturnValue([pipelineType('DecisionFeaturePipelineDriver')]);
+            const processor = new DecisionProbeProcessor(PROMPT_ID, undefined, decisionSpec([booleanOutput('IsUrgent')]));
 
             const driver = await processor.Resolve(context);
+
             expect(driver).toBeInstanceOf(DecisionFeaturePipelineDriver);
             expect(driver.Capabilities.ProducesConfidence).toBe(true);
         });
 
-        it('fans out confidence across records sharing a cache key in ProcessBatch', async () => {
-            const typeEntity = {
-                ID: 'F67FFBFD-94AA-47CF-9867-C3BDF36F30F9',
-                Name: 'Decision',
-                DriverClass: 'DecisionFeaturePipelineDriver',
-                Status: 'Active',
-            } as unknown as MJFeaturePipelineTypeEntity;
-
-            vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'Config').mockResolvedValue();
-            vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'FeaturePipelineTypes', 'get').mockReturnValue([typeEntity]);
-
-            vi.spyOn(AIEngine.Instance, 'Config').mockResolvedValue(true as unknown as void);
-            const prompt = makeDecisionPrompt();
-            vi.spyOn(AIEngine.Instance, 'Prompts', 'get').mockReturnValue([prompt]);
-
+        it('fans out confidence, to the result and to Feature Values, across records sharing a cache key', async () => {
             vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockResolvedValue(new Map());
-            vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockResolvedValue({ ID: 'cache-1' } as unknown as MJFeatureValueCacheEntity);
-            vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue();
+            vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockResolvedValue(cacheEntry('CACHE-1'));
+            const recordFeatureValues = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue();
+            const runner = answerWith(decided({ IsUrgent: likelihood(0.95) }, 'PR-BATCH-1'));
+            const spec = decisionSpec([booleanOutput('IsUrgent')], {
+                Caching: { Cacheable: true, KeyFields: ['EmailDomain'], Scope: 'pipeline' },
+            });
 
-            // Register a mock decision runner for AIDecisionRunner
-            const mockRunner = {
-                ExecuteDecision: vi.fn(async () => ({
-                    success: true,
-                    Answers: {
-                        IsVIP: { Kind: 'Likelihood', Probability: 0.95 } as LikelihoodAnswer,
-                    },
-                    promptRun: { ID: 'pr-batch-1' },
-                })),
-            };
-            vi.spyOn(DecisionFeaturePipelineDriver.prototype as unknown as { CreateDecisionRunner(): AIDecisionRunner }, 'CreateDecisionRunner')
-                .mockReturnValue(mockRunner as unknown as AIDecisionRunner);
+            const results = await new InferProcessor(PROMPT_ID, undefined, spec).ProcessBatch([ticket('T-1'), ticket('T-2')], context);
 
-            const spec: DataFeatureSpec = {
-                Kind: 'decision-derived',
-                PipelineType: 'Decision',
-                Target: { Entity: 'Customers', Mode: 'field' },
-                Outputs: [{ Name: 'IsVIP', Target: { Mode: 'field', Field: 'IsVIP' }, Constraint: { Type: 'boolean' } }],
-                Caching: {
-                    Cacheable: true,
-                    KeyFields: ['EmailDomain'],
-                    Scope: 'pipeline',
-                },
-            };
-
-            const processor = new InferProcessor('prompt-dec-1', undefined, spec);
-            const context = makeDummyContext();
-
-            const records: RecordRef[] = [
-                { EntityID: 'ent-1', RecordID: 'c1', Record: { EmailDomain: 'example.com' } },
-                { EntityID: 'ent-1', RecordID: 'c2', Record: { EmailDomain: 'example.com' } },
-            ];
-
-            const batchResults = await processor.ProcessBatch(records, context);
-
-            expect(batchResults.size).toBe(2);
-            const r1 = batchResults.get('c1');
-            const r2 = batchResults.get('c2');
-
-            expect(r1?.Status).toBe('Succeeded');
-            expect(r2?.Status).toBe('Succeeded');
-            expect(r1?.Confidence).toEqual({ IsVIP: 0.95 });
-            expect(r2?.Confidence).toEqual({ IsVIP: 0.95 });
-            expect(mockRunner.ExecuteDecision).toHaveBeenCalledTimes(1);
+            expect(runner.Calls).toHaveLength(1);
+            expect(results.get('T-1')?.Confidence).toEqual({ IsUrgent: 0.95 });
+            expect(results.get('T-2')?.Confidence).toEqual({ IsUrgent: 0.95 });
+            expect(recordFeatureValues).toHaveBeenCalledTimes(2);
+            for (const [call] of recordFeatureValues.mock.calls) {
+                expect(call.outputs).toEqual([expect.objectContaining({ featureName: 'IsUrgent', value: true, confidence: 0.95 })]);
+                expect(call.aiPromptRunID).toBe('PR-BATCH-1');
+            }
+            expect(recordFeatureValues.mock.calls.map(([call]) => call.recordID)).toEqual(['T-1', 'T-2']);
         });
     });
 });

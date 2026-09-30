@@ -32,7 +32,7 @@ import {
     type ScoreQuestion,
     type DecisionAnswer,
 } from '@memberjunction/ai';
-import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import type { MJAIModelEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import {
     DECISION_FEATURE_PIPELINE_CAPABILITIES,
     type DataFeatureOutput,
@@ -44,6 +44,9 @@ import {
     type FeaturePipelineComputeRequest,
     type FeaturePipelineComputeResult,
 } from './BaseFeaturePipelineDriver';
+
+/** The model type `AIDecisionRunner` requires, by name. */
+const DECISION_MODEL_TYPE = 'Decision';
 
 /**
  * Runs the pipeline's prompt on a typed decision model for each record, mapping outputs to
@@ -135,9 +138,9 @@ export class DecisionFeaturePipelineDriver extends BaseFeaturePipelineDriver {
 
     /**
      * Executes the Decision pipeline for a single record:
-     * 1. Validates that the prompt is bound to a Decision model type.
+     * 1. Validates that the prompt runs on Decision models ({@link IsDecisionPrompt}).
      * 2. Renders the record state via `BeforeBuildContext` and `BuildPromptData`, canonicalizing it.
-     * 3. Checks estimated state tokens against the model's `Decision.MaxStateTokens` limit (fails if exceeded, never truncates).
+     * 3. Checks estimated state tokens against the strictest `Decision.MaxStateTokens` limit of the models the prompt may run on (fails if exceeded, never truncates).
      * 4. Builds typed decision questions (Likelihood, Choice, Score) from the spec's outputs.
      * 5. Executes the decision via `AIDecisionRunner.ExecuteDecision`.
      * 6. Maps answers back to output values (applying boolean constraint threshold and score rubric rescaling) and confidences.
@@ -148,7 +151,7 @@ export class DecisionFeaturePipelineDriver extends BaseFeaturePipelineDriver {
         if (!this.IsDecisionPrompt(prompt)) {
             return {
                 Success: false,
-                ErrorMessage: `Prompt '${prompt?.Name ?? prompt?.ID}' is not a Decision prompt; Decision pipelines require a prompt bound to a Decision model type.`,
+                ErrorMessage: `Prompt '${prompt?.Name ?? prompt?.ID}' is not a Decision prompt; Decision pipelines require a prompt whose model type is Decision, or that has no model type and a Decision model bound to it.`,
                 AIPromptRunID: undefined,
             };
         }
@@ -199,101 +202,63 @@ export class DecisionFeaturePipelineDriver extends BaseFeaturePipelineDriver {
         };
     }
 
-    /** Verifies whether a prompt is bound to a Decision model or model type. */
+    /**
+     * Whether the prompt is meant for Decision models: its model type is Decision or, when it has none (so
+     * `AIDecisionRunner` applies its own Decision floor), a Decision model is bound to it. Model types are
+     * compared by ID. The prompt's name plays no part, so a prompt whose type is LLM is refused here, before
+     * the record's state is rendered, whatever it is called.
+     */
     protected IsDecisionPrompt(prompt: MJAIPromptEntityExtended): boolean {
-        if (!prompt) {
+        const decisionTypeID = this.decisionModelTypeID();
+        if (!prompt || !decisionTypeID) {
             return false;
         }
-
-        const promptType = (prompt as { AIModelType?: string }).AIModelType;
-        if (typeof promptType === 'string' && promptType.trim().toLowerCase() === 'decision') {
-            return true;
-        }
-
         if (prompt.AIModelTypeID) {
-            try {
-                const mt = AIEngine.Instance.ModelTypesByID?.get(NormalizeUUID(prompt.AIModelTypeID))
-                    ?? AIEngine.Instance.ModelTypes?.find((t) => UUIDsEqual(t.ID, prompt.AIModelTypeID));
-                if (mt?.Name?.trim().toLowerCase() === 'decision') {
-                    return true;
-                }
-            } catch {
-                // ignore
-            }
+            return UUIDsEqual(prompt.AIModelTypeID, decisionTypeID);
         }
-
-        const directModelId = (prompt as { AIModelID?: string; ModelID?: string }).AIModelID
-            ?? (prompt as { AIModelID?: string; ModelID?: string }).ModelID;
-        if (directModelId) {
-            try {
-                const model = AIEngine.Instance.ModelsByID?.get(NormalizeUUID(directModelId))
-                    ?? AIEngine.Instance.Models?.find((m) => UUIDsEqual(m.ID, directModelId));
-                if (model) {
-                    if (model.AIModelType?.trim().toLowerCase() === 'decision') {
-                        return true;
-                    }
-                    if (model.AIModelTypeID) {
-                        const mt = AIEngine.Instance.ModelTypesByID?.get(NormalizeUUID(model.AIModelTypeID))
-                            ?? AIEngine.Instance.ModelTypes?.find((t) => UUIDsEqual(t.ID, model.AIModelTypeID));
-                        if (mt?.Name?.trim().toLowerCase() === 'decision') {
-                            return true;
-                        }
-                    }
-                }
-            } catch {
-                // ignore
-            }
-        }
-
-        if (prompt.Models?.Items && prompt.Models.Items.length > 0) {
-            for (const item of prompt.Models.Items) {
-                const modelId = item.ModelID ?? (item as { AIModelID?: string }).AIModelID;
-                if (modelId) {
-                    try {
-                        const model = AIEngine.Instance.ModelsByID?.get(NormalizeUUID(modelId))
-                            ?? AIEngine.Instance.Models?.find((m) => UUIDsEqual(m.ID, modelId));
-                        if (model?.AIModelType?.trim().toLowerCase() === 'decision') {
-                            return true;
-                        }
-                    } catch {
-                        // ignore
-                    }
-                }
-            }
-        }
-
-        if (prompt.Name && prompt.Name.toLowerCase().includes('decision')) {
-            return true;
-        }
-
-        return false;
+        return this.boundDecisionModels(prompt, decisionTypeID).length > 0;
     }
 
-    /** Resolves the effective `MaxStateTokens` limit from the prompt's model configuration. */
+    /**
+     * The strictest `Decision.MaxStateTokens` among the models the prompt may run on, or undefined when none
+     * declares one. The runner picks the model per call, by credentials and failover, so the state is
+     * checked against every model it may pick rather than against whichever binding is read first. Those
+     * models are the Decision models bound to the prompt or, when none is bound, every active Decision model.
+     */
     protected ResolveMaxStateTokens(prompt: MJAIPromptEntityExtended): number | undefined {
-        try {
-            const directModelId = (prompt as { AIModelID?: string }).AIModelID;
-            if (directModelId) {
-                const config = AIEngine.Instance.GetEffectiveModelConfiguration(directModelId);
-                if (config?.Decision?.MaxStateTokens !== undefined) {
-                    return config.Decision.MaxStateTokens;
-                }
-            }
-            if (prompt.Models?.Items && prompt.Models.Items.length > 0) {
-                for (const item of prompt.Models.Items) {
-                    const modelId = item.ModelID ?? (item as { AIModelID?: string }).AIModelID;
-                    if (modelId) {
-                        const config = AIEngine.Instance.GetEffectiveModelConfiguration(modelId);
-                        if (config?.Decision?.MaxStateTokens !== undefined) {
-                            return config.Decision.MaxStateTokens;
-                        }
-                    }
-                }
-            }
-        } catch {
-            // ignore
+        const limits = this.eligibleDecisionModels(prompt)
+            .map((model) => AIEngine.Instance.GetEffectiveModelConfiguration(model.ID)?.Decision?.MaxStateTokens)
+            .filter((limit): limit is number => typeof limit === 'number' && limit > 0);
+        return limits.length > 0 ? Math.min(...limits) : undefined;
+    }
+
+    /** The ID of the model type `AIDecisionRunner` requires, matched by name as the runner matches it. */
+    private decisionModelTypeID(): string | undefined {
+        const wanted = DECISION_MODEL_TYPE.toLowerCase();
+        return AIEngine.Instance.ModelTypes.find((type) => type.Name?.trim().toLowerCase() === wanted)?.ID;
+    }
+
+    /** The active Decision models bound to the prompt through its active or preview `MJ: AI Prompt Models` rows. */
+    private boundDecisionModels(prompt: MJAIPromptEntityExtended, decisionTypeID: string): MJAIModelEntityExtended[] {
+        return AIEngine.Instance.PromptModels
+            .filter((binding) => UUIDsEqual(binding.PromptID, prompt.ID) && (binding.Status === 'Active' || binding.Status === 'Preview'))
+            .map((binding) => AIEngine.Instance.ModelsByID.get(NormalizeUUID(binding.ModelID)))
+            .filter((model): model is MJAIModelEntityExtended => model !== undefined && this.isActiveOfType(model, decisionTypeID));
+    }
+
+    /** The models the prompt may run on: its bound Decision models, or every active Decision model when none is bound. */
+    private eligibleDecisionModels(prompt: MJAIPromptEntityExtended): MJAIModelEntityExtended[] {
+        const decisionTypeID = this.decisionModelTypeID();
+        if (!decisionTypeID) {
+            return [];
         }
-        return undefined;
+        const bound = this.boundDecisionModels(prompt, decisionTypeID);
+        return bound.length > 0 ? bound : AIEngine.Instance.Models.filter((model) => this.isActiveOfType(model, decisionTypeID));
+    }
+
+    /** Whether the model is active and of the given model type. */
+    private isActiveOfType(model: MJAIModelEntityExtended, modelTypeID: string): boolean {
+        return model.IsActive && UUIDsEqual(model.AIModelTypeID, modelTypeID);
     }
 
     /** Factory method to create an AIDecisionRunner instance (extension point for unit testing). */
@@ -323,7 +288,7 @@ export class DecisionFeaturePipelineDriver extends BaseFeaturePipelineDriver {
                 const descriptions: Record<string, string> = { ...(constraint.ValueDescriptions ?? {}) };
 
                 if (output.Target?.Mode === 'field') {
-                    const fieldName = output.Target.EntityFieldName ?? (output.Target as { Field?: string }).Field;
+                    const fieldName = output.Target.EntityFieldName;
                     if (fieldName) {
                         const entity = request.Context.provider?.EntityByID(request.Record.EntityID)
                             ?? Metadata.Provider?.EntityByID(request.Record.EntityID);
