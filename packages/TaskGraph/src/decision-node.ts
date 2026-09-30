@@ -221,6 +221,20 @@ export function ResolveGraphDecisions(rows: readonly DecisionTaskRow[]): GraphDe
     return { Answers: answers, Unresolved: unresolved };
 }
 
+/**
+ * The questions a completed Decision step is holding, with why: each answer below its question's
+ * `minConfidence`, and each question it gave no answer to.
+ *
+ * Empty for any other step, and for a Decision whose answers are all usable. This is what makes such
+ * a step retryable — the edges that read these answers hold until it is asked again.
+ */
+export function HeldDecisionAnswers(row: DecisionTaskRow): Record<string, string> {
+    if (row.StepType !== 'Decision' || row.Status !== 'Complete') return {};
+    const config = ReadDecisionStepConfiguration(row.Configuration);
+    if (!config) return {};
+    return { ...ResolveGraphDecisions([row]).Unresolved[config.nodeId] };
+}
+
 /** The reason a step's output gives for holding an answer, or `null` when it holds none there. */
 function heldReason(entry: unknown): string | null {
     return isRecord(entry) && typeof entry.held === 'string' && entry.held ? entry.held : null;

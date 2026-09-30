@@ -47,6 +47,7 @@ import {
 
     FinalizeAgentRunStep,
     InitAgentRunStep,
+    DecisionReferencesIn,
 } from '@memberjunction/ai-core-plus';
 import { DatabaseProviderBase, IMetadataProvider, IRunQueryProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { IShutdownable, ShutdownRegistry, UUIDsEqual } from '@memberjunction/global';
@@ -3165,11 +3166,16 @@ export class TaskGraphDispatcher implements IShutdownable {
         const key = `${dep.ID}:${errorMessage ?? ''}`;
         if (this.reportedUnevaluableConditions.has(key)) return;
         this.reportedUnevaluableConditions.add(key);
+        // A hold on a decision has a way out that a broken condition does not: ask again.
+        const readsDecision = DecisionReferencesIn(dep.Condition ?? '').References.length > 0;
         LogError(
             `[TaskGraphDispatcher] Dependency ${dep.ID} has an unevaluable condition ` +
             `(${errorMessage}); condition text: ${JSON.stringify(dep.Condition)}. ` +
             `Task ${dep.TaskID} is HELD — it will not run and will not be skipped until the ` +
-            `condition can be evaluated. The graph reports as stalled while this holds.`,
+            `condition can be evaluated. The graph reports as stalled while this holds.` +
+            (readsDecision
+                ? ' Retrying the Decision step it reads asks its questions again; an edge override answers the condition by hand.'
+                : ''),
         );
     }
 

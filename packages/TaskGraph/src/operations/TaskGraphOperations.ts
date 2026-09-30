@@ -162,6 +162,9 @@ export class TaskGraphCancelServerOperation extends TaskGraphCancelOperation {
  *
  * Unblocking is not optional: retrying a task while its dependents remain `Blocked` leaves the graph
  * exactly as stuck as before, because nothing downstream ever becomes eligible again.
+ *
+ * Also the way out of a Decision step's hold: a completed Decision holding an answer below its
+ * question's `minConfidence` is asked again (see `TaskGraphService.Retry`).
  */
 @RegisterClass(BaseRemotableOperation, 'TaskGraph.RetryTask')
 export class TaskGraphRetryTaskServerOperation extends TaskGraphRetryTaskOperation {
@@ -176,7 +179,12 @@ export class TaskGraphRetryTaskServerOperation extends TaskGraphRetryTaskOperati
         if (!input?.taskID) throw new Error('taskID is required');
 
         const ok = await new TaskGraphService().Retry(input.taskID, submitContext(provider, user, ''), input.inputPayload);
-        if (!ok) return { success: false, errorMessage: 'Retry failed; the task may not be in a Failed state.' };
+        if (!ok) {
+            return {
+                success: false,
+                errorMessage: 'Retry failed; the task may be neither Failed nor a Decision step holding an answer below its minConfidence.',
+            };
+        }
 
         const task = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', user);
         const loaded = await task.Load(input.taskID);

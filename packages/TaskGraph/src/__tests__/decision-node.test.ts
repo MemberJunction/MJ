@@ -43,13 +43,21 @@ import {
     DecisionAnswerConfidence,
     DecisionStepOutputAnswers,
     DecisionsPayloadConflict,
+    HeldDecisionAnswers,
     ReadDecisionStepConfiguration,
     ResolveDecisionState,
     ResolveGraphDecisions,
     type DecisionTaskRow,
 } from '../decision-node';
 import { SummarizeDecisionAnswers } from '../AIDecisionTaskRunner';
-import { BuildStepConfiguration, DecisionPromptNameOf, FindUnrunnableKinds } from '../TaskGraphService';
+import {
+    BuildStepConfiguration,
+    DecisionPromptNameOf,
+    FindUnrunnableKinds,
+    PrepareTaskForRetry,
+    RetryRefusal,
+    type RetryableTask,
+} from '../TaskGraphService';
 import type { TaskDecisionRunner, TaskDecisionRunParams, TaskDecisionRunResult, TaskPromptRunner } from '../types';
 
 // ── fixtures ────────────────────────────────────────────────────────────────────────────────────
@@ -614,6 +622,76 @@ describe('a failed decision holds; it never reads as false', () => {
         const evaluate = vi.fn((): ConditionVerdict => ({ Success: true, Value: true }));
         expect(EvaluateCondition("decisions.triage.intent.value === 'other'", {}, FAILED, evaluate).Unevaluable).toBe(true);
         expect(evaluate).not.toHaveBeenCalled();
+    });
+});
+
+// ── releasing a hold ────────────────────────────────────────────────────────────────────────────
+
+describe('retrying a Decision step that is holding an answer', () => {
+    const LOW_INTENT = { ...BILLING_CONFIDENT, intent: { value: 'billing', confidence: 0.55 } };
+    const held = decisionRow('Complete', triageOutput(LOW_INTENT));
+    const usable = decisionRow('Complete', triageOutput(BILLING_CONFIDENT));
+
+    /** A step the graph holds on, with the columns a retry resets. */
+    const heldStep = (): RetryableTask & DecisionTaskRow => ({
+        ...held,
+        Status: 'Complete',
+        StepType: 'Decision',
+        StartedAt: new Date('2026-09-30T10:00:00Z'),
+        CompletedAt: new Date('2026-09-30T10:00:02Z'),
+        PercentComplete: 100,
+        ClaimedBy: null,
+        ClaimExpiresAt: null,
+    });
+
+    it('knows which answers it is holding, and why', () => {
+        expect(HeldDecisionAnswers(held)).toEqual({
+            intent: 'the decision "Triage the ticket" answered "intent" with confidence 0.55, below its minConfidence of 0.7',
+        });
+        expect(HeldDecisionAnswers(usable)).toEqual({});
+        expect(HeldDecisionAnswers(decisionRow('Failed', {}, 'timed out'))).toEqual({});
+    });
+
+    it('may be retried from Complete, as a failed step may', () => {
+        expect(RetryRefusal(held)).toBeNull();
+        expect(RetryRefusal(decisionRow('Failed', {}, 'timed out'))).toBeNull();
+    });
+
+    it('is refused when every answer is usable, and for anything else that has not failed', () => {
+        expect(RetryRefusal(usable)).toMatch(/answers are all usable/);
+        expect(RetryRefusal({ ...held, StepType: 'Agent' })).toMatch(/status is Complete, expected Failed/);
+        expect(RetryRefusal(decisionRow('In Progress', undefined))).toMatch(/status is In Progress/);
+    });
+
+    it('goes back to Pending with its answers cleared; edges reading it hold until it answers again, then route', () => {
+        const step = heldStep();
+        PrepareTaskForRetry(step);
+        expect(step).toMatchObject({
+            Status: 'Pending', OutputPayload: null, ErrorMessage: null, StartedAt: null, CompletedAt: null, PercentComplete: 0,
+        });
+
+        // An edge from a later step that reads the decision holds while it is asked again...
+        const dispatcher = dispatcherWith(decisionRunner({ Success: true }));
+        const gather: OriginFields = { ...origin('Complete', {}), ID: 'task-gather', Name: 'Gather' };
+        const reading = { ...edge('e-later', "decisions.triage.intent.value === 'billing'"), DependsOnTaskID: 'task-gather' };
+        const waiting = ResolveGraphDecisions([step]);
+        expect(dispatcher.evaluateEdgeCondition(reading, new Map([['task-gather', gather]]), 'block', {}, waiting)).toMatchObject({
+            outcome: 'hold', reason: expect.stringMatching(/has not answered \(it is Pending\)/),
+        });
+
+        // ...and routes once it answers confidently.
+        const answered = ResolveGraphDecisions([{ ...step, Status: 'Complete', OutputPayload: JSON.stringify(triageOutput(BILLING_CONFIDENT)) }]);
+        expect(dispatcher.evaluateEdgeCondition(reading, new Map([['task-gather', gather]]), 'block', {}, answered).outcome).toBe('keep');
+        expect(resolveIntentFork('Complete', answered).keptEdgeIDs).toEqual(['e-billing']);
+    });
+
+    it('keeps a failed step\'s output when it is not a Decision', () => {
+        const step: RetryableTask = {
+            Status: 'Failed', StepType: 'Agent', ErrorMessage: 'boom', StartedAt: null, CompletedAt: null,
+            PercentComplete: 40, ClaimedBy: null, ClaimExpiresAt: null, OutputPayload: '{"partial":true}',
+        };
+        PrepareTaskForRetry(step);
+        expect(step).toMatchObject({ Status: 'Pending', ErrorMessage: null, OutputPayload: '{"partial":true}' });
     });
 });
 
