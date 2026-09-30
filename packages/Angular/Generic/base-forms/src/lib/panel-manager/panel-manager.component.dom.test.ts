@@ -30,6 +30,7 @@ function row(over: Partial<FormPanelContributionRow> = {}): FormPanelContributio
         ReplacesSectionKey: 'details',
         ReplacesFieldNames: [],
         RelatedEntity: null,
+        RelatedJoinField: null,
         ChromeGroup: null,
         ContributionKey: 'panel:OrgMemberOverviewPanel',
         ComponentID: 'COMP-1',
@@ -251,7 +252,7 @@ describe('MjPanelManagerComponent (DOM) — changing where a panel goes', () => 
         expect(f.componentInstance.EditContext?.Existing.map((e) => e.Key)).toEqual(['panel:Other']);
     });
 
-    it('writes the new placement and closes', async () => {
+    it('writes the new placement and closes, keeping the row\'s own key', async () => {
         const f = render();
         f.componentInstance.OnEdit(f.componentInstance.Items[0]);
         await f.componentInstance.OnEditApplied({
@@ -259,8 +260,38 @@ describe('MjPanelManagerComponent (DOM) — changing where a panel goes', () => 
             ActivateNow: true,
         });
         expect(admin.SetPlacement).toHaveBeenCalledWith(
-            'ROW-1', { slot: 'after-fields', presentation: 'panel', title: 'Renamed' }, true, PROVIDER);
+            'ROW-1',
+            { slot: 'after-fields', presentation: 'panel', title: 'Renamed', contributionKey: 'panel:OrgMemberOverviewPanel' },
+            true, PROVIDER);
         expect(f.componentInstance.Editing).toBeNull();
+    });
+
+    it('drops the key of a panel the user stopped replacing', async () => {
+        admin.RowsForEntity.mockReturnValue([
+            row({ ContributionKey: 'panel:Other' }),
+            row({ ID: 'ROW-2', Name: 'Other', ContributionKey: 'panel:Other' }),
+        ]);
+        const f = render();
+        f.componentInstance.OnEdit(f.componentInstance.Items.find((i) => i.ID === 'ROW-1')!);
+        await f.componentInstance.OnEditApplied({
+            Contribution: { slot: 'after-fields', presentation: 'panel', title: 'Mine' },
+            ActivateNow: true,
+        });
+        expect(admin.SetPlacement).toHaveBeenCalledWith(
+            'ROW-1', { slot: 'after-fields', presentation: 'panel', title: 'Mine' }, true, PROVIDER);
+    });
+
+    // Two grids can show one entity; the join field is what tells them apart.
+    it('opens a grid claim with its join field', () => {
+        admin.RowsForEntity.mockReturnValue([row({
+            ReplacesSectionKey: null, RelatedEntity: 'MJ_BizApps_Common: People', RelatedJoinField: 'ContactID',
+            ContributionKey: 'related:MJ_BizApps_Common: People:ContactID',
+        })]);
+        const f = render();
+        f.componentInstance.OnEdit(f.componentInstance.Items[0]);
+        expect(f.componentInstance.EditProposal).toMatchObject({
+            relatedEntity: 'MJ_BizApps_Common: People', relatedJoinField: 'ContactID',
+        });
     });
 
     it('writes nothing when the dialog is cancelled', () => {

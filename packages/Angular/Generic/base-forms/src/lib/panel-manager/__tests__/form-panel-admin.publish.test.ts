@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { ApplyContributionSpecToRow, ParseClaimedFieldNames } from '@memberjunction/core-entities';
 
 /**
  * Publishing changes who a form or panel is for. Two things must hold, and neither is visible
@@ -11,6 +12,10 @@ type Scope = 'User' | 'Role' | 'Global';
 interface StoredRow {
     ID: string; EntityID: string; Status: string; Scope: Scope;
     RoleID: string | null; UserID: string | null; ContributionKey?: string | null;
+    Component?: string; RelatedEntityID?: string | null; RelatedJoinField?: string | null;
+    ReplacesSectionKey?: string | null; ReplacesFieldNames?: string | null; InSectionKey?: string | null;
+    SectionPosition?: 'start' | 'end' | null; Inclusion?: 'Primary' | 'More' | 'None' | null;
+    ChromeGroup?: 'details' | 'more' | null; Configuration?: string | null;
 }
 
 const ME = 'user-me';
@@ -20,26 +25,29 @@ let overrides: StoredRow[] = [];
 let saves: Array<{ ID: string; Status: string; Scope: Scope; RoleID: string | null; UserID: string | null }> = [];
 let submit = vi.fn(async () => true);
 /** The row the service loaded last, to read what it wrote. */
-let lastRow: {
-    SortKey: number; Slot?: string; ReplacesSectionKey: string | null; ReplacesSectionKeys: string | null;
-    InSectionKey: string | null; SectionPosition: string | null;
-} | null = null;
+let lastRow: FakeRow | null = null;
 
 /** Stands in for a loaded entity row: holds its columns and records its save. */
 class FakeRow {
     public ID = ''; public Status = ''; public Scope: Scope = 'User';
     public RoleID: string | null = null; public UserID: string | null = null;
-    public SortKey = 5;
+    public Component = 'Cohort';
+    public Slot = 'after-fields'; public SortKey = 5; public Presentation = 'panel';
+    public Title: string | null = null; public Icon: string | null = null;
+    public ContributionKey: string | null = null;
+    public RelatedEntityID: string | null = null; public RelatedJoinField: string | null = null;
     public ReplacesSectionKey: string | null = null; public ReplacesSectionKeys: string | null = null;
     public ReplacesFieldNames: string | null = null; public InSectionKey: string | null = null;
     public SectionPosition: string | null = null;
+    public Inclusion: string | null = null; public ChromeGroup: string | null = null;
+    public Configuration: string | null = null;
     public TransactionGroup: unknown = null;
     public LatestResult = { CompleteMessage: '' };
     public constructor(private readonly source: () => StoredRow[]) {}
     public async Load(id: string): Promise<boolean> {
         const found = this.source().find((r) => r.ID === id);
         if (!found) return false;
-        Object.assign(this, { ID: found.ID, Status: found.Status, Scope: found.Scope, RoleID: found.RoleID, UserID: found.UserID });
+        Object.assign(this, found);
         return true;
     }
     public async Save(): Promise<boolean> {
@@ -48,8 +56,11 @@ class FakeRow {
     }
 }
 
+const ENROLLMENTS = { ID: 'ENT-ENROLL', Name: 'MoreCheese: Course Enrollments' };
+
 const provider = {
     CurrentUser: { ID: ME },
+    EntityByName: (name: string) => (name.trim().toLowerCase() === ENROLLMENTS.Name.toLowerCase() ? ENROLLMENTS : undefined),
     CreateTransactionGroup: async () => ({ Submit: submit }),
     GetEntityObject: async (name: string) => {
         lastRow = new FakeRow(() => (name === 'MJ: Entity Form Overrides' ? overrides : contributions));
@@ -57,10 +68,19 @@ const provider = {
     },
 };
 
-vi.mock('@memberjunction/core-entities', () => ({
-    InteractiveFormsEngine: { get Instance() { return { Contributions: contributions, Overrides: overrides }; } },
-    UserCanManageFormDefaults: vi.fn(() => true),
-}));
+vi.mock('@memberjunction/core-entities', async () => {
+    // The row mapper is pure, so the real one writes the columns under test.
+    const mapper = await vi.importActual<{
+        ApplyContributionSpecToRow: typeof ApplyContributionSpecToRow;
+        ParseClaimedFieldNames: typeof ParseClaimedFieldNames;
+    }>('@memberjunction/core-entities/dist/custom/FormScope/FormContributionRow.js');
+    return {
+        InteractiveFormsEngine: { get Instance() { return { Contributions: contributions, Overrides: overrides }; } },
+        UserCanManageFormDefaults: vi.fn(() => true),
+        ApplyContributionSpecToRow: mapper.ApplyContributionSpecToRow,
+        ParseClaimedFieldNames: mapper.ParseClaimedFieldNames,
+    };
+});
 vi.mock('@memberjunction/core', () => ({
     LogError: () => undefined,
     Metadata: class { public static get Provider() { return provider; } },
@@ -71,7 +91,6 @@ vi.mock('@memberjunction/global', () => ({
 }));
 vi.mock('../../panel-slot/collect-form-contribution-registrations', () => ({
     InvalidateFormContributionRegistrationCache: () => undefined,
-    ParseClaimedFieldNames: () => [],
 }));
 const setHidden = vi.fn();
 vi.mock('../../panel-slot/panel-hides', () => ({ SetPanelHidden: (...args: unknown[]) => setHidden(...args) }));
@@ -192,5 +211,79 @@ describe('FormPanelAdminService.SetPlacement — section claims', () => {
     it('drops a position that has no section to apply to', async () => {
         await new FormPanelAdminService().SetPlacement('mine', { slot: 'after-fields', presentation: 'panel', title: 'P', sectionPosition: 'end' }, true);
         expect(lastRow?.SectionPosition).toBeNull();
+    });
+});
+
+/**
+ * A placement change rewrites every claim column through the shared row mapper, so the row
+ * keeps nothing of the claim it had and satisfies the table's CHECK constraints.
+ */
+describe('FormPanelAdminService.SetPlacement — claims', () => {
+    const P = { slot: 'after-fields' as const, presentation: 'panel' as const, title: 'P' };
+    const GRID_KEY = 'related:MoreCheese: Course Enrollments:CourseID';
+
+    it('clears a grid claim when the panel stands in for fields instead', async () => {
+        contributions = [panel({
+            ID: 'mine', Scope: 'User', UserID: ME, ContributionKey: GRID_KEY,
+            RelatedEntityID: 'ENT-ENROLL', RelatedJoinField: 'CourseID',
+        })];
+        const result = await new FormPanelAdminService().SetPlacement('mine', { ...P, replacesFieldNames: ['Name'], sectionPosition: 'end' }, true);
+        expect(result.Success).toBe(true);
+        expect(lastRow).toMatchObject({
+            RelatedEntityID: null, RelatedJoinField: null,
+            ReplacesFieldNames: '["Name"]', SectionPosition: 'end', ContributionKey: 'panel:Cohort',
+        });
+    });
+
+    it('writes the grid and its key when the panel takes over a grid', async () => {
+        contributions = [panel({ ID: 'mine', Scope: 'User', UserID: ME, ContributionKey: 'panel:Cohort', ReplacesFieldNames: '["Name"]' })];
+        await new FormPanelAdminService().SetPlacement('mine', { ...P, relatedEntity: 'MoreCheese: Course Enrollments', relatedJoinField: '[CourseID]' }, true);
+        expect(lastRow).toMatchObject({
+            RelatedEntityID: 'ENT-ENROLL', RelatedJoinField: '[CourseID]',
+            ReplacesFieldNames: null, ContributionKey: GRID_KEY,
+        });
+    });
+
+    it('refuses a grid on an entity that is not registered, and saves nothing', async () => {
+        contributions = [panel({ ID: 'mine', Scope: 'User', UserID: ME })];
+        const result = await new FormPanelAdminService().SetPlacement('mine', { ...P, relatedEntity: 'Nope' }, true);
+        expect(result.Success).toBe(false);
+        expect(saves).toEqual([]);
+    });
+
+    it('writes the key of the panel it now replaces', async () => {
+        contributions = [panel({ ID: 'mine', Scope: 'User', UserID: ME })];
+        await new FormPanelAdminService().SetPlacement('mine', { ...P, contributionKey: 'skip:health' }, true);
+        expect(lastRow?.ContributionKey).toBe('skip:health');
+    });
+
+    it('clears every claim when the panel replaces nothing', async () => {
+        contributions = [panel({
+            ID: 'mine', Scope: 'User', UserID: ME, ContributionKey: GRID_KEY,
+            RelatedEntityID: 'ENT-ENROLL', RelatedJoinField: 'CourseID',
+        })];
+        await new FormPanelAdminService().SetPlacement('mine', P, true);
+        expect(lastRow).toMatchObject({
+            RelatedEntityID: null, RelatedJoinField: null, ReplacesSectionKey: null, ReplacesSectionKeys: null,
+            ReplacesFieldNames: null, InSectionKey: null, SectionPosition: null, ContributionKey: 'panel:Cohort',
+        });
+    });
+
+    it('gives a bare strip no rail metadata', async () => {
+        contributions = [panel({ ID: 'mine', Scope: 'User', UserID: ME, Inclusion: 'Primary', ChromeGroup: 'details' })];
+        await new FormPanelAdminService().SetPlacement('mine', { ...P, presentation: 'bare' }, true);
+        expect(lastRow).toMatchObject({ Presentation: 'bare', Inclusion: null, ChromeGroup: null });
+    });
+
+    it('keeps what the dialog does not edit on a panel', async () => {
+        contributions = [panel({ ID: 'mine', Scope: 'User', UserID: ME, Inclusion: 'Primary', Configuration: '{"window":30}' })];
+        await new FormPanelAdminService().SetPlacement('mine', P, true);
+        expect(lastRow).toMatchObject({ Inclusion: 'Primary', Configuration: '{"window":30}' });
+    });
+
+    it('stores a draft as Pending', async () => {
+        contributions = [panel({ ID: 'mine', Scope: 'User', UserID: ME })];
+        await new FormPanelAdminService().SetPlacement('mine', P, false);
+        expect(lastRow?.Status).toBe('Pending');
     });
 });

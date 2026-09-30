@@ -18,7 +18,10 @@ const engine = {
     },
 };
 
-vi.mock('@memberjunction/core-entities', () => ({ InteractiveFormsEngine: { get Instance() { return engine; } } }));
+vi.mock('@memberjunction/core-entities', () => ({
+    InteractiveFormsEngine: { get Instance() { return engine; } },
+    ParseClaimedFieldNames: () => [],
+}));
 vi.mock('@memberjunction/core', () => ({
     LogError: () => undefined,
     Metadata: class { public static Provider = null; },
@@ -29,7 +32,6 @@ vi.mock('@memberjunction/global', () => ({
 }));
 vi.mock('../../panel-slot/collect-form-contribution-registrations', () => ({
     InvalidateFormContributionRegistrationCache: () => undefined,
-    ParseClaimedFieldNames: () => [],
 }));
 
 import { FormPanelAdminService } from '../form-panel-admin.service';

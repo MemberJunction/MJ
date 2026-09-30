@@ -1,6 +1,6 @@
 // packages/Angular/Generic/base-forms/src/lib/panel-slot/collect-form-contribution-registrations.ts
 import { LogError, type EntityInfo, type IMetadataProvider } from '@memberjunction/core';
-import { InteractiveFormsEngine, type MJEntityFormContributionEntity } from '@memberjunction/core-entities';
+import { InteractiveFormsEngine, ParseClaimedFieldNames, type MJEntityFormContributionEntity } from '@memberjunction/core-entities';
 import { MJGlobal, SafeJSONParse } from '@memberjunction/global';
 import { BaseFormPanel, type FormPanelRegistrationMetadata, type FormPanelSlot } from './base-form-panel';
 import type { FormContributionRegistration } from './form-contribution';
@@ -102,25 +102,6 @@ export function CollectClassFormPanelRegistrations(): FormContributionRegistrati
         Source: 'class' as const,
         Registration: reg,
     }));
-}
-
-/**
- * The names in a `ReplacesFieldNames` or `ReplacesSectionKeys` cell.
- *
- * Stored as a JSON array, the same shape and for the same reason as
- * `FormChromeRule.JoinFields`. A cell that is not an array of names yields none, so a
- * malformed row claims nothing rather than hiding something arbitrary.
- */
-export function ParseClaimedFieldNames(raw: string | null | undefined): string[] {
-    if (!raw || raw.trim().length === 0) return [];
-    const parsed = SafeJSONParse<string[]>(raw, false);
-    if (!Array.isArray(parsed)) return [];
-    const out: string[] = [];
-    for (const item of parsed) {
-        const name = typeof item === 'string' ? item.trim() : '';
-        if (name.length > 0 && !out.includes(name)) out.push(name);
-    }
-    return out;
 }
 
 /** Project one `MJ: Entity Form Contributions` row onto the compiled metadata shape. */

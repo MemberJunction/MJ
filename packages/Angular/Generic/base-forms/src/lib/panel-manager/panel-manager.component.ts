@@ -24,6 +24,7 @@ import {
   type FormPanelStockGridRow,
 } from './form-panel-inventory';
 import {
+  KeepEditedRowKey,
   PlacementStateFromContribution,
   type FormPlacementContext,
   type FormPlacementDecision,
@@ -212,6 +213,7 @@ export class MjPanelManagerComponent implements OnChanges {
     if (row.InSectionKey) spec.inSectionKey = row.InSectionKey;
     if (row.SectionPosition) spec.sectionPosition = row.SectionPosition;
     if (row.RelatedEntity) spec.relatedEntity = row.RelatedEntity;
+    if (row.RelatedEntity && row.RelatedJoinField) spec.relatedJoinField = row.RelatedJoinField;
     if (row.ContributionKey) spec.contributionKey = row.ContributionKey;
     spec.sortKey = row.SortKey;
 
@@ -256,10 +258,13 @@ export class MjPanelManagerComponent implements OnChanges {
 
   public async OnEditApplied(decision: FormPlacementDecision): Promise<void> {
     const item = this.Editing;
+    const existing = this.EditContext?.Existing ?? [];
     this.CloseEdit();
     if (!item) return;
+    const row = this.rows.find((candidate) => UUIDsEqual(candidate.ID, item.ID));
+    const contribution = row ? KeepEditedRowKey(decision.Contribution, row, existing) : decision.Contribution;
     await this.run(item.ID, () =>
-      this.admin.SetPlacement(item.ID, decision.Contribution, decision.ActivateNow, this.Provider));
+      this.admin.SetPlacement(item.ID, contribution, decision.ActivateNow, this.Provider));
   }
 
   /** Clicking the backdrop closes the dialog; clicking the dialog itself does not. */

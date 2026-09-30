@@ -94,6 +94,8 @@ export interface FormPanelContributionRow {
     /** Where inside its section it draws. Null means the start. */
     SectionPosition: 'start' | 'end' | null;
     RelatedEntity: string | null;
+    /** The join field of the grid it replaces, which tells apart two grids of one entity. */
+    RelatedJoinField: string | null;
     ChromeGroup: string | null;
     ContributionKey: string | null;
     /** The component the panel renders. */

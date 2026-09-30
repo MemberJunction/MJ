@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { ParseClaimedFieldNames } from '@memberjunction/core-entities';
 
 const engine = {
     Loaded: true,
@@ -18,10 +19,16 @@ const userInfo = {
     SetSettingDebounced: (key: string, value: string) => { settings.set(key, value); },
 };
 
-vi.mock('@memberjunction/core-entities', () => ({
-    InteractiveFormsEngine: { get Instance() { return engine; } },
-    UserInfoEngine: { get Instance() { return userInfo; } },
-}));
+vi.mock('@memberjunction/core-entities', async () => {
+    // The cell parser is pure, so the real one reads the claim columns.
+    const mapper = await vi.importActual<{ ParseClaimedFieldNames: typeof ParseClaimedFieldNames }>(
+        '@memberjunction/core-entities/dist/custom/FormScope/FormContributionRow.js');
+    return {
+        InteractiveFormsEngine: { get Instance() { return engine; } },
+        UserInfoEngine: { get Instance() { return userInfo; } },
+        ParseClaimedFieldNames: mapper.ParseClaimedFieldNames,
+    };
+});
 const logError = vi.fn();
 vi.mock('@memberjunction/core', () => ({ LogError: (...args: unknown[]) => logError(...args) }));
 const byMetadataScan = vi.fn(() => classRegs);

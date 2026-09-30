@@ -1,17 +1,16 @@
 import { Injectable } from '@angular/core';
 import { LogError, Metadata, type EntityInfo, type IMetadataProvider } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
+    ApplyContributionSpecToRow,
     InteractiveFormsEngine,
+    ParseClaimedFieldNames,
     UserCanManageFormDefaults,
     type MJEntityFormContributionEntity,
     type MJEntityFormOverrideEntity,
 } from '@memberjunction/core-entities';
-import {
-    InvalidateFormContributionRegistrationCache,
-    ParseClaimedFieldNames,
-} from '../panel-slot/collect-form-contribution-registrations';
-import { DEFAULT_FORM_CONTRIBUTION_SLOT, type FormContributionSpec } from '@memberjunction/interactive-component-types/forms';
+import { InvalidateFormContributionRegistrationCache } from '../panel-slot/collect-form-contribution-registrations';
+import type { FormContributionSpec } from '@memberjunction/interactive-component-types/forms';
 import type { FormOverrideRow, FormPanelContributionRow } from './form-panel-inventory';
 import { SetPanelHidden } from '../panel-slot/panel-hides';
 import {
@@ -94,11 +93,13 @@ export class FormPanelAdminService {
     }
 
     /**
-     * Writes a new placement onto an existing row.
+     * Writes a new placement onto an existing row, through the same row mapper the Create and
+     * Modify actions use.
      *
-     * Every placement column is set, including the ones the decision leaves out, so a
-     * claim the user has just dropped is actually cleared. Merging instead would make a
-     * panel that stops replacing a section keep replacing it.
+     * Every claim column is rewritten, including the ones the decision leaves out, so a claim the
+     * user has just dropped is actually cleared. The key is the one the decision names, or the
+     * one the write path derives from its grid claim or the row's component. The order,
+     * rail inclusion and configuration, which the placement dialog does not edit, are kept.
      */
     public async SetPlacement(
         rowID: string,
@@ -107,25 +108,16 @@ export class FormPanelAdminService {
         provider?: IMetadataProvider | null,
     ): Promise<FormPanelAdminResult> {
         return this.write(rowID, provider, async (row) => {
-            row.Slot = contribution.slot ?? DEFAULT_FORM_CONTRIBUTION_SLOT;
-            row.Presentation = contribution.presentation;
-            if (contribution.sortKey != null) row.SortKey = contribution.sortKey;
-            row.Title = contribution.title;
-            row.Icon = contribution.icon ?? null;
-            row.ReplacesFieldNames = contribution.replacesFieldNames?.length
-                ? JSON.stringify(contribution.replacesFieldNames)
-                : null;
-            // One replaced section always goes in the single-key column, as the actions write it.
-            const sections = [contribution.replacesSectionKey, ...(contribution.replacesSectionKeys ?? [])]
-                .map((key) => key?.trim() ?? '')
-                .filter((key, index, all) => key.length > 0 && all.indexOf(key) === index);
-            row.ReplacesSectionKey = sections.length === 1 ? sections[0] : null;
-            row.ReplacesSectionKeys = sections.length > 1 ? JSON.stringify(sections) : null;
-            row.InSectionKey = contribution.inSectionKey?.trim() || null;
-            // A position is kept only for a panel drawn inside a section, as the CHECK requires.
-            row.SectionPosition = row.InSectionKey || row.ReplacesFieldNames ? (contribution.sectionPosition ?? null) : null;
-            row.ChromeGroup = contribution.chromeGroup ?? null;
-            row.RelatedJoinField = contribution.relatedJoinField ?? null;
+            const relatedName = contribution.relatedEntity?.trim();
+            const related = relatedName ? (provider ?? Metadata.Provider)?.EntityByName(relatedName) : null;
+            if (relatedName && !related) {
+                return { Success: false, Message: `The related entity "${relatedName}" is not registered.` };
+            }
+            ApplyContributionSpecToRow(row, this.keepUneditedColumns(contribution, row), {
+                relatedEntityID: related?.ID ?? null,
+                relatedEntityName: related?.Name ?? null,
+                componentName: row.Component || null,
+            });
             row.Status = activeNow ? 'Active' : 'Pending';
             const saved = await row.Save();
             return saved
@@ -322,6 +314,18 @@ export class FormPanelAdminService {
         }
     }
 
+    /** The decision, with the columns the placement dialog does not edit filled in from the row. */
+    private keepUneditedColumns(contribution: FormContributionSpec, row: MJEntityFormContributionEntity): FormContributionSpec {
+        return {
+            ...contribution,
+            sortKey: contribution.sortKey ?? row.SortKey,
+            inclusion: contribution.inclusion ?? row.Inclusion ?? undefined,
+            configuration: contribution.configuration
+                ?? SafeJSONParse<Record<string, unknown>>(row.Configuration ?? '', false)
+                ?? undefined,
+        };
+    }
+
     private project(row: MJEntityFormContributionEntity): FormPanelContributionRow {
         return {
             ID: row.ID,
@@ -341,6 +345,7 @@ export class FormPanelAdminService {
             InSectionKey: row.InSectionKey,
             SectionPosition: row.SectionPosition,
             RelatedEntity: row.RelatedEntity,
+            RelatedJoinField: row.RelatedJoinField,
             ChromeGroup: row.ChromeGroup,
             ContributionKey: row.ContributionKey,
             ComponentID: row.ComponentID,

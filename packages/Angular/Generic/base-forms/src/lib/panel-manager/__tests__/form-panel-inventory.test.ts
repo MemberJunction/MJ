@@ -32,6 +32,7 @@ const CONTRIBUTION: FormPanelContributionRow = {
     ReplacesSectionKey: 'details',
     ReplacesFieldNames: [],
     RelatedEntity: null,
+    RelatedJoinField: null,
     ChromeGroup: null,
     ContributionKey: 'panel:OrgMemberOverviewPanel',
     ComponentID: 'COMP-1',
