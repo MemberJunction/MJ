@@ -4,7 +4,9 @@
  * `RunAIAgentResolver` uses this for every status it sends. A host whose
  * `AgentTurnHandler` answers with an In-Progress reply uses the same publisher,
  * on that caller's session, so the chat follows the turn: significant-step
- * progress, streamed text, the partial result, and the completion.
+ * progress, streamed text, the partial result, and the completion. When the
+ * turn throws instead of returning a result, call `PublishFailure` with the
+ * reply row's id and the error.
  */
 import type { PubSubEngine } from 'type-graphql';
 import type {
@@ -141,7 +143,9 @@ export class AgentRunStatusPublisher {
 
     /**
      * Completion for a failure that has no run. The fire-and-forget path uses this when
-     * `executeAIAgent` rejects, which is the only message that tells the client the run failed.
+     * `executeAIAgent` rejects. A host uses it the same way: when the turn throws
+     * instead of returning a result, call `PublishFailure` with the reply row's id
+     * and the error. That completion is what tells the chat the reply finished.
      */
     public PublishFailure(conversationDetailId: string | undefined, errorMessage: string): void {
         this.publish('StreamingContent', {
