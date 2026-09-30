@@ -22,8 +22,8 @@ import {
   CanAskRoutingDecision,
   CollectRoutingParticipants,
   IsAgentAllowed,
-  type RoutingAgent,
   type RoutingArtifactVersion,
+  type RoutingCatalogAgent,
   type RoutingDecisionInput,
   type RoutingDecisionOutcome,
   type RoutingParticipant
@@ -2073,8 +2073,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         .catch(error => console.error('Conversation naming failed:', error));
     }
 
-    const routing = await this.decideAgentRouting(messageDetail, mentionResult);
-    const target = this.resolveAgentTurnTarget(mentionResult, routing);
+    // Read the candidates before any await. This composer stays cached while the person opens
+    // another conversation, and the chat area then rebinds its history and pinned agent, so a
+    // read after the routing decision could see another conversation's state (or none).
+    const candidates = this.agentTurnCandidates(this.agentMentionIds(mentionResult));
+    const routing = await this.decideAgentRouting(messageDetail, candidates);
+    const target = this.resolveAgentTurnTarget(candidates, routing);
     if (!target) {
       await this.finishWithoutAgentTurn(messageDetail, 'NoAgent');
       return;
@@ -2091,16 +2095,18 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * Asks the routing decision for this message when {@link EnableDecisionRouting} is on and the
    * message qualifies (see `ShouldRunRoutingDecision`). Returns null, with no call, otherwise, and
    * when anything fails: the message then keeps today's routing.
+   *
+   * @param candidates The turn's candidates, read before any await (see {@link routeMessage}).
    */
   private async decideAgentRouting(
     message: MJConversationDetailEntity,
-    mentionResult: MentionParseResult
+    candidates: AgentTurnCandidates
   ): Promise<RoutingDecisionOutcome | null> {
-    const continuityAgentId = this.findLastNonSageAgentId();
+    const continuityAgentId = candidates.ContinuityAgentId;
     const qualifies = ShouldRunRoutingDecision({
       Enabled: this.EnableDecisionRouting,
       ReplyMode: this.AgentReplyMode,
-      MentionedAgentIds: this.agentMentionIds(mentionResult),
+      MentionedAgentIds: candidates.MentionedAgentIds,
       Message: message.Message ?? '',
       ContinuityAgentId: continuityAgentId
     });
@@ -2108,13 +2114,17 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       return null;
     }
     try {
+      // Built before the first await, so it reads the same conversation as the candidates.
       const input = this.buildRoutingDecisionInput(message, continuityAgentId);
       if (!CanAskRoutingDecision(input)) {
         return null;
       }
       input.ArtifactVersions = await this.loadRoutingArtifactVersions(message.ConversationID, input.Participants);
       const outcome = await RunRoutingDecision(input, params => this.agentService.RunDecision(params));
-      LogStatusEx({ message: `Decision routing: ${outcome.Verdict}, ${outcome.Reason}`, verboseOnly: true });
+      LogStatusEx({
+        message: `Decision routing: ${outcome.Verdict}, ${outcome.Reason} (prompt run ${outcome.PromptRunID ?? 'none'})`,
+        verboseOnly: true
+      });
       return outcome;
     } catch (error) {
       console.warn('Decision routing failed, so the message keeps continuity:', error);
@@ -2129,7 +2139,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    */
   private buildRoutingDecisionInput(message: MJConversationDetailEntity, continuityAgentId: string): RoutingDecisionInput {
     const history = this.ConversationHistory.filter(row => this.isWithinHistoryFloor(row) && !UUIDsEqual(row.ID, message.ID));
-    const findAgent = (agentId: string): RoutingAgent | undefined => AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
+    const findAgent = (agentId: string): RoutingCatalogAgent | undefined => AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
     const manager = this.ConverationManagerAgent;
     return {
       Message: message.Message ?? '',
@@ -2175,11 +2185,11 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * A routing decision, when there was one, is applied to the candidates first.
    */
   private resolveAgentTurnTarget(
-    mentionResult: MentionParseResult,
-    routing: RoutingDecisionOutcome | null = null
+    candidates: AgentTurnCandidates,
+    routing: RoutingDecisionOutcome | null
   ): AgentTurnTarget | null {
     return ResolveAgentTurn(
-      ApplyRoutingDecision(this.agentTurnCandidates(this.agentMentionIds(mentionResult)), routing),
+      ApplyRoutingDecision(candidates, routing),
       this.agentTurnRules,
       agentId => this.isKnownAgent(agentId)
     );
@@ -2235,7 +2245,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   /**
    * Runs a turn that {@link BeforeAgentTurn} let through, on the host's handler or MJ's path.
    * The routing decision, when there was one, supplies the artifact version the turn's agent
-   * continues from.
+   * continues from; a host's handler receives it as `TargetArtifactVersionId`.
    */
   private async runAgentTurn(
     userMessage: MJConversationDetailEntity,
@@ -2244,8 +2254,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     routing: RoutingDecisionOutcome | null = null
   ): Promise<void> {
     const mention = turn.Route === 'Mention' ? this.findAgentMention(mentionResult, turn.AgentId) : null;
+    const targetArtifactVersionId = ArtifactVersionForTurn(routing, turn.AgentId);
     if (this.AgentTurnHandler) {
-      await this.runHostAgentTurn(this.AgentTurnHandler, userMessage, turn, mention);
+      await this.runHostAgentTurn(this.AgentTurnHandler, userMessage, turn, mention, targetArtifactVersionId);
       return;
     }
     if (mention) {
@@ -2254,7 +2265,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       await this.runConversationManagerTurn(userMessage, mentionResult);
     } else {
       // Pinned and host defaults keep their direct call even when they name the manager, as before.
-      await this.handleAgentContinuity(userMessage, turn.AgentId, ArtifactVersionForTurn(routing, turn.AgentId));
+      await this.handleAgentContinuity(userMessage, turn.AgentId, targetArtifactVersionId);
     }
   }
 
@@ -2426,9 +2437,11 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     handler: AgentTurnHandler,
     userMessage: MJConversationDetailEntity,
     turn: AgentTurnTarget,
-    mention: Mention | null
+    mention: Mention | null,
+    targetArtifactVersionId: string | null
   ): Promise<void> {
-    const result = await this.callAgentTurnHandler(handler, this.buildAgentTurnRequest(userMessage, turn, mention));
+    const request = this.buildAgentTurnRequest(userMessage, turn, mention, targetArtifactVersionId);
+    const result = await this.callAgentTurnHandler(handler, request);
     if (!result.Success) {
       this.notifyAgentTurnProblem(result.ErrorMessage || 'The agent could not answer this message.', 'error');
     } else {
@@ -2450,11 +2463,17 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     }
   }
 
-  /** What the host's handler is told about the turn. */
+  /**
+   * What the host's handler is told about the turn.
+   *
+   * @param targetArtifactVersionId The artifact version the routing decision named for this
+   *   turn's agent, or null.
+   */
   private buildAgentTurnRequest(
     userMessage: MJConversationDetailEntity,
     turn: AgentTurnTarget,
-    mention: Mention | null
+    mention: Mention | null,
+    targetArtifactVersionId: string | null
   ): AgentTurnRequest {
     return {
       ConversationId: userMessage.ConversationID,
@@ -2469,7 +2488,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       // A mention carries its own preset (or none); every other route follows the header picker.
       ConfigurationPresetId: turn.Route === 'Mention' ? (mention?.configurationId ?? null) : this.AgentConfigurationPresetId,
       RequestedSkillIDs: [...this._pendingRequestedSkillIDs],
-      PlanMode: this.PlanModeEnabled
+      PlanMode: this.PlanModeEnabled,
+      TargetArtifactVersionId: targetArtifactVersionId
     };
   }
 

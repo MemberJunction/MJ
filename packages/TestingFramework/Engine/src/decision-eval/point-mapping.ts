@@ -12,6 +12,7 @@ import {
     CollectRoutingParticipants,
     type RoutingAgent,
     type RoutingArtifactSummary,
+    type RoutingCatalogAgent,
     type RoutingDecisionInput,
     type RoutingHistoryRow
 } from '@memberjunction/ai-core-plus';
@@ -21,10 +22,11 @@ import type { DecisionCorpusArtifact, DecisionCorpusPoint } from './types';
 /** The agents the mapping can resolve: the engine's, in the driver. */
 export interface DecisionEvalAgentCatalog {
     /**
-     * Looks an agent up by ID. Undefined when the catalog doesn't have it; the mapping then falls
+     * Looks an agent up by ID, with its status: as in the chat, an agent that isn't active, or is
+     * restricted, is not offered. Undefined when the catalog doesn't have it; the mapping then falls
      * back to the name (and, for the previous agent, the description) the point itself records.
      */
-    FindAgent(agentId: string): RoutingAgent | undefined;
+    FindAgent(agentId: string): RoutingCatalogAgent | undefined;
     /** The conversation manager (Sage), offered as "someone else". Null when the catalog doesn't have it. */
     ConversationManager: RoutingAgent | null;
 }
@@ -46,7 +48,7 @@ export interface DecisionEvalAgentCatalog {
  */
 export function MapPointToRoutingInput(point: DecisionCorpusPoint, catalog: DecisionEvalAgentCatalog): RoutingDecisionInput {
     const history = HistoryBeforeMessage(point);
-    const findAgent = (agentId: string): RoutingAgent | undefined => catalog.FindAgent(agentId) ?? pointAgent(point, agentId);
+    const findAgent = (agentId: string): RoutingCatalogAgent | undefined => catalog.FindAgent(agentId) ?? pointAgent(point, agentId);
     const manager = catalog.ConversationManager;
     const previousAgent = findAgent(point.previous_agent.id) ?? fromPreviousAgent(point);
     const artifacts = point.artifacts.map(ToRoutingArtifactSummary);
@@ -88,13 +90,20 @@ export function ToRoutingArtifactSummary(artifact: DecisionCorpusArtifact): Rout
     return { artifactName: artifact.artifactName, ArtifactType: artifact.artifactType, Versions: artifact.versions };
 }
 
+/**
+ * The status an agent the catalog doesn't have is given: routable. The point records it answering in
+ * this conversation, and nothing says it has since been disabled. An agent the catalog has keeps the
+ * catalog's status.
+ */
+const POINT_AGENT_STATUS: Pick<RoutingCatalogAgent, 'Status' | 'IsRestricted'> = { Status: 'Active', IsRestricted: false };
+
 /** An agent as the point records it: the previous agent in full, or a history row's name. */
-function pointAgent(point: DecisionCorpusPoint, agentId: string): RoutingAgent | undefined {
+function pointAgent(point: DecisionCorpusPoint, agentId: string): RoutingCatalogAgent | undefined {
     if (UUIDsEqual(agentId, point.previous_agent.id)) {
-        return fromPreviousAgent(point);
+        return { ...fromPreviousAgent(point), ...POINT_AGENT_STATUS };
     }
     const named = [...point.history].reverse().find(row => UUIDsEqual(row.agent_id, agentId) && !!row.agent_name?.trim());
-    return named ? { ID: agentId, Name: named.agent_name, Description: null } : undefined;
+    return named ? { ID: agentId, Name: named.agent_name, Description: null, ...POINT_AGENT_STATUS } : undefined;
 }
 
 /** The previous agent as the point records it. */

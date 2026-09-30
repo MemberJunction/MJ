@@ -113,6 +113,13 @@ export const ROUTING_ARTIFACT_QUESTION = ARTIFACT_QUESTION;
 /** The artifact Choice's option value for "the message modifies no artifact". */
 export const ROUTING_NO_ARTIFACT = NO_ARTIFACT;
 
+/**
+ * The most artifact versions the artifact question offers, besides "none". Each participant can
+ * bring up to 40, and the server refuses the whole request, agent Choice included, when one Choice
+ * lists more than 255 options. A long list also lengthens the prompt the time limit has to cover.
+ */
+export const MAX_ROUTING_ARTIFACT_VERSIONS = 20;
+
 /** How many turns before the new message the decision reads. */
 const RECENT_TURN_COUNT = 6;
 
@@ -127,6 +134,9 @@ export type RoutingHistoryRow = Pick<MJConversationDetailEntity, 'ID' | 'Role' |
 
 /** An agent, as routing describes it to the model. */
 export type RoutingAgent = Pick<MJAIAgentEntityExtended, 'ID' | 'Name' | 'Description'>;
+
+/** An agent as the client's catalog holds it: what routing describes, and whether it can answer. */
+export type RoutingCatalogAgent = RoutingAgent & Pick<MJAIAgentEntityExtended, 'Status' | 'IsRestricted'>;
 
 /** An agent that has taken part in the conversation: one option of the agent Choice. */
 export interface RoutingParticipant {
@@ -225,7 +235,15 @@ export interface RoutingDecisionOutcome {
     TargetArtifact: RoutingArtifactTarget | null;
     /** Why, for logs. */
     Reason: string;
+    /**
+     * The `MJ: AI Prompt Runs` row the decision wrote, which records its model and cost. Null when
+     * the server wrote none or the answer didn't arrive in time.
+     */
+    PromptRunID: string | null;
 }
+
+/** The verdict half of an outcome: what the agent Choice and thread Likelihood concluded. */
+type RouteVerdict = Pick<RoutingDecisionOutcome, 'Verdict' | 'RoutedAgentId' | 'Reason'>;
 
 /**
  * A routing decision's result, as {@link InterpretRoutingAnswers} reads it. `RunDecisionResult` in
@@ -242,6 +260,8 @@ export interface RoutingDecisionAnswers extends DecisionAnsweringModel {
     ErrorMessage?: string;
     /** The answers by question key. Empty on failure. */
     Answers: Record<string, DecisionAnswer>;
+    /** The `MJ: AI Prompt Runs` row the decision wrote, when it wrote one. */
+    PromptRunID?: string;
 }
 
 /**
@@ -264,7 +284,8 @@ export function IsAgentAllowed(
 /**
  * The agents that have taken part in the conversation and may answer now, newest first, each once
  * with its newest reply. The conversation manager is left out (it is the "someone else" option),
- * and so is any agent the client's catalog doesn't know or the host doesn't allow.
+ * and so is any agent the client's catalog doesn't know, the host doesn't allow, or that can no
+ * longer answer: one that isn't active, or is restricted (see {@link IsRoutableAgent}).
  *
  * @param history The conversation's rows the turn may read, oldest first.
  * @param conversationManagerId The conversation manager's ID, when it is loaded.
@@ -275,7 +296,7 @@ export function CollectRoutingParticipants(
     history: readonly RoutingHistoryRow[],
     conversationManagerId: string | null,
     allowedAgentIDs: readonly string[] | null,
-    findAgent: (agentId: string) => RoutingAgent | undefined
+    findAgent: (agentId: string) => RoutingCatalogAgent | undefined
 ): RoutingParticipant[] {
     const participants: RoutingParticipant[] = [];
     for (const row of [...history].reverse()) {
@@ -284,11 +305,20 @@ export function CollectRoutingParticipants(
             continue;
         }
         const agent = isListed(participants, agentId) ? undefined : findAgent(agentId);
-        if (agent) {
+        if (agent && IsRoutableAgent(agent)) {
             participants.push({ Agent: agent, LastReply: excerpt(row.Message, EXCERPT_CHARS) });
         }
     }
     return participants;
+}
+
+/**
+ * True when an agent can take a routed turn: it is active and not restricted, the same test the
+ * '@' list applies. An agent that answered earlier may since have been disabled, and the server
+ * refuses to run an agent that isn't active.
+ */
+export function IsRoutableAgent(agent: Pick<RoutingCatalogAgent, 'Status' | 'IsRestricted'>): boolean {
+    return agent.Status === 'Active' && !agent.IsRestricted;
 }
 
 /**
@@ -327,18 +357,27 @@ export function BuildRecentTurnParts(
  * agent's newest first, labelled with the artifact's name, type and version and the agent that
  * made it.
  *
- * @param artifactsByAgent Each participant with its artifacts in the conversation.
+ * At most {@link MAX_ROUTING_ARTIFACT_VERSIONS} are offered, each once. Every artifact's latest
+ * version comes first, in participant order, then each artifact's next newest, and so on; the
+ * versions kept stay in the order above.
+ *
+ * @param artifactsByAgent Each participant with its artifacts in the conversation, newest first.
  */
 export function BuildRoutingArtifactVersions(
     artifactsByAgent: ReadonlyArray<{ Agent: RoutingAgent; Artifacts: readonly RoutingArtifactSummary[] }>
 ): RoutingArtifactVersion[] {
-    return artifactsByAgent.flatMap(({ Agent, Artifacts }) =>
-        Artifacts.flatMap(artifact => artifact.Versions.map((version, index) => ({
-            AgentId: Agent.ID,
-            ArtifactVersionId: version.versionId,
-            Description: describeArtifactVersion(artifact, version, index === 0, Agent)
+    const ranked = artifactsByAgent.flatMap(({ Agent, Artifacts }) =>
+        Artifacts.flatMap(artifact => artifact.Versions.map((version, index): RankedArtifactVersion => ({
+            Recency: index,
+            Version: {
+                AgentId: Agent.ID,
+                ArtifactVersionId: version.versionId,
+                Description: describeArtifactVersion(artifact, version, index === 0, Agent)
+            }
         })))
     );
+    const kept = pickArtifactVersions(ranked, MAX_ROUTING_ARTIFACT_VERSIONS);
+    return ranked.filter(entry => kept.has(entry)).map(entry => entry.Version);
 }
 
 /**
@@ -451,12 +490,20 @@ export function BuildRoutingStateStructured(input: RoutingDecisionInput): Routin
  * @param result The decision's result.
  */
 export function InterpretRoutingAnswers(input: RoutingDecisionInput, result: RoutingDecisionAnswers): RoutingDecisionOutcome {
+    const promptRunId = result.PromptRunID ?? null;
     if (!result.Success) {
-        return keptContinuity(`the decision failed: ${result.ErrorMessage ?? 'no reason given'}`);
+        const failed = keptContinuity(`the decision failed: ${result.ErrorMessage ?? 'no reason given'}`);
+        return { ...failed, PromptRunID: promptRunId };
     }
     const answeredBy: DecisionAnsweringModel = { ModelName: result.ModelName, ResolvedModel: result.ResolvedModel };
     const verdict = readRouteVerdict(input, result.Answers[ROUTE_QUESTION], result.Answers[CONTINUES_QUESTION], answeredBy);
-    return { ...verdict, TargetArtifact: readArtifactTarget(input, result.Answers[ARTIFACT_QUESTION]) };
+    return {
+        Verdict: verdict.Verdict,
+        RoutedAgentId: verdict.RoutedAgentId,
+        Reason: verdict.Reason,
+        TargetArtifact: readArtifactTarget(input, result.Answers[ARTIFACT_QUESTION]),
+        PromptRunID: promptRunId
+    };
 }
 
 /** An outcome that keeps today's routing, for the given reason. */
@@ -472,6 +519,30 @@ function buildRouteOptions(input: RoutingDecisionInput): ChoiceOption[] {
         options.push({ Value: manager.ID, Description: describeSomeoneElse(manager) });
     }
     return options;
+}
+
+/** An artifact version, with its place in its artifact's history: 0 for the latest. */
+interface RankedArtifactVersion {
+    Recency: number;
+    Version: RoutingArtifactVersion;
+}
+
+/**
+ * Up to `max` versions, each once, the newest in their artifacts first: every artifact's latest,
+ * then every artifact's second newest, and so on. Versions equally new keep their order.
+ */
+function pickArtifactVersions(ranked: readonly RankedArtifactVersion[], max: number): Set<RankedArtifactVersion> {
+    const kept = new Set<RankedArtifactVersion>();
+    for (const entry of [...ranked].sort((a, b) => a.Recency - b.Recency)) {
+        if (kept.size >= max) {
+            break;
+        }
+        const id = entry.Version.ArtifactVersionId;
+        if (![...kept].some(k => UUIDsEqual(k.Version.ArtifactVersionId, id))) {
+            kept.add(entry);
+        }
+    }
+    return kept;
 }
 
 /** The artifact Choice's options: each version, then "none". */
@@ -566,7 +637,7 @@ function readRouteVerdict(
     route: DecisionAnswer | undefined,
     continues: DecisionAnswer | undefined,
     answeredBy: DecisionAnsweringModel
-): Omit<RoutingDecisionOutcome, 'TargetArtifact'> {
+): RouteVerdict {
     if (route?.Kind !== 'Choice' || continues?.Kind !== 'Likelihood') {
         return keptContinuity('the answer is missing the agent choice or the thread likelihood');
     }
@@ -588,7 +659,7 @@ function readRouteVerdict(
 }
 
 /** The verdict for an agent Choice that confidently left the thread. */
-function verdictForChoice(input: RoutingDecisionInput, value: string): Omit<RoutingDecisionOutcome, 'TargetArtifact'> {
+function verdictForChoice(input: RoutingDecisionInput, value: string): RouteVerdict {
     const manager = input.ConversationManager;
     if (manager && UUIDsEqual(value, manager.ID) && IsAgentAllowed(manager.ID, input.AllowedAgentIDs)) {
         return { Verdict: 'SomeoneElse', RoutedAgentId: null, Reason: 'the message moves to someone else' };
@@ -611,5 +682,5 @@ function readArtifactTarget(input: RoutingDecisionInput, answer: DecisionAnswer 
 
 /** An outcome that keeps today's routing. */
 function keptContinuity(reason: string): RoutingDecisionOutcome {
-    return { Verdict: 'KeptContinuity', RoutedAgentId: null, TargetArtifact: null, Reason: reason };
+    return { Verdict: 'KeptContinuity', RoutedAgentId: null, TargetArtifact: null, Reason: reason, PromptRunID: null };
 }
