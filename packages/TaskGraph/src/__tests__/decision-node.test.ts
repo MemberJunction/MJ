@@ -17,6 +17,8 @@ import type { MJTaskDependencyEntity, MJTaskEntity } from '@memberjunction/core-
 import {
     CompileFlowToTaskGraph,
     CONDITION_ROOTS,
+    ComputeEligibleTasks,
+    ComputeTasksToBlock,
     DecisionAnswerConfidence,
     NormalizeDependency,
     ValidateTaskGraphSpec,
@@ -30,6 +32,8 @@ import {
     type EvaluatedEdge,
     type GraphDecisions,
     type TaskGraphDecisionAnswer,
+    type TaskGraphEdge,
+    type TaskGraphNode,
     type TaskGraphNodeConfigMap,
     type TaskGraphSpec,
 } from '@memberjunction/ai-core-plus';
@@ -48,11 +52,13 @@ import {
     DecisionsPayloadConflict,
     FailedDecisionIDs,
     HeldDecisionAnswers,
+    KeptDecisionAnswers,
     PassOverFailedDecisionPaths,
+    QuestionsToAsk,
     ReadsFailedDecision,
     ReadDecisionStepConfiguration,
-    ResolveDecisionState,
     ResolveGraphDecisions,
+    StillHoldingDecisionOutput,
     type DecisionTaskRow,
 } from '../decision-node';
 import {
@@ -63,7 +69,14 @@ import {
     RetryRefusal,
     type RetryableTask,
 } from '../TaskGraphService';
-import type { TaskDecisionRunner, TaskDecisionRunParams, TaskDecisionRunResult, TaskPromptRunner } from '../types';
+import type {
+    TaskDecisionRunner,
+    TaskDecisionRunParams,
+    TaskDecisionRunResult,
+    TaskGraphFrame,
+    TaskGraphObserver,
+    TaskPromptRunner,
+} from '../types';
 
 // ── fixtures ────────────────────────────────────────────────────────────────────────────────────
 
@@ -101,11 +114,13 @@ const BILLING_CONFIDENT: Record<string, TaskGraphDecisionAnswer> = {
 /** The Task columns the dispatcher reads from a Decision step. */
 type DecisionTaskFields = Pick<
     MJTaskEntity,
-    'ID' | 'Name' | 'StepType' | 'PromptID' | 'ActionID' | 'AgentID' | 'ParentID' | 'Configuration' | 'ConfigurationObject'
+    'ID' | 'Name' | 'StepType' | 'PromptID' | 'ActionID' | 'AgentID' | 'ParentID' | 'Configuration' | 'ConfigurationObject' | 'OutputPayload'
 >;
 
-/** A Decision task row, the shape the dispatcher reads. */
-function decisionTask(over: Partial<Pick<DecisionTaskFields, 'ID' | 'Name' | 'Configuration' | 'PromptID' | 'ParentID'>> = {}): DecisionTaskFields {
+/** A Decision task row, the shape the dispatcher reads. A first run has no output yet. */
+function decisionTask(
+    over: Partial<Pick<DecisionTaskFields, 'ID' | 'Name' | 'Configuration' | 'PromptID' | 'ParentID' | 'OutputPayload'>> = {},
+): DecisionTaskFields {
     return {
         ID: 'task-triage',
         Name: 'Triage the ticket',
@@ -116,6 +131,7 @@ function decisionTask(over: Partial<Pick<DecisionTaskFields, 'ID' | 'Name' | 'Co
         ParentID: 'graph-1',
         Configuration: TRIAGE_CONFIGURATION,
         ConfigurationObject: null,
+        OutputPayload: null,
         ...over,
     };
 }
@@ -208,6 +224,32 @@ type OriginFields = Pick<MJTaskEntity, 'ID' | 'Name' | 'Status' | 'ErrorMessage'
 /** The dependency columns the gate reads. */
 type EdgeFields = Pick<MJTaskDependencyEntity, 'ID' | 'TaskID' | 'DependsOnTaskID' | 'Condition' | 'ExclusiveGroup' | 'Priority' | 'Sequence'>;
 
+/** A graph's child row, with every column `loadGraphState`, a Decision step and a retry read or reset. */
+type GraphRow = DecisionTaskFields & Pick<
+    MJTaskEntity,
+    'Status' | 'ErrorMessage' | 'StartedAt' | 'CompletedAt' | 'PercentComplete' | 'ClaimedBy' | 'ClaimExpiresAt'
+>;
+
+/** A graph's edge, with the columns `loadGraphState` reads. */
+type GraphEdgeRow = EdgeFields & Pick<MJTaskDependencyEntity, 'DependencyType'>;
+
+/** A provider over one in-memory graph: its rows and edges by RunView, its parent by GetEntityObject. */
+type GraphProvider = {
+    GetEntityObject(entityName: string): Promise<FakeParentTask>;
+    RunView(params: RunViewParams): Promise<{ Success: boolean; Results: ReadonlyArray<GraphRow> | ReadonlyArray<GraphEdgeRow> }>;
+};
+
+/** What `loadGraphState` hands propagation and claiming, as these tests read it. */
+type GraphStateView = {
+    nodes: TaskGraphNode[];
+    edges: TaskGraphEdge[];
+    holdTaskIDs: Set<string>;
+    skipSeedTaskIDs: Set<string>;
+    unreachableTaskIDs: Set<string>;
+    cascadeSkipTaskIDs: Set<string>;
+    handledFailureIDs: Set<string>;
+};
+
 /**
  * The private surface of the dispatcher these tests drive, typed by the columns and provider calls
  * those paths actually use.
@@ -215,7 +257,7 @@ type EdgeFields = Pick<MJTaskDependencyEntity, 'ID' | 'TaskID' | 'DependsOnTaskI
 type DispatcherInternals = {
     runTaskBody(
         task: DecisionTaskFields,
-        provider: FakeProvider,
+        provider: FakeProvider | GraphProvider,
         inputPayload: unknown,
         dependencyOutputs: Map<string, unknown>,
     ): Promise<{ Success: boolean; Output?: unknown; ErrorMessage?: string; PromptRunID?: string }>;
@@ -233,9 +275,12 @@ type DispatcherInternals = {
         invocation: ConditionInvocation,
         decisions: GraphDecisions,
     ): EdgeConditionOutcome;
+    loadGraphState(provider: GraphProvider, parentTaskID: string): Promise<GraphStateView>;
 };
 
-const DRIVEN_METHODS: ReadonlyArray<keyof DispatcherInternals> = ['runTaskBody', 'canActOn', 'evaluateEdgeCondition', 'evaluateExclusiveCondition'];
+const DRIVEN_METHODS: ReadonlyArray<keyof DispatcherInternals> = [
+    'runTaskBody', 'canActOn', 'evaluateEdgeCondition', 'evaluateExclusiveCondition', 'loadGraphState',
+];
 
 /** True when `value` has every method these tests drive — checked, so a renamed method fails loudly here. */
 function drivesDispatcher(value: object): value is DispatcherInternals {
@@ -246,15 +291,18 @@ function drivesDispatcher(value: object): value is DispatcherInternals {
  * A dispatcher with only what these paths read. The real constructor stands up a claim store, timers
  * and a provider factory none of this touches; the methods under test come from the prototype.
  */
-function dispatcherWith(runner: TaskDecisionRunner, promptRunner?: TaskPromptRunner): DispatcherInternals {
+function dispatcherWith(runner: TaskDecisionRunner, promptRunner?: TaskPromptRunner, observer?: TaskGraphObserver): DispatcherInternals {
     const instance = {
         decisionRunner: runner,
         promptRunner,
+        observer,
         contextUser: new UserInfo(),
         conditionEvaluator: new DispatcherConditionEvaluator(),
         reportedUnevaluableConditions: new Set<string>(),
         inFlight: new Set<string>(),
         runStepLogs: new Map<string, Promise<void>>(),
+        emittedGateVerdicts: new Map<string, Map<string, string>>(),
+        ownerByParentID: new Map<string, string | null>(),
     };
     Object.setPrototypeOf(instance, TaskGraphDispatcher.prototype);
     if (!drivesDispatcher(instance)) throw new Error('TaskGraphDispatcher no longer has the methods these tests drive.');
@@ -393,6 +441,17 @@ describe('a Decision node on the dispatcher', () => {
 
         expect(outcome.Success).toBe(false);
         expect(outcome.ErrorMessage).toMatch(/"payload.ticket" is not in the payload/);
+        expect(runner.Calls).toHaveLength(0);
+    });
+
+    it('does not call the model when its state is an empty object, and fails the step', async () => {
+        // The in-run walker applies the same rule; ai-agents' flow-agent-decision-step tests pin that half.
+        const runner = decisionRunner({ Success: true, Answers: BILLING_CONFIDENT });
+
+        const outcome = await dispatcherWith(runner).runTaskBody(decisionTask(), fakeProvider(null).Provider, { ticket: {} }, new Map());
+
+        expect(outcome.Success).toBe(false);
+        expect(outcome.ErrorMessage).toBe('Decision "Triage the ticket" was not asked: its state "payload.ticket" is empty.');
         expect(runner.Calls).toHaveLength(0);
     });
 
@@ -777,18 +836,30 @@ describe('retrying a Decision step that is holding an answer', () => {
         expect(RetryRefusal(decisionRow('Failed', {}, 'timed out'))).toBeNull();
     });
 
+    it('refuses an edited input a held step could not read, since failing would lose the answers it keeps', () => {
+        expect(RetryRefusal(held, JSON.stringify({ ticket: { subject: 'Charged twice, and I need it today' } }))).toBeNull();
+        expect(RetryRefusal(held, '')).toBeNull();
+        expect(RetryRefusal(held, '["not", "named"]')).toMatch(/not a JSON object of named values/);
+        expect(RetryRefusal(held, '{ not json')).toMatch(/not a JSON object of named values/);
+        // A failed step keeps no answers, so its edited input fails, if at all, the ordinary way.
+        expect(RetryRefusal(decisionRow('Failed', {}, 'timed out'), '[]')).toBeNull();
+    });
+
     it('is refused when every answer is usable, and for anything else that has not failed', () => {
         expect(RetryRefusal(usable)).toMatch(/answers are all usable/);
         expect(RetryRefusal({ ...held, StepType: 'Agent' })).toMatch(/status is Complete, expected Failed/);
         expect(RetryRefusal(decisionRow('In Progress', undefined))).toMatch(/status is In Progress/);
     });
 
-    it('goes back to Pending with its answers cleared; edges reading it hold until it answers again, then route', () => {
+    it('goes back to Pending keeping its output; edges reading it hold until it answers again, then route', () => {
         const step = heldStep();
+        const output = step.OutputPayload;
         PrepareTaskForRetry(step);
         expect(step).toMatchObject({
-            Status: 'Pending', OutputPayload: null, ErrorMessage: null, StartedAt: null, CompletedAt: null, PercentComplete: 0,
+            Status: 'Pending', OutputPayload: output, ErrorMessage: null, StartedAt: null, CompletedAt: null, PercentComplete: 0,
         });
+        // The output is kept for the answers the retry keeps, and nothing reads it as current meanwhile.
+        expect(KeptDecisionAnswers(step)).toEqual({ urgent: BILLING_CONFIDENT.urgent });
 
         // An edge from a later step that reads the decision holds while it is asked again...
         const dispatcher = dispatcherWith(decisionRunner({ Success: true }));
@@ -805,6 +876,19 @@ describe('retrying a Decision step that is holding an answer', () => {
         expect(resolveIntentFork('Complete', answered).keptEdgeIDs).toEqual(['e-billing']);
     });
 
+    it('clears a failed Decision\'s output: it has no answers of its own to keep', () => {
+        const step: RetryableTask & DecisionTaskRow = {
+            ...heldStep(),
+            Status: 'Failed',
+            ErrorMessage: 'the model timed out',
+            // A failed step passes its input through, and that input can carry a stale entry under its own name.
+            OutputPayload: JSON.stringify({ decisions: { triage: BILLING_CONFIDENT } }),
+        };
+        PrepareTaskForRetry(step);
+        expect(step.OutputPayload).toBeNull();
+        expect(KeptDecisionAnswers(step)).toEqual({});
+    });
+
     it('keeps a failed step\'s output when it is not a Decision', () => {
         const step: RetryableTask = {
             Status: 'Failed', StepType: 'Agent', ErrorMessage: 'boom', StartedAt: null, CompletedAt: null,
@@ -815,23 +899,343 @@ describe('retrying a Decision step that is holding an answer', () => {
     });
 });
 
-// ── pieces ──────────────────────────────────────────────────────────────────────────────────────
+describe('a retried Decision asks only what it is holding', () => {
+    const input = { ticket: { subject: 'I was charged twice', body: 'Two charges on my card this month.' } };
+    const URGENT_HELD = { ...BILLING_CONFIDENT, urgent: { probability: 0.6 } };
+    /** The step as a retry from Complete leaves it: Pending again, with the output it held on. */
+    const retried = () => decisionTask({ OutputPayload: JSON.stringify(triageOutput(URGENT_HELD, input)) });
+    const triageOf = (output: unknown) => ResolveGraphDecisions([decisionRow('Complete', output)]);
 
-describe('ResolveDecisionState', () => {
-    it('defaults to the whole payload', () => {
-        expect(ResolveDecisionState(undefined, { a: 1 })).toEqual({ State: { a: 1 } });
+    it('reads the kept answers from an entity, whose fields are getters', () => {
+        const output = JSON.stringify(triageOutput(URGENT_HELD, input));
+        // Shaped like a BaseEntity: every field an accessor on the prototype, none an own property.
+        class TaskEntityLike {
+            get Name(): string { return 'Triage the ticket'; }
+            get StepType(): string { return 'Decision'; }
+            get Configuration(): string { return TRIAGE_CONFIGURATION; }
+            get OutputPayload(): string { return output; }
+        }
+        expect(KeptDecisionAnswers(new TaskEntityLike())).toEqual({ intent: BILLING_CONFIDENT.intent });
     });
 
-    it('passes text through and sends a list as JSON', () => {
-        expect(ResolveDecisionState('payload.text', { text: 'hello' })).toEqual({ State: 'hello' });
-        expect(ResolveDecisionState('payload.items', { items: [1, 2] })).toEqual({ State: '[1,2]' });
+    it('asks every question on a first run, which has no output yet', () => {
+        expect(Object.keys(QuestionsToAsk(TRIAGE.questions, KeptDecisionAnswers(decisionTask())))).toEqual(['intent', 'urgent']);
     });
 
-    it('refuses an empty state rather than ask about nothing', () => {
-        expect(ResolveDecisionState(undefined, {})).toEqual({ ErrorMessage: 'its state "payload" is empty' });
-        expect(ResolveDecisionState('payload.text', { text: ' ' })).toEqual({ ErrorMessage: 'its state "payload.text" is empty' });
+    it('asks only the held questions, in one call, and merges the answers into the ones it kept', async () => {
+        const runner = decisionRunner({ Success: true, Answers: { urgent: { probability: 0.05 } }, PromptRunID: PROMPT_RUN_ID });
+
+        const outcome = await dispatcherWith(runner).runTaskBody(retried(), fakeProvider(null).Provider, input, new Map());
+
+        expect(runner.Calls).toHaveLength(1);
+        expect(Object.keys(runner.Calls[0].Questions)).toEqual(['urgent']);
+        expect(outcome.Success).toBe(true);
+        expect(triageOf(outcome.Output).Answers.triage).toEqual({ intent: BILLING_CONFIDENT.intent, urgent: { probability: 0.05 } });
+    });
+
+    it('never replaces a kept answer, whatever the call returns for its question', async () => {
+        // A flipped answer to a question it was not asked: the fork already went to billing.
+        const runner = decisionRunner({
+            Success: true,
+            Answers: { intent: { value: 'refund', confidence: 0.9, probabilities: { billing: 0.05, refund: 0.9, other: 0.05 } }, urgent: { probability: 0.05 } },
+        });
+
+        const outcome = await dispatcherWith(runner).runTaskBody(retried(), fakeProvider(null).Provider, input, new Map());
+
+        expect(triageOf(outcome.Output).Answers.triage.intent).toEqual(BILLING_CONFIDENT.intent);
+    });
+
+    it('stays Complete with its usable answers when asking again fails, holding the rest with the reason', async () => {
+        const runner = decisionRunner({ Success: false, ErrorMessage: 'the model timed out', PromptRunID: PROMPT_RUN_ID });
+
+        const outcome = await dispatcherWith(runner).runTaskBody(retried(), fakeProvider(null).Provider, input, new Map());
+
+        expect(outcome.Success).toBe(true);
+        expect(outcome.PromptRunID).toBe(PROMPT_RUN_ID);
+        const row = decisionRow('Complete', outcome.Output);
+        expect(ResolveGraphDecisions([row]).Answers.triage).toEqual({ intent: BILLING_CONFIDENT.intent });
+        expect(HeldDecisionAnswers(row)).toEqual({
+            urgent: 'the decision "Triage the ticket" was asked "urgent" again and could not answer: the model timed out',
+        });
+        // Still holding, so it can be retried again.
+        expect(RetryRefusal(row)).toBeNull();
+    });
+
+    it('stays Complete holding when it cannot be asked again, and calls no model', async () => {
+        const runner = decisionRunner({ Success: true, Answers: BILLING_CONFIDENT });
+
+        // An edited input that lost the state the questions are about.
+        const outcome = await dispatcherWith(runner).runTaskBody(retried(), fakeProvider(null).Provider, { other: 1 }, new Map());
+
+        expect(runner.Calls).toHaveLength(0);
+        expect(outcome.Success).toBe(true);
+        const row = decisionRow('Complete', outcome.Output);
+        expect(ResolveGraphDecisions([row]).Answers.triage).toEqual({ intent: BILLING_CONFIDENT.intent });
+        expect(HeldDecisionAnswers(row).urgent).toMatch(/asked "urgent" again and could not answer: its state "payload.ticket" is not in the payload/);
+    });
+
+    it('keeps the earlier output around the answers when it could not answer again', () => {
+        const previous = JSON.stringify(triageOutput(URGENT_HELD, input));
+        const output = StillHoldingDecisionOutput(previous, 'Triage the ticket', 'triage', TRIAGE.questions, { intent: BILLING_CONFIDENT.intent }, 'boom');
+        expect(output.ticket).toEqual(input.ticket);
+        expect(output.decisions).toEqual({
+            triage: {
+                intent: BILLING_CONFIDENT.intent,
+                urgent: { held: 'the decision "Triage the ticket" was asked "urgent" again and could not answer: boom' },
+            },
+        });
     });
 });
+
+// ── a retry in a running graph ──────────────────────────────────────────────────────────────────
+
+/** A graph step that is not a Decision: it completes when it runs. */
+function workRow(id: string, name: string): GraphRow {
+    return {
+        ID: id, Name: name, StepType: 'Agent', PromptID: null, ActionID: null, AgentID: `agent-${id}`, ParentID: 'graph-1',
+        Configuration: null, ConfigurationObject: null, OutputPayload: null, Status: 'Pending', ErrorMessage: null,
+        StartedAt: null, CompletedAt: null, PercentComplete: 0, ClaimedBy: null, ClaimExpiresAt: null,
+    };
+}
+
+/** An edge in the in-memory graph. */
+function graphEdge(id: string, taskID: string, dependsOn: string, condition: string | null, exclusiveGroup: string | null = null): GraphEdgeRow {
+    return {
+        ID: id, TaskID: taskID, DependsOnTaskID: dependsOn, Condition: condition, ExclusiveGroup: exclusiveGroup,
+        Priority: 0, Sequence: 0, DependencyType: 'Prerequisite',
+    };
+}
+
+/**
+ * The graph from the review of this retry: `triage` forks on `intent` to A (billing) or B (refund),
+ * `urgent` gates C, and A also waits on C. The fork is drawn either as an exclusive group or as two
+ * ordinary conditional edges.
+ */
+function supportGraph(fork: 'exclusive' | 'conditional') {
+    const group = fork === 'exclusive' ? 'route' : null;
+    const rows = new Map<string, GraphRow>([
+        ['task-triage', { ...decisionTask(), Status: 'Pending', ErrorMessage: null, StartedAt: null, CompletedAt: null, PercentComplete: 0, ClaimedBy: null, ClaimExpiresAt: null }],
+        ['task-a', workRow('task-a', 'Handle billing')],
+        ['task-b', workRow('task-b', 'Handle refund')],
+        ['task-c', workRow('task-c', 'Escalate')],
+    ]);
+    const edges = [
+        graphEdge('e-a', 'task-a', 'task-triage', "decisions.triage.intent.value === 'billing'", group),
+        graphEdge('e-b', 'task-b', 'task-triage', "decisions.triage.intent.value === 'refund'", group),
+        graphEdge('e-c', 'task-c', 'task-triage', 'decisions.triage.urgent.probability >= 0.5'),
+        graphEdge('e-ca', 'task-a', 'task-c', null),
+    ];
+    const provider: GraphProvider = {
+        GetEntityObject: async () => ({ InputPayload: null, AgentRunID: null, Load: async () => true }),
+        RunView: async (params: RunViewParams) => ({
+            Success: true,
+            Results: params.EntityName === 'MJ: Task Dependencies' ? edges : [...rows.values()],
+        }),
+    };
+    const statusOf = (id: string) => rows.get(id)?.Status;
+    return { rows, provider, statusOf, triage: () => rows.get('task-triage')! };
+}
+
+type SupportGraph = ReturnType<typeof supportGraph>;
+
+/** A decision runner that answers, on each call, only the questions it was asked, from the next set. */
+function answeringRunner(answerSets: Array<Record<string, TaskGraphDecisionAnswer>>): TaskDecisionRunner & { Calls: TaskDecisionRunParams[] } {
+    const calls: TaskDecisionRunParams[] = [];
+    return {
+        Calls: calls,
+        RunDecisionForTask: async (params: TaskDecisionRunParams) => {
+            const set = answerSets[calls.length];
+            calls.push(params);
+            const answers: Record<string, TaskGraphDecisionAnswer> = {};
+            for (const key of Object.keys(params.Questions)) answers[key] = set[key];
+            return { Success: true, Answers: answers };
+        },
+    };
+}
+
+/**
+ * Runs the graph the way the dispatcher's passes do — skips, then blocks, then claims whatever is
+ * eligible — until nothing is left to claim. Every edge decision is the real `loadGraphState`'s, and
+ * the Decision step runs through the real `runTaskBody`; only the row writes are in memory.
+ */
+async function runUntilSettled(dispatcher: DispatcherInternals, graph: SupportGraph, input: Record<string, unknown>): Promise<void> {
+    for (let pass = 0; pass < 20; pass++) {
+        const propagation = await dispatcher.loadGraphState(graph.provider, 'graph-1');
+        for (const id of propagation.cascadeSkipTaskIDs) {
+            const row = graph.rows.get(id);
+            if (row?.Status === 'Pending') row.Status = 'Skipped';
+        }
+        const afterSkips = await dispatcher.loadGraphState(graph.provider, 'graph-1');
+        for (const id of ComputeTasksToBlock(afterSkips.nodes, afterSkips.edges, afterSkips.handledFailureIDs)) {
+            const row = graph.rows.get(id);
+            if (row && !afterSkips.cascadeSkipTaskIDs.has(id)) row.Status = 'Blocked';
+        }
+
+        const claim = await dispatcher.loadGraphState(graph.provider, 'graph-1');
+        const eligible = ComputeEligibleTasks(claim.nodes, claim.edges, claim.handledFailureIDs).filter((n) =>
+            !claim.holdTaskIDs.has(n.id) && !claim.skipSeedTaskIDs.has(n.id)
+            && !claim.unreachableTaskIDs.has(n.id) && !claim.cascadeSkipTaskIDs.has(n.id));
+        if (eligible.length === 0) return;
+        for (const node of eligible) {
+            const row = graph.rows.get(node.id)!;
+            if (row.StepType !== 'Decision') { row.Status = 'Complete'; continue; }
+            const outcome = await dispatcher.runTaskBody(row, graph.provider, input, new Map());
+            row.Status = outcome.Success ? 'Complete' : 'Failed';
+            row.OutputPayload = outcome.Output == null ? null : JSON.stringify(outcome.Output);
+            row.ErrorMessage = outcome.ErrorMessage ?? null;
+        }
+    }
+    throw new Error('The graph did not settle in 20 passes.');
+}
+
+describe('retrying a held Decision in a running graph re-decides nothing', () => {
+    const input = { ticket: { subject: 'I was charged twice', body: 'Two charges on my card this month.' } };
+
+    it.each(['exclusive', 'conditional'] as const)('keeps the fork on its first answer when the retry would flip it (%s fork)', async (fork) => {
+        const graph = supportGraph(fork);
+        const runner = answeringRunner([
+            // Billing, confidently; urgent at 0.6, below its 0.8.
+            { intent: BILLING_CONFIDENT.intent, urgent: { probability: 0.6 } },
+            // Asked again, the model would now say refund, and a confident no on urgent.
+            { intent: { value: 'refund', confidence: 0.9, probabilities: { billing: 0.05, refund: 0.9, other: 0.05 } }, urgent: { probability: 0.05 } },
+        ]);
+        const dispatcher = dispatcherWith(runner);
+
+        await runUntilSettled(dispatcher, graph, input);
+        // The fork went to billing: refund is skipped, billing waits on C, and C holds on urgent.
+        expect([graph.statusOf('task-a'), graph.statusOf('task-b'), graph.statusOf('task-c')]).toEqual(['Pending', 'Skipped', 'Pending']);
+
+        expect(RetryRefusal(graph.triage())).toBeNull();
+        PrepareTaskForRetry(graph.triage());
+        await runUntilSettled(dispatcher, graph, input);
+
+        // Billing stands, so the billing branch runs; C is not needed. Re-asking intent would flip the
+        // fork to refund, whose branch is already Skipped, and skip A with C: nothing would run.
+        expect([graph.statusOf('task-a'), graph.statusOf('task-b'), graph.statusOf('task-c')]).toEqual(['Complete', 'Skipped', 'Skipped']);
+        expect(Object.keys(runner.Calls[1].Questions)).toEqual(['urgent']);
+        expect(ResolveGraphDecisions([graph.triage()]).Answers.triage).toEqual({
+            intent: BILLING_CONFIDENT.intent, urgent: { probability: 0.05 },
+        });
+    });
+});
+
+describe('retrying a held Decision in a compiled flow re-decides nothing', () => {
+    // The same shape as above, drawn as a Flow agent in parallel mode and compiled, as a dispatched
+    // flow is: Triage forks to Billing or Refund, Escalate is gated on urgent, and Billing also waits
+    // on Escalate. A compiled flow's Decision step is released by the same Retry.
+    const TRIAGE_ID = 'eeeeeeee-0000-4000-8000-000000000001';
+    const BILLING_ID = 'eeeeeeee-0000-4000-8000-000000000002';
+    const REFUND_ID = 'eeeeeeee-0000-4000-8000-000000000003';
+    const ESCALATE_ID = 'eeeeeeee-0000-4000-8000-000000000004';
+    const step = (ID: string, Name: string, over: Partial<FlowCompilerStep> = {}): FlowCompilerStep => ({
+        ID, Name, StepType: 'Sub-Agent', StartingStep: false, Status: 'Active', SubAgentID: `agent-${Name}`, ...over,
+    });
+    const flowPath = (ID: string, from: string, to: string, condition: string | null): FlowCompilerPath => ({
+        ID, OriginStepID: from, DestinationStepID: to, Condition: condition, Priority: 0,
+    });
+
+    /** The compiled graph as the dispatcher would hold it: one row per node and one edge per dependency. */
+    function compiledGraph(): SupportGraph {
+        const compiled = CompileFlowToTaskGraph(
+            [
+                step(TRIAGE_ID, 'Triage the ticket', {
+                    StepType: 'Decision', StartingStep: true, SubAgentID: null,
+                    Configuration: JSON.stringify({ key: 'triage', state: TRIAGE.state, questions: TRIAGE.questions }),
+                }),
+                step(BILLING_ID, 'Billing'),
+                step(REFUND_ID, 'Refund'),
+                step(ESCALATE_ID, 'Escalate'),
+            ],
+            [
+                flowPath('p-billing', TRIAGE_ID, BILLING_ID, "decisions.triage.intent.value === 'billing'"),
+                flowPath('p-refund', TRIAGE_ID, REFUND_ID, "decisions.triage.intent.value === 'refund'"),
+                flowPath('p-escalate', TRIAGE_ID, ESCALATE_ID, 'decisions.triage.urgent.probability >= 0.5'),
+                flowPath('p-join', ESCALATE_ID, BILLING_ID, null),
+            ],
+            {
+                WorkflowName: 'Support triage', TraversalMode: 'parallel',
+                ResolveAgentName: (id) => id.replace('agent-', ''), ResolveActionName: () => null, ResolvePromptName: () => null,
+            },
+        );
+        expect(compiled.Errors).toEqual([]);
+        const spec = compiled.Spec!;
+        expect(ValidateTaskGraphSpec(spec).Errors).toEqual([]);
+
+        const rows = new Map<string, GraphRow>(spec.tasks.map((node): [string, GraphRow] => [
+            node.tempId,
+            node.kind === 'Decision'
+                ? {
+                    ...workRow(node.tempId, node.name), StepType: 'Decision', AgentID: null, PromptID: DECISION_PROMPT_ID,
+                    Configuration: JSON.stringify(BuildStepConfiguration(node)),
+                }
+                : workRow(node.tempId, node.name),
+        ]));
+        const edges = spec.tasks.flatMap((node) => (node.dependsOn ?? []).map(NormalizeDependency).map((d) => ({
+            ...graphEdge(`${d.tempId}->${node.tempId}`, node.tempId, d.tempId, d.condition ?? null, d.exclusiveGroup ?? null),
+            DependencyType: d.dependencyType ?? 'Prerequisite',
+        })));
+        const provider: GraphProvider = {
+            GetEntityObject: async () => ({ InputPayload: null, AgentRunID: null, Load: async () => true }),
+            RunView: async (params: RunViewParams) => ({
+                Success: true,
+                Results: params.EntityName === 'MJ: Task Dependencies' ? edges : [...rows.values()],
+            }),
+        };
+        return { rows, provider, statusOf: (id: string) => rows.get(id)?.Status, triage: () => rows.get(TRIAGE_ID)! };
+    }
+
+    it('keeps the fork on its first answer when the retry would flip it', async () => {
+        const graph = compiledGraph();
+        const runner = answeringRunner([
+            { intent: BILLING_CONFIDENT.intent, urgent: { probability: 0.6 } },
+            { intent: { value: 'refund', confidence: 0.9, probabilities: { billing: 0.05, refund: 0.9, other: 0.05 } }, urgent: { probability: 0.05 } },
+        ]);
+        const dispatcher = dispatcherWith(runner);
+        const input = { ticket: 'I was charged twice' };
+        const statuses = () => [graph.statusOf(BILLING_ID), graph.statusOf(REFUND_ID), graph.statusOf(ESCALATE_ID)];
+
+        await runUntilSettled(dispatcher, graph, input);
+        expect(statuses()).toEqual(['Pending', 'Skipped', 'Pending']);
+
+        expect(RetryRefusal(graph.triage())).toBeNull();
+        PrepareTaskForRetry(graph.triage());
+        await runUntilSettled(dispatcher, graph, input);
+
+        expect(statuses()).toEqual(['Complete', 'Skipped', 'Skipped']);
+        expect(Object.keys(runner.Calls[1].Questions)).toEqual(['urgent']);
+    });
+});
+
+describe('a held exclusive fork says why', () => {
+    const LOW_INTENT = { ...BILLING_CONFIDENT, intent: { value: 'billing', confidence: 0.55 } };
+
+    it('logs the hold reason once per edge and puts it on the edge\'s GateDecision frame', async () => {
+        const graph = supportGraph('exclusive');
+        graph.triage().Status = 'Complete';
+        graph.triage().OutputPayload = JSON.stringify(triageOutput(LOW_INTENT));
+        const frames: TaskGraphFrame[] = [];
+        const dispatcher = dispatcherWith(decisionRunner({ Success: true }), undefined, { OnFrame: (frame) => frames.push(frame) });
+        const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            const first = await dispatcher.loadGraphState(graph.provider, 'graph-1');
+            await dispatcher.loadGraphState(graph.provider, 'graph-1');
+            await new Promise((resolve) => setTimeout(resolve, 0));
+
+            expect([...first.holdTaskIDs].sort()).toEqual(['task-a', 'task-b']);
+            const reason = 'the decision "Triage the ticket" answered "intent" with confidence 0.55, below its minConfidence of 0.7';
+            const logged = errors.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('unevaluable condition'));
+            expect(logged.filter((line) => line.includes('Dependency e-a '))).toHaveLength(1);
+            expect(logged.filter((line) => line.includes('Dependency e-b '))).toHaveLength(1);
+            expect(logged[0]).toContain(reason);
+            expect(logged[0]).toContain('Retrying the Decision step it reads asks the questions it is holding again');
+            expect(frames.find((f) => f.Kind === 'GateDecision' && f.EdgeID === 'e-a')).toMatchObject({ Verdict: 'held', Reason: reason });
+        } finally {
+            errors.mockRestore();
+        }
+    });
+});
+
+// ── pieces ──────────────────────────────────────────────────────────────────────────────────────
 
 describe('persisting a Decision step', () => {
     const node = TaskNode.Decision({ tempId: 'triage', name: 'Triage the ticket', description: '', dependsOn: [] }, TRIAGE);

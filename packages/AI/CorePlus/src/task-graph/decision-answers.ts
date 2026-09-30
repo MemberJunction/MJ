@@ -17,6 +17,7 @@
  */
 import type { DecisionAnswer } from '@memberjunction/ai';
 import { DecisionReferencesIn } from './decision-conditions';
+import { GetValueFromPath } from './payload-mapping';
 import type { TaskGraphDecisionAnswer, TaskGraphDecisionQuestion } from './task-graph-spec';
 
 /**
@@ -133,6 +134,41 @@ export function ResolveDecisionStepAnswers(
         }
     }
     return resolved;
+}
+
+/** A Decision step's default state: its whole payload. */
+const WHOLE_PAYLOAD = 'payload';
+
+/**
+ * The state a Decision step's questions are about, resolved from its payload — or why it cannot be
+ * asked.
+ *
+ * `payload` is the whole payload; `payload.<path>` is one value in it. A string or a non-empty
+ * object is passed as-is; any other value (an array, a number) is passed as JSON text. Missing or
+ * empty is refused, whitespace-only text and `{}` included: asking a model about nothing produces a
+ * confident answer about nothing.
+ *
+ * Both engines apply it before the call, so a flow's Decision step asks, or refuses, the same state
+ * whether it is dispatched or walked in-run. A refusal fails the step the way a failed call does.
+ */
+export function ResolveDecisionState(
+    state: string | undefined,
+    payload: unknown,
+): { State: string | Record<string, unknown> } | { ErrorMessage: string } {
+    const path = state?.trim() || WHOLE_PAYLOAD;
+    if (path !== WHOLE_PAYLOAD && !path.startsWith(`${WHOLE_PAYLOAD}.`)) {
+        return { ErrorMessage: `its state "${path}" is not "payload" or "payload.<path>"` };
+    }
+
+    const value = path === WHOLE_PAYLOAD ? payload : GetValueFromPath(payload, path.slice(WHOLE_PAYLOAD.length + 1));
+    if (value === undefined || value === null) return { ErrorMessage: `its state "${path}" is not in the payload` };
+    if (typeof value === 'string') {
+        return value.trim() ? { State: value } : { ErrorMessage: `its state "${path}" is empty` };
+    }
+    if (isRecord(value)) {
+        return Object.keys(value).length > 0 ? { State: value } : { ErrorMessage: `its state "${path}" is empty` };
+    }
+    return { State: JSON.stringify(value) };
 }
 
 /**

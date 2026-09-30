@@ -10,7 +10,6 @@
  */
 import {
     DecisionReferencesIn,
-    GetValueFromPath,
     ResolveDecisionStepAnswers,
     type EdgeConditionOutcome,
     type GraphDecisions,
@@ -61,9 +60,6 @@ export type DecisionTaskRow = {
 /** The payload key a Decision step writes its answers under, by step. */
 export const DECISIONS_PAYLOAD_KEY = 'decisions';
 
-/** The default state: the step's whole input. */
-const WHOLE_PAYLOAD = 'payload';
-
 /**
  * Reads a Decision step's settings from its stored `Configuration`, or `null` when they are absent
  * or unusable. A step without them cannot ask anything, and a caller must say so rather than guess.
@@ -78,34 +74,10 @@ export function ReadDecisionStepConfiguration(configuration: string | null | und
     if (!isRecord(parsed) || !isRecord(parsed.decision)) return null;
     const decision = parsed.decision;
     if (typeof decision.nodeId !== 'string' || !decision.nodeId || !isRecord(decision.questions)) return null;
+    // Only `nodeId` and the shape of `questions` are checked here. The runner is the real guard on
+    // the questions themselves: `AIDecisionTaskRunner` passes them through `ToDecisionQuestions`
+    // and refuses the call on any invalid one. A caller that uses them any other way must check them.
     return decision as TaskDecisionStepConfiguration;
-}
-
-/**
- * The state a Decision step's questions are about, resolved from its payload.
- *
- * `payload` is the whole input; `payload.<path>` is one value in it. A string or a non-empty object
- * is passed as-is; any other value (an array, a number) is passed as JSON text. Absent or empty is an
- * error: asking a model about nothing produces a confident answer about nothing.
- */
-export function ResolveDecisionState(
-    state: string | undefined,
-    payload: Record<string, unknown>,
-): { State: string | Record<string, unknown> } | { ErrorMessage: string } {
-    const path = state?.trim() || WHOLE_PAYLOAD;
-    if (path !== WHOLE_PAYLOAD && !path.startsWith(`${WHOLE_PAYLOAD}.`)) {
-        return { ErrorMessage: `its state "${path}" is not "payload" or "payload.<path>"` };
-    }
-
-    const value = path === WHOLE_PAYLOAD ? payload : GetValueFromPath(payload, path.slice(WHOLE_PAYLOAD.length + 1));
-    if (value === undefined || value === null) return { ErrorMessage: `its state "${path}" is not in the payload` };
-    if (typeof value === 'string') {
-        return value.trim() ? { State: value } : { ErrorMessage: `its state "${path}" is empty` };
-    }
-    if (isRecord(value)) {
-        return Object.keys(value).length > 0 ? { State: value } : { ErrorMessage: `its state "${path}" is empty` };
-    }
-    return { State: JSON.stringify(value) };
 }
 
 /** One question's entry in a Decision step's output: the answer, or why it is held. */
@@ -253,6 +225,74 @@ export function PassOverFailedDecisionPaths<E extends { id: string; exclusiveGro
             ? { ...e, conditionOutcome: 'unsatisfied' }
             : e,
     );
+}
+
+/**
+ * The usable answers a Decision step already gave, read from its own output: the answers a retry
+ * keeps.
+ *
+ * **A usable answer is final.** The graph acts on it as soon as the step completes: a fork's losing
+ * branch is Skipped, and nothing puts it back. So a retry asks only the questions the step is
+ * holding. Asking a usable one again could flip a fork whose other branch is already gone, and leave
+ * neither branch to run.
+ *
+ * Empty for a step with no answers of its own: a first run has no output yet, and a failed step's
+ * output is cleared when it is retried (`PrepareTaskForRetry`).
+ */
+export function KeptDecisionAnswers(
+    row: Pick<DecisionTaskRow, 'Name' | 'StepType' | 'Configuration' | 'OutputPayload'>,
+): Record<string, TaskGraphDecisionAnswer> {
+    const config = ReadDecisionStepConfiguration(row.Configuration);
+    if (!config || !row.OutputPayload) return {};
+    // Read as the completed step that wrote this output, so the same answer rules apply. Copied field
+    // by field, not spread: the row is usually an entity, whose fields are getters a spread drops.
+    const written: DecisionTaskRow = {
+        Name: row.Name,
+        StepType: row.StepType,
+        Configuration: row.Configuration,
+        OutputPayload: row.OutputPayload,
+        Status: 'Complete',
+        ErrorMessage: null,
+    };
+    return { ...ResolveGraphDecisions([written]).Answers[config.nodeId] };
+}
+
+/** The questions a Decision step asks on this run: every one it has no kept answer to. */
+export function QuestionsToAsk(
+    questions: Readonly<Record<string, TaskGraphDecisionQuestion>>,
+    kept: Readonly<Record<string, TaskGraphDecisionAnswer>>,
+): Record<string, TaskGraphDecisionQuestion> {
+    const toAsk: Record<string, TaskGraphDecisionQuestion> = {};
+    for (const [key, question] of Object.entries(questions)) {
+        if (!Object.prototype.hasOwnProperty.call(kept, key)) toAsk[key] = question;
+    }
+    return toAsk;
+}
+
+/**
+ * The output of a retried Decision step that could not answer again: its earlier output, with the
+ * same usable answers, and each question it asked again held for `reason`.
+ *
+ * The step stays `Complete` rather than failing. Failing it would undo answers the graph has already
+ * acted on: under `'block'` the branch those answers chose would block, and the next retry would find
+ * no answers left to keep.
+ */
+export function StillHoldingDecisionOutput(
+    previousOutput: string | null,
+    stepName: string,
+    nodeId: string,
+    questions: Readonly<Record<string, TaskGraphDecisionQuestion>>,
+    kept: Readonly<Record<string, TaskGraphDecisionAnswer>>,
+    reason: string,
+): Record<string, unknown> {
+    const previous = ParseConditionOutput(previousOutput);
+    const answers: Record<string, DecisionStepOutputAnswer> = {};
+    for (const key of Object.keys(questions)) {
+        answers[key] = Object.prototype.hasOwnProperty.call(kept, key)
+            ? kept[key]
+            : { held: `the decision "${stepName}" was asked "${key}" again and could not answer: ${reason}` };
+    }
+    return BuildDecisionStepOutput(isRecord(previous) ? previous : {}, nodeId, answers);
 }
 
 /** A completed step's answers, as it wrote them into its output. */

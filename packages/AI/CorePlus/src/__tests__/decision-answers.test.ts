@@ -11,6 +11,7 @@ import {
     DecisionAnswerConfidence,
     DecisionHoldReason,
     NO_DECISIONS,
+    ResolveDecisionState,
     ResolveDecisionStepAnswers,
     SummarizeDecisionAnswers,
     type GraphDecisions,
@@ -141,5 +142,32 @@ describe('SummarizeDecisionAnswers', () => {
         expect(Object.keys(summary.urgent).sort()).toEqual([...DECISION_ANSWER_FIELDS.Likelihood].sort());
         expect(Object.keys(summary.intent).sort()).toEqual([...DECISION_ANSWER_FIELDS.Choice].sort());
         expect(Object.keys(summary.severity).sort()).toEqual([...DECISION_ANSWER_FIELDS.Score].sort());
+    });
+});
+
+describe('ResolveDecisionState (moved here from @memberjunction/task-graph)', () => {
+    it('defaults to the whole payload', () => {
+        expect(ResolveDecisionState(undefined, { a: 1 })).toEqual({ State: { a: 1 } });
+    });
+
+    it('passes text through and sends a list as JSON', () => {
+        expect(ResolveDecisionState('payload.text', { text: 'hello' })).toEqual({ State: 'hello' });
+        expect(ResolveDecisionState('payload.items', { items: [1, 2] })).toEqual({ State: '[1,2]' });
+    });
+
+    it('refuses an empty state rather than ask about nothing', () => {
+        expect(ResolveDecisionState(undefined, {})).toEqual({ ErrorMessage: 'its state "payload" is empty' });
+        expect(ResolveDecisionState('payload.ticket', { ticket: {} })).toEqual({ ErrorMessage: 'its state "payload.ticket" is empty' });
+        expect(ResolveDecisionState('payload.text', { text: ' ' })).toEqual({ ErrorMessage: 'its state "payload.text" is empty' });
+    });
+
+    it('refuses a state that is not in the payload, or a payload that is not there', () => {
+        expect(ResolveDecisionState('payload.ticket', { other: 1 })).toEqual({ ErrorMessage: 'its state "payload.ticket" is not in the payload' });
+        expect(ResolveDecisionState('payload.ticket', { ticket: null })).toEqual({ ErrorMessage: 'its state "payload.ticket" is not in the payload' });
+        expect(ResolveDecisionState(undefined, undefined)).toEqual({ ErrorMessage: 'its state "payload" is not in the payload' });
+    });
+
+    it('refuses a state that is not a payload path', () => {
+        expect(ResolveDecisionState('the ticket', { ticket: 'x' })).toEqual({ ErrorMessage: 'its state "the ticket" is not "payload" or "payload.<path>"' });
     });
 });
