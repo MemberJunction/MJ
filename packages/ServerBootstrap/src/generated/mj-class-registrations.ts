@@ -1079,8 +1079,9 @@ import {
     TemplateRunServerOperation,
 } from '@memberjunction/templates';
 
-// @memberjunction/ai-prompts (1 classes)
+// @memberjunction/ai-prompts (2 classes)
 import {
+    LLMDecision,
     ParallelExecutionCoordinator,
 } from '@memberjunction/ai-prompts';
 
@@ -2261,6 +2262,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AIPromptExtension,
     TemplateEmbedExtension,
     TemplateRunServerOperation,
+    LLMDecision,
     ParallelExecutionCoordinator,
     LLMReranker,
     AdaptiveBoundarySegmenter,
@@ -2340,11 +2342,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PredictiveStudioPromoteModelServerOperation,
     PredictiveStudioRunExperimentAction,
     PredictiveStudioRunFeaturePipelineServerOperation,
-    PredictiveStudioScheduleModelScoringAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    PredictiveStudioScheduleModelScoringAction,
     PredictiveStudioScoreRecordSetAction,
     PredictiveStudioScoreRecordSetServerOperation,
     PredictiveStudioStartExperimentSessionServerOperation,
@@ -2544,11 +2546,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     OAuthFlowAction,
     ObjectExistsAction,
     PDFExtractorAction,
-    ParallelExecuteAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ParallelExecuteAction,
     PasswordStrengthAction,
     PerplexitySearchAction,
     PostalCodeLookupAction,
@@ -2618,7 +2620,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1053;
+export const CLASS_REGISTRATIONS_COUNT = 1054;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
