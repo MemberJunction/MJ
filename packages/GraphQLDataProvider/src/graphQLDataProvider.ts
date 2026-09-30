@@ -406,6 +406,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     /**
+     * The authenticate-only half of {@link Config}, for embedded/anonymous surfaces that only make
+     * their own GraphQL calls. After it resolves, {@link ExecuteGQL} works. No metadata is fetched,
+     * so entity metadata (`Entities`, `EntityByName`, `RunView`, `GetEntityObject`) is NOT available
+     * until the full boot runs (`SetupGraphQLClient`, or {@link Config}) on this same instance.
+     * Always uses the shared singleton connection.
+     */
+    public async Connect(configData: GraphQLProviderConfigData): Promise<void> {
+        await this.connectClient(configData, false, false);
+    }
+
+    /**
      * The connection half of {@link Config}: stores the config, resolves the session id and creates the
      * GraphQL client (this instance's own client when separateConnection is true, otherwise the shared
      * singleton client). Loads no metadata.

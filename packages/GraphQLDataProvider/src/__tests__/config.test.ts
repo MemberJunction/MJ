@@ -1,4 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+// The entities every mocked provider instance reports; tests swap it to simulate an empty or loaded graph.
+const mockProviderState = vi.hoisted(() => ({ entities: [{ Name: 'Stub Entity' }] as Array<{ Name: string }> }));
 
 // Mock all dependencies
 vi.mock('@memberjunction/core', () => ({
@@ -28,6 +31,8 @@ vi.mock('../graphQLDataProvider', () => {
     Config = vi.fn().mockResolvedValue(true);
     preValidateAndRefresh = vi.fn().mockResolvedValue(undefined);
     backgroundValidateAndRefresh = vi.fn().mockResolvedValue(undefined);
+    Connect = vi.fn().mockResolvedValue(undefined);
+    Entities: Array<{ Name: string }> = mockProviderState.entities;
   }
   class MockGraphQLProviderConfigData {
     Token: string;
@@ -45,7 +50,7 @@ vi.mock('../graphQLDataProvider', () => {
   };
 });
 
-import { SetupGraphQLClient } from '../config';
+import { SetupGraphQLClient, ConnectGraphQLClient } from '../config';
 import { GraphQLProviderConfigData } from '../graphQLDataProvider';
 import { SetProvider, StartupManager } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
@@ -101,5 +106,38 @@ describe('setupGraphQLClient', () => {
 
     await SetupGraphQLClient(config);
     expect(MJGlobal.Instance.RaiseEvent).toHaveBeenCalled();
+  });
+});
+
+describe('ConnectGraphQLClient', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockProviderState.entities = []; // not booted yet
+  });
+
+  afterEach(() => {
+    mockProviderState.entities = [{ Name: 'Stub Entity' }];
+  });
+
+  it('returns an already-booted provider without reconnecting it', async () => {
+    mockProviderState.entities = [{ Name: 'Stub Entity' }];
+
+    const provider = await ConnectGraphQLClient(new GraphQLProviderConfigData('t', 'http://localhost:4000', 'ws://localhost:4000'));
+
+    expect(provider.Connect).not.toHaveBeenCalled();
+    expect(SetProvider).not.toHaveBeenCalled();
+  });
+
+  it('registers the provider and connects without booting metadata or engines', async () => {
+    const config = new GraphQLProviderConfigData('test-token', 'http://localhost:4000', 'ws://localhost:4000');
+
+    const provider = await ConnectGraphQLClient(config);
+
+    expect(SetProvider).toHaveBeenCalledWith(provider);
+    expect(provider.Connect).toHaveBeenCalledWith(config);
+    expect(provider.Config).not.toHaveBeenCalled();
+    expect(provider.preValidateAndRefresh).not.toHaveBeenCalled();
+    expect(MJGlobal.Instance.RaiseEvent).not.toHaveBeenCalled();
+    expect(StartupManager.Instance.Startup).not.toHaveBeenCalled();
   });
 });
