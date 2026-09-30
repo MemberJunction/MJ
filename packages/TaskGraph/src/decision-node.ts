@@ -10,7 +10,6 @@
  */
 import {
     DecisionReferencesIn,
-    GetValueFromPath,
     ResolveDecisionStepAnswers,
     type EdgeConditionOutcome,
     type GraphDecisions,
@@ -61,9 +60,6 @@ export type DecisionTaskRow = {
 /** The payload key a Decision step writes its answers under, by step. */
 export const DECISIONS_PAYLOAD_KEY = 'decisions';
 
-/** The default state: the step's whole input. */
-const WHOLE_PAYLOAD = 'payload';
-
 /**
  * Reads a Decision step's settings from its stored `Configuration`, or `null` when they are absent
  * or unusable. A step without them cannot ask anything, and a caller must say so rather than guess.
@@ -82,33 +78,6 @@ export function ReadDecisionStepConfiguration(configuration: string | null | und
     // the questions themselves: `AIDecisionTaskRunner` passes them through `ToDecisionQuestions`
     // and refuses the call on any invalid one. A caller that uses them any other way must check them.
     return decision as TaskDecisionStepConfiguration;
-}
-
-/**
- * The state a Decision step's questions are about, resolved from its payload.
- *
- * `payload` is the whole input; `payload.<path>` is one value in it. A string or a non-empty object
- * is passed as-is; any other value (an array, a number) is passed as JSON text. Absent or empty is an
- * error: asking a model about nothing produces a confident answer about nothing.
- */
-export function ResolveDecisionState(
-    state: string | undefined,
-    payload: Record<string, unknown>,
-): { State: string | Record<string, unknown> } | { ErrorMessage: string } {
-    const path = state?.trim() || WHOLE_PAYLOAD;
-    if (path !== WHOLE_PAYLOAD && !path.startsWith(`${WHOLE_PAYLOAD}.`)) {
-        return { ErrorMessage: `its state "${path}" is not "payload" or "payload.<path>"` };
-    }
-
-    const value = path === WHOLE_PAYLOAD ? payload : GetValueFromPath(payload, path.slice(WHOLE_PAYLOAD.length + 1));
-    if (value === undefined || value === null) return { ErrorMessage: `its state "${path}" is not in the payload` };
-    if (typeof value === 'string') {
-        return value.trim() ? { State: value } : { ErrorMessage: `its state "${path}" is empty` };
-    }
-    if (isRecord(value)) {
-        return Object.keys(value).length > 0 ? { State: value } : { ErrorMessage: `its state "${path}" is empty` };
-    }
-    return { State: JSON.stringify(value) };
 }
 
 /** One question's entry in a Decision step's output: the answer, or why it is held. */

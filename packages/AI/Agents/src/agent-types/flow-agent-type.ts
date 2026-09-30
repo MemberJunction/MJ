@@ -18,6 +18,7 @@ import {
     DecisionReferencesIn,
     NO_DECISIONS,
     ReadFlowDecisionStepConfiguration,
+    ResolveDecisionState,
     ResolveDecisionStepAnswers,
     SelectOutgoingEdges,
     ValidateTaskGraphSpec,
@@ -1067,6 +1068,10 @@ export class FlowAgentType extends BaseAgentType {
      *
      * A configuration that cannot be read, or a prompt that no longer exists, ends the run: the
      * dispatched path refuses the same flow before it starts.
+     *
+     * A state the dispatched path refuses — missing, or empty, `{}` and whitespace-only text
+     * included — is refused here by the same rule (`ResolveDecisionState`), before any model is
+     * asked. The step then fails as a failed call does, so its recovery path runs.
      */
     private createDecisionStep<P>(node: MJAIAgentStepEntity, payload: P): BaseAgentNextStep<P> {
         const read = ReadFlowDecisionStepConfiguration(node.Configuration);
@@ -1083,9 +1088,28 @@ export class FlowAgentType extends BaseAgentType {
         }
 
         const { key, state, questions } = read.Config;
+        const resolved = ResolveDecisionState(state, payload);
+        if ('ErrorMessage' in resolved) {
+            return this.decisionNotAsked(key, resolved.ErrorMessage, payload);
+        }
         return this.createNextStep<P>('Decision' as BaseAgentNextStep['step'], {
             decisions: [{ id: key, state: state ?? 'payload', questions }],
             ...(promptName ? { decisionPromptName: promptName } : {}),
+            newPayload: payload,
+            previousPayload: payload
+        });
+    }
+
+    /**
+     * A Decision step that is not asked, handed back the way BaseAgent hands back a failed call: a
+     * `'Retry'` carrying one failed result. {@link completeDecisionStep} then fails the step, so a
+     * condition reading its answers holds or is passed over, and its recovery path is taken, as
+     * after any failed call. No model is asked and no Decision run step is logged; the dispatched
+     * path logs none for a step it does not ask either.
+     */
+    private decisionNotAsked<P>(key: string, reason: string, payload: P): BaseAgentNextStep<P> {
+        return this.createNextStep<P>('Retry', {
+            decisionResults: [{ id: key, success: false, error: `it was not asked: ${reason}` }],
             newPayload: payload,
             previousPayload: payload
         });

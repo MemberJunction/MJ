@@ -578,6 +578,41 @@ describe('a Decision step walked in-run', () => {
         expect(result.success).toBe(true);
     });
 
+    /** States the dispatched path refuses, each with the reason it gives. */
+    const REFUSED_STATES: Array<[string, FlowDecisionStepConfiguration, Record<string, unknown>, string]> = [
+        ['payload.ticket is {}', TRIAGE, { ticket: {} }, 'its state "payload.ticket" is empty'],
+        ['the whole payload is {}', { key: TRIAGE.key, questions: TRIAGE.questions }, {}, 'its state "payload" is empty'],
+        ['payload.ticket is only whitespace', TRIAGE, { ticket: '  ' }, 'its state "payload.ticket" is empty'],
+        ['payload.ticket is missing', TRIAGE, { other: 1 }, 'its state "payload.ticket" is not in the payload'],
+    ];
+
+    it.each(REFUSED_STATES)('fails the step without asking when %s, as the dispatched path does, and takes its recovery path', async (_case, config, payload) => {
+        harness.steps[0] = triageStep({ Configuration: JSON.stringify(config) });
+        harness.steps.push(subAgentStep('Recover'));
+        harness.paths.push(path(TRIAGE_STEP_ID, stepID('Recover'), 'stepResult.Success === false', 0));
+        const agent = makeAgent(answered({ value: 'billing', confidence: 0.92 }, 0.1));
+
+        const result = await agent.Execute(makeParams({ executionMode: 'inRun' }, payload));
+
+        // Walked unchecked, a {} state was sent to the model and the flow routed on its answer.
+        expect(agent.Decisions.Calls).toHaveLength(0);
+        expect(harness.decisionRunSteps).toHaveLength(0);
+        expect(agent.SubAgentCalls).toEqual(['Recover Agent']);
+        expect(result.success).toBe(true);
+    });
+
+    it.each(REFUSED_STATES)('fails the run with the reason when %s and no path can be taken', async (_case, config, payload, reason) => {
+        harness.steps[0] = triageStep({ Configuration: JSON.stringify(config) });
+        const agent = makeAgent(answered({ value: 'billing', confidence: 0.92 }, 0.1));
+
+        const result = await agent.Execute(makeParams({ executionMode: 'inRun' }, payload));
+
+        expect(result.success).toBe(false);
+        expect(agent.Decisions.Calls).toHaveLength(0);
+        expect(agent.SubAgentCalls).toEqual([]);
+        expect(harness.run.ErrorMessage).toContain(`the decision "Triage the ticket" failed: it was not asked: ${reason}`);
+    });
+
     it('fails the run when the Decision step was skipped, without asking anything', async () => {
         harness.steps.push(subAgentStep('Queue'));
         harness.paths.push(path(TRIAGE_STEP_ID, stepID('Queue'), null, 0));

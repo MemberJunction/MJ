@@ -57,7 +57,6 @@ import {
     QuestionsToAsk,
     ReadsFailedDecision,
     ReadDecisionStepConfiguration,
-    ResolveDecisionState,
     ResolveGraphDecisions,
     StillHoldingDecisionOutput,
     type DecisionTaskRow,
@@ -442,6 +441,17 @@ describe('a Decision node on the dispatcher', () => {
 
         expect(outcome.Success).toBe(false);
         expect(outcome.ErrorMessage).toMatch(/"payload.ticket" is not in the payload/);
+        expect(runner.Calls).toHaveLength(0);
+    });
+
+    it('does not call the model when its state is an empty object, and fails the step', async () => {
+        // The in-run walker applies the same rule; ai-agents' flow-agent-decision-step tests pin that half.
+        const runner = decisionRunner({ Success: true, Answers: BILLING_CONFIDENT });
+
+        const outcome = await dispatcherWith(runner).runTaskBody(decisionTask(), fakeProvider(null).Provider, { ticket: {} }, new Map());
+
+        expect(outcome.Success).toBe(false);
+        expect(outcome.ErrorMessage).toBe('Decision "Triage the ticket" was not asked: its state "payload.ticket" is empty.');
         expect(runner.Calls).toHaveLength(0);
     });
 
@@ -1139,22 +1149,6 @@ describe('a held exclusive fork says why', () => {
 });
 
 // ── pieces ──────────────────────────────────────────────────────────────────────────────────────
-
-describe('ResolveDecisionState', () => {
-    it('defaults to the whole payload', () => {
-        expect(ResolveDecisionState(undefined, { a: 1 })).toEqual({ State: { a: 1 } });
-    });
-
-    it('passes text through and sends a list as JSON', () => {
-        expect(ResolveDecisionState('payload.text', { text: 'hello' })).toEqual({ State: 'hello' });
-        expect(ResolveDecisionState('payload.items', { items: [1, 2] })).toEqual({ State: '[1,2]' });
-    });
-
-    it('refuses an empty state rather than ask about nothing', () => {
-        expect(ResolveDecisionState(undefined, {})).toEqual({ ErrorMessage: 'its state "payload" is empty' });
-        expect(ResolveDecisionState('payload.text', { text: ' ' })).toEqual({ ErrorMessage: 'its state "payload.text" is empty' });
-    });
-});
 
 describe('persisting a Decision step', () => {
     const node = TaskNode.Decision({ tempId: 'triage', name: 'Triage the ticket', description: '', dependsOn: [] }, TRIAGE);
