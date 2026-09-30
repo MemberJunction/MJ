@@ -104,11 +104,7 @@ describe('WorkspaceInitializerService.classifyError', () => {
     expect(result.shouldRetry).toBe(false);
   });
 
-  it('should classify ResourceTypes error as no_roles', () => {
-    const err = new Error("Cannot read properties of undefined (reading 'ResourceTypes')");
-    const result = service.classifyError(err);
-    expect(result.type).toBe('no_roles');
-  });
+  // An empty-graph boot now rejects in SetupGraphQLClient carrying the real cause, which the "MJ: User Roles" case above covers.
 
   it('should classify access denied error', () => {
     const err = new Error("You don't have access to this application");
