@@ -23,6 +23,12 @@ Every measurement:
 | Escalation floors | 5.4 | the same | escalating to the LLM didn't help on either task | no floor recommended yet | #4890 |
 | Self-reported `confidence` | 3.4 | 546 recorded loop turns; 337 memory notes | the loop's carries no usable signal; Jev gates memory notes better than the extraction's own | loop: don't gate on it; memory: Jev at calibrated 0.6, opt-in | #4897 |
 
+## 1. Sage agent discovery (Task 3.1)" up to, not including, "## 2. The duplicate check at entry".
+The Summary table's discovery row still holds as written (77% vs 30%; calibrated 0.85, was raw 0.7).
+Source: the 2026-09-29 run re-scored on 2026-09-30 from its stored per-run results
+(~/Projects/decision-eval-runs/discovery-rescore-2026-09-30/), no new model calls.
+-->
+
 ## 1. Sage agent discovery (Task 3.1)
 
 **The corpus:** 258 requests written by Gemini 3 Flash for the 33 agents discoverable in a development database:
@@ -33,29 +39,37 @@ Labels come from construction. The catalog includes development fixtures, so abs
 
 **The cells:** Jev and LLM Decision, each pinned, three reps; and the semantic search that `Find Candidate Agents` runs, which is what the old two-turn flow started from.
 
-| Cell | Top-1 [95% CI] | p50 / p95 | Within the 1,500 ms timeout | Repeatability |
+**Scored as production scores it (re-scored 2026-09-30).** Production gives up on discovery after 1,500 ms, and that limit covers building the options, including the semantic search, as well as the call. The first scoring counted every answer, however late. Every figure below counts an answer that came after the limit as injecting nothing. The re-score used the stored runs, with no new model calls. Each run's stored duration also includes writing the test-run rows, so it overstates the discovery a little. So LLM Decision's on-time rate and coverage below are lower bounds, and a re-run with the fixed eval gives exact figures.
+
+| Cell | Top-1 [95% CI] | Call p50 / p95 | Discovery within 1,500 ms | Repeatability |
 |---|---|---|---|---|
-| **Jev** | **0.769** [0.710, 0.823] | 185 / 274 ms | 100% | 0.981 |
-| LLM Decision | 0.646 [0.581, 0.712] | 1,200 / 2,275 ms | 73.6% | 0.906 |
-| Semantic search (first row) | 0.298 [0.232, 0.359] | 100 / 132 ms | — | — |
+| **Jev** | **0.769** [0.715, 0.828] | 185 / 274 ms | 99.9% (all but the run's first, which loaded the embedding model) | 0.981 |
+| LLM Decision | 0.646 [0.582, 0.709] | 1,200 / 2,275 ms | 67.7% to 73.6% | 0.906 |
+| Semantic search (first row) | 0.298 [0.237, 0.364] | 100 / 132 ms | — | — |
 
 - **The decision picks the right agent 2.6× as often as semantic search.** In 27 runs (9 requests), the labelled agent wasn't among the options, because the search narrows 33 agents to the 25 the Choice allows. Those count against every cell.
-- **The placeholder threshold barely fired.** Discovery injects its suggestion only when the Choice's confidence and the any-applies Likelihood both reach the threshold. Jev's raw any-applies Likelihood never passed 0.8, so on raw probabilities 0.7 covered 6.9% of agent requests.
+- **LLM Decision often misses the limit.** On its call time alone, 73.6% of its answers came within 1,500 ms. Counting the semantic search too, at least 67.7% did. So as Jev's failover, LLM Decision loses between a quarter and a third of discoveries to the timeout, and those inject nothing. Jev is unaffected: its call took 274 ms at p95.
+- **The placeholder threshold barely fired.** Discovery injects its suggestion only when the Choice's confidence and the any-applies Likelihood both reach the threshold. Jev's raw any-applies Likelihood never passed 0.8, so on raw probabilities 0.7 covered 6.9% of agent requests. LLM Decision's raw 0.7 covered 26.4% on time, not the 33.2% first reported.
 - **Calibrated per model, it works:**
 
   | At a calibrated threshold | Jev: coverage / precision / false injections | LLM Decision |
   |---|---|---|
-  | 0.80 | 33.5% / 94.0% / 10.0% | 25.9% / 90.9% / 5.6% |
-  | **0.85** | **23.7% / 95.7% / 6.7%** | 19.0% / 91.2% / 4.4% |
-  | 0.90 | 13.6% / 96.3% / 5.0% | 6.6% / 89.7% / 1.7% |
+  | 0.80 | 33.0% / 94.9% / 8.9% | 20.9% / 89.5% / 6.1% |
+  | **0.85** | **21.7% / 95.3% / 5.0%** | 16.0% / 92.6% / 5.0% |
+  | 0.90 | 10.1% / 95.0% / 3.3% | 7.9% / 91.5% / 2.8% |
 
-  Coverage is the share of agent requests that get the suggestion. Precision is the share of those that name the right agent. False injections are the share of no-agent requests that got one; Jev's were all multi-agent workflows.
+  Coverage is the share of agent requests that get the suggestion. Precision is the share of those that name the right agent. False injections are the share of no-agent requests that got one. Jev's were all multi-agent workflows; LLM Decision's were 8 workflows and 1 direct question.
+
+  Calibration is out of fold: each request is scored by a fit that never saw it.
+  - **LLM Decision's figures moved because of the timeout.** At 0.85, coverage fell from 19.0% to 16.0%, and it stays between 16.0% and 16.8% however much of the stored duration is overhead.
+  - **Jev's figures moved for a different reason.** The first table's folds depended on the order the database returned the runs. They are now dealt from the requests in ID order. On the same runs, Jev's coverage at 0.85 ranged from 21.5% to 23.7% with the read order. Read these figures as ±2 points.
+- **The fits converged.** The first scorecard reported LLM Decision's any-applies fit as not converged. The fit was already at its optimum, but float rounding stalled the harness's convergence check. With that fixed, all four fits converge in 5 to 7 iterations, and a 60-digit refit agrees with the shipped constants to 4 places. The constants are unchanged.
 - **The setting (#4893):**
-  - per-model Platt calibration of both answers;
+  - per-model Platt calibration of both answers, each tied to the exact model it was fitted on: Jev at its pinned `typesafe/jev-1.13-20260917`, and LLM Decision only when its GPT-OSS-120B chat model answered;
   - the threshold at a calibrated 0.85;
-  - an uncalibrated model's answer treated as unsure.
+  - an answer from any other model is treated as unsure, and discovery warns once per such model.
 
-  A wrong suggestion costs more than a missed one, because a missed one is only the two-turn flow the agent already used. So precision decided it.
+  A wrong suggestion costs more than a missed one, because a missed one is only the two-turn flow the agent already used. So precision decided it. The corrected scoring doesn't change the choice: Jev's precision is about 95% from 0.80 to 0.90, and 0.85 cuts false injections from 8.9% to 5.0% while keeping twice the coverage of 0.90.
 
 ## 2. The duplicate check at entry (Task 3.8)
 
