@@ -162,6 +162,7 @@ import {
     CanSearchEntities,
     DECISION_DISCOVERY_MAX_RECORDED_IDS,
     DECISION_DISCOVERY_MIN_CONFIDENCE,
+    DECISION_DISCOVERY_MIN_OPTIONS,
     DECISION_DISCOVERY_TIMEOUT_MS,
     DecisionDiscoveryAgentSearch,
     DecisionDiscoveryFromResult,
@@ -172,6 +173,7 @@ import {
     FailedDecisionDiscovery,
     HostAllowedAgentIDs,
     IsDecisionDiscoveryOn,
+    IsOpeningTurn,
     MentionsAgent,
 } from './decision-discovery';
 import {
@@ -1546,6 +1548,13 @@ export class BaseAgent {
      */
     private _openingRequest: string = '';
 
+    /**
+     * Whether the run answers its conversation's opening request ({@link IsOpeningTurn}), read from
+     * the messages it started with. Decision discovery asks about no other turn.
+     * @private
+     */
+    private _isOpeningTurn: boolean = false;
+
     /** The longest the catalog narrowing decision may take before the run shows the full catalog. */
     private static readonly CATALOG_NARROWING_TIMEOUT_MS = 30000;
 
@@ -2178,6 +2187,7 @@ export class BaseAgent {
             this._messageLifecycleCallback = params.onMessageLifecycle;
             this._catalogNarrowing = undefined;
             this._openingRequest = OpeningRequestText(params.conversationMessages);
+            this._isOpeningTurn = IsOpeningTurn(params.conversationMessages);
 
             // Resolve storage account for file artifacts
             this._resolvedStorageAccountId = await this.getStorageAccountID(wrappedParams);
@@ -3890,15 +3900,22 @@ export class BaseAgent {
      * Decision discovery (plan Task 3.1): suggests the agent to delegate to before the first prompt.
      *
      * Runs in parallel with the rest of Phase 2 of `Execute()`, and only when the merged agent-type
-     * prompt params set `decisionDiscovery: true` and the opening request @mentions no agent. One
-     * decision asks which of the agents the user may run (and the host allows) should handle the
-     * request, and whether a specialist should. When both answers are confident, a `<suggested_agent>`
-     * system message is unshifted onto `conversationMessages`, the way pre-execution RAG adds
-     * `<retrieved_context>`. Each discovery is recorded as one `Agent discovery` Decision step.
+     * prompt params set `decisionDiscovery: true`, the run answers its conversation's opening request
+     * ({@link IsOpeningTurn}), and that request @mentions no agent. A follow-up turn is never asked
+     * about: it may be continuing work with an agent already engaged, and a suggestion must not pull
+     * the agent away from it. One decision asks which of the agents the user may run (and the host
+     * allows) should handle the request, and whether a specialist should. When both answers are
+     * confident, a `<suggested_agent>` system message is unshifted onto `conversationMessages`, the
+     * way pre-execution RAG adds `<retrieved_context>`. Each discovery is recorded as one
+     * `Agent discovery` Decision step.
      *
-     * Fails safe: an error, a timeout, an unusable answer or an unsure one adds nothing, so the agent
-     * behaves as it would without discovery. Never delays the first prompt by more than
+     * Fails safe: an error, a timeout, a cancelled run, an unusable answer or an unsure one adds
+     * nothing, so the agent behaves as it would without discovery. So do fewer than
+     * {@link DECISION_DISCOVERY_MIN_OPTIONS} options. Never delays the first prompt by more than
      * {@link DECISION_DISCOVERY_TIMEOUT_MS}, and never throws.
+     *
+     * The any-applies question does not name the options, so the decision cannot say that none of
+     * them fits: see {@link DECISION_DISCOVERY_APPLIES_INSTRUCTIONS} for why it stays that way for now.
      *
      * @param agent - The agent being executed.
      * @param contextUser - The user whose run permission decides the options.
@@ -3913,18 +3930,24 @@ export class BaseAgent {
         data: Record<string, unknown> | undefined
     ): Promise<void> {
         try {
-            const promptParams = this.decisionDiscoveryPromptParams(agent, data);
-            if (!IsDecisionDiscoveryOn(promptParams) || !conversationMessages) {
+            const override = data?.__agentTypePromptParams;
+            const overrides = IsPlainObject(override) ? override : undefined;
+            if (!this.isDecisionDiscoveryOnFor(agent, overrides) || !conversationMessages) {
                 return;
             }
             if (!this._openingRequest || !contextUser) {
                 this.logStatus(`Decision discovery skipped for '${agent.Name}': the run has no ${contextUser ? 'user message' : 'context user'}`, true);
                 return;
             }
+            if (!this._isOpeningTurn) {
+                this.logStatus(`Decision discovery skipped for '${agent.Name}': a follow-up turn, which may continue with an agent already engaged`, true);
+                return;
+            }
             if (MentionsAgent(this._openingRequest, AIEngine.Instance.Agents, agent.ID)) {
                 this.logStatus(`Decision discovery skipped for '${agent.Name}': the request @mentions an agent`, true);
                 return;
             }
+            const promptParams = this.decisionDiscoveryPromptParams(agent, overrides);
             const outcome = await this.runDecisionDiscovery(agent, contextUser, promptParams, HostAllowedAgentIDs(data));
             if (outcome.Injected && outcome.Message) {
                 conversationMessages.unshift({ role: 'system', content: outcome.Message });
@@ -3935,11 +3958,37 @@ export class BaseAgent {
         }
     }
 
-    /** The run's merged agent-type prompt params (schema defaults < agent < per-run overrides), for the switch. */
-    private decisionDiscoveryPromptParams(agent: MJAIAgentEntityExtended, data: Record<string, unknown> | undefined): Record<string, unknown> {
-        const overrides = data?.__agentTypePromptParams;
+    /**
+     * Whether discovery is on for this run, read without rebuilding the merged prompt params, since it
+     * is asked on every run of every agent: the per-run override's `decisionDiscovery` when it sets
+     * one, otherwise the agent's base params, cached on AIEngine with its base catalog. Only a cold
+     * cache builds them.
+     */
+    private isDecisionDiscoveryOnFor(agent: MJAIAgentEntityExtended, overrides: Record<string, unknown> | undefined): boolean {
+        if (overrides && 'decisionDiscovery' in overrides) {
+            return IsDecisionDiscoveryOn(overrides);
+        }
+        return IsDecisionDiscoveryOn(this.cachedBasePromptParams(agent) ?? this.buildDecisionDiscoveryPromptParams(agent, undefined));
+    }
+
+    /**
+     * The run's merged agent-type prompt params (schema defaults < agent < per-run overrides), once
+     * discovery is on: the cached base params when there is no override, otherwise built.
+     */
+    private decisionDiscoveryPromptParams(agent: MJAIAgentEntityExtended, overrides: Record<string, unknown> | undefined): Record<string, unknown> {
+        const cached = overrides ? undefined : this.cachedBasePromptParams(agent);
+        return cached ?? this.buildDecisionDiscoveryPromptParams(agent, overrides);
+    }
+
+    /** The agent's base prompt params (no per-run overrides), from the base catalog AIEngine caches, when it holds one. */
+    private cachedBasePromptParams(agent: MJAIAgentEntityExtended): Record<string, unknown> | undefined {
+        return AIEngine.Instance.GetAgentBaseCatalog<AgentBaseCatalog>(agent.ID)?.baseAgentTypePromptParams;
+    }
+
+    /** Builds the merged prompt params, as `gatherPromptTemplateData` does. */
+    private buildDecisionDiscoveryPromptParams(agent: MJAIAgentEntityExtended, overrides: Record<string, unknown> | undefined): Record<string, unknown> {
         const agentType = AIEngine.Instance.AgentTypes.find(at => UUIDsEqual(at.ID, agent.TypeID));
-        return this.buildAgentTypePromptParams(agentType, agent, IsPlainObject(overrides) ? overrides : undefined);
+        return this.buildAgentTypePromptParams(agentType, agent, overrides);
     }
 
     /**
@@ -3958,7 +4007,7 @@ export class BaseAgent {
             ? promptParams.decisionPromptName
             : AgentDecisionService.DEFAULT_PROMPT_NAME;
         const step = await this.startDecisionDiscoveryStep(contextUser, promptName);
-        const outcome = await this.boundDecisionDiscovery(signal => this.discoverAgent(agent, contextUser, promptName, hostAllowedIDs, signal));
+        const outcome = await this.boundDecisionDiscovery(signal => this.discoverAgent(agent, contextUser, promptName, hostAllowedIDs, signal), step);
         await this.finishDecisionDiscoveryStep(step, outcome);
         if (!outcome.Succeeded) {
             this.warnDecisionDiscovery(agent, outcome.Reason ?? 'unknown error');
@@ -3998,13 +4047,20 @@ export class BaseAgent {
     /**
      * Runs `discover` until it finishes, {@link DECISION_DISCOVERY_TIMEOUT_MS} passes, or the run is
      * cancelled. A timeout or a cancellation aborts the signal `discover` was given, which aborts the
-     * decision call, and returns a failed discovery at once. Whatever `discover` returns after that
-     * is ignored.
+     * decision call, and returns a failed discovery at once. What `discover` returns after that
+     * suggests nothing, but the prompt run of its decision call is still linked to `step` once it
+     * settles ({@link linkLateDecisionPromptRun}), so the run counts the call's cost.
      */
-    private async boundDecisionDiscovery(discover: (signal: AbortSignal) => Promise<DecisionDiscoveryOutcome>): Promise<DecisionDiscoveryOutcome> {
+    private async boundDecisionDiscovery(
+        discover: (signal: AbortSignal) => Promise<DecisionDiscoveryOutcome>,
+        step?: MJAIAgentRunStepEntityExtended
+    ): Promise<DecisionDiscoveryOutcome> {
         const controller = new AbortController();
-        const stopped = new Promise<DecisionDiscoveryOutcome>(resolve => controller.signal.addEventListener(
-            'abort', () => resolve(FailedDecisionDiscovery(String(controller.signal.reason))), { once: true }));
+        let stoppedOutcome: DecisionDiscoveryOutcome | undefined;
+        const stopped = new Promise<DecisionDiscoveryOutcome>(resolve => controller.signal.addEventListener('abort', () => {
+            stoppedOutcome = FailedDecisionDiscovery(String(controller.signal.reason));
+            resolve(stoppedOutcome);
+        }, { once: true }));
         const runToken = this._executeParams?.cancellationToken;
         const relayRunAbort = (): void => controller.abort('the run was cancelled');
         if (runToken?.aborted) {
@@ -4015,7 +4071,12 @@ export class BaseAgent {
         const timeoutMS = DECISION_DISCOVERY_TIMEOUT_MS;
         const timer = setTimeout(() => controller.abort(`the decision timed out after ${timeoutMS}ms`), timeoutMS);
         try {
-            return await Promise.race([discover(controller.signal), stopped]);
+            const discovering = discover(controller.signal);
+            const outcome = await Promise.race([discovering, stopped]);
+            if (outcome === stoppedOutcome) {
+                this.linkLateDecisionPromptRun(step, discovering.then(late => late.Result));
+            }
+            return outcome;
         } catch (error) {
             return FailedDecisionDiscovery(error instanceof Error ? error.message : String(error));
         } finally {
@@ -4041,8 +4102,8 @@ export class BaseAgent {
             if (optionsError) {
                 return { ...FailedDecisionDiscovery(optionsError), ...sizes };
             }
-            if (options.length < 2) {
-                return { Injected: false, Succeeded: true, Reason: `there are ${options.length} agents to choose from, so nothing was asked`, ...sizes };
+            if (options.length < DECISION_DISCOVERY_MIN_OPTIONS) {
+                return { Injected: false, Succeeded: true, Reason: `there are ${options.length} agents to choose from, fewer than the ${DECISION_DISCOVERY_MIN_OPTIONS} a suggestion needs, so nothing was asked`, ...sizes };
             }
             if (signal.aborted) {
                 return { ...FailedDecisionDiscovery(String(signal.reason)), ...sizes };
@@ -8454,6 +8515,33 @@ The context is now within limits. Please retry your request with the recovered c
         }
     }
 
+    /**
+     * Links the prompt run of a decision call the run stopped waiting for (a timeout or a cancellation)
+     * to its step, once the call settles. `AIDecisionRunner` writes the prompt run before it calls the
+     * model, so a stopped call still has one. The link keeps that row on the run's trace, and counts its
+     * usage in the run's cost and token totals when it settles before the run ends, as
+     * {@link attachDecisionPromptRun} does on time. The step may already be finalized, so the link is
+     * saved on its own. Never throws, and a call that never settles links nothing.
+     */
+    private linkLateDecisionPromptRun(
+        step: MJAIAgentRunStepEntityExtended | undefined,
+        late: Promise<AIDecisionRunResult | undefined>
+    ): void {
+        if (!step) {
+            return;
+        }
+        late.then(result => {
+            const promptRunID = result?.promptRun?.ID;
+            if (!result || !promptRunID || step.TargetLogID === promptRunID) {
+                return;
+            }
+            this.attachDecisionPromptRun(step, result);
+            this.queueStepSave(step, (s) => { s.TargetLogID = promptRunID; });
+        }).catch(error => {
+            LogError(`Could not link a stopped decision call's prompt run to its step: ${error instanceof Error ? error.message : String(error)}`);
+        });
+    }
+
     /** A literal state, or a value read from the payload by a `payload.` path. */
     private resolveDecisionState(state: string | undefined, finalPayload: unknown): { State: string } | { Error: string } {
         if (typeof state !== 'string') {
@@ -8898,7 +8986,7 @@ The context is now within limits. Please retry your request with the recovered c
             ? promptParams.decisionPromptName
             : AgentDecisionService.DEFAULT_PROMPT_NAME;
         const step = await this.startCatalogNarrowingStep(contextUser, promptName, asked, limits);
-        const result = await this.askCatalogNarrowing(agent, contextUser, BuildCatalogNarrowingQuestions(asked), promptName);
+        const result = await this.askCatalogNarrowing(agent, contextUser, BuildCatalogNarrowingQuestions(asked), promptName, step);
         const outcome = result.success ? SelectCatalogNarrowing(candidates, asked, result.Answers, limits) : undefined;
         if (!outcome) {
             const reason = result.success ? 'an answer was missing or was not a probability' : (result.errorMessage || 'the decision call failed');
@@ -8913,18 +9001,23 @@ The context is now within limits. Please retry your request with the recovered c
     /**
      * The one decision call, against the opening request. Never throws, and never waits longer than
      * {@link CATALOG_NARROWING_TIMEOUT_MS} or past the run's cancellation: a throw, a timeout and a
-     * cancelled run each come back as a failed result. Stopping also aborts the call.
+     * cancelled run each come back as a failed result. Stopping also aborts the call, and links the
+     * prompt run it still returns to `step` once it does ({@link linkLateDecisionPromptRun}).
      */
     private async askCatalogNarrowing(
         agent: MJAIAgentEntityExtended,
         contextUser: UserInfo,
         questions: Record<string, DecisionQuestion>,
-        promptName: string
+        promptName: string,
+        step?: MJAIAgentRunStepEntityExtended
     ): Promise<AIDecisionRunResult> {
         const failed = (errorMessage: string): AIDecisionRunResult => ({ success: false, errorMessage, Answers: {} });
         const controller = new AbortController();
-        const stopped = new Promise<AIDecisionRunResult>(resolve => controller.signal.addEventListener(
-            'abort', () => resolve(failed(String(controller.signal.reason))), { once: true }));
+        let stoppedResult: AIDecisionRunResult | undefined;
+        const stopped = new Promise<AIDecisionRunResult>(resolve => controller.signal.addEventListener('abort', () => {
+            stoppedResult = failed(String(controller.signal.reason));
+            resolve(stoppedResult);
+        }, { once: true }));
         const runToken = this._executeParams?.cancellationToken;
         const relayRunAbort = (): void => controller.abort('the run was cancelled');
         if (runToken?.aborted) {
@@ -8943,7 +9036,11 @@ The context is now within limits. Please retry your request with the recovered c
                 PromptName: promptName,
                 CancellationToken: controller.signal,
             });
-            return await Promise.race([ask, stopped]);
+            const result = await Promise.race([ask, stopped]);
+            if (result === stoppedResult) {
+                this.linkLateDecisionPromptRun(step, ask);
+            }
+            return result;
         } catch (error) {
             return failed(error instanceof Error ? error.message : String(error));
         } finally {

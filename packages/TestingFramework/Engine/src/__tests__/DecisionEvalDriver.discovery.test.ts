@@ -15,6 +15,7 @@ import {
     BuildDecisionDiscoveryOptionSet,
     BuildDecisionDiscoveryQuestions,
     DECISION_DISCOVERY_MIN_CONFIDENCE,
+    DECISION_DISCOVERY_MIN_OPTIONS,
     DECISION_DISCOVERY_TIMEOUT_MS,
     type DecisionDiscoveryAgent
 } from '@memberjunction/ai-agents';
@@ -51,6 +52,9 @@ const BILLING = agent('E1000000-0000-4000-8000-000000000002', 'Billing Agent');
 const MARKETING = agent('E1000000-0000-4000-8000-000000000003', 'Marketing Agent');
 const HELPER = agent('E1000000-0000-4000-8000-000000000004', 'Helper Sub', { InvocationMode: 'Sub-Agent' });
 const RUNNABLE = [SAGE, RESEARCH, BILLING, MARKETING, HELPER];
+const LEGAL = agent('E1000000-0000-4000-8000-000000000005', 'Legal Agent');
+/** Four discoverable agents: over an option cap of 3, and still at production's floor of 3 once narrowed. */
+const WIDE = [...RUNNABLE, LEGAL];
 
 const PROMPT = { ID: 'prompt-1', Name: 'Default Decision' } satisfies Pick<MJAIPromptEntityExtended, 'ID' | 'Name'>;
 
@@ -219,12 +223,12 @@ describe('DecisionEvalDriver — agent discovery', () => {
         });
 
         it("narrows a catalog over the prompt's option cap with the real search, and records it", async () => {
-            const search = new FakeSearch([{ ID: SAGE.ID }, { ID: MARKETING.ID }, { ID: BILLING.ID }, { ID: RESEARCH.ID }]);
-            const { driver, result } = await run({ environment: environment(search, { DeclaredCap: 2 }) });
-            expect(search.Calls).toEqual([{ Request: STATE, TopK: 6 }]);
+            const search = new FakeSearch([{ ID: SAGE.ID }, { ID: MARKETING.ID }, { ID: BILLING.ID }, { ID: LEGAL.ID }, { ID: RESEARCH.ID }]);
+            const { driver, result } = await run({ environment: environment(search, { DeclaredCap: 3, RunnableAgents: WIDE, AllAgents: WIDE }) });
+            expect(search.Calls).toEqual([{ Request: STATE, TopK: 9 }]);
             const choice = driver.Runner.Calls[0].Questions.agent;
-            expect(choice.Kind === 'Choice' ? choice.Options.map(o => o.Value) : []).toEqual([MARKETING.ID, BILLING.ID]);
-            expect(actualOf(result).Options).toEqual({ Count: 2, Limit: 2, CatalogSize: 3, WithoutDescription: 0, DeclaredCap: 2, NarrowedFrom: 3 });
+            expect(choice.Kind === 'Choice' ? choice.Options.map(o => o.Value) : []).toEqual([MARKETING.ID, BILLING.ID, LEGAL.ID]);
+            expect(actualOf(result).Options).toEqual({ Count: 3, Limit: 3, CatalogSize: 4, WithoutDescription: 0, DeclaredCap: 3, NarrowedFrom: 4 });
         });
     });
 
@@ -294,10 +298,10 @@ describe('DecisionEvalDriver — agent discovery', () => {
          */
         async function timed(searchMs: number, callMs: number, expected: DiscoveryEvalExpected = AGENT_LABEL) {
             vi.useFakeTimers({ toFake: ['Date'] });
-            const search = new FakeSearch([{ ID: BILLING.ID }, { ID: MARKETING.ID }, { ID: RESEARCH.ID }], searchMs);
+            const search = new FakeSearch([{ ID: BILLING.ID }, { ID: MARKETING.ID }, { ID: RESEARCH.ID }, { ID: LEGAL.ID }], searchMs);
             return run({
                 expected,
-                environment: environment(search, { DeclaredCap: 2 }),
+                environment: environment(search, { DeclaredCap: 3, RunnableAgents: WIDE, AllAgents: WIDE }),
                 respond: async () => {
                     takes(callMs);
                     return decided(BILLING.ID, 0.99, 0.9);
@@ -366,11 +370,13 @@ describe('DecisionEvalDriver — agent discovery', () => {
             expect(mention.driver.Runner.Calls).toHaveLength(0);
         });
 
-        it('skips when fewer than two agents are left to choose from', async () => {
-            const { driver, result } = await run({ environment: environment(new FakeSearch(), { RunnableAgents: [SAGE, BILLING, HELPER] }) });
+        it(`skips when fewer than production's ${DECISION_DISCOVERY_MIN_OPTIONS} agents are left to choose from, and asks at ${DECISION_DISCOVERY_MIN_OPTIONS}`, async () => {
+            const { driver, result } = await run({ environment: environment(new FakeSearch(), { RunnableAgents: [SAGE, BILLING, MARKETING, HELPER] }) });
             expect(result.status).toBe('Skipped');
-            expect(result.errorMessage).toContain('1 agents to choose from');
+            expect(result.errorMessage).toContain(`2 agents to choose from, fewer than the ${DECISION_DISCOVERY_MIN_OPTIONS}`);
             expect(driver.Runner.Calls).toHaveLength(0);
+            // The default catalog has exactly three options.
+            expect((await run()).driver.Runner.Calls).toHaveLength(1);
         });
     });
 

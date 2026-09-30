@@ -9,10 +9,13 @@
  *   1. Off by default: no decision call, no step, and the first prompt's messages are untouched.
  *   2. On: one call per run, over the agents the user may run (rebuilt every run, minus the running
  *      agent, Sub-Agents and agents without a description), as agent IDs with their descriptions.
- *      An @mention of another agent means no call.
+ *      An @mention of another agent, a follow-up turn, or fewer than three options means no call.
+ *      The switch is read without rebuilding the prompt params once the agent's catalog is cached.
  *   3. A confident Choice and Likelihood put a <suggested_agent> system message first in the first
- *      prompt; a low Choice confidence, a low Likelihood, an error, a throw, an unusable answer and a
- *      timeout each inject nothing. Every call is recorded as one `Agent discovery` Decision step.
+ *      prompt; a low Choice confidence, a low Likelihood, an error, a throw, an unusable answer, a
+ *      timeout and a cancelled run each inject nothing. Every call is recorded as one
+ *      `Agent discovery` Decision step, which links the call's prompt run so the run counts its cost:
+ *      on time, and after a timeout or a cancellation once the call settles.
  *   4. A catalog over the decision model's option cap is narrowed first by the semantic search, and
  *      the step says so.
  */
@@ -27,6 +30,7 @@ import {
     DECISION_DISCOVERY_APPLIES_INSTRUCTIONS,
     DECISION_DISCOVERY_MAX_OPTIONS,
     DECISION_DISCOVERY_MAX_RECORDED_IDS,
+    DECISION_DISCOVERY_MIN_OPTIONS,
     DECISION_DISCOVERY_TIMEOUT_MS,
     SuggestedAgentMessage,
     DECISION_DISCOVERY_CALIBRATION,
@@ -36,6 +40,7 @@ import {
 import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { DecisionResult, type ChatMessage, type ChoiceQuestion, type DecisionAnswer, type PlattCalibration } from '@memberjunction/ai';
+import type { MJAIAgentTypeEntity, MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { LogErrorEx } from '@memberjunction/core';
 import type { EntitySearchResult, IMetadataProvider, SearchEntityParams, UserInfo } from '@memberjunction/core';
 
@@ -209,6 +214,7 @@ class MockStepEntity {
     public PayloadAtStart: string | null = null;
     public PayloadAtEnd: string | null = null;
     public Skills: string | null = null;
+    public PromptRun: MJAIPromptRunEntity | undefined = undefined;
 
     constructor(private readonly seq: number) {}
 
@@ -293,6 +299,7 @@ class DiscoveryHarness {
     public promptModels: PromptModelRow[] = [];
     public modelConfigCalls: Array<{ ModelID: string; ModelVendorID: string | undefined }> = [];
     public maxChoiceOptions: number | null = null;
+    public runs: FakeAgentRun[] = [];
     public steps: MockStepEntity[] = [];
 
     private stepSeq = 0;
@@ -354,7 +361,9 @@ class DiscoveryHarness {
     public readonly provider = {
         GetEntityObject: async (entityName: string): Promise<unknown> => {
             if (entityName === 'MJ: AI Agent Runs') {
-                return new FakeAgentRun();
+                const run = new FakeAgentRun();
+                this.runs.push(run);
+                return run;
             }
             if (entityName === 'MJ: AI Agent Run Steps') {
                 const step = new MockStepEntity(++this.stepSeq);
@@ -385,13 +394,26 @@ class HarnessAgent extends BaseAgent {
     }
 }
 
+/** Counts how often the agent-type prompt params are merged. */
+class ParamBuildCountingAgent extends HarnessAgent {
+    public Builds = 0;
+
+    protected override buildAgentTypePromptParams(
+        agentType: MJAIAgentTypeEntity | undefined,
+        agent: MJAIAgentEntityExtended,
+        runtimeOverrides?: Record<string, unknown>
+    ): Record<string, unknown> {
+        this.Builds++;
+        return super.buildAgentTypePromptParams(agentType, agent, runtimeOverrides);
+    }
+}
+
 /** The private member the tests replace. */
 interface AgentInternals {
     _promptRunner: RecordingPromptRunner;
 }
 
-function makeAgent(): { agent: HarnessAgent; runner: RecordingPromptRunner } {
-    const agent = new HarnessAgent();
+function makeAgent(agent: HarnessAgent = new HarnessAgent()): { agent: HarnessAgent; runner: RecordingPromptRunner } {
     const runner = new RecordingPromptRunner();
     (agent as unknown as AgentInternals)._promptRunner = runner;
     return { agent, runner };
@@ -486,6 +508,58 @@ function expectWarning(): void {
     expect(vi.mocked(LogErrorEx)).toHaveBeenCalledWith(expect.objectContaining({ severity: 'warning', category: 'DecisionDiscovery' }));
 }
 
+/** The discovery decision's own prompt run, as AIDecisionRunner returns it once finalized. */
+const DISCOVERY_RUN = {
+    ID: 'eeeeeeee-8000-4000-8000-000000000001',
+    TokensUsedRollup: 700,
+    TokensPromptRollup: 650,
+    TokensCompletionRollup: 50,
+    TokensCacheReadRollup: 0,
+    TokensCacheWriteRollup: 0,
+    TotalCost: 0.0023,
+} satisfies Pick<MJAIPromptRunEntity, 'ID' | 'TokensUsedRollup' | 'TokensPromptRollup' | 'TokensCompletionRollup' | 'TokensCacheReadRollup' | 'TokensCacheWriteRollup' | 'TotalCost'>;
+
+/** What AIDecisionRunner returns for an aborted call: it wrote the prompt run before it called the model. */
+const ABORTED: AIDecisionRunResult = { success: false, errorMessage: 'The operation was aborted', Answers: {}, promptRun: DISCOVERY_RUN as MJAIPromptRunEntity };
+
+/** `ask`, with the discovery call's prompt run on its result. */
+function withPromptRun(ask: (args: AgentDecisionAskParams) => Promise<AIDecisionRunResult>): (args: AgentDecisionAskParams) => Promise<AIDecisionRunResult> {
+    return async (args) => ({ ...(await ask(args)), promptRun: DISCOVERY_RUN as MJAIPromptRunEntity });
+}
+
+/**
+ * An Ask that calls `onAsked`, then settles with `result` once its signal aborts, as the runner
+ * finalizes its prompt run after the abort.
+ */
+function settlesOnAbort(result: AIDecisionRunResult, onAsked: () => void): (args: AgentDecisionAskParams) => Promise<AIDecisionRunResult> {
+    return (args) => new Promise<AIDecisionRunResult>(resolve => {
+        args.CancellationToken?.addEventListener('abort', () => resolve(result), { once: true });
+        onAsked();
+    });
+}
+
+/** `Asked` resolves once `Mark` is called: the moment the decision is asked. */
+function askedSignal(): { Asked: Promise<void>; Mark: () => void } {
+    let mark: () => void = () => undefined;
+    const asked = new Promise<void>(resolve => {
+        mark = resolve;
+    });
+    return { Asked: asked, Mark: mark };
+}
+
+/** The discovery step links DISCOVERY_RUN, and the run's totals include it. */
+function expectDiscoveryRunCounted(): void {
+    const step = discoverySteps()[0];
+    expect(step.TargetLogID).toBe(DISCOVERY_RUN.ID);
+    expect(step.PromptRun).toBe(DISCOVERY_RUN);
+    // The scripted prompt carries no prompt run, so the discovery call is the run's whole spend.
+    const run = harness.runs[0];
+    expect(run.TotalCost).toBe(DISCOVERY_RUN.TotalCost);
+    expect(run.TotalTokensUsed).toBe(DISCOVERY_RUN.TokensUsedRollup);
+    expect(run.TotalPromptTokensUsed).toBe(DISCOVERY_RUN.TokensPromptRollup);
+    expect(run.TotalCompletionTokensUsed).toBe(DISCOVERY_RUN.TokensCompletionRollup);
+}
+
 beforeEach(() => {
     vi.clearAllMocks();
     vi.restoreAllMocks();
@@ -505,6 +579,21 @@ describe('decision discovery — off by default', () => {
         expect(discoverySteps()).toHaveLength(0);
         expect(harness.steps.map(s => s.StepType)).toEqual(['Validation', 'Prompt']);
         expect(runner.MessagesAtCall[0]).toEqual([{ role: 'user', content: OPENING_REQUEST }]);
+    });
+
+    it("reads the switch without rebuilding the prompt params once the agent's catalog is cached", async () => {
+        const agent = new ParamBuildCountingAgent();
+        const { runner } = makeAgent(agent);
+
+        await agent.Execute(makeParams());
+        const buildsOnFirstRun = agent.Builds;
+        await agent.Execute(makeParams());
+        await agent.Execute(makeParams({ data: { __agentTypePromptParams: { decisionDiscovery: false } } }));
+
+        // The first run fills the cache; after it, only gatherPromptTemplateData merges the override.
+        expect(buildsOnFirstRun).toBeGreaterThan(0);
+        expect(agent.Builds - buildsOnFirstRun).toBe(1);
+        expect(runner.Calls).toHaveLength(3);
     });
 
     it.each([
@@ -608,8 +697,12 @@ describe('decision discovery — the options', () => {
         expect(ask.mock.calls[0][0].PromptName).toBe('Routing Decision');
     });
 
-    it('asks nothing when fewer than two agents are left to choose from, and records why', async () => {
-        harness.runnableIDs = new Set([SELF_ID, BILLING.ID]);
+    it.each([
+        ['one agent', [BILLING.ID]],
+        // A Choice between two cannot say that neither fits: its top answer is at least 0.5.
+        ['two agents', [BILLING.ID, MARKETING.ID]],
+    ])(`asks nothing, and records why, when %s (fewer than ${DECISION_DISCOVERY_MIN_OPTIONS}) are left to choose from`, async (_label, runnable) => {
+        harness.runnableIDs = new Set([SELF_ID, ...runnable]);
         const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask');
         const { agent, runner } = makeAgent();
 
@@ -619,7 +712,18 @@ describe('decision discovery — the options', () => {
         expect(suggestionsInFirstPrompt(runner)).toHaveLength(0);
         const steps = discoverySteps();
         expect(steps).toHaveLength(1);
-        expect(stepOutput(steps[0])).toMatchObject({ injected: false, catalogSize: 1, options: 1 });
+        expect(steps[0].Status).toBe('Completed');
+        expect(stepOutput(steps[0])).toMatchObject({ injected: false, catalogSize: runnable.length, options: runnable.length });
+        expect(String(stepOutput(steps[0]).reason)).toContain(`fewer than the ${DECISION_DISCOVERY_MIN_OPTIONS} a suggestion needs`);
+    });
+
+    it(`asks once ${DECISION_DISCOVERY_MIN_OPTIONS} agents are left to choose from`, async () => {
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.9, 0.95));
+        const { agent } = makeAgent();
+
+        await agent.Execute(makeParams());
+
+        expect(choiceOf(ask.mock.calls[0][0]).Options).toHaveLength(DECISION_DISCOVERY_MIN_OPTIONS);
     });
 });
 
@@ -709,6 +813,20 @@ describe('decision discovery — what reaches the prompt', () => {
 
         const message = SuggestedAgentMessage({ ID: MARKETING.ID, Name: MARKETING.Name, Description: MARKETING.Description ?? '' }, 0.91);
         expect(suggestionsInFirstPrompt(runner)).toEqual([{ role: 'system', content: message }]);
+    });
+
+    it.each([
+        ['it injects a suggestion', answering(BILLING, 0.9, 0.95), true],
+        ['it is unsure, and injects nothing', answering(BILLING, 0.55, 0.9), false],
+    ])("counts the decision toward the run's tokens and cost when %s: its step links the prompt run", async (_label, answer, injected) => {
+        vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(withPromptRun(answer));
+        const { agent, runner } = makeAgent();
+
+        await agent.Execute(makeParams());
+
+        expect(suggestionsInFirstPrompt(runner)).toHaveLength(injected ? 1 : 0);
+        expect(stepOutput(discoverySteps()[0])).toMatchObject({ injected, promptRunId: DISCOVERY_RUN.ID });
+        expectDiscoveryRunCounted();
     });
 
     it.each([
@@ -818,6 +936,117 @@ describe('decision discovery — what reaches the prompt', () => {
             expect(stepOutput(steps[0])).toMatchObject({ injected: false });
             expect(String(stepOutput(steps[0]).reason)).toContain('timed out');
         });
+
+        it('links the prompt run of the call it stopped waiting for, so the run still counts it', async () => {
+            vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+            const { Asked, Mark } = askedSignal();
+            vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(settlesOnAbort(ABORTED, Mark));
+            const { agent, runner } = makeAgent();
+
+            const pending = agent.Execute(makeParams());
+            await Asked;
+            await vi.advanceTimersByTimeAsync(DECISION_DISCOVERY_TIMEOUT_MS);
+            const result = await pending;
+
+            expect(result.success).toBe(true);
+            expect(suggestionsInFirstPrompt(runner)).toHaveLength(0);
+            const step = discoverySteps()[0];
+            expect(step.Status).toBe('Failed');
+            expect(String(stepOutput(step).reason)).toContain('timed out');
+            expectDiscoveryRunCounted();
+        });
+    });
+});
+
+describe('decision discovery — a cancelled run', () => {
+    beforeEach(() => {
+        harness.self = makeSelf(ON);
+    });
+
+    it('stops at once when the run is cancelled, injects nothing, and still counts the call', async () => {
+        const run = new AbortController();
+        const { Asked, Mark } = askedSignal();
+        let signal: AbortSignal | undefined;
+        vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation((args) => {
+            signal = args.CancellationToken;
+            return settlesOnAbort(ABORTED, Mark)(args);
+        });
+        const { agent, runner } = makeAgent();
+
+        const pending = agent.Execute(makeParams({ cancellationToken: run.signal }));
+        await Asked;
+        expect(signal?.aborted).toBe(false);
+        run.abort('user cancelled');
+        const result = await pending;
+
+        expect(result.success).toBe(false);
+        expect(signal?.aborted).toBe(true);
+        expect(suggestionsInFirstPrompt(runner)).toHaveLength(0);
+        expectWarning();
+        const step = discoverySteps()[0];
+        expect(step.Status).toBe('Failed');
+        expect(stepOutput(step)).toMatchObject({ injected: false });
+        // Not the timeout: the run's cancellation reached the call before DECISION_DISCOVERY_TIMEOUT_MS.
+        expect(String(stepOutput(step).reason)).toContain('cancelled');
+        expectDiscoveryRunCounted();
+    });
+});
+
+describe('decision discovery — follow-up turns', () => {
+    beforeEach(() => {
+        harness.self = makeSelf(ON);
+    });
+
+    it.each([
+        ['a follow-up to an agent already at work', [
+            { role: 'user', content: OPENING_REQUEST },
+            { role: 'assistant', content: 'Billing Agent drafted the invoice.' },
+            { role: 'user', content: 'Make it shorter' },
+        ]],
+        ['a turn after a summary of the earlier conversation', [
+            { role: 'user', content: 'Summary: Billing Agent is drafting an invoice for Acme.', metadata: { isConversationSummary: true } },
+            { role: 'user', content: 'Make it shorter' },
+        ]],
+    ] satisfies Array<[string, ChatMessage[]]>)('asks nothing, records no step and leaves the prompt untouched on %s', async (_label, messages) => {
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(MARKETING, 0.99, 0.99));
+        const { agent, runner } = makeAgent();
+
+        const result = await agent.Execute(makeParams({ conversationMessages: messages }));
+
+        expect(result.success).toBe(true);
+        expect(ask).not.toHaveBeenCalled();
+        expect(harness.filterCalls).toHaveLength(0);
+        expect(discoverySteps()).toHaveLength(0);
+        expect(suggestionsInFirstPrompt(runner)).toHaveLength(0);
+    });
+
+    it("still asks on the conversation's opening request when a greeting came before it", async () => {
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.9, 0.95));
+        const { agent, runner } = makeAgent();
+
+        await agent.Execute(makeParams({ conversationMessages: [
+            { role: 'assistant', content: 'Hi! What can I help you with?' },
+            { role: 'user', content: OPENING_REQUEST },
+        ] }));
+
+        expect(ask).toHaveBeenCalledTimes(1);
+        expect(ask.mock.calls[0][0].State).toBe(OPENING_REQUEST);
+        expect(suggestionsInFirstPrompt(runner)).toHaveLength(1);
+    });
+
+    it('asks again on the opening request of the next conversation the same agent instance runs', async () => {
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.9, 0.95));
+        const { agent } = makeAgent();
+
+        await agent.Execute(makeParams({ conversationMessages: [
+            { role: 'user', content: 'Hello' },
+            { role: 'assistant', content: 'Hi' },
+            { role: 'user', content: 'Make it shorter' },
+        ] }));
+        await agent.Execute(makeParams());
+
+        expect(ask).toHaveBeenCalledTimes(1);
+        expect(ask.mock.calls[0][0].State).toBe(OPENING_REQUEST);
     });
 });
 
@@ -851,9 +1080,10 @@ describe('decision discovery — a catalog over the option cap', () => {
     });
 
     it('narrows the catalog first with the semantic search, in its rank order, and says so in the step', async () => {
-        harness.maxChoiceOptions = 2;
+        harness.maxChoiceOptions = 3;
+        harness.catalog = [...harness.catalog, LATECOMER];
         const searches: SearchEntityParams[] = [];
-        const ranked = [SECRET.ID, MARKETING.ID, RESEARCH.ID, BILLING.ID];
+        const ranked = [SECRET.ID, MARKETING.ID, RESEARCH.ID, LATECOMER.ID, BILLING.ID];
         const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(MARKETING, 0.9, 0.95));
         const { agent, runner } = makeAgent();
 
@@ -863,19 +1093,19 @@ describe('decision discovery — a catalog over the option cap', () => {
         expect(searches[0]).toMatchObject({
             entityName: 'MJ: AI Agents',
             searchText: OPENING_REQUEST,
-            options: { mode: 'hybrid', topK: 6, minScore: 0 },
+            options: { mode: 'hybrid', topK: 9, minScore: 0 },
         });
         expect(searches[0].options?.contextUser?.ID).toBe(USER_ID);
-        // The cap (2) is below DECISION_DISCOVERY_MAX_OPTIONS, so 2 are kept; SECRET is not permitted.
-        expect(choiceOf(ask.mock.calls[0][0]).Options.map(o => o.Value)).toEqual([MARKETING.ID, RESEARCH.ID]);
+        // The cap (3) is below DECISION_DISCOVERY_MAX_OPTIONS, so 3 are kept; SECRET is not permitted.
+        expect(choiceOf(ask.mock.calls[0][0]).Options.map(o => o.Value)).toEqual([MARKETING.ID, RESEARCH.ID, LATECOMER.ID]);
         expect(suggestionsInFirstPrompt(runner)).toHaveLength(1);
         expect(stepOutput(discoverySteps()[0])).toMatchObject({
             injected: true,
-            catalogSize: 4,
-            options: 2,
-            optionLimit: 2,
-            declaredOptionCap: 2,
-            narrowed: { by: 'semantic search', from: 3, to: 2 },
+            catalogSize: 5,
+            options: 3,
+            optionLimit: 3,
+            declaredOptionCap: 3,
+            narrowed: { by: 'semantic search', from: 4, to: 3 },
         });
     });
 
@@ -974,23 +1204,25 @@ describe("decision discovery — the host's allow-list", () => {
     }
 
     it('offers only the permitted agents the host lists, matching IDs in any case, and records the list', async () => {
+        harness.catalog = [...harness.catalog, LATECOMER];
         const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(MARKETING, 0.9, 0.95));
         const { agent, runner } = makeAgent();
         const upperResearch = { ...RESEARCH, ID: RESEARCH.ID.toUpperCase() };
 
-        await agent.Execute(makeParams({ data: hostCatalog(upperResearch, MARKETING, SECRET) }));
+        await agent.Execute(makeParams({ data: hostCatalog(upperResearch, MARKETING, LATECOMER, SECRET) }));
 
         // BILLING is not listed by the host; SECRET is listed but the user may not run it.
-        expect(choiceOf(ask.mock.calls[0][0]).Options.map(o => o.Value)).toEqual([RESEARCH.ID, MARKETING.ID]);
+        expect(choiceOf(ask.mock.calls[0][0]).Options.map(o => o.Value)).toEqual([RESEARCH.ID, MARKETING.ID, LATECOMER.ID]);
         expect(suggestionsInFirstPrompt(runner)).toHaveLength(1);
-        expect(stepOutput(discoverySteps()[0])).toMatchObject({ injected: true, catalogSize: 2, options: 2, hostAllowList: { size: 3 } });
+        expect(stepOutput(discoverySteps()[0])).toMatchObject({ injected: true, catalogSize: 3, options: 3, hostAllowList: { size: 4 } });
     });
 
     it('never suggests an agent the host excluded, even when the decision picks it', async () => {
+        harness.catalog = [...harness.catalog, LATECOMER];
         vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.99, 0.99));
         const { agent, runner } = makeAgent();
 
-        await agent.Execute(makeParams({ data: hostCatalog(RESEARCH, MARKETING) }));
+        await agent.Execute(makeParams({ data: hostCatalog(RESEARCH, MARKETING, LATECOMER) }));
 
         expect(suggestionsInFirstPrompt(runner)).toHaveLength(0);
         const steps = discoverySteps();

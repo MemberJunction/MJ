@@ -15,6 +15,7 @@ import {
     BuildDecisionDiscoveryQuestions,
     CanSearchEntities,
     DECISION_DISCOVERY_MIN_CONFIDENCE,
+    DECISION_DISCOVERY_MIN_OPTIONS,
     DECISION_DISCOVERY_TIMEOUT_MS,
     DecisionDiscoveryAgentSearch,
     DecisionDiscoveryCatalog,
@@ -306,7 +307,9 @@ export class DecisionEvalDriver extends BaseTestDriver {
     /**
      * Maps the request to production's state, then runs the `semantic-search` baseline, or builds
      * the options and runs the one decision, and scores it. A request production would ask nothing
-     * about is Skipped; options that cannot be built are an Error.
+     * about is Skipped, including one with fewer than {@link DECISION_DISCOVERY_MIN_OPTIONS} options;
+     * options that cannot be built are an Error. Every corpus request is a conversation's opening
+     * request, the only turn production's discovery asks about.
      */
     private async evaluateDiscoveryTest(test: ParsedDiscoveryEvalTest, context: DriverExecutionContext, startedAt: number): Promise<DriverExecutionResult> {
         const environment = await this.LoadDiscoveryEnvironment(test.Config, context);
@@ -330,8 +333,10 @@ export class DecisionEvalDriver extends BaseTestDriver {
         if (optionSet.Error) {
             throw new Error(`The options could not be built: ${optionSet.Error}`);
         }
-        if (optionSet.Options.length < 2) {
-            return { ...this.errorResult(`There are ${optionSet.Options.length} agents to choose from, so production asks nothing.`, test, null, [], startedAt), status: 'Skipped' };
+        if (optionSet.Options.length < DECISION_DISCOVERY_MIN_OPTIONS) {
+            const reason = `There are ${optionSet.Options.length} agents to choose from, fewer than the ${DECISION_DISCOVERY_MIN_OPTIONS} production's `
+                + 'discovery needs, so production asks nothing.';
+            return { ...this.errorResult(reason, test, null, [], startedAt), status: 'Skipped' };
         }
         this.logToTestRun(context, 'info', `Asking agent discovery with '${environment.Prompt?.Name}' over ${optionSet.Options.length} option(s)`);
         const call = await this.callDiscoveryDecision(test.Config, request, optionSet, environment.Prompt, context, discoveryStarted);
