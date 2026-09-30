@@ -627,6 +627,62 @@ describe('DecisionFeaturePipelineDriver', () => {
         });
     });
 
+    describe('the output check, end to end through InferProcessor.ProcessRecord', () => {
+        /** Runs one ticket through the processor, answering with `answers`; returns the result and the Feature Values rows. */
+        async function processTicket(outputs: DataFeatureOutput[], answers: Record<string, DecisionAnswer>) {
+            const recordFeatureValues = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue();
+            answerWith(decided(answers));
+            const result = await new InferProcessor(PROMPT_ID, undefined, decisionSpec(outputs)).ProcessRecord(ticket('T-1'), context);
+            return { result, featureValues: recordFeatureValues.mock.calls.map(([params]) => params.outputs) };
+        }
+
+        const offTheList = choice('Reopened', 0.9, { Reopened: 0.9, Open: 0.05, Closed: 0.05 });
+
+        it('accepts an answer from the value list of a FromFieldMetadata enum, and keeps its confidence', async () => {
+            const { result, featureValues } = await processTicket([statusOutput()], { Status: choice('Open', 0.9, { Open: 0.9, Closed: 0.1 }) });
+
+            expect(result.Status).toBe('Succeeded');
+            expect(result.ResultPayload).toEqual({ Status: 'Open' });
+            expect(result.Confidence).toEqual({ Status: 0.9 });
+            expect(featureValues).toEqual([[expect.objectContaining({ featureName: 'Status', value: 'Open', confidence: 0.9 })]]);
+        });
+
+        it('fails the record for an answer off the value list when OnViolation is fail, writing nothing', async () => {
+            const { result, featureValues } = await processTicket([statusOutput()], { Status: offTheList });
+
+            expect(result.Status).toBe('Failed');
+            expect(result.ErrorMessage).toMatch(/Value 'Reopened' is not in the allowed vocabulary: \[Open, Closed\]/);
+            expect(featureValues).toEqual([]);
+        });
+
+        it('writes null with no confidence when OnViolation is null, keeping the other outputs\' confidence', async () => {
+            const { result, featureValues } = await processTicket([booleanOutput('IsUrgent'), statusOutput({ OnViolation: 'null' })], {
+                IsUrgent: likelihood(0.8),
+                Status: offTheList,
+            });
+
+            expect(result.Status).toBe('Succeeded');
+            expect(result.ResultPayload).toEqual(expect.objectContaining({ IsUrgent: true, Status: null }));
+            expect(result.Confidence).toEqual({ IsUrgent: 0.8 });
+            expect(featureValues).toHaveLength(1);
+            const [urgent, status] = featureValues[0];
+            expect(urgent).toEqual(expect.objectContaining({ featureName: 'IsUrgent', value: true, confidence: 0.8 }));
+            expect(status).toEqual(expect.objectContaining({ featureName: 'Status', value: null }));
+            expect(status.confidence).toBeUndefined();
+        });
+
+        it("writes 'Other' with no confidence when OnViolation is coerce-to-other", async () => {
+            const { result, featureValues } = await processTicket([statusOutput({ OnViolation: 'coerce-to-other' })], { Status: offTheList });
+
+            expect(result.Status).toBe('Succeeded');
+            expect(result.ResultPayload).toEqual(expect.objectContaining({ Status: 'Other' }));
+            expect(result.Confidence).toBeUndefined();
+            const [status] = featureValues[0];
+            expect(status).toEqual(expect.objectContaining({ featureName: 'Status', value: 'Other' }));
+            expect(status.confidence).toBeUndefined();
+        });
+    });
+
     describe('InferProcessor Integration', () => {
         class DecisionProbeProcessor extends InferProcessor {
             public Resolve(ctx: RecordProcessorContext): Promise<BaseFeaturePipelineDriver> {
