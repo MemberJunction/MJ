@@ -26,7 +26,10 @@ interface CriterionProbability {
     passed: boolean;
 }
 
-/** The decision run's details, reported on every result the decision call produced. */
+/**
+ * The decision run's details, reported on every result the decision call produced. `llmCost` is the
+ * key the LLM judge reports its cost under; nothing adds either judge's cost to `TestRun.CostUSD`.
+ */
 interface DecisionRunDetails {
     decisionRunId?: string;
     decisionModel?: string;
@@ -58,8 +61,9 @@ interface DecisionRunDetails {
  * - passed: every criterion's probability is at or above `passThreshold`
  * - score: the weighted mean of the probabilities (weights default to 1)
  * - details: `criteriaProbabilities` (one entry per criterion), `passThreshold`, `promptName`,
- *   `decisionRunId` (the `MJ: AI Prompt Runs` row), `decisionModel`, and `llmCost`, which is where the
- *   LLM judge reports its cost
+ *   `decisionRunId` (the `MJ: AI Prompt Runs` row), `decisionModel`, and `llmCost`, the decision
+ *   call's cost, under the key the LLM judge uses for its own. It is saved with the result details
+ *   (`TestRun.ResultDetails`) but, as for the LLM judge, it is not added to `TestRun.CostUSD`.
  *
  * A failed decision call gives a failed result with the error message. The oracle never throws.
  *
