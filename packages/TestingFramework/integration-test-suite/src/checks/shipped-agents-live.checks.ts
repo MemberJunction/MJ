@@ -26,6 +26,7 @@ import { NamedCheck, IntegrationCheckContext, AgentLiveFixture } from '@memberju
 import {
     AGENT_LIVE_FIXTURE_TAG, AGENT_LIVE_SETTLE_MS, NewMarker, Sleep,
     MakeAIClient, UserTurn, RunAgentOverWire, ResolveRunId, GetRunSteps, DeleteById, PurgeAgentRun,
+    type WireRunOptions,
 } from './agent-live-shared';
 
 function fixture(ctx: IntegrationCheckContext): AgentLiveFixture {
@@ -47,13 +48,16 @@ async function resolveShipped(name: string, user: UserInfo): Promise<MJAIAgentEn
 }
 
 /** Run a shipped agent over the wire, land its run id (recorded for teardown), deep-verify it. */
-async function runAndVerify(ctx: IntegrationCheckContext, agent: MJAIAgentEntityExtended, message: string, opts?: { conversationDetailId?: string; conversationId?: string }): Promise<string> {
+// Typed as the shared WireRunOptions — not a local copy — so a rename there breaks this file at
+// compile time. A local `{ conversationId? }` copy survived the rename to `ConversationId`, and
+// because it was forwarded as a variable (no excess-property check) SA4 silently ran unlinked.
+async function runAndVerify(ctx: IntegrationCheckContext, agent: MJAIAgentEntityExtended, message: string, opts?: Pick<WireRunOptions, 'conversationDetailId' | 'ConversationId'>): Promise<string> {
     const result = await RunAgentOverWire(MakeAIClient(ctx.Provider, ctx.User), agent, UserTurn(message), opts);
     await Sleep(AGENT_LIVE_SETTLE_MS);
     const fallback = opts?.conversationDetailId
         ? `AgentID='${agent.ID}' AND ConversationDetailID='${opts.conversationDetailId}'`
-        : opts?.conversationId
-            ? `AgentID='${agent.ID}' AND ConversationID='${opts.conversationId}'`
+        : opts?.ConversationId
+            ? `AgentID='${agent.ID}' AND ConversationID='${opts.ConversationId}'`
             : `AgentID='${agent.ID}' AND Status<>'Running'`;
     const runId = await ResolveRunId(result, ctx.User, fallback, ctx.Provider);
     Assert(!!runId, `shipped run for '${agent.Name}' landed an AI Agent Run`);
@@ -130,12 +134,12 @@ export const ShippedAgentsLiveChecks: NamedCheck[] = [
             Assert(await detail.Save(), `SA4: detail save: ${detail.LatestResult?.CompleteMessage}`);
             fx.ConversationDetailIds.push(detail.ID);
 
-            // Pass conversationId, NOT conversationDetailId: the resolver treats a supplied
+            // Pass ConversationId, NOT conversationDetailId: the resolver treats a supplied
             // conversationDetailId as the caller's ALREADY-CREATED agent-response row (the real UI
             // pre-creates it client-side) and only updates it — so handing it the Role='User' row
             // would update that row in place and never produce a Role='AI' detail. With
-            // conversationId the server owns both details, which is what this check asserts.
-            const runId = await runAndVerify(ctx, sage, 'Reply with the single word: pong.', { conversationId: conversation.ID });
+            // ConversationId the server owns both details, which is what this check asserts.
+            const runId = await runAndVerify(ctx, sage, 'Reply with the single word: pong.', { ConversationId: conversation.ID });
 
             const run = await new RunView().RunView<{ ConversationID: string | null }>({
                 EntityName: 'MJ: AI Agent Runs', ExtraFilter: `ID='${runId}'`, Fields: ['ConversationID'], ResultType: 'simple', BypassCache: true,
