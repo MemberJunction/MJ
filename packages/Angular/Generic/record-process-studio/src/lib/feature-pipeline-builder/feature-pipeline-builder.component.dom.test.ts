@@ -133,6 +133,15 @@ function savedSpec(record: MJRecordProcessEntity): DataFeatureSpec | null {
   return SafeJSONParse<DataFeatureSpec>(record.Configuration ?? '');
 }
 
+/** The output's constraint narrowed to its boolean variant; throws (failing the test) for any other type. */
+function booleanConstraint(output: DataFeatureSpec['Outputs'][number]) {
+  const constraint = output.Constraint;
+  if (constraint?.Type !== 'boolean') {
+    throw new Error(`expected a boolean constraint, got ${constraint?.Type ?? 'none'}`);
+  }
+  return constraint;
+}
+
 const render = (record: MJRecordProcessEntity, validity?: boolean[]) =>
   renderComponentFixture(FeaturePipelineBuilderComponent, {
     inputs: {
@@ -319,7 +328,7 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     const f = render(rec);
     const levels = f.componentInstance.GetNumericLevels(output);
     expect(levels).toEqual([]);
-    expect(output.Constraint.Levels).toBeUndefined();
+    expect(output.Constraint).toEqual({ Type: 'numeric', Min: 0, Max: 100, OnViolation: 'fail' });
   });
 
   it('handles optional boolean threshold without default or silent clamping', () => {
@@ -344,10 +353,10 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     expect(thresholdInput.value).toBe('');
 
     f.componentInstance.UpdateBooleanThreshold(0, eventWithValue('1.5', 'input'));
-    expect(out.Constraint?.Threshold).toBe(1.5);
+    expect(booleanConstraint(out).Threshold).toBe(1.5);
 
     f.componentInstance.UpdateBooleanThreshold(0, eventWithValue('', 'input'));
-    expect(out.Constraint?.Threshold).toBeUndefined();
+    expect(booleanConstraint(out).Threshold).toBeUndefined();
     expect(f.componentInstance.GetBooleanThreshold(out)).toBeNull();
   });
 
@@ -360,7 +369,7 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     f.componentInstance.addOutput();
     const newOut = f.componentInstance.spec.Outputs[0];
     expect(newOut.Constraint?.Type).toBe('boolean');
-    expect(newOut.Constraint?.Threshold).toBeUndefined();
+    expect(booleanConstraint(newOut).Threshold).toBeUndefined();
   });
 
   it('shows inactive or unrecognized pipeline types as selected options', () => {
