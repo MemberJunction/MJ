@@ -87,7 +87,7 @@ export class AIEmbeddingRunner extends BaseModelRunner {
   constructor() {
     super();
     // With no Provider set, BaseModelRunner.Provider falls back to this: the global default.
-    this._metadata = new Metadata();
+    this._metadata = new Metadata(); // global-provider-ok: the fallback only; a caller's Provider (params or setter) always wins
   }
 
   public override get RequiredModelType(): string {
