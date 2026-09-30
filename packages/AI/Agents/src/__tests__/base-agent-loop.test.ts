@@ -653,7 +653,9 @@ describe('BaseAgent.Execute — full loop: prompt → actions → prompt → fin
         const contents = params.conversationMessages.map((m) => (typeof m.content === 'string' ? m.content : ''));
         expect(contents.some((c) => c.includes(`You invoked the **${ACTION_NAME}** action`))).toBe(true);
         expect(contents.some((c) => c.startsWith('Action results:'))).toBe(true);
-        expect(runner.Calls[1].conversationMessages).toBe(params.conversationMessages);
+        // Prompt 2 received the conversation history with the trailing runtime state fragment appended
+        expect(runner.Calls[1].conversationMessages.slice(0, -1)).toEqual(params.conversationMessages);
+        expect(runner.Calls[1].conversationMessages.at(-1)?.metadata?.volatileState).toBe(true);
     });
 });
 
@@ -802,8 +804,9 @@ describe('BaseAgent.Execute — native tool results: call turn → tool turn, no
         // Neither the "[You invoked …]" recap nor the markdown "Action results:" message exists.
         expect(messages.some((m) => textOf(m).includes('You invoked'))).toBe(false);
         expect(messages.some((m) => textOf(m).startsWith('Action results:'))).toBe(false);
-        // Prompt 2 saw the same array.
-        expect(runner.Calls[1].conversationMessages).toBe(params.conversationMessages);
+        // Prompt 2 saw the conversation messages with the trailing runtime state fragment appended.
+        expect(runner.Calls[1].conversationMessages.slice(0, -1)).toEqual(params.conversationMessages);
+        expect(runner.Calls[1].conversationMessages.at(-1)?.metadata?.volatileState).toBe(true);
     });
 
     it('keeps the recap and the markdown results when the catalog did not ask for native results', async () => {
@@ -948,13 +951,12 @@ describe('BaseAgent.Execute — failure finalization', () => {
         expect(result.success).toBe(true);
         expect(harness.run.Status).toBe('Completed');
 
-        // Surprising-but-real behavior: only actions that THROW count toward the
-        // "N of M action(s) failed" header — a returned Success=false still renders
-        // under the plain "Action results:" header (with its FAILED result code).
+        // When an action returns Success=false, it correctly counts toward the
+        // failed actions header and generates failure guidance for the model.
         const contents = params.conversationMessages.map((m) => (typeof m.content === 'string' ? m.content : ''));
-        const resultsMessage = contents.find((c) => c.includes('Action results:'));
+        const resultsMessage = contents.find((c) => c.includes('action(s) failed:'));
         expect(resultsMessage).toBeDefined();
-        expect(contents.some((c) => c.includes('action(s) failed'))).toBe(false);
+        expect(contents.some((c) => c.includes('Action Execution Failure Guidance'))).toBe(true);
     });
 });
 
@@ -1033,10 +1035,17 @@ describe('BaseAgent.Execute — a While whose condition cannot be evaluated', ()
     const contentOf = (m: { content: unknown }): string => (typeof m.content === 'string' ? m.content : '');
 
     it('tells the model why on its next turn, so it can correct the loop', async () => {
+        // The trailing runtime-state fragment (metadata.volatileState) rides as the last message of
+        // EVERY request and is rebuilt each time; it is framework state, not a message the loop added,
+        // so it is excluded before the turns are compared.
+        const realMessages = (p: AIPromptParams): string[] =>
+            (p.conversationMessages ?? [])
+                .filter((m) => (m as { metadata?: { volatileState?: boolean } }).metadata?.volatileState !== true)
+                .map(contentOf);
         const turns: string[][] = [];
         const { agent, runner } = makeAgent([
-            (p) => { turns.push((p.conversationMessages ?? []).map(contentOf)); return llmEnvelope(badWhile()); },
-            (p) => { turns.push((p.conversationMessages ?? []).map(contentOf)); return llmEnvelope(successEnvelope()); },
+            (p) => { turns.push(realMessages(p)); return llmEnvelope(badWhile()); },
+            (p) => { turns.push(realMessages(p)); return llmEnvelope(successEnvelope()); },
         ]);
 
         const result = await agent.Execute(makeParams({ payload: { count: 0 } }));
@@ -1098,6 +1107,11 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
     /** Asked only the decision requests, never the gate. */
     const decisionCalls = (ask: ReturnType<typeof answerDecisions>) => ask.mock.calls.filter(([args]) => !('q1' in args.Questions));
 
+    /** Run params for an agent whose finishIf gates are `mode` (gates are opt-in; the default is off). */
+    function gateParams(mode: 'on' | 'shadow'): ExecuteAgentParams {
+        return makeParams({ data: { __agentTypePromptParams: { finishIfMode: mode } } });
+    }
+
     function gatedActionsEnvelope(): LoopAgentResponse {
         return {
             taskComplete: false,
@@ -1151,7 +1165,9 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
         const injected = params.conversationMessages.map(textOf).find((c) => c.startsWith('Decision results:'));
         expect(injected).toContain('"id":"triage"');
         expect(injected).toContain('"probability":0.8');
-        expect(runner.Calls[1].conversationMessages).toBe(params.conversationMessages);
+        // The next prompt reads them. It gets a copy with the trailing runtime state appended, not
+        // the same array, so check the content it received.
+        expect(runner.Calls[1].conversationMessages?.map(textOf).some((c) => c.startsWith('Decision results:'))).toBe(true);
     });
 
     it('answers a decisions field that is not an array with one failed result, and keeps the rest of the turn', async () => {
@@ -1214,7 +1230,7 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
             () => llmEnvelope(successEnvelope()),
         ]);
 
-        const result = await agent.Execute(makeParams());
+        const result = await agent.Execute(gateParams('on'));
 
         expect(result.success).toBe(true);
         expect(runner.Calls).toHaveLength(1);
@@ -1230,7 +1246,7 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
             () => llmEnvelope(gatedActionsEnvelope()),
             () => llmEnvelope(successEnvelope()),
         ]);
-        const params = makeParams();
+        const params = gateParams('on');
 
         const result = await agent.Execute(params);
 
@@ -1241,6 +1257,38 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
         expect(harness.steps[3].StepName).toContain('Finish check');
         expect(harness.steps[4].StepName).toContain('Decision: triage');
         expect(runner.Calls[1].conversationMessages?.map(textOf).some((c) => c.startsWith('Decision results:') && c.includes('"id":"triage"'))).toBe(true);
+    });
+
+    it('in shadow mode, records a passing gate, does not end the run, and asks the decisions for the next prompt', async () => {
+        const ask = answerDecisions(0.95);
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(gatedActionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(gateParams('shadow'));
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(2);
+        expect(harness.run.Message).not.toBe(FINISH_IF.message);
+        expect(decisionCalls(ask)).toHaveLength(1);
+        expect(harness.steps.some((s) => s.StepName.includes('Finish check'))).toBe(true);
+    });
+
+    it('with gates off (the default), asks no gate, and asks the decisions for the next prompt', async () => {
+        const ask = answerDecisions(0.95);
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(gatedActionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(2);
+        expect(ask.mock.calls.some(([args]) => 'q1' in args.Questions)).toBe(false);
+        expect(decisionCalls(ask)).toHaveLength(1);
+        expect(harness.steps.some((s) => s.StepName.includes('Finish check'))).toBe(false);
     });
 
     it('never asks decisions sent with client tools and taskComplete, which end the run once the tools return', async () => {

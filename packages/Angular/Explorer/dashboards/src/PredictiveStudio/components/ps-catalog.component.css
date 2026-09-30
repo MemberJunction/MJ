@@ -1,4 +1,9 @@
 .ps-catalog { display: flex; flex-direction: column; gap: 16px; }
+/* Cards size to their content. Without this the default flex-shrink:1 compresses the
+   guide card below its own body when the panel is height-constrained (46px vs 166px at
+   1280x720), and the overflowing content — including the filter chips — lands behind the
+   position:relative gallery cards, making the chips unclickable. */
+.ps-catalog > .ps-card { flex-shrink: 0; }
 
 .ps-catalog .guide-card .guide-head { display: flex; gap: 12px; align-items: flex-start; }
 .ps-catalog .guide-head i { font-size: 18px; margin-top: 2px; }
