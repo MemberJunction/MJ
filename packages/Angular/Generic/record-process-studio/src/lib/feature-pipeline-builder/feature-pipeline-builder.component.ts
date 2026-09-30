@@ -66,6 +66,16 @@ export interface EscalationTargetCandidate extends MinimalEscalationTargetRow {
     ParsedSpec?: DataFeatureSpec;
 }
 
+/**
+ * The confidence floor typed into the builder, as a number. A blank or non-numeric entry is NaN, so the spec
+ * check reports it ("must be a number greater than 0 and less than 1, but is NaN") instead of the builder
+ * guessing a value; an out-of-range number is kept as typed, for the same check to report.
+ */
+export function ParseConfidenceFloor(raw: string): number {
+    const text = raw.trim();
+    return text.length === 0 ? Number.NaN : Number(text);
+}
+
 @Component({
     selector: 'mj-feature-pipeline-builder',
     standalone: true,
@@ -1039,20 +1049,10 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         this.emitChanges();
     }
 
+    /** Sets the confidence floor from its input, as a number; a blank or invalid entry is NaN, which the spec check reports. */
     public OnEscalationFloorChange(event: Event): void {
-        if (!this.spec.Escalation) {
-            this.spec.Escalation = {
-                PipelineID: '',
-                BelowConfidence: 0.7,
-            };
-        }
-        const raw = (event.target as HTMLInputElement).value.trim();
-        if (raw === '') {
-            delete (this.spec.Escalation as Partial<typeof this.spec.Escalation>).BelowConfidence;
-        } else {
-            const num = parseFloat(raw);
-            this.spec.Escalation.BelowConfidence = isNaN(num) ? (raw as unknown as number) : num;
-        }
+        const floor = ParseConfidenceFloor((event.target as HTMLInputElement).value);
+        this.spec.Escalation = { PipelineID: this.spec.Escalation?.PipelineID ?? '', BelowConfidence: floor };
         this.emitChanges();
     }
 

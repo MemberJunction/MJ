@@ -6,7 +6,7 @@ import { EntityInfo } from '@memberjunction/core';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { renderComponentFixture, query, queryAll, createFakeProvider } from '@memberjunction/ng-test-utils';
-import { FeaturePipelineBuilderComponent, type EscalationTargetCandidate } from './feature-pipeline-builder.component';
+import { FeaturePipelineBuilderComponent, ParseConfidenceFloor, type EscalationTargetCandidate } from './feature-pipeline-builder.component';
 import type { DataFeatureSpec } from '@memberjunction/feature-pipelines';
 
 try {
@@ -98,6 +98,16 @@ function eventWithValue(value: string, tag: 'select' | 'input' = 'select'): Even
   element.value = value;
   const event = new Event('change');
   element.dispatchEvent(event);
+  return event;
+}
+
+/** A change event from a real checkbox, checked or not. */
+function checkboxEvent(checked: boolean): Event {
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = checked;
+  const event = new Event('change');
+  input.dispatchEvent(event);
   return event;
 }
 
@@ -390,7 +400,7 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     expect(f.componentInstance.spec.Escalation).toBeUndefined();
 
     // Toggle ON
-    f.componentInstance.OnEscalationToggle({ target: { checked: true } } as unknown as Event);
+    f.componentInstance.OnEscalationToggle(checkboxEvent(true));
     f.detectChanges();
     expect(f.componentInstance.IsEscalationEnabled).toBe(true);
     expect(f.componentInstance.spec.Escalation).toEqual({
@@ -399,7 +409,7 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     });
 
     // Toggle OFF
-    f.componentInstance.OnEscalationToggle({ target: { checked: false } } as unknown as Event);
+    f.componentInstance.OnEscalationToggle(checkboxEvent(false));
     f.detectChanges();
     expect(f.componentInstance.IsEscalationEnabled).toBe(false);
     expect(f.componentInstance.spec.Escalation).toBeUndefined();
@@ -508,16 +518,16 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     expect(f.componentInstance.GetTargetProblem(decisionCandidate)).toContain("is a 'Decision' pipeline");
 
     // Select valid candidate
-    f.componentInstance.OnEscalationTargetChange({ target: { value: 'target-1' } } as unknown as Event);
+    f.componentInstance.OnEscalationTargetChange(eventWithValue('target-1'));
     expect(f.componentInstance.spec.Escalation?.PipelineID).toBe('target-1');
     expect(f.componentInstance.ValidationErrors.some((e) => e.Path === 'Escalation.PipelineID')).toBe(false);
 
     // Select invalid candidate
-    f.componentInstance.OnEscalationTargetChange({ target: { value: 'target-3' } } as unknown as Event);
+    f.componentInstance.OnEscalationTargetChange(eventWithValue('target-3'));
     expect(f.componentInstance.ValidationErrors.some((e) => e.Path === 'Escalation.PipelineID')).toBe(true);
   });
 
-  it('handles confidence floor changes without clamping invalid inputs', () => {
+  it('stores the confidence floor as a number, keeping an out-of-range or blank entry for the spec check to report', () => {
     const rec = makeRecord({
       PipelineType: 'Decision',
       Outputs: [
@@ -534,21 +544,33 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
       },
     });
     const f = render(rec);
+    const floorErrors = () => f.componentInstance.ValidationErrors.filter((e) => e.Path === 'Escalation.BelowConfidence').map((e) => e.Message);
 
-    const inputEvent = (val: string) => ({ target: { value: val } } as unknown as Event);
-
-    // Set valid floor
-    f.componentInstance.OnEscalationFloorChange(inputEvent('0.85'));
+    // A valid floor
+    f.componentInstance.OnEscalationFloorChange(eventWithValue('0.85', 'input'));
     expect(f.componentInstance.spec.Escalation?.BelowConfidence).toBe(0.85);
+    expect(savedSpec(rec)?.Escalation?.BelowConfidence).toBe(0.85);
+    expect(floorErrors()).toEqual([]);
 
-    // Set invalid floor (1.5) - not clamped, but caught by validateSpec
-    f.componentInstance.OnEscalationFloorChange(inputEvent('1.5'));
+    // Out of range: kept as typed (not clamped), and reported
+    f.componentInstance.OnEscalationFloorChange(eventWithValue('1.5', 'input'));
     expect(f.componentInstance.spec.Escalation?.BelowConfidence).toBe(1.5);
-    expect(f.componentInstance.ValidationErrors.some((e) => e.Path === 'Escalation.BelowConfidence')).toBe(true);
+    expect(floorErrors()).toEqual([expect.stringContaining('but is 1.5')]);
 
-    // Clear floor
-    f.componentInstance.OnEscalationFloorChange(inputEvent(''));
-    expect(f.componentInstance.spec.Escalation?.BelowConfidence).toBeUndefined();
+    // Cleared: NaN, a number, reported; the pipeline keeps its target
+    f.componentInstance.OnEscalationFloorChange(eventWithValue('', 'input'));
+    expect(f.componentInstance.spec.Escalation).toEqual({ PipelineID: 'target-1', BelowConfidence: Number.NaN });
+    expect(floorErrors()).toEqual([expect.stringContaining('but is NaN')]);
+    // JSON has no NaN, so the record holds null, never a string
+    expect(savedSpec(rec)?.Escalation?.BelowConfidence).toBeNull();
+  });
+
+  it('parses a confidence floor strictly, to NaN when blank or not a number', () => {
+    expect(ParseConfidenceFloor(' 0.25 ')).toBe(0.25);
+    expect(ParseConfidenceFloor('1e-1')).toBe(0.1);
+    expect(ParseConfidenceFloor('')).toBeNaN();
+    expect(ParseConfidenceFloor('   ')).toBeNaN();
+    expect(ParseConfidenceFloor('0.7abc')).toBeNaN();
   });
 
   it('deletes Escalation when switching away from Decision pipeline', () => {
