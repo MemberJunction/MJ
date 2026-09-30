@@ -21,6 +21,7 @@ const userInfo = {
 
 vi.mock('@memberjunction/core-entities', async () => {
     // The cell parser is pure, so the real one reads the claim columns.
+    // Loads from core-entities' dist, so that package must be built first.
     const mapper = await vi.importActual<{ ParseClaimedFieldNames: typeof ParseClaimedFieldNames }>(
         '@memberjunction/core-entities/dist/custom/FormScope/FormContributionRow.js');
     return {

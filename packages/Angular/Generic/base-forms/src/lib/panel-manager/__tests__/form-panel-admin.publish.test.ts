@@ -70,6 +70,7 @@ const provider = {
 
 vi.mock('@memberjunction/core-entities', async () => {
     // The row mapper is pure, so the real one writes the columns under test.
+    // Loads from core-entities' dist, so that package must be built first.
     const mapper = await vi.importActual<{
         ApplyContributionSpecToRow: typeof ApplyContributionSpecToRow;
         ParseClaimedFieldNames: typeof ParseClaimedFieldNames;

@@ -18,7 +18,6 @@ import {
     DEFAULT_FORM_CONTRIBUTION_SLOT,
     FORM_CONTRIBUTION_SLOTS,
     GENERATED_FORM_CONTRIBUTION_SLOTS,
-    RelatedContributionKey,
     StripJoinFieldBrackets,
     type FormContributionPresentation,
     type FormContributionSlot,
@@ -205,13 +204,21 @@ export function ReplacedPreviewKeys(
 }
 
 /**
+ * Whether the form's targets are not known yet: no sections, and none read from the form.
+ * A claim cannot be checked against such a context, so it is kept as it stands.
+ */
+export function TargetsUnread(context: FormPlacementContext): boolean {
+    return context.Sections.length === 0 && !context.TargetsVerified;
+}
+
+/**
  * The sections the `section` mode stands in for, in the form's order and kept to sections the
  * form draws. The list when one is set, else the single key.
  */
 export function ChosenSectionKeys(state: FormPlacementState, context: FormPlacementContext): string[] {
     const wanted = state.ReplaceSectionKeys.length > 0 ? state.ReplaceSectionKeys : [state.ReplaceSectionKey];
     const keys = wanted.map((key) => key.trim()).filter((key) => key.length > 0);
-    if (context.Sections.length === 0) return keys;
+    if (TargetsUnread(context)) return keys;
     return context.Sections.map((s) => s.Key).filter((key) => keys.includes(key));
 }
 
@@ -281,8 +288,7 @@ export function FieldsInSection(
  * means a section the form stopped drawing cannot smuggle a claim through.
  */
 export function ChosenFieldNames(state: FormPlacementState, context: FormPlacementContext): string[] {
-    // With no sections known there is nothing to check the names against, so they stand.
-    if (context.Sections.length === 0) return [...state.ReplaceFieldNames];
+    if (TargetsUnread(context)) return [...state.ReplaceFieldNames];
     const available = FieldsInSection(context, state.ReplaceFieldSectionKey);
     return state.ReplaceFieldNames.filter((name) => available.some((f) => f.Name === name));
 }
@@ -511,9 +517,8 @@ export function PlacementStateFromContribution(
 ): FormPlacementState {
     const railKey = (spec.replacesSectionKey ?? '').trim();
     const listed = (spec.replacesSectionKeys ?? []).map((k) => k.trim()).filter((k) => k.length > 0);
-    // Until the form is read the context names no sections and no rail, so a stored claim
-    // cannot be checked and is kept as stored: Details and More are tabs, any other key a section.
-    const unread = context.Sections.length === 0 && !context.SlotsVerified;
+    // A claim that cannot be checked is kept as stored: Details and More are tabs, any other key a section.
+    const unread = TargetsUnread(context);
     const unreadTab = unread && RailKeyChromeGroup(railKey) !== null;
     const sectionKey = context.Sections.some((s) => s.Key === railKey)
         ? railKey
@@ -581,20 +586,20 @@ function relatedTargetIndex(context: FormPlacementContext, spec: FormContributio
  * {@link ResolvePlacementDecision} writes a key only when the user chose to replace a panel, and
  * the write path derives one otherwise. For a row already saved, that would change its identity
  * on every edit. So a decision with no key and no grid claim keeps the row's own key, unless that
- * key was the claim the user just dropped: the key of a panel the dialog listed, or of the grid
- * the row replaced.
+ * key was the claim the user just dropped: the key of a panel the dialog listed, or a grid key.
  *
  * @param existing The other panels the dialog offered to replace.
  */
 export function KeepEditedRowKey(
     contribution: FormContributionSpec,
-    row: { ContributionKey: string | null; RelatedEntity: string | null; RelatedJoinField: string | null },
+    row: { ContributionKey: string | null },
     existing: readonly FormPlacementExisting[],
 ): FormContributionSpec {
     const key = row.ContributionKey?.trim();
     if (!key || contribution.contributionKey || contribution.relatedEntity) return contribution;
     if (existing.some((e) => e.Key === key)) return contribution;
-    if (row.RelatedEntity && key === RelatedContributionKey(row.RelatedEntity, row.RelatedJoinField)) return contribution;
+    // Any grid key, whatever casing or join field it was written with.
+    if (key.startsWith('related:')) return contribution;
     return { ...contribution, contributionKey: key };
 }
 

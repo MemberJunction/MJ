@@ -684,8 +684,10 @@ describe('PlacementStateFromContribution — before the form has been read', () 
 
     it('still drops a claim the read form does not draw', () => {
         expect(PlacementStateFromContribution(spec({ replacesSectionKey: 'gone' }), CONTEXT, true).ReplaceMode).toBe('none');
-        const readWithoutSections: FormPlacementContext = { ...unread, SlotsVerified: true, SlotsPresent: ['after-fields'] };
+        const readWithoutSections: FormPlacementContext = { ...unread, TargetsVerified: true };
         expect(PlacementStateFromContribution(spec({ replacesSectionKey: 'details' }), readWithoutSections, true).ReplaceMode).toBe('none');
+        expect(ChosenFieldNames({ ...InitialPlacementState(null, readWithoutSections), ReplaceFieldNames: ['Name'] }, readWithoutSections))
+            .toEqual([]);
     });
 });
 
@@ -712,6 +714,14 @@ describe('KeepEditedRowKey', () => {
         const grid = row({
             ContributionKey: 'related:MoreCheese: Course Enrollments:CourseID',
             RelatedEntity: 'MoreCheese: Course Enrollments', RelatedJoinField: '[CourseID]',
+        });
+        expect(KeepEditedRowKey(placed, grid, CONTEXT.Existing).contributionKey).toBeUndefined();
+    });
+
+    it('drops a grid key written in another casing or form', () => {
+        const grid = row({
+            ContributionKey: 'related:morecheese: course enrollments:[CourseID]',
+            RelatedEntity: 'MoreCheese: Course Enrollments', RelatedJoinField: 'CourseID',
         });
         expect(KeepEditedRowKey(placed, grid, CONTEXT.Existing).contributionKey).toBeUndefined();
     });
