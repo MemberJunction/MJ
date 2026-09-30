@@ -1,6 +1,6 @@
 import { Command, Flags } from '@oclif/core';
 import { ClearSharedCacheCategories, SHARED_CACHE_WRITE_CATEGORIES } from '@memberjunction/redis-provider';
-import { DescribeRedisUrl, ResolveSharedCacheTarget } from '../../lib/shared-cache.js';
+import { DescribeRedisUrl, KnownCacheCategories, ResolveCacheCategories, ResolveSharedCacheTarget } from '../../lib/shared-cache.js';
 
 /**
  * `mj cache clear` — clear the shared Redis cache and notify every running server.
@@ -34,13 +34,12 @@ export default class CacheClear extends Command {
     const target = this.resolveTarget(flags.url, flags.prefix);
     const chosen = flags.category?.length ? flags.category : undefined;
     // An unknown category is a typo, and a typo used to be a silent no-op that still printed
-    // "servers will reload" (plan §16.3 #15). Names are matched case-insensitively.
-    const unknown = (chosen ?? []).filter(c => !SHARED_CACHE_WRITE_CATEGORIES.some(known => known.toLowerCase() === c.trim().toLowerCase())
-        && c.trim().toLowerCase() !== 'default');
+    // "servers will reload" (plan §16.3 #15). Names are matched case-insensitively and then
+    // CANONICALISED, because the store's keys are not.
+    const { Categories: categories, Unknown: unknown } = ResolveCacheCategories(chosen);
     if (unknown.length > 0) {
-      this.error(`Unknown cache categor${unknown.length === 1 ? 'y' : 'ies'}: ${unknown.join(', ')}. Known: ${[...SHARED_CACHE_WRITE_CATEGORIES, 'default'].join(', ')}`, { exit: 1 });
+      this.error(`Unknown cache categor${unknown.length === 1 ? 'y' : 'ies'}: ${unknown.join(', ')}. Known: ${KnownCacheCategories().join(', ')}`, { exit: 1 });
     }
-    const categories = chosen ?? SHARED_CACHE_WRITE_CATEGORIES;
     const verb = flags['dry-run'] ? 'Would clear' : 'Cleared';
 
     let results;
