@@ -10926,6 +10926,9 @@ importers:
       '@memberjunction/actions-base':
         specifier: 6.2.0-edge.1
         version: link:../Actions/Base
+      '@memberjunction/ai':
+        specifier: 6.2.0-edge.1
+        version: link:../AI/Core
       '@memberjunction/ai-core-plus':
         specifier: 6.2.0-edge.1
         version: link:../AI/CorePlus
