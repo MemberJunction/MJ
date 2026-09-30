@@ -127,8 +127,9 @@ function likelihood(probability: number): LikelihoodAnswer {
     return { Kind: 'Likelihood', Probability: probability };
 }
 
+/** A successful decision, answered by Jev at the version routing's thread-likelihood calibration was fitted on. */
 function answered(answers: Record<string, DecisionAnswer>): RunDecisionResult {
-    return { Success: true, Answers: answers };
+    return { Success: true, Answers: answers, ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.13-20260917' };
 }
 
 /** The part of each service the routing paths call. */
@@ -388,7 +389,8 @@ describe('MessageInputComponent — decision routing', () => {
 
         it.each([
             ['a low-confidence Choice', async () => answered({ route: choice(RESEARCH.ID, 0.5), continues: likelihood(0.1) })],
-            ['an ambiguous Likelihood', async () => answered({ route: choice(RESEARCH.ID, 0.9), continues: likelihood(0.5) })],
+            // Ambiguous after calibration: Jev's raw 0.87 is a calibrated 0.51 (a raw 0.5 is 0.03, a clear "leaves")
+            ['an ambiguous Likelihood', async () => answered({ route: choice(RESEARCH.ID, 0.9), continues: likelihood(0.87) })],
             ['a failed decision', async (): Promise<RunDecisionResult> => ({ Success: false, ErrorMessage: 'no model', Answers: {} })],
             ['a call that throws', async (): Promise<RunDecisionResult> => { throw new Error('network down'); }],
         ])('%s keeps continuity', async (_label, answer) => {

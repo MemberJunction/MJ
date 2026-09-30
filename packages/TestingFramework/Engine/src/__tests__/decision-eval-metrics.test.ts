@@ -2,6 +2,7 @@
  * @fileoverview Decision Eval metrics, each against values computed by hand on small arrays.
  */
 import { describe, it, expect } from 'vitest';
+import { ApplyPlattCalibration, PLATT_LOGIT_CLAMP } from '@memberjunction/ai';
 import {
     Accuracy,
     ApplyPlatt,
@@ -13,6 +14,7 @@ import {
     ClassRecall,
     ComputeCellMetrics,
     CreateSeededRandom,
+    DECISION_EVAL_LOGIT_CLAMP,
     DECISION_EVAL_OPERATING_THRESHOLDS,
     FitPlatt,
     MeasureCaseRepeatability,
@@ -264,6 +266,14 @@ describe('Decision Eval metrics', () => {
     });
 
     describe('Platt scaling', () => {
+        it('fits and applies on production\'s scale: its clamp, and its transform', () => {
+            expect(DECISION_EVAL_LOGIT_CLAMP).toBe(PLATT_LOGIT_CLAMP);
+            const fit = FitPlatt(overconfidentSet(60, 13));
+            for (const p of [0, 1e-9, 0.02, 0.3, 0.5, 0.77, 0.999, 1]) {
+                expect(ApplyPlatt(p, fit)).toBe(ApplyPlattCalibration(p, fit));
+            }
+        });
+
         it('the clamped logit stays finite at 0 and 1', () => {
             expect(ClampedLogit(0)).toBeCloseTo(Math.log(1e-6 / (1 - 1e-6)), 10);
             expect(ClampedLogit(1)).toBeCloseTo(-ClampedLogit(0), 10);
