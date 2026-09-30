@@ -107,6 +107,10 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   get disabled(): boolean {
     return this.Disabled;
   }
+  /**
+   * Blocks sending. Distinct from {@link Disabled}, which means the composer is busy.
+   */
+  @Input() ReadOnly = false;
   @Input() Placeholder: string = 'Type a message... (Ctrl+Enter to send)';
 
   /** @deprecated Use {@link Placeholder}. */
@@ -1101,6 +1105,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * Called from setter or ngAfterViewInit when conditions are met.
    */
   private triggerInitialSend(): void {
+    if (this.ReadOnly) {
+      return;
+    }
     const message = this._initialMessage;
     const attachments = this._initialAttachments;
     const hasContent = !!message || !!(attachments && attachments.length > 0);
@@ -1215,7 +1222,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
   /** True when the mic button should be enabled (have an agent + not disabled). */
   public get CanStartRealtime(): boolean {
-    return !this.Disabled && !this.VoiceActive && !!this.ResolveCurrentAgentId();
+    return !this.ReadOnly && !this.Disabled && !this.VoiceActive && !!this.ResolveCurrentAgentId();
   }
 
   /** @deprecated Use {@link CanStartRealtime}. */
@@ -1683,7 +1690,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   get CanSend(): boolean {
-    return !this.Disabled && !this.IsSending && this.MessageText.trim().length > 0;
+    return !this.ReadOnly && !this.Disabled && !this.IsSending && this.MessageText.trim().length > 0;
   }
 
   /** @deprecated Use {@link CanSend}. */
@@ -1719,6 +1726,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * Handle text submitted from the input box
    */
   async OnTextSubmitted(text: string): Promise<void> {
+    if (this.ReadOnly) {
+      return;
+    }
     // Check if we have either text or attachments
     const hasText = text && text.trim().length > 0;
     const hasAttachments = this.pendingAttachments.length > 0;
@@ -1857,6 +1867,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * explicitly and we merge + dedupe (by `id`) before saving.
    */
   public async SendMessageWithText(text: string, extraAttachments?: PendingAttachment[]): Promise<boolean> {
+    if (this.ReadOnly) {
+      return false;
+    }
     const merged: PendingAttachment[] = (() => {
       if (!extraAttachments || extraAttachments.length === 0) {
         return [...this.pendingAttachments];
