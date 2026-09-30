@@ -18,6 +18,8 @@ import {
   ResolveSharedCacheTarget,
   SKIP_CACHE_CLEAR_ENV,
   DescribeRedisUrl,
+  ResolveCacheCategories,
+  KnownCacheCategories,
 } from '../lib/shared-cache';
 
 const ENV_KEYS = ['REDIS_URL', 'REDIS_KEY_PREFIX', SKIP_CACHE_CLEAR_ENV];
@@ -139,6 +141,36 @@ describe('shared cache clear after a CLI write', () => {
       ]);
 
       expect((await ClearSharedCacheAfterWrite('mj codegen'))?.Ok).toBe(true);
+    });
+  });
+
+  describe('ResolveCacheCategories', () => {
+    it('canonicalises a case-insensitive spelling, because Redis keys are case-SENSITIVE', () => {
+      // Accepting `runviewcache` and then scanning `{prefix}:runviewcache:*` matched nothing and
+      // reported a successful clear of 0 keys — the operator is told the fleet will reload and it
+      // never does.
+      expect(ResolveCacheCategories(['runviewcache', 'DATASETCACHE']).Categories).toEqual(['RunViewCache', 'DatasetCache']);
+      expect(ResolveCacheCategories(['runviewcache']).Unknown).toEqual([]);
+    });
+
+    it('trims, de-duplicates, and keeps the order asked for', () => {
+      expect(ResolveCacheCategories([' Metadata ', 'metadata', 'RunViewCache']).Categories).toEqual(['Metadata', 'RunViewCache']);
+    });
+
+    it('reports an unknown category in the spelling the user typed', () => {
+      const out = ResolveCacheCategories(['RunViewCache', 'runview']);
+      expect(out.Categories).toEqual(['RunViewCache']);
+      expect(out.Unknown).toEqual(['runview']);
+    });
+
+    it('defaults to every write category when nothing is named', () => {
+      expect(ResolveCacheCategories(undefined).Categories).toEqual(['RunViewCache', 'DatasetCache', 'Metadata']);
+      expect(ResolveCacheCategories([]).Categories).toEqual(['RunViewCache', 'DatasetCache', 'Metadata']);
+    });
+
+    it('allows the proxy-key store to be named explicitly', () => {
+      expect(ResolveCacheCategories(['default']).Categories).toEqual(['default']);
+      expect(KnownCacheCategories()).toContain('default');
     });
   });
 

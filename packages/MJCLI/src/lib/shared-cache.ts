@@ -17,6 +17,50 @@ import type { RedisProviderConfig, SharedCacheCategoryClear } from '@memberjunct
 /** Setting this to `1`/`true` disables the automatic clear (the explicit command still works). */
 export const SKIP_CACHE_CLEAR_ENV = 'MJ_SKIP_SHARED_CACHE_CLEAR';
 
+/** The categories a clear may target: everything a CLI write invalidates, plus the proxy-key store. */
+const CLEARABLE_CATEGORIES: readonly string[] = [...SHARED_CACHE_WRITE_CATEGORIES, 'default'];
+
+/** What the user asked to clear, mapped onto the names the cache actually uses. */
+export type ResolvedCacheCategories = {
+    /** Canonical category names, safe to hand to the store. */
+    Categories: string[];
+    /** Anything that matched no known category, in the spelling the user gave. */
+    Unknown: string[];
+};
+
+/**
+ * Maps requested category names onto their canonical spelling.
+ *
+ * Names are accepted case-insensitively because nobody should have to remember that it is
+ * `RunViewCache` and not `runviewcache`. But Redis keys ARE case-sensitive, so accepting a
+ * spelling and then using it verbatim scanned `{prefix}:runviewcache:*`, matched nothing, and
+ * reported a successful clear of 0 keys — the operator is told the fleet will reload and it never
+ * does. Accept the spelling, then hand the store the canonical name (plan §22.3).
+ */
+export function ResolveCacheCategories(requested: readonly string[] | undefined): ResolvedCacheCategories {
+    if (!requested?.length) {
+        return { Categories: [...SHARED_CACHE_WRITE_CATEGORIES], Unknown: [] };
+    }
+    const resolved: string[] = [];
+    const unknown: string[] = [];
+    for (const raw of requested) {
+        const canonical = CLEARABLE_CATEGORIES.find(known => known.toLowerCase() === raw.trim().toLowerCase());
+        if (canonical) {
+            if (!resolved.includes(canonical)) {
+                resolved.push(canonical);
+            }
+        } else {
+            unknown.push(raw);
+        }
+    }
+    return { Categories: resolved, Unknown: unknown };
+}
+
+/** The category names a clear can be asked for, for error messages and help text. */
+export function KnownCacheCategories(): string[] {
+    return [...CLEARABLE_CATEGORIES];
+}
+
 /** The shared cache the environment points at, or null when none is configured. */
 export interface SharedCacheTarget {
     Connection: RedisProviderConfig;
