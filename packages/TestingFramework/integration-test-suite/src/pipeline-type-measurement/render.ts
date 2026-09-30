@@ -50,9 +50,12 @@ function table(header: readonly string[], rows: ReadonlyArray<readonly string[]>
     return [line(header), line(header.map(() => '---')), ...rows.map(line)].join('\n');
 }
 
-/** Text from the database made safe for one table cell: no line breaks, and pipes escaped. */
+/**
+ * Text from the database made safe for one table cell: no line breaks, backslashes escaped, then pipes
+ * escaped. Backslashes go first so a trailing `\` in the text cannot cancel the escape of the pipe after it.
+ */
 export function TableCellText(text: string): string {
-    return text.replace(/\s*[\r\n]+\s*/g, ' ').replace(/\|/g, '\\|');
+    return text.replace(/\s*[\r\n]+\s*/g, ' ').replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
 }
 
 function renderSetup(report: MeasurementReport): string {

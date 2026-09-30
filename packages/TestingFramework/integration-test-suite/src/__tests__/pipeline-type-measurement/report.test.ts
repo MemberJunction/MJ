@@ -159,6 +159,8 @@ describe('RenderReportMarkdown', () => {
         expect(markdown).toContain('| A | A |');
         expect(markdown).toContain('| B | About B |');
         expect(TableCellText('Reads | writes\n  files')).toBe('Reads \\| writes files');
+        // A backslash is escaped before the pipe, so `\|` in the text cannot un-escape the pipe.
+        expect(TableCellText('C:\\temp\\| x')).toBe('C:\\\\temp\\\\\\| x');
     });
 
     it('formats missing numbers as n/a', () => {
