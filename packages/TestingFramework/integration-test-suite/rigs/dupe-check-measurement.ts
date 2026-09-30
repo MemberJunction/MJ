@@ -1,12 +1,21 @@
 /**
  * @fileoverview CLI harness to measure duplicate record entry check across reasoning arms:
  *  1. Vector threshold arm
- *  2. Decision prompt arm (DecisionReasoningProvider)
- *  3. Decision · production arm (PassedThreshold && IsPlausible)
+ *  2. Decision prompt arm (DecisionReasoningProvider, banded as the entry check bands it)
+ *  3. Decision · production arm (PassedThreshold && banded Uncertain)
  *  4. Full prompt arm (PromptReasoningProvider)
  *  5. Prompt · production arm (PassedThreshold && (Merge || Uncertain))
  *
- * All arms evaluate the exact same candidates retrieved per check.
+ * All arms evaluate the exact same candidates retrieved per check. Retrieval runs with a threshold
+ * of 0, so the decision and prompt calls see every readable top-K candidate, including any below
+ * PotentialMatchThreshold; the `· production` views filter their verdicts afterwards.
+ *
+ * The decision arm flags as production's entry check does: a candidate a successful decision gave
+ * no answer for is flagged, and a failed decision flags nothing. Each call's success, error (withheld
+ * when it quotes record text) and missing answers are recorded, and a failure is logged.
+ *
+ * The entry check's latency is timed from building the unsaved record through the decision call:
+ * PreparationLatencyMs (record, retrieval, permission narrowing, candidate load) plus the decision.
  *
  * USAGE:
  *   npx tsx rigs/dupe-check-measurement.ts --entity "MJ: Actions" --corpus <dir> --out <dir> \
@@ -57,10 +66,15 @@ import {
     BuildMeasurementReport,
     CandidatePairObservation,
     CorpusRecord,
+    DecisionArmReading,
     DuplicateCorpusLabel,
     NewCorpusLabel,
+    PromptArmReading,
     ReadCorpusFiles,
+    ReadDecisionArm,
+    ReadPromptArm,
     RecordCheckObservation,
+    RecordTextsOf,
     ReportOptions,
     WriteReportFiles,
 } from '../src/dupe-check-measurement';
@@ -227,15 +241,6 @@ export class MeasuringDecisionReasoningProvider extends DecisionReasoningProvide
     }
 }
 
-export function ToPromptRecommendation(
-    val: string | null | undefined
-): 'Merge' | 'NotDuplicate' | 'Uncertain' | null {
-    if (val === 'Merge' || val === 'NotDuplicate' || val === 'Uncertain') {
-        return val;
-    }
-    return null;
-}
-
 function readFlag(argv: string[], name: string): string | undefined {
     const index = argv.indexOf(`--${name}`);
     return index >= 0 ? argv[index + 1] : undefined;
@@ -347,19 +352,32 @@ async function setupMeasurementEnvironment(
     };
 }
 
-async function executeSingleEntryCheck(
-    env: MeasurementEnv,
-    record: CorpusRecord,
-    label: DuplicateCorpusLabel | NewCorpusLabel,
-    options: MeasurementCliOptions,
-    rep: number
-): Promise<RecordCheckObservation> {
-    const { detector, entityInfo, entityDocument, configuredThreshold, bootstrapCtx, decisionProvider, promptProvider } = env;
+/** The entry check's steps before its decision call, as production runs them. */
+interface PreparedCheck {
+    Unsaved: BaseEntity;
+    /** The top-K candidates the context user can read. */
+    Candidates: PotentialDuplicate[];
+    /** Null when there are no readable candidates, or no model arm runs. */
+    ReasoningInput: DuplicateReasoningInput | null;
+    /** The vector query alone. */
+    RetrievalLatencyMs: number;
+    /** From building the unsaved record through loading the candidates for the reasoning input. */
+    PreparationLatencyMs: number;
+}
 
-    // 1. Unsaved record
+/** One model arm's call for a check. */
+interface ArmCall<TReading> {
+    Reading: TReading;
+    LatencyMs: number;
+    PromptRunId: string | null;
+}
+
+async function prepareCheck(env: MeasurementEnv, record: CorpusRecord, options: MeasurementCliOptions): Promise<PreparedCheck> {
+    const { detector, entityInfo, entityDocument, bootstrapCtx } = env;
+    const start = performance.now();
     const unsaved = await detector.BuildRecord(entityInfo, record.Values, bootstrapCtx.user);
 
-    // 2. Candidate retrieval (retrieve TopK with threshold 0 so all arms evaluate the exact same candidates)
+    // Retrieve TopK with threshold 0 so all arms evaluate the exact same candidates
     const retrievalStart = performance.now();
     const query = await detector.QueryCandidates(
         unsaved,
@@ -371,130 +389,145 @@ async function executeSingleEntryCheck(
 
     const allCandidates = query?.Duplicates?.Duplicates ?? [];
     const displayNames = await detector.ReadableCandidateNames(allCandidates, entityInfo);
-    const readableCandidates = allCandidates.filter(c =>
-        displayNames.has(NormalizeUUID(c.ToCompactURLSegment()))
-    );
+    const readable = allCandidates.filter(c => displayNames.has(NormalizeUUID(c.ToCompactURLSegment())));
 
-    // 3. Reasoning input
     let reasoningInput: DuplicateReasoningInput | null = null;
-    if (
-        readableCandidates.length > 0 &&
-        query &&
-        (options.Arms.includes('decision') || options.Arms.includes('prompt'))
-    ) {
+    if (readable.length > 0 && query && (options.Arms.includes('decision') || options.Arms.includes('prompt'))) {
         const readableQuery: CandidateQuery = {
             ...query,
-            Duplicates: {
-                ...query.Duplicates,
-                Duplicates: readableCandidates,
-            },
+            Duplicates: { ...query.Duplicates, Duplicates: readable },
         };
-        reasoningInput = await detector.ReasoningInput(
-            readableQuery,
-            entityInfo,
-            entityDocument,
-            bootstrapCtx.user,
-            unsaved
-        );
+        reasoningInput = await detector.ReasoningInput(readableQuery, entityInfo, entityDocument, bootstrapCtx.user, unsaved);
     }
 
-    // 4. Decision arm
-    let decisionLatencyMs: number | null = null;
-    let decisionPromptRunId: string | null = null;
-    const decisionProbabilities = new Map<string, number | null>();
+    return {
+        Unsaved: unsaved,
+        Candidates: readable,
+        ReasoningInput: reasoningInput,
+        RetrievalLatencyMs: retrievalLatencyMs,
+        PreparationLatencyMs: performance.now() - start,
+    };
+}
 
-    if (options.Arms.includes('decision') && reasoningInput && readableCandidates.length > 0) {
-        const dStart = performance.now();
-        const decisionRes = await decisionProvider.DecideCandidates(reasoningInput, {
-            Provider: bootstrapCtx.provider,
-            ContextUser: bootstrapCtx.user,
-        });
-        decisionLatencyMs = performance.now() - dStart;
-        decisionPromptRunId = decisionRes.AIPromptRunID ?? null;
+async function runDecisionArm(
+    env: MeasurementEnv,
+    input: DuplicateReasoningInput,
+    recordTexts: readonly string[]
+): Promise<ArmCall<DecisionArmReading>> {
+    const start = performance.now();
+    const decision = await env.decisionProvider.DecideCandidates(input, {
+        Provider: env.bootstrapCtx.provider,
+        ContextUser: env.bootstrapCtx.user,
+    });
+    return {
+        Reading: ReadDecisionArm(decision, env.decisionProvider, recordTexts),
+        LatencyMs: performance.now() - start,
+        PromptRunId: decision.AIPromptRunID ?? null,
+    };
+}
 
-        if (decisionRes.Success && decisionRes.Candidates) {
-            for (const cand of decisionRes.Candidates) {
-                decisionProbabilities.set(NormalizeUUID(cand.RecordID), cand.Probability);
-            }
-        }
-    }
+async function runPromptArm(
+    env: MeasurementEnv,
+    input: DuplicateReasoningInput,
+    recordTexts: readonly string[]
+): Promise<ArmCall<PromptArmReading>> {
+    const start = performance.now();
+    const output = await env.promptProvider.Reason(input, {
+        Provider: env.bootstrapCtx.provider,
+        ContextUser: env.bootstrapCtx.user,
+    });
+    return {
+        Reading: ReadPromptArm(output, input.Candidates.map(c => c.RecordID), recordTexts),
+        LatencyMs: performance.now() - start,
+        PromptRunId: output.AIPromptRunID ?? null,
+    };
+}
 
-    // 5. Prompt arm
-    let promptLatencyMs: number | null = null;
-    let promptRunId: string | null = null;
-    const promptRecommendations = new Map<string, string | null>();
-
-    if (options.Arms.includes('prompt') && reasoningInput && readableCandidates.length > 0) {
-        const pStart = performance.now();
-        const promptRes = await promptProvider.Reason(reasoningInput, {
-            Provider: bootstrapCtx.provider,
-            ContextUser: bootstrapCtx.user,
-        });
-        promptLatencyMs = performance.now() - pStart;
-        promptRunId = promptRes.AIPromptRunID ?? null;
-
-        if (promptRes.Success && promptRes.CandidateVerdicts) {
-            for (const cand of promptRes.CandidateVerdicts) {
-                promptRecommendations.set(NormalizeUUID(cand.RecordID), cand.Recommendation);
-            }
-        }
-    }
-
-    // 6. Build candidate pair observations
-    const candidatePairs: CandidatePairObservation[] = readableCandidates.map(cand => {
+function buildCandidatePairs(
+    env: MeasurementEnv,
+    record: CorpusRecord,
+    label: DuplicateCorpusLabel | NewCorpusLabel,
+    candidates: readonly PotentialDuplicate[],
+    decision: ArmCall<DecisionArmReading> | null,
+    prompt: ArmCall<PromptArmReading> | null
+): CandidatePairObservation[] {
+    return candidates.map(cand => {
         const candId = cand.ToCompactURLSegment();
-        const isDupePair =
-            label.Label === 'duplicate' &&
-            NormalizeUUID(candId) === NormalizeUUID(label.SourceRecordId);
-        const vectorScore = cand.ProbabilityScore;
-        const passedThreshold = vectorScore >= configuredThreshold;
-        const thresholdFlagged = passedThreshold;
-
-        const decProb = decisionProbabilities.get(NormalizeUUID(candId)) ?? null;
-        const decisionFlagged = decProb !== null && decisionProvider.IsPlausible(decProb);
-
-        const pRec = promptRecommendations.get(NormalizeUUID(candId)) ?? null;
-        // Prompt arm flag rule: Merge OR Uncertain counts as flagged; only NotDuplicate does not
-        const promptFlagged = pRec === 'Merge' || pRec === 'Uncertain';
-
+        const key = NormalizeUUID(candId);
+        const passedThreshold = cand.ProbabilityScore >= env.configuredThreshold;
+        const pRec = prompt?.Reading.Recommendations.get(key) ?? null;
         return {
             RecordId: record.Id,
             CandidateId: candId,
-            IsDuplicatePair: isDupePair,
-            VectorScore: vectorScore,
+            IsDuplicatePair: label.Label === 'duplicate' && NormalizeUUID(candId) === NormalizeUUID(label.SourceRecordId),
+            VectorScore: cand.ProbabilityScore,
             InTopK: true,
             PassedThreshold: passedThreshold,
-            ThresholdFlagged: thresholdFlagged,
-            DecisionProbability: decProb,
-            DecisionFlagged: decisionFlagged,
-            PromptRecommendation: ToPromptRecommendation(pRec),
-            PromptFlagged: promptFlagged,
+            ThresholdFlagged: passedThreshold,
+            DecisionProbability: decision?.Reading.Probabilities.get(key) ?? null,
+            // Production's flag: a failed decision leaves the map empty, so it flags nothing.
+            DecisionFlagged: decision?.Reading.Flagged.get(key) ?? false,
+            PromptRecommendation: pRec,
+            // Prompt arm flag rule: Merge OR Uncertain counts as flagged; only NotDuplicate does not
+            PromptFlagged: pRec === 'Merge' || pRec === 'Uncertain',
         };
     });
+}
+
+function warnOnFailure(arm: string, record: CorpusRecord, rep: number, reading: { Success: boolean; ErrorMessage?: string }): void {
+    if (!reading.Success) {
+        console.warn(`  ${arm} call failed for record ${record.Id} (rep ${rep}): ${reading.ErrorMessage ?? 'unknown error'}`);
+    }
+}
+
+async function executeSingleEntryCheck(
+    env: MeasurementEnv,
+    record: CorpusRecord,
+    label: DuplicateCorpusLabel | NewCorpusLabel,
+    options: MeasurementCliOptions,
+    rep: number
+): Promise<RecordCheckObservation> {
+    const prepared = await prepareCheck(env, record, options);
+    const input = prepared.ReasoningInput;
+    const recordTexts = RecordTextsOf(record.Values, input);
+
+    const decision = options.Arms.includes('decision') && input ? await runDecisionArm(env, input, recordTexts) : null;
+    const prompt = options.Arms.includes('prompt') && input ? await runPromptArm(env, input, recordTexts) : null;
+    if (decision) {
+        warnOnFailure('Decision', record, rep, decision.Reading);
+    }
+    if (prompt) {
+        warnOnFailure('Prompt', record, rep, prompt.Reading);
+    }
 
     return {
         RecordId: record.Id,
         Rep: rep,
         Label: label,
-        RetrievalLatencyMs: retrievalLatencyMs,
-        Candidates: candidatePairs,
-        DecisionResult:
-            options.Arms.includes('decision') && decisionLatencyMs !== null
-                ? {
-                      LatencyMs: decisionLatencyMs,
-                      Model: 'Pending',
-                      PromptRunId: decisionPromptRunId,
-                      CostUSD: null,
-                  }
-                : undefined,
-        PromptResult:
-            options.Arms.includes('prompt') && promptLatencyMs !== null
-                ? {
-                      LatencyMs: promptLatencyMs,
-                      PromptRunId: promptRunId,
-                      CostUSD: null,
-                  }
-                : undefined,
+        RetrievalLatencyMs: prepared.RetrievalLatencyMs,
+        PreparationLatencyMs: prepared.PreparationLatencyMs,
+        Candidates: buildCandidatePairs(env, record, label, prepared.Candidates, decision, prompt),
+        DecisionResult: decision
+            ? {
+                  LatencyMs: decision.LatencyMs,
+                  Model: 'Pending',
+                  PromptRunId: decision.PromptRunId,
+                  CostUSD: null,
+                  Success: decision.Reading.Success,
+                  ErrorMessage: decision.Reading.ErrorMessage,
+                  MissingAnswers: decision.Reading.MissingAnswers,
+              }
+            : undefined,
+        PromptResult: prompt
+            ? {
+                  LatencyMs: prompt.LatencyMs,
+                  PromptRunId: prompt.PromptRunId,
+                  CostUSD: null,
+                  Success: prompt.Reading.Success,
+                  ErrorMessage: prompt.Reading.ErrorMessage,
+                  MissingAnswers: prompt.Reading.MissingAnswers,
+              }
+            : undefined,
     };
 }
 
@@ -594,6 +627,21 @@ function writeFinalChecksJsonl(outDir: string, observations: readonly RecordChec
     writeFileSync(checksJsonlPath, content, 'utf8');
 }
 
+/** The report's arms: those that ran, each model arm with its production view. */
+function reportArms(arms: readonly string[]): string[] {
+    const reported: string[] = [];
+    if (arms.includes('threshold')) {
+        reported.push('threshold');
+    }
+    if (arms.includes('decision')) {
+        reported.push('decision', 'decision · production');
+    }
+    if (arms.includes('prompt')) {
+        reported.push('prompt', 'prompt · production');
+    }
+    return reported;
+}
+
 function generateAndWriteReports(
     options: MeasurementCliOptions,
     observations: readonly RecordCheckObservation[],
@@ -609,7 +657,7 @@ function generateAndWriteReports(
         Reps: options.Reps,
         TopK: options.TopK,
         DecisionPrompt: options.DecisionPromptName,
-        Arms: ['threshold', 'decision', 'decision · production', 'prompt', 'prompt · production'],
+        Arms: reportArms(options.Arms),
     };
     const report = BuildMeasurementReport(observations, reportOptions);
 

@@ -238,6 +238,8 @@ async function main(): Promise<void> {
                 continue;
             }
 
+            // Only an exact match is screened out. A hard negative ("the same operation for a different
+            // vendor") may already exist under other wording; the measurement report notes that caveat.
             if (IsExactMatchWithExisting(validation.Values, sourceRows, options.Fields)) {
                 lastError = 'Generated record is an exact match with an existing row';
                 continue;

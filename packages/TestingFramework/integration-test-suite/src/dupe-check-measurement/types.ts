@@ -59,16 +59,46 @@ export interface CandidatePairObservation {
     PassedThreshold: boolean;
     /** Threshold arm: flagged when VectorScore >= PotentialMatchThreshold. */
     ThresholdFlagged: boolean;
-    /** Decision arm: probability in [0, 1] from DecisionReasoningProvider. */
+    /**
+     * Decision arm: probability in [0, 1] from DecisionReasoningProvider. Null when the decision
+     * gave no answer for this candidate, or when the call failed (see the check's DecisionResult).
+     */
     DecisionProbability: number | null;
-    /** Decision arm: flagged when banded 'Uncertain'. */
+    /**
+     * Decision arm: flagged as production's entry check flags it, when the provider bands it
+     * 'Uncertain'. A candidate a successful decision gave no answer for is flagged (a missing
+     * probability fails toward inclusion); a failed decision flags nothing.
+     */
     DecisionFlagged: boolean;
     /** Answering model name for the decision call. */
     DecisionModel?: string;
-    /** Prompt arm: recommendation from PromptReasoningProvider. */
+    /** Prompt arm: recommendation from PromptReasoningProvider; null when it gave none for this candidate. */
     PromptRecommendation: 'Merge' | 'NotDuplicate' | 'Uncertain' | null;
     /** Prompt arm: flagged when recommendation is 'Merge' or 'Uncertain'. */
     PromptFlagged: boolean;
+}
+
+/** How one arm's model call went for one check. */
+export interface ArmCallResult {
+    LatencyMs: number;
+    PromptRunId: string | null;
+    /** The run's cost, backfilled after the run; null when none was recorded. */
+    CostUSD: number | null;
+    /**
+     * Whether the call succeeded. A failed call answers no candidate. For the decision arm it flags
+     * nothing, as production's entry check does.
+     */
+    Success: boolean;
+    /** Why the call failed, when it did. Withheld when it quotes record text. */
+    ErrorMessage?: string;
+    /** Candidates a successful call gave no answer for. */
+    MissingAnswers: number;
+}
+
+/** How the decision arm's call went for one check. */
+export interface DecisionCallResult extends ArmCallResult {
+    /** The model that answered (`MJ: AI Prompt Runs.Model`), backfilled after the run. */
+    Model: string;
 }
 
 /** The results of running one entry check for a corpus record across all arms. */
@@ -76,24 +106,21 @@ export interface RecordCheckObservation {
     Rep: number;
     RecordId: string;
     Label: CorpusLabel;
+    /** The vector query alone. */
     RetrievalLatencyMs: number;
+    /**
+     * The entry check's steps before its decision call: building the unsaved record, the vector
+     * query, narrowing to the candidates the user can read, and loading them for the reasoning input.
+     */
+    PreparationLatencyMs: number;
     /** All readable candidate pairs observed for this record. */
     Candidates: CandidatePairObservation[];
     /** Threshold arm execution details, if tracked. */
     ThresholdLatencyMs?: number;
     /** Decision arm execution details, when run. */
-    DecisionResult?: {
-        LatencyMs: number;
-        Model: string;
-        PromptRunId: string | null;
-        CostUSD: number | null;
-    };
+    DecisionResult?: DecisionCallResult;
     /** Prompt arm execution details, when run. */
-    PromptResult?: {
-        LatencyMs: number;
-        PromptRunId: string | null;
-        CostUSD: number | null;
-    };
+    PromptResult?: ArmCallResult;
 }
 
 /** Summary retrieval metrics across all duplicate records. */
@@ -118,6 +145,22 @@ export interface ArmPerformanceMetrics {
     F1CI: ConfidenceInterval | null;
     FalseFlagRateOnNew: number;
     FlagsPerCheck: number;
+    /** How the arm's model calls went; null for the threshold arm, which makes none. */
+    Calls: ArmCallSummary | null;
+}
+
+/** How often an arm's model call failed, or left candidates unanswered, over rep 1. */
+export interface ArmCallSummary {
+    /** Checks where the arm made its call. */
+    Calls: number;
+    FailedCalls: number;
+    /** FailedCalls / Calls; 0 when there were no calls. */
+    FailedCallRate: number;
+    /** Candidates in the successful calls. */
+    CandidatesAsked: number;
+    MissingAnswers: number;
+    /** MissingAnswers / CandidatesAsked; 0 when none were asked. */
+    MissingAnswerRate: number;
 }
 
 /** One point in the vector score threshold sweep (0.60 to 0.95). */
@@ -168,12 +211,15 @@ export interface DecisionBandSweepRow {
 export interface LatencySummary {
     RetrievalP50: number | null;
     RetrievalP95: number | null;
+    PreparationP50: number | null;
+    PreparationP95: number | null;
     ThresholdP50: number | null;
     ThresholdP95: number | null;
     DecisionP50: number | null;
     DecisionP95: number | null;
     PromptP50: number | null;
     PromptP95: number | null;
+    /** The entry check path: preparation plus the decision call. */
     EntryCheckP50: number | null;
     EntryCheckP95: number | null;
     EntryCheckBudgetMs: number;
@@ -183,9 +229,13 @@ export interface LatencySummary {
 /** Arm cost summary per 1,000 checks. */
 export interface ArmCostSummary {
     ArmName: 'threshold' | 'decision' | 'prompt';
+    /** The summed cost of the checks with a recorded cost. */
     TotalCostUSD: number;
     TotalChecks: number;
-    CostPer1000ChecksUSD: number;
+    /** Checks whose run recorded no cost; they are left out of CostPer1000ChecksUSD. */
+    ChecksMissingCost: number;
+    /** Over the checks with a recorded cost; null when none has one. */
+    CostPer1000ChecksUSD: number | null;
 }
 
 /** Repeatability metrics across repetitions (rep 1 vs rep 2). */

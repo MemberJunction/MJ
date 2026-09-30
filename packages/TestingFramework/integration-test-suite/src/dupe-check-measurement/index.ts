@@ -8,3 +8,5 @@ export * from './types';
 export * from './prompts';
 export * from './corpus-generator';
 export * from './evaluator';
+export * from './record-text';
+export * from './arm-readings';
