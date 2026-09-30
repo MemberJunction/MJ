@@ -131,6 +131,7 @@ vi.mock('@memberjunction/global', () => ({
     },
     UUIDsEqual: (a: unknown, b: unknown) =>
         typeof a === 'string' && typeof b === 'string' && a.trim().toLowerCase() === b.trim().toLowerCase(),
+    NormalizeUUID: (id: string) => id.trim().toLowerCase(),
     RegisterClass: () => (target: Function) => target,
 }));
 
@@ -850,6 +851,18 @@ describe('VectorSearchProvider', () => {
             const pinned = mockRunEmbeddingFn.mock.calls.map(([params]) => [params.ModelID, params.Dimensions]);
             expect(pinned).toHaveLength(2);
             expect(pinned).toEqual(expect.arrayContaining([['embed-model-1', undefined], ['embed-model-2', 1024]]));
+        });
+
+        it('does not answer a query for one model from the cached vector of another model on the same driver', async () => {
+            mockModelsRef.value.push({ ID: 'embed-model-3', Name: 'Embed Three', DriverClass: 'LocalEmbedding', APIName: 'Xenova/three' });
+            const index = (id: string, modelID: string) => ({ ID: id, Name: id, VectorDatabaseID: 'db-1', EmbeddingModelID: modelID, Dimensions: null });
+
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [index('idx-1', 'embed-model-1')] });
+            await provider.Search('pinned query: shared driver', 5, undefined, contextUser);
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [index('idx-3', 'embed-model-3')] });
+            await provider.Search('pinned query: shared driver', 5, undefined, contextUser);
+
+            expect(mockRunEmbeddingFn.mock.calls.map(([params]) => params.ModelID)).toEqual(['embed-model-1', 'embed-model-3']);
         });
     });
 
