@@ -643,7 +643,8 @@
           "NativeControlFlow": "implicit",
           "NativeToolResults": true
         }
-      }
+      },
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Gemini 2.5 Flash"
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -2275,7 +2276,7 @@
       "Name": "o4-mini",
       "Description": "Smaller model optimized for fast, cost-efficient reasoning",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
-      "PowerRank": 6,
+      "PowerRank": 10,
       "IsActive": true,
       "InheritTypeModalities": true,
       "ModelConfiguration": {
@@ -2285,7 +2286,8 @@
           "NativeControlFlow": "implicit",
           "NativeToolResults": true
         }
-      }
+      },
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=o3-mini"
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -4210,7 +4212,8 @@
           "NativeControlFlow": "implicit",
           "NativeToolResults": true
         }
-      }
+      },
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT 5"
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -5063,7 +5066,7 @@
       "Name": "o3-mini",
       "Description": "small reasoning model, providing high intelligence at the same cost and latency targets of o1-mini. o3-mini supports key developer features, like Structured Outputs, function calling, and Batch API.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
-      "PowerRank": 8,
+      "PowerRank": 9,
       "IsActive": true,
       "InheritTypeModalities": true,
       "ModelConfiguration": {
@@ -5073,7 +5076,8 @@
           "NativeControlFlow": "implicit",
           "NativeToolResults": true
         }
-      }
+      },
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=o1-mini"
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -10143,7 +10147,7 @@
       "Name": "GPT 5-mini",
       "Description": "Smaller, cost-efficient version of GPT-5 with excellent performance for most tasks. Supports 272k input and 128k output tokens with fast response times.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
-      "PowerRank": 15,
+      "PowerRank": 9,
       "IsActive": true,
       "SpeedRank": 10,
       "CostRank": 8,
@@ -10155,7 +10159,8 @@
           "NativeControlFlow": "implicit",
           "NativeToolResults": true
         }
-      }
+      },
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT 4.1-mini"
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -10317,7 +10322,7 @@
       "Name": "GPT 5",
       "Description": "OpenAI's flagship model combining reasoning abilities with fast responses. Smartest, fastest, most useful model with 272k input and 128k output token limits. 45% less likely to hallucinate than GPT-4o.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
-      "PowerRank": 20,
+      "PowerRank": 10,
       "IsActive": true,
       "SpeedRank": 9,
       "CostRank": 5,
@@ -10329,7 +10334,8 @@
           "NativeControlFlow": "implicit",
           "NativeToolResults": true
         }
-      }
+      },
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT 4.1"
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -10642,7 +10648,7 @@
       "Name": "GPT 5-nano",
       "Description": "Ultra-efficient smallest version of GPT-5 optimized for high-volume, low-latency applications. Supports 272k input and 128k output tokens.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
-      "PowerRank": 12,
+      "PowerRank": 8,
       "IsActive": true,
       "SpeedRank": 10,
       "CostRank": 10,
@@ -10654,7 +10660,8 @@
           "NativeControlFlow": "implicit",
           "NativeToolResults": true
         }
-      }
+      },
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT 4.1 Nano"
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -13018,7 +13025,7 @@
       "SpeedRank": 12,
       "CostRank": 2,
       "InheritTypeModalities": true,
-      "PriorVersionID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Gemini 2.5 Flash-Lite",
       "ModelConfiguration": {
         "LLM": {
           "SupportsNativeToolCalling": true,
@@ -15559,7 +15566,7 @@
   {
     "fields": {
       "Name": "GPT 5.5",
-      "PowerRank": 12,
+      "PowerRank": 15,
       "Description": "OpenAI's flagship reasoning model, released April 24, 2026 (ChatGPT/Codex April 23, API April 24). Successor to GPT 5.4. Built for professional scenarios where precision, reliability, and persistence matter. 1,050,000 token context window (~1M) with 128K output capacity (Codex deployment uses a 400K context). Supports adjustable reasoning via reasoning_effort parameter (none, low, medium, high, xhigh). Available through Responses API and Chat Completions, also surfaced on Microsoft Foundry / Azure.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
@@ -15734,7 +15741,7 @@
   {
     "fields": {
       "Name": "GPT 5.5 Pro",
-      "PowerRank": 8,
+      "PowerRank": 16,
       "Description": "OpenAI's premium variant of GPT 5.5, released April 24, 2026. Extends reasoning depth and task complexity for the most demanding enterprise workloads. Same 1M input / 128K output token window as GPT 5.5. Available through the Responses API and Batch API. Pricing reflects deeper reasoning compute: 6x the input and 6x the output cost of standard GPT 5.5.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
@@ -15857,7 +15864,7 @@
   {
     "fields": {
       "Name": "Grok 4.3",
-      "PowerRank": 16,
+      "PowerRank": 23,
       "Description": "xAI's new flagship reasoning model, released April 30, 2026 (beta to SuperGrok Heavy on April 17). Always-on reasoning - 'thinks' before responding for every query. 1M token context window. Built-in code execution environment, video upload support, and native generation of downloadable PDFs, fully populated spreadsheets, and PowerPoint decks. Scores 53 on the Artificial Analysis Intelligence Index at 207 t/s output speed. Aggressively priced at 40% lower than Grok 4.20.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
@@ -16670,7 +16677,7 @@
   {
     "fields": {
       "Name": "GPT 5.5 Instant",
-      "PowerRank": 13,
+      "PowerRank": 15,
       "Description": "OpenAI's latest low-latency default ChatGPT model (May 5, 2026). Replaces GPT-5.3 Instant as the default in ChatGPT. API NOTE: there is no `gpt-5.5-instant` or `gpt-5.5-chat-latest` model id — OpenAI exposes this family as `gpt-5.5` (verified against /v1/models), which is what this record's APIName uses. Headline metric: 52.5% fewer hallucinated claims than GPT-5.3 Instant on high-stakes prompts (legal, medical, financial). Inherits the GPT-5.5 family context: 1,050,000 input tokens, 128,000 output. Supports configurable reasoning_effort. PRICING NOTE: provisional rate uses the GPT-5.5 standard $5/$30 per 1M tokens; Instant SKU may carry a lower rate once OpenAI's pricing page differentiates it.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
@@ -16867,7 +16874,7 @@
       "SpeedRank": 7,
       "CostRank": 5,
       "InheritTypeModalities": true,
-      "PriorVersionID": "@lookup:MJ: AI Models.Name=GLM 5.1",
+      "PriorVersionID": null,
       "ModelConfiguration": {
         "LLM": {
           "SupportsNativeToolCalling": true,
@@ -17792,7 +17799,7 @@
       "SpeedRank": 11,
       "CostRank": 2,
       "InheritTypeModalities": true,
-      "PriorVersionID": "@lookup:MJ: AI Models.Name=Mercury 2"
+      "PriorVersionID": null
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -17891,7 +17898,8 @@
           "NativeControlFlow": "implicit",
           "NativeToolResults": true
         }
-      }
+      },
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash"
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -18747,7 +18755,7 @@
   {
     "fields": {
       "Name": "MiniMax-M3",
-      "PowerRank": 20,
+      "PowerRank": 21,
       "Description": "MiniMax's long-context multimodal flagship released June 1, 2026. Features the new MiniMax Sparse Attention (MSA) architecture for 9.7x faster prefill and 15.6x faster decode vs M2.7 at 1M context. 1M token context window. Native multimodal input (text + image + video) with desktop computer-use agent capabilities. Positioned as a long-context specialist complementing M2.7, not a replacement. Open weights and technical report promised within ~10 days of launch. OpenAI-compatible API.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
@@ -20065,7 +20073,7 @@
           "NativeToolResults": true
         }
       },
-      "PowerRank": 19,
+      "PowerRank": 21,
       "Description": "Anthropic's next-generation Sonnet-class flagship, released June 30, 2026 with simultaneous availability on Anthropic API, Amazon Bedrock, Vertex AI, and Microsoft Foundry. 1M-token context, 128K max output. Uses a new Claude 5 tokenizer that produces ~30-35% more tokens per input than Sonnet 4.6 — factor into per-request cost projections. Launch pricing $2/$10 per 1M tokens is in effect through August 31, 2026, after which standard pricing steps to $3/$15 per 1M (parity with Sonnet 4.6 per-token pricing). Supports streaming, JSON output, and adaptive effort levels. Positioned as a cost-neutral capability upgrade over Sonnet 4.6, closing much of the gap with Opus 4.8.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
@@ -20878,7 +20886,7 @@
   {
     "fields": {
       "Name": "GPT 5.6",
-      "PowerRank": 15,
+      "PowerRank": 16,
       "Description": "OpenAI's flagship model, successor to GPT 5.5. Sets a new quality and efficiency baseline for complex production workflows. The gpt-5.6 API alias routes to the top-capability gpt-5.6-sol variant. Features a 1,050,000 token (~1M) context window and 128K output capacity. Supports adjustable reasoning via reasoning_effort (none, low, medium, high, xhigh, max) plus a new 'pro mode' that applies more model work before returning a single final answer. Adds Programmatic Tool Calling, multi-agent coordination, explicit prompt caching, and persisted reasoning. Knowledge cutoff February 2026.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
@@ -23871,7 +23879,7 @@
       "SpeedRank": 10,
       "CostRank": 2,
       "InheritTypeModalities": true,
-      "PriorVersionID": "@lookup:MJ: AI Models.Name=GLM 5.3",
+      "PriorVersionID": null,
       "ModelConfiguration": {
         "LLM": {
           "SupportsNativeToolCalling": true,
@@ -24187,14 +24195,14 @@
   {
     "fields": {
       "Name": "Qwen3.8-Flash",
-      "PowerRank": 15,
+      "PowerRank": 16,
       "Description": "Alibaba Cloud (Qwen) cost-tier Flash companion to Qwen 3.8 Max, released 2026-08-26. 125B parameters, multimodal reasoning across text / image / video / agentic surfaces, 1,000,000-token input context and 131,072-token max output. Positioned by Alibaba as a low-cost general-purpose reasoning model. Sources: https://www.bloomberg.com/news/articles/2026-08-26/alibaba-releases-smaller-cost-effective-qwen-ai-model ; https://mpost.io/alibaba-prices-qwen3-8-flash-api-at-0-16-per-million-tokens-cutting-inference-costs-for-125b-parameter-model/ ; https://openrouter.ai/qwen/qwen3.8-flash",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
       "SpeedRank": 10,
       "CostRank": 2,
       "InheritTypeModalities": true,
-      "PriorVersionID": "@lookup:MJ: AI Models.Name=Qwen 3.8 Max",
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Qwen 3.7 Flash",
       "ModelConfiguration": {
         "LLM": {
           "SupportsNativeToolCalling": true,
