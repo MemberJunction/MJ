@@ -810,8 +810,25 @@ describe('RerankerService.GetReranker, prompt-backed branch', () => {
         expect(createInstance).toHaveBeenCalledWith(BaseReranker, 'DecisionReranker', '', 'Default Decision', CUSTOM_DECISION_PROMPT_ID, contextUser);
     });
 
-    it('requires a prompt ID for DecisionReranker, as it does for LLMReranker', async () => {
-        expect(await RerankerService.Instance.GetReranker(DECISION_RERANKER_MODEL_ID, contextUser)).toBeNull();
+    it('builds DecisionReranker without a prompt ID, with the decision prompt its model-vendor APIName names', async () => {
+        const createInstance = vi.spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance');
+
+        const reranker = await RerankerService.Instance.GetReranker(DECISION_RERANKER_MODEL_ID, contextUser);
+
+        expect(reranker).toBeInstanceOf(DecisionReranker);
+        expect(createInstance).toHaveBeenCalledWith(BaseReranker, 'DecisionReranker', '', 'Default Decision', DEFAULT_DECISION_PROMPT_ID, contextUser);
+    });
+
+    it('builds DecisionReranker for Default Decision, with an empty prompt ID, when its APIName names no prompt', async () => {
+        modelByID(DECISION_RERANKER_MODEL_ID).ModelVendors[0].APIName = 'No Such Prompt';
+        const createInstance = vi.spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance');
+        stubDecisions();
+
+        const reranker = await RerankerService.Instance.GetReranker(DECISION_RERANKER_MODEL_ID, contextUser);
+        await reranker?.Rerank({ query: QUERY, documents: notes(2) });
+
+        expect(createInstance).toHaveBeenCalledWith(BaseReranker, 'DecisionReranker', '', 'No Such Prompt', '', contextUser);
+        expect(decisionCalls[0].prompt.ID).toBe(DEFAULT_DECISION_PROMPT_ID);
     });
 
     it('builds LLMReranker as before: the seeded model, a chat prompt ID, the context user, and no API key', async () => {

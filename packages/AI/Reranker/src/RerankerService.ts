@@ -30,6 +30,9 @@ export {
     parseRerankerConfiguration,
 };
 
+/** The driver class of `DecisionReranker`, which has a default decision prompt. */
+const DECISION_RERANKER_DRIVER = 'DecisionReranker';
+
 /**
  * Result from reranking operation including metrics.
  */
@@ -192,7 +195,10 @@ export class RerankerService extends BaseSingleton<RerankerService> {
      *
      * @param modelID - ID of the AIModel with type='Reranker'
      * @param contextUser - User context for operations
-     * @param promptID - Prompt ID for prompt-backed rerankers (`LLMReranker`, `DecisionReranker`), which require one
+     * @param promptID - The prompt a prompt-backed reranker runs. `LLMReranker` requires its chat
+     * prompt's ID. For `DecisionReranker` it is optional: without one it asks the decision prompt its
+     * model-vendor row's `APIName` names, as `AIRerankerRunner` does, or `Default Decision` when that
+     * names no prompt.
      * @returns Reranker instance or null if unavailable
      */
     public async GetReranker(
@@ -231,8 +237,9 @@ export class RerankerService extends BaseSingleton<RerankerService> {
             let reranker: BaseReranker | null = null;
 
             if (IsPromptBackedReranker(driverClass)) {
-                // A prompt-backed reranker (LLMReranker, DecisionReranker) needs promptID and contextUser
-                if (!promptID) {
+                // A prompt-backed reranker (LLMReranker, DecisionReranker) needs the prompt it runs and contextUser
+                const promptToRun = promptID || this.defaultPromptID(driverClass, apiName);
+                if (promptToRun === undefined) {
                     LogError(`RerankerService: ${driverClass} requires a promptID`);
                     return null;
                 }
@@ -241,7 +248,7 @@ export class RerankerService extends BaseSingleton<RerankerService> {
                     driverClass,
                     '', // No API key for a prompt-backed reranker
                     apiName || model.APIName || '',
-                    promptID,
+                    promptToRun,
                     contextUser
                 );
             } else {
@@ -274,6 +281,21 @@ export class RerankerService extends BaseSingleton<RerankerService> {
             LogError(`RerankerService: Failed to create reranker: ${message}`);
             return null;
         }
+    }
+
+    /**
+     * The prompt a prompt-backed reranker runs when the caller names none. A `DecisionReranker` asks
+     * the decision prompt its model-vendor row's `APIName` names, as `AIRerankerRunner` does, or, when
+     * that names no prompt, an empty ID, which makes it ask `Default Decision`. An `LLMReranker` has no
+     * default: undefined, because its caller must name its chat prompt.
+     */
+    private defaultPromptID(driverClass: string, apiName: string | null): string | undefined {
+        if (driverClass !== DECISION_RERANKER_DRIVER) {
+            return undefined;
+        }
+        const target = apiName?.trim().toLowerCase();
+        const named = target ? AIEngine.Instance.Prompts.find(p => p.Name?.trim().toLowerCase() === target) : undefined;
+        return named?.ID ?? '';
     }
 
     /** @deprecated Use {@link GetReranker}. */
