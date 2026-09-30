@@ -126,7 +126,7 @@ class MeasuringDuplicateRecordDetector extends DuplicateRecordDetector {
     public async BuildRecord(
         entityInfo: EntityInfo,
         values: Record<string, unknown>,
-        contextUser?: UserInfo
+        contextUser: UserInfo
     ) {
         return this.BuildUnsavedRecord(entityInfo, values, contextUser);
     }
@@ -142,9 +142,15 @@ class MeasuringDuplicateRecordDetector extends DuplicateRecordDetector {
 
     public async ReadableCandidateNames(
         candidates: PotentialDuplicate[],
-        entityInfo: EntityInfo
+        entityInfo: EntityInfo,
+        contextUser: UserInfo
     ) {
-        return this.LoadReadableCandidateNames(candidates, entityInfo);
+        return this.LoadReadableCandidateNames(candidates, entityInfo, contextUser);
+    }
+
+    /** The decision's input bounded as the entry check bounds it (field count and text length). */
+    public EntryDecisionInput(input: DuplicateReasoningInput): DuplicateReasoningInput {
+        return this.BoundEntryDecisionInput(input);
     }
 
     public async ReasoningInput(
@@ -388,7 +394,7 @@ async function prepareCheck(env: MeasurementEnv, record: CorpusRecord, options: 
     const retrievalLatencyMs = performance.now() - retrievalStart;
 
     const allCandidates = query?.Duplicates?.Duplicates ?? [];
-    const displayNames = await detector.ReadableCandidateNames(allCandidates, entityInfo);
+    const displayNames = await detector.ReadableCandidateNames(allCandidates, entityInfo, bootstrapCtx.user);
     const readable = allCandidates.filter(c => displayNames.has(NormalizeUUID(c.ToCompactURLSegment())));
 
     let reasoningInput: DuplicateReasoningInput | null = null;
@@ -491,7 +497,11 @@ async function executeSingleEntryCheck(
     const input = prepared.ReasoningInput;
     const recordTexts = RecordTextsOf(record.Values, input);
 
-    const decision = options.Arms.includes('decision') && input ? await runDecisionArm(env, input, recordTexts) : null;
+    // The decision sees the input bounded as the entry check bounds it; the prompt arm, like batch
+    // Prompt mode, sees it whole.
+    const decision = options.Arms.includes('decision') && input
+        ? await runDecisionArm(env, env.detector.EntryDecisionInput(input), recordTexts)
+        : null;
     const prompt = options.Arms.includes('prompt') && input ? await runPromptArm(env, input, recordTexts) : null;
     if (decision) {
         warnOnFailure('Decision', record, rep, decision.Reading);
