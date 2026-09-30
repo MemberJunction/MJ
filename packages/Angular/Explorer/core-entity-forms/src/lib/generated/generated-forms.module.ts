@@ -234,6 +234,7 @@ import { MJExperimentSessionIterationFormComponent } from "./Entities/MJExperime
 import { MJExplorerNavigationItemFormComponent } from "./Entities/MJExplorerNavigationItem/mjexplorernavigationitem.form.component";
 import { MJExternalDataSourceFormComponent } from "./Entities/MJExternalDataSource/mjexternaldatasource.form.component";
 import { MJExternalDataSourceTypeFormComponent } from "./Entities/MJExternalDataSourceType/mjexternaldatasourcetype.form.component";
+import { MJFeaturePipelineTypeFormComponent } from "./Entities/MJFeaturePipelineType/mjfeaturepipelinetype.form.component";
 import { MJFeatureValueCacheFormComponent } from "./Entities/MJFeatureValueCache/mjfeaturevaluecache.form.component";
 import { MJFeatureValueFormComponent } from "./Entities/MJFeatureValue/mjfeaturevalue.form.component";
 import { MJFileCategoryFormComponent } from "./Entities/MJFileCategory/mjfilecategory.form.component";
@@ -853,6 +854,7 @@ declarations: [
     MJAISkillPermissionFormComponent,
     MJAPIScopeFormComponent,
     MJDashboardCategoryLinkFormComponent,
+    MJFeaturePipelineTypeFormComponent,
     MJGeneratedCodeFormComponent,
     MJMLTrainingRunFormComponent,
     MJUserApplicationEntityFormComponent
