@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { RunViewParams } from '@memberjunction/core';
 import type { AIDecisionParams, AIDecisionRunResult } from '@memberjunction/ai-prompts';
-import type { AIPromptParams, AIPromptRunResult } from '@memberjunction/ai-core-plus';
+import type { AIPromptParams, AIPromptRunResult, ModelInfo } from '@memberjunction/ai-core-plus';
 import type { DecisionAnswer } from '@memberjunction/ai';
 
 /**
@@ -280,20 +280,28 @@ async function loadedAccount(row: object): Promise<AccountRecord> {
 }
 
 /**
+ * Answers each Likelihood, as `model`, with the **raw** probability given here for the candidate its
+ * instructions name; unnamed ones get no answer.
+ */
+function answerRawByRecord(raw: Record<string, number>, model: ModelInfo = ANSWERING_MODEL): void {
+    mocks.ExecuteDecision.mockImplementation(async (params: AIDecisionParams) => {
+        const answers: Record<string, DecisionAnswer> = {};
+        for (const [key, question] of Object.entries(params.Questions)) {
+            const recordID = Object.keys(raw).find(id => question.Instructions.includes(`(recordId ${id})`));
+            if (recordID !== undefined) {
+                answers[key] = { Kind: 'Likelihood', Probability: raw[recordID] };
+            }
+        }
+        return { success: true, Answers: answers, modelInfo: model };
+    });
+}
+
+/**
  * Answers each Likelihood, as {@link ANSWERING_MODEL}, so that the candidate its instructions name
  * gets the **calibrated** probability given here; unnamed ones get no answer.
  */
 function answerByRecord(probabilities: Record<string, number>): void {
-    mocks.ExecuteDecision.mockImplementation(async (params: AIDecisionParams) => {
-        const answers: Record<string, DecisionAnswer> = {};
-        for (const [key, question] of Object.entries(params.Questions)) {
-            const recordID = Object.keys(probabilities).find(id => question.Instructions.includes(`(recordId ${id})`));
-            if (recordID !== undefined) {
-                answers[key] = { Kind: 'Likelihood', Probability: RawFor(probabilities[recordID]) };
-            }
-        }
-        return { success: true, Answers: answers, modelInfo: ANSWERING_MODEL };
-    });
+    answerRawByRecord(Object.fromEntries(Object.entries(probabilities).map(([id, p]) => [id, RawFor(p)])));
 }
 
 /** The one decision call's params. */
@@ -418,6 +426,16 @@ describe('DuplicateRecordDetector.CheckRecordValues', () => {
             expect(mocks.ExecuteDecision).toHaveBeenCalledTimes(1);
             expect(mocks.ExecutePrompt).not.toHaveBeenCalled();
             expect(result.Candidates.map(c => c.RecordID)).toEqual(['cand-b', 'cand-a']);
+        });
+
+        it('flags Jev\'s raw answers as the shipped band and parameters do', async () => {
+            // Literal raw answers: a change to the 0.7 band or to Jev's fit changes what is flagged.
+            answerRawByRecord({ 'cand-a': 0.9, 'cand-b': 0.85, 'cand-c': 0.7 });
+
+            const result = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, undefined, USER);
+
+            // Calibrated 0.774, 0.509 and 0.095: only cand-a reaches 0.7.
+            expect(result.Candidates.map(c => [c.RecordID, c.Probability])).toEqual([['cand-a', expect.closeTo(0.77424, 4)]]);
         });
 
         it('flags nothing, and says why, when the decision fails', async () => {

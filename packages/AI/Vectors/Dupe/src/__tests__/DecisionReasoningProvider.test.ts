@@ -331,6 +331,54 @@ describe('DecisionReasoningProvider', () => {
         );
     });
 
+    // Literal values, not read from the constants, so a change to the shipped band, the pre-filter or
+    // a model's fitted parameters fails here. They were set from the duplicate-check measurement.
+    describe('the shipped settings', () => {
+        it('bands at a calibrated 0.7, and pre-filters at a calibrated 0.3', () => {
+            expect(DecisionReasoningProvider.DEFAULT_UNCERTAIN_ABOVE).toBe(0.7);
+            expect(DecisionReasoningProvider.PRE_FILTER_UNCERTAIN_ABOVE).toBe(0.3);
+            expect(new DecisionReasoningProvider().UncertainAbove).toBe(0.7);
+        });
+
+        it('ships the fitted Platt parameters for Jev and LLM Decision, and no others', () => {
+            expect(DUPLICATE_DECISION_CALIBRATION).toEqual({
+                'Jev': { A: 2.5855, B: -4.4485 },
+                'LLM Decision': { A: 0.9918, B: -1.4843 },
+            });
+        });
+
+        it.each([
+            // model, raw, calibrated
+            ['Jev', 0.5, 0.01156],
+            ['Jev', 0.9, 0.77424],
+            ['Jev', 0.85, 0.50908],
+            ['LLM Decision', 0.5, 0.18478],
+            ['LLM Decision', 0.9, 0.66706],
+            ['LLM Decision', 0.95, 0.80783],
+        ])('calibrates %s\'s raw %s to %s', (model, raw, calibrated) => {
+            expect(CalibratedDuplicateProbability(raw, model)).toBeCloseTo(calibrated, 4);
+        });
+
+        it.each([
+            // raw answer from Jev, flagged at the entry band (0.7), kept by the pre-filter (0.3)
+            [0.9, true, true],
+            [0.89, true, true], // calibrated 0.723: the 0.7 edge is a raw 0.886
+            [0.88, false, true], // calibrated 0.669
+            [0.85, false, true], // calibrated 0.509
+            [0.81, false, true], // calibrated 0.332: the 0.3 edge is a raw 0.801
+            [0.79, false, false], // calibrated 0.264
+            [0.5, false, false],
+        ])('bands Jev\'s raw %s: flagged %s at entry, kept %s by the pre-filter', async (raw, flagged, kept) => {
+            answerRawByRecord({ 'ID|c1': raw });
+            const entry = new DecisionReasoningProvider();
+            const decision = await decide(entry);
+            const [answer] = decision.Candidates;
+
+            expect(entry.BandCandidate(answer).Recommendation).toBe(flagged ? 'Uncertain' : 'NotDuplicate');
+            expect(new DecisionReasoningProvider(DecisionReasoningProvider.PRE_FILTER_UNCERTAIN_ABOVE).IsPlausible(answer.Probability)).toBe(kept);
+        });
+    });
+
     describe('never merges', () => {
         const probabilitySets: Record<string, number>[] = [
             { 'ID|c1': 1, 'ID|c2': 1, 'ID|c3': 1 },
