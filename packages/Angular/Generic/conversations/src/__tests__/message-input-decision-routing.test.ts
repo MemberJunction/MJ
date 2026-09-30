@@ -25,13 +25,18 @@ import type { BeforeAgentTurnEventArgs } from '../lib/events/chat-events';
 import { PlanModePreference } from '../lib/utils/plan-mode-preference';
 import type { AgentArtifactSummary } from '../lib/utils/agent-artifact-summary';
 import type { AgentPayloadSource } from '../lib/services/conversation-agent.service';
-import { DECISION_ROUTING_TIMEOUT_MS, type RoutingAgent } from '../lib/utils/decision-routing';
+import { DECISION_ROUTING_TIMEOUT_MS, type RoutingAgent, type RoutingCatalogAgent } from '../lib/utils/decision-routing';
 import type { MentionParseResult } from '../lib/models/conversation-state.model';
 
-const MANAGER = { ID: 'AAAAAAAA-0000-0000-0000-000000000001', Name: 'Sage', Description: 'Routes each request.' } satisfies RoutingAgent;
-const RESEARCH = { ID: 'AAAAAAAA-0000-0000-0000-000000000002', Name: 'Research', Description: 'Finds sources.' } satisfies RoutingAgent;
-const WRITER = { ID: 'AAAAAAAA-0000-0000-0000-000000000003', Name: 'Writer', Description: 'Drafts documents.' } satisfies RoutingAgent;
-const AGENTS = [MANAGER, RESEARCH, WRITER];
+const ACTIVE = { Status: 'Active', IsRestricted: false } as const;
+const MANAGER = { ID: 'AAAAAAAA-0000-0000-0000-000000000001', Name: 'Sage', Description: 'Routes each request.', ...ACTIVE } satisfies RoutingCatalogAgent;
+const RESEARCH = { ID: 'AAAAAAAA-0000-0000-0000-000000000002', Name: 'Research', Description: 'Finds sources.', ...ACTIVE } satisfies RoutingCatalogAgent;
+const WRITER = { ID: 'AAAAAAAA-0000-0000-0000-000000000003', Name: 'Writer', Description: 'Drafts documents.', ...ACTIVE } satisfies RoutingCatalogAgent;
+/** Answered earlier in the conversation, and has since been disabled. */
+const RETIRED = { ID: 'AAAAAAAA-0000-0000-0000-000000000004', Name: 'Archivist', Description: 'Files old drafts.', Status: 'Disabled', IsRestricted: false } satisfies RoutingCatalogAgent;
+/** Active, but restricted to system use. */
+const INTERNAL = { ID: 'AAAAAAAA-0000-0000-0000-000000000005', Name: 'Scheduler', Description: 'Runs scheduled jobs.', Status: 'Active', IsRestricted: true } satisfies RoutingCatalogAgent;
+const AGENTS = [MANAGER, RESEARCH, WRITER, RETIRED, INTERNAL];
 
 const VERSION = 'BBBBBBBB-0000-0000-0000-000000000001';
 
@@ -302,6 +307,26 @@ describe('MessageInputComponent — decision routing', () => {
             expect(h.before.map(e => [e.Route, e.AgentId])).toEqual([['ConversationManager', MANAGER.ID]]);
             expect(h.processMessage).toHaveBeenCalledOnce();
             expect(h.invokeSubAgent).not.toHaveBeenCalled();
+        });
+
+        it('never offers, or routes to, an agent that is no longer active or is restricted', async () => {
+            h.set({ ConversationHistory: [reply(RETIRED, 'r1', 'Filed the old draft.'), reply(INTERNAL, 'r2', 'Export scheduled.'), ...TWO_AGENTS()] });
+            h.runDecision.mockResolvedValue(leavesTo(RETIRED));
+
+            await h.route(userMessage());
+
+            expect(routeOptionValues(h.runDecision.mock.calls[0][0])).toEqual([WRITER.ID, RESEARCH.ID, MANAGER.ID]);
+            expect(h.before.map(e => [e.Route, e.AgentId])).toEqual([['Continuity', WRITER.ID]]);
+            expect(h.findArtifacts.mock.calls.map(([, agentId]) => agentId)).toEqual([WRITER.ID, RESEARCH.ID]);
+        });
+
+        it('makes no call when the last agent is no longer active, which keeps today\'s routing', async () => {
+            h.set({ ConversationHistory: [...TWO_AGENTS(), new FakeDetail('u3', 'User', 'Tidy it'), reply(RETIRED, 'r1', 'Filed.')] });
+
+            await h.route(userMessage());
+
+            expect(h.runDecision).not.toHaveBeenCalled();
+            expect(h.before.map(e => [e.Route, e.AgentId])).toEqual([['Continuity', RETIRED.ID]]);
         });
 
         it('ignores a routed agent the chat does not allow, and never offers it', async () => {

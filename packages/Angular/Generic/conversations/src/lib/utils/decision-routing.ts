@@ -62,6 +62,9 @@ export type RoutingHistoryRow = Pick<MJConversationDetailEntity, 'ID' | 'Role' |
 /** An agent, as routing describes it to the model. */
 export type RoutingAgent = Pick<MJAIAgentEntityExtended, 'ID' | 'Name' | 'Description'>;
 
+/** An agent as the client's catalog holds it: what routing describes, and whether it can answer. */
+export type RoutingCatalogAgent = RoutingAgent & Pick<MJAIAgentEntityExtended, 'Status' | 'IsRestricted'>;
+
 /** An agent that has taken part in the conversation: one option of the agent Choice. */
 export interface RoutingParticipant {
     /** The agent. */
@@ -164,7 +167,8 @@ export function ShouldRunRoutingDecision(gate: RoutingDecisionGate): boolean {
 /**
  * The agents that have taken part in the conversation and may answer now, newest first, each once
  * with its newest reply. The conversation manager is left out (it is the "someone else" option),
- * and so is any agent the client's catalog doesn't know or the host doesn't allow.
+ * and so is any agent the client's catalog doesn't know, the host doesn't allow, or that can no
+ * longer answer: one that isn't active, or is restricted (see {@link IsRoutableAgent}).
  *
  * @param history The conversation's rows the turn may read, oldest first.
  * @param conversationManagerId The conversation manager's ID, when it is loaded.
@@ -175,7 +179,7 @@ export function CollectRoutingParticipants(
     history: readonly RoutingHistoryRow[],
     conversationManagerId: string | null,
     allowedAgentIDs: readonly string[] | null,
-    findAgent: (agentId: string) => RoutingAgent | undefined
+    findAgent: (agentId: string) => RoutingCatalogAgent | undefined
 ): RoutingParticipant[] {
     const participants: RoutingParticipant[] = [];
     for (const row of [...history].reverse()) {
@@ -184,11 +188,20 @@ export function CollectRoutingParticipants(
             continue;
         }
         const agent = isListed(participants, agentId) ? undefined : findAgent(agentId);
-        if (agent) {
+        if (agent && IsRoutableAgent(agent)) {
             participants.push({ Agent: agent, LastReply: excerpt(row.Message, EXCERPT_CHARS) });
         }
     }
     return participants;
+}
+
+/**
+ * True when an agent can take a routed turn: it is active and not restricted, the same test the
+ * '@' list applies. An agent that answered earlier may since have been disabled, and the server
+ * refuses to run an agent that isn't active.
+ */
+export function IsRoutableAgent(agent: Pick<RoutingCatalogAgent, 'Status' | 'IsRestricted'>): boolean {
+    return agent.Status === 'Active' && !agent.IsRestricted;
 }
 
 /**

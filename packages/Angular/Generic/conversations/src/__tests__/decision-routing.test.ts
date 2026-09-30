@@ -23,9 +23,11 @@ import {
     DECISION_ROUTING_MIN_CONFIDENCE,
     DECISION_ROUTING_TIMEOUT_MS,
     InterpretRoutingAnswers,
+    IsRoutableAgent,
     RunRoutingDecision,
     ShouldRunRoutingDecision,
     type RoutingAgent,
+    type RoutingCatalogAgent,
     type RoutingDecisionGate,
     type RoutingDecisionInput,
     type RoutingDecisionOutcome,
@@ -36,12 +38,13 @@ import {
 import { ResolveAgentTurn, type AgentTurnCandidates } from '../lib/utils/agent-turn-routing';
 import type { AgentArtifactSummary } from '../lib/utils/agent-artifact-summary';
 
-const MANAGER = { ID: 'AAAAAAAA-0000-0000-0000-000000000001', Name: 'Sage', Description: 'Routes each request.' } satisfies RoutingAgent;
-const RESEARCH = { ID: 'AAAAAAAA-0000-0000-0000-000000000002', Name: 'Research', Description: 'Finds and summarises sources.' } satisfies RoutingAgent;
-const WRITER = { ID: 'AAAAAAAA-0000-0000-0000-000000000003', Name: 'Writer', Description: 'Drafts and edits documents.' } satisfies RoutingAgent;
-const ANALYST = { ID: 'AAAAAAAA-0000-0000-0000-000000000004', Name: 'Analyst', Description: null } satisfies RoutingAgent;
-const CATALOG: RoutingAgent[] = [MANAGER, RESEARCH, WRITER, ANALYST];
-const findAgent = (id: string): RoutingAgent | undefined => CATALOG.find(a => a.ID.toUpperCase() === id.toUpperCase());
+const ACTIVE = { Status: 'Active', IsRestricted: false } as const;
+const MANAGER = { ID: 'AAAAAAAA-0000-0000-0000-000000000001', Name: 'Sage', Description: 'Routes each request.', ...ACTIVE } satisfies RoutingCatalogAgent;
+const RESEARCH = { ID: 'AAAAAAAA-0000-0000-0000-000000000002', Name: 'Research', Description: 'Finds and summarises sources.', ...ACTIVE } satisfies RoutingCatalogAgent;
+const WRITER = { ID: 'AAAAAAAA-0000-0000-0000-000000000003', Name: 'Writer', Description: 'Drafts and edits documents.', ...ACTIVE } satisfies RoutingCatalogAgent;
+const ANALYST = { ID: 'AAAAAAAA-0000-0000-0000-000000000004', Name: 'Analyst', Description: null, ...ACTIVE } satisfies RoutingCatalogAgent;
+const CATALOG: RoutingCatalogAgent[] = [MANAGER, RESEARCH, WRITER, ANALYST];
+const findAgent = (id: string): RoutingCatalogAgent | undefined => CATALOG.find(a => a.ID.toUpperCase() === id.toUpperCase());
 
 const VERSION_1 = 'BBBBBBBB-0000-0000-0000-000000000001';
 const VERSION_2 = 'BBBBBBBB-0000-0000-0000-000000000002';
@@ -188,6 +191,21 @@ describe('decision routing', () => {
             const unknown: RoutingHistoryRow = { ID: 'x1', Role: 'AI', AgentID: 'CCCCCCCC-0000-0000-0000-000000000009', Message: '?' };
             const participants = CollectRoutingParticipants([...history, unknown], MANAGER.ID, [WRITER.ID, MANAGER.ID], findAgent);
             expect(participants.map(p => p.Agent.ID)).toEqual([WRITER.ID]);
+        });
+
+        it('leaves out agents that are no longer active or are restricted, as the \'@\' list does', () => {
+            const catalog: RoutingCatalogAgent[] = [MANAGER, { ...RESEARCH, Status: 'Disabled' }, { ...WRITER, IsRestricted: true }, ANALYST];
+            const lookup = (id: string): RoutingCatalogAgent | undefined => catalog.find(a => a.ID === id);
+            const rows = [...history, agentRow('a4', ANALYST, 'Figures attached')];
+
+            expect(CollectRoutingParticipants(rows, MANAGER.ID, null, lookup).map(p => p.Agent.ID)).toEqual([ANALYST.ID]);
+        });
+
+        it('IsRoutableAgent needs an active, unrestricted agent', () => {
+            expect(IsRoutableAgent({ Status: 'Active', IsRestricted: false })).toBe(true);
+            expect(IsRoutableAgent({ Status: 'Pending', IsRestricted: false })).toBe(false);
+            expect(IsRoutableAgent({ Status: 'Disabled', IsRestricted: false })).toBe(false);
+            expect(IsRoutableAgent({ Status: 'Active', IsRestricted: true })).toBe(false);
         });
 
         it('truncates a long reply', () => {

@@ -19,8 +19,8 @@ import {
   CollectRoutingParticipants,
   RunRoutingDecision,
   ShouldRunRoutingDecision,
-  type RoutingAgent,
   type RoutingArtifactVersion,
+  type RoutingCatalogAgent,
   type RoutingDecisionInput,
   type RoutingDecisionOutcome,
   type RoutingParticipant
@@ -2133,7 +2133,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    */
   private buildRoutingDecisionInput(message: MJConversationDetailEntity, continuityAgentId: string): RoutingDecisionInput {
     const history = this.ConversationHistory.filter(row => this.isWithinHistoryFloor(row) && !UUIDsEqual(row.ID, message.ID));
-    const findAgent = (agentId: string): RoutingAgent | undefined => AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
+    const findAgent = (agentId: string): RoutingCatalogAgent | undefined => AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
     const manager = this.ConverationManagerAgent;
     return {
       Message: message.Message ?? '',
