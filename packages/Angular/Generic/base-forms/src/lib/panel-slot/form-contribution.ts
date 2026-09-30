@@ -5,12 +5,20 @@
  * grid. Related claims replace the stock/baked grid. No Angular, no ClassFactory
  * — the host queries registrations and feeds this.
  *
- * Section keys for related panels MUST match CodeGen's camelCase
- * (`angular-codegen.ts` `camelCase` + related-entity sectionKey). If they drift,
- * hide-baked and skip-baked miss and the user sees a double grid.
+ * Contribution keys and section keys come from the shared key module in
+ * `@memberjunction/interactive-component-types/forms`, which the server actions use too.
+ * Section keys for related panels match CodeGen's camelCase (`angular-codegen.ts`), so
+ * hide-baked and skip-baked find the grid CodeGen emitted.
  */
 import type { ClassRegistration } from '@memberjunction/global';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
+import {
+    FormSectionCamelCase as SharedFormSectionCamelCase,
+    RelatedContributionKey as SharedRelatedContributionKey,
+    RelatedGridSectionKey,
+    ResolveContributionWriteKey,
+    StripJoinFieldBrackets as SharedStripJoinFieldBrackets,
+} from '@memberjunction/interactive-component-types/forms';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import type { MJEntityFormContributionEntity } from '@memberjunction/core-entities';
 import { FormPanelRegistrationMetadata, FormPanelSlot } from './base-form-panel';
@@ -122,39 +130,27 @@ export interface ResolveFormContributionsResult {
     StockGrids: FormContributionWinner[];
 }
 
-/** Strip wrapping [] from a join field, matching CodeGen's tab-name helper. */
+/** Strip wrapping [] from a join field. Uses the shared `StripJoinFieldBrackets`. */
 export function StripJoinFieldBrackets(joinField: string | null | undefined): string {
-    return (joinField ?? '').trim().replace(/^\[/, '').replace(/\]$/, '');
+    return SharedStripJoinFieldBrackets(joinField);
+}
+
+/** camelCase + identifier sanitize, as CodeGen names sections. Uses the shared `FormSectionCamelCase`. */
+export function FormSectionCamelCase(str: string): string {
+    return SharedFormSectionCamelCase(str);
+}
+
+/** `related:<entity>:<join>`. Uses the shared `RelatedContributionKey`. */
+export function RelatedContributionKey(relatedEntity: string, joinField?: string | null): string {
+    return SharedRelatedContributionKey(relatedEntity, joinField);
 }
 
 /**
- * camelCase + identifier sanitize. Byte-compatible with
- * `CodeGenLib` `angular-codegen.ts` `camelCase` — do not "improve".
+ * The key a registration collapses by: its own key, else the derived related key. Empty for a
+ * registration with neither, which never collapses. Uses the shared `ResolveContributionWriteKey`.
  */
-export function FormSectionCamelCase(str: string): string {
-    const sanitized = str.replace(/[^a-zA-Z0-9\s]/g, ' ');
-    let result = sanitized
-        .replace(/\s(.)/g, (_match, char: string) => char.toUpperCase())
-        .replace(/\s/g, '')
-        .replace(/^(.)/, (_match, char: string) => char.toLowerCase());
-    if (/^\d/.test(result)) {
-        result = '_' + result;
-    }
-    return result.length === 0 ? 'section' : result;
-}
-
-export function RelatedContributionKey(relatedEntity: string, joinField?: string | null): string {
-    return `related:${relatedEntity.trim()}:${StripJoinFieldBrackets(joinField)}`;
-}
-
 export function ResolveContributionKey(meta: FormPanelRegistrationMetadata): string {
-    if (meta.contributionKey && meta.contributionKey.trim().length > 0) {
-        return meta.contributionKey.trim();
-    }
-    if (meta.relatedEntity && meta.relatedEntity.trim().length > 0) {
-        return RelatedContributionKey(meta.relatedEntity, meta.relatedJoinField);
-    }
-    return '';
+    return ResolveContributionWriteKey(meta, meta.relatedEntity ?? null) ?? '';
 }
 
 /**
@@ -179,12 +175,7 @@ export function RelatedEntitySectionKey(
 }
 
 function relatedSectionKey(relationship: FormContributionRelationship, sharesRelatedEntity: boolean): string {
-    if (sharesRelatedEntity) {
-        return FormSectionCamelCase(
-            `${relationship.RelatedEntity} ${StripJoinFieldBrackets(relationship.RelatedEntityJoinField)}`,
-        );
-    }
-    return FormSectionCamelCase(relationship.RelatedEntity);
+    return RelatedGridSectionKey(relationship.RelatedEntity, relationship.RelatedEntityJoinField, sharesRelatedEntity);
 }
 
 /**

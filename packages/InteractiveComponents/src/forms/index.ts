@@ -26,6 +26,7 @@ export * from './form-host-props-fixture';
 export * from './form-variant-preference';
 export * from './form-spec-info';
 export * from './form-contribution-spec';
+export * from './form-contribution-key';
 export * from './form-panel-host-props';
 export * from './form-panel-events';
 
