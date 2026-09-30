@@ -371,3 +371,28 @@ describe('executeAIAgent — status publishing', () => {
         expect(detail.Save).not.toHaveBeenCalled();
     });
 });
+
+describe('persistInFlightAgentFailure — a refused conversation-detail save logs the reason (MJ#4791)', () => {
+    it('includes LatestResult.CompleteMessage when the Error-status save is refused', async () => {
+        const { resolver } = makeResolver();
+        const errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const detail = {
+            Status: 'In-Progress',
+            LatestResult: { CompleteMessage: 'You do not have access to this conversation.' },
+            Load: vi.fn().mockResolvedValue(true),
+            EnsureSaveComplete: vi.fn().mockResolvedValue(undefined),
+            Save: vi.fn().mockResolvedValue(false),
+        };
+        const provider = { GetEntityObject: vi.fn().mockResolvedValue(detail) };
+        const persist = (resolver as unknown as {
+            persistInFlightAgentFailure(...args: unknown[]): Promise<void>;
+        }).persistInFlightAgentFailure.bind(resolver);
+
+        await persist(provider, { sessionId: 'session-1', userRecord: USER }, null, 'detail-1', 'agent threw');
+
+        const lines = errSpy.mock.calls.map((call) => String(call[0]));
+        const line = lines.find((l) => l.includes('Failed to persist Error on conversation detail detail-1'));
+        expect(line).toBeDefined();
+        expect(line).toContain('You do not have access to this conversation.');
+    });
+});
