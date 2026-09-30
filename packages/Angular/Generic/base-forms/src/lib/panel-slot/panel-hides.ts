@@ -75,12 +75,22 @@ export function SetPanelHidden(entityName: string, key: string, hidden: boolean)
 }
 
 /**
- * The registrations with the hidden ones removed.
+ * Whether the user's hides drop this registration from their form.
  *
  * A user's own panel is never dropped, even when its key is listed: they turn it off, which is a
  * separate switch in a separate place, and letting a hide reach it too would give one thing two
- * switches. Returns the same array when nothing is hidden, so callers that memoize on identity
- * keep their memo.
+ * switches.
+ */
+export function IsPanelHiddenByUser(registration: FormContributionRegistration, hidden: ReadonlySet<string>): boolean {
+    if (hidden.size === 0) return false;
+    if (registration.Source === 'metadata' && registration.Scope === 'User') return false;
+    const key = PanelHideKey(registration);
+    return !!key && hidden.has(key);
+}
+
+/**
+ * The registrations with the hidden ones removed ({@link IsPanelHiddenByUser}). Returns the same
+ * array when nothing is hidden, so callers that memoize on identity keep their memo.
  */
 export function WithoutHiddenPanels(
     registrations: FormContributionRegistration[],
@@ -88,9 +98,5 @@ export function WithoutHiddenPanels(
 ): FormContributionRegistration[] {
     if (hidden.length === 0) return registrations;
     const hiddenSet = new Set(hidden);
-    return registrations.filter((registration) => {
-        if (registration.Source === 'metadata' && registration.Scope === 'User') return true;
-        const key = PanelHideKey(registration);
-        return !key || !hiddenSet.has(key);
-    });
+    return registrations.filter((registration) => !IsPanelHiddenByUser(registration, hiddenSet));
 }

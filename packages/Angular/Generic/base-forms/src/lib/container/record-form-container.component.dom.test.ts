@@ -1,7 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { By } from '@angular/platform-browser';
-import type { BaseEntity } from '@memberjunction/core';
+import { CompositeKey, type BaseEntity } from '@memberjunction/core';
 import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
 import { MjRecordFormContainerComponent } from './record-form-container.component';
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
@@ -11,6 +11,8 @@ import type { BaseFormComponent } from '../base-form-component';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { FORM_PLACEMENT_PREVIEW, FormPlacementPreview, PLACEMENT_PREVIEW_KEY } from '../panel-slot/placement-preview';
+import type { FormContributionRegistration } from '../panel-slot/form-contribution';
+import { InteractiveFormPanelComponent } from '../interactive-form/interactive-form-panel.component';
 import { ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
 import { FormSectionIndicatorCoordinator, type FormSectionIndicatorSource } from '../section-indicators/form-section-indicator-coordinator.service';
 import { ParseValidationSource, SumSectionIndicators, type FormSectionIndicators, type ParsedValidationSource } from '../section-indicators/form-section-indicators';
@@ -718,5 +720,120 @@ describe('MjRecordFormContainerComponent (DOM) — a bare strip that replaces bl
     expect(strip.style.display).toBe('none');
     f.componentInstance.OnChromeGroupActivate('details');
     expect(strip.style.display).toBe('');
+  });
+});
+
+/**
+ * The container reads the form's contributions through the same collapse the slots use. These
+ * drive it with a fixed list and read the rail, count and warning decisions it derives.
+ */
+describe('MjRecordFormContainerComponent (DOM) — contributions it files and reports', () => {
+  type Internals = {
+    formContributionRegistrations(): FormContributionRegistration[];
+    allChromePanels(): Array<{ SectionKey: string; SectionName: string; Variant: string; ClaimableFields: Array<{ Name: string }> }>;
+    contributionSectionKeys(): string[];
+    countContributions(): Array<{ SectionKey: string }>;
+    warnUnmatchedReplaceKeys(): void;
+    warnUnmatchedFieldClaims(): void;
+  };
+  const internals = (f: ReturnType<typeof render>) => f.componentInstance as unknown as Internals;
+  const proto = MjRecordFormContainerComponent.prototype as unknown as Internals;
+
+  const row = (meta: Partial<FormContributionRegistration['Metadata']>): FormContributionRegistration => ({
+    Priority: 0, Source: 'metadata', Scope: 'User', RowID: 'row-1', ComponentID: 'comp-1', Presentation: 'panel',
+    Metadata: { entity: 'Accounts', slot: 'after-related', ...meta },
+  });
+
+  function renderWith(registrations: FormContributionRegistration[]) {
+    vi.spyOn(proto, 'formContributionRegistrations').mockReturnValue(registrations);
+    vi.spyOn(proto, 'allChromePanels').mockReturnValue([
+      { SectionKey: 'identity', SectionName: 'Identity', Variant: 'default', ClaimableFields: [{ Name: 'FirstName' }] },
+    ]);
+    return render();
+  }
+
+  function warnings(run: () => void): string[] {
+    const out: string[] = [];
+    const warn = vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => { out.push(args.map(String).join(' ')); });
+    try { run(); } finally { warn.mockRestore(); }
+    return out;
+  }
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('files a related-grid row with no key of its own under the section key its panel draws', () => {
+    const claim = row({ relatedEntity: 'Orders', relatedJoinField: 'AccountID' });
+    const panel = Object.create(InteractiveFormPanelComponent.prototype) as InteractiveFormPanelComponent;
+    panel.Contribution = claim;
+    const f = renderWith([claim]);
+    expect(internals(f).contributionSectionKeys()).toEqual([panel.SectionKey]);
+    expect(internals(f).countContributions().map((c) => c.SectionKey)).toEqual([panel.SectionKey]);
+  });
+
+  it('files the compiled panel, not a row it ties with, for a key both hold', () => {
+    const compiled: FormContributionRegistration = {
+      Priority: 0, Source: 'class', Metadata: { entity: 'Accounts', slot: 'after-fields', contributionKey: 'summary', inclusion: 'Primary' },
+    };
+    const tied = row({ contributionKey: 'summary', inclusion: 'None' });
+    const f = renderWith([compiled, tied]);
+    const inclusion = (f.componentInstance as unknown as { contributionInclusionByKey(): Map<string, string> }).contributionInclusionByKey();
+    expect(inclusion.get('summary')).toBe('Primary');
+  });
+
+  it('does not warn for a claim on a whole rail tab', () => {
+    const f = renderWith([row({ contributionKey: 'k', replacesSectionKey: DETAILS_SECTION_KEY })]);
+    expect(warnings(() => internals(f).warnUnmatchedReplaceKeys())).toEqual([]);
+  });
+
+  it('warns for a section in a claimed list that the form does not draw', () => {
+    const f = renderWith([row({ contributionKey: 'k', replacesSectionKeys: ['identity', 'ghost'] })]);
+    const out = warnings(() => internals(f).warnUnmatchedReplaceKeys());
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain('"ghost"');
+  });
+
+  it('does not warn for a panel placed in a section the form draws, whatever fields it names', () => {
+    const f = renderWith([row({ contributionKey: 'k', inSectionKey: 'identity', replacesFieldNames: ['Nope'] })]);
+    expect(warnings(() => internals(f).warnUnmatchedFieldClaims())).toEqual([]);
+  });
+
+  it('warns for a panel placed in a section the form does not draw', () => {
+    const f = renderWith([row({ contributionKey: 'k', inSectionKey: 'ghost' })]);
+    const out = warnings(() => internals(f).warnUnmatchedFieldClaims());
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain('"ghost"');
+  });
+});
+
+/**
+ * The snapshot names the open record in the form `CompositeKey.FromURLSegment` reads, so the
+ * placement dialog can preview it. A record not saved yet has no key to name.
+ */
+describe('MjRecordFormContainerComponent (DOM) — the record the snapshot names', () => {
+  type Publishing = { publishCompositionSnapshot(spec: FormChromeSpec): void };
+  const SPEC: FormChromeSpec = { Layout: 'accordion', Groups: [], RelatedRoles: new Map(), MoreSectionKeys: [] };
+
+  function publish(record: Partial<BaseEntity>): string | null | undefined {
+    const f = render();
+    const form = {
+      record,
+      EntityInfo: { Name: 'Accounts', RelatedEntities: [], ChildEntities: [] },
+      OwnsEntireFormBody: true,
+      CompositionChanged: { emit: () => undefined },
+      CompositionSnapshot: null as { RecordPrimaryKey: string | null } | null,
+    };
+    f.componentInstance.FormComponent = form as unknown as BaseFormComponent;
+    (f.componentInstance as unknown as Publishing).publishCompositionSnapshot(SPEC);
+    return form.CompositionSnapshot?.RecordPrimaryKey;
+  }
+
+  it('names a saved record by its URL segment', () => {
+    const key = CompositeKey.FromKeyValuePair('ID', 'acct-7');
+    expect(publish({ IsSaved: true, PrimaryKey: key } as Partial<BaseEntity>)).toBe('ID|acct-7');
+  });
+
+  it('names no record for one not saved yet', () => {
+    const key = CompositeKey.FromKeyValuePair('ID', 'generated-uuid');
+    expect(publish({ IsSaved: false, PrimaryKey: key } as Partial<BaseEntity>)).toBeNull();
   });
 });

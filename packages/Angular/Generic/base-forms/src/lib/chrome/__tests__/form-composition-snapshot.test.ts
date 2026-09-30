@@ -67,3 +67,47 @@ describe('BuildFormCompositionSnapshot', () => {
         expect(snapshot).toMatchObject({ Entity: PEOPLE, Layout: 'left-nav', SlotsPresent: ['before-fields', 'after-fields', 'after-everything'], ChromeRuleCount: 2 });
     });
 });
+
+/**
+ * The apply flow reads a key's holder from the snapshot, and a panel the user hid still holds its
+ * key. So the snapshot lists it, marked hidden, the same way the apply flow finds it without one.
+ */
+describe('BuildFormCompositionSnapshot — panels the user hid', () => {
+    const TICKETS_KEY = `related:${TICKETS}:PersonID`;
+    const compiledTickets: FormContributionRegistration = {
+        Priority: 2, Source: 'class', Title: 'Tickets', Registration: { Key: 'people:tickets' } as FormContributionRegistration['Registration'],
+        Metadata: { entity: PEOPLE, slot: 'after-related', relatedEntity: TICKETS, relatedJoinField: 'PersonID' },
+    };
+    const build = (hidden: string[]) => BuildFormCompositionSnapshot({
+        EntityName: PEOPLE,
+        RecordPrimaryKey: null,
+        Layout: 'accordion',
+        Groups: [],
+        Panels: [],
+        HiddenSectionKeys: new Set(),
+        RelatedEntities: [tickets],
+        IsaChildEntityIDs: [],
+        BakedSectionKeys: [],
+        Registrations: [compiledTickets],
+        HiddenPanelKeys: hidden,
+        RelatedRoles: new Map(),
+        HiddenContributionKeys: new Set(),
+        SlotsPresent: [],
+        ChromeRuleCount: 0,
+    });
+
+    it('lists a hidden compiled panel with its key, marked hidden', () => {
+        expect(build([TICKETS_KEY]).Contributions).toEqual([
+            expect.objectContaining({ Key: TICKETS_KEY, Source: 'class', Hidden: true, Precedence: 2 }),
+        ]);
+    });
+
+    it('does not count a hidden panel\'s claim: its grid is filled in again', () => {
+        expect(build([TICKETS_KEY]).Related).toEqual([expect.objectContaining({ Entity: TICKETS, Source: 'stock' })]);
+        expect(build([]).Related).toEqual([expect.objectContaining({ Entity: TICKETS, Source: 'claimed' })]);
+    });
+
+    it('marks nothing hidden when the user hid nothing', () => {
+        expect(build([]).Contributions).toEqual([expect.objectContaining({ Key: TICKETS_KEY, Hidden: false })]);
+    });
+});

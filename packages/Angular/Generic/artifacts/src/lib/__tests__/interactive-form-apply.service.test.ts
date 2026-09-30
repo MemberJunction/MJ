@@ -735,7 +735,7 @@ describe('InteractiveFormApplyService — form-panel specs', () => {
 
     describe('what the dialog is offered from the open form', () => {
         const openForm = () => snapshot({
-            RecordPrimaryKey: 'ID=person-7',
+            RecordPrimaryKey: 'ID|person-7',
             Sections: [
                 { Key: 'details', Title: 'Details', Variant: 'default', Group: '__mj_form_details', Hidden: false,
                   Fields: [{ Name: 'FirstName', Label: 'First name' }] },
@@ -775,6 +775,18 @@ describe('InteractiveFormApplyService — form-panel specs', () => {
         it('previews a sample record when the snapshot names none', async () => {
             const svc = new InteractiveFormApplyService();
             await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot({ RecordPrimaryKey: '' }));
+            expect(hoisted.placementRecordKey).toBeNull();
+        });
+
+        it('previews a sample record for a record not saved yet', async () => {
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot({ RecordPrimaryKey: null }));
+            expect(hoisted.placementRecordKey).toBeNull();
+        });
+
+        it('previews a sample record when the key names fields that are not the entity\'s key', async () => {
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot({ RecordPrimaryKey: 'Email|a@b.c' }));
             expect(hoisted.placementRecordKey).toBeNull();
         });
     });

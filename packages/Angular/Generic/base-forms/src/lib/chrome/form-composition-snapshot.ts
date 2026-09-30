@@ -2,16 +2,17 @@
 import type { FormInclusion, FormRole } from '@memberjunction/core';
 import type { FormPanelSlot } from '../panel-slot/base-form-panel';
 import {
-    CollapseFormPanelRegistrations,
     RelatedContributionKey,
     RelatedEntitySectionKey,
     ResolveContributionKey,
     ReplacedSectionKeys,
+    ResolveFormContributionWinners,
     ResolveFormContributions,
     StripJoinFieldBrackets,
     type FormContributionRegistration,
     type FormContributionRelationship,
 } from '../panel-slot/form-contribution';
+import { IsPanelHiddenByUser } from '../panel-slot/panel-hides';
 import type { FormChromeGroup, FormChromePanelSnapshot } from './form-chrome';
 
 /**
@@ -49,7 +50,7 @@ export interface FormCompositionContribution {
     Source: 'class' | 'metadata';
     Title: string;
     Presentation: 'panel' | 'bare';
-    /** Suppressed by an L3 rule or inclusion None. */
+    /** Suppressed by an L3 rule or inclusion None, or hidden by this user. */
     Hidden: boolean;
     /** Last-wins rank; the apply flow uses incumbent + 1 to replace a compiled piece. */
     Precedence: number;
@@ -70,12 +71,13 @@ export interface FormCompositionContribution {
 export interface FormCompositionSnapshot {
     Entity: string;
     /**
-     * The record this composition was built for, as `PrimaryKey.ToString()`.
+     * The record this composition was built for, as `CompositeKey.ToURLSegment()`, which
+     * `CompositeKey.FromURLSegment` reads back. Null for a record not saved yet.
      * `AdditionalContext` is app-global and replaced wholesale by whichever surface
      * published last, so a consumer needs to be able to tell which record a snapshot
      * describes rather than assuming it matches the conversation.
      */
-    RecordPrimaryKey: string;
+    RecordPrimaryKey: string | null;
     Layout: 'accordion' | 'left-nav';
     Sections: FormCompositionSection[];
     Related: FormCompositionRelated[];
@@ -97,7 +99,7 @@ export interface FormCompositionRailItem {
 
 export interface BuildFormCompositionSnapshotInput {
     EntityName: string;
-    RecordPrimaryKey: string;
+    RecordPrimaryKey: string | null;
     Layout: 'accordion' | 'left-nav';
     Groups: readonly FormChromeGroup[];
     Panels: readonly FormChromePanelSnapshot[];
@@ -105,7 +107,10 @@ export interface BuildFormCompositionSnapshotInput {
     RelatedEntities: readonly FormContributionRelationship[];
     IsaChildEntityIDs: readonly string[];
     BakedSectionKeys: readonly string[];
+    /** Every registration on the form, including the panels this user hid. */
     Registrations: readonly FormContributionRegistration[];
+    /** The keys of the panels this user hid. Their registrations are listed, marked hidden. */
+    HiddenPanelKeys?: readonly string[];
     /** SectionKey → resolved role for related grids (Primary | Detail). Detail reads as More. */
     RelatedRoles: ReadonlyMap<string, FormRole>;
     HiddenContributionKeys: ReadonlySet<string>;
@@ -125,11 +130,14 @@ function presentationOf(reg: FormContributionRegistration): 'panel' | 'bare' {
 }
 
 export function BuildFormCompositionSnapshot(input: BuildFormCompositionSnapshotInput): FormCompositionSnapshot {
+    const userHidden = new Set(input.HiddenPanelKeys ?? []);
+    const isUserHidden = (reg: FormContributionRegistration) => IsPanelHiddenByUser(reg, userHidden);
+    const drawn = userHidden.size > 0 ? input.Registrations.filter((reg) => !isUserHidden(reg)) : input.Registrations;
     const resolved = ResolveFormContributions({
         EntityName: input.EntityName,
         RelatedEntities: input.RelatedEntities,
         IsaChildEntityIDs: input.IsaChildEntityIDs,
-        Registrations: input.Registrations,
+        Registrations: drawn,
         BakedSectionKeys: input.BakedSectionKeys,
         ShowRelatedEntities: true,
     });
@@ -157,9 +165,9 @@ export function BuildFormCompositionSnapshot(input: BuildFormCompositionSnapshot
         };
     });
 
-    const applicable = input.Registrations.filter((reg) => reg.Metadata.entity === '*' || reg.Metadata.entity === input.EntityName);
     let unique = 0;
-    const contributions: FormCompositionContribution[] = CollapseFormPanelRegistrations(applicable).map((reg) => {
+    const winners = ResolveFormContributionWinners(input.EntityName, input.Registrations).Winners;
+    const contributions: FormCompositionContribution[] = winners.map((reg) => {
         const key = ResolveContributionKey(reg.Metadata) || `__unique:${unique++}`;
         return {
             Key: key,
@@ -167,7 +175,7 @@ export function BuildFormCompositionSnapshot(input: BuildFormCompositionSnapshot
             Source: reg.Source ?? 'class',
             Title: reg.Title ?? reg.Metadata.contributionKey ?? key,
             Presentation: presentationOf(reg),
-            Hidden: input.HiddenContributionKeys.has(key),
+            Hidden: input.HiddenContributionKeys.has(key) || isUserHidden(reg),
             Precedence: reg.Priority,
             SortKey: reg.Metadata.sortKey ?? 0,
             ...(reg.Metadata.inSectionKey ? { InSectionKey: reg.Metadata.inSectionKey } : {}),

@@ -18,7 +18,7 @@
  */
 import { Injectable, inject } from '@angular/core';
 import {
-    CompositeKey, KeyValuePair, Metadata, LogError, RunView,
+    CompositeKey, Metadata, LogError, RunView,
     type EntityInfo, type IMetadataProvider, type UserInfo,
 } from '@memberjunction/core';
 import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -331,20 +331,17 @@ export class InteractiveFormApplyService {
     }
 
     /**
-     * The open record's key, read from the snapshot's `Field=Value AND Field=Value` form. Null
-     * when the snapshot names no record, or names fields that are not the entity's primary key.
+     * The open record's key, read from the snapshot's URL segment. Null when the snapshot names
+     * no record (a record not saved yet), or names fields that are not the entity's primary key.
      */
     private recordKeyFrom(snapshot: FormCompositionSnapshot | null, entity: EntityInfo): CompositeKey | null {
         const raw = snapshot?.RecordPrimaryKey?.trim();
         if (!raw) return null;
-        const pairs = raw.split(' AND ').map(part => {
-            const at = part.indexOf('=');
-            return at > 0 ? new KeyValuePair(part.slice(0, at).trim(), part.slice(at + 1)) : null;
-        });
+        const key = CompositeKey.FromURLSegment(entity, raw);
         const keyFields = entity.PrimaryKeys.map(pk => pk.Name);
-        const valid = pairs.length === keyFields.length
-            && pairs.every(pair => !!pair && keyFields.includes(pair.FieldName));
-        return valid ? CompositeKey.FromKeyValuePairs(pairs as KeyValuePair[]) : null;
+        const pairs = key.KeyValuePairs ?? [];
+        const valid = pairs.length === keyFields.length && pairs.every(pair => keyFields.includes(pair.FieldName));
+        return valid ? key : null;
     }
 
     /** The `Get Form Composition For Entity` payload, as the dialog's context. */
