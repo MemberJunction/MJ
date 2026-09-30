@@ -128,6 +128,11 @@
             "default": "off",
             "description": "Whether this agent writes finishIf gates (one to three yes/no questions and a final message on an Actions or single Sub-Agent step), and whether they act. 'off' (the default): the model is not taught finishIf and a gate is never evaluated. 'shadow': the model writes gates and each is evaluated and recorded as a Finish check step, but never ends the run, which measures the agent's gates on real traffic. 'on': a passing gate ends the run with the model's message, without another LLM turn. Off by default because a replay of recorded action rounds found a gate at the 0.9 threshold would have ended 22% of the rounds where the agent went on to act (typed-decision plan, Task 4.6)."
           },
+          "payloadFeedbackCheck": {
+            "type": "boolean",
+            "default": false,
+            "description": "Check the agent's own payload changes that the payload analyzer flags as needing feedback (large truncations, removed keys, type changes). Each flagged change becomes one Likelihood ('was this change intended?'), all asked in one decision call with the decisionPromptName prompt and recorded as a 'Payload change check' Decision step. The changes judged unintended are listed on the agent's next turn, which asks it to confirm them or put them back. A change is never reverted or blocked automatically: the agent decides. When the decision fails or takes longer than 30 seconds, every change is accepted, as it is when this is off. A step that ends the run (Success, Chat, or any step that terminates) is not checked, since no turn would read the result. Off by default: each check costs an extra decision call."
+          },
           "enableTaskGraphs": {
             "type": "boolean",
             "default": false,
@@ -136,12 +141,12 @@
           "maxSubAgentsInPrompt": {
             "type": "integer",
             "default": -1,
-            "description": "Maximum number of sub-agents to include in the prompt's capabilities section. Use -1 to include all available sub-agents, 0 to hide sub-agent capabilities entirely, or a positive number to limit to the first N sub-agents. Useful for agents with many sub-agents where only a few are commonly used."
+            "description": "Catalog narrowing for sub-agents. -1 (the default) or 0 turns it off, and the prompt describes every sub-agent. A positive N: when the agent has more than N sub-agents, one decision call per run judges which are most useful for the run's opening request, and the prompt describes those N plus any with MinExecutionsPerRun set, after a line naming the sub-agents it hides. Narrowing only hides: every permitted sub-agent can still be called by name, and a failed decision shows them all. It is prose-only: with native tool calling, every sub-agent is still declared as a tool. Setting N adds one decision call to each run."
           },
           "maxActionsInPrompt": {
             "type": "integer",
             "default": -1,
-            "description": "Maximum number of actions to include in the prompt's capabilities section. Use -1 to include all available actions, 0 to hide action capabilities entirely, or a positive number to limit to the first N actions. Useful for agents with many actions where only a few are commonly used."
+            "description": "Catalog narrowing for actions and skills. -1 (the default) or 0 turns it off, and the prompt describes every action and skill. A positive N: when the agent has more than N actions (or skills), one decision call per run judges which are most useful for the run's opening request, and the prompt describes those N plus any action with MinExecutionsPerRun set and the Find Candidate Actions / Find Candidate Agents actions, after a line saying how many it hides and how to reach them. Hidden skills are named; hidden actions are found with Find Candidate Actions, so actions are narrowed only when the agent has that action. Narrowing only hides: every permitted action and skill can still be used, and a failed decision shows them all. It is prose-only: with native tool calling, every action is still declared as a tool. Setting N adds one decision call to each run."
           }
         }
       }
