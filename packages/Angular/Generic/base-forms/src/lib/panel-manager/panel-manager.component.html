@@ -176,6 +176,7 @@
         <div class="mj-pm-edit" role="dialog" aria-label="Change where this panel goes"
              (click)="OnEditScrimClick($event)">
           <mj-form-placement-dialog
+            [Provider]="Provider"
             [Context]="EditContext"
             [Proposal]="EditProposal"
             [ComponentName]="Editing.Title"

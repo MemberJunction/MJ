@@ -35,6 +35,7 @@ import {
 } from './form-placement';
 import { FormSlotProbeService } from './form-slot-probe.service';
 import { CompositeKey } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 /**
@@ -54,7 +55,7 @@ import type { ComponentSpec } from '@memberjunction/interactive-component-types'
     templateUrl: './form-placement-dialog.component.html',
     styleUrls: ['./form-placement-dialog.component.css'],
 })
-export class MjFormPlacementDialogComponent {
+export class MjFormPlacementDialogComponent extends BaseAngularComponent {
     /** What the form contains. Setting it re-seeds the answers. */
     @Input()
     set Context(value: FormPlacementContext) {
@@ -382,7 +383,7 @@ export class MjFormPlacementDialogComponent {
 
         this.Probing = true;
         try {
-            const shape = await this.probe.Probe(this.viewContainer, entity);
+            const shape = await this.probe.Probe(this.viewContainer, entity, this.ProviderToUse);
             if (shape.Slots.length === 0 || this._context.EntityName !== entity) return;
             this._context = {
                 ...this._context,

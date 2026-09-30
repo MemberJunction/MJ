@@ -9,6 +9,7 @@
       <!-- Read-only: a preview shows the form as it reads, and an empty required field in
            edit mode would paint the whole form with validation errors. -->
       <mj-entity-form-host
+        [Provider]="Provider"
         [EntityName]="EntityName"
         [PrimaryKey]="PrimaryKey"
         [EditMode]="false"

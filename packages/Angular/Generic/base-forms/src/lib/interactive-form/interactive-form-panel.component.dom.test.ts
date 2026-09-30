@@ -7,6 +7,8 @@ import { renderComponentFixture, query, text } from '@memberjunction/ng-test-uti
 import { InteractiveFormPanelComponent } from './interactive-form-panel.component';
 import type { FormContributionRegistration } from '../panel-slot/form-contribution';
 import type { BaseFormComponent } from '../base-form-component';
+import type { ComponentSpec } from '@memberjunction/interactive-component-types';
+import type { FormPanelHostProps } from '@memberjunction/interactive-component-types/forms';
 
 /**
  * DOM coverage for <mj-interactive-form-panel> — the generic BaseFormPanel that renders a
@@ -34,7 +36,11 @@ function contribution(over: Partial<FormContributionRegistration> = {}): FormCon
   };
 }
 
-interface State { loadError?: string | null; componentSpec?: unknown; HostProps?: unknown }
+interface State {
+  loadError?: string | null;
+  componentSpec?: Pick<ComponentSpec, 'name'>;
+  HostProps?: Pick<FormPanelHostProps, 'record'>;
+}
 type OnInitProto = { ngOnInit: () => Promise<void> };
 function render(c: FormContributionRegistration, state: State = {}) {
   vi.spyOn(InteractiveFormPanelComponent.prototype as unknown as OnInitProto, 'ngOnInit').mockResolvedValue(undefined);
@@ -45,8 +51,8 @@ function render(c: FormContributionRegistration, state: State = {}) {
     inputs: { Contribution: c, Record: RECORD, FormComponent: FORM },
     setup: (inst) => {
       if (state.loadError !== undefined) inst.loadError = state.loadError;
-      if (state.componentSpec !== undefined) inst.componentSpec = state.componentSpec as never;
-      if (state.HostProps !== undefined) inst.HostProps = state.HostProps as never;
+      if (state.componentSpec !== undefined) inst.componentSpec = state.componentSpec as ComponentSpec;
+      if (state.HostProps !== undefined) inst.HostProps = state.HostProps as FormPanelHostProps;
     },
   });
 }

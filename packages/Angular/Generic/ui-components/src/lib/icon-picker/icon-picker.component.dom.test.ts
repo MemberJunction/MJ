@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { renderComponentFixture, query, click } from '@memberjunction/ng-test-utils';
-import { MjIconPickerComponent } from '../lib/icon-picker/icon-picker.component';
-import { IconCatalogueService } from '../lib/icon-picker/icon-catalogue.service';
-import type { FontAwesomeIcon } from '../lib/icon-picker/font-awesome-icons';
+import { MjIconPickerComponent } from './icon-picker.component';
+import { IconCatalogueService } from './icon-catalogue.service';
+import type { FontAwesomeIcon } from './font-awesome-icons';
 
 /**
  * A catalogue the test controls, so the assertions do not depend on which Font Awesome

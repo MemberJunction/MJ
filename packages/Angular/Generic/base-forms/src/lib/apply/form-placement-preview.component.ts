@@ -2,7 +2,8 @@ import {
     AfterViewInit, ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, NgZone, OnDestroy, Output,
     ViewChild, inject,
 } from '@angular/core';
-import { CompositeKey, LogError, Metadata, RunView, type EntityInfo } from '@memberjunction/core';
+import { CompositeKey, LogError, RunView, type EntityInfo } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import type { FormContributionSpec } from '@memberjunction/interactive-component-types/forms';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { FORM_PLACEMENT_PREVIEW, FormPlacementPreview } from '../panel-slot/placement-preview';
@@ -25,7 +26,7 @@ import type { EntityFormConfig } from '../types/entity-form-config';
     styleUrls: ['./form-placement-preview.component.css'],
     providers: [{ provide: FORM_PLACEMENT_PREVIEW, useFactory: () => new FormPlacementPreview() }],
 })
-export class MjFormPlacementPreviewComponent implements AfterViewInit, OnDestroy {
+export class MjFormPlacementPreviewComponent extends BaseAngularComponent implements AfterViewInit, OnDestroy {
     /**
      * The narrowest width the form is laid out at. A narrower column shows it scaled down; a
      * wider one shows it at its real size, never enlarged.
@@ -158,7 +159,7 @@ export class MjFormPlacementPreviewComponent implements AfterViewInit, OnDestroy
         const run = ++this.resolveRun;
         this.RecordResolved = false;
         this.Loaded = false;
-        const entity = this._entityName ? Metadata.Provider?.EntityByName(this._entityName) : undefined;
+        const entity = this._entityName ? this.ProviderToUse?.EntityByName(this._entityName) : undefined;
         let key = this._recordKey;
         let label = key ? 'Showing the record you have open' : '';
         if (!key && entity) {
@@ -178,7 +179,7 @@ export class MjFormPlacementPreviewComponent implements AfterViewInit, OnDestroy
      * the entity has a name field, so every user sees the same one, else newest first.
      */
     private async sampleRecord(entity: EntityInfo): Promise<{ Key: CompositeKey; Label: string } | null> {
-        const provider = Metadata.Provider;
+        const provider = this.ProviderToUse;
         if (!provider) return null;
         const nameField = entity.NameField?.Name;
         const keyFields = entity.PrimaryKeys.map((pk) => pk.Name);

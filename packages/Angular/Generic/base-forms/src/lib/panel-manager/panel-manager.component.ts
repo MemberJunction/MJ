@@ -4,6 +4,7 @@ import {
   OnChanges, SimpleChanges,
 } from '@angular/core';
 import { Metadata, type CompositeKey, type EntityInfo, type IMetadataProvider } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import type { FormScope } from '@memberjunction/core-entities';
 import { FormPanelAdminService } from './form-panel-admin.service';
 import { HiddenPanelKeys } from '../panel-slot/panel-hides';
@@ -196,7 +197,7 @@ export class MjPanelManagerComponent implements OnChanges {
    */
   public OnEdit(item: FormPanelInventoryItem): void {
     if (!item.CanEdit) return;
-    const row = this.rows.find((candidate) => candidate.ID === item.ID);
+    const row = this.rows.find((candidate) => UUIDsEqual(candidate.ID, item.ID));
     if (!row) return;
 
     const spec: FormContributionSpec = {
@@ -268,7 +269,7 @@ export class MjPanelManagerComponent implements OnChanges {
 
   /** A contribution row as the placement dialog lists it: its key, position and order. */
   private existingFrom(rowID: string, slot: string, title: string): FormPlacementContext['Existing'][number] {
-    const row = this.rows.find((candidate) => candidate.ID === rowID);
+    const row = this.rows.find((candidate) => UUIDsEqual(candidate.ID, rowID));
     return {
       Key: this.contributionKeyOf(rowID),
       Slot: slot,
@@ -284,7 +285,7 @@ export class MjPanelManagerComponent implements OnChanges {
 
   /** A contribution row's key, or empty when the row has none. */
   private contributionKeyOf(rowID: string): string {
-    return (this.rows.find((row) => row.ID === rowID)?.ContributionKey ?? '').trim();
+    return (this.rows.find((row) => UUIDsEqual(row.ID, rowID))?.ContributionKey ?? '').trim();
   }
 
   public CloseEdit(): void {
@@ -307,7 +308,7 @@ export class MjPanelManagerComponent implements OnChanges {
    */
   public async OnRemove(item: FormPanelInventoryItem): Promise<void> {
     if (this.Busy || !item.CanRemove) return;
-    if (this.Confirming !== item.ID) {
+    if (!UUIDsEqual(this.Confirming, item.ID)) {
       this.Confirming = item.ID;
       this.cdr.markForCheck();
       return;
@@ -317,7 +318,7 @@ export class MjPanelManagerComponent implements OnChanges {
   }
 
   public RemoveLabel(item: FormPanelInventoryItem): string {
-    if (this.Confirming !== item.ID) return 'Remove';
+    if (!UUIDsEqual(this.Confirming, item.ID)) return 'Remove';
     return item.Audience === 'yours' ? 'Really remove?' : 'Remove for everyone?';
   }
 
@@ -350,7 +351,7 @@ export class MjPanelManagerComponent implements OnChanges {
   /** Open the audience chooser on a panel. */
   public OnPublishPanel(item: FormPanelInventoryItem): void {
     if (!item.CanPublish && !item.CanChangeAudience) return;
-    const row = this.rows.find((r) => r.ID === item.ID);
+    const row = this.rows.find((r) => UUIDsEqual(r.ID, item.ID));
     if (!row) return;
     this.openAudience('panel', item.ID, item.Title, row.Scope as FormScope, row.RoleID);
   }
@@ -358,7 +359,7 @@ export class MjPanelManagerComponent implements OnChanges {
   /** Open the audience chooser on a full custom form. */
   public OnPublishForm(form: FormPanelFormItem): void {
     if (!form.ID || (!form.CanPublish && !form.CanChangeAudience)) return;
-    const row = this.admin.OverridesForEntity(this.Entity).find((r) => r.ID === form.ID);
+    const row = this.admin.OverridesForEntity(this.Entity).find((r) => UUIDsEqual(r.ID, form.ID));
     this.openAudience('form', form.ID, form.Title, (row?.Scope ?? 'User') as FormScope, row?.RoleID ?? null);
   }
 
@@ -388,7 +389,7 @@ export class MjPanelManagerComponent implements OnChanges {
     const records = `every ${this.EntityName} record`;
     if (target.Scope === 'User') return `Only you will see ${what}, on ${records}.`;
     if (target.Scope === 'Global') return `Everyone will see ${what} on ${records}.`;
-    const role = this.RoleOptions.find((r) => r.ID === target.RoleID)?.Name;
+    const role = this.RoleOptions.find((r) => UUIDsEqual(r.ID, target.RoleID))?.Name;
     return role ? `Everyone in ${role} will see ${what} on ${records}.` : 'Choose a role.';
   }
 

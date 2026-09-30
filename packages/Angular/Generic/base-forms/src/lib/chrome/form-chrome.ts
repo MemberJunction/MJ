@@ -162,6 +162,9 @@ export function ReplacedSectionChromeGroup(
     return IsAlwaysMoreSection(key, section.SectionName) ? 'more' : 'details';
 }
 
+const SCHEMA_PREFIX = /^[A-Za-z][A-Za-z0-9_]*$/;
+const LINE_TERMINATOR = /[\n\r\u2028\u2029]/;
+
 /**
  * Drop a schema entity-name prefix (`MJ_BizApps_Common: Contact Methods` →
  * `Contact Methods`). DisplayName is the long-term source of truth; this keeps
@@ -169,8 +172,13 @@ export function ReplacedSectionChromeGroup(
  */
 export function HumanizeEntityTitle(name: string): string {
     const trimmed = (name ?? '').trim();
-    const match = trimmed.match(/^[A-Za-z][A-Za-z0-9_]*:\s+(.+)$/);
-    return match?.[1]?.trim() || trimmed;
+    const colon = trimmed.indexOf(':');
+    if (colon < 1 || !SCHEMA_PREFIX.test(trimmed.slice(0, colon))) return trimmed;
+    const rest = trimmed.slice(colon + 1);
+    const title = rest.trimStart();
+    // The prefix needs whitespace after its colon, and the title is one line.
+    if (title.length === rest.length || LINE_TERMINATOR.test(title)) return trimmed;
+    return title || trimmed;
 }
 
 export interface FormChromeGroup {

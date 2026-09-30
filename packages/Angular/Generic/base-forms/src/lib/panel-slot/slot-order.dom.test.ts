@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { SlotAnchorSectionKey } from './slot-order';
-import { BaseFormPanel } from './base-form-panel';
+import { BaseFormPanel, type FormPanelSlot } from './base-form-panel';
+import type { BaseFormComponent } from '../base-form-component';
 import { SlotDisplayOrder } from './slot-order';
 
 /**
@@ -60,12 +61,12 @@ describe('BaseFormPanel.DisplayOrder on the page', () => {
     class TestPanel extends BaseFormPanel {}
 
     const ORDER: Record<string, number> = { details: 0, dates: 1, enrollments: 2 };
-    const form = {
+    const form: Pick<BaseFormComponent, 'getSectionOrderIndex' | 'getSectionDisplayOrder'> = {
         getSectionOrderIndex: (key: string) => ORDER[key] ?? null,
         getSectionDisplayOrder: (key: string) => ORDER[key] ?? 3,
     };
 
-    function mountedIn(slotName: string, metadata: Record<string, unknown> = {}): TestPanel {
+    function mountedIn(slotName: FormPanelSlot, metadata: Record<string, unknown> = {}): TestPanel {
         const host = slot(slotName);
         column(slot('before-fields'), section('details'), section('dates'), host, section('enrollments'));
         if (slotName === 'before-fields') {
@@ -73,8 +74,8 @@ describe('BaseFormPanel.DisplayOrder on the page', () => {
             host.parentElement!.replaceChild(host, first);
         }
         const p = new TestPanel();
-        p.RegistrationMetadata = { entity: 'E', slot: slotName as never, ...metadata };
-        p.FormComponent = form as never;
+        p.RegistrationMetadata = { entity: 'E', slot: slotName, ...metadata };
+        p.FormComponent = form as BaseFormComponent;
         p.SlotElement = host;
         return p;
     }

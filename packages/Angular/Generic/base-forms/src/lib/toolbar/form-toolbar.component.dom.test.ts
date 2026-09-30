@@ -39,7 +39,7 @@ const render = (inputs: Record<string, unknown> = {}) =>
     },
   });
 
-type Fx = Fx;
+type Fx = ReturnType<typeof render>;
 const btn = (f: Fx, sel: string) => query(f, sel) as HTMLElement | null;
 
 describe('MjFormToolbarComponent (DOM)', () => {
@@ -388,7 +388,7 @@ describe('MjFormToolbarComponent (DOM) — items placed beside the section contr
         ...over,
     });
 
-    const rightButtons = (f: ReturnType<typeof renderToolbar>) =>
+    const rightButtons = (f: Fx) =>
         (f.componentInstance.ResolvedRightItems as Array<{ Key: string }>).map((i) => i.Key);
 
     it('draws an item placed on the right', () => {

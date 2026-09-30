@@ -1,5 +1,5 @@
 import { ApplicationRef, Injectable, ViewContainerRef, inject } from '@angular/core';
-import { LogError, Metadata, ResolveFormLayout } from '@memberjunction/core';
+import { LogError, Metadata, ResolveFormLayout, type EntityInfo, type IMetadataProvider } from '@memberjunction/core';
 import type { FormPanelSlot } from '../panel-slot/base-form-panel';
 import { MjEntityFormHostComponent } from '../host/entity-form-host.component';
 import { ResolveFormChrome } from '../chrome/resolve-form-chrome';
@@ -65,8 +65,9 @@ export class FormSlotProbeService {
      * @param host a `ViewContainerRef` inside `BaseFormsModule`. The form host is declared
      *   in that module, so it is created through a view in its scope rather than through
      *   the environment injector.
+     * @param provider the provider the form is drawn with; the global provider when omitted.
      */
-    public async Probe(host: ViewContainerRef, entityName: string): Promise<ProbedFormShape> {
+    public async Probe(host: ViewContainerRef, entityName: string, provider?: IMetadataProvider): Promise<ProbedFormShape> {
         const key = entityName.trim().toLowerCase();
         if (!key) return EMPTY_SHAPE;
 
@@ -76,7 +77,7 @@ export class FormSlotProbeService {
         const running = this.inflight.get(key);
         if (running) return running;
 
-        const probe = this.render(host, entityName)
+        const probe = this.render(host, entityName, provider ?? Metadata.Provider)
             .catch((err: unknown) => {
                 LogError(`FormSlotProbeService: probe of '${entityName}' failed: ${err instanceof Error ? err.message : String(err)}`);
                 return EMPTY_SHAPE;
@@ -94,10 +95,8 @@ export class FormSlotProbeService {
     }
 
     /** Section keys of the contributions already registered on this entity. */
-    private contributionKeys(entityName: string): string[] {
-        const entity = Metadata.Provider?.EntityByName(entityName);
-        if (!entity) return [];
-        return CollectFormContributionRegistrations(entity, Metadata.Provider)
+    private contributionKeys(entity: EntityInfo, provider: IMetadataProvider | undefined): string[] {
+        return CollectFormContributionRegistrations(entity, provider)
             .map((reg) => ResolveContributionKey(reg.Metadata))
             .filter((key) => key.length > 0);
     }
@@ -108,10 +107,11 @@ export class FormSlotProbeService {
         else this.cache.clear();
     }
 
-    private async render(host: ViewContainerRef, entityName: string): Promise<ProbedFormShape> {
+    private async render(host: ViewContainerRef, entityName: string, provider: IMetadataProvider | undefined): Promise<ProbedFormShape> {
         const ref = host.createComponent(MjEntityFormHostComponent);
         try {
             this.hide(ref.location.nativeElement as HTMLElement);
+            ref.instance.Provider = provider ?? null;
             ref.instance.EntityName = entityName;
             ref.changeDetectorRef.detectChanges();
 
@@ -120,7 +120,7 @@ export class FormSlotProbeService {
 
             const root = ref.location.nativeElement as HTMLElement;
             const panels = this.readPanels(root);
-            const rail = this.resolveRail(entityName, panels);
+            const rail = this.resolveRail(entityName, panels, provider);
             const fieldsBySection = this.readFields(root);
             return {
                 Slots: this.readSlots(root),
@@ -253,8 +253,9 @@ export class FormSlotProbeService {
     private resolveRail(
         entityName: string,
         panels: FormChromePanelSnapshot[],
+        provider: IMetadataProvider | undefined,
     ): { Groups: FormChromeGroup[]; Layout: 'accordion' | 'left-nav' } {
-        const entity = Metadata.Provider?.EntityByName(entityName);
+        const entity = provider?.EntityByName(entityName);
         if (!entity) {
             return { Groups: [], Layout: ResolveFormLayout(null, panels.length) };
         }
@@ -265,7 +266,7 @@ export class FormSlotProbeService {
                 RelatedSchemaByEntityId: new Map(),
                 // Without these an installed contribution is indistinguishable from a
                 // field section, so it folds into Details and is counted as one of them.
-                ContributionSectionKeys: this.contributionKeys(entity.Name),
+                ContributionSectionKeys: this.contributionKeys(entity, provider),
             }).Spec;
             return { Groups: spec.Groups, Layout: spec.Layout };
         } catch (err: unknown) {

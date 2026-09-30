@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import type { EntityInfo } from '@memberjunction/core';
+import type { EntityInfo, IMetadataProvider } from '@memberjunction/core';
 import { renderComponentFixture, query } from '@memberjunction/ng-test-utils';
 import { MjPanelManagerComponent } from './panel-manager.component';
 import { FormPanelAdminService } from './form-panel-admin.service';
 import type { FormOverrideRow, FormPanelContributionRow } from './form-panel-inventory';
+import type { FormPlacementState } from '../apply/form-placement';
 
 /**
  * The drawer is the only way back out of applying a panel, so the thing it must never do
@@ -75,6 +76,7 @@ beforeEach(() => {
 /** The placement dialog is covered by its own spec; here it only has to exist. */
 @Component({ standalone: true, selector: 'mj-form-placement-dialog', template: '<div class="dialog-stub"></div>' })
 class PlacementDialogStub {
+    @Input() Provider: IMetadataProvider | null = null;
     @Input() Context: unknown;
     @Input() Proposal: unknown;
     @Input() ComponentName = '';
@@ -280,14 +282,15 @@ describe('MjPanelManagerComponent (DOM) — changing where a panel goes', () => 
     it('reseeds against whatever context the dialog ends up with', () => {
         const f = render();
         f.componentInstance.OnEdit(f.componentInstance.Items[0]);
+        const state: Pick<FormPlacementState, 'ReplaceMode' | 'ReplaceSectionKey'> = { ReplaceMode: 'none', ReplaceSectionKey: '' };
         const dialog = {
-            State: { ReplaceMode: 'none', ReplaceSectionKey: '' } as { ReplaceMode: string; ReplaceSectionKey: string },
+            State: state as FormPlacementState,
             Context: {
                 ...f.componentInstance.EditContext!,
                 Sections: [{ Key: 'details', Title: 'Details' }],
             },
         };
-        f.componentInstance.SeedEdit(dialog as never);
+        f.componentInstance.SeedEdit(dialog);
         expect(dialog.State.ReplaceMode).toBe('section');
         expect(dialog.State.ReplaceSectionKey).toBe('details');
     });

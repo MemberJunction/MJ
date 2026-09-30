@@ -13,6 +13,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { RoleInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { UserCanManageFormDefaults } from '@memberjunction/core-entities';
 
 /**
@@ -298,7 +299,7 @@ export class FormOverrideDialogComponent extends BaseAngularComponent implements
     public get ScopeLabel(): string {
         if (this.Scope === 'Global') return 'Everyone';
         if (this.Scope === 'Role') {
-            const role = this.availableRoles.find((r) => r.ID === this.RoleID)?.Name;
+            const role = this.availableRoles.find((r) => UUIDsEqual(r.ID, this.RoleID))?.Name;
             return role ? `${role} role` : 'A role';
         }
         return 'Me only';

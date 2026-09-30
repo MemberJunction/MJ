@@ -3,6 +3,7 @@ import { Component, Directive, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { renderComponentFixture, query } from '@memberjunction/ng-test-utils';
+import type { IMetadataProvider } from '@memberjunction/core';
 import type { FormContributionSpec } from '@memberjunction/interactive-component-types/forms';
 import { MjIconPickerComponent } from '@memberjunction/ng-ui-components';
 import { MjFormPlacementDialogComponent } from './form-placement-dialog.component';
@@ -761,6 +762,7 @@ describe('MjFormPlacementDialogComponent (DOM) — standing in for fields', () =
  */
 @Component({ standalone: true, selector: 'mj-form-placement-preview', template: '' })
 class PreviewStub {
+    @Input() Provider: IMetadataProvider | null = null;
     @Input() EntityName = '';
     @Input() RecordKey: unknown;
     @Input() Spec: unknown;

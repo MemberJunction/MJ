@@ -28,6 +28,31 @@ describe('HumanizeEntityTitle', () => {
         expect(HumanizeEntityTitle('Personal Identity')).toBe('Personal Identity');
         expect(HumanizeEntityTitle('Order Headers (Bill To Person)')).toBe('Order Headers (Bill To Person)');
     });
+
+    it('matches the regular expression it replaced on a generated corpus', () => {
+        const replaced = (name: string): string => {
+            const trimmed = (name ?? '').trim();
+            const match = trimmed.match(/^[A-Za-z][A-Za-z0-9_]*:\s+(.+)$/);
+            return match?.[1]?.trim() || trimmed;
+        };
+        const alphabet = ['A', 'z', '_', '7', ':', ' ', '\t', '\n', '\r', '\u2028', '\u00a0', 'x', '(', ')', '-'];
+        let seed = 42;
+        const next = (): number => {
+            seed = (seed * 1103515245 + 12345) % 2147483648;
+            return seed;
+        };
+        for (let i = 0; i < 20000; i++) {
+            const length = next() % 14;
+            let name = '';
+            for (let c = 0; c < length; c++) name += alphabet[next() % alphabet.length];
+            expect(HumanizeEntityTitle(name), JSON.stringify(name)).toBe(replaced(name));
+        }
+    });
+
+    it('stays linear on the repeated-whitespace input the old expression was slow on', () => {
+        const name = 'A:\t' + '\t\t'.repeat(200000) + 'x\ny';
+        expect(HumanizeEntityTitle(name)).toBe(name);
+    });
 });
 
 describe('IsDetailsSectionKey', () => {

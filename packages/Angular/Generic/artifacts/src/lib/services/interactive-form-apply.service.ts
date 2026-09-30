@@ -205,7 +205,7 @@ export class InteractiveFormApplyService {
             return this.fail(`Could not read the composition of the "${entityName}" form.`);
         }
 
-        const decision = await this.askWherePanelGoes(context, contribution, spec.name, spec);
+        const decision = await this.askWherePanelGoes(context, contribution, spec.name, spec, provider);
         if (!decision) return { Success: false, Kind: 'contribution', Message: 'Cancelled by user.' };
 
         const placed = decision.Contribution;
@@ -363,6 +363,7 @@ export class InteractiveFormApplyService {
         proposal: FormContributionSpec,
         componentName: string | undefined,
         component: ComponentSpec,
+        provider: IMetadataProvider,
     ): Promise<FormPlacementDecision | null> {
         return new Promise<FormPlacementDecision | null>((resolve) => {
             const ref = this.dialog.Open({
@@ -377,6 +378,7 @@ export class InteractiveFormApplyService {
                 resolve(null);
                 return;
             }
+            dialog.Provider = provider;
             dialog.ComponentName = componentName ?? proposal.title;
             dialog.Proposal = proposal;
             // The preview draws the component itself, not a placeholder, before anything is saved.
