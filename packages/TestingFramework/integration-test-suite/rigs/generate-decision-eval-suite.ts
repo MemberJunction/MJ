@@ -12,17 +12,22 @@
  * `MJ_DECISION_EVAL_CORPUS_DIR`), and every generated record carries a corpus point verbatim, so
  * `--out` must be outside every git working tree: the rig refuses outright otherwise.
  *
+ * IT NEVER DELETES WHAT IT DIDN'T WRITE. Outside a repository nothing can recover a file, so `--out`
+ * must be a new or empty directory. `--force` lets it replace an earlier run there: it removes only
+ * the files that run listed in its `generated-files.json`, keeps everything else, and refuses to
+ * overwrite a file it didn't write (`WriteGeneratedFiles` in the testing engine).
+ *
  * USAGE (from the repo root):
  *   npx tsx packages/TestingFramework/integration-test-suite/rigs/generate-decision-eval-suite.ts \
  *     --corpus <dir> --out <dir> [--matrix <file>] [--reps N] [--label-source construction] \
- *     [--suite <name>] [--limit N] [--dry-run]
+ *     [--suite <name>] [--limit N] [--force] [--dry-run]
  *
  * `--matrix` defaults to the committed template, metadata-optional/decision-eval/matrix/example.json,
  * whose cells pin no model: copy it outside the repository and fill in the model IDs locally.
  * `--dry-run` prints the counts and a cost estimate and writes nothing. It never pushes: it prints
  * the `mj sync push` command instead.
  */
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -40,9 +45,12 @@ import {
     ParseDecisionEvalMatrix,
     ParseDecisionLabels,
     SelectLabelSource,
+    WriteGeneratedFiles,
     type DecisionEvalMatrix,
+    type GeneratedFile,
     type LabelledDecisionPoint,
-    type SyncRecord
+    type SyncRecord,
+    type WriteGeneratedFilesResult
 } from '@memberjunction/testing-engine';
 
 // This package is native ESM, so __dirname does not exist.
@@ -50,9 +58,11 @@ const RIG_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = FindRepoRoot(RIG_DIR) ?? resolve(RIG_DIR, '../../../..');
 const TEMPLATE_MATRIX = join(REPO_ROOT, 'metadata-optional/decision-eval/matrix/example.json');
 const CORPUS_ENV = 'MJ_DECISION_EVAL_CORPUS_DIR';
+/** Recorded in the output's manifest: only a manifest this rig wrote lets `--force` remove files. */
+const GENERATOR = 'generate-decision-eval-suite';
 
 const USAGE = 'usage: generate-decision-eval-suite.ts --corpus <dir> --out <dir> [--matrix <file>] [--reps N] '
-    + '[--label-source construction] [--suite <name>] [--limit N] [--dry-run]';
+    + '[--label-source construction] [--suite <name>] [--limit N] [--force] [--dry-run]';
 
 /** The command line, read. */
 interface GeneratorArgs {
@@ -63,6 +73,8 @@ interface GeneratorArgs {
     LabelSource: string;
     Suite: string | null;
     Limit: number | null;
+    /** Replace an earlier run of this rig in `OutDir`: only the files its manifest lists. */
+    Force: boolean;
     DryRun: boolean;
 }
 
@@ -110,6 +122,7 @@ function parseArgs(argv: readonly string[]): GeneratorArgs {
         LabelSource: readFlag(argv, 'label-source') ?? DEFAULT_LABEL_SOURCE,
         Suite: readFlag(argv, 'suite') ?? null,
         Limit: readPositiveInt(argv, 'limit'),
+        Force: argv.includes('--force'),
         DryRun: argv.includes('--dry-run')
     };
 }
@@ -136,35 +149,51 @@ function generate(args: GeneratorArgs): GeneratedSuite {
     };
 }
 
-function writeJson(path: string, value: object): void {
-    writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+function jsonFile(relativePath: string, value: object): GeneratedFile {
+    return { RelativePath: relativePath, Content: `${JSON.stringify(value, null, 2)}\n` };
 }
 
-/** Writes the records, the suite, the sync configs and the provenance into the output directory. */
-function writeSuite(outDir: string, args: GeneratorArgs, suite: GeneratedSuite): void {
-    const testsDir = join(outDir, 'tests');
-    const suitesDir = join(outDir, 'test-suites');
-    // Regenerate from scratch: a stale record for a dropped point would keep running forever.
-    rmSync(testsDir, { recursive: true, force: true });
-    rmSync(suitesDir, { recursive: true, force: true });
-    mkdirSync(testsDir, { recursive: true });
-    mkdirSync(suitesDir, { recursive: true });
-    for (const record of suite.Records) {
-        writeJson(join(testsDir, `.${record.primaryKey.ID}.json`), record);
-    }
-    writeJson(join(testsDir, '.mj-sync.json'), { entity: 'MJ: Tests', filePattern: '**/.*.json' });
-    writeJson(join(suitesDir, '.mj-sync.json'), { entity: 'MJ: Test Suites', filePattern: '**/.*.json' });
+/**
+ * Writes the records, the suite, the sync configs and the provenance into the output directory.
+ * With `--force`, the previous run's files are replaced, so a stale record for a dropped point
+ * doesn't keep running forever; nothing the rig didn't write is touched.
+ */
+function writeSuite(outDir: string, args: GeneratorArgs, suite: GeneratedSuite): WriteGeneratedFilesResult {
     const description = `Generated from ${suite.Cases.length} labelled decision point(s) × ${suite.Matrix.cells.length} cell(s). `
         + 'Regenerate with rigs/generate-decision-eval-suite.ts; do not hand-edit.';
-    writeJson(join(suitesDir, '.decision-eval-suite.json'), [BuildDecisionEvalSuiteRecord(suite.SuiteName, suite.Names, description)]);
-    // `emitSyncNotes: false`: every push would otherwise write sync blocks back into generated files.
-    writeJson(join(outDir, '.mj-sync.json'), {
-        version: '1.0.0',
-        push: { autoCreateMissingRecords: true },
-        directoryOrder: ['tests', 'test-suites'],
-        emitSyncNotes: false
-    });
-    writeJson(join(outDir, 'generated-from.json'), {
+    const files: GeneratedFile[] = [
+        ...suite.Records.map(record => jsonFile(`tests/.${record.primaryKey.ID}.json`, record)),
+        jsonFile('tests/.mj-sync.json', { entity: 'MJ: Tests', filePattern: '**/.*.json' }),
+        jsonFile('test-suites/.mj-sync.json', { entity: 'MJ: Test Suites', filePattern: '**/.*.json' }),
+        jsonFile('test-suites/.decision-eval-suite.json', [BuildDecisionEvalSuiteRecord(suite.SuiteName, suite.Names, description)]),
+        // `emitSyncNotes: false`: every push would otherwise write sync blocks back into generated files.
+        jsonFile('.mj-sync.json', {
+            version: '1.0.0',
+            push: { autoCreateMissingRecords: true },
+            directoryOrder: ['tests', 'test-suites'],
+            emitSyncNotes: false
+        }),
+        jsonFile('generated-from.json', provenance(args, suite))
+    ];
+    return WriteGeneratedFiles(outDir, files, { Generator: GENERATOR, Replace: args.Force });
+}
+
+/** Where a generated suite came from: `generated-from.json`. */
+interface GenerationProvenance {
+    corpus: string;
+    labelSource: string;
+    matrix: string;
+    suiteName: string;
+    reps: number;
+    cells: string[];
+    points: number;
+    records: number;
+    generatedAt: string;
+}
+
+/** Where the suite came from, for `generated-from.json`. */
+function provenance(args: GeneratorArgs, suite: GeneratedSuite): GenerationProvenance {
+    return {
         corpus: args.CorpusDir,
         labelSource: args.LabelSource,
         matrix: args.MatrixPath,
@@ -174,7 +203,7 @@ function writeSuite(outDir: string, args: GeneratorArgs, suite: GeneratedSuite):
         points: suite.Cases.length,
         records: suite.Records.length,
         generatedAt: new Date().toISOString()
-    });
+    };
 }
 
 /** Warnings worth reading before spending a run. */
@@ -205,7 +234,7 @@ function warnings(suite: GeneratedSuite): string[] {
 }
 
 /** Prints the counts, the estimate, any warnings, and what to do next. */
-function report(args: GeneratorArgs, outDir: string, suite: GeneratedSuite): void {
+function report(args: GeneratorArgs, outDir: string, suite: GeneratedSuite, written: WriteGeneratedFilesResult | null): void {
     const byLabel = (label: string) => suite.Cases.filter(c => c.Label === label).length;
     const estimate = EstimateDecisionEvalRun(suite.Cases, suite.Matrix.cells, suite.Reps);
     console.log(args.DryRun ? '── decision-eval suite — DRY RUN (nothing written) ──' : '── decision-eval suite generated ──');
@@ -224,6 +253,13 @@ function report(args: GeneratorArgs, outDir: string, suite: GeneratedSuite): voi
     for (const cell of estimate.PerCell) {
         console.log(`                  ${cell.USD === null ? '     ?' : `$${cell.USD.toFixed(2)}`.padStart(8)}  ${cell.Label}`);
     }
+    if (written && written.Removed > 0) {
+        console.log(`   replaced     : ${written.Removed} file(s) of the earlier run no longer generated were removed`);
+    }
+    if (written && written.Kept.length > 0) {
+        console.log(`   ⚠ ${written.Kept.length} file(s) in ${outDir} were not written by this rig and were left alone `
+            + `(${written.Kept.slice(0, 3).join(', ')}${written.Kept.length > 3 ? ', …' : ''}). mj sync may pick up any under tests/ or test-suites/.`);
+    }
     for (const warning of warnings(suite)) {
         console.log(`   ⚠ ${warning}`);
     }
@@ -237,11 +273,8 @@ function main(): void {
     // Refuse before reading a single corpus line: nothing derived from it may land in a repository.
     const outDir = AssertOutputOutsideRepo(args.OutDir, [REPO_ROOT]);
     const suite = generate(args);
-    if (!args.DryRun) {
-        mkdirSync(outDir, { recursive: true });
-        writeSuite(outDir, args, suite);
-    }
-    report(args, outDir, suite);
+    const written = args.DryRun ? null : writeSuite(outDir, args, suite);
+    report(args, outDir, suite, written);
 }
 
 try {
