@@ -30,8 +30,8 @@ import {
 import { LLMDecision } from './LLMDecision';
 
 /**
- * The result of running a decision, the candidate that produced it (after any failover), and
- * whether it answered through a linked child run.
+ * The result of running a decision, the candidate that produced it (after any failover), and what
+ * its attempts cost through child runs.
  */
 interface DecisionRun {
   Result: DecisionResult;
@@ -41,6 +41,17 @@ interface DecisionRun {
    * run. Only then is its cost a descendant cost; otherwise it is the decision run's own.
    */
   AnsweredThroughChildRun: boolean;
+  /**
+   * What the child runs linked to the decision's run cost, summed over every attempt, the answering
+   * one included. Absent when no linked child run reported a cost.
+   */
+  ChildRunCost?: AttemptCost;
+}
+
+/** A cost, in its currency when known. */
+interface AttemptCost {
+  Amount: number;
+  Currency?: string;
 }
 
 /** One attempt on a candidate: the driver's result, and whether its model call ran as a linked child run. */
@@ -269,7 +280,8 @@ export class AIDecisionRunner extends BaseModelRunner {
   /**
    * Runs the selected candidate alone when failover is off, otherwise the base failover loop. Tracks
    * the candidate that produced the result, so the caller reports the model that actually answered,
-   * and whether that attempt's model call ran as a linked child run.
+   * and adds up what every attempt's linked child run cost, so none of those costs is lost when a
+   * later attempt answers.
    */
   private async runDecision(
     prompt: MJAIPromptEntityExtended,
@@ -281,11 +293,15 @@ export class AIDecisionRunner extends BaseModelRunner {
   ): Promise<DecisionRun> {
     let answeredBy = selection.Candidate;
     let answeredThroughChildRun = false;
+    let childRunCost: AttemptCost | undefined;
     const attempt = async (candidate: ModelVendorCandidate): Promise<DecisionResult> => {
       answeredBy = candidate;
       answeredThroughChildRun = false;
       const outcome = await this.executeOnCandidate(candidate, state, params, prompt, promptRun);
       answeredThroughChildRun = outcome.LinkedChildRun;
+      if (outcome.LinkedChildRun) {
+        childRunCost = this.addCost(childRunCost, outcome.Result.Usage);
+      }
       return outcome.Result;
     };
     const failoverConfig = this.getFailoverConfiguration(prompt);
@@ -301,7 +317,15 @@ export class AIDecisionRunner extends BaseModelRunner {
           promptRun,
           selection.CredentialAvailability
         );
-    return { Result: result, AnsweredBy: answeredBy, AnsweredThroughChildRun: answeredThroughChildRun };
+    return { Result: result, AnsweredBy: answeredBy, AnsweredThroughChildRun: answeredThroughChildRun, ChildRunCost: childRunCost };
+  }
+
+  /** Adds an attempt's cost to a running total. An attempt that reported no cost adds nothing. */
+  private addCost(total: AttemptCost | undefined, usage: ModelUsage | undefined): AttemptCost | undefined {
+    if (usage?.cost === undefined) {
+      return total;
+    }
+    return { Amount: (total?.Amount ?? 0) + usage.cost, Currency: total?.Currency ?? usage.costCurrency };
   }
 
   /**
@@ -477,30 +501,35 @@ export class AIDecisionRunner extends BaseModelRunner {
   }
 
   /**
-   * Records the answering attempt's tokens and cost on the run. When the attempt made its model call
-   * through a child run linked to this run (`LLMDecision`'s chat prompt), the cost is that child's,
-   * so it is recorded as `DescendantCost` and in `TotalCost`, never as this run's `Cost`: a report
-   * summing `Cost` over every run would otherwise count the chat call twice. An attempt whose chat
-   * run could not be linked is not a descendant, so its cost is this run's own.
+   * Records the answering attempt's tokens on the run, and the cost by where it was incurred:
+   * - a model call the answering driver made directly is this run's own `Cost`;
+   * - a model call made through a child run linked to this run (`LLMDecision`'s chat prompt) is that
+   *   child's cost, so it is recorded as `DescendantCost` and in `TotalCost`, never as `Cost`: a
+   *   report summing `Cost` over every run would otherwise count the chat call twice.
+   *
+   * `DescendantCost` sums every attempt's linked child run, not only the answering one's: each is a
+   * child of this run, and the server's rollup sums them all, so recording less would overwrite
+   * that rollup with a smaller number. An attempt whose chat run could not be linked is not a
+   * descendant, so when it answers, its cost is this run's own.
    */
   private applyUsage(run: MJAIPromptRunEntityExtended, decisionRun: DecisionRun): void {
     const usage = decisionRun.Result.Usage;
-    if (!usage) {
-      return;
-    }
-    run.TokensPrompt = usage.promptTokens;
-    run.TokensCompletion = usage.completionTokens;
-    run.TokensUsed = usage.totalTokens;
-    if (usage.cost !== undefined) {
-      if (decisionRun.AnsweredThroughChildRun) {
-        run.DescendantCost = usage.cost;
-        run.TotalCost = (run.Cost ?? 0) + usage.cost;
-      } else {
+    if (usage) {
+      run.TokensPrompt = usage.promptTokens;
+      run.TokensCompletion = usage.completionTokens;
+      run.TokensUsed = usage.totalTokens;
+      if (usage.cost !== undefined && !decisionRun.AnsweredThroughChildRun) {
         run.Cost = usage.cost;
       }
     }
-    if (usage.costCurrency !== undefined) {
-      run.CostCurrency = usage.costCurrency;
+    const childRunCost = decisionRun.ChildRunCost;
+    if (childRunCost) {
+      run.DescendantCost = childRunCost.Amount;
+      run.TotalCost = (run.Cost ?? 0) + childRunCost.Amount;
+    }
+    const currency = usage?.costCurrency ?? childRunCost?.Currency;
+    if (currency !== undefined) {
+      run.CostCurrency = currency;
     }
   }
 

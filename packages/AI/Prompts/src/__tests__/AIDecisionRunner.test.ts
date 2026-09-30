@@ -255,6 +255,7 @@ class MockDecisionDriver extends BaseDecision {
 // Registered drivers, for tests that build drivers through the real ClassFactory
 // ---------------------------------------------------------------------------
 const SCRIPTED_LLM_DRIVER = 'ScriptedLLMDecision';
+const SCRIPTED_NATIVE_DRIVER = 'ScriptedNativeDecision';
 
 /**
  * An `LLMDecision` whose results are scripted, so no chat prompt runs. The runner links it to the
@@ -279,12 +280,25 @@ class ScriptedLLMDecision extends LLMDecision {
   }
 }
 
+/** A driver that calls its model directly, answering with Usage(120, 45, 0.002, 'USD'). */
+@RegisterClass(BaseDecision, SCRIPTED_NATIVE_DRIVER)
+class ScriptedNativeDecision extends MockDecisionDriver {}
+
 /** A decision that answers its Likelihood question, after a model call that cost `cost`. */
 function answeredWith(cost: number): DecisionResult {
   const answered = new DecisionResult(true, new Date(), new Date());
   answered.Answers = { q_likelihood: { Kind: 'Likelihood', Probability: 0.4 } };
   answered.Usage = new ModelUsage(120, 45, cost, 'USD');
   return answered;
+}
+
+/** A failed decision that allows failover, after a model call that cost `cost`. */
+function failedOverAfter(cost: number): DecisionResult {
+  const failed = new DecisionResult(false, new Date(), new Date());
+  failed.errorMessage = 'Service unavailable';
+  failed.errorInfo = { errorType: 'ServiceUnavailable', severity: 'Retriable', canFailover: true };
+  failed.Usage = new ModelUsage(80, 10, cost, 'USD');
+  return failed;
 }
 
 // ---------------------------------------------------------------------------
@@ -1228,6 +1242,56 @@ describe('AIDecisionRunner', () => {
       expect(lastPromptRun?.DescendantCost).toBeUndefined();
       expect(lastPromptRun?.Cost).toBe(0.002);
       expect(lastPromptRun?.TotalCost).toBe(0.002);
+    });
+
+    it("14h. records every linked attempt's cost, not only the answering attempt's", async () => {
+      useRealClassFactory();
+      const [, second] = bindInOrder([SCRIPTED_LLM_DRIVER, SCRIPTED_LLM_DRIVER]);
+      ScriptedLLMDecision.Script = [() => failedOverAfter(0.001), () => answeredWith(0.002)];
+
+      const result = await runner.ExecuteDecision(scriptedParams(true));
+
+      expect(result.success).toBe(true);
+      expect(result.modelInfo?.modelId).toBe(second);
+      // Both chat runs are children of the decision's run, and the server's rollup sums them both.
+      expect(ScriptedLLMDecision.ParentsSeen).toEqual([lastPromptRun?.ID, lastPromptRun?.ID]);
+      expect(lastPromptRun?.DescendantCost).toBeCloseTo(0.003, 12);
+      expect(lastPromptRun?.TotalCost).toBeCloseTo(0.003, 12);
+      expect(lastPromptRun?.Cost).toBeUndefined();
+      expect(lastPromptRun?.CostCurrency).toBe('USD');
+      // The tokens are still the answering attempt's.
+      expect(lastPromptRun?.TokensPrompt).toBe(120);
+      expect(lastPromptRun?.TokensCompletion).toBe(45);
+    });
+
+    it("14i. keeps a linked attempt's cost as a descendant when a direct driver answers, whose cost is the run's own", async () => {
+      useRealClassFactory();
+      bindInOrder([SCRIPTED_LLM_DRIVER, SCRIPTED_NATIVE_DRIVER]);
+      ScriptedLLMDecision.Script = [() => failedOverAfter(0.001)];
+
+      const result = await runner.ExecuteDecision(scriptedParams(true));
+
+      expect(result.success).toBe(true);
+      expect(result.DriverClass).toBe(SCRIPTED_NATIVE_DRIVER);
+      expect(lastPromptRun?.Cost).toBe(0.002);
+      expect(lastPromptRun?.DescendantCost).toBe(0.001);
+      expect(lastPromptRun?.TotalCost).toBeCloseTo(0.003, 12);
+    });
+
+    it('14j. keeps what the linked attempts cost when every attempt fails', async () => {
+      useRealClassFactory();
+      bindInOrder([SCRIPTED_LLM_DRIVER, SCRIPTED_LLM_DRIVER]);
+      ScriptedLLMDecision.Script = [() => failedOverAfter(0.001)];
+
+      const result = await runner.ExecuteDecision(scriptedParams(true));
+
+      expect(result.success).toBe(false);
+      expect(ScriptedLLMDecision.ParentsSeen).toHaveLength(2);
+      expect(lastPromptRun?.Success).toBe(false);
+      expect(lastPromptRun?.DescendantCost).toBeCloseTo(0.002, 12);
+      expect(lastPromptRun?.TotalCost).toBeCloseTo(0.002, 12);
+      expect(lastPromptRun?.Cost).toBeUndefined();
+      expect(lastPromptRun?.CostCurrency).toBe('USD');
     });
   });
 });
