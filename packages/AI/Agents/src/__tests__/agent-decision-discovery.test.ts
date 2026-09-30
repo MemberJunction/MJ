@@ -9,7 +9,7 @@
  *   1. Off by default: no decision call, no step, and the first prompt's messages are untouched.
  *   2. On: one call per run, over the agents the user may run (rebuilt every run, minus the running
  *      agent, Sub-Agents and agents without a description), as agent IDs with their descriptions.
- *      An @mention of another agent, or a follow-up turn, means no call.
+ *      An @mention of another agent, a follow-up turn, or fewer than three options means no call.
  *   3. A confident Choice and Likelihood put a <suggested_agent> system message first in the first
  *      prompt; a low Choice confidence, a low Likelihood, an error, a throw, an unusable answer, a
  *      timeout and a cancelled run each inject nothing. Every call is recorded as one
@@ -29,6 +29,7 @@ import {
     DECISION_DISCOVERY_APPLIES_INSTRUCTIONS,
     DECISION_DISCOVERY_MAX_OPTIONS,
     DECISION_DISCOVERY_MAX_RECORDED_IDS,
+    DECISION_DISCOVERY_MIN_OPTIONS,
     DECISION_DISCOVERY_TIMEOUT_MS,
     SuggestedAgentMessage,
 } from '../decision-discovery';
@@ -629,8 +630,12 @@ describe('decision discovery — the options', () => {
         expect(ask.mock.calls[0][0].PromptName).toBe('Routing Decision');
     });
 
-    it('asks nothing when fewer than two agents are left to choose from, and records why', async () => {
-        harness.runnableIDs = new Set([SELF_ID, BILLING.ID]);
+    it.each([
+        ['one agent', [BILLING.ID]],
+        // A Choice between two cannot say that neither fits: its top answer is at least 0.5.
+        ['two agents', [BILLING.ID, MARKETING.ID]],
+    ])(`asks nothing, and records why, when %s (fewer than ${DECISION_DISCOVERY_MIN_OPTIONS}) are left to choose from`, async (_label, runnable) => {
+        harness.runnableIDs = new Set([SELF_ID, ...runnable]);
         const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask');
         const { agent, runner } = makeAgent();
 
@@ -640,7 +645,18 @@ describe('decision discovery — the options', () => {
         expect(suggestionsInFirstPrompt(runner)).toHaveLength(0);
         const steps = discoverySteps();
         expect(steps).toHaveLength(1);
-        expect(stepOutput(steps[0])).toMatchObject({ injected: false, catalogSize: 1, options: 1 });
+        expect(steps[0].Status).toBe('Completed');
+        expect(stepOutput(steps[0])).toMatchObject({ injected: false, catalogSize: runnable.length, options: runnable.length });
+        expect(String(stepOutput(steps[0]).reason)).toContain(`fewer than the ${DECISION_DISCOVERY_MIN_OPTIONS} a suggestion needs`);
+    });
+
+    it(`asks once ${DECISION_DISCOVERY_MIN_OPTIONS} agents are left to choose from`, async () => {
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.84, 0.9));
+        const { agent } = makeAgent();
+
+        await agent.Execute(makeParams());
+
+        expect(choiceOf(ask.mock.calls[0][0]).Options).toHaveLength(DECISION_DISCOVERY_MIN_OPTIONS);
     });
 });
 
@@ -965,9 +981,10 @@ describe('decision discovery — a catalog over the option cap', () => {
     });
 
     it('narrows the catalog first with the semantic search, in its rank order, and says so in the step', async () => {
-        harness.maxChoiceOptions = 2;
+        harness.maxChoiceOptions = 3;
+        harness.catalog = [...harness.catalog, LATECOMER];
         const searches: SearchEntityParams[] = [];
-        const ranked = [SECRET.ID, MARKETING.ID, RESEARCH.ID, BILLING.ID];
+        const ranked = [SECRET.ID, MARKETING.ID, RESEARCH.ID, LATECOMER.ID, BILLING.ID];
         const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(MARKETING, 0.84, 0.9));
         const { agent, runner } = makeAgent();
 
@@ -977,19 +994,19 @@ describe('decision discovery — a catalog over the option cap', () => {
         expect(searches[0]).toMatchObject({
             entityName: 'MJ: AI Agents',
             searchText: OPENING_REQUEST,
-            options: { mode: 'hybrid', topK: 6, minScore: 0 },
+            options: { mode: 'hybrid', topK: 9, minScore: 0 },
         });
         expect(searches[0].options?.contextUser?.ID).toBe(USER_ID);
-        // The cap (2) is below DECISION_DISCOVERY_MAX_OPTIONS, so 2 are kept; SECRET is not permitted.
-        expect(choiceOf(ask.mock.calls[0][0]).Options.map(o => o.Value)).toEqual([MARKETING.ID, RESEARCH.ID]);
+        // The cap (3) is below DECISION_DISCOVERY_MAX_OPTIONS, so 3 are kept; SECRET is not permitted.
+        expect(choiceOf(ask.mock.calls[0][0]).Options.map(o => o.Value)).toEqual([MARKETING.ID, RESEARCH.ID, LATECOMER.ID]);
         expect(suggestionsInFirstPrompt(runner)).toHaveLength(1);
         expect(stepOutput(discoverySteps()[0])).toMatchObject({
             injected: true,
-            catalogSize: 4,
-            options: 2,
-            optionLimit: 2,
-            declaredOptionCap: 2,
-            narrowed: { by: 'semantic search', from: 3, to: 2 },
+            catalogSize: 5,
+            options: 3,
+            optionLimit: 3,
+            declaredOptionCap: 3,
+            narrowed: { by: 'semantic search', from: 4, to: 3 },
         });
     });
 
@@ -1088,23 +1105,25 @@ describe("decision discovery — the host's allow-list", () => {
     }
 
     it('offers only the permitted agents the host lists, matching IDs in any case, and records the list', async () => {
+        harness.catalog = [...harness.catalog, LATECOMER];
         const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(MARKETING, 0.84, 0.9));
         const { agent, runner } = makeAgent();
         const upperResearch = { ...RESEARCH, ID: RESEARCH.ID.toUpperCase() };
 
-        await agent.Execute(makeParams({ data: hostCatalog(upperResearch, MARKETING, SECRET) }));
+        await agent.Execute(makeParams({ data: hostCatalog(upperResearch, MARKETING, LATECOMER, SECRET) }));
 
         // BILLING is not listed by the host; SECRET is listed but the user may not run it.
-        expect(choiceOf(ask.mock.calls[0][0]).Options.map(o => o.Value)).toEqual([RESEARCH.ID, MARKETING.ID]);
+        expect(choiceOf(ask.mock.calls[0][0]).Options.map(o => o.Value)).toEqual([RESEARCH.ID, MARKETING.ID, LATECOMER.ID]);
         expect(suggestionsInFirstPrompt(runner)).toHaveLength(1);
-        expect(stepOutput(discoverySteps()[0])).toMatchObject({ injected: true, catalogSize: 2, options: 2, hostAllowList: { size: 3 } });
+        expect(stepOutput(discoverySteps()[0])).toMatchObject({ injected: true, catalogSize: 3, options: 3, hostAllowList: { size: 4 } });
     });
 
     it('never suggests an agent the host excluded, even when the decision picks it', async () => {
+        harness.catalog = [...harness.catalog, LATECOMER];
         vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.99, 0.99));
         const { agent, runner } = makeAgent();
 
-        await agent.Execute(makeParams({ data: hostCatalog(RESEARCH, MARKETING) }));
+        await agent.Execute(makeParams({ data: hostCatalog(RESEARCH, MARKETING, LATECOMER) }));
 
         expect(suggestionsInFirstPrompt(runner)).toHaveLength(0);
         const steps = discoverySteps();

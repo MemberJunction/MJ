@@ -162,6 +162,7 @@ import {
     CanSearchEntities,
     DECISION_DISCOVERY_MAX_RECORDED_IDS,
     DECISION_DISCOVERY_MIN_CONFIDENCE,
+    DECISION_DISCOVERY_MIN_OPTIONS,
     DECISION_DISCOVERY_SEARCH_ENTITY,
     DECISION_DISCOVERY_TIMEOUT_MS,
     DecisionDiscoveryFromResult,
@@ -3911,9 +3912,13 @@ export class BaseAgent {
      * way pre-execution RAG adds `<retrieved_context>`. Each discovery is recorded as one
      * `Agent discovery` Decision step.
      *
-     * Fails safe: an error, a timeout, an unusable answer or an unsure one adds nothing, so the agent
-     * behaves as it would without discovery. Never delays the first prompt by more than
+     * Fails safe: an error, a timeout, a cancelled run, an unusable answer or an unsure one adds
+     * nothing, so the agent behaves as it would without discovery. So do fewer than
+     * {@link DECISION_DISCOVERY_MIN_OPTIONS} options. Never delays the first prompt by more than
      * {@link DECISION_DISCOVERY_TIMEOUT_MS}, and never throws.
+     *
+     * The any-applies question does not name the options, so the decision cannot say that none of
+     * them fits: see {@link DECISION_DISCOVERY_APPLIES_INSTRUCTIONS} for why it stays that way for now.
      *
      * @param agent - The agent being executed.
      * @param contextUser - The user whose run permission decides the options.
@@ -4043,8 +4048,8 @@ export class BaseAgent {
             if (optionsError) {
                 return { ...FailedDecisionDiscovery(optionsError), ...sizes };
             }
-            if (options.length < 2) {
-                return { Injected: false, Succeeded: true, Reason: `there are ${options.length} agents to choose from, so nothing was asked`, ...sizes };
+            if (options.length < DECISION_DISCOVERY_MIN_OPTIONS) {
+                return { Injected: false, Succeeded: true, Reason: `there are ${options.length} agents to choose from, fewer than the ${DECISION_DISCOVERY_MIN_OPTIONS} a suggestion needs, so nothing was asked`, ...sizes };
             }
             if (signal.aborted) {
                 return { ...FailedDecisionDiscovery(String(signal.reason)), ...sizes };

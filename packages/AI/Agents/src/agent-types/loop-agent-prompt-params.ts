@@ -529,7 +529,8 @@ export interface LoopAgentTypePromptParams {
      * answers are confident it adds a `<suggested_agent>` system message to the first prompt, so the
      * agent can delegate in its first turn instead of calling Find Candidate Agents first. Otherwise,
      * and on any error, timeout or cancellation, the prompt is unchanged. A follow-up turn is never
-     * asked about, so a suggestion never pulls the agent away from one it has already engaged.
+     * asked about, so a suggestion never pulls the agent away from one it has already engaged, and
+     * fewer than three candidate agents ask nothing.
      * @default false
      */
     decisionDiscovery?: boolean;

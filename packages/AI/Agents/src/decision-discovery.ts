@@ -14,6 +14,9 @@
  * and the agent behaves as it did before. A follow-up turn is never asked about (see
  * {@link IsOpeningTurn}), so discovery never pulls the agent away from one it has already engaged.
  *
+ * Known limitation, kept on purpose: the Likelihood does not name the options, so "none of these
+ * agents fits" cannot be expressed (see {@link DECISION_DISCOVERY_APPLIES_INSTRUCTIONS}).
+ *
  * @module @memberjunction/ai-agents
  */
 
@@ -43,6 +46,18 @@ export const DECISION_DISCOVERY_MIN_CONFIDENCE = 0.7;
  */
 export const DECISION_DISCOVERY_TIMEOUT_MS = 1500;
 
+/**
+ * The fewest options discovery asks about. Below it nothing is asked and nothing is suggested.
+ *
+ * Two options are not enough, although the Choice is well-formed: its probabilities sum to 1, so its
+ * top answer is at least 0.5 however poorly both agents fit, and the any-applies Likelihood cannot
+ * vouch for them (see {@link DECISION_DISCOVERY_APPLIES_INSTRUCTIONS}). A confidence threshold then
+ * sits only a little above chance. The discovery eval (#4892) offered every request dozens of
+ * options, so this bound leaves the measured case alone. With fewer options the agent falls back to
+ * Find Candidate Agents, as it would without discovery.
+ */
+export const DECISION_DISCOVERY_MIN_OPTIONS = 3;
+
 /** The Choice's question key: which agent should handle the request. */
 export const DECISION_DISCOVERY_AGENT_QUESTION = 'agent';
 
@@ -52,6 +67,21 @@ export const DECISION_DISCOVERY_APPLIES_QUESTION = 'anyApplies';
 /**
  * The Likelihood's instructions. They stand on the request alone, because a driver may answer each
  * question separately and never see the Choice's options.
+ *
+ * **Known limitation.** Because they name no agent, the Likelihood measures "is this specialist
+ * work?", not "does one of *these* agents fit?". A per-question driver, such as the Default
+ * Decision prompt's top-priority binding, answers each question on its own, so it never sees the
+ * options while answering this one. The Choice cannot say "none" either: its probabilities sum to
+ * 1 over the options it is given. So when the options leave out the agent the request needs (a host
+ * allow-list of a Billing and a Marketing agent, and a request for a legal review), both answers can
+ * still clear the threshold and suggest an agent that does not fit. The suggestion stays advisory,
+ * and the agent's prompt keeps the "unless the request clearly needs something else" escape.
+ *
+ * **Why the wording stays.** The discovery eval (#4892) measured, and the calibration (#4893)
+ * calibrated, exactly this question: its per-model Platt parameters and threshold hold only for this
+ * wording. Rewording it invalidates both, so the fix (quoting the options, or one Likelihood per
+ * option) waits for a re-measurement. Meanwhile {@link DECISION_DISCOVERY_MIN_OPTIONS} closes the
+ * worst case, two options, and leaves the measured case unchanged.
  */
 export const DECISION_DISCOVERY_APPLIES_INSTRUCTIONS =
     'This request asks for work that a specialist agent should do, rather than something the conversation manager should answer directly or plan as a multi-agent workflow.';
@@ -321,6 +351,10 @@ export function RankOptionsBySearch(
  * The two questions, asked about the opening request in one call: a Choice over the options, whose
  * values are agent IDs and whose descriptions are the agents' descriptions, and a Likelihood,
  * {@link DECISION_DISCOVERY_APPLIES_INSTRUCTIONS}, that stands on the request alone.
+ *
+ * Neither can say that none of the options fits: the Likelihood never sees them, and the Choice's
+ * probabilities sum to 1 over them. The wording is what the discovery eval measured and calibrated,
+ * so it changes only with a re-measurement (see {@link DECISION_DISCOVERY_APPLIES_INSTRUCTIONS}).
  *
  * @param options - The agents to choose from.
  */

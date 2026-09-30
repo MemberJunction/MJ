@@ -17,6 +17,7 @@ import {
     DECISION_DISCOVERY_MAX_OPTIONS,
     DECISION_DISCOVERY_MAX_RECORDED_IDS,
     DECISION_DISCOVERY_MIN_CONFIDENCE,
+    DECISION_DISCOVERY_MIN_OPTIONS,
     DECISION_DISCOVERY_TIMEOUT_MS,
     DecisionDiscoveryFromResult,
     DecisionDiscoveryOption,
@@ -67,6 +68,7 @@ function answers(value: string, confidence: number, applies: number): Record<str
 describe('the named constants', () => {
     it('start where the brief puts them', () => {
         expect(DECISION_DISCOVERY_MAX_OPTIONS).toBe(25);
+        expect(DECISION_DISCOVERY_MIN_OPTIONS).toBe(3);
         expect(DECISION_DISCOVERY_MIN_CONFIDENCE).toBe(0.7);
         expect(DECISION_DISCOVERY_TIMEOUT_MS).toBe(1500);
         expect(DECISION_DISCOVERY_MAX_RECORDED_IDS).toBe(50);
@@ -246,6 +248,8 @@ describe('BuildDecisionDiscoveryQuestions', () => {
     });
 
     it('words the Likelihood so it stands on the request alone, without the options', () => {
+        // Pinned on purpose: the discovery eval measured, and its calibration fitted, exactly this
+        // wording. Naming the options (so the decision can say none fits) needs a re-measurement first.
         expect(DECISION_DISCOVERY_APPLIES_INSTRUCTIONS).toBe(
             'This request asks for work that a specialist agent should do, rather than something the conversation manager should answer directly or plan as a multi-agent workflow.'
         );
