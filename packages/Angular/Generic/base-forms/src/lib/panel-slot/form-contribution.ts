@@ -156,6 +156,26 @@ export function ResolveContributionKey(meta: FormPanelRegistrationMetadata): str
 }
 
 /**
+ * The section key a registration's panel draws under, which the rail, the counts and the chrome
+ * group file it by.
+ *
+ * A row's panel draws under its contribution key ({@link ResolveContributionKey}), or
+ * `contribution:<row id>` when it has none. A compiled panel's template names its own section; by
+ * convention that is its `contributionKey`, or for a grid claim with no key, the related entity's
+ * name after its schema prefix, in camelCase. Empty for a compiled panel with neither.
+ */
+export function ContributionSectionKey(registration: FormContributionRegistration): string {
+    const meta = registration.Metadata;
+    if (registration.Source === 'metadata') {
+        return ResolveContributionKey(meta) || `contribution:${registration.RowID ?? registration.ComponentID ?? 'unknown'}`;
+    }
+    const own = meta.contributionKey?.trim();
+    if (own) return own;
+    const entityName = meta.relatedEntity?.split(':').pop()?.trim();
+    return entityName ? entityName.charAt(0).toLowerCase() + entityName.slice(1).replace(/\s+/g, '') : '';
+}
+
+/**
  * A contribution spec as a registration: the one mapping for a saved row, the placement preview
  * and the artifact viewer's preview. Ranked 0 and keyed only by the spec's own key; a caller that
  * knows more (a row's precedence, a preview's derived key) sets it on the result.
@@ -337,9 +357,8 @@ export interface ResolvedFormContributions {
     /** The winners that act on the form: one per key, and each registration that has no key. */
     readonly Winners: readonly FormContributionRegistration[];
     /**
-     * The winners the rail files, by {@link ResolveContributionKey}: they name the entity rather
-     * than the wildcard, have a key, and draw a section rather than a bare strip. For a metadata
-     * row the key is also the section key its panel draws under.
+     * The winners the rail files, by {@link ContributionSectionKey}: they name the entity rather
+     * than the wildcard, draw a section rather than a bare strip, and have a section key.
      */
     readonly RailItems: ReadonlyMap<string, FormContributionRegistration>;
 }
@@ -367,7 +386,7 @@ export function ResolveFormContributionWinners(
     for (const reg of winners) {
         const meta = reg.Metadata;
         if (meta.entity !== entityName || reg.Presentation === 'bare' || meta.presentation === 'bare') continue;
-        const key = ResolveContributionKey(meta);
+        const key = ContributionSectionKey(reg);
         if (key) railItems.set(key, reg);
     }
     const resolved: ResolvedFormContributions = { Winners: winners, RailItems: railItems };

@@ -16,7 +16,7 @@ import {
 import { MJReactComponent, ReactBridgeService, type ReactComponentEvent } from '@memberjunction/ng-react';
 import { NormalizeIconClass } from '@memberjunction/ng-ui-components';
 import { BaseFormPanel, type FormPanelRegistrationMetadata } from '../panel-slot/base-form-panel';
-import { ReplacedSectionKeys, ResolveContributionKey, type FormContributionRegistration } from '../panel-slot/form-contribution';
+import { ContributionSectionKey, ReplacedSectionKeys, type FormContributionRegistration } from '../panel-slot/form-contribution';
 import { BuildFormPanelHostProps } from './form-panel-host-props.builder';
 
 /**
@@ -60,10 +60,9 @@ export class InteractiveFormPanelComponent extends BaseFormPanel implements OnIn
     private readonly cdr = inject(ChangeDetectorRef);
     private readonly reactBridge = inject(ReactBridgeService);
 
-    /** Section identity — the contribution key, or a unique fallback for keyless rows. */
+    /** Section identity — {@link ContributionSectionKey}, the key the rail files this panel by. */
     public get SectionKey(): string {
-        const key = ResolveContributionKey(this.Contribution.Metadata);
-        return key || `contribution:${this.Contribution.RowID ?? this.Contribution.ComponentID ?? 'unknown'}`;
+        return ContributionSectionKey(this.Contribution);
     }
 
     public get Title(): string {

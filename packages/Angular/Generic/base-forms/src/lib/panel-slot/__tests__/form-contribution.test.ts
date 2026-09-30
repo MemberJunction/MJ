@@ -3,6 +3,7 @@ import type { FormPanelRegistrationMetadata, FormPanelSlot } from '../base-form-
 import {
     CollapseFormPanelRegistrations,
     ContributionClaimedFieldNames,
+    ContributionSectionKey,
     ContributionSpecToRegistration,
     ContributionHiddenSectionKeys,
     FormContributionEntityMatches,
@@ -508,6 +509,16 @@ describe('ResolveFormContributionWinners', () => {
         expect(resolved.RailItems.get('header')).toBe(rowK);
     });
 
+    it('files each rail item under the section key its panel draws', () => {
+        const row: FormContributionRegistration = {
+            Priority: 0, Source: 'metadata', RowID: 'row-t',
+            Metadata: { entity: PEOPLE, slot: 'after-related', relatedEntity: TICKETS, relatedJoinField: 'PersonID' },
+        };
+        const compiled = reg({ entity: PEOPLE, slot: 'after-related', relatedEntity: ADDR, relatedJoinField: 'RecordID' });
+        const resolved = ResolveFormContributionWinners(PEOPLE, [row, compiled]);
+        expect([...resolved.RailItems.keys()]).toEqual([ContributionSectionKey(row), ContributionSectionKey(compiled)]);
+    });
+
     it('returns the same value for the same list, so a form resolves it once', () => {
         const list = [compiledK, rowK];
         expect(ResolveFormContributionWinners(PEOPLE, list)).toBe(ResolveFormContributionWinners(PEOPLE, list));
@@ -516,6 +527,38 @@ describe('ResolveFormContributionWinners', () => {
     it('compares keys exactly: a key differing only in case is another key', () => {
         const lower: FormContributionRegistration = { ...rowK, Metadata: { ...rowK.Metadata, contributionKey: 'Header' } };
         expect(ResolveFormContributionWinners(PEOPLE, [compiledK, lower]).Winners).toHaveLength(2);
+    });
+});
+
+/**
+ * The section key a registration's panel draws under. A row's panel draws under its contribution
+ * key; a compiled panel's template names its own, which by convention is its `contributionKey`, or
+ * for a grid claim with no key, the related entity's name in camelCase without its schema.
+ */
+describe('ContributionSectionKey', () => {
+    const row = (meta: Partial<FormPanelRegistrationMetadata>, rowID: string | undefined = 'row-9'): FormContributionRegistration =>
+        ({ Priority: 0, Source: 'metadata', RowID: rowID, Metadata: { entity: PEOPLE, slot: 'after-related', ...meta } });
+
+    it('keys a row by its contribution key, derived for a grid claim', () => {
+        expect(ContributionSectionKey(row({ contributionKey: ' skip:ltv ' }))).toBe('skip:ltv');
+        expect(ContributionSectionKey(row({ relatedEntity: TICKETS, relatedJoinField: '[PersonID]' }))).toBe(`related:${TICKETS}:PersonID`);
+    });
+
+    it('keys a row with no key by its row', () => {
+        expect(ContributionSectionKey(row({}))).toBe('contribution:row-9');
+    });
+
+    it('keys a compiled panel by its own key', () => {
+        expect(ContributionSectionKey(reg({ entity: PEOPLE, slot: 'after-related', contributionKey: 'addresses', relatedEntity: ADDR }))).toBe('addresses');
+    });
+
+    it('keys a compiled grid claim with no key the way its template names the section', () => {
+        const contactMethods = reg({ entity: PEOPLE, slot: 'after-related', relatedEntity: 'MJ_BizApps_Common: Contact Methods', relatedJoinField: 'PersonID' });
+        expect(ContributionSectionKey(contactMethods)).toBe('contactMethods');
+    });
+
+    it('gives a compiled panel with neither no key', () => {
+        expect(ContributionSectionKey(reg({ entity: PEOPLE, slot: 'after-fields' }))).toBe('');
     });
 });
 

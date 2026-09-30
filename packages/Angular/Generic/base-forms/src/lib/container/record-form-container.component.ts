@@ -1483,7 +1483,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     return this.chrome.IsFirstClassSectionVisible(sectionKey);
   }
 
-  /** Keys of the contributions the rail files, which are the section keys they draw under. */
+  /** The section keys the rail files contributions by. */
   private contributionSectionKeys(): string[] {
     return [...this.resolvedContributions().RailItems.keys()];
   }
@@ -1721,10 +1721,12 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   /** Delegates to the pure decision in `form-chrome-rail-pref`, supplying this form's registrations. */
   private unsavedLeadGroupKey(): string | null {
+    const railItems = this.resolvedContributions().RailItems;
+    const keyByMetadata = new Map([...railItems].map(([key, reg]) => [reg.Metadata, key]));
     return UnsavedLeadGroupKey(
       this.EffectiveEntityInfo?.Name,
-      [...this.resolvedContributions().RailItems.values()],
-      (meta) => ResolveContributionKey(meta) || null,
+      [...railItems.values()],
+      (meta) => keyByMetadata.get(meta) ?? null,
     );
   }
 

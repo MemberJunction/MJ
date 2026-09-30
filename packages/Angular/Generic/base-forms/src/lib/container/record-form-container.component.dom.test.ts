@@ -770,6 +770,16 @@ describe('MjRecordFormContainerComponent (DOM) — contributions it files and re
     expect(internals(f).countContributions().map((c) => c.SectionKey)).toEqual([panel.SectionKey]);
   });
 
+  it('files a compiled grid panel with no key under the section key its template names', () => {
+    const compiled: FormContributionRegistration = {
+      Priority: 0, Source: 'class',
+      Metadata: { entity: 'Accounts', slot: 'after-related', relatedEntity: 'MJ_BizApps_Common: Contact Methods', relatedJoinField: 'AccountID' },
+    };
+    const f = renderWith([compiled]);
+    expect(internals(f).contributionSectionKeys()).toEqual(['contactMethods']);
+    expect(internals(f).countContributions().map((c) => c.SectionKey)).toEqual(['contactMethods']);
+  });
+
   it('files the compiled panel, not a row it ties with, for a key both hold', () => {
     const compiled: FormContributionRegistration = {
       Priority: 0, Source: 'class', Metadata: { entity: 'Accounts', slot: 'after-fields', contributionKey: 'summary', inclusion: 'Primary' },
