@@ -39,6 +39,20 @@ function trimTrailingSpaces(value: string): string {
 }
 
 /**
+ * A field's value and dirty-tracking state, as {@link EntityField.GetState} captures them.
+ */
+export interface EntityFieldState {
+    /** The field's value. */
+    Value: unknown;
+    /** The value the field is compared with to decide whether it's dirty. */
+    OldValue: unknown;
+    /** Whether the source the record was hydrated from omitted the field. See {@link EntityField.NotLoaded}. */
+    NotLoaded: boolean;
+    /** Whether the field has had no set since it was created or re-armed. */
+    NeverSet: boolean;
+}
+
+/**
  * Represents a field in an instance of the BaseEntity class. This class is used to store the value of the field, dirty state, as well as other run-time information about the field. The class encapsulates the underlying field metadata and exposes some of the more commonly
  * used properties from the entity field metadata.
  *
@@ -597,10 +611,28 @@ export class EntityField {
 
     /**
      * Restores the dirty-tracking baseline to a previously captured value.
-     * Used by graph rollback so a retried save still sees the pre-attempt dirty set.
      */
     public RestoreOldValue(value: unknown): void {
         this._oldValue = value;
+    }
+
+    /**
+     * Framework-internal: the field's value and dirty-tracking state, so a unit of work that rolls
+     * back can put them back with {@link RestoreState}.
+     */
+    public GetState(): EntityFieldState {
+        return { Value: this._value, OldValue: this._oldValue, NotLoaded: this._notLoaded, NeverSet: this._neverSet };
+    }
+
+    /**
+     * Framework-internal: puts back a state {@link GetState} captured. It writes the state as it was,
+     * so the read-only and first-set rules of the {@link Value} setter don't apply.
+     */
+    public RestoreState(state: EntityFieldState): void {
+        this._value = state.Value;
+        this._oldValue = state.OldValue;
+        this._notLoaded = state.NotLoaded;
+        this._neverSet = state.NeverSet;
     }
 
     /**
@@ -1021,15 +1053,20 @@ function sameEntityName(a: string, b: string): boolean {
 }
 
 /**
- * Base class used for all entity objects. This class is abstract and is sub-classes for each particular entity using the CodeGen tool. This class provides the basic functionality for loading, saving, and validating entity objects.
+ * One record as it was before a unit of work: whether it was saved and loaded, and each field with
+ * its value and dirty-tracking state. Captured so a unit of work that rolls back can put the record
+ * back.
  */
-/** In-memory baseline captured before a graph runs so a rollback can be retried. */
-type GraphParticipantSnapshot = {
+type RecordSnapshot = {
     entity: BaseEntity;
     wasSaved: boolean;
-    oldValues: { name: string; old: unknown }[];
+    wasLoaded: boolean;
+    fields: { field: EntityField; state: EntityFieldState }[];
 };
 
+/**
+ * Base class used for all entity objects. This class is abstract and is sub-classes for each particular entity using the CodeGen tool. This class provides the basic functionality for loading, saving, and validating entity objects.
+ */
 export abstract class BaseEntity<T = unknown> {
     /**
      * Metadata describing this entity (name, fields, keys, relationships). Populated during
@@ -3163,10 +3200,11 @@ export abstract class BaseEntity<T = unknown> {
         const childDeleteOptions = Object.assign(new EntityDeleteOptions(), deleteOptions ?? {});
         childDeleteOptions.GraphVisited = visited;
 
-        // Snapshot dirty/saved bookkeeping so a rolled-back graph can be retried.
-        // Node Save() finalizes each participant as saved+clean; DB rollback does
-        // not undo that, and the next Save() would skip the peer and fail the FK.
-        const participants = this.captureGraphParticipants(plan);
+        // A node's write finalizes the node and each IS-A parent above it before the graph commits:
+        // a save marks them saved and clean, a delete resets them with NewRecord(). A rollback
+        // undoes neither in memory, and a retry would then skip a peer or fail its FK, so capture
+        // every node's chain now and put it back on failure.
+        const participants = BaseEntity.captureChains(plan.Nodes.map(node => node.Entity));
 
         // Acquired INSIDE the try: a begin failure (pool exhausted, dead connection) is a failed
         // save, and Save()/Delete() report failure by returning false — an escaping throw here
@@ -3186,7 +3224,7 @@ export abstract class BaseEntity<T = unknown> {
             });
             if (!result.Success) {
                 await scope?.Rollback();
-                this.revertGraphParticipants(participants);
+                BaseEntity.restoreChains(participants);
                 this.registerGraphFailure(result.ErrorMessage, operation);
                 this.RaiseEvent('graph_save', { Success: false, NodeCount: plan.NodeCount, Error: result.ErrorMessage });
                 return false;
@@ -3208,7 +3246,7 @@ export abstract class BaseEntity<T = unknown> {
                     `${this.EntityInfo?.Name}: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
                 );
             }
-            this.revertGraphParticipants(participants);
+            BaseEntity.restoreChains(participants);
             const detail = e instanceof Error ? e.message : String(e);
             LogError(`BaseEntity.executeGraphLocal failed for ${this.EntityInfo?.Name}: ${detail}`);
             this.registerGraphFailure(detail, operation);
@@ -3234,40 +3272,67 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
-     * Captures saved/dirty baselines for every plan participant so a rolled-back
-     * graph can be retried without re-INSERTing a "saved" peer or skipping it.
+     * Captures each record's IS-A chain, from its leaf up to its root, so a unit of work that rolls
+     * back can put the chain back with {@link restoreChains}. A record in more than one chain is
+     * captured once.
      */
-    private captureGraphParticipants(plan: EntitySavePlan): GraphParticipantSnapshot[] {
-        return plan.Nodes.map(node => ({
-            entity: node.Entity,
-            wasSaved: node.Entity.IsSaved,
-            oldValues: node.Entity.Fields.map(f => ({ name: f.Name, old: f.OldValue })),
-        }));
+    private static captureChains(entities: BaseEntity[]): RecordSnapshot[] {
+        const captured = new Set<BaseEntity>();
+        const snapshots: RecordSnapshot[] = [];
+        for (const entity of entities) {
+            for (let level: BaseEntity | null = entity.LeafEntity; level && !captured.has(level); level = level._parentEntity) {
+                captured.add(level);
+                snapshots.push({
+                    entity: level,
+                    wasSaved: level._everSaved,
+                    wasLoaded: level._recordLoaded,
+                    fields: level.Fields.map(field => ({ field, state: field.GetState() })),
+                });
+            }
+        }
+        return snapshots;
     }
 
     /**
-     * Restores in-memory saved/dirty state after the database rolled the graph back.
+     * Puts back, after a rollback, what the unit of work changed in memory. See {@link restoreSnapshot}.
      */
-    private revertGraphParticipants(snapshots: GraphParticipantSnapshot[]): void {
-        for (const snap of snapshots) {
-            snap.entity.revertUncommittedGraphSave(snap);
+    private static restoreChains(snapshots: RecordSnapshot[]): void {
+        for (const snapshot of snapshots) {
+            snapshot.entity.restoreSnapshot(snapshot);
         }
     }
 
     /**
-     * After a graph node Save() the fields look clean and `_everSaved` is true.
-     * The DB rollback does not undo that. Restore the pre-attempt baseline so
-     * a retry still writes the peer and the owner FK still matches.
+     * Puts this record back as a snapshot captured it, after the unit of work that finalized it
+     * rolled back.
+     *
+     * A save's `finalizeSave()` rebuilds the record's fields from what its write returned and marks
+     * it saved; a delete's `NewRecord()` rebuilds them empty and marks it unsaved. The database undid
+     * the write, so the record gets back its saved and loaded flags and each field's value and
+     * tracking state. A field edited since then keeps the edit, and is compared with its captured
+     * baseline again, since that is what the database holds after the rollback.
+     *
+     * A record still holding the captured field objects was never finalized, so nothing about it
+     * changed and it is left alone.
      */
-    private revertUncommittedGraphSave(snap: GraphParticipantSnapshot): void {
-        if (!snap.wasSaved) {
-            this._everSaved = false;
-            this._recordLoaded = false;
+    private restoreSnapshot(snapshot: RecordSnapshot): void {
+        const finalized = snapshot.fields.some(({ field }) => this.GetFieldByName(field.Name) !== field);
+        if (!finalized) {
+            return;
         }
-        for (const captured of snap.oldValues) {
-            const field = this.GetFieldByName(captured.name);
-            if (field) {
-                field.RestoreOldValue(captured.old);
+        this._everSaved = snapshot.wasSaved;
+        this._recordLoaded = snapshot.wasLoaded;
+        this._compositeKey = null; // cached from the finalized key; rebuilt on the next read
+        for (const { field: capturedField, state } of snapshot.fields) {
+            const field = this.GetFieldByName(capturedField.Name);
+            if (!field) {
+                continue;
+            }
+            if (field.Dirty) {
+                field.RestoreOldValue(state.OldValue);
+            }
+            else {
+                field.RestoreState(state);
             }
         }
     }
@@ -3326,6 +3391,23 @@ export abstract class BaseEntity<T = unknown> {
             await scope.Rollback();
         } catch (rollbackError) {
             LogError(`Error rolling back entity transaction scope for ${this.EntityInfo?.Name}: ${rollbackError}`);
+        }
+    }
+
+    /**
+     * The failure path of a save: rolls back the transaction scope this entity holds, if any, then
+     * puts the IS-A chain back as `chain` captured it. `chain` is null when this save didn't start
+     * a chain save, and then only the scope is rolled back.
+     *
+     * The chain is put back whether or not there was a scope. A provider with no local transactions
+     * is the client tier, where `GraphQLDataProvider` records each parent's save in memory and sends
+     * the whole chain in the leaf's one mutation, which the server runs in one transaction. When
+     * that fails, no level was saved.
+     */
+    private async rollbackChainSave(chain: RecordSnapshot[] | null): Promise<void> {
+        await this.rollbackEntityTransactionScope();
+        if (chain) {
+            BaseEntity.restoreChains(chain);
         }
     }
 
@@ -4706,6 +4788,8 @@ export abstract class BaseEntity<T = unknown> {
         const currentResultCount = this.ResultHistory.length;
         const newResult = new BaseEntityResult();
         newResult.StartedAt = new Date();
+        // The IS-A chain as it was before this save, captured only when this entity starts a chain save.
+        let chain: RecordSnapshot[] | null = null;
 
         try {
             const initialDirtyState = this.Dirty; // save this because parent entity save cycle, if any, will clear their dirty flags
@@ -4722,6 +4806,15 @@ export abstract class BaseEntity<T = unknown> {
 
             // IS-A orchestration: determine if this is the initiating save in a parent chain
             const isISAInitiator = (!!this._parentEntity) && !_options.IsParentEntitySave;
+
+            // Each level of the chain is finalized as saved and clean when its own write returns,
+            // before the chain commits. Capture the chain first, so a failure after any of those
+            // writes can put it back. Not in a TransactionGroup: no scope is opened there, so a
+            // level outside the group has really written, and one inside it finalizes only when
+            // the group succeeds.
+            if (isISAInitiator && !this.TransactionGroup) {
+                chain = BaseEntity.captureChains([this]);
+            }
 
             // Open (or join) a transaction scope for the parent chain. The provider arbitrates:
             // if a transaction is already in flight — an application cascade, an enclosing graph
@@ -4745,8 +4838,9 @@ export abstract class BaseEntity<T = unknown> {
 
                 const parentResult = await this._parentEntity.Save(parentSaveOptions); // we know parent entity exists hre
                 if (!parentResult) {
-                    // Parent save failed — rollback if we started the transaction
-                    await this.rollbackEntityTransactionScope();
+                    // Parent save failed — roll back if we started the transaction, and put back
+                    // the levels above it that had already saved
+                    await this.rollbackChainSave(chain);
 
                     // RECORD the failure on THIS entity's ResultHistory before returning. Without
                     // this the caller gets `false` with LatestResult === null and an empty
@@ -4902,7 +4996,7 @@ export abstract class BaseEntity<T = unknown> {
                                 await this.commitEntityTransactionScope();
                             }
                             else {
-                                await this.rollbackEntityTransactionScope();
+                                await this.rollbackChainSave(chain);
                             }
 
                             return result;
@@ -4955,8 +5049,10 @@ export abstract class BaseEntity<T = unknown> {
             }
         }
         catch (e: any) {
-            // Roll back the scope this entity opened, if any. No-op when it holds none.
-            await this.rollbackEntityTransactionScope();
+            // Roll back the scope this entity opened, if any (a no-op when it holds none), and put
+            // back what the chain's saves changed in memory, this entity included when the commit
+            // is what threw. Before the result below, which reads IsSaved and the old values.
+            await this.rollbackChainSave(chain);
 
             if (currentResultCount === this.ResultHistory.length) {
                 // this means that NO new results were added to the history anywhere

@@ -423,7 +423,12 @@ sequenceDiagram
 
 **Save order:** Parent → ... → Child (Product first, then Meeting, then Webinar)
 
-**On failure:** The entire transaction is rolled back — no partial saves.
+**On failure:** The entire transaction is rolled back — no partial saves. Every level of the chain
+also goes back, in memory, to how it was before `Save()`. Each parent was finalized as saved and
+clean when its own write returned, so it gets back its saved flag, its values and its pending edits:
+a new chain reads as unsaved again, and a retry writes every level. An edit made while the save was
+in flight is kept, and still counts as an edit. The same holds on the client, where each parent's
+save is recorded in memory and the leaf's one mutation carries the whole chain.
 
 > ### ⚠️ Transaction handling changed in 6.2
 >

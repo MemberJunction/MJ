@@ -213,6 +213,9 @@ standalone save.
 The root additionally raises `graph_save_started` and `graph_save`, so a UI can refresh once per unit
 of work rather than once per line.
 
+If a node fails, the graph rolls back, and every record in it (IS-A parents included) goes back in
+memory to how it was before `Save()`, so the same call can be retried.
+
 ### Loading children
 
 | Mode | Behaviour |

@@ -233,6 +233,31 @@ describe('delete graph', () => {
         expect(parent.LatestResult?.Success).toBe(false);
         expect(parent.LatestResult?.Type).toBe('delete');
     });
+
+    it('puts back a related record it deleted before the failure, so a retry can delete it', async () => {
+        const { parent, provider, collection } = await makeSavedParent(2);
+        const keys = new Map(collection.Items.map(child => [child, child.Get('ID')]));
+        let deletes = 0;
+        provider.Delete = async (entity: BaseEntity) => {
+            opLog.push(`delete:${labelOf(entity)}`);
+            return ++deletes < 2;
+        };
+
+        expect(await parent.Delete()).toBe(false);
+
+        // The first delete returned and reset its record with NewRecord(); the second failed and
+        // the graph rolled back, so the first record's row is still there.
+        const deleted = collection.Items.find(child => opLog[0] === `delete:${labelOf(child)}`);
+        expect(deleted, 'a related record was deleted before the failure').toBeDefined();
+        expect(deleted!.IsSaved).toBe(true);
+        expect(deleted!.Get('ID')).toBe(keys.get(deleted!));
+
+        provider.Delete = async (entity: BaseEntity) => {
+            opLog.push(`delete:${labelOf(entity)}`);
+            return true;
+        };
+        expect(await parent.Delete()).toBe(true);
+    });
 });
 
 describe('nesting', () => {
