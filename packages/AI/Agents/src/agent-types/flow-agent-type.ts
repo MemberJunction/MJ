@@ -223,6 +223,10 @@ export interface FlowAgentExecuteParams {
      *
      * The step must belong to the agent being executed.
      * Use AIEngine.Instance.GetAgentSteps(agentId) to retrieve available steps.
+     *
+     * A Decision step's answers are held by the run, never written into the payload, so a run started
+     * past a Decision step has none from it: every path that reads that decision stops the run with
+     * the reason. Start at or before the Decision step to route on it.
      */
     startAtStep?: MJAIAgentStepEntity;
 
