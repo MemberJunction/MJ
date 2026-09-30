@@ -44,9 +44,11 @@ import {
   ErrorAnalyzer,
   AIErrorInfo,
   GetAIAPIKey,
-  AIPromptConfiguration
+  AIPromptConfiguration,
+  ModelUsage
 } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { CredentialEngine } from '@memberjunction/credentials';
 import { AIPromptTimeoutError } from './AIPromptTimeoutError';
 
@@ -119,6 +121,16 @@ export interface FailoverAttempt {
   timestamp: Date;
 }
 
+/**
+ * The `MJ: AI Prompt Runs` columns that {@link BaseModelRunner.ApplyUsageToRunRecord} writes, with
+ * the row's `ID` for its log line. Narrower than the entity, so the helper states exactly what it
+ * touches. Exported because it names a protected method's parameter, which a subclass outside this
+ * package must be able to write.
+ */
+export type PromptRunUsageFields = Pick<
+  MJAIPromptRunEntityExtended,
+  'ID' | 'TokensPrompt' | 'TokensCompletion' | 'TokensUsed' | 'UsageTypeID' | 'InputUnitsUsed' | 'OutputUnitsUsed' | 'Cost' | 'CostCurrency'
+>;
 
 
 /**
@@ -2173,9 +2185,11 @@ export abstract class BaseModelRunner {
         promptRun.TokensUsedRollup = promptRun.TokensUsed;
         promptRun.TokensCacheReadRollup = promptRun.TokensCacheRead;
         promptRun.TokensCacheWriteRollup = promptRun.TokensCacheWrite;
-        // A parallel parent carries no own Cost (its arms do); its TotalCost is their sum.
-        if (promptRun.RunType !== 'ParallelParent' && promptRun.Cost !== undefined) {
-          promptRun.TotalCost = promptRun.Cost;
+        // TotalCost is Cost plus DescendantCost. A parallel parent carries no own Cost (its arms do), so
+        // its TotalCost is their sum; a run with no Cost of its own (NULL once its INSERT has reloaded
+        // it) keeps the TotalCost applyResultFields gave it, rather than being nulled.
+        if (promptRun.RunType !== 'ParallelParent' && promptRun.Cost != null) {
+          promptRun.TotalCost = promptRun.Cost + (promptRun.DescendantCost ?? 0);
         }
       } catch (error) {
         this.logError(error, {
@@ -2186,6 +2200,87 @@ export abstract class BaseModelRunner {
         });
       }
     });
+  }
+
+  // ==================== USAGE RECORDING ====================
+
+  /**
+   * The usage to record for one call: the driver's when it reports a quantity (tokens, or units in
+   * a measure), otherwise the runner's own count, which keeps any cost the driver gave. With neither,
+   * the driver's usage (possibly undefined) is returned, and nothing is invented.
+   *
+   * A runner counts what it can see without the driver: the images returned, or the characters it
+   * sent. The driver's figure wins because it is the vendor's own measure.
+   *
+   * @param reported The usage the driver returned, if any.
+   * @param counted The runner's own count as `ModelUsage.ForMedia`, or undefined when it has none.
+   */
+  protected ResolveUsageToRecord(reported: ModelUsage | undefined, counted: ModelUsage | undefined): ModelUsage | undefined {
+    if (this.reportsUsageQuantity(reported) || !counted) {
+      return reported;
+    }
+    if (reported?.cost !== undefined) {
+      counted.cost = reported.cost;
+      counted.costCurrency = reported.costCurrency;
+    }
+    return counted;
+  }
+
+  /**
+   * Records one call's usage on its run row, for runners whose calls are not chat calls: tokens;
+   * continuous units (seconds, characters, images) with the `MJ: AI Usage Types` row that names
+   * their measure; and a cost only when the driver gave one. With no usage nothing is recorded, so
+   * the cost stays empty and the row's save prices it from the model's cost rows, or declines to.
+   *
+   * Call it from the {@link FinalizeRunRecord} callback.
+   */
+  protected ApplyUsageToRunRecord(run: PromptRunUsageFields, usage: ModelUsage | undefined): void {
+    if (!usage) {
+      return;
+    }
+    const promptTokens = usage.promptTokens ?? 0;
+    const completionTokens = usage.completionTokens ?? 0;
+    if (promptTokens + completionTokens > 0) {
+      run.TokensPrompt = promptTokens;
+      run.TokensCompletion = completionTokens;
+      run.TokensUsed = promptTokens + completionTokens;
+    }
+    if (usage.unitKind && usage.unitKind !== 'Tokens') {
+      this.applyUnitUsage(run, usage);
+    }
+    if (usage.cost !== undefined) {
+      run.Cost = usage.cost;
+    }
+    if (usage.costCurrency !== undefined) {
+      run.CostCurrency = usage.costCurrency;
+    }
+  }
+
+  /** Whether the usage names any quantity: tokens, or units in a measure other than tokens. */
+  private reportsUsageQuantity(usage: ModelUsage | undefined): boolean {
+    if (!usage) {
+      return false;
+    }
+    const tokens = (usage.promptTokens ?? 0) + (usage.completionTokens ?? 0);
+    const hasMeasure = usage.unitKind !== undefined && usage.unitKind !== 'Tokens';
+    const units = hasMeasure ? (usage.inputUnits ?? 0) + (usage.outputUnits ?? 0) : 0;
+    return tokens > 0 || units > 0;
+  }
+
+  /**
+   * Records continuous units with the usage type that names their measure. Units without a
+   * resolvable usage type would be read as tokens, so they are skipped with a log line.
+   */
+  private applyUnitUsage(run: PromptRunUsageFields, usage: ModelUsage): void {
+    const kind = usage.unitKind?.toLowerCase();
+    const usageType = AIEngineBase.Instance.UsageTypes.find(ut => ut.Name?.trim().toLowerCase() === kind);
+    if (!usageType) {
+      LogStatus(`${this.DefaultLogCategory}: usage type '${usage.unitKind}' is not loaded; units not recorded on run ${run.ID}`);
+      return;
+    }
+    run.UsageTypeID = usageType.ID;
+    run.InputUnitsUsed = usage.inputUnits ?? null;
+    run.OutputUnitsUsed = usage.outputUnits ?? null;
   }
 
   // ==================== CONTEXT LENGTH METHODS ====================
