@@ -108,7 +108,7 @@ export function BuildFinishIfQuestions(finishIf: Pick<AgentFinishIf, 'questions'
 /**
  * The gate's rule: it passes only when every question has a Likelihood answer whose probability
  * reaches the threshold. A missing answer, an answer of another kind, and a probability that is not
- * a number all fail it.
+ * a number all fail it, and so does an empty question set: the gate fails closed.
  *
  * @param answers The decision's answers, by question key.
  * @param questions The questions asked, from {@link BuildFinishIfQuestions}.
@@ -120,8 +120,12 @@ export function JudgeFinishIf(
     threshold: number
 ): FinishIfOutcome {
     const probabilities: Record<string, number> = {};
+    const keys = Object.keys(questions);
+    if (keys.length === 0) {
+        return { Passed: false, Probabilities: probabilities, Reason: 'No question was asked' };
+    }
     const failures: string[] = [];
-    for (const key of Object.keys(questions)) {
+    for (const key of keys) {
         const answer = answers[key];
         if (answer?.Kind !== 'Likelihood') {
             failures.push(`${key} has no answer`);

@@ -354,6 +354,11 @@ describe('finish-if-state, called directly', () => {
             const one = BuildFinishIfQuestions({ questions: ['Created?'] });
             expect(JudgeFinishIf(likelihoods(0.95, 0.1).Answers, one, 0.9).Passed).toBe(true);
         });
+
+        it('fails closed when no question was asked, whatever the answers', () => {
+            expect(JudgeFinishIf(likelihoods(1, 1).Answers, {}, 0.9)).toEqual({ Passed: false, Probabilities: {}, Reason: 'No question was asked' });
+            expect(JudgeFinishIf({}, BuildFinishIfQuestions({ questions: [] }), 0)).toMatchObject({ Passed: false });
+        });
     });
 
     describe('IsValidFinishIf', () => {
