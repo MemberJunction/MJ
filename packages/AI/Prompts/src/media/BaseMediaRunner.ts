@@ -15,10 +15,12 @@ import {
 } from '@memberjunction/ai-core-plus';
 import {
   BaseModelRunner,
+  ExecutionBound,
   FailoverAttempt,
   FailoverConfiguration,
   ModelVendorCandidate,
 } from '../BaseModelRunner';
+import { AIPromptTimeoutError } from '../AIPromptTimeoutError';
 import {
   AIMediaRunOptions,
   AIMediaRunOutcome,
@@ -34,6 +36,9 @@ import {
 class MediaCallResult<TOutput> extends BaseResult {
   /** The driver's result, when the driver returned one. */
   public Output?: TOutput;
+
+  /** Whether the caller cancelled the call, which the run row records as cancelled rather than failed. */
+  public Cancelled = false;
 
   constructor(success: boolean, output?: TOutput) {
     const now = new Date();
@@ -81,6 +86,9 @@ interface MediaRunPlan {
  * message is classified from the message, which recognizes rate limits, outages and a few malformed
  * requests; any other message reads as `Unknown`, which fails over.
  *
+ * Each driver call is bounded by the caller's `TimeoutMS` and `CancellationToken`, as a chat call is
+ * by `timeoutMS` and `cancellationToken`.
+ *
  * @typeParam TParams The operation params, including {@link AIMediaRunOptions}.
  * @typeParam TDriver The driver base class, resolved through the ClassFactory by driver class.
  * @typeParam TOutput The driver's result type.
@@ -109,9 +117,9 @@ export abstract class BaseMediaRunner<
     let promptRun: MJAIPromptRunEntityExtended | undefined;
     let selected: ModelVendorCandidate | undefined;
     try {
-      const invalid = params ? operation.Validate(params) : `${this.RequiredModelType} run parameters are required`;
-      if (invalid) {
-        return this.failedOutcome(invalid, startTime);
+      const refusal = this.refusalFor(params, operation);
+      if (refusal) {
+        return this.failedOutcome(refusal, startTime);
       }
       await AIEngine.Instance.Config(false, params.ContextUser);
       const plan = this.planRun(params);
@@ -151,7 +159,21 @@ export abstract class BaseMediaRunner<
     delete driverParams.AgentID;
     delete driverParams.OnPromptRunCreated;
     delete driverParams.AgentRunID;
+    delete driverParams.TimeoutMS;
+    delete driverParams.CancellationToken;
     return driverParams;
+  }
+
+  /** Why the call cannot start: no params, params the operation refuses, or a caller that already cancelled. */
+  private refusalFor(params: TParams, operation: MediaOperation<TParams, TDriver, TOutput>): string | undefined {
+    if (!params) {
+      return `${this.RequiredModelType} run parameters are required`;
+    }
+    const invalid = operation.Validate(params);
+    if (invalid) {
+      return invalid;
+    }
+    return params.CancellationToken?.aborted ? `The ${this.RequiredModelType} call was cancelled before it started` : undefined;
   }
 
   /** Chooses the prompt and the candidates, or returns why the call cannot run. */
@@ -186,7 +208,7 @@ export abstract class BaseMediaRunner<
   /**
    * The base runner reads its settings from `AIPromptParams`, so the media params are mapped onto
    * one: the carrier prompt, the context user, the keys, the parent run, the agent and its
-   * run-created hook, and the runner's provider.
+   * run-created hook, the timeout and cancellation token, and the runner's provider.
    */
   private buildPromptParams(params: TParams, prompt: MJAIPromptEntityExtended): AIPromptParams {
     const promptParams = new AIPromptParams();
@@ -196,6 +218,8 @@ export abstract class BaseMediaRunner<
     promptParams.parentPromptRunId = params.ParentRunID;
     promptParams.agentId = params.AgentID;
     promptParams.onPromptRunCreated = params.OnPromptRunCreated;
+    promptParams.timeoutMS = params.TimeoutMS;
+    promptParams.cancellationToken = params.CancellationToken;
     if (this._provider) {
       promptParams.provider = this._provider;
     }
@@ -287,12 +311,18 @@ export abstract class BaseMediaRunner<
       : candidates;
   }
 
-  /** Makes the call on one candidate: resolves its credential, builds its driver, and calls it. */
+  /**
+   * Makes the call on one candidate: resolves its credential, builds its driver, and calls it. A
+   * caller that cancelled while an earlier candidate ran gets no further calls.
+   */
   private async executeOnCandidate(
     candidate: ModelVendorCandidate,
     plan: MediaRunPlan,
     operation: MediaOperation<TParams, TDriver, TOutput>
   ): Promise<MediaCallResult<TOutput>> {
+    if (plan.PromptParams.cancellationToken?.aborted) {
+      return this.cancelledCall();
+    }
     let apiKey: string;
     try {
       apiKey = await this.ResolveCredentialForExecution(candidate.driverClass, plan.Prompt.ID, candidate.model.ID, candidate.vendorId, plan.PromptParams);
@@ -303,7 +333,7 @@ export abstract class BaseMediaRunner<
     if (typeof driver === 'string') {
       return this.failedCall(driver, 'ModelError');
     }
-    return this.callDriver(driver, candidate, operation);
+    return this.callDriver(driver, candidate, plan, operation);
   }
 
   /** Builds the candidate's driver through the ClassFactory, or returns why it cannot be built. */
@@ -316,25 +346,69 @@ export abstract class BaseMediaRunner<
   }
 
   /**
-   * Calls the driver. A driver that throws gets the vendor's classification of the error; one that
-   * returns a failure without classifying it gets the vendor's classification of its message.
+   * Calls the driver within the call's bound: the caller's timeout and cancellation token, composed
+   * as for a chat call. A driver that throws, or that the timeout abandons, gets the vendor's
+   * classification of the error; a timeout reads as a network error, so it fails over. A cancelled
+   * call is never failed over.
    */
   private async callDriver(
     driver: TDriver,
     candidate: ModelVendorCandidate,
+    plan: MediaRunPlan,
     operation: MediaOperation<TParams, TDriver, TOutput>
   ): Promise<MediaCallResult<TOutput>> {
+    const bound = this.createExecutionBound(plan.Prompt, plan.PromptParams, plan.PromptParams.cancellationToken);
     try {
-      const output = await operation.Invoke(driver, this.apiNameFor(candidate));
+      const output = await this.withinBound(operation.Invoke(driver, this.apiNameFor(candidate)), bound, plan.Prompt);
       if (!output) {
         return this.failedCall(`The driver '${candidate.driverClass}' returned no result`, 'ModelError');
       }
       return this.callResultFrom(output, candidate);
     } catch (err: unknown) {
+      if (bound.Signal?.aborted && !bound.TimedOut()) {
+        return this.cancelledCall();
+      }
       const failed = this.failedCall(err instanceof Error ? err.message : String(err), 'Unknown');
       failed.errorInfo = ErrorAnalyzer.AnalyzeError(err, candidate.vendorName);
       return failed;
+    } finally {
+      bound.Dispose();
     }
+  }
+
+  /**
+   * Waits for the driver call, or rejects when the bound aborts first. The media drivers take no
+   * abort signal, so an abandoned request is not torn down: the runner stops waiting for it and
+   * ignores its result.
+   */
+  private async withinBound(call: Promise<TOutput>, bound: ExecutionBound, prompt: MJAIPromptEntityExtended): Promise<TOutput> {
+    const signal = bound.Signal;
+    if (!signal) {
+      return call;
+    }
+    let onAbort: (() => void) | undefined;
+    const aborted = new Promise<never>((_, reject) => {
+      onAbort = () => reject(bound.TimedOut()
+        ? this.timeoutError(signal, prompt, bound)
+        : new Error(`The ${this.RequiredModelType} call was cancelled`));
+      if (signal.aborted) {
+        onAbort();
+      } else {
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
+    });
+    try {
+      return await Promise.race([call, aborted]);
+    } finally {
+      if (onAbort) {
+        signal.removeEventListener('abort', onAbort);
+      }
+    }
+  }
+
+  /** The error a timed-out call fails with: the bound's own `AIPromptTimeoutError`. */
+  private timeoutError(signal: AbortSignal, prompt: MJAIPromptEntityExtended, bound: ExecutionBound): Error {
+    return signal.reason instanceof AIPromptTimeoutError ? signal.reason : new AIPromptTimeoutError(prompt.Name, bound.TimeoutMS ?? 0);
   }
 
   /**
@@ -371,6 +445,18 @@ export abstract class BaseMediaRunner<
     return failed;
   }
 
+  /**
+   * A call the caller cancelled. It is not eligible for failover, so the failover loop returns it
+   * as it is, and the run row records it as cancelled.
+   */
+  private cancelledCall(): MediaCallResult<TOutput> {
+    const cancelled = new MediaCallResult<TOutput>(false);
+    cancelled.errorMessage = `The ${this.RequiredModelType} call was cancelled`;
+    cancelled.errorInfo = { errorType: 'Unknown', severity: 'Fatal', canFailover: false };
+    cancelled.Cancelled = true;
+    return cancelled;
+  }
+
   /** The result returned when every failover candidate has failed. */
   private createFailoverErrorResult(lastError: Error | null, failoverAttempts: FailoverAttempt[]): MediaCallResult<TOutput> {
     const result = new MediaCallResult<TOutput>(false);
@@ -384,8 +470,8 @@ export abstract class BaseMediaRunner<
 
   /**
    * Finalizes the run row: the operation's description of a successful result, the usage to record,
-   * and any error. The runner's own count applies only to a successful call, so a failed call is
-   * never billed for what it was sent.
+   * and any error, or the cancellation. The runner's own count applies only to a successful call, so
+   * a failed call is never billed for what it was sent.
    */
   private async finalizeMediaRun(
     promptRun: MJAIPromptRunEntityExtended,
@@ -404,6 +490,11 @@ export abstract class BaseMediaRunner<
       this.ApplyUsageToRunRecord(run, this.ResolveUsageToRecord(output?.usage, counted));
       if (!call.success && call.errorMessage) {
         run.ErrorMessage = call.errorMessage;
+      }
+      if (call.Cancelled) {
+        run.Status = 'Cancelled';
+        run.Cancelled = true;
+        run.CancellationReason = 'user_requested';
       }
     });
   }

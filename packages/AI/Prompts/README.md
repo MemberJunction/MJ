@@ -224,6 +224,8 @@ Whether a failed call fails over is `ErrorAnalyzer`'s decision, as it is for cha
 
 A driver that reports only `errorMessage` is classified from the message, which recognizes rate limits, outages and a few malformed requests; any other message reads as `Unknown`, which fails over. A driver should set `errorInfo` with `ErrorAnalyzer.AnalyzeError(error)` on the error it caught.
 
+`TimeoutMS` and `CancellationToken` bound each driver call as `timeoutMS` and `cancellationToken` bound a chat call. A call that exceeds `TimeoutMS` fails with an `AIPromptTimeoutError` and fails over. A cancelled call ends at once, never fails over, and its run row is recorded as `Cancelled`. The media drivers take no abort signal, so in both cases the request already sent is abandoned rather than torn down.
+
 Video generation is asynchronous at the provider, and the primitive offers no status call, so `AIVideoRunner` does not wait for a render. A successful run means the provider accepted the request; the row records the video ID (for HeyGen, the render job's ID) and records the video's length only if a driver reports it.
 
 Usage is recorded with `BaseModelRunner.ApplyUsageToRunRecord`, which writes non-token quantities as `InputUnitsUsed` / `OutputUnitsUsed` with the `MJ: AI Usage Types` row that names their measure. The runners never set a cost. The row's save prices it from the model's cost rows, and declines when no price unit type claims the measure, as none yet does for `Characters`.

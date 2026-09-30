@@ -73,7 +73,7 @@ interface SpeechCall {
 }
 
 const calls: SpeechCall[] = [];
-let respond: (driver: string, params: TextToSpeechParams) => SpeechResult;
+let respond: (driver: string, params: TextToSpeechParams) => SpeechResult | Promise<SpeechResult>;
 
 /** When set, building a driver throws this, as an SDK client's constructor can. */
 let constructorFailure: string | undefined;
@@ -109,6 +109,11 @@ function rejected(error: Error): SpeechResult {
   const result = failed(error.message);
   result.errorInfo = ErrorAnalyzer.AnalyzeError(error, 'Test vendor');
   return result;
+}
+
+/** A driver call that never answers. */
+function hangs(): Promise<SpeechResult> {
+  return new Promise<SpeechResult>(() => undefined);
 }
 
 /** Request errors the shipped drivers return, with the status their SDKs keep. */
@@ -434,6 +439,86 @@ describe('AITextToSpeechRunner', () => {
       expect(result.Success).toBe(true);
       expect(calls).toHaveLength(1);
       expect(calls[0].Params.model_id).toBeUndefined();
+    });
+  });
+
+  describe('timeout and cancellation', () => {
+    it("fails a call over to the model's other vendor when it exceeds TimeoutMS", async () => {
+      respond = driver => (driver === DRIVER_A ? hangs() : spoken());
+
+      const result = await runner.RunTextToSpeech(speechParams({ TimeoutMS: 25 }));
+      await runner.WaitForPendingPromptRunSaves();
+      const run = MediaHarness.LastRun;
+
+      expect(calls.map(c => c.Driver)).toEqual([DRIVER_A, DRIVER_B]);
+      expect(result.Success).toBe(true);
+      expect(result.DriverClass).toBe(DRIVER_B);
+      expect(run?.FailoverAttempts).toBe(1);
+      expect(JSON.parse(String(run?.FailoverErrors))).toMatchObject([{ errorType: 'NetworkError' }]);
+      expect(Object.keys(calls[0].Params)).not.toContain('TimeoutMS');
+      expect(Object.keys(calls[0].Params)).not.toContain('CancellationToken');
+    });
+
+    it('fails with a timeout error when every vendor exceeds TimeoutMS', async () => {
+      respond = () => hangs();
+
+      const result = await runner.RunTextToSpeech(speechParams({ TimeoutMS: 25 }));
+      await runner.WaitForPendingPromptRunSaves();
+
+      expect(calls).toHaveLength(2);
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toMatch(/exceeded its configured TimeoutMS \(25ms\)/);
+      expect(MediaHarness.LastRun?.Status).toBe('Failed');
+    });
+
+    it('refuses a call whose token is already cancelled, before a run row exists', async () => {
+      const controller = new AbortController();
+      controller.abort();
+
+      const result = await runner.RunTextToSpeech(speechParams({ CancellationToken: controller.signal }));
+
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toBe('The TTS call was cancelled before it started');
+      expect(calls).toHaveLength(0);
+      expect(MediaHarness.State.Runs).toHaveLength(0);
+    });
+
+    it.each([
+      ['with no TimeoutMS', undefined],
+      ['with a TimeoutMS the call is still within', 5000],
+    ])('ends a call cancelled while it runs, %s, without failing over', async (_name, timeoutMS) => {
+      const controller = new AbortController();
+      respond = () => {
+        setTimeout(() => controller.abort(), 10);
+        return hangs();
+      };
+
+      const result = await runner.RunTextToSpeech(speechParams({ CancellationToken: controller.signal, TimeoutMS: timeoutMS }));
+      await runner.WaitForPendingPromptRunSaves();
+      const run = MediaHarness.LastRun;
+
+      expect(calls).toHaveLength(1);
+      expect(run?.FailoverAttempts).toBe(0);
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toBe('The TTS call was cancelled');
+      expect(run?.Status).toBe('Cancelled');
+      expect(run?.Cancelled).toBe(true);
+      expect(run?.CancellationReason).toBe('user_requested');
+    });
+
+    it('does not try the next vendor once the caller has cancelled', async () => {
+      const controller = new AbortController();
+      respond = () => {
+        controller.abort();
+        return failed('503 Service Unavailable');
+      };
+
+      const result = await runner.RunTextToSpeech(speechParams({ CancellationToken: controller.signal }));
+      await runner.WaitForPendingPromptRunSaves();
+
+      expect(calls.map(c => c.Driver)).toEqual([DRIVER_A]);
+      expect(result.Success).toBe(false);
+      expect(MediaHarness.LastRun?.Status).toBe('Cancelled');
     });
   });
 

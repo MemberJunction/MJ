@@ -56,6 +56,26 @@ export interface AIMediaRunOptions {
    * {@link OnPromptRunCreated}.
    */
   AgentRunID?: string;
+
+  /**
+   * A bound, in milliseconds, on each driver call, as `AIPromptParams.timeoutMS` bounds each chat
+   * call: every failover candidate gets its own. A call that runs longer fails with an
+   * `AIPromptTimeoutError`, which reads as a network error and so fails over. For audio a driver
+   * splits, the bound covers the whole transcription. Unset or not positive means no bound, unless the
+   * runner declares a `DefaultPromptTimeoutMS`.
+   *
+   * The media drivers take no abort signal, so a request that times out is abandoned, not torn down:
+   * the runner stops waiting for it and ignores its result.
+   */
+  TimeoutMS?: number;
+
+  /**
+   * Cancels the call, as `AIPromptParams.cancellationToken` cancels a chat call. A token already
+   * aborted refuses the call before a run row exists. Aborted during the call, it ends the call at
+   * once, before any further failover candidate, and the run row is recorded as `Cancelled`. As with
+   * {@link TimeoutMS}, a request already sent is abandoned rather than torn down.
+   */
+  CancellationToken?: AbortSignal;
 }
 
 /**

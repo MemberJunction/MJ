@@ -40,6 +40,9 @@ export interface RecordedRun {
   OutputUnitsUsed?: number | null;
   Cost?: number;
   FailoverAttempts?: number;
+  FailoverErrors?: string;
+  Cancelled?: boolean;
+  CancellationReason?: string | null;
   SaveCount: number;
 }
 
