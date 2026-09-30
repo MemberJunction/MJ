@@ -327,4 +327,47 @@ describe('executeAIAgent — status publishing', () => {
             result: JSON.stringify({ success: false, errorMessage: 'background blew up' }),
         });
     });
+
+    it('saves a Running run reported by progress as Failed when the agent throws', async () => {
+        const { resolver, seams } = makeResolver();
+        seams.validateAgent = vi.fn().mockResolvedValue({ ID: 'agent-1', Name: 'Test Agent' });
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        const runningRun = {
+            ID: 'run-1',
+            Status: 'Running',
+            ErrorMessage: '',
+            CompletedAt: null as Date | null,
+            EnsureSaveComplete: vi.fn().mockResolvedValue(undefined),
+            Save: vi.fn().mockResolvedValue(true),
+        };
+        const detail = {
+            Status: 'Complete',
+            Load: vi.fn().mockResolvedValue(true),
+            Save: vi.fn().mockResolvedValue(true),
+        };
+        const provider = { GetEntityObject: vi.fn().mockResolvedValue(detail) };
+        hoisted.runAgentInConversation.mockReset().mockImplementation(async (params: {
+            onProgress?: (progress: { step: string; metadata?: Record<string, unknown> }) => void;
+        }) => {
+            params.onProgress?.({ step: 'prompt_execution', metadata: { agentRun: runningRun } });
+            throw new Error('agent threw mid-run');
+        });
+        const execute = (resolver as unknown as {
+            executeAIAgent(...args: unknown[]): Promise<{ success: boolean; errorMessage?: string }>;
+        }).executeAIAgent.bind(resolver);
+        const args = executeArgs();
+        args[0] = provider;
+
+        const result = await execute(...args);
+
+        expect(result.success).toBe(false);
+        expect(result.errorMessage).toBe('agent threw mid-run');
+        expect(runningRun.Status).toBe('Failed');
+        expect(runningRun.ErrorMessage).toBe('agent threw mid-run');
+        expect(runningRun.CompletedAt).toBeInstanceOf(Date);
+        expect(runningRun.EnsureSaveComplete).toHaveBeenCalled();
+        expect(runningRun.Save).toHaveBeenCalled();
+        expect(detail.Save).not.toHaveBeenCalled();
+    });
 });
