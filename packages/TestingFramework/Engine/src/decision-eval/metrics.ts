@@ -1,7 +1,8 @@
 /**
  * @fileoverview Decision Eval metrics: agreement with labels, repeatability and calibration, per
- * matrix cell. Pure and deterministic: every random draw comes from a seeded generator, so the same
- * runs always give the same scorecard.
+ * matrix cell. Pure and deterministic: every random draw comes from a seeded generator, and
+ * {@link ComputeCellMetrics} puts the cases in case-ID order before any draw, so the same runs give
+ * the same scorecard in whatever order they are read.
  *
  * Definitions (all on the cell's observations):
  * - A **case** is one corpus point. Its repeats are the cell's runs of it.
@@ -22,6 +23,7 @@
  * @module @memberjunction/testing-engine
  */
 
+import { ApplyPlattCalibration, PLATT_LOGIT_CLAMP } from '@memberjunction/ai';
 import type { DecisionEvalLabel } from './types';
 
 /** The threshold the metrics use unless told otherwise. */
@@ -39,8 +41,12 @@ export const DECISION_EVAL_CALIBRATION_FOLDS = 5;
 /** The number of equal-width reliability bins. */
 export const DECISION_EVAL_ECE_BINS = 10;
 
-/** How far a probability is clamped from 0 and 1 before its logit is taken. */
-export const DECISION_EVAL_LOGIT_CLAMP = 1e-6;
+/**
+ * How far a probability is clamped from 0 and 1 before its logit is taken: production's
+ * `PLATT_LOGIT_CLAMP` (`@memberjunction/ai`), so parameters fitted here are applied there on the
+ * same scale.
+ */
+export const DECISION_EVAL_LOGIT_CLAMP = PLATT_LOGIT_CLAMP;
 
 /** The operating-point thresholds: 0.30 to 0.90 in steps of 0.05. */
 export const DECISION_EVAL_OPERATING_THRESHOLDS: readonly number[] =
@@ -350,6 +356,9 @@ export function CalibrationBins(points: readonly LabelledProbability[], binCount
  * replacement, from a generator seeded with `seed`, and the 2.5th and 97.5th percentiles of the
  * statistic. Draws where the statistic is undefined are skipped. Null when none is defined.
  *
+ * The draws pick cases by position, so the interval depends on the input's order as well as the
+ * seed: pass the cases in a stable order ({@link ComputeCellMetrics} sorts them by case ID).
+ *
  * @param points The cases.
  * @param statistic The statistic to bound.
  * @param resamples How many resamples.
@@ -436,20 +445,25 @@ export function FitPlatt(points: readonly LabelledProbability[]): PlattParameter
 }
 
 /**
- * A probability through fitted Platt parameters.
+ * A probability through fitted Platt parameters, by production's own `ApplyPlattCalibration`
+ * (`@memberjunction/ai`), so the eval scores exactly the transform a consumer applies.
  *
  * @param probability The raw probability.
  * @param parameters The fit.
  */
 export function ApplyPlatt(probability: number, parameters: Pick<PlattParameters, 'A' | 'B'>): number {
-    return sigmoid(parameters.A * ClampedLogit(probability) + parameters.B);
+    return ApplyPlattCalibration(probability, parameters);
 }
 
 /**
  * Out-of-fold Platt calibration: the cases are shuffled within each class with a seeded generator
  * and dealt into folds in turn (so each fold holds both classes where it can); each fold is
- * calibrated by a fit on the others. Returns the calibrated probabilities in the input's order, or
- * null with fewer than two cases. With fewer cases than folds, each case is its own fold.
+ * calibrated by a fit on the others, so no case's calibrated value depends on its own label.
+ * Returns the calibrated probabilities in the input's order, or null with fewer than two cases.
+ * With fewer cases than folds, each case is its own fold (leave one out).
+ *
+ * The shuffle is by position, so the folds depend on the input's order as well as the seed: pass
+ * the cases in a stable order ({@link ComputeCellMetrics} sorts them by case ID).
  *
  * @param points The cases.
  * @param folds The fold count.
@@ -548,7 +562,9 @@ export function ComputeProbabilityMetrics(
 }
 
 /**
- * Every metric for one cell, from its runs.
+ * Every metric for one cell, from its runs. The runs may come in any order: the cases are put in
+ * case-ID order, and each case's repeats in ascending order, before anything is summed or drawn,
+ * so the folds, the bootstrap draws and every figure are the same for any order of the same runs.
  *
  * @param observations The cell's runs.
  * @param options Threshold, bootstrap, seed, folds and worst-case count; each has a default.
@@ -598,7 +614,11 @@ function isUsable(observation: DecisionEvalObservation): boolean {
     return observation.Probability !== null && !(observation.FailedOver && !observation.FailoverAllowed);
 }
 
-/** The usable runs, grouped by case in first-seen order. */
+/**
+ * The usable runs, grouped by case, in case-ID order, each case's probabilities ascending. Nothing
+ * downstream then depends on the order the runs were read in: not the folds or the bootstrap draws,
+ * which pick by position, and not a floating-point sum, whose last bits depend on its order.
+ */
 function groupCases(usable: readonly DecisionEvalObservation[]): Map<string, CaseRepeats> {
     const cases = new Map<string, CaseRepeats>();
     for (const run of usable) {
@@ -606,7 +626,13 @@ function groupCases(usable: readonly DecisionEvalObservation[]): Map<string, Cas
         entry.Probabilities.push(run.Probability ?? 0);
         cases.set(run.CaseId, entry);
     }
-    return cases;
+    const sorted = [...cases.values()].sort((x, y) => compareOrdinal(x.CaseId, y.CaseId));
+    return new Map(sorted.map(c => [c.CaseId, { ...c, Probabilities: [...c.Probabilities].sort((a, b) => a - b) }]));
+}
+
+/** Compares two strings by code unit, the same on every machine and locale. */
+function compareOrdinal(x: string, y: string): number {
+    return x < y ? -1 : x > y ? 1 : 0;
 }
 
 /** The mean of a non-empty list. */
@@ -637,7 +663,8 @@ function summarizeLatency(usable: readonly DecisionEvalObservation[]): LatencySu
  * what a decision costs: a cell with many failed calls looked several times cheaper.
  */
 function summarizeCost(usable: readonly DecisionEvalObservation[]): CostSummary {
-    const costs = usable.map(o => o.CostUSD).filter((c): c is number => c !== null);
+    // Summed in ascending order, so the mean does not depend on the order the runs were read in.
+    const costs = usable.map(o => o.CostUSD).filter((c): c is number => c !== null).sort((a, b) => a - b);
     const mean = Mean(costs);
     return { RunsWithCost: costs.length, CostPer1kUSD: mean === null ? null : mean * 1000 };
 }

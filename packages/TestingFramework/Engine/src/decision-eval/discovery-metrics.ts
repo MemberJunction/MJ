@@ -11,8 +11,9 @@
  * - A run is **correct** when its label is `agent` and it chose the labelled agent.
  * - Metrics are over **runs**: each run is one request production would have seen. Intervals
  *   resample **cases** (a cluster bootstrap), so a case's repeats move together, and calibration
- *   folds are dealt by case, so no case's repeats are both fitted and scored. Cases are taken in ID
- *   order, so the folds and intervals depend on the runs, not on the order they were read in.
+ *   folds are dealt by case, so no case's repeats are both fitted and scored. The runs are put in a
+ *   canonical order first (by case ID, then by what each recorded), so every figure depends on the
+ *   runs, not on the order they were read in.
  * - **Top-1 accuracy**: among usable `agent` runs, the share that are correct.
  * - **Choice confidence calibration**: the Choice's confidence as P(correct), over usable `agent`
  *   runs.
@@ -402,7 +403,7 @@ export function ComputeDiscoveryDecisionMetrics(
 ): DiscoveryDecisionCellMetrics {
     const resamples = options.BootstrapResamples ?? DECISION_EVAL_BOOTSTRAP_RESAMPLES;
     const seed = options.Seed ?? DECISION_EVAL_SEED;
-    const usable = observations.filter(IsUsableDiscoveryDecisionRun);
+    const usable = inCanonicalOrder(observations.filter(IsUsableDiscoveryDecisionRun));
     const scored = usable.map(toScoredRun);
     const calibrated = CalibrateDiscoveryOutOfFold(scored, options.CalibrationFolds ?? DECISION_EVAL_CALIBRATION_FOLDS, seed);
     const thresholds = options.Thresholds ?? DISCOVERY_INJECTION_THRESHOLDS;
@@ -441,7 +442,7 @@ export function ComputeDiscoveryBaselineMetrics(
     observations: readonly DiscoveryEvalObservation[],
     options: DiscoveryMetricOptions = {}
 ): DiscoveryBaselineCellMetrics {
-    const usable = observations.filter(o => o.Arm === 'semantic-search' && o.WouldInject !== null);
+    const usable = inCanonicalOrder(observations.filter(o => o.Arm === 'semantic-search' && o.WouldInject !== null));
     const agentRuns = usable.filter(o => o.Label === 'agent');
     const noneRuns = usable.filter(o => o.Label === 'none');
     const below = noneRuns.filter(o => o.WouldInject === false).length;
@@ -658,6 +659,27 @@ function groupByCase<T extends { CaseId: string }>(runs: readonly T[]): Map<stri
 /** Orders two IDs by code unit: the same order in every locale. */
 function compareIds(x: string, y: string): number {
     return x < y ? -1 : x > y ? 1 : 0;
+}
+
+/** Orders two optional numbers, a missing one first. */
+function compareNumbers(x: number | null, y: number | null): number {
+    return x === y ? 0 : x === null ? -1 : y === null ? 1 : x - y;
+}
+
+/**
+ * The runs in a canonical order: by case ID, then by what each run recorded. Nothing downstream then
+ * depends on the order they were read in: not the folds or the bootstrap draws, which pick by
+ * position, and not a floating-point sum, whose last bits depend on its order.
+ */
+function inCanonicalOrder(observations: readonly DiscoveryEvalObservation[]): DiscoveryEvalObservation[] {
+    return [...observations].sort((x, y) =>
+        compareIds(x.CaseId.toUpperCase(), y.CaseId.toUpperCase())
+        || compareNumbers(x.Confidence, y.Confidence)
+        || compareNumbers(x.AnyApplies, y.AnyApplies)
+        || compareIds((x.ChosenAgentId ?? '').toUpperCase(), (y.ChosenAgentId ?? '').toUpperCase())
+        || compareNumbers(x.DiscoveryLatencyMs, y.DiscoveryLatencyMs)
+        || compareNumbers(x.LatencyMs, y.LatencyMs)
+        || compareNumbers(x.CostUSD, y.CostUSD));
 }
 
 /** A ratio, or null when the denominator is zero. */

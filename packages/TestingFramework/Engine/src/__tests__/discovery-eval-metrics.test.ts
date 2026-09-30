@@ -240,12 +240,11 @@ describe('CalibrateDiscoveryOutOfFold', () => {
 describe('ComputeDiscoveryDecisionMetrics', () => {
     const metrics = ComputeDiscoveryDecisionMetrics(CELL, { BootstrapResamples: 200 });
 
-    it('does not depend on the order the runs were read in', () => {
-        // The folds and the bootstrap take cases in ID order, so only float rounding in sums can differ.
-        const reversed = ComputeDiscoveryDecisionMetrics([...CELL].reverse(), { BootstrapResamples: 200 });
-        expect(reversed.Top1).toEqual(metrics.Top1);
-        expect(reversed.Injection).toEqual(metrics.Injection);
-        expect(reversed.AnyAppliesCalibration.Calibrated?.Brier).toBeCloseTo(metrics.AnyAppliesCalibration.Calibrated?.Brier ?? -1, 12);
+    it('does not depend on the order the runs were read in, to the last bit', () => {
+        expect(ComputeDiscoveryDecisionMetrics([...CELL].reverse(), { BootstrapResamples: 200 })).toEqual(metrics);
+        const repeated = [...CELL, ...CELL.map(o => ({ ...o, Confidence: o.Confidence === null ? null : o.Confidence * 0.9 }))];
+        expect(ComputeDiscoveryDecisionMetrics([...repeated].reverse(), { BootstrapResamples: 50 }))
+            .toEqual(ComputeDiscoveryDecisionMetrics(repeated, { BootstrapResamples: 50 }));
     });
 
     it('counts runs, leaving out the unanswered and the forbidden failover', () => {

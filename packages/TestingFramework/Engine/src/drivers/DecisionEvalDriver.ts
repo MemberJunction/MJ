@@ -33,9 +33,14 @@ import {
     BuildRoutingState,
     BuildRoutingStateStructured,
     CanAskRoutingDecision,
+    DECISION_ROUTING_MIN_CONFIDENCE,
+    DECISION_ROUTING_TIMEOUT_MS,
+    FindDecisionCalibration,
     InterpretRoutingAnswers,
+    ROUTING_CONTINUES_CALIBRATION,
     ROUTING_CONTINUES_QUESTION,
     ROUTING_ROUTE_QUESTION,
+    type DecisionAnsweringModel,
     type MJAIPromptEntityExtended,
     type RoutingAgent,
     type RoutingDecisionInput
@@ -71,6 +76,7 @@ import {
     type DecisionEvalExpected,
     type DecisionEvalInput,
     type DecisionEvalModelRecord,
+    type DecisionEvalRoutingPolicy,
     type DecisionEvalSampling
 } from '../decision-eval/types';
 
@@ -187,8 +193,8 @@ const SAMPLING_NOT_APPLIED = 'The decision path has no sampling parameters: AIDe
  * baseline cell makes no decision call: it records what `Find Candidate Agents` would have listed
  * first.
  *
- * **Never throws.** A bad test, a missing prompt, a point with nothing to decide, and a failed
- * decision all come back as an `Error` run with the reason.
+ * **Never throws.** A bad test, a missing prompt and a failed decision come back as an `Error` run
+ * with the reason. A point or request with nothing to decide is `Skipped`: production makes no call there.
  */
 @RegisterClass(BaseTestDriver, 'DecisionEvalDriver')
 export class DecisionEvalDriver extends BaseTestDriver {
@@ -587,8 +593,12 @@ export function BuildDecisionEvalParams(
 
 /**
  * What a run records as its `ActualOutput`: the summarized answers, the `continues` probability,
- * the agent Choice, production's verdict, the model record, the sampling record, the latency, the
- * prompt run and its cost, and the error when there are no answers.
+ * the agent Choice, production's verdict and the policy it was reached under, the model record, the
+ * sampling record, the latency, the prompt run and its cost, and the error when there are no answers.
+ *
+ * The verdict is production's: the answers are read by `InterpretRoutingAnswers` with the model
+ * that answered and the model behind it, as the chat passes them from `RunDecision`, so the thread
+ * Likelihood is calibrated exactly when production would calibrate it.
  *
  * @param config The cell's configuration.
  * @param promptName The decision prompt's name.
@@ -599,6 +609,7 @@ export function BuildDecisionEvalActualOutput(config: DecisionEvalConfig, prompt
     const answers = result.success ? result.Answers : {};
     const continues = answers[ROUTING_CONTINUES_QUESTION];
     const route = answers[ROUTING_ROUTE_QUESTION];
+    const answeredBy = answeringModelOf(result);
     return {
         Decision: config.decision,
         StateLayout: config.stateLayout,
@@ -606,13 +617,39 @@ export function BuildDecisionEvalActualOutput(config: DecisionEvalConfig, prompt
         Answers: SummarizeDecisionEvalAnswers(answers),
         ContinuesProbability: continues?.Kind === 'Likelihood' ? continues.Probability : null,
         Route: route?.Kind === 'Choice' ? { Value: route.Value, Confidence: route.Confidence } : null,
-        RoutingVerdict: result.success ? InterpretRoutingAnswers(call.Input, { Success: true, Answers: answers }).Verdict : null,
+        RoutingVerdict: result.success ? InterpretRoutingAnswers(call.Input, { Success: true, Answers: answers, ...answeredBy }).Verdict : null,
+        RoutingPolicy: result.success ? routingPolicyFor(answeredBy) : null,
         Model: modelRecord(config, result),
         Sampling: samplingRecord(config),
         LatencyMs: call.LatencyMs,
         PromptRunId: result.promptRun?.ID ?? null,
         CostUSD: result.promptRun?.TotalCost ?? result.promptRun?.Cost ?? result.cost ?? null,
         Error: result.success ? null : (result.errorMessage || 'the decision failed with no message')
+    };
+}
+
+/**
+ * The model that answered a decision, as `RunDecision` reports it to the chat: the MJ decision
+ * model (`modelInfo.modelName`) and the exact model behind it (`DecisionResult.ResolvedModel`).
+ *
+ * @param result The runner's result.
+ */
+function answeringModelOf(result: AIDecisionRunResult): DecisionAnsweringModel {
+    return { ModelName: result.modelInfo?.modelName, ResolvedModel: result.DecisionResult?.ResolvedModel };
+}
+
+/**
+ * The routing policy production applies to an answer from this model: the confidence bar, the
+ * timeout, and the thread Likelihood's calibration for this exact model, or null when it has none.
+ *
+ * @param answeredBy The model that answered.
+ */
+function routingPolicyFor(answeredBy: DecisionAnsweringModel): DecisionEvalRoutingPolicy {
+    const calibration = FindDecisionCalibration(ROUTING_CONTINUES_CALIBRATION, answeredBy);
+    return {
+        MinConfidence: DECISION_ROUTING_MIN_CONFIDENCE,
+        TimeoutMs: DECISION_ROUTING_TIMEOUT_MS,
+        Calibration: calibration ? { A: calibration.A, B: calibration.B } : null
     };
 }
 
