@@ -56,6 +56,39 @@ export function ResolveCacheCategories(requested: readonly string[] | undefined)
     return { Categories: resolved, Unknown: unknown };
 }
 
+/** What a `mj migrate` run did, as far as the command can tell. */
+export type MigrationOutcome = {
+    /** The migration engine threw instead of returning a result. */
+    Threw: boolean;
+    /** The run reported success. */
+    Succeeded: boolean;
+    /** Migrations the run reports as applied. Meaningful only on success. */
+    MigrationsApplied: number;
+    /** At least one migration began executing — the only reliable "the database may have changed". */
+    StartedApplying: boolean;
+};
+
+/**
+ * Whether a migration run may have changed the database, and so whether the fleet's cache is stale.
+ *
+ * On success the count is authoritative: a run that found nothing pending must NOT make every server
+ * drop its cache and reload every engine for nothing (§16.3 #13).
+ *
+ * On a failure — including one that threw rather than returning — the count is not trustworthy and
+ * neither is the detail list, which can be empty precisely because the run died before assembling
+ * it. What IS known is whether a migration started executing. DDL is not transactional across
+ * batches on SQL Server, so a migration that began and failed can still have committed statements;
+ * a run that never started one cannot have. That makes "did anything start" the honest gate: a bad
+ * connection string or a config error leaves the fleet alone, and anything that touched the database
+ * clears.
+ */
+export function MigrationChangedDatabase(outcome: MigrationOutcome): boolean {
+    if (outcome.Threw || !outcome.Succeeded) {
+        return outcome.StartedApplying;
+    }
+    return outcome.MigrationsApplied > 0;
+}
+
 /** The category names a clear can be asked for, for error messages and help text. */
 export function KnownCacheCategories(): string[] {
     return [...CLEARABLE_CATEGORIES];

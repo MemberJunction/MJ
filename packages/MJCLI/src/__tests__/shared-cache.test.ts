@@ -20,6 +20,7 @@ import {
   DescribeRedisUrl,
   ResolveCacheCategories,
   KnownCacheCategories,
+  MigrationChangedDatabase,
 } from '../lib/shared-cache';
 
 const ENV_KEYS = ['REDIS_URL', 'REDIS_KEY_PREFIX', SKIP_CACHE_CLEAR_ENV];
@@ -171,6 +172,42 @@ describe('shared cache clear after a CLI write', () => {
     it('allows the proxy-key store to be named explicitly', () => {
       expect(ResolveCacheCategories(['default']).Categories).toEqual(['default']);
       expect(KnownCacheCategories()).toContain('default');
+    });
+  });
+
+  describe('MigrationChangedDatabase', () => {
+    const outcome = (o: Partial<Parameters<typeof MigrationChangedDatabase>[0]>) =>
+      MigrationChangedDatabase({ Threw: false, Succeeded: true, MigrationsApplied: 0, StartedApplying: false, ...o });
+
+    it('does not disturb the fleet when a successful run had nothing to apply', () => {
+      expect(outcome({ MigrationsApplied: 0 })).toBe(false);
+    });
+
+    it('clears when a successful run applied something', () => {
+      expect(outcome({ MigrationsApplied: 3 })).toBe(true);
+    });
+
+    it('clears when the run THREW after a migration had started', () => {
+      // Previously nothing cleared on this path at all: whatever had been applied was committed and
+      // every server kept serving pre-migration rows until something else invalidated them.
+      expect(outcome({ Threw: true, Succeeded: false, StartedApplying: true })).toBe(true);
+    });
+
+    it('leaves the fleet alone when the run threw before any migration started', () => {
+      // A bad connection string or a config error cannot have changed the database.
+      expect(outcome({ Threw: true, Succeeded: false, StartedApplying: false })).toBe(false);
+    });
+
+    it('clears a failed run even when it reported no details', () => {
+      // `Details` can be empty precisely because the run died before assembling it — the emptiness
+      // is not evidence that nothing happened.
+      expect(outcome({ Succeeded: false, MigrationsApplied: 0, StartedApplying: true })).toBe(true);
+    });
+
+    it('clears a failed run in which every migration failed', () => {
+      // DDL is not transactional across batches on SQL Server, so a migration that began and failed
+      // can still have committed statements. "None succeeded" is not "nothing changed".
+      expect(outcome({ Succeeded: false, StartedApplying: true, MigrationsApplied: 0 })).toBe(true);
     });
   });
 
