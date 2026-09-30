@@ -107,21 +107,32 @@ export class WorkflowAgentWriter extends WorkflowAgentWriterBase {
     /**
      * Name → ID for every agent, action and prompt, in one batch, lowercased so a spec's
      * human-entered name still resolves.
+     *
+     * A failed load throws rather than leaving an index empty: an empty index resolves nothing, and
+     * every agent, action and prompt in the workflow would then be reported lost — or, for an action,
+     * saved pointing at nothing.
      */
     private async buildNameIndexes(
         context: { ContextUser: UserInfo; Provider: IMetadataProvider },
     ): Promise<{ Agents: Map<string, string>; Actions: Map<string, string>; Prompts: Map<string, string> }> {
-        const [agents, actions, prompts] = await RunView.FromMetadataProvider(context.Provider).RunViews<{ ID: string; Name: string }>(
-            ['MJ: AI Agents', 'MJ: Actions', 'MJ: AI Prompts'].map((EntityName) => ({
+        const entityNames = ['MJ: AI Agents', 'MJ: Actions', 'MJ: AI Prompts'];
+        const results = await RunView.FromMetadataProvider(context.Provider).RunViews<{ ID: string; Name: string }>(
+            entityNames.map((EntityName) => ({
                 EntityName,
                 Fields: ['ID', 'Name'],
                 ResultType: 'simple' as const,
             })),
             context.ContextUser,
         );
-        const index = (rows: Array<{ ID: string; Name: string }> | undefined): Map<string, string> =>
-            new Map((rows ?? []).map((r) => [r.Name.trim().toLowerCase(), r.ID]));
-        return { Agents: index(agents?.Results), Actions: index(actions?.Results), Prompts: index(prompts?.Results) };
+        const failed = entityNames.filter((_, i) => !results[i]?.Success);
+        if (failed.length > 0) {
+            const reasons = failed.map((name) => `${name}: ${results[entityNames.indexOf(name)]?.ErrorMessage || 'no result'}`);
+            throw new Error(`Could not load the names a workflow's steps refer to (${reasons.join('; ')}).`);
+        }
+        const [agents, actions, prompts] = results;
+        const index = (rows: Array<{ ID: string; Name: string }>): Map<string, string> =>
+            new Map(rows.map((r) => [r.Name.trim().toLowerCase(), r.ID]));
+        return { Agents: index(agents.Results), Actions: index(actions.Results), Prompts: index(prompts.Results) };
     }
 }
 
