@@ -313,6 +313,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     // Inputs and record state may have changed since the last pass: resolve the items afresh.
     this._resolvedItems = null;
     this._pinnedItems = null;
+    this._userInfoEngine = null;
     if (this._formRef) {
       this.syncFromFormRef();
     }
@@ -1184,8 +1185,17 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     }
   }
 
-  /** The engine for this component's provider (a multi-provider host has one per connection), else the global one. */
+  /**
+   * The engine for this component's provider (a multi-provider host has one per connection), else
+   * the global one. Resolved once per change-detection pass (cleared in ngDoCheck).
+   */
   private get userInfoEngine(): UserInfoEngine {
+    return (this._userInfoEngine ??= this.resolveUserInfoEngine());
+  }
+
+  private _userInfoEngine: UserInfoEngine | null = null;
+
+  private resolveUserInfoEngine(): UserInfoEngine {
     const provider = this.ProviderToUse;
     const engine = provider
       ? UserInfoEngine.GetProviderInstance<UserInfoEngine>(provider, UserInfoEngine) as UserInfoEngine

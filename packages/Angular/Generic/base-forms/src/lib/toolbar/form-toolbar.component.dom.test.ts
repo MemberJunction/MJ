@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import type { BaseEntity, EntityInfo } from '@memberjunction/core';
+import type { BaseEntity, EntityInfo, IMetadataProvider } from '@memberjunction/core';
 import { renderComponentFixture, query, queryAll, capture } from '@memberjunction/ng-test-utils';
 import { MjFormToolbarComponent } from './form-toolbar.component';
 import { DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
@@ -369,6 +369,45 @@ describe('MjFormToolbarComponent (DOM)', () => {
     });
   });
 
+  describe('pins with a provider of their own', () => {
+    const provider = { InstanceConnectionString: 'conn-b', CurrentUser: null } as unknown as IMetadataProvider;
+    const engineFor = (loaded: boolean, pinned: string[]) => ({
+      Loaded: loaded,
+      GetSetting: vi.fn((key: string) => (key === TOOLBAR_PINS_SETTING_KEY ? JSON.stringify({ Version: 1, Pinned: pinned }) : undefined)),
+      SetSettingDebounced: vi.fn(),
+    });
+    const pinnedKeys = (f: Fx) => f.componentInstance.PinnedActionItems.map((i) => i.Key);
+
+    it("reads and saves pins on that provider's engine, not the global one", () => {
+      const own = engineFor(true, ['tags']);
+      const lookup = vi.spyOn(UserInfoEngine, 'GetProviderInstance').mockImplementation((p) => (p === provider ? own : UserInfoEngine.Instance) as unknown as UserInfoEngine);
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(JSON.stringify({ Version: 1, Pinned: ['list'] }));
+      const globalSave = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
+      const f = render({ Provider: provider });
+      expect(pinnedKeys(f)).toEqual(['tags']);
+
+      openMore(f);
+      btn(f, 'button[aria-label="Pin History"]')!.click();
+      f.detectChanges();
+      expect(own.SetSettingDebounced).toHaveBeenLastCalledWith(TOOLBAR_PINS_SETTING_KEY, JSON.stringify({ Version: 1, Pinned: ['tags', 'history'] }));
+      expect(globalSave).not.toHaveBeenCalled();
+      // Resolved once per change-detection pass, not once per read.
+      lookup.mockClear();
+      f.componentInstance.ngDoCheck();
+      void [f.componentInstance.PinnedKeys, f.componentInstance.PinnedKeys, f.componentInstance.IsPinned('tags')];
+      expect(lookup).toHaveBeenCalledTimes(1);
+    });
+
+    it("uses the global engine while that provider's engine hasn't loaded", () => {
+      vi.spyOn(UserInfoEngine, 'GetProviderInstance').mockReturnValue(engineFor(false, ['tags']) as unknown as UserInfoEngine);
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation((key: string) =>
+        key === TOOLBAR_PINS_SETTING_KEY ? JSON.stringify({ Version: 1, Pinned: ['list'] }) : undefined
+      );
+      const f = render({ Provider: provider });
+      expect(pinnedKeys(f)).toEqual(['list']);
+    });
+  });
+
   describe('keyboard and screen readers', () => {
     it('uses a disclosure panel: the trigger controls it by id, and nothing claims the menu role', () => {
       const f = render();
@@ -433,14 +472,29 @@ describe('MjFormToolbarComponent (DOM)', () => {
 
     it('listens on the document only while a panel is open', () => {
       const f = render();
-      const listeners = () => (f.componentInstance as unknown as { _unlistenDocument: unknown[] })._unlistenDocument.length;
-      expect(listeners()).toBe(0);
+      const onClick = vi.spyOn(f.componentInstance, 'OnDocumentClick');
+      document.body.click();
+      expect(onClick).not.toHaveBeenCalled();
       openMore(f);
-      expect(listeners()).toBe(2);
+      onClick.mockClear(); // the More button's own click reaches the new listener
       document.body.click();
       f.detectChanges();
+      expect(onClick).toHaveBeenCalledTimes(1);
       expect(f.componentInstance.MoreMenuOpen).toBe(false);
-      expect(listeners()).toBe(0);
+      document.body.click();
+      expect(onClick).toHaveBeenCalledTimes(1);
+    });
+
+    it('stops listening on the document when destroyed with a panel open', () => {
+      const f = render();
+      openMore(f);
+      const close = vi.spyOn(f.componentInstance, 'CloseMenus');
+      const onEscape = vi.spyOn(f.componentInstance, 'OnEscape');
+      f.destroy();
+      document.body.click();
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      expect(close).not.toHaveBeenCalled();
+      expect(onEscape).not.toHaveBeenCalled();
     });
 
     it('clears the section search on the first Escape and closes the panel on the next', () => {
@@ -461,13 +515,14 @@ describe('MjFormToolbarComponent (DOM)', () => {
       const f = render({ Config: { ...DEFAULT_TOOLBAR_CONFIG, ShowSectionManager: true } });
       document.body.appendChild(f.nativeElement);
       openView(f);
-      const listeners = () => (f.componentInstance as unknown as { _unlistenDocument: unknown[] })._unlistenDocument.length;
-      expect(listeners()).toBe(2);
+      const onClick = vi.spyOn(f.componentInstance, 'OnDocumentClick');
       const manage = capture(f.componentInstance.ManageSectionsRequested);
       (queryAll(f, '.mj-forms-menu-item').find((b) => b.textContent?.includes('Reorder sections')) as HTMLElement).click();
       f.detectChanges();
       expect(f.componentInstance.ViewMenuOpen).toBe(false);
-      expect(listeners()).toBe(0);
+      onClick.mockClear();
+      document.body.click();
+      expect(onClick).not.toHaveBeenCalled();
       expect(document.activeElement).toBe(btn(f, '[data-menu-trigger="view"]'));
       expect(manage.length).toBe(1);
       f.nativeElement.remove();
