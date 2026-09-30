@@ -3959,7 +3959,7 @@ export class BaseAgent {
             ? promptParams.decisionPromptName
             : AgentDecisionService.DEFAULT_PROMPT_NAME;
         const step = await this.startDecisionDiscoveryStep(contextUser, promptName);
-        const outcome = await this.boundDecisionDiscovery(signal => this.discoverAgent(agent, contextUser, promptName, hostAllowedIDs, signal));
+        const outcome = await this.boundDecisionDiscovery(signal => this.discoverAgent(agent, contextUser, promptName, hostAllowedIDs, signal), step);
         await this.finishDecisionDiscoveryStep(step, outcome);
         if (!outcome.Succeeded) {
             this.warnDecisionDiscovery(agent, outcome.Reason ?? 'unknown error');
@@ -3972,13 +3972,20 @@ export class BaseAgent {
     /**
      * Runs `discover` until it finishes, {@link DECISION_DISCOVERY_TIMEOUT_MS} passes, or the run is
      * cancelled. A timeout or a cancellation aborts the signal `discover` was given, which aborts the
-     * decision call, and returns a failed discovery at once. Whatever `discover` returns after that
-     * is ignored.
+     * decision call, and returns a failed discovery at once. What `discover` returns after that
+     * suggests nothing, but the prompt run of its decision call is still linked to `step` once it
+     * settles ({@link linkLateDecisionPromptRun}), so the run counts the call's cost.
      */
-    private async boundDecisionDiscovery(discover: (signal: AbortSignal) => Promise<DecisionDiscoveryOutcome>): Promise<DecisionDiscoveryOutcome> {
+    private async boundDecisionDiscovery(
+        discover: (signal: AbortSignal) => Promise<DecisionDiscoveryOutcome>,
+        step?: MJAIAgentRunStepEntityExtended
+    ): Promise<DecisionDiscoveryOutcome> {
         const controller = new AbortController();
-        const stopped = new Promise<DecisionDiscoveryOutcome>(resolve => controller.signal.addEventListener(
-            'abort', () => resolve(FailedDecisionDiscovery(String(controller.signal.reason))), { once: true }));
+        let stoppedOutcome: DecisionDiscoveryOutcome | undefined;
+        const stopped = new Promise<DecisionDiscoveryOutcome>(resolve => controller.signal.addEventListener('abort', () => {
+            stoppedOutcome = FailedDecisionDiscovery(String(controller.signal.reason));
+            resolve(stoppedOutcome);
+        }, { once: true }));
         const runToken = this._executeParams?.cancellationToken;
         const relayRunAbort = (): void => controller.abort('the run was cancelled');
         if (runToken?.aborted) {
@@ -3989,7 +3996,12 @@ export class BaseAgent {
         const timeoutMS = DECISION_DISCOVERY_TIMEOUT_MS;
         const timer = setTimeout(() => controller.abort(`the decision timed out after ${timeoutMS}ms`), timeoutMS);
         try {
-            return await Promise.race([discover(controller.signal), stopped]);
+            const discovering = discover(controller.signal);
+            const outcome = await Promise.race([discovering, stopped]);
+            if (outcome === stoppedOutcome) {
+                this.linkLateDecisionPromptRun(step, discovering.then(late => late.Result));
+            }
+            return outcome;
         } catch (error) {
             return FailedDecisionDiscovery(error instanceof Error ? error.message : String(error));
         } finally {

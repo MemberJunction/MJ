@@ -11,8 +11,10 @@
  *      agent, Sub-Agents and agents without a description), as agent IDs with their descriptions.
  *      An @mention of another agent means no call.
  *   3. A confident Choice and Likelihood put a <suggested_agent> system message first in the first
- *      prompt; a low Choice confidence, a low Likelihood, an error, a throw, an unusable answer and a
- *      timeout each inject nothing. Every call is recorded as one `Agent discovery` Decision step.
+ *      prompt; a low Choice confidence, a low Likelihood, an error, a throw, an unusable answer, a
+ *      timeout and a cancelled run each inject nothing. Every call is recorded as one
+ *      `Agent discovery` Decision step, which links the call's prompt run so the run counts its cost:
+ *      on time, and after a timeout or a cancellation once the call settles.
  *   4. A catalog over the decision model's option cap is narrowed first by the semantic search, and
  *      the step says so.
  */
@@ -33,6 +35,7 @@ import {
 import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import type { ChatMessage, ChoiceQuestion, DecisionAnswer } from '@memberjunction/ai';
+import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { LogErrorEx } from '@memberjunction/core';
 import type { EntitySearchResult, IMetadataProvider, SearchEntityParams, UserInfo } from '@memberjunction/core';
 
@@ -206,6 +209,7 @@ class MockStepEntity {
     public PayloadAtStart: string | null = null;
     public PayloadAtEnd: string | null = null;
     public Skills: string | null = null;
+    public PromptRun: MJAIPromptRunEntity | undefined = undefined;
 
     constructor(private readonly seq: number) {}
 
@@ -290,6 +294,7 @@ class DiscoveryHarness {
     public promptModels: PromptModelRow[] = [];
     public modelConfigCalls: Array<{ ModelID: string; ModelVendorID: string | undefined }> = [];
     public maxChoiceOptions: number | null = null;
+    public runs: FakeAgentRun[] = [];
     public steps: MockStepEntity[] = [];
 
     private stepSeq = 0;
@@ -351,7 +356,9 @@ class DiscoveryHarness {
     public readonly provider = {
         GetEntityObject: async (entityName: string): Promise<unknown> => {
             if (entityName === 'MJ: AI Agent Runs') {
-                return new FakeAgentRun();
+                const run = new FakeAgentRun();
+                this.runs.push(run);
+                return run;
             }
             if (entityName === 'MJ: AI Agent Run Steps') {
                 const step = new MockStepEntity(++this.stepSeq);
@@ -446,6 +453,58 @@ function suggestionsInFirstPrompt(runner: RecordingPromptRunner): ChatMessage[] 
 
 function expectWarning(): void {
     expect(vi.mocked(LogErrorEx)).toHaveBeenCalledWith(expect.objectContaining({ severity: 'warning', category: 'DecisionDiscovery' }));
+}
+
+/** The discovery decision's own prompt run, as AIDecisionRunner returns it once finalized. */
+const DISCOVERY_RUN = {
+    ID: 'eeeeeeee-8000-4000-8000-000000000001',
+    TokensUsedRollup: 700,
+    TokensPromptRollup: 650,
+    TokensCompletionRollup: 50,
+    TokensCacheReadRollup: 0,
+    TokensCacheWriteRollup: 0,
+    TotalCost: 0.0023,
+} satisfies Pick<MJAIPromptRunEntity, 'ID' | 'TokensUsedRollup' | 'TokensPromptRollup' | 'TokensCompletionRollup' | 'TokensCacheReadRollup' | 'TokensCacheWriteRollup' | 'TotalCost'>;
+
+/** What AIDecisionRunner returns for an aborted call: it wrote the prompt run before it called the model. */
+const ABORTED: AIDecisionRunResult = { success: false, errorMessage: 'The operation was aborted', Answers: {}, promptRun: DISCOVERY_RUN as MJAIPromptRunEntity };
+
+/** `ask`, with the discovery call's prompt run on its result. */
+function withPromptRun(ask: (args: AgentDecisionAskParams) => Promise<AIDecisionRunResult>): (args: AgentDecisionAskParams) => Promise<AIDecisionRunResult> {
+    return async (args) => ({ ...(await ask(args)), promptRun: DISCOVERY_RUN as MJAIPromptRunEntity });
+}
+
+/**
+ * An Ask that calls `onAsked`, then settles with `result` once its signal aborts, as the runner
+ * finalizes its prompt run after the abort.
+ */
+function settlesOnAbort(result: AIDecisionRunResult, onAsked: () => void): (args: AgentDecisionAskParams) => Promise<AIDecisionRunResult> {
+    return (args) => new Promise<AIDecisionRunResult>(resolve => {
+        args.CancellationToken?.addEventListener('abort', () => resolve(result), { once: true });
+        onAsked();
+    });
+}
+
+/** `Asked` resolves once `Mark` is called: the moment the decision is asked. */
+function askedSignal(): { Asked: Promise<void>; Mark: () => void } {
+    let mark: () => void = () => undefined;
+    const asked = new Promise<void>(resolve => {
+        mark = resolve;
+    });
+    return { Asked: asked, Mark: mark };
+}
+
+/** The discovery step links DISCOVERY_RUN, and the run's totals include it. */
+function expectDiscoveryRunCounted(): void {
+    const step = discoverySteps()[0];
+    expect(step.TargetLogID).toBe(DISCOVERY_RUN.ID);
+    expect(step.PromptRun).toBe(DISCOVERY_RUN);
+    // The scripted prompt carries no prompt run, so the discovery call is the run's whole spend.
+    const run = harness.runs[0];
+    expect(run.TotalCost).toBe(DISCOVERY_RUN.TotalCost);
+    expect(run.TotalTokensUsed).toBe(DISCOVERY_RUN.TokensUsedRollup);
+    expect(run.TotalPromptTokensUsed).toBe(DISCOVERY_RUN.TokensPromptRollup);
+    expect(run.TotalCompletionTokensUsed).toBe(DISCOVERY_RUN.TokensCompletionRollup);
 }
 
 beforeEach(() => {
@@ -673,6 +732,20 @@ describe('decision discovery — what reaches the prompt', () => {
     });
 
     it.each([
+        ['it injects a suggestion', answering(BILLING, 0.84, 0.9), true],
+        ['it is unsure, and injects nothing', answering(BILLING, 0.55, 0.9), false],
+    ])("counts the decision toward the run's tokens and cost when %s: its step links the prompt run", async (_label, answer, injected) => {
+        vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(withPromptRun(answer));
+        const { agent, runner } = makeAgent();
+
+        await agent.Execute(makeParams());
+
+        expect(suggestionsInFirstPrompt(runner)).toHaveLength(injected ? 1 : 0);
+        expect(stepOutput(discoverySteps()[0])).toMatchObject({ injected, promptRunId: DISCOVERY_RUN.ID });
+        expectDiscoveryRunCounted();
+    });
+
+    it.each([
         ['a low Choice confidence', 0.55, 0.95, 'agent confidence 0.55 is below 0.7'],
         ['a low Likelihood', 0.9, 0.3, 'any agent applies, 0.30, is below 0.7'],
     ])('injects nothing for %s, and records the answer as not injected', async (_label, confidence, applies, reason) => {
@@ -748,6 +821,59 @@ describe('decision discovery — what reaches the prompt', () => {
             expect(stepOutput(steps[0])).toMatchObject({ injected: false });
             expect(String(stepOutput(steps[0]).reason)).toContain('timed out');
         });
+
+        it('links the prompt run of the call it stopped waiting for, so the run still counts it', async () => {
+            vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+            const { Asked, Mark } = askedSignal();
+            vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(settlesOnAbort(ABORTED, Mark));
+            const { agent, runner } = makeAgent();
+
+            const pending = agent.Execute(makeParams());
+            await Asked;
+            await vi.advanceTimersByTimeAsync(DECISION_DISCOVERY_TIMEOUT_MS);
+            const result = await pending;
+
+            expect(result.success).toBe(true);
+            expect(suggestionsInFirstPrompt(runner)).toHaveLength(0);
+            const step = discoverySteps()[0];
+            expect(step.Status).toBe('Failed');
+            expect(String(stepOutput(step).reason)).toContain('timed out');
+            expectDiscoveryRunCounted();
+        });
+    });
+});
+
+describe('decision discovery — a cancelled run', () => {
+    beforeEach(() => {
+        harness.self = makeSelf(ON);
+    });
+
+    it('stops at once when the run is cancelled, injects nothing, and still counts the call', async () => {
+        const run = new AbortController();
+        const { Asked, Mark } = askedSignal();
+        let signal: AbortSignal | undefined;
+        vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation((args) => {
+            signal = args.CancellationToken;
+            return settlesOnAbort(ABORTED, Mark)(args);
+        });
+        const { agent, runner } = makeAgent();
+
+        const pending = agent.Execute(makeParams({ cancellationToken: run.signal }));
+        await Asked;
+        expect(signal?.aborted).toBe(false);
+        run.abort('user cancelled');
+        const result = await pending;
+
+        expect(result.success).toBe(false);
+        expect(signal?.aborted).toBe(true);
+        expect(suggestionsInFirstPrompt(runner)).toHaveLength(0);
+        expectWarning();
+        const step = discoverySteps()[0];
+        expect(step.Status).toBe('Failed');
+        expect(stepOutput(step)).toMatchObject({ injected: false });
+        // Not the timeout: the run's cancellation reached the call before DECISION_DISCOVERY_TIMEOUT_MS.
+        expect(String(stepOutput(step).reason)).toContain('cancelled');
+        expectDiscoveryRunCounted();
     });
 });
 
