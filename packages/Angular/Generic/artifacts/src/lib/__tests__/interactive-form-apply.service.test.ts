@@ -13,12 +13,16 @@
  * regress silently — the unit tests on the actions wouldn't notice.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { CompositeKey } from '@memberjunction/core';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
+import type { FieldGroupsInDetails, HumanizeEntityTitle } from '@memberjunction/ng-base-forms';
 
 // ─── Hoisted state buckets the mocks read/write ──────────────────────────
 
 const hoisted = vi.hoisted(() => ({
     dialogResult: 'apply' as 'apply' | 'cancel',
+    /** The yes/no confirm's answer when it differs from the placement dialog's. */
+    confirmResult: null as 'apply' | 'cancel' | null,
     actionResponses: new Map<string, { Success: boolean; Message?: string; ResultCode?: string }>(),
     actionCalls: [] as Array<{ id: string; params: unknown }>,
     runViewResponses: [] as Array<{ Success: boolean; Results: Array<{ ID: string }>; ErrorMessage?: string }>,
@@ -40,6 +44,10 @@ const hoisted = vi.hoisted(() => ({
     },
     /** The context the dialog was handed — what the user was actually offered. */
     placementContext: null as Record<string, unknown> | null,
+    /** The record the dialog's preview was told to show. */
+    placementRecordKey: null as CompositeKey | null,
+    /** Compiled `BaseFormPanel` registrations the collector reports. */
+    compiledRegistrations: [] as Array<{ Priority: number; Source: 'class' | 'metadata'; Title?: string; Metadata: Record<string, unknown> }>,
 }));
 
 // ─── Module mocks ────────────────────────────────────────────────────────
@@ -81,6 +89,8 @@ const mockDialog = {
                 Proposal: null as unknown,
                 set Context(value: Record<string, unknown>) { hoisted.placementContext = value; },
                 get Context(): Record<string, unknown> { return hoisted.placementContext ?? {}; },
+                set RecordKey(value: CompositeKey | null) { hoisted.placementRecordKey = value; },
+                get RecordKey(): CompositeKey | null { return hoisted.placementRecordKey; },
                 Applied: {
                     subscribe: (cb: (d: unknown) => void) => {
                         if (hoisted.dialogResult === 'apply') {
@@ -101,7 +111,7 @@ const mockDialog = {
             Result: {
                 subscribe: (cb: (r: { text: string; primary?: boolean }) => void) => {
                     cb(
-                        hoisted.dialogResult === 'apply'
+                        (hoisted.confirmResult ?? hoisted.dialogResult) === 'apply'
                             ? { text: 'Apply', primary: true }
                             : { text: 'Cancel' },
                     );
@@ -112,15 +122,25 @@ const mockDialog = {
 };
 
 /**
- * The placement dialog is an Angular component; importing it here would drag the framework
- * into a node-preset suite. Only the two symbols the service uses are needed, and
- * `ApplyDecisionToSpec` is reproduced exactly so the test still asserts the real merge.
+ * The placement dialog is an Angular component; importing the package root here would drag
+ * the framework into a node-preset suite. `ApplyDecisionToSpec` is reproduced exactly so the
+ * test still asserts the real merge. The chrome helpers are pure and framework-free, so the
+ * built ones run. The collector reads the ClassFactory, so it reports what a test sets.
  */
-vi.mock('@memberjunction/ng-base-forms', () => ({
-    MjFormPlacementDialogComponent: class MjFormPlacementDialogComponent {},
-    ApplyDecisionToSpec: (spec: Record<string, unknown>, decision: { Contribution: unknown }) =>
-        ({ ...spec, formContribution: decision.Contribution }),
-}));
+vi.mock('@memberjunction/ng-base-forms', async () => {
+    const chrome = await vi.importActual<{
+        FieldGroupsInDetails: typeof FieldGroupsInDetails;
+        HumanizeEntityTitle: typeof HumanizeEntityTitle;
+    }>('@memberjunction/ng-base-forms/dist/lib/chrome/form-chrome.js');
+    return {
+        MjFormPlacementDialogComponent: class MjFormPlacementDialogComponent {},
+        ApplyDecisionToSpec: (spec: Record<string, unknown>, decision: { Contribution: unknown }) =>
+            ({ ...spec, formContribution: decision.Contribution }),
+        FieldGroupsInDetails: chrome.FieldGroupsInDetails,
+        HumanizeEntityTitle: chrome.HumanizeEntityTitle,
+        CollectFormContributionRegistrations: () => hoisted.compiledRegistrations,
+    };
+});
 
 const mockNotifications = {
     CreateSimpleNotification: (message: string, type: string) => {
@@ -166,7 +186,7 @@ vi.mock('@memberjunction/core', async () => {
 
 import { InteractiveFormApplyService } from '../services/interactive-form-apply.service';
 
-function mockProvider(overrides: Partial<{ EntityByName: () => unknown; CurrentUser: unknown }> = {}) {
+function mockProvider(overrides: Partial<{ EntityByName: (name: string) => unknown; CurrentUser: unknown }> = {}) {
     return {
         EntityByName: () => ({ ID: 'ENT-1', Name: 'MJ: Apps' }),
         CurrentUser: { ID: 'U1', Name: 'Test' },
@@ -181,7 +201,10 @@ function spec(over: Partial<ComponentSpec> = {}): ComponentSpec {
 
 beforeEach(() => {
     hoisted.dialogResult = 'apply';
+    hoisted.confirmResult = null;
     hoisted.resolveActionIdsByName = false;
+    hoisted.placementRecordKey = null;
+    hoisted.compiledRegistrations = [];
     hoisted.actionResponses.clear();
     hoisted.actionCalls.length = 0;
     hoisted.runViewResponses.length = 0;
@@ -397,7 +420,12 @@ describe('InteractiveFormApplyService — form-panel specs', () => {
         } as never;
     }
 
-    const provider = () => mockProvider({ EntityByName: () => ({ ID: 'ENT-PEOPLE', Name: ENTITY }) });
+    /** Resolves the form's entity and any related entity a claim names, in registered casing. */
+    const provider = () => mockProvider({
+        EntityByName: (name: string) => (name.toLowerCase() === ENTITY.toLowerCase()
+            ? { ID: 'ENT-PEOPLE', Name: ENTITY, PrimaryKeys: [{ Name: 'ID' }] }
+            : { ID: `ENT-${name}`, Name: name, PrimaryKeys: [{ Name: 'ID' }] }),
+    });
 
     /** The spec the Create action actually received, which is the spec that gets persisted. */
     function sentSpec(): { formContribution: Record<string, string | undefined> } {
@@ -620,18 +648,21 @@ describe('InteractiveFormApplyService — form-panel specs', () => {
             return spec as unknown as ComponentSpec;
         }
 
+        /** An installed row, shaped the way Create writes it: a keyless panel carries `panel:<name>`. */
         function installed(over: Record<string, unknown>) {
             return {
                 Success: true,
                 Message: JSON.stringify({
                     EntityName: ENTITY,
                     Contributions: [{
-                        ContributionID: 'ROW-EXISTING', ContributionKey: null, Status: 'Active',
+                        ContributionID: 'ROW-EXISTING', ContributionKey: 'panel:PersonLtvStrip', Status: 'Active',
                         Scope: 'User', Name: 'Lifetime value', ComponentName: 'PersonLtvStrip', ...over,
                     }],
                 }),
             };
         }
+
+        const ids = () => hoisted.actionCalls.map(c => c.id);
 
         it('versions the installed row instead of adding a second copy when no key is declared', async () => {
             hoisted.actionResponses.set('Get Form Contributions For Entity', installed({}));
@@ -639,29 +670,126 @@ describe('InteractiveFormApplyService — form-panel specs', () => {
 
             await svc.ConfirmAndApply(keylessSpec(), ENTITY, provider(), snapshot());
 
-            const ids = hoisted.actionCalls.map(c => c.id);
-            expect(ids).toContain('Modify Form Contribution');
-            expect(ids).not.toContain('Create Form Contribution');
+            expect(ids()).toContain('Modify Form Contribution');
+            expect(ids()).not.toContain('Create Form Contribution');
+            const modify = hoisted.actionCalls.find(c => c.id === 'Modify Form Contribution')!;
+            expect((modify.params as Array<{ Name: string; Value: string }>).find(p => p.Name === 'ContributionID')?.Value)
+                .toBe('ROW-EXISTING');
         });
 
         it('still creates when the installed row is a different component', async () => {
             hoisted.actionResponses.set('Get Form Contributions For Entity',
-                installed({ ComponentName: 'SomeOtherStrip' }));
+                installed({ ContributionKey: 'panel:SomeOtherStrip', ComponentName: 'SomeOtherStrip' }));
             const svc = new InteractiveFormApplyService();
 
             await svc.ConfirmAndApply(keylessSpec(), ENTITY, provider(), snapshot());
 
-            expect(hoisted.actionCalls.map(c => c.id)).toContain('Create Form Contribution');
+            expect(ids()).toContain('Create Form Contribution');
         });
 
-        it('does not match a row that carries a key against a keyless spec', async () => {
+        it('does not take over a row of the same component that claims something else', async () => {
             hoisted.actionResponses.set('Get Form Contributions For Entity',
                 installed({ ContributionKey: 'skip:something-else' }));
             const svc = new InteractiveFormApplyService();
 
             await svc.ConfirmAndApply(keylessSpec(), ENTITY, provider(), snapshot());
 
-            expect(hoisted.actionCalls.map(c => c.id)).toContain('Create Form Contribution');
+            expect(ids()).toContain('Create Form Contribution');
+        });
+
+        // Modify keeps a panel's key when it renames the component, so the row's key names the old one.
+        it('finds a row whose key predates a rename of its component', async () => {
+            hoisted.actionResponses.set('Get Form Contributions For Entity',
+                installed({ ContributionKey: 'panel:PersonLifetimeValue' }));
+            const svc = new InteractiveFormApplyService();
+
+            await svc.ConfirmAndApply(keylessSpec(), ENTITY, provider(), snapshot());
+
+            expect(ids()).toContain('Modify Form Contribution');
+            expect(ids()).not.toContain('Create Form Contribution');
+        });
+
+        it('treats a spec under another component name as a new panel', async () => {
+            hoisted.actionResponses.set('Get Form Contributions For Entity', installed({}));
+            const renamed = { ...keylessSpec(), name: 'PersonValueStrip' } as ComponentSpec;
+            const svc = new InteractiveFormApplyService();
+
+            await svc.ConfirmAndApply(renamed, ENTITY, provider(), snapshot());
+
+            expect(ids()).toContain('Create Form Contribution');
+        });
+    });
+
+    describe('what the dialog is offered from the open form', () => {
+        const openForm = () => snapshot({
+            RecordPrimaryKey: 'ID=person-7',
+            Sections: [
+                { Key: 'details', Title: 'Details', Variant: 'default', Group: '__mj_form_details', Hidden: false,
+                  Fields: [{ Name: 'FirstName', Label: 'First name' }] },
+                { Key: 'eventOrderLines', Title: 'MJ_BizApps_Orders: Event Order Lines', Variant: 'related-entity',
+                  Group: 'eventOrderLines', Hidden: false, Fields: [] },
+                { Key: 'panel:PersonLtvStrip', Title: 'Lifetime value', Variant: 'contribution', Group: null, Hidden: false, Fields: [] },
+                { Key: 'systemMetadata', Title: 'System Metadata', Variant: 'default', Group: null, Hidden: false, Fields: [] },
+            ],
+            Related: [{ Entity: 'MJ_BizApps_Orders: Event Order Lines', JoinField: 'PersonID', SectionKey: 'eventOrderLines', Inclusion: 'Auto', Source: 'baked' }],
+            Rail: [
+                { Key: '__mj_form_details', Title: 'Details', Icon: 'fa fa-id-card', SectionKeys: ['details'], IsMore: false },
+                { Key: 'eventOrderLines', Title: 'Event Order Lines', Icon: 'fa fa-table', SectionKeys: ['eventOrderLines'], IsMore: false },
+                { Key: '__mj_form_more', Title: 'More', Icon: 'fa fa-folder', SectionKeys: ['systemMetadata'], IsMore: true },
+            ],
+        });
+
+        it('offers only the field groups, not grids, panels or system metadata', async () => {
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), openForm());
+            expect((hoisted.placementContext?.Sections as Array<{ Key: string }>).map(s => s.Key)).toEqual(['details']);
+        });
+
+        it('names a grid the way its rail item is titled', async () => {
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), openForm());
+            expect(hoisted.placementContext?.Related).toEqual([
+                { Entity: 'MJ_BizApps_Orders: Event Order Lines', JoinField: 'PersonID', DisplayName: 'Event Order Lines' },
+            ]);
+        });
+
+        it('previews the record the user has open', async () => {
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), openForm());
+            expect(hoisted.placementRecordKey?.KeyValuePairs).toEqual([{ FieldName: 'ID', Value: 'person-7' }]);
+        });
+
+        it('previews a sample record when the snapshot names none', async () => {
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot({ RecordPrimaryKey: '' }));
+            expect(hoisted.placementRecordKey).toBeNull();
+        });
+    });
+
+    describe('replacing an installed panel with no open form', () => {
+        beforeEach(() => {
+            hoisted.placement.contribution = {
+                slot: 'after-fields', presentation: 'panel', title: 'Lifetime value', contributionKey: 'header',
+            };
+            hoisted.compiledRegistrations = [
+                { Priority: 3, Source: 'class', Title: 'Header', Metadata: { entity: ENTITY, slot: 'before-fields', contributionKey: 'header' } },
+                { Priority: 9, Source: 'class', Metadata: { entity: 'Some Other Entity', slot: 'before-fields', contributionKey: 'header' } },
+            ];
+        });
+
+        it('ranks the new row one above the compiled panel holding its key', async () => {
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
+            const create = hoisted.actionCalls.find(c => c.id === 'Create Form Contribution')!;
+            expect((create.params as Array<{ Name: string; Value: string }>).find(p => p.Name === 'Precedence')?.Value).toBe('4');
+        });
+
+        it('cancels without writing when the user declines', async () => {
+            hoisted.confirmResult = 'cancel';
+            const svc = new InteractiveFormApplyService();
+            const result = await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
+            expect(result).toMatchObject({ Success: false, Message: 'Cancelled by user.' });
+            expect(hoisted.actionCalls.map(c => c.id)).not.toContain('Create Form Contribution');
         });
     });
 });

@@ -17,17 +17,21 @@
  * eventually the cockpit's chat-pane Apply flow) follows the same rules.
  */
 import { Injectable, inject } from '@angular/core';
-import { Metadata, LogError, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import {
+    CompositeKey, KeyValuePair, Metadata, LogError, RunView,
+    type EntityInfo, type IMetadataProvider, type UserInfo,
+} from '@memberjunction/core';
 import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJDialogService } from '@memberjunction/ng-ui-components';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import {
-    GetDeclaredFormContribution, IsFormPanelRole,
+    GetDeclaredFormContribution, IsFormPanelRole, IsPanelContributionKey, ResolveContributionWriteKey,
     type FormContributionSlot, type FormContributionSpec,
 } from '@memberjunction/interactive-component-types/forms';
 import {
-    ApplyDecisionToSpec, MjFormPlacementDialogComponent,
+    ApplyDecisionToSpec, CollectFormContributionRegistrations, FieldGroupsInDetails, HumanizeEntityTitle,
+    MjFormPlacementDialogComponent,
     type FormCompositionSnapshot, type FormPlacementContext, type FormPlacementDecision,
 } from '@memberjunction/ng-base-forms';
 
@@ -96,7 +100,7 @@ export class InteractiveFormApplyService {
         // A form panel is a contribution, not a whole-form override — a different
         // action family and a different set of confirmations.
         if (IsFormPanelRole(spec)) {
-            return this.applyContribution(spec, entity.Name, client, p, snapshot);
+            return this.applyContribution(spec, entity, client, p, snapshot);
         }
 
         // Step 1: detect existing state via Get Active Form For Entity.
@@ -188,11 +192,12 @@ export class InteractiveFormApplyService {
      */
     private async applyContribution(
         spec: ComponentSpec,
-        entityName: string,
+        entity: EntityInfo,
         client: GraphQLActionClient,
         provider: IMetadataProvider,
         snapshot: FormCompositionSnapshot | null,
     ): Promise<InteractiveFormApplyResult> {
+        const entityName = entity.Name;
         const contribution = GetDeclaredFormContribution(spec);
         if (!contribution) {
             return this.fail('This component declares componentRole form-panel but has no readable formContribution block.');
@@ -205,12 +210,14 @@ export class InteractiveFormApplyService {
             return this.fail(`Could not read the composition of the "${entityName}" form.`);
         }
 
-        const decision = await this.askWherePanelGoes(context, contribution, spec.name, spec, provider);
+        const decision = await this.askWherePanelGoes(
+            context, contribution, spec.name, spec, provider, this.recordKeyFrom(sameEntity, entity));
         if (!decision) return { Success: false, Kind: 'contribution', Message: 'Cancelled by user.' };
 
         const placed = decision.Contribution;
-        const key = this.writeKeyFor(placed);
-        const precedence = await this.resolvePrecedence(key, sameEntity);
+        // The key the write path will derive, so the duplicate and incumbent lookups find it.
+        const key = ResolveContributionWriteKey(placed, this.relatedEntityName(placed, provider), spec.name);
+        const precedence = await this.resolvePrecedence(key, sameEntity, entity, provider);
         if (precedence === null) {
             return { Success: false, Kind: 'contribution', Message: 'Cancelled by user.' };
         }
@@ -222,7 +229,7 @@ export class InteractiveFormApplyService {
             return this.fail(`Could not check existing contributions: ${existingResult.Message ?? 'unknown error'}`);
         }
         const existing = this.findExistingContribution(
-            this.parseContributions(existingResult.Message), key, spec.name);
+            this.parseContributions(existingResult.Message), key, placed, spec.name);
 
         const specToSend: ComponentSpec = ApplyDecisionToSpec(spec, decision);
         const { result, mode } = existing
@@ -273,12 +280,14 @@ export class InteractiveFormApplyService {
         if (snapshot) {
             return {
                 EntityName: entityName,
-                Sections: snapshot.Sections.map(s => ({
+                Sections: this.fieldGroupsOf(snapshot).map(s => ({
                     Key: s.Key, Title: s.Title,
                     Fields: (s.Fields ?? []).map(f => ({ Name: f.Name, Label: f.Label })),
                 })),
+                // Titled as the grid's rail item is, so the dialog can find the item it sits under.
                 Related: snapshot.Related.map(r => ({
-                    Entity: r.Entity, JoinField: r.JoinField, DisplayName: r.Entity,
+                    Entity: r.Entity, JoinField: r.JoinField,
+                    DisplayName: HumanizeEntityTitle(snapshot.Sections.find(s => s.Key === r.SectionKey)?.Title || r.Entity),
                 })),
                 Existing: snapshot.Contributions.map(c => ({
                     Key: c.Key, Slot: c.Slot, Title: c.Title, SortKey: c.SortKey,
@@ -309,6 +318,35 @@ export class InteractiveFormApplyService {
         return this.parseComposition(result.Message, entityName);
     }
 
+    /**
+     * The field groups a panel can stand in for: what the Details rail item holds, the same set
+     * the dialog's own probe offers. Related grids, installed panels and system metadata are not.
+     */
+    private fieldGroupsOf(snapshot: FormCompositionSnapshot): FormCompositionSnapshot['Sections'] {
+        const keys = new Set(FieldGroupsInDetails(
+            snapshot.Sections.map(s => ({ SectionKey: s.Key, SectionName: s.Title, Variant: s.Variant })),
+            snapshot.Rail ?? [],
+        ).map(group => group.Key));
+        return snapshot.Sections.filter(s => keys.has(s.Key));
+    }
+
+    /**
+     * The open record's key, read from the snapshot's `Field=Value AND Field=Value` form. Null
+     * when the snapshot names no record, or names fields that are not the entity's primary key.
+     */
+    private recordKeyFrom(snapshot: FormCompositionSnapshot | null, entity: EntityInfo): CompositeKey | null {
+        const raw = snapshot?.RecordPrimaryKey?.trim();
+        if (!raw) return null;
+        const pairs = raw.split(' AND ').map(part => {
+            const at = part.indexOf('=');
+            return at > 0 ? new KeyValuePair(part.slice(0, at).trim(), part.slice(at + 1)) : null;
+        });
+        const keyFields = entity.PrimaryKeys.map(pk => pk.Name);
+        const valid = pairs.length === keyFields.length
+            && pairs.every(pair => !!pair && keyFields.includes(pair.FieldName));
+        return valid ? CompositeKey.FromKeyValuePairs(pairs as KeyValuePair[]) : null;
+    }
+
     /** The `Get Form Composition For Entity` payload, as the dialog's context. */
     private parseComposition(message: string | undefined, entityName: string): FormPlacementContext | null {
         try {
@@ -330,7 +368,7 @@ export class InteractiveFormApplyService {
                     Fields: (s.Fields ?? []).map(f => ({ Name: f.Name, Label: f.Label })),
                 })),
                 Related: (raw.Related ?? []).map(r => ({
-                    Entity: r.Entity, JoinField: r.JoinField, DisplayName: r.Entity,
+                    Entity: r.Entity, JoinField: r.JoinField, DisplayName: HumanizeEntityTitle(r.Entity),
                 })),
                 Existing: (raw.Contributions ?? []).map(c => ({
                     Key: c.Key, Slot: c.Slot, Title: c.Title, SortKey: c.SortKey ?? 0,
@@ -364,6 +402,7 @@ export class InteractiveFormApplyService {
         componentName: string | undefined,
         component: ComponentSpec,
         provider: IMetadataProvider,
+        recordKey: CompositeKey | null,
     ): Promise<FormPlacementDecision | null> {
         return new Promise<FormPlacementDecision | null>((resolve) => {
             const ref = this.dialog.Open({
@@ -383,6 +422,7 @@ export class InteractiveFormApplyService {
             dialog.Proposal = proposal;
             // The preview draws the component itself, not a placeholder, before anything is saved.
             dialog.PanelComponentSpec = component;
+            dialog.RecordKey = recordKey;
             dialog.Context = context;
 
             let settled = false;
@@ -407,10 +447,10 @@ export class InteractiveFormApplyService {
     private async resolvePrecedence(
         key: string | null,
         snapshot: FormCompositionSnapshot | null,
+        entity: EntityInfo,
+        provider: IMetadataProvider,
     ): Promise<number | null> {
-        const incumbent = key
-            ? snapshot?.Contributions.find(c => c.Key === key && c.Source === 'class')
-            : undefined;
+        const incumbent = key ? this.compiledIncumbent(key, snapshot, entity, provider) : null;
         if (!incumbent) return 0;
         const replace = await this.ask(
             'Replace an installed contribution?',
@@ -421,15 +461,28 @@ export class InteractiveFormApplyService {
     }
 
     /**
-     * The key the row will carry. Must stay byte-identical to the write path's
-     * `ResolveWriteContributionKey` and the renderer's `RelatedContributionKey`, or the
-     * duplicate lookup and the incumbent lookup both miss.
+     * The installed compiled contribution holding this key, if any. Read from the open form when
+     * there is one, else from the compiled registrations for the entity.
      */
-    private writeKeyFor(contribution: FormContributionSpec): string | null {
-        if (contribution.contributionKey) return contribution.contributionKey;
-        if (!contribution.relatedEntity) return null;
-        const join = (contribution.relatedJoinField ?? '').trim().replace(/^\[/, '').replace(/\]$/, '');
-        return `related:${contribution.relatedEntity.trim()}:${join}`;
+    private compiledIncumbent(
+        key: string,
+        snapshot: FormCompositionSnapshot | null,
+        entity: EntityInfo,
+        provider: IMetadataProvider,
+    ): { Title: string; Precedence: number } | null {
+        if (snapshot) return snapshot.Contributions.find(c => c.Key === key && c.Source === 'class') ?? null;
+        const registration = CollectFormContributionRegistrations(entity, provider).find(reg =>
+            reg.Source === 'class'
+            && (reg.Metadata.entity === '*' || reg.Metadata.entity === entity.Name)
+            && ResolveContributionWriteKey(reg.Metadata, reg.Metadata.relatedEntity ?? null) === key);
+        return registration ? { Title: registration.Title ?? key, Precedence: registration.Priority } : null;
+    }
+
+    /** The registered name of the entity a grid claim names, which the write path derives the key from. */
+    private relatedEntityName(contribution: FormContributionSpec, provider: IMetadataProvider): string | null {
+        const name = contribution.relatedEntity?.trim();
+        if (!name) return null;
+        return provider.EntityByName(name)?.Name ?? name;
     }
 
     private async createContribution(
@@ -488,27 +541,25 @@ export class InteractiveFormApplyService {
     /**
      * The caller's own live row for this panel, or undefined when there is none.
      *
-     * `contributionKey` is the declared identity and is matched first. A spec that
-     * declares none still has one — the component name — and matching on it is what
-     * stops a second apply of the same panel installing a second copy beside the
-     * first. Without that fallback an identity-less panel is unrecognizable to its
-     * own next apply, and the form grows a duplicate on every press.
+     * Matched by the key the write path derives, which for a panel that claims no other
+     * panel and no grid is `panel:<component name>`. Such a panel is also matched by its
+     * component name on a row that carries a panel key, because Modify keeps a panel's key
+     * when it renames the component.
      */
     private findExistingContribution(
         rows: ParsedContribution[],
         key: string | null,
+        placed: FormContributionSpec,
         componentName: string | undefined,
     ): ParsedContribution | undefined {
+        if (!key) return undefined;
         const mine = rows.filter(c =>
             c.Scope === 'User' && (c.Status === 'Active' || c.Status === 'Pending'));
-
-        if (key) {
-            return mine.find(c => c.ContributionKey === key);
-        }
-
+        const byKey = mine.find(c => c.ContributionKey === key);
+        const keyless = !placed.contributionKey?.trim() && !placed.relatedEntity?.trim();
         const name = componentName?.trim();
-        if (!name) return undefined;
-        return mine.find(c => !c.ContributionKey && c.ComponentName?.trim() === name);
+        if (byKey || !keyless || !name) return byKey;
+        return mine.find(c => IsPanelContributionKey(c.ContributionKey) && c.ComponentName?.trim() === name);
     }
 
     private parseContributions(message: string | undefined): ParsedContribution[] {
