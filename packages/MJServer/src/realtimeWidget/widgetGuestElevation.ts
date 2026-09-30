@@ -22,19 +22,19 @@ const WIDGET_ENTITY = 'MJ: Conversation Widget Instances';
 
 /**
  * Resolved elevation context for a widget-guest agent run. Returned only when the request is a
- * widget guest; the dispatch resolver runs the agent under {@link WidgetGuestRunContext.elevatedUser}
- * with {@link WidgetGuestRunContext.pinnedAgentId} (authoritative), keeping ownership checks under
+ * widget guest; the dispatch resolver runs the agent under {@link WidgetGuestRunContext.ElevatedUser}
+ * with {@link WidgetGuestRunContext.PinnedAgentId} (authoritative), keeping ownership checks under
  * the guest principal.
  */
 export interface WidgetGuestRunContext {
   /** The trusted server principal under which the agent run (and its run-entity writes) executes. */
-  elevatedUser: UserInfo;
+  ElevatedUser: UserInfo;
   /** The widget instance the guest session is bound to (authoritative config). */
-  widget: MJConversationWidgetInstanceEntity;
+  Widget: MJConversationWidgetInstanceEntity;
   /** The authoritative pinned support agent id — overrides any client-supplied agent id (D5). */
-  pinnedAgentId: string;
+  PinnedAgentId: string;
   /** The guest's per-session scope id (Conversation.ExternalID), used to validate conversation ownership. */
-  sessionScopeId?: string;
+  SessionScopeId?: string;
 }
 
 /**
@@ -47,7 +47,7 @@ export interface WidgetGuestRunContext {
  * Never throws: a resolution failure (no system user, widget not found, read error) returns `null`,
  * so the caller falls back to the normal (guest-principal) path rather than failing the request.
  */
-export async function resolveWidgetGuestRunContext(
+export async function ResolveWidgetGuestRunContext(
   userPayload: UserPayload,
   provider: DatabaseProviderBase,
 ): Promise<WidgetGuestRunContext | null> {
@@ -70,11 +70,19 @@ export async function resolveWidgetGuestRunContext(
   }
 
   return {
-    elevatedUser,
-    widget,
-    pinnedAgentId: widget.PinnedAgentID,
-    sessionScopeId: guest.MagicLinkScope?.ResourceID,
+    ElevatedUser: elevatedUser,
+    Widget: widget,
+    PinnedAgentId: widget.PinnedAgentID,
+    SessionScopeId: guest.MagicLinkScope?.ResourceID,
   };
+}
+
+/** @deprecated Use {@link ResolveWidgetGuestRunContext}. */
+export async function resolveWidgetGuestRunContext(
+  userPayload: UserPayload,
+  provider: DatabaseProviderBase,
+): Promise<WidgetGuestRunContext | null> {
+  return ResolveWidgetGuestRunContext(userPayload, provider);
 }
 
 /**
@@ -123,13 +131,18 @@ export function ResolveScopedAnonymousRunUser(contextUser: UserInfo): UserInfo {
  * preserving the guest's `sessionId` — so progress/streaming PubSub still routes to the guest's
  * live websocket, but all AI run-entity writes happen under the trusted server principal.
  */
-export function elevateUserPayload(userPayload: UserPayload, elevatedUser: UserInfo): UserPayload {
+export function ElevateUserPayload(userPayload: UserPayload, elevatedUser: UserInfo): UserPayload {
   return {
     ...userPayload,
     email: elevatedUser.Email,
     userRecord: elevatedUser,
     isSystemUser: true,
   };
+}
+
+/** @deprecated Use {@link ElevateUserPayload}. */
+export function elevateUserPayload(userPayload: UserPayload, elevatedUser: UserInfo): UserPayload {
+  return ElevateUserPayload(userPayload, elevatedUser);
 }
 
 /** Loads a single widget instance by id under the elevated principal (read-only). */

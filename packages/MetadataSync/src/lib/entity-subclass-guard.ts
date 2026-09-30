@@ -59,7 +59,17 @@ function describeConsequence(options: MissingEntitySubclassOptions): string {
   );
 }
 
+/** @deprecated Use {@link DescribeMissingEntitySubclass}. */
+export function describeMissingEntitySubclass(entityName: string, options: { dryRun?: boolean } = {}): string | null {
+  return DescribeMissingEntitySubclass(entityName, options);
+}
+
 /** Test seam: forget which entities have been reported. */
-export function resetMissingEntitySubclassWarnings(): void {
+export function ResetMissingEntitySubclassWarnings(): void {
   warned.clear();
+}
+
+/** @deprecated Use {@link ResetMissingEntitySubclassWarnings}. */
+export function resetMissingEntitySubclassWarnings(): void {
+  return ResetMissingEntitySubclassWarnings();
 }

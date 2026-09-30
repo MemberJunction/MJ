@@ -123,24 +123,28 @@ vi.mock('@memberjunction/ai-vectordb', () => ({
     BaseResponse: vi.fn(),
 }));
 
-vi.mock('@memberjunction/global', () => ({
-    MJGlobal: {
-        Instance: {
-            ClassFactory: {
-                CreateInstance: vi.fn().mockReturnValue({
-                    EmbedTexts: vi.fn().mockResolvedValue({ vectors: [[0.1, 0.2], [0.3, 0.4]] }),
-                    queryIndex: vi.fn().mockResolvedValue({ success: true, data: { matches: [] } }),
-                    HybridQuery: vi.fn().mockResolvedValue({ success: true, data: { matches: [] } }),
-                    SupportsHybridSearch: false,
-                }),
+vi.mock('@memberjunction/global', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/global')>();
+    return {
+        ...actual,
+        MJGlobal: {
+            Instance: {
+                ClassFactory: {
+                    CreateInstance: vi.fn().mockReturnValue({
+                        EmbedTexts: vi.fn().mockResolvedValue({ vectors: [[0.1, 0.2], [0.3, 0.4]] }),
+                        queryIndex: vi.fn().mockResolvedValue({ success: true, data: { matches: [] } }),
+                        HybridQuery: vi.fn().mockResolvedValue({ success: true, data: { matches: [] } }),
+                        SupportsHybridSearch: false,
+                    }),
+                },
             },
         },
-    },
-    UUIDsEqual: vi.fn((a: string, b: string) => a === b),
-    // No-op decorator stub — the Compare Remote Operation (transitively loaded via
-    // @memberjunction/record-comparison) is decorated with @RegisterClass at module load.
-    RegisterClass: () => () => { /* no-op */ },
-}));
+        UUIDsEqual: vi.fn((a: string, b: string) => a === b),
+        // No-op decorator stub — the Compare Remote Operation (transitively loaded via
+        // @memberjunction/record-comparison) is decorated with @RegisterClass at module load.
+        RegisterClass: () => () => { /* no-op */ },
+    };
+});
 
 vi.mock('@memberjunction/core-entities', () => ({
     MJDuplicateRunDetailEntity: vi.fn(),

@@ -3,7 +3,7 @@ import { UserInfo } from "./securityInfo";
 import { EntityDependency, EntityFieldInfo, EntityFieldTSType, EntityInfo, EntityPermissionType, RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult } from "./entityInfo";
 import { BaseEntity, BaseEntityResult, RecordChangePayload, RecordChangeSource, RestoreContext } from "./baseEntity";
 import { EntitySaveOptions, EntityDeleteOptions, EntityMergeOptions, PotentialDuplicateRequest, PotentialDuplicateResponse, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
-import { dispatchRemoteOperationInProcess } from "./remoteOperationDispatch";
+import { DispatchRemoteOperationInProcess } from "./remoteOperationDispatch";
 import { TransactionItem } from "./transactionGroup";
 import { CompositeKey } from "./compositeKey";
 import { EntityTransactionScope } from "./entityTransactionScope";
@@ -140,7 +140,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         } catch {
             // CurrentUser is unavailable until the provider is configured — rely on options.user instead.
         }
-        return dispatchRemoteOperationInProcess<TInput, TOutput>(operationKey, input, options, this, fallbackUser);
+        return DispatchRemoteOperationInProcess<TInput, TOutput>(operationKey, input, options, this, fallbackUser);
     }
 
     /**
@@ -2361,6 +2361,19 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         const e = this.EntityByName(request.EntityName);
         if (!e || !e.AllowRecordMerge)
             throw new Error(`Entity ${request.EntityName} does not allow record merging, check the AllowRecordMerge property in the entity metadata`);
+
+        // IS-A records: the dependency pass below re-points only the foreign keys that target this
+        // entity, and BaseEntity.Delete follows the shared key into the loser's subtype and parent
+        // rows, whose own references never moved. Refuse rather than half-merge.
+        if (e.ParentID)
+            throw new Error(`Entity ${request.EntityName} is an IS-A subtype; merging subtype records is not supported yet`);
+        if (e.ChildEntities.length > 0) {
+            for (const key of [request.SurvivingRecordCompositeKey, ...request.RecordsToMerge]) {
+                const child = await this.FindISAChildEntity(e, key.Values(), contextUser);
+                if (child)
+                    throw new Error(`Record ${key.ToString()} of ${request.EntityName} has a ${child.ChildEntityName} subtype row; merging records another entity extends is not supported yet`);
+            }
+        }
 
         const result: RecordMergeResult = {
             Success: false,

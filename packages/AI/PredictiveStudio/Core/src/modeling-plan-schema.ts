@@ -67,7 +67,7 @@ export type PlanValidationResult =
  * `value` on success or a single flattened, human-readable `error` string on
  * failure (suitable for an Action's VALIDATION_ERROR message).
  */
-export function validateModelingPlanSpec(raw: unknown): PlanValidationResult {
+export function ValidateModelingPlanSpec(raw: unknown): PlanValidationResult {
   const parsed = ModelingPlanSpecSchema.safeParse(raw);
   if (parsed.success) {
     return { ok: true, value: parsed.data as unknown as ModelingPlanSpec };
@@ -75,16 +75,26 @@ export function validateModelingPlanSpec(raw: unknown): PlanValidationResult {
   return { ok: false, error: formatZodError(parsed.error) };
 }
 
+/** @deprecated Use {@link ValidateModelingPlanSpec}. */
+export function validateModelingPlanSpec(raw: unknown): PlanValidationResult {
+  return ValidateModelingPlanSpec(raw);
+}
+
 /**
  * Validate an untrusted value as a {@link Budget}. Returns the typed budget or a
  * flattened error string.
  */
-export function validateBudget(raw: unknown): { ok: true; value: Budget } | { ok: false; error: string } {
+export function ValidateBudget(raw: unknown): { ok: true; value: Budget } | { ok: false; error: string } {
   const parsed = BudgetSchema.safeParse(raw);
   if (parsed.success) {
     return { ok: true, value: parsed.data as Budget };
   }
   return { ok: false, error: formatZodError(parsed.error) };
+}
+
+/** @deprecated Use {@link ValidateBudget}. */
+export function validateBudget(raw: unknown): { ok: true; value: Budget } | { ok: false; error: string } {
+  return ValidateBudget(raw);
 }
 
 /** Flatten a ZodError into a single `path: message; …` string. */

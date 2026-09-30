@@ -170,9 +170,14 @@ export class NavigationService implements OnDestroy {
    * Clears the cached Home app info.
    * Call this if apps are reloaded or user logs out.
    */
-  public clearHomeAppCache(): void {
+  public ClearHomeAppCache(): void {
     this._homeAppId = undefined;
     this._homeAppColor = null;
+  }
+
+  /** @deprecated Use {@link ClearHomeAppCache}. */
+  public clearHomeAppCache(): void {
+    return this.ClearHomeAppCache();
   }
 
   // ════════════════════════════════════════════

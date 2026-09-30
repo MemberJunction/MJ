@@ -130,34 +130,80 @@ export class PSModelsResourceComponent extends PSResourceBase {
 
   private readonly cdrLocal = inject(ChangeDetectorRef);
 
-  public activeSection: PSPanelKey = 'registry';
+  public ActiveSection: PSPanelKey = 'registry';
+
+  /** @deprecated Use {@link ActiveSection}. */
+  public get activeSection(): PSPanelKey {
+    return this.ActiveSection;
+  }
+  /** @deprecated Use {@link ActiveSection}. */
+  public set activeSection(value: PSPanelKey) {
+    this.ActiveSection = value;
+  }
   public readonly sections: readonly PSSection[] = MODELS_SECTIONS;
-  public initialModelId?: string;
-  public isNavCollapsed = false;
-  public navSizePct = 14;
-  public contentSizePct = 86;
+  public initialModelId?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  public IsNavCollapsed = false;
+
+  /** @deprecated Use {@link IsNavCollapsed}. */
+  public get isNavCollapsed() {
+    return this.IsNavCollapsed;
+  }
+  /** @deprecated Use {@link IsNavCollapsed}. */
+  public set isNavCollapsed(value) {
+    this.IsNavCollapsed = value;
+  }
+  public NavSizePct = 14;
+
+  /** @deprecated Use {@link NavSizePct}. */
+  public get navSizePct() {
+    return this.NavSizePct;
+  }
+  /** @deprecated Use {@link NavSizePct}. */
+  public set navSizePct(value) {
+    this.NavSizePct = value;
+  }
+  public ContentSizePct = 86;
+
+  /** @deprecated Use {@link ContentSizePct}. */
+  public get contentSizePct() {
+    return this.ContentSizePct;
+  }
+  /** @deprecated Use {@link ContentSizePct}. */
+  public set contentSizePct(value) {
+    this.ContentSizePct = value;
+  }
 
   override ngOnInit(): void {
     super.ngOnInit();
     const qp = this.GetQueryParams();
     const initial = qp['section'] as PSPanelKey | undefined;
-    if (initial && hasSection(this.sections, initial)) this.activeSection = initial;
+    if (initial && hasSection(this.sections, initial)) this.ActiveSection = initial;
     if (qp['modelId']) this.initialModelId = qp['modelId'];
     this.loadLayoutPrefs();
   }
 
-  public toggleNav(): void {
-    this.isNavCollapsed = !this.isNavCollapsed;
+  public ToggleNav(): void {
+    this.IsNavCollapsed = !this.IsNavCollapsed;
     this.saveLayoutPrefs();
     this.cdrLocal.detectChanges();
   }
 
-  public onSplitDragEnd(sizes: readonly (number | '*')[]): void {
+  /** @deprecated Use {@link ToggleNav}. */
+  public toggleNav(): void {
+    return this.ToggleNav();
+  }
+
+  public OnSplitDragEnd(sizes: readonly (number | '*')[]): void {
     if (Array.isArray(sizes) && sizes.length === 2 && typeof sizes[0] === 'number' && typeof sizes[1] === 'number') {
-      this.navSizePct = Math.round(sizes[0]);
-      this.contentSizePct = Math.round(sizes[1]);
+      this.NavSizePct = Math.round(sizes[0]);
+      this.ContentSizePct = Math.round(sizes[1]);
       this.saveLayoutPrefs();
     }
+  }
+
+  /** @deprecated Use {@link OnSplitDragEnd}. */
+  public onSplitDragEnd(sizes: readonly (number | '*')[]): void {
+    return this.OnSplitDragEnd(sizes);
   }
 
   private loadLayoutPrefs(): void {
@@ -166,11 +212,11 @@ export class PSModelsResourceComponent extends PSResourceBase {
       try {
         const parsed = JSON.parse(raw);
         if (typeof parsed.navSizePct === 'number' && parsed.navSizePct >= 10 && parsed.navSizePct <= 35) {
-          this.navSizePct = parsed.navSizePct;
-          this.contentSizePct = 100 - parsed.navSizePct;
+          this.NavSizePct = parsed.navSizePct;
+          this.ContentSizePct = 100 - parsed.navSizePct;
         }
         if (typeof parsed.isNavCollapsed === 'boolean') {
-          this.isNavCollapsed = parsed.isNavCollapsed;
+          this.IsNavCollapsed = parsed.isNavCollapsed;
         }
       } catch {}
     }
@@ -178,17 +224,17 @@ export class PSModelsResourceComponent extends PSResourceBase {
 
   private saveLayoutPrefs(): void {
     const prefs = {
-      navSizePct: this.navSizePct,
-      contentSizePct: this.contentSizePct,
-      isNavCollapsed: this.isNavCollapsed,
+      navSizePct: this.NavSizePct,
+      contentSizePct: this.ContentSizePct,
+      isNavCollapsed: this.IsNavCollapsed,
     };
     UserInfoEngine.Instance.SetSettingDebounced('mj.predictiveStudio.models.layout', JSON.stringify(prefs));
   }
 
   protected override async OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): Promise<void> {
     const next = params['section'] as PSPanelKey | undefined;
-    if (next && next !== this.activeSection && hasSection(this.sections, next)) {
-      this.activeSection = next;
+    if (next && next !== this.ActiveSection && hasSection(this.sections, next)) {
+      this.ActiveSection = next;
     }
     if (params['modelId']) {
       this.initialModelId = params['modelId'];
@@ -203,8 +249,8 @@ export class PSModelsResourceComponent extends PSResourceBase {
   protected override extraAgentContext(): Record<string, unknown> {
     const models = this.engine.Models;
     return buildModelsAgentContext({
-      ActiveSection: this.activeSection,
-      ActiveSectionLabel: this.activeLabel,
+      ActiveSection: this.ActiveSection,
+      ActiveSectionLabel: this.ActiveLabel,
       SectionLabels: this.sections.map((s) => s.label),
       TotalModelCount: models.length,
       PublishedModelCount: this.engine.PublishedModels.length,
@@ -237,22 +283,42 @@ export class PSModelsResourceComponent extends PSResourceBase {
     ]);
   }
 
-  public get groups(): string[] { return sectionGroups(this.sections); }
-  public itemsForGroup(group: string): PSSection[] { return sectionsInGroup(this.sections, group); }
-  public get activeLabel(): string { return sectionLabel(this.sections, this.activeSection); }
+  public get Groups(): string[] { return sectionGroups(this.sections); }
+
+  /** @deprecated Use {@link Groups}. */
+  public get groups(): string[] {
+    return this.Groups;
+  }
+  public ItemsForGroup(group: string): PSSection[] { return sectionsInGroup(this.sections, group); }
+
+  /** @deprecated Use {@link ItemsForGroup}. */
+  public itemsForGroup(group: string): PSSection[] {
+    return this.ItemsForGroup(group);
+  }
+  public get ActiveLabel(): string { return sectionLabel(this.sections, this.ActiveSection); }
+
+  /** @deprecated Use {@link ActiveLabel}. */
+  public get activeLabel(): string {
+    return this.ActiveLabel;
+  }
 
   /** Section-specific subtitle for the interior header. */
-  public get activeSubtitle(): string {
+  public get ActiveSubtitle(): string {
     const map: Record<string, string> = {
       registry: 'Versioned trained models, their metrics, and lineage.',
       production: "What's scoring live, and its recent runs.",
     };
-    return map[this.activeSection] ?? '';
+    return map[this.ActiveSection] ?? '';
+  }
+
+  /** @deprecated Use {@link ActiveSubtitle}. */
+  public get activeSubtitle(): string {
+    return this.ActiveSubtitle;
   }
 
   public selectSection(key: PSPanelKey): void {
-    if (this.activeSection === key) return;
-    this.activeSection = key;
+    if (this.ActiveSection === key) return;
+    this.ActiveSection = key;
     this.UpdateQueryParams({ section: key });
     this.publishAgentContext();
     this.cdrLocal.detectChanges();

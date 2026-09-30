@@ -13,7 +13,16 @@ export class PinnedMessagesPanelComponent {
    * a stable reference between real changes is what keeps this input from re-firing every
    * change detection cycle. The panel renders it; it never mutates it.
    */
-  @Input() public pinnedMessages: readonly MJConversationDetailEntity[] = [];
+  @Input() public PinnedMessages: readonly MJConversationDetailEntity[] = [];
+
+  /** @deprecated Use {@link PinnedMessages}. */
+  @Input() public set pinnedMessages(value: readonly MJConversationDetailEntity[]) {
+    this.PinnedMessages = value;
+  }
+  /** @deprecated Use {@link PinnedMessages}. */
+  public get pinnedMessages(): readonly MJConversationDetailEntity[] {
+    return this.PinnedMessages;
+  }
 
   /**
    * True during the panel's first open, while its rows are being fetched.
@@ -21,34 +30,79 @@ export class PinnedMessagesPanelComponent {
    * Pins are no longer loaded during conversation open — the open path reads only a count —
    * so the panel can now render before its contents exist.
    */
-  @Input() public isLoading = false;
+  @Input() public IsLoading = false;
 
-  @Output() public closed = new EventEmitter<void>();
-  @Output() public jumpRequested = new EventEmitter<string>(); // emits messageId
-  @Output() public unpinRequested = new EventEmitter<MJConversationDetailEntity>();
+  /** @deprecated Use {@link IsLoading}. */
+  @Input() public set isLoading(value: PinnedMessagesPanelComponent['IsLoading']) {
+    this.IsLoading = value;
+  }
+  /** @deprecated Use {@link IsLoading}. */
+  public get isLoading(): PinnedMessagesPanelComponent['IsLoading'] {
+    return this.IsLoading;
+  }
+
+  @Output() public Closed = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link Closed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (closed) keeps working. Must stay AFTER Closed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public closed = this.Closed;
+  @Output() public JumpRequested = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link JumpRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (jumpRequested) keeps working. Must stay AFTER JumpRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public jumpRequested = this.JumpRequested; // emits messageId
+  @Output() public UnpinRequested = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * @deprecated Use {@link UnpinRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (unpinRequested) keeps working. Must stay AFTER UnpinRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public unpinRequested = this.UnpinRequested;
 
   /** IDs currently being removed (for fade-out animation) */
-  public unpinningIds = new Set<string>();
+  public UnpinningIds = new Set<string>();
+
+  /** @deprecated Use {@link UnpinningIds}. */
+  public get unpinningIds() {
+    return this.UnpinningIds;
+  }
+  /** @deprecated Use {@link UnpinningIds}. */
+  public set unpinningIds(value) {
+    this.UnpinningIds = value;
+  }
 
   public Close(): void {
-    this.closed.emit();
+    this.Closed.emit();
   }
 
   public OnJump(message: MJConversationDetailEntity): void {
-    this.jumpRequested.emit(message.ID);
+    this.JumpRequested.emit(message.ID);
   }
 
   public OnUnpin(message: MJConversationDetailEntity): void {
-    this.unpinningIds.add(message.ID);
+    this.UnpinningIds.add(message.ID);
     // Let the card animate out before the parent removes it from the list
     setTimeout(() => {
-      this.unpinningIds.delete(message.ID);
-      this.unpinRequested.emit(message);
+      this.UnpinningIds.delete(message.ID);
+      this.UnpinRequested.emit(message);
     }, 200);
   }
 
   public IsUnpinning(message: MJConversationDetailEntity): boolean {
-    return this.unpinningIds.has(message.ID);
+    return this.UnpinningIds.has(message.ID);
   }
 
   /** Strip markdown to plain prose for card preview */

@@ -21,11 +21,11 @@ function listItem(over: ListItemOverrides = {}): ConversationListItem {
     const entity = { ID: 'c1', Name: 'Chat', IsPinned: false, ...(entityOver ?? {}) };
     return {
         entity: entity as unknown as ConversationListItem['entity'],
-        latestSnippet: 'hello',
-        latestAt: new Date(),
+        LatestSnippet: 'hello',
+        LatestAt: new Date(),
         live: false,
-        agentIds: [],
-        agentNames: [],
+        AgentIds: [],
+        AgentNames: [],
         messageCount: 3,
         ...rest,
     };
@@ -68,30 +68,30 @@ describe('adapt', () => {
     describe('AdaptConversationToSummary', () => {
         it('maps core fields and falls back for empty title/snippet', () => {
             const summary = AdaptConversationToSummary(
-                listItem({ entity: { ID: 'c9', Name: null, IsPinned: true }, latestSnippet: null, messageCount: 7, live: true }),
+                listItem({ entity: { ID: 'c9', Name: null, IsPinned: true }, LatestSnippet: null, messageCount: 7, live: true }),
             );
-            expect(summary.id).toBe('c9');
-            expect(summary.title).toBe('(untitled)');
-            expect(summary.snippet).toBe('(no messages yet)');
-            expect(summary.messageCount).toBe(7);
-            expect(summary.live).toBe(true);
-            expect(summary.pinned).toBe(true);
+            expect(summary.Id).toBe('c9');
+            expect(summary.Title).toBe('(untitled)');
+            expect(summary.Snippet).toBe('(no messages yet)');
+            expect(summary.MessageCount).toBe(7);
+            expect(summary.Live).toBe(true);
+            expect(summary.Pinned).toBe(true);
         });
 
         it('synthesizes a single fallback agent when none participated', () => {
-            const summary = AdaptConversationToSummary(listItem({ agentIds: [], agentNames: [] }));
-            expect(summary.agents).toHaveLength(1);
-            expect(summary.agents[0].name).toBe('Skip');
-            expect(summary.agents[0].color).toBe(Colors.agentFallback);
+            const summary = AdaptConversationToSummary(listItem({ AgentIds: [], AgentNames: [] }));
+            expect(summary.Agents).toHaveLength(1);
+            expect(summary.Agents[0].name).toBe('Skip');
+            expect(summary.Agents[0].color).toBe(Colors.agentFallback);
         });
 
         it('builds one participant per agent id with resolved colors/initials', () => {
             const summary = AdaptConversationToSummary(
-                listItem({ agentIds: ['a1', 'a2'], agentNames: ['Research', 'Analyst'] }),
+                listItem({ AgentIds: ['a1', 'a2'], AgentNames: ['Research', 'Analyst'] }),
             );
-            expect(summary.agents).toHaveLength(2);
-            expect(summary.agents[0]).toMatchObject({ id: 'a1', name: 'Research', color: Colors.agentResearch, initial: 'R' });
-            expect(summary.agents[1]).toMatchObject({ id: 'a2', name: 'Analyst', color: Colors.agentAnalyst, initial: 'A' });
+            expect(summary.Agents).toHaveLength(2);
+            expect(summary.Agents[0]).toMatchObject({ id: 'a1', name: 'Research', color: Colors.agentResearch, initial: 'R' });
+            expect(summary.Agents[1]).toMatchObject({ id: 'a2', name: 'Analyst', color: Colors.agentAnalyst, initial: 'A' });
         });
     });
 
@@ -104,16 +104,16 @@ describe('adapt', () => {
             lastWeek.setDate(now.getDate() - 8);
 
             const grouped = GroupConversations([
-                listItem({ entity: { ID: 'p', Name: 'Pinned', IsPinned: true }, latestAt: lastWeek }),
-                listItem({ entity: { ID: 't', Name: 'Today' }, latestAt: now }),
-                listItem({ entity: { ID: 'y', Name: 'Yest' }, latestAt: yesterday }),
-                listItem({ entity: { ID: 'e', Name: 'Earlier' }, latestAt: lastWeek }),
+                listItem({ entity: { ID: 'p', Name: 'Pinned', IsPinned: true }, LatestAt: lastWeek }),
+                listItem({ entity: { ID: 't', Name: 'Today' }, LatestAt: now }),
+                listItem({ entity: { ID: 'y', Name: 'Yest' }, LatestAt: yesterday }),
+                listItem({ entity: { ID: 'e', Name: 'Earlier' }, LatestAt: lastWeek }),
             ]);
 
-            expect(grouped.pinned.map((s) => s.id)).toEqual(['p']);
-            expect(grouped.today.map((s) => s.id)).toEqual(['t']);
-            expect(grouped.yesterday.map((s) => s.id)).toEqual(['y']);
-            expect(grouped.earlier.map((s) => s.id)).toEqual(['e']);
+            expect(grouped.Pinned.map((s) => s.Id)).toEqual(['p']);
+            expect(grouped.Today.map((s) => s.Id)).toEqual(['t']);
+            expect(grouped.Yesterday.map((s) => s.Id)).toEqual(['y']);
+            expect(grouped.Earlier.map((s) => s.Id)).toEqual(['e']);
         });
     });
 
@@ -144,23 +144,23 @@ describe('adapt', () => {
             );
             expect(m.kind).toBe('agent');
             if (m.kind === 'agent') {
-                expect(m.body).toBe('the answer');
-                expect(m.agent.name).toBe('Sage');
-                expect(m.completionMs).toBe(1234);
-                expect(m.suggestedResponses).toEqual(['a', 'b', 'c', 'd']);
+                expect(m.Body).toBe('the answer');
+                expect(m.Agent.name).toBe('Sage');
+                expect(m.CompletionMs).toBe(1234);
+                expect(m.SuggestedResponses).toEqual(['a', 'b', 'c', 'd']);
             }
         });
 
         it('tolerates malformed suggested-responses JSON', () => {
             const m = AdaptMessage(message({ ID: 'm3', Role: 'AI', Message: 'x', SuggestedResponses: '{not json' }));
-            if (m.kind === 'agent') expect(m.suggestedResponses).toEqual([]);
+            if (m.kind === 'agent') expect(m.SuggestedResponses).toEqual([]);
         });
 
         it('defaults status to Complete and falls back to Error text for empty message', () => {
             const m = AdaptMessage(message({ ID: 'm4', Role: 'Error', Message: null, Error: 'boom', Status: null }));
             if (m.kind === 'agent') {
-                expect(m.status).toBe('Complete');
-                expect(m.body).toBe('boom');
+                expect(m.Status).toBe('Complete');
+                expect(m.Body).toBe('boom');
             }
         });
     });
@@ -168,14 +168,14 @@ describe('adapt', () => {
     describe('AdaptConversation', () => {
         it('dedupes participants, counts messages, and flags live', () => {
             const load: ConversationDetailLoad = {
-                conversation: { ID: 'c1', Name: 'My Chat' } as unknown as ConversationDetailLoad['conversation'],
-                messages: [
+                Conversation: { ID: 'c1', Name: 'My Chat' } as unknown as ConversationDetailLoad['Conversation'],
+                Messages: [
                     message({ ID: '1', Role: 'User', Message: 'q' }),
                     message({ ID: '2', Role: 'AI', Message: 'a', AgentID: 'a1', Status: 'Complete' }, 'Sage'),
                     message({ ID: '3', Role: 'AI', Message: '', AgentID: 'a1', Status: 'In-Progress' }, 'Sage'),
                 ],
-                artifacts: [],
-                sessionMeta: new Map(),
+                Artifacts: [],
+                SessionMeta: new Map(),
             };
             const adapted = AdaptConversation(load);
             expect(adapted.id).toBe('c1');
@@ -203,32 +203,32 @@ describe('mention tokens in titles and snippets', () => {
         const row = AdaptConversationToSummary(
             listItem({ entity: { ID: 'c1', Name: `${MENTION} what is on my plate` } }),
         );
-        expect(row.title).toBe('@Sage what is on my plate');
-        expect(row.title).not.toContain('{"type"');
+        expect(row.Title).toBe('@Sage what is on my plate');
+        expect(row.Title).not.toContain('{"type"');
     });
 
     it('renders a mention in the list snippet as the display name', () => {
         const row = AdaptConversationToSummary(
-            listItem({ latestSnippet: `${MENTION} how is the pipeline` }),
+            listItem({ LatestSnippet: `${MENTION} how is the pipeline` }),
         );
-        expect(row.snippet).toBe('@Sage how is the pipeline');
+        expect(row.Snippet).toBe('@Sage how is the pipeline');
     });
 
     it('renders a mention in the thread header title as the display name', () => {
         const adapted = AdaptConversation({
-            conversation: { ID: 'c1', Name: `${MENTION} pipeline` } as unknown as ConversationDetailLoad['conversation'],
-            messages: [],
-            artifacts: [],
-            sessionMeta: new Map(),
+            Conversation: { ID: 'c1', Name: `${MENTION} pipeline` } as unknown as ConversationDetailLoad['Conversation'],
+            Messages: [],
+            Artifacts: [],
+            SessionMeta: new Map(),
         });
         expect(adapted.title).toBe('@Sage pipeline');
     });
 
     it('still falls back when the name and snippet are absent', () => {
         const row = AdaptConversationToSummary(
-            listItem({ entity: { ID: 'c1', Name: null }, latestSnippet: null }),
+            listItem({ entity: { ID: 'c1', Name: null }, LatestSnippet: null }),
         );
-        expect(row.title).toBe('(untitled)');
-        expect(row.snippet).toBe('(no messages yet)');
+        expect(row.Title).toBe('(untitled)');
+        expect(row.Snippet).toBe('(no messages yet)');
     });
 });

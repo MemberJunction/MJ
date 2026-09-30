@@ -46,7 +46,7 @@ import type { LoopAgentResponse } from '../agent-types/loop-agent-response-type'
 import type { AgentPreExecutionRAGResult } from '../agent-pre-execution-rag';
 import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { RecordToolCallingDecision } from '@memberjunction/ai-prompts';
-import { sanitizeToolName } from '../native-tools/action-tool-builder';
+import { SanitizeToolName } from '../native-tools/action-tool-builder';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
 // ============================================================================
@@ -486,7 +486,7 @@ function llmEnvelope(envelope: LoopAgentResponse): AIPromptRunResult {
 function llmNativeActionCall(toolCallId: string, toolResults: boolean): AIPromptRunResult {
     const chatResult = {
         success: true,
-        data: { choices: [{ message: { role: 'assistant', content: '', toolCalls: [{ id: toolCallId, name: sanitizeToolName(ACTION_NAME), arguments: { foo: 'bar' } }] } }] },
+        data: { choices: [{ message: { role: 'assistant', content: '', toolCalls: [{ id: toolCallId, name: SanitizeToolName(ACTION_NAME), arguments: { foo: 'bar' } }] } }] },
     } as unknown as AIPromptRunResult['chatResult'];
     RecordToolCallingDecision(chatResult, { useNativeTools: true, mode: 'Native', controlFlow: 'envelope', toolResults });
     // What the real runner hands back for a tool-call-only turn: parseAndValidate returns `{ result: null }`
@@ -645,7 +645,9 @@ describe('BaseAgent.Execute — full loop: prompt → actions → prompt → fin
         const contents = params.conversationMessages.map((m) => (typeof m.content === 'string' ? m.content : ''));
         expect(contents.some((c) => c.includes(`You invoked the **${ACTION_NAME}** action`))).toBe(true);
         expect(contents.some((c) => c.startsWith('Action results:'))).toBe(true);
-        expect(runner.Calls[1].conversationMessages).toBe(params.conversationMessages);
+        // Prompt 2 received the conversation history with the trailing runtime state fragment appended
+        expect(runner.Calls[1].conversationMessages.slice(0, -1)).toEqual(params.conversationMessages);
+        expect(runner.Calls[1].conversationMessages.at(-1)?.metadata?.volatileState).toBe(true);
     });
 });
 
@@ -790,12 +792,13 @@ describe('BaseAgent.Execute — native tool results: call turn → tool turn, no
         const next = messages[callIndex + 1];
         expect(next.role).toBe('tool');
         const blocks = next.content as ToolBlock[];
-        expect(blocks.map((b) => [b.type, b.toolCallId, b.toolName, b.isError])).toEqual([['tool_result', 'call_1', sanitizeToolName(ACTION_NAME), false]]);
+        expect(blocks.map((b) => [b.type, b.toolCallId, b.toolName, b.isError])).toEqual([['tool_result', 'call_1', SanitizeToolName(ACTION_NAME), false]]);
         // Neither the "[You invoked …]" recap nor the markdown "Action results:" message exists.
         expect(messages.some((m) => textOf(m).includes('You invoked'))).toBe(false);
         expect(messages.some((m) => textOf(m).startsWith('Action results:'))).toBe(false);
-        // Prompt 2 saw the same array.
-        expect(runner.Calls[1].conversationMessages).toBe(params.conversationMessages);
+        // Prompt 2 saw the conversation messages with the trailing runtime state fragment appended.
+        expect(runner.Calls[1].conversationMessages.slice(0, -1)).toEqual(params.conversationMessages);
+        expect(runner.Calls[1].conversationMessages.at(-1)?.metadata?.volatileState).toBe(true);
     });
 
     it('keeps the recap and the markdown results when the catalog did not ask for native results', async () => {
@@ -940,13 +943,12 @@ describe('BaseAgent.Execute — failure finalization', () => {
         expect(result.success).toBe(true);
         expect(harness.run.Status).toBe('Completed');
 
-        // Surprising-but-real behavior: only actions that THROW count toward the
-        // "N of M action(s) failed" header — a returned Success=false still renders
-        // under the plain "Action results:" header (with its FAILED result code).
+        // When an action returns Success=false, it correctly counts toward the
+        // failed actions header and generates failure guidance for the model.
         const contents = params.conversationMessages.map((m) => (typeof m.content === 'string' ? m.content : ''));
-        const resultsMessage = contents.find((c) => c.includes('Action results:'));
+        const resultsMessage = contents.find((c) => c.includes('action(s) failed:'));
         expect(resultsMessage).toBeDefined();
-        expect(contents.some((c) => c.includes('action(s) failed'))).toBe(false);
+        expect(contents.some((c) => c.includes('Action Execution Failure Guidance'))).toBe(true);
     });
 });
 
@@ -1012,5 +1014,61 @@ describe('BaseAgent.Execute — iteration guardrails', () => {
                 (m) => typeof m.content === 'string' && m.content.includes('Retrying due to:'),
             ),
         ).toBe(true);
+    });
+});
+
+describe('BaseAgent.Execute — a While whose condition cannot be evaluated', () => {
+    // `payload.count =` does not parse, so the loop fails before its first iteration.
+    const badWhile = (): LoopAgentResponse => ({
+        taskComplete: false,
+        reasoning: 'Tick until the count reaches 3',
+        nextStep: { type: 'While', while: { condition: 'payload.count =', itemVariable: 'attempt', action: { name: ACTION_NAME, params: {} } } },
+    });
+    const contentOf = (m: { content: unknown }): string => (typeof m.content === 'string' ? m.content : '');
+
+    it('tells the model why on its next turn, so it can correct the loop', async () => {
+        // The trailing runtime-state fragment (metadata.volatileState) rides as the last message of
+        // EVERY request and is rebuilt each time; it is framework state, not a message the loop added,
+        // so it is excluded before the turns are compared.
+        const realMessages = (p: AIPromptParams): string[] =>
+            (p.conversationMessages ?? [])
+                .filter((m) => (m as { metadata?: { volatileState?: boolean } }).metadata?.volatileState !== true)
+                .map(contentOf);
+        const turns: string[][] = [];
+        const { agent, runner } = makeAgent([
+            (p) => { turns.push(realMessages(p)); return llmEnvelope(badWhile()); },
+            (p) => { turns.push(realMessages(p)); return llmEnvelope(successEnvelope()); },
+        ]);
+
+        const result = await agent.Execute(makeParams({ payload: { count: 0 } }));
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(2);
+        expect(harness.runActionCalls).toHaveLength(0); // the loop body never ran
+        // A Failed loop step is answered by another prompt, and nothing on that path reads the
+        // step's errorMessage. Turn 2 saw exactly one new message: the loop result carrying the error.
+        const added = turns[1].slice(turns[0].length);
+        expect(added).toHaveLength(1);
+        expect(added[0]).toContain("While condition 'payload.count =' could not be evaluated");
+        expect(added[0]).toContain('not a parseable single expression');
+        // The While step itself is recorded as failed with the same message.
+        const whileStep = harness.steps.find((s) => s.StepType === 'While');
+        expect(whileStep?.Status).toBe('Failed');
+        expect(whileStep?.ErrorMessage).toContain('could not be evaluated');
+    });
+
+    it('a model that keeps emitting the bad While is stopped by the per-run iteration limit', async () => {
+        // The consecutive-failed-steps breaker cannot catch this: each prompt's While decision
+        // resets it, so the run alternates Prompt → Failed While until an iteration limit trips.
+        harness.agent = makeAgentRow({ MaxIterationsPerRun: 4 });
+        const { agent, runner } = makeAgent([() => llmEnvelope(badWhile())]);
+
+        const result = await agent.Execute(makeParams({ payload: { count: 0 } }));
+
+        expect(result.success).toBe(false);
+        expect(runner.Calls).toHaveLength(4);
+        expect(harness.run.Status).toBe('Failed');
+        expect(harness.run.ErrorMessage).toContain('Maximum iteration limit of 4 exceeded');
+        expect(harness.steps.filter((s) => s.StepType === 'While').map((s) => s.Status)).toEqual(['Failed', 'Failed', 'Failed']);
     });
 });

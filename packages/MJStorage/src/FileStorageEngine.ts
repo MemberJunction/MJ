@@ -8,7 +8,7 @@ import {
     MJFileStorageProviderEntity
 } from '@memberjunction/core-entities';
 import { FileStorageBase } from './generic/FileStorageBase';
-import { initializeDriverWithAccountCredentials } from './util';
+import { InitializeDriverWithAccountCredentials } from './util';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -235,6 +235,22 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
     }
 
     /**
+     * Calls `Dispose()` on every currently-cached driver before it's dropped. Most driver
+     * implementations no-op (their SDK exposes no explicit teardown), but drivers that do own a
+     * disposable client (e.g. `AWSFileStorage`'s `S3Client`) get their keep-alive sockets
+     * released instead of leaking them for the remainder of the process.
+     */
+    private disposeCachedDrivers(): void {
+        for (const driver of this._driverCache.values()) {
+            try {
+                driver.Dispose();
+            } catch (error) {
+                LogError(`FileStorageEngine: error disposing cached driver: ${error}`);
+            }
+        }
+    }
+
+    /**
      * Initializes storage drivers for all active accounts and caches them.
      * Called automatically during Config(). Can also be called independently to
      * re-initialize drivers without reloading metadata (e.g., after credential rotation).
@@ -242,6 +258,7 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
      * on-demand initialization when GetDriver() is called.
      */
     public async RefreshDriverCache(): Promise<void> {
+        this.disposeCachedDrivers();
         this._driverCache.clear();
 
         const activeAccounts = this.Base.AccountsWithProviders.filter(a => a.provider.IsActive !== false);
@@ -252,7 +269,7 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
         const contextUser = this._contextUser;
         const results = await Promise.allSettled(
             activeAccounts.map(async ({ account, provider: storageProvider }) => {
-                const driver = await initializeDriverWithAccountCredentials({
+                const driver = await InitializeDriverWithAccountCredentials({
                     accountEntity: account,
                     providerEntity: storageProvider,
                     contextUser
@@ -332,7 +349,7 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
             throw new Error(`FileStorageEngine.GetDriver: account '${accountId}' not found in cached metadata. Did you call Config() first?`);
         }
 
-        const driver = await initializeDriverWithAccountCredentials({
+        const driver = await InitializeDriverWithAccountCredentials({
             accountEntity: resolved.account,
             providerEntity: resolved.provider,
             contextUser

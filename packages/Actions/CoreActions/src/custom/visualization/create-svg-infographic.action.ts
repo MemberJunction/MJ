@@ -4,7 +4,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { JSDOM } from 'jsdom';
 import { SVGActionResult, ViewBox, Branding } from './shared/svg-types';
 import { SVGUtils } from './shared/svg-utils';
-import { getPalette, generateCSS, getFontSpec } from './shared/svg-theming';
+import { GetPalette, GenerateCSS, GetFontSpec } from './shared/svg-theming';
 
 /**
  * Panel specification for infographic composition
@@ -169,12 +169,12 @@ export class CreateSVGInfographicAction extends BaseAction {
             const svg = doc.querySelector('svg')!;
 
             // Add styles
-            const css = generateCSS(branding);
+            const css = GenerateCSS(branding);
             SVGUtils.addStyles(svg, css);
 
             // Get palette
-            const palette = getPalette(branding.palette);
-            const font = getFontSpec(branding.font);
+            const palette = GetPalette(branding.palette);
+            const font = GetFontSpec(branding.font);
             const ns = svg.namespaceURI!;
 
             // Add background

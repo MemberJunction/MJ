@@ -42,7 +42,8 @@ import {
     KnowledgeHubMetadataEngine,
 } from "@memberjunction/core-entities";
 import { VectorBase } from "@memberjunction/ai-vectors";
-import { EntityDocumentTemplateParser, EntityVectorSyncer, VectorizeEntityParams } from "@memberjunction/ai-vector-sync";
+import { EntityVectorSyncer, VectorizeEntityParams } from "@memberjunction/ai-vector-sync";
+import { EntityDocumentTemplateParser } from "@memberjunction/entity-documents";
 import { TemplateEngineServer } from "@memberjunction/templates";
 import type { MJTemplateEntityExtended, MJTemplateContentEntity } from "@memberjunction/core-entities";
 import { DuplicateReasoningProvider } from "./reasoning/DuplicateReasoningProvider";
@@ -248,7 +249,7 @@ export class DuplicateRecordDetector extends VectorBase {
             }
 
             const batchIDs = recordIDs.slice(offset, offset + batchSize);
-            const batchResults = await this.ProcessBatch(
+            const batchResults = await this.processBatch(
                 batchIDs, entityInfo, entityDocument, templateParser, duplicateRun.ID,
                 topK, concurrency, options, startTime, recordIDs.length, offset, totalMatchesFound, contextUser
             );
@@ -371,7 +372,7 @@ export class DuplicateRecordDetector extends VectorBase {
      * @param contextUser - The user context for entity operations
      * @returns Combined results and match count for this batch
      */
-    private async ProcessBatch(
+    private async processBatch(
         batchIDs: string[],
         entityInfo: EntityInfo,
         entityDocument: MJEntityDocumentEntity,
@@ -552,6 +553,13 @@ export class DuplicateRecordDetector extends VectorBase {
         // Skip re-initialization if providers are already set for this entity document
         if (this.embedding && this.vectorDB && this.indexName) {
             return;
+        }
+
+        if (!entityDocument.AIModelID) {
+            throw new Error(`Entity Document '${entityDocument.Name}' (${entityDocument.ID}) cannot be used for duplicate detection: AIModelID is required but is null.`);
+        }
+        if (!entityDocument.VectorDatabaseID) {
+            throw new Error(`Entity Document '${entityDocument.Name}' (${entityDocument.ID}) cannot be used for duplicate detection: VectorDatabaseID is required but is null.`);
         }
 
         const aiModel = this.GetAIModel(entityDocument.AIModelID);

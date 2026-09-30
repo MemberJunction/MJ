@@ -2,30 +2,30 @@ import { describe, it, expect } from 'vitest';
 import jwt from 'jsonwebtoken';
 import { createPublicKey, type JsonWebKey } from 'node:crypto';
 import {
-  generateRawToken,
-  hashToken,
-  evaluateInvite,
-  buildSessionClaims,
-  buildConsumeInviteSQL,
-  canIssueInvites,
-  isRoleGrantable,
-  unionScopes,
+  GenerateRawToken,
+  HashToken,
+  EvaluateInvite,
+  BuildSessionClaims,
+  BuildConsumeInvitePostgresSQL,
+  CanIssueInvites,
+  IsRoleGrantable,
+  UnionScopes,
   MAGIC_LINK_TOKEN_PREFIX,
 } from '../auth/magicLink/magicLinkCore.js';
-import { buildRedeemLandingHtml, escapeHtml } from '../auth/magicLink/redeemLanding.js';
+import { BuildRedeemLandingHtml, EscapeHtml } from '../auth/magicLink/redeemLanding.js';
 import { MagicLinkKeyManager } from '../auth/magicLink/MagicLinkKeys.js';
 
 describe('magic-link core', () => {
   describe('generateRawToken', () => {
     it('prefixes tokens and uses 32 bytes of hex entropy', () => {
-      const t = generateRawToken();
+      const t = GenerateRawToken();
       expect(t.startsWith(MAGIC_LINK_TOKEN_PREFIX)).toBe(true);
       const body = t.slice(MAGIC_LINK_TOKEN_PREFIX.length);
       expect(body).toMatch(/^[0-9a-f]{64}$/);
     });
 
     it('produces unique tokens', () => {
-      const set = new Set(Array.from({ length: 100 }, () => generateRawToken()));
+      const set = new Set(Array.from({ length: 100 }, () => GenerateRawToken()));
       expect(set.size).toBe(100);
     });
   });
@@ -33,15 +33,15 @@ describe('magic-link core', () => {
   describe('hashToken', () => {
     it('is deterministic and base64url-encoded sha256 (43 chars, URL-safe alphabet)', () => {
       const raw = 'mj_ml_abc';
-      expect(hashToken(raw)).toBe(hashToken(raw));
+      expect(HashToken(raw)).toBe(HashToken(raw));
       // base64url of 32 bytes = 43 chars, no padding, only [A-Za-z0-9_-]
-      expect(hashToken(raw)).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      expect(HashToken(raw)).toMatch(/^[A-Za-z0-9_-]{43}$/);
     });
 
     it('differs for different inputs and never equals the raw token', () => {
-      const raw = generateRawToken();
-      expect(hashToken(raw)).not.toBe(hashToken(generateRawToken()));
-      expect(hashToken(raw)).not.toBe(raw);
+      const raw = GenerateRawToken();
+      expect(HashToken(raw)).not.toBe(HashToken(GenerateRawToken()));
+      expect(HashToken(raw)).not.toBe(raw);
     });
   });
 
@@ -51,37 +51,37 @@ describe('magic-link core', () => {
     const past = new Date(now - 3600_000);
 
     it('accepts an active, unexpired, unused invite', () => {
-      expect(evaluateInvite({ Status: 'Active', ExpiresAt: future, MaxUses: 1, UseCount: 0 }, now)).toEqual({ ok: true });
+      expect(EvaluateInvite({ Status: 'Active', ExpiresAt: future, MaxUses: 1, UseCount: 0 }, now)).toEqual({ ok: true });
     });
 
     it('rejects revoked invites first', () => {
-      expect(evaluateInvite({ Status: 'Revoked', ExpiresAt: future, MaxUses: 1, UseCount: 0 }, now)).toEqual({ ok: false, errorCode: 'revoked' });
+      expect(EvaluateInvite({ Status: 'Revoked', ExpiresAt: future, MaxUses: 1, UseCount: 0 }, now)).toEqual({ ok: false, errorCode: 'revoked' });
     });
 
     it('rejects expired invites', () => {
-      expect(evaluateInvite({ Status: 'Active', ExpiresAt: past, MaxUses: 1, UseCount: 0 }, now)).toEqual({ ok: false, errorCode: 'expired' });
+      expect(EvaluateInvite({ Status: 'Active', ExpiresAt: past, MaxUses: 1, UseCount: 0 }, now)).toEqual({ ok: false, errorCode: 'expired' });
     });
 
     it('rejects consumed invites (by status)', () => {
-      expect(evaluateInvite({ Status: 'Consumed', ExpiresAt: future, MaxUses: 1, UseCount: 1 }, now)).toEqual({ ok: false, errorCode: 'consumed' });
+      expect(EvaluateInvite({ Status: 'Consumed', ExpiresAt: future, MaxUses: 1, UseCount: 1 }, now)).toEqual({ ok: false, errorCode: 'consumed' });
     });
 
     it('rejects when use count reaches max', () => {
-      expect(evaluateInvite({ Status: 'Active', ExpiresAt: future, MaxUses: 3, UseCount: 3 }, now)).toEqual({ ok: false, errorCode: 'consumed' });
+      expect(EvaluateInvite({ Status: 'Active', ExpiresAt: future, MaxUses: 3, UseCount: 3 }, now)).toEqual({ ok: false, errorCode: 'consumed' });
     });
 
     it('allows multi-use invites that still have uses left', () => {
-      expect(evaluateInvite({ Status: 'Active', ExpiresAt: future, MaxUses: 3, UseCount: 2 }, now)).toEqual({ ok: true });
+      expect(EvaluateInvite({ Status: 'Active', ExpiresAt: future, MaxUses: 3, UseCount: 2 }, now)).toEqual({ ok: true });
     });
 
     it('rejects unknown statuses as invalid', () => {
-      expect(evaluateInvite({ Status: 'Pending', ExpiresAt: future, MaxUses: 1, UseCount: 0 }, now)).toEqual({ ok: false, errorCode: 'invalid' });
+      expect(EvaluateInvite({ Status: 'Pending', ExpiresAt: future, MaxUses: 1, UseCount: 0 }, now)).toEqual({ ok: false, errorCode: 'invalid' });
     });
   });
 
   describe('buildSessionClaims', () => {
     it('scopes the token to exactly the given app and role and marks it magic-link', () => {
-      const claims = buildSessionClaims({
+      const claims = BuildSessionClaims({
         issuer: 'http://localhost:4051',
         audience: 'mj-magic-link',
         inviteId: 'INVITE-1',
@@ -103,7 +103,7 @@ describe('magic-link core', () => {
     });
 
     it('carries mj_invited_by when an inviter is supplied (attribution claim)', () => {
-      const claims = buildSessionClaims({
+      const claims = BuildSessionClaims({
         issuer: 'i', audience: 'a', inviteId: 'INVITE-1', email: 'e@x.com',
         applicationId: 'APP-1', roleName: 'Magic Link Baseline',
         invitedByUserId: 'USER-42', nowSeconds: 1000, ttlSeconds: 3600,
@@ -112,7 +112,7 @@ describe('magic-link core', () => {
     });
 
     it('omits mj_invited_by when no inviter is supplied', () => {
-      const claims = buildSessionClaims({
+      const claims = BuildSessionClaims({
         issuer: 'i', audience: 'a', inviteId: 'INVITE-1', email: 'e@x.com',
         applicationId: 'APP-1', roleName: 'Magic Link Baseline',
         nowSeconds: 1000, ttlSeconds: 3600,
@@ -121,7 +121,7 @@ describe('magic-link core', () => {
     });
 
     it('always emits a single-entry mj_scopes for the current link', () => {
-      const claims = buildSessionClaims({
+      const claims = BuildSessionClaims({
         issuer: 'i', audience: 'a', inviteId: 'INVITE-1', email: 'e@x.com',
         applicationId: 'APP-1', roleName: 'Magic Link Baseline', nowSeconds: 1000, ttlSeconds: 3600,
       });
@@ -129,7 +129,7 @@ describe('magic-link core', () => {
     });
 
     it('marks anonymous sessions and carries the per-session id + prior-scope union', () => {
-      const claims = buildSessionClaims({
+      const claims = BuildSessionClaims({
         issuer: 'i', audience: 'a', inviteId: 'INVITE-2', email: 'anon@x',
         applicationId: 'APP-2', roleName: 'Guest', anonymous: true, sessionId: 'SID-9',
         priorScopes: [{ inviteId: 'INVITE-1', appId: 'APP-1', role: 'Guest' }],
@@ -142,7 +142,7 @@ describe('magic-link core', () => {
     });
 
     it('does NOT mark mj_anon for email sessions', () => {
-      const claims = buildSessionClaims({
+      const claims = BuildSessionClaims({
         issuer: 'i', audience: 'a', inviteId: 'INVITE-1', email: 'e@x.com',
         applicationId: 'APP-1', roleName: 'Magic Link Baseline', nowSeconds: 1000, ttlSeconds: 3600,
       });
@@ -155,84 +155,26 @@ describe('magic-link core', () => {
     const b = { inviteId: 'I2', appId: 'A2', role: 'R' };
 
     it('appends a new scope entry', () => {
-      expect(unionScopes([a], b)).toEqual([a, b]);
+      expect(UnionScopes([a], b)).toEqual([a, b]);
     });
 
     it('is idempotent by inviteId — re-redeeming the same link never accretes a duplicate', () => {
-      expect(unionScopes([a, b], { inviteId: 'I1', appId: 'A1', role: 'R' })).toEqual([a, b]);
+      expect(UnionScopes([a, b], { inviteId: 'I1', appId: 'A1', role: 'R' })).toEqual([a, b]);
     });
 
     it('handles an empty/undefined prior union', () => {
-      expect(unionScopes(undefined, a)).toEqual([a]);
-      expect(unionScopes([], a)).toEqual([a]);
+      expect(UnionScopes(undefined, a)).toEqual([a]);
+      expect(UnionScopes([], a)).toEqual([a]);
     });
   });
 
-  describe('buildConsumeInviteSQL', () => {
-    const table = '[__mj].[MagicLinkInvite]';
-    const sql = buildConsumeInviteSQL(table);
-
-    it('targets the supplied qualified table', () => {
-      expect(sql).toContain(`UPDATE ${table} `);
-    });
-
-    it('increments UseCount', () => {
-      expect(sql).toContain('UseCount = UseCount + 1');
-    });
-
-    it('stamps ConsumedAt only the first time (COALESCE preserves an existing value)', () => {
-      expect(sql).toContain('ConsumedAt = COALESCE(ConsumedAt, SYSUTCDATETIME())');
-    });
-
-    it('flips Status to Consumed exactly when the last use is taken', () => {
-      expect(sql).toContain("Status = CASE WHEN UseCount + 1 >= MaxUses THEN 'Consumed' ELSE Status END");
-    });
-
-    it('returns the affected row via OUTPUT INTO a table var so the caller can detect a win (exactly one row)', () => {
-      // Must be OUTPUT ... INTO, not a bare OUTPUT: SQL Server forbids a bare
-      // OUTPUT clause on a table with enabled triggers, and CodeGen adds an
-      // __mj_UpdatedAt trigger to every MJ table. Regression guard for that bug.
-      expect(sql).toContain('OUTPUT INSERTED.ID INTO @consumed');
-      expect(sql).not.toMatch(/OUTPUT INSERTED\.ID(?!\s+INTO)/);
-      expect(sql).toContain('SELECT ID FROM @consumed');
-    });
-
-    it('guards atomically on Active + not-exhausted + not-expired — this IS the single-use gate', () => {
-      const where = sql.slice(sql.indexOf('WHERE'));
-      expect(where).toContain("Status = 'Active'");
-      expect(where).toContain('UseCount < MaxUses');
-      expect(where).toContain('ExpiresAt > SYSUTCDATETIME()');
-    });
-
-    it('binds the invite ID as a parameter, never interpolated (injection-safe)', () => {
-      expect(sql).toContain('ID = @p0');
-      // The id must not be string-interpolated with quotes around a value.
-      expect(sql).not.toMatch(/ID = '/);
-    });
-
-    it('is a self-contained batch: declare table var, update-with-output, select', () => {
-      // Intentionally a 3-statement batch (the OUTPUT-INTO requirement). The ID is
-      // still parameterized, so the batch carries no interpolated user input.
-      expect(sql).toContain('DECLARE @consumed TABLE (ID UNIQUEIDENTIFIER)');
-      expect(sql.match(/;/g)?.length).toBe(3);
-      expect(sql.trim().endsWith(';')).toBe(true);
-    });
-
-    it('rejects a non-whitelisted table identifier (defense-in-depth against injection)', () => {
-      // Only bracket-quoted [schema].[table] of word chars is accepted, even though
-      // the caller derives the table from EntityInfo and never from user input.
-      expect(() => buildConsumeInviteSQL('__mj.MagicLinkInvite')).toThrow();
-      expect(() => buildConsumeInviteSQL('[__mj].[MagicLinkInvite]; DROP TABLE x;--')).toThrow();
-      expect(() => buildConsumeInviteSQL('[__mj].[Magic Link]')).toThrow();
-      expect(() => buildConsumeInviteSQL(table)).not.toThrow();
-    });
-  });
-
-  describe('buildConsumeInviteSQL (postgresql dialect)', () => {
-    // PG uses `schema.table` (unquoted — PostgreSQLDataProvider.ExecuteSQL auto-quotes
-    // the PascalCase identifiers). SS uses the bracket-quoted `[schema].[table]` form.
+  describe('BuildConsumeInvitePostgresSQL', () => {
+    // PostgreSQL only: SQL Server consumes through spConsumeMagicLinkInvite (#4753), but PG has no
+    // such function and its runtime roles hold table DML, so PG keeps this direct guarded UPDATE.
+    // PG uses `schema.table` unquoted — PostgreSQLDataProvider.ExecuteSQL auto-quotes the
+    // PascalCase identifiers.
     const pgTable = '__mj.MagicLinkInvite';
-    const pgSql = buildConsumeInviteSQL(pgTable, 'postgresql');
+    const pgSql = BuildConsumeInvitePostgresSQL(pgTable);
 
     it('targets the supplied unquoted schema.table', () => {
       expect(pgSql).toContain(`UPDATE ${pgTable} `);
@@ -246,63 +188,60 @@ describe('magic-link core', () => {
 
     it('binds the invite ID as PG positional param $1, not T-SQL @p0 (injection-safe)', () => {
       expect(pgSql).toContain('ID = $1');
-      expect(pgSql).not.toContain('@p0');
-      expect(pgSql).not.toMatch(/@/); // no T-SQL @-anything survives on PG
+      expect(pgSql).not.toMatch(/@/);
       expect(pgSql).not.toMatch(/ID = '/);
     });
 
     it('uses PG timestamp expressions, not T-SQL SYSUTCDATETIME()', () => {
       expect(pgSql).not.toContain('SYSUTCDATETIME');
-      expect(pgSql).toContain("(now() AT TIME ZONE 'utc')");
       expect(pgSql).toContain("ConsumedAt = COALESCE(ConsumedAt, (now() AT TIME ZONE 'utc'))");
     });
 
-    it('guards atomically on Active + not-exhausted + not-expired (same predicate as SS)', () => {
+    it('guards atomically on Active + not-exhausted + not-expired (same predicate as spConsumeMagicLinkInvite)', () => {
       const where = pgSql.slice(pgSql.indexOf('WHERE'));
       expect(where).toContain("Status = 'Active'");
       expect(where).toContain('UseCount < MaxUses');
       expect(where).toContain("ExpiresAt > (now() AT TIME ZONE 'utc')");
     });
 
-    it('increments UseCount and flips Status on the last use (same semantics as SS)', () => {
+    it('increments UseCount and flips Status on the last use (same semantics as spConsumeMagicLinkInvite)', () => {
       expect(pgSql).toContain('UseCount = UseCount + 1');
       expect(pgSql).toContain("Status = CASE WHEN UseCount + 1 >= MaxUses THEN 'Consumed' ELSE Status END");
     });
 
-    it('rejects a non-whitelisted PG table identifier (defense-in-depth against injection)', () => {
-      // Bracket-quoted (SS) form is not a valid PG identifier here.
-      expect(() => buildConsumeInviteSQL('[__mj].[MagicLinkInvite]', 'postgresql')).toThrow();
-      expect(() => buildConsumeInviteSQL('__mj.MagicLinkInvite; DROP TABLE x;--', 'postgresql')).toThrow();
-      expect(() => buildConsumeInviteSQL('__mj.Magic Link', 'postgresql')).toThrow();
-      expect(() => buildConsumeInviteSQL(pgTable, 'postgresql')).not.toThrow();
+    it('rejects a non-whitelisted table identifier (defense-in-depth against injection)', () => {
+      expect(() => BuildConsumeInvitePostgresSQL('[__mj].[MagicLinkInvite]')).toThrow();
+      expect(() => BuildConsumeInvitePostgresSQL('__mj.MagicLinkInvite; DROP TABLE x;--')).toThrow();
+      expect(() => BuildConsumeInvitePostgresSQL('__mj.Magic Link')).toThrow();
+      expect(() => BuildConsumeInvitePostgresSQL(pgTable)).not.toThrow();
     });
   });
 
   describe('canIssueInvites', () => {
     it('always allows Owners, regardless of issuer-role config (case/space-insensitive)', () => {
-      expect(canIssueInvites('Owner', [], [])).toBe(true);
-      expect(canIssueInvites('  owner ', [], [])).toBe(true);
+      expect(CanIssueInvites('Owner', [], [])).toBe(true);
+      expect(CanIssueInvites('  owner ', [], [])).toBe(true);
     });
 
     it('Owner-only by default: a non-Owner with no configured issuer roles is denied', () => {
-      expect(canIssueInvites('User', ['Developer', 'Magic Link Baseline'], [])).toBe(false);
+      expect(CanIssueInvites('User', ['Developer', 'Magic Link Baseline'], [])).toBe(false);
     });
 
     it('denies an external user holding the restricted role (the escalation we are blocking)', () => {
       // restricted role is never an issuer role, so this stays false even if someone
       // mistakenly leaves issuerRoleNames empty
-      expect(canIssueInvites('User', ['Magic Link Baseline'], [])).toBe(false);
+      expect(CanIssueInvites('User', ['Magic Link Baseline'], [])).toBe(false);
     });
 
     it('allows a non-Owner only when one of their roles is a configured issuer role', () => {
-      expect(canIssueInvites('User', ['Sales Admin'], ['Sales Admin'])).toBe(true);
-      expect(canIssueInvites('User', ['sales admin'], ['Sales Admin'])).toBe(true); // case-insensitive
-      expect(canIssueInvites('User', ['Marketing'], ['Sales Admin'])).toBe(false);
+      expect(CanIssueInvites('User', ['Sales Admin'], ['Sales Admin'])).toBe(true);
+      expect(CanIssueInvites('User', ['sales admin'], ['Sales Admin'])).toBe(true); // case-insensitive
+      expect(CanIssueInvites('User', ['Marketing'], ['Sales Admin'])).toBe(false);
     });
 
     it('handles null/undefined type and empty role lists safely', () => {
-      expect(canIssueInvites(null, [], ['X'])).toBe(false);
-      expect(canIssueInvites(undefined, ['X'], ['X'])).toBe(true);
+      expect(CanIssueInvites(null, [], ['X'])).toBe(false);
+      expect(CanIssueInvites(undefined, ['X'], ['X'])).toBe(true);
     });
   });
 
@@ -310,41 +249,41 @@ describe('magic-link core', () => {
     const restricted = 'Magic Link Baseline';
 
     it('always allows the restricted role (case/space-insensitive)', () => {
-      expect(isRoleGrantable('Magic Link Baseline', restricted, [])).toBe(true);
-      expect(isRoleGrantable(' magic link baseline ', restricted, [])).toBe(true);
+      expect(IsRoleGrantable('Magic Link Baseline', restricted, [])).toBe(true);
+      expect(IsRoleGrantable(' magic link baseline ', restricted, [])).toBe(true);
     });
 
     it('rejects a privileged role by default — blocks roleId=Owner escalation', () => {
-      expect(isRoleGrantable('Owner', restricted, [])).toBe(false);
-      expect(isRoleGrantable('Administrator', restricted, [])).toBe(false);
+      expect(IsRoleGrantable('Owner', restricted, [])).toBe(false);
+      expect(IsRoleGrantable('Administrator', restricted, [])).toBe(false);
     });
 
     it('allows additional roles only when explicitly opted in', () => {
-      expect(isRoleGrantable('Read Only Guest', restricted, ['Read Only Guest'])).toBe(true);
-      expect(isRoleGrantable('read only guest', restricted, ['Read Only Guest'])).toBe(true);
-      expect(isRoleGrantable('Owner', restricted, ['Read Only Guest'])).toBe(false);
+      expect(IsRoleGrantable('Read Only Guest', restricted, ['Read Only Guest'])).toBe(true);
+      expect(IsRoleGrantable('read only guest', restricted, ['Read Only Guest'])).toBe(true);
+      expect(IsRoleGrantable('Owner', restricted, ['Read Only Guest'])).toBe(false);
     });
 
     it('rejects empty/null role names', () => {
-      expect(isRoleGrantable('', restricted, [])).toBe(false);
-      expect(isRoleGrantable(null, restricted, [])).toBe(false);
+      expect(IsRoleGrantable('', restricted, [])).toBe(false);
+      expect(IsRoleGrantable(null, restricted, [])).toBe(false);
     });
   });
 
   describe('escapeHtml', () => {
     it('escapes the five significant HTML characters', () => {
-      expect(escapeHtml(`<>&"'`)).toBe('&lt;&gt;&amp;&quot;&#39;');
+      expect(EscapeHtml(`<>&"'`)).toBe('&lt;&gt;&amp;&quot;&#39;');
     });
 
     it('leaves a normal magic-link token untouched', () => {
-      const t = generateRawToken();
-      expect(escapeHtml(t)).toBe(t);
+      const t = GenerateRawToken();
+      expect(EscapeHtml(t)).toBe(t);
     });
   });
 
   describe('buildRedeemLandingHtml', () => {
-    const token = generateRawToken();
-    const html = buildRedeemLandingHtml(token, '/magic-link/redeem');
+    const token = GenerateRawToken();
+    const html = BuildRedeemLandingHtml(token, '/magic-link/redeem');
 
     it('renders a POST form to the redeem path (GET stays side-effect-free)', () => {
       expect(html).toContain('method="POST"');
@@ -365,7 +304,7 @@ describe('magic-link core', () => {
     });
 
     it('escapes a token containing HTML metacharacters into the form value', () => {
-      const evil = buildRedeemLandingHtml('a"><script>x</script>', '/magic-link/redeem');
+      const evil = BuildRedeemLandingHtml('a"><script>x</script>', '/magic-link/redeem');
       expect(evil).not.toContain('<script>x</script>');
       expect(evil).toContain('&lt;script&gt;');
     });
@@ -377,7 +316,7 @@ describe('MagicLinkKeyManager', () => {
     const km = MagicLinkKeyManager.Instance;
     km.Initialize(); // ephemeral keypair
 
-    const claims = buildSessionClaims({
+    const claims = BuildSessionClaims({
       issuer: 'http://localhost:4051',
       audience: 'mj-magic-link',
       inviteId: 'INVITE-1',
@@ -414,7 +353,7 @@ describe('MagicLinkKeyManager', () => {
   it('rejects a tampered token', () => {
     const km = MagicLinkKeyManager.Instance;
     km.Initialize();
-    const claims = buildSessionClaims({
+    const claims = BuildSessionClaims({
       issuer: 'http://localhost:4051',
       audience: 'mj-magic-link',
       inviteId: 'INVITE-2',

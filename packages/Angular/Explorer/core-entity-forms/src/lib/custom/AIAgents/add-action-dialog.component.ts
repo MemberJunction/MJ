@@ -7,17 +7,17 @@ import { UUIDsEqual } from '@memberjunction/global';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface CategoryTreeNode {
-  id: string;
-  name: string;
-  count: number;
-  icon: string;
-  children?: CategoryTreeNode[];
-  expanded?: boolean;
+  id: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  name: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  count: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  icon: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  children?: CategoryTreeNode[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  expanded?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface ActionDisplayItem extends MJActionEntity {
-  selected: boolean;
-  categoryName?: string;
+  Selected: boolean;
+  CategoryName?: string;
 }
 
 /**
@@ -33,39 +33,180 @@ export interface ActionDisplayItem extends MJActionEntity {
 export class AddActionDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   
   // Input properties set by service
-  agentId: string = '';
-  agentName: string = '';
-  existingActionIds: string[] = [];
+  AgentId: string = '';
+
+  /** @deprecated Use {@link AgentId}. */
+  get agentId(): string {
+    return this.AgentId;
+  }
+  /** @deprecated Use {@link AgentId}. */
+  set agentId(value: string) {
+    this.AgentId = value;
+  }
+  AgentName: string = '';
+
+  /** @deprecated Use {@link AgentName}. */
+  get agentName(): string {
+    return this.AgentName;
+  }
+  /** @deprecated Use {@link AgentName}. */
+  set agentName(value: string) {
+    this.AgentName = value;
+  }
+  ExistingActionIds: string[] = [];
+
+  /** @deprecated Use {@link ExistingActionIds}. */
+  get existingActionIds(): string[] {
+    return this.ExistingActionIds;
+  }
+  /** @deprecated Use {@link ExistingActionIds}. */
+  set existingActionIds(value: string[]) {
+    this.ExistingActionIds = value;
+  }
 
   // Reactive state management
   private destroy$ = new Subject<void>();
-  public result = new Subject<MJActionEntity[]>();
+  public Result = new Subject<MJActionEntity[]>();
+
+  /** @deprecated Use {@link Result}. */
+  public get result() {
+    return this.Result;
+  }
+  /** @deprecated Use {@link Result}. */
+  public set result(value) {
+    this.Result = value;
+  }
   
   // Data streams
-  allActions$ = new BehaviorSubject<ActionDisplayItem[]>([]);
-  categories$ = new BehaviorSubject<MJActionCategoryEntity[]>([]);
-  filteredActions$ = new BehaviorSubject<ActionDisplayItem[]>([]);
-  categoryTree$ = new BehaviorSubject<CategoryTreeNode[]>([]);
-  selectedActions$ = new BehaviorSubject<Set<string>>(new Set());
-  isLoading$ = new BehaviorSubject<boolean>(false);
+  AllActions$ = new BehaviorSubject<ActionDisplayItem[]>([]);
+
+  /** @deprecated Use {@link AllActions$}. */
+  get allActions$() {
+    return this.AllActions$;
+  }
+  /** @deprecated Use {@link AllActions$}. */
+  set allActions$(value) {
+    this.AllActions$ = value;
+  }
+  Categories$ = new BehaviorSubject<MJActionCategoryEntity[]>([]);
+
+  /** @deprecated Use {@link Categories$}. */
+  get categories$() {
+    return this.Categories$;
+  }
+  /** @deprecated Use {@link Categories$}. */
+  set categories$(value) {
+    this.Categories$ = value;
+  }
+  FilteredActions$ = new BehaviorSubject<ActionDisplayItem[]>([]);
+
+  /** @deprecated Use {@link FilteredActions$}. */
+  get filteredActions$() {
+    return this.FilteredActions$;
+  }
+  /** @deprecated Use {@link FilteredActions$}. */
+  set filteredActions$(value) {
+    this.FilteredActions$ = value;
+  }
+  CategoryTree$ = new BehaviorSubject<CategoryTreeNode[]>([]);
+
+  /** @deprecated Use {@link CategoryTree$}. */
+  get categoryTree$() {
+    return this.CategoryTree$;
+  }
+  /** @deprecated Use {@link CategoryTree$}. */
+  set categoryTree$(value) {
+    this.CategoryTree$ = value;
+  }
+  SelectedActions$ = new BehaviorSubject<Set<string>>(new Set());
+
+  /** @deprecated Use {@link SelectedActions$}. */
+  get selectedActions$() {
+    return this.SelectedActions$;
+  }
+  /** @deprecated Use {@link SelectedActions$}. */
+  set selectedActions$(value) {
+    this.SelectedActions$ = value;
+  }
+  IsLoading$ = new BehaviorSubject<boolean>(false);
+
+  /** @deprecated Use {@link IsLoading$}. */
+  get isLoading$() {
+    return this.IsLoading$;
+  }
+  /** @deprecated Use {@link IsLoading$}. */
+  set isLoading$(value) {
+    this.IsLoading$ = value;
+  }
   
   // UI state
-  searchControl = new FormControl('');
-  selectedCategoryId$ = new BehaviorSubject<string>('all');
-  viewMode$ = new BehaviorSubject<'grid' | 'list'>('grid');
-  expandedCategories = new Set<string>();
+  SearchControl = new FormControl('');
+
+  /** @deprecated Use {@link SearchControl}. */
+  get searchControl() {
+    return this.SearchControl;
+  }
+  /** @deprecated Use {@link SearchControl}. */
+  set searchControl(value) {
+    this.SearchControl = value;
+  }
+  SelectedCategoryId$ = new BehaviorSubject<string>('all');
+
+  /** @deprecated Use {@link SelectedCategoryId$}. */
+  get selectedCategoryId$() {
+    return this.SelectedCategoryId$;
+  }
+  /** @deprecated Use {@link SelectedCategoryId$}. */
+  set selectedCategoryId$(value) {
+    this.SelectedCategoryId$ = value;
+  }
+  ViewMode$ = new BehaviorSubject<'grid' | 'list'>('grid');
+
+  /** @deprecated Use {@link ViewMode$}. */
+  get viewMode$() {
+    return this.ViewMode$;
+  }
+  /** @deprecated Use {@link ViewMode$}. */
+  set viewMode$(value) {
+    this.ViewMode$ = value;
+  }
+  ExpandedCategories = new Set<string>();
+
+  /** @deprecated Use {@link ExpandedCategories}. */
+  get expandedCategories() {
+    return this.ExpandedCategories;
+  }
+  /** @deprecated Use {@link ExpandedCategories}. */
+  set expandedCategories(value) {
+    this.ExpandedCategories = value;
+  }
 
   // Computed values
+  get SelectedCount(): number {
+    return this.SelectedActions$.value.size;
+  }
+
+  /** @deprecated Use {@link SelectedCount}. */
   get selectedCount(): number {
-    return this.selectedActions$.value.size;
+    return this.SelectedCount;
   }
 
+  get TotalActionCount(): number {
+    return this.AllActions$.value.length;
+  }
+
+  /** @deprecated Use {@link TotalActionCount}. */
   get totalActionCount(): number {
-    return this.allActions$.value.length;
+    return this.TotalActionCount;
   }
 
+  get FilteredCount(): number {
+    return this.FilteredActions$.value.length;
+  }
+
+  /** @deprecated Use {@link FilteredCount}. */
   get filteredCount(): number {
-    return this.filteredActions$.value.length;
+    return this.FilteredCount;
   }
 
   @Output() DialogClose = new EventEmitter<void>();
@@ -87,7 +228,7 @@ export class AddActionDialogComponent extends BaseAngularComponent implements On
   }
 
   private async initializeData() {
-    this.isLoading$.next(true);
+    this.IsLoading$.next(true);
     
     try {
       await this.loadActionsAndCategories();
@@ -95,7 +236,7 @@ export class AddActionDialogComponent extends BaseAngularComponent implements On
     } catch (error) {
       console.error('Error loading dialog data:', error);
     } finally {
-      this.isLoading$.next(false);
+      this.IsLoading$.next(false);
     }
   }
 
@@ -122,26 +263,26 @@ export class AddActionDialogComponent extends BaseAngularComponent implements On
     if (actionsResult.Success) {
       const actions = (actionsResult.Results as MJActionEntity[] || []).map(action => ({
         ...action.GetAll(),
-        selected: false,
-        categoryName: action.Category || 'Uncategorized'
+        Selected: false,
+        CategoryName: action.Category || 'Uncategorized'
       } as ActionDisplayItem));
       
-      this.allActions$.next(actions);
+      this.AllActions$.next(actions);
     }
 
     if (categoriesResult.Success) {
-      this.categories$.next(categoriesResult.Results as MJActionCategoryEntity[] || []);
+      this.Categories$.next(categoriesResult.Results as MJActionCategoryEntity[] || []);
     }
   }
 
   private buildCategoryTree() {
-    const actions = this.allActions$.value;
-    const categories = this.categories$.value;
+    const actions = this.AllActions$.value;
+    const categories = this.Categories$.value;
     
     // Count actions per category
     const categoryCounts = new Map<string, number>();
     actions.forEach(action => {
-      const categoryName = action.categoryName || 'Uncategorized';
+      const categoryName = action.CategoryName || 'Uncategorized';
       categoryCounts.set(categoryName, (categoryCounts.get(categoryName) || 0) + 1);
     });
 
@@ -179,7 +320,7 @@ export class AddActionDialogComponent extends BaseAngularComponent implements On
       });
     }
 
-    this.categoryTree$.next(treeNodes);
+    this.CategoryTree$.next(treeNodes);
   }
 
   private getCategoryIcon(categoryName: string): string {
@@ -200,13 +341,13 @@ export class AddActionDialogComponent extends BaseAngularComponent implements On
 
   private setupFiltering() {
     combineLatest([
-      this.allActions$,
-      this.searchControl.valueChanges.pipe(
+      this.AllActions$,
+      this.SearchControl.valueChanges.pipe(
         debounceTime(300),
         distinctUntilChanged(),
         startWith('')  // Emit initial empty value
       ),
-      this.selectedCategoryId$
+      this.SelectedCategoryId$
     ]).pipe(
       takeUntil(this.destroy$)
     ).subscribe(([actions, searchTerm, categoryId]) => {
@@ -223,7 +364,7 @@ export class AddActionDialogComponent extends BaseAngularComponent implements On
         filtered = filtered.filter(action => !action.Category);
       } else {
         const categoryName = this.getCategoryNameById(categoryId);
-        filtered = filtered.filter(action => action.categoryName === categoryName);
+        filtered = filtered.filter(action => action.CategoryName === categoryName);
       }
     }
 
@@ -233,80 +374,100 @@ export class AddActionDialogComponent extends BaseAngularComponent implements On
       filtered = filtered.filter(action =>
         action.Name.toLowerCase().includes(term) ||
         (action.Description && action.Description.toLowerCase().includes(term)) ||
-        (action.categoryName && action.categoryName.toLowerCase().includes(term))
+        (action.CategoryName && action.CategoryName.toLowerCase().includes(term))
       );
     }
 
-    this.filteredActions$.next(filtered);
+    this.FilteredActions$.next(filtered);
   }
 
   private getCategoryNameById(categoryId: string): string {
-    const category = this.categories$.value.find(c => UUIDsEqual(c.ID, categoryId));
+    const category = this.Categories$.value.find(c => UUIDsEqual(c.ID, categoryId));
     return category?.Name || '';
   }
 
   private preselectExistingActions() {
-    if (this.existingActionIds.length > 0) {
-      const selected = new Set(this.existingActionIds);
-      this.selectedActions$.next(selected);
+    if (this.ExistingActionIds.length > 0) {
+      const selected = new Set(this.ExistingActionIds);
+      this.SelectedActions$.next(selected);
       
       // Update action selection state
-      const actions = this.allActions$.value;
+      const actions = this.AllActions$.value;
       actions.forEach(action => {
-        action.selected = selected.has(action.ID);
+        action.Selected = selected.has(action.ID);
       });
-      this.allActions$.next(actions);
+      this.AllActions$.next(actions);
     }
   }
 
   // === UI Event Handlers ===
 
+  SelectCategory(categoryId: string) {
+    this.SelectedCategoryId$.next(categoryId);
+  }
+
+  /** @deprecated Use {@link SelectCategory}. */
   selectCategory(categoryId: string) {
-    this.selectedCategoryId$.next(categoryId);
+    return this.SelectCategory(categoryId);
   }
 
+  ToggleViewMode() {
+    const currentMode = this.ViewMode$.value;
+    this.ViewMode$.next(currentMode === 'grid' ? 'list' : 'grid');
+  }
+
+  /** @deprecated Use {@link ToggleViewMode}. */
   toggleViewMode() {
-    const currentMode = this.viewMode$.value;
-    this.viewMode$.next(currentMode === 'grid' ? 'list' : 'grid');
+    return this.ToggleViewMode();
   }
 
-  toggleActionSelection(action: ActionDisplayItem) {
-    const selected = this.selectedActions$.value;
-    const actions = this.allActions$.value;
+  ToggleActionSelection(action: ActionDisplayItem) {
+    const selected = this.SelectedActions$.value;
+    const actions = this.AllActions$.value;
     
     // Find the action and toggle its selection
     const actionToUpdate = actions.find(a => UUIDsEqual(a.ID, action.ID));
     if (actionToUpdate) {
-      actionToUpdate.selected = !actionToUpdate.selected;
+      actionToUpdate.Selected = !actionToUpdate.Selected;
       
-      if (actionToUpdate.selected) {
+      if (actionToUpdate.Selected) {
         selected.add(action.ID);
       } else {
         selected.delete(action.ID);
       }
       
-      this.selectedActions$.next(new Set(selected));
-      this.allActions$.next(actions);
+      this.SelectedActions$.next(new Set(selected));
+      this.AllActions$.next(actions);
       
       // Update filtered actions to reflect selection state
-      const filtered = this.filteredActions$.value;
+      const filtered = this.FilteredActions$.value;
       const filteredAction = filtered.find(a => UUIDsEqual(a.ID, action.ID));
       if (filteredAction) {
-        filteredAction.selected = actionToUpdate.selected;
-        this.filteredActions$.next(filtered);
+        filteredAction.Selected = actionToUpdate.Selected;
+        this.FilteredActions$.next(filtered);
       }
     }
+  }
+
+  /** @deprecated Use {@link ToggleActionSelection}. */
+  toggleActionSelection(action: ActionDisplayItem) {
+    return this.ToggleActionSelection(action);
   }
 
   // Backs the no-results empty-state "Clear Filters" CTA: resets every dimension
   // the list narrows on — search AND the category filter — so the CTA actually
   // returns results instead of appearing to do nothing.
-  clearSearch() {
-    this.searchControl.reset();
-    this.selectedCategoryId$.next('all');
+  ClearSearch() {
+    this.SearchControl.reset();
+    this.SelectedCategoryId$.next('all');
   }
 
-  getActionIcon(action: ActionDisplayItem): string {
+  /** @deprecated Use {@link ClearSearch}. */
+  clearSearch() {
+    return this.ClearSearch();
+  }
+
+  GetActionIcon(action: ActionDisplayItem): string {
     // Return custom icon if set
     if (action.IconClass) {
       return action.IconClass;
@@ -326,25 +487,35 @@ export class AddActionDialogComponent extends BaseAngularComponent implements On
     return 'fa-bolt'; // Default action icon
   }
 
+  /** @deprecated Use {@link GetActionIcon}. */
+  getActionIcon(action: ActionDisplayItem): string {
+    return this.GetActionIcon(action);
+  }
+
   // === Dialog Actions ===
 
   cancel() {
-    this.result.next([]);
+    this.Result.next([]);
     this.DialogClose.emit();
   }
 
-  addSelectedActions() {
-    const selectedIds = this.selectedActions$.value;
-    const allActions = this.allActions$.value;
+  AddSelectedActions() {
+    const selectedIds = this.SelectedActions$.value;
+    const allActions = this.AllActions$.value;
 
     // Get the selected action display items (excluding existing ones)
     const selectedDisplayItems = allActions
-      .filter(action => selectedIds.has(action.ID) && !this.existingActionIds.some(id => UUIDsEqual(id, action.ID)));
+      .filter(action => selectedIds.has(action.ID) && !this.ExistingActionIds.some(id => UUIDsEqual(id, action.ID)));
 
     // Convert ActionDisplayItem to MJActionEntity by casting (they have the same structure)
     const selectedActions: MJActionEntity[] = selectedDisplayItems.map(item => item as MJActionEntity);
 
-    this.result.next(selectedActions);
+    this.Result.next(selectedActions);
     this.DialogClose.emit();
+  }
+
+  /** @deprecated Use {@link AddSelectedActions}. */
+  addSelectedActions() {
+    return this.AddSelectedActions();
   }
 }

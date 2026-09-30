@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeBestLevels, RankingRow, RECOMMENDATION_RANK } from '../PredictiveStudio/engine/predictive-studio.engine';
+import { ComputeBestLevels, RankingRow, RECOMMENDATION_RANK } from '../PredictiveStudio/engine/predictive-studio.engine';
 
 /**
  * Tests for the Predictive Studio ranking-matrix reducer that drives the Algorithm Catalog
@@ -38,11 +38,11 @@ describe('RECOMMENDATION_RANK', () => {
 
 describe('computeBestLevels', () => {
   it('returns an empty map when no scenarios are selected', () => {
-    expect(computeBestLevels(rankings, []).size).toBe(0);
+    expect(ComputeBestLevels(rankings, []).size).toBe(0);
   });
 
   it('returns each algorithm level for a single scenario', () => {
-    const result = computeBestLevels(rankings, [BINARY]);
+    const result = ComputeBestLevels(rankings, [BINARY]);
     expect(result.get(XGB)).toBe('Primary');
     expect(result.get(LOGREG)).toBe('Viable');
     expect(result.get(MLP)).toBe('Viable');
@@ -51,21 +51,21 @@ describe('computeBestLevels', () => {
   it('takes the BEST level across multiple scenarios (max by rank)', () => {
     // XGB: Primary(binary) vs Weak(interp) → Primary
     // LOGREG: Viable(binary) vs Primary(interp) → Primary
-    const result = computeBestLevels(rankings, [BINARY, INTERP]);
+    const result = ComputeBestLevels(rankings, [BINARY, INTERP]);
     expect(result.get(XGB)).toBe('Primary');
     expect(result.get(LOGREG)).toBe('Primary');
   });
 
   it('omits algorithms with no ranking row for the selected scenarios', () => {
     // Only EMBED selected → LOGREG has no EMBED row.
-    const result = computeBestLevels(rankings, [EMBED]);
+    const result = ComputeBestLevels(rankings, [EMBED]);
     expect(result.has(LOGREG)).toBe(false);
     expect(result.get(MLP)).toBe('Primary');
     expect(result.get(XGB)).toBe('Strong');
   });
 
   it('is case-insensitive on use-case IDs (UUID skew tolerance)', () => {
-    const result = computeBestLevels(rankings, [BINARY.toUpperCase()]);
+    const result = ComputeBestLevels(rankings, [BINARY.toUpperCase()]);
     expect(result.get(XGB)).toBe('Primary');
   });
 });

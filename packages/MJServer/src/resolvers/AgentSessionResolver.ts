@@ -25,15 +25,15 @@ import { SessionManager, SessionAuthorizationError } from '../agentSessions/inde
 export class StartAgentSessionResult {
     /** ID of the newly created session. */
     @Field()
-    agentSessionId: string;
+    agentSessionId: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     /** Lifecycle status of the session (always `Active` on a successful start). */
     @Field()
-    status: string;
+    status: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     /** ID of the conversation the session is attached to (supplied or freshly created). */
     @Field()
-    conversationId: string;
+    conversationId: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 /**

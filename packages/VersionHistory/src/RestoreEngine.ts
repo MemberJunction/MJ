@@ -28,11 +28,11 @@ import {
     ENTITY_VERSION_LABEL_ITEMS,
     ENTITY_VERSION_LABEL_RESTORES,
     ENTITY_VERSION_LABELS,
-    sqlEquals,
-    sqlNotIn,
-    loadRecordChangeSnapshot,
-    loadEntityById,
-    buildPrimaryKeyForLoad,
+    SqlEquals,
+    SqlNotIn,
+    LoadRecordChangeSnapshot,
+    LoadEntityById,
+    BuildPrimaryKeyForLoad,
 } from './constants';
 
 /** Batch size for progress update writes — only persist every N items. */
@@ -49,8 +49,8 @@ const PROGRESS_UPDATE_INTERVAL = 10;
  * - Supports dry-run mode for previewing changes without applying them
  */
 export class RestoreEngine {
-    private LabelMgr = new LabelManager();
-    private SnapshotBldr = new SnapshotBuilder();
+    private labelMgr = new LabelManager();
+    private snapshotBldr = new SnapshotBuilder();
 
     /** Optional provider override; falls back to Metadata.Provider when not set. */
     private _provider?: IMetadataProvider;
@@ -73,7 +73,7 @@ export class RestoreEngine {
         const resolvedOptions = this.resolveDefaults(options);
 
         // Load the target label
-        const label = await loadEntityById<MJVersionLabelEntity>(ENTITY_VERSION_LABELS, labelId, contextUser);
+        const label = await LoadEntityById<MJVersionLabelEntity>(ENTITY_VERSION_LABELS, labelId, contextUser);
         if (!label) throw new Error(`Version label '${labelId}' not found`);
 
         const labelName = label.Name;
@@ -117,7 +117,7 @@ export class RestoreEngine {
 
         // Mark the label as restored
         if (!resolvedOptions.DryRun && finalStatus !== 'Error') {
-            await this.LabelMgr.MarkLabelRestored(labelId, contextUser);
+            await this.labelMgr.MarkLabelRestored(labelId, contextUser);
         }
 
         LogStatus(`VersionHistory: Restore complete. ${restoredCount} restored, ${failedCount} failed, ${skippedCount} skipped.`);
@@ -189,7 +189,7 @@ export class RestoreEngine {
     ): Promise<MJVersionLabelItemEntityType[]> {
         const rv = new RunView();
 
-        let extraFilter = sqlEquals('VersionLabelID', labelId);
+        let extraFilter = SqlEquals('VersionLabelID', labelId);
 
         // Apply entity exclusion
         if (options.SkipEntities && options.SkipEntities.length > 0) {
@@ -198,7 +198,7 @@ export class RestoreEngine {
                 .map(name => md.EntityByName(name)?.ID)
                 .filter((id): id is string => id != null);
             if (excludeIds.length > 0) {
-                extraFilter += ` AND ${sqlNotIn('EntityID', excludeIds)}`;
+                extraFilter += ` AND ${SqlNotIn('EntityID', excludeIds)}`;
             }
         }
 
@@ -306,7 +306,7 @@ export class RestoreEngine {
         }
 
         try {
-            const snapshotData = await loadRecordChangeSnapshot(item.RecordChangeID, contextUser);
+            const snapshotData = await LoadRecordChangeSnapshot(item.RecordChangeID, contextUser);
             if (!snapshotData) {
                 return this.failedItemResult(entityInfo.Name, item.RecordID,
                     'Could not load snapshot from RecordChange');
@@ -379,7 +379,7 @@ export class RestoreEngine {
 
         // Try to load existing record using the entity's actual primary key
         try {
-            const key = buildPrimaryKeyForLoad(entityInfo, recordId);
+            const key = BuildPrimaryKeyForLoad(entityInfo, recordId);
             const loaded = await entity.InnerLoad(key);
             if (loaded) return entity;
         } catch {
@@ -439,7 +439,7 @@ export class RestoreEngine {
         items: MJVersionLabelItemEntityType[],
         contextUser: UserInfo
     ): Promise<string> {
-        const label = await this.LabelMgr.CreateLabel({
+        const label = await this.labelMgr.CreateLabel({
             Name: `Pre-Restore: ${targetLabelName} (${new Date().toISOString()})`,
             Description: `Automatic safety snapshot created before restoring to label '${targetLabelName}'`,
             Scope: targetLabelScope,
@@ -458,7 +458,7 @@ export class RestoreEngine {
             // the key `ID='ID|abc'`, and a composite key can't be a single value at all.
             const key = CompositeKey.FromURLSegment(entityInfo, item.RecordID);
 
-            await this.SnapshotBldr.CaptureRecord(
+            await this.snapshotBldr.CaptureRecord(
                 preRestoreLabelId,
                 entityInfo.Name,
                 key,
@@ -512,7 +512,7 @@ export class RestoreEngine {
         contextUser: UserInfo
     ): Promise<void> {
         try {
-            const restore = await loadEntityById<MJVersionLabelRestoreEntity>(ENTITY_VERSION_LABEL_RESTORES, restoreId, contextUser);
+            const restore = await LoadEntityById<MJVersionLabelRestoreEntity>(ENTITY_VERSION_LABEL_RESTORES, restoreId, contextUser);
             if (!restore) return;
 
             restore.CompletedItems = completedItems;
@@ -536,7 +536,7 @@ export class RestoreEngine {
         contextUser: UserInfo
     ): Promise<void> {
         try {
-            const restore = await loadEntityById<MJVersionLabelRestoreEntity>(ENTITY_VERSION_LABEL_RESTORES, restoreId, contextUser);
+            const restore = await LoadEntityById<MJVersionLabelRestoreEntity>(ENTITY_VERSION_LABEL_RESTORES, restoreId, contextUser);
             if (!restore) return;
 
             restore.Status = status;

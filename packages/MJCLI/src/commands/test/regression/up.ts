@@ -5,10 +5,10 @@ import {
   AGENTIC_TEST_RUNNER_IMAGE,
   BACPAC_OVERLAY,
   BACPAC_STANDALONE_COMPOSE,
-  dockerComposeArgs,
-  isInsideMonorepo,
-  resolveStandaloneCompose,
-  spawnInherit,
+  DockerComposeArgs,
+  IsInsideMonorepo,
+  ResolveStandaloneCompose,
+  SpawnInherit,
 } from '../../../lib/regression/docker-helpers.js';
 
 export default class TestRegressionUp extends Command {
@@ -43,7 +43,7 @@ export default class TestRegressionUp extends Command {
     if ((flags['bacpac-no-upgrade'] || flags.metadata) && !flags.bacpac) {
       this.error('--bacpac-no-upgrade and --metadata require --bacpac.');
     }
-    if (isInsideMonorepo()) {
+    if (IsInsideMonorepo()) {
       await this.runInMonorepo(flags);
     } else {
       await this.runExternal(flags);
@@ -73,9 +73,9 @@ export default class TestRegressionUp extends Command {
     }
     if (flags.suite) { childEnv.TEST_SUITE_NAME = flags.suite as string; this.log(`  Suite: ${flags.suite}`); }
 
-    const composeArgs = dockerComposeArgs('full', ['up'], overlays);
+    const composeArgs = DockerComposeArgs('full', ['up'], overlays);
     if (flags.detach) composeArgs.push('-d');
-    const code = await spawnInherit('docker', composeArgs, { env: childEnv });
+    const code = await SpawnInherit('docker', composeArgs, { env: childEnv });
     if (code !== 0) this.exit(code);
   }
 
@@ -94,7 +94,7 @@ export default class TestRegressionUp extends Command {
     const metaAbs = path.resolve(flags.metadata as string);
     if (!existsSync(metaAbs) || !statSync(metaAbs).isDirectory()) this.error(`✗ --metadata directory not found: ${metaAbs}`);
 
-    const compose = resolveStandaloneCompose(BACPAC_STANDALONE_COMPOSE);
+    const compose = ResolveStandaloneCompose(BACPAC_STANDALONE_COMPOSE);
     if (!existsSync(compose)) this.error(`✗ Standalone bacpac compose not found (${compose}). Reinstall @memberjunction/cli.`);
 
     const childEnv: NodeJS.ProcessEnv = {
@@ -115,7 +115,7 @@ export default class TestRegressionUp extends Command {
       'that is a separate workstream). If it cannot be pulled, the explorer service will fail to start.',
     );
     this.log(`▶ docker compose (bacpac-standalone) — bacpac=${abs} upgrade=${childEnv.BACPAC_UPGRADE}`);
-    const code = await spawnInherit(
+    const code = await SpawnInherit(
       'docker',
       ['compose', '-f', compose, 'up', '--abort-on-container-exit', '--exit-code-from', 'test-runner'],
       { env: childEnv },

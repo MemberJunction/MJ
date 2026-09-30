@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
     GraphProviderPool,
-    probeIndependentInstances,
+    ProbeIndependentInstances,
     type GraphProviderLike,
     type GraphSettleOutcome,
 } from '../lib/graph-provider-pool';
@@ -256,7 +256,7 @@ describe('probeIndependentInstances', () => {
             created.push(child);
             return child;
         };
-        expect(await probeIndependentInstances(host)).toBeUndefined();
+        expect(await ProbeIndependentInstances(host)).toBeUndefined();
         expect(created).toHaveLength(1);
         expect(created[0].releases).toBe(1);
     });
@@ -264,6 +264,6 @@ describe('probeIndependentInstances', () => {
     it('returns the reason when CreateIndependentInstance throws', async () => {
         const host = new FakeProvider();
         host.independentShouldThrow = true;
-        expect(await probeIndependentInstances(host)).toMatch(/does not implement/);
+        expect(await ProbeIndependentInstances(host)).toMatch(/does not implement/);
     });
 });

@@ -4,10 +4,10 @@ import { RegisterClass } from '@memberjunction/global';
 import { ListOperations } from '@memberjunction/lists';
 
 import {
-  addOutputParam,
-  getBooleanParam,
-  getStringParam,
-  missingParam,
+  AddOutputParam,
+  GetBooleanParam,
+  GetStringParam,
+  MissingParam,
 } from './_action-helpers';
 
 /**
@@ -22,10 +22,10 @@ import {
 @RegisterClass(BaseAction, 'Refresh List From Source')
 export class RefreshListFromSourceAction extends BaseAction {
   protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-    const listId = getStringParam(params, 'ListID');
-    if (!listId) return missingParam('ListID');
+    const listId = GetStringParam(params, 'ListID');
+    if (!listId) return MissingParam('ListID');
 
-    const mode = (getStringParam(params, 'Mode') ?? 'Additive') as 'Additive' | 'Sync';
+    const mode = (GetStringParam(params, 'Mode') ?? 'Additive') as 'Additive' | 'Sync';
     if (mode !== 'Additive' && mode !== 'Sync') {
       return {
         Success: false,
@@ -33,14 +33,14 @@ export class RefreshListFromSourceAction extends BaseAction {
         Message: `Mode must be 'Additive' or 'Sync', got '${mode}'`,
       };
     }
-    const confirmDrops = getBooleanParam(params, 'ConfirmDrops', false);
+    const confirmDrops = GetBooleanParam(params, 'ConfirmDrops', false);
 
     const ops = new ListOperations(params.ContextUser, params.Provider);
     const result = await ops.RefreshFromSource(listId, mode, { ConfirmDrops: confirmDrops });
 
-    addOutputParam(params, 'Added', result.Counts?.Added);
-    addOutputParam(params, 'Removed', result.Counts?.Removed);
-    addOutputParam(params, 'Failed', result.Counts?.Failed);
+    AddOutputParam(params, 'Added', result.Counts?.Added);
+    AddOutputParam(params, 'Removed', result.Counts?.Removed);
+    AddOutputParam(params, 'Failed', result.Counts?.Failed);
 
     return {
       Success: result.Success,

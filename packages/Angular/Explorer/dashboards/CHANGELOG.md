@@ -1,5 +1,374 @@
 # @memberjunction/ng-dashboards
 
+## 6.2.0-edge.1
+
+### Minor Changes
+
+- 0eeb89d: **AI usage analytics: a trustworthy cost basis, and the dimensions to slice it by (#4396)**
+
+  Cost reporting was wrong in both directions and could not be sliced by the dimensions anyone
+  actually asks about. This settles the basis, gives runs the keys they were missing, and rebuilds
+  the reporting layer on top.
+  - **Cost doctrine.** `guides/AI_USAGE_AND_COST_ANALYTICS_GUIDE.md` states the rules every consumer
+    now follows: the additive basis is own cost at the prompt-run grain, `Cost IS NULL` means
+    unpriced and is never coalesced to zero, rollups are derived from the hierarchy at query time and
+    never summed from stored inclusive columns, and coverage ships beside every cost figure.
+  - **Attribution.** `AIPromptRun` gains `UserID`, written when the run is created. The agent run a
+    prompt run belongs to is not stored on it: the agent layer owns that link as
+    `AIAgentRunStep.TargetLogID`, now indexed, and the fact view resolves it at query time. Cost
+    precision is aligned on `decimal(19,8)` across both run tables, and six analytics indexes are
+    added. Sub-agent runs now inherit `CompanyID`.
+  - **Parallel execution accounting.** The consolidated parent is created before its arms run, so the
+    arms persist as `ParallelChild` rows with their own cost and the parent carries none — previously
+    the losing arms were never recorded at all.
+  - **Semantic layer.** `vwAIUsageFacts` gives one row per prompt run over the base tables, with
+    time buckets, every dimension, and the flags that carry semantics no column expresses
+    (`IsPriced`, `IsParallelParent`, `IsUnmeasured`, `SourceKind`).
+  - **Aggregates.** Eight saved queries in the `AI` category, every cost figure grouped by currency
+    and carried with its priced/unpriced counts. They run live; materializing the hourly and daily
+    grains is a follow-up.
+  - **Honest dashboards.** The seven analytics surfaces read the aggregates instead of pulling
+    unbounded raw rows, unpriced cost renders as an em dash rather than `$0.00`, and coverage is
+    shown beside every total.
+  - **`mj-query-pivot`.** A generic pivot over any saved Query in `@memberjunction/ng-query-viewer`;
+    the AI Usage Explorer is a thin configuration of it. `ColumnLabels` titles columns, and
+    `HiddenColumns` lets a host group by an ID it does not display (so two records that share a name
+    stay apart while only the name shows).
+
+### Patch Changes
+
+- a3539d2: Business-user vocabulary: surface the user's own domain nouns instead of platform jargon on the default data-browsing surfaces.
+  - `EntityInfo.DisplayNamePlural` (`@memberjunction/core`): a business-friendly plural of the entity's display name ("Contacts", "Companies", "Addresses"), derived from `DisplayNameOrName` via the existing `GeneratePluralName` helper, so a per-deployment `DisplayName` override ("Member") flows through as "Members". It keeps the name's leading capital, so irregular plurals read "People" and "Children" rather than "people". Display-only; never a lookup key. Unit-tested.
+  - Entity viewer, grid, and cards empty states now say "No Contacts to display" instead of "No records found" / "No data to display", falling back to the generic copy when no entity is in scope.
+  - Data Explorer: the word "entity" is translated out of the default data-browsing app (both search placeholders, the sidebar's "Record Types" heading, loading text, counts, filter pill, empty states, recent section). Bindings, CSS classes, and agent-tool contracts are untouched.
+  - Sharing Center: section headings show friendly labels ("Dashboards", "Artifacts", "Rules") via a display-only label map. The underlying `DomainName` stays as-is because it is the lookup key that drives Revoke, audit mapping, and icon selection. Unmapped custom domains have a trailing " Permissions" stripped. Sections are sorted by the label the user reads.
+  - User Routines: softened the editor loading text.
+
+  Ported from #3043 (the runtime, no-migration half). The stored `Entity.DisplayNamePlural` column, its CodeGen completion, and the non-English plural seam are tracked separately.
+
+- 41274aa: Cache-invalidation events no longer carry row data unless the deployment opts in, and the consumers that needed that row now re-read it through an access-controlled path.
+
+  The `cacheInvalidation` subscription is delivered to every connected client with no per-user filter, and both publish sites attached the full row (`JSON.stringify(entity.GetAll())`) to every save. Row-level security and any consumer-side scoping apply on the read path, which a push bypasses — so every signed-in session received the contents of rows it had no right to read.
+
+  **Server.** `recordData` is populated only for entities named in the new `cacheSettings.recordDataBroadcastEntities`, default `[]`. `['*']` restores the previous behaviour wholesale. `EntityName` and `PrimaryKeyValues` still broadcast unconditionally — they disclose nothing a client cannot already derive, and they are what tells a consumer _which_ record changed.
+
+  **Core.** New `ResolveEntityEventRow(event, provider?, contextUser?)` and `ResolveEntityEventKey(event)`. The first returns the row from the live entity (local events), from `recordData` (allowlisted entities), or by re-reading that one record by primary key through the provider — as the signed-in user, so the server decides what comes back. A session that may not read the record gets `null` rather than an exception or someone else's data. The second reads identity from the primary key, which is always present.
+
+  **Consumers.** `ConversationEngine` hydrates once in its already-async event dispatcher and passes the row to its five handlers, which stay synchronous; identity now comes from the primary key, so a conversation delete and a project delete need no row at all. The dispatcher asks `EntityEventRowIsFree(event)` first — a row that is already in hand, from the live entity or from allowlisted `recordData`, is never worth skipping, and the per-entity skips below it are about avoiding THE READ. The AI Agent Run form resolves `Status` the same way, behind its id match; `AgentRunID` on a step cannot be gated that way (it is the foreign key being matched), so while that form is open on a Running agent every step save in the deployment costs it one keyed read, bounded by the run's lifetime. The Form Builder cockpit resolves `Name` only after its id match has already missed. A conversation whose re-read comes back null — refused, gone, or failed — is left as it was rather than handed to `SetMany`, and a remote delete on the detail path no longer re-reads a row that is guaranteed gone.
+
+  **Cost, stated plainly for whoever sets the allowlist.** `BaseEngine` is unchanged in code and is the broadest behavioural change here: it applies a remote save in place only when `recordData` is present, so with the default `[]` every remote save of an `AutoRefresh` entity falls through to a full `RunView` reload of each matching config (`LoadSingleConfig(..., bypassCache=true)`), not a keyed read. Remote deletes still apply in place from the primary key. Engine-cached reference entities that every signed-in user may read are the ones worth listing.
+
+  Without the consumer half, defaulting `recordDataBroadcastEntities` to `[]` would have made `ConversationEngine`'s remote handling a silent no-op — including the eviction whose own comment warns that a warm cache "would keep serving without this row forever".
+
+- 520bd09: Follow-ups to the durable entity-action payload fix (#4794), found while verifying it end to end.
+  - `@memberjunction/actions`: a durable binding now redacts its payload against the engine's live `ActionParam` definitions, the same ones `ActionExecutionLog.Params` uses. Before, it read a per-action cached collection that keeps the old row after an in-place update, so setting a parameter's `LogValue` to 0 on a running server redacted the log while the value was still written to `Task.InputPayload` until a restart. The runtime parameters are now named from those same live definitions too: redaction matches definitions by name, so a parameter renamed on a running server was named from the stale copy, matched nothing, and was written to the payload unredacted, whole-record bindings included.
+  - `@memberjunction/task-graph`: a task whose `InputPayload` is not valid JSON now **fails** (`Task <id> has an InputPayload that is not valid JSON …`) instead of running with no inputs. A raw string reaches that column through `TaskGraph.RetryTask` / `UpdateTaskInput`.
+  - `@memberjunction/server`: `TaskGraphActionRunner` no longer adds one parameter per upstream task to an action step. That map is keyed by upstream task ID, so every step with a dependency received an extra parameter named by a GUID and holding the upstream step's whole output (logged in full). The dependency outputs still reach the step, merged by key, through the dispatcher.
+  - `@memberjunction/ng-dashboards`: the Workflows run view shows why a failed step failed ("Why it failed"). Before, the message was only in the JSON tab.
+
+- d67c8c0: Reveal hover-gated row actions on keyboard focus, and stop a card collapsing under
+  its own content.
+  - `view-selector` and `home-dashboard` gated row/pin actions on `:hover` alone. At
+    `opacity: 0` they were pointer-only — invisible to a tabbing keyboard user and
+    unreachable without a mouse. Added `:focus-within`.
+  - `ps-catalog` cards had no `flex-shrink: 0`. The default shrink compressed the guide
+    card below its own content at 1280x720 (46px vs 166px) and the overflow landed
+    _behind_ the `position: relative` gallery cards, making filter chips genuinely
+    unclickable.
+
+  Note: roughly 20 other stylesheets still gate row actions on `:hover` alone. Not
+  addressed here — worth a dedicated sweep.
+
+- f78fd63: Ctrl/Cmd+/ opens the command palette, and the whiteboard's Sees dropdown closes on an
+  outside click.
+
+  Two components declared the same host event twice, silently disabling a handler. Angular
+  collects host listeners into an object keyed by event name, so a second `@HostListener`
+  for the same event **replaces** the first — no build error, no warning.
+  - `ShellComponent` declared `document:keydown` twice; the surviving handler did not
+    handle the command-palette chord, so Ctrl/Cmd+/ never fired for the entire life of
+    the feature.
+  - `RealtimeWhiteboardHostComponent` had the same bug for `document:click`, killing the
+    Sees dropdown's outside-click dismissal.
+
+  Both packages get a source-level guard test, because a behavioural test can only observe
+  the surviving handler — it cannot see that a second declaration clobbered the first.
+
+  With the chord live, Ctrl/Cmd+/ no longer collides with places that already used it:
+  - The shell leaves the chord to an element that already handled it, so Ctrl/Cmd+/ in a
+    code editor toggles a comment without also opening the palette.
+  - Component Studio's shortcuts panel opens with `?` only, and Data Explorer's `/` filter
+    shortcut ignores Ctrl/Cmd+/.
+
+  The palette could not be opened before, so two of its own bugs are fixed with it:
+  - It lists only the user's own apps — the same list Home, the app switcher and the
+    omnibar show — instead of every app in the system.
+  - Its search row, now "Search everything", opens Search Results; nothing handled its
+    event before. It shows only while the chrome shows search (`Shell.SearchBar.Enabled`),
+    like the header search.
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [beacbb2]
+- Updated dependencies [520bd09]
+- Updated dependencies [2d4bf8d]
+- Updated dependencies [307da67]
+- Updated dependencies [d67c8c0]
+- Updated dependencies [62e9e2d]
+- Updated dependencies [67f6c85]
+- Updated dependencies [62f0ebc]
+- Updated dependencies [a7da50b]
+- Updated dependencies [2cb5498]
+- Updated dependencies [1d43161]
+- Updated dependencies [7110019]
+- Updated dependencies [87aa6e0]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [9845c00]
+- Updated dependencies [db975fa]
+- Updated dependencies [920bef8]
+- Updated dependencies [e2fa695]
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/ai-core-plus@6.2.0-edge.1
+  - @memberjunction/ng-core-entity-forms@6.2.0-edge.1
+  - @memberjunction/ng-query-viewer@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.1
+  - @memberjunction/ng-resource-permissions@6.2.0-edge.1
+  - @memberjunction/ng-user-routines@6.2.0-edge.1
+  - @memberjunction/ng-conversations@6.2.0-edge.1
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.1
+  - @memberjunction/actions-base@6.2.0-edge.1
+  - @memberjunction/ng-base-forms@6.2.0-edge.1
+  - @memberjunction/api-keys-base@6.2.0-edge.1
+  - @memberjunction/credentials@6.2.0-edge.1
+  - @memberjunction/export-engine@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/interactive-component-types@6.2.0-edge.1
+  - @memberjunction/ng-action-gallery@6.2.0-edge.1
+  - @memberjunction/ng-agent-requests@6.2.0-edge.1
+  - @memberjunction/ng-agents@6.2.0-edge.1
+  - @memberjunction/ng-ai-test-harness@6.2.0-edge.1
+  - @memberjunction/ng-artifacts@6.2.0-edge.1
+  - @memberjunction/ng-base-application@6.2.0-edge.1
+  - @memberjunction/ng-clustering@6.2.0-edge.1
+  - @memberjunction/ng-code-editor@6.2.0-edge.1
+  - @memberjunction/ng-composer@6.2.0-edge.1
+  - @memberjunction/ng-container-directives@6.2.0-edge.1
+  - @memberjunction/ng-credentials@6.2.0-edge.1
+  - @memberjunction/ng-dashboard-viewer@6.2.0-edge.1
+  - @memberjunction/ng-entity-relationship-diagram@6.2.0-edge.1
+  - @memberjunction/ng-explorer-settings@6.2.0-edge.1
+  - @memberjunction/ng-export-service@6.2.0-edge.1
+  - @memberjunction/ng-filter-builder@6.2.0-edge.1
+  - @memberjunction/ng-list-management@6.2.0-edge.1
+  - @memberjunction/ng-markdown@6.2.0-edge.1
+  - @memberjunction/ng-media-player@6.2.0-edge.1
+  - @memberjunction/ng-notifications@6.2.0-edge.1
+  - @memberjunction/ng-react@6.2.0-edge.1
+  - @memberjunction/ng-record-process-studio@6.2.0-edge.1
+  - @memberjunction/ng-search@6.2.0-edge.1
+  - @memberjunction/ng-shared@6.2.0-edge.1
+  - @memberjunction/ng-shared-generic@6.2.0-edge.1
+  - @memberjunction/ng-tabstrip@6.2.0-edge.1
+  - @memberjunction/ng-testing@6.2.0-edge.1
+  - @memberjunction/ng-trees@6.2.0-edge.1
+  - @memberjunction/ng-ui-components@6.2.0-edge.1
+  - @memberjunction/ng-versions@6.2.0-edge.1
+  - @memberjunction/ng-word-cloud@6.2.0-edge.1
+  - @memberjunction/predictive-studio-core@6.2.0-edge.1
+  - @memberjunction/tag-engine-base@6.2.0-edge.1
+  - @memberjunction/theme-engine@6.2.0-edge.1
+  - @memberjunction/ai-engine-base@6.2.0-edge.1
+  - @memberjunction/ng-actions@6.2.0-edge.1
+  - @memberjunction/ng-archive-manager@6.2.0-edge.1
+  - @memberjunction/ng-base-types@6.2.0-edge.1
+  - @memberjunction/ng-map-view@6.2.0-edge.1
+  - @memberjunction/ng-scheduling@6.2.0-edge.1
+  - @memberjunction/ng-task-graph-editor@6.2.0-edge.1
+  - @memberjunction/integration-engine-base@6.2.0-edge.1
+  - @memberjunction/templates-base-types@6.2.0-edge.1
+  - @memberjunction/testing-engine-base@6.2.0-edge.1
+  - @memberjunction/lists-base@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- a17a228: Consolidate metadata cache API methods and update PredictiveStudio outcome config score band semantics per review.
+  - **Metadata Cache API**:
+    - Make `HasCachedRecordName` and `GetCachedRecordNameOnlyIfCached` required methods on `IMetadataProvider`.
+    - Remove deprecated `GetCachedRecordNameSync` across core and UI consumers (`navigation.service.ts`, `record-origin-crumb.component.ts`, `app-routing.module.ts`).
+  - **Predictive Studio Outcome Config**:
+    - Score band assignment now uses clean half-open intervals `[Min, Max)` with the highest band inclusive `[Min, Max]`, eliminating floating-point sentinel tolerances.
+    - Non-finite and out-of-range normalized model scores (`< 0` or `> 1`) return `null` rather than silently clamping.
+    - Non-standard/neutral target variables default to neutral gray band styling without asserting polarity.
+    - Warn on JSON parse failures in `resolveOutcomeConfig`.
+  - **Lockfile & Dev Scripts**:
+    - Restored `@memberjunction/tag-engine-base` lockfile sync.
+    - Restored MJExplorer dev port 4201.
+
+- 2cd8411: Fix a set of resource-leak findings from the Round 14 memory-leak audit: `ai-mcp-server`'s `--list-tools` CLI path now attaches a pool `error` handler and guarantees the SQL connection pool is closed in a `finally` block, so a failed tool-discovery run no longer orphans the connection; `ai-openai`'s `OpenAIRealtimeSession.Close()` (inherited by the xAI provider) now clears its callback-handler fields on close, matching the Gemini and ElevenLabs realtime sessions; `ng-dashboards`'s `ConnectionsComponent` and `GraphQLConsoleComponent` now call `super.ngOnInit()`/`super.ngOnDestroy()` so `BaseResourceComponent`'s query-param subscription and `destroy$` teardown run correctly; `installer`'s `GitHubReleaseProvider` and `SmokeTestPhase` now drain discarded HTTP response bodies instead of leaving them unconsumed; and `messaging-adapters`'s `SlackAdapter.thinkingMessageIds` map now uses the same TTL/max-size eviction pattern already applied to its sibling per-thread maps.
+- 6ab86a7: fix(vectors): live UI update on vector sync completion and loud failure reporting on embedding errors
+  - **Vector Management Dashboard**:
+    - In `VectorManagementResourceComponent`, `RunView` for `MJ: Entity Record Documents` now sets `BypassCache: true` during row refresh to avoid returning stale zero-vector counts from `QueryCache`.
+    - Added `buildSidebarData()` call in the sync completion flow so Vector DB Health, status reason, and vector coverage percentage update in real-time.
+    - Replaced strict equality (`===`) checks on `EntityDocumentID` with case-insensitive `UUIDsEqual()` across row finding and status/progress updating methods.
+    - Canonicalized entity document IDs to `doc.ID` and updated `SyncingIds` tracking with case-insensitive `IsSyncing()` checks.
+    - Added `forceRefresh?: boolean` parameter to `LoadData()` and `fetchAllData()` to bypass cache on manual refreshes and entity document creation/updates.
+  - **AI Vector Sync Engine**:
+    - In `EntityVectorSyncer`, caught and recorded embedding generation errors (`_embedErrors`) when calling `EmbedTexts()`.
+    - Fails loudly when embedding models throw or return 0 vectors for valid records (e.g., due to missing API keys like `AI_VENDOR_API_KEY__<DRIVER>` or model unavailability).
+    - Emits `Stage: 'error'` with an explicit error message naming the driver and expected environment variable, ensuring failures are not masked as silent completions with 0 vectors.
+
+- Updated dependencies [abf8778]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [37891d3]
+- Updated dependencies [6ad6434]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [d665a6e]
+- Updated dependencies [50241c8]
+- Updated dependencies [6207578]
+- Updated dependencies [6fd16d2]
+- Updated dependencies [5df9486]
+- Updated dependencies [5df9486]
+- Updated dependencies [e225ece]
+- Updated dependencies [c157749]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [7658d68]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [575bfae]
+- Updated dependencies [a17a228]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [3977917]
+- Updated dependencies [d61b425]
+- Updated dependencies [104125c]
+- Updated dependencies [dc04823]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8d1a373]
+- Updated dependencies [1ed606c]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [af57e8d]
+- Updated dependencies [2c590b0]
+- Updated dependencies [fc3da91]
+  - @memberjunction/actions-base@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/ai-core-plus@6.2.0-edge.0
+  - @memberjunction/ng-conversations@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.0
+  - @memberjunction/ng-base-forms@6.2.0-edge.0
+  - @memberjunction/testing-engine-base@6.2.0-edge.0
+  - @memberjunction/ng-core-entity-forms@6.2.0-edge.0
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.0
+  - @memberjunction/ng-shared-generic@6.2.0-edge.0
+  - @memberjunction/predictive-studio-core@6.2.0-edge.0
+  - @memberjunction/ng-shared@6.2.0-edge.0
+  - @memberjunction/ai-engine-base@6.2.0-edge.0
+  - @memberjunction/ng-search@6.2.0-edge.0
+  - @memberjunction/ng-explorer-settings@6.2.0-edge.0
+  - @memberjunction/ng-actions@6.2.0-edge.0
+  - @memberjunction/ng-user-routines@6.2.0-edge.0
+  - @memberjunction/ng-ai-test-harness@6.2.0-edge.0
+  - @memberjunction/tag-engine-base@6.2.0-edge.0
+  - @memberjunction/api-keys-base@6.2.0-edge.0
+  - @memberjunction/ng-base-application@6.2.0-edge.0
+  - @memberjunction/ng-testing@6.2.0-edge.0
+  - @memberjunction/ng-action-gallery@6.2.0-edge.0
+  - @memberjunction/ng-agent-requests@6.2.0-edge.0
+  - @memberjunction/ng-agents@6.2.0-edge.0
+  - @memberjunction/ng-archive-manager@6.2.0-edge.0
+  - @memberjunction/ng-artifacts@6.2.0-edge.0
+  - @memberjunction/ng-base-types@6.2.0-edge.0
+  - @memberjunction/ng-clustering@6.2.0-edge.0
+  - @memberjunction/ng-code-editor@6.2.0-edge.0
+  - @memberjunction/ng-credentials@6.2.0-edge.0
+  - @memberjunction/ng-dashboard-viewer@6.2.0-edge.0
+  - @memberjunction/ng-list-management@6.2.0-edge.0
+  - @memberjunction/ng-map-view@6.2.0-edge.0
+  - @memberjunction/ng-notifications@6.2.0-edge.0
+  - @memberjunction/ng-query-viewer@6.2.0-edge.0
+  - @memberjunction/ng-react@6.2.0-edge.0
+  - @memberjunction/ng-record-process-studio@6.2.0-edge.0
+  - @memberjunction/ng-resource-permissions@6.2.0-edge.0
+  - @memberjunction/ng-scheduling@6.2.0-edge.0
+  - @memberjunction/ng-task-graph-editor@6.2.0-edge.0
+  - @memberjunction/ng-trees@6.2.0-edge.0
+  - @memberjunction/ng-versions@6.2.0-edge.0
+  - @memberjunction/credentials@6.2.0-edge.0
+  - @memberjunction/integration-engine-base@6.2.0-edge.0
+  - @memberjunction/templates-base-types@6.2.0-edge.0
+  - @memberjunction/ng-composer@6.2.0-edge.0
+  - @memberjunction/ng-container-directives@6.2.0-edge.0
+  - @memberjunction/ng-entity-relationship-diagram@6.2.0-edge.0
+  - @memberjunction/ng-filter-builder@6.2.0-edge.0
+  - @memberjunction/ng-media-player@6.2.0-edge.0
+  - @memberjunction/interactive-component-types@6.2.0-edge.0
+  - @memberjunction/ng-tabstrip@6.2.0-edge.0
+  - @memberjunction/ng-export-service@6.2.0-edge.0
+  - @memberjunction/ng-markdown@6.2.0-edge.0
+  - @memberjunction/ng-ui-components@6.2.0-edge.0
+  - @memberjunction/ng-word-cloud@6.2.0-edge.0
+  - @memberjunction/lists-base@6.2.0-edge.0
+  - @memberjunction/export-engine@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+  - @memberjunction/theme-engine@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes

@@ -6,7 +6,7 @@ import { MJMagicLinkProvider } from './providers/mjexplorer-magic-link-provider.
 import { MJGlobal } from '@memberjunction/global';
 import type { PublicAuthProviderInfo } from '@memberjunction/core';
 import { AuthProviderCatalog, type AuthProviderResolution } from './auth-provider-catalog';
-import { mergeCatalogEnvironment, type CatalogEnvironmentMapper } from './catalog-environment';
+import { MergeCatalogEnvironment, type CatalogEnvironmentMapper } from './catalog-environment';
 import { MJLoginPickerComponent } from './login-picker.component';
 
 // Import our generic redirect component
@@ -56,7 +56,7 @@ export class AuthServicesModule {
    *        behaviour is byte-for-byte what it was before the catalog existed, which is what
    *        keeps every existing deployment working untouched.
    */
-  static forRoot(environment: any, catalog?: PublicAuthProviderInfo[]): ModuleWithProviders<AuthServicesModule> {
+  static ForRoot(environment: any, catalog?: PublicAuthProviderInfo[]): ModuleWithProviders<AuthServicesModule> {
     const env = environment as Record<string, unknown>;
     const providers: Provider[] = [];
     const configuredType = (env['AUTH_TYPE'] as string | undefined)?.toLowerCase();
@@ -103,7 +103,7 @@ export class AuthServicesModule {
     // Magic-link is excluded: its session is established by the redeem flow, not by catalog config.
     const effectiveEnvironment =
       resolution.active && !magicLinkActive
-        ? mergeCatalogEnvironment(environment, resolution.active, providerClass as CatalogEnvironmentMapper | undefined)
+        ? MergeCatalogEnvironment(environment, resolution.active, providerClass as CatalogEnvironmentMapper | undefined)
         : environment;
 
     // Use the factory to get provider-specific Angular services
@@ -128,5 +128,10 @@ export class AuthServicesModule {
       ngModule: AuthServicesModule,
       providers: providers as never[]
     };
+  }
+
+  /** @deprecated Use {@link ForRoot}. */
+  static forRoot(environment: any, catalog?: PublicAuthProviderInfo[]): ModuleWithProviders<AuthServicesModule> {
+    return this.ForRoot(environment, catalog);
   }
 }

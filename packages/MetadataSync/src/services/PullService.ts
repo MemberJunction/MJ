@@ -2,7 +2,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import { RunView, EntityInfo, UserInfo, BaseEntity } from '@memberjunction/core';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
-import { findExistingRecordFiles } from '../lib/existing-record-files';
+import { FindExistingRecordFiles } from '../lib/existing-record-files';
 import { loadEntityConfig, EntityConfig } from '../config';
 import { configManager } from '../lib/config-manager';
 import { FileWriteBatch } from '../lib/file-write-batch';
@@ -87,11 +87,16 @@ export class PullService {
   }
 
   /** Set or replace the state manager after construction. */
-  setStateManager(stateManager: SyncStateManager): void {
+  SetStateManager(stateManager: SyncStateManager): void {
     this.stateManager = stateManager;
   }
+
+  /** @deprecated Use {@link SetStateManager}. */
+  setStateManager(stateManager: SyncStateManager): void {
+    return this.SetStateManager(stateManager);
+  }
   
-  async pull(options: PullOptions, callbacks?: PullCallbacks): Promise<PullResult> {
+  async Pull(options: PullOptions, callbacks?: PullCallbacks): Promise<PullResult> {
     // Validate that include and exclude are not used together
     if (options.include && options.exclude) {
       throw new Error('Cannot specify both --include and --exclude options. Please use one or the other.');
@@ -240,7 +245,7 @@ export class PullService {
       
       // Operation succeeded - clean up backup files
       if (!options.dryRun) {
-        await this.cleanupBackupFiles();
+        await this.CleanupBackupFiles();
       }
       
     } catch (error) {
@@ -276,6 +281,11 @@ export class PullService {
       ...pullResult,
       targetDir
     };
+  }
+
+  /** @deprecated Use {@link Pull}. */
+  async pull(options: PullOptions, callbacks?: PullCallbacks): Promise<PullResult> {
+    return this.Pull(options, callbacks);
   }
   
   private async processRecords(
@@ -394,7 +404,7 @@ export class PullService {
    * Clean up backup files created during the pull operation
    * Should be called after successful pull operations to remove persistent backup files
    */
-  async cleanupBackupFiles(): Promise<void> {
+  async CleanupBackupFiles(): Promise<void> {
     if (this.createdBackupFiles.length === 0 && this.createdBackupDirs.size === 0) {
       return;
     }
@@ -430,6 +440,11 @@ export class PullService {
     }
   }
 
+  /** @deprecated Use {@link CleanupBackupFiles}. */
+  async cleanupBackupFiles(): Promise<void> {
+    return this.CleanupBackupFiles();
+  }
+
   /**
    * Remove a backup directory if it's empty
    */
@@ -460,8 +475,13 @@ export class PullService {
   /**
    * Get the list of backup files created during the current pull operation
    */
-  getCreatedBackupFiles(): string[] {
+  GetCreatedBackupFiles(): string[] {
     return [...this.createdBackupFiles];
+  }
+
+  /** @deprecated Use {@link GetCreatedBackupFiles}. */
+  getCreatedBackupFiles(): string[] {
+    return this.GetCreatedBackupFiles();
   }
   
   /**
@@ -593,7 +613,7 @@ export class PullService {
     
     // Find existing files
     const filePattern = entityConfig.pull?.filePattern || entityConfig.filePattern || '*.json';
-    const existingFiles = await findExistingRecordFiles(
+    const existingFiles = await FindExistingRecordFiles(
       targetDir,
       filePattern,
       entityConfig.ignoreDirectories ?? []

@@ -78,14 +78,14 @@ export function ComponentRenderer({ spec }: { spec: ComponentSpec }): React.Reac
 
             const savedUserSettings = await LoadUserSettings(spec, user);
             const libraries =
-                assessment.mode === 'dom'
+                assessment.Mode === 'dom'
                     ? await LoadDomHostLibraries(DeclaredGlobals(resolved, hierarchy.Libraries), user)
                     : [];
 
             if (!active) return;
             setPrepared({
                 Spec: resolved,
-                Mode: assessment.mode,
+                Mode: assessment.Mode,
                 Reason: assessment.reason,
                 Styles: BuildMobileComponentStyles(spec),
                 SavedUserSettings: savedUserSettings,

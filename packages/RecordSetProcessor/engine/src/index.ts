@@ -19,3 +19,4 @@ export * from './trackers/NoOpTracker';
 export * from './trackers/GenericProcessRunTracker';
 export * from './operations/RecordProcessGetRunStatusOperation';
 export * from './operations/RecordProcessControlOperations';
+export * from './watermark/WatermarkService';

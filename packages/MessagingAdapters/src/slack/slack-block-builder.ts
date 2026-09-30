@@ -12,8 +12,8 @@
 import { ExecuteAgentResult, MJAIAgentEntityExtended, ActionableCommand, OpenResourceCommand, AutomaticCommand, AgentResponseForm, FormQuestion, MediaOutput } from '@memberjunction/ai-core-plus';
 import { parseBase64DataUrl } from '@memberjunction/ai';
 import { LogStatus } from '@memberjunction/core';
-import { markdownToBlocks } from './slack-formatter.js';
-import { buildExplorerDeepLink, isOpenableURI } from '../base/message-formatter.js';
+import { MarkdownToBlocks } from './slack-formatter.js';
+import { BuildExplorerDeepLink, IsOpenableURI } from '../base/message-formatter.js';
 
 /** Slack enforces a hard 50-block limit per message. */
 const SLACK_MAX_BLOCKS = 50;
@@ -52,7 +52,7 @@ function storeFullResponseText(text: string): string {
  * Retrieve full response text by store key.
  * Returns null if expired or not found.
  */
-export function getFullResponseText(key: string): string | null {
+export function GetFullResponseText(key: string): string | null {
   const entry = fullResponseStore.get(key);
   if (!entry) return null;
   if (Date.now() - entry.timestamp > FULL_RESPONSE_TTL_MS) {
@@ -60,6 +60,11 @@ export function getFullResponseText(key: string): string | null {
     return null;
   }
   return entry.text;
+}
+
+/** @deprecated Use {@link GetFullResponseText}. */
+export function getFullResponseText(key: string): string | null {
+  return GetFullResponseText(key);
 }
 
 /**
@@ -115,7 +120,7 @@ export interface BuildRichResponseOptions {
  * Enforces Slack's 50-block limit. If exceeded, truncates text blocks
  * and adds a truncation notice.
  */
-export function buildRichResponse(
+export function BuildRichResponse(
   result: ExecuteAgentResult | null,
   agent: MJAIAgentEntityExtended,
   responseText: string,
@@ -124,8 +129,8 @@ export function buildRichResponse(
   const blocks: Record<string, unknown>[] = [];
 
   // Agent context header
-  blocks.push(buildAgentContextBlock(agent));
-  blocks.push(buildDivider());
+  blocks.push(BuildAgentContextBlock(agent));
+  blocks.push(BuildDivider());
 
   // Mirror MJ Explorer: show the user-facing Message text (responseText) and let
   // the Explorer deep-link provide access to the full payload/artifact. We do NOT
@@ -133,15 +138,15 @@ export function buildRichResponse(
   // shapes and inevitably leaks internal LLM state (research plans, orchestration
   // metadata, etc.) to the user. The data model itself tells us what's user-facing:
   // agentRun.Message is the text, the artifact is the structured content.
-  blocks.push(...buildTextBlocks(responseText));
+  blocks.push(...BuildTextBlocks(responseText));
 
   // Media blocks (images from agent)
   if (result?.mediaOutputs && result.mediaOutputs.length > 0) {
-    blocks.push(...buildMediaBlocks(result.mediaOutputs.map((m) => mediaOutputToRecord(m))));
+    blocks.push(...BuildMediaBlocks(result.mediaOutputs.map((m) => mediaOutputToRecord(m))));
   }
 
   // Notification blocks from automatic commands
-  const notificationBlocks = buildNotificationBlocks(result?.automaticCommands);
+  const notificationBlocks = BuildNotificationBlocks(result?.automaticCommands);
   if (notificationBlocks.length > 0) {
     blocks.push(...notificationBlocks);
   }
@@ -149,13 +154,13 @@ export function buildRichResponse(
   // Action buttons (if actionableCommands present)
   const commands = result?.actionableCommands;
   if (commands && commands.length > 0) {
-    blocks.push(buildDivider());
-    blocks.push(...buildActionButtons(commands, options?.explorerBaseURL));
+    blocks.push(BuildDivider());
+    blocks.push(...BuildActionButtons(commands, options?.explorerBaseURL));
   }
 
   // Response form (choice buttons for structured input)
   if (result?.responseForm?.questions && result.responseForm.questions.length > 0) {
-    blocks.push(...buildResponseForm(result.responseForm));
+    blocks.push(...BuildResponseForm(result.responseForm));
   }
 
   // "Open in MJ Explorer" link — shown for all successful agent runs when ExplorerBaseURL is configured
@@ -166,18 +171,28 @@ export function buildRichResponse(
 
   // Metadata footer
   if (result?.agentRun) {
-    blocks.push(buildDivider());
-    blocks.push(buildMetadataFooter(result));
+    blocks.push(BuildDivider());
+    blocks.push(BuildMetadataFooter(result));
   }
 
   // Enforce 50-block limit (adds "View Full" button when truncating)
   return enforceBlockLimit(blocks, responseText);
 }
 
+/** @deprecated Use {@link BuildRichResponse}. */
+export function buildRichResponse(
+  result: ExecuteAgentResult | null,
+  agent: MJAIAgentEntityExtended,
+  responseText: string,
+  options?: BuildRichResponseOptions
+): Record<string, unknown>[] {
+  return BuildRichResponse(result, agent, responseText, options);
+}
+
 /**
  * Build a context block showing the agent's avatar and name.
  */
-export function buildAgentContextBlock(agent: MJAIAgentEntityExtended): Record<string, unknown> {
+export function BuildAgentContextBlock(agent: MJAIAgentEntityExtended): Record<string, unknown> {
   const elements: Record<string, unknown>[] = [];
   const agentName = agent.Name ?? 'Agent';
 
@@ -201,19 +216,29 @@ export function buildAgentContextBlock(agent: MJAIAgentEntityExtended): Record<s
   };
 }
 
+/** @deprecated Use {@link BuildAgentContextBlock}. */
+export function buildAgentContextBlock(agent: MJAIAgentEntityExtended): Record<string, unknown> {
+  return BuildAgentContextBlock(agent);
+}
+
 /**
  * Convert markdown response text to Block Kit text sections.
  * Reuses the existing `markdownToBlocks` logic from `slack-formatter.ts`.
  */
+export function BuildTextBlocks(markdown: string): Record<string, unknown>[] {
+  return MarkdownToBlocks(markdown);
+}
+
+/** @deprecated Use {@link BuildTextBlocks}. */
 export function buildTextBlocks(markdown: string): Record<string, unknown>[] {
-  return markdownToBlocks(markdown);
+  return BuildTextBlocks(markdown);
 }
 
 /**
  * Build a rich artifact card from a structured payload.
  * Renders title, summary, source links, and an optional "View Full" button.
  */
-export function buildArtifactCard(artifact: ArtifactPayload): Record<string, unknown>[] {
+export function BuildArtifactCard(artifact: ArtifactPayload): Record<string, unknown>[] {
   const blocks: Record<string, unknown>[] = [];
 
   // Title section
@@ -237,7 +262,7 @@ export function buildArtifactCard(artifact: ArtifactPayload): Record<string, unk
       : artifact.Summary;
 
     // Render preview as markdown blocks
-    const previewBlocks = markdownToBlocks(preview);
+    const previewBlocks = MarkdownToBlocks(preview);
     blocks.push(...previewBlocks.slice(0, 10));
 
     // "View Full Content" button for long content
@@ -288,7 +313,7 @@ export function buildArtifactCard(artifact: ArtifactPayload): Record<string, unk
 
   // "View Full" button if URL is available. A non-public URL here fails the entire message
   // (see isButtonSafeURL), so anything not button-safe degrades to a mrkdwn link.
-  if (artifact.URL && !isButtonSafeURL(artifact.URL) && isOpenableURI(artifact.URL)) {
+  if (artifact.URL && !isButtonSafeURL(artifact.URL) && IsOpenableURI(artifact.URL)) {
     blocks.push({
       type: 'context',
       elements: [{ type: 'mrkdwn', text: `<${artifact.URL}|View Full Report>` }],
@@ -317,6 +342,11 @@ export function buildArtifactCard(artifact: ArtifactPayload): Record<string, unk
   return blocks;
 }
 
+/** @deprecated Use {@link BuildArtifactCard}. */
+export function buildArtifactCard(artifact: ArtifactPayload): Record<string, unknown>[] {
+  return BuildArtifactCard(artifact);
+}
+
 /**
  * Is this URL valid inside a Slack **block element**?
  *
@@ -327,7 +357,7 @@ export function buildArtifactCard(artifact: ArtifactPayload): Record<string, unk
  * context deep-links worked while buttons silently killed the message.
  */
 function isButtonSafeURL(url: unknown): boolean {
-  if (typeof url !== 'string' || !isOpenableURI(url)) return false;
+  if (typeof url !== 'string' || !IsOpenableURI(url)) return false;
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
@@ -349,14 +379,14 @@ function isButtonSafeURL(url: unknown): boolean {
  *
  * Returns an array of blocks (may include both action and context blocks).
  */
-export function buildActionButtons(commands: ActionableCommand[], explorerBaseURL?: string): Record<string, unknown>[] {
+export function BuildActionButtons(commands: ActionableCommand[], explorerBaseURL?: string): Record<string, unknown>[] {
   const blocks: Record<string, unknown>[] = [];
   const buttons: Record<string, unknown>[] = [];
   const resourceInfoItems: string[] = [];
 
   for (const cmd of commands.slice(0, 5)) {
     if (cmd.type === 'open:url' && 'url' in cmd) {
-      if (!isOpenableURI(cmd.url)) {
+      if (!IsOpenableURI(cmd.url)) {
         // Only PROMISE an attachment when one will actually be harvested. The drop-guard fires on
         // any non-http(s) scheme, but only a base64 `data:` URI yields bytes — a `blob:`, `file:`
         // or unparseable `data:` would otherwise render "attached to this reply" beside nothing.
@@ -373,7 +403,7 @@ export function buildActionButtons(commands: ActionableCommand[], explorerBaseUR
       }
     } else if (cmd.type === 'open:resource') {
       const resourceCmd = cmd as OpenResourceCommand;
-      const deepLink = buildExplorerDeepLink(resourceCmd, explorerBaseURL);
+      const deepLink = BuildExplorerDeepLink(resourceCmd, explorerBaseURL);
       if (deepLink && isButtonSafeURL(deepLink)) {
         buttons.push(buildURLButton(cmd.label, deepLink, buttons.length));
       } else if (deepLink) {
@@ -403,6 +433,11 @@ export function buildActionButtons(commands: ActionableCommand[], explorerBaseUR
   }
 
   return blocks;
+}
+
+/** @deprecated Use {@link BuildActionButtons}. */
+export function buildActionButtons(commands: ActionableCommand[], explorerBaseURL?: string): Record<string, unknown>[] {
+  return BuildActionButtons(commands, explorerBaseURL);
 }
 
 /**
@@ -483,7 +518,7 @@ function buildExplorerArtifactLink(
  *
  * Renders notifications as styled context blocks with severity icons.
  */
-export function buildNotificationBlocks(commands: AutomaticCommand[] | undefined): Record<string, unknown>[] {
+export function BuildNotificationBlocks(commands: AutomaticCommand[] | undefined): Record<string, unknown>[] {
   if (!commands || commands.length === 0) return [];
 
   const blocks: Record<string, unknown>[] = [];
@@ -503,6 +538,11 @@ export function buildNotificationBlocks(commands: AutomaticCommand[] | undefined
   return blocks;
 }
 
+/** @deprecated Use {@link BuildNotificationBlocks}. */
+export function buildNotificationBlocks(commands: AutomaticCommand[] | undefined): Record<string, unknown>[] {
+  return BuildNotificationBlocks(commands);
+}
+
 /** Severity icons for notification automatic commands. */
 const NOTIFICATION_ICONS: Record<string, string> = {
   success: ':white_check_mark:',
@@ -514,7 +554,7 @@ const NOTIFICATION_ICONS: Record<string, string> = {
 /**
  * Build image blocks from media outputs.
  */
-export function buildMediaBlocks(mediaOutputs: Record<string, unknown>[]): Record<string, unknown>[] {
+export function BuildMediaBlocks(mediaOutputs: Record<string, unknown>[]): Record<string, unknown>[] {
   return mediaOutputs
     .filter((m) => typeof m.url === 'string' && (m.url as string).startsWith('https://'))
     .slice(0, 5)
@@ -526,10 +566,15 @@ export function buildMediaBlocks(mediaOutputs: Record<string, unknown>[]): Recor
     }));
 }
 
+/** @deprecated Use {@link BuildMediaBlocks}. */
+export function buildMediaBlocks(mediaOutputs: Record<string, unknown>[]): Record<string, unknown>[] {
+  return BuildMediaBlocks(mediaOutputs);
+}
+
 /**
  * Build a warning-styled error display block.
  */
-export function buildErrorBlocks(errorMessage: string): Record<string, unknown>[] {
+export function BuildErrorBlocks(errorMessage: string): Record<string, unknown>[] {
   return [
     {
       type: 'section',
@@ -541,10 +586,15 @@ export function buildErrorBlocks(errorMessage: string): Record<string, unknown>[
   ];
 }
 
+/** @deprecated Use {@link BuildErrorBlocks}. */
+export function buildErrorBlocks(errorMessage: string): Record<string, unknown>[] {
+  return BuildErrorBlocks(errorMessage);
+}
+
 /**
  * Build a metadata footer with timing and token information.
  */
-export function buildMetadataFooter(result: ExecuteAgentResult): Record<string, unknown> {
+export function BuildMetadataFooter(result: ExecuteAgentResult): Record<string, unknown> {
   const parts: string[] = [];
 
   // Timing
@@ -588,11 +638,21 @@ export function buildMetadataFooter(result: ExecuteAgentResult): Record<string, 
   };
 }
 
+/** @deprecated Use {@link BuildMetadataFooter}. */
+export function buildMetadataFooter(result: ExecuteAgentResult): Record<string, unknown> {
+  return BuildMetadataFooter(result);
+}
+
 /**
  * Build a divider block.
  */
-export function buildDivider(): Record<string, unknown> {
+export function BuildDivider(): Record<string, unknown> {
   return { type: 'divider' };
+}
+
+/** @deprecated Use {@link BuildDivider}. */
+export function buildDivider(): Record<string, unknown> {
+  return BuildDivider();
 }
 
 /**
@@ -613,7 +673,7 @@ function mediaOutputToRecord(m: MediaOutput): Record<string, unknown> {
  * This is agent-agnostic and avoids partial submissions — the user fills out
  * everything in the modal and submits once.
  */
-export function buildResponseForm(form: AgentResponseForm): Record<string, unknown>[] {
+export function BuildResponseForm(form: AgentResponseForm): Record<string, unknown>[] {
   const blocks: Record<string, unknown>[] = [];
 
   // Form title
@@ -655,6 +715,11 @@ export function buildResponseForm(form: AgentResponseForm): Record<string, unkno
   return blocks;
 }
 
+/** @deprecated Use {@link BuildResponseForm}. */
+export function buildResponseForm(form: AgentResponseForm): Record<string, unknown>[] {
+  return BuildResponseForm(form);
+}
+
 /**
  * Build a Slack modal view definition from an AgentResponseForm.
  * Used when the form contains non-choice questions that need input fields.
@@ -662,7 +727,7 @@ export function buildResponseForm(form: AgentResponseForm): Record<string, unkno
  * Slack modals support: plain_text_input, number_input, datepicker, checkboxes,
  * radio_buttons, static_select, and multi_static_select.
  */
-export function buildFormModal(form: AgentResponseForm): Record<string, unknown> {
+export function BuildFormModal(form: AgentResponseForm): Record<string, unknown> {
   const modalBlocks: Record<string, unknown>[] = [];
 
   for (const question of form.questions) {
@@ -686,6 +751,11 @@ export function buildFormModal(form: AgentResponseForm): Record<string, unknown>
     close: { type: 'plain_text', text: 'Cancel' },
     blocks: modalBlocks,
   };
+}
+
+/** @deprecated Use {@link BuildFormModal}. */
+export function buildFormModal(form: AgentResponseForm): Record<string, unknown> {
+  return BuildFormModal(form);
 }
 
 /**

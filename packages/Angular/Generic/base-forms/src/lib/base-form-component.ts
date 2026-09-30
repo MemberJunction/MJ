@@ -443,46 +443,53 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
         // ignore blur errors
       }
 
-      if (this.record) {
-        this.PopulatePendingRecords();
-        const valResults = this.Validate();
-        if (valResults.Success) {
-          const result = await this.InternalSaveRecord();
-          if (result) {
-            this._pendingRecords = [];
-            this.clearValidationState();
-            if (StopEditModeAfterSave)
-              this.EndEditMode();
-
-            this.Notification.emit({ Message: 'Record saved successfully', Type: 'success', Duration: 2500 });
-            this.RecordSaved.emit({
-              EntityName: this.record.EntityInfo.Name,
-              RecordId: this.record.PrimaryKey.ToString(),
-              Result: { Success: true }
-            });
-            return true;
-          } else {
-            const serverMsg = this.record.LatestResult?.Message || '';
-            const errorMsg = serverMsg ? `Save failed: ${serverMsg}` : 'Error saving record';
-            // A server-side Validate()/ValidateAsync() refusal comes back with its field-named
-            // reasons in LatestResult.Errors (rehydrated by the provider). When any of them names a
-            // field on this record, publish them through the SAME path the local Validate() branch
-            // uses below, so the field paints red with its message instead of the user getting a
-            // toast and a form with nothing marked. Errors with no field source stay toast-only.
-            const serverErrors = this.fieldSourcedServerErrors();
-            if (serverErrors.length > 0) {
-              this.publishValidationFailure(serverErrors);
-            } else {
-              this.Notification.emit({ Message: errorMsg, Type: 'error', Duration: 5000 });
-            }
-            this.RecordSaveFailed.emit({ EntityName: this.record.EntityInfo.Name, ErrorMessage: errorMsg });
-          }
-        } else {
-          this.publishValidationFailure(valResults.Errors);
-        }
+      if (!this.record) {
+        // The only failure this method cannot show the user: with no record there is nothing to
+        // validate, toast about or paint. Every other refusal below is already reported through
+        // the toast and the fields, so it is NOT logged again here — a second, generic line
+        // ("Record not found") on a create that failed validation sent readers hunting for an
+        // ID or routing fault that did not exist.
+        LogError('Could not save record: the form has no record bound to it');
+        return false;
       }
 
-      LogError("Could not save record: Record not found");
+      this.PopulatePendingRecords();
+      const valResults = this.Validate();
+      if (!valResults.Success) {
+        this.publishValidationFailure(valResults.Errors);
+        return false;
+      }
+
+      const result = await this.InternalSaveRecord();
+      if (result) {
+        this._pendingRecords = [];
+        this.clearValidationState();
+        if (StopEditModeAfterSave)
+          this.EndEditMode();
+
+        this.Notification.emit({ Message: 'Record saved successfully', Type: 'success', Duration: 2500 });
+        this.RecordSaved.emit({
+          EntityName: this.record.EntityInfo.Name,
+          RecordId: this.record.PrimaryKey.ToString(),
+          Result: { Success: true }
+        });
+        return true;
+      }
+
+      const serverMsg = this.record.LatestResult?.Message || '';
+      const errorMsg = serverMsg ? `Save failed: ${serverMsg}` : 'Error saving record';
+      // A server-side Validate()/ValidateAsync() refusal comes back with its field-named
+      // reasons in LatestResult.Errors (rehydrated by the provider). When any of them names a
+      // field on this record, publish them through the SAME path the local Validate() branch
+      // uses above, so the field paints red with its message instead of the user getting a
+      // toast and a form with nothing marked. Errors with no field source stay toast-only.
+      const serverErrors = this.fieldSourcedServerErrors();
+      if (serverErrors.length > 0) {
+        this.publishValidationFailure(serverErrors);
+      } else {
+        this.Notification.emit({ Message: errorMsg, Type: 'error', Duration: 5000 });
+      }
+      this.RecordSaveFailed.emit({ EntityName: this.record.EntityInfo.Name, ErrorMessage: errorMsg });
       return false;
     } catch (e) {
       const errorMsg = 'Error saving record: ' + e;

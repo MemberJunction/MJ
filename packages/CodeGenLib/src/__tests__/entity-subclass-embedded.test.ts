@@ -56,7 +56,8 @@ vi.mock('fs', async () => {
 });
 
 vi.mock('mssql', () => ({ default: {} }));
-vi.mock('../Misc/status_logging', () => ({ logError: vi.fn(), logStatus: vi.fn(), logWarning: vi.fn() }));
+vi.mock('../Misc/status_logging', () => ({ logError: vi.fn(), logStatus: vi.fn(), LogWarning: vi.fn(),
+    get logWarning() { return this.LogWarning; } }));
 vi.mock('../Database/manage-metadata', () => ({
     ValidatorResult: class {},
     ManageMetadataBase: class { static generatedValidators: unknown[] = []; },
@@ -68,7 +69,8 @@ vi.mock('../Database/manage-metadata', () => ({
  * `@mj-biz-apps/orders-entities`.
  */
 vi.mock('../Config/config', () => ({
-    mj_core_schema: '__mj',
+    MjCoreSchema: '__mj',
+    get mj_core_schema() { return this.MjCoreSchema; },
     configInfo: {
         entityPackageName: '@mj-biz-apps/orders-entities',
         entityImportPackages: {
@@ -77,8 +79,9 @@ vi.mock('../Config/config', () => ({
         },
         mjCoreSchema: '__mj',
     },
-    resolveEntityPackageName: () => '@mj-biz-apps/orders-entities',
-    resolveEntityImportPackage: (related: string, owning: string) => {
+    ResolveEntityPackageName: () => '@mj-biz-apps/orders-entities',
+    get resolveEntityPackageName() { return this.ResolveEntityPackageName; },
+    ResolveEntityImportPackage: (related: string, owning: string) => {
         const r = (related ?? '').toLowerCase();
         const o = (owning ?? '').toLowerCase();
         if (r === '__mj') return '@memberjunction/core-entities';
@@ -95,11 +98,14 @@ vi.mock('../Config/config', () => ({
         }
         return pkg;
     },
+    get resolveEntityImportPackage() { return this.ResolveEntityImportPackage; },
 }));
 vi.mock('./sql_logging', () => ({ SQLLogging: class {} }));
 vi.mock('../Misc/util', () => ({
-    makeDir: vi.fn(),
-    sortBySequenceAndCreatedAt: vi.fn((items: unknown[]) => [...items]),
+    MakeDir: vi.fn(),
+    get makeDir() { return this.MakeDir; },
+    SortBySequenceAndCreatedAt: vi.fn((items: unknown[]) => [...items]),
+    get sortBySequenceAndCreatedAt() { return this.SortBySequenceAndCreatedAt; },
 }));
 
 import fs from 'fs';
