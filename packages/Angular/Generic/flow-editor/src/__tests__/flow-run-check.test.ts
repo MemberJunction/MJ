@@ -82,13 +82,16 @@ describe('CheckFlowRun', () => {
     expect(problems[0].Message).toContain('no path for "other"');
   });
 
-  it('flags a path testing a value the Choice does not offer, which the runtime would let run and never take', () => {
+  it('flags a path testing a value the Choice does not offer, once, as the runtime refuses it', () => {
     const steps = flow({ intent }, ['billing']);
     const path = MakePath('p1', TRIAGE_ID, { DestinationStepID: 'h-billing', Condition: "decisions.triage.intent.value === 'invoice'" });
 
     const problems = CheckFlowRun(steps, [path]);
-    expect(problems).toEqual([expect.objectContaining({ Code: 'UnofferedChoiceValue', StepID: TRIAGE_ID, PathID: 'p1' })]);
-    expect(problems[0].Message).toContain('tests "invoice", which the Choice question "intent" of Decision step "Triage" does not offer');
+    expect(problems).toEqual([expect.objectContaining({ Code: 'InvalidCondition', StepID: TRIAGE_ID, PathID: 'p1' })]);
+    expect(problems[0].Message).toContain(
+      'compares the Choice question "intent" of Decision step "Triage" with "invoice", which is not one of its options'
+    );
+    expect(problems[0].Message).toContain("The condition was: decisions.triage.intent.value === 'invoice'");
   });
 
   it('flags two Decision steps sharing a key on the second', () => {

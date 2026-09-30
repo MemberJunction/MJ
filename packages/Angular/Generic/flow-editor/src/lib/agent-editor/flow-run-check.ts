@@ -6,25 +6,19 @@
  * (`ValidateTaskGraphSpec`) — the two calls the dispatcher makes before it runs a flow, and refuses
  * the whole flow on — and places each refusal on the step or path it is about. So a path that reads
  * a question the step no longer asks, or a field its kind does not have (`.value` of a Likelihood),
- * is flagged while the author can still see why, not when a run fails.
- *
- * One check is the editor's own, because neither engine makes it: a path that tests a Choice answer
- * against a value the question does not offer. The validator refuses a fork that leaves an option
- * without a path, but a test of a value that is not an option — a typo, or an option renamed outside
- * this editor — is simply never true, and nothing says so.
+ * is flagged while the author can still see why, not when a run fails. That includes a path that
+ * tests a Choice answer against a value the question does not offer — a typo, or an option renamed
+ * outside this editor — which the validator refuses on any edge.
  */
 import { UUIDsEqual } from '@memberjunction/global';
 import {
   CompileFlowToTaskGraph,
-  DecisionChoiceTestOf,
   NormalizeDependency,
-  ReadFlowDecisionStepConfiguration,
   TaskNode,
   ValidateTaskGraphSpec,
   type FlowCompileError,
   type FlowCompilerPath,
   type FlowCompilerStep,
-  type FlowDecisionStepConfiguration,
   type TaskGraphSpec,
   type TaskGraphSpecNode,
   type TaskGraphValidationError
@@ -32,8 +26,8 @@ import {
 
 /** Why the flow would not run as it stands, placed where its author will look for it. */
 export type FlowRunProblem = {
-  /** The runtime's code for the problem, or `UnofferedChoiceValue` for the editor's own check. */
-  Code: FlowCompileError['Code'] | TaskGraphValidationError['Code'] | 'UnofferedChoiceValue';
+  /** The runtime's code for the problem. */
+  Code: FlowCompileError['Code'] | TaskGraphValidationError['Code'];
   /** The runtime's message, naming steps by name and quoting conditions as the author wrote them. */
   Message: string;
   /** The step the problem is on, when it is on one. */
@@ -75,7 +69,7 @@ const PROBE_PREFIX = 'path-check:';
  * Every reason the flow would not run as it stands. Empty when the dispatcher would accept it.
  *
  * Compile problems come first and, like the dispatcher, stop there: a flow that does not compile has
- * no graph to validate. The editor's own Choice check runs either way.
+ * no graph to validate.
  *
  * @param steps the flow's steps (`MJAIAgentStepEntity` satisfies the shape as-is)
  * @param paths the flow's paths (`MJAIAgentStepPathEntity` satisfies the shape as-is)
@@ -92,10 +86,9 @@ export function CheckFlowRun(steps: readonly FlowCompilerStep[], paths: readonly
     // What the dispatcher compiles a flow with (`CompileFlowAgentToTaskGraph`).
     TraversalMode: 'sequential'
   });
-  const runtime = compiled.Success && compiled.Spec
+  return compiled.Success && compiled.Spec
     ? validationProblems(compiled.Spec, paths)
     : compiled.Errors.map((error) => compileProblem(error, paths));
-  return [...runtime, ...unofferedChoiceValues(steps, paths)];
 }
 
 /** A compile error, on the path it quotes when it is about one path's condition. */
@@ -192,49 +185,4 @@ function stepNamer(spec: TaskGraphSpec): (message: string) => string {
 
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/** Paths that test a Choice answer against a value the question does not offer. */
-function unofferedChoiceValues(steps: readonly FlowCompilerStep[], paths: readonly FlowCompilerPath[]): FlowRunProblem[] {
-  const decisions = activeDecisionsByKey(steps);
-  const problems: FlowRunProblem[] = [];
-  for (const path of paths) {
-    const test = path.Condition?.trim() ? DecisionChoiceTestOf(path.Condition) : null;
-    const decision = test ? decisions.get(test.NodeId) : undefined;
-    if (!test || !decision) continue;
-    const questions = decision.Config.questions;
-    const question = Object.prototype.hasOwnProperty.call(questions, test.QuestionKey) ? questions[test.QuestionKey] : undefined;
-    if (question?.kind !== 'Choice') continue;
-
-    const offered = question.options.map((option) => option.value);
-    const unoffered = test.Values.filter((value) => !offered.includes(value));
-    if (unoffered.length === 0) continue;
-    const origin = steps.find((s) => UUIDsEqual(s.ID, path.OriginStepID))?.Name ?? path.OriginStepID;
-    problems.push({
-      Code: 'UnofferedChoiceValue',
-      Message: `A path from step "${origin}" tests ${quoted(unoffered)}, which the Choice question "${test.QuestionKey}" of `
-        + `Decision step "${decision.Name}" does not offer (its options: ${quoted(offered)}). The decision always answers with `
-        + `one of its options, so this path is never taken. The condition was: ${path.Condition}`,
-      StepID: path.OriginStepID,
-      PathID: path.ID
-    });
-  }
-  return problems;
-}
-
-/** Each active Decision step the runtime can read, by key; the first step to use a key keeps it. */
-function activeDecisionsByKey(steps: readonly FlowCompilerStep[]): Map<string, { Name: string; Config: FlowDecisionStepConfiguration }> {
-  const decisions = new Map<string, { Name: string; Config: FlowDecisionStepConfiguration }>();
-  for (const step of steps) {
-    if (step.StepType !== 'Decision' || step.Status !== 'Active') continue;
-    const read = ReadFlowDecisionStepConfiguration(step.Configuration);
-    if ('Config' in read && !decisions.has(read.Config.key)) {
-      decisions.set(read.Config.key, { Name: step.Name, Config: read.Config });
-    }
-  }
-  return decisions;
-}
-
-function quoted(values: readonly string[]): string {
-  return values.map((value) => `"${value}"`).join(', ');
 }
