@@ -9,6 +9,11 @@ export * from './AIPromptTimeoutError';
 // helpers are how a caller reads back which path a run took.
 export * from './nativeToolCallingGate';
 export * from './AIModelRunner';
+export * from './image/AIImageGenerationRunner';
+export * from './image/image-runner.types';
 // Exported so its @RegisterClass runs (the base resolves it via the ClassFactory to avoid a
 // circular import) and so a full build picks it up into the class-registration manifests.
 export * from './ParallelExecutionCoordinator';
+export * from './decision/LLMDecision';
+export * from './decision/decision-runner.types';
+export * from './decision/AIDecisionRunner';
