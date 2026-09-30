@@ -8482,6 +8482,33 @@ The context is now within limits. Please retry your request with the recovered c
         }
     }
 
+    /**
+     * Links the prompt run of a decision call the run stopped waiting for (a timeout or a cancellation)
+     * to its step, once the call settles. `AIDecisionRunner` writes the prompt run before it calls the
+     * model, so a stopped call still has one. The link keeps that row on the run's trace, and counts its
+     * usage in the run's cost and token totals when it settles before the run ends, as
+     * {@link attachDecisionPromptRun} does on time. The step may already be finalized, so the link is
+     * saved on its own. Never throws, and a call that never settles links nothing.
+     */
+    private linkLateDecisionPromptRun(
+        step: MJAIAgentRunStepEntityExtended | undefined,
+        late: Promise<AIDecisionRunResult | undefined>
+    ): void {
+        if (!step) {
+            return;
+        }
+        late.then(result => {
+            const promptRunID = result?.promptRun?.ID;
+            if (!result || !promptRunID || step.TargetLogID === promptRunID) {
+                return;
+            }
+            this.attachDecisionPromptRun(step, result);
+            this.queueStepSave(step, (s) => { s.TargetLogID = promptRunID; });
+        }).catch(error => {
+            LogError(`Could not link a stopped decision call's prompt run to its step: ${error instanceof Error ? error.message : String(error)}`);
+        });
+    }
+
     /** A literal state, or a value read from the payload by a `payload.` path. */
     private resolveDecisionState(state: string | undefined, finalPayload: unknown): { State: string } | { Error: string } {
         if (typeof state !== 'string') {
@@ -8926,7 +8953,7 @@ The context is now within limits. Please retry your request with the recovered c
             ? promptParams.decisionPromptName
             : AgentDecisionService.DEFAULT_PROMPT_NAME;
         const step = await this.startCatalogNarrowingStep(contextUser, promptName, asked, limits);
-        const result = await this.askCatalogNarrowing(agent, contextUser, BuildCatalogNarrowingQuestions(asked), promptName);
+        const result = await this.askCatalogNarrowing(agent, contextUser, BuildCatalogNarrowingQuestions(asked), promptName, step);
         const outcome = result.success ? SelectCatalogNarrowing(candidates, asked, result.Answers, limits) : undefined;
         if (!outcome) {
             const reason = result.success ? 'an answer was missing or was not a probability' : (result.errorMessage || 'the decision call failed');
@@ -8941,18 +8968,23 @@ The context is now within limits. Please retry your request with the recovered c
     /**
      * The one decision call, against the opening request. Never throws, and never waits longer than
      * {@link CATALOG_NARROWING_TIMEOUT_MS} or past the run's cancellation: a throw, a timeout and a
-     * cancelled run each come back as a failed result. Stopping also aborts the call.
+     * cancelled run each come back as a failed result. Stopping also aborts the call, and links the
+     * prompt run it still returns to `step` once it does ({@link linkLateDecisionPromptRun}).
      */
     private async askCatalogNarrowing(
         agent: MJAIAgentEntityExtended,
         contextUser: UserInfo,
         questions: Record<string, DecisionQuestion>,
-        promptName: string
+        promptName: string,
+        step?: MJAIAgentRunStepEntityExtended
     ): Promise<AIDecisionRunResult> {
         const failed = (errorMessage: string): AIDecisionRunResult => ({ success: false, errorMessage, Answers: {} });
         const controller = new AbortController();
-        const stopped = new Promise<AIDecisionRunResult>(resolve => controller.signal.addEventListener(
-            'abort', () => resolve(failed(String(controller.signal.reason))), { once: true }));
+        let stoppedResult: AIDecisionRunResult | undefined;
+        const stopped = new Promise<AIDecisionRunResult>(resolve => controller.signal.addEventListener('abort', () => {
+            stoppedResult = failed(String(controller.signal.reason));
+            resolve(stoppedResult);
+        }, { once: true }));
         const runToken = this._executeParams?.cancellationToken;
         const relayRunAbort = (): void => controller.abort('the run was cancelled');
         if (runToken?.aborted) {
@@ -8971,7 +9003,11 @@ The context is now within limits. Please retry your request with the recovered c
                 PromptName: promptName,
                 CancellationToken: controller.signal,
             });
-            return await Promise.race([ask, stopped]);
+            const result = await Promise.race([ask, stopped]);
+            if (result === stoppedResult) {
+                this.linkLateDecisionPromptRun(step, ask);
+            }
+            return result;
         } catch (error) {
             return failed(error instanceof Error ? error.message : String(error));
         } finally {
