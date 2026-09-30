@@ -500,3 +500,227 @@ describe('DataFeatureSpec — PipelineType validation', () => {
     expect(issues[0].Severity).toBe('error');
   });
 });
+
+describe('DataFeatureSpec — decision-derived extensions', () => {
+  const baseSpec = (): DataFeatureSpec => ({
+    Name: 'DecisionPipeline',
+    Description: 'Tests decision extensions',
+    Context: { Fields: ['CurrentJobTitle'] },
+    PromptID: 'prompt-1',
+    Outputs: [
+      {
+        Ref: '$.isExecutive',
+        Name: 'IsExecutive',
+        Target: { Mode: 'field', EntityFieldName: 'IsVIP' },
+        Constraint: { Type: 'boolean', OnViolation: 'fail' },
+      },
+    ],
+    Caching: { Cacheable: false },
+  });
+
+  describe('FeatureKind', () => {
+    it('accepts decision-derived FeatureKind', () => {
+      const spec = baseSpec();
+      spec.Outputs[0].FeatureKind = 'decision-derived';
+      const issues = ValidateSpec(spec, sampleEntity);
+      expect(issues.filter(i => i.Path === 'Outputs[0].FeatureKind')).toHaveLength(0);
+    });
+
+    it('rejects unrecognized FeatureKind', () => {
+      const spec = baseSpec();
+      spec.Outputs[0].FeatureKind = 'invalid-kind' as unknown as FeatureKind;
+      const issues = ValidateSpec(spec, sampleEntity);
+      expect(issues.some(i => i.Path === 'Outputs[0].FeatureKind' && i.Severity === 'error')).toBe(true);
+    });
+  });
+
+  describe('Threshold validation', () => {
+    it('accepts valid threshold on boolean constraint', () => {
+      const spec = baseSpec();
+      spec.Outputs[0].Constraint = { Type: 'boolean', Threshold: 0.6, OnViolation: 'fail' };
+      const issues = ValidateSpec(spec, sampleEntity);
+      expect(issues.filter(i => i.Path.includes('Threshold'))).toHaveLength(0);
+    });
+
+    it('rejects out-of-range or non-numeric threshold on boolean constraint', () => {
+      const spec1 = baseSpec();
+      spec1.Outputs[0].Constraint = { Type: 'boolean', Threshold: 1.5, OnViolation: 'fail' };
+      const issues1 = ValidateSpec(spec1, sampleEntity);
+      expect(issues1.some(i => i.Path === 'Outputs[0].Constraint.Threshold')).toBe(true);
+
+      const spec2 = baseSpec();
+      spec2.Outputs[0].Constraint = { Type: 'boolean', Threshold: -0.1, OnViolation: 'fail' };
+      const issues2 = ValidateSpec(spec2, sampleEntity);
+      expect(issues2.some(i => i.Path === 'Outputs[0].Constraint.Threshold')).toBe(true);
+    });
+  });
+
+  describe('Levels on numeric constraint', () => {
+    it('accepts 2 to 10 non-empty string levels', () => {
+      const spec: DataFeatureSpec = {
+        Name: 'ScorePipeline',
+        Description: 'Scores items',
+        Context: { Fields: ['CurrentJobTitle'] },
+        PromptID: 'prompt-1',
+        Outputs: [
+          {
+            Ref: '$.score',
+            Name: 'SentimentScore',
+            Target: { Mode: 'field', EntityFieldName: 'SentimentScore' },
+            Constraint: {
+              Type: 'numeric',
+              Min: 1,
+              Max: 5,
+              Levels: ['Terrible', 'Poor', 'Average', 'Good', 'Excellent'],
+              OnViolation: 'fail',
+            },
+          },
+        ],
+      };
+      const issues = ValidateSpec(spec, sampleEntity);
+      expect(issues.filter(i => i.Path.includes('Levels'))).toHaveLength(0);
+    });
+
+    it('rejects fewer than 2 or more than 10 levels, or non-string/empty levels', () => {
+      const makeSpec = (levels: unknown) => ({
+        Name: 'ScorePipeline',
+        Description: 'Scores items',
+        Context: { Fields: ['CurrentJobTitle'] },
+        PromptID: 'prompt-1',
+        Outputs: [
+          {
+            Ref: '$.score',
+            Name: 'SentimentScore',
+            Target: { Mode: 'field', EntityFieldName: 'SentimentScore' },
+            Constraint: {
+              Type: 'numeric' as const,
+              Levels: levels as string[],
+              OnViolation: 'fail' as const,
+            },
+          },
+        ],
+      });
+
+      expect(ValidateSpec(makeSpec(['Single'])).some(i => i.Path.includes('Levels'))).toBe(true);
+      expect(
+        ValidateSpec(makeSpec(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'])).some(i =>
+          i.Path.includes('Levels')
+        )
+      ).toBe(true);
+      expect(ValidateSpec(makeSpec(['Valid', '   '])).some(i => i.Path.includes('Levels'))).toBe(true);
+    });
+  });
+
+  describe('ValueDescriptions on enum constraint', () => {
+    it('accepts valid ValueDescriptions record', () => {
+      const spec: DataFeatureSpec = {
+        Name: 'EnumPipeline',
+        Description: 'Categorizes seniority',
+        Context: { Fields: ['CurrentJobTitle'] },
+        PromptID: 'prompt-1',
+        Outputs: [
+          {
+            Ref: '$.seniority',
+            Name: 'SeniorityLevel',
+            Target: { Mode: 'field', EntityFieldName: 'SeniorityLevel' },
+            Constraint: {
+              Type: 'enum',
+              Values: ['IC', 'Manager'],
+              ValueDescriptions: { IC: 'Individual Contributor', Manager: 'People Manager' },
+              OnViolation: 'fail',
+            },
+          },
+        ],
+      };
+      const issues = ValidateSpec(spec, sampleEntity);
+      expect(issues.filter(i => i.Path.includes('ValueDescriptions'))).toHaveLength(0);
+    });
+
+    it('rejects non-object ValueDescriptions', () => {
+      const spec: DataFeatureSpec = {
+        Name: 'EnumPipeline',
+        Description: 'Categorizes seniority',
+        Context: { Fields: ['CurrentJobTitle'] },
+        PromptID: 'prompt-1',
+        Outputs: [
+          {
+            Ref: '$.seniority',
+            Name: 'SeniorityLevel',
+            Target: { Mode: 'field', EntityFieldName: 'SeniorityLevel' },
+            Constraint: {
+              Type: 'enum',
+              Values: ['IC'],
+              ValueDescriptions: 'not-an-object' as unknown as Record<string, string>,
+              OnViolation: 'fail',
+            },
+          },
+        ],
+      };
+      const issues = ValidateSpec(spec, sampleEntity);
+      expect(issues.some(i => i.Path.includes('ValueDescriptions'))).toBe(true);
+    });
+  });
+
+  describe('ResolveConstraint extensions', () => {
+    it('passes through Levels for numeric constraint', () => {
+      const resolved = ResolveConstraint({
+        Ref: '$.score',
+        Name: 'Score',
+        Target: { Mode: 'field', EntityFieldName: 'Score' },
+        Constraint: {
+          Type: 'numeric',
+          Min: 0,
+          Max: 10,
+          Levels: ['Low', 'High'],
+          OnViolation: 'fail',
+        },
+      });
+      expect(resolved?.Levels).toEqual(['Low', 'High']);
+    });
+
+    it('merges descriptions from field metadata for enum constraint', () => {
+      const field: EntityMetadataStub['Fields'][0] = {
+        Name: 'Role',
+        TSType: 'string',
+        EntityFieldValues: [
+          { Value: 'Dev', Description: 'Developer role' },
+          { Value: 'QA', Description: 'Quality Assurance' },
+        ],
+      };
+      const resolved = ResolveConstraint(
+        {
+          Ref: '$.role',
+          Name: 'Role',
+          Target: { Mode: 'field', EntityFieldName: 'Role' },
+          Constraint: {
+            Type: 'enum',
+            FromFieldMetadata: true,
+            ValueDescriptions: { Dev: 'Software Engineer' }, // override
+            OnViolation: 'fail',
+          },
+        },
+        field
+      );
+      expect(resolved?.AllowedValues).toEqual(['Dev', 'QA']);
+      expect(resolved?.ValueDescriptions).toEqual({
+        Dev: 'Software Engineer',
+        QA: 'Quality Assurance',
+      });
+    });
+
+    it('passes through Threshold for boolean constraint', () => {
+      const resolved = ResolveConstraint({
+        Ref: '$.flag',
+        Name: 'Flag',
+        Target: { Mode: 'field', EntityFieldName: 'Flag' },
+        Constraint: {
+          Type: 'boolean',
+          Threshold: 0.8,
+          OnViolation: 'fail',
+        },
+      });
+      expect(resolved?.Threshold).toBe(0.8);
+    });
+  });
+});
+

@@ -72,6 +72,8 @@ export interface RecordResult {
     PromptVersionHash?: string;
     /** Reference to the FeatureValueCache entry when served from or saved to the cache. */
     FeatureValueCacheID?: string;
+    /** Per-output confidence scores keyed by output Name, when produced by the driver. */
+    Confidence?: Record<string, number>;
 }
 
 /** Running tallies for a process run. */

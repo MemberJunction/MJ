@@ -59,6 +59,8 @@ export interface DataFeatureSpec {
   PipelineType?: string;
 }
 
+export type FeatureKind = 'numeric' | 'categorical' | 'embedding' | 'llm-derived' | 'decision-derived';
+
 export interface DataFeatureOutput {
   /** Result path, e.g. "$.seniority". */
   Ref: string;
@@ -69,7 +71,9 @@ export interface DataFeatureOutput {
   /** Where this output lands (D19). */
   Target: OutputTarget;
   /** How Predictive Studio should treat it when consumed as a model feature. */
-  FeatureKind?: 'numeric' | 'categorical' | 'embedding' | 'llm-derived';
+  FeatureKind?: FeatureKind;
+  /** Optional human-readable description / instructions for this output. */
+  Description?: string;
 }
 
 /** Structured validation issue surfaced by validateSpec. */
@@ -89,7 +93,7 @@ export interface FieldMetadataStub {
   AllowsNull?: boolean;
   RelatedEntity?: string;
   RelatedEntityID?: string;
-  EntityFieldValues?: Array<{ Value: string; Code?: string }>;
+  EntityFieldValues?: Array<{ Value: string; Code?: string; Description?: string }>;
 }
 
 /** Minimal entity metadata stub decoupled from @memberjunction/core. */
@@ -336,6 +340,20 @@ export function ValidateSpec(
         }
       }
 
+      if (out.FeatureKind !== undefined) {
+        const validFeatureKinds: ReadonlyArray<string> = ['numeric', 'categorical', 'embedding', 'llm-derived', 'decision-derived'];
+        if (!validFeatureKinds.includes(out.FeatureKind)) {
+          issues.push({
+            Path: `${basePath}.FeatureKind`,
+            Message: `Output '${out.Name}' has invalid FeatureKind '${out.FeatureKind}'.`,
+            FixRecommendation: `Specify one of: ${validFeatureKinds.join(', ')}.`,
+            Severity: 'error',
+          });
+        }
+      }
+
+
+
       // Constraint bounds validation
       if (out.Constraint) {
         if (out.Constraint.Type === 'enum') {
@@ -347,6 +365,20 @@ export function ValidateSpec(
               Severity: 'error',
             });
           }
+          if (out.Constraint.ValueDescriptions !== undefined) {
+            if (
+              typeof out.Constraint.ValueDescriptions !== 'object' ||
+              out.Constraint.ValueDescriptions === null ||
+              Array.isArray(out.Constraint.ValueDescriptions)
+            ) {
+              issues.push({
+                Path: `${basePath}.Constraint.ValueDescriptions`,
+                Message: `Enum constraint ValueDescriptions on output '${out.Name}' must be an object mapping enum values to string descriptions.`,
+                FixRecommendation: 'Provide an object mapping each allowed value to its description.',
+                Severity: 'error',
+              });
+            }
+          }
         } else if (out.Constraint.Type === 'numeric' || out.Constraint.Type === 'money') {
           if (out.Constraint.Min !== undefined && out.Constraint.Max !== undefined && out.Constraint.Min > out.Constraint.Max) {
             issues.push({
@@ -355,6 +387,32 @@ export function ValidateSpec(
               FixRecommendation: 'Ensure Min is less than or equal to Max.',
               Severity: 'error',
             });
+          }
+          if (out.Constraint.Type === 'numeric' && out.Constraint.Levels !== undefined) {
+            if (
+              !Array.isArray(out.Constraint.Levels) ||
+              out.Constraint.Levels.length < 2 ||
+              out.Constraint.Levels.length > 10 ||
+              out.Constraint.Levels.some(l => typeof l !== 'string' || l.trim().length === 0)
+            ) {
+              issues.push({
+                Path: `${basePath}.Constraint.Levels`,
+                Message: `Numeric constraint Levels on output '${out.Name}' must be an array of 2 to 10 non-empty strings.`,
+                FixRecommendation: 'Provide between 2 and 10 level descriptions, e.g. ["Low", "Medium", "High"].',
+                Severity: 'error',
+              });
+            }
+          }
+        } else if (out.Constraint.Type === 'boolean') {
+          if (out.Constraint.Threshold !== undefined) {
+            if (typeof out.Constraint.Threshold !== 'number' || isNaN(out.Constraint.Threshold) || out.Constraint.Threshold < 0 || out.Constraint.Threshold > 1) {
+              issues.push({
+                Path: `${basePath}.Constraint.Threshold`,
+                Message: `Boolean constraint Threshold on output '${out.Name}' must be a number between 0 and 1.`,
+                FixRecommendation: 'Provide a number between 0 and 1, or omit to default to 0.5.',
+                Severity: 'error',
+              });
+            }
           }
         }
 
@@ -454,13 +512,20 @@ export function ResolveConstraint(
   if (c) {
     if (c.Type === 'enum') {
       let allowedValues = c.Values ?? [];
+      const valueDescriptions: Record<string, string> = { ...(c.ValueDescriptions ?? {}) };
       if (c.FromFieldMetadata && field?.EntityFieldValues && field.EntityFieldValues.length > 0) {
         allowedValues = field.EntityFieldValues.map(v => v.Value);
+        for (const efv of field.EntityFieldValues) {
+          if (efv.Description && !valueDescriptions[efv.Value]) {
+            valueDescriptions[efv.Value] = efv.Description;
+          }
+        }
       }
       return {
         Type: 'enum',
         OnViolation: c.OnViolation,
         AllowedValues: allowedValues,
+        ValueDescriptions: Object.keys(valueDescriptions).length > 0 ? valueDescriptions : undefined,
       };
     }
     if (c.Type === 'numeric') {
@@ -470,6 +535,7 @@ export function ResolveConstraint(
         Min: c.Min,
         Max: c.Max,
         Integer: c.Integer,
+        Levels: c.Levels,
       };
     }
     if (c.Type === 'money') {
@@ -493,6 +559,7 @@ export function ResolveConstraint(
       return {
         Type: 'boolean',
         OnViolation: c.OnViolation,
+        Threshold: c.Threshold,
       };
     }
     if (c.Type === 'lookup') {
@@ -515,10 +582,17 @@ export function ResolveConstraint(
   // 2. Implicit constraint derived from field metadata if target is Mode: 'field'
   if (output.Target.Mode === 'field' && field) {
     if (field.EntityFieldValues && field.EntityFieldValues.length > 0) {
+      const valueDescriptions: Record<string, string> = {};
+      for (const efv of field.EntityFieldValues) {
+        if (efv.Description) {
+          valueDescriptions[efv.Value] = efv.Description;
+        }
+      }
       return {
         Type: 'enum',
         OnViolation: 'fail',
         AllowedValues: field.EntityFieldValues.map(v => v.Value),
+        ValueDescriptions: Object.keys(valueDescriptions).length > 0 ? valueDescriptions : undefined,
       };
     }
     if (field.TSType === 'boolean') {

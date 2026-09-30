@@ -1196,8 +1196,9 @@ import {
     ValidateEntitySchemaAction,
 } from '@memberjunction/database-designer-actions';
 
-// @memberjunction/record-set-processor (6 classes)
+// @memberjunction/record-set-processor (7 classes)
 import {
+    DecisionFeaturePipelineDriver,
     LLMFeaturePipelineDriver,
     RecordProcessCancelRunServerOperation,
     RecordProcessGetRunStatusServerOperation,
@@ -2337,6 +2338,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ListMyEntitiesAction,
     ModifyEntityAction,
     ValidateEntitySchemaAction,
+    DecisionFeaturePipelineDriver,
     LLMFeaturePipelineDriver,
     RecordProcessCancelRunServerOperation,
     RecordProcessGetRunStatusServerOperation,
@@ -2349,11 +2351,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PredictiveStudioCreateScoringProcessServerOperation,
     PredictiveStudioModelDevAgent,
     PredictiveStudioPipelineBuilderAgent,
-    PredictiveStudioPromoteModelAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    PredictiveStudioPromoteModelAction,
     PredictiveStudioPromoteModelServerOperation,
     PredictiveStudioRunExperimentAction,
     PredictiveStudioRunFeaturePipelineServerOperation,
@@ -2553,11 +2555,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ModifyDocumentSectionAction,
     ModifyInteractiveFormAction,
     MoveListMembersAction,
-    MoveObjectAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MoveObjectAction,
     OAuthFlowAction,
     ObjectExistsAction,
     PDFExtractorAction,
@@ -2632,7 +2634,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1058;
+export const CLASS_REGISTRATIONS_COUNT = 1059;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
