@@ -86,12 +86,6 @@ const ROOT_PATTERN = /(?<![A-Za-z0-9_$.])decisions(?![A-Za-z0-9_$])/g;
 /** A name that can follow a dot. Anything else is written in brackets. */
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
-/** An equality or inequality operator, with the whitespace around it, at the start of the text. */
-const COMPARISON_AFTER = /^\s*(?:===?|!==?)\s*/;
-
-/** Nothing but an equality or inequality operator and whitespace. */
-const COMPARISON_BETWEEN = /^\s*(?:===?|!==?)\s*$/;
-
 /** Characters no literal can carry verbatim: the scanner compares a literal's raw text, escapes included. */
 const UNQUOTABLE = /[\\\r\n\u2028\u2029]/;
 
@@ -315,7 +309,7 @@ function applyEdits(expression: string, edits: readonly TextEdit[]): string {
 function rootsIn(expression: string, strings: ReadonlyArray<[number, number]> = stringSpans(expression)): number[] {
     return [...expression.matchAll(ROOT_PATTERN)]
         .map((match) => match.index ?? 0)
-        .filter((start) => !strings.some(([from, to]) => start >= from && start < to));
+        .filter((start) => !insideString(strings, start));
 }
 
 /**
@@ -328,11 +322,28 @@ function comparedLiteral(
     end: number,
     strings: ReadonlyArray<[number, number]>,
 ): { Start: number; End: number; Value: string } | null {
-    const operator = COMPARISON_AFTER.exec(expression.slice(end));
-    const after = operator ? strings.find(([from]) => from === end + operator[0].length) : undefined;
-    const before = [...strings].reverse().find(([, to]) => to <= start);
-    const span = after ?? (before && COMPARISON_BETWEEN.test(expression.slice(before[1], start)) ? before : undefined);
+    const span = literalRightAfter(expression, end, strings) ?? literalRightBefore(expression, start, strings);
     return span ? { Start: span[0], End: span[1], Value: expression.slice(span[0] + 1, span[1] - 1) } : null;
+}
+
+/** The string literal that opens right after an equality or inequality following `end`, or `undefined`. */
+function literalRightAfter(expression: string, end: number, strings: ReadonlyArray<[number, number]>): [number, number] | undefined {
+    const operatorEnd = operatorEndAt(expression, skipSpaces(expression, end), COMPARISONS);
+    if (operatorEnd < 0) return undefined;
+    const open = skipSpaces(expression, operatorEnd);
+    const span = strings[firstSpanEndingAfter(strings, open)];
+    return span?.[0] === open ? span : undefined;
+}
+
+/**
+ * The last string literal before `start` when nothing but an equality or inequality, and whitespace,
+ * separates the two; or `undefined`.
+ */
+function literalRightBefore(expression: string, start: number, strings: ReadonlyArray<[number, number]>): [number, number] | undefined {
+    const span = strings[firstSpanEndingAfter(strings, start) - 1];
+    if (!span) return undefined;
+    const operatorStart = operatorStartBefore(expression, skipSpacesBack(expression, start));
+    return operatorStart >= span[1] && skipSpacesBack(expression, operatorStart) === span[1] ? span : undefined;
 }
 
 /** One name as a path segment the scanner reads back, or `null` when none can carry it. */
@@ -442,6 +453,12 @@ function stringSpans(expression: string): Array<[number, number]> {
 
 /** Whether `at` falls inside one of `spans`, which are in order and do not overlap. */
 function insideString(spans: ReadonlyArray<[number, number]>, at: number): boolean {
+    const index = firstSpanEndingAfter(spans, at);
+    return index < spans.length && spans[index][0] <= at;
+}
+
+/** The index of the first of `spans` that ends after `at`, or `spans.length` when none does. */
+function firstSpanEndingAfter(spans: ReadonlyArray<[number, number]>, at: number): number {
     let low = 0;
     let high = spans.length;
     while (low < high) {
@@ -449,7 +466,7 @@ function insideString(spans: ReadonlyArray<[number, number]>, at: number): boole
         if (spans[middle][1] <= at) low = middle + 1;
         else high = middle;
     }
-    return low < spans.length && spans[low][0] <= at;
+    return low;
 }
 
 /** Up to `max` path segments starting at `from`, each with where it sits and how it was written. */
