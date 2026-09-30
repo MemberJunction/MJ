@@ -46,9 +46,17 @@ export const MEMORY_NOTE_MAX_EXCERPT_CHARS = 4000;
  * Set from the memory-note gate measurement (plan Task 3.4, 2026-09-29): 60 synthetic conversations,
  * 337 candidate notes labelled durable, ephemeral, wrong or speculative, two repeats. At a calibrated
  * 0.6, Jev kept durable notes at 96.1% precision and 95.4% recall, and kept 6.2% of the
- * conversation-only (ephemeral) notes, where today's self-reported `confidence >= 80` kept 40.0% of
+ * conversation-only (ephemeral) notes. A proxy self-report scorer's `confidence >= 80` kept 40.0% of
  * them at 85.3% precision and 98.7% recall. Neither kept a wrong note; the gate kept 3.4% of the
- * speculative ones, the self-report none.
+ * speculative ones, the proxy none.
+ *
+ * **The baseline is a proxy, not today's Memory Manager.** Its self-reported confidence came from a
+ * separate scoring call with a four-band rubric (90-100 stated, 75-89 strongly implied, 50-74
+ * possible, below 50 skip). Production's `Memory Manager - Extract Notes` template has three bands
+ * (90-100, 80-89, below 80 skip), and skip rules the proxy doesn't have: one-time requests, matters
+ * resolved within the conversation, and task-scoped clarifications. Those rules drop exactly the
+ * ephemeral notes counted here before any confidence filter runs, so production probably keeps fewer
+ * than 40% of them. The gate's own figures stand; the comparison is against the proxy.
  */
 export const MEMORY_NOTE_MIN_PROBABILITY = 0.6;
 
@@ -60,9 +68,9 @@ export const MEMORY_NOTE_MIN_PROBABILITY = 0.6;
  * - **Jev** at its pinned `APIName`, `typesafe/jev-1.13-20260917`, which it reports back as the
  *   resolved model.
  *
- * Only models that beat the self-reported confidence are listed. LLM Decision was measured and left
- * out: at any threshold it kept more wrong and speculative notes than today's rule (at a calibrated
- * 0.6, 11.5% of wrong notes). A batch answered by any other model, including Jev at another version,
+ * Only models that beat the proxy self-report scorer (see {@link MEMORY_NOTE_MIN_PROBABILITY}) are
+ * listed. LLM Decision was measured and left out: at any threshold it kept more wrong and speculative
+ * notes than the proxy's `confidence >= 80` (at a calibrated 0.6, 11.5% of wrong notes). A batch answered by any other model, including Jev at another version,
  * falls back to the self-reported confidence rule, as a failed decision does. Refit, and add the new
  * pair, whenever a model, its version or the question changes.
  */

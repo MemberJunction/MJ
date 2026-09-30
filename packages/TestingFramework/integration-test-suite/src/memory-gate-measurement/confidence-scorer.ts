@@ -1,6 +1,7 @@
 /**
- * @fileoverview Scores candidate memory notes with self-reported confidence using
- * the exact production extraction prompt guidance, without exposing ground truth labels.
+ * @fileoverview A proxy self-report scorer: scores candidate memory notes with a self-reported
+ * confidence in a separate call, without exposing ground truth labels. It is the measurement's
+ * baseline, not the Memory Manager's own filter (see {@link MEMORY_NOTE_CONFIDENCE_PROMPT_GUIDANCE}).
  *
  * @module @memberjunction/integration-test-suite
  */
@@ -9,8 +10,11 @@ import type { BaseLLM } from '@memberjunction/ai';
 import type { RawGeneratedCandidate } from './corpus-types';
 
 /**
- * Exact confidence scoring guidance loaded from the production extraction prompt
- * (see migrations/v5/B202605291452__v5.38.x__Baseline.sql).
+ * The proxy scorer's confidence rubric. It is **not** production's: this rubric has four bands, while
+ * the `Memory Manager - Extract Notes` template (`metadata/prompts/templates/memory-manager/extract-notes.md`)
+ * has three (90-100, 80-89, below 80 skip) plus skip rules for one-time requests, matters resolved
+ * within the conversation, and task-scoped clarifications, none of which this scorer applies. Kept as
+ * the measurement ran it, so its results can be reproduced.
  */
 export const MEMORY_NOTE_CONFIDENCE_PROMPT_GUIDANCE =
 `Assign a confidence score (0-100) reflecting how certain you are this is an accurate, durable learning:

@@ -71,7 +71,7 @@ export function RenderMeasurementReportMarkdown(report: MeasurementReportJson): 
 
 | Arm | AUC | 95% Bootstrap CI | Notes |
 | :--- | :--- | :--- | :--- |
-| **Self-Confidence (Baseline)** | ${fmt(report.SelfConfidenceArm.Auc)} | - | 0-100 score normalized |
+| **Proxy Self-Report (Baseline)** | ${fmt(report.SelfConfidenceArm.Auc)} | - | 0-100 score normalized |
 | **Decision Gate (Raw)** | ${fmt(report.DecisionRawArm.Auc)} | ${ciRaw.trim() || '-'} | Direct Likelihood output |
 | **Decision Gate (Calibrated)** | ${fmt(report.DecisionCalibratedArm.Auc)} | ${ciCal.trim() || '-'} | 5-fold out-of-fold Platt, whole scenarios per fold |
 
@@ -96,7 +96,9 @@ None of these enters a fit, a sweep or an AUC; a failed or missing answer is not
 
 ---
 
-## 5. Operating Points: Self-Reported Confidence (Today's Rule: >= 80)
+## 5. Operating Points: Proxy Self-Report Scorer (>= 80)
+
+A separate scoring call with its own rubric, not the Memory Manager's Extract Notes template and its skip rules.
 
 ${renderOperatingTable(report.SelfConfidenceArm.OperatingPoints)}
 
