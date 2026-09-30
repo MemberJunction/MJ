@@ -515,14 +515,33 @@ export function FindCrossUserAssignments(spec: TaskGraphSpec, submitterUserID: s
  * A `Failed` task can. So can a `Complete` Decision step that is holding an answer — one below its
  * question's `minConfidence`, or missing — because the edges that read it hold until it is asked
  * again. Anything else ran to a usable end, or has not ended.
+ *
+ * `editedInput` is the input the retry would run on, as JSON. A held Decision refuses one it could
+ * not read: that input would fail the step before it is asked, and a failed step keeps none of the
+ * answers the graph has already acted on.
  */
-export function RetryRefusal(task: DecisionTaskRow): string | null {
+export function RetryRefusal(task: DecisionTaskRow, editedInput?: string): string | null {
     if (task.Status === 'Failed') return null;
-    if (Object.keys(HeldDecisionAnswers(task)).length > 0) return null;
+    if (Object.keys(HeldDecisionAnswers(task)).length > 0) {
+        return editedInput === undefined || isNameValueJson(editedInput)
+            ? null
+            : 'its edited input is not a JSON object of named values, which would fail a Decision step and lose the answers it keeps';
+    }
     if (task.StepType === 'Decision' && task.Status === 'Complete') {
         return 'it is a Decision step whose answers are all usable, so nothing is waiting on it to be asked again';
     }
     return `status is ${task.Status}, expected Failed, or a completed Decision step holding an answer below its minConfidence`;
+}
+
+/** True when `json` is an input a step can run on: empty, or a JSON object of named values. */
+function isNameValueJson(json: string): boolean {
+    if (!json) return true;
+    try {
+        const parsed: unknown = JSON.parse(json);
+        return parsed === null || (typeof parsed === 'object' && !Array.isArray(parsed));
+    } catch {
+        return false;
+    }
 }
 
 /** The fields {@link PrepareTaskForRetry} resets. `MJTaskEntity` satisfies it as-is. */
@@ -534,12 +553,15 @@ export type RetryableTask = Pick<
 /**
  * Puts a task back to `Pending` with nothing left from the run being retried.
  *
- * A Decision step's output is cleared as well, because it IS its answers: a completed one carries the
- * answers it is being asked again for, and leaving them would show earlier answers as current until
- * the new ones land. Other steps keep theirs, as a failed step always has.
+ * A Decision step retried from `Complete` keeps its output, because that output holds the usable
+ * answers it already gave, and the graph has already acted on them: the retry asks only the
+ * questions it is holding and keeps the rest (`KeptDecisionAnswers`). A failed Decision has no
+ * answers to keep, so its output is cleared: whatever is there is its input passed through, and a
+ * `decisions` entry in it must not be read back as the step's own. Other steps keep their output,
+ * as a failed step always has.
  */
 export function PrepareTaskForRetry(task: RetryableTask): void {
-    if (task.StepType === 'Decision') task.OutputPayload = null;
+    if (task.StepType === 'Decision' && task.Status !== 'Complete') task.OutputPayload = null;
     task.Status = 'Pending';
     task.ErrorMessage = null;
     task.StartedAt = null;
@@ -916,9 +938,24 @@ export class TaskGraphService {
      *
      * **A held Decision is retried from `Complete`.** Its call succeeded, but an edge that reads the
      * below-threshold answer holds rather than guess, and time is the only thing that can change it —
-     * so asking again is the way out, as it is for a failed call. Every question is asked again, and
-     * the step's earlier answers are cleared: while it runs, every edge that reads it holds, and edges
-     * already decided on its earlier answers stay decided.
+     * so asking again is the way out, as it is for a failed call.
+     *
+     * - **Only the held questions are asked again**, in one call. The answers it already gave that
+     *   were usable are kept and merged with the new ones, because the graph has already acted on
+     *   them: a fork's losing branch is already Skipped. Asking those questions again could flip the
+     *   fork to a branch that is gone and leave neither branch to run, so a retry can settle a hold
+     *   but never re-decide a fork. An edited `inputPayload` changes what the held questions are
+     *   asked about; the kept answers stand.
+     * - While it runs, every edge that reads it holds.
+     * - If the new call fails, or cannot be made, the step stays `Complete` with the same usable
+     *   answers, and each question it asked again holds with the reason. Retry it again.
+     * - An edited `inputPayload` that is not a JSON object of named values is refused for a held
+     *   Decision: the step would fail on it, and a failed step keeps no answers.
+     * - **Cost:** the graph's cost rollup reaches a Decision's call through
+     *   `Configuration.runtime.promptRunID`, which holds one ID and is replaced by each later call.
+     *   So the rollup counts only the last call, as it does for a retried Prompt step. Every call is
+     *   still recorded in its own `MJ: AI Prompt Runs` row and, for a graph an agent run submitted,
+     *   as a `Decision` step on that run.
      *
      * Also clears any `Blocked` dependents, since they were only blocked because this task failed —
      * leaving them blocked would make the retry pointless, as the graph still could not progress
@@ -928,7 +965,10 @@ export class TaskGraphService {
         try {
             const task = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', context.ContextUser);
             if (!(await task.Load(taskID))) return false;
-            const refusal = RetryRefusal(task);
+            const editedInput = inputPayload === undefined
+                ? undefined
+                : typeof inputPayload === 'string' ? inputPayload : JSON.stringify(inputPayload);
+            const refusal = RetryRefusal(task, editedInput);
             if (refusal) {
                 LogError(`[TaskGraphService] Cannot retry task ${taskID}: ${refusal}.`);
                 return false;
@@ -944,9 +984,9 @@ export class TaskGraphService {
             // hazard — a concurrent human retry is), but the shape is the same and it costs one
             // statement to not have it. The rest of this method's full-row save predates this PR
             // and is Round 3's to purge; the new write does not add to it.
-            if (inputPayload !== undefined) {
+            if (editedInput !== undefined) {
                 const typeID = await this.ensureTaskType(context);
-                const json = typeof inputPayload === 'string' ? inputPayload : JSON.stringify(inputPayload);
+                const json = editedInput;
                 const wrote = await this.debugWrites.TryUpdateInputPayload(
                     context.Provider, taskID, json, expectedStatus, typeID, context.ContextUser,
                 );
