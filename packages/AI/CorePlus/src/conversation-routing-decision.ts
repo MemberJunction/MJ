@@ -44,10 +44,27 @@ export const DECISION_ROUTING_TIMEOUT_MS = 350;
  * leaves the thread only when its **calibrated** probability of continuing (see
  * {@link ROUTING_CONTINUES_CALIBRATION}) is at most `1 - DECISION_ROUTING_MIN_CONFIDENCE`.
  *
- * Set from the Phase 2 Decision Eval (plan Task 2.4, 2026-09-29), on calibrated probabilities. At
- * a calibrated 0.30, Jev routed away correctly 96.8% of the time, caught 86.2% of real switches, and
- * kept 96.1% of real continuations. LLM Decision scored 96.2%, 72.4% and 96.1%. At a 90%-continue
- * prior that is 95.1% (Jev) and 93.7% (LLM Decision) accurate, against 90.0% for always-continue.
+ * **What the bar means in a chat.** The calibration was fitted on a corpus that is mostly switches
+ * (174 switches, 127 continuations), and a chat is mostly continuations. A calibrated 0.30 is a 30%
+ * chance that the message continues only at the corpus's mix; at a 90%-continue prior it is about an
+ * 84% chance (see {@link ROUTING_CONTINUES_CALIBRATION}). In raw terms, routing leaves the thread when
+ * Jev's raw probability is at most about 0.80 (LLM Decision's, about 0.78). Before calibration the
+ * bar was a raw 0.30. This value was not chosen for a chat's mix. Routing ships off, and the bar
+ * should be set on the prior-weighted figures below before routing is turned on.
+ *
+ * **Measured at a calibrated 0.30** in the Phase 2 Decision Eval (plan Task 2.4, 2026-09-29), on that
+ * corpus. Jev left the thread on 155 points, and 150 of them were real switches. So it caught 86.2%
+ * of the switches (150/174) and wrongly left 3.9% of the continuations (5/127). LLM Decision caught
+ * 72.4% of the switches and also wrongly left 5 continuations.
+ * - **At the corpus's mix** (58% switches), 96.8% of Jev's leaves were correct, and 96.2% of LLM
+ *   Decision's.
+ * - **At a 90%-continue prior**, closer to a chat, about **71%** of Jev's leaves are correct, and about
+ *   **67%** of LLM Decision's. Per 100 messages, Jev makes about 8.6 correct leaves and sends about 3.5
+ *   continuations to another agent. The false-leave rate rests on 5 of 127 continuations (Wilson 95%
+ *   interval 1.7% to 8.9%), so Jev's figure could be anywhere from about 52% to 85%.
+ * - Accuracy at that prior is 95.1% (Jev) and 93.7% (LLM Decision), against 90.0% for always
+ *   continuing. Accuracy hides the gap above, because a missed switch and a continuation sent to the
+ *   wrong agent don't cost the same.
  *
  * **Those figures are an upper bound on what routing does.** They score the thread Likelihood
  * alone, on each point's mean over five repeats. Routing makes one call, and leaves the thread only
@@ -63,18 +80,44 @@ export const DECISION_ROUTING_MIN_CONFIDENCE = 0.7;
 /**
  * Platt calibration of the thread Likelihood (`continues`), per decision model, each tied to the
  * exact model it was fitted on (see `FindDecisionCalibration`): the MJ decision model that answered
- * (`ModelName`) and the model the driver reports behind it (`ResolvedModel`). A model's raw
- * probability is not calibrated: both models' raw answers lean heavily toward "continues" (Jev's
- * raw 0.5 is a calibrated 0.03). Any other model, including Jev at another version or
- * `LLM Decision` answered by another chat model, is treated as unsure, so routing keeps continuity.
+ * (`ModelName`) and the model the driver reports behind it (`ResolvedModel`). Any other model,
+ * including Jev at another version or `LLM Decision` answered by another chat model, is treated as
+ * unsure, so routing keeps continuity.
  *
- * Fitted by the Phase 2 Decision Eval (plan Task 2.4, 2026-09-29) on the labelled continuity corpus,
- * with the production state layout and question, averaging five repeats per point:
+ * **Calibrated at the corpus's mix, not a chat's.** Platt's `B` absorbs the base rate of the data it
+ * was fitted on: 127 continuations to 174 switches, so 42% of messages continue. A calibrated value
+ * is the chance that the message continues when 42% of messages do. Both models' raw answers lean
+ * toward "continues": at the corpus's mix, Jev's raw 0.5 is a calibrated 0.03. At a 90%-continue
+ * prior, closer to a chat, the calibrated logit gains ln(9 × 174/127) ≈ 2.51. Jev's raw 0.5 is then
+ * about 0.30, and the leave bar of a calibrated 0.30 ({@link DECISION_ROUTING_MIN_CONFIDENCE}) is about
+ * an 84% chance that the message continues. `B` is kept as fitted; that constant says what the bar
+ * does at a chat's mix.
+ *
+ * **Where the fits come from.** The Phase 2 Decision Eval (plan Task 2.4, 2026-09-29), cell
+ * `production` (the production state layout and question), on the labelled continuity corpus with
+ * its construction labels. The corpus has 374 points. 301 are scored (174 switch, 127 continue); the
+ * rest are ambiguous or never got a usable probability. Each point is asked five times and scored on
+ * its mean. `A` and `B` are fitted on all 301 points; the figures below are out of fold (5 folds). The
+ * corpus is private and not in the repo. When the fits were made, `corpus.jsonl` hashed (SHA-256) to
+ * `08dd187af4318a93…` and `labels.jsonl` to `625d1df9b1428809…`, so a refit can be compared with this one.
  * - **Jev** at its pinned `APIName`, `typesafe/jev-1.13-20260917`, which OpenRouter reports back as
- *   the resolved model. 301 points: balanced accuracy 0.800 raw → **0.928** calibrated out of fold
- *   [0.897, 0.956], ECE 0.226 → 0.041.
+ *   the resolved model. Suite "Decision Eval — Conversation Routing (Jev rerun)", runs since
+ *   2026-09-29T21:36:27Z: 1,825 usable runs (45 more had no probability). Balanced accuracy 0.800
+ *   raw → **0.928** calibrated [0.897, 0.956], ECE 0.226 → 0.041.
  * - **LLM Decision** when its chat model is GPT-OSS-120B (its prompt's first choice, via Cerebras
- *   in the eval). 301 points: 0.796 → **0.861** [0.826, 0.897], ECE 0.195 → 0.081.
+ *   in the eval). Suite "Decision Eval — Conversation Routing", runs since 2026-09-29T20:29:56Z:
+ *   1,825 usable runs. 0.796 → **0.861** [0.826, 0.897], ECE 0.195 → 0.081.
+ *
+ * **Assumptions in the keying.**
+ * - LLM Decision reports its chat model's MJ name, `GPT-OSS-120B`, with no vendor. So its fit also
+ *   covers answers served by Groq, which the LLM Decision prompt lists second, though the fit was
+ *   measured via Cerebras. This assumes both vendors serve the same model.
+ * - After a failover inside the LLM Decision prompt, the resolved model is the one `AIPromptRunner`
+ *   first selected, not the one that answered: its `modelInfo` comes from the selected model, and
+ *   failover moves only `promptRun.ModelID`. So if both GPT-OSS-120B vendors fail and another chat
+ *   model answers, the GPT-OSS-120B fit is applied to that answer. Jev would have to fail first, and
+ *   then both vendors, within {@link DECISION_ROUTING_TIMEOUT_MS}, so this is unlikely. The fix
+ *   belongs in `AIPromptRunner`: build `modelInfo` from the candidate that answered.
  *
  * Refit, and add the new pair, whenever a model, its version, the question or the state layout
  * changes.
@@ -284,13 +327,15 @@ export function IsAgentAllowed(
 /**
  * The agents that have taken part in the conversation and may answer now, newest first, each once
  * with its newest reply. The conversation manager is left out (it is the "someone else" option),
- * and so is any agent the client's catalog doesn't know, the host doesn't allow, or that can no
- * longer answer: one that isn't active, or is restricted (see {@link IsRoutableAgent}).
+ * and so is any agent `findAgent` doesn't return, the host doesn't allow, or that can no longer
+ * answer: one that isn't active, or is restricted (see {@link IsRoutableAgent}).
  *
  * @param history The conversation's rows the turn may read, oldest first.
  * @param conversationManagerId The conversation manager's ID, when it is loaded.
  * @param allowedAgentIDs The host's allowed list. Null allows every agent.
- * @param findAgent Looks an agent up in the client's catalog.
+ * @param findAgent Looks an agent up among those the person may run. The chat passes the '@' list's
+ *   permission-filtered set (`MentionAutocomplete.GetAvailableAgents()`), so an agent that answered
+ *   in the conversation but that this person can't run is never offered.
  */
 export function CollectRoutingParticipants(
     history: readonly RoutingHistoryRow[],
@@ -313,9 +358,10 @@ export function CollectRoutingParticipants(
 }
 
 /**
- * True when an agent can take a routed turn: it is active and not restricted, the same test the
- * '@' list applies. An agent that answered earlier may since have been disabled, and the server
- * refuses to run an agent that isn't active.
+ * True when an agent can take a routed turn: it is active and not restricted. An agent that
+ * answered earlier may since have been disabled, and the server refuses to run an agent that isn't
+ * active. This is only part of what the '@' list checks (it also needs run permission, and leaves
+ * out sub-agents), so the chat looks participants up in that list, and this check is a backstop.
  */
 export function IsRoutableAgent(agent: Pick<RoutingCatalogAgent, 'Status' | 'IsRestricted'>): boolean {
     return agent.Status === 'Active' && !agent.IsRestricted;
