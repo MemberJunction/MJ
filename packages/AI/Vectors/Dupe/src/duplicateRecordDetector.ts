@@ -50,6 +50,7 @@ import { DuplicateReasoningProvider } from "./reasoning/DuplicateReasoningProvid
 import {
     DuplicateReasoningInput,
     DuplicateReasoningOutput,
+    DuplicateReasoningCandidateVerdict,
     ReasoningCandidate,
     ReasoningFieldDelta,
 } from "./reasoning/DuplicateReasoningTypes";
@@ -1385,7 +1386,7 @@ export class DuplicateRecordDetector extends VectorBase {
         reasoning: DuplicateReasoningOutput,
         candidateRecordID: string
     ): void {
-        const verdict = reasoning.CandidateVerdicts.find(v => this.recordIdMatches(v.RecordID, candidateRecordID));
+        const verdict = this.findCandidateVerdict(reasoning, candidateRecordID);
         match.LLMRecommendation = verdict ? verdict.Recommendation : reasoning.Recommendation;
         match.LLMConfidence = verdict ? verdict.Confidence : reasoning.Confidence;
         match.LLMReasoning = (verdict?.Reasoning || reasoning.Reasoning) || null;
@@ -1395,6 +1396,14 @@ export class DuplicateRecordDetector extends VectorBase {
             : null;
         match.AIPromptRunID = reasoning.AIPromptRunID ?? null;
         match.AIAgentRunID = reasoning.AIAgentRunID ?? null;
+    }
+
+    /** This candidate's own verdict, matched by record id, or undefined when the reasoner returned none for it. */
+    protected findCandidateVerdict(
+        reasoning: DuplicateReasoningOutput,
+        candidateRecordID: string
+    ): DuplicateReasoningCandidateVerdict | undefined {
+        return reasoning.CandidateVerdicts.find(v => this.recordIdMatches(v.RecordID, candidateRecordID));
     }
 
     // ─────────────────────────────────────────────
@@ -1597,11 +1606,12 @@ export class DuplicateRecordDetector extends VectorBase {
     }
 
     /**
-     * Carry the set-level verdict + resolved survivor field map onto the result so the
-     * auto-merge step (AutoMergeAboveAbsolute) can consult the recommendation and apply the
-     * literal {FieldName, Value} overrides via {@link RecordMergeRequest.FieldMap}. The UI
-     * still reads the persisted per-row {@link MJDuplicateRunDetailMatchEntity.LLMProposedFieldMap}
-     * (the raw choices) and lets the reviewer override before a manual merge.
+     * Carry the set-level verdict + resolved survivor field map onto the result, and each
+     * candidate's own verdict onto its {@link PotentialDuplicate}, so the auto-merge step
+     * (AutoMergeAboveAbsolute) can consult both recommendations and apply the literal
+     * {FieldName, Value} overrides via {@link RecordMergeRequest.FieldMap}. The UI still reads
+     * the persisted per-row {@link MJDuplicateRunDetailMatchEntity.LLMProposedFieldMap} (the raw
+     * choices) and lets the reviewer override before a manual merge.
      */
     protected applyReasoningToResult(
         result: PotentialDuplicateResult,
@@ -1614,6 +1624,9 @@ export class DuplicateRecordDetector extends VectorBase {
         result.ReasoningRecommendation = output.Recommendation;
         result.ReasoningFieldMap = fieldMap.length > 0 ? fieldMap : undefined;
         result.ReasoningText = output.Reasoning?.trim() ? output.Reasoning : undefined;
+        for (const dupe of result.Duplicates) {
+            dupe.ReasoningRecommendation = this.findCandidateVerdict(output, dupe.Values())?.Recommendation;
+        }
     }
 
     // ─────────────────────────────────────────────
@@ -1658,7 +1671,9 @@ export class DuplicateRecordDetector extends VectorBase {
      * Reasoning path (EnableLLMReasoning = true): `AutomationLevel` governs.
      *   - ReviewAll / LLMGated → never auto-merge (everything goes to human review).
      *   - AutoMergeAboveAbsolute → at/above the absolute threshold AND the set's LLM
-     *     recommendation is 'Merge'.
+     *     recommendation is 'Merge' AND this candidate's own verdict is 'Merge'. A set-level
+     *     'Merge' only says that SOME candidate is a duplicate, so it never merges a candidate
+     *     the reasoner judged otherwise, or returned no verdict for.
      */
     protected IsAutoMergeEligible(
         dupe: PotentialDuplicate,
@@ -1673,7 +1688,9 @@ export class DuplicateRecordDetector extends VectorBase {
         if (entityDocument.AutomationLevel !== 'AutoMergeAboveAbsolute') {
             return false;
         }
-        return aboveAbsolute && dupeResult.ReasoningRecommendation === 'Merge';
+        return aboveAbsolute
+            && dupeResult.ReasoningRecommendation === 'Merge'
+            && dupe.ReasoningRecommendation === 'Merge';
     }
 
     /**

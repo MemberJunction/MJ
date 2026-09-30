@@ -123,7 +123,8 @@ export interface DuplicateReasoningOutput {
     /**
      * The overall verdict for the set, **derived** from the per-candidate verdicts (Merge if any
      * candidate is a Merge, else Uncertain if any is Uncertain, else NotDuplicate). Used for the
-     * group's dominant display and the auto-merge gate — NOT stamped on individual candidate rows.
+     * group's dominant display and, together with each candidate's own verdict, the auto-merge
+     * gate — NOT stamped on individual candidate rows.
      */
     Recommendation: DuplicateReasoningRecommendation;
     /**
@@ -137,7 +138,8 @@ export interface DuplicateReasoningOutput {
     /**
      * Per-candidate verdicts — the authoritative, row-level result. Each entry is judged
      * independently against the source so a false-positive candidate reads NotDuplicate even when
-     * another candidate in the same set is a confident Merge.
+     * another candidate in the same set is a confident Merge. Auto-merge requires the candidate's
+     * own verdict to be Merge, so a candidate with no entry here is never auto-merged.
      */
     CandidateVerdicts: DuplicateReasoningCandidateVerdict[];
     /** The record id the reasoner proposes should survive (null when NotDuplicate). */
