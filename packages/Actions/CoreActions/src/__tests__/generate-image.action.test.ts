@@ -2,9 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
  * `Generate Image` goes through `AIImageGenerationRunner`, so every call gets failover and an
- * `MJ: AI Prompt Runs` row. What must NOT change is pinned here: the model the action chooses, the key
- * it resolves (runtime key, platform key, then the vendor-name fallback), and every output param and
- * result code a caller may match on.
+ * `MJ: AI Prompt Runs` row. Pinned here: the model is pinned only when the caller names one (so the
+ * `Default Image Generation` prompt's failover applies otherwise), the keys it resolves (runtime key,
+ * platform key, then the vendor-name fallback) for every driver class the run may reach, the calling
+ * agent, and every output param and result code a caller may match on.
  *
  * The runner is mocked whole; its own behaviour is tested in `@memberjunction/ai-prompts`.
  * `GetAIAPIKey` is mocked as the PLATFORM lookup, as in `generate-image-api-key.test.ts`.
@@ -14,9 +15,11 @@ const h = vi.hoisted(() => {
         Success: boolean;
         ErrorMessage?: string;
         ImageResult?: { success: boolean; images: Array<Record<string, unknown>>; revisedPrompt?: string };
+        ModelName?: string;
         ExecutionTimeMS: number;
     };
     return {
+        inferenceTypeId: 'VT-INFERENCE-PROVIDER',
         platformKeys: new Map<string, string>(),
         generateCalls: [] as Array<Record<string, unknown>>,
         editCalls: [] as Array<Record<string, unknown>>,
@@ -44,6 +47,7 @@ vi.mock('@memberjunction/ai-engine-base', () => ({
             Config: (...args: unknown[]) => h.engineConfig(...args),
             get Models() { return h.models; },
             get Vendors() { return h.vendors; },
+            IsInferenceProvider: (mv: { TypeID?: string }) => mv.TypeID === h.inferenceTypeId,
         },
     },
 }));
@@ -75,31 +79,38 @@ class TestableGenerateImageAction extends GenerateImageAction {
 
 const OPENAI = 'D8A5CCEC-6A37-EF11-86D4-000D3A4E707E';
 const BFL = 'B1AC0F00-0000-4000-8000-00000000F1A5';
+const DEVELOPER_TYPE_ID = 'VT-MODEL-DEVELOPER';
 const contextUser = { ID: 'user-1', Name: 'Test User' } as UserInfo;
+
+/** An inference-provider vendor row for a model. */
+function inferenceRow(vendorId: string, driverClass: string, apiName: string, priority = 1): Record<string, unknown> {
+    return { VendorID: vendorId, TypeID: h.inferenceTypeId, DriverClass: driverClass, APIName: apiName, Status: 'Active', Priority: priority };
+}
 
 /** The seeded catalog shape: a developer row with no driver, then the inference row. */
 function seedModels(): void {
     h.vendors = [{ ID: OPENAI, Name: 'OpenAI' }, { ID: BFL, Name: 'Black Forest Labs' }];
     h.models = [
         {
-            ID: 'model-gpt-image-2', Name: 'GPT Image 2', APIName: null, AIModelType: 'Image Generator', IsActive: true, PowerRank: 19,
-            ModelVendors: [
-                { VendorID: OPENAI, DriverClass: null, APIName: null, Status: 'Active' },
-                { VendorID: OPENAI, DriverClass: 'OpenAIImageGenerator', APIName: 'gpt-image-2', Status: 'Active' },
-            ],
+            ID: 'model-flux-2-pro', Name: 'FLUX.2 Pro', APIName: 'flux-2-pro', AIModelType: 'Image Generator', IsActive: true, PowerRank: 10,
+            ModelVendors: [inferenceRow(BFL, 'FLUXImageGenerator', 'flux-2-pro')],
         },
         {
-            ID: 'model-flux-2-pro', Name: 'FLUX.2 Pro', APIName: 'flux-2-pro', AIModelType: 'Image Generator', IsActive: true, PowerRank: 10,
-            ModelVendors: [{ VendorID: BFL, DriverClass: 'FLUXImageGenerator', APIName: 'flux-2-pro', Status: 'Active' }],
+            ID: 'model-gpt-image-2', Name: 'GPT Image 2', APIName: null, AIModelType: 'Image Generator', IsActive: true, PowerRank: 19,
+            ModelVendors: [
+                { VendorID: OPENAI, TypeID: DEVELOPER_TYPE_ID, DriverClass: null, APIName: null, Status: 'Active', Priority: 0 },
+                inferenceRow(OPENAI, 'OpenAIImageGenerator', 'gpt-image-2'),
+            ],
         },
         { ID: 'model-llm', Name: 'Big LLM', APIName: 'big-llm', AIModelType: 'LLM', IsActive: true, PowerRank: 99, ModelVendors: [] },
     ];
 }
 
-function imagesResult(count: number): ReturnType<typeof h.respond> {
+function imagesResult(count: number, modelName = 'GPT Image 2'): ReturnType<typeof h.respond> {
     return {
         Success: true,
         ExecutionTimeMS: 5,
+        ModelName: modelName,
         ImageResult: {
             success: true,
             images: Array.from({ length: count }, () => ({ base64: 'aW1hZ2U=', format: 'png', width: 1024, height: 1024 })),
@@ -108,13 +119,20 @@ function imagesResult(count: number): ReturnType<typeof h.respond> {
     };
 }
 
-function paramsFor(inputs: Record<string, unknown>, resolver?: RuntimeAPIKeyResolver): RunActionParams {
+function paramsFor(inputs: Record<string, unknown>, resolver?: RuntimeAPIKeyResolver, context?: Record<string, unknown>): RunActionParams {
     return {
         Params: Object.entries(inputs).map(([Name, Value]) => ({ Name, Type: 'Input', Value })),
         ContextUser: contextUser,
         RuntimeAPIKeyResolver: resolver,
+        Context: context,
     } as RunActionParams;
 }
+
+/** The platform keys for both shipped image driver classes, in the order the action resolves them. */
+const PLATFORM_KEYS = [
+    { driverClass: 'OpenAIImageGenerator', apiKey: 'platform-openai' },
+    { driverClass: 'FLUXImageGenerator', apiKey: 'platform-flux' },
+];
 
 function outputValue(params: RunActionParams, name: string): unknown {
     return params.Params.find(p => p.Name === name && p.Type === 'Output')?.Value;
@@ -132,7 +150,7 @@ describe('GenerateImageAction through AIImageGenerationRunner', () => {
         action = new TestableGenerateImageAction();
     });
 
-    it('generates through the runner, pinned to the highest-power image model, with the resolved key', async () => {
+    it("with no Model named, leaves the model to the prompt's bindings, carrying a key for every driver class it may reach", async () => {
         const params = paramsFor({ Prompt: 'A lighthouse at dusk', NumberOfImages: 2 });
 
         const result = await action.RunForTest(params);
@@ -140,10 +158,9 @@ describe('GenerateImageAction through AIImageGenerationRunner', () => {
         expect(result.Success).toBe(true);
         expect(result.ResultCode).toBe('IMAGES_GENERATED');
         expect(h.generateCalls).toHaveLength(1);
-        expect(h.generateCalls[0]).toEqual({
+        expect(h.generateCalls[0]).toStrictEqual({
             ContextUser: contextUser,
-            ModelID: 'model-gpt-image-2',
-            APIKeys: [{ driverClass: 'OpenAIImageGenerator', apiKey: 'platform-openai' }],
+            APIKeys: PLATFORM_KEYS,
             prompt: 'A lighthouse at dusk',
             n: 2,
             size: '1024x1024',
@@ -172,7 +189,17 @@ describe('GenerateImageAction through AIImageGenerationRunner', () => {
         });
     });
 
-    it('passes the requested model as ModelID, found by name or API name, with its own driver class key', async () => {
+    it('ModelUsed and the message name the model that answered, which after failover is not the first choice', async () => {
+        h.respond = () => imagesResult(1, 'FLUX.2 Pro');
+        const params = paramsFor({ Prompt: 'x' });
+
+        const result = await action.RunForTest(params);
+
+        expect(outputValue(params, 'ModelUsed')).toBe('FLUX.2 Pro');
+        expect(JSON.parse(result.Message ?? '{}').model).toBe('FLUX.2 Pro');
+    });
+
+    it('pins the requested model as ModelID, found by name or API name, with its own driver class key', async () => {
         await action.RunForTest(paramsFor({ Prompt: 'x', Model: 'FLUX.2 Pro' }));
         await action.RunForTest(paramsFor({ Prompt: 'x', Model: 'flux-2-pro' }));
 
@@ -180,12 +207,32 @@ describe('GenerateImageAction through AIImageGenerationRunner', () => {
         expect(h.generateCalls[0].APIKeys).toEqual([{ driverClass: 'FLUXImageGenerator', apiKey: 'platform-flux' }]);
     });
 
-    it("passes the run's runtime key for the driver class through to the runner", async () => {
-        const resolver: RuntimeAPIKeyResolver = (driverClass) => (driverClass === 'OpenAIImageGenerator' ? 'sk-customer' : undefined);
+    it("carries the run's own key for every driver class it resolves, so the key survives failover to the other vendor", async () => {
+        const runKeys = new Map([['OpenAIImageGenerator', 'sk-customer-openai'], ['FLUXImageGenerator', 'sk-customer-bfl']]);
+        const resolver: RuntimeAPIKeyResolver = (driverClass) => runKeys.get(driverClass);
 
         await action.RunForTest(paramsFor({ Prompt: 'x' }, resolver));
 
-        expect(h.generateCalls[0].APIKeys).toEqual([{ driverClass: 'OpenAIImageGenerator', apiKey: 'sk-customer' }]);
+        expect(h.generateCalls[0].APIKeys).toEqual([
+            { driverClass: 'OpenAIImageGenerator', apiKey: 'sk-customer-openai' },
+            { driverClass: 'FLUXImageGenerator', apiKey: 'sk-customer-bfl' },
+        ]);
+    });
+
+    it("asks the run's resolver for each driver class, falling back to the platform key for a class the run does not key", async () => {
+        const asked: string[] = [];
+        const resolver: RuntimeAPIKeyResolver = (driverClass) => {
+            asked.push(driverClass);
+            return driverClass === 'OpenAIImageGenerator' ? 'sk-customer' : undefined;
+        };
+
+        await action.RunForTest(paramsFor({ Prompt: 'x' }, resolver));
+
+        expect(asked).toEqual(['OpenAIImageGenerator', 'FLUXImageGenerator']);
+        expect(h.generateCalls[0].APIKeys).toEqual([
+            { driverClass: 'OpenAIImageGenerator', apiKey: 'sk-customer' },
+            { driverClass: 'FLUXImageGenerator', apiKey: 'platform-flux' },
+        ]);
     });
 
     it('a vendor-name-only key still works: it reaches the runner under the driver class', async () => {
@@ -199,17 +246,52 @@ describe('GenerateImageAction through AIImageGenerationRunner', () => {
         expect(h.generateCalls[0].APIKeys).toEqual([{ driverClass: 'OpenAIImageGenerator', apiKey: 'platform-openai-by-vendor' }]);
     });
 
-    it('with no key anywhere it fails as before, without calling the runner', async () => {
+    it('with no key it can resolve, the runner still runs (a credential binding may apply), and its failure is GENERATION_FAILED', async () => {
         h.platformKeys = new Map();
+        h.respond = () => ({
+            Success: false,
+            ErrorMessage: "No Image Generator model has credentials available for prompt 'Default Image Generation'",
+            ExecutionTimeMS: 5,
+        });
 
         const result = await action.RunForTest(paramsFor({ Prompt: 'x' }));
 
+        expect(h.generateCalls[0].APIKeys).toEqual([]);
         expect(result).toEqual({
             Success: false,
-            Message: 'Generate image failed: No API key found for OpenAIImageGenerator or vendor OpenAI',
-            ResultCode: 'ACTION_FAILED',
+            Message: "Image generation failed: No Image Generator model has credentials available for prompt 'Default Image Generation'",
+            ResultCode: 'GENERATION_FAILED',
         });
-        expect(h.generateCalls).toHaveLength(0);
+    });
+
+    it("resolves a driver class's key for the vendor the runner tries first (Priority), not the first in array order", async () => {
+        // One model, two inference vendors on the same driver class, each keyed only by vendor name.
+        // The array lists the lower-priority vendor first; the runner tries the higher-priority one first.
+        const LOW = 'VENDOR-LOW';
+        const HIGH = 'VENDOR-HIGH';
+        h.vendors.push({ ID: LOW, Name: 'Low Priority Host' }, { ID: HIGH, Name: 'High Priority Host' });
+        h.models.push({
+            ID: 'model-shared', Name: 'Shared Image Model', APIName: 'shared-image', AIModelType: 'Image Generator', IsActive: true, PowerRank: 5,
+            ModelVendors: [
+                inferenceRow(LOW, 'SharedImageGenerator', 'shared-image', 1),
+                inferenceRow(HIGH, 'SharedImageGenerator', 'shared-image', 5),
+                { ...inferenceRow(HIGH, 'InactiveImageGenerator', 'shared-image', 9), Status: 'Inactive' },
+            ],
+        });
+        h.platformKeys = new Map([['Low Priority Host', 'key-low'], ['High Priority Host', 'key-high']]);
+
+        await action.RunForTest(paramsFor({ Prompt: 'x', Model: 'Shared Image Model' }));
+
+        expect(h.generateCalls[0].ModelID).toBe('model-shared');
+        expect(h.generateCalls[0].APIKeys).toEqual([{ driverClass: 'SharedImageGenerator', apiKey: 'key-high' }]);
+    });
+
+    it('records the calling agent from the context BaseAgent stamps, and nothing outside an agent run', async () => {
+        await action.RunForTest(paramsFor({ Prompt: 'x' }, undefined, { AgentID: 'agent-1', ActiveSkillIDs: [] }));
+        await action.RunForTest(paramsFor({ Prompt: 'x' }));
+
+        expect(h.generateCalls[0].AgentID).toBe('agent-1');
+        expect(Object.keys(h.generateCalls[1])).not.toContain('AgentID');
     });
 
     it('a runner failure maps to GENERATION_FAILED with the same message as a failed generation', async () => {
@@ -231,17 +313,16 @@ describe('GenerateImageAction through AIImageGenerationRunner', () => {
         expect(result).toEqual({ Success: false, Message: 'No images were generated', ResultCode: 'NO_IMAGES' });
     });
 
-    it('a source image goes through RunImageEdit with the mask and the pinned model', async () => {
+    it('a source image goes through RunImageEdit with the mask and the same keys', async () => {
         const result = await action.RunForTest(paramsFor({
             Prompt: 'Make it a watercolour', SourceImage: 'c291cmNl', Mask: 'bWFzaw==', OutputFormat: 'url', NegativePrompt: 'blur',
         }));
 
         expect(result.ResultCode).toBe('IMAGES_GENERATED');
         expect(h.generateCalls).toHaveLength(0);
-        expect(h.editCalls[0]).toEqual({
+        expect(h.editCalls[0]).toStrictEqual({
             ContextUser: contextUser,
-            ModelID: 'model-gpt-image-2',
-            APIKeys: [{ driverClass: 'OpenAIImageGenerator', apiKey: 'platform-openai' }],
+            APIKeys: PLATFORM_KEYS,
             prompt: 'Make it a watercolour',
             image: 'c291cmNl',
             mask: 'bWFzaw==',
@@ -260,6 +341,29 @@ describe('GenerateImageAction through AIImageGenerationRunner', () => {
         expect(unknown).toEqual({
             Success: false,
             Message: "Generate image failed: Image generator model 'No Such Model' not found",
+            ResultCode: 'ACTION_FAILED',
+        });
+        expect(h.generateCalls).toHaveLength(0);
+    });
+
+    it('keeps ACTION_FAILED for a named model with no active inference provider, and for no image models at all', async () => {
+        h.models.push({
+            ID: 'model-dev-only', Name: 'Developer Only', APIName: 'dev-only', AIModelType: 'Image Generator', IsActive: true, PowerRank: 1,
+            ModelVendors: [{ VendorID: OPENAI, TypeID: DEVELOPER_TYPE_ID, DriverClass: null, APIName: null, Status: 'Active', Priority: 0 }],
+        });
+        const noProvider = await action.RunForTest(paramsFor({ Prompt: 'x', Model: 'Developer Only' }));
+
+        h.models = h.models.filter(m => m.AIModelType !== 'Image Generator');
+        const noModels = await action.RunForTest(paramsFor({ Prompt: 'x' }));
+
+        expect(noProvider).toEqual({
+            Success: false,
+            Message: "Generate image failed: No active inference provider found for model 'Developer Only'",
+            ResultCode: 'ACTION_FAILED',
+        });
+        expect(noModels).toEqual({
+            Success: false,
+            Message: 'Generate image failed: No active image generator models found',
             ResultCode: 'ACTION_FAILED',
         });
         expect(h.generateCalls).toHaveLength(0);

@@ -65,8 +65,9 @@ interface ImageSelection {
  * pinned `ModelID`), resolves credentials, fails over, and writes an `MJ: AI Prompt Runs` row.
  *
  * The row never holds image bytes: `Messages` records the prompt text and the image count, and
- * `Result` the count and sizes of the images. Usage is recorded only when the driver reports it;
- * the runner never invents a quantity or a price.
+ * `Result` the count and sizes of the images. Usage is the driver's when it reports a quantity;
+ * otherwise the images returned are counted in the `Images` measure, so the model's `Per Image`
+ * cost row prices the run when the row saves. The runner never sets a cost itself.
  */
 export class AIImageGenerationRunner extends BaseModelRunner {
   /** The carrier prompt used when the caller names none. */
@@ -175,7 +176,8 @@ export class AIImageGenerationRunner extends BaseModelRunner {
 
   /**
    * The base runner reads its settings from `AIPromptParams`, so the image params are mapped onto
-   * one: the carrier prompt, the context user, the keys, the parent run and the runner's provider.
+   * one: the carrier prompt, the context user, the keys, the parent run, the agent and its
+   * run-created hook, and the runner's provider.
    */
   private buildPromptParams(params: ImageRunParams, prompt: MJAIPromptEntityExtended): AIPromptParams {
     const promptParams = new AIPromptParams();
@@ -183,6 +185,8 @@ export class AIImageGenerationRunner extends BaseModelRunner {
     promptParams.contextUser = params.ContextUser;
     promptParams.apiKeys = params.APIKeys;
     promptParams.parentPromptRunId = params.ParentRunID;
+    promptParams.agentId = params.AgentID;
+    promptParams.onPromptRunCreated = params.OnPromptRunCreated;
     if (this._provider) {
       promptParams.provider = this._provider;
     }
@@ -318,6 +322,8 @@ export class AIImageGenerationRunner extends BaseModelRunner {
     delete driverParams.PromptID;
     delete driverParams.APIKeys;
     delete driverParams.ParentRunID;
+    delete driverParams.AgentID;
+    delete driverParams.OnPromptRunCreated;
     delete driverParams.AgentRunID;
     return driverParams;
   }
@@ -367,7 +373,7 @@ export class AIImageGenerationRunner extends BaseModelRunner {
     });
   }
 
-  /** Finalizes the run row with the image summary, the driver's usage, and any error. */
+  /** Finalizes the run row with the image summary, the usage to record, and any error. */
   private async finalizeImageRun(
     promptRun: MJAIPromptRunEntityExtended,
     imageResult: ImageGenerationResult,
@@ -376,7 +382,7 @@ export class AIImageGenerationRunner extends BaseModelRunner {
   ): Promise<void> {
     await this.FinalizeRunRecord(promptRun, imageResult.success, endTime, executionTimeMS, run => {
       run.Result = this.describeImages(imageResult);
-      this.applyUsage(run, imageResult.usage);
+      this.applyUsage(run, this.usageToRecord(imageResult));
       if (!imageResult.success && imageResult.errorMessage) {
         run.ErrorMessage = imageResult.errorMessage;
       }
@@ -392,8 +398,39 @@ export class AIImageGenerationRunner extends BaseModelRunner {
   }
 
   /**
-   * Records the usage the driver reported: tokens, units in the measure it named, and a cost only
-   * when the driver gave one. With no usage nothing is recorded, so the cost stays empty.
+   * The usage to record: the driver's when it reported a quantity (tokens or units), otherwise the
+   * images it returned, counted as output units in the `Images` measure. Image cost rows price
+   * that count (`Per Image`, rate in `OutputPricePerUnit`) when the row saves. A driver's own cost
+   * is kept. A call that returned no images records nothing.
+   */
+  private usageToRecord(result: ImageGenerationResult): ModelUsage | undefined {
+    const reported = result.usage;
+    const imageCount = result.images?.length ?? 0;
+    if (this.reportsQuantity(reported) || imageCount === 0) {
+      return reported;
+    }
+    const counted = ModelUsage.ForMedia('Images', 0, imageCount);
+    if (reported?.cost !== undefined) {
+      counted.cost = reported.cost;
+      counted.costCurrency = reported.costCurrency;
+    }
+    return counted;
+  }
+
+  /** Whether the driver's usage names any quantity: tokens, or units in a measure. */
+  private reportsQuantity(usage: ModelUsage | undefined): boolean {
+    if (!usage) {
+      return false;
+    }
+    const tokens = (usage.promptTokens ?? 0) + (usage.completionTokens ?? 0);
+    const hasMeasure = usage.unitKind !== undefined && usage.unitKind !== 'Tokens';
+    const units = hasMeasure ? (usage.inputUnits ?? 0) + (usage.outputUnits ?? 0) : 0;
+    return tokens > 0 || units > 0;
+  }
+
+  /**
+   * Records the usage: tokens, units in the measure it names, and a cost only when the driver gave
+   * one. With no usage nothing is recorded, so the cost stays empty.
    */
   private applyUsage(run: MJAIPromptRunEntityExtended, usage: ModelUsage | undefined): void {
     if (!usage) {

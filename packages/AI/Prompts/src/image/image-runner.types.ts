@@ -23,7 +23,8 @@ export interface AIImageRunOptions {
 
   /**
    * Pins the image model by ID, as `AIDecisionRunner` does with `override.modelId`. Failover then
-   * stays within that model's vendors.
+   * stays within that model's vendors. Leave it unset to let the carrier prompt's bindings choose,
+   * which is what makes failover reach another model.
    */
   ModelID?: string;
 
@@ -34,17 +35,33 @@ export interface AIImageRunOptions {
   PromptID?: string;
 
   /**
-   * Keys by driver class, passed through as the base runner's `apiKeys`. They sit where the
-   * environment keys do in the credential hierarchy: a credential binding still wins over them.
+   * Keys by driver class, passed through as the base runner's `apiKeys`. A key reaches only the
+   * candidates of its own driver class, so a caller whose key should survive failover supplies one
+   * for each driver class a candidate may use.
+   *
+   * They rank as they do for chat prompts, just above the environment keys: a credential bound to
+   * the prompt-model, the model-vendor or the vendor, or a default credential of the vendor's
+   * credential type, wins over them.
    */
   APIKeys?: AIAPIKey[];
 
   /** A parent `MJ: AI Prompt Runs` row, recorded as this run's `ParentID`. */
   ParentRunID?: string;
 
+  /** The agent the call is made for, recorded as the run row's `AgentID`. */
+  AgentID?: string;
+
+  /**
+   * Called with the run row's ID as soon as the row exists, before the model call: the hook an
+   * agent step uses to point its `TargetLogID` at the row. An error it throws is logged, never
+   * raised.
+   */
+  OnPromptRunCreated?: (promptRunId: string) => void | Promise<void>;
+
   /**
    * The agent run this call belongs to. `MJ: AI Prompt Runs` has no agent-run column, so it is
-   * recorded in the row's `Messages`.
+   * recorded in the row's `Messages`, for reading only. To join the row to the run, use
+   * {@link OnPromptRunCreated}.
    */
   AgentRunID?: string;
 }

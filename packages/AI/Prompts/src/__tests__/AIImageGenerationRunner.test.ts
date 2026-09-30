@@ -33,6 +33,16 @@ const h = vi.hoisted(() => {
   const norm = (s: unknown): string => (s == null ? '' : String(s).trim().toLowerCase());
   const eq = (a: unknown, b: unknown): boolean => norm(a) === norm(b);
 
+  type CredentialBinding = { BindingType: string; TargetID: string; CredentialID: string; Priority: number };
+  type Credential = {
+    ID: string;
+    Name: string;
+    IsActive: boolean;
+    IsDefault: boolean;
+    CredentialTypeID: string;
+    ExpiresAt: Date | null;
+  };
+
   type State = {
     vendorTypeDefinitions: Array<{ ID: string; Name: string }>;
     vendors: Array<{ ID: string; Name: string; CredentialTypeID?: string | null }>;
@@ -43,6 +53,8 @@ const h = vi.hoisted(() => {
     promptModels: Array<Record<string, unknown>>;
     prompts: Array<Record<string, unknown>>;
     configuredDrivers: Set<string>;
+    credentialBindings: CredentialBinding[];
+    credentials: Credential[];
   };
 
   const state: State = {
@@ -55,7 +67,12 @@ const h = vi.hoisted(() => {
     promptModels: [],
     prompts: [],
     configuredDrivers: new Set(),
+    credentialBindings: [],
+    credentials: [],
   };
+
+  const bindingsFor = (bindingType: string, targetId: string): CredentialBinding[] =>
+    state.credentialBindings.filter(b => b.BindingType === bindingType && eq(b.TargetID, targetId));
 
   const groupBy = (rows: Array<Record<string, unknown>>, key: string): Map<string, Array<Record<string, unknown>>> => {
     const map = new Map<string, Array<Record<string, unknown>>>();
@@ -88,8 +105,8 @@ const h = vi.hoisted(() => {
     get PromptModelsByPromptID() { return groupBy(state.promptModels, 'PromptID'); },
     GetConfigurationChain() { return []; },
     GetEffectiveModelConfiguration() { return undefined; },
-    HasCredentialBindings() { return false; },
-    GetCredentialBindingsForTarget() { return []; },
+    HasCredentialBindings(bindingType: string, targetId: string) { return bindingsFor(bindingType, targetId).length > 0; },
+    GetCredentialBindingsForTarget(bindingType: string, targetId: string) { return bindingsFor(bindingType, targetId); },
   };
 
   return {
@@ -121,6 +138,7 @@ vi.mock('@memberjunction/ai', async (importOriginal) => {
   };
 });
 
+// A credential resolves to `{ apiKey: '<its name>-value' }`, which the base passes to the driver as JSON.
 vi.mock('@memberjunction/credentials', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>().catch(() => ({}));
   return {
@@ -128,9 +146,9 @@ vi.mock('@memberjunction/credentials', async (importOriginal) => {
     CredentialEngine: {
       Instance: {
         Config: vi.fn().mockResolvedValue(undefined),
-        Credentials: [],
-        getCredentialById: () => null,
-        getCredential: vi.fn().mockResolvedValue({ values: {} }),
+        get Credentials() { return h.state.credentials; },
+        getCredentialById: (id: string) => h.state.credentials.find(c => c.ID === id) ?? null,
+        getCredential: async (name: string) => ({ values: { apiKey: `${name}-value` } }),
       },
     },
   };
@@ -265,9 +283,10 @@ describe('AIImageGenerationRunner', () => {
     h.state.configurations = catalog.configurations;
     const primary = imageModel(PRIMARY_ID, 'Primary Image Model', 'primary-image-v1', VENDOR.OpenAI, 'OpenAI', 19);
     const secondary = imageModel(SECONDARY_ID, 'Secondary Image Model', 'secondary-image-v1', VENDOR.Google, 'Google', 10);
-    h.state.models = [...catalog.models, primary, secondary];
+    // Copied into plain objects: the fixture interfaces have no index signature to widen to a record.
+    h.state.models = [...catalog.models.map(m => ({ ...m })), primary, secondary];
     h.state.modelVendors = [
-      ...catalog.modelVendors,
+      ...catalog.modelVendors.map(mv => ({ ...mv })),
       ...(primary.ModelVendors as Array<Record<string, unknown>>),
       ...(secondary.ModelVendors as Array<Record<string, unknown>>),
     ];
@@ -287,6 +306,8 @@ describe('AIImageGenerationRunner', () => {
       MaxRetries: 0,
     }];
     h.state.configuredDrivers = new Set([DRIVER]);
+    h.state.credentialBindings = [];
+    h.state.credentials = [];
   }
 
   function generationParams(overrides: Partial<AIImageGenerationRunParams> = {}): AIImageGenerationRunParams {
@@ -309,9 +330,12 @@ describe('AIImageGenerationRunner', () => {
     setupCatalog();
     lastPromptRun = null;
     driver = new MockImageDriver();
-    vi.spyOn(AIEngineBase.Instance, 'EnsureLoaded').mockResolvedValue(undefined as never);
+    vi.spyOn(AIEngineBase.Instance, 'EnsureLoaded').mockResolvedValue(undefined);
+    vi.spyOn(AIEngineBase.Instance, 'UsageTypes', 'get').mockReturnValue(
+      [{ ID: IMAGES_USAGE_TYPE_ID, Name: 'Images' }] as unknown as MJAIUsageTypeEntity[]
+    );
     vi.spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance').mockImplementation(
-      (_baseClass: unknown, driverClass: string) => (driverClass === DRIVER ? driver : undefined) as never
+      (_baseClass: unknown, driverClass: string | null = null) => (driverClass === DRIVER ? driver : null)
     );
     runner = new AIImageGenerationRunner();
     runner.Provider = fakeProvider as unknown as IMetadataProvider;
@@ -351,30 +375,51 @@ describe('AIImageGenerationRunner', () => {
       });
     });
 
-    it('records no usage and no cost when the driver reports none', async () => {
-      await runner.RunImageGeneration(generationParams());
-      await runner.WaitForPendingPromptRunSaves();
-
-      expect(lastPromptRun?.Cost).toBeUndefined();
-      expect(lastPromptRun?.TokensUsed).toBeUndefined();
-      expect(lastPromptRun?.UsageTypeID).toBeUndefined();
-      expect(lastPromptRun?.OutputUnitsUsed).toBeUndefined();
-    });
-
-    it('records image units under the Images usage type when the driver reports them, and no invented cost', async () => {
-      vi.spyOn(AIEngineBase.Instance, 'UsageTypes', 'get').mockReturnValue(
-        [{ ID: IMAGES_USAGE_TYPE_ID, Name: 'Images' }] as unknown as MJAIUsageTypeEntity[]
-      );
-      driver.Respond = () => ImagesResult(2, ModelUsage.ForMedia('Images', 0, 2));
+    it('with no usage from the driver, records the images returned as Images output units, so Per Image pricing applies; it sets no cost itself', async () => {
+      driver.Respond = () => ImagesResult(3);
 
       await runner.RunImageGeneration(generationParams());
       await runner.WaitForPendingPromptRunSaves();
 
       expect(lastPromptRun?.UsageTypeID).toBe(IMAGES_USAGE_TYPE_ID);
-      expect(lastPromptRun?.OutputUnitsUsed).toBe(2);
+      expect(lastPromptRun?.OutputUnitsUsed).toBe(3);
       expect(lastPromptRun?.InputUnitsUsed).toBe(0);
       expect(lastPromptRun?.TokensUsed).toBeUndefined();
       expect(lastPromptRun?.Cost).toBeUndefined();
+    });
+
+    it('a call that returns no images records no usage', async () => {
+      driver.Respond = () => ImagesResult(0);
+
+      await runner.RunImageGeneration(generationParams());
+      await runner.WaitForPendingPromptRunSaves();
+
+      expect(lastPromptRun?.UsageTypeID).toBeUndefined();
+      expect(lastPromptRun?.OutputUnitsUsed).toBeUndefined();
+    });
+
+    it("the driver's own units are recorded as reported, not replaced by the image count", async () => {
+      driver.Respond = () => ImagesResult(2, ModelUsage.ForMedia('Images', 1, 4));
+
+      await runner.RunImageGeneration(generationParams());
+      await runner.WaitForPendingPromptRunSaves();
+
+      expect(lastPromptRun?.UsageTypeID).toBe(IMAGES_USAGE_TYPE_ID);
+      expect(lastPromptRun?.InputUnitsUsed).toBe(1);
+      expect(lastPromptRun?.OutputUnitsUsed).toBe(4);
+      expect(lastPromptRun?.Cost).toBeUndefined();
+    });
+
+    it("a driver that reports tokens keeps its own measure: no image count is added", async () => {
+      driver.Respond = () => ImagesResult(2, new ModelUsage(120, 4000));
+
+      await runner.RunImageGeneration(generationParams());
+      await runner.WaitForPendingPromptRunSaves();
+
+      expect(lastPromptRun?.TokensPrompt).toBe(120);
+      expect(lastPromptRun?.TokensCompletion).toBe(4000);
+      expect(lastPromptRun?.UsageTypeID).toBeUndefined();
+      expect(lastPromptRun?.OutputUnitsUsed).toBeUndefined();
     });
 
     it('records the parent run and the agent run', async () => {
@@ -383,6 +428,21 @@ describe('AIImageGenerationRunner', () => {
 
       expect(lastPromptRun?.ParentID).toBe('parent-run-1');
       expect(JSON.parse(String(lastPromptRun?.Messages)).AgentRunID).toBe('agent-run-1');
+    });
+
+    it('records the agent as AgentID, and hands the row ID to OnPromptRunCreated before the model call', async () => {
+      const createdBeforeCall: Array<{ ID: string; DriverCalls: number }> = [];
+      const onCreated = (promptRunId: string): void => {
+        createdBeforeCall.push({ ID: promptRunId, DriverCalls: driver.GenerateCalls.length });
+      };
+
+      const result = await runner.RunImageGeneration(generationParams({ AgentID: 'agent-1', OnPromptRunCreated: onCreated }));
+      await runner.WaitForPendingPromptRunSaves();
+
+      expect(lastPromptRun?.AgentID).toBe('agent-1');
+      expect(createdBeforeCall).toEqual([{ ID: result.PromptRunID, DriverCalls: 0 }]);
+      expect(Object.keys(driver.GenerateCalls[0])).not.toContain('AgentID');
+      expect(Object.keys(driver.GenerateCalls[0])).not.toContain('OnPromptRunCreated');
     });
 
     it('rejects an empty prompt without throwing or creating a run', async () => {
@@ -500,6 +560,50 @@ describe('AIImageGenerationRunner', () => {
       expect(result.DriverClass).toBe(DRIVER);
     });
 
+    it("a driver that throws gets the vendor's error classification, not a generic one", async () => {
+      h.state.prompts[0].FailoverStrategy = 'None';
+      driver.Respond = () => {
+        throw Object.assign(new Error('Your request was rejected by the safety system'), { status: 400 });
+      };
+
+      const result = await runner.RunImageGeneration(generationParams());
+
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toBe('Your request was rejected by the safety system');
+      expect(result.ImageResult?.errorInfo).toMatchObject({
+        errorType: 'InvalidRequest',
+        severity: 'Fatal',
+        httpStatusCode: 400,
+        context: { provider: 'OpenAI' },
+      });
+    });
+
+    it('a thrown fatal error stops failover, and a thrown retriable one fails over', async () => {
+      driver.Respond = (model) => {
+        if (model === 'primary-image-v1') {
+          throw Object.assign(new Error('Your request was rejected by the safety system'), { status: 400 });
+        }
+        return ImagesResult(1);
+      };
+      const fatal = await runner.RunImageGeneration(generationParams());
+      const fatalCalls = driver.GenerateCalls.map(c => c.model);
+
+      driver.GenerateCalls = [];
+      driver.Respond = (model) => {
+        if (model === 'primary-image-v1') {
+          throw Object.assign(new Error('503 Service Unavailable'), { status: 503 });
+        }
+        return ImagesResult(1);
+      };
+      const retriable = await runner.RunImageGeneration(generationParams());
+
+      expect(fatal.Success).toBe(false);
+      expect(fatalCalls).toEqual(['primary-image-v1']);
+      expect(retriable.Success).toBe(true);
+      expect(retriable.ModelID).toBe(SECONDARY_ID);
+      expect(driver.GenerateCalls.map(c => c.model)).toEqual(['primary-image-v1', 'secondary-image-v1']);
+    });
+
     it('returns the last failure when every candidate fails', async () => {
       driver.Respond = () => RetriableFailure('503 upstream unavailable');
 
@@ -532,6 +636,40 @@ describe('AIImageGenerationRunner', () => {
 
       expect(result.Success).toBe(true);
       expect(MJGlobal.Instance.ClassFactory.CreateInstance).toHaveBeenCalledWith(BaseImageGenerator, DRIVER, 'caller-key');
+    });
+
+    const API_KEY_TYPE_ID = 'credential-type-api-key';
+    const orgCredential = { ID: 'cred-org-openai', Name: 'Org OpenAI Key', IsActive: true, CredentialTypeID: API_KEY_TYPE_ID, ExpiresAt: null };
+
+    it.each([
+      {
+        source: 'a Vendor credential binding',
+        arrange: (): void => {
+          h.state.credentials = [{ ...orgCredential, IsDefault: false }];
+          h.state.credentialBindings = [{ BindingType: 'Vendor', TargetID: VENDOR.OpenAI, CredentialID: orgCredential.ID, Priority: 1 }];
+        },
+      },
+      {
+        source: "a default credential of the vendor's credential type",
+        arrange: (): void => {
+          h.state.credentials = [{ ...orgCredential, IsDefault: true }];
+          const openAI = h.state.vendors.find(v => v.ID === VENDOR.OpenAI);
+          if (openAI) {
+            openAI.CredentialTypeID = API_KEY_TYPE_ID;
+          }
+        },
+      },
+    ])("$source wins over the caller's APIKeys, as it does for chat prompts", async ({ arrange }) => {
+      arrange();
+
+      const result = await runner.RunImageGeneration(generationParams({ APIKeys: [{ driverClass: DRIVER, apiKey: 'caller-key' }] }));
+
+      expect(result.Success).toBe(true);
+      expect(result.ModelID).toBe(PRIMARY_ID);
+      expect(MJGlobal.Instance.ClassFactory.CreateInstance).toHaveBeenCalledWith(
+        BaseImageGenerator, DRIVER, JSON.stringify({ apiKey: 'Org OpenAI Key-value' })
+      );
+      expect(MJGlobal.Instance.ClassFactory.CreateInstance).not.toHaveBeenCalledWith(BaseImageGenerator, DRIVER, 'caller-key');
     });
   });
 
