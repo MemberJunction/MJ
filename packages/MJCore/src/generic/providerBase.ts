@@ -5915,14 +5915,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     // in this situation, the last thing we check is for each entity, if the rowcount is the same as the server, if it is, we're good
                     // iterate through all of the entities and check the row counts
                     const localDataset = await this.GetCachedDataset(datasetName, itemFilters);
-                    if (!localDataset?.Results) {
-                        // The date key outlived the blob it vouches for (they expire independently),
-                        // so there is nothing to compare row counts against — treat the cache as out
-                        // of date rather than dereferencing it (plan §16.3 #3).
-                        return false;
-                    }
                     for (const eu of status.EntityUpdateDates) {
-                        const localEntity = localDataset.Results.find(e => UUIDsEqual(e.EntityID, eu.EntityID));
+                        // `localDataset` can be missing even though its date key is present: the two
+                        // keys expire independently and a cache clear removes them in order, so the
+                        // date can outlive the blob. An absent blob means the row counts cannot be
+                        // compared, which is "not up to date" — but only reached when there IS a
+                        // count to compare, so a dataset with no entity rows still answers as it
+                        // always did rather than becoming permanently stale (plan §16.3 #3, §24).
+                        const localEntity = localDataset?.Results?.find(e => UUIDsEqual(e.EntityID, eu.EntityID));
                         if (!localEntity || localEntity.Results.length !== eu.RowCount) {
                             // we either couldn't find the entity in the local cache or the row count is different, so we're out of date
                             // the RowCount being different picks up on DELETED rows. The UpdatedAt check which is handled above would pick up 

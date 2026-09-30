@@ -2559,3 +2559,105 @@ holds engine rows with an empty local fingerprint index, so F9's save-time inval
 for it — the sweep is the real backstop, and the `_changeCallbacks` union is the deterministic
 signal that would replace the debate. That is a design change, not a fix, and belongs in its own
 round.
+
+
+## 24. Rebased onto origin/next (2026-09-29)
+
+The branch was 704 commits behind. Committed in eleven logical commits, then rebased (not merged),
+so the history reads as one sequence: metadata → core → redis-provider → generic-database-provider →
+user-cache → sqlserver → server → cli → engines → integration tests → docs.
+
+**The IT94 collision.** `origin/next` now uses IT94 (*MetadataSync Push Atomicity*) and IT95
+(*Trailing Runtime State*). This branch's bundle is renamed **IT96 — Cache Architecture
+Invariants**, across the test definition, the suite membership lookup, the registry comment, the
+plan, the changeset, the guide and both rig files. The registry's bundle count is 96 (upstream's 95
+plus this one).
+
+**Conflicts, all resolved by combining rather than choosing.**
+- `RegisterForStartup`: upstream renamed its private methods to camelCase; this branch's warm-up
+  lease structure kept, with their names.
+- `GenericDatabaseProvider`: upstream added post-commit tasks (`runPostCommitTasks`,
+  `drainIdlePostCommitTasks`). The entity-event batch settling is interleaved with them on all
+  three paths, including the commit-failure branch.
+- `MJServer/src/config.ts` and both `package.json` files: additive — upstream's versions
+  (`6.2.0-edge.1`) plus this branch's additions.
+
+**Upstream's new naming gate applied to this branch.** All 11 failing violations repo-wide were this
+branch's new code: an exported function (`describeRedisUrl` → `DescribeRedisUrl`), a private member,
+four members of an exported options interface, and five members of the rig's `Replica` class. Fixed
+and folded into the commits they belong to; `check:naming` reports 0 failing. Two upstream renames
+also broke this branch quietly and are fixed: `DomainProfile.summary` → `Summary`, and
+`TemplateEngineBase._Metadata` → `_metadata`.
+
+**The sync-push clear policy changed, because upstream fixed the bug it was written around.**
+§14 and §23 justified clearing after a FAILED push with "a push is not all-or-nothing". Upstream's
+#4550 makes an atomic push the default and rolls its writes back; `PushAbortedError` reports
+`rolledBack` and the rows a non-atomic push committed anyway. So the shim now clears after a failure
+only when something stayed behind, and skips the clear after a clean rollback — which used to cost
+every server a full reload for a run that changed nothing. An unreadable outcome still clears.
+Six tests cover it, including the clean-rollback case, and they fail without the check.
+
+**Database.** `mj_test_2` was upgraded in the documented order: 16 migrations, `codegen --skipfiles`
+(391 entities), `sync push` (14,359 records, all unchanged — upstream's consolidated sync migration
+had already applied them), then `codegen --skipdb`, which produced **no diff**. That is the signal
+that this branch and the database agree with what the repo ships.
+
+### 24.1 The two tier failures after the rebase, and what they were
+
+The first post-rebase deterministic run was `77 passed, 2 failed, 1 skipped`. Both failures were
+real, and only one of them was mine to fix in code.
+
+**`dataset-cache.DS2` — a guard I added in §16.3 #3 was wrong.** `IsDatasetCacheUpToDate` compares
+the stored dataset timestamp with the server's, and *then* compares per-entity row counts to catch
+pure deletes, which a timestamp cannot see. Upstream reads the blob before that loop and dereferences
+it **inside** the loop, so a dataset whose status carries no per-entity counts never touches the blob
+at all and is judged on its timestamp alone. My guard returned `false` up front whenever the blob was
+unreadable — which turned that case from "up to date" into "permanently stale", and a permanently
+stale dataset is a reload on every single check. That is a worse failure than the one I was
+protecting against, and it is what DS2 caught.
+
+The protection itself was still needed (the blob and its `_date` key expire independently, so the
+date can outlive the blob and upstream would throw a `TypeError` on it). The fix is therefore
+optional chaining *at the original dereference point* rather than an early return — upstream's
+semantics exactly, plus null-safety:
+
+```ts
+const localDataset = await this.GetCachedDataset(datasetName, itemFilters);
+for (const eu of status.EntityUpdateDates) {
+    const localEntity = localDataset?.Results?.find(e => UUIDsEqual(e.EntityID, eu.EntityID));
+    if (!localEntity || localEntity.Results.length !== eu.RowCount) {
+        return false;
+    }
+}
+```
+
+Both halves are now pinned, and each was verified to fail against the code it pins:
+- *blob gone, row counts present* → `false`, not a throw. Fails against upstream's unguarded
+  dereference (`promise rejected "TypeError: Cannot read properties of undefined"`).
+- *blob gone, no row counts reported* → answers on the timestamp, as it always did. Fails against
+  my own early-return version (`expected false to be true`).
+
+The second case is the regression test the branch was missing: nothing in the unit suite described
+what should happen when the server reports no per-entity counts, so an early return looked
+conservative and was in fact a behaviour change. IT07 now passes 3/3.
+
+**`fls-lifecycle.LC8` — fixture drift, exactly as the code comment predicted.** `UserRole`
+`(52FC7F82…, 748C3D6D…)` had two rows: `882776A0…` created 22:14 by a tier run's `restoreUserRole`,
+and the fixture-pinned `4A9811EE…` created 23:24 by the `metadata-optional` push after the IT96
+rename. The pinned primary key had been orphaned on an earlier run, so `mj sync push` could not find
+it and created the pair a second time — the precise mechanism documented on `restoreUserRole`, which
+notes it is invisible on a from-scratch CI database and only bites a persistent dev one. Deleted the
+non-pinned row (the user granted full control of `mj_test_2`); a `GROUP BY UserID, RoleID HAVING
+COUNT(*) > 1` sweep confirms no other pair is duplicated. IT91 now passes 9/9.
+
+**Green after both.** `79 passed, 1 skipped, 0 failed`, exit 0 — the skip is `IT52 - Unified Search
+Seams`, gated on `RUN_SEARCH_TESTS` and skipped in the pre-fix run too. MJCore's unit suite is 195
+files / 2,849 tests. The run was made against a restarted MJAPI on the rebuilt MJCore with the Redis
+keyspace flushed first, so no key predates the change.
+
+A note for anyone re-running the tier: it needs the same environment MJAPI was started with
+(`GRAPHQL_PORT=14100`, the `REDIS_URL`/`REDIS_KEY_PREFIX` pair, `RUN_MUTATION_TESTS=1`, and DB
+credentials with DDL rights). Without them the run is not a weaker version of the same thing — it is
+a different run: 28 bundles skip on the mutation gate and on an unreachable API, and the two
+materialized-entity bundles *fail* on `CREATE TABLE permission denied` rather than skipping. A
+`50 passed / 2 failed / 28 skipped` result means the environment was wrong, not the branch.
