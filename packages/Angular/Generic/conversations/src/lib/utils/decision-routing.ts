@@ -182,13 +182,15 @@ export function ShouldRunRoutingDecision(gate: RoutingDecisionGate): boolean {
 /**
  * The agents that have taken part in the conversation and may answer now, newest first, each once
  * with its newest reply. The conversation manager is left out (it is the "someone else" option),
- * and so is any agent the client's catalog doesn't know, the host doesn't allow, or that can no
- * longer answer: one that isn't active, or is restricted (see {@link IsRoutableAgent}).
+ * and so is any agent `findAgent` doesn't return, the host doesn't allow, or that can no longer
+ * answer: one that isn't active, or is restricted (see {@link IsRoutableAgent}).
  *
  * @param history The conversation's rows the turn may read, oldest first.
  * @param conversationManagerId The conversation manager's ID, when it is loaded.
  * @param allowedAgentIDs The host's allowed list. Null allows every agent.
- * @param findAgent Looks an agent up in the client's catalog.
+ * @param findAgent Looks an agent up among those the person may run. The chat passes the '@'
+ *   list's permission-filtered set, so an agent that answered here but that this person can't run
+ *   is never offered.
  */
 export function CollectRoutingParticipants(
     history: readonly RoutingHistoryRow[],
@@ -211,9 +213,10 @@ export function CollectRoutingParticipants(
 }
 
 /**
- * True when an agent can take a routed turn: it is active and not restricted, the same test the
- * '@' list applies. An agent that answered earlier may since have been disabled, and the server
- * refuses to run an agent that isn't active.
+ * True when an agent can take a routed turn: it is active and not restricted. An agent that
+ * answered earlier may since have been disabled, and the server refuses to run an agent that isn't
+ * active. This is only part of what the '@' list checks (it also needs run permission, and leaves
+ * out sub-agents), so the chat looks participants up in that list, and this check is a backstop.
  */
 export function IsRoutableAgent(agent: Pick<RoutingCatalogAgent, 'Status' | 'IsRestricted'>): boolean {
     return agent.Status === 'Active' && !agent.IsRestricted;

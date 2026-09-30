@@ -6,11 +6,12 @@
  * decision-routing.test.ts. These pin the wiring: with `EnableDecisionRouting` off (the default)
  * there is no call and routing is unchanged; with it on, a confident answer routes the turn, and
  * anything else keeps continuity; a tagged message or a form response makes no call; and a
- * confident artifact answer reaches the agent's run as its payload source.
+ * confident artifact answer reaches the agent's run as its payload source. Only agents in the
+ * '@' list (the person's permission-filtered set) are ever offered.
  *
  * The component is built by Angular's own injector, with typed doubles for the services these
  * paths use. Agents, conversation rows and agent runs are real entity objects on a minimal
- * entity definition. Nothing is cast.
+ * entity definition, and the '@' list's cache is stubbed. Nothing is cast.
  */
 import '@angular/compiler'; // JIT support — the component import evaluates Angular decorators in vitest's node env
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
@@ -32,6 +33,7 @@ import { ConversationBridgeService } from '../lib/services/conversation-bridge.s
 import { ConversationStreamingService } from '../lib/services/conversation-streaming.service';
 import { DataCacheService } from '../lib/services/data-cache.service';
 import { DialogService } from '../lib/services/dialog.service';
+import { MentionAutocompleteService } from '../lib/services/mention-autocomplete.service';
 import { MentionParserService } from '../lib/services/mention-parser.service';
 import { RealtimeSessionService } from '../lib/services/realtime-session.service';
 import { ToastService } from '../lib/services/toast.service';
@@ -75,6 +77,11 @@ const RETIRED = agent({ ID: 'AAAAAAAA-0000-0000-0000-000000000004', Name: 'Archi
 /** Active, but restricted to system use. */
 const INTERNAL = agent({ ID: 'AAAAAAAA-0000-0000-0000-000000000005', Name: 'Scheduler', Description: 'Runs scheduled jobs.', Status: 'Active', IsRestricted: true });
 const AGENTS = [MANAGER, RESEARCH, WRITER, RETIRED, INTERNAL];
+/**
+ * The '@' list's agents for this person (`GetAvailableAgents`): the active, unrestricted ones,
+ * all of which the person may run. Routing offers participants only from this set.
+ */
+const RUNNABLE = [MANAGER, RESEARCH, WRITER];
 
 const VERSION = 'BBBBBBBB-0000-0000-0000-000000000001';
 const PROMPT_RUN = 'EEEEEEEE-0000-0000-0000-000000000001';
@@ -260,6 +267,7 @@ describe('MessageInputComponent — decision routing', () => {
 
     beforeEach(() => {
         vi.spyOn(AIEngineBase.Instance, 'Agents', 'get').mockReturnValue(AGENTS);
+        vi.spyOn(MentionAutocompleteService.Instance, 'GetAvailableAgents').mockReturnValue(RUNNABLE);
         vi.spyOn(PlanModePreference, 'IsEnabled').mockReturnValue(false);
         vi.spyOn(PlanModePreference, 'ClaimPendingNew').mockImplementation(() => undefined);
         vi.spyOn(console, 'log').mockImplementation(() => undefined);
@@ -359,6 +367,33 @@ describe('MessageInputComponent — decision routing', () => {
             expect(routeOptionValues(h.runDecision.mock.calls[0][0])).toEqual([WRITER.ID, RESEARCH.ID, MANAGER.ID]);
             expect(h.before.map(e => [e.Route, e.AgentId])).toEqual([['Continuity', WRITER.ID]]);
             expect(h.findArtifacts.mock.calls.map(([, agentId]) => agentId)).toEqual([WRITER.ID, RESEARCH.ID]);
+        });
+
+        it('never offers, or routes to, an agent that answered here but that the person can\'t run', async () => {
+            // Research answered in this (shared) conversation, but isn't in this person's '@' list.
+            vi.spyOn(MentionAutocompleteService.Instance, 'GetAvailableAgents').mockReturnValue([MANAGER, WRITER]);
+            h.runDecision.mockResolvedValue(leavesTo(RESEARCH));
+
+            await h.route(userMessage());
+
+            const params = h.runDecision.mock.calls[0][0];
+            expect(routeOptionValues(params)).toEqual([WRITER.ID, MANAGER.ID]);
+            expect(h.findArtifacts.mock.calls.map(([, agentId]) => agentId)).toEqual([WRITER.ID]);
+            expect(h.before.map(e => [e.Route, e.AgentId])).toEqual([['Continuity', WRITER.ID]]);
+            expect(h.invokeSubAgent.mock.calls.map(call => call[0])).toEqual(['Writer']);
+            // Its earlier reply is still part of the conversation the decision reads, under its name.
+            expect(params.State).toContain('Research: Here are five sources.');
+        });
+
+        it('makes no call before the \'@\' list has loaded, which keeps today\'s routing', async () => {
+            vi.spyOn(MentionAutocompleteService.Instance, 'GetAvailableAgents').mockReturnValue([]);
+            h.runDecision.mockResolvedValue(leavesTo(RESEARCH));
+
+            await h.route(userMessage());
+
+            expect(h.runDecision).not.toHaveBeenCalled();
+            expect(h.findArtifacts).not.toHaveBeenCalled();
+            expect(h.before.map(e => [e.Route, e.AgentId])).toEqual([['Continuity', WRITER.ID]]);
         });
 
         it('makes no call when the last agent is no longer active, which keeps today\'s routing', async () => {
