@@ -10,10 +10,10 @@
  */
 
 import { EntityInfo, LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey } from '@memberjunction/core';
-import { MJVectorIndexEntity, MJVectorDatabaseEntity, MJContentSourceEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
+import { MJVectorIndexEntity, MJVectorDatabaseEntity, MJContentSourceEntity, MJEntityDocumentEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai';
-import { VectorDBBase, BaseResponse } from '@memberjunction/ai-vectordb';
+import { VectorDBBase, BaseResponse, QueryByVectorValues } from '@memberjunction/ai-vectordb';
 import { MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseSearchProvider } from './ISearchProvider';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints, ScopeExternalIndexConstraint } from './search.types';
@@ -27,6 +27,13 @@ import { CheckScopeJsonFilter, ScopeFilterCheck } from './ScopeFilterGuard';
 interface EmbeddingCacheEntry {
     vector: number[];
     timestamp: number;
+}
+
+/** A match as a vector database's `QueryIndex` returns it. */
+interface VectorMatch {
+    id: string;
+    score?: number;
+    metadata?: Record<string, unknown>;
 }
 
 @RegisterClass(BaseSearchProvider, 'VectorSearchProvider')
@@ -338,29 +345,95 @@ export class VectorSearchProvider extends BaseSearchProvider {
             return this.convertMatches(colocated.matches, vectorIndex.Name, fallbackEntity, entityByContentSourceID);
         }
 
-        // contextUser is passed as the 2nd arg per VectorDBBase.QueryIndex's
-        // contract. Remote drivers (Pinecone/Qdrant) ignore it and authenticate
-        // via their own API key; in-process drivers (e.g. SimpleVectorDatabase)
-        // use it to honor server-side row-level security when loading vectors
-        // via RunView.
-        const response: BaseResponse = await vectorDBInstance.QueryIndex({
-            id: vectorIndex.ExternalID?.trim() || vectorIndex.Name,
-            vector: queryVector,
-            topK,
-            includeMetadata: true,
-            filter,
-            providerConfig,
-        }, contextUser);
-
-        if (!response.success || !response.data?.matches) {
+        const options: QueryByVectorValues = { vector: queryVector, topK, includeMetadata: true, filter, providerConfig };
+        const matches = vectorDBInstance.QueryKeyIsEntityDocumentID
+            ? await this.queryEntityDocumentPools(vectorDBInstance, vectorIndex, options, contextUser)
+            : await this.queryIndexByName(vectorDBInstance, vectorIndex, options, contextUser);
+        if (matches.length === 0) {
             return [];
         }
 
         const [fallbackEntity, entityByContentSourceID] = await Promise.all([
-            this.getFallbackEntityName(response.data.matches, vectorIndex, contextUser),
-            this.resolveContentSourceEntities(response.data.matches, contextUser),
+            this.getFallbackEntityName(matches, vectorIndex, contextUser),
+            this.resolveContentSourceEntities(matches, contextUser),
         ]);
-        return this.convertMatches(response.data.matches, vectorIndex.Name, fallbackEntity, entityByContentSourceID);
+        return this.convertMatches(matches, vectorIndex.Name, fallbackEntity, entityByContentSourceID);
+    }
+
+    /**
+     * Query an index keyed by its provider-side name: `ExternalID`, else the MJ `Name`.
+     *
+     * contextUser is passed as the 2nd arg per VectorDBBase.QueryIndex's contract. Remote drivers
+     * (Pinecone/Qdrant) ignore it and authenticate via their own API key; in-process drivers use it
+     * to honor server-side row-level security when loading vectors via RunView.
+     */
+    private async queryIndexByName(
+        vectorDB: VectorDBBase,
+        vectorIndex: MJVectorIndexEntity,
+        options: QueryByVectorValues,
+        contextUser: UserInfo
+    ): Promise<VectorMatch[]> {
+        const response: BaseResponse = await vectorDB.QueryIndex({ ...options, id: vectorIndex.ExternalID?.trim() || vectorIndex.Name }, contextUser);
+        return this.matchesOf(response);
+    }
+
+    /**
+     * Query an index whose provider keys vectors by **Entity Document** rather than by index name
+     * ({@link VectorDBBase.QueryKeyIsEntityDocumentID} — the in-process Simple Vector Service is one).
+     *
+     * Each Active Entity Document that points at the index is its own pool, and one index usually
+     * serves several: the shipped default SVS index holds all six standard Search documents. So every
+     * pool is queried and the best `topK` across them is kept. These providers return only a
+     * `RecordID`, so each match is stamped with its document's entity — the index alone cannot name
+     * it once it spans more than one entity, and an unattributed match is dropped by the permission
+     * filter.
+     */
+    private async queryEntityDocumentPools(
+        vectorDB: VectorDBBase,
+        vectorIndex: MJVectorIndexEntity,
+        options: QueryByVectorValues,
+        contextUser: UserInfo
+    ): Promise<VectorMatch[]> {
+        const documents = await this.entityDocumentsForIndex(vectorIndex, contextUser);
+        const perDocument = await Promise.all(documents.map(async doc => {
+            const response: BaseResponse = await vectorDB.QueryIndex({ ...options, id: doc.ID }, contextUser);
+            return this.matchesOf(response).map(match => this.withDocumentEntity(match, doc.Entity));
+        }));
+        return perDocument.flat()
+            .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+            .slice(0, options.topK);
+    }
+
+    /**
+     * The Active Entity Documents that point at a vector index, read from the knowledge-hub metadata
+     * cache rather than a per-query RunView (`Config()` is a no-op once loaded).
+     *
+     * Throws when there are none. Falling back to the index name would only move the failure into the
+     * driver, which then tries to parse a name as a uniqueidentifier (#4911).
+     */
+    private async entityDocumentsForIndex(vectorIndex: MJVectorIndexEntity, contextUser: UserInfo): Promise<MJEntityDocumentEntity[]> {
+        const engine = KnowledgeHubMetadataEngine.Instance;
+        await engine.Config(false, contextUser, this.Provider);
+        const documents = engine.GetActiveEntityDocuments().filter(d => UUIDsEqual(d.VectorIndexID, vectorIndex.ID));
+        if (documents.length === 0) {
+            const hint = engine.IsPermissionConstrained
+                ? ' The knowledge-hub metadata cache is permission-constrained, so they may be hidden from this user.'
+                : '';
+            throw new Error(
+                `Vector index "${vectorIndex.Name}" is keyed by Entity Document, but no Active Entity Document points at it.${hint}`
+            );
+        }
+        return documents;
+    }
+
+    /** A match's own `Entity` metadata wins; otherwise it takes the entity its Entity Document vectorizes. */
+    private withDocumentEntity(match: VectorMatch, entityName: string): VectorMatch {
+        return match.metadata?.['Entity'] ? match : { ...match, metadata: { ...match.metadata, Entity: entityName } };
+    }
+
+    /** The matches of a successful `QueryIndex` response, or none. */
+    private matchesOf(response: BaseResponse): VectorMatch[] {
+        return response.success && response.data?.matches ? response.data.matches : [];
     }
 
     /**
