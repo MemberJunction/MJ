@@ -1,4 +1,4 @@
-import { BaseEntity, Metadata, RunView, RunQuery, SetProvider, StartupManager } from "@memberjunction/core";
+import { BaseEntity, LogError, Metadata, RunView, RunQuery, SetProvider, StartupManager } from "@memberjunction/core";
 import { GraphQLDataProvider, GraphQLProviderConfigData } from "./graphQLDataProvider";
 import { MJGlobal, MJEventType } from "@memberjunction/global";
 
@@ -72,7 +72,15 @@ export async function ConnectGraphQLClient(config: GraphQLProviderConfigData): P
     }
 
     SetProvider(provider);
-    await provider.Connect(config);
+    try {
+        await provider.Connect(config);
+    }
+    catch (e) {
+        const cause = e instanceof Error ? e : new Error(String(e));
+        const error = new Error(`ConnectGraphQLClient: connecting to ${config.URL} failed: ${cause.message}`, { cause });
+        LogError(error.message);
+        throw error;
+    }
     return provider;
 }
 

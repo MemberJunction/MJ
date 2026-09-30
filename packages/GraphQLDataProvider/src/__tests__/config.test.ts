@@ -4,10 +4,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 const mockProviderState = vi.hoisted(() => ({
   entities: [{ Name: 'Stub Entity' }] as Array<{ Name: string }>,
   lastMetadataLoadError: null as Error | null,
+  connectError: null as Error | null,
 }));
 
 // Mock all dependencies
 vi.mock('@memberjunction/core', () => ({
+  LogError: vi.fn(),
   BaseEntity: vi.fn(),
   Metadata: vi.fn(),
   RunView: vi.fn(),
@@ -34,7 +36,9 @@ vi.mock('../graphQLDataProvider', () => {
     Config = vi.fn().mockResolvedValue(true);
     preValidateAndRefresh = vi.fn().mockResolvedValue(undefined);
     backgroundValidateAndRefresh = vi.fn().mockResolvedValue(undefined);
-    Connect = vi.fn().mockResolvedValue(undefined);
+    Connect = vi.fn(async () => {
+      if (mockProviderState.connectError) throw mockProviderState.connectError;
+    });
     Entities: Array<{ Name: string }> = mockProviderState.entities;
     LastMetadataLoadError: Error | null = mockProviderState.lastMetadataLoadError;
   }
@@ -56,7 +60,7 @@ vi.mock('../graphQLDataProvider', () => {
 
 import { SetupGraphQLClient, ConnectGraphQLClient } from '../config';
 import { GraphQLProviderConfigData } from '../graphQLDataProvider';
-import { SetProvider, StartupManager } from '@memberjunction/core';
+import { LogError, SetProvider, StartupManager } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 
 describe('setupGraphQLClient', () => {
@@ -163,6 +167,7 @@ describe('ConnectGraphQLClient', () => {
 
   afterEach(() => {
     mockProviderState.entities = [{ Name: 'Stub Entity' }];
+    mockProviderState.connectError = null;
   });
 
   it('returns an already-booted provider without reconnecting it', async () => {
@@ -185,5 +190,17 @@ describe('ConnectGraphQLClient', () => {
     expect(provider.preValidateAndRefresh).not.toHaveBeenCalled();
     expect(MJGlobal.Instance.RaiseEvent).not.toHaveBeenCalled();
     expect(StartupManager.Instance.Startup).not.toHaveBeenCalled();
+  });
+
+  it('rejects with the URL and the cause when connecting fails, and logs it', async () => {
+    const cause = new Error('session store unavailable');
+    mockProviderState.connectError = cause;
+    const config = new GraphQLProviderConfigData('t', 'http://connect.example:4000', 'ws://connect.example:4000');
+
+    const rejection = await ConnectGraphQLClient(config).then(() => null, (e: Error) => e);
+
+    expect(rejection?.message).toBe('ConnectGraphQLClient: connecting to http://connect.example:4000 failed: session store unavailable');
+    expect(rejection?.cause).toBe(cause);
+    expect(LogError).toHaveBeenCalled();
   });
 });
