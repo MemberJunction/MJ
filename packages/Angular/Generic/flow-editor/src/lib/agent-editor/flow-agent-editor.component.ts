@@ -497,11 +497,19 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
 
   // ── Flow Editor Event Handlers ──────────────────────────────
 
+  /**
+   * A new, empty step entity from the editor's provider. The one place a step is created, so a host or
+   * a spec can supply its own.
+   */
+  protected async CreateStepEntity(): Promise<MJAIAgentStepEntity> {
+    const p = this.ProviderToUse;
+    return p.GetEntityObject<MJAIAgentStepEntity>('MJ: AI Agent Steps', p.CurrentUser);
+  }
+
   protected async onNodeAdded(event: FlowNodeAddedEvent): Promise<void> {
     if (!this.AgentID) return;
 
-    const p = this.ProviderToUse;
-    const step = await p.GetEntityObject<MJAIAgentStepEntity>('MJ: AI Agent Steps', p.CurrentUser);
+    const step = await this.CreateStepEntity();
     step.NewRecord(); // This generates a UUID immediately - available before Save()
     step.AgentID = this.AgentID;
     step.Name = event.Node.Label;
