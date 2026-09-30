@@ -59,7 +59,8 @@ import { WarnIfUnnamed } from '../a11y/unnamed-control-guard';
       (backdropClick)="Close()" (detach)="Close()">
       <div class="mj-calendar" role="grid"
         [attr.aria-labelledby]="CalendarLabelledBy || null"
-        [attr.aria-label]="CalendarLabelledBy ? null : CalendarLabel">
+        [attr.aria-label]="CalendarLabelledBy ? null : CalendarLabel"
+        (keydown)="OnCalendarKeyDown($event)">
         <div class="mj-calendar-header">
           <button type="button" (click)="PreviousMonth()" aria-label="Previous month" class="mj-calendar-nav">
             <i class="fa-solid fa-chevron-left"></i></button>
@@ -222,6 +223,18 @@ export class MJDatepickerComponent extends MJNamedControlBase implements Control
   OnKeyDown(event: KeyboardEvent): void {
     if (event.key === 'Escape') this.Close();
     else if (event.key === 'Enter' && !this.IsOpen) this.Open();
+    else if (event.key === 'Tab') this.returnTabToField();
+  }
+
+  /** Tab in the calendar closes it and returns to the field. The key is not cancelled, so the browser moves on from that field. */
+  OnCalendarKeyDown(event: KeyboardEvent): void {
+    if (event.key === 'Tab') this.returnTabToField();
+  }
+
+  private returnTabToField(): void {
+    if (!this.IsOpen) return;
+    this.dateInputEl?.nativeElement.focus();
+    this.Close();
   }
   writeValue(value: Date | string | null): void {
     if (value == null) { this.selectedDate = null; this.DisplayValue = ''; }

@@ -59,8 +59,9 @@ vi.mock('@memberjunction/remote-browser-server', () => ({
 }));
 
 vi.mock('@memberjunction/aiengine', () => ({ AIEngine: { Instance: { Config: vi.fn(), Prompts: [] } } }));
-// Spread the real module so other exports a transitively-loaded resolver imports (e.g. RunDecisionResolver's
-// AIDecisionRunner) still resolve; only AIPromptRunner is overridden for the test.
+// Spread the real module, as for ai-core-plus below, so transitively-loaded modules resolve: runners such as
+// AIRerankerRunner (which extends BaseModelRunner), and RunDecisionResolver's AIDecisionRunner. Only
+// AIPromptRunner is overridden for the test.
 vi.mock('@memberjunction/ai-prompts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@memberjunction/ai-prompts')>()),
   AIPromptRunner: class {},
