@@ -105,7 +105,9 @@ export type CloneWarningCode =
     /** The root record wasn't found or the cloner can't read it; the plan is blocked. */
     | 'SOURCE_NOT_FOUND'
     /** A Deep IS-A subtype or embedded edge: those rows need a save recipe this release doesn't have; the plan is blocked. */
-    | 'EDGE_KIND_UNSUPPORTED';
+    | 'EDGE_KIND_UNSUPPORTED'
+    /** Rows of an edge the clone copies couldn't be read (no read permission, a failed query); the copy leaves them out. */
+    | 'CHILD_ROWS_UNREADABLE';
 
 /**
  * Warning or notification emitted by the planning or execution engine.

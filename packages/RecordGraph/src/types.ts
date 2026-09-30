@@ -140,6 +140,20 @@ export interface WalkOptions {
     ListNonCuratedInbound?: boolean;
     /** Called per candidate edge before traversal; returning Skip prunes the walk, Reference records the target without recursing, Deep recurses. */
     EdgePolicy?: (edge: GraphEdgeCandidate) => EdgePolicyDecision;
+    /**
+     * Called when the rows of an edge the walk follows can't be loaded (no read permission, a
+     * failed query). The walk goes on without them, so a caller that must not act on a partial
+     * graph (cloning) reports it. Default: the failure is only logged.
+     */
+    OnLoadFailure?: (failure: GraphLoadFailure) => void;
+}
+
+/** An edge whose rows could not be loaded during a walk. */
+export interface GraphLoadFailure {
+    Edge: GraphEdgeCandidate;
+    /** What the edge policy decided before the load (Deep when there is no policy). */
+    Decision: EdgePolicyDecision;
+    Message: string;
 }
 
 /**

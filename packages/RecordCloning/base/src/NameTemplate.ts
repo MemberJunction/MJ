@@ -21,46 +21,27 @@ export interface NameTemplateOptions {
 }
 
 /**
- * Builds a candidate from `render(name)`, shortening `name` (never the template's own text) until
- * the result fits `maxLength`. When even an empty name doesn't fit, the result is cut to length.
- */
-function fitToLength(sourceName: string, maxLength: number | undefined, render: (name: string) => string): string {
-    const full = render(sourceName);
-    if (!maxLength || maxLength <= 0 || full.length <= maxLength) return full;
-    const overhead = full.length - sourceName.length;
-    const room = maxLength - overhead;
-    if (room <= 0) return full.slice(0, maxLength).trimEnd();
-    return render(sourceName.slice(0, room).trimEnd());
-}
-
-/**
  * The text every candidate `FindNextAvailableName` could produce starts with, for looking up
- * existing names with a prefix match. Empty when there is no stable prefix.
+ * existing names with a prefix match. Empty when there is no stable prefix. Taken from the
+ * candidates themselves, so shortening a long name or trimming a template for a short column
+ * can't make the lookup miss a name the search would then produce.
  */
 export function NameCollisionPrefix(sourceName: string, options?: NameTemplateOptions): string {
     const strategy = options?.Strategy || 'suffix';
     if (strategy === 'none' || strategy === 'prompt') return '';
-    if (strategy === 'increment') {
-        // "Project v1" -> "Project v": every increment keeps the text before its trailing number.
-        const next = IncrementName(sourceName);
-        const closing = next.endsWith(')') ? ')' : '';
-        const [stem] = splitTrailingDigits(closing ? next.slice(0, -1) : next);
-        if (!options?.MaxLength) return stem;
-        // Candidates cut the text before the marker to fit the counter (see TryFindNextAvailableName),
-        // so match on what survives the tightest cut: room for a four-digit counter.
-        const marker = /\s?[(vV]?$/.exec(stem)?.[0] ?? '';
-        const head = stem.slice(0, stem.length - marker.length);
-        const room = Math.max(0, options.MaxLength - (marker.length + 4 + closing.length));
-        return head.slice(0, room).trimEnd();
+    let prefix: string | null = null;
+    for (const candidate of nameCandidates(sourceName, options)) {
+        if (candidate === null) continue;
+        if (prefix === null) {
+            prefix = candidate;
+            continue;
+        }
+        let i = 0;
+        while (i < prefix.length && i < candidate.length && prefix[i].toLowerCase() === candidate[i].toLowerCase()) i++;
+        prefix = prefix.slice(0, i);
+        if (prefix === '') break;
     }
-    const template = options?.Template || 'Copy of {Name}';
-    const beforeCounter = template.includes('{n}') ? template.slice(0, template.indexOf('{n}')) : template;
-    const ctx: NameTemplateContext = { SourceRecordName: sourceName, DateStr: options?.Context?.DateStr, UserName: options?.Context?.UserName };
-    // Shortening for MaxLength can cut into the name, so match on what survives the tightest cut.
-    const shortest = fitToLength(sourceName, options?.MaxLength ? options.MaxLength - 6 : undefined, (name) =>
-        RenderNameTemplate(beforeCounter, { ...ctx, SourceRecordName: name })
-    );
-    return shortest;
+    return prefix ?? '';
 }
 
 /**
@@ -158,20 +139,31 @@ export function TryFindNextAvailableName(
     existingNames: Set<string> | string[],
     options?: NameTemplateOptions
 ): string | null {
+    const strategy = options?.Strategy || 'suffix';
+    if (strategy === 'none' || strategy === 'prompt') return sourceName;
     const lowered = new Set([...existingNames].map((n) => n.toLowerCase()));
+    const seen = new Set<string>([sourceName.toLowerCase()]);
+    for (const candidate of nameCandidates(sourceName, options)) {
+        // An increment that no longer fits ends the search; a suffix candidate that doesn't fit is skipped.
+        if (candidate === null) {
+            if (strategy === 'increment') return null;
+            continue;
+        }
+        const key = candidate.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        if (!lowered.has(key)) return candidate;
+    }
+    return null;
+}
+
+/**
+ * Every name the renaming strategies try, in order, up to MAX_NAME_ATTEMPTS; null for one that
+ * can't fit `MaxLength`. Candidates may repeat (a short column cuts several to the same text).
+ */
+function* nameCandidates(sourceName: string, options?: NameTemplateOptions): Generator<string | null> {
     const strategy = options?.Strategy || 'suffix';
     const maxLength = options?.MaxLength;
-    if (strategy === 'none' || strategy === 'prompt') return sourceName;
-
-    const seen = new Set<string>([sourceName.toLowerCase()]);
-    /** A usable candidate: new, not taken, not the source. Remembers what it has tried. */
-    const free = (candidate: string | null): candidate is string => {
-        if (candidate === null) return false;
-        const key = candidate.toLowerCase();
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return !lowered.has(key);
-    };
 
     if (strategy === 'increment') {
         // Fit each step before checking it, keeping the trailing counter whole.
@@ -182,10 +174,10 @@ export function TryFindNextAvailableName(
             const [before, digits] = splitTrailingDigits(closing ? next.slice(0, -1) : next);
             const marker = /\s?[(vV]?$/.exec(before)?.[0] ?? '';
             const candidate = fitKeeping(before.slice(0, before.length - marker.length), marker + digits + closing, maxLength);
-            if (candidate === null) return null;
-            if (free(candidate)) return candidate;
+            yield candidate;
+            if (candidate === null) return;
         }
-        return null;
+        return;
     }
 
     // 'suffix': the template, then " (n)" (or {n} in the template) until a name is free.
@@ -209,11 +201,7 @@ export function TryFindNextAvailableName(
         const bare = hasCounter ? RenderNameTemplate(template, { ...ctx, SourceRecordName: '', Counter: undefined }) : render('');
         return fitKeeping(bare, hasCounter ? String(n) : counter, maxLength);
     };
-    for (let n = 1; n <= MAX_NAME_ATTEMPTS; n++) {
-        const candidate = candidateFor(n);
-        if (free(candidate)) return candidate;
-    }
-    return null;
+    for (let n = 1; n <= MAX_NAME_ATTEMPTS; n++) yield candidateFor(n);
 }
 
 /**

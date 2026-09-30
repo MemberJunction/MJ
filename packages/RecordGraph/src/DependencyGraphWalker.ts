@@ -47,7 +47,7 @@ interface ForwardReference {
 }
 
 /** Walk options with every default applied. `EdgePolicy` stays optional: no callback means every edge is Deep. */
-type ResolvedWalkOptions = Required<Omit<WalkOptions, 'EdgePolicy'>> & Pick<WalkOptions, 'EdgePolicy'>;
+type ResolvedWalkOptions = Required<Omit<WalkOptions, 'EdgePolicy' | 'OnLoadFailure'>> & Pick<WalkOptions, 'EdgePolicy' | 'OnLoadFailure'>;
 
 /**
  * Extended metadata provider interface with optional FindISAChildEntities
@@ -247,27 +247,27 @@ export class DependencyGraphWalker {
             const edgeKind: EdgeKind = isHierarchyRel ? 'Hierarchy' : (rel.IsCollection ? 'Collection' : 'Relationship');
 
             // Check edge policy before loading if policy is configured
-            if (options.EdgePolicy) {
-                const candidate: GraphEdgeCandidate = {
-                    Kind: edgeKind,
-                    SourceEntityName: parentNode.EntityName,
-                    SourceKey: parentNode.RecordKey,
-                    SourceRecordData: parentNode.RecordData,
-                    TargetEntityName: rel.ChildEntityInfo.Name,
-                    JoinField: rel.ChildJoinField,
-                    Relationship: rel.RelationshipInfo,
-                    CollectionName: rel.CollectionName,
-                    IsSoftLink: false,
-                    Depth: parentNode.Depth + 1,
-                    HierarchyDirection: isHierarchyRel ? 'Down' : undefined,
-                };
-                const decision = options.EdgePolicy(candidate);
-                if (decision === 'Skip') {
-                    continue;
-                }
+            const edgeCandidate: GraphEdgeCandidate = {
+                Kind: edgeKind,
+                SourceEntityName: parentNode.EntityName,
+                SourceKey: parentNode.RecordKey,
+                SourceRecordData: parentNode.RecordData,
+                TargetEntityName: rel.ChildEntityInfo.Name,
+                JoinField: rel.ChildJoinField,
+                Relationship: rel.RelationshipInfo,
+                CollectionName: rel.CollectionName,
+                IsSoftLink: false,
+                Depth: parentNode.Depth + 1,
+                HierarchyDirection: isHierarchyRel ? 'Down' : undefined,
+            };
+            const edgeDecision: EdgePolicyDecision = options.EdgePolicy ? options.EdgePolicy(edgeCandidate) : 'Deep';
+            if (edgeDecision === 'Skip') {
+                continue;
             }
 
-            const childRecords = await this.loadChildRecords(parentNode, rel, options, contextUser);
+            const childRecords = await this.loadChildRecords(parentNode, rel, options, contextUser, (message) =>
+                options.OnLoadFailure?.({ Edge: edgeCandidate, Decision: edgeDecision, Message: message })
+            );
 
             for (const childData of childRecords) {
                 const childKey = BuildCompositeKeyFromRecord(rel.ChildEntityInfo, childData);
@@ -387,7 +387,10 @@ export class DependencyGraphWalker {
                         ResultType: 'simple',
                     }, contextUser);
 
-                    if (!result.Success) continue;
+                    if (!result.Success) {
+                        options.OnLoadFailure?.({ Edge: candidate, Decision: decision, Message: result.ErrorMessage || 'the query failed' });
+                        continue;
+                    }
 
                     for (const row of result.Results) {
                         const rowKey = BuildCompositeKeyFromRecord(entity, row);
@@ -416,6 +419,7 @@ export class DependencyGraphWalker {
                 } catch (e: unknown) {
                     const msg = e instanceof Error ? e.message : String(e);
                     LogError(`DependencyGraphWalker: Error loading inbound FK records for ${entity.Name}: ${msg}`);
+                    options.OnLoadFailure?.({ Edge: candidate, Decision: decision, Message: msg });
                 }
             }
         }
@@ -480,7 +484,10 @@ export class DependencyGraphWalker {
                         ResultType: 'simple',
                     }, contextUser);
 
-                    if (!result.Success) continue;
+                    if (!result.Success) {
+                        options.OnLoadFailure?.({ Edge: candidate, Decision: decision, Message: result.ErrorMessage || 'the query failed' });
+                        continue;
+                    }
 
                     for (const row of result.Results) {
                         const rowKey = BuildCompositeKeyFromRecord(entity, row);
@@ -510,6 +517,7 @@ export class DependencyGraphWalker {
                 } catch (e: unknown) {
                     const msg = e instanceof Error ? e.message : String(e);
                     LogError(`DependencyGraphWalker: Error loading soft link records for ${entity.Name}: ${msg}`);
+                    options.OnLoadFailure?.({ Edge: candidate, Decision: decision, Message: msg });
                 }
             }
         }
@@ -860,7 +868,8 @@ export class DependencyGraphWalker {
         parentNode: DependencyNode,
         rel: ReverseRelationship,
         options: ResolvedWalkOptions,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        onFailure: (message: string) => void
     ): Promise<Record<string, unknown>[]> {
         const parentKeyValue = parentNode.RecordData[rel.ParentKeyField] ?? null;
         if (parentKeyValue == null) return [];
@@ -884,12 +893,14 @@ export class DependencyGraphWalker {
                     `${parentNode.EntityName} via ${rel.ChildEntityInfo.Name}.${rel.ChildJoinField}: ` +
                     `${result.ErrorMessage}`
                 );
+                onFailure(result.ErrorMessage || 'the query failed');
                 return [];
             }
             return result.Results;
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : String(e);
             LogError(`DependencyGraphWalker: Error loading child records: ${msg}`);
+            onFailure(msg);
             return [];
         }
     }
@@ -1079,6 +1090,7 @@ export class DependencyGraphWalker {
             FollowHierarchies: options.FollowHierarchies ?? false,
             ListNonCuratedInbound: options.ListNonCuratedInbound ?? false,
             EdgePolicy: options.EdgePolicy,
+            OnLoadFailure: options.OnLoadFailure,
         };
     }
 }

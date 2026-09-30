@@ -294,6 +294,17 @@ export class ClonePlanner {
                 IncludeSubtypes: effectiveOptions.Subtypes === 'include',
                 IncludeSoftLinks: effectiveOptions.SoftLinks === 'include',
                 FollowHierarchies: effectiveOptions.Hierarchy === 'subtree',
+                // A copy missing rows it should have (a Flow agent without its steps) looks complete, so say so.
+                OnLoadFailure: (failure) => {
+                    if (failure.Decision !== 'Deep') return;
+                    const edge = failure.Edge;
+                    warnings.push({
+                        Code: 'CHILD_ROWS_UNREADABLE',
+                        Severity: 'Warning',
+                        NodeKey: `${edge.SourceEntityName}::${edge.SourceKey.ToConcatenatedString()}`,
+                        Message: `Couldn't read the ${edge.TargetEntityName} rows (by ${edge.JoinField}) of this ${edge.SourceEntityName} record, so the copy leaves them out: ${failure.Message}`,
+                    });
+                },
                 EdgePolicy: (candidate: GraphEdgeCandidate): 'Deep' | 'Reference' | 'Skip' => {
                     const targetEntity = md.EntityByName(candidate.TargetEntityName);
                     const joinFieldInfo = targetEntity?.Fields.find(

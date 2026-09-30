@@ -191,6 +191,47 @@ describe('DependencyGraphWalker', () => {
             expect(rootNode.Children.length).toBe(0);
         });
 
+        it('reports an edge whose rows fail to load, with the decision made before the load', async () => {
+            const walker = new DependencyGraphWalker(mockProvider);
+            mockRunViewInstance
+                .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'parent-1' }] })
+                .mockResolvedValueOnce({ Success: false, Results: [], ErrorMessage: 'no read permission' });
+
+            const { CompositeKey } = await import('@memberjunction/core');
+            const failures: Array<{ Target: string; Decision: string; Message: string }> = [];
+            const rootNode = await walker.WalkDependents(
+                'ParentEntity',
+                new CompositeKey([{ FieldName: 'ID', Value: 'parent-1' }]),
+                {
+                    RequireTrackRecordChanges: false,
+                    EdgePolicy: () => 'Deep',
+                    OnLoadFailure: (f) => failures.push({ Target: f.Edge.TargetEntityName, Decision: f.Decision, Message: f.Message }),
+                },
+                mockUser
+            );
+
+            expect(rootNode.Children).toEqual([]);
+            expect(failures).toEqual([{ Target: 'ChildEntity', Decision: 'Deep', Message: 'no read permission' }]);
+        });
+
+        it('reports a load that throws', async () => {
+            const walker = new DependencyGraphWalker(mockProvider);
+            mockRunViewInstance
+                .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'parent-1' }] })
+                .mockRejectedValueOnce(new Error('connection reset'));
+
+            const { CompositeKey } = await import('@memberjunction/core');
+            const messages: string[] = [];
+            await walker.WalkDependents(
+                'ParentEntity',
+                new CompositeKey([{ FieldName: 'ID', Value: 'parent-1' }]),
+                { RequireTrackRecordChanges: false, OnLoadFailure: (f) => messages.push(`${f.Decision}: ${f.Message}`) },
+                mockUser
+            );
+
+            expect(messages).toEqual(['Deep: connection reset']);
+        });
+
         it('respects EdgePolicy returning Reference without recursing deeper', async () => {
             const walker = new DependencyGraphWalker(mockProvider);
 

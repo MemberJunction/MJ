@@ -255,6 +255,25 @@ describe('ClonePlanner', () => {
         mockRunViewInstance.mockReset();
     });
 
+    it('warns when the rows of an edge it copies cannot be read, instead of planning a copy that looks complete', async () => {
+        mockRunViewInstance.mockImplementation(async (params: { EntityName: string }) =>
+            params.EntityName === 'ParentEntity'
+                ? { Success: true, Results: [{ ID: 'parent-1', Name: 'Original Parent' }] }
+                : { Success: false, Results: [], ErrorMessage: 'no read permission on ChildEntity' });
+        const cfg = { ...parentEntity, CloneConfig: { Enabled: true, Relationships: { ChildEntity: { Policy: 'Deep' } } } } as unknown as EntityInfo;
+        const list = [cfg, childEntity as EntityInfo];
+        const provider = { ...mockProvider, Entities: list, EntityByName: (n: string) => list.find((e) => e.Name === n) ?? null } as IMetadataProvider;
+
+        const plan = await new ClonePlanner({ Provider: provider }).Plan({ EntityName: 'ParentEntity', SourceRecordKey: { ID: 'parent-1' } }, standardUser);
+
+        const unreadable = plan.Warnings.filter((w) => w.Code === 'CHILD_ROWS_UNREADABLE');
+        expect(unreadable).toHaveLength(1);
+        expect(unreadable[0].Severity).toBe('Warning');
+        expect(unreadable[0].Message).toContain('ChildEntity');
+        expect(unreadable[0].Message).toContain('no read permission');
+        mockRunViewInstance.mockReset();
+    });
+
     it('drops rows an ExcludeRows rule names under a qualified, miscased relationship key', async () => {
         mockRunViewInstance.mockImplementation(async (params: { EntityName: string }) =>
             params.EntityName === 'ParentEntity'

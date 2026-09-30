@@ -168,6 +168,23 @@ describe('NameCollisionPrefix', () => {
         expect(second.startsWith(prefix)).toBe(true);
     });
 
+    it.each([
+        ['a long name shortened ahead of text after {Name}', 'x'.repeat(250), { Template: '{Name} (copy)', MaxLength: 255 }],
+        ['a column of six characters or fewer', 'Sales', { Template: 'Copy of {Name}', MaxLength: 6 }],
+        ['a {n} template in a short column', 'Quarterly report', { Template: '{Name} v{n}', MaxLength: 12 }],
+    ])('is a prefix of every candidate for %s, so a second clone sees the first', (_label, source, opts) => {
+        const prefix = NameCollisionPrefix(source, opts);
+        const names: string[] = [];
+        for (let i = 0; i < 12; i++) {
+            const next = TryFindNextAvailableName(source, names, opts);
+            if (next === null) break;
+            expect(next.toLowerCase().startsWith(prefix.toLowerCase()), `${next} / ${prefix}`).toBe(true);
+            expect(names).not.toContain(next);
+            names.push(next);
+        }
+        expect(names.length).toBeGreaterThan(1);
+    });
+
     it('trims the text of a template without {Name} to fit the column', () => {
         const name = TryFindNextAvailableName('Anything', [], { Template: 'Duplicated record', MaxLength: 10 });
         expect(name).not.toBeNull();
