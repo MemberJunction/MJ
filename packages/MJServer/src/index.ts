@@ -168,6 +168,7 @@ export * from './generic/RunViewResolver.js';
 export * from './resolvers/RunTemplateResolver.js';
 export * from './resolvers/RunAIPromptResolver.js';
 export * from './resolvers/RunAIAgentResolver.js';
+export { AgentRunStatusPublisher } from './resolvers/AgentRunStatusPublisher.js';
 export * from './resolvers/VectorizeEntityResolver.js';
 export * from './resolvers/SearchKnowledgeResolver.js';
 export * from './resolvers/SearchKnowledgeStreamResolver.js';
