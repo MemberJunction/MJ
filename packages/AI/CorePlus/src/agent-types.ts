@@ -16,6 +16,7 @@ import {  } from '@memberjunction/core-entities';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 import { AgentScratchpad } from './agent-scratchpad';
+import { AgentDecisionRequest, AgentFinishIf } from './agent-decisions';
 import { AIAPIKey } from '@memberjunction/ai';
 import { AgentResponseForm } from './response-forms';
 import { ActionParam } from '@memberjunction/actions-base';
@@ -688,6 +689,12 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      */
     scratchpad?: AgentScratchpad;
     /**
+     * Decision requests from the agent's response.
+     * Processed inline (zero turn cost) alongside payload and scratchpad changes.
+     * Results are injected into the next turn's conversation.
+     */
+    decisions?: AgentDecisionRequest[];
+    /**
      * Artifact tool calls from the agent's response.
      * Each entry identifies an artifact and the tool to execute against it.
      * Processed inline (zero turn cost) alongside payload and scratchpad changes.
@@ -766,6 +773,12 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * to decide whether to return Success or continue to another prompt.
      */
     terminateAfterExecution?: boolean;
+    /**
+     * Conditional completion gate for Actions or Sub-Agent steps.
+     * When present, if all questions evaluate to a probability >= threshold after the step completes,
+     * the run finishes immediately with `finishIf.message` at zero extra turn cost.
+     */
+    finishIf?: AgentFinishIf;
 }
 
 /**

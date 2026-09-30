@@ -40,10 +40,12 @@
             <i class="fas fa-arrow-up-right-from-square"></i>
             Jump to message
           </button>
-          <button class="pin-action-btn unpin-btn" (click)="OnUnpin(message)" title="Unpin this message">
-            <i class="fas fa-thumbtack"></i>
-            Unpin
-          </button>
+          @if (AllowUnpin) {
+            <button class="pin-action-btn unpin-btn" (click)="OnUnpin(message)" title="Unpin this message">
+              <i class="fas fa-thumbtack"></i>
+              Unpin
+            </button>
+          }
         </div>
       </div>
     }
