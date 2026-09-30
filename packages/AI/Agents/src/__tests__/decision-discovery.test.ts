@@ -1,10 +1,10 @@
 /**
- * The pure half of decision discovery (decision-discovery.ts): the switch, @mention detection, the
- * options and the option cap, narrowing by search rank, the questions, how answers are judged, and
- * the injected message.
+ * The pure half of decision discovery (decision-discovery.ts): the switch, the opening turn, @mention
+ * detection, the options and the option cap, narrowing by search rank, the questions, how answers
+ * are judged, and the injected message.
  */
 import { describe, it, expect } from 'vitest';
-import type { DecisionAnswer } from '@memberjunction/ai';
+import type { ChatMessage, DecisionAnswer } from '@memberjunction/ai';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import {
     AgentsWithoutDescription,
@@ -17,6 +17,7 @@ import {
     DECISION_DISCOVERY_MAX_OPTIONS,
     DECISION_DISCOVERY_MAX_RECORDED_IDS,
     DECISION_DISCOVERY_MIN_CONFIDENCE,
+    DECISION_DISCOVERY_MIN_OPTIONS,
     DECISION_DISCOVERY_TIMEOUT_MS,
     DecisionDiscoveryFromResult,
     DecisionDiscoveryOption,
@@ -25,6 +26,7 @@ import {
     FailedDecisionDiscovery,
     HostAllowedAgentIDs,
     IsDecisionDiscoveryOn,
+    IsOpeningTurn,
     JudgeDecisionDiscovery,
     KeepHostAllowedAgents,
     MentionsAgent,
@@ -66,6 +68,7 @@ function answers(value: string, confidence: number, applies: number): Record<str
 describe('the named constants', () => {
     it('start where the brief puts them', () => {
         expect(DECISION_DISCOVERY_MAX_OPTIONS).toBe(25);
+        expect(DECISION_DISCOVERY_MIN_OPTIONS).toBe(3);
         expect(DECISION_DISCOVERY_MIN_CONFIDENCE).toBe(0.7);
         expect(DECISION_DISCOVERY_TIMEOUT_MS).toBe(1500);
         expect(DECISION_DISCOVERY_MAX_RECORDED_IDS).toBe(50);
@@ -81,6 +84,31 @@ describe('IsDecisionDiscoveryOn', () => {
         expect(IsDecisionDiscoveryOn({ decisionDiscovery: false })).toBe(false);
         expect(IsDecisionDiscoveryOn({ decisionDiscovery: 'true' })).toBe(false);
         expect(IsDecisionDiscoveryOn({ decisionDiscovery: 1 })).toBe(false);
+    });
+});
+
+describe('IsOpeningTurn', () => {
+    const user = (content: string): ChatMessage => ({ role: 'user', content });
+    const assistant = (content: string): ChatMessage => ({ role: 'assistant', content });
+    const system = (content: string): ChatMessage => ({ role: 'system', content });
+
+    it('is the opening turn when the run holds exactly one user message', () => {
+        expect(IsOpeningTurn([user('Invoice Acme')])).toBe(true);
+    });
+
+    it('ignores assistant and system messages, so a greeting or injected context before the request still counts', () => {
+        expect(IsOpeningTurn([system('<retrieved_context>'), assistant('Hi! How can I help?'), user('Invoice Acme')])).toBe(true);
+    });
+
+    it('is a follow-up when an earlier request, or the summary of earlier turns, is in the history', () => {
+        expect(IsOpeningTurn([user('Invoice Acme'), assistant('Done.'), user('Make it shorter')])).toBe(false);
+        expect(IsOpeningTurn([user('Summary of the earlier conversation'), user('Make it shorter')])).toBe(false);
+    });
+
+    it('is not an opening turn without a user message', () => {
+        expect(IsOpeningTurn([])).toBe(false);
+        expect(IsOpeningTurn(undefined)).toBe(false);
+        expect(IsOpeningTurn([assistant('Hi!')])).toBe(false);
     });
 });
 
@@ -220,6 +248,8 @@ describe('BuildDecisionDiscoveryQuestions', () => {
     });
 
     it('words the Likelihood so it stands on the request alone, without the options', () => {
+        // Pinned on purpose: the discovery eval measured, and its calibration fitted, exactly this
+        // wording. Naming the options (so the decision can say none fits) needs a re-measurement first.
         expect(DECISION_DISCOVERY_APPLIES_INSTRUCTIONS).toBe(
             'This request asks for work that a specialist agent should do, rather than something the conversation manager should answer directly or plan as a multi-agent workflow.'
         );
