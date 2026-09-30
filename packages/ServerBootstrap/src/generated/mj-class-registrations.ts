@@ -1055,25 +1055,6 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/search-engine (15 classes)
-import {
-    AzureAISearchProvider,
-    BGEReRanker,
-    CohereReRanker,
-    ElasticsearchSearchProvider,
-    EntitySearchProvider,
-    FullTextSearchProvider,
-    NoopReRanker,
-    OpenAIReRanker,
-    OpenSearchSearchProvider,
-    SearchScopePermissionResolver,
-    StorageSearchProvider,
-    TagSearchProvider,
-    TypesenseSearchProvider,
-    VectorSearchProvider,
-    VoyageReRanker,
-} from '@memberjunction/search-engine';
-
 // @memberjunction/templates (3 classes)
 import {
     AIPromptExtension,
@@ -1108,6 +1089,35 @@ import {
 import {
     PromptReasoningProvider,
 } from '@memberjunction/ai-vector-dupe';
+
+// @memberjunction/content-autotagging (6 classes)
+import {
+    AutotagBaseEngine,
+    AutotagCloudStorage,
+    AutotagEntity,
+    AutotagLocalFileSystem,
+    AutotagRSSFeed,
+    AutotagWebsite,
+} from '@memberjunction/content-autotagging';
+
+// @memberjunction/search-engine (15 classes)
+import {
+    AzureAISearchProvider,
+    BGEReRanker,
+    CohereReRanker,
+    ElasticsearchSearchProvider,
+    EntitySearchProvider,
+    FullTextSearchProvider,
+    NoopReRanker,
+    OpenAIReRanker,
+    OpenSearchSearchProvider,
+    SearchScopePermissionResolver,
+    StorageSearchProvider,
+    TagSearchProvider,
+    TypesenseSearchProvider,
+    VectorSearchProvider,
+    VoyageReRanker,
+} from '@memberjunction/search-engine';
 
 // @memberjunction/ai-agents (22 classes)
 import {
@@ -1166,16 +1176,6 @@ import {
     FormBuilderBuilderAgent,
     FormBuilderDesignerAgent,
 } from '@memberjunction/ai-form-builder';
-
-// @memberjunction/content-autotagging (6 classes)
-import {
-    AutotagBaseEngine,
-    AutotagCloudStorage,
-    AutotagEntity,
-    AutotagLocalFileSystem,
-    AutotagRSSFeed,
-    AutotagWebsite,
-} from '@memberjunction/content-autotagging';
 
 // @memberjunction/database-designer-core (4 classes)
 import {
@@ -2250,21 +2250,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     RestoreRecordAction,
     RunAllActiveArchivesAction,
     TagEngineBase,
-    AzureAISearchProvider,
-    BGEReRanker,
-    CohereReRanker,
-    ElasticsearchSearchProvider,
-    EntitySearchProvider,
-    FullTextSearchProvider,
-    NoopReRanker,
-    OpenAIReRanker,
-    OpenSearchSearchProvider,
-    SearchScopePermissionResolver,
-    StorageSearchProvider,
-    TagSearchProvider,
-    TypesenseSearchProvider,
-    VectorSearchProvider,
-    VoyageReRanker,
     AIPromptExtension,
     TemplateEmbedExtension,
     TemplateRunServerOperation,
@@ -2280,6 +2265,27 @@ const CLASS_REGISTRATIONS_3: any[] = [
     StructuralTextSegmenter,
     TranscriptSegmenter,
     PromptReasoningProvider,
+    AutotagBaseEngine,
+    AutotagCloudStorage,
+    AutotagEntity,
+    AutotagLocalFileSystem,
+    AutotagRSSFeed,
+    AutotagWebsite,
+    AzureAISearchProvider,
+    BGEReRanker,
+    CohereReRanker,
+    ElasticsearchSearchProvider,
+    EntitySearchProvider,
+    FullTextSearchProvider,
+    NoopReRanker,
+    OpenAIReRanker,
+    OpenSearchSearchProvider,
+    SearchScopePermissionResolver,
+    StorageSearchProvider,
+    TagSearchProvider,
+    TypesenseSearchProvider,
+    VectorSearchProvider,
+    VoyageReRanker,
     AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
     CSVToolLibrary,
@@ -2318,12 +2324,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     FormBuilderAgent,
     FormBuilderBuilderAgent,
     FormBuilderDesignerAgent,
-    AutotagBaseEngine,
-    AutotagCloudStorage,
-    AutotagEntity,
-    AutotagLocalFileSystem,
-    AutotagRSSFeed,
-    AutotagWebsite,
     DatabaseDesignerAgent,
     DatabaseDesignerSchemaBuilder,
     DatabaseDesignerSchemaDesigner,
@@ -2717,18 +2717,18 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/archiving-engine',
     '@memberjunction/archiving-action',
     '@memberjunction/tag-engine-base',
-    '@memberjunction/search-engine',
     '@memberjunction/templates',
     '@memberjunction/ai-prompts',
     '@memberjunction/ai-reranker',
     '@memberjunction/ai-segmentation',
     '@memberjunction/ai-vector-dupe',
+    '@memberjunction/content-autotagging',
+    '@memberjunction/search-engine',
     '@memberjunction/ai-agents',
     '@memberjunction/action-runtime-host',
     '@memberjunction/ai-agent-harness',
     '@memberjunction/ai-agent-manager',
     '@memberjunction/ai-form-builder',
-    '@memberjunction/content-autotagging',
     '@memberjunction/database-designer-core',
     '@memberjunction/database-designer-actions',
     '@memberjunction/record-set-processor',

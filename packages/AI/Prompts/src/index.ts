@@ -9,6 +9,8 @@ export * from './AIPromptTimeoutError';
 // helpers are how a caller reads back which path a run took.
 export * from './nativeToolCallingGate';
 export * from './AIModelRunner';
+export * from './embedding/AIEmbeddingRunner';
+export * from './embedding/embedding-runner.types';
 export * from './image/AIImageGenerationRunner';
 export * from './image/image-runner.types';
 export * from './media/BaseMediaRunner';
