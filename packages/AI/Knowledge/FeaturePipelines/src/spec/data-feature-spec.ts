@@ -54,6 +54,9 @@ export interface DataFeatureSpec {
 
   /** Optional subclass hook registration (P1-6). */
   ProcessorExtensionKey?: string;
+
+  /** The name of an `MJ: Feature Pipeline Types` row. Absent means `LLM`. */
+  PipelineType?: string;
 }
 
 export interface DataFeatureOutput {
@@ -124,6 +127,11 @@ export function ValidateSpec(
       FixRecommendation: 'Select or configure an AI Prompt to execute for this pipeline.',
       Severity: 'error',
     });
+  }
+
+  const pipelineTypeIssue = validatePipelineType(spec);
+  if (pipelineTypeIssue) {
+    issues.push(pipelineTypeIssue);
   }
 
   if (!spec.Outputs || spec.Outputs.length === 0) {
@@ -363,6 +371,27 @@ export function ValidateSpec(
   }
 
   return issues;
+}
+
+/**
+ * PipelineType is optional, but when a spec names one it must be a non-empty string. The spec is
+ * parsed from JSON, so the value is read as `unknown` and narrowed. A JSON `null` counts as absent,
+ * as it does where the processor resolves the type.
+ */
+function validatePipelineType(spec: DataFeatureSpec): SpecValidationIssue | null {
+  const pipelineType: unknown = spec.PipelineType;
+  if (pipelineType === undefined || pipelineType === null) {
+    return null;
+  }
+  if (typeof pipelineType === 'string' && pipelineType.trim().length > 0) {
+    return null;
+  }
+  return {
+    Path: 'PipelineType',
+    Message: 'DataFeatureSpec PipelineType, when present, must be a non-empty string.',
+    FixRecommendation: 'Name an MJ: Feature Pipeline Types row (for example "LLM"), or remove PipelineType to use LLM.',
+    Severity: 'error',
+  };
 }
 
 /** @deprecated Use {@link ValidateSpec}. */
