@@ -54,7 +54,6 @@ import { LogStatus } from '@memberjunction/core';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { MJActionEntityExtended } from '@memberjunction/actions-base';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
-import type { AgentDecisionService } from '../AgentDecisionService';
 import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS } from '../agent-types/loop-agent-prompt-params';
 
 // ============================================================================
@@ -442,6 +441,11 @@ let harness: LoopHarness;
 class HarnessAgent extends BaseAgent {
     protected override async InjectPreExecutionRAG(): Promise<AgentPreExecutionRAGResult | null> {
         return null;
+    }
+
+    /** The decision service this agent asks through, so a test can spy on this agent's calls alone. */
+    public get DecisionService(): AgentDecisionService {
+        return this._agentDecisionService;
     }
 }
 
@@ -1095,15 +1099,6 @@ describe('BaseAgent.Execute — the payload change check (opt-in with payloadFee
 
     const contentOf = (m: { content: unknown }): string => (typeof m.content === 'string' ? m.content : '');
 
-    /** The BaseAgent member the check asks through. Protected, so tests reach it through this seam. */
-    interface DecisionInternals {
-        _agentDecisionService: AgentDecisionService;
-    }
-
-    function decisionServiceOf(agent: HarnessAgent): AgentDecisionService {
-        return (agent as unknown as DecisionInternals)._agentDecisionService;
-    }
-
     function likelihood(probability: number): AIDecisionRunResult {
         return { success: true, Answers: { change_1: { Kind: 'Likelihood', Probability: probability } } };
     }
@@ -1148,7 +1143,7 @@ describe('BaseAgent.Execute — the payload change check (opt-in with payloadFee
         harness.agent = makeAgentRow({ AgentTypePromptParams: promptParams });
         const turns: string[][] = [];
         const { agent, runner } = makeAgent(truncatingScript(turns));
-        const ask = vi.spyOn(decisionServiceOf(agent), 'Ask');
+        const ask = vi.spyOn(agent.DecisionService, 'Ask');
 
         const result = await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY } }));
 
@@ -1176,7 +1171,7 @@ describe('BaseAgent.Execute — the payload change check (opt-in with payloadFee
         it('asks one Likelihood per flagged change, in one call, about the reasoning and never the payload', async () => {
             const turns: string[][] = [];
             const { agent } = makeAgent(truncatingScript(turns));
-            const ask = vi.spyOn(decisionServiceOf(agent), 'Ask').mockResolvedValueOnce(likelihood(0.9));
+            const ask = vi.spyOn(agent.DecisionService, 'Ask').mockResolvedValueOnce(likelihood(0.9));
 
             await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY } }));
 
@@ -1199,7 +1194,7 @@ describe('BaseAgent.Execute — the payload change check (opt-in with payloadFee
         it('uses the agent\'s decisionPromptName', async () => {
             harness.agent = makeAgentRow({ AgentTypePromptParams: JSON.stringify({ payloadFeedbackCheck: true, decisionPromptName: 'Custom Decision' }) });
             const { agent } = makeAgent(truncatingScript([]));
-            const ask = vi.spyOn(decisionServiceOf(agent), 'Ask').mockResolvedValueOnce(likelihood(0.9));
+            const ask = vi.spyOn(agent.DecisionService, 'Ask').mockResolvedValueOnce(likelihood(0.9));
 
             await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY } }));
 
@@ -1209,7 +1204,7 @@ describe('BaseAgent.Execute — the payload change check (opt-in with payloadFee
         it('lists a change judged unintended on the next turn, and never reverts it', async () => {
             const turns: string[][] = [];
             const { agent, runner } = makeAgent(truncatingScript(turns));
-            vi.spyOn(decisionServiceOf(agent), 'Ask').mockResolvedValueOnce(likelihood(0.1));
+            vi.spyOn(agent.DecisionService, 'Ask').mockResolvedValueOnce(likelihood(0.1));
 
             const result = await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY } }));
 
@@ -1228,7 +1223,7 @@ describe('BaseAgent.Execute — the payload change check (opt-in with payloadFee
         it('adds nothing to the next turn for a change judged intended', async () => {
             const turns: string[][] = [];
             const { agent, runner } = makeAgent(truncatingScript(turns));
-            vi.spyOn(decisionServiceOf(agent), 'Ask').mockResolvedValueOnce(likelihood(0.9));
+            vi.spyOn(agent.DecisionService, 'Ask').mockResolvedValueOnce(likelihood(0.9));
 
             await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY } }));
 
@@ -1240,7 +1235,7 @@ describe('BaseAgent.Execute — the payload change check (opt-in with payloadFee
 
         it('records the check as one Decision step, with the questions and the probabilities', async () => {
             const { agent } = makeAgent(truncatingScript([]));
-            vi.spyOn(decisionServiceOf(agent), 'Ask').mockResolvedValueOnce(likelihood(0.1));
+            vi.spyOn(agent.DecisionService, 'Ask').mockResolvedValueOnce(likelihood(0.1));
 
             await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY } }));
 
@@ -1277,7 +1272,7 @@ describe('BaseAgent.Execute — the payload change check (opt-in with payloadFee
         it('asks nothing when the analyzer flags nothing', async () => {
             const turns: string[][] = [];
             const { agent } = makeAgent(truncatingScript(turns, { newElements: { note: 'added' } }));
-            const ask = vi.spyOn(decisionServiceOf(agent), 'Ask');
+            const ask = vi.spyOn(agent.DecisionService, 'Ask');
 
             await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY } }));
 
