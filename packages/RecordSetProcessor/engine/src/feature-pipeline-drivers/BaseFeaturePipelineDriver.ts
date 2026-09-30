@@ -8,6 +8,7 @@
  * @module @memberjunction/record-set-processor
  */
 
+import type { IMetadataProvider } from '@memberjunction/core';
 import type { AIPromptParams, AIPromptRunResult, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import type { RecordProcessorContext, RecordRef } from '@memberjunction/record-set-processor-base';
 import type {
@@ -93,9 +94,12 @@ export abstract class BaseFeaturePipelineDriver {
     /**
      * Checks each output's constraint type and target mode against {@link Capabilities}.
      * An output with no constraint is not checked for its constraint type.
+     * @param spec - The pipeline's spec
+     * @param provider - The run's metadata provider, for a driver that reads entity metadata to check an
+     *   output. The base check doesn't use it.
      * @returns One message per output this driver cannot produce; empty when it can produce them all.
      */
-    public ValidateOutputs(spec: DataFeatureSpec): string[] {
+    public ValidateOutputs(spec: DataFeatureSpec, provider?: IMetadataProvider): string[] {
         const messages: string[] = [];
         for (const output of spec.Outputs ?? []) {
             const reasons = this.unsupportedReasons(output);
