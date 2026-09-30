@@ -226,7 +226,7 @@ vi.mock('ioredis', () => {
     return { default: MockRedis };
 });
 
-import { RedisLocalStorageProvider } from '../RedisLocalStorageProvider.js';
+import { RedisLocalStorageProvider, KeyLockLostError } from '../RedisLocalStorageProvider.js';
 import { LogError } from '@memberjunction/core';
 
 /**
@@ -1416,6 +1416,52 @@ describe('RedisLocalStorageProvider', () => {
         });
     });
 
+    describe('holding the key lock while Redis stops answering', () => {
+        beforeEach(() => { vi.useFakeTimers(); });
+        afterEach(() => { vi.useRealTimers(); });
+
+        /** Makes every lock command fail, as a dropped connection does. */
+        function connectionDrops(p: RedisLocalStorageProvider): void {
+            const client = p.Client as unknown as { get: ReturnType<typeof vi.fn>; eval: ReturnType<typeof vi.fn> };
+            client.get.mockRejectedValue(new Error('Connection is closed'));
+            client.eval.mockRejectedValue(new Error('Connection is closed'));
+        }
+
+        it('reports the lock lost when the connection has been down longer than the lock could live', async () => {
+            // The post-work check reads the lock back. When THAT read fails, the connection is
+            // down — and the renewals ran over the same connection, so they have been failing
+            // silently too. Answering "still mine" is then exactly backwards: it is most likely
+            // gone, and another process is writing the same key. The clock can answer when Redis
+            // cannot — the lock cannot outlive its TTL measured from the last confirmed renewal.
+            let finishWork!: () => void;
+            const working = new Promise<void>(resolve => { finishWork = resolve; });
+            const held = provider.WithKeyLock('slot', 'RunViewCache', async () => { await working; return 'wrote'; });
+
+            await vi.advanceTimersByTimeAsync(0);   // the lock is acquired
+            connectionDrops(provider);
+            await vi.advanceTimersByTimeAsync(11_000); // past the 10 s TTL with no renewal landing
+            finishWork();
+
+            await expect(held).rejects.toBeInstanceOf(KeyLockLostError);
+        });
+
+        it('still trusts the lock when the read fails but it cannot have expired yet', async () => {
+            // Same unreadable check, different facts: the connection dropped a moment ago, well
+            // inside the TTL, so the lock IS still ours and refusing the write would be a
+            // needless failure.
+            let finishWork!: () => void;
+            const working = new Promise<void>(resolve => { finishWork = resolve; });
+            const held = provider.WithKeyLock('slot', 'RunViewCache', async () => { await working; return 'wrote'; });
+
+            await vi.advanceTimersByTimeAsync(0);
+            connectionDrops(provider);
+            await vi.advanceTimersByTimeAsync(500);
+            finishWork();
+
+            await expect(held).resolves.toBe('wrote');
+        });
+    });
+
     describe('per-category expiry', () => {
         it('does not expire the default category, where keys vouch for other keys', async () => {
             const ttlProvider = new RedisLocalStorageProvider({ defaultTTLSeconds: 60, enableLogging: false });
@@ -1429,6 +1475,41 @@ describe('RedisLocalStorageProvider', () => {
                 expect(await ttlProvider.GetTTL('___MJCore_Metadata_AllMetadata', 'default')).toBe(-1);
                 expect(await ttlProvider.GetTTL('___MJCore_Metadata_Timestamps', 'default')).toBe(-1);
                 expect(await ttlProvider.GetTTL('Users|f1', 'RunViewCache')).toBe(60);
+            } finally {
+                await ttlProvider.Disconnect();
+            }
+        });
+
+        it('keeps the default category unexpiring when a host configures some OTHER category', async () => {
+            // The invariant belongs to the `default` category, not to the act of writing a config:
+            // a host that only wants a dataset TTL must not silently reinstate the proxy-key bug.
+            // The test above passes `default: 0` explicitly, so it cannot see a config that
+            // REPLACES the built-in map instead of merging over it.
+            const ttlProvider = new RedisLocalStorageProvider({
+                defaultTTLSeconds: 60,
+                categoryTTLSeconds: { DatasetCache: 30 },
+                enableLogging: false,
+            });
+            try {
+                await ttlProvider.SetItem('___MJCore_Metadata_Timestamps', 'claim', 'default');
+                await ttlProvider.SetItem('ds', 'v', 'DatasetCache');
+
+                expect(await ttlProvider.GetTTL('___MJCore_Metadata_Timestamps', 'default')).toBe(-1);
+                expect(await ttlProvider.GetTTL('ds', 'DatasetCache')).toBe(30);
+            } finally {
+                await ttlProvider.Disconnect();
+            }
+        });
+
+        it('lets a host override the default category deliberately', async () => {
+            const ttlProvider = new RedisLocalStorageProvider({
+                defaultTTLSeconds: 60,
+                categoryTTLSeconds: { default: 15 },
+                enableLogging: false,
+            });
+            try {
+                await ttlProvider.SetItem('k', 'v', 'default');
+                expect(await ttlProvider.GetTTL('k', 'default')).toBe(15);
             } finally {
                 await ttlProvider.Disconnect();
             }

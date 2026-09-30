@@ -91,8 +91,9 @@ export interface RedisProviderConfig {
     defaultTTLSeconds?: number;
 
     /**
-     * Expiry per category, overriding {@link defaultTTLSeconds} (0 = no expiry). Defaults to
-     * `{ default: 0 }`.
+     * Expiry per category, overriding {@link defaultTTLSeconds} (0 = no expiry). **Merged over**
+     * the built-in `{ default: 0 }` rather than replacing it, so setting one category never
+     * changes another; name `default` here to override even that.
      *
      * The `default` category holds **proxy keys**: entries that vouch for other entries. The
      * metadata snapshot's timestamps key is written after the payload it describes, and a dataset's
@@ -497,7 +498,11 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         this._config = config;
         this._keyPrefix = config.keyPrefix ?? 'mj';
         this._defaultTTLSeconds = config.defaultTTLSeconds ?? DEFAULT_TTL_SECONDS;
-        this._categoryTTLSeconds = config.categoryTTLSeconds ?? DEFAULT_CATEGORY_TTL_SECONDS;
+        // Merged over the built-in map, never replacing it: the `default` category's "no expiry"
+        // is an invariant of what that category HOLDS (proxy keys), so a host that only wants, say,
+        // a dataset TTL must not silently reinstate the bug §16.3 fixed. Naming `default`
+        // explicitly still overrides it, which is the only way that should be possible.
+        this._categoryTTLSeconds = { ...DEFAULT_CATEGORY_TTL_SECONDS, ...(config.categoryTTLSeconds ?? {}) };
         this._enableLogging = config.enableLogging ?? true;
         this._maxRetryDelayMs = config.maxRetryDelayMs ?? 30000;
         this._enablePubSub = config.enablePubSub ?? false;
@@ -1192,20 +1197,23 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         // extended while the work runs, and a lock that was lost anyway (a stalled renewal, a
         // failover) is reported rather than ignored (plan §16.3 #12).
         const renewUntil = Date.now() + KEY_LOCK_MAX_HOLD_MS;
+        // When the lock was last known to be ours. Every successful renewal moves it forward; it is
+        // what the post-work check falls back on when Redis cannot be read at all.
+        let confirmedAt = Date.now();
         const renewal = setInterval(() => {
             if (Date.now() >= renewUntil) {
                 clearInterval(renewal);
                 LogError(`Redis key lock "${lockKey}" has been held for ${KEY_LOCK_MAX_HOLD_MS} ms; no longer renewing it, so it expires on its own and other processes can proceed. The work holding it is hung.`);
                 return;
             }
-            this.renewLock(lockKey, token).catch(() => undefined);
+            this.renewLock(lockKey, token).then(() => { confirmedAt = Date.now(); }).catch(() => undefined);
         }, KEY_LOCK_RENEW_MS);
         if (typeof renewal === 'object' && renewal !== null && 'unref' in renewal) {
             (renewal as { unref(): void }).unref();
         }
         try {
             const result = await work();
-            if (!(await this.stillHoldsLock(lockKey, token))) {
+            if (!(await this.stillHoldsLock(lockKey, token, confirmedAt))) {
                 throw new KeyLockLostError(lockKey);
             }
             return result;
@@ -1220,12 +1228,25 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         await this._client.eval(RENEW_LOCK_SCRIPT, 1, lockKey, token, String(KEY_LOCK_TTL_MS));
     }
 
-    /** Whether this holder's token is still the one in the lock. @internal */
-    private async stillHoldsLock(lockKey: string, token: string): Promise<boolean> {
+    /**
+     * Whether this holder's token is still the one in the lock.
+     *
+     * @param confirmedAt when the lock was last known to be ours (acquisition, or the most recent
+     * renewal that actually landed)
+     *
+     * This used to answer `true` when the read failed, on the reasoning that an unreadable check
+     * should not fail a write. But the failures are correlated: this read and the renewals share
+     * one connection, so a read that throws means the renewals have been throwing too, and the
+     * lock is most likely expired — the one case where "still mine" is both unverifiable and
+     * probably false. The clock is the evidence that remains: a lock cannot outlive its TTL
+     * measured from the last time we know it was ours (plan §22.3).
+     * @internal
+     */
+    private async stillHoldsLock(lockKey: string, token: string, confirmedAt: number): Promise<boolean> {
         try {
             return (await this._client.get(lockKey)) === token;
         } catch {
-            return true; // cannot tell; do not turn an unreadable check into a failed write
+            return Date.now() - confirmedAt < KEY_LOCK_TTL_MS;
         }
     }
 
