@@ -113,6 +113,7 @@ export * from './custom/workflow/delay.action';
 
 // AI Actions
 export * from './custom/ai/execute-ai-prompt.action';
+export * from './custom/ai/run-decision.action';
 export * from './custom/ai/execute-agent.action';
 export * from './custom/ai/create-runtime-action.action';
 export * from './custom/ai/test-runtime-action.action';
