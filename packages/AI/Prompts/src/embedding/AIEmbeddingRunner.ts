@@ -52,6 +52,13 @@ interface FailoverExecutionResult {
  * credential resolution, failover, and `MJ: AI Prompt Runs` observability tracking.
  */
 export class AIEmbeddingRunner extends BaseModelRunner {
+  /**
+   * Whether each driver class needs an API key, keyed by driver class. The answer is a property of
+   * the class, so it can't change during a process, and finding it out means constructing the
+   * driver. It is worked out once per process instead of on every call.
+   */
+  private static readonly keyRequirementByDriver = new Map<string, boolean>();
+
   private _providerOverride: IMetadataProvider | null = null;
 
   public override get RequiredModelType(): string {
@@ -268,6 +275,50 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     return { Candidate: selected, CredentialAvailability: credentialAvailability };
   }
 
+  /**
+   * A candidate whose driver needs no API key ({@link BaseEmbeddings.RequiresAPIKey} is `false`,
+   * e.g. `LocalEmbedding`) counts as credentialed with no key, binding or credential configured.
+   * Every other candidate goes through the base check. This is decided by the driver, not by the
+   * vendor's `CredentialTypeID`: several vendors that do need keys leave that column empty.
+   */
+  protected override HasCredentialsAvailable(
+    driverClass: string,
+    promptId: string | undefined,
+    modelId: string | undefined,
+    vendorId: string | undefined,
+    params?: AIPromptParams
+  ): boolean {
+    return super.HasCredentialsAvailable(driverClass, promptId, modelId, vendorId, params)
+      || !this.driverRequiresAPIKey(driverClass);
+  }
+
+  private driverRequiresAPIKey(driverClass: string): boolean {
+    let requires = AIEmbeddingRunner.keyRequirementByDriver.get(driverClass);
+    if (requires === undefined) {
+      requires = this.probeDriverRequiresAPIKey(driverClass);
+      AIEmbeddingRunner.keyRequirementByDriver.set(driverClass, requires);
+    }
+    return requires;
+  }
+
+  /**
+   * Builds the driver with no key, the way a keyless call would, and asks it. A driver that can't
+   * be resolved, or whose constructor throws without a key, is treated as needing one.
+   */
+  private probeDriverRequiresAPIKey(driverClass: string): boolean {
+    try {
+      return this.createDriver(driverClass, '')?.RequiresAPIKey ?? true;
+    } catch {
+      return true;
+    }
+  }
+
+  /** Creates the driver through the ClassFactory. Returns null when no subclass is registered for the key. */
+  private createDriver(driverClass: string, apiKey: string): BaseEmbeddings | null {
+    const driver = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(BaseEmbeddings, driverClass, apiKey);
+    return driver && driver.constructor !== BaseEmbeddings ? driver : null;
+  }
+
   private candidateKey(candidate: ModelVendorCandidate): string {
     return `${candidate.driverClass}:${candidate.model.ID}:${candidate.vendorId || 'default'}`;
   }
@@ -393,12 +444,8 @@ export class AIEmbeddingRunner extends BaseModelRunner {
       return res;
     }
 
-    const embeddingInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
-      BaseEmbeddings,
-      candidate.driverClass,
-      apiKey
-    );
-    if (!embeddingInstance || embeddingInstance.constructor === BaseEmbeddings) {
+    const embeddingInstance = this.createDriver(candidate.driverClass, apiKey);
+    if (!embeddingInstance) {
       const res = new EmbeddingInternalResult(false, startTime, new Date());
       res.errorMessage = `Failed to create BaseEmbeddings driver for '${candidate.driverClass}'`;
       res.errorInfo = { errorType: 'ModelError', severity: 'Retriable', canFailover: true };

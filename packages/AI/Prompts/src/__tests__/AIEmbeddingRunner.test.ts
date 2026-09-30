@@ -8,46 +8,69 @@ import {
   EmbedTextResult,
   ModelUsage,
 } from '@memberjunction/ai';
-import type { UserInfo } from '@memberjunction/core';
-import { AIEmbeddingRunner } from '../embedding/AIEmbeddingRunner';
-import { AIModelRunner } from '../AIModelRunner';
+import { UserInfo } from '@memberjunction/core';
+import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import {
-  buildRealisticCatalog,
+  BuildRealisticCatalog,
+  MakeModel,
+  MakeModelVendor,
+  MakePromptModel,
   MODEL_TYPE,
   VENDOR,
-  makeModel,
-  makeModelVendor,
-  makePromptModel,
-} from './__fixtures__/ai-metadata.fixtures';
+  VENDOR_TYPE,
+} from '@memberjunction/unit-testing';
+import type { FxModel, FxModelVendor, FxPromptModel, FxVendor } from '@memberjunction/unit-testing';
+import { AIEmbeddingRunner } from '../embedding/AIEmbeddingRunner';
+import { AIModelRunner } from '../AIModelRunner';
 
-const EMBEDDINGS_MODEL_TYPE_ID = MODEL_TYPE.Embeddings;
+/** The prompt fields the runner reads. Value-list fields are typed from the entity so they can't drift. */
+interface FakePrompt {
+  ID: string;
+  Name: string;
+  Status: MJAIPromptEntityExtended['Status'];
+  Type: string;
+  AIModelTypeID: string | null;
+  SelectionStrategy: MJAIPromptEntityExtended['SelectionStrategy'];
+  FailoverStrategy: MJAIPromptEntityExtended['FailoverStrategy'];
+  RequireSpecificModels: boolean;
+}
+
+/** Stands in for an `MJ: AI Prompt Runs` entity: records what the runner sets and how often it is saved. */
+interface RecordedRun {
+  ID: string;
+  PromptID?: string;
+  ModelID?: string;
+  Status?: string;
+  Success?: boolean;
+  Result?: string;
+  ErrorMessage?: string;
+  TokensUsed?: number;
+  Cost?: number;
+  SaveCount: number;
+}
 
 const h = vi.hoisted(() => {
-  const norm = (s: unknown): string => (s == null ? '' : String(s).trim().toLowerCase());
-  const eq = (a: unknown, b: unknown): boolean => norm(a) === norm(b);
+  const norm = (s: string | null | undefined): string => (s == null ? '' : s.trim().toLowerCase());
 
-  type State = {
-    vendorTypeDefinitions: Array<{ ID: string; Name: string }>;
-    vendors: Array<{ ID: string; Name: string; CredentialTypeID?: string | null }>;
-    modelTypes: Array<{ ID: string; Name: string }>;
-    configurations: Array<{ ID: string; Name: string; ParentID: string | null }>;
-    models: Array<Record<string, unknown>>;
-    modelVendors: Array<Record<string, unknown>>;
-    promptModels: Array<Record<string, unknown>>;
-    prompts: Array<Record<string, unknown>>;
-    configuredDrivers: Set<string>;
+  const state = {
+    vendorTypeDefinitions: [] as Array<{ ID: string; Name: string }>,
+    vendors: [] as FxVendor[],
+    modelTypes: [] as Array<{ ID: string; Name: string }>,
+    models: [] as FxModel[],
+    modelVendors: [] as FxModelVendor[],
+    promptModels: [] as FxPromptModel[],
+    prompts: [] as FakePrompt[],
+    configuredDrivers: new Set<string>(),
+    runs: [] as RecordedRun[],
   };
 
-  const state: State = {
-    vendorTypeDefinitions: [],
-    vendors: [],
-    modelTypes: [],
-    configurations: [],
-    models: [],
-    modelVendors: [],
-    promptModels: [],
-    prompts: [],
-    configuredDrivers: new Set(),
+  const byModelID = <T extends { ModelID: string }>(rows: T[]): Map<string, T[]> => {
+    const map = new Map<string, T[]>();
+    for (const row of rows) {
+      const key = norm(row.ModelID);
+      map.set(key, [...(map.get(key) ?? []), row]);
+    }
+    return map;
   };
 
   const engine = {
@@ -55,78 +78,75 @@ const h = vi.hoisted(() => {
     get VendorTypeDefinitions() { return state.vendorTypeDefinitions; },
     get Vendors() { return state.vendors; },
     get ModelTypes() { return state.modelTypes; },
-    get Configurations() { return state.configurations; },
+    get Configurations() { return []; },
     get Models() { return state.models; },
     get ModelVendors() { return state.modelVendors; },
     get PromptModels() { return state.promptModels; },
     get Prompts() { return state.prompts; },
-    get InferenceProviderTypeID() {
-      return state.vendorTypeDefinitions.find(v => v.Name === 'Inference Provider')?.ID;
-    },
     IsInferenceProvider(mv: { TypeID?: string }) {
-      const inf = state.vendorTypeDefinitions.find(v => v.Name === 'Inference Provider')?.ID;
-      return inf ? eq(mv?.TypeID, inf) : true;
+      const inference = state.vendorTypeDefinitions.find(v => v.Name === 'Inference Provider')?.ID;
+      return inference ? norm(mv?.TypeID) === norm(inference) : true;
     },
     get ModelsByID() { return new Map(state.models.map(m => [norm(m.ID), m])); },
     get VendorsByID() { return new Map(state.vendors.map(v => [norm(v.ID), v])); },
     get ModelTypesByID() { return new Map(state.modelTypes.map(t => [norm(t.ID), t])); },
-    get ConfigurationsByID() { return new Map(state.configurations.map(c => [norm(c.ID), c])); },
-    get ModelVendorsByModelID() {
-      const map = new Map<string, Array<Record<string, unknown>>>();
-      for (const mv of state.modelVendors) {
-        const k = norm(mv.ModelID);
-        (map.get(k) ?? map.set(k, []).get(k)!).push(mv);
-      }
-      return map;
-    },
-    get PromptModelsByPromptID() {
-      const map = new Map<string, Array<Record<string, unknown>>>();
-      for (const pm of state.promptModels) {
-        const k = norm(pm.PromptID);
-        (map.get(k) ?? map.set(k, []).get(k)!).push(pm);
-      }
-      return map;
-    },
-    GetConfigurationChain(id: string) {
-      const chain: Array<{ ID: string; ParentID: string | null }> = [];
-      let cur: string | null = id;
-      const seen = new Set<string>();
-      while (cur) {
-        if (seen.has(norm(cur))) break;
-        const c = state.configurations.find(x => eq(x.ID, cur));
-        if (!c) break;
-        seen.add(norm(cur));
-        chain.push(c);
-        cur = c.ParentID;
-      }
-      return chain;
-    },
+    get ModelVendorsByModelID() { return byModelID(state.modelVendors); },
+    GetConfigurationChain() { return []; },
     HasCredentialBindings() { return false; },
     GetCredentialBindingsForTarget() { return []; },
+  };
+
+  let runSeq = 0;
+  /** Returned for 'MJ: AI Prompt Runs'; the runner's base class sets many more fields than these at runtime. */
+  class FakePromptRun implements RecordedRun {
+    public ID = '';
+    public SaveCount = 0;
+    public NewRecord(): boolean {
+      this.ID = `run-${++runSeq}`;
+      state.runs.push(this);
+      return true;
+    }
+    public async Save(): Promise<boolean> {
+      this.SaveCount++;
+      return true;
+    }
+  }
+
+  const provider = {
+    GetEntityObject: vi.fn(async (entityName: string) =>
+      entityName === 'MJ: AI Prompt Runs' ? new FakePromptRun() : null
+    ),
   };
 
   return {
     state,
     engine,
-    getApiKey: (d: string) => (state.configuredDrivers.has(d) ? 'test-api-key' : ''),
+    provider,
+    getApiKey: (driver: string) => (state.configuredDrivers.has(driver) ? 'test-api-key' : ''),
   };
 });
 
 vi.mock('@memberjunction/aiengine', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
+  const actual = await importOriginal<typeof import('@memberjunction/aiengine')>();
   return { ...actual, AIEngine: { Instance: h.engine } };
 });
 
 vi.mock('@memberjunction/ai', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return {
-    ...actual,
-    GetAIAPIKey: (d: string) => h.getApiKey(d),
-  };
+  const actual = await importOriginal<typeof import('@memberjunction/ai')>();
+  return { ...actual, GetAIAPIKey: (driver: string) => h.getApiKey(driver) };
+});
+
+vi.mock('@memberjunction/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@memberjunction/core')>();
+  /** Every run row goes through the default provider, so the tests read rows from the fake one. */
+  class TestMetadata {
+    public static get Provider() { return h.provider; }
+  }
+  return { ...actual, Metadata: TestMetadata };
 });
 
 vi.mock('@memberjunction/credentials', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>().catch(() => ({}));
+  const actual = await importOriginal<typeof import('@memberjunction/credentials')>();
   return {
     ...actual,
     CredentialEngine: {
@@ -140,211 +160,187 @@ vi.mock('@memberjunction/credentials', async (importOriginal) => {
   };
 });
 
-class MockEmbeddingDriver extends BaseEmbeddings {
-  public lastParams?: EmbedTextsParams;
-  public embedTextsOverride?: (params: EmbedTextsParams) => Promise<EmbedTextsResult>;
+// ---------------------------------------------------------------------------
+// Scripted drivers, registered with the ClassFactory under their driver keys so the
+// runner resolves them exactly as it resolves real ones.
+// ---------------------------------------------------------------------------
 
-  constructor(apiKey = 'test-key') {
+/** What one driver key was asked to do, and how it should answer. */
+interface DriverScript {
+  /** The key each instance was constructed with (including the runner's keyless probe). */
+  ConstructedWith: string[];
+  /** Every EmbedTexts call, in order. */
+  Calls: EmbedTextsParams[];
+  /** Replaces the default answer: one 3-wide (or `dimensions`-wide) vector per text. */
+  Answer?: (params: EmbedTextsParams) => Promise<EmbedTextsResult>;
+}
+
+const scripts = new Map<string, DriverScript>();
+
+function scriptFor(driverKey: string): DriverScript {
+  const script = scripts.get(driverKey);
+  if (!script) {
+    throw new Error(`No scripted driver registered as '${driverKey}'`);
+  }
+  return script;
+}
+
+abstract class ScriptedEmbeddings extends BaseEmbeddings {
+  constructor(apiKey: string, private readonly driverKey: string) {
     super(apiKey);
+    scriptFor(driverKey).ConstructedWith.push(apiKey);
   }
 
-  public async EmbedText(_params: EmbedTextParams): Promise<EmbedTextResult> {
-    return {
-      vector: [0.1, 0.2, 0.3],
-      ModelUsage: new ModelUsage(5, 0, 0.0001, 'USD'),
-    };
+  public async EmbedText(params: EmbedTextParams): Promise<EmbedTextResult> {
+    return { object: 'object', model: params.model ?? '', ModelUsage: new ModelUsage(5, 0), vector: [0.1, 0.2, 0.3] };
   }
 
-  public async GetEmbeddingModels(): Promise<unknown> {
+  public async GetEmbeddingModels(): Promise<string[]> {
     return [];
   }
 
   public override async EmbedTexts(params: EmbedTextsParams): Promise<EmbedTextsResult> {
-    this.lastParams = params;
-    if (this.embedTextsOverride) {
-      return this.embedTextsOverride(params);
+    const script = scriptFor(this.driverKey);
+    script.Calls.push(params);
+    if (script.Answer) {
+      return script.Answer(params);
     }
-    const dims = params.dimensions ?? 3;
-    const vectors = params.texts.map(() => Array(dims).fill(0.1));
+    const width = params.dimensions ?? 3;
     return {
-      vectors,
+      object: 'list',
+      model: params.model ?? '',
       ModelUsage: new ModelUsage(params.texts.length * 10, 0, 0.0002, 'USD'),
+      vectors: params.texts.map(() => Array<number>(width).fill(0.1)),
     };
   }
 }
 
-let prSeq = 0;
-class FakePromptRun {
-  public ID = '';
-  public PromptID?: string;
-  public ModelID?: string;
-  public VendorID?: string | null;
-  public Status?: string;
-  public Success?: boolean;
-  public RunAt?: Date;
-  public CompletedAt?: Date;
-  public ExecutionTimeMS?: number;
-  public Messages?: string;
-  public Result?: string;
-  public ErrorMessage?: string;
-  public TokensPrompt?: number;
-  public TokensCompletion?: number;
-  public TokensUsed?: number;
-  public Cost?: number;
-  public CostCurrency?: string;
-  public saveCount = 0;
-  [k: string]: unknown;
+const DRIVER_1 = 'EmbeddingRunnerTestDriver1';
+const DRIVER_1B = 'EmbeddingRunnerTestDriver1B';
+const DRIVER_2 = 'EmbeddingRunnerTestDriver2';
+const DRIVER_LOCAL = 'EmbeddingRunnerTestLocalDriver';
 
-  NewRecord(): boolean {
-    this.ID = `pr-${++prSeq}`;
-    return true;
-  }
-  async Save(): Promise<boolean> {
-    this.saveCount++;
-    return true;
-  }
+class TestDriverOne extends ScriptedEmbeddings {
+  constructor(apiKey: string) { super(apiKey, DRIVER_1); }
+}
+class TestDriverOneB extends ScriptedEmbeddings {
+  constructor(apiKey: string) { super(apiKey, DRIVER_1B); }
+}
+class TestDriverTwo extends ScriptedEmbeddings {
+  constructor(apiKey: string) { super(apiKey, DRIVER_2); }
+}
+/** Like `LocalEmbedding`: runs in-process and needs no key. */
+class TestLocalDriver extends ScriptedEmbeddings {
+  constructor(apiKey: string) { super(apiKey, DRIVER_LOCAL); }
+  public override get RequiresAPIKey(): boolean { return false; }
 }
 
-let lastPromptRun: FakePromptRun | null = null;
-const fakeProvider = {
-  GetEntityObject: vi.fn(async (entityName: string) => {
-    if (entityName.includes('AI Prompt Runs')) {
-      lastPromptRun = new FakePromptRun();
-      return lastPromptRun;
-    }
-    return null;
-  }),
-};
+for (const [key, driverClass] of [
+  [DRIVER_1, TestDriverOne],
+  [DRIVER_1B, TestDriverOneB],
+  [DRIVER_2, TestDriverTwo],
+  [DRIVER_LOCAL, TestLocalDriver],
+] as const) {
+  MJGlobal.Instance.ClassFactory.Register(BaseEmbeddings, driverClass, key, 1000);
+}
 
-const mockUser = {
-  ID: 'user-001',
-  Name: 'Test User',
-  Email: 'test@example.com',
-} as UserInfo;
+// ---------------------------------------------------------------------------
+// Catalog
+// ---------------------------------------------------------------------------
+
+const MODEL_1_ID = 'E0000000-0000-0000-0000-000000000001';
+const MODEL_2_ID = 'E0000000-0000-0000-0000-000000000002';
+const LOCAL_MODEL_ID = 'E0000000-0000-0000-0000-000000000003';
+const LOCAL_VENDOR_ID = 'E0000000-0000-0000-0000-0000000000AA';
+const PROMPT_ID = 'E0000000-0000-0000-0000-0000000000P1';
+
+const mockUser = new UserInfo(undefined, { ID: 'user-001', Name: 'Test User', Email: 'test@example.com' });
+
+function embeddingVendor(id: string, modelID: string, vendorID: string, vendor: string, driver: string, apiName: string, priority: number): FxModelVendor {
+  return MakeModelVendor({
+    ID: id,
+    ModelID: modelID,
+    VendorID: vendorID,
+    Vendor: vendor,
+    DriverClass: driver,
+    APIName: apiName,
+    Priority: priority,
+    TypeID: VENDOR_TYPE.InferenceProvider,
+  });
+}
+
+function embeddingModel(id: string, name: string, vendors: FxModelVendor[], powerRank: number): FxModel {
+  return MakeModel({
+    ID: id,
+    Name: name,
+    AIModelTypeID: MODEL_TYPE.Embeddings,
+    AIModelType: 'Embeddings',
+    DriverClass: vendors[0].DriverClass,
+    APIName: vendors[0].APIName,
+    PowerRank: powerRank,
+    ModelVendors: vendors,
+  });
+}
+
+/**
+ * Model 1 (OpenAI, driver 1) is the prompt's first choice and model 2 (Google, driver 2) its second.
+ * The local model (keyless driver) is bound to no prompt, so an unpinned call reaches it only as a
+ * power-matched fallback.
+ */
+function loadCatalog(): void {
+  const catalog = BuildRealisticCatalog();
+  h.state.vendorTypeDefinitions = catalog.vendorTypeDefinitions;
+  h.state.vendors = [...catalog.vendors, { ID: LOCAL_VENDOR_ID, Name: 'LocalEmbeddings', CredentialTypeID: null }];
+  h.state.modelTypes = catalog.modelTypes;
+
+  const mv1 = embeddingVendor('mv-001', MODEL_1_ID, VENDOR.OpenAI, 'OpenAI', DRIVER_1, 'text-embed-1', 10);
+  const mv2 = embeddingVendor('mv-002', MODEL_2_ID, VENDOR.Google, 'Google', DRIVER_2, 'text-embed-2', 5);
+  const mvLocal = embeddingVendor('mv-local', LOCAL_MODEL_ID, LOCAL_VENDOR_ID, 'LocalEmbeddings', DRIVER_LOCAL, 'Xenova/all-MiniLM-L6-v2', 1);
+
+  h.state.models = [
+    embeddingModel(MODEL_1_ID, 'Test Embedding Model 1', [mv1], 50),
+    embeddingModel(MODEL_2_ID, 'Test Embedding Model 2', [mv2], 40),
+    embeddingModel(LOCAL_MODEL_ID, 'Test Local Embedding Model', [mvLocal], 10),
+  ];
+  h.state.modelVendors = [mv1, mv2, mvLocal];
+  h.state.prompts = [{
+    ID: PROMPT_ID,
+    Name: 'Standard Embedding Prompt',
+    Status: 'Active',
+    Type: 'Embedding',
+    AIModelTypeID: MODEL_TYPE.Embeddings,
+    SelectionStrategy: 'Specific',
+    FailoverStrategy: 'NextBestModel',
+    RequireSpecificModels: false,
+  }];
+  h.state.promptModels = [
+    MakePromptModel({ ID: 'pm-001', PromptID: PROMPT_ID, ModelID: MODEL_1_ID, Priority: 10 }),
+    MakePromptModel({ ID: 'pm-002', PromptID: PROMPT_ID, ModelID: MODEL_2_ID, Priority: 5 }),
+  ];
+  h.state.configuredDrivers = new Set([DRIVER_1, DRIVER_1B, DRIVER_2]);
+}
+
+/** Drops the keyless local model, so a catalog with no keys configured has no usable candidate at all. */
+function removeLocalModel(): void {
+  h.state.models = h.state.models.filter(m => m.ID !== LOCAL_MODEL_ID);
+  h.state.modelVendors = h.state.modelVendors.filter(mv => mv.ModelID !== LOCAL_MODEL_ID);
+}
+
+function lastRun(): RecordedRun | undefined {
+  return h.state.runs[h.state.runs.length - 1];
+}
 
 describe('AIEmbeddingRunner', () => {
   let runner: AIEmbeddingRunner;
-  let driver1: MockEmbeddingDriver;
-  let driver2: MockEmbeddingDriver;
-
-  const DRIVER_1 = 'MockDriver1';
-  const DRIVER_2 = 'MockDriver2';
-  const MODEL_1_ID = 'embedding-model-001';
-  const MODEL_2_ID = 'embedding-model-002';
-  const PROMPT_ID = 'prompt-embedding-001';
 
   beforeEach(() => {
-    prSeq = 0;
-    lastPromptRun = null;
     vi.clearAllMocks();
-
-    driver1 = new MockEmbeddingDriver();
-    driver2 = new MockEmbeddingDriver();
-
-    vi.spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance').mockImplementation(
-      (_baseClass: unknown, className: string) => {
-        if (className === DRIVER_1) return driver1 as never;
-        if (className === DRIVER_2) return driver2 as never;
-        return driver1 as never;
-      }
-    );
-
-    const catalog = buildRealisticCatalog();
-    h.state.vendorTypeDefinitions = catalog.vendorTypeDefinitions;
-    h.state.vendors = catalog.vendors;
-    h.state.modelTypes = catalog.modelTypes;
-    h.state.configurations = catalog.configurations;
-    h.state.configuredDrivers = new Set([DRIVER_1, DRIVER_2]);
-
-    const mv1 = makeModelVendor({
-      ID: 'mv-001',
-      ModelID: MODEL_1_ID,
-      VendorID: VENDOR.OpenAI,
-      Vendor: 'OpenAI',
-      DriverClass: DRIVER_1,
-      APIName: 'text-embed-1',
-      Priority: 10,
-      Status: 'Active',
-      TypeID: catalog.vendorTypeDefinitions.find(v => v.Name === 'Inference Provider')?.ID,
-    });
-
-    const mv2 = makeModelVendor({
-      ID: 'mv-002',
-      ModelID: MODEL_2_ID,
-      VendorID: VENDOR.Cohere,
-      Vendor: 'Cohere',
-      DriverClass: DRIVER_2,
-      APIName: 'text-embed-2',
-      Priority: 5,
-      Status: 'Active',
-      TypeID: catalog.vendorTypeDefinitions.find(v => v.Name === 'Inference Provider')?.ID,
-    });
-
-    const m1 = makeModel({
-      ID: MODEL_1_ID,
-      Name: 'Test Embedding Model 1',
-      Vendor: 'OpenAI',
-      AIModelTypeID: EMBEDDINGS_MODEL_TYPE_ID,
-      AIModelType: 'Embeddings',
-      DriverClass: DRIVER_1,
-      APIName: 'text-embed-1',
-      IsActive: true,
-      PowerRank: 50,
-      ModelVendors: [mv1],
-    });
-
-    const m2 = makeModel({
-      ID: MODEL_2_ID,
-      Name: 'Test Embedding Model 2',
-      Vendor: 'Cohere',
-      AIModelTypeID: EMBEDDINGS_MODEL_TYPE_ID,
-      AIModelType: 'Embeddings',
-      DriverClass: DRIVER_2,
-      APIName: 'text-embed-2',
-      IsActive: true,
-      PowerRank: 40,
-      ModelVendors: [mv2],
-    });
-
-    h.state.models = [m1, m2];
-    h.state.modelVendors = [mv1, mv2];
-
-    h.state.prompts = [
-      {
-        ID: PROMPT_ID,
-        Name: 'Standard Embedding Prompt',
-        Status: 'Active',
-        Type: 'Embedding',
-        AIModelTypeID: EMBEDDINGS_MODEL_TYPE_ID,
-        SelectionStrategy: 'Specific',
-        FailoverStrategy: 'NextInList',
-        RequireSpecificModels: false,
-        MaxFailoverAttempts: 3,
-        PromptModels: [],
-      },
-    ];
-
-    h.state.promptModels = [
-      makePromptModel({
-        ID: 'pm-001',
-        PromptID: PROMPT_ID,
-        ModelID: MODEL_1_ID,
-        Priority: 10,
-        Status: 'Active',
-        ConfigurationID: null,
-      }),
-      makePromptModel({
-        ID: 'pm-002',
-        PromptID: PROMPT_ID,
-        ModelID: MODEL_2_ID,
-        Priority: 5,
-        Status: 'Active',
-        ConfigurationID: null,
-      }),
-    ];
-
+    h.state.runs = [];
+    for (const key of [DRIVER_1, DRIVER_1B, DRIVER_2, DRIVER_LOCAL]) {
+      scripts.set(key, { ConstructedWith: [], Calls: [] });
+    }
+    loadCatalog();
     runner = new AIEmbeddingRunner();
-    runner.Provider = fakeProvider as never;
   });
 
   it('happy path with vectors, tokens, cost, and an MJ: AI Prompt Runs record', async () => {
@@ -367,13 +363,15 @@ describe('AIEmbeddingRunner', () => {
 
     await runner.WaitForPendingPromptRunSaves();
 
-    expect(lastPromptRun).not.toBeNull();
-    expect(lastPromptRun?.Success).toBe(true);
-    expect(lastPromptRun?.Status).toBe('Completed');
-    expect(lastPromptRun?.TokensUsed).toBe(20);
-    expect(lastPromptRun?.Cost).toBe(0.0002);
-    expect(lastPromptRun?.saveCount).toBeGreaterThanOrEqual(2);
-    const parsedResult = JSON.parse(lastPromptRun?.Result ?? '{}');
+    const run = lastRun();
+    expect(run?.ID).toBe(result.PromptRunID);
+    expect(run?.PromptID).toBe(PROMPT_ID);
+    expect(run?.Success).toBe(true);
+    expect(run?.Status).toBe('Completed');
+    expect(run?.TokensUsed).toBe(20);
+    expect(run?.Cost).toBe(0.0002);
+    expect(run?.SaveCount).toBeGreaterThanOrEqual(2);
+    const parsedResult = JSON.parse(run?.Result ?? '{}');
     expect(parsedResult.vectorCount).toBe(2);
     expect(parsedResult.dimensions).toBe(3);
   });
@@ -388,11 +386,12 @@ describe('AIEmbeddingRunner', () => {
     expect(result.Success).toBe(true);
     expect(result.ModelID).toBe(MODEL_2_ID);
     expect(result.ModelName).toBe('Test Embedding Model 2');
-    expect(driver2.lastParams?.model).toBe('text-embed-2');
+    expect(scriptFor(DRIVER_2).Calls[0]?.model).toBe('text-embed-2');
+    expect(scriptFor(DRIVER_1).Calls).toHaveLength(0);
   });
 
-  it('failover to a second candidate after a Retriable failure, naming the second model', async () => {
-    driver1.embedTextsOverride = vi.fn().mockRejectedValue(new Error('Rate limit exceeded (429)'));
+  it('under NextBestModel, fails over to the second model after a Retriable failure, naming the second model', async () => {
+    scriptFor(DRIVER_1).Answer = () => Promise.reject(new Error('503 Service Unavailable'));
 
     const result = await runner.RunEmbedding({
       Texts: ['failover test text'],
@@ -404,11 +403,12 @@ describe('AIEmbeddingRunner', () => {
     expect(result.ModelID).toBe(MODEL_2_ID);
     expect(result.ModelName).toBe('Test Embedding Model 2');
     expect(result.Vectors).toHaveLength(1);
-    expect(driver1.embedTextsOverride).toHaveBeenCalled();
+    expect(scriptFor(DRIVER_1).Calls).toHaveLength(1);
   });
 
   it('no candidate with credentials gives a clear Success: false', async () => {
     h.state.configuredDrivers.clear();
+    removeLocalModel();
 
     const result = await runner.RunEmbedding({
       Texts: ['test without credentials'],
@@ -422,12 +422,9 @@ describe('AIEmbeddingRunner', () => {
   });
 
   it('an exception after the row is created finalizes the row as failed', async () => {
-    driver1.embedTextsOverride = vi.fn().mockImplementation(() => {
-      throw new Error('Fatal unrecoverable network crash');
-    });
-    driver2.embedTextsOverride = vi.fn().mockImplementation(() => {
-      throw new Error('Fatal unrecoverable network crash on secondary');
-    });
+    removeLocalModel();
+    scriptFor(DRIVER_1).Answer = () => { throw new Error('Fatal unrecoverable network crash'); };
+    scriptFor(DRIVER_2).Answer = () => { throw new Error('Fatal unrecoverable network crash on secondary'); };
 
     const result = await runner.RunEmbedding({
       Texts: ['crash text'],
@@ -441,10 +438,10 @@ describe('AIEmbeddingRunner', () => {
 
     await runner.WaitForPendingPromptRunSaves();
 
-    expect(lastPromptRun).not.toBeNull();
-    expect(lastPromptRun?.Success).toBe(false);
-    expect(lastPromptRun?.Status).toBe('Failed');
-    expect(lastPromptRun?.ErrorMessage).toContain('Fatal unrecoverable network crash');
+    const run = lastRun();
+    expect(run?.Success).toBe(false);
+    expect(run?.Status).toBe('Failed');
+    expect(run?.ErrorMessage).toContain('Fatal unrecoverable network crash');
   });
 
   it('Dimensions are forwarded to the driver', async () => {
@@ -456,13 +453,48 @@ describe('AIEmbeddingRunner', () => {
     });
 
     expect(result.Success).toBe(true);
-    expect(driver1.lastParams?.dimensions).toBe(512);
+    expect(scriptFor(DRIVER_1).Calls[0]?.dimensions).toBe(512);
     expect(result.Vectors[0]).toHaveLength(512);
+  });
+
+  describe('keyless drivers', () => {
+    it('a pinned call to a model whose driver needs no key succeeds with no key configured', async () => {
+      h.state.configuredDrivers.clear();
+
+      const result = await runner.RunEmbedding({
+        Texts: ['keyless local text'],
+        ContextUser: mockUser,
+        ModelID: LOCAL_MODEL_ID,
+      });
+
+      expect(result.Success).toBe(true);
+      expect(result.ErrorMessage).toBeNull();
+      expect(result.ModelID).toBe(LOCAL_MODEL_ID);
+      expect(result.Vectors).toHaveLength(1);
+      const local = scriptFor(DRIVER_LOCAL);
+      expect(local.Calls).toHaveLength(1);
+      expect(local.Calls[0]?.model).toBe('Xenova/all-MiniLM-L6-v2');
+      // The driver the call ran on got no key: there was none to give it.
+      expect(local.ConstructedWith[local.ConstructedWith.length - 1]).toBe('');
+    });
+
+    it('a keyless vendor does not make a cloud driver that needs a key count as credentialed', async () => {
+      h.state.configuredDrivers.clear();
+
+      const result = await runner.RunEmbedding({
+        Texts: ['cloud text'],
+        ContextUser: mockUser,
+        ModelID: MODEL_1_ID,
+      });
+
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toContain('No Embeddings model has credentials available');
+      expect(scriptFor(DRIVER_1).Calls).toHaveLength(0);
+    });
   });
 
   it('AIModelRunner delegation works transparently', async () => {
     const legacyRunner = new AIModelRunner();
-    legacyRunner.Provider = fakeProvider as never;
 
     const result = await legacyRunner.RunEmbedding({
       Texts: ['delegation test'],
@@ -473,6 +505,6 @@ describe('AIEmbeddingRunner', () => {
     expect(result.Success).toBe(true);
     expect(result.Vectors).toHaveLength(1);
     await legacyRunner.WaitForPendingPromptRunSaves();
-    expect(lastPromptRun?.Status).toBe('Completed');
+    expect(lastRun()?.Status).toBe('Completed');
   });
 });
