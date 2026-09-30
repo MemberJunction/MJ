@@ -1,8 +1,10 @@
 # Rubrics — a first-class MemberJunction primitive
 
 > **Status:** design agreed, schema authored, implementation not started.
-> **Schema:** `migrations/v6/V202609302204__v6.2.x__Rubrics.sql` (+ `…2205…`, `…2206…`) — hand-written
-> DDL is committed; the CodeGen sections are appended by the implementing agent (§9, task R0).
+> **Schema:** `migrations/v6/V202609302204__v6.2.x__Rubrics.sql` and `…2206…`. Hand-written DDL is
+> the tables and the consensus wrapper views. Layered-base-view flags are metadata
+> (`metadata/entities/.layered-base-views.json`), not a migration. CodeGen tails are appended
+> by the implementing agent (§9, task R0).
 > **Scope of this plan:** the core primitive, the testing framework integration, and the agent
 > integration. All three ship from this plan.
 >
@@ -482,43 +484,45 @@ public base views `vwRubricEvaluations` / `vwRubricEvaluationScores`, which do `
 consensus columns. (Mechanism: `packages/CodeGenLib/CLAUDE.md` § "Base views: generated, custom,
 or LAYERED".)
 
-### 9.1 Why it takes three migrations
+### 9.1 Two migrations, flags in metadata
 
-The ordering is forced; each file exists because of one constraint:
+Entity rows are not updated from a migration. `BaseViewGenerated` and `GeneratedBaseViewName`
+are set in `metadata/entities/.layered-base-views.json` and applied with `mj sync push`, the
+same way `MJ: Version Installations` and `MJ: User View Run Details` are adopted. A build
+branch does not ship an `UPDATE Entity` script. The release build is what turns metadata
+into a migration.
 
-| File | Hand-written section | CodeGen section (appended) | Why it cannot merge with the previous one |
+| File | Hand-written section | CodeGen section (appended) | Why it is its own file |
 |---|---|---|---|
-| `V202609302204__v6.2.x__Rubrics.sql` | all tables, constraints, triggers, descriptions | **Pass 1** — registers every new entity (Entity/EntityField rows, generated views, CRUD procs, FK indexes, permissions) | — |
-| `V202609302205__v6.2.x__Rubrics_Layered_Base_View_Flags.sql` | `UPDATE Entity SET BaseViewGenerated = 0, GeneratedBaseViewName = …` for the two entities, keyed by name | **Pass 2** — generates the two **inner** views and repoints CRUD at them | The flags live on Entity rows that only exist after pass 1's capture runs; an UPDATE in file 1's hand section would run first and match nothing. |
-| `V202609302206__v6.2.x__Rubrics_Consensus_Views.sql` | `CREATE OR ALTER VIEW` for the two wrapper views | **Pass 3** — discovers the wrapper columns as virtual EntityFields and regenerates CRUD so it returns them | A view cannot be created before the view it selects from, and the inner views only exist after pass 2's capture. |
+| `V202609302204__v6.2.x__Rubrics.sql` | tables, constraints, triggers, descriptions | entity registration, then the two **inner** views (`vwRubricEvaluationsGenerated`, `vwRubricEvaluationScoresGenerated`) captured after the metadata push | — |
+| `V202609302206__v6.2.x__Rubrics_Consensus_Views.sql` | `CREATE OR ALTER VIEW` for the two public wrappers | virtual EntityFields for the wrapper columns, and CRUD that returns them | A view cannot be created before the view it selects from, and hand-written SQL cannot live below a CodeGen section that is replaced wholesale. |
 
-The flags **also** go in `metadata/entities/.layered-base-views.json` (two entries, like the pilot's)
-so a metadata push can never flip them back — but they must ship in a migration because an install
-runs migrations and nothing else: the first CodeGen on a fresh environment would otherwise see
-`BaseViewGenerated = 1` and overwrite the public view with a plain generated one.
+`BaseViewGenerated` is set to false in the same metadata record as `GeneratedBaseViewName`.
+New entities are created with `BaseViewGenerated = 1`, and the column check rejects an inner
+name while CodeGen still owns the public view.
 
 ### 9.2 Procedure (task R0) — on a private database at the last released version
 
 ```bash
-# Private DB only: one database per agent (migrations/CLAUDE.md). Use the bootstrap-clean-db skill.
-mj migrate                                   # applies 2204's hand DDL (no capture yet)
-mj codegen --skipfiles                       # PASS 1 — DB side only
-node <append> migrations/v6/V202609302204…   # fold CodeGen_Run_*.sql below 50 blank lines + banner
-mj migrate                                   # applies 2205's flag UPDATEs
-# PASS 2 — force base-view regeneration for exactly these two entities, or the capture OMITS the
-# inner views (flipping flags is not an entity "modification" to CodeGen, but it still CREATEs the
-# views in the DB). In mj.config.cjs, temporarily:
-#   codeGeneration.forceRegeneration = { enabled: true, baseViews: true,
+# Private DB only: one database per agent (migrations/CLAUDE.md).
+# Park 2206 outside migrations/ until the inner views exist, or migrate stops on it.
+mj migrate                                   # 2204 hand DDL. Entities do not exist yet.
+mj codegen --skipfiles --no-ai               # PASS 1 — creates Entity rows. Keep this SQL.
+mj sync push --dir=metadata --include=entities --ci
+# PASS 2 — flipping the flags is not an entity modification, so a plain run CREATEs the
+# inner views in the database but OMITS them from the SQL log. Temporarily, in mj.config.cjs:
+#   forceRegeneration: { enabled: true, baseViews: true,
 #     entityWhereClause: "Name IN ('MJ: Rubric Evaluations','MJ: Rubric Evaluation Scores')" }
-mj codegen --skipfiles
-#   → append to 2205; VERIFY BY NAME that vwRubricEvaluationsGenerated and
-#     vwRubricEvaluationScoresGenerated are both in the appended section. Revert mj.config.cjs.
-mj migrate                                   # applies 2206's wrapper views
-mj codegen --skipfiles                       # PASS 3 — registers the wrapper columns
-#   → append to 2206
-mj sync push --dir=metadata --include="entities" --ci   # JSONTypes, layered flags, CascadeDeletes
-mj codegen --skipdb                          # files: entity classes, resolvers, forms (+ JSONType accessors)
-# revert the sync write-back (lastModified/checksum) in metadata/**/*.json before committing
+mj codegen --skipfiles --no-ai
+#   → confirm vwRubricEvaluationsGenerated and vwRubricEvaluationScoresGenerated are both
+#     in this capture. Revert mj.config.cjs.
+# Append pass 1, then pass 2, to 2204: 50 blank lines, banner, then the SQL. Delete the
+# standalone CodeGen_Run_*.sql files.
+mj migrate                                   # 2206 wrapper views
+mj codegen --skipfiles --no-ai               # PASS 3 — virtual fields on the wrappers
+#   → append to 2206 the same way. The capture must not DROP or CREATE the public views.
+mj codegen --skipdb --no-ai                  # entity classes, resolvers, forms
+# revert sync write-back (lastModified/checksum) before committing
 ```
 
 Checks before committing:
@@ -526,7 +530,7 @@ Checks before committing:
 - `npm run check:codegen-tail` — every new table has its generated entity.
 - In pass 3's capture, confirm **no DDL targets `vwRubricEvaluations` / `vwRubricEvaluationScores`**
   (CodeGen must only refresh/grant them, guarded by existence) — the pilot's banner explains why.
-- **From zero:** build a clean database with `bootstrap-clean-db` and run all three migrations; the
+- **From zero:** build a clean database with `bootstrap-clean-db` and run both migrations; the
   wrapper views must compile and every virtual field must exist. This is the only check that catches
   a capture that was complete on your dev database and incomplete on a fresh one.
 
@@ -786,8 +790,9 @@ by their evaluator and by roles the consumer grants.
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (say why in §16).
 
 **R — core**
-- [ ] **R0** Run the §9.2 procedure: three CodeGen passes, captures appended, codegen tail committed,
-      from-zero build green. Add `packages/Rubrics/*` to workspace globs.
+- [ ] **R0** Run the §9.2 procedure: CodeGen captures appended to 2204 and 2206, generated
+      entities committed, from-zero build green. Add `packages/Rubrics/*` to workspace globs.
+      Layered flags stay in `metadata/entities/.layered-base-views.json` — no Entity UPDATE migration.
 - [ ] **R1** Metadata: JSONType interfaces + bridge records (§4.1); layered flags + `CascadeDeletes`
       in `metadata/entities`; `IsHierarchy` config on `RubricCriterion.ParentID` and
       `RubricCategory.ParentID` (see `guides/RECURSIVE_FOREIGN_KEYS_AND_HIERARCHIES_GUIDE.md`);
@@ -845,12 +850,22 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 
 ## 16. Progress log
 
+- **2026-09-30** — CodeGen tail captured. Pass 1 registers the entities. Pass 2, after
+  `mj sync push` of `.layered-base-views.json`, appends the inner views to `V202609302204`.
+  Pass 3 appends the wrapper virtual fields to `V202609302206`. Generated entity classes,
+  GraphQL schema, and forms are committed. A fresh database (`MJ_6_2_CLEAN_pr4937_verify`)
+  applied both migrations, 104 scripts, with no error. `check:codegen-tail` and
+  `check-migration-entityfield-sequence` passed. R0 is not done: `packages/Rubrics/*` is
+  not in the workspace globs, and the package build is not started.
+- **2026-09-30** — Removed `V202609302205` (the `UPDATE Entity` that set layered-base-view flags).
+  Those flags now live only in `metadata/entities/.layered-base-views.json`, applied with
+  `mj sync push`. `V202609302206` stays: the consensus wrappers are schema DDL, and they have
+  to run after 2204's CodeGen section creates the inner views.
 - **2026-09-30** — `TestRubric` deprecation moved out of the migration into
   `metadata/entities/.test-rubrics-deprecation.json` (entity `Status = Deprecated` + description).
-- **2026-09-30** — Design agreed. Hand-written DDL for all three migrations committed (tables,
-  constraints, immutability triggers, descriptions, flag UPDATEs, wrapper views). CodeGen captures,
-  code, metadata and UI not started. The `Check migrations` job will report the missing codegen
-  tail until R0 is done — expected.
+- **2026-09-30** — Design agreed. Hand-written DDL committed (tables, constraints, immutability
+  triggers, descriptions, wrapper views). CodeGen captures, code, and UI not started. The
+  `Check migrations` job reports the missing codegen tail until R0 is done.
 
 ---
 

@@ -10,22 +10,13 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Test Definition Section -->
+    <!-- Details Section -->
     <mj-collapsible-panel
-        SectionKey="testDefinition"
-        SectionName="Test Definition"
-        Icon="fa fa-file-alt"
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
         [Form]="this"
         [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="TypeID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -45,140 +36,51 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
+            FieldName="ScaleType"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="MinValue"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="MaxValue"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Step"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="HigherIsBetter"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="Status"
             Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Test Logic Section -->
-    <mj-collapsible-panel
-        SectionKey="testLogic"
-        SectionName="Test Logic"
-        Icon="fa fa-code"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="InputDefinition"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ExpectedOutcomes"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Configuration"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Variables"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Execution Settings Section -->
-    <mj-collapsible-panel
-        SectionKey="executionSettings"
-        SectionName="Execution Settings"
-        Icon="fa fa-sliders-h"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Tags"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Priority"
-            Type="number"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="EstimatedDurationSeconds"
-            Type="number"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="EstimatedCostUSD"
-            Type="number"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="RepeatCount"
-            Type="number"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="MaxExecutionTimeMS"
-            Type="number"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Details Section -->
-    <mj-collapsible-panel
-        SectionKey="details"
-        SectionName="Details"
-        Icon="fa fa-align-left"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="false"
-            FieldName="RubricID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- System Metadata Section -->
-    <mj-collapsible-panel
-        SectionKey="systemMetadata"
-        SectionName="System Metadata"
-        Icon="fa fa-cog"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -204,50 +106,50 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Test Runs Section -->
+    <!-- Rubric Scale Levels Section -->
     <mj-collapsible-panel
-        SectionKey="mJTestRuns"
-        SectionName="Test Runs"
-        Icon="fa fa-flask"
+        SectionKey="mJRubricScaleLevels"
+        SectionName="Rubric Scale Levels"
+        Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJTestRuns')"
+        [BadgeCount]="GetSectionRowCount('mJRubricScaleLevels')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Test Runs','TestID')"
-                [NewRecordValues]="NewRecordValues('MJ: Test Runs','TestID')"
-                [AllowLoad]="IsSectionExpanded('mJTestRuns')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Rubric Scale Levels','ScaleID')"
+                [NewRecordValues]="NewRecordValues('MJ: Rubric Scale Levels','ScaleID')"
+                [AllowLoad]="IsSectionExpanded('mJRubricScaleLevels')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJTestRuns', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJRubricScaleLevels', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- Test Suite Tests Section -->
+    <!-- Rubric Criterions Section -->
     <mj-collapsible-panel
-        SectionKey="mJTestSuiteTests"
-        SectionName="Test Suite Tests"
+        SectionKey="mJRubricCriterions"
+        SectionName="Rubric Criterions"
         Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJTestSuiteTests')"
+        [BadgeCount]="GetSectionRowCount('mJRubricCriterions')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Test Suite Tests','TestID')"
-                [NewRecordValues]="NewRecordValues('MJ: Test Suite Tests','TestID')"
-                [AllowLoad]="IsSectionExpanded('mJTestSuiteTests')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Rubric Criterions','ScaleID')"
+                [NewRecordValues]="NewRecordValues('MJ: Rubric Criterions','ScaleID')"
+                [AllowLoad]="IsSectionExpanded('mJRubricCriterions')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJTestSuiteTests', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJRubricCriterions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
