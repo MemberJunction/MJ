@@ -8,73 +8,108 @@
  * anything else keeps continuity; a tagged message or a form response makes no call; and a
  * confident artifact answer reaches the agent's run as its payload source.
  *
- * Instantiated via the prototype (no constructor/TestBed) with only the members these paths
- * touch stubbed, the same style as agent-turn-host-rules.test.ts.
+ * The component is built by Angular's own injector, with typed doubles for the services these
+ * paths use. Agents, conversation rows and agent runs are real entity objects on a minimal
+ * entity definition. Nothing is cast.
  */
 import '@angular/compiler'; // JIT support — the component import evaluates Angular decorators in vitest's node env
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
-import { EventEmitter } from '@angular/core';
+import { Injector } from '@angular/core';
 import type { ChoiceAnswer, DecisionAnswer, LikelihoodAnswer } from '@memberjunction/ai';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { ConversationUtility, DECISION_ROUTING_TIMEOUT_MS, type MJAIAgentEntityExtended, type RoutingAgent } from '@memberjunction/ai-core-plus';
+import {
+    ConversationUtility,
+    DECISION_ROUTING_TIMEOUT_MS,
+    MJAIAgentEntityExtended,
+    MJAIAgentRunEntityExtended,
+    type ExecuteAgentResult,
+    type RoutingAgent
+} from '@memberjunction/ai-core-plus';
+import { EntityInfo, UserInfo } from '@memberjunction/core';
+import { MJAIAgentRunSchema, MJAIAgentSchema, MJConversationDetailEntity, MJConversationDetailSchema } from '@memberjunction/core-entities';
 import type { RunDecisionParams, RunDecisionResult } from '@memberjunction/graphql-dataprovider';
-import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 import { MessageInputComponent } from '../lib/components/message/message-input.component';
 import type { BeforeAgentTurnEventArgs } from '../lib/events/chat-events';
+import type { AgentTurnHandler } from '../lib/models/agent-turn.model';
+import { ActiveTasksService } from '../lib/services/active-tasks.service';
+import { ConversationAgentService } from '../lib/services/conversation-agent.service';
+import { ConversationAttachmentService } from '../lib/services/conversation-attachment.service';
+import { ConversationBridgeService } from '../lib/services/conversation-bridge.service';
+import { ConversationStreamingService } from '../lib/services/conversation-streaming.service';
+import { DataCacheService } from '../lib/services/data-cache.service';
+import { DialogService } from '../lib/services/dialog.service';
+import { MentionParserService } from '../lib/services/mention-parser.service';
+import { RealtimeSessionService } from '../lib/services/realtime-session.service';
+import { ToastService } from '../lib/services/toast.service';
 import { PlanModePreference } from '../lib/utils/plan-mode-preference';
-import type { AgentArtifactSummary } from '../lib/utils/agent-artifact-summary';
-import type { AgentPayloadSource } from '../lib/services/conversation-agent.service';
 import type { MentionParseResult } from '../lib/models/conversation-state.model';
 
-const MANAGER = { ID: 'AAAAAAAA-0000-0000-0000-000000000001', Name: 'Sage', Description: 'Routes each request.' } satisfies RoutingAgent;
-const RESEARCH = { ID: 'AAAAAAAA-0000-0000-0000-000000000002', Name: 'Research', Description: 'Finds sources.' } satisfies RoutingAgent;
-const WRITER = { ID: 'AAAAAAAA-0000-0000-0000-000000000003', Name: 'Writer', Description: 'Drafts documents.' } satisfies RoutingAgent;
-const AGENTS = [MANAGER, RESEARCH, WRITER];
+/**
+ * A minimal entity definition with the named fields, so the fixtures below are real entity objects:
+ * the ID is the primary key, and every other field can be set and reads back what was set.
+ */
+function entityInfo(name: string, fieldNames: readonly string[]): EntityInfo {
+    const entityId = `entity-${name}`;
+    return new EntityInfo({
+        ID: entityId, Name: name, SchemaName: '__mj', BaseTable: name, BaseView: `vw${name}`,
+        Fields: fieldNames.map((field, index) => ({
+            ID: `${entityId}-${field}`, EntityID: entityId, Sequence: index + 1, Name: field, Entity: name,
+            Type: field === 'ID' ? 'uniqueidentifier' : 'nvarchar', IsPrimaryKey: field === 'ID', AllowUpdateAPI: true,
+        })),
+    });
+}
+
+const AGENT_ENTITY = entityInfo('MJ: AI Agents', Object.keys(MJAIAgentSchema.shape));
+const AGENT_RUN_ENTITY = entityInfo('MJ: AI Agent Runs', Object.keys(MJAIAgentRunSchema.shape));
+const DETAIL_ENTITY = entityInfo('MJ: Conversation Details', Object.keys(MJConversationDetailSchema.shape));
+
+/** The agent fields routing reads. */
+type AgentFields = Pick<MJAIAgentEntityExtended, 'ID' | 'Name' | 'Description' | 'Status' | 'IsRestricted'>;
+
+function agent(fields: AgentFields): MJAIAgentEntityExtended {
+    const row = new MJAIAgentEntityExtended(AGENT_ENTITY);
+    row.Hydrate(fields);
+    return row;
+}
+
+const MANAGER = agent({ ID: 'AAAAAAAA-0000-0000-0000-000000000001', Name: 'Sage', Description: 'Routes each request.', Status: 'Active', IsRestricted: false });
+const RESEARCH = agent({ ID: 'AAAAAAAA-0000-0000-0000-000000000002', Name: 'Research', Description: 'Finds sources.', Status: 'Active', IsRestricted: false });
+const WRITER = agent({ ID: 'AAAAAAAA-0000-0000-0000-000000000003', Name: 'Writer', Description: 'Drafts documents.', Status: 'Active', IsRestricted: false });
+/** Answered earlier in the conversation, and has since been disabled. */
+const RETIRED = agent({ ID: 'AAAAAAAA-0000-0000-0000-000000000004', Name: 'Archivist', Description: 'Files old drafts.', Status: 'Disabled', IsRestricted: false });
+/** Active, but restricted to system use. */
+const INTERNAL = agent({ ID: 'AAAAAAAA-0000-0000-0000-000000000005', Name: 'Scheduler', Description: 'Runs scheduled jobs.', Status: 'Active', IsRestricted: true });
+const AGENTS = [MANAGER, RESEARCH, WRITER, RETIRED, INTERNAL];
 
 const VERSION = 'BBBBBBBB-0000-0000-0000-000000000001';
+const PROMPT_RUN = 'EEEEEEEE-0000-0000-0000-000000000001';
+const CREATED_AT = new Date('2026-09-01T10:00:00.000Z');
 
-type Fn = ReturnType<typeof vi.fn>;
-type RunDecisionMock = Mock<(params: RunDecisionParams) => Promise<RunDecisionResult>>;
-type FindArtifactsMock = Mock<(conversationId: string, agentId: string, historyFrom?: Date | null) => Promise<AgentArtifactSummary[]>>;
-type FindVersionMock = Mock<(versionId: string) => Promise<AgentPayloadSource | null>>;
-
-/** A conversation detail row stand-in that counts its saves. */
-class FakeDetail {
-    public ID: string;
-    public ConversationID = 'conv-1';
-    public Role: 'AI' | 'Error' | 'User';
-    public Message = '';
-    public Status: 'Complete' | 'Error' | 'In-Progress' = 'Complete';
-    public AgentID: string | null = null;
-    public ParentID: string | null = null;
-    public HiddenToUser = false;
-    public Error: string | null = null;
-    public ResponseForm: string | null = null;
-    public ActionableCommands: string | null = null;
-    public AutomaticCommands: string | null = null;
-    public __mj_CreatedAt = new Date('2026-09-01T10:00:00.000Z');
-    public LatestResult = null;
-    public Saves = 0;
-
-    constructor(id: string, role: 'AI' | 'Error' | 'User', message = '') {
-        this.ID = id;
-        this.Role = role;
-        this.Message = message;
-    }
-
-    public async Save(): Promise<boolean> {
-        this.Saves++;
+/** A conversation row that saves and loads without a database. */
+class TestDetail extends MJConversationDetailEntity {
+    public override async Save(): Promise<boolean> {
         return true;
     }
 
-    public async Load(): Promise<boolean> {
+    public override async Load(): Promise<boolean> {
         return true;
     }
 }
 
-function chatResult(runId: string) {
-    return { success: true, agentRun: { ID: runId, AgentID: null, FinalStep: 'Chat', Message: 'done' }, payload: {} };
+function detail(id: string, role: MJConversationDetailEntity['Role'], message = '', agentId: string | null = null): TestDetail {
+    const row = new TestDetail(DETAIL_ENTITY);
+    row.Hydrate({
+        ID: id, ConversationID: 'conv-1', Role: role, Message: message, Status: 'Complete', AgentID: agentId,
+        ParentID: null, HiddenToUser: false, __mj_CreatedAt: CREATED_AT,
+    });
+    return row;
+}
+
+function chatResult(runId: string): ExecuteAgentResult<Record<string, unknown>> {
+    const agentRun = new MJAIAgentRunEntityExtended(AGENT_RUN_ENTITY);
+    agentRun.Hydrate({ ID: runId, AgentID: null, FinalStep: 'Chat', Message: 'done' });
+    return { success: true, agentRun, payload: {} };
 }
 
 function mentionsOf(...agents: RoutingAgent[]): MentionParseResult {
@@ -97,120 +132,129 @@ function answered(answers: Record<string, DecisionAnswer>): RunDecisionResult {
     return { Success: true, Answers: answers, ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.13-20260917' };
 }
 
+/** The part of each service the routing paths call. */
+type AgentServiceDouble = Pick<ConversationAgentService,
+    'RunDecision' | 'FindAgentArtifacts' | 'FindArtifactVersionById' | 'ProcessMessage' | 'invokeSubAgent'
+    | 'FindConfigurationPresetForAgent' | 'FindLatestAgentOutputVersion'>;
+type DataCacheDouble = Pick<DataCacheService, 'createConversationDetail' | 'getConversationDetail'>;
+type ActiveTasksDouble = Pick<ActiveTasksService, 'add' | 'remove' | 'getByConversationDetailId' | 'updateStatusByConversationDetailId'>;
+type StreamingDouble = Pick<ConversationStreamingService, 'registerMessageCallback' | 'unregisterMessageCallback'>;
+
+interface ServiceDoubles {
+    agentService: AgentServiceDouble;
+    dataCache: DataCacheDouble;
+    activeTasks: ActiveTasksDouble;
+    streaming: StreamingDouble;
+}
+
+/** The component's constructor parameters, in order. */
+const COMPONENT_DEPS = [
+    DialogService, ToastService, ConversationAgentService, DataCacheService, ActiveTasksService,
+    ConversationStreamingService, MentionParserService, ConversationAttachmentService, ConversationBridgeService,
+    RealtimeSessionService,
+];
+
+/** Builds the component through Angular's injector, with the doubles in place of the services. */
+function buildComponent(doubles: ServiceDoubles): MessageInputComponent {
+    const injector = Injector.create({
+        providers: [
+            { provide: ConversationAgentService, useValue: doubles.agentService },
+            { provide: DataCacheService, useValue: doubles.dataCache },
+            { provide: ActiveTasksService, useValue: doubles.activeTasks },
+            { provide: ConversationStreamingService, useValue: doubles.streaming },
+            // The routing paths never reach these.
+            ...[DialogService, ToastService, MentionParserService, ConversationAttachmentService, ConversationBridgeService, RealtimeSessionService]
+                .map(token => ({ provide: token, useValue: {} })),
+            { provide: MessageInputComponent, deps: COMPONENT_DEPS },
+        ],
+    });
+    return injector.get(MessageInputComponent);
+}
+
 interface Harness {
     component: MessageInputComponent;
     before: BeforeAgentTurnEventArgs[];
-    runDecision: RunDecisionMock;
-    findArtifacts: FindArtifactsMock;
-    findVersion: FindVersionMock;
-    processMessage: Fn;
-    invokeSubAgent: Fn;
-    set(fields: Record<string, unknown>): void;
-    route(message: FakeDetail, mentions?: MentionParseResult): Promise<void>;
+    runDecision: Mock<ConversationAgentService['RunDecision']>;
+    findArtifacts: Mock<ConversationAgentService['FindAgentArtifacts']>;
+    findVersion: Mock<ConversationAgentService['FindArtifactVersionById']>;
+    processMessage: Mock<ConversationAgentService['ProcessMessage']>;
+    invokeSubAgent: Mock<ConversationAgentService['invokeSubAgent']>;
+    set(values: Partial<MessageInputComponent>): void;
+    route(message: MJConversationDetailEntity, mentions?: MentionParseResult): Promise<void>;
 }
 
 function buildHarness(): Harness {
-    const before: BeforeAgentTurnEventArgs[] = [];
-    const beforeEmitter = new EventEmitter<BeforeAgentTurnEventArgs>();
-    beforeEmitter.subscribe(e => before.push(e));
-    const sentEmitter = new EventEmitter<FakeDetail>();
-    const afterEmitter = new EventEmitter();
     let nextId = 0;
-
-    const runDecision: RunDecisionMock = vi.fn(async () => answered({}));
-    const findArtifacts: FindArtifactsMock = vi.fn(async () => []);
-    const findVersion: FindVersionMock = vi.fn(async (versionId: string) => ({
+    const runDecision = vi.fn<ConversationAgentService['RunDecision']>(async () => answered({}));
+    const findArtifacts = vi.fn<ConversationAgentService['FindAgentArtifacts']>(async () => []);
+    const findVersion = vi.fn<ConversationAgentService['FindArtifactVersionById']>(async versionId => ({
         artifactId: 'artifact-1', versionId, versionNumber: 1, payload: { title: 'Press kit' },
     }));
-    const processMessage = vi.fn(async () => chatResult('run-manager'));
-    const invokeSubAgent = vi.fn(async () => chatResult('run-agent'));
+    const processMessage = vi.fn<ConversationAgentService['ProcessMessage']>(async () => chatResult('run-manager'));
+    const invokeSubAgent = vi.fn<ConversationAgentService['invokeSubAgent']>(async () => chatResult('run-agent'));
 
-    const component = Object.create(MessageInputComponent.prototype) as MessageInputComponent;
-    const fields = component as unknown as Record<string, unknown>;
-    Object.assign(fields, {
-        ConversationId: 'conv-1',
-        ConversationName: 'Test',
-        CurrentUser: { ID: 'user-1' },
-        ApplicationId: null,
-        AppContext: null,
-        DefaultAgentId: null,
-        ConversationDefaultAgentId: null,
-        AgentConfigurationPresetId: null,
-        AgentReplyMode: 'Always',
-        AllowedAgentIDs: null,
-        MentionPeople: null,
-        AgentHistoryFrom: null,
-        AgentTurnHandler: null,
-        AutoNameConversation: false,
-        EnableDecisionRouting: false,
-        ConverationManagerAgent: MANAGER,
-        ConversationHistory: [],
-        _pendingRequestedSkillIDs: [],
-        completionTimestamps: new Map<string, number>(),
-        registeredCallbacks: new Map(),
-        inFlightWatches: new Map(),
-        BeforeAgentTurn: beforeEmitter,
-        beforeAgentTurn: beforeEmitter,
-        AfterAgentTurn: afterEmitter,
-        afterAgentTurn: afterEmitter,
-        MessageSent: sentEmitter,
-        messageSent: sentEmitter,
-        ArtifactCreated: new EventEmitter(),
-        MessageComplete: new EventEmitter(),
-        dataCache: {
-            createConversationDetail: vi.fn(async () => new FakeDetail(`row-${++nextId}`, 'AI')),
-            getConversationDetail: vi.fn(async () => null),
-        },
+    const component = buildComponent({
         agentService: {
             RunDecision: runDecision,
             FindAgentArtifacts: findArtifacts,
             FindArtifactVersionById: findVersion,
             ProcessMessage: processMessage,
             invokeSubAgent,
-            FindConfigurationPresetForAgent: vi.fn(async () => undefined),
-            FindLatestAgentOutputVersion: vi.fn(async () => null),
+            FindConfigurationPresetForAgent: vi.fn<ConversationAgentService['FindConfigurationPresetForAgent']>(async () => undefined),
+            FindLatestAgentOutputVersion: vi.fn<ConversationAgentService['FindLatestAgentOutputVersion']>(async () => null),
+        },
+        dataCache: {
+            createConversationDetail: vi.fn<DataCacheService['createConversationDetail']>(async () => detail(`row-${++nextId}`, 'AI')),
+            getConversationDetail: vi.fn<DataCacheService['getConversationDetail']>(async () => null),
         },
         activeTasks: {
-            add: vi.fn(() => 'task-1'),
-            remove: vi.fn(),
-            getByConversationDetailId: vi.fn(() => undefined),
-            updateStatusByConversationDetailId: vi.fn(),
+            add: vi.fn<ActiveTasksService['add']>(() => 'task-1'),
+            remove: vi.fn<ActiveTasksService['remove']>(),
+            getByConversationDetailId: vi.fn<ActiveTasksService['getByConversationDetailId']>(() => undefined),
+            updateStatusByConversationDetailId: vi.fn<ActiveTasksService['updateStatusByConversationDetailId']>(() => true),
         },
-        streamingService: { registerMessageCallback: vi.fn(), unregisterMessageCallback: vi.fn() },
+        streaming: {
+            registerMessageCallback: vi.fn<ConversationStreamingService['registerMessageCallback']>(),
+            unregisterMessageCallback: vi.fn<ConversationStreamingService['unregisterMessageCallback']>(),
+        },
+    });
+    Object.assign(component, {
+        ConversationId: 'conv-1',
+        ConversationName: 'Test',
+        CurrentUser: Object.assign(new UserInfo(), { ID: 'user-1' }),
+        ConverationManagerAgent: MANAGER,
     });
 
-    const routeMessage = (component as unknown as {
-        routeMessage(message: FakeDetail, mentions: MentionParseResult, isFirstMessage: boolean): Promise<void>;
-    }).routeMessage.bind(component);
+    const before: BeforeAgentTurnEventArgs[] = [];
+    component.BeforeAgentTurn.subscribe(e => before.push(e));
 
     return {
         component, before, runDecision, findArtifacts, findVersion, processMessage, invokeSubAgent,
-        set: values => Object.assign(fields, values),
-        route: (message, mentions = NO_MENTIONS) => routeMessage(message, mentions, false),
+        set: values => Object.assign(component, values),
+        // routeMessage is private; element access reaches it with its real signature.
+        route: (message, mentions = NO_MENTIONS) => component['routeMessage'](message, mentions, false),
     };
 }
 
-function userMessage(text = 'Now turn it into a press release'): FakeDetail {
-    return new FakeDetail('user-msg-1', 'User', text);
+function userMessage(text = 'Now turn it into a press release'): TestDetail {
+    return detail('user-msg-1', 'User', text);
 }
 
-function reply(agent: RoutingAgent, id: string, text: string): FakeDetail {
-    const row = new FakeDetail(id, 'AI', text);
-    row.AgentID = agent.ID;
-    return row;
+function reply(from: RoutingAgent, id: string, text: string): TestDetail {
+    return detail(id, 'AI', text, from.ID);
 }
 
 /** Research answered, then Writer: continuity is Writer. */
 const TWO_AGENTS = () => [
-    new FakeDetail('u1', 'User', 'Find sources'),
+    detail('u1', 'User', 'Find sources'),
     reply(RESEARCH, 'a1', 'Here are five sources.'),
-    new FakeDetail('u2', 'User', 'Draft a summary'),
+    detail('u2', 'User', 'Draft a summary'),
     reply(WRITER, 'a2', 'Summary drafted.'),
 ];
 
 /** A confident move away from Writer, to the given agent. */
-function leavesTo(agent: RoutingAgent, extra: Record<string, DecisionAnswer> = {}): RunDecisionResult {
-    return answered({ route: choice(agent.ID, 0.9), continues: likelihood(0.1), ...extra });
+function leavesTo(to: RoutingAgent, extra: Record<string, DecisionAnswer> = {}): RunDecisionResult {
+    return answered({ route: choice(to.ID, 0.9), continues: likelihood(0.1), ...extra });
 }
 
 function routeOptionValues(params: RunDecisionParams): string[] {
@@ -222,11 +266,9 @@ describe('MessageInputComponent — decision routing', () => {
     let h: Harness;
 
     beforeEach(() => {
-        vi.spyOn(AIEngineBase.Instance, 'Agents', 'get').mockReturnValue(AGENTS as unknown as MJAIAgentEntityExtended[]);
+        vi.spyOn(AIEngineBase.Instance, 'Agents', 'get').mockReturnValue(AGENTS);
         vi.spyOn(PlanModePreference, 'IsEnabled').mockReturnValue(false);
         vi.spyOn(PlanModePreference, 'ClaimPendingNew').mockImplementation(() => undefined);
-        vi.spyOn(MJNotificationService, 'Instance', 'get')
-            .mockReturnValue({ CreateSimpleNotification: vi.fn() } as unknown as MJNotificationService);
         vi.spyOn(console, 'log').mockImplementation(() => undefined);
         vi.spyOn(console, 'warn').mockImplementation(() => undefined);
         vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -236,13 +278,13 @@ describe('MessageInputComponent — decision routing', () => {
 
     afterEach(() => {
         vi.useRealTimers();
+        vi.unstubAllEnvs();
         vi.restoreAllMocks();
     });
 
     describe('off by default', () => {
         it('the input defaults to false', () => {
-            const construct = MessageInputComponent as unknown as new (...deps: unknown[]) => MessageInputComponent;
-            expect(new construct().EnableDecisionRouting).toBe(false);
+            expect(h.component.EnableDecisionRouting).toBe(false);
         });
 
         it('makes no call and routes to the last agent, exactly as before', async () => {
@@ -260,6 +302,17 @@ describe('MessageInputComponent — decision routing', () => {
 
     describe('on', () => {
         beforeEach(() => h.set({ EnableDecisionRouting: true }));
+
+        /**
+         * Composers are cached per conversation. Opening another conversation rebinds this hidden
+         * composer's history to [] and its pinned agent to null; the call does that, then answers.
+         */
+        function switchesAwayThenAnswers(result: RunDecisionResult): void {
+            h.runDecision.mockImplementation(async () => {
+                h.set({ ConversationHistory: [], ConversationDefaultAgentId: null });
+                return result;
+            });
+        }
 
         it('a confident Choice of another agent routes the turn to it, labelled DecisionRouted', async () => {
             h.runDecision.mockResolvedValue(leavesTo(RESEARCH));
@@ -283,6 +336,17 @@ describe('MessageInputComponent — decision routing', () => {
             expect(params.State).toContain('Now turn it into a press release');
         });
 
+        it('logs the verdict with the decision\'s prompt run, in verbose mode', async () => {
+            vi.stubEnv('MJ_VERBOSE', 'true');
+            const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+            h.runDecision.mockResolvedValue({ ...leavesTo(RESEARCH), PromptRunID: PROMPT_RUN });
+
+            await h.route(userMessage());
+
+            const lines = log.mock.calls.map(args => args.join(' '));
+            expect(lines).toContain(`Decision routing: Routed, routed to Research (prompt run ${PROMPT_RUN})`);
+        });
+
         it('choosing the conversation manager sends the turn down the manager path', async () => {
             h.runDecision.mockResolvedValue(leavesTo(MANAGER));
 
@@ -291,6 +355,26 @@ describe('MessageInputComponent — decision routing', () => {
             expect(h.before.map(e => [e.Route, e.AgentId])).toEqual([['ConversationManager', MANAGER.ID]]);
             expect(h.processMessage).toHaveBeenCalledOnce();
             expect(h.invokeSubAgent).not.toHaveBeenCalled();
+        });
+
+        it('never offers, or routes to, an agent that is no longer active or is restricted', async () => {
+            h.set({ ConversationHistory: [reply(RETIRED, 'r1', 'Filed the old draft.'), reply(INTERNAL, 'r2', 'Export scheduled.'), ...TWO_AGENTS()] });
+            h.runDecision.mockResolvedValue(leavesTo(RETIRED));
+
+            await h.route(userMessage());
+
+            expect(routeOptionValues(h.runDecision.mock.calls[0][0])).toEqual([WRITER.ID, RESEARCH.ID, MANAGER.ID]);
+            expect(h.before.map(e => [e.Route, e.AgentId])).toEqual([['Continuity', WRITER.ID]]);
+            expect(h.findArtifacts.mock.calls.map(([, agentId]) => agentId)).toEqual([WRITER.ID, RESEARCH.ID]);
+        });
+
+        it('makes no call when the last agent is no longer active, which keeps today\'s routing', async () => {
+            h.set({ ConversationHistory: [...TWO_AGENTS(), detail('u3', 'User', 'Tidy it'), reply(RETIRED, 'r1', 'Filed.')] });
+
+            await h.route(userMessage());
+
+            expect(h.runDecision).not.toHaveBeenCalled();
+            expect(h.before.map(e => [e.Route, e.AgentId])).toEqual([['Continuity', RETIRED.ID]]);
         });
 
         it('ignores a routed agent the chat does not allow, and never offers it', async () => {
@@ -316,6 +400,36 @@ describe('MessageInputComponent — decision routing', () => {
 
             expect(h.before.map(e => [e.Route, e.AgentId])).toEqual([['Continuity', WRITER.ID]]);
             expect(h.invokeSubAgent.mock.calls[0][0]).toBe('Writer');
+        });
+
+        it('a failure while loading the artifacts keeps continuity, and makes no call', async () => {
+            h.findArtifacts.mockRejectedValue(new Error('artifact query failed'));
+
+            await h.route(userMessage());
+
+            expect(h.runDecision).not.toHaveBeenCalled();
+            expect(h.before.map(e => [e.Route, e.AgentId])).toEqual([['Continuity', WRITER.ID]]);
+            expect(h.invokeSubAgent.mock.calls[0][0]).toBe('Writer');
+        });
+
+        describe('when the person opens another conversation during the call', () => {
+            it('a kept thread still goes to the last agent', async () => {
+                switchesAwayThenAnswers(answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.9) }));
+
+                await h.route(userMessage());
+
+                expect(h.before.map(e => [e.Route, e.AgentId])).toEqual([['Continuity', WRITER.ID]]);
+                expect(h.invokeSubAgent.mock.calls[0][0]).toBe('Writer');
+            });
+
+            it('someone else still goes to the conversation\'s pinned agent', async () => {
+                h.set({ ConversationDefaultAgentId: RESEARCH.ID });
+                switchesAwayThenAnswers(leavesTo(MANAGER));
+
+                await h.route(userMessage());
+
+                expect(h.before.map(e => [e.Route, e.AgentId])).toEqual([['ConversationDefault', RESEARCH.ID]]);
+            });
         });
 
         it('an answer slower than 250 ms keeps continuity', async () => {
@@ -413,6 +527,48 @@ describe('MessageInputComponent — decision routing', () => {
 
                 expect(h.findVersion).not.toHaveBeenCalled();
                 expect(h.invokeSubAgent.mock.calls[0][9]).toBeUndefined();
+            });
+
+            it('keeps the version when the person opens another conversation during the call', async () => {
+                switchesAwayThenAnswers(answered({
+                    route: choice(WRITER.ID, 0.9), continues: likelihood(0.9), artifact: choice(VERSION, 0.9),
+                }));
+
+                await h.route(userMessage());
+
+                expect(h.invokeSubAgent.mock.calls[0][0]).toBe('Writer');
+                expect(h.invokeSubAgent.mock.calls[0][9]).toBe(VERSION);
+            });
+
+            describe('with a host AgentTurnHandler', () => {
+                let handler: Mock<AgentTurnHandler>;
+
+                beforeEach(() => {
+                    handler = vi.fn<AgentTurnHandler>(async () => ({ Success: true }));
+                    h.set({ AgentTurnHandler: handler });
+                });
+
+                it('hands the handler the version, since the host runs the turn', async () => {
+                    h.runDecision.mockResolvedValue(answered({
+                        route: choice(WRITER.ID, 0.9), continues: likelihood(0.9), artifact: choice(VERSION, 0.9),
+                    }));
+
+                    await h.route(userMessage());
+
+                    expect(handler).toHaveBeenCalledOnce();
+                    expect(handler.mock.calls[0][0]).toMatchObject({ AgentId: WRITER.ID, Route: 'Continuity', TargetArtifactVersionId: VERSION });
+                    expect(h.invokeSubAgent).not.toHaveBeenCalled();
+                });
+
+                it('hands it no version for another agent\'s turn, or without a confident answer', async () => {
+                    h.runDecision.mockResolvedValueOnce(leavesTo(RESEARCH, { artifact: choice(VERSION, 0.9) }));
+                    await h.route(userMessage());
+                    h.runDecision.mockResolvedValueOnce(answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.9) }));
+                    await h.route(userMessage());
+
+                    expect(handler.mock.calls.map(([request]) => [request.AgentId, request.TargetArtifactVersionId]))
+                        .toEqual([[RESEARCH.ID, null], [WRITER.ID, null]]);
+                });
             });
 
             it('does not hand one agent\'s version to another agent\'s turn', async () => {
