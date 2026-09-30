@@ -1,7 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { EntityInfo, LogStatus, UserInfo } from '@memberjunction/core';
+import { EntityInfo, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { DecisionResult, type DecisionAnswer } from '@memberjunction/ai';
-import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, type DecisionAnsweringModel } from '@memberjunction/ai-core-plus';
+import {
+    MJAIAgentEntityExtended,
+    MJAIAgentRunEntityExtended,
+    MJAIAgentRunStepEntityExtended,
+    type AgentConfiguration,
+    type BaseAgentNextStep,
+    type DecisionAnsweringModel,
+    type ExecuteAgentParams
+} from '@memberjunction/ai-core-plus';
+import { AIEngine } from '@memberjunction/aiengine';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { MemoryManagerAgent } from '../memory-manager-agent';
@@ -129,6 +138,12 @@ class TestMemoryManagerAgent extends MemoryManagerAgent {
 
     public RunGate(notes: NoteShape[], threads: ThreadShape[], user: UserInfo, gateApplies: boolean = true): Promise<NoteShape[]> {
         return this.filterCandidateNotes(notes, threads, user, gateApplies);
+    }
+
+    /** The run itself, as `BaseAgent.Execute` starts it. */
+    public RunExecute(params: ExecuteAgentParams): Promise<{ finalStep: BaseAgentNextStep<Record<string, unknown>>; stepCount: number }> {
+        const config: AgentConfiguration = { success: true };
+        return this.executeAgentInternal<Record<string, unknown>>(params, config);
     }
 
     /** As production: no step without a run. */
@@ -392,6 +407,56 @@ describe('MemoryManagerAgent - Decision Gate Integration', () => {
 
             expect(decisions.Calls).toEqual([]);
             expect(filtered).toEqual([unnamed]);
+        });
+    });
+
+    describe('a run reads the gate flag and the cancellation signal from its params', () => {
+        /** A run's params as a caller that passes `data` sends them: the Execute Agent action or the MCP agent tool. */
+        function runParams(data: Record<string, unknown> | undefined, cancellationToken?: AbortSignal): ExecuteAgentParams {
+            const memoryManager = new MJAIAgentEntityExtended(entityInfo('MJ: AI Agents', ['ID', 'Name']));
+            memoryManager.ID = 'aaaaaaaa-6666-4000-8000-000000000001';
+            memoryManager.Name = 'Memory Manager';
+            return { agent: memoryManager, conversationMessages: [], contextUser: user, data, cancellationToken };
+        }
+
+        beforeEach(() => {
+            // No agent injects memory and there is no earlier run, so each run ends before extraction.
+            vi.spyOn(AIEngine.Instance, 'Agents', 'get').mockReturnValue([]);
+            vi.spyOn(RunView.prototype, 'RunView').mockResolvedValue({
+                Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: ''
+            });
+        });
+
+        it("turns the gate on from data.enableDecisionGate, and hands its calls the run's cancellation signal", async () => {
+            const controller = new AbortController();
+            const decisions = new ScriptedDecisionService(() => answered(JEV, { n1: 0.95, n2: 0.6, n3: 0.9 }));
+            agent.SetDecisionService(decisions);
+
+            const run = await agent.RunExecute(runParams({ enableDecisionGate: true }, controller.signal));
+            const filtered = await agent.RunGate(sampleNotes, oneThread, user);
+
+            expect(run.finalStep.step).toBe('Success');
+            expect(agent.EnableDecisionGate).toBe(true);
+            // The run's notes then go through the decision, which carries the run's signal.
+            expect(decisions.Calls).toHaveLength(1);
+            expect(decisions.Calls[0].CancellationToken).toBe(controller.signal);
+            expect(filtered.map(n => n.content)).toEqual(['Prefers dark mode theme', 'Build failed on missing module']);
+        });
+
+        it.each<[string, Record<string, unknown> | undefined]>([
+            ['no data', undefined],
+            ['data without the flag', { verbose: false }],
+            ['a flag that is not a boolean', { enableDecisionGate: 'true' }]
+        ])('leaves the gate off with %s', async (_label, data) => {
+            const decisions = new ScriptedDecisionService(() => answered(JEV, { n1: 0.01, n2: 0.01, n3: 0.99 }));
+            agent.SetDecisionService(decisions);
+
+            await agent.RunExecute(runParams(data));
+            const filtered = await agent.RunGate(sampleNotes, oneThread, user);
+
+            expect(agent.EnableDecisionGate).toBe(false);
+            expect(decisions.Calls).toEqual([]);
+            expect(filtered.map(n => n.content)).toEqual(['Prefers dark mode theme', 'Do not touch production DB']);
         });
     });
 
