@@ -269,6 +269,13 @@ Collapsible panel replacing Kendo panelbar/expansion panel. Inputs: `Title`, `Ex
 ### `mj-dialog` — MJDialogComponent
 Modal with backdrop, Esc/backdrop close (`Closeable`), body scroll lock. Inputs: `Visible`, `Title`, `Size: 'sm'|'md'|'lg'|'xl'|'auto'` (400/600/800/1000px), `Width`/`Height`/`MinWidth`, `Role: 'dialog'|'alertdialog'`. Output: `Close`. **`Visible` is not two-way** — set it false in your `(Close)` handler. Slots: default body, `mj-dialog-titlebar`, `mj-dialog-actions`.
 
+Focus inputs, each on by default:
+
+- `AutoFocus` (default `true`) moves focus into the dialog on open: `[data-autofocus]`, else the first field, else the first body or actions button (never the close button), else the container.
+- `TrapFocus` (default `true`) wraps only. The browser moves Tab between stops. Tab on the last stop wraps to the first, and Shift+Tab on the first stop or the container wraps to the last. A Tab that arrives while focus is outside the open dialog is brought back in. Stops skip `display: none`, `[hidden]`, `visibility: hidden`, disabled controls, hidden inputs, and `tabindex="-1"`. A `contenteditable` region is a stop unless `contenteditable="false"`. A nested dialog handles its own Tab first.
+- `RestoreFocus` (default `true`) returns focus to the element that opened the dialog.
+- `AriaLabel` names the dialog when `Title` is empty. A title uses `aria-labelledby` and does not also set `aria-label`.
+
 ```html
 <mj-dialog [Visible]="show" Title="Confirm" Size="md" (Close)="show = false">
   <p>Are you sure?</p>

@@ -68,6 +68,54 @@ class DialogFocusHostComponent {
   }
 }
 
+/** Inner dialog is nested in the outer one. Closeable is off so its stops are exactly the two buttons. */
+@Component({
+  standalone: true,
+  imports: [MJDialogComponent],
+  template: `
+    <mj-dialog [Visible]="true" [AutoFocus]="false" Title="Outer">
+      <button type="button" class="outer-btn">Outer</button>
+      <mj-dialog [Visible]="true" [Closeable]="false" [AutoFocus]="false">
+        <button type="button" class="inner-first">First</button>
+        <button type="button" class="inner-last">Last</button>
+      </mj-dialog>
+    </mj-dialog>
+  `,
+})
+class NestedDialogHostComponent {}
+
+/** Hidden controls must not be tab stops. One visible button is then both the first and the last. */
+@Component({
+  standalone: true,
+  imports: [MJDialogComponent],
+  template: `
+    <mj-dialog [Visible]="true" [Closeable]="false" [AutoFocus]="false">
+      <button type="button" class="shown">Shown</button>
+      <button type="button" class="display-none" style="display: none">Display</button>
+      <button type="button" class="attr-hidden" hidden>Hidden</button>
+      <span style="visibility: hidden"><button type="button" class="visibility-hidden">Visibility</button></span>
+      <div style="display: none"><button type="button" class="parent-none">Parent</button></div>
+      <input type="hidden" class="input-hidden" />
+      <button type="button" class="tabindex-none" tabindex="-1">Skip</button>
+    </mj-dialog>
+  `,
+})
+class HiddenStopHostComponent {}
+
+/** A contenteditable region is a stop. contenteditable="false" is not. */
+@Component({
+  standalone: true,
+  imports: [MJDialogComponent],
+  template: `
+    <mj-dialog [Visible]="true" [Closeable]="false" [AutoFocus]="false">
+      <div class="frozen" contenteditable="false">Frozen</div>
+      <div class="editor" contenteditable="true">Edit</div>
+      <button type="button" class="after">After</button>
+    </mj-dialog>
+  `,
+})
+class EditableStopHostComponent {}
+
 const render = (inputs: Record<string, unknown> = {}) =>
   renderComponentFixture(MJDialogComponent, { imports: [MJDialogComponent], inputs: { Visible: true, ...inputs } });
 type Fx = ReturnType<typeof render>;
@@ -78,8 +126,11 @@ const renderHost = (inputs: Record<string, unknown> = {}) =>
 /** Initial focus is deferred one macrotask so `@if (Visible)` can insert the container. */
 const flushMacrotask = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
-const press = (el: HTMLElement, key: string, init: KeyboardEventInit = {}) =>
-  el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init }));
+const press = (el: HTMLElement, key: string, init: KeyboardEventInit = {}): KeyboardEvent => {
+  const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init });
+  el.dispatchEvent(event);
+  return event;
+};
 
 const dialogOf = (f: ComponentFixture<unknown>): MJDialogComponent => {
   const match = f.debugElement.query(By.directive(MJDialogComponent));
@@ -213,7 +264,7 @@ describe('MJDialogComponent (DOM)', () => {
     expect(document.activeElement).toBe(query(f, '.ok'));
   });
 
-  it('cycles Tab through the dialog, including the close button, in both directions', async () => {
+  it('wraps Tab only at the ends and leaves a Tab between stops to the browser', async () => {
     const f = renderHost();
     await openFrom(f);
     const closeBtn = query(f, '.mj-dialog-close') as HTMLButtonElement;
@@ -222,24 +273,29 @@ describe('MJDialogComponent (DOM)', () => {
     const container = query(f, '.mj-dialog-container') as HTMLElement;
 
     ok.focus();
-    press(ok, 'Tab');
+    const fromLast = press(ok, 'Tab');
+    expect(fromLast.defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(closeBtn);
 
     closeBtn.focus();
-    press(closeBtn, 'Tab', { shiftKey: true });
+    const fromFirstBack = press(closeBtn, 'Tab', { shiftKey: true });
+    expect(fromFirstBack.defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(ok);
 
-    // The ✕ is a real stop: Shift+Tab from the control after it, and Tab from the last, both land on it.
+    // jsdom does not move focus for an unprevented Tab, so staying put is the proof the dialog left it alone.
     bodyBtn.focus();
-    press(bodyBtn, 'Tab', { shiftKey: true });
-    expect(document.activeElement).toBe(closeBtn);
-
-    closeBtn.focus();
-    press(closeBtn, 'Tab');
+    const betweenBack = press(bodyBtn, 'Tab', { shiftKey: true });
+    expect(betweenBack.defaultPrevented).toBe(false);
     expect(document.activeElement).toBe(bodyBtn);
 
+    closeBtn.focus();
+    const fromFirstForward = press(closeBtn, 'Tab');
+    expect(fromFirstForward.defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(closeBtn);
+
     container.focus();
-    press(container, 'Tab', { shiftKey: true });
+    const fromContainer = press(container, 'Tab', { shiftKey: true });
+    expect(fromContainer.defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(ok);
   });
 
@@ -331,6 +387,67 @@ describe('MJDialogComponent (DOM)', () => {
     f.componentRef.setInput('Visible', false);
     f.detectChanges();
     expect(document.activeElement).not.toBe(opener);
+  });
+
+  it('brings a Tab from outside the open dialog back to the first or last stop', async () => {
+    const f = renderHost({ AutoFocus: false });
+    const opener = await openFrom(f);
+    expect(document.activeElement).toBe(opener);
+
+    const forward = press(document.body, 'Tab');
+    expect(forward.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(query(f, '.mj-dialog-close'));
+
+    opener.focus();
+    const backward = press(document.body, 'Tab', { shiftKey: true });
+    expect(backward.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(query(f, '.ok'));
+  });
+});
+
+describe('MJDialogComponent nested focus (DOM)', () => {
+  it('lets the inner dialog wrap its own Tab and does not send it to the outer close button', async () => {
+    const f = renderComponentFixture(NestedDialogHostComponent, { imports: [NestedDialogHostComponent] });
+    await flushMacrotask();
+    const outerClose = query(f, '.mj-dialog-close') as HTMLButtonElement;
+    const innerFirst = query(f, '.inner-first') as HTMLButtonElement;
+    const innerLast = query(f, '.inner-last') as HTMLButtonElement;
+
+    innerFirst.focus();
+    const between = press(innerFirst, 'Tab');
+    expect(between.defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(innerFirst);
+    expect(document.activeElement).not.toBe(outerClose);
+
+    innerLast.focus();
+    const wrap = press(innerLast, 'Tab');
+    expect(wrap.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(innerFirst);
+    expect(document.activeElement).not.toBe(outerClose);
+  });
+});
+
+describe('MJDialogComponent tab stops (DOM)', () => {
+  it('does not treat hidden, disabled-looking, or tabindex=-1 controls as stops', async () => {
+    const f = renderComponentFixture(HiddenStopHostComponent, { imports: [HiddenStopHostComponent] });
+    await flushMacrotask();
+    const shown = query(f, '.shown') as HTMLButtonElement;
+    shown.focus();
+    const wrap = press(shown, 'Tab');
+    expect(wrap.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(shown);
+  });
+
+  it('treats contenteditable as a stop and skips contenteditable=false', async () => {
+    const f = renderComponentFixture(EditableStopHostComponent, { imports: [EditableStopHostComponent] });
+    await flushMacrotask();
+    const editor = query(f, '.editor') as HTMLElement;
+    const after = query(f, '.after') as HTMLButtonElement;
+    after.focus();
+    const wrap = press(after, 'Tab');
+    expect(wrap.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(editor);
+    expect(document.activeElement).not.toBe(query(f, '.frozen'));
   });
 });
 

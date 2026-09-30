@@ -5,7 +5,8 @@ import {
   EventEmitter,
   HostListener,
   ElementRef,
-  OnDestroy
+  OnDestroy,
+  inject
 } from '@angular/core';
 
 export type MjDialogSize = 'sm' | 'md' | 'lg' | 'xl' | 'auto';
@@ -28,7 +29,9 @@ const SIZE_MAP: Record<MjDialogSize, string> = {
  *
  * On open, focus moves to `[data-autofocus]`, else the first field in the body,
  * else the first button in the body or actions (never the ✕), else the container.
- * Tab cycles inside the dialog, and focus returns to the trigger on close.
+ * Tab between stops is left to the browser. Tab on the last stop wraps to the
+ * first, and Shift+Tab on the first stop or the container wraps to the last.
+ * Focus returns to the trigger on close.
  * `AutoFocus`, `TrapFocus`, and `RestoreFocus` each default on so a dialog that
  * manages focus itself can turn that one behavior off.
  *
@@ -90,19 +93,29 @@ const SIZE_MAP: Record<MjDialogSize, string> = {
   `
 })
 export class MJDialogComponent implements OnDestroy {
-  private readonly host: ElementRef<HTMLElement>;
+  private readonly host = inject(ElementRef) as ElementRef<HTMLElement>;
   private _visible = false;
   /** Element that held focus when the dialog opened; restored on close. */
   private previouslyFocused: HTMLElement | null = null;
-  /** Deferred until the `@if (Visible)` container is actually in the DOM. */
-  private initialFocusTimer: number | null = null;
+  /** Set while the open focus is waiting for the `@if (Visible)` container. */
+  private initialFocusPending = false;
   private static nextId = 0;
 
-  private static readonly TAB_STOP_SELECTOR = 'a[href], button, input, select, textarea, [tabindex]';
+  private static readonly TAB_STOP_SELECTOR =
+    'a[href], button, input, select, textarea, [contenteditable]:not([contenteditable="false"]), [tabindex]';
 
-  constructor(host: ElementRef<HTMLElement>) {
-    this.host = host;
-  }
+  private readonly onDocumentKeyDown = (event: KeyboardEvent): void => {
+    if (event.defaultPrevented || event.key !== 'Tab' || !this.TrapFocus || !this._visible) return;
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const container = this.containerElement();
+    if (!container) return;
+    const active = document.activeElement;
+    if (active instanceof Node && container.contains(active)) return;
+    const stops = this.tabStops(container);
+    event.preventDefault();
+    const target = stops.length === 0 ? container : (event.shiftKey ? stops[stops.length - 1] : stops[0]);
+    target.focus();
+  };
 
   @Input()
   set Visible(value: boolean) {
@@ -137,7 +150,11 @@ export class MJDialogComponent implements OnDestroy {
   /** Move focus into the dialog when it opens. Off when the dialog focuses itself. */
   @Input() AutoFocus = true;
 
-  /** Keep Tab / Shift+Tab inside the dialog, including the ✕. */
+  /**
+   * Keep focus in the dialog. The browser moves Tab between stops. Tab on the last
+   * stop wraps to the first, and Shift+Tab on the first stop or the container wraps
+   * to the last. A Tab that arrives while focus is outside the open dialog is brought back in.
+   */
   @Input() TrapFocus = true;
 
   /** Return focus to the element that was focused when the dialog opened. */
@@ -199,33 +216,42 @@ export class MJDialogComponent implements OnDestroy {
   }
 
   /**
-   * Cycles Tab within the container. With no enabled control, focus stays on
-   * the container (it is `tabindex="-1"`, so it is not itself a tab stop).
+   * Wraps Tab at the ends of the dialog. A Tab that is already handled, including
+   * by a dialog nested inside this one, is left alone. With no enabled control,
+   * focus stays on the container (it is `tabindex="-1"`, so it is not itself a tab stop).
    */
   OnTabKey(event: KeyboardEvent): void {
-    if (event.key !== 'Tab' || !this.TrapFocus || !this.Visible) return;
+    if (event.defaultPrevented || event.key !== 'Tab' || !this.TrapFocus || !this.Visible) return;
     if (event.altKey || event.ctrlKey || event.metaKey) return;
     const container = event.currentTarget;
     if (!(container instanceof HTMLElement)) return;
 
     const stops = this.tabStops(container);
-    event.preventDefault();
     if (stops.length === 0) {
+      event.preventDefault();
       container.focus();
       return;
     }
 
     const active = document.activeElement;
     const index = active instanceof HTMLElement ? stops.indexOf(active) : -1;
-    // Shift+Tab from the first stop, or from the container (not a stop), wraps to the last.
-    const nextIndex = event.shiftKey
-      ? (index <= 0 ? stops.length - 1 : index - 1)
-      : (index < 0 || index >= stops.length - 1 ? 0 : index + 1);
-    stops[nextIndex].focus();
+    const onContainer = active === container;
+    if (event.shiftKey) {
+      if (index === 0 || onContainer) {
+        event.preventDefault();
+        stops[stops.length - 1].focus();
+      }
+      return;
+    }
+    if (index === stops.length - 1) {
+      event.preventDefault();
+      stops[0].focus();
+    }
   }
 
   ngOnDestroy(): void {
     this.clearInitialFocusTimer();
+    document.removeEventListener('keydown', this.onDocumentKeyDown);
     if (this._visible) {
       this.restoreFocus();
     }
@@ -234,6 +260,7 @@ export class MJDialogComponent implements OnDestroy {
 
   private onOpen(): void {
     document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', this.onDocumentKeyDown);
     const active = document.activeElement;
     this.previouslyFocused = active instanceof HTMLElement ? active : null;
     if (this.AutoFocus) {
@@ -243,23 +270,23 @@ export class MJDialogComponent implements OnDestroy {
 
   private onCloseInternal(): void {
     document.body.style.overflow = '';
+    document.removeEventListener('keydown', this.onDocumentKeyDown);
     this.clearInitialFocusTimer();
     this.restoreFocus();
   }
 
   private scheduleInitialFocus(): void {
-    this.clearInitialFocusTimer();
+    this.initialFocusPending = true;
     // The Visible setter runs before `@if` inserts `.mj-dialog-container`.
-    this.initialFocusTimer = window.setTimeout(() => {
-      this.initialFocusTimer = null;
+    Promise.resolve().then(() => {
+      if (!this.initialFocusPending) return;
+      this.initialFocusPending = false;
       this.focusInitial();
-    }, 0);
+    });
   }
 
   private clearInitialFocusTimer(): void {
-    if (this.initialFocusTimer === null) return;
-    window.clearTimeout(this.initialFocusTimer);
-    this.initialFocusTimer = null;
+    this.initialFocusPending = false;
   }
 
   private focusInitial(): void {
@@ -337,6 +364,19 @@ export class MJDialogComponent implements OnDestroy {
     if (el.getAttribute('tabindex') === '-1') return false;
     if (this.isDisabled(el)) return false;
     if (el instanceof HTMLInputElement && el.type === 'hidden') return false;
+    if (!this.isVisibleStop(el)) return false;
+    return true;
+  }
+
+  /** display:none, visibility:hidden, and [hidden] cannot take focus, so they are not stops. */
+  private isVisibleStop(el: HTMLElement): boolean {
+    let current: HTMLElement | null = el;
+    while (current) {
+      if (current.hasAttribute('hidden')) return false;
+      const style = getComputedStyle(current);
+      if (style.display === 'none' || style.visibility === 'hidden') return false;
+      current = current.parentElement;
+    }
     return true;
   }
 
