@@ -1116,9 +1116,15 @@ describe('BaseAgent.Execute — the payload change check (opt-in with payloadFee
         updateElements: { summary: SHORT_SUMMARY },
         reasoning: CHANGE_REASONING,
     }): Array<(params: AIPromptParams) => AIPromptRunResult> {
+        // The trailing runtime-state fragment (metadata.volatileState) is rebuilt on every request; it
+        // is framework state, not a message the loop added, so it is left out of each recorded turn.
+        const realMessages = (p: AIPromptParams): string[] =>
+            (p.conversationMessages ?? [])
+                .filter((m) => (m as { metadata?: { volatileState?: boolean } }).metadata?.volatileState !== true)
+                .map(contentOf);
         return [
-            (p) => { turns.push((p.conversationMessages ?? []).map(contentOf)); return llmEnvelope(actionsEnvelope({ reasoning: REASONING, payloadChangeRequest: changeRequest })); },
-            (p) => { turns.push((p.conversationMessages ?? []).map(contentOf)); return llmEnvelope(successEnvelope()); },
+            (p) => { turns.push(realMessages(p)); return llmEnvelope(actionsEnvelope({ reasoning: REASONING, payloadChangeRequest: changeRequest })); },
+            (p) => { turns.push(realMessages(p)); return llmEnvelope(successEnvelope()); },
         ];
     }
 
