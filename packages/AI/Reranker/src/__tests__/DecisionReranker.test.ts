@@ -13,7 +13,7 @@ import { MJGlobal } from '@memberjunction/global';
 import { UserInfo } from '@memberjunction/core';
 import type { IMetadataProvider } from '@memberjunction/core';
 import { BaseReranker } from '@memberjunction/ai';
-import type { AIModelConfiguration, DecisionAnswer, RerankDocument, RerankResponse } from '@memberjunction/ai';
+import type { AIModelConfiguration, DecisionAnswer, RerankDocument, RerankResponse, ScoreAnswer } from '@memberjunction/ai';
 import { AIDecisionRunner } from '@memberjunction/ai-prompts';
 import type { AIDecisionParams, AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
@@ -34,6 +34,8 @@ const LEGACY_LLM_RERANKER_MODEL_ID = 'model-llm-reranker';
 const DEFAULT_DECISION_PROMPT_ID = 'prompt-default-decision';
 const CUSTOM_DECISION_PROMPT_ID = 'prompt-custom-decision';
 const DEFAULT_RERANK_PROMPT_ID = 'prompt-default-rerank';
+/** A decision prompt with no model bindings, so the decision runner cannot build its candidates. */
+const UNBOUND_DECISION_PROMPT_ID = 'prompt-unbound-decision';
 const STATEMENT = 'This note bears on the request: ';
 
 // ---------------------------------------------------------------------------
@@ -258,6 +260,24 @@ function answerAll(params: AIDecisionParams): AIDecisionRunResult {
     }
     return { success: true, Answers: answers };
 }
+
+/** Answers every question, except that the question at `index` in each call gets `answer`. */
+function answerAllBut(index: number, answer: DecisionAnswer): (params: AIDecisionParams) => Promise<AIDecisionRunResult> {
+    return async params => {
+        const result = answerAll(params);
+        result.Answers[Object.keys(params.Questions)[index]] = answer;
+        return result;
+    };
+}
+
+/** A Score answer that also carries a valid-looking Probability: only its Kind says it is not a Likelihood answer. */
+const SCORE_ANSWER_WITH_PROBABILITY: ScoreAnswer & { Probability: number } = {
+    Kind: 'Score',
+    Value: 1,
+    Probabilities: { Low: 0.1, High: 0.9 },
+    Confidence: 0.9,
+    Probability: 0.9,
+};
 
 /** Every decision call made, in the order the reranker made them. */
 let decisionCalls: AIDecisionParams[] = [];
@@ -679,6 +699,91 @@ describe('DecisionReranker', () => {
 
             expect(response.success).toBe(true);
             expect(vi.getTimerCount()).toBe(0);
+        });
+    });
+
+    describe('its guards', () => {
+        const invalidAnswers: Array<[string, DecisionAnswer]> = [
+            ['a Score answer, even one that carries a Probability', SCORE_ANSWER_WITH_PROBABILITY],
+            ['a NaN probability', { Kind: 'Likelihood', Probability: Number.NaN }],
+            ['a probability over 1', { Kind: 'Likelihood', Probability: 1.5 }],
+            ['a negative probability', { Kind: 'Likelihood', Probability: -0.1 }],
+        ];
+
+        it.each(invalidAnswers)('fails rather than scoring a document by %s', async (_label, answer) => {
+            stubDecisions(answerAllBut(1, answer));
+
+            const response = await rerank(new DecisionReranker('', '', '', contextUser), notes(3));
+
+            expect(response.success).toBe(false);
+            expect(response.errorMessage).toBe('DecisionReranker: No valid Likelihood answer for document doc-1');
+            expect(response.results).toEqual([]);
+        });
+
+        it('accepts probabilities of exactly 0 and 1', async () => {
+            stubDecisions();
+            const documents = [note('doc-1', 'Certainly unrelated', 0), note('doc-2', 'Certainly related', 1)];
+
+            const response = await rerank(new DecisionReranker('', '', '', contextUser), documents);
+
+            expect(response.results.map(r => [r.id, r.relevanceScore])).toEqual([['doc-2', 1], ['doc-1', 0]]);
+        });
+
+        it('keeps the input order of documents with equal scores', async () => {
+            stubDecisions();
+            const documents = [
+                note('doc-a', 'First tie', 0.5),
+                note('doc-b', 'Most relevant', 0.7),
+                note('doc-c', 'Second tie', 0.5),
+                note('doc-d', 'Third tie', 0.5),
+            ];
+
+            const response = await rerank(new DecisionReranker('', '', '', contextUser), documents);
+
+            expect(response.results.map(r => r.id)).toEqual(['doc-b', 'doc-a', 'doc-c', 'doc-d']);
+        });
+
+        it('keeps the input order of tied documents across split calls', async () => {
+            setModelLimit(PRIMARY_DECISION_MODEL_ID, 2);
+            stubDecisions();
+            const documents = [0, 1, 2, 3, 4].map(i => note(`doc-${i}`, `Tied note ${i}`, 0.5));
+
+            const response = await rerank(new DecisionReranker('', '', '', contextUser), documents);
+
+            expect(batchSizes()).toEqual([2, 2, 1]);
+            expect(response.results.map(r => r.id)).toEqual(['doc-0', 'doc-1', 'doc-2', 'doc-3', 'doc-4']);
+        });
+
+        it("rounds a model's fractional MaxQuestionsPerCall down, so no call exceeds it", async () => {
+            setModelLimit(PRIMARY_DECISION_MODEL_ID, 2.5);
+            stubDecisions();
+
+            await rerank(new DecisionReranker('', '', '', contextUser), notes(5));
+
+            expect(batchSizes()).toEqual([2, 2, 1]);
+        });
+
+        it('ignores a MaxQuestionsPerCall below 1, and applies the default cap', async () => {
+            setModelLimit(PRIMARY_DECISION_MODEL_ID, 0.5);
+            stubDecisions();
+
+            await rerank(new DecisionReranker('', '', '', contextUser), notes(5));
+
+            expect(batchSizes()).toEqual([5]);
+        });
+
+        it("leaves a prompt whose candidates cannot be built to the decision call, which reports why", async () => {
+            h.state.prompts.push(catalogPrompt(UNBOUND_DECISION_PROMPT_ID, 'Unbound Decision', DECISION_TYPE_ID));
+            // The real decision call, which fails before any model call or run row.
+            const executeDecision = vi.spyOn(AIDecisionRunner.prototype, 'ExecuteDecision');
+
+            const response = await rerank(new DecisionReranker('', '', UNBOUND_DECISION_PROMPT_ID, contextUser), notes(2));
+
+            expect(executeDecision).toHaveBeenCalledTimes(1);
+            expect(response.success).toBe(false);
+            expect(response.errorMessage).toMatch(
+                /^DecisionReranker: Decision call failed: SelectionStrategy is 'Specific' but no valid AIPromptModel candidates found for prompt "Unbound Decision"/
+            );
         });
     });
 
