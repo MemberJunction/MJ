@@ -130,4 +130,26 @@ describe('Decision Eval scorecard', () => {
         const options = { Suite: 'Suite', GeneratedAt: 'now', BootstrapResamples: 50 };
         expect(BuildDecisionEvalScorecard(ROWS, options)).toEqual(BuildDecisionEvalScorecard(ROWS, options));
     });
+
+    it('gives an identical scorecard, JSON and Markdown, for the runs in reverse order', () => {
+        // Enough cases for the folds and the bootstrap draws to matter, two resolved models and
+        // two unreadable reasons, so every place the read order could leak in is exercised.
+        const rows = [...ROWS, ...manyRows(80, 4)];
+        const options = { Suite: 'Suite', GeneratedAt: 'now' };
+        const forward = BuildDecisionEvalScorecard(rows, options);
+        const reversed = BuildDecisionEvalScorecard([...rows].reverse(), options);
+        expect(reversed).toEqual(forward);
+        expect(JSON.stringify(reversed)).toBe(JSON.stringify(forward));
+        expect(RenderDecisionEvalScorecard(reversed)).toBe(RenderDecisionEvalScorecard(forward));
+    });
 });
+
+/** `cases` cases of `repeats` runs each in one cell, alternately answered by two resolved models. */
+function manyRows(cases: number, repeats: number): DecisionEvalRunRow[] {
+    return Array.from({ length: cases }, (_, c) => {
+        const label: DecisionEvalLabel = c % 3 === 0 ? 'switch' : 'continue';
+        const base = label === 'continue' ? 0.55 + (c % 7) * 0.06 : 0.25 + (c % 5) * 0.12;
+        return Array.from({ length: repeats }, (_, r) => runRow(`case-${(cases - c) * 37 % 101}-${c}`, 'many', label,
+            actual(Math.min(0.99, base + r * 0.013), { ResolvedModel: r % 2 === 0 ? 'model-b' : 'model-a' })));
+    }).flat();
+}

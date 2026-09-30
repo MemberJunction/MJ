@@ -45,6 +45,36 @@ function overconfidentSet(count: number, seed: number): LabelledProbability[] {
     });
 }
 
+/**
+ * A cell's runs: `cases` cases (about one in ten ambiguous) of `repeats` runs each, from the same
+ * overconfident predictor with noise between repeats, varied latency and cost, and IDs whose
+ * first-seen order is not their sorted order.
+ */
+function observationSet(cases: number, repeats: number, seed: number): DecisionEvalObservation[] {
+    const random = CreateSeededRandom(seed);
+    const sharpen = (p: number) => 1 / (1 + Math.exp(-3 * Math.log(p / (1 - p))));
+    return Array.from({ length: cases }, (_, c) => {
+        const truth = 0.05 + 0.9 * random();
+        const label: DecisionEvalObservation['Label'] = random() < 0.1 ? 'ambiguous' : random() < truth ? 'continue' : 'switch';
+        const caseId = `${Math.floor(random() * 1e9).toString(36)}-${c}`;
+        return Array.from({ length: repeats }, () => {
+            const noisy = Math.min(0.99, Math.max(0.01, truth + (random() - 0.5) * 0.3));
+            return observation(caseId, label, sharpen(noisy), { LatencyMs: Math.round(100 + 400 * random()), CostUSD: 0.0001 * (1 + random()) });
+        });
+    }).flat();
+}
+
+/** The same items in a seeded random order. */
+function shuffled<T>(items: readonly T[], seed: number): T[] {
+    const random = CreateSeededRandom(seed);
+    const copy = [...items];
+    for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+}
+
 describe('Decision Eval metrics', () => {
     describe('basic statistics', () => {
         it('Quantile interpolates linearly between order statistics', () => {
@@ -264,6 +294,17 @@ describe('Decision Eval metrics', () => {
             expect(OutOfFoldPlatt(set, 5, 3)).toEqual(OutOfFoldPlatt(set, 5, 3));
             expect(OutOfFoldPlatt([point(0.4, true)], 5, 3)).toBeNull();
             expect(OutOfFoldPlatt([point(0.4, true), point(0.6, false)], 5, 3)).toHaveLength(2);
+        });
+    });
+
+    describe('order independence', () => {
+        const runs = observationSet(120, 5, 17);
+
+        it('gives the same metrics, intervals and folds for the same runs in any order', () => {
+            const forward = ComputeCellMetrics(runs);
+            expect(forward.Calibrated?.BalancedAccuracyCI).not.toBeNull();
+            expect(ComputeCellMetrics([...runs].reverse())).toEqual(forward);
+            expect(ComputeCellMetrics(shuffled(runs, 99))).toEqual(forward);
         });
     });
 
