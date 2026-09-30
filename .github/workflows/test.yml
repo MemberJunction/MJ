@@ -8,6 +8,11 @@ on:
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'packages/**'
+      # The citizen-builder template sits outside packages/** but @memberjunction/cli bundles a
+      # copy of it, and the guard that keeps that copy in step runs in the guards job. A PR editing
+      # only citizen-builder/ is exactly the one that can leave the copy behind, so it must trigger.
+      - 'citizen-builder/**'
+      - '.github/scripts/check-citizen-builder-template.mjs'
       - 'vitest.*'
       # A change to ONLY a root tsconfig must trigger the workflow — package tsconfigs extend the
       # root ones, so the grep fallback below matches `tsconfig[^/]*\.json`, but without this paths
@@ -196,6 +201,20 @@ jobs:
       - name: MJ CLI resolution guard
         if: ${{ !cancelled() }}
         run: node .github/scripts/check-mj-cli-resolution.mjs packages
+
+      # Citizen-builder template copy guard. `mj agent init` scaffolds from citizen-builder/, and
+      # @memberjunction/cli commits a copy of it under src/init-templates/: that copy is the CLI's
+      # build-cache key for the template and what the CLI's tests scaffold from, so while it is
+      # stale a cache hit restores a dist/ holding the old template and every test still passes.
+      # It lives HERE rather than as a vitest test in the CLI because, on the PR shape that lets
+      # the two drift (only citizen-builder/ changes), that test would neither be selected by the
+      # affected-package filter nor have its turbo cache invalidated. Self-test first: a
+      # comparison whose fixtures regressed must not be trusted to pass the real trees.
+      - name: Citizen-builder template copy guard
+        if: ${{ !cancelled() }}
+        run: |
+          node .github/scripts/check-citizen-builder-template.mjs --self-test
+          node .github/scripts/check-citizen-builder-template.mjs
 
       # App-token-never-merges guard. `blue-cypress-ci-bot` is a BYPASS ACTOR on
       # `next-protect`: the one identity that can land a commit in next with no approving

@@ -92,6 +92,19 @@ describe('AgentInit Command', () => {
     expect(envLines(target, 'MJ_VERSION')).toEqual([`MJ_VERSION=${cliVersion}`]);
   });
 
+  // The pin in .env only matters if the container honours it. These files come from the CLI's
+  // bundled copy of the template, which once lagged citizen-builder/ and still installed an
+  // unpinned CLI while the test above passed.
+  it('scaffolds a container that installs the release MJ_VERSION names', async () => {
+    const target = path.join(tempDir, 'pinned-container-workspace');
+    await AgentInit.run([target, '--skip-docker-check', '--no-start']);
+
+    const read = (...segments: string[]) => readFileSync(path.join(target, ...segments), 'utf8');
+    expect(read('docker-compose.yml')).toContain('MJ_VERSION: "${MJ_VERSION:?');
+    expect(read('docker', 'Dockerfile')).toContain('npm install -g "@memberjunction/cli@${MJ_VERSION}"');
+    expect(read('scripts', 'docker-entrypoint.sh')).toContain('--tag "v${MJ_VERSION}"');
+  });
+
   it('re-pins a stale MJ_VERSION in place on --force, keeping the user\'s other values', async () => {
     const target = path.join(tempDir, 'stale-pin-workspace');
     await AgentInit.run([target, '--skip-docker-check', '--no-start']);
