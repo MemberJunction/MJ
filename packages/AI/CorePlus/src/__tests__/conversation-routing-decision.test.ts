@@ -37,6 +37,7 @@ import {
     type RoutingHistoryRow,
     type RoutingParticipant,
 } from '../conversation-routing-decision';
+import type { DecisionAnsweringModel } from '../decision-calibration';
 
 const MANAGER = { ID: 'AAAAAAAA-0000-0000-0000-000000000001', Name: 'Sage', Description: 'Routes each request.' } satisfies RoutingAgent;
 const RESEARCH = { ID: 'AAAAAAAA-0000-0000-0000-000000000002', Name: 'Research', Description: 'Finds and summarises sources.' } satisfies RoutingAgent;
@@ -88,9 +89,15 @@ function likelihood(probability: number): LikelihoodAnswer {
     return { Kind: 'Likelihood', Probability: probability };
 }
 
+/** Jev at the version its routing calibration was fitted on. */
+const JEV: DecisionAnsweringModel = { ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.13-20260917' };
+
+/** LLM Decision answered by the chat model its routing calibration was fitted on. */
+const LLM_DECISION: DecisionAnsweringModel = { ModelName: 'LLM Decision', ResolvedModel: 'GPT-OSS-120B' };
+
 /** A successful decision, answered by a calibrated model unless the test says otherwise. */
-function answered(answers: Record<string, DecisionAnswer>, ModelName: string | undefined = 'Jev'): RoutingDecisionAnswers {
-    return { Success: true, Answers: answers, ModelName };
+function answered(answers: Record<string, DecisionAnswer>, answeredBy: DecisionAnsweringModel = JEV): RoutingDecisionAnswers {
+    return { Success: true, Answers: answers, ...answeredBy };
 }
 
 /** A confident move away from Research, to the given agent. */
@@ -119,21 +126,64 @@ describe('conversation routing decision', () => {
         it('are the figures the Phase 2 Decision Eval set', () => {
             expect(DECISION_ROUTING_TIMEOUT_MS).toBe(350);
             expect(DECISION_ROUTING_MIN_CONFIDENCE).toBe(0.7);
-            expect(ROUTING_CONTINUES_CALIBRATION).toEqual({ Jev: { A: 1.7757, B: -3.3506 }, 'LLM Decision': { A: 1.6508, B: -2.9110 } });
+            expect(ROUTING_CONTINUES_CALIBRATION).toEqual([
+                { ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.13-20260917', Calibration: { A: 1.7757, B: -3.3506 } },
+                { ModelName: 'LLM Decision', ResolvedModel: 'GPT-OSS-120B', Calibration: { A: 1.6508, B: -2.9110 } }
+            ]);
         });
     });
 
-    describe('the thread likelihood is calibrated per model', () => {
+    describe('the thread likelihood is calibrated per exact model', () => {
         it('maps a raw probability through the answering model\'s Platt calibration', () => {
             // Jev's raw 0.5 means about a 3% chance the thread continues
-            expect(CalibratedContinuesProbability(0.5, 'Jev')).toBeCloseTo(0.0339, 4);
-            expect(CalibratedContinuesProbability(0.5, 'LLM Decision')).toBeCloseTo(0.0516, 4);
-            expect(CalibratedContinuesProbability(0.5, '  Jev ')).toBeCloseTo(0.0339, 4);
+            expect(CalibratedContinuesProbability(0.5, JEV)).toBeCloseTo(0.0339, 4);
+            expect(CalibratedContinuesProbability(0.5, LLM_DECISION)).toBeCloseTo(0.0516, 4);
+            expect(CalibratedContinuesProbability(0.5, { ModelName: '  Jev ', ResolvedModel: ' typesafe/jev-1.13-20260917 ' })).toBeCloseTo(0.0339, 4);
         });
 
-        it('has no calibrated probability for an unknown or unnamed model', () => {
-            expect(CalibratedContinuesProbability(0.5, 'Some Other Model')).toBeNull();
-            expect(CalibratedContinuesProbability(0.5, undefined)).toBeNull();
+        it('has no calibrated probability for a model it was not fitted on', () => {
+            const uncalibrated: DecisionAnsweringModel[] = [
+                { ModelName: 'Some Other Model', ResolvedModel: 'some-vendor/some-model' },
+                // Jev at another version: the vendor row's APIName was edited
+                { ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.14-20261101' },
+                // LLM Decision answered by another chat model (an installation with only an OpenAI key)
+                { ModelName: 'LLM Decision', ResolvedModel: 'GPT 5.5 Instant' },
+                // The right model name, but nothing says which model was behind it
+                { ModelName: 'Jev' },
+                { ModelName: 'LLM Decision', ResolvedModel: null },
+                {},
+                // Names that are Object.prototype members must not reach an inherited value
+                { ModelName: 'constructor', ResolvedModel: 'constructor' },
+                { ModelName: '__proto__', ResolvedModel: 'toString' }
+            ];
+            for (const answeredBy of uncalibrated) {
+                expect(CalibratedContinuesProbability(0.99, answeredBy)).toBeNull();
+            }
+        });
+
+        it('keeps continuity for LLM Decision answered by a chat model it was not fitted on', () => {
+            // The review's probe: GPT-OSS-120B's fit turns a raw 0.75 into a calibrated 0.25, a
+            // "leaves". Applied to another chat model's answer, that would route it away.
+            const answers = { route: choice(WRITER.ID, 0.9), continues: likelihood(0.75) };
+            expect(CalibratedContinuesProbability(0.75, LLM_DECISION)).toBeCloseTo(0.25, 2);
+            expect(InterpretRoutingAnswers(input(), answered(answers, LLM_DECISION)).Verdict).toBe('Routed');
+            const other = InterpretRoutingAnswers(input(), answered(answers, { ModelName: 'LLM Decision', ResolvedModel: 'GPT 5.5 Instant' }));
+            expect(other.Verdict).toBe('KeptContinuity');
+            expect(other.Reason).toBe('the thread likelihood is uncalibrated for LLM Decision (GPT 5.5 Instant)');
+        });
+
+        it('keeps continuity for Jev at a version it was not fitted on', () => {
+            // The review's probe: Jev's fit turns a raw 0.8 into a calibrated 0.29, a "leaves".
+            const answers = { route: choice(WRITER.ID, 0.9), continues: likelihood(0.8) };
+            expect(InterpretRoutingAnswers(input(), answered(answers)).Verdict).toBe('Routed');
+            const edited = InterpretRoutingAnswers(input(), answered(answers, { ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.14-20261101' }));
+            expect(edited.Verdict).toBe('KeptContinuity');
+            expect(edited.Reason).toContain('uncalibrated for Jev (typesafe/jev-1.14-20261101)');
+        });
+
+        it('keeps continuity when the probability is not a number', () => {
+            const outcome = InterpretRoutingAnswers(input(), answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(Number.NaN) }));
+            expect(outcome.Verdict).toBe('KeptContinuity');
         });
 
         it('routes on a raw answer the uncalibrated check called unsure', () => {
@@ -151,10 +201,8 @@ describe('conversation routing decision', () => {
         });
 
         it('keeps continuity when the answering model is unnamed or uncalibrated, however sure it sounds', () => {
-            for (const model of [undefined, 'Some Other Model']) {
-                // Built directly: passing undefined to answered() would take its 'Jev' default
-                const result: RoutingDecisionAnswers = { Success: true, Answers: { route: choice(WRITER.ID, 0.99), continues: likelihood(0.01) }, ModelName: model };
-                const outcome = InterpretRoutingAnswers(input(), result);
+            for (const answeredBy of [{}, { ModelName: 'Jev' }, { ModelName: 'Some Other Model', ResolvedModel: 'x' }]) {
+                const outcome = InterpretRoutingAnswers(input(), answered({ route: choice(WRITER.ID, 0.99), continues: likelihood(0.01) }, answeredBy));
                 expect(outcome.Verdict).toBe('KeptContinuity');
                 expect(outcome.Reason).toContain('uncalibrated');
             }
