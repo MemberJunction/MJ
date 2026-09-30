@@ -305,14 +305,19 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * quick succession (e.g., multiple engines during startup).
      * The throttle is armed only by a check whose status request succeeded — a check
      * that threw or got no timestamps proved nothing, so the next caller checks again.
-     * Concurrent checks share one in-flight request (see {@link CheckToSeeIfRefreshNeeded}).
+     * A caller arriving while a check is in flight is told no refresh is needed, as the
+     * in-flight owner acts on the answer (see {@link CheckToSeeIfRefreshNeeded}).
      * Does NOT affect forced Refresh() calls. Default: 30 000 ms.
      */
     public static MinRefreshCheckIntervalMs: number = 30000;
 
     /** When the last SUCCESSFUL refresh check's status request completed; 0 = never. */
     private _lastRefreshCheckAt: number = 0;
-    /** Single-flight slot for {@link CheckToSeeIfRefreshNeeded}; null when no check is running. */
+    /**
+     * The check currently running in {@link CheckToSeeIfRefreshNeeded}; null when none is. While
+     * set, a non-bypassing caller is answered `false` without a request — the owner of this check
+     * acts on its answer. Held as the promise (not a flag) so only its owner clears it.
+     */
     private _refreshCheckInFlight: Promise<boolean> | null = null;
     /** When a server-loaded metadata snapshot was last adopted (see adoptServerMetadata); 0 = never. */
     private _lastServerMetadataLoadAt = 0;
@@ -5394,20 +5399,26 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * member entity was just written, and the throttle otherwise answers "fresh" for any check
      * arriving within the window of the previous one — which would silently drop the second of
      * two permission changes made less than the window apart. For the same reason a bypassing
-     * caller never joins an in-flight check: that check may have started before the write.
+     * caller always runs its own check, even while another is in flight: that check may have
+     * started before the write.
      *
      * The throttle is armed only when the status request succeeded (returned timestamps). A
      * check that throws or returns no timestamps leaves it unarmed, so a retried boot inside
      * the window really checks instead of reading "current" and loading nothing (#4887).
-     * Concurrent non-bypassing callers join the check already in flight and share its answer,
-     * which is what keeps N engines starting together down to one request.
+     * A non-bypassing caller arriving while a check is in flight is told no refresh is needed,
+     * as the in-flight owner acts on the answer; that keeps N engines starting together down to
+     * one request. It must not share the owner's answer: a shared `true` would send every caller
+     * into its own full metadata reload (preValidateAndRefresh / backgroundValidateAndRefresh /
+     * RefreshIfNeeded load outside Config's reload single-flight). For the same reason it gets
+     * `false`, not the owner's rejection, when the owner's check throws.
      * @returns True if refresh is needed, false otherwise
      */
     public async CheckToSeeIfRefreshNeeded(providerToUse?: IMetadataProvider, bypassMinCheckInterval?: boolean): Promise<boolean> {
         if (!this.AllowRefresh) return false;
 
         if (!bypassMinCheckInterval && this._refreshCheckInFlight) {
-            return this._refreshCheckInFlight;
+            LogStatusEx({ message: `[RefreshCheck] Skipped — a check is already in flight; its caller acts on the answer`, verboseOnly: true });
+            return false;
         }
 
         const now = Date.now();

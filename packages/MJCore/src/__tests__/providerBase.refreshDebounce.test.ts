@@ -4,8 +4,8 @@
  * Verifies that MinRefreshCheckIntervalMs prevents redundant network calls
  * when CheckToSeeIfRefreshNeeded / RefreshIfNeeded are called in quick
  * succession (e.g., multiple engines during startup), that only a check whose
- * status request succeeded arms that throttle, and that concurrent checks
- * share one in-flight request.
+ * status request succeeded arms that throttle, and that a caller arriving
+ * while a check is in flight gets `false` without a request of its own.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -82,11 +82,11 @@ describe('ProviderBase Refresh Check Debounce', () => {
             provider.CheckToSeeIfRefreshNeeded(),
         ]);
 
-        // The first call starts the check; the other four join it while it is in flight
-        // (single-flight), so they share its one network request and its answer. The throttle
-        // cannot do this — it is armed only after a check's status request succeeds.
+        // The first call starts the check; the other four arrive while it is in flight and are
+        // told no refresh is needed (the owner acts on the answer). The throttle cannot do this —
+        // it is armed only after a check's status request succeeds.
         expect(refreshTimestampsSpy).toHaveBeenCalledTimes(1);
-        expect(new Set(results).size).toBe(1);
+        expect(results.slice(1)).toEqual([false, false, false, false]);
     });
 
     it('should not arm the throttle when the status request throws (#4887)', async () => {
@@ -110,16 +110,33 @@ describe('ProviderBase Refresh Check Debounce', () => {
         expect(refreshTimestampsSpy).toHaveBeenCalledTimes(2);
     });
 
-    it('should share one in-flight check among concurrent callers (#4887)', async () => {
+    it('should answer false to callers arriving while a check is in flight (#4887)', async () => {
         ProviderBase.MinRefreshCheckIntervalMs = 5000;
         refreshTimestampsSpy.mockImplementation(
             (() => new Promise<boolean>(resolve => setTimeout(() => resolve(true), 20))) as never
         );
-
-        const results = await Promise.all([1, 2, 3, 4, 5].map(() => provider.CheckToSeeIfRefreshNeeded()));
+        // Make the owner's real answer "obsolete" (true), so the assertions below prove the other
+        // callers are not handed it — a shared true would send each into its own full reload.
+        vi.spyOn(provider, 'LocalMetadataObsolete').mockReturnValue(true);
+        const [first, ...rest] = await Promise.all([1, 2, 3, 4, 5].map(() => provider.CheckToSeeIfRefreshNeeded()));
 
         expect(refreshTimestampsSpy).toHaveBeenCalledTimes(1);
-        expect(new Set(results).size).toBe(1);
+        expect(first).toBe(true);
+        expect(rest).toEqual([false, false, false, false]);
+    });
+
+    it('should answer false, not the rejection, to a caller arriving while a check that rejects is in flight (#4887)', async () => {
+        ProviderBase.MinRefreshCheckIntervalMs = 5000;
+        refreshTimestampsSpy.mockImplementationOnce(
+            (() => new Promise<boolean>((_resolve, reject) => setTimeout(() => reject(new Error('network down')), 20))) as never
+        );
+
+        const owner = provider.CheckToSeeIfRefreshNeeded();
+        const concurrent = provider.CheckToSeeIfRefreshNeeded();
+
+        await expect(owner).rejects.toThrow('network down');
+        await expect(concurrent).resolves.toBe(false);
+        expect(refreshTimestampsSpy).toHaveBeenCalledTimes(1);
     });
 
     it('should run its own check for a bypassMinCheckInterval caller during an in-flight check (#4887)', async () => {

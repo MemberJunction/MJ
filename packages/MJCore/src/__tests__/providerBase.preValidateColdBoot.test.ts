@@ -7,14 +7,23 @@
  * (warm/fast-start from a local cache) must still perform its check.
  */
 
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ProviderConfigDataBase } from '../generic/interfaces';
+import { ProviderBase } from '../generic/providerBase';
 import { TestMetadataProvider } from './mocks/TestMetadataProvider';
 
 describe('ProviderBase preValidateAndRefresh after a cold boot', () => {
     const testConfig = new ProviderConfigDataBase({}, '__mj', [], [], true);
+    const originalInterval = ProviderBase.MinRefreshCheckIntervalMs;
+
+    beforeEach(() => {
+        // The cold-boot skip is measured against this interval; pin it so a change to the
+        // default (or another file's override) cannot make the skip window vanish.
+        ProviderBase.MinRefreshCheckIntervalMs = 30000;
+    });
 
     afterEach(() => {
+        ProviderBase.MinRefreshCheckIntervalMs = originalInterval;
         vi.restoreAllMocks();
     });
 
