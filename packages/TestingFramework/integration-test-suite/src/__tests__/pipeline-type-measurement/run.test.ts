@@ -55,7 +55,7 @@ function mockBackend(processBatch?: (spec: MeasurementSpec, ids: readonly string
         LoadCandidates: vi.fn<MeasurementBackend['LoadCandidates']>(async () => ({ LabelColumn: 'Category', Records: ROWS.map((r) => ({ RecordID: r.RecordID, Label: r.Label })) })),
         LoadDescriptionSources: vi.fn<MeasurementBackend['LoadDescriptionSources']>(async () => ({ A: 'About A' })),
         ResolvePromptIDs: vi.fn<MeasurementBackend['ResolvePromptIDs']>(async () => ({ LLM: 'llm-id', Decision: 'decision-id' })),
-        CreateBatchProcessor: vi.fn<MeasurementBackend['CreateBatchProcessor']>((spec): BatchProcessor => {
+        CreateBatchProcessor: vi.fn<MeasurementBackend['CreateBatchProcessor']>((_type, spec): BatchProcessor => {
             specs.push(spec);
             const run = processBatch ?? (async (s: MeasurementSpec, ids: readonly string[]) => new Map(ids.map((id) => [id, answer(s, id)])));
             return { ProcessBatch: (ids) => run(spec, ids) };
@@ -97,7 +97,12 @@ describe('RunMeasurement --dry-run', () => {
         expect(outcome.DryRun).toBe(true);
         expect(lines[0]).toBe('Sample: 8 of 8 requested (A 4, B 4), from 8 candidate records.');
         expect(lines[1]).toBe('Descriptions: no source description for B; the value is used.');
-        expect(lines[2]).toBe('Planned calls: 2 rep(s) x 2 types x 8 records = 32 prompt runs, in 12 ProcessBatch calls of up to 3 records.');
+        expect(lines.slice(2, 5)).toEqual([
+            'Value descriptions (Decision: Choice option descriptions; LLM: listed in its constraint block and in valueDescriptions):',
+            '  A: About A',
+            '  B: B',
+        ]);
+        expect(lines[5]).toBe('Planned calls: 2 rep(s) x 2 types x 8 records = 32 prompt runs, in 12 ProcessBatch calls of up to 3 records.');
         expect(lines.at(-1)).toBe('--dry-run: no prompt was run.');
         expect(backend.CreateBatchProcessor).not.toHaveBeenCalled();
         expect(backend.ReadPromptRunCosts).not.toHaveBeenCalled();

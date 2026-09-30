@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { BuildMeasurementReport } from '../../pipeline-type-measurement/report';
 import type { ReportInput } from '../../pipeline-type-measurement/report';
-import { FormatCost, FormatPercent, RenderReportMarkdown } from '../../pipeline-type-measurement/render';
+import { FormatCost, FormatPercent, RenderReportMarkdown, TableCellText } from '../../pipeline-type-measurement/render';
 import type { MeasurementOptions } from '../../pipeline-type-measurement/types';
 import { COSTS, PREDICTIONS, RunCost, SAMPLE } from './fixtures';
 
@@ -48,11 +48,14 @@ describe('BuildMeasurementReport', () => {
         expect(report.Types.LLM.Latency).toEqual({ Known: 8, P50Ms: 1000, P90Ms: 1000 });
     });
 
-    it('notes the fallback descriptions, the shared descriptions and the missing-#4880 cost caveat', () => {
+    it('notes the fallback descriptions, how each type gets the descriptions, and the missing-#4880 cost caveat', () => {
         const notes = report.Notes.join('\n');
         expect(report.FallbackDescriptionValues).toEqual(['A']);
         expect(notes).toMatch(/No source description for: A\./);
-        expect(notes).toMatch(/Both types see the same value descriptions/);
+        expect(notes).toMatch(/Decision gets them as its Choice question's option descriptions/);
+        expect(notes).toMatch(/constraint block .* lists each allowed value with its description/);
+        expect(notes).toMatch(/only if that template renders \{\{ constraints \}\}/);
+        expect(notes).not.toMatch(/LLM measurement prompt lists the same descriptions/);
         expect(notes).toMatch(/TotalCost.*falling back to Cost/);
         expect(notes).toMatch(/#4880/);
         expect(notes).not.toMatch(/lower bound/);
@@ -63,6 +66,10 @@ describe('BuildMeasurementReport', () => {
         partial.set('LLM-1-r1', RunCost('LLM-1-r1', null));
         const notes = BuildMeasurementReport({ ...INPUT, Costs: partial }).Notes.join('\n');
         expect(notes).toMatch(/LLM: 7 of 8 answers have a prompt run with a known cost/);
+    });
+
+    it('records the value descriptions both types saw', () => {
+        expect(report.Setup.ValueDescriptions).toEqual({ A: 'A', B: 'About B' });
     });
 
     it('holds one ID-only row per answer', () => {
@@ -80,7 +87,7 @@ describe('RenderReportMarkdown', () => {
     const markdown = RenderReportMarkdown(BuildMeasurementReport(INPUT));
 
     it('renders every section', () => {
-        for (const heading of ['# Feature Pipeline type measurement: MJ: Actions.Category', '## Results', '## Recall per value', '## Agreement between the types', '## Decision calibration', '## Escalation simulation (plan 5.4)', '## Notes']) {
+        for (const heading of ['# Feature Pipeline type measurement: MJ: Actions.Category', '## Value descriptions', '## Results', '## Recall per value', '## Agreement between the types', '## Decision calibration', '## Escalation simulation (plan 5.4)', '## Notes']) {
             expect(markdown).toContain(heading);
         }
     });
@@ -89,6 +96,12 @@ describe('RenderReportMarkdown', () => {
         expect(markdown).toContain('| Repeatability (rep 1 against rep 2) | 50.0% | 25.0% |');
         expect(markdown).toContain('| 0.60 | 87.5% | 37.5% | 4.750000 USD |');
         expect(markdown).toContain('ECE 0.3125 over 8 answers with a confidence');
+    });
+
+    it('lists each value\'s description, safe for a table cell', () => {
+        expect(markdown).toContain('| A | A |');
+        expect(markdown).toContain('| B | About B |');
+        expect(TableCellText('Reads | writes\n  files')).toBe('Reads \\| writes files');
     });
 
     it('formats missing numbers as n/a', () => {

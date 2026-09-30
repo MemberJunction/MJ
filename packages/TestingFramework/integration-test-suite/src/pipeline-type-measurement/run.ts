@@ -32,8 +32,8 @@ export interface MeasurementBackend {
     LoadDescriptionSources(values: readonly string[]): Promise<Record<string, string | null>>;
     /** The prompt each type runs, resolved from its name. */
     ResolvePromptIDs(): Promise<Record<MeasuredPipelineType, string>>;
-    /** A processor for one type in one rep. */
-    CreateBatchProcessor(spec: MeasurementSpec): BatchProcessor;
+    /** A processor for one type in one rep (the rig's is `CreateMeasurementProcessor`'s). */
+    CreateBatchProcessor(type: MeasuredPipelineType, spec: MeasurementSpec): BatchProcessor;
     /** Each prompt run's cost and latency, once its saves have finished. */
     ReadPromptRunCosts(promptRunIDs: readonly string[]): Promise<Map<string, PromptRunCost>>;
 }
@@ -106,7 +106,10 @@ export async function PrepareMeasurement(options: MeasurementOptions, backend: M
     return { LabelColumn: candidates.LabelColumn, CandidateCount: candidates.Records.length, Sample: sample, Descriptions: descriptions, Specs: specs, Plan: plan };
 }
 
-/** The lines a run prints before it starts (and all a dry run prints): the sample and the planned calls. */
+/**
+ * The lines a run prints before it starts (and all a dry run prints): the sample, the value
+ * descriptions both arms see, and the planned calls.
+ */
 export function FormatPlan(setup: MeasurementSetup, options: MeasurementOptions): string[] {
     const perValue = Object.entries(CountPerValue(setup.Sample, options.Values)).map(([value, count]) => `${value} ${count}`).join(', ');
     const calls = setup.Plan.reduce((sum, run) => sum + run.Batches.reduce((n, batch) => n + batch.length, 0), 0);
@@ -115,6 +118,8 @@ export function FormatPlan(setup: MeasurementSetup, options: MeasurementOptions)
     return [
         `Sample: ${setup.Sample.length} of ${options.SampleSize} requested (${perValue}), from ${setup.CandidateCount} candidate records.`,
         fallback.length > 0 ? `Descriptions: no source description for ${fallback.join(', ')}; the value is used.` : 'Descriptions: every value has its own.',
+        'Value descriptions (Decision: Choice option descriptions; LLM: listed in its constraint block and in valueDescriptions):',
+        ...options.Values.map((value) => `  ${value}: ${setup.Descriptions.Descriptions[value]}`),
         `Planned calls: ${options.Reps} rep(s) x 2 types x ${setup.Sample.length} records = ${calls} prompt runs, in ${batchCalls} ProcessBatch calls of up to ${options.BatchSize} records.`,
         ...setup.Plan.map((run) => `  rep ${run.Rep}: ${run.Type} (${run.Batches.length} batch(es))`),
     ];
@@ -152,7 +157,7 @@ async function executePlan(setup: MeasurementSetup, backend: MeasurementBackend,
     const predictions: RecordPrediction[] = [];
     const timings: BatchTiming[] = [];
     for (const run of setup.Plan) {
-        const processor = backend.CreateBatchProcessor(setup.Specs[run.Type]);
+        const processor = backend.CreateBatchProcessor(run.Type, setup.Specs[run.Type]);
         for (const [i, batch] of run.Batches.entries()) {
             const outcome = await runBatch(processor, run, batch, setup.LabelColumn, io);
             predictions.push(...outcome.Predictions);

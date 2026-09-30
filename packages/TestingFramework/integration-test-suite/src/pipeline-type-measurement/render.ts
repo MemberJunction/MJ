@@ -12,6 +12,7 @@ import type { MeasuredPipelineType } from './types';
 export function RenderReportMarkdown(report: MeasurementReport): string {
     return [
         renderSetup(report),
+        renderValueDescriptions(report),
         renderHeadline(report),
         renderRecall(report),
         renderAgreement(report),
@@ -48,6 +49,11 @@ function table(header: readonly string[], rows: ReadonlyArray<readonly string[]>
     return [line(header), line(header.map(() => '---')), ...rows.map(line)].join('\n');
 }
 
+/** Text from the database made safe for one table cell: no line breaks, and pipes escaped. */
+export function TableCellText(text: string): string {
+    return text.replace(/\s*[\r\n]+\s*/g, ' ').replace(/\|/g, '\\|');
+}
+
 function renderSetup(report: MeasurementReport): string {
     const s = report.Setup;
     const perValue = Object.entries(report.Sample.PerValue).map(([value, count]) => `${value} ${count}`).join(', ');
@@ -60,6 +66,15 @@ function renderSetup(report: MeasurementReport): string {
             ['Reps', String(s.Reps)], ['Seed', String(s.Seed)], ['Batch size', String(s.BatchSize)],
             ['LLM prompt', s.LLMPrompt], ['Decision prompt', s.DecisionPrompt],
         ]),
+    ].join('\n\n');
+}
+
+function renderValueDescriptions(report: MeasurementReport): string {
+    const rows = report.Setup.Values.map((value) => [TableCellText(value), TableCellText(report.Setup.ValueDescriptions[value] ?? value)]);
+    return [
+        '## Value descriptions',
+        'Both types get these: Decision as its Choice option descriptions, the LLM in its constraint block and `valueDescriptions`.',
+        table(['Value', 'Description'], rows),
     ].join('\n\n');
 }
 

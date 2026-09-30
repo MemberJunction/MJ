@@ -11,8 +11,10 @@
  * WHAT IT RUNS. Two in-memory specs, identical except for `PipelineType` (and the prompt each type
  * runs), each with one enum output whose `ValueDescriptions` are each value's own description (for a
  * category, its `Description`; the value itself when there is none, which the report says). For each
- * rep and each type, a new `InferProcessor` runs the sample through `ProcessBatch` in batches of
- * `--batch-size` (RecordSetProcessor's default is 100), timed around each call.
+ * rep and each type, a new processor runs the sample through `ProcessBatch` in batches of
+ * `--batch-size` (RecordSetProcessor's default is 100), timed around each call: a plain
+ * `InferProcessor` for Decision, and for LLM one that adds the value descriptions to its prompt data
+ * (`CreateMeasurementProcessor` in `../src/pipeline-type-measurement/processors.ts`).
  *
  * WHAT IT NEVER DOES. It never writes a record back. The output's target is the label column only
  * because a Decision pipeline supports field targets alone. `InferProcessor.ProcessBatch` does not
@@ -32,9 +34,31 @@
  *
  * The label field is never in `record`. The constraint block names the output (`- **Category**
  * ($.Category):`) and lists the allowed values. The LLM prompt must answer with a JSON object keyed
- * by the output's Name, which is the label column: `{ "Category": "<one of --values>" }`. Decision
- * receives the same data canonicalised as its state, and one Choice question whose options carry the
- * value descriptions.
+ * by the output's Name, which is the label column: `{ "Category": "<one of --values>" }`.
+ *
+ * THE VALUE DESCRIPTIONS reach both types. Decision receives the prompt data canonicalised as its
+ * state, and one Choice question whose options carry the descriptions. For LLM, the constraint block
+ * lists each allowed value with its description (`* "System": <description>`), and
+ * `valueDescriptions` holds them as `{ <output Name>: { <value>: <description> } }`. The rig cannot see
+ * the LLM prompt's template, so the template must render `{{ constraints }}`; it need not, and should
+ * not, list the values or descriptions itself. A template that works for any entity:
+ *
+ *   You classify one record into exactly one allowed value of each output listed below.
+ *
+ *   ## The record
+ *
+ *   {% for key, value in record %}{% if key != 'ID' and key != 'RecordID' and key != 'EntityID' %}- **{{ key }}:** {{ value }}
+ *   {% endif %}{% endfor %}
+ *
+ *   {{ constraints }}
+ *
+ *   ## Response
+ *
+ *   Respond with a JSON object and nothing else. Its keys are the output names listed in the
+ *   constraints above (the bold names), and each value is exactly one of that output's allowed values.
+ *   Add no other keys and no explanation.
+ *
+ * Bind it to one chat model, with `ResponseFormat` JSON.
  *
  * COST. Each prompt run's `TotalCost` (own plus descendant cost), falling back to `Cost`, read once
  * the rows reach a final status (their finalize save sets status and cost together). A Decision
@@ -42,8 +66,9 @@
  * on branches that carry #4880; the report says so.
  *
  * OUTPUT. `report.md` and `report.json` in `--out`, which must be outside every git working tree. The
- * report holds record IDs, labels and numbers, never a record's text. The pure logic (sampling,
- * specs, metrics, report) lives in `../src/pipeline-type-measurement/` and is unit-tested there.
+ * report holds record IDs, labels, the value descriptions and numbers, never a measured record's text.
+ * The logic (sampling, specs, processors, metrics, report) lives in `../src/pipeline-type-measurement/`
+ * and is unit-tested there.
  *
  * USAGE (from the repo root, which holds `.env` for the database):
  *   npx tsx packages/TestingFramework/integration-test-suite/rigs/feature-pipeline-type-measurement.ts \
@@ -58,16 +83,16 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { performance } from 'node:perf_hooks';
-import { CompositeKey, EntityFieldInfo, EntityInfo, RunView, UserInfo } from '@memberjunction/core';
+import { CompositeKey, EntityFieldInfo, EntityInfo, RunView } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
-import { InferProcessor } from '@memberjunction/record-set-processor';
 import type { RecordProcessorContext, RecordRef } from '@memberjunction/record-set-processor-base';
 import { BootstrapAI, Settle } from './lib/ai-bootstrap';
 import type { AICtx } from './lib/ai-bootstrap';
 import { ParseMeasurementArgs } from '../src/pipeline-type-measurement/args';
 import { IsPromptRunFinished, PROMPT_RUN_COST_FIELDS, ToPromptRunCost } from '../src/pipeline-type-measurement/cost-and-time';
 import type { PromptRunCostRow } from '../src/pipeline-type-measurement/cost-and-time';
+import { CreateMeasurementProcessor } from '../src/pipeline-type-measurement/processors';
 import { AssertOutputOutsideRepo } from '../src/pipeline-type-measurement/repo-guard';
 import { RunMeasurement } from '../src/pipeline-type-measurement/run';
 import type { BatchProcessor, MeasurementBackend, MeasurementIO } from '../src/pipeline-type-measurement/run';
@@ -130,9 +155,9 @@ class LiveMeasurementBackend implements MeasurementBackend {
         return { LLM: promptIDNamed(this.options.LLMPromptName), Decision: promptIDNamed(this.options.DecisionPromptName) };
     }
 
-    public CreateBatchProcessor(spec: MeasurementSpec): BatchProcessor {
-        const processor = new InferProcessor(spec.PromptID, undefined, spec);
-        processor.WritesHistory = false;
+    public CreateBatchProcessor(type: MeasuredPipelineType, spec: MeasurementSpec): BatchProcessor {
+        // WritesHistory off; for LLM, the value descriptions in the prompt data.
+        const processor = CreateMeasurementProcessor(type, spec);
         const entityID = this.entity().ID;
         // No recordProcessID or processRunID: nothing about this run is recorded as a pipeline run.
         const context: RecordProcessorContext = { contextUser: this.ctx.user, provider: this.ctx.provider, entityID };

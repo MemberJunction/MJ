@@ -1,8 +1,8 @@
 /**
  * report.ts — assembles the measurement report (`report.json`) and renders it as `report.md`.
  *
- * Pure. The report holds record IDs, labels (values of the label field) and numbers, never a record's
- * text: nothing that reaches this module carries any.
+ * Pure. The report holds record IDs, labels (values of the label field), the value descriptions both
+ * arms saw, and numbers, never a measured record's text: nothing that reaches this module carries any.
  */
 import { SimulateEscalation, SummarizeCalibration } from './calibration';
 import type { CalibrationSummary, EscalationPoint } from './calibration';
@@ -67,6 +67,8 @@ export interface MeasurementReport {
         BatchSize: number;
         LLMPrompt: string;
         DecisionPrompt: string;
+        /** The description each value had, as both arms saw it (the value itself for a fallback). */
+        ValueDescriptions: Record<string, string>;
     };
     Sample: { Size: number; PerValue: Record<string, number> };
     FallbackDescriptionValues: string[];
@@ -104,6 +106,7 @@ function buildSetup(input: ReportInput): MeasurementReport['Setup'] {
     return {
         EntityName: o.EntityName, LabelField: o.LabelField, LabelColumn: input.LabelColumn, TextFields: [...o.TextFields], Values: [...o.Values],
         RequestedSampleSize: o.SampleSize, Reps: o.Reps, Seed: o.Seed, BatchSize: o.BatchSize, LLMPrompt: o.LLMPromptName, DecisionPrompt: o.DecisionPromptName,
+        ValueDescriptions: { ...input.Descriptions.Descriptions },
     };
 }
 
@@ -142,16 +145,16 @@ function buildRecordRows(input: ReportInput): ReportRecordRow[] {
 /** The report's notes: how it was measured, and every caveat a reader needs. */
 export function BuildReportNotes(report: MeasurementReport): string[] {
     const notes = [
-        'Both types see the same value descriptions: the Decision spec passes each value\'s own description as ValueDescriptions, and the LLM measurement prompt lists the same descriptions.',
+        'Both types get the same value descriptions (under Setup). Decision gets them as its Choice question\'s option descriptions. The LLM gets them in its prompt data: the constraint block (constraints and ConstraintBlock) lists each allowed value with its description, and valueDescriptions holds them by output. The rig cannot see the LLM prompt\'s template, so the LLM sees them only if that template renders {{ constraints }} (or valueDescriptions).',
         report.FallbackDescriptionValues.length > 0
             ? `No source description for: ${report.FallbackDescriptionValues.join(', ')}. Each of these uses the value itself as its description, because Decision needs a description for every value.`
             : 'Every value had its own source description.',
-        `Prompt data, for both types: { record: { <primary key>, ${report.Setup.TextFields.join(', ')} }, constraints, ConstraintBlock }. Decision receives it canonicalised as its state; the label field is never in it.`,
+        `Prompt data, for both types: { record: { <primary key>, ${report.Setup.TextFields.join(', ')} }, constraints, ConstraintBlock }, plus valueDescriptions for the LLM. Decision receives it canonicalised as its state; the label field is never in it.`,
         'Cost is each prompt run\'s TotalCost (its own cost plus descendant cost), falling back to Cost, read after the runs\' saves finished. A Decision failover or delegated chat run is a child prompt run, and its cost reaches the parent\'s TotalCost only on branches that carry #4880. On a branch without #4880, the Decision cost can be missing that delegated cost.',
         `Wall time is measured around each ProcessBatch call (batches of up to ${report.Setup.BatchSize} records; one InferProcessor per type per rep; no caching; WritesHistory off; nothing written back). Latency is each prompt run's ExecutionTimeMS.`,
         'A failed or missing answer counts as wrong. Agreement and repeatability count a record only when both answers succeeded and match.',
         'The escalation simulation follows InferProcessor: a Decision answer below the floor (or with no confidence) takes the same rep\'s LLM answer, and a failed Decision answer fails without escalating.',
-        'Records are identified by ID only. No record text is in this report.',
+        'Records are identified by ID only. No measured record\'s text is in this report.',
     ];
     return [...notes, ...costCaveats(report)];
 }
