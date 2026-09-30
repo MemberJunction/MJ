@@ -131,6 +131,9 @@ Production's code checks never gate 260 rounds, where an action failed or may ha
   - A stricter threshold doesn't fix that: at 0.95 it is 18% and 41%.
   - Calibration doesn't either: calibrated, no threshold reaches 70% precision with meaningful coverage.
   - The generic question discriminates worse still.
+- **Re-scored after review (2026-09-30), from the cached decisions, with no model calls.** The replay now also excludes rounds production never gates: a ForEach or While loop's iterations, actions after any other kind of turn, and non-Loop agents' runs. None of those occur in this corpus, so every figure above stands. Two further notes:
+  - **The decisions weren't pinned.** They ran through `Default Decision` with failover, but Jev answered all 2,956 of them.
+  - **Chat replies are counted as `finish`.** Of the 129 finish rounds whose next turn was a Chat reply, 67 pass at 0.9. If a Chat reply counts as `continue` instead, the gate ends **28.6%** of the rounds where the agent went on to act (not 22.4%), and skips 45.2% of the rest (not 48.6%). That strengthens the case for opt-in.
 - **This overstates the risk in one way.** The replay wrote a gate for **every** round, while a live loop model attaches `finishIf` only when it expects to finish, so many of these `continue` rounds would never carry a gate.
 - **It understates the risk in another.** A false finish returns the model's pre-written message in place of work the agent went on to do.
 
