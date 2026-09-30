@@ -1603,6 +1603,7 @@ flowchart TD
 - **Incremental state** (`--incremental`) is saved only after the commit, so a failed push never marks its files as pushed.
 - **PostgreSQL checks deferred foreign keys at COMMIT.** A delete that breaks a foreign key therefore fails when the push commits, and the error cannot be tied to one record.
 - **On PostgreSQL, any statement that fails inside the push transaction aborts it,** including a read. A healthy database does not hit this. A database whose views are missing columns that the metadata expects fails the whole atomic push at the first such read.
+- **Metadata is reloaded inside the transaction.** After a directory writes a metadata-dataset entity, the push reloads metadata on that same transaction before the next directory runs, so the next directory sees those rows. Each reload is a full metadata load. Phase 2 does not reload again; the per-directory reload already covered those writes. Before Phase 2.5 the push reloads only when a deletion since the start of Phase 2 touched a metadata dataset. A dry run does not reload. After a rollback, a pool read puts back only the committed rows. If that read fails, the rollback error is still the one reported.
 
 ### Trade-offs of the shared default
 
