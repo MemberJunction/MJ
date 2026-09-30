@@ -21,7 +21,7 @@ Every measurement:
 | finishIf gate | 4.6 | replay of 739 gated action rounds | at 0.9 it ends 22% of rounds the agent continued | opt-in (`finishIfMode`, default off; shadow to measure) | #4895, #4814 |
 | LLM vs Decision pipelines | 5.5 | 117 and 198 labelled rows | Decision matches or beats the LLM at ¼ the latency and ⅓ the cost | — | #4890 |
 | Escalation floors | 5.4 | the same | escalating to the LLM didn't help on either task | no floor recommended yet | #4890 |
-| Self-reported `confidence` | 3.4 | 546 recorded loop turns | carries no usable signal | don't gate on it | — |
+| Self-reported `confidence` | 3.4 | 546 recorded loop turns; 337 memory notes | the loop's carries no usable signal; Jev gates memory notes better than the extraction's own | loop: don't gate on it; memory: Jev at calibrated 0.6, opt-in | #4897 |
 
 ## 1. Sage agent discovery (Task 3.1)
 
@@ -153,9 +153,22 @@ Production's code checks never gate 260 rounds, where an action failed or may ha
 
 It isn't even monotonic. Run success is a crude proxy for whether a turn was right, but a number that is nearly constant and unrelated to outcomes can't carry a threshold.
 
-**Recommendation:**
-- **Don't make `confidence` load-bearing.** Where a gate is needed, ask a typed decision, as `finishIf` does.
-- **The memory manager** (`minConfidenceThreshold: 80`) already gates durable memory writes on this number. That gate should move to a typed Likelihood about the note itself, with its own labelled corpus, before it is trusted.
+**Recommendation:** don't make the loop agent's `confidence` load-bearing. Where a gate is needed, ask a typed decision, as `finishIf` does.
+
+### The Memory Manager's note gate (#4897)
+
+The Memory Manager keeps an extracted note when the extraction prompt's own `confidence` is at least 80. #4897 measures that against a typed Likelihood per note, on 60 synthetic conversations with 337 candidate notes labelled durable (153), ephemeral (true, but only about this conversation), wrong or speculative. Two repeats per model.
+
+| Gate | AUC | Precision | Recall | Ephemeral kept | Wrong kept | Speculative kept |
+|---|---|---|---|---|---|---|
+| Self-reported ≥ 80 (today) | 0.969 | 0.853 | 0.987 | 40.0% | 0% | 0% |
+| **Jev, calibrated 0.6** | **0.991** | **0.961** | 0.954 | **6.2%** | 0% | 3.4% |
+| LLM Decision, calibrated 0.6 | 0.908 | 0.814 | 0.856 | 16.9% | 11.5% | 20.7% |
+
+- **Unlike the loop agent's turn-level `confidence`, the extraction prompt's per-note confidence is informative.** Jev's gate is still better: it mostly stops conversation-only details from becoming durable memory.
+- **LLM Decision is worse than the self-report,** so only Jev is calibrated. A batch answered by any other model falls back to the self-reported rule, as a failed call does.
+- **The first run caught a design bug.** With every question worded the same and the note only in the state, Jev's answers were at chance (AUC 0.51), because a native driver may answer each question on its own. Each question now quotes its note.
+- **The gate ships off** (`EnableDecisionGate`). The corpus and the self-reported scores came from the same model family, which may flatter the self-report, so refit on real extraction data before turning it on by default.
 
 ## Findings across consumers
 
