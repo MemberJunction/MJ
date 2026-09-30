@@ -361,9 +361,10 @@ function BuildOwnerFallbackWarning(
     `(the owner of core schema '${coreSchema}'), because the installing login cannot both assign that owner ` +
     `and grant on the schema's objects afterwards (that needs IMPERSONATE on the owner and CONTROL on the database). ` +
     consequence +
-    `Remedy: remove the app (without --keep-data, which keeps this schema and makes the next install ` +
-    `reuse it as-is) and reinstall as a member of db_owner, which may both assign '${owner.OwnerName}' as ` +
-    `owner and grant on the schema's objects afterwards. To keep the data instead, run ` +
+    `Remedy: remove the app without --keep-data, which drops the schema and all of its data (with ` +
+    `--keep-data the next install reuses the schema as-is), and install it again as a member of db_owner, ` +
+    `which may both assign '${owner.OwnerName}' as owner and grant on the schema's objects afterwards. ` +
+    `To keep the data instead, run ` +
     `ALTER AUTHORIZATION ON SCHEMA::[${schemaName.replace(/]/g, ']]')}] TO [${owner.OwnerName.replace(/]/g, ']]')}] ` +
     `as db_owner after scripting out the schema's grants, because it drops them — see the Open App ` +
     `README section "Schema ownership on SQL Server".`
@@ -402,10 +403,11 @@ async function ResolveCoreSchemaOwner(
     CanControlDatabase: number | null;
   }>(
     `SELECT USER_NAME(s.principal_id) AS OwnerName, USER_NAME() AS CurrentUser, ` +
-    // QUOTENAME: HAS_PERMS_BY_NAME parses the securable as an identifier, so a raw owner name
-    // containing `.`, `[` or `]` returns 0/NULL even for db_owner (verified on SQL Server 2022).
+    // QUOTENAME (owner and database): HAS_PERMS_BY_NAME parses the securable as an identifier, so
+    // a raw name containing `.`, `[` or `]` returns 0/NULL even for db_owner (verified on SQL
+    // Server 2022, for an owner `john.smith` and a database `mj.review_4760`).
     `HAS_PERMS_BY_NAME(QUOTENAME(USER_NAME(s.principal_id)), 'USER', 'IMPERSONATE') AS CanImpersonateOwner, ` +
-    `HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'CONTROL') AS CanControlDatabase ` +
+    `HAS_PERMS_BY_NAME(QUOTENAME(DB_NAME()), 'DATABASE', 'CONTROL') AS CanControlDatabase ` +
     `FROM sys.schemas s WHERE s.name = '${EscapeSQLString(coreSchema)}'`
   );
   const row = rows[0];

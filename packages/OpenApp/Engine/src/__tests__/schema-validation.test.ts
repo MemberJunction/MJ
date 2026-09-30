@@ -363,6 +363,21 @@ describe('CreateAppSchema — SQL Server schema owner (#4756)', () => {
         // name the data-preserving remedy too.
         expect(result.Warning).toMatch(/--keep-data/);
         expect(result.Warning).toMatch(/ALTER AUTHORIZATION ON SCHEMA::\[bcsaas\] TO \[dbo\]/);
+        // Removing without --keep-data is what lets the reinstall recreate the schema, and it also
+        // deletes the app's data — the operator must be told before choosing that remedy.
+        expect(result.Warning).toMatch(/drops the schema and all of its data/);
+    });
+
+    it('passes the database name to HAS_PERMS_BY_NAME as a quoted identifier', async () => {
+        // HAS_PERMS_BY_NAME parses the securable as an identifier: in a database named
+        // `mj.review_4760`, a non-dbo db_owner member gets 0 from the raw DB_NAME() and 1 from
+        // QUOTENAME(DB_NAME()) (verified on SQL Server 2022), so the raw form sends a
+        // fully-permitted installer down the fallback.
+        const { provider, executeSql } = makeMockProvider([[], [{ OwnerName: 'dbo', CanImpersonateOwner: 1, CanControlDatabase: 1 }]]);
+        await CreateAppSchema('bcsaas', provider);
+        expect(executeSql.mock.calls[1][0] as string).toContain(
+            "HAS_PERMS_BY_NAME(QUOTENAME(DB_NAME()), 'DATABASE', 'CONTROL')"
+        );
     });
 
     it('falls back when the installer may impersonate the owner but lacks CONTROL on the database', async () => {
