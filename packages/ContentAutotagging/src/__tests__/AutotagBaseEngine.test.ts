@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { VectorDBBase } from '@memberjunction/ai-vectordb';
+import type { MJContentItemEntity } from '@memberjunction/core-entities';
 
 // Mock all external dependencies, preserving BaseEngine and related classes
 // Shared mock function so tests can reconfigure RunView behavior
@@ -234,8 +235,14 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
   // MJAICredentialBindingEntity, pulled in via BaseAIEngine) always exist —
   // otherwise adding any new core-entities export breaks this mock's load.
   const actual = await importOriginal<typeof import('@memberjunction/core-entities')>();
-  const mockVectorIndexes = [
-    { ID: 'idx-1', Name: 'test-index', VectorDatabaseID: 'vdb-1', EmbeddingModelID: 'embed-model-1' },
+  const mockVectorIndexes: Array<{
+    ID: string;
+    Name: string;
+    VectorDatabaseID: string;
+    EmbeddingModelID: string;
+    Dimensions?: number | null;
+  }> = [
+    { ID: 'idx-1', Name: 'test-index', VectorDatabaseID: 'vdb-1', EmbeddingModelID: 'embed-model-1', Dimensions: null },
   ];
   const mockKHInstance = {
     ContentSources: [],
@@ -875,6 +882,7 @@ describe('AutotagBaseEngine', () => {
         return {
           CreateRecords: mockCreateRecords,
           DeleteRecords: mockDeleteRecords,
+          QueryIndex: vi.fn().mockResolvedValue({ success: true, data: { matches: [] } }),
           TryWireColocatedHost: vi.fn().mockReturnValue(false),
           SupportsColocatedQuery: false,
           RequiresAPIKey: true,
@@ -1831,6 +1839,55 @@ describe('AutotagBaseEngine', () => {
         expect(result.embedded).toBe(0);
         expect(chunk.EmbeddingStatus).toBe('Pending');
         expect(chunk.Save).not.toHaveBeenCalled();
+      });
+
+      it("pins the vector index's embedding model and threads its Dimensions to AIEmbeddingRunner.RunEmbedding", async () => {
+        await setupVectorMocks();
+        const { KnowledgeHubMetadataEngine } = await import('@memberjunction/core-entities');
+        const index = KnowledgeHubMetadataEngine.Instance.VectorIndexes[0];
+        const original = index.Dimensions;
+        index.Dimensions = 1024;
+        try {
+          const chunk = makePendingChunk('chunk-dim', 'item-1', 'Chunk text to embed');
+          installChunkProvider([chunk], [makeParentItem('item-1')]);
+
+          await engine.EmbedPendingChunks(mockUser);
+
+          expect(mockRunEmbeddingFn).toHaveBeenCalled();
+          const lastCall = mockRunEmbeddingFn.mock.calls[mockRunEmbeddingFn.mock.calls.length - 1][0];
+          expect(lastCall.ModelID).toBe('embed-model-1');
+          expect(lastCall.Dimensions).toBe(1024);
+        } finally {
+          index.Dimensions = original;
+        }
+      });
+    });
+
+    describe('DetectVectorDuplicates', () => {
+      it("pins the vector index's embedding model and threads its Dimensions to AIEmbeddingRunner.RunEmbedding", async () => {
+        await setupVectorMocks();
+        const { KnowledgeHubMetadataEngine } = await import('@memberjunction/core-entities');
+        const index = KnowledgeHubMetadataEngine.Instance.VectorIndexes[0];
+        const original = index.Dimensions;
+        index.Dimensions = 768;
+        try {
+          // The dedup path reads only these fields of the item.
+          const item = {
+            ID: 'item-dedup',
+            Text: 'Some content for dedup',
+            ContentSourceID: 'source-1',
+            ContentSourceTypeID: 'type-1',
+            ContentTypeID: 'content-type-1',
+          } satisfies Partial<MJContentItemEntity>;
+          await engine.DetectVectorDuplicates(item as MJContentItemEntity, mockUser, true);
+
+          expect(mockRunEmbeddingFn).toHaveBeenCalled();
+          const lastCall = mockRunEmbeddingFn.mock.calls[mockRunEmbeddingFn.mock.calls.length - 1][0];
+          expect(lastCall.ModelID).toBe('embed-model-1');
+          expect(lastCall.Dimensions).toBe(768);
+        } finally {
+          index.Dimensions = original;
+        }
       });
     });
   });

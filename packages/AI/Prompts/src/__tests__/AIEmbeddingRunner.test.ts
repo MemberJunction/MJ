@@ -40,6 +40,7 @@ interface RecordedRun {
   ID: string;
   PromptID?: string;
   ModelID?: string;
+  UserID?: string | null;
   Status?: string;
   Success?: boolean;
   Result?: string;
@@ -104,6 +105,7 @@ const h = vi.hoisted(() => {
   /** Returned for 'MJ: AI Prompt Runs'; the runner's base class sets many more fields than these at runtime. */
   class FakePromptRun implements RecordedRun {
     public ID = '';
+    public UserID?: string | null = null;
     public Status?: string;
     public SaveCount = 0;
     public StatusAtSave: string[] = [];
@@ -409,6 +411,7 @@ describe('AIEmbeddingRunner', () => {
     const run = lastRun();
     expect(run?.ID).toBe(result.PromptRunID);
     expect(run?.PromptID).toBe(PROMPT_ID);
+    expect(run?.UserID).toBe(mockUser.ID);
     expect(run?.Success).toBe(true);
     expect(run?.Status).toBe('Completed');
     expect(run?.TokensUsed).toBe(20);
