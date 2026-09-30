@@ -3,6 +3,7 @@ import { BaseAction } from "@memberjunction/actions";
 import { Metadata, LogError, RunView, RunInEntityTransaction } from "@memberjunction/core";
 import { EscapeSQLString, RegisterClass } from "@memberjunction/global";
 import type { MJEntityFormContributionEntity } from "@memberjunction/core-entities";
+import { CONTRIBUTION_KEY_PATTERN } from "@memberjunction/interactive-component-types/forms";
 import {
     AddOutput,
     CheckScopedOwnership,
@@ -11,7 +12,6 @@ import {
     LoadComponent,
     LoadContribution,
     MapToComponentStatus,
-    CONTRIBUTION_KEY_PATTERN,
 } from "./_shared";
 
 /** The shape `RunInEntityTransaction` needs; providers that lack it run the work untransacted. */

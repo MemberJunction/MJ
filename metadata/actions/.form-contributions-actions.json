@@ -202,6 +202,16 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "ResultCode": "QUERY_FAILED",
+            "Description": "The duplicate-key lookup failed, so nothing was written."
+          },
+          "primaryKey": {
+            "ID": "0FB9E5C3-0EC5-45B4-89BA-D7C4C097C97F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "ResultCode": "INVALID_CONTRIBUTION_KEY",
             "Description": "The contribution key contains characters outside [A-Za-z0-9:._- ] or exceeds 256 characters."
           },

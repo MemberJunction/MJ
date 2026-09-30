@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import {
-    ApplySectionClaims,
     BumpMinorVersion,
     BumpPatchVersion,
     BumpMajorVersion,
@@ -11,8 +10,11 @@ import {
     ParseSpecParam,
     GetStringParam,
     GetNumberParam,
+    ResolveContributionRegistration,
 } from '../custom/interactive-forms/_shared';
 import type { RunActionParams } from '@memberjunction/actions-base';
+import type { IMetadataProvider } from '@memberjunction/core';
+import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 /**
  * The interactive-form action family shares a small kit of helpers in
@@ -227,48 +229,51 @@ describe('getNumberParam', () => {
 });
 
 /**
- * A spec's section claims land in three columns. One section always goes in the single-key
- * column, whichever field the spec used, and a position is kept only for a panel drawn inside a
- * section — the only case the column's CHECK constraint allows.
+ * Create and Modify both read a spec's registration through this one function, so the two
+ * resolve the related entity and derive the row's key the same way.
  */
-describe('ApplySectionClaims', () => {
-    const blank = () => ({ ReplacesSectionKey: null as string | null, ReplacesSectionKeys: null as string | null,
-        InSectionKey: null as string | null, SectionPosition: null as 'start' | 'end' | null });
+describe('ResolveContributionRegistration', () => {
+    const TICKETS = 'MJ_BizApps_Orders: Event Order Lines';
+    const provider = {
+        EntityByName: (name: string) => name.trim().toLowerCase() === TICKETS.toLowerCase()
+            ? { ID: 'ENT-TICKETS', Name: TICKETS } : undefined,
+    } as unknown as IMetadataProvider;
 
-    it('stores several replaced sections as a JSON array', () => {
-        const row = blank();
-        ApplySectionClaims(row, { replacesSectionKeys: ['identity', 'profile'] });
-        expect(row).toEqual({ ReplacesSectionKey: null, ReplacesSectionKeys: '["identity","profile"]', InSectionKey: null, SectionPosition: null });
+    function panelSpec(formContribution: Record<string, unknown>): ComponentSpec {
+        return {
+            name: 'TicketsPanel', componentRole: 'form-panel',
+            formContribution: { presentation: 'panel', title: 'Tickets', ...formContribution },
+        } as unknown as ComponentSpec;
+    }
+
+    it('resolves the related entity to its registered name and ID and derives the related key', () => {
+        const result = ResolveContributionRegistration(
+            provider, panelSpec({ relatedEntity: TICKETS.toLowerCase(), relatedJoinField: '[PersonID]' }), 'TicketsPanel');
+        expect('error' in result).toBe(false);
+        if ('error' in result) return;
+        expect(result.Contribution.relatedEntity).toBe(TICKETS);
+        expect(result.RowOptions).toEqual({ relatedEntityID: 'ENT-TICKETS', relatedEntityName: TICKETS, componentName: 'TicketsPanel' });
+        expect(result.WriteKey).toBe(`related:${TICKETS}:PersonID`);
     });
 
-    it('stores one replaced section in the single-key column, from either field', () => {
-        const a = blank();
-        ApplySectionClaims(a, { replacesSectionKeys: ['identity'] });
-        const b = blank();
-        ApplySectionClaims(b, { replacesSectionKey: 'identity' });
-        expect(a).toEqual(b);
-        expect(a.ReplacesSectionKey).toBe('identity');
-        expect(a.ReplacesSectionKeys).toBeNull();
+    it('derives the panel key from the component name when the spec names no key and claims no grid', () => {
+        const result = ResolveContributionRegistration(provider, panelSpec({}), 'TicketsPanel');
+        expect('error' in result ? null : result.WriteKey).toBe('panel:TicketsPanel');
     });
 
-    it('places a panel in a section at the position asked for', () => {
-        const row = blank();
-        ApplySectionClaims(row, { inSectionKey: 'identity', sectionPosition: 'end' });
-        expect(row).toMatchObject({ InSectionKey: 'identity', SectionPosition: 'end', ReplacesSectionKey: null });
+    it('fails with RELATED_ENTITY_NOT_FOUND for an unregistered related entity', () => {
+        const result = ResolveContributionRegistration(provider, panelSpec({ relatedEntity: 'Nope' }), 'TicketsPanel');
+        expect('error' in result ? result.error.ResultCode : null).toBe('RELATED_ENTITY_NOT_FOUND');
     });
 
-    it('keeps a position for a field claim, and drops it for anything not drawn inside a section', () => {
-        const fields = blank();
-        ApplySectionClaims(fields, { replacesFieldNames: ['Name'], sectionPosition: 'end' });
-        expect(fields.SectionPosition).toBe('end');
-        const slot = blank();
-        ApplySectionClaims(slot, { sectionPosition: 'end' });
-        expect(slot.SectionPosition).toBeNull();
+    it('fails with INVALID_CONTRIBUTION_KEY for a key outside the permitted character set', () => {
+        const result = ResolveContributionRegistration(provider, panelSpec({ contributionKey: "x'; DROP--" }), 'TicketsPanel');
+        expect('error' in result ? result.error.ResultCode : null).toBe('INVALID_CONTRIBUTION_KEY');
     });
 
-    it('clears claims a row had when the spec no longer makes them', () => {
-        const row = { ReplacesSectionKey: 'old', ReplacesSectionKeys: '["a","b"]', InSectionKey: 'x', SectionPosition: 'end' as const };
-        ApplySectionClaims(row, {});
-        expect(row).toEqual(blank());
+    it('fails with LINT_FAILED when the spec is not a form panel', () => {
+        const spec = { ...panelSpec({}), componentRole: 'form' } as ComponentSpec;
+        const result = ResolveContributionRegistration(provider, spec, 'TicketsPanel');
+        expect('error' in result ? result.error.ResultCode : null).toBe('LINT_FAILED');
     });
 });

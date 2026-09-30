@@ -2,9 +2,8 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { BaseAction } from "@memberjunction/actions";
 import { Metadata, LogError } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
-import type { MJEntityFormContributionEntity } from "@memberjunction/core-entities";
+import { ApplyContributionSpecToRow, type MJEntityFormContributionEntity } from "@memberjunction/core-entities";
 import type { ComponentSpec } from "@memberjunction/interactive-component-types";
-import { GetDeclaredFormContribution, type FormContributionSpec } from "@memberjunction/interactive-component-types/forms";
 import {
     AddOutput,
     BumpVersion,
@@ -12,17 +11,16 @@ import {
     Failure,
     GetStringParam,
     InsertComponent,
+    InsertContribution,
     LintFormPanelSpec,
     LoadComponent,
     LoadContribution,
     MapToComponentStatus,
     ParseSpecParam,
     ParseVersionBumpKind,
-    CONTRIBUTION_KEY_PATTERN,
-    ResolveWriteContributionKey,
+    ResolveContributionRegistration,
+    type ContributionRegistration,
     type VersionBumpKind,
-    SerializeClaimedFieldNames,
-    ApplySectionClaims,
 } from "./_shared";
 
 /**
@@ -73,27 +71,9 @@ export class ModifyFormContributionAction extends BaseAction {
 
             const lintFail = await LintFormPanelSpec(spec, user);
             if (lintFail) return lintFail;
-            const contribution = GetDeclaredFormContribution(spec);
-            if (!contribution) return Failure("LINT_FAILED", "Spec.formContribution could not be read.");
-
-            let relatedEntityID: string | null = null;
-            if (contribution.relatedEntity) {
-                const related = provider.EntityByName(contribution.relatedEntity);
-                if (!related) {
-                    return Failure("RELATED_ENTITY_NOT_FOUND",
-                        `Related entity '${contribution.relatedEntity}' is not registered.`);
-                }
-                relatedEntityID = related.ID;
-                contribution.relatedEntity = related.Name;
-            }
-
-            // The key the row will carry — derived for a keyless related claim, exactly as
-            // Create does, so the unique index sees it either way.
-            const writeKey = ResolveWriteContributionKey(contribution, contribution.relatedEntity ?? null);
-            if (writeKey && !CONTRIBUTION_KEY_PATTERN.test(writeKey)) {
-                return Failure("INVALID_CONTRIBUTION_KEY",
-                    `Contribution key '${writeKey}' must match ${CONTRIBUTION_KEY_PATTERN.source}.`);
-            }
+            // The same derivation Create uses, so a modified row keeps the key Create gave it.
+            const registration = ResolveContributionRegistration(provider, spec, spec.name?.trim() || null);
+            if ('error' in registration) return registration.error;
 
             const sourceComponent = await LoadComponent(provider, user, source.ComponentID);
             if (!sourceComponent) {
@@ -109,9 +89,9 @@ export class ModifyFormContributionAction extends BaseAction {
             }
 
             if (bump === 'in-place') {
-                return this.modifyInPlace(params, { source, sourceComponent, spec, contribution, writeKey, relatedEntityID, notes });
+                return this.modifyInPlace(params, { source, sourceComponent, spec, registration, notes });
             }
-            return this.createNextVersion(params, { source, sourceComponent, spec, contribution, writeKey, relatedEntityID, notes, bump, provider, user });
+            return this.createNextVersion(params, { source, sourceComponent, spec, registration, notes, bump, provider, user });
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             LogError(`ModifyFormContributionAction: ${message}`);
@@ -126,13 +106,11 @@ export class ModifyFormContributionAction extends BaseAction {
             source: MJEntityFormContributionEntity;
             sourceComponent: Awaited<ReturnType<typeof LoadComponent>> & object;
             spec: ComponentSpec;
-            contribution: FormContributionSpec;
-            writeKey: string | null;
-            relatedEntityID: string | null;
+            registration: ContributionRegistration;
             notes: string | null;
         },
     ): Promise<ActionResultSimple> {
-        const { source, sourceComponent, spec, contribution, writeKey, relatedEntityID, notes } = ctx;
+        const { source, sourceComponent, spec, registration, notes } = ctx;
         sourceComponent.Specification = JSON.stringify(spec);
         sourceComponent.Title = spec.title ?? sourceComponent.Title;
         sourceComponent.Description = spec.description ?? sourceComponent.Description;
@@ -140,7 +118,7 @@ export class ModifyFormContributionAction extends BaseAction {
             return Failure("PERSIST_FAILED",
                 `Component update failed: ${sourceComponent.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
-        this.applyRegistration(source, contribution, writeKey, relatedEntityID);
+        ApplyContributionSpecToRow(source, registration.Contribution, registration.RowOptions);
         if (notes) source.Notes = `${source.Notes ? source.Notes + "\n" : ""}${notes}`;
         if (!(await source.Save())) {
             return Failure("PERSIST_FAILED",
@@ -152,23 +130,24 @@ export class ModifyFormContributionAction extends BaseAction {
         });
     }
 
-    /** Insert a new Pending component + row, superseding the source only when it was Pending. */
+    /**
+     * Insert a new Pending component + User-scope row, superseding the source only when it was
+     * Pending. A copy of a Role or Global row ranks one above it, so the copy is what its owner sees.
+     */
     private async createNextVersion(
         params: RunActionParams,
         ctx: {
             source: MJEntityFormContributionEntity;
             sourceComponent: Awaited<ReturnType<typeof LoadComponent>> & object;
             spec: ComponentSpec;
-            contribution: FormContributionSpec;
-            writeKey: string | null;
-            relatedEntityID: string | null;
+            registration: ContributionRegistration;
             notes: string | null;
             bump: VersionBumpKind;
             provider: NonNullable<RunActionParams['Provider']>;
             user: NonNullable<RunActionParams['ContextUser']>;
         },
     ): Promise<ActionResultSimple> {
-        const { source, sourceComponent, spec, contribution, writeKey, relatedEntityID, notes, bump, provider, user } = ctx;
+        const { source, sourceComponent, spec, registration, notes, bump, provider, user } = ctx;
         const nextVersion = BumpVersion(sourceComponent.Version, bump);
         const componentInsert = await InsertComponent({
             provider, user, spec, fallbackName: sourceComponent.Name,
@@ -178,24 +157,14 @@ export class ModifyFormContributionAction extends BaseAction {
         });
         if ('error' in componentInsert) return componentInsert.error;
 
-        const row = await provider.GetEntityObject<MJEntityFormContributionEntity>(
-            "MJ: Entity Form Contributions", user,
-        );
-        row.NewRecord();
-        row.EntityID = source.EntityID;
-        row.ComponentID = componentInsert.id;
-        row.Name = source.Name;
-        row.Description = spec.description ?? source.Description;
-        row.Notes = notes ?? null;
-        this.applyRegistration(row, contribution, writeKey, relatedEntityID);
-        row.Scope = "User";
-        row.UserID = user.ID;
-        row.RoleID = null;
-        row.Precedence = source.Precedence ?? 0;
-        row.Status = 'Pending';
-        if (!(await row.Save())) {
-            return Failure("PERSIST_FAILED",
-                `Contribution insert failed: ${row.LatestResult?.CompleteMessage ?? 'unknown error'} (Component ${componentInsert.id} persisted).`);
+        const rowInsert = await InsertContribution({
+            provider, user, entityID: source.EntityID, componentID: componentInsert.id,
+            name: source.Name, description: spec.description ?? source.Description, notes,
+            registration, status: 'Pending',
+            precedence: (source.Precedence ?? 0) + (source.Scope === 'User' ? 0 : 1),
+        });
+        if ('error' in rowInsert) {
+            return Failure("PERSIST_FAILED", `${rowInsert.error.Message} (Component ${componentInsert.id} persisted).`);
         }
 
         if (source.Status === 'Pending') {
@@ -206,32 +175,9 @@ export class ModifyFormContributionAction extends BaseAction {
             await sourceComponent.Save();
         }
         return this.success(params, {
-            ContributionID: row.ID, ComponentID: componentInsert.id,
+            ContributionID: rowInsert.id, ComponentID: componentInsert.id,
             Version: nextVersion, Mode: 'new-version', BumpKind: bump,
         });
-    }
-
-    /** Copy the spec's registration intent onto a contribution row. */
-    private applyRegistration(
-        row: MJEntityFormContributionEntity,
-        c: FormContributionSpec,
-        writeKey: string | null,
-        relatedEntityID: string | null,
-    ): void {
-        row.Slot = c.slot;
-        row.SortKey = c.sortKey ?? 0;
-        row.ContributionKey = writeKey;
-        row.RelatedEntityID = relatedEntityID;
-        row.RelatedJoinField = c.relatedJoinField ?? null;
-        row.ReplacesFieldNames = SerializeClaimedFieldNames(c.replacesFieldNames);
-        ApplySectionClaims(row, c);
-        row.Inclusion = c.inclusion ?? null;
-        row.ChromeGroup = c.chromeGroup ?? null;
-        row.Presentation = c.presentation;
-        row.Title = c.title;
-        row.Icon = c.icon ?? null;
-        row.Configuration = c.configuration && Object.keys(c.configuration).length > 0
-            ? JSON.stringify(c.configuration) : null;
     }
 
     private success(params: RunActionParams, payload: {

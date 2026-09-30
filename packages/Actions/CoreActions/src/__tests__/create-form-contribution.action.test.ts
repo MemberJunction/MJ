@@ -15,6 +15,7 @@ const { hoisted } = vi.hoisted(() => ({
     hoisted: {
         entities: [] as Array<{ entityName: string; fields: Record<string, unknown>; saveOutcome: boolean; ID: string }>,
         dupRows: [] as Array<{ ID: string; Status: string }>,
+        dupQueryFails: false,
         lintViolations: [] as Array<{ severity: string; rule: string; message: string }>,
     },
 }));
@@ -67,7 +68,8 @@ const provider = {
 vi.mock('@memberjunction/core', async () => {
     const actual = await vi.importActual<Record<string, unknown>>('@memberjunction/core');
     class MockRunView {
-        async RunView<T>(): Promise<{ Success: boolean; Results: T[] }> {
+        async RunView<T>(): Promise<{ Success: boolean; Results: T[]; ErrorMessage?: string }> {
+            if (hoisted.dupQueryFails) return { Success: false, Results: [], ErrorMessage: 'boom' };
             return { Success: true, Results: hoisted.dupRows as unknown as T[] };
         }
         static FromMetadataProvider(): MockRunView { return new MockRunView(); }
@@ -119,7 +121,7 @@ async function run(p: RunActionParams): Promise<ActionResultSimple> {
 const componentRow = () => hoisted.entities.find(e => e.entityName === 'MJ: Components')!;
 const contributionRow = () => hoisted.entities.find(e => e.entityName === 'MJ: Entity Form Contributions')!;
 
-beforeEach(() => { hoisted.entities = []; hoisted.dupRows = []; hoisted.lintViolations = []; });
+beforeEach(() => { hoisted.entities = []; hoisted.dupRows = []; hoisted.dupQueryFails = false; hoisted.lintViolations = []; });
 
 describe('CreateFormContributionAction', () => {
     it('inserts a Widget component and a Pending User-scope contribution row from the spec block', async () => {
@@ -213,6 +215,19 @@ describe('CreateFormContributionAction', () => {
     it('returns ALREADY_EXISTS when an Active or Pending row shares the key', async () => {
         hoisted.dupRows = [{ ID: 'ROW-1', Status: 'Pending' }];
         expect((await run(params())).ResultCode).toBe('ALREADY_EXISTS');
+    });
+
+    it('returns QUERY_FAILED when the duplicate check cannot run, and writes nothing', async () => {
+        hoisted.dupQueryFails = true;
+        const result = await run(params());
+        expect(result.ResultCode).toBe('QUERY_FAILED');
+        expect(hoisted.entities).toHaveLength(0);
+    });
+
+    it('stores no rail metadata on a bare panel', async () => {
+        const formContribution = { ...panelSpec.formContribution, inclusion: 'Primary', chromeGroup: 'details' };
+        await run(params({ Spec: { ...panelSpec, formContribution } }));
+        expect(contributionRow().fields).toMatchObject({ Presentation: 'bare', Inclusion: null, ChromeGroup: null });
     });
 
     it('surfaces blocking lint violations', async () => {

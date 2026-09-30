@@ -2,45 +2,16 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { BaseAction } from "@memberjunction/actions";
 import { Metadata, LogError, RunView, ReadRelationshipInclusion, type EntityInfo, type EntityRelationshipInfo } from "@memberjunction/core";
 import { EscapeSQLString, RegisterClass, UUIDsEqual } from "@memberjunction/global";
-import { AddOutput, Failure, GetStringParam, ContributionScopeFilter, ParseClaimedFieldNames } from "./_shared";
+import { ParseClaimedFieldNames } from "@memberjunction/core-entities";
+import { AddOutput, Failure, GetStringParam, ContributionScopeFilter } from "./_shared";
 import {
     FORM_VARIANT_EXPLICIT_DEFAULT,
+    FormSectionCamelCase,
     FormVariantSettingKey,
+    GENERATED_FORM_CONTRIBUTION_SLOTS,
+    RelatedGridSectionKey,
+    StripJoinFieldBrackets,
 } from "@memberjunction/interactive-component-types/forms";
-
-/**
- * Byte-compatible with CodeGenLib `angular-codegen.ts` camelCase and ng-base-forms
- * `FormSectionCamelCase`. A section key an agent reads here is one it will later write
- * as `replacesSectionKey`, and the host matches it by exact string — so a "tidier"
- * implementation here silently stops matching the form. Do not "improve" it.
- */
-function sectionCamelCase(str: string): string {
-    const sanitized = str.replace(/[^a-zA-Z0-9\s]/g, ' ');
-    let result = sanitized
-        .replace(/\s(.)/g, (_m, c: string) => c.toUpperCase())
-        .replace(/\s/g, '')
-        .replace(/^(.)/, (_m, c: string) => c.toLowerCase());
-    if (/^\d/.test(result)) result = '_' + result;
-    return result.length === 0 ? 'section' : result;
-}
-
-function stripBrackets(join: string | null | undefined): string {
-    return (join ?? '').trim().replace(/^\[/, '').replace(/\]$/, '');
-}
-
-/**
- * What a generated form emits. CodeGen writes `before-fields`, `after-fields` and
- * `after-related` into every form it produces (`angular-codegen.ts`), and
- * `mj-record-form-container` always terminates the fallback chain with `after-everything`.
- *
- * `top-area` is deliberately absent: no generated form has ever emitted it. A panel aimed
- * there falls through to the bottom of the form, so offering it as an equal choice sends
- * users to a position they did not pick.
- *
- * A hand-written custom form that replaces the template can emit a different set. That is
- * the one case this list can be wrong, and the Note says so.
- */
-const GENERATED_FORM_SLOTS = ['before-fields', 'after-fields', 'after-related', 'after-everything'] as const;
 
 /** An override row, as far as the rendered-form question needs it. */
 interface OverrideRow {
@@ -85,10 +56,9 @@ const FULL_CUSTOM_FORM_NOTE =
  * Compiled `BaseFormPanel` registrations live in the browser bundle, so they are absent and
  * the `Note` says so.
  *
- * Slots are reported from {@link GENERATED_FORM_SLOTS} rather than guessed: what CodeGen
- * emits is fixed, so the set is known for every generated form without opening one. It used
- * to claim all five slots, which sent anyone choosing `top-area` to the bottom of the form
- * instead.
+ * Slots are reported from `GENERATED_FORM_CONTRIBUTION_SLOTS` rather than guessed: what CodeGen
+ * emits is fixed, so the set is known for every generated form without opening one. A
+ * hand-written custom form can emit a different set, and the `Note` says so.
  */
 @RegisterClass(BaseAction, "__GetFormCompositionForEntity")
 export class GetFormCompositionForEntityAction extends BaseAction {
@@ -166,7 +136,7 @@ export class GetFormCompositionForEntityAction extends BaseAction {
                     SectionKeys: replacedSectionKeyList(r),
                     ReplacesPlace: !!(r.ReplacesSectionKey || r.ReplacesSectionKeys || r.RelatedEntityID),
                 })),
-                SlotsPresent: fullCustomForm ? [] : [...GENERATED_FORM_SLOTS],
+                SlotsPresent: fullCustomForm ? [] : [...GENERATED_FORM_CONTRIBUTION_SLOTS],
                 ChromeRuleCount: (rules.Results ?? []).length,
                 Note: fullCustomForm ? FULL_CUSTOM_FORM_NOTE : SERVER_DERIVATION_NOTE,
             };
@@ -233,7 +203,7 @@ export class GetFormCompositionForEntityAction extends BaseAction {
             'System Metadata',
         ];
         return ordered.map(title => ({
-            Key: sectionCamelCase(title),
+            Key: FormSectionCamelCase(title),
             Title: title,
             Variant: 'default',
             Group: null,
@@ -257,7 +227,7 @@ export class GetFormCompositionForEntityAction extends BaseAction {
 
         return visible.map(r => ({
             Entity: r.RelatedEntity,
-            JoinField: stripBrackets(r.RelatedEntityJoinField),
+            JoinField: StripJoinFieldBrackets(r.RelatedEntityJoinField),
             SectionKey: this.relatedSectionKey(r, visible),
             Inclusion: ReadRelationshipInclusion(r.Configuration) ?? 'Auto',
             Source: 'baked' as const,
@@ -270,10 +240,8 @@ export class GetFormCompositionForEntityAction extends BaseAction {
      * form itself does.
      */
     private relatedSectionKey(rel: EntityRelationshipInfo, peers: readonly EntityRelationshipInfo[]): string {
-        const sameEntity = peers.filter(p => UUIDsEqual(p.RelatedEntityID, rel.RelatedEntityID));
-        return sameEntity.length > 1
-            ? sectionCamelCase(`${rel.RelatedEntity} ${stripBrackets(rel.RelatedEntityJoinField)}`)
-            : sectionCamelCase(rel.RelatedEntity);
+        const sharesRelatedEntity = peers.filter(p => UUIDsEqual(p.RelatedEntityID, rel.RelatedEntityID)).length > 1;
+        return RelatedGridSectionKey(rel.RelatedEntity, rel.RelatedEntityJoinField, sharesRelatedEntity);
     }
 }
 

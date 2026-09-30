@@ -3,7 +3,6 @@ import { BaseAction } from "@memberjunction/actions";
 import { Metadata, LogError, RunView } from "@memberjunction/core";
 import { EscapeSQLString, RegisterClass } from "@memberjunction/global";
 import type { ComponentSpec } from "@memberjunction/interactive-component-types";
-import { GetDeclaredFormContribution } from "@memberjunction/interactive-component-types/forms";
 import {
     AddOutput,
     Failure,
@@ -13,8 +12,7 @@ import {
     InsertContribution,
     LintFormPanelSpec,
     ParseSpecParam,
-    CONTRIBUTION_KEY_PATTERN,
-    ResolveWriteContributionKey,
+    ResolveContributionRegistration,
 } from "./_shared";
 
 /**
@@ -61,26 +59,14 @@ export class CreateFormContributionAction extends BaseAction {
             const lintFail = await LintFormPanelSpec(inputs.Spec, user);
             if (lintFail) return lintFail;
 
-            const contribution = GetDeclaredFormContribution(inputs.Spec);
-            if (!contribution) return Failure("LINT_FAILED", "Spec.formContribution could not be read.");
-
-            let relatedEntityID: string | null = null;
-            if (contribution.relatedEntity) {
-                const related = provider.EntityByName(contribution.relatedEntity);
-                if (!related) {
-                    return Failure("RELATED_ENTITY_NOT_FOUND",
-                        `Related entity '${contribution.relatedEntity}' is not registered.`);
-                }
-                relatedEntityID = related.ID;
-                // Normalize to the registered casing so the derived key is stable.
-                contribution.relatedEntity = related.Name;
-            }
-
-            // The component name is the seed for a panel that claims nothing and names no
-            // key. It has to be read before the Component row is written, because the
-            // duplicate check runs first — a rejected create must leave nothing behind.
+            // The component name seeds the key of a panel that claims nothing and names no key.
             const componentName = (inputs.Spec.name ?? inputs.Name)?.trim() || inputs.Name;
-            const writeKey = ResolveWriteContributionKey(contribution, contribution.relatedEntity ?? null, componentName);
+            const registration = ResolveContributionRegistration(provider, inputs.Spec, componentName);
+            if ('error' in registration) return registration.error;
+
+            // The duplicate check runs before the Component row is written, so a rejected
+            // create leaves nothing behind.
+            const writeKey = registration.WriteKey;
             const keyCheck = writeKey
                 ? await this.checkKeyAvailable(provider, user, entityInfo.ID, inputs.EntityName, writeKey)
                 : null;
@@ -95,8 +81,7 @@ export class CreateFormContributionAction extends BaseAction {
             const rowInsert = await InsertContribution({
                 provider, user, entityID: entityInfo.ID, componentID: componentInsert.id,
                 name: inputs.Name, description: inputs.Description, notes: inputs.Notes,
-                contribution, relatedEntityName: contribution.relatedEntity ?? null, relatedEntityID,
-                componentName, status: 'Pending', precedence: inputs.Precedence,
+                registration, status: 'Pending', precedence: inputs.Precedence,
             });
             if ('error' in rowInsert) {
                 return Failure("PERSIST_FAILED",
@@ -110,7 +95,7 @@ export class CreateFormContributionAction extends BaseAction {
                 Success: true, ResultCode: "SUCCESS",
                 Message: JSON.stringify({
                     ContributionID: rowInsert.id, ComponentID: componentInsert.id, EntityName: entityInfo.Name,
-                    ContributionKey: writeKey, Slot: contribution.slot,
+                    ContributionKey: writeKey, Slot: registration.Contribution.slot,
                     Scope: "User", Status: "Pending", Version: "1.0.0",
                 }),
             };
@@ -122,9 +107,9 @@ export class CreateFormContributionAction extends BaseAction {
     }
 
     /**
-     * Rejects a malformed key, and a key the caller already holds on this entity.
-     * The duplicate check covers keyless related claims too, because the key it tests
-     * is the derived one the row will actually carry.
+     * Rejects a key the caller already holds on this entity, and fails with QUERY_FAILED when
+     * that cannot be checked. Covers derived keys too, because the key it tests is the one the
+     * row will actually carry.
      */
     private async checkKeyAvailable(
         provider: NonNullable<RunActionParams['Provider']>,
@@ -133,17 +118,16 @@ export class CreateFormContributionAction extends BaseAction {
         entityName: string,
         writeKey: string,
     ): Promise<ActionResultSimple | null> {
-        if (!CONTRIBUTION_KEY_PATTERN.test(writeKey)) {
-            return Failure("INVALID_CONTRIBUTION_KEY",
-                `Contribution key '${writeKey}' must match ${CONTRIBUTION_KEY_PATTERN.source}.`);
-        }
         const rv = RunView.FromMetadataProvider(provider);
         const dup = await rv.RunView<{ ID: string; Status: string }>({
             EntityName: "MJ: Entity Form Contributions",
             ExtraFilter: `EntityID='${EscapeSQLString(entityID)}' AND Scope='User' AND UserID='${EscapeSQLString(user.ID)}' AND ContributionKey='${EscapeSQLString(writeKey)}' AND Status IN ('Active','Pending')`,
             Fields: ['ID', 'Status'], ResultType: 'simple', MaxRows: 1,
         }, user);
-        if (dup.Success && (dup.Results ?? []).length > 0) {
+        if (!dup.Success) {
+            return Failure("QUERY_FAILED", `Duplicate-key lookup failed: ${dup.ErrorMessage ?? 'unknown error'}`);
+        }
+        if ((dup.Results ?? []).length > 0) {
             const existing = dup.Results![0];
             return Failure("ALREADY_EXISTS",
                 `A ${existing.Status} User-scope contribution '${writeKey}' already exists on '${entityName}' (ContributionID=${existing.ID}). Use 'Modify Form Contribution' on it.`);

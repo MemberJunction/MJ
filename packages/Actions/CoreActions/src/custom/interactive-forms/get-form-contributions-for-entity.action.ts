@@ -2,8 +2,8 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { BaseAction } from "@memberjunction/actions";
 import { Metadata, LogError, RunView } from "@memberjunction/core";
 import { EscapeSQLString, RegisterClass } from "@memberjunction/global";
-import type { MJEntityFormContributionEntity } from "@memberjunction/core-entities";
-import { ParseClaimedFieldNames, AddOutput, Failure, GetStringParam } from "./_shared";
+import { ParseClaimedFieldNames, type MJEntityFormContributionEntity } from "@memberjunction/core-entities";
+import { AddOutput, ContributionScopeFilter, Failure, GetStringParam } from "./_shared";
 
 /** One contribution row, flattened for an agent or an apply flow to reason about. */
 export interface FormContributionSummary {
@@ -51,7 +51,7 @@ export class GetFormContributionsForEntityAction extends BaseAction {
             const rv = RunView.FromMetadataProvider(provider);
             const rows = await rv.RunView<MJEntityFormContributionEntity>({
                 EntityName: "MJ: Entity Form Contributions",
-                ExtraFilter: this.applicableFilter(entity.ID, user),
+                ExtraFilter: ContributionScopeFilter(entity.ID, user),
                 OrderBy: "Precedence DESC, SortKey DESC",
                 ResultType: 'entity_object',
             }, user);
@@ -85,16 +85,6 @@ export class GetFormContributionsForEntityAction extends BaseAction {
             LogError(`GetFormContributionsForEntityAction: ${message}`);
             return Failure("UNEXPECTED_ERROR", message);
         }
-    }
-
-    /** Rows the caller can see: their own User rows, their roles' rows, and Global rows. */
-    private applicableFilter(entityID: string, user: NonNullable<RunActionParams['ContextUser']>): string {
-        const roleIDs = ((user as { UserRoles?: { RoleID?: string }[] }).UserRoles ?? [])
-            .map(r => r.RoleID).filter((x): x is string => !!x);
-        const roleClause = roleIDs.length > 0
-            ? `(Scope='Role' AND RoleID IN (${roleIDs.map(id => `'${EscapeSQLString(id)}'`).join(',')}))`
-            : `(1=0)`;
-        return `EntityID='${EscapeSQLString(entityID)}' AND ((Scope='User' AND UserID='${EscapeSQLString(user.ID)}') OR ${roleClause} OR Scope='Global')`;
     }
 
     /** Component name + version for each distinct ComponentID, in one query. */

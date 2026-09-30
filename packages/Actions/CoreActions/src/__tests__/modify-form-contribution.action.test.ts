@@ -218,4 +218,52 @@ describe('ModifyFormContributionAction', () => {
         expect((await run(params({ ContributionID: undefined }))).ResultCode).toBe('MISSING_PARAMETER');
         expect((await run(params({ Spec: undefined }))).ResultCode).toBe('MISSING_PARAMETER');
     });
+
+    // Create keys a panel that names no key and claims nothing as panel:<component name>.
+    // Modify must derive the same key, or Activate cannot find the Active row to demote and
+    // the panel renders twice.
+    describe('a panel with no key and no claim', () => {
+        const keyless = { ...spec, formContribution: { slot: 'before-fields', presentation: 'bare', title: 'LTV v2' } };
+        beforeEach(() => { loadedRow.ContributionKey = 'panel:PersonLtvStrip'; });
+
+        it('keeps panel:<name> on the row modified in place', async () => {
+            const result = await run(params({ Spec: keyless }));
+            expect(result.Success).toBe(true);
+            expect(loadedRow.ContributionKey).toBe('panel:PersonLtvStrip');
+        });
+
+        it('keeps panel:<name> on the new-version row', async () => {
+            loadedRow.Status = 'Active';
+            const result = await run(params({ Spec: keyless }));
+            expect(result.Success).toBe(true);
+            expect(createdRow().fields.ContributionKey).toBe('panel:PersonLtvStrip');
+        });
+    });
+
+    it('clears a related claim on the row when the new spec claims fields instead', async () => {
+        Object.assign(loadedRow, { RelatedEntityID: 'ENT-TICKETS', RelatedJoinField: 'PersonID' });
+        const formContribution = { ...spec.formContribution, presentation: 'panel', replacesFieldNames: ['Email'] };
+        await run(params({ Spec: { ...spec, formContribution } }));
+        expect(loadedRow).toMatchObject({ RelatedEntityID: null, RelatedJoinField: null, ReplacesFieldNames: '["Email"]' });
+    });
+
+    describe('precedence of the new-version row', () => {
+        function asOwner(p: RunActionParams): RunActionParams {
+            p.ContextUser = { ...user, Type: 'Owner' } as unknown as RunActionParams['ContextUser'];
+            return p;
+        }
+
+        it('ranks a personal copy of a Global row above the row it copies', async () => {
+            Object.assign(loadedRow, { Scope: 'Global', UserID: null, Status: 'Active', Precedence: 4 });
+            const result = await run(asOwner(params()));
+            expect(result.Success).toBe(true);
+            expect(createdRow().fields).toMatchObject({ Scope: 'User', UserID: 'USER-1', Precedence: 5 });
+        });
+
+        it('keeps the precedence of the personal row it versions', async () => {
+            Object.assign(loadedRow, { Status: 'Active', Precedence: 3 });
+            await run(params());
+            expect(createdRow().fields.Precedence).toBe(3);
+        });
+    });
 });

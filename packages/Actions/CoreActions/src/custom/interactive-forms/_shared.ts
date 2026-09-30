@@ -6,17 +6,21 @@
  */
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { IMetadataProvider, UserInfo } from "@memberjunction/core";
-import { EscapeSQLString, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
+import { EscapeSQLString, UUIDsEqual } from "@memberjunction/global";
 import {
+    ApplyContributionSpecToRow,
     MJComponentEntity,
     MJEntityFormContributionEntity,
     MJEntityFormOverrideEntity,
 } from "@memberjunction/core-entities";
 import type { ComponentSpec } from "@memberjunction/interactive-component-types";
 import {
+    CONTRIBUTION_KEY_PATTERN,
+    GetDeclaredFormContribution,
     IsFormPanelRole,
     isFormRole,
-    type FormContributionSpec,
+    ResolveContributionWriteKey,
+    type NormalizedFormContributionSpec,
 } from "@memberjunction/interactive-component-types/forms";
 import { ComponentLinter } from "@memberjunction/react-linter";
 
@@ -321,14 +325,6 @@ export function CheckOverrideOwnership(
     return CheckScopedOwnership(override, user, 'Override');
 }
 
-/** Ownership check for the contribution-mutation actions. */
-export function CheckContributionOwnership(
-    contribution: Pick<MJEntityFormContributionEntity, 'ID' | 'Scope' | 'UserID' | 'RoleID'>,
-    user: UserInfo,
-): ActionResultSimple | null {
-    return CheckScopedOwnership(contribution, user, 'Contribution');
-}
-
 /** @deprecated Use {@link CheckOverrideOwnership}. */
 export function checkOverrideOwnership(
     override: Pick<MJEntityFormOverrideEntity, 'ID' | 'Scope' | 'UserID' | 'RoleID'>,
@@ -599,124 +595,59 @@ export function parseVersionBumpKind(raw: unknown): VersionBumpKind | null {
 // ── form contribution helpers ────────────────────────────────────────────
 
 /**
- * Permitted character set for a contribution key.
- *
- * Keys are compared in SQL filters and matched by `MJ: Form Chrome Rules`, and they
- * arrive from an LLM. Constraining the character set is stronger than escaping at each
- * call site: a key that cannot contain a quote cannot break a filter, and a rejected
- * key is a clear action failure rather than a subtly malformed query.
- *
- * The space is permitted because a derived related-grid key embeds an entity name, and
- * MJ entity names contain spaces by convention (`MJ_BizApps_Orders: Event Order Lines`).
- * A set without it rejects every derived key. Spaces are not what breaks a SQL string
- * literal; quotes and control characters are, and neither is in the set.
+ * A form-panel spec's registration intent, with its related entity resolved and the key its
+ * row will carry derived and checked.
  */
-export const CONTRIBUTION_KEY_PATTERN = /^[A-Za-z0-9:._ -]{1,256}$/;
-
-/**
- * Strips one wrapping `[...]` pair from a join field.
- *
- * Byte-identical to `StripJoinFieldBrackets` in `@memberjunction/ng-base-forms`. It is
- * duplicated rather than imported because an Actions package must not depend on Angular.
- * Both sides must derive the same key or a persisted key stops matching the one the
- * renderer computes, and the two contributions never collapse.
- */
-function stripJoinFieldBrackets(joinField: string | null | undefined): string {
-    return (joinField ?? '').trim().replace(/^\[/, '').replace(/\]$/, '');
+export interface ContributionRegistration {
+    Contribution: NormalizedFormContributionSpec;
+    /** What {@link ApplyContributionSpecToRow} needs beyond the spec. */
+    RowOptions: Parameters<typeof ApplyContributionSpecToRow>[2];
+    /** The key the row will carry, or null when nothing supplies one. */
+    WriteKey: string | null;
 }
 
 /**
- * The key a row will actually carry.
+ * Reads the `formContribution` block of a linted form-panel spec, resolves the related entity it
+ * claims to its registered name and ID, and derives the row's key with
+ * `ResolveContributionWriteKey`.
  *
- * Every contribution gets one. The key is the contribution's identity: the duplicate
- * check tests it, the rail builds an item per key, and "replace an installed panel"
- * names one. A row without a key is invisible to all three, so the same panel can be
- * applied twice and neither copy can be targeted afterwards.
+ * Fails with `LINT_FAILED` when the block cannot be read, `RELATED_ENTITY_NOT_FOUND` when the
+ * related entity is not registered, and `INVALID_CONTRIBUTION_KEY` when the key does not match
+ * `CONTRIBUTION_KEY_PATTERN`.
  *
- * Three sources, in order. An author-supplied key wins. A related-grid claim derives
- * `related:<entity>:<join>`, byte-identical to `RelatedContributionKey` in
- * `@memberjunction/ng-base-forms`, so the renderer computes the same string. Anything
- * else derives from the component name, which is stable across re-applies of the same
- * panel and distinct between different ones.
+ * @param componentName The component name that seeds the key of a panel with no other key.
  */
-export function ResolveWriteContributionKey(
-    contribution: FormContributionSpec,
-    relatedEntityName: string | null,
-    componentName?: string | null,
-): string | null {
-    if (contribution.contributionKey) return contribution.contributionKey;
-    if (relatedEntityName) {
-        return `related:${relatedEntityName.trim()}:${stripJoinFieldBrackets(contribution.relatedJoinField)}`;
+export function ResolveContributionRegistration(
+    provider: IMetadataProvider,
+    spec: ComponentSpec,
+    componentName: string | null,
+): ContributionRegistration | { error: ActionResultSimple } {
+    const contribution = GetDeclaredFormContribution(spec);
+    if (!contribution) return { error: Failure("LINT_FAILED", "Spec.formContribution could not be read.") };
+
+    let relatedEntityID: string | null = null;
+    if (contribution.relatedEntity) {
+        const related = provider.EntityByName(contribution.relatedEntity);
+        if (!related) {
+            return { error: Failure("RELATED_ENTITY_NOT_FOUND",
+                `Related entity '${contribution.relatedEntity}' is not registered.`) };
+        }
+        relatedEntityID = related.ID;
+        // The registered casing keeps the derived key stable.
+        contribution.relatedEntity = related.Name;
     }
-    return PanelContributionKey(componentName);
-}
 
-/**
- * Field names as the `ReplacesFieldNames` column stores them: a JSON array, or null.
- *
- * The same shape as `FormChromeRule.JoinFields`. Null for an empty list, because a claim
- * that names no field is one the runtime can never match — the column's CHECK constraint
- * refuses an empty array for the same reason.
- */
-export function SerializeClaimedFieldNames(names: readonly string[] | undefined): string | null {
-    const cleaned: string[] = [];
-    for (const raw of names ?? []) {
-        const name = typeof raw === 'string' ? raw.trim() : '';
-        if (name.length > 0 && !cleaned.includes(name)) cleaned.push(name);
+    const relatedEntityName = contribution.relatedEntity ?? null;
+    const writeKey = ResolveContributionWriteKey(contribution, relatedEntityName, componentName);
+    if (writeKey && !CONTRIBUTION_KEY_PATTERN.test(writeKey)) {
+        return { error: Failure("INVALID_CONTRIBUTION_KEY",
+            `Contribution key '${writeKey}' must match ${CONTRIBUTION_KEY_PATTERN.source}.`) };
     }
-    return cleaned.length > 0 ? JSON.stringify(cleaned) : null;
-}
-
-/**
- * Writes the section claims of a spec onto a row: the sections it stands in for, and the
- * section it is placed in with its position there.
- *
- * One section is stored in `ReplacesSectionKey` whichever field the spec used, so a single
- * block has one representation. A position is kept only for a panel drawn inside a section,
- * which is the only case it means anything and the only case the column's CHECK allows.
- */
-export function ApplySectionClaims(
-    row: Pick<MJEntityFormContributionEntity, 'ReplacesSectionKey' | 'ReplacesSectionKeys' | 'InSectionKey' | 'SectionPosition'>,
-    contribution: Pick<FormContributionSpec, 'replacesSectionKey' | 'replacesSectionKeys' | 'replacesFieldNames' | 'inSectionKey' | 'sectionPosition'>,
-): void {
-    const sections = ParseClaimedFieldNames(SerializeClaimedFieldNames([
-        ...(contribution.replacesSectionKey ? [contribution.replacesSectionKey] : []),
-        ...(contribution.replacesSectionKeys ?? []),
-    ]));
-    row.ReplacesSectionKey = sections.length === 1 ? sections[0] : null;
-    row.ReplacesSectionKeys = sections.length > 1 ? JSON.stringify(sections) : null;
-    const inSection = contribution.inSectionKey?.trim() || null;
-    row.InSectionKey = inSection;
-    const drawsInSection = !!inSection || (contribution.replacesFieldNames ?? []).some((n) => n.trim().length > 0);
-    row.SectionPosition = drawsInSection ? (contribution.sectionPosition ?? null) : null;
-}
-
-/** The field names in a `ReplacesFieldNames` cell. Inverse of {@link SerializeClaimedFieldNames}. */
-export function ParseClaimedFieldNames(raw: string | null | undefined): string[] {
-    if (!raw || raw.trim().length === 0) return [];
-    const parsed = SafeJSONParse<string[]>(raw, false);
-    if (!Array.isArray(parsed)) return [];
-    const out: string[] = [];
-    for (const item of parsed) {
-        const name = typeof item === 'string' ? item.trim() : '';
-        if (name.length > 0 && !out.includes(name)) out.push(name);
-    }
-    return out;
-}
-
-/**
- * `panel:<component name>`, with characters {@link CONTRIBUTION_KEY_PATTERN} rejects
- * folded to `-`. Null when the name carries nothing usable.
- */
-export function PanelContributionKey(componentName: string | null | undefined): string | null {
-    const slug = (componentName ?? '')
-        .trim()
-        .replace(/[^A-Za-z0-9._ -]+/g, '-')
-        .replace(/-{2,}/g, '-')
-        .replace(/^-|-$/g, '')
-        .slice(0, 240)
-        .trim();
-    return slug ? `panel:${slug}` : null;
+    return {
+        Contribution: contribution,
+        RowOptions: { relatedEntityID, relatedEntityName, componentName },
+        WriteKey: writeKey,
+    };
 }
 
 /**
@@ -731,19 +662,11 @@ export async function InsertContribution(opts: {
     name: string;
     description: string | null;
     notes?: string | null;
-    contribution: FormContributionSpec;
-    /** Resolved related entity — `Name` for the derived key, `ID` for the column. */
-    relatedEntityName: string | null;
-    relatedEntityID: string | null;
-    /** Seeds the contribution key when the spec names none and nothing is claimed. */
-    componentName?: string | null;
+    registration: ContributionRegistration;
     status: 'Active' | 'Pending';
     precedence: number;
 }): Promise<{ id: string } | { error: ActionResultSimple }> {
-    const {
-        provider, user, entityID, componentID, name, description, notes,
-        contribution, relatedEntityName, relatedEntityID, status, precedence,
-    } = opts;
+    const { provider, user, entityID, componentID, name, description, notes, registration, status, precedence } = opts;
     const row = await provider.GetEntityObject<MJEntityFormContributionEntity>(
         "MJ: Entity Form Contributions", user,
     );
@@ -753,24 +676,7 @@ export async function InsertContribution(opts: {
     row.Name = name;
     row.Description = description;
     row.Notes = notes ?? null;
-    row.Slot = contribution.slot;
-    row.SortKey = contribution.sortKey ?? 0;
-    // Derive and persist. A related claim with no author-supplied key resolves to
-    // `related:<entity>:<join>` at render time, but a NULL column is invisible to the
-    // ContributionKey unique index, so two Active rows could otherwise claim the same
-    // grid and the winner would be decided by row order.
-    row.ContributionKey = ResolveWriteContributionKey(contribution, relatedEntityName, opts.componentName);
-    row.RelatedEntityID = relatedEntityID;
-    row.RelatedJoinField = contribution.relatedJoinField ?? null;
-    row.ReplacesFieldNames = SerializeClaimedFieldNames(contribution.replacesFieldNames);
-    ApplySectionClaims(row, contribution);
-    row.Inclusion = contribution.inclusion ?? null;
-    row.ChromeGroup = contribution.chromeGroup ?? null;
-    row.Presentation = contribution.presentation;
-    row.Title = contribution.title;
-    row.Icon = contribution.icon ?? null;
-    row.Configuration = contribution.configuration && Object.keys(contribution.configuration).length > 0
-        ? JSON.stringify(contribution.configuration) : null;
+    ApplyContributionSpecToRow(row, registration.Contribution, registration.RowOptions);
     // Security clamp: agents write User scope only. Promotion is a human act.
     row.Scope = "User";
     row.UserID = user.ID;
