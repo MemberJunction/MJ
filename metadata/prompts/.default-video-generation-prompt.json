@@ -8,6 +8,7 @@
       "Status": "Active",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Video",
       "SelectionStrategy": "Specific",
+      "RequireSpecificModels": true,
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
       "ResponseFormat": "Any",

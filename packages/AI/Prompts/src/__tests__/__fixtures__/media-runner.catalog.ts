@@ -81,6 +81,7 @@ export function LoadMediaCatalog(harness: MediaRunnerHarness, spec: MediaCatalog
     AIModelTypeID: spec.ModelTypeID,
     SelectionStrategy: 'Specific',
     FailoverStrategy: spec.FailoverStrategy,
+    // As the shipped carrier prompts set it: no fallback to models the prompt does not bind.
     RequireSpecificModels: true,
     MaxRetries: 0,
   }];
