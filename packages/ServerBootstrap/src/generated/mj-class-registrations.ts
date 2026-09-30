@@ -1073,8 +1073,9 @@ import {
     ParallelExecutionCoordinator,
 } from '@memberjunction/ai-prompts';
 
-// @memberjunction/ai-reranker (1 classes)
+// @memberjunction/ai-reranker (2 classes)
 import {
+    DecisionReranker,
     LLMReranker,
 } from '@memberjunction/ai-reranker';
 
@@ -1341,9 +1342,10 @@ import {
     UpdateScheduledJobAction,
 } from '@memberjunction/scheduling-actions';
 
-// @memberjunction/testing-engine (2 classes)
+// @memberjunction/testing-engine (3 classes)
 import {
     AgentEvalDriver,
+    DecisionEvalDriver,
     PromptEvalDriver,
 } from '@memberjunction/testing-engine';
 
@@ -2264,6 +2266,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     TemplateRunServerOperation,
     LLMDecision,
     ParallelExecutionCoordinator,
+    DecisionReranker,
     LLMReranker,
     AdaptiveBoundarySegmenter,
     FixedWindowSegmenter,
@@ -2353,13 +2356,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     RecordProcessRunNowServerOperation,
     MLModelInferenceProcessor,
     MLModelScoreEnricher,
-    PredictiveStudioControlExperimentSessionServerOperation,
-    PredictiveStudioCreateScoringProcessServerOperation,
-    PredictiveStudioModelDevAgent,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    PredictiveStudioControlExperimentSessionServerOperation,
+    PredictiveStudioCreateScoringProcessServerOperation,
+    PredictiveStudioModelDevAgent,
     PredictiveStudioPipelineBuilderAgent,
     PredictiveStudioPromoteModelAction,
     PredictiveStudioPromoteModelServerOperation,
@@ -2457,6 +2460,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     QueryScheduledJobsAction,
     UpdateScheduledJobAction,
     AgentEvalDriver,
+    DecisionEvalDriver,
     PromptEvalDriver,
     ComputerUseAction,
     ComputerUseTestDriver,
@@ -2556,14 +2560,14 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ListStorageAccountsAction,
     LoadAgentSpecAction,
     LoopAction,
-    MCPToolAction,
-    MaterializeListFromViewAction,
-    ModifyDocumentSectionAction,
-    ModifyInteractiveFormAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MCPToolAction,
+    MaterializeListFromViewAction,
+    ModifyDocumentSectionAction,
+    ModifyInteractiveFormAction,
     MoveListMembersAction,
     MoveObjectAction,
     OAuthFlowAction,
@@ -2640,7 +2644,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1060;
+export const CLASS_REGISTRATIONS_COUNT = 1064;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

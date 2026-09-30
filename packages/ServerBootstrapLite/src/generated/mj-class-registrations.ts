@@ -906,13 +906,16 @@ import {
     ParallelExecutionCoordinator,
 } from '@memberjunction/ai-prompts';
 
-// @memberjunction/ai-reranker (1 classes)
+// @memberjunction/ai-reranker (2 classes)
 import {
+    DecisionReranker,
     LLMReranker,
 } from '@memberjunction/ai-reranker';
 
-// @memberjunction/ai-vector-dupe (1 classes)
+// @memberjunction/ai-vector-dupe (3 classes)
 import {
+    DecisionReasoningProvider,
+    DecisionThenPromptReasoningProvider,
     PromptReasoningProvider,
 } from '@memberjunction/ai-vector-dupe';
 
@@ -1266,9 +1269,10 @@ import {
     UpdateScheduledJobAction,
 } from '@memberjunction/scheduling-actions';
 
-// @memberjunction/testing-engine (2 classes)
+// @memberjunction/testing-engine (3 classes)
 import {
     AgentEvalDriver,
+    DecisionEvalDriver,
     PromptEvalDriver,
 } from '@memberjunction/testing-engine';
 
@@ -1956,7 +1960,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     TemplateRunServerOperation,
     LLMDecision,
     ParallelExecutionCoordinator,
+    DecisionReranker,
     LLMReranker,
+    DecisionReasoningProvider,
+    DecisionThenPromptReasoningProvider,
     PromptReasoningProvider,
     AzureAISearchProvider,
     BGEReRanker,
@@ -2090,13 +2097,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJMLTrainingPipelineEntityServer,
     MJMaterializedResultEntityServer,
     MJQueryEntityServer,
-    MJQuerySQLEntityServer,
-    MJRecordProcessEntityServer,
-    MJRemoteOperationEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    MJQuerySQLEntityServer,
+    MJRecordProcessEntityServer,
+    MJRemoteOperationEntityServer,
     MJRoleEntityServer,
     MJRowLevelSecurityFilterEntityServer,
     MJSearchScopeEntityServer,
@@ -2265,6 +2272,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     QueryScheduledJobsAction,
     UpdateScheduledJobAction,
     AgentEvalDriver,
+    DecisionEvalDriver,
     PromptEvalDriver,
 ];
 
@@ -2281,7 +2289,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 969;
+export const CLASS_REGISTRATIONS_COUNT = 973;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
