@@ -12,6 +12,7 @@ import {
     DecisionReferencesIn,
     DecisionsReadAsProperty,
     DecisionValueComparisonsIn,
+    RewriteDecisionReferences,
 } from '../task-graph/decision-conditions';
 
 /** Far more than a linear read of any input here needs, and far less than the old patterns took. */
@@ -73,6 +74,18 @@ describe('the decisions scanner on pathological input', () => {
         expect(withinBudget(() => DecisionChoiceTestOf(`decisions.triage${'\t'.repeat(LONG)}=== 'billing'`))).toBeNull();
         const spaced = `decisions.triage.intent.value${' '.repeat(LONG)}===${' '.repeat(LONG)}'billing'`;
         expect(withinBudget(() => DecisionChoiceTestOf(spaced))).toEqual({ NodeId: 'triage', QuestionKey: 'intent', Values: ['billing'] });
+    });
+
+    it('rewrites step names past long runs of whitespace, and leaves a reference cut short by one alone', () => {
+        const rename = (key: string): string | undefined => (key === 'triage' ? 'step-1' : undefined);
+        const cutShort = `decisions.triage${'\t'.repeat(LONG)}!`;
+        expect(withinBudget(() => RewriteDecisionReferences(cutShort, rename))).toEqual({ Expression: cutShort, Unknown: [] });
+
+        const spaced = `decisions${' '.repeat(LONG)}?.triage.intent${'\t'.repeat(LONG)}&& true`;
+        expect(withinBudget(() => RewriteDecisionReferences(spaced, rename))).toEqual({
+            Expression: `decisions${' '.repeat(LONG)}?.['step-1'].intent${'\t'.repeat(LONG)}&& true`,
+            Unknown: [],
+        });
     });
 });
 

@@ -203,8 +203,8 @@ function stepSegmentAt(expression: string, from: number): StepSegment | null {
 
 /** A step segment written with a new name, in its original form where the name allows. */
 function formatStepSegment(segment: StepSegment, name: string): string {
-    const lead = /^\s*/.exec(segment.Text)?.[0] ?? '';
-    const optional = /^\s*\?\./.test(segment.Text);
+    const lead = segment.Text.slice(0, skipSpaces(segment.Text, 0));
+    const optional = segment.Text.startsWith('?.', lead.length);
     if (segment.Quote === null && IDENTIFIER.test(name)) return `${lead}${optional ? '?.' : '.'}${name}`;
 
     const quote = segment.Quote ?? '\'';
