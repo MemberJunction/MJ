@@ -10,7 +10,8 @@
  * Textual, like `UnknownConditionRoots`, and for the same reason: this package does not parse
  * JavaScript. The grammar it accepts is deliberately narrow — the root, then two segments written as
  * `.name` or `['name']` — and anything else that touches `decisions` is reported as malformed rather
- * than guessed at, so the validator refuses it and the gate holds on it.
+ * than guessed at, so the validator refuses it and the gate holds on it. It is read by hand, in time
+ * linear in the condition's length, because a condition is author input (see the scanner below).
  *
  * The same grammar rewrites the step names in a condition ({@link RewriteDecisionReferences}): a flow
  * names a Decision step by its key and a compiled graph by its step ID, so a condition crossing
@@ -82,20 +83,6 @@ const ROOT = 'decisions';
 /** The root as an identifier: not a property (`x.decisions`) and not part of a longer name. */
 const ROOT_PATTERN = /(?<![A-Za-z0-9_$.])decisions(?![A-Za-z0-9_$])/g;
 
-const STRING_LITERAL = /'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"/g;
-
-/** One path segment: `.name`, `?.name`, `['name']` or `?.["name"]`. Sticky: it matches only at `lastIndex`. */
-const SEGMENT = /\s*(?:\??\.\s*([A-Za-z_$][A-Za-z0-9_$]*)|(?:\?\.)?\s*\[\s*(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")\s*\])/y;
-
-/** A whole string literal, and nothing after it. */
-const WHOLE_LITERAL = /^(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")$/;
-
-/** A leading string literal. */
-const LEADING_LITERAL = /^(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")/;
-
-/** Loose or strict equality, with the whitespace around it. */
-const EQUALITY = /^\s*===?\s*/;
-
 /** A name that can follow a dot. Anything else is written in brackets. */
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
@@ -119,30 +106,11 @@ type PathSegment = {
     Quote: '\'' | '"' | null;
 };
 
-/** A string literal, captured whole with its quotes. */
-const LITERAL = String.raw`('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")`;
-
-/** Where an operand ends: the end, a closing parenthesis, a logical operator, a ternary or a comma. */
-const OPERAND_END = String.raw`(?:$|[)?:,]|&&|\|\|)`;
-
-/** An (in)equality with a literal right after a value reference, and nothing more to that operand. */
-const COMPARED_WITH_LITERAL = new RegExp(String.raw`^\s*(?:===?|!==?)\s*${LITERAL}\s*(?=${OPERAND_END})`);
-
-/** A literal and an (in)equality right before a value reference, starting its own operand. */
-const LITERAL_COMPARED_WITH = new RegExp(String.raw`(?:^|[(?:,]|&&|\|\|)\s*${LITERAL}\s*(?:===?|!==?)\s*$`);
-
-/** Nothing more to the operand after a value reference. */
-const ENDS_OPERAND = new RegExp(String.raw`^\s*${OPERAND_END}`);
-
 /**
- * `decisions` read as a PROPERTY — `.decisions`, `?.decisions`, `['decisions']` — rather than as the
- * root. A spread (`...decisions`) is not a property read, and an array literal (`['decisions']`
- * after an operator) is not one either.
+ * How far back {@link DecisionsReadAsProperty} looks for the chain a property read hangs off. A
+ * condition is short; this only bounds the message for one that is not.
  */
-const DECISIONS_PROPERTY = /(?:\?\.|(?<!\.)\.)\s*decisions(?![A-Za-z0-9_$])|(?<=[A-Za-z0-9_$)\]]\s*)(?:\?\.)?\s*\[\s*(?:'decisions'|"decisions")\s*\]/g;
-
-/** The member chain that ends where the text ends: `payload`, `stepResult.result`, `output?.['x']`. */
-const CHAIN_BEFORE = /[A-Za-z_$][A-Za-z0-9_$]*(?:\s*\??\.\s*[A-Za-z_$][A-Za-z0-9_$]*|\s*(?:\?\.)?\s*\[\s*(?:'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|\d+)\s*\])*\s*$/;
+const CHAIN_WINDOW = 200;
 
 /**
  * Every `decisions` reference in a condition, and every use of the root that is not one.
@@ -156,7 +124,7 @@ export function DecisionReferencesIn(expression: string): DecisionReferenceScan 
     const strings = stringSpans(expression);
     for (const match of expression.matchAll(ROOT_PATTERN)) {
         const start = match.index ?? 0;
-        if (strings.some(([from, to]) => start >= from && start < to)) continue;
+        if (insideString(strings, start)) continue;
 
         const path = readSegments(expression, start + ROOT.length, 3);
         const [nodeId, questionKey, field] = path.Segments;
@@ -383,8 +351,8 @@ function stepSegmentAt(expression: string, from: number): PathSegment | null {
 
 /** A segment written with a new name, in its original form where the name allows. */
 function formatSegment(segment: PathSegment, name: string): string {
-    const lead = /^\s*/.exec(segment.Text)?.[0] ?? '';
-    const optional = /^\s*\?\./.test(segment.Text);
+    const lead = segment.Text.slice(0, skipSpaces(segment.Text, 0));
+    const optional = segment.Text.startsWith('?.', lead.length);
     if (segment.Quote === null && IDENTIFIER.test(name)) return `${lead}${optional ? '?.' : '.'}${name}`;
 
     const quote = segment.Quote ?? '\'';
@@ -404,17 +372,19 @@ export function DecisionValueComparisonsIn(expression: string): DecisionValueCom
     if (!expression) return comparisons;
 
     const strings = stringSpans(expression);
+    let literalBefore: ((start: number) => string | null) | undefined;
     for (const match of expression.matchAll(ROOT_PATTERN)) {
         const start = match.index ?? 0;
-        if (strings.some(([from, to]) => start >= from && start < to)) continue;
+        if (insideString(strings, start)) continue;
         const reference = readValueReference(expression, start);
         if (!reference) continue;
 
-        const rest = expression.slice(reference.End);
-        const after = COMPARED_WITH_LITERAL.exec(rest);
-        const before = after ? null : ENDS_OPERAND.test(rest) ? LITERAL_COMPARED_WITH.exec(expression.slice(0, start)) : null;
-        const literal = after?.[1] ?? before?.[1];
-        if (literal === undefined) continue;
+        let literal = literalComparedAfter(expression, reference.End);
+        if (literal === null && endsOperandAt(expression, skipSpaces(expression, reference.End))) {
+            literalBefore ??= literalsComparedBefore(expression);
+            literal = literalBefore(start);
+        }
+        if (literal === null) continue;
         comparisons.push({ NodeId: reference.NodeId, QuestionKey: reference.QuestionKey, Value: unescapeLiteral(literal.slice(1, -1)) });
     }
     return comparisons;
@@ -433,21 +403,53 @@ export function DecisionsReadAsProperty(expression: string): string[] {
     if (!expression) return reads;
 
     const strings = stringSpans(expression);
-    for (const match of expression.matchAll(DECISIONS_PROPERTY)) {
-        const start = match.index ?? 0;
-        if (strings.some(([from, to]) => start >= from && start < to)) continue;
-        // The chain it hangs off, for a message the author recognises. Bounded, because a condition
-        // is short and a failed search over a long prefix is the only way this could be slow.
-        const prefix = expression.slice(Math.max(0, start - 200), start);
-        const chain = CHAIN_BEFORE.exec(prefix)?.[0].trim() ?? '…';
-        reads.push(`${chain}${match[0].trim()}`);
+    for (const read of decisionsPropertyReads(expression)) {
+        if (insideString(strings, read.Start)) continue;
+        // The chain it hangs off, for a message the author recognises.
+        const prefix = expression.slice(Math.max(0, read.Start - CHAIN_WINDOW), read.Start);
+        const chain = chainEndingAt(prefix)?.trim() ?? '…';
+        reads.push(`${chain}${expression.slice(read.Start, read.End).trim()}`);
     }
     return reads;
 }
 
-/** The `[start, end)` ranges of every string literal. */
+/**
+ * The `[start, end)` ranges of every string literal, in order.
+ *
+ * A quote whose literal never closes opens nothing, and the text after it is searched again. A quote
+ * of the same kind inside that text was escaped, so a literal opened there would stop where the first
+ * did; each kind of quote is therefore read past once, and the whole search is linear.
+ */
 function stringSpans(expression: string): Array<[number, number]> {
-    return [...expression.matchAll(STRING_LITERAL)].map((m) => [m.index ?? 0, (m.index ?? 0) + m[0].length]);
+    const spans: Array<[number, number]> = [];
+    const unclosedUntil: Record<Quote, number> = { '\'': 0, '"': 0 };
+    let at = 0;
+    while (at < expression.length) {
+        const quote = expression.charAt(at);
+        if (isQuote(quote) && at >= unclosedUntil[quote]) {
+            const literal = scanLiteral(expression, at);
+            if (literal.Closed) {
+                spans.push([at, literal.End]);
+                at = literal.End;
+                continue;
+            }
+            unclosedUntil[quote] = literal.End;
+        }
+        at++;
+    }
+    return spans;
+}
+
+/** Whether `at` falls inside one of `spans`, which are in order and do not overlap. */
+function insideString(spans: ReadonlyArray<[number, number]>, at: number): boolean {
+    let low = 0;
+    let high = spans.length;
+    while (low < high) {
+        const middle = (low + high) >> 1;
+        if (spans[middle][1] <= at) low = middle + 1;
+        else high = middle;
+    }
+    return low < spans.length && spans[low][0] <= at;
 }
 
 /** Up to `max` path segments starting at `from`, each with where it sits and how it was written. */
@@ -455,12 +457,10 @@ function pathSegmentsAt(expression: string, from: number, max: number): PathSegm
     const segments: PathSegment[] = [];
     let at = from;
     while (segments.length < max) {
-        SEGMENT.lastIndex = at;
-        const match = SEGMENT.exec(expression);
-        if (!match) break;
-        const quote = match[1] !== undefined ? null : match[2] !== undefined ? '\'' : '"';
-        segments.push({ Name: match[1] ?? match[2] ?? match[3] ?? '', Start: at, End: SEGMENT.lastIndex, Text: match[0], Quote: quote });
-        at = SEGMENT.lastIndex;
+        const segment = readSegment(expression, at);
+        if (!segment) break;
+        segments.push({ Name: segment.Name, Start: at, End: segment.End, Text: expression.slice(at, segment.End), Quote: segment.Quote });
+        at = segment.End;
     }
     return segments;
 }
@@ -533,21 +533,18 @@ function parseChoiceEquality(term: string): { NodeId: string; QuestionKey: strin
     if (term.startsWith(ROOT)) {
         const reference = readValueReference(term, 0);
         if (!reference) return null;
-        const rest = term.slice(reference.End);
-        const operator = EQUALITY.exec(rest);
-        const literal = operator ? WHOLE_LITERAL.exec(rest.slice(operator[0].length)) : null;
-        return literal ? { ...reference, Value: unescapeLiteral(literal[1] ?? literal[2] ?? '') } : null;
+        const literalAt = equalityEnd(term, reference.End);
+        const literal = literalAt < 0 ? null : closedLiteralAt(term, literalAt);
+        return literal && literal.End === term.length ? { ...reference, Value: unescapeLiteral(literal.Body) } : null;
     }
 
-    const literal = LEADING_LITERAL.exec(term);
+    const literal = closedLiteralAt(term, 0);
     if (!literal) return null;
-    const rest = term.slice(literal[0].length);
-    const operator = EQUALITY.exec(rest);
-    if (!operator) return null;
-    const tail = rest.slice(operator[0].length);
-    const reference = tail.startsWith(ROOT) ? readValueReference(tail, 0) : null;
-    return reference && reference.End === tail.length
-        ? { NodeId: reference.NodeId, QuestionKey: reference.QuestionKey, Value: unescapeLiteral(literal[1] ?? literal[2] ?? '') }
+    const referenceAt = equalityEnd(term, literal.End);
+    if (referenceAt < 0) return null;
+    const reference = readValueReference(term, referenceAt);
+    return reference && reference.End === term.length
+        ? { NodeId: reference.NodeId, QuestionKey: reference.QuestionKey, Value: unescapeLiteral(literal.Body) }
         : null;
 }
 
@@ -583,4 +580,341 @@ function unescapeLiteral(body: string): string {
             return SIMPLE_ESCAPES[single] ?? single;
         },
     );
+}
+
+// ---------------------------------------------------------------------------------------------
+// The scanner. Hand-written rather than regular expressions: a condition is author input, and the
+// patterns that used to describe this grammar backtracked on crafted input — quadratically on a run
+// of whitespace or an unclosed string, exponentially on the chain before a property read. Each
+// reader below makes one pass over the text it reads and accepts exactly what those patterns did.
+// ---------------------------------------------------------------------------------------------
+
+type Quote = '\'' | '"';
+
+/** Where a string literal opening at a quote ends. */
+type LiteralScan = {
+    /** Whether the literal closes. */
+    Closed: boolean;
+    /** Just past the closing quote when it closes; where the literal stops being one when it does not. */
+    End: number;
+};
+
+/** One path segment: `.name`, `?.name`, `['name']` or `?.["name"]`, with any whitespace before it. */
+type Segment = {
+    /** The name, as written — a bracket segment's escapes are not resolved. */
+    Name: string;
+    /** Just past the segment. */
+    End: number;
+    /** The quote a bracket segment used, or `null` for `.name` (and for an index). */
+    Quote: Quote | null;
+};
+
+/**
+ * Reads the string literal opening at `at`, which must be a quote: any characters but the quote and
+ * a backslash, or a backslash and the character after it. A backslash before a line break, or at
+ * the end, ends it unclosed — an escape takes any character but a line break.
+ */
+function scanLiteral(text: string, at: number): LiteralScan {
+    const quote = text.charAt(at);
+    let i = at + 1;
+    while (i < text.length) {
+        const ch = text.charAt(i);
+        if (ch === quote) return { Closed: true, End: i + 1 };
+        if (ch !== '\\') {
+            i++;
+        } else if (i + 1 < text.length && !isLineBreak(text.charAt(i + 1))) {
+            i += 2;
+        } else {
+            return { Closed: false, End: i };
+        }
+    }
+    return { Closed: false, End: i };
+}
+
+/** The string literal opening at `at` when there is one and it closes: where it ends, and its body as written. */
+function closedLiteralAt(text: string, at: number): { End: number; Body: string } | null {
+    if (!isQuote(text.charAt(at))) return null;
+    const literal = scanLiteral(text, at);
+    return literal.Closed ? { End: literal.End, Body: text.slice(at + 1, literal.End - 1) } : null;
+}
+
+/**
+ * The path segment at `at`, or `null`. With `numericIndex`, `[0]` is a segment too — as it is in a
+ * member chain, though not in a `decisions` reference.
+ */
+function readSegment(text: string, at: number, numericIndex = false): Segment | null {
+    const start = skipSpaces(text, at);
+    const optional = text.startsWith('?.', start);
+    if (optional || text.charAt(start) === '.') {
+        const name = skipSpaces(text, start + (optional ? 2 : 1));
+        const nameEnd = identifierEnd(text, name);
+        if (nameEnd > name) return { Name: text.slice(name, nameEnd), End: nameEnd, Quote: null };
+    }
+
+    const open = skipSpaces(text, optional ? start + 2 : start);
+    if (text.charAt(open) !== '[') return null;
+    const key = skipSpaces(text, open + 1);
+    const quote = text.charAt(key);
+    let keyEnd = -1;
+    let name = '';
+    if (isQuote(quote)) {
+        const literal = closedLiteralAt(text, key);
+        if (literal) {
+            keyEnd = literal.End;
+            name = literal.Body;
+        }
+    } else if (numericIndex && isDigit(text.charAt(key))) {
+        keyEnd = key;
+        while (isDigit(text.charAt(keyEnd))) keyEnd++;
+        name = text.slice(key, keyEnd);
+    }
+    if (keyEnd < 0) return null;
+    const close = skipSpaces(text, keyEnd);
+    return text.charAt(close) === ']' ? { Name: name, End: close + 1, Quote: isQuote(quote) ? quote : null } : null;
+}
+
+/**
+ * The member chain that runs to the end of `text`, whitespace aside — `payload`, `stepResult.result`,
+ * `output?.['x']`, `rows[0]` — starting as early as one can, or `null` when none does.
+ */
+function chainEndingAt(text: string): string | null {
+    // Chains that meet at a point end the same way from there, so each point is followed once.
+    const reachesEnd = new Map<number, boolean>();
+    let triedThisName = false;
+    for (let at = 0; at < text.length; at++) {
+        const ch = text.charAt(at);
+        if (!isIdentifierPart(ch)) {
+            triedThisName = false;
+            continue;
+        }
+        // Every start inside one name reads to the same end of it, and so to the same answer.
+        if (triedThisName || !isIdentifierStart(ch)) continue;
+        triedThisName = true;
+        if (chainReachesEnd(text, identifierEnd(text, at), reachesEnd)) return text.slice(at);
+    }
+    return null;
+}
+
+/** Whether path segments from `from` run to the end of `text`, whitespace aside. Records every point it passes. */
+function chainReachesEnd(text: string, from: number, reachesEnd: Map<number, boolean>): boolean {
+    const passed: number[] = [];
+    let at = from;
+    let known = reachesEnd.get(at);
+    while (known === undefined && skipSpaces(text, at) < text.length) {
+        passed.push(at);
+        const segment = readSegment(text, at, true);
+        if (!segment) {
+            known = false;
+            break;
+        }
+        at = segment.End;
+        known = reachesEnd.get(at);
+    }
+    const reaches = known ?? true;
+    for (const point of passed) reachesEnd.set(point, reaches);
+    return reaches;
+}
+
+/**
+ * Every read of `decisions` as a property, as written: `.decisions` or `?.decisions` (not a spread,
+ * `...decisions`), and `['decisions']` or `?.["decisions"]` after a name, `)` or `]` — an array
+ * literal `['decisions']` after an operator is not one. The span of a bracketed read includes the
+ * whitespace before it.
+ */
+function decisionsPropertyReads(expression: string): Array<{ Start: number; End: number }> {
+    const reads: Array<{ Start: number; End: number }> = [];
+    // The last character before `at` that is not whitespace: what a bracketed read must follow.
+    let lastSolid = -1;
+    let at = 0;
+    while (at < expression.length) {
+        const end = dottedDecisionsEnd(expression, at) ?? bracketedDecisionsEnd(expression, at, lastSolid);
+        if (end !== null) {
+            reads.push({ Start: at, End: end });
+            lastSolid = end - 1;
+            at = end;
+        } else if (isSpace(expression.charAt(at))) {
+            // From anywhere in a run of whitespace, a bracketed read follows the same character and
+            // needs the same `[` after the run, so the rest of the run fails as its first position did.
+            at = skipSpaces(expression, at);
+        } else {
+            lastSolid = at++;
+        }
+    }
+    return reads;
+}
+
+/** Where `.decisions` or `?.decisions` starting at `at` ends, or `null`. */
+function dottedDecisionsEnd(text: string, at: number): number | null {
+    let dot: number;
+    if (text.startsWith('?.', at)) dot = at + 2;
+    else if (text.charAt(at) === '.' && text.charAt(at - 1) !== '.') dot = at + 1;
+    else return null;
+    const name = skipSpaces(text, dot);
+    const end = name + ROOT.length;
+    return text.startsWith(ROOT, name) && !isIdentifierPart(text.charAt(end)) ? end : null;
+}
+
+/** Where `['decisions']` or `?.["decisions"]` starting at `at` ends, when it follows a name, `)` or `]`; or `null`. */
+function bracketedDecisionsEnd(text: string, at: number, lastSolid: number): number | null {
+    if (lastSolid < 0 || !isPropertyOwnerEnd(text.charAt(lastSolid))) return null;
+    const open = skipSpaces(text, text.startsWith('?.', at) ? at + 2 : at);
+    if (text.charAt(open) !== '[') return null;
+    const key = skipSpaces(text, open + 1);
+    if (!text.startsWith(`'${ROOT}'`, key) && !text.startsWith(`"${ROOT}"`, key)) return null;
+    const close = skipSpaces(text, key + ROOT.length + 2);
+    return text.charAt(close) === ']' ? close + 1 : null;
+}
+
+/**
+ * The string literal a value reference ending at `end` is compared with — `=== 'x'`, `!= "x"` — when
+ * nothing more follows it in that operand; or `null`.
+ */
+function literalComparedAfter(expression: string, end: number): string | null {
+    const operatorEnd = operatorEndAt(expression, skipSpaces(expression, end), COMPARISONS);
+    if (operatorEnd < 0) return null;
+    const open = skipSpaces(expression, operatorEnd);
+    const literal = closedLiteralAt(expression, open);
+    return literal && endsOperandAt(expression, skipSpaces(expression, literal.End)) ? expression.slice(open, literal.End) : null;
+}
+
+/**
+ * For one condition, the string literal compared with a value reference from its left — `'x' === <ref>`
+ * — when the literal starts its own operand: after the start, `(`, `?`, `:`, `,`, `&&` or `||`.
+ *
+ * Built once per condition. A literal that closes right before the comparison can only have opened at
+ * the nearest quote of its kind that starts an operand: a literal opened earlier ends at that quote,
+ * which no backslash precedes. So each such quote is found by a search, and read once.
+ */
+function literalsComparedBefore(expression: string): (start: number) => string | null {
+    const openers: Record<Quote, number[]> = { '\'': [], '"': [] };
+    for (let at = 0; at < expression.length; at++) {
+        const quote = expression.charAt(at);
+        if (isQuote(quote) && startsOperand(expression, at)) openers[quote].push(at);
+    }
+    const scans = new Map<number, LiteralScan>();
+
+    return (start: number): string | null => {
+        const operatorStart = operatorStartBefore(expression, skipSpacesBack(expression, start));
+        if (operatorStart < 0) return null;
+        const close = skipSpacesBack(expression, operatorStart) - 1;
+        const quote = expression.charAt(close);
+        if (!isQuote(quote)) return null;
+        const open = lastBelow(openers[quote], close);
+        if (open < 0) return null;
+        let literal = scans.get(open);
+        if (!literal) {
+            literal = scanLiteral(expression, open);
+            scans.set(open, literal);
+        }
+        return literal.Closed && literal.End === close + 1 ? expression.slice(open, close + 1) : null;
+    };
+}
+
+/** Whether the quote at `at` starts an operand: only whitespace between it and the start, `(`, `?`, `:`, `,`, `&&` or `||`. */
+function startsOperand(text: string, at: number): boolean {
+    const before = skipSpacesBack(text, at);
+    if (before === 0) return true;
+    return '(?:,'.includes(text.charAt(before - 1))
+        || (before >= 2 && (text.startsWith('&&', before - 2) || text.startsWith('||', before - 2)));
+}
+
+/** Whether an operand ends at `at`: the end, `)`, `?`, `:`, `,`, `&&` or `||`. */
+function endsOperandAt(text: string, at: number): boolean {
+    if (at >= text.length) return true;
+    return ')?:,'.includes(text.charAt(at)) || text.startsWith('&&', at) || text.startsWith('||', at);
+}
+
+/** Equality and inequality, longest first. */
+const COMPARISONS: readonly string[] = ['===', '!==', '==', '!='];
+
+/** Equality alone, longest first. */
+const EQUALITIES: readonly string[] = ['===', '=='];
+
+/** Just past one of `operators` at `at`, or -1. */
+function operatorEndAt(text: string, at: number, operators: readonly string[]): number {
+    const operator = operators.find((o) => text.startsWith(o, at));
+    return operator === undefined ? -1 : at + operator.length;
+}
+
+/** Where a comparison operator that ends at `end` starts, or -1. */
+function operatorStartBefore(text: string, end: number): number {
+    const operator = COMPARISONS.find((o) => end >= o.length && text.startsWith(o, end - o.length));
+    return operator === undefined ? -1 : end - operator.length;
+}
+
+/** Past an equality at `at` and the whitespace around it, or -1. */
+function equalityEnd(text: string, at: number): number {
+    const operatorEnd = operatorEndAt(text, skipSpaces(text, at), EQUALITIES);
+    return operatorEnd < 0 ? -1 : skipSpaces(text, operatorEnd);
+}
+
+/** The largest of `sorted` below `limit`, or -1. */
+function lastBelow(sorted: readonly number[], limit: number): number {
+    let low = 0;
+    let high = sorted.length;
+    while (low < high) {
+        const middle = (low + high) >> 1;
+        if (sorted[middle] < limit) low = middle + 1;
+        else high = middle;
+    }
+    return low > 0 ? sorted[low - 1] : -1;
+}
+
+/** The first position at or after `at` that is not whitespace. */
+function skipSpaces(text: string, at: number): number {
+    let i = at;
+    while (i < text.length && isSpace(text.charAt(i))) i++;
+    return i;
+}
+
+/** The start of the whitespace that ends at `at`. */
+function skipSpacesBack(text: string, at: number): number {
+    let i = at;
+    while (i > 0 && isSpace(text.charAt(i - 1))) i--;
+    return i;
+}
+
+/** Just past the name starting at `at`, or `at` when none does. */
+function identifierEnd(text: string, at: number): number {
+    if (!isIdentifierStart(text.charAt(at))) return at;
+    let i = at + 1;
+    while (isIdentifierPart(text.charAt(i))) i++;
+    return i;
+}
+
+/** One character each, as the patterns these replace read them; an empty string (past the end) is none of them. */
+const SPACE = /\s/;
+const IDENTIFIER_START = /[A-Za-z_$]/;
+const IDENTIFIER_PART = /[A-Za-z0-9_$]/;
+const DIGIT = /[0-9]/;
+const PROPERTY_OWNER_END = /[A-Za-z0-9_$)\]]/;
+
+function isSpace(ch: string): boolean {
+    return SPACE.test(ch);
+}
+
+function isIdentifierStart(ch: string): boolean {
+    return IDENTIFIER_START.test(ch);
+}
+
+function isIdentifierPart(ch: string): boolean {
+    return IDENTIFIER_PART.test(ch);
+}
+
+function isDigit(ch: string): boolean {
+    return DIGIT.test(ch);
+}
+
+/** A character a property read can follow: the end of a name, a call or an index. */
+function isPropertyOwnerEnd(ch: string): boolean {
+    return PROPERTY_OWNER_END.test(ch);
+}
+
+function isQuote(ch: string): ch is Quote {
+    return ch === '\'' || ch === '"';
+}
+
+/** A line break, which an escape cannot take. */
+function isLineBreak(ch: string): boolean {
+    return ch === '\n' || ch === '\r' || ch === ' ' || ch === ' ';
 }
