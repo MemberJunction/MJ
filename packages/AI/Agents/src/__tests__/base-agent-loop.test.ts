@@ -1408,6 +1408,29 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
         expect(skippedLines()[0]).toContain('the run failed before they were asked');
         expect(skippedLines()[0]).toContain('terminateAfter');
     });
+
+    it('tells the next prompt which decision calls the per-turn call budget skipped', async () => {
+        const ask = answerDecisions();
+        const batch: AgentDecisionRequest = { id: 'batch', forEachItemIn: 'payload.tickets', questions: TRIAGE.questions };
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(actionsEnvelope({ decisions: [batch, TRIAGE] })),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams({
+            payload: { tickets: ['Printer on fire.', 'Password reset.', 'Coffee machine.'] },
+            data: { __agentTypePromptParams: { decisionsMaxCallsPerTurn: 2 } },
+        }));
+
+        expect(result.success).toBe(true);
+        // Three items and one single request want four calls; the budget allows two.
+        expect(decisionCalls(ask)).toHaveLength(2);
+        const injected = runner.Calls[1].conversationMessages?.map(textOf).find((c) => c.startsWith('Decision results:'));
+        expect(injected).toContain('"id":"batch","success":true,"answers":');
+        expect(injected).toContain('"skippedCount":1');
+        expect(injected).toContain('"id":"triage","success":false');
+        expect(injected).toContain('at most 2 decision calls in total');
+    });
 });
 
 describe('BaseAgent.Execute — a finishIfMode that is not a mode', () => {

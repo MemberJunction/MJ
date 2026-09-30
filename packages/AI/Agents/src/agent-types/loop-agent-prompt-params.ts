@@ -421,7 +421,7 @@ export interface LoopAgentTypePromptParams {
 
     /**
      * Maximum number of items to process when `forEachItemIn` is used.
-     * Items beyond this limit are truncated.
+     * Items beyond this limit are truncated. `decisionsMaxCallsPerTurn` can cut a request shorter.
      * @default 100
      */
     decisionsMaxItems?: number;
@@ -432,6 +432,15 @@ export interface LoopAgentTypePromptParams {
      * @default MAX_DECISION_REQUESTS_PER_TURN (8)
      */
     decisionsMaxRequests?: number;
+
+    /**
+     * Maximum number of decision calls one agent turn's requests make in total, counting every
+     * `forEachItemIn` item. The budget is handed out in request order before any call is made. A
+     * `forEachItemIn` request it cuts short asks its first items and reports the rest in
+     * `skippedCount`. A request it leaves no calls for is not run, and gets a failed result saying why.
+     * @default MAX_DECISION_CALLS_PER_TURN (100)
+     */
+    decisionsMaxCallsPerTurn?: number;
 
     /**
      * Name of the decision prompt used for evaluating decisions.
@@ -509,10 +518,18 @@ export interface LoopAgentTypePromptParams {
 
 /**
  * The most decision requests answered from one agent turn, unless `decisionsMaxRequests` overrides
- * it. Each request can itself make up to `decisionsMaxItems` calls through `forEachItemIn`, so this
- * bounds how many decision calls one turn can start.
+ * it. Each request can itself make up to `decisionsMaxItems` calls through `forEachItemIn`, so the
+ * total number of calls is bounded separately, by {@link MAX_DECISION_CALLS_PER_TURN}.
  */
 export const MAX_DECISION_REQUESTS_PER_TURN = 8;
+
+/**
+ * The most decision calls one agent turn's requests make in total, counting every `forEachItemIn`
+ * item, unless `decisionsMaxCallsPerTurn` overrides it. Without it, 8 requests of 100 items each
+ * could send 800 calls, each with its own step and prompt run, before the run's cost guardrails
+ * (checked between steps) could stop them.
+ */
+export const MAX_DECISION_CALLS_PER_TURN = 100;
 
 /** Every {@link FinishIfMode}, for validation. Mode names are case-sensitive. */
 export const FINISH_IF_MODES: readonly FinishIfMode[] = ['off', 'shadow', 'on'];
@@ -558,6 +575,7 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     includeDecisionsDocs: true,
     decisionsMaxItems: 100,
     decisionsMaxRequests: MAX_DECISION_REQUESTS_PER_TURN,
+    decisionsMaxCallsPerTurn: MAX_DECISION_CALLS_PER_TURN,
     decisionPromptName: 'Default Decision',
     finishIfMode: 'off',
     includeFinishIfDocs: true,

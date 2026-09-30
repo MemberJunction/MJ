@@ -137,7 +137,7 @@ import { ScratchpadManager } from './ScratchpadManager';
 import { ArtifactToolManager, ArtifactToolCall, StoredToolResult } from './ArtifactToolManager';
 import { MemoryWriteManager, MemoryWriteRequest, MemoryWriteResult } from './MemoryWriteManager';
 import { AgentDecisionService, DecisionQuestionMapping } from './AgentDecisionService';
-import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS, FINISH_IF_MODES, IsFinishIfMode, MAX_DECISION_REQUESTS_PER_TURN, ResolveFinishIfMode, type FinishIfMode } from './agent-types/loop-agent-prompt-params';
+import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS, FINISH_IF_MODES, IsFinishIfMode, MAX_DECISION_CALLS_PER_TURN, MAX_DECISION_REQUESTS_PER_TURN, ResolveFinishIfMode, type FinishIfMode } from './agent-types/loop-agent-prompt-params';
 import {
     PipelineExecutor,
     PipelineToolRegistry,
@@ -508,6 +508,17 @@ interface HeldDecisionRequests {
     /** Why they were held, for the log line when they are skipped. */
     Reason: string;
 }
+
+/** How many decision calls one request of a turn may make, from the turn's `decisionsMaxCallsPerTurn` budget. */
+interface DecisionCallAllowance {
+    /** The calls the request makes with no budget: one, or one per `forEachItemIn` item up to `decisionsMaxItems`. */
+    Wanted: number;
+    /** The calls the budget leaves it, handed out in request order: `Wanted`, or fewer once the budget runs out. */
+    Allowed: number;
+}
+
+/** The prompt params that limit one turn's decisions. */
+type DecisionLimitParam = 'decisionsMaxRequests' | 'decisionsMaxItems' | 'decisionsMaxCallsPerTurn';
 
 export class BaseAgent {
     /**
@@ -7927,8 +7938,14 @@ The context is now within limits. Please retry your request with the recovered c
      * (StepType 'Decision'), with bounded concurrency. A failed request never fails the run: it
      * becomes that request's `success: false`, which the agent reads on its next turn.
      *
-     * At most `decisionsMaxRequests` requests run (default {@link MAX_DECISION_REQUESTS_PER_TURN}).
-     * Each request over the cap is not run and records no step; its result says why.
+     * Two limits bound the turn. At most `decisionsMaxRequests` requests run (default
+     * {@link MAX_DECISION_REQUESTS_PER_TURN}); each request over that cap is not run and records no
+     * step, and its result says why. And the requests make at most `decisionsMaxCallsPerTurn`
+     * decision calls in total, counting every `forEachItemIn` item (default
+     * {@link MAX_DECISION_CALLS_PER_TURN}). That budget is handed out in request order before any
+     * call is made, so which calls run never depends on timing. A `forEachItemIn` request it cuts
+     * short asks its first items and reports the rest in `skippedCount`. A request it leaves no calls
+     * for is not run, records no step, and its result says why.
      *
      * @since 2.132.0
      */
@@ -7939,12 +7956,17 @@ The context is now within limits. Please retry your request with the recovered c
         params: ExecuteAgentParams,
     ): Promise<AgentDecisionResult[]> {
         const cap = this.decisionRequestCap(agentTypePromptParams);
+        const toRun = requests.slice(0, cap);
         const overCap = requests.slice(cap);
         if (overCap.length > 0) {
             this.logStatus(`[Decisions] ${requests.length} decision requests on one turn — answering the first ${cap}, skipping ${overCap.length} (per-turn cap)`, true, params);
         }
-        const results = await this.runWithConcurrencyLimit(requests.slice(0, cap), BaseAgent.DECISION_CONCURRENCY,
-            req => this.executeSingleDecisionRequestAsStep(req, finalPayload, agentTypePromptParams, params),
+        const budget = this.decisionCallBudget(agentTypePromptParams);
+        const allowances = this.allotDecisionCalls(toRun, finalPayload, agentTypePromptParams, budget, params);
+        const results = await this.runWithConcurrencyLimit(toRun, BaseAgent.DECISION_CONCURRENCY,
+            async (req, index) => allowances[index].Wanted > 0 && allowances[index].Allowed === 0
+                ? this.overBudgetDecisionResult(req, index, budget)
+                : this.executeSingleDecisionRequestAsStep(req, finalPayload, agentTypePromptParams, params, allowances[index].Allowed),
             (error, req, index): AgentDecisionResult => ({
                 id: this.decisionRequestId(req, index),
                 success: false,
@@ -7960,10 +7982,83 @@ The context is now within limits. Please retry your request with the recovered c
 
     /** The most decision requests one turn may run: `decisionsMaxRequests`, or {@link MAX_DECISION_REQUESTS_PER_TURN}. */
     private decisionRequestCap(agentTypePromptParams: Record<string, unknown> | undefined): number {
-        const configured = agentTypePromptParams?.decisionsMaxRequests;
-        return typeof configured === 'number' && Number.isInteger(configured) && configured >= 0
-            ? configured
-            : MAX_DECISION_REQUESTS_PER_TURN;
+        return this.decisionLimit(agentTypePromptParams, 'decisionsMaxRequests', MAX_DECISION_REQUESTS_PER_TURN);
+    }
+
+    /**
+     * The most decision calls one turn's requests make in total, `forEachItemIn` items included:
+     * `decisionsMaxCallsPerTurn`, or {@link MAX_DECISION_CALLS_PER_TURN}.
+     */
+    private decisionCallBudget(agentTypePromptParams: Record<string, unknown> | undefined): number {
+        return this.decisionLimit(agentTypePromptParams, 'decisionsMaxCallsPerTurn', MAX_DECISION_CALLS_PER_TURN);
+    }
+
+    /** The most items one `forEachItemIn` request asks about: `decisionsMaxItems`, or its default. */
+    private decisionMaxItems(agentTypePromptParams: Record<string, unknown> | undefined): number {
+        return this.decisionLimit(agentTypePromptParams, 'decisionsMaxItems', DEFAULT_LOOP_AGENT_PROMPT_PARAMS.decisionsMaxItems);
+    }
+
+    /** A decision limit from the prompt params when it is a non-negative integer, or `fallback` when it is absent or anything else. */
+    private decisionLimit(agentTypePromptParams: Record<string, unknown> | undefined, name: DecisionLimitParam, fallback: number): number {
+        const configured = agentTypePromptParams?.[name];
+        return typeof configured === 'number' && Number.isInteger(configured) && configured >= 0 ? configured : fallback;
+    }
+
+    /**
+     * Hands out the turn's decision-call budget to its requests in order, before any of them runs.
+     * Each request gets the calls it wants while the budget lasts. The first one the budget cannot
+     * cover gets what is left, and the ones after it get none.
+     */
+    private allotDecisionCalls(
+        requests: AgentDecisionRequest[],
+        finalPayload: unknown,
+        agentTypePromptParams: Record<string, unknown> | undefined,
+        budget: number,
+        params: ExecuteAgentParams
+    ): DecisionCallAllowance[] {
+        let remaining = budget;
+        const allowances = requests.map((request): DecisionCallAllowance => {
+            const wanted = this.decisionCallsWanted(request, finalPayload, agentTypePromptParams);
+            const allowed = Math.min(wanted, remaining);
+            remaining -= allowed;
+            return { Wanted: wanted, Allowed: allowed };
+        });
+        const cut = allowances.reduce((sum, allowance) => sum + allowance.Wanted - allowance.Allowed, 0);
+        if (cut > 0) {
+            this.logStatus(`[Decisions] The turn's decision requests want ${budget + cut} decision calls — making ${budget}, skipping ${cut} (per-turn call budget)`, true, params);
+        }
+        return allowances;
+    }
+
+    /**
+     * The decision calls a request makes with no budget: one, or one per `forEachItemIn` item up to
+     * `decisionsMaxItems`. A request that cannot make any, because it is not an object or its
+     * `forEachItemIn` is not an array, wants none. A request that fails before it asks, such as one
+     * with no valid question, still holds what its shape wants: the budget can then go unused, but
+     * it is never exceeded.
+     */
+    private decisionCallsWanted(
+        request: AgentDecisionRequest,
+        finalPayload: unknown,
+        agentTypePromptParams: Record<string, unknown> | undefined
+    ): number {
+        if (!request || typeof request !== 'object') {
+            return 0;
+        }
+        if (!request.forEachItemIn) {
+            return 1;
+        }
+        const target = typeof request.forEachItemIn === 'string' ? this.resolvePayloadPath(request.forEachItemIn, finalPayload) : undefined;
+        return Array.isArray(target) ? Math.min(target.length, this.decisionMaxItems(agentTypePromptParams)) : 0;
+    }
+
+    /** The result of a request the turn's decision-call budget left no calls for. It was not run. */
+    private overBudgetDecisionResult(request: AgentDecisionRequest, index: number, budget: number): AgentDecisionResult {
+        return {
+            id: this.decisionRequestId(request, index),
+            success: false,
+            error: `Not run: one turn's decisions make at most ${budget} decision calls in total, counting each forEachItemIn item, and the requests before this one used them all. Ask again next turn if you still need it.`,
+        };
     }
 
     /** A request's id for its result, or its position when the model sent no usable id. */
@@ -7978,6 +8073,11 @@ The context is now within limits. Please retry your request with the recovered c
      * output, so any error finishes the step as failed rather than escaping: this never throws
      * once the step exists.
      *
+     * @param callAllowance The most decision calls the request may make, from the turn's
+     * `decisionsMaxCallsPerTurn` budget. It caps a `forEachItemIn` request's items below
+     * `decisionsMaxItems`. A single-state request makes one call, and
+     * {@link executeDecisionRequestsAsSteps} never starts one the budget left without it.
+     * Unbounded by default.
      * @since 2.132.0
      */
     protected async executeSingleDecisionRequestAsStep(
@@ -7985,6 +8085,7 @@ The context is now within limits. Please retry your request with the recovered c
         finalPayload: unknown,
         agentTypePromptParams: Record<string, unknown> | undefined,
         params: ExecuteAgentParams,
+        callAllowance: number = Number.POSITIVE_INFINITY,
     ): Promise<AgentDecisionResult> {
         const step = await this.createStepEntity({
             stepType: 'Decision',
@@ -8007,7 +8108,7 @@ The context is now within limits. Please retry your request with the recovered c
             }
             const ask = this.decisionAsker(mapping.Questions, agentTypePromptParams, params);
             const outcome = request.forEachItemIn
-                ? await this.askForEachItem(request, finalPayload, agentTypePromptParams, params, step, ask)
+                ? await this.askForEachItem(request, finalPayload, agentTypePromptParams, callAllowance, params, step, ask)
                 : await this.askOnce(request, finalPayload, step, ask);
             return await this.finishDecisionStep(step, request, outcome, mapping.Invalid);
         } catch (error) {
@@ -8055,14 +8156,16 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Asks the same questions of each item of a payload array, up to `decisionsMaxItems`. Each item's
-     * call is its own child Decision step of the request's step, carrying that call's prompt run, as
-     * each iteration of a ForEach is a child step of its loop step.
+     * Asks the same questions of each item of a payload array, up to `decisionsMaxItems` and the
+     * request's share of the turn's call budget. Each item's call is its own child Decision step of
+     * the request's step, carrying that call's prompt run, as each iteration of a ForEach is a child
+     * step of its loop step.
      */
     private async askForEachItem(
         request: AgentDecisionRequest,
         finalPayload: unknown,
         agentTypePromptParams: Record<string, unknown> | undefined,
+        callAllowance: number,
         params: ExecuteAgentParams,
         step: MJAIAgentRunStepEntityExtended,
         ask: (state: string) => Promise<AIDecisionRunResult>
@@ -8071,11 +8174,13 @@ The context is now within limits. Please retry your request with the recovered c
         if (!Array.isArray(target)) {
             return { Error: `forEachItemIn target "${request.forEachItemIn}" is not an array` };
         }
-        const maxItems = typeof agentTypePromptParams?.decisionsMaxItems === 'number' ? agentTypePromptParams.decisionsMaxItems : 100;
-        const items = target.slice(0, maxItems);
-        const skippedCount = target.length > maxItems ? target.length - maxItems : undefined;
+        const maxItems = this.decisionMaxItems(agentTypePromptParams);
+        const limit = Math.min(maxItems, callAllowance);
+        const items = target.slice(0, limit);
+        const skippedCount = target.length > limit ? target.length - limit : undefined;
         if (skippedCount) {
-            this.logStatus(`[Decisions] "${request.forEachItemIn}" has ${target.length} items; asking the first ${maxItems} (${skippedCount} skipped)`, true, params);
+            const why = limit < maxItems ? "the turn's decision-call budget" : 'decisionsMaxItems';
+            this.logStatus(`[Decisions] "${request.forEachItemIn}" has ${target.length} items; asking the first ${limit} (${skippedCount} skipped: ${why})`, true, params);
         }
         const results = await this.runWithConcurrencyLimit(items, BaseAgent.DECISION_CONCURRENCY,
             (item, index) => this.askItemAsStep(request, item, index, step, ask, params),
