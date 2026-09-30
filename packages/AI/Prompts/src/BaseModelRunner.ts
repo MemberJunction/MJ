@@ -2185,9 +2185,11 @@ export abstract class BaseModelRunner {
         promptRun.TokensUsedRollup = promptRun.TokensUsed;
         promptRun.TokensCacheReadRollup = promptRun.TokensCacheRead;
         promptRun.TokensCacheWriteRollup = promptRun.TokensCacheWrite;
-        // A parallel parent carries no own Cost (its arms do); its TotalCost is their sum.
-        if (promptRun.RunType !== 'ParallelParent' && promptRun.Cost !== undefined) {
-          promptRun.TotalCost = promptRun.Cost;
+        // TotalCost is Cost plus DescendantCost. A parallel parent carries no own Cost (its arms do), so
+        // its TotalCost is their sum; a run with no Cost of its own (NULL once its INSERT has reloaded
+        // it) keeps the TotalCost applyResultFields gave it, rather than being nulled.
+        if (promptRun.RunType !== 'ParallelParent' && promptRun.Cost != null) {
+          promptRun.TotalCost = promptRun.Cost + (promptRun.DescendantCost ?? 0);
         }
       } catch (error) {
         this.logError(error, {

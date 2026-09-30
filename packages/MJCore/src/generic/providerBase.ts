@@ -545,6 +545,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     private _metadataDatasetEntityNames: ReadonlySet<string> | null = null;
 
+    /**
+     * True only while {@link RefreshWithinTransaction} is reloading. The metadata dataset is
+     * normally read on the pool (#4514); this window joins those reads to the caller's transaction
+     * so a push can see the metadata rows it has not committed yet (MJ#4836).
+     */
+    private _metadataReadsJoinTransaction = false;
+
     /** Debounce timer for {@link scheduleMetadataMemberRefresh}. */
     private _metadataMemberRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -567,6 +574,28 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
         this._metadataDatasetEntityNames = names;
         this.ensureInflightViewInvalidation();
+    }
+
+    /**
+     * Whether `entityName` is one of the entities this provider's metadata is built from.
+     * False when the membership set has not been loaded yet — a caller must not treat "unknown"
+     * as "reload". Names are compared case-insensitively, matching the set recorded by
+     * {@link registerMetadataDatasetMembership}.
+     */
+    public IsMetadataDatasetMember(entityName: string): boolean {
+        const name = entityName?.trim().toLowerCase();
+        if (!name || !this._metadataDatasetEntityNames) {
+            return false;
+        }
+        return this._metadataDatasetEntityNames.has(name);
+    }
+
+    /**
+     * True while {@link RefreshWithinTransaction} is running, so metadata-dataset reads join the
+     * ambient transaction instead of the pool.
+     */
+    protected get MetadataReadsJoinTransaction(): boolean {
+        return this._metadataReadsJoinTransaction;
     }
 
     /**
@@ -5313,6 +5342,24 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
         else
             return true; // subclass is telling us not to do any refresh ops right now
+    }
+
+    /**
+     * The same hard reload as {@link Refresh}, but the metadata dataset's reads join the ambient
+     * transaction for the duration of the call (MJ#4836).
+     *
+     * A timer-driven refresh must stay on the pool so it cannot land beside COMMIT (#4514).
+     * The caller that owns the transaction — `mj sync push`, between its own writes — is the
+     * one case that has to see its uncommitted metadata rows, and it waits for this call, so
+     * the read cannot race the commit.
+     */
+    public async RefreshWithinTransaction(providerToUse?: IMetadataProvider): Promise<boolean> {
+        this._metadataReadsJoinTransaction = true;
+        try {
+            return await this.Refresh(providerToUse);
+        } finally {
+            this._metadataReadsJoinTransaction = false;
+        }
     }
 
     /**

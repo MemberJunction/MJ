@@ -21,3 +21,6 @@ export * from './video/video-runner.types';
 // Exported so its @RegisterClass runs (the base resolves it via the ClassFactory to avoid a
 // circular import) and so a full build picks it up into the class-registration manifests.
 export * from './ParallelExecutionCoordinator';
+export * from './decision/LLMDecision';
+export * from './decision/decision-runner.types';
+export * from './decision/AIDecisionRunner';
