@@ -12,7 +12,7 @@ import type { AIPromptParams, AIPromptRunResult, MJAIPromptEntityExtended } from
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIEngine } from '@memberjunction/aiengine';
 import { LLMJudgeOracle } from '../oracles/LLMJudgeOracle';
-import { BuildJudgeTrace, ReadJudgeCriteria } from '../oracles/judge-trace';
+import { BuildJudgeTrace, ReadJudgeCriteria, type JudgeCriterion } from '../oracles/judge-trace';
 import type { OracleConfig, OracleInput } from '../types';
 
 const USER = { ID: 'user-1' } satisfies Pick<UserInfo, 'ID'>;
@@ -60,10 +60,26 @@ describe('BuildJudgeTrace', () => {
 });
 
 describe('ReadJudgeCriteria', () => {
-    it("reads the expected output's judgeValidationCriteria first", () => {
-        const criteria = ReadJudgeCriteria(oracleInput(null, { judgeValidationCriteria: ['E'] }, 'a'), { criteria: ['C'] });
+    /** The criteria read from this expected output and config, asserting they were read. */
+    function readCriteria(expected: unknown, config: OracleConfig): JudgeCriterion[] {
+        const result = ReadJudgeCriteria(oracleInput(null, expected, 'a'), config);
+        if (!result.Success) {
+            throw new Error(`Expected criteria, got: ${result.ErrorMessage}`);
+        }
+        return result.Value;
+    }
 
-        expect(criteria).toEqual(['E']);
+    /** The reason these criteria cannot be read, asserting they were not. */
+    function readError(expected: unknown, config: OracleConfig): string {
+        const result = ReadJudgeCriteria(oracleInput(null, expected, 'a'), config);
+        if (result.Success) {
+            throw new Error(`Expected an error, got: ${JSON.stringify(result.Value)}`);
+        }
+        return result.ErrorMessage;
+    }
+
+    it("reads the expected output's judgeValidationCriteria first", () => {
+        expect(readCriteria({ judgeValidationCriteria: ['E'] }, { criteria: ['C'] })).toEqual([{ Criterion: 'E', Weight: 1 }]);
     });
 
     it.each([
@@ -71,15 +87,45 @@ describe('ReadJudgeCriteria', () => {
         ['null', null],
         ['an object without criteria', { other: 1 }],
     ])("falls back to the config's criteria when the expected output is %s", (_label, expected) => {
-        expect(ReadJudgeCriteria(oracleInput(null, expected, 'a'), { criteria: ['C'] })).toEqual(['C']);
+        expect(readCriteria(expected, { criteria: ['C'] })).toEqual([{ Criterion: 'C', Weight: 1 }]);
     });
 
-    it('keeps an empty criteria list from the expected output rather than falling back', () => {
-        expect(ReadJudgeCriteria(oracleInput(null, { judgeValidationCriteria: [] }, 'a'), { criteria: ['C'] })).toEqual([]);
+    it('reads a mixed list of strings and weighted criteria, in order', () => {
+        const criteria = readCriteria(
+            { judgeValidationCriteria: ['Is polite', { criterion: 'Answers', weight: 2 }, { criterion: 'Cites', weight: null }] },
+            {},
+        );
+
+        expect(criteria).toEqual([
+            { Criterion: 'Is polite', Weight: 1 },
+            { Criterion: 'Answers', Weight: 2 },
+            { Criterion: 'Cites', Weight: 1 },
+        ]);
     });
 
-    it('returns undefined when neither source sets criteria', () => {
-        expect(ReadJudgeCriteria(oracleInput(null, {}, 'a'), {})).toBeUndefined();
+    it('keeps an empty criteria list from the expected output rather than falling back, and reports none', () => {
+        expect(readError({ judgeValidationCriteria: [] }, { criteria: ['C'] })).toBe('No validation criteria provided');
+    });
+
+    it('reports none when neither source sets criteria', () => {
+        expect(readError({}, {})).toBe('No validation criteria provided');
+    });
+
+    it('rejects criteria that are not an array', () => {
+        expect(readError({ judgeValidationCriteria: 'Is polite' }, {})).toBe('Validation criteria must be an array of criteria, not a string');
+    });
+
+    it.each([
+        ['an empty string', '  '],
+        ['a negative weight', { criterion: 'A', weight: -1 }],
+        ['an infinite weight', { criterion: 'A', weight: Number.POSITIVE_INFINITY }],
+        ['a non-numeric weight', { criterion: 'A', weight: 'heavy' }],
+        ['an empty criterion', { criterion: '', weight: 2 }],
+        ['an object without a criterion', { weight: 2 }],
+        ['a number', 42],
+        ['null', null],
+    ])('rejects %s, naming its position', (_label, entry) => {
+        expect(readError({ judgeValidationCriteria: ['Fine', entry] }, {})).toMatch(/^Criterion 2 must be a non-empty string/);
     });
 });
 
@@ -109,6 +155,22 @@ describe('LLMJudgeOracle.evaluate — the prompt data it sends', () => {
             actual: JSON.stringify({ reply: 'pong' }, null, 2),
             criteria: '1. Is polite\n2. Answers the question',
         });
+    });
+
+    it('sends the text of each criterion in a mixed list of strings and weighted criteria', async () => {
+        const expected = { judgeValidationCriteria: ['Is polite', { criterion: 'Answers the question', weight: 2 }] };
+        await new LLMJudgeOracle().evaluate(oracleInput(null, expected, 'out'), {});
+
+        expect(sentData()?.criteria).toBe('1. Is polite\n2. Answers the question');
+        expect(sentData()?.criteria).not.toContain('[object Object]');
+    });
+
+    it('fails without calling the model when a criterion is malformed', async () => {
+        const result = await new LLMJudgeOracle().evaluate(oracleInput(null, { judgeValidationCriteria: ['Fine', 42] }, 'out'), {});
+
+        expect(executePrompt).not.toHaveBeenCalled();
+        expect(result.passed).toBe(false);
+        expect(result.message).toMatch(/^Criterion 2 must be a non-empty string/);
     });
 
     it('sends an empty object as the input when the test has no input definition', async () => {

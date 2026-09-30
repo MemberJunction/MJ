@@ -16,6 +16,10 @@ import { AIEngine } from '@memberjunction/aiengine';
  * Uses an LLM to evaluate output quality based on custom criteria.
  * Provides semantic evaluation beyond deterministic checks.
  *
+ * Criteria come from `expectedOutput.judgeValidationCriteria`, or else from `config.criteria`. Each is
+ * a string or `{ "criterion": "...", "weight": 2 }`, as for {@link DecisionJudgeOracle}; this judge
+ * sends each criterion's text and ignores its weight. Malformed criteria fail the oracle without a call.
+ *
  * Configuration:
  * - criteria: Array of validation criteria (required)
  * - model: Model to use for judging (default: from prompt or default model)
@@ -92,14 +96,14 @@ Respond in JSON format:
             await AIEngine.Instance.Config(false, input.contextUser);
 
             // Get criteria from expected outcomes or config
-            const criteria = ReadJudgeCriteria(input, config) as string[];
+            const criteria = ReadJudgeCriteria(input, config);
 
-            if (!criteria || criteria.length === 0) {
+            if (!criteria.Success) {
                 return {
                     oracleType: this.type,
                     passed: false,
                     score: 0,
-                    message: 'No validation criteria provided'
+                    message: criteria.ErrorMessage
                 };
             }
 
@@ -124,7 +128,7 @@ Respond in JSON format:
                 input: trace.Input,
                 expected: trace.Expected,
                 actual: trace.Actual,
-                criteria: criteria.map((c, i) => `${i + 1}. ${c}`).join('\n')
+                criteria: criteria.Value.map((c, i) => `${i + 1}. ${c.Criterion}`).join('\n')
             };
 
             // Execute LLM judgment

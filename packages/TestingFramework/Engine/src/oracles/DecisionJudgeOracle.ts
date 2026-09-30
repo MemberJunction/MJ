@@ -8,14 +8,8 @@ import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIDecisionParams, AIDecisionRunResult, AIDecisionRunner } from '@memberjunction/ai-prompts';
 import { AIEngine } from '@memberjunction/aiengine';
 import { IOracle } from './IOracle';
-import { BuildJudgeTrace, JudgeTrace, ReadJudgeCriteria } from './judge-trace';
+import { BuildJudgeTrace, JudgeCriterion, JudgeTrace, ReadJudgeCriteria } from './judge-trace';
 import { OracleInput, OracleConfig, OracleResult } from '../types';
-
-/** A criterion to judge, with its weight in the score. */
-interface WeightedCriterion {
-    criterion: string;
-    weight: number;
-}
 
 /** The settings read from the oracle's config. */
 interface JudgeSettings {
@@ -101,9 +95,9 @@ export class DecisionJudgeOracle implements IOracle {
      */
     async evaluate(input: OracleInput, config: OracleConfig): Promise<OracleResult> {
         try {
-            const criteria = this.readCriteria(input, config);
-            if (typeof criteria === 'string') {
-                return this.failed(criteria);
+            const criteria = ReadJudgeCriteria(input, config);
+            if (!criteria.Success) {
+                return this.failed(criteria.ErrorMessage);
             }
             const settings = this.readSettings(config);
             if (typeof settings === 'string') {
@@ -116,49 +110,11 @@ export class DecisionJudgeOracle implements IOracle {
                 return this.failed(`Decision prompt "${settings.promptName}" not found in AIEngine.Instance.Prompts`);
             }
 
-            const run = await new AIDecisionRunner().ExecuteDecision(this.buildParams(input, prompt, criteria));
-            return this.judge(run, criteria, settings);
+            const run = await new AIDecisionRunner().ExecuteDecision(this.buildParams(input, prompt, criteria.Value));
+            return this.judge(run, criteria.Value, settings);
         } catch (error) {
             return this.failed(`Decision judge error: ${error instanceof Error ? error.message : String(error)}`);
         }
-    }
-
-    /** The criteria to judge, or the reason they cannot be read. */
-    private readCriteria(input: OracleInput, config: OracleConfig): WeightedCriterion[] | string {
-        const raw = ReadJudgeCriteria(input, config);
-        if (!Array.isArray(raw) || raw.length === 0) {
-            return 'No validation criteria provided';
-        }
-        const entries: unknown[] = raw;
-        const criteria: WeightedCriterion[] = [];
-        for (const [index, entry] of entries.entries()) {
-            const criterion = this.readCriterion(entry);
-            if (!criterion) {
-                return `Criterion ${index + 1} must be a non-empty string, or an object with a non-empty "criterion" ` +
-                    'and an optional "weight" that is a number of 0 or more';
-            }
-            criteria.push(criterion);
-        }
-        return criteria;
-    }
-
-    /** One criterion: a string (weight 1), or `{ criterion, weight? }`. Undefined when it is neither. */
-    private readCriterion(entry: unknown): WeightedCriterion | undefined {
-        if (typeof entry === 'string') {
-            return entry.trim() ? { criterion: entry, weight: 1 } : undefined;
-        }
-        if (typeof entry !== 'object' || entry === null || !('criterion' in entry)) {
-            return undefined;
-        }
-        const text = entry.criterion;
-        const weight = 'weight' in entry && entry.weight != null ? entry.weight : 1;
-        if (typeof text !== 'string' || !text.trim()) {
-            return undefined;
-        }
-        if (typeof weight !== 'number' || !Number.isFinite(weight) || weight < 0) {
-            return undefined;
-        }
-        return { criterion: text, weight };
     }
 
     /** The pass threshold and prompt name, defaulted, or the reason the config is invalid. */
@@ -181,7 +137,7 @@ export class DecisionJudgeOracle implements IOracle {
     }
 
     /** The one decision call: the judge's trace as the state, and a question per criterion. */
-    private buildParams(input: OracleInput, prompt: MJAIPromptEntityExtended, criteria: WeightedCriterion[]): AIDecisionParams {
+    private buildParams(input: OracleInput, prompt: MJAIPromptEntityExtended, criteria: JudgeCriterion[]): AIDecisionParams {
         const params = new AIDecisionParams();
         params.prompt = prompt;
         params.contextUser = input.contextUser;
@@ -200,12 +156,12 @@ export class DecisionJudgeOracle implements IOracle {
     }
 
     /** One Likelihood question per criterion, keyed by position: a key is a label for code only. */
-    private buildQuestions(criteria: WeightedCriterion[]): Record<string, DecisionQuestion> {
+    private buildQuestions(criteria: JudgeCriterion[]): Record<string, DecisionQuestion> {
         const questions: Record<string, DecisionQuestion> = {};
         criteria.forEach((c, index) => {
             questions[this.questionKey(index)] = {
                 Kind: 'Likelihood',
-                Instructions: `The response satisfies: ${c.criterion}`,
+                Instructions: `The response satisfies: ${c.Criterion}`,
             };
         });
         return questions;
@@ -216,7 +172,7 @@ export class DecisionJudgeOracle implements IOracle {
     }
 
     /** Turns the decision into the oracle result: the pass rule and the weighted score, in code. */
-    private judge(run: AIDecisionRunResult, criteria: WeightedCriterion[], settings: JudgeSettings): OracleResult {
+    private judge(run: AIDecisionRunResult, criteria: JudgeCriterion[], settings: JudgeSettings): OracleResult {
         const runDetails = this.runDetails(run);
         if (!run.success) {
             return this.failed(`Decision judgment failed: ${run.errorMessage || 'unknown error'}`, runDetails);
@@ -240,17 +196,17 @@ export class DecisionJudgeOracle implements IOracle {
     }
 
     /** Each criterion's probability and pass, or the reason an answer is missing. */
-    private readOutcomes(run: AIDecisionRunResult, criteria: WeightedCriterion[], passThreshold: number): CriterionProbability[] | string {
+    private readOutcomes(run: AIDecisionRunResult, criteria: JudgeCriterion[], passThreshold: number): CriterionProbability[] | string {
         const outcomes: CriterionProbability[] = [];
         for (const [index, c] of criteria.entries()) {
             const answer = run.Answers[this.questionKey(index)];
             if (answer?.Kind !== 'Likelihood' || !Number.isFinite(answer.Probability)) {
-                return `The decision returned no Likelihood answer for criterion ${index + 1}: ${c.criterion}`;
+                return `The decision returned no Likelihood answer for criterion ${index + 1}: ${c.Criterion}`;
             }
             outcomes.push({
-                criterion: c.criterion,
+                criterion: c.Criterion,
                 probability: answer.Probability,
-                weight: c.weight,
+                weight: c.Weight,
                 passed: answer.Probability >= passThreshold,
             });
         }
