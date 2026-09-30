@@ -542,16 +542,22 @@ export class LLMDecision extends BaseDecision {
     }
 
     /**
-     * The chat call's cost. The runner's reported cost wins when it has one. Otherwise it is the
-     * chat run's saved cost, which the server computes when the run is saved: `TotalCost`, else
-     * `Cost`. Unset when neither is known.
+     * The chat call's cost. Once the chat run is saved, its saved cost wins: `TotalCost`, else
+     * `Cost`, which the server computes when the run is saved and which is what rolls up to the
+     * decision's run. It differs from the runner's reported cost only when the runner reports 0,
+     * which the server treats as unpriced and reprices, so reporting the saved cost keeps the
+     * decision run's descendant cost equal to the rollup. Before the run is saved, the runner's
+     * reported cost wins, then the run's cost as it stands. Unset when none is known.
      */
     private resolveCost(promptResult: AIPromptRunResult): { cost?: number; currency?: string } {
+        const run = promptResult.promptRun;
+        const runCost = run ? this.savedRunCost(run) : undefined;
+        if (run?.IsSaved && runCost !== undefined) {
+            return { cost: runCost, currency: run.CostCurrency ?? promptResult.costCurrency };
+        }
         if (promptResult.cost !== undefined) {
             return { cost: promptResult.cost, currency: promptResult.costCurrency };
         }
-        const run = promptResult.promptRun;
-        const runCost = run ? this.savedRunCost(run) : undefined;
         if (runCost === undefined) {
             return { currency: promptResult.costCurrency };
         }

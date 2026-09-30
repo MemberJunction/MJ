@@ -1102,7 +1102,7 @@ describe('LLMDecision', () => {
             expect(result.Usage?.costCurrency).toBeUndefined();
         });
 
-        it("keeps the runner's reported cost over the chat run's saved cost", async () => {
+        it("keeps the runner's reported cost over the chat run's cost while the run is not saved", async () => {
             const decision = new LLMDecision('', PROMPT_ID, mockUser);
             executePromptSpy.mockResolvedValueOnce(
                 makeSuccessRunResult(
@@ -1110,7 +1110,7 @@ describe('LLMDecision', () => {
                     {
                         cost: 0.003,
                         costCurrency: 'USD',
-                        promptRun: asPromptRun({ Cost: 0.0007, DescendantCost: null, TotalCost: 0.0007, CostCurrency: 'EUR' }),
+                        promptRun: asPromptRun({ Cost: 0.0007, DescendantCost: null, TotalCost: 0.0007, CostCurrency: 'EUR', IsSaved: false }),
                     }
                 )
             );
@@ -1119,6 +1119,43 @@ describe('LLMDecision', () => {
 
             expect(result.Usage?.cost).toBe(0.003);
             expect(result.Usage?.costCurrency).toBe('USD');
+        });
+
+        it("reports a saved chat run's cost over a reported cost of 0, which the server reprices, so it agrees with the rollup", async () => {
+            const decision = new LLMDecision('', PROMPT_ID, mockUser);
+            executePromptSpy.mockResolvedValueOnce(
+                makeSuccessRunResult(
+                    { q1: 0.5 },
+                    {
+                        cost: 0,
+                        costCurrency: 'USD',
+                        promptRun: asPromptRun({ Cost: 0.0007, DescendantCost: null, TotalCost: 0.0007, CostCurrency: 'USD', IsSaved: true }),
+                    }
+                )
+            );
+
+            const result = await decision.Decide(likelihoodOnly);
+
+            expect(result.Usage?.cost).toBe(0.0007);
+            expect(result.Usage?.costCurrency).toBe('USD');
+        });
+
+        it("keeps a reported cost of 0 when the saved chat run could not be priced either", async () => {
+            const decision = new LLMDecision('', PROMPT_ID, mockUser);
+            executePromptSpy.mockResolvedValueOnce(
+                makeSuccessRunResult(
+                    { q1: 0.5 },
+                    {
+                        cost: 0,
+                        costCurrency: 'USD',
+                        promptRun: asPromptRun({ Cost: null, DescendantCost: null, TotalCost: 0, CostCurrency: null, IsSaved: true }),
+                    }
+                )
+            );
+
+            const result = await decision.Decide(likelihoodOnly);
+
+            expect(result.Usage?.cost).toBe(0);
         });
 
         it("reports the chat run's cost when the reply fails to map, because the call still cost money", async () => {
@@ -1145,8 +1182,8 @@ describe('LLMDecision', () => {
 /** The prompt-run entity an `AIPromptRunResult` carries. */
 type ChatPromptRun = NonNullable<AIPromptRunResult['promptRun']>;
 
-/** The chat run's cost columns: what LLMDecision reads once the run is saved. */
-type ChatRunCost = Pick<ChatPromptRun, 'Cost' | 'DescendantCost' | 'TotalCost' | 'CostCurrency'>;
+/** The chat run's cost columns, and whether it was saved: what LLMDecision reads for its cost. */
+type ChatRunCost = Pick<ChatPromptRun, 'Cost' | 'DescendantCost' | 'TotalCost' | 'CostCurrency'> & Partial<Pick<ChatPromptRun, 'IsSaved'>>;
 
 /** The seam onto the full prompt-run entity that `AIPromptRunResult.promptRun` is declared as. */
 function asPromptRun(run: ChatRunCost): ChatPromptRun {
