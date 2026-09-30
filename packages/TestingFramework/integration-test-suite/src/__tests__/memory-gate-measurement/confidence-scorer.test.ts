@@ -59,15 +59,16 @@ describe('confidence-scorer', () => {
         });
     });
 
-    it('defaults missing or invalid note scores to 50', () => {
+    it('leaves a missing or invalid note score out, so it is counted as missing rather than as 50', () => {
         const response = JSON.stringify({
             scores: {
-                n1: 85
+                n1: 85,
+                n3: 'not a number',
+                n4: ''
             }
         });
-        const parsed = ParseConfidenceScores(response, ['n1', 'n2']);
-        expect(parsed.n1).toBe(85);
-        expect(parsed.n2).toBe(50);
+        const parsed = ParseConfidenceScores(response, ['n1', 'n2', 'n3', 'n4']);
+        expect(parsed).toEqual({ n1: 85 });
     });
 
     it('retries when response fails to parse, succeeding on retry', async () => {

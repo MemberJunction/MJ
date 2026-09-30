@@ -93,6 +93,7 @@ None of these enters a fit, a sweep or an AUC; a failed or missing answer is not
 - **Notes without a usable answer, per rep:** ${report.Exclusions.NoAnswer}
 - **Notes left out, no usable answer in any rep:** ${report.Exclusions.UnscoredNotes}
 - **Notes left out, no label:** ${report.Exclusions.UnlabelledNotes}
+- **Notes left out of the self-report arm only, no self-score:** ${report.Exclusions.SelfScoreMissing}
 
 ---
 

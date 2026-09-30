@@ -31,7 +31,8 @@ export interface EvaluatedNote {
     NoteId: string;
     Label: CorpusLabel;
     IsDurable: boolean;
-    SelfConfidence: number;
+    /** The proxy self-report score, or null when the scorer gave none; such a note is left out of the self-confidence arm. */
+    SelfConfidence: number | null;
     DecisionRawProbability: number;
     DecisionCalibratedProbability?: number;
     ModelName: string;
@@ -268,14 +269,15 @@ export function EvaluateMemoryGateMeasurement(
         labelDistribution[n.Label]++;
     }
 
-    // 1. Self-confidence Arm
-    const confPoints: LabelledProbability[] = evaluatedNotes.map(n => ({
+    // 1. Self-confidence Arm: only the notes the proxy scorer gave a score. A missing score is not a 50.
+    const selfScored = evaluatedNotes.filter(hasSelfScore);
+    const confPoints: LabelledProbability[] = selfScored.map(n => ({
         Probability: n.SelfConfidence / 100,
         Positive: n.IsDurable
     }));
     const confAuc = RocAuc(confPoints);
     const confOperatingPoints = CONFIDENCE_SWEEP_THRESHOLDS.map(th =>
-        ComputeOperatingThresholdMetrics(evaluatedNotes, th, n => n.SelfConfidence)
+        ComputeOperatingThresholdMetrics(selfScored, th, n => n.SelfConfidence)
     );
 
     // 2. Decision Raw Arm
@@ -349,8 +351,18 @@ export function EvaluateMemoryGateMeasurement(
         CostPerThousandNotesUsd: telemetry.costPerThousandUsd,
         RepeatabilityAgreement: repeatability,
         RepeatabilityThreshold: MEMORY_NOTE_MIN_PROBABILITY,
-        Exclusions: { ...CountDecisionFailures(observations), UnscoredNotes: excluded.UnscoredNotes, UnlabelledNotes: excluded.UnlabelledNotes }
+        Exclusions: {
+            ...CountDecisionFailures(observations),
+            UnscoredNotes: excluded.UnscoredNotes,
+            UnlabelledNotes: excluded.UnlabelledNotes,
+            SelfScoreMissing: evaluatedNotes.length - selfScored.length
+        }
     };
+}
+
+/** True when the proxy self-report scorer gave the note a score. */
+function hasSelfScore(note: EvaluatedNote): note is EvaluatedNote & { SelfConfidence: number } {
+    return typeof note.SelfConfidence === 'number' && Number.isFinite(note.SelfConfidence);
 }
 
 /** The calibrated arm, from notes carrying their out-of-fold calibrated probability. */

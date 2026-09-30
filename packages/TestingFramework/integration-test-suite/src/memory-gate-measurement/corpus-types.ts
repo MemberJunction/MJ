@@ -32,7 +32,8 @@ export interface RawGeneratedScenario {
 /** A candidate note in corpus.jsonl with its self-reported confidence. */
 export interface CorpusNoteCandidate extends MemoryNoteCandidate {
     NoteId: string;
-    SelfConfidence: number;
+    /** The proxy self-report scorer's 0-100 score, or null when it gave the note no usable score. */
+    SelfConfidence: number | null;
 }
 
 /** One scenario in corpus.jsonl. */
@@ -63,6 +64,8 @@ export interface DecisionObservation {
     /** The Likelihood's probability; null unless `Outcome` is `answered`, and never scored then. */
     RawProbability: number | null;
     ModelName: string;
+    /** The exact model behind `ModelName`, as its driver reported it. Absent in observations recorded before it was kept. */
+    ResolvedModel?: string;
     LatencyMs: number;
     CostUsd: number;
     PromptRunId?: string;
@@ -81,6 +84,8 @@ export interface MeasurementExclusions {
     UnscoredNotes: number;
     /** Notes with no label in labels.jsonl: left out of every arm. */
     UnlabelledNotes: number;
+    /** Scored notes the proxy self-report scorer gave no usable score: left out of the self-confidence arm only. */
+    SelfScoreMissing: number;
 }
 
 /** Metrics for an operating point threshold. */

@@ -188,6 +188,7 @@ async function runLiveMeasurement(
                     Success: result.success,
                     Answers: result.Answers,
                     ModelName: result.modelInfo?.modelName ?? args.DecisionModel ?? 'unknown',
+                    ResolvedModel: result.DecisionResult?.ResolvedModel,
                     LatencyMs: Date.now() - start,
                     CostUsd: result.promptRun?.TotalCost ?? result.promptRun?.Cost ?? 0,
                     PromptRunId: result.promptRun?.ID

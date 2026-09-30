@@ -74,8 +74,9 @@ Return an object with a "scores" map from noteId to numeric score (0-100):
 }
 
 /**
- * Parses and validates confidence scores from model response.
- * Clamps scores to [0, 100] and defaults missing scores to 50.
+ * Parses and validates confidence scores from model response, clamped to [0, 100]. A note the model
+ * gave no usable score is left out of the result, so the caller records it as missing instead of as
+ * a middling score that would quietly shift the baseline.
  */
 export function ParseConfidenceScores(
     responseText: string,
@@ -103,10 +104,8 @@ export function ParseConfidenceScores(
         const val = rawScores[noteId];
         if (typeof val === 'number' && !Number.isNaN(val)) {
             result[noteId] = Math.max(0, Math.min(100, Math.round(val)));
-        } else if (typeof val === 'string' && !Number.isNaN(Number(val))) {
+        } else if (typeof val === 'string' && val.trim() !== '' && !Number.isNaN(Number(val))) {
             result[noteId] = Math.max(0, Math.min(100, Math.round(Number(val))));
-        } else {
-            result[noteId] = 50; // Fallback default
         }
     }
 

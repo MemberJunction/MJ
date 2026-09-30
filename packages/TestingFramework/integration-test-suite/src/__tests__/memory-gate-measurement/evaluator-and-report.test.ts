@@ -81,7 +81,7 @@ describe('memory-gate evaluator and report builder', () => {
         const metrics = ComputeOperatingThresholdMetrics(
             sampleEvaluatedNotes,
             80,
-            n => n.SelfConfidence
+            n => n.SelfConfidence ?? Number.NaN
         );
 
         expect(metrics.Threshold).toBe(80);
@@ -257,9 +257,23 @@ describe('memory-gate evaluator and report builder', () => {
             expect(set.UnlabelledNotes).toBe(1);
 
             const report = EvaluateMemoryGateMeasurement(set.Notes, observations, 2, set);
-            expect(report.Exclusions).toEqual({ FailedCalls: 1, NoAnswer: 1, UnscoredNotes: 1, UnlabelledNotes: 1 });
+            expect(report.Exclusions).toEqual({ FailedCalls: 1, NoAnswer: 1, UnscoredNotes: 1, UnlabelledNotes: 1, SelfScoreMissing: 0 });
             expect(report.NoteCount).toBe(2);
             expect(RenderMeasurementReportMarkdown(report)).toContain('**Failed decision calls:** 1');
+        });
+
+        it('leaves a note with no self-score out of the self-report arm only, where a 50 used to enter it', () => {
+            const unscoredBySelf: EvaluatedNote = { ...sampleEvaluatedNotes[0], NoteId: 's1-n9', SelfConfidence: null };
+            const withMissing = EvaluateMemoryGateMeasurement([...sampleEvaluatedNotes, unscoredBySelf], [], 1);
+            const asFifty = EvaluateMemoryGateMeasurement([...sampleEvaluatedNotes, { ...unscoredBySelf, SelfConfidence: 50 }], [], 1);
+            const without = EvaluateMemoryGateMeasurement(sampleEvaluatedNotes, [], 1);
+
+            expect(withMissing.SelfConfidenceArm).toEqual(without.SelfConfidenceArm);
+            expect(asFifty.SelfConfidenceArm).not.toEqual(without.SelfConfidenceArm);
+            // The decision arms still score it.
+            expect(withMissing.NoteCount).toBe(sampleEvaluatedNotes.length + 1);
+            expect(withMissing.Exclusions.SelfScoreMissing).toBe(1);
+            expect(RenderMeasurementReportMarkdown(withMissing)).toContain('**Notes left out of the self-report arm only, no self-score:** 1');
         });
 
         it('leaves a failed note out of the fit and the sweeps, where a raw 0.5 used to enter them', () => {
@@ -281,6 +295,17 @@ describe('memory-gate evaluator and report builder', () => {
             expect(withReport.FittedPlattByModel).toEqual(without.FittedPlattByModel);
             expect(withReport.DecisionRawArm).toEqual(without.DecisionRawArm);
             expect(withReport.Exclusions.UnscoredNotes).toBe(1);
+        });
+
+        it('records which exact model answered, and reads it back', () => {
+            const observations = ObservationsForDecision(scenario, 1, {
+                ...decision, ResolvedModel: 'typesafe/jev-1.13-20260917', Success: true, Answers: { n1: { Kind: 'Likelihood', Probability: 0.7 } }
+            });
+            expect(observations.map(o => o.ResolvedModel)).toEqual(Array(3).fill('typesafe/jev-1.13-20260917'));
+            expect(ParseDecisionObservations(observations.map(SerializeObservation).join('\n')).Observations).toEqual(observations);
+            // An observation recorded before the field existed still reads, with no resolved model.
+            const older = ParseDecisionObservations(JSON.stringify({ ...observations[0], ResolvedModel: undefined })).Observations;
+            expect(older.map(o => o.ResolvedModel)).toEqual([undefined]);
         });
 
         it('writes and reads observations back, skipping and counting a line that is not one', () => {

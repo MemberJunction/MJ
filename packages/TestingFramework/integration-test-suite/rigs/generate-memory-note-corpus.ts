@@ -122,7 +122,8 @@ async function runLiveGeneration(
 
             const scenarioNotes: CorpusNoteCandidate[] = rawScenario.Notes.map((n, idx) => {
                 const noteId = scorableCandidates[idx].NoteId;
-                const selfConfidence = confidenceScores[noteId] ?? 50;
+                // A note the scorer gave no usable score stays unscored, never a middling 50.
+                const selfConfidence = confidenceScores[noteId] ?? null;
 
                 labelRecords.push({ NoteId: noteId, Label: n.Label });
 
@@ -131,7 +132,7 @@ async function runLiveGeneration(
                     type: n.Type,
                     scopeLevel: n.ScopeLevel,
                     content: n.Content,
-                    confidence: selfConfidence,
+                    confidence: selfConfidence ?? undefined,
                     SelfConfidence: selfConfidence
                 };
             });

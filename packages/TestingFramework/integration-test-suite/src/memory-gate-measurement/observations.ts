@@ -18,6 +18,11 @@ export interface ScenarioDecision {
     Success: boolean;
     Answers: Record<string, DecisionAnswer>;
     ModelName: string;
+    /**
+     * The exact model behind `ModelName`, as its driver reported it (`DecisionResult.ResolvedModel`),
+     * such as Jev's dated version. It ties a fit to the version that answered.
+     */
+    ResolvedModel?: string;
     LatencyMs: number;
     CostUsd: number;
     PromptRunId?: string;
@@ -54,6 +59,7 @@ export function ObservationsForDecision(
             Outcome: outcome,
             RawProbability: probability,
             ModelName: decision.ModelName,
+            ResolvedModel: decision.ResolvedModel,
             LatencyMs: decision.LatencyMs,
             CostUsd: decision.CostUsd / Math.max(1, scenario.Notes.length),
             PromptRunId: decision.PromptRunId
@@ -104,7 +110,7 @@ export function BuildEvaluatedNotes(
                     NoteId: note.NoteId,
                     Label: label,
                     IsDurable: label === 'durable',
-                    SelfConfidence: note.SelfConfidence,
+                    SelfConfidence: note.SelfConfidence ?? null,
                     DecisionRawProbability: first.RawProbability,
                     ModelName: first.ModelName
                 });
@@ -132,7 +138,7 @@ function readObservation(parsed: JSONValue): DecisionObservation | null {
     if (!isJsonObject(parsed)) {
         return null;
     }
-    const { ScenarioId, NoteId, Rep, Outcome, RawProbability, ModelName, LatencyMs, CostUsd, PromptRunId } = parsed;
+    const { ScenarioId, NoteId, Rep, Outcome, RawProbability, ModelName, ResolvedModel, LatencyMs, CostUsd, PromptRunId } = parsed;
     if (typeof ScenarioId !== 'string' || typeof NoteId !== 'string' || typeof Rep !== 'number' || !isOutcome(Outcome)
         || typeof ModelName !== 'string' || typeof LatencyMs !== 'number' || typeof CostUsd !== 'number') {
         return null;
@@ -145,6 +151,7 @@ function readObservation(parsed: JSONValue): DecisionObservation | null {
         Outcome: Outcome === 'answered' && probability === null ? 'no-answer' : Outcome,
         RawProbability: probability,
         ModelName,
+        ResolvedModel: typeof ResolvedModel === 'string' ? ResolvedModel : undefined,
         LatencyMs,
         CostUsd,
         PromptRunId: typeof PromptRunId === 'string' ? PromptRunId : undefined
