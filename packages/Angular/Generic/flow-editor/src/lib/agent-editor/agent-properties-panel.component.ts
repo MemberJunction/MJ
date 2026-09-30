@@ -7,6 +7,8 @@ import {
   FlowDecisionStepConfiguration,
   ReadFlowDecisionStepConfiguration,
   RewriteDecisionReferences,
+  RewriteDecisionQuestionReferences,
+  RewriteDecisionChoiceValues,
   DecisionChoiceTestOf,
   DecisionConditionLiteral,
   DecisionReferenceText,
@@ -43,6 +45,11 @@ type ChoiceOption = Extract<TaskGraphDecisionQuestion, { kind: 'Choice' }>['opti
 
 /** The kinds the question editor offers, in the order it lists them. */
 const DECISION_QUESTION_KINDS: readonly DecisionQuestionKind[] = ['Likelihood', 'Choice', 'Score'];
+
+/** The key an option's refused value is kept under: the question and the option's position. */
+function optionErrorKey(questionKey: string, index: number | string): string {
+  return `${questionKey}\u0000${index}`;
+}
 
 /** A runtime problem phrase ("its key ... cannot be named ...") as a sentence on its own. */
 function capitalize(phrase: string): string {
@@ -416,7 +423,7 @@ export class AgentPropertiesPanelComponent {
 
     this.keyDraft = null;
     this.updateDecisionConfig({ ...config, key });
-    if (previous && !this.decisionStepUsingKey(previous)) {
+    if (this.conditionsFollowKey(previous)) {
       this.rewritePathConditions(condition =>
         RewriteDecisionReferences(condition, k => (k === previous ? key : undefined)).Expression);
     }
@@ -460,14 +467,18 @@ export class AgentPropertiesPanelComponent {
     const currentConfig = this.DecisionConfig;
     const questions = { ...currentConfig.questions };
     delete questions[key];
+    this.questionKeyErrors.delete(key);
+    this.clearOptionValueErrors(key);
     this.updateDecisionConfig({ ...currentConfig, questions });
   }
 
   /**
-   * The question key field's `change` event: renames the question, keeping its place in the list.
+   * The question key field's `change` event: renames the question, keeping its place in the list, and
+   * every path condition that reads it.
    *
-   * Refused — nothing stored — when the key is empty, is not the identifier shape a step key has, or is
-   * another question's key. A refused key stays in the field with {@link QuestionKeyError} beneath it.
+   * Refused — nothing stored, nothing rewritten — when the key is empty, is not the identifier shape a
+   * step key has, or is another question's key. A refused key stays in the field with
+   * {@link QuestionKeyError} beneath it.
    *
    * @returns why the key was refused, or `null`
    */
@@ -488,6 +499,13 @@ export class AgentPropertiesPanelComponent {
       Object.entries(config.questions).map(([k, question]) => [k === oldKey ? key : k, question])
     );
     this.updateDecisionConfig({ ...config, questions });
+    this.moveOptionValueErrors(oldKey, key);
+
+    const stepKey = this.conditionsFollowKey(config.key);
+    if (stepKey) {
+      this.rewritePathConditions(condition =>
+        RewriteDecisionQuestionReferences(condition, stepKey, q => (q === oldKey ? key : undefined)));
+    }
     return null;
   }
 
@@ -585,18 +603,70 @@ export class AgentPropertiesPanelComponent {
     if (!q || q.kind !== 'Choice') return;
     const options = q.options.filter((_, i) => i !== index);
     questions[questionKey] = { ...q, options };
+    this.clearOptionValueErrors(questionKey);
     this.updateDecisionConfig({ ...currentConfig, questions });
   }
 
+  /**
+   * Edits one option of a Choice question. A description is stored as typed; a value is committed
+   * through {@link OnChoiceOptionValueChange}, since path conditions read it.
+   */
   OnChoiceOptionChange(questionKey: string, index: number, field: 'value' | 'description', val: string): void {
+    if (field === 'value') {
+      this.OnChoiceOptionValueChange(questionKey, index, val);
+      return;
+    }
     if (!this.Step || this.ReadOnly) return;
     const currentConfig = this.DecisionConfig;
     const questions = { ...currentConfig.questions };
     const q = questions[questionKey];
     if (!q || q.kind !== 'Choice') return;
-    const options = q.options.map((opt, i) => i === index ? { ...opt, [field]: val } : opt);
+    const options = q.options.map((opt, i) => i === index ? { ...opt, description: val } : opt);
     questions[questionKey] = { ...q, options };
     this.updateDecisionConfig({ ...currentConfig, questions });
+  }
+
+  /**
+   * An option value field's `change` event: renames the option and every path condition that compares
+   * the question's answer with it.
+   *
+   * Refused — nothing stored, nothing rewritten — when the value is empty, is another option's value,
+   * or holds characters no condition literal can carry verbatim (a backslash, a line break, or both
+   * kinds of quote). A refused value stays in the field with {@link OptionValueError} beneath it.
+   *
+   * @returns why the value was refused, or `null`
+   */
+  OnChoiceOptionValueChange(questionKey: string, index: number, newValue: string): string | null {
+    if (!this.Step || this.ReadOnly) return null;
+    const config = this.DecisionConfig;
+    const q = config.questions[questionKey];
+    if (!q || q.kind !== 'Choice' || !q.options?.[index]) return null;
+    const previous = q.options[index].value;
+    const value = newValue.trim();
+    const errorKey = optionErrorKey(questionKey, index);
+    const problem = value === previous ? null : this.optionValueProblem(value, q.options, index);
+    if (problem) {
+      this.optionValueErrors.set(errorKey, problem);
+      return problem;
+    }
+    this.optionValueErrors.delete(errorKey);
+    if (value === previous) return null;
+
+    const options = q.options.map((opt, i) => (i === index ? { ...opt, value } : opt));
+    this.updateDecisionConfig({ ...config, questions: { ...config.questions, [questionKey]: { ...q, options } } });
+
+    const stepKey = this.conditionsFollowKey(config.key);
+    const sharedValue = q.options.some((opt, i) => i !== index && opt.value === previous);
+    if (stepKey && previous && !sharedValue) {
+      this.rewritePathConditions(condition =>
+        RewriteDecisionChoiceValues(condition, stepKey, questionKey, v => (v === previous ? value : undefined)));
+    }
+    return null;
+  }
+
+  /** Why the last change to option `index` of question `questionKey` was refused, or `null`. */
+  OptionValueError(questionKey: string, index: number): string | null {
+    return this.optionValueErrors.get(optionErrorKey(questionKey, index)) ?? null;
   }
 
   GetChoiceCoverageHint(questionKey: string, options: Array<{ value: string; description: string }>): string {
@@ -673,10 +743,53 @@ export class AgentPropertiesPanelComponent {
   /** Why the last rename of each question was refused, by the question's current key. */
   private questionKeyErrors = new Map<string, string>();
 
+  /** Why the last change to each option value was refused, by {@link optionErrorKey}. */
+  private optionValueErrors = new Map<string, string>();
+
   /** Forgets everything typed but not committed. */
   private clearDecisionDrafts(): void {
     this.keyDraft = null;
     this.questionKeyErrors.clear();
+    this.optionValueErrors.clear();
+  }
+
+  /** Forgets the refused option values of one question, whose options have moved. */
+  private clearOptionValueErrors(questionKey: string): void {
+    for (const key of [...this.optionValueErrors.keys()]) {
+      if (key.startsWith(optionErrorKey(questionKey, ''))) this.optionValueErrors.delete(key);
+    }
+  }
+
+  /** Carries a renamed question's refused option values over to its new key. */
+  private moveOptionValueErrors(oldKey: string, newKey: string): void {
+    const prefix = optionErrorKey(oldKey, '');
+    for (const [key, error] of [...this.optionValueErrors]) {
+      if (!key.startsWith(prefix)) continue;
+      this.optionValueErrors.delete(key);
+      this.optionValueErrors.set(optionErrorKey(newKey, key.slice(prefix.length)), error);
+    }
+  }
+
+  /** Why `value` cannot be the value of option `index`, or `null`. */
+  private optionValueProblem(value: string, options: ChoiceOption[], index: number): string | null {
+    if (!value) {
+      return 'An option needs a value; the decision answers with it, and paths compare against it';
+    }
+    if (options.some((opt, i) => i !== index && opt.value === value)) {
+      return `This question already offers "${value}"`;
+    }
+    return DecisionConditionLiteral(value) === null
+      ? 'An option value cannot hold a backslash, a line break, or both kinds of quote; a path condition could not name it'
+      : null;
+  }
+
+  /**
+   * The key path conditions name this step by, when they can be followed through a rename: the step has
+   * a key, and no other Decision step shares it. With a shared key, which step a condition meant cannot
+   * be told, so nothing is rewritten and the flow check reports the clash instead.
+   */
+  private conditionsFollowKey(stepKey: string): string | null {
+    return stepKey && !this.decisionStepUsingKey(stepKey) ? stepKey : null;
   }
 
   /** Why `key` cannot be a question key on this step, or `null`. */

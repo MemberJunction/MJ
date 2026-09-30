@@ -376,10 +376,13 @@
                           </div>
                           @for (opt of ChoiceOptionsOf(item.question); track $index) {
                             <div class="mj-agent-props-option-row">
+                              <!-- Committed on change: paths compare against the value, and follow it when it is renamed. -->
                               <input type="text" [value]="opt.value"
                                 [readonly]="ReadOnly"
-                                (input)="OnChoiceOptionChange(item.key, $index, 'value', InputValue($event))"
-                                placeholder="Value (e.g. billing)" class="mj-agent-props-input mj-agent-props-input--sm">
+                                (change)="OnChoiceOptionValueChange(item.key, $index, InputValue($event))"
+                                (keydown.enter)="BlurTarget($event)"
+                                placeholder="Value (e.g. billing)" class="mj-agent-props-input mj-agent-props-input--sm"
+                                [class.mj-agent-props-input--error]="!!OptionValueError(item.key, $index)">
                               <input type="text" [value]="opt.description"
                                 [readonly]="ReadOnly"
                                 (input)="OnChoiceOptionChange(item.key, $index, 'description', InputValue($event))"
@@ -392,6 +395,9 @@
                                 </button>
                               }
                             </div>
+                            @if (OptionValueError(item.key, $index); as valueError) {
+                              <span class="mj-agent-props-error">{{ valueError }}</span>
+                            }
                           }
                           <!-- Choice Coverage Hint -->
                           <div class="mj-agent-props-coverage-hint">

@@ -584,3 +584,97 @@ describe('AgentPropertiesPanelComponent — Route on Answer writes conditions th
     expect(panel.GetGeneratedRouteCondition()).toBe('decisions.triage.urgent.probability >= 0.6');
   });
 });
+
+describe('AgentPropertiesPanelComponent — renaming a question or option renames the paths that read it (review should-fix 2)', () => {
+  let panel: AgentPropertiesPanelComponent;
+  let emittedPaths: MJAIAgentStepPathEntity[];
+
+  const triage = (): object => ({
+    key: 'triage',
+    questions: {
+      intent: { kind: 'Choice', instructions: 'Which team?', options: [{ value: 'billing', description: 'Billing' }, { value: 'refund', description: 'Refunds' }] },
+      urgent: { kind: 'Likelihood', instructions: 'Is it urgent?' }
+    }
+  });
+
+  beforeEach(() => {
+    panel = new AgentPropertiesPanelComponent();
+    emittedPaths = [];
+    panel.PathChanged.subscribe(p => emittedPaths.push(p));
+  });
+
+  it('renames the question in every path that reads it, and nothing else', () => {
+    const step = MakeDecisionStep('dec', triage());
+    const other = MakeDecisionStep('other', { key: 'route', questions: { intent: { kind: 'Likelihood', instructions: 'Other?' } } });
+    const fromStep = MakePath('p1', 'dec', { Condition: "decisions.triage.intent.value === 'billing'" });
+    const downstream = MakePath('p2', 'x', { Condition: "decisions.triage.intent.value === 'refund' && decisions.triage.urgent.probability > 0.5" });
+    const otherStep = MakePath('p3', 'other', { Condition: 'decisions.route.intent.probability > 0.5' });
+    panel.AllSteps = [step, other];
+    panel.AllPaths = [fromStep, downstream, otherStep];
+    panel.Step = step;
+
+    expect(panel.OnDecisionQuestionKeyChange('intent', 'category')).toBeNull();
+
+    expect(fromStep.Condition).toBe("decisions.triage.category.value === 'billing'");
+    expect(downstream.Condition).toBe("decisions.triage.category.value === 'refund' && decisions.triage.urgent.probability > 0.5");
+    expect(otherStep.Condition).toBe('decisions.route.intent.probability > 0.5');
+    expect(emittedPaths.map(p => p.ID)).toEqual(['p1', 'p2']);
+  });
+
+  it('touches no path when a question rename is refused', () => {
+    const step = MakeDecisionStep('dec', triage());
+    const reads = MakePath('p1', 'dec', { Condition: "decisions.triage.intent.value === 'billing'" });
+    panel.AllSteps = [step];
+    panel.AllPaths = [reads];
+    panel.Step = step;
+
+    expect(panel.OnDecisionQuestionKeyChange('intent', 'urgent')).not.toBeNull();
+    expect(reads.Condition).toBe("decisions.triage.intent.value === 'billing'");
+    expect(emittedPaths).toEqual([]);
+  });
+
+  it('renames an option in the paths that compare the answer with it, on commit', () => {
+    const step = MakeDecisionStep('dec', triage());
+    const fork = MakePath('p1', 'dec', { Condition: "decisions.triage.intent.value === 'billing' || decisions.triage.intent.value === 'refund'" });
+    const plain = MakePath('p2', 'dec', { Condition: "payload.team === 'billing'" });
+    panel.AllSteps = [step];
+    panel.AllPaths = [fork, plain];
+    panel.Step = step;
+
+    expect(panel.OnChoiceOptionValueChange('intent', 0, 'invoices')).toBeNull();
+
+    expect(panel.ChoiceOptionsOf(panel.DecisionConfig.questions['intent']).map(o => o.value)).toEqual(['invoices', 'refund']);
+    expect(fork.Condition).toBe("decisions.triage.intent.value === 'invoices' || decisions.triage.intent.value === 'refund'");
+    expect(plain.Condition).toBe("payload.team === 'billing'");
+  });
+
+  it.each([
+    ['', /needs a value/],
+    ['refund', /already offers "refund"/],
+    ['both \' and "', /cannot hold a backslash, a line break, or both kinds of quote/]
+  ])('refuses the option value %p, keeping the option and its paths', (typed, message) => {
+    const step = MakeDecisionStep('dec', triage());
+    const reads = MakePath('p1', 'dec', { Condition: "decisions.triage.intent.value === 'billing'" });
+    panel.AllSteps = [step];
+    panel.AllPaths = [reads];
+    panel.Step = step;
+
+    expect(panel.OnChoiceOptionValueChange('intent', 0, typed)).toMatch(message);
+    expect(panel.OptionValueError('intent', 0)).toMatch(message);
+    expect(panel.ChoiceOptionsOf(panel.DecisionConfig.questions['intent'])[0].value).toBe('billing');
+    expect(reads.Condition).toBe("decisions.triage.intent.value === 'billing'");
+  });
+
+  it('does not rewrite paths while the step shares its key with another step', () => {
+    const step = MakeDecisionStep('dec', triage());
+    const twin = MakeDecisionStep('twin', triage());
+    const reads = MakePath('p1', 'twin', { Condition: "decisions.triage.intent.value === 'billing'" });
+    panel.AllSteps = [step, twin];
+    panel.AllPaths = [reads];
+    panel.Step = step;
+
+    panel.OnDecisionQuestionKeyChange('intent', 'category');
+    panel.OnChoiceOptionValueChange('category', 0, 'invoices');
+    expect(reads.Condition).toBe("decisions.triage.intent.value === 'billing'");
+  });
+});
