@@ -60,7 +60,7 @@
 | `@memberjunction/ai-vectordb` | Vector database abstraction (query, hybrid search) |
 | `@memberjunction/ai-vectors` | `VectorBase` base class with metadata and RunView helpers |
 | `@memberjunction/ai-vector-sync` | `EntityVectorSyncer` for record vectorization, template parsing |
-| `@memberjunction/ai-prompts` | Runs the reasoning prompt in `'Prompt'` mode (`PromptReasoningProvider`) |
+| `@memberjunction/ai-prompts` | Runs the reasoning prompt in `'Prompt'` mode (`PromptReasoningProvider`) and the typed decision in the `'Decision'` modes (`AIDecisionRunner`) |
 | `@memberjunction/record-comparison` | Computes the field-level deltas across a matched set that the reasoner judges |
 | `@memberjunction/core` | Core types: `PotentialDuplicateRequest`, `DuplicateDetectionOptions`, etc. |
 | `@memberjunction/core-entities` | Generated entity classes for Duplicate Runs, Lists, Entity Documents (incl. the `*Reasoning*` / `AutomationLevel` columns) |
@@ -253,20 +253,22 @@ All reasoning configuration lives on the `MJ: Entity Documents` record, per enti
 | Field | Type | Default | Purpose |
 |---|---|---|---|
 | `EnableLLMReasoning` | `boolean` | `false` | Master switch. Off = vector-only behavior, unchanged. |
-| `ReasoningMode` | `'Prompt' \| 'Agent'` | `'Prompt'` | Which provider runs (see below). |
+| `ReasoningMode` | `'Prompt' \| 'Agent' \| 'Decision' \| 'DecisionThenPrompt'` | `'Prompt'` | Which provider runs (see below). |
 | `ReasoningThreshold` | `number \| null` | `null` | Vector-score gate (0–1). LLM runs only when the set's top score clears this. `null` = reason over any non-empty set. |
 | `ReasoningPromptID` | `string \| null` | -- | The AI Prompt to use in `'Prompt'` mode. Falls back to the seeded "Duplicate Resolution" prompt. |
 | `ReasoningAgentID` | `string \| null` | -- | The AI Agent to use in `'Agent'` mode. Falls back to the seeded "Duplicate Resolution Agent". |
-| `AutomationLevel` | `'ReviewAll' \| 'LLMGated' \| 'AutoMergeAboveAbsolute'` | `'ReviewAll'` | How far automation goes after reasoning (review everything / let the LLM gate review / auto-merge above the absolute threshold). |
+| `AutomationLevel` | `'ReviewAll' \| 'LLMGated' \| 'AutoMergeAboveAbsolute'` | `'ReviewAll'` | How far automation goes after reasoning (review everything / let the LLM gate review / auto-merge a candidate above the absolute threshold whose own verdict is `Merge`). |
 
 ### The pluggable provider seam
 
-Reasoning is delegated through an abstract `DuplicateReasoningProvider`, resolved at runtime via the MJ class factory by `ReasoningMode`. Two providers ship; both emit the **identical** `DuplicateReasoningOutput`, so promoting an entity from `Prompt` to `Agent` is a config change, not a rewrite.
+Reasoning is delegated through an abstract `DuplicateReasoningProvider`, resolved at runtime via the MJ class factory by `ReasoningMode`. Four providers ship, and all emit the same `DuplicateReasoningOutput`. `Prompt` and `Agent` run the same instruction set, so promoting an entity from `Prompt` to `Agent` is a config change, not a rewrite. The two decision modes put a typed decision model (the seeded "Default Decision" prompt, run through `AIDecisionRunner`) in front of, or in place of, the prompt.
 
 | Provider | `@RegisterClass` key | Package | Path |
 |---|---|---|---|
 | `PromptReasoningProvider` | `PROMPT_REASONING_PROVIDER_KEY` (`'Prompt'`) | `@memberjunction/ai-vector-dupe` | Single-shot AI Prompt. Persists `AIPromptRunID`. |
 | `DuplicateReasoningAgentProvider` | `AGENT_REASONING_PROVIDER_KEY` (`'Agent'`) | `@memberjunction/ai-agents` | Orchestrated agent run (unlocks memory-note injection + future context tools). Persists `AIAgentRunID`. |
+| `DecisionReasoningProvider` | `DECISION_REASONING_PROVIDER_KEY` (`'Decision'`) | `@memberjunction/ai-vector-dupe` | One decision call per set, with one Likelihood per candidate. Recommends only: `Uncertain` (flagged for review) at or above its threshold (0.5 by default), else `NotDuplicate`. Never `Merge`, so it never auto-merges. Persists `AIPromptRunID`. |
+| `DecisionThenPromptReasoningProvider` | `DECISION_THEN_PROMPT_REASONING_PROVIDER_KEY` (`'DecisionThenPrompt'`) | `@memberjunction/ai-vector-dupe` | The decision drops candidates below its threshold, then the `'Prompt'` provider reasons over the survivors and may recommend `Merge`. A dropped candidate reads `NotDuplicate` and its row points at the decision run. With no survivors the prompt never runs; if the decision fails, every candidate goes to the prompt. Both stages resolve through the class factory, so overrides of `'Decision'` and `'Prompt'` apply inside the chain. |
 
 > The Agent provider lives in `@memberjunction/ai-agents`, **not** this package, because `ai-agents` depends on `ai-vector-dupe` -- importing `AgentRunner` here would create a build cycle. It registers against the seam under the `'Agent'` key, so the detector resolves it via the class factory with no static import back into the pipeline. Registration is handled by the class-registration manifest (no `Load*()` helper needed).
 
@@ -295,7 +297,7 @@ export class MyReasoningProvider extends DuplicateReasoningProvider {
 
 ### Per-candidate verdicts
 
-A matched set is the top-K neighbors of one source record, so it routinely mixes true duplicates with false positives. The reasoner therefore returns a verdict **per candidate** (`DuplicateReasoningOutput.CandidateVerdicts`), each judged independently against the source -- a false-positive candidate reads `NotDuplicate` even when another candidate in the same set is a confident `Merge`. The detector stamps each candidate's own verdict onto its match row; the set-level `Recommendation`/`Confidence` are *derived* values used only for the group's dominant display and the auto-merge gate.
+A matched set is the top-K neighbors of one source record, so it routinely mixes true duplicates with false positives. The reasoner therefore returns a verdict **per candidate** (`DuplicateReasoningOutput.CandidateVerdicts`), each judged independently against the source -- a false-positive candidate reads `NotDuplicate` even when another candidate in the same set is a confident `Merge`. The detector stamps each candidate's own verdict onto its match row; the set-level `Recommendation`/`Confidence` are *derived* values used for the group's dominant display. Auto-merge (`AutoMergeAboveAbsolute`) requires both the set-level recommendation and the candidate's own verdict (carried on `PotentialDuplicate.ReasoningRecommendation`) to be `Merge`, so a candidate is never merged because another candidate in its set is a duplicate.
 
 The output also carries a proposed `SurvivorRecordID` and per-field survivor choices (`FieldChoices`) that feed `Metadata.MergeRecords` at merge time. A `null` `Confidence` means the model returned no usable confidence and must be rendered/stored as "unknown" -- never conflated with a real `0` (which reads as "confidently NOT a duplicate"). See `DuplicateReasoningTypes` for the full contract.
 
