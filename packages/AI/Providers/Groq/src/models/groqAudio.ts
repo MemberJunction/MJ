@@ -138,6 +138,9 @@ export class GroqAudioGenerator extends BaseAudioGenerator {
             const errorInfo = ErrorAnalyzer.analyzeError(error, 'Groq Whisper');
             result.success = false;
             result.errorMessage = error?.message || 'Unknown error occurred';
+            // Kept so a caller can tell a rejected upload (a 400) from an outage: the message alone
+            // loses the SDK error's HTTP status.
+            result.errorInfo = errorInfo;
             console.error('Groq Whisper error:', error, errorInfo);
         }
         return result;

@@ -60,6 +60,9 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
             const errorInfo = ErrorAnalyzer.analyzeError(error, 'ElevenLabs');
             speechResult.success = false;
             speechResult.errorMessage = error?.message || 'Unknown error occurred';
+            // Kept so a caller can tell a rejected request (a 422 for an unknown voice) from an
+            // outage: the message alone loses the SDK error's HTTP status.
+            speechResult.errorInfo = errorInfo;
             console.error('ElevenLabs CreateSpeech error:', error, errorInfo);
         }
         return speechResult;

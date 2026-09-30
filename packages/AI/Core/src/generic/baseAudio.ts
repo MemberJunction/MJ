@@ -1,5 +1,6 @@
 import { BaseModel, BaseParams, ModelUsage } from "./baseModel";
 import { ChatResult } from "./chat.types";
+import type { AIErrorInfo } from "./errorTypes";
 import { TranscribeAudioWithSplitting } from "./baseSpeechToText";
 import type { BaseSpeechToText } from "./baseSpeechToText";
 import type { BaseTextToSpeech } from "./baseTextToSpeech";
@@ -89,6 +90,16 @@ export class SpeechResult {
      * cost calculation declines rather than billing the request as free.
      */
     usage?: ModelUsage;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+    /**
+     * How a failure is classified, when the request failed: `ErrorAnalyzer`'s reading of the error
+     * the provider's SDK threw, which keeps its HTTP status. A caller deciding whether to try another
+     * vendor reads this, as the failover loop reads `BaseResult.errorInfo`: a rate limit or an outage
+     * is worth another vendor, and a request the vendor rejected as invalid is not. The message alone
+     * cannot tell them apart. Undefined on success, and from a driver that reports only
+     * `errorMessage`.
+     */
+    errorInfo?: AIErrorInfo;  // case-violation-ok-legacy-back-compat: named as BaseResult.errorInfo, which the failover loop reads
 }
 
 export class SpeechToTextParams extends BaseParams {
