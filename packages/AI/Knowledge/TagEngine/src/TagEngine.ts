@@ -6,6 +6,7 @@ import { SimpleVectorService, VectorEntry } from '@memberjunction/ai-vectors-mem
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIEmbeddingRunner } from '@memberjunction/ai-prompts';
 import type { EmbeddingRunResult } from '@memberjunction/ai-prompts';
+import type { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
 import { TagGovernanceEngine, TagSuggestionReason } from './TagGovernanceEngine';
 import { generateSeedTaxonomy as generateSeedTaxonomyImpl, SeedTaxonomyResult } from './SeedTaxonomy';
 import type { IMetadataProvider } from '@memberjunction/core';
@@ -78,8 +79,11 @@ export interface TagEmbeddingMetadata {
  * Describes an embedding model discovered from the AIEngine.
  */
 interface EmbeddingModelInfo {
-    /** The AIModel.ID — used to detect stale persisted embeddings. */
-    ModelID: string | null;
+    /**
+     * The AIModel.ID. Every tag-embedding call pins it, and it is persisted as
+     * `Tag.EmbeddingModelID` to detect stale persisted embeddings.
+     */
+    ModelID: string;
     /** The driver class name (e.g., "OpenAIEmbeddings") */
     DriverClass: string;
     /** The API-facing model name (e.g., "text-embedding-3-small") */
@@ -106,6 +110,12 @@ export class TagEngine extends BaseSingleton<TagEngine> {
     }
 
     private _tagVectorService: SimpleVectorService<TagEmbeddingMetadata> | null = null;
+    /**
+     * The model every vector in `_tagVectorService` came from, resolved once per load by
+     * {@link resolveTagEmbeddingModel}. Query and new-tag embeddings pin it too: cosine similarity
+     * is only meaningful between vectors from the same model.
+     */
+    private _tagEmbeddingModel: EmbeddingModelInfo | null = null;
     private _loaded = false;
     private _loading = false;
     private _loadingPromise: Promise<void> | null = null;
@@ -239,14 +249,16 @@ export class TagEngine extends BaseSingleton<TagEngine> {
      * Build or rebuild the tag vector service by embedding each tag's name and description.
      * Gracefully degrades if no embedding model is available.
      *
-     * Ensures AIEngine is loaded first since getSmallestEmbeddingModel() requires it.
+     * Ensures AIEngine is loaded first since resolveTagEmbeddingModel() requires it.
      */
     private async refreshTagEmbeddings(contextUser?: UserInfo): Promise<void> {
         // AIEngine must be loaded before we can discover embedding models.
         // This is an internal dependency — callers should not need to know about it.
         await AIEngine.Instance.Config(false, contextUser);
 
-        const modelInfo = this.getSmallestEmbeddingModel();
+        const modelInfo = this.resolveTagEmbeddingModel();
+        this._tagEmbeddingModel = modelInfo;
+        this._tagVectorService = null;
         if (!modelInfo) {
             LogStatus('TagEngine: No embedding model available. Semantic tag matching will be disabled; exact-name matching still works.');
             return;
@@ -314,10 +326,10 @@ export class TagEngine extends BaseSingleton<TagEngine> {
      */
     private tryHydrateFromPersisted(
         tag: MJTagEntity,
-        configuredModelID: string | null
+        configuredModelID: string
     ): VectorEntry<TagEmbeddingMetadata> | null {
         if (!tag.EmbeddingVector || !tag.EmbeddingModelID) return null;
-        if (configuredModelID && !UUIDsEqual(tag.EmbeddingModelID, configuredModelID)) return null;
+        if (!UUIDsEqual(tag.EmbeddingModelID, configuredModelID)) return null;
 
         try {
             const vector = JSON.parse(tag.EmbeddingVector) as number[];
@@ -341,10 +353,8 @@ export class TagEngine extends BaseSingleton<TagEngine> {
     private async persistFreshEmbeddings(
         tags: MJTagEntity[],
         entries: VectorEntry<TagEmbeddingMetadata>[],
-        modelID: string | null
+        modelID: string
     ): Promise<void> {
-        if (!modelID) return;
-
         const byID = new Map(entries.map(e => [e.key, e.vector]));
         for (const tag of tags) {
             const vector = byID.get(NormalizeUUID(tag.ID));
@@ -373,18 +383,20 @@ export class TagEngine extends BaseSingleton<TagEngine> {
         await this.Config(false, contextUser);
         await AIEngine.Instance.Config(false, contextUser);
 
-        const modelInfo = this.getSmallestEmbeddingModel();
+        const modelInfo = this.resolveTagEmbeddingModel();
         if (!modelInfo) {
             LogStatus('TagEngine.RebuildTagEmbeddings: No embedding model available; nothing to do.');
             return { refreshed: 0, total: this.Tags.length };
         }
+        const modelChanged = !this._tagEmbeddingModel || !UUIDsEqual(this._tagEmbeddingModel.ModelID, modelInfo.ModelID);
+        this._tagEmbeddingModel = modelInfo;
 
         const configuredModelID = modelInfo.ModelID;
         const stale: MJTagEntity[] = [];
         for (const tag of this.Tags) {
             if (!tag.EmbeddingVector
                 || !tag.EmbeddingModelID
-                || (configuredModelID && !UUIDsEqual(tag.EmbeddingModelID, configuredModelID))) {
+                || !UUIDsEqual(tag.EmbeddingModelID, configuredModelID)) {
                 stale.push(tag);
             }
         }
@@ -405,11 +417,28 @@ export class TagEngine extends BaseSingleton<TagEngine> {
             for (const entry of entries) {
                 this._tagVectorService.AddVector(entry.key, entry.vector, entry.metadata);
             }
+            if (modelChanged) {
+                this.dropVectorsNotRefreshed(stale, entries);
+            }
         }
 
         await this.persistFreshEmbeddings(stale, entries, configuredModelID);
         LogStatus(`TagEngine.RebuildTagEmbeddings: Refreshed ${entries.length}/${stale.length} stale embeddings.`);
         return { refreshed: entries.length, total: this.Tags.length };
+    }
+
+    /**
+     * After the tag model changes, a stale tag whose re-embed failed still holds a vector from the
+     * old model. Drop it rather than compare it with vectors from the new one.
+     */
+    private dropVectorsNotRefreshed(stale: MJTagEntity[], refreshed: VectorEntry<TagEmbeddingMetadata>[]): void {
+        const refreshedKeys = new Set(refreshed.map(e => e.key));
+        for (const tag of stale) {
+            const key = NormalizeUUID(tag.ID);
+            if (!refreshedKeys.has(key)) {
+                this._tagVectorService?.RemoveVector(key);
+            }
+        }
     }
 
     /**
@@ -446,7 +475,7 @@ export class TagEngine extends BaseSingleton<TagEngine> {
     /**
      * Generate embeddings for tags in batches using AIEmbeddingRunner.RunEmbedding()
      * for tracked embedding runs with AIPromptRun records. Processes up to
-     * 50 tags per API call for efficiency.
+     * 50 tags per API call for efficiency. Every batch is pinned to `modelInfo`.
      */
     private async generateTagEmbeddings(
         tags: MJTagEntity[],
@@ -476,14 +505,14 @@ export class TagEngine extends BaseSingleton<TagEngine> {
     }
 
     /**
-     * Embed a batch of tags using AIEmbeddingRunner for tracked runs.
+     * Embed a batch of tags using AIEmbeddingRunner for tracked runs, pinned to `modelInfo`.
      * Returns VectorEntry array (may be empty on failure).
      */
     private async embedBatchViaEmbeddingRunner(
         batch: MJTagEntity[],
         texts: string[],
         promptID: string | undefined,
-        modelInfo?: EmbeddingModelInfo
+        modelInfo: EmbeddingModelInfo
     ): Promise<VectorEntry<TagEmbeddingMetadata>[]> {
         const entries: VectorEntry<TagEmbeddingMetadata>[] = [];
         try {
@@ -491,7 +520,7 @@ export class TagEngine extends BaseSingleton<TagEngine> {
             const result: EmbeddingRunResult = await runner.RunEmbedding({
                 Texts: texts,
                 PromptID: promptID,
-                ModelID: modelInfo?.ModelID ?? undefined,
+                ModelID: modelInfo.ModelID,
                 ContextUser: this._contextUser!,
                 Description: `Tag semantic embeddings (batch of ${batch.length})`
             });
@@ -519,7 +548,8 @@ export class TagEngine extends BaseSingleton<TagEngine> {
 
     /**
      * Resolve the "Tag Semantic Matching" prompt ID from AIEngine, if available.
-     * Returns undefined if not found (AIModelRunner will fall back to first Embedding prompt).
+     * Returns undefined if not found (AIEmbeddingRunner then records the run against the first
+     * Embedding prompt).
      */
     private resolveTagSemanticPromptID(): string | undefined {
         const aiEngine = AIEngine.Instance;
@@ -834,7 +864,7 @@ export class TagEngine extends BaseSingleton<TagEngine> {
             return null;
         }
 
-        const modelInfo = this.getSmallestEmbeddingModel();
+        const modelInfo = this._tagEmbeddingModel;
         if (!modelInfo) return null;
 
         const queryVector = await this.embedQueryText(tagText, modelInfo);
@@ -924,11 +954,12 @@ export class TagEngine extends BaseSingleton<TagEngine> {
     }
 
     /**
-     * Embed a query text string for similarity search using AIEmbeddingRunner.
+     * Embed a query text string for similarity search using AIEmbeddingRunner, pinned to the
+     * model the tag vectors came from.
      */
     private async embedQueryText(
         text: string,
-        _modelInfo: EmbeddingModelInfo
+        modelInfo: EmbeddingModelInfo
     ): Promise<number[] | null> {
         if (!this._contextUser) {
             LogError('TagEngine: No contextUser available for query embedding.');
@@ -941,6 +972,7 @@ export class TagEngine extends BaseSingleton<TagEngine> {
             const result = await runner.RunEmbedding({
                 Texts: [text],
                 PromptID: promptID,
+                ModelID: modelInfo.ModelID,
                 ContextUser: this._contextUser,
                 Description: `Tag resolution query: "${text}"`
             });
@@ -1106,10 +1138,12 @@ export class TagEngine extends BaseSingleton<TagEngine> {
 
     /**
      * Embed a single tag and add it to the existing vector service.
-     * Uses AIEmbeddingRunner for tracked runs. No-op if no vector service available.
+     * Uses AIEmbeddingRunner for tracked runs, pinned to the model the other tag vectors came from.
+     * No-op if no vector service available.
      */
     private async addTagToVectorService(tag: MJTagEntity): Promise<void> {
-        if (!this._tagVectorService || !this._contextUser) {
+        const modelInfo = this._tagEmbeddingModel;
+        if (!this._tagVectorService || !this._contextUser || !modelInfo) {
             return;
         }
 
@@ -1121,6 +1155,7 @@ export class TagEngine extends BaseSingleton<TagEngine> {
             const result = await runner.RunEmbedding({
                 Texts: [text],
                 PromptID: promptID,
+                ModelID: modelInfo.ModelID,
                 ContextUser: this._contextUser,
                 Description: `Tag embedding for new tag "${tag.Name}"`
             });
@@ -1162,6 +1197,43 @@ export class TagEngine extends BaseSingleton<TagEngine> {
     // ========================================================================
 
     /**
+     * The one model tag embeddings use: the "Tag Semantic Matching" prompt's model, else the
+     * smallest embedding model. Tag vectors, query vectors and new-tag vectors are all pinned to it,
+     * and its ID is what gets persisted as `Tag.EmbeddingModelID`.
+     */
+    private resolveTagEmbeddingModel(): EmbeddingModelInfo | null {
+        return this.getTagPromptModel() ?? this.getSmallestEmbeddingModel();
+    }
+
+    /**
+     * The highest-priority active model bound to the "Tag Semantic Matching" prompt (with no
+     * configuration, as the runner uses it), or null when the prompt or its bindings are missing.
+     */
+    private getTagPromptModel(): EmbeddingModelInfo | null {
+        const promptID = this.resolveTagSemanticPromptID();
+        if (!promptID) {
+            return null;
+        }
+        const bindings = AIEngine.Instance.PromptModels
+            .filter(pm => UUIDsEqual(pm.PromptID, promptID)
+                && (pm.Status === 'Active' || pm.Status === 'Preview')
+                && !pm.ConfigurationID)
+            .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0));
+        for (const binding of bindings) {
+            const model = AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, binding.ModelID));
+            if (model && model.IsActive && this.isEmbeddingModel(model)) {
+                return this.toEmbeddingModelInfo(model);
+            }
+        }
+        return null;
+    }
+
+    private isEmbeddingModel(model: MJAIModelEntityExtended): boolean {
+        const modelType = typeof model.AIModelType === 'string' ? model.AIModelType.trim().toLowerCase() : '';
+        return modelType === 'embeddings';
+    }
+
+    /**
      * Find the smallest available embedding model from the AIEngine.
      * Prefers the model with the smallest InputTokenLimit (cheapest/fastest).
      * @returns Model info with DriverClass and APIName, or null if none found
@@ -1173,10 +1245,7 @@ export class TagEngine extends BaseSingleton<TagEngine> {
         }
 
         // Filter to embedding models only
-        const embeddingModels = aiEngine.Models.filter(m => {
-            const modelType = typeof m.AIModelType === 'string' ? m.AIModelType.trim().toLowerCase() : '';
-            return modelType === 'embeddings';
-        });
+        const embeddingModels = aiEngine.Models.filter(m => this.isEmbeddingModel(m));
 
         if (embeddingModels.length === 0) {
             return null;
@@ -1189,27 +1258,29 @@ export class TagEngine extends BaseSingleton<TagEngine> {
             return aTokens - bTokens;
         });
 
-        const chosen = sorted[0];
+        return this.toEmbeddingModelInfo(sorted[0]);
+    }
 
-        // Find the model vendor to get DriverClass
-        const modelVendor = this.findModelVendor(chosen.ID);
+    /** The model's ID with its highest-priority vendor's driver and API name (or the model's own). */
+    private toEmbeddingModelInfo(model: MJAIModelEntityExtended): EmbeddingModelInfo | null {
+        const modelVendor = this.findModelVendor(model.ID);
         if (!modelVendor) {
             // Fall back to model's own DriverClass if available
-            if (chosen.DriverClass) {
+            if (model.DriverClass) {
                 return {
-                    ModelID: chosen.ID,
-                    DriverClass: chosen.DriverClass,
-                    APIName: chosen.APIName ?? chosen.Name
+                    ModelID: model.ID,
+                    DriverClass: model.DriverClass,
+                    APIName: model.APIName ?? model.Name
                 };
             }
-            LogError(`TagEngine: No model vendor found for embedding model "${chosen.Name}" and model has no DriverClass.`);
+            LogError(`TagEngine: No model vendor found for embedding model "${model.Name}" and model has no DriverClass.`);
             return null;
         }
 
         return {
-            ModelID: chosen.ID,
+            ModelID: model.ID,
             DriverClass: modelVendor.DriverClass,
-            APIName: modelVendor.APIName ?? chosen.APIName ?? chosen.Name
+            APIName: modelVendor.APIName ?? model.APIName ?? model.Name
         };
     }
 
