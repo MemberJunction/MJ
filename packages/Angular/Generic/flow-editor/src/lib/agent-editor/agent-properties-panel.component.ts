@@ -3,7 +3,7 @@ import { MJAIAgentStepEntity, MJAIAgentStepPathEntity } from '@memberjunction/co
 import { FlowConnection, PromptOption } from '../interfaces/flow-types';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
-  FLOW_DECISION_KEY_PATTERN,
+  FlowDecisionKeyProblem,
   FlowDecisionStepConfiguration,
   ReadFlowDecisionStepConfiguration,
   RewriteDecisionReferences,
@@ -11,6 +11,7 @@ import {
   IsDecisionPrompt
 } from '@memberjunction/ai-core-plus';
 import type { TaskGraphDecisionQuestion } from '@memberjunction/ai-core-plus';
+import { ReadDecisionStepKey, ReadEditableDecisionConfig } from './decision-step-config';
 
 /** Step type accent color mapping */
 const STEP_TYPE_COLORS: Record<string, string> = {
@@ -32,6 +33,11 @@ const STEP_TYPE_ICONS: Record<string, string> = {
   While: 'fa-rotate'
 };
 
+/** A runtime problem phrase ("its key ... cannot be named ...") as a sentence on its own. */
+function capitalize(phrase: string): string {
+  return phrase.charAt(0).toUpperCase() + phrase.slice(1);
+}
+
 /**
  * Properties panel for editing AI Agent step and path configurations.
  * Shows context-aware sections based on the selected step type.
@@ -46,7 +52,19 @@ const STEP_TYPE_ICONS: Record<string, string> = {
 })
 export class AgentPropertiesPanelComponent {
   // ── Inputs ──────────────────────────────────────────────────
-  @Input() Step: MJAIAgentStepEntity | null = null;
+  /** The selected step. Selecting a different one drops whatever was typed but not committed for the last. */
+  @Input()
+  set Step(value: MJAIAgentStepEntity | null) {
+    if (!UUIDsEqual(value?.ID, this._step?.ID)) {
+      this.clearDecisionDrafts();
+    }
+    this._step = value;
+  }
+  get Step(): MJAIAgentStepEntity | null {
+    return this._step;
+  }
+  private _step: MJAIAgentStepEntity | null = null;
+
   @Input() SelectedConnection: FlowConnection | null = null;
   @Input() PathEntity: MJAIAgentStepPathEntity | null = null;
   @Input() ReadOnly = false;
@@ -258,11 +276,6 @@ export class AgentPropertiesPanelComponent {
     return this.Step?.StepType === 'Decision';
   }
 
-  /** @deprecated Use {@link ShowDecisionConfig}. */
-  get showDecisionConfig(): boolean {
-    return this.ShowDecisionConfig;
-  }
-
   get DecisionPrompts(): PromptOption[] {
     return this.Prompts.filter(p => IsDecisionPrompt(p, this.DecisionModelTypeID));
   }
@@ -272,27 +285,13 @@ export class AgentPropertiesPanelComponent {
     return this.Prompts.find(p => UUIDsEqual(p.ID, this.Step!.PromptID))?.Name ?? 'Unknown Prompt';
   }
 
+  /**
+   * The step's configuration as the runtime reads it or, while the runtime still refuses it, the parts
+   * that parse — so an unfinished step can be shown and finished. Whether it can run is
+   * {@link DecisionValidationError}'s answer, which is the runtime's.
+   */
   get DecisionConfig(): FlowDecisionStepConfiguration {
-    if (!this.Step?.Configuration) {
-      return { key: 'decision', state: 'payload', questions: {} };
-    }
-    const read = ReadFlowDecisionStepConfiguration(this.Step.Configuration);
-    if ('Config' in read) {
-      return read.Config;
-    }
-    try {
-      const parsed = JSON.parse(this.Step.Configuration);
-      if (parsed && typeof parsed === 'object') {
-        return {
-          key: typeof parsed.key === 'string' ? parsed.key : 'decision',
-          state: typeof parsed.state === 'string' ? parsed.state : 'payload',
-          questions: parsed.questions && typeof parsed.questions === 'object' ? parsed.questions : {}
-        };
-      }
-    } catch {
-      // ignore
-    }
-    return { key: 'decision', state: 'payload', questions: {} };
+    return ReadEditableDecisionConfig(this.Step?.Configuration) ?? { key: '', questions: {} };
   }
 
   get DecisionValidationError(): string | null {
@@ -301,29 +300,18 @@ export class AgentPropertiesPanelComponent {
     return 'Error' in read ? read.Error : null;
   }
 
+  /** The key field's text: what the author is typing, until it is committed; the stored key otherwise. */
+  get DecisionKeyText(): string {
+    return this.keyDraftFor(this.Step) ?? this.DecisionConfig.key;
+  }
+
+  /**
+   * Why the key in the field cannot be committed, or `null`. Judged as it is typed, so the author sees
+   * the problem before committing, with the runtime's own wording for a key a condition cannot name.
+   */
   get DecisionKeyError(): string | null {
-    if (this.Step?.StepType !== 'Decision') return null;
-    const key = this.DecisionConfig.key;
-    if (!key || !key.trim()) {
-      return 'Key is required';
-    }
-    const trimmed = key.trim();
-    if (!FLOW_DECISION_KEY_PATTERN.test(trimmed)) {
-      return 'Key must start with a letter or underscore, and contain only letters, numbers, and underscores';
-    }
-    const duplicate = this.AllSteps.some(s => {
-      if (UUIDsEqual(s.ID, this.Step?.ID) || s.StepType !== 'Decision' || !s.Configuration) return false;
-      try {
-        const parsed = JSON.parse(s.Configuration);
-        return parsed && parsed.key === trimmed;
-      } catch {
-        return false;
-      }
-    });
-    if (duplicate) {
-      return `Key "${trimmed}" is already used by another Decision step`;
-    }
-    return null;
+    if (!this.ShowDecisionConfig) return null;
+    return this.decisionKeyProblem(this.DecisionKeyText.trim());
   }
 
   get DecisionStateError(): string | null {
@@ -353,24 +341,61 @@ export class AgentPropertiesPanelComponent {
 
   // ── Decision Step Mutators ────────────────────────────────
 
-  OnDecisionKeyChange(newKey: string): void {
+  /**
+   * The key field's `input` event: records what the author typed, and nothing else.
+   *
+   * The key is not stored, and no path condition is touched, until the author commits it
+   * ({@link OnDecisionKeyCommit}). Renaming on every keystroke passed each in-between value through
+   * the flow's conditions: typing through another step's key merged the two steps' references, and
+   * clearing the field on the way to a new key stranded them on a fragment of the old one.
+   */
+  OnDecisionKeyChange(value: string): void {
     if (!this.Step || this.ReadOnly) return;
-    const currentConfig = this.DecisionConfig;
-    const oldKey = currentConfig.key;
-    const updated: FlowDecisionStepConfiguration = { ...currentConfig, key: newKey };
-    this.updateDecisionConfig(updated);
+    this.keyDraft = { StepID: this.Step.ID, Value: value };
+  }
 
-    if (oldKey && newKey && oldKey !== newKey) {
-      for (const path of this.AllPaths) {
-        if (path.Condition) {
-          const rewrite = RewriteDecisionReferences(path.Condition, k => k === oldKey ? newKey : undefined);
-          if (rewrite.Expression !== path.Condition) {
-            path.Condition = rewrite.Expression;
-            this.PathChanged.emit(path);
-          }
-        }
-      }
+  /** The key field's `change` event and Enter: commits what was typed. Refused keys stay in the field with their error. */
+  OnDecisionKeyCommit(): void {
+    const typed = this.keyDraftFor(this.Step);
+    if (typed !== null) {
+      this.RenameDecisionKey(typed);
     }
+  }
+
+  /**
+   * Renames this Decision step's key and, in the same change, every path condition that names the step
+   * by it.
+   *
+   * Refused — nothing stored, nothing rewritten — when the key is one a condition cannot name or another
+   * Decision step already uses. Conditions follow only a key that named this step alone: when another
+   * step shares the old key, nothing says which of the two a condition meant, so they are left for the
+   * flow check to report rather than guessed at.
+   *
+   * @param newKey the key to give the step; surrounding whitespace is dropped
+   * @returns why the key was refused, or `null` when it was stored (or unchanged)
+   */
+  RenameDecisionKey(newKey: string): string | null {
+    if (!this.Step || this.ReadOnly || !this.ShowDecisionConfig) return null;
+    const key = newKey.trim();
+    const config = this.DecisionConfig;
+    const previous = config.key;
+    if (key === previous) {
+      this.keyDraft = null;
+      return null;
+    }
+    const problem = this.decisionKeyProblem(key);
+    if (problem) {
+      this.keyDraft = { StepID: this.Step.ID, Value: newKey };
+      return problem;
+    }
+
+    this.keyDraft = null;
+    this.updateDecisionConfig({ ...config, key });
+    if (previous && !this.decisionStepUsingKey(previous)) {
+      this.rewritePathConditions(condition =>
+        RewriteDecisionReferences(condition, k => (k === previous ? key : undefined)).Expression);
+    }
+    return null;
   }
 
   OnDecisionPromptChange(promptId: string): void {
@@ -581,6 +606,54 @@ export class AgentPropertiesPanelComponent {
     if (!this.Step) return;
     this.Step.Configuration = JSON.stringify(config, null, 2);
     this.StepChanged.emit(this.Step);
+  }
+
+  // ── Decision step: uncommitted edits and the flow's conditions ───────
+
+  /** The key the author is typing into a Decision step's key field, before it is committed. */
+  private keyDraft: { StepID: string; Value: string } | null = null;
+
+  /** The typed, uncommitted key for `step`, or `null` when nothing is being typed for it. */
+  private keyDraftFor(step: MJAIAgentStepEntity | null): string | null {
+    return step && this.keyDraft && UUIDsEqual(this.keyDraft.StepID, step.ID) ? this.keyDraft.Value : null;
+  }
+
+  /** Forgets everything typed but not committed. */
+  private clearDecisionDrafts(): void {
+    this.keyDraft = null;
+  }
+
+  /** Why `key` cannot be this step's key, or `null`. The shape is the runtime's rule and wording. */
+  private decisionKeyProblem(key: string): string | null {
+    const problem = FlowDecisionKeyProblem(key);
+    if (problem) return capitalize(problem);
+    const owner = this.decisionStepUsingKey(key);
+    return owner
+      ? `Decision step "${owner.Name}" already uses the key "${key}"; each Decision step needs its own, so a path condition can say which one it reads`
+      : null;
+  }
+
+  /**
+   * Another Decision step whose configuration stores `key`, whether or not the runtime can read the rest
+   * of it — a step still being written keeps its key, and sharing it would merge the two steps'
+   * conditions once both run.
+   */
+  private decisionStepUsingKey(key: string): MJAIAgentStepEntity | null {
+    return this.AllSteps.find(s =>
+      s.StepType === 'Decision' && !UUIDsEqual(s.ID, this.Step?.ID) && ReadDecisionStepKey(s.Configuration) === key
+    ) ?? null;
+  }
+
+  /** Applies `rewrite` to every path condition in the flow, and reports each path it changes. */
+  private rewritePathConditions(rewrite: (condition: string) => string): void {
+    for (const path of this.AllPaths) {
+      if (!path.Condition) continue;
+      const rewritten = rewrite(path.Condition);
+      if (rewritten !== path.Condition) {
+        path.Condition = rewritten;
+        this.PathChanged.emit(path);
+      }
+    }
   }
 
   // ── Route on Answer (Path Helper) ─────────────────────────

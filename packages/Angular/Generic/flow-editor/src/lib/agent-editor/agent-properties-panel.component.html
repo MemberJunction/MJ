@@ -211,8 +211,12 @@
               <div class="mj-agent-props-field">
                 <label>Key <span class="mj-agent-props-required">*</span></label>
                 @if (!ReadOnly) {
-                  <input type="text" [value]="DecisionConfig.key"
+                  <!-- Typing only records the key; it is stored, and the paths that read it follow, on
+                       commit (blur or Enter). -->
+                  <input type="text" [value]="DecisionKeyText"
                     (input)="OnDecisionKeyChange(InputValue($event))"
+                    (change)="OnDecisionKeyCommit()"
+                    (keydown.enter)="OnDecisionKeyCommit()"
                     placeholder="e.g. triage" class="mj-agent-props-input"
                     [class.mj-agent-props-input--error]="!!DecisionKeyError">
                 }

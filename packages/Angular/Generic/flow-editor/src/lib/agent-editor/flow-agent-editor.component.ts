@@ -10,6 +10,7 @@ import { FlowNode, FlowConnection, FlowNodeAddedEvent, FlowConnectionCreatedEven
 import { FlowEditorComponent } from '../components/flow-editor.component';
 import { AgentFlowTransformerService, AGENT_STEP_TYPE_CONFIGS } from './agent-flow-transformer.service';
 import { UUIDsEqual } from '@memberjunction/global';
+import { ReadDecisionStepKey } from './decision-step-config';
 
 /** View mode for the agent editor */
 export type AgentEditorViewMode = 'diagram' | 'list';
@@ -21,15 +22,9 @@ export type AgentEditorViewMode = 'diagram' | 'list';
 export function GenerateUniqueDecisionKey(steps: MJAIAgentStepEntity[]): string {
   const existingKeys = new Set<string>();
   for (const s of steps) {
-    if (s.StepType === 'Decision' && s.Configuration) {
-      try {
-        const parsed = JSON.parse(s.Configuration);
-        if (parsed && typeof parsed.key === 'string' && parsed.key.trim().length > 0) {
-          existingKeys.add(parsed.key.trim());
-        }
-      } catch {
-        // Ignore malformed JSON
-      }
+    const key = s.StepType === 'Decision' ? ReadDecisionStepKey(s.Configuration)?.trim() : undefined;
+    if (key) {
+      existingKeys.add(key);
     }
   }
 
