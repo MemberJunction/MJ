@@ -105,7 +105,8 @@ export interface ResponseTypeInclusionRules {
 
     /**
      * Include finishIf field in the nextStep response interface.
-     * Auto-aligns with includeFinishIfDocs unless explicitly set.
+     * Auto-aligns with includeFinishIfDocs unless explicitly set, and so is off whenever
+     * `finishIfMode` is `'off'`, the default.
      * @default true
      */
     finishIf?: boolean;
@@ -256,6 +257,16 @@ export type SpecializationPlacement = 'auto' | 'systemPrompt' | 'trailingMessage
  * Resolved by `BaseAgent.shouldUseAppendOnlyTrailingState` via `BaseAgent.resolvePrefixPromptCache`.
  */
 export type TrailingStateMode = 'auto' | 'appendOnly' | 'replace';
+
+/**
+ * How a loop agent treats `finishIf` gates.
+ * - `'off'`: the model is not taught `finishIf`, and a gate it writes anyway is ignored.
+ * - `'shadow'`: the model is taught `finishIf`, and every gate is evaluated and recorded as a
+ *   `Finish check` step, but it never ends the run: the model always gets its next turn. This
+ *   measures an agent's gates on its real traffic at the cost of one decision call per gate.
+ * - `'on'`: a passing gate ends the run with the model's pre-written message.
+ */
+export type FinishIfMode = 'off' | 'shadow' | 'on';
 
 export interface LoopAgentTypePromptParams {
     // === Section Inclusion Flags ===
@@ -429,8 +440,20 @@ export interface LoopAgentTypePromptParams {
     decisionPromptName?: string;
 
     /**
-     * Include conditional completion (finishIf) documentation in the prompt.
-     * Disable for agents that should never request inline completion gates.
+     * Whether this agent writes finishIf gates, and whether they act. See {@link FinishIfMode}.
+     *
+     * **Defaults to `'off'`: gates are opt-in per agent.** A replay of recorded action rounds (plan
+     * Task 4.6) found that a gate at the 0.9 threshold would have ended 22% of the rounds where the
+     * agent went on to act, and neither a stricter threshold nor calibration fixed that. Use
+     * `'shadow'` to measure an agent's own gates on real traffic before turning them `'on'`.
+     * @default 'off'
+     */
+    finishIfMode?: FinishIfMode;
+
+    /**
+     * Include conditional completion (finishIf) documentation in the prompt. Takes effect only when
+     * `finishIfMode` is `'shadow'` or `'on'`; with `'off'` the documentation is always omitted.
+     * Set false to keep the documentation out even then.
      * @default true
      */
     includeFinishIfDocs?: boolean;
@@ -512,6 +535,14 @@ export const MAX_DECISION_REQUESTS_PER_TURN = 8;
  * Default values for LoopAgentTypePromptParams.
  * All section flags default to true (include), limits default to -1 (include all).
  */
+/** Every {@link FinishIfMode}, for validation. */
+export const FINISH_IF_MODES: readonly FinishIfMode[] = ['off', 'shadow', 'on'];
+
+/** The mode a prompt-param value names; anything else, an absent value included, is `'off'`. */
+export function ResolveFinishIfMode(value: unknown): FinishIfMode {
+    return value === 'shadow' || value === 'on' ? value : 'off';
+}
+
 export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParams> = {
     includeResponseTypeDefinition: { ...DEFAULT_RESPONSE_TYPE_INCLUSION_RULES },
     includeForEachDocs: true,
@@ -533,6 +564,7 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     decisionsMaxItems: 100,
     decisionsMaxRequests: MAX_DECISION_REQUESTS_PER_TURN,
     decisionPromptName: 'Default Decision',
+    finishIfMode: 'off',
     includeFinishIfDocs: true,
     finishIfThreshold: 0.9,
     // Deliberately false — a capability gate, not a token-savings flag (D3).
