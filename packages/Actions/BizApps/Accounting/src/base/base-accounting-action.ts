@@ -201,7 +201,7 @@ export abstract class BaseAccountingAction extends BaseAction {
             .map(name => `'${EscapeSQLString(name)}'`)
             .join(', ');
 
-        const rv = new RunView();
+        const rv = this.requestProvider ? RunView.FromMetadataProvider(this.requestProvider) : new RunView();
         const result = await rv.RunView<MJCompanyIntegrationEntity>({
             EntityName: 'MJ: Company Integrations',
             ExtraFilter: `CompanyID = '${EscapeSQLString(companyId)}' AND IsActive = 1 AND Integration IN (${nameList})`,

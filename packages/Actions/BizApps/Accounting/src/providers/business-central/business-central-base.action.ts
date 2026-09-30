@@ -151,7 +151,7 @@ export abstract class BusinessCentralBaseAction extends BaseAccountingAction {
             );
         } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : String(error);
-            LogError(`Business Central: ${msg}. Ignoring it and using the legacy connection fields.`);
+            LogError(`Business Central: ${msg} Ignoring it and using the legacy connection fields.`);
             return false;
         }
     }
