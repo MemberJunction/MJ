@@ -64,6 +64,13 @@ describe('LocalEmbedding', () => {
     });
   });
 
+  /* ---- RequiresAPIKey ---- */
+  describe('RequiresAPIKey', () => {
+    it('is false, because the model runs in-process', () => {
+      expect(embedding.RequiresAPIKey).toBe(false);
+    });
+  });
+
   /* ---- EmbedText ---- */
   describe('EmbedText', () => {
     it('should throw error when model name is missing', async () => {
