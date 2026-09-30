@@ -80,6 +80,17 @@ export interface PipelineTypeOption {
                         <div class="rpe-static-text">{{ SelectedPipelineTypeDescription || '—' }}</div>
                     </div>
                 </div>
+                @if (ShowCaptureReasoning) {
+                    <div class="rpe-grid2 rpe-mt">
+                        <div class="field">
+                            <label>Capture Reasoning</label>
+                            <select class="mj-input fpb-reasoning-select" [value]="spec.CaptureReasoning ? 'true' : 'false'" (change)="UpdateCaptureReasoning($event)">
+                                <option value="true">Yes — Keep the model's rationale with each Feature Value</option>
+                                <option value="false">No</option>
+                            </select>
+                        </div>
+                    </div>
+                }
             </section>
 
             <!-- STAGE 1: CONTEXT SOURCE -->
@@ -532,6 +543,14 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         return this.CurrentPipelineTypeName.toLowerCase() === 'decision';
     }
 
+    /**
+     * Whether to offer the Capture Reasoning setting: for a type that produces reasoning, and for any spec
+     * that already asks for it, so a pipeline switched to a type without reasoning can turn it off.
+     */
+    public get ShowCaptureReasoning(): boolean {
+        return this.CurrentCapabilities.ProducesReasoning || this.spec.CaptureReasoning === true;
+    }
+
     public get SelectedPipelineTypeDescription(): string {
         const cur = this.CurrentPipelineTypeName.toLowerCase();
         const opt = this.AvailablePipelineTypes.find((t) => t.Name.toLowerCase() === cur);
@@ -700,6 +719,9 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
                     this.spec.Caching = parsed.Caching ?? { Cacheable: false };
                     this.spec.ProcessorExtensionKey = parsed.ProcessorExtensionKey;
                     this.spec.PipelineType = parsed.PipelineType;
+                    // Carried so the capability check sees what the runtime sees, and the next edit keeps them
+                    this.spec.CaptureReasoning = parsed.CaptureReasoning;
+                    this.spec.Watermark = parsed.Watermark;
                 }
             }
         }
@@ -1210,6 +1232,16 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
     /** @deprecated Use {@link UpdateCacheScope}. */
     public updateCacheScope(event: Event): void {
         return this.UpdateCacheScope(event);
+    }
+
+    /** Turns capture of the model's rationale on or off. Off removes the flag, so a spec that never set it keeps its hash. */
+    public UpdateCaptureReasoning(event: Event): void {
+        if ((event.target as HTMLSelectElement).value === 'true') {
+            this.spec.CaptureReasoning = true;
+        } else {
+            delete this.spec.CaptureReasoning;
+        }
+        this.emitChanges();
     }
 
     public OnPipelineTypeSelect(event: Event): void {
