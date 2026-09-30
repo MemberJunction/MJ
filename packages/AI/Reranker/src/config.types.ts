@@ -33,7 +33,13 @@ export interface RerankerConfiguration {
 
     /**
      * Minimum relevance score (0.0-1.0) for reranked results to be included.
-     * Results below this threshold are filtered out.
+     * Results below this threshold are filtered out. When none reaches it, the agent keeps the vector
+     * search results instead, as if reranking were off, so the threshold never empties the list.
+     *
+     * Recommended for a DecisionReranker: 0.1. Its scores are Likelihood probabilities that are not
+     * calibrated, so the order and the top-N cut do the ranking, and the threshold should only drop
+     * the candidates the model rules out. 0.1 is a starting point until a calibration is fitted for
+     * memory reranking.
      * Default: 0.5
      */
     minRelevanceThreshold: number;

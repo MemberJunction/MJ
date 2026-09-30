@@ -215,6 +215,22 @@ describe('AgentContextInjector examples reranking stage', () => {
         expect(rerank.mock.calls[0][4]).toEqual({ agentRunID: 'run-7', parentStepID: 'step-2', stepNumber: 4, OnStepCreated: onStepCreated });
     });
 
+    it('keeps the vector search results when no example reaches the rerank threshold', async () => {
+        spyOnRerankExamples([]);
+
+        const examples = await getExamples(rerankerConfig({ rerankExamples: true }));
+
+        expect(ids(examples)).toEqual(['e0', 'e1']);
+    });
+
+    it('keeps the vector search results when no example reaches the threshold, even with fallbackOnError false, since that is not a failure', async () => {
+        spyOnRerankExamples([]);
+
+        const examples = await getExamples(rerankerConfig({ rerankExamples: true, fallbackOnError: false }));
+
+        expect(ids(examples)).toEqual(['e0', 'e1']);
+    });
+
     it('falls back to the vector search results when reranking fails and fallbackOnError is true', async () => {
         spyOnRerankExamples(new Error('Decision model is down'));
 
@@ -258,6 +274,30 @@ describe('AgentContextInjector notes reranking stage', () => {
         });
 
         expect(rerank.mock.calls[0][4]).toEqual({ agentRunID: 'run-7', parentStepID: undefined, stepNumber: 3, OnStepCreated: onStepCreated });
+    });
+
+    it('keeps the vector search results when no note reaches the rerank threshold', async () => {
+        spyOnRerankNotes([]);
+
+        const notes = await getNotes(rerankerConfig());
+
+        expect(ids(notes)).toEqual(['n0', 'n1']);
+    });
+
+    it('keeps the vector search results when no note reaches the threshold, even with fallbackOnError false, since that is not a failure', async () => {
+        spyOnRerankNotes([]);
+
+        const notes = await getNotes(rerankerConfig({ fallbackOnError: false }));
+
+        expect(ids(notes)).toEqual(['n0', 'n1']);
+    });
+
+    it('returns the one note that reached the threshold, without topping it up from the vector search', async () => {
+        spyOnRerankNotes([h.noteCandidates[4]]);
+
+        const notes = await getNotes(rerankerConfig());
+
+        expect(ids(notes)).toEqual(['n4']);
     });
 
     it('falls back to the vector search results when the rerank runs out of time and fallbackOnError is true', async () => {

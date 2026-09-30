@@ -138,7 +138,8 @@ export class AgentContextInjector {
      * When reranking is enabled:
      * 1. Fetch N * retrievalMultiplier candidates via vector search
      * 2. Rerank candidates using configured reranker
-     * 3. Return top N reranked results
+     * 3. Return top N reranked results, or the top N vector search results when no candidate reached
+     *    the rerank threshold
      *
      * Fallback behavior (controlled by config.fallbackOnError):
      * - If true: On reranking failure, gracefully falls back to vector search results
@@ -187,6 +188,11 @@ export class AgentContextInjector {
                 this.rerankObservability(params.observability)
             );
 
+            if (rerankResult.notes.length === 0) {
+                this.logEmptyRerank('note', config);
+                return matches.slice(0, params.maxNotes).map(m => m.note);
+            }
+
             // Return top N reranked notes
             const result = rerankResult.notes.slice(0, params.maxNotes).map(m => m.note);
             LogStatus(`AgentContextInjector: Returning ${result.length} notes after reranking`);
@@ -215,7 +221,8 @@ export class AgentContextInjector {
      * When example reranking is on:
      * 1. Fetch N * retrievalMultiplier candidates via vector search
      * 2. Rerank candidates with the same reranker and threshold as notes
-     * 3. Return top N reranked results, falling back as config.fallbackOnError says
+     * 3. Return top N reranked results, falling back as config.fallbackOnError says, or the top N
+     *    vector search results when no candidate reached the rerank threshold
      */
     private async getExamplesViaSemanticSearch(params: GetExamplesParams): Promise<MJAIAgentExampleEntity[]> {
         const config = this.exampleRerankerConfig(params);
@@ -245,6 +252,16 @@ export class AgentContextInjector {
         return this.rerankExamples(matches, params, config);
     }
 
+    /**
+     * Logs a rerank that kept nothing. Its caller then keeps the vector search order, as if reranking
+     * were off: rerank scores need not be calibrated (a DecisionReranker's are uncalibrated
+     * probabilities), so a threshold that drops every candidate is not evidence that none is relevant.
+     * This is not a failure, so it does not depend on fallbackOnError.
+     */
+    private logEmptyRerank(kind: 'note' | 'example', config: RerankerConfiguration): void {
+        LogStatus(`AgentContextInjector: No ${kind} reached the rerank threshold (${config.minRelevanceThreshold}), keeping the vector search results`);
+    }
+
     /** The observability options a rerank runs under, from the caller's, or none. */
     private rerankObservability(observability: NotesObservabilityOptions | undefined): RerankObservabilityOptions | undefined {
         return observability ? {
@@ -266,7 +283,8 @@ export class AgentContextInjector {
 
     /**
      * Stage 2 for examples: reranks the vector search candidates and returns the top N. On failure, falls
-     * back to the vector search results when config.fallbackOnError is true, and throws otherwise.
+     * back to the vector search results when config.fallbackOnError is true, and throws otherwise. When no
+     * candidate reaches the threshold, returns the top N vector search results.
      */
     private async rerankExamples(
         matches: ExampleMatchResult[],
@@ -282,6 +300,10 @@ export class AgentContextInjector {
                 params.contextUser,
                 this.rerankObservability(params.observability)
             );
+            if (reranked.length === 0) {
+                this.logEmptyRerank('example', config);
+                return matches.slice(0, params.maxExamples).map(m => m.example);
+            }
             return reranked.slice(0, params.maxExamples).map(m => m.example);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);

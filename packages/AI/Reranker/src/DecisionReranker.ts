@@ -111,6 +111,9 @@ class DecisionRerankRunner extends AIDecisionRunner {
  * A failed decision call, an answer missing for any document, or a budget that runs out fails the
  * whole rerank. No score is ever invented.
  *
+ * The scores are Likelihood probabilities, which are not calibrated, so a low
+ * `RerankerConfiguration.minRelevanceThreshold` suits this reranker: 0.1 is the recommended start.
+ *
  * Usage:
  * ```typescript
  * const reranker = MJGlobal.Instance.ClassFactory.CreateInstance<BaseReranker>(
