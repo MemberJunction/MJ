@@ -574,6 +574,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * is confident and arrives in time; an error, a slow or unsure answer keeps today's routing, and
    * a tagged message or a form response makes no call (see `decision-routing.ts`). False (the
    * default) changes nothing: no call, and today's routing.
+   *
+   * What goes to the model: each qualifying message sends these to the model behind the
+   * `Default Decision` prompt, which can be a different vendor from the agents' own: the first
+   * 1,000 characters of the new message, the last 6 turns (150 characters each), each participant's
+   * name, description and last reply, and the names of their artifact versions. Each call writes an
+   * `MJ: AI Prompt Runs` row, even when the answer comes too late to be used.
    */
   @Input() EnableDecisionRouting: boolean = false;
 
