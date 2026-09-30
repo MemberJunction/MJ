@@ -120,8 +120,9 @@ export abstract class BaseMediaRunner<
           run.Messages = operation.DescribeRequest(params);
         });
       const call = await this.runOnCandidates(plan, operation, promptRun);
-      const executionTimeMS = new Date().getTime() - startTime.getTime();
-      await this.finalizeMediaRun(promptRun, call.Result, params, operation, executionTimeMS);
+      const endTime = new Date();
+      const executionTimeMS = endTime.getTime() - startTime.getTime();
+      await this.finalizeMediaRun(promptRun, call.Result, params, operation, endTime, executionTimeMS);
       return this.buildOutcome(call, promptRun, executionTimeMS);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -383,11 +384,12 @@ export abstract class BaseMediaRunner<
     call: MediaCallResult<TOutput>,
     params: TParams,
     operation: MediaOperation<TParams, TDriver, TOutput>,
+    endTime: Date,
     executionTimeMS: number
   ): Promise<void> {
     const output = call.Output;
     const counted = call.success && output ? operation.CountUsage?.(params, output) : undefined;
-    await this.FinalizeRunRecord(promptRun, call.success, new Date(), executionTimeMS, run => {
+    await this.FinalizeRunRecord(promptRun, call.success, endTime, executionTimeMS, run => {
       if (call.success && output) {
         run.Result = operation.DescribeOutput(output);
       }
