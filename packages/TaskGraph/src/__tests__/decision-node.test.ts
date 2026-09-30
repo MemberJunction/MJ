@@ -15,41 +15,46 @@ import { describe, it, expect, vi } from 'vitest';
 import { UserInfo, type RunViewParams } from '@memberjunction/core';
 import type { MJTaskDependencyEntity, MJTaskEntity } from '@memberjunction/core-entities';
 import {
+    CompileFlowToTaskGraph,
     CONDITION_ROOTS,
-    DECISION_ANSWER_FIELDS,
+    DecisionAnswerConfidence,
+    NormalizeDependency,
+    ValidateTaskGraphSpec,
+    type FlowCompilerPath,
+    type FlowCompilerStep,
+    DecisionHoldReason,
+    NO_DECISIONS,
     ResolveExclusiveGroups,
     TaskNode,
     type EdgeConditionOutcome,
     type EvaluatedEdge,
+    type GraphDecisions,
     type TaskGraphDecisionAnswer,
     type TaskGraphNodeConfigMap,
     type TaskGraphSpec,
 } from '@memberjunction/ai-core-plus';
-import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { TaskGraphDispatcher } from '../TaskGraphDispatcher';
 import { DispatcherConditionEvaluator } from '../DispatcherConditionEvaluator';
 import {
     BuildConditionContext,
     DecideGate,
-    DecisionHoldReason,
     EvaluateCondition,
-    NO_DECISIONS,
     type ConditionInvocation,
     type ConditionVerdict,
-    type GraphDecisions,
 } from '../condition-gate';
 import {
     BuildDecisionStepOutput,
-    DecisionAnswerConfidence,
     DecisionStepOutputAnswers,
     DecisionsPayloadConflict,
+    FailedDecisionIDs,
     HeldDecisionAnswers,
+    PassOverFailedDecisionPaths,
+    ReadsFailedDecision,
     ReadDecisionStepConfiguration,
     ResolveDecisionState,
     ResolveGraphDecisions,
     type DecisionTaskRow,
 } from '../decision-node';
-import { SummarizeDecisionAnswers } from '../AIDecisionTaskRunner';
 import {
     BuildStepConfiguration,
     DecisionPromptNameOf,
@@ -625,6 +630,121 @@ describe('a failed decision holds; it never reads as false', () => {
     });
 });
 
+describe('a failed decision with a recovery path', () => {
+    const FAILED_ROW = decisionRow('Failed', {}, 'the model timed out');
+    const RECOVER = { ...edge('e-recover', 'stepResult.Success === false', 'route'), Priority: 0 };
+    /** The intent fork ranked 3/2/1, above whatever else the test adds at 0. */
+    const RANKED_FORK = INTENT_FORK.map((d, i) => ({ ...d, Priority: 3 - i }));
+
+    /** Resolves a fork out of `triage` the way `loadGraphState` does, recovery rule included. */
+    const resolveFork = (edges: EdgeFields[], row: DecisionTaskRow, originStatus: 'Complete' | 'Failed') => {
+        const dispatcher = dispatcherWith(decisionRunner({ Success: true }));
+        const entityById = new Map([['task-triage', origin(originStatus, {})]]);
+        const decisions = ResolveGraphDecisions([row]);
+        const failed = FailedDecisionIDs([row]);
+        const evaluated: EvaluatedEdge[] = edges.map((d) => ({
+            id: d.ID, taskId: d.TaskID, dependsOnTaskId: d.DependsOnTaskID, exclusiveGroup: 'route',
+            originStatus, priority: d.Priority, sequence: 0,
+            conditionOutcome: dispatcher.evaluateExclusiveCondition(d, entityById, {}, decisions),
+        }));
+        const conditions = new Map(edges.map((d) => [d.ID, d.Condition ?? '']));
+        return ResolveExclusiveGroups(
+            PassOverFailedDecisionPaths(evaluated, (e) => ReadsFailedDecision(conditions.get(e.id) ?? '', failed)),
+            new Set(['Complete', 'Failed']),
+        );
+    };
+
+    it('takes the recovery path however it ranks, and sets the paths reading the answer aside', () => {
+        const resolution = resolveFork([...RANKED_FORK, RECOVER], FAILED_ROW, 'Failed');
+        expect(resolution.keptEdgeIDs).toEqual(['e-recover']);
+        expect(resolution.loserEdgeIDs.sort()).toEqual(['e-billing', 'e-other', 'e-refund']);
+        expect(resolution.holdTaskIDs).toEqual([]);
+    });
+
+    it('still holds a fork with no recovery path, so a Retry of the step can route it', () => {
+        const resolution = resolveFork(RANKED_FORK, FAILED_ROW, 'Failed');
+        expect(resolution.holdTaskIDs).toHaveLength(3);
+        expect(resolution.loserEdgeIDs).toEqual([]);
+    });
+
+    it('never sets aside an answer below minConfidence — its path might have been the one to take', () => {
+        const below = decisionRow('Complete', triageOutput({ ...BILLING_CONFIDENT, intent: { value: 'billing', confidence: 0.55 } }));
+        const fallback = { ...edge('e-fallback', '', 'route'), Condition: null, Priority: 0 };
+        const resolution = resolveFork([...RANKED_FORK, fallback], below, 'Complete');
+        expect(resolution.holdTaskIDs.sort()).toEqual(['target-e-billing', 'target-e-fallback', 'target-e-other', 'target-e-refund']);
+        expect(resolution.keptEdgeIDs).toEqual([]);
+    });
+
+    it('names only the Decision steps that failed', () => {
+        expect([...FailedDecisionIDs([FAILED_ROW, decisionRow('Complete', triageOutput(BILLING_CONFIDENT))])]).toEqual(['triage']);
+        expect(ReadsFailedDecision("decisions.triage.intent.value === 'x'", new Set(['triage']))).toBe(true);
+        expect(ReadsFailedDecision('stepResult.Success === false', new Set(['triage']))).toBe(false);
+    });
+});
+
+describe('the 0.55 example on stepResult.result, dispatched', () => {
+    // The dispatched half of the reviewer's probe; ai-agents' flow-agent-decision-step tests walk the
+    // same flow in-run. A path reads the answer through stepResult.result at priority 2, a fallback
+    // sits at priority 1, and "billing" is answered at 0.55 against a minConfidence of 0.7.
+    const TRIAGE_ID = 'dddddddd-0000-4000-8000-000000000001';
+    const BILLING_ID = 'dddddddd-0000-4000-8000-000000000002';
+    const QUEUE_ID = 'dddddddd-0000-4000-8000-000000000003';
+    const step = (ID: string, Name: string, over: Partial<FlowCompilerStep>): FlowCompilerStep => ({
+        ID, Name, StepType: 'Sub-Agent', StartingStep: false, Status: 'Active', SubAgentID: `agent-${Name}`, ...over,
+    });
+    const steps: FlowCompilerStep[] = [
+        step(TRIAGE_ID, 'Triage the ticket', {
+            StepType: 'Decision', StartingStep: true, SubAgentID: null,
+            Configuration: JSON.stringify({ key: 'triage', state: TRIAGE.state, questions: TRIAGE.questions }),
+        }),
+        step(BILLING_ID, 'Billing', {}),
+        step(QUEUE_ID, 'Queue', {}),
+    ];
+    const paths: FlowCompilerPath[] = [
+        { ID: 'p-billing', OriginStepID: TRIAGE_ID, DestinationStepID: BILLING_ID, Condition: "stepResult.result.intent.value === 'billing'", Priority: 2 },
+        { ID: 'p-queue', OriginStepID: TRIAGE_ID, DestinationStepID: QUEUE_ID, Condition: null, Priority: 1 },
+    ];
+
+    it('compiles, validates, and routes to the fallback — the same path the walker takes', async () => {
+        const compiled = CompileFlowToTaskGraph(steps, paths, {
+            WorkflowName: 'Support triage',
+            ResolveAgentName: (id) => id.replace('agent-', ''),
+            ResolveActionName: () => null,
+            ResolvePromptName: () => null,
+        });
+        expect(compiled.Errors).toEqual([]);
+        const spec = compiled.Spec!;
+        expect(ValidateTaskGraphSpec(spec).Errors).toEqual([]);
+
+        // The Decision node runs, as the dispatcher runs it, and answers "billing" at 0.55.
+        const node = spec.tasks.find((t) => t.tempId === TRIAGE_ID)!;
+        const runner = decisionRunner({ Success: true, Answers: { intent: { value: 'billing', confidence: 0.55 }, urgent: { probability: 0.1 } } });
+        const task = decisionTask({ ID: TRIAGE_ID, Name: node.name, Configuration: JSON.stringify(BuildStepConfiguration(node)) });
+        const dispatcher = dispatcherWith(runner);
+        const outcome = await dispatcher.runTaskBody(task, fakeProvider(null).Provider, { ticket: 'I was charged twice' }, new Map());
+        const row: DecisionTaskRow = {
+            Name: node.name, Status: 'Complete', StepType: 'Decision', Configuration: task.Configuration,
+            OutputPayload: JSON.stringify(outcome.Output), ErrorMessage: null,
+        };
+
+        const entityById = new Map<string, OriginFields>([[TRIAGE_ID, { ...origin('Complete', outcome.Output), ID: TRIAGE_ID, Name: node.name }]]);
+        const decisions = ResolveGraphDecisions([row]);
+        const edges: EvaluatedEdge[] = spec.tasks.flatMap((t) => (t.dependsOn ?? []).map(NormalizeDependency).map((d) => {
+            const dep: EdgeFields = {
+                ID: `${d.tempId}->${t.tempId}`, TaskID: t.tempId, DependsOnTaskID: d.tempId, Condition: d.condition ?? null,
+                ExclusiveGroup: d.exclusiveGroup ?? null, Priority: d.priority ?? 0, Sequence: d.sequence ?? 0,
+            };
+            return {
+                id: dep.ID, taskId: dep.TaskID, dependsOnTaskId: dep.DependsOnTaskID, exclusiveGroup: d.exclusiveGroup ?? '',
+                originStatus: 'Complete', priority: dep.Priority, sequence: dep.Sequence,
+                conditionOutcome: dispatcher.evaluateExclusiveCondition(dep, entityById, {}, decisions),
+            };
+        }));
+
+        expect(ResolveExclusiveGroups(edges, new Set(['Complete', 'Failed'])).keptEdgeIDs).toEqual([`${TRIAGE_ID}->${QUEUE_ID}`]);
+    });
+});
+
 // ── releasing a hold ────────────────────────────────────────────────────────────────────────────
 
 describe('retrying a Decision step that is holding an answer', () => {
@@ -696,29 +816,6 @@ describe('retrying a Decision step that is holding an answer', () => {
 });
 
 // ── pieces ──────────────────────────────────────────────────────────────────────────────────────
-
-describe('SummarizeDecisionAnswers', () => {
-    const typed: AIDecisionRunResult['Answers'] = {
-        urgent: { Kind: 'Likelihood', Probability: 0.81 },
-        intent: { Kind: 'Choice', Value: 'refund', Confidence: 0.77, Probabilities: { billing: 0.2, refund: 0.77, other: 0.03 } },
-        severity: { Kind: 'Score', Value: 1.4, Confidence: 0.6, Probabilities: { minor: 0.1, major: 0.4, critical: 0.5 } },
-    };
-
-    it('keeps the full distribution in the shape conditions read', () => {
-        expect(SummarizeDecisionAnswers(typed)).toEqual({
-            urgent: { probability: 0.81 },
-            intent: { value: 'refund', confidence: 0.77, probabilities: { billing: 0.2, refund: 0.77, other: 0.03 } },
-            severity: { value: 1.4, confidence: 0.6, probabilities: { minor: 0.1, major: 0.4, critical: 0.5 } },
-        });
-    });
-
-    it('produces exactly the fields the validator lets a condition read, for every kind', () => {
-        const summary = SummarizeDecisionAnswers(typed);
-        expect(Object.keys(summary.urgent).sort()).toEqual([...DECISION_ANSWER_FIELDS.Likelihood].sort());
-        expect(Object.keys(summary.intent).sort()).toEqual([...DECISION_ANSWER_FIELDS.Choice].sort());
-        expect(Object.keys(summary.severity).sort()).toEqual([...DECISION_ANSWER_FIELDS.Score].sort());
-    });
-});
 
 describe('ResolveDecisionState', () => {
     it('defaults to the whole payload', () => {

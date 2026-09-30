@@ -16,7 +16,7 @@
  *
  * @module @memberjunction/task-graph
  */
-import { DecisionReferencesIn, type TaskGraphDecisionAnswer } from '@memberjunction/ai-core-plus';
+import { DecisionHoldReason, NO_DECISIONS, type GraphDecisions } from '@memberjunction/ai-core-plus';
 
 /**
  * What to do with a gating edge whose condition has been considered.
@@ -45,21 +45,6 @@ export type FailureSemantics = 'block' | 'edges';
  * at all. Such a verdict HOLDS. It never reads as false, whatever `Success` and `Value` say.
  */
 export type ConditionVerdict = { Success: boolean; Value?: unknown; ErrorMessage?: string; Unevaluable?: boolean };
-
-/**
- * Every Decision step's answers in one graph, keyed by the step's `tempId` and then by question.
- *
- * `Answers` holds only the answers a condition may act on. `Unresolved` says, per question, why the
- * rest are missing — the step has not answered yet, its call failed, or the answer fell below its
- * question's `minConfidence` — and a condition that reads one of them holds.
- */
-export type GraphDecisions = {
-    Answers: Readonly<Record<string, Readonly<Record<string, TaskGraphDecisionAnswer>>>>;
-    Unresolved: Readonly<Record<string, Readonly<Record<string, string>>>>;
-};
-
-/** A graph with no Decision steps. */
-export const NO_DECISIONS: GraphDecisions = Object.freeze({ Answers: Object.freeze({}), Unresolved: Object.freeze({}) });
 
 /**
  * The invocation's contribution to the condition envelope — the flow dialect's `data`/`context`.
@@ -215,32 +200,6 @@ export function BuildConditionContext(
 }
 
 /**
- * Why a condition cannot be answered yet because of a decision it reads, or `null` when it can.
- *
- * Asked BEFORE evaluation, because evaluation cannot tell "no" from "not known": a missing answer
- * reads as `undefined`, and `undefined === 'billing'` is a confident, wrong `false` that would drop
- * the edge or lose the fork. So a condition that reads a failed decision, one below its question's
- * `minConfidence`, or one not given yet is refused evaluation and holds.
- *
- * A use of `decisions` that names no step and question cannot be checked, so it holds too. The
- * validator refuses such a condition at submit; this is the backstop for one that bypassed it.
- */
-export function DecisionHoldReason(condition: string, decisions: GraphDecisions): string | null {
-    const scan = DecisionReferencesIn(condition);
-    if (scan.Malformed.length > 0) {
-        return `the condition reads "decisions" without naming a step and a question (${scan.Malformed[0]})`;
-    }
-    for (const reference of scan.References) {
-        if (hasOwn(decisions.Answers, reference.NodeId) && hasOwn(decisions.Answers[reference.NodeId], reference.QuestionKey)) continue;
-        const unresolved = hasOwn(decisions.Unresolved, reference.NodeId) ? decisions.Unresolved[reference.NodeId] : undefined;
-        return unresolved && hasOwn(unresolved, reference.QuestionKey)
-            ? unresolved[reference.QuestionKey]
-            : `no Decision step "${reference.NodeId}" has answered "${reference.QuestionKey}"`;
-    }
-    return null;
-}
-
-/**
  * Evaluates an edge condition, holding first on any decision it reads that is not settled.
  *
  * The evaluation itself is the caller's, so this stays synchronous and pure: the answers were
@@ -255,11 +214,6 @@ export function EvaluateCondition(
     const held = DecisionHoldReason(condition, decisions);
     if (held) return { Success: false, Unevaluable: true, ErrorMessage: held };
     return evaluate(condition, context);
-}
-
-/** Own-property lookup, so a question named like an `Object.prototype` member is not "found". */
-function hasOwn(record: object, key: string): boolean {
-    return Object.prototype.hasOwnProperty.call(record, key);
 }
 
 /**

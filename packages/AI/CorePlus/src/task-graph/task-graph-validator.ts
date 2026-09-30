@@ -411,6 +411,24 @@ function checkDecisionConfiguration(task: TaskGraphSpecNode, errors: TaskGraphVa
     const config = ConfigOf(task, 'Decision');
     if (!config) return;
 
+    const problems = DecisionConfigurationProblems(config);
+    if (problems.length > 0) {
+        errors.push({
+            Code: 'InvalidConfiguration',
+            Message: `Decision step "${task.name?.trim() || task.tempId}" cannot run: ${problems.join('; ')}.`,
+            TempId: task.tempId,
+        });
+    }
+}
+
+/**
+ * What is wrong with a Decision step's settings, as phrases naming each problem. Empty when it can run.
+ *
+ * The checks a task-graph Decision node gets at submit, exported so a Flow agent's Decision step is
+ * held to exactly the same ones rather than to a copy that drifts. Absent `questions` is not reported
+ * here — a task graph reports it as missing configuration — so a caller that requires them says so.
+ */
+export function DecisionConfigurationProblems(config: TaskGraphNodeConfigMap['Decision']): string[] {
     const problems: string[] = [];
     if (config.promptName !== undefined && !(typeof config.promptName === 'string' && config.promptName.trim())) {
         problems.push('its promptName is empty; omit it to use the Default Decision prompt');
@@ -428,14 +446,7 @@ function checkDecisionConfiguration(task: TaskGraphSpecNode, errors: TaskGraphVa
             for (const [key, question] of Object.entries(config.questions)) problems.push(...questionProblems(key, question));
         }
     }
-
-    if (problems.length > 0) {
-        errors.push({
-            Code: 'InvalidConfiguration',
-            Message: `Decision step "${task.name?.trim() || task.tempId}" cannot run: ${problems.join('; ')}.`,
-            TempId: task.tempId,
-        });
-    }
+    return problems;
 }
 
 /** What is wrong with one question, as phrases naming it. Empty when it is well formed. */

@@ -9,15 +9,12 @@
  * @module @memberjunction/task-graph
  */
 import { AgentDecisionService } from '@memberjunction/ai-agents';
-import type { TaskGraphDecisionAnswer } from '@memberjunction/ai-core-plus';
-import { AIDecisionParams, AIDecisionRunner, type AIDecisionRunResult } from '@memberjunction/ai-prompts';
+import { SummarizeDecisionAnswers } from '@memberjunction/ai-core-plus';
+import { AIDecisionParams, AIDecisionRunner } from '@memberjunction/ai-prompts';
 import { AIEngine } from '@memberjunction/aiengine';
 import { LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { TaskDecisionRunner, TaskDecisionRunParams, TaskDecisionRunResult } from './types';
-
-/** One typed answer as the decision runner returns it. */
-type TypedDecisionAnswer = AIDecisionRunResult['Answers'][string];
 
 /** Runs a Decision node's questions through `AIDecisionRunner`, once. */
 export class AIDecisionTaskRunner implements TaskDecisionRunner {
@@ -58,27 +55,5 @@ export class AIDecisionTaskRunner implements TaskDecisionRunner {
             LogError(`[AIDecisionTaskRunner] Task ${params.TaskID} failed: ${message}`);
             return { Success: false, ErrorMessage: message };
         }
-    }
-}
-
-/**
- * The runner's typed answers in the shape an edge condition reads them — the full distribution kept,
- * so a condition can route on more than the winner.
- */
-export function SummarizeDecisionAnswers(answers: AIDecisionRunResult['Answers']): Record<string, TaskGraphDecisionAnswer> {
-    const summary: Record<string, TaskGraphDecisionAnswer> = {};
-    for (const [key, answer] of Object.entries(answers)) summary[key] = summarizeAnswer(answer);
-    return summary;
-}
-
-/** One answer, by kind. The fields match `DECISION_ANSWER_FIELDS`, which is what the validator allows. */
-function summarizeAnswer(answer: TypedDecisionAnswer): TaskGraphDecisionAnswer {
-    switch (answer.Kind) {
-        case 'Likelihood':
-            return { probability: answer.Probability };
-        case 'Choice':
-            return { value: answer.Value, confidence: answer.Confidence, probabilities: { ...answer.Probabilities } };
-        case 'Score':
-            return { value: answer.Value, confidence: answer.Confidence, probabilities: { ...answer.Probabilities } };
     }
 }

@@ -9,13 +9,18 @@
  * @module @memberjunction/task-graph
  */
 import {
+    DecisionReferencesIn,
     GetValueFromPath,
+    ResolveDecisionStepAnswers,
+    type EdgeConditionOutcome,
+    type GraphDecisions,
+    type HeldDecisionAnswer,
     type TaskGraphDecisionAnswer,
     type TaskGraphDecisionQuestion,
     type TaskGraphNodeConfigMap,
 } from '@memberjunction/ai-core-plus';
 import type { MJTaskEntity_ITaskStepConfiguration } from '@memberjunction/core-entities';
-import { ParseConditionOutput, type GraphDecisions } from './condition-gate';
+import { ParseConditionOutput } from './condition-gate';
 
 /**
  * What a Decision step keeps in `Task.Configuration.decision`: its spec configuration, plus the name
@@ -103,15 +108,6 @@ export function ResolveDecisionState(
     return { State: JSON.stringify(value) };
 }
 
-/**
- * What a Decision step's output carries in place of an answer a condition may not act on: why it is
- * held, and never the answer itself.
- */
-export type HeldDecisionAnswer = {
-    /** Why the answer is held, in the words a hold reports: below its `minConfidence`, or missing. */
-    held: string;
-};
-
 /** One question's entry in a Decision step's output: the answer, or why it is held. */
 export type DecisionStepOutputAnswer = TaskGraphDecisionAnswer | HeldDecisionAnswer;
 
@@ -130,12 +126,14 @@ export function DecisionStepOutputAnswers(
     questions: Readonly<Record<string, TaskGraphDecisionQuestion>>,
     answers: Readonly<Record<string, TaskGraphDecisionAnswer>>,
 ): Record<string, DecisionStepOutputAnswer> {
+    // The shared answer rules decide which are usable, so this copy and every hold agree.
+    const resolved = ResolveDecisionStepAnswers({ Name: stepName, Status: 'Complete', ErrorMessage: null }, questions, answers);
     const output: Record<string, DecisionStepOutputAnswer> = {};
-    for (const [key, question] of Object.entries(questions)) {
-        const answer = Object.prototype.hasOwnProperty.call(answers, key) ? answers[key] : undefined;
-        // `unusableAnswerReason` reports a missing answer too, so the fallback is for the compiler.
-        const reason = unusableAnswerReason(stepName, key, answer, question);
-        output[key] = answer && !reason ? answer : { held: reason ?? `the decision "${stepName}" completed without an answer to "${key}"` };
+    for (const key of Object.keys(questions)) {
+        output[key] = Object.prototype.hasOwnProperty.call(resolved.Answers, key)
+            ? resolved.Answers[key]
+            // Every question the rules do not use has a reason; the fallback is for the compiler.
+            : { held: resolved.Unresolved[key] ?? `the decision "${stepName}" completed without an answer to "${key}"` };
     }
     return output;
 }
@@ -176,18 +174,6 @@ export function BuildDecisionStepOutput(
 }
 
 /**
- * How confident an answer is, on the scale `minConfidence` is written in.
- *
- * A Choice or Score states its confidence. A Likelihood's probability IS its confidence, but in one
- * direction only, so it is measured by its distance from an even call: 0.05 is as sure as 0.95.
- */
-export function DecisionAnswerConfidence(answer: TaskGraphDecisionAnswer): number | undefined {
-    if (typeof answer.confidence === 'number') return answer.confidence;
-    if (typeof answer.probability === 'number') return Math.max(answer.probability, 1 - answer.probability);
-    return undefined;
-}
-
-/**
  * Every Decision step's answers in a graph, split into those a condition may act on and, for the
  * rest, why not.
  *
@@ -205,18 +191,9 @@ export function ResolveGraphDecisions(rows: readonly DecisionTaskRow[]): GraphDe
         if (!config) continue;
 
         const given = row.Status === 'Complete' ? answersIn(row.OutputPayload, config.nodeId) : {};
-        for (const [key, question] of Object.entries(config.questions)) {
-            // The step's output already says why it held an answer; the threshold is still applied
-            // to whatever answer is there, so an output written any other way cannot bypass it.
-            const reason = row.Status === 'Complete'
-                ? heldReason(given[key]) ?? unusableAnswerReason(row.Name, key, given[key], question)
-                : notAnsweredReason(row);
-            if (reason) {
-                (unresolved[config.nodeId] ??= {})[key] = reason;
-            } else {
-                (answers[config.nodeId] ??= {})[key] = given[key] as TaskGraphDecisionAnswer;
-            }
-        }
+        const resolved = ResolveDecisionStepAnswers(row, config.questions, given);
+        if (Object.keys(resolved.Answers).length > 0) Object.assign(answers[config.nodeId] ??= {}, resolved.Answers);
+        if (Object.keys(resolved.Unresolved).length > 0) Object.assign(unresolved[config.nodeId] ??= {}, resolved.Unresolved);
     }
     return { Answers: answers, Unresolved: unresolved };
 }
@@ -235,9 +212,47 @@ export function HeldDecisionAnswers(row: DecisionTaskRow): Record<string, string
     return { ...ResolveGraphDecisions([row]).Unresolved[config.nodeId] };
 }
 
-/** The reason a step's output gives for holding an answer, or `null` when it holds none there. */
-function heldReason(entry: unknown): string | null {
-    return isRecord(entry) && typeof entry.held === 'string' && entry.held ? entry.held : null;
+/** The `tempId`s of the graph's Decision steps whose call failed. */
+export function FailedDecisionIDs(rows: readonly DecisionTaskRow[]): Set<string> {
+    const failed = new Set<string>();
+    for (const row of rows) {
+        if (row.StepType !== 'Decision' || row.Status !== 'Failed') continue;
+        const config = ReadDecisionStepConfiguration(row.Configuration);
+        if (config) failed.add(config.nodeId);
+    }
+    return failed;
+}
+
+/** True when a condition reads any of the given Decision steps. */
+export function ReadsFailedDecision(condition: string, failedDecisionIDs: ReadonlySet<string>): boolean {
+    if (failedDecisionIDs.size === 0 || !condition) return false;
+    return DecisionReferencesIn(condition).References.some((r) => failedDecisionIDs.has(r.NodeId));
+}
+
+/**
+ * An exclusive fork's edges with each path that reads a FAILED decision counted as not taken, in
+ * every fork that has a satisfied path — so the satisfied one wins whatever its rank.
+ *
+ * A failed decision call is a failed step, and a flow's failure handling is its outgoing paths: the
+ * recovery path its author drew (`stepResult.Success === false`, or a fallback) is how the flow goes
+ * on. Holding the fork because a higher-ranked path reads the answer that never came would stop it
+ * from ever being taken. The paths are not evaluated — a negated read of a missing answer would come
+ * out true — only set aside.
+ *
+ * A fork with NO satisfied path is left alone: every path is unevaluable, the fork holds, and a
+ * Retry of the failed Decision step can still route it. An answer below `minConfidence` is never set
+ * aside; it holds, because its path might have been the one to take.
+ */
+export function PassOverFailedDecisionPaths<E extends { id: string; exclusiveGroup: string; conditionOutcome: EdgeConditionOutcome }>(
+    edges: readonly E[],
+    readsFailedDecision: (edge: E) => boolean,
+): E[] {
+    const recoverable = new Set(edges.filter((e) => e.conditionOutcome === 'satisfied').map((e) => e.exclusiveGroup));
+    return edges.map((e) =>
+        e.conditionOutcome === 'unevaluable' && recoverable.has(e.exclusiveGroup) && readsFailedDecision(e)
+            ? { ...e, conditionOutcome: 'unsatisfied' }
+            : e,
+    );
 }
 
 /** A completed step's answers, as it wrote them into its output. */
@@ -246,39 +261,6 @@ function answersIn(outputPayload: string | null, nodeId: string): Record<string,
     const decisions = isRecord(output) ? output[DECISIONS_PAYLOAD_KEY] : undefined;
     const mine = isRecord(decisions) && Object.prototype.hasOwnProperty.call(decisions, nodeId) ? decisions[nodeId] : undefined;
     return isRecord(mine) ? mine : {};
-}
-
-/** Why a completed step's answer to one question may not be acted on, or `null` when it may. */
-function unusableAnswerReason(
-    stepName: string,
-    key: string,
-    answer: unknown,
-    question: TaskGraphDecisionQuestion,
-): string | null {
-    if (!isDecisionAnswer(answer)) return `the decision "${stepName}" completed without an answer to "${key}"`;
-    const min = question.minConfidence;
-    if (typeof min !== 'number') return null;
-    const confidence = DecisionAnswerConfidence(answer);
-    if (confidence === undefined) {
-        return `the decision "${stepName}" answered "${key}" with no confidence to hold to its minConfidence of ${min}`;
-    }
-    return confidence < min
-        ? `the decision "${stepName}" answered "${key}" with confidence ${Number(confidence.toFixed(3))}, below its minConfidence of ${min}`
-        : null;
-}
-
-/** Why a step that is not Complete has no usable answers. */
-function notAnsweredReason(row: DecisionTaskRow): string {
-    if (row.Status === 'Failed') {
-        return `the decision "${row.Name}" failed${row.ErrorMessage ? `: ${row.ErrorMessage}` : ''}`;
-    }
-    return `the decision "${row.Name}" has not answered (it is ${row.Status})`;
-}
-
-/** An answer in the shape a condition reads: a Likelihood's probability, or a Choice's or Score's value. */
-function isDecisionAnswer(value: unknown): value is TaskGraphDecisionAnswer {
-    if (!isRecord(value)) return false;
-    return typeof value.probability === 'number' || typeof value.value === 'string' || typeof value.value === 'number';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

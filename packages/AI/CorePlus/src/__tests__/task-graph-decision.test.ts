@@ -617,12 +617,15 @@ describe('ProjectTaskRowsToSpec — a Decision row', () => {
 });
 
 describe('Save as Workflow — a Decision node', () => {
-    it('is reported as a loss rather than emitted as a step of the wrong kind', () => {
+    it('becomes a Decision step keyed by its tempId, not a loss', () => {
         const result = ConvertTaskGraphToAgentSpec(
             spec([agentStep('first', []), TaskNode.Decision(base('triage', ['first'], 'Triage the ticket'), TRIAGE)]),
             { AgentID: 'agent-1', ResolveAgentID: () => 'agent-2', NextID: (() => { let n = 0; return () => `id-${++n}`; })() },
         );
-        expect(result.Spec?.Steps).toHaveLength(1);
-        expect(result.Losses.find((l) => 'TempId' in l && l.TempId === 'triage')?.Detail).toMatch(/Decision step/);
+        expect(result.Spec?.Steps).toHaveLength(2);
+        expect(result.Losses).toEqual([]);
+        const step = result.Spec?.Steps?.find((s) => s.StepType === 'Decision');
+        expect(step?.Name).toBe('Triage the ticket');
+        expect(JSON.parse(step?.Configuration ?? '{}')).toEqual({ key: 'triage', questions: TRIAGE.questions });
     });
 });
