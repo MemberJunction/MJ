@@ -2,9 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { Component, Input } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
-import { renderComponentFixture, renderTemplate, query, queryAll, text, capture } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, renderTemplate, query, queryAll, text, capture, overlayQuery, clearOverlayContainers } from '@memberjunction/ng-test-utils';
 import { MJDialogComponent, MJDialogActionsComponent, MJDialogTitlebarComponent } from './dialog.component';
 import { MJDialogService } from './dialog.service';
+import { MJFilterPopoverComponent } from '../filter-popover/filter-popover.component';
 
 /**
  * DOM coverage for the mj-dialog family (dialog.component.ts) — the native-<dialog>-based modal that
@@ -146,6 +147,36 @@ class InnerOnlyStopHostComponent {}
   `,
 })
 class SiblingDialogHostComponent {}
+
+/** A dialog that does not trap focus is open over one that does. The page's Tab stays on the page. */
+@Component({
+  standalone: true,
+  imports: [MJDialogComponent],
+  template: `
+    <button type="button" class="page">Page</button>
+    <mj-dialog [Visible]="true" [AutoFocus]="false" Title="Under">
+      <button type="button" class="under-btn">Under</button>
+    </mj-dialog>
+    <mj-dialog [Visible]="true" [AutoFocus]="false" [TrapFocus]="false" Title="Over">
+      <button type="button" class="over-btn">Over</button>
+    </mj-dialog>
+  `,
+})
+class NonTrappingOverHostComponent {}
+
+/** The filter popover panel is an overlay and does not handle Tab. The dialog must leave that Tab there. */
+@Component({
+  standalone: true,
+  imports: [MJDialogComponent, MJFilterPopoverComponent],
+  template: `
+    <mj-dialog [Visible]="true" [AutoFocus]="false" Title="Form">
+      <mj-filter-popover Label="Filters">
+        <button type="button" class="in-panel">In panel</button>
+      </mj-filter-popover>
+    </mj-dialog>
+  `,
+})
+class FilterPopoverInDialogHostComponent {}
 
 /** A child can turn visibility back on. That child is a stop; a hidden parent is not enough to skip it. */
 @Component({
@@ -531,6 +562,38 @@ describe('MJDialogComponent topmost focus (DOM)', () => {
     expect(document.activeElement).toBe(overClose);
     expect(document.activeElement).not.toBe(underClose);
     outside.remove();
+  });
+
+  it('does not pull a Tab under a dialog that does not trap focus', async () => {
+    const f = renderComponentFixture(NonTrappingOverHostComponent, { imports: [NonTrappingOverHostComponent] });
+    await flushMacrotask();
+    const page = query(f, '.page') as HTMLButtonElement;
+    const underClose = f.nativeElement.querySelector('mj-dialog .mj-dialog-close') as HTMLButtonElement;
+    page.focus();
+
+    const tab = press(page, 'Tab');
+
+    expect(tab.defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(page);
+    expect(document.activeElement).not.toBe(underClose);
+  });
+
+  it('leaves Tab inside a filter popover panel that does not handle Tab', () => {
+    const f = renderComponentFixture(FilterPopoverInDialogHostComponent, { imports: [FilterPopoverInDialogHostComponent] });
+    const closeBtn = query(f, '.mj-dialog-close') as HTMLButtonElement;
+    (query(f, '.mj-filter-popover-trigger') as HTMLButtonElement).click();
+    f.detectChanges();
+    const inPanel = overlayQuery('.in-panel') as HTMLButtonElement;
+    expect(inPanel).not.toBeNull();
+    inPanel.focus();
+
+    const tab = press(inPanel, 'Tab');
+    f.detectChanges();
+
+    expect(tab.defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(inPanel);
+    expect(document.activeElement).not.toBe(closeBtn);
+    clearOverlayContainers();
   });
 });
 

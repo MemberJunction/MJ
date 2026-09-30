@@ -377,6 +377,35 @@ class DropdownInDialogHostComponent {
   Data = DATA;
 }
 
+/** The dropdown is the dialog's last stop. Tab in its filter must wrap to the first stop. */
+@Component({
+  standalone: true,
+  imports: [MJDialogComponent, MJDropdownComponent],
+  template: `
+    <mj-dialog [Visible]="true" [AutoFocus]="false" Title="Form">
+      <mj-dropdown [Filterable]="true" [Data]="Data" TextField="text" ValueField="value" [ValuePrimitive]="true" AriaLabel="Role"></mj-dropdown>
+    </mj-dialog>
+  `,
+})
+class DropdownLastInDialogHostComponent {
+  Data = DATA;
+}
+
+/** Closeable is off, so the dropdown is the first stop. Shift+Tab in its filter must wrap to the last. */
+@Component({
+  standalone: true,
+  imports: [MJDialogComponent, MJDropdownComponent],
+  template: `
+    <mj-dialog [Visible]="true" [AutoFocus]="false" [Closeable]="false" Title="Form">
+      <mj-dropdown [Filterable]="true" [Data]="Data" TextField="text" ValueField="value" [ValuePrimitive]="true" AriaLabel="Role"></mj-dropdown>
+      <button type="button" class="last">Last</button>
+    </mj-dialog>
+  `,
+})
+class DropdownFirstInDialogHostComponent {
+  Data = DATA;
+}
+
 describe('MJDropdownComponent inside mj-dialog (DOM)', () => {
   const press = (el: HTMLElement, key: string, init: KeyboardEventInit = {}): KeyboardEvent => {
     const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init });
@@ -419,5 +448,43 @@ describe('MJDropdownComponent inside mj-dialog (DOM)', () => {
     expect(document.activeElement).toBe(field);
     expect(document.activeElement).not.toBe(query(f, '.after'));
     expect(overlayQuery('.mj-dropdown-panel')).toBeNull();
+  });
+
+  it('Tab in the filter of a dropdown that is the last stop wraps to the dialog close', async () => {
+    const f = renderComponentFixture(DropdownLastInDialogHostComponent, { imports: [DropdownLastInDialogHostComponent] });
+    const closeBtn = query(f, '.mj-dialog-close') as HTMLButtonElement;
+    const field = query(f, '.mj-dropdown') as HTMLElement;
+    field.click();
+    f.detectChanges();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const filter = overlayQuery('.mj-dropdown-filter') as HTMLInputElement;
+    filter.focus();
+
+    const tab = press(filter, 'Tab');
+    f.detectChanges();
+
+    expect(tab.defaultPrevented).toBe(true);
+    expect(overlayQuery('.mj-dropdown-panel')).toBeNull();
+    expect(document.activeElement).toBe(closeBtn);
+    expect(document.activeElement).not.toBe(field);
+  });
+
+  it('Shift+Tab in the filter of a dropdown that is the first stop wraps to the last stop', async () => {
+    const f = renderComponentFixture(DropdownFirstInDialogHostComponent, { imports: [DropdownFirstInDialogHostComponent] });
+    const field = query(f, '.mj-dropdown') as HTMLElement;
+    const last = query(f, '.last') as HTMLButtonElement;
+    field.click();
+    f.detectChanges();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const filter = overlayQuery('.mj-dropdown-filter') as HTMLInputElement;
+    filter.focus();
+
+    const tab = press(filter, 'Tab', { shiftKey: true });
+    f.detectChanges();
+
+    expect(tab.defaultPrevented).toBe(true);
+    expect(overlayQuery('.mj-dropdown-panel')).toBeNull();
+    expect(document.activeElement).toBe(last);
+    expect(document.activeElement).not.toBe(field);
   });
 });

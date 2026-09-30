@@ -309,4 +309,22 @@ describe('MJDatepickerComponent inside mj-dialog (DOM)', () => {
     expect(document.activeElement).not.toBe(query(f, '.after'));
     expect(overlayQuery('.mj-calendar')).toBeNull();
   });
+
+  it('Tab on the date field while the calendar is open closes the calendar and stays on the field', () => {
+    const f = renderComponentFixture(DatepickerInDialogHostComponent, { imports: [DatepickerInDialogHostComponent] });
+    const closeBtn = query(f, '.mj-dialog-close') as HTMLButtonElement;
+    const field = query(f, '.mj-datepicker-input') as HTMLInputElement;
+    (query(f, '.mj-datepicker-toggle') as HTMLButtonElement).click();
+    f.detectChanges();
+    expect(overlayQuery('.mj-calendar')).not.toBeNull();
+    field.focus();
+
+    const tab = press(field, 'Tab');
+    f.detectChanges();
+
+    expect(tab.defaultPrevented).toBe(false);
+    expect(overlayQuery('.mj-calendar')).toBeNull();
+    expect(document.activeElement).toBe(field);
+    expect(document.activeElement).not.toBe(closeBtn);
+  });
 });
