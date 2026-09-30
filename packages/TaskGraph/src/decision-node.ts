@@ -104,17 +104,71 @@ export function ResolveDecisionState(
 }
 
 /**
+ * What a Decision step's output carries in place of an answer a condition may not act on: why it is
+ * held, and never the answer itself.
+ */
+export type HeldDecisionAnswer = {
+    /** Why the answer is held, in the words a hold reports: below its `minConfidence`, or missing. */
+    held: string;
+};
+
+/** One question's entry in a Decision step's output: the answer, or why it is held. */
+export type DecisionStepOutputAnswer = TaskGraphDecisionAnswer | HeldDecisionAnswer;
+
+/**
+ * A Decision step's answers as its output carries them: each usable answer as given, and for every
+ * other question the reason it is held.
+ *
+ * **An answer below its question's `minConfidence` never leaves the step.** The output is what later
+ * steps read, and a condition can reach it too (`payload.decisions…`) — the validator refuses that,
+ * but a below-threshold answer that is simply not there cannot be acted on by anything that slips
+ * past it, or by a later step's prompt. The edges that route on the decision read the graph's own
+ * answers through `ResolveGraphDecisions`, which reads the reasons back from here and holds.
+ */
+export function DecisionStepOutputAnswers(
+    stepName: string,
+    questions: Readonly<Record<string, TaskGraphDecisionQuestion>>,
+    answers: Readonly<Record<string, TaskGraphDecisionAnswer>>,
+): Record<string, DecisionStepOutputAnswer> {
+    const output: Record<string, DecisionStepOutputAnswer> = {};
+    for (const [key, question] of Object.entries(questions)) {
+        const answer = Object.prototype.hasOwnProperty.call(answers, key) ? answers[key] : undefined;
+        // `unusableAnswerReason` reports a missing answer too, so the fallback is for the compiler.
+        const reason = unusableAnswerReason(stepName, key, answer, question);
+        output[key] = answer && !reason ? answer : { held: reason ?? `the decision "${stepName}" completed without an answer to "${key}"` };
+    }
+    return output;
+}
+
+/**
+ * Why a Decision step cannot add its answers to this payload, or `null` when it can.
+ *
+ * The answers go under `decisions`, merged into whatever object is already there. Anything else
+ * there — a list, a string — is business data the merge would destroy, so the step is failed before
+ * its call rather than overwrite it.
+ */
+export function DecisionsPayloadConflict(payload: Readonly<Record<string, unknown>>): string | null {
+    const existing = payload[DECISIONS_PAYLOAD_KEY];
+    if (existing === undefined || existing === null || isRecord(existing)) return null;
+    const kind = Array.isArray(existing) ? 'a list' : `a ${typeof existing}`;
+    return `its payload already has a "${DECISIONS_PAYLOAD_KEY}" field holding ${kind}, which its answers would replace; `
+        + `rename that field, since a Decision step writes its answers under "${DECISIONS_PAYLOAD_KEY}"`;
+}
+
+/**
  * The payload a Decision step hands downstream: its input, with its answers added under
  * `decisions.<step>`.
  *
  * Earlier steps' answers are kept, so a later step's prompt sees every decision made on its way.
  * Conditions do not read this copy — they read the graph's own, from `ResolveGraphDecisions` — so a
- * downstream step that rewrites the payload cannot change what an edge decides.
+ * downstream step that rewrites the payload cannot change what an edge decides. Pass the answers
+ * through {@link DecisionStepOutputAnswers}, so that one below its threshold is not among them, and
+ * check {@link DecisionsPayloadConflict} first: a `decisions` field that is not an object is replaced.
  */
 export function BuildDecisionStepOutput(
     payload: Record<string, unknown>,
     nodeId: string,
-    answers: Readonly<Record<string, TaskGraphDecisionAnswer>>,
+    answers: Readonly<Record<string, DecisionStepOutputAnswer>>,
 ): Record<string, unknown> {
     const existing = payload[DECISIONS_PAYLOAD_KEY];
     const earlier = isRecord(existing) ? existing : {};
@@ -152,8 +206,10 @@ export function ResolveGraphDecisions(rows: readonly DecisionTaskRow[]): GraphDe
 
         const given = row.Status === 'Complete' ? answersIn(row.OutputPayload, config.nodeId) : {};
         for (const [key, question] of Object.entries(config.questions)) {
+            // The step's output already says why it held an answer; the threshold is still applied
+            // to whatever answer is there, so an output written any other way cannot bypass it.
             const reason = row.Status === 'Complete'
-                ? unusableAnswerReason(row.Name, key, given[key], question)
+                ? heldReason(given[key]) ?? unusableAnswerReason(row.Name, key, given[key], question)
                 : notAnsweredReason(row);
             if (reason) {
                 (unresolved[config.nodeId] ??= {})[key] = reason;
@@ -163,6 +219,11 @@ export function ResolveGraphDecisions(rows: readonly DecisionTaskRow[]): GraphDe
         }
     }
     return { Answers: answers, Unresolved: unresolved };
+}
+
+/** The reason a step's output gives for holding an answer, or `null` when it holds none there. */
+function heldReason(entry: unknown): string | null {
+    return isRecord(entry) && typeof entry.held === 'string' && entry.held ? entry.held : null;
 }
 
 /** A completed step's answers, as it wrote them into its output. */
