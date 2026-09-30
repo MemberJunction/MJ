@@ -1119,6 +1119,93 @@ describe('retrying a held Decision in a running graph re-decides nothing', () =>
     });
 });
 
+describe('retrying a held Decision in a compiled flow re-decides nothing', () => {
+    // The same shape as above, drawn as a Flow agent in parallel mode and compiled, as a dispatched
+    // flow is: Triage forks to Billing or Refund, Escalate is gated on urgent, and Billing also waits
+    // on Escalate. A compiled flow's Decision step is released by the same Retry.
+    const TRIAGE_ID = 'eeeeeeee-0000-4000-8000-000000000001';
+    const BILLING_ID = 'eeeeeeee-0000-4000-8000-000000000002';
+    const REFUND_ID = 'eeeeeeee-0000-4000-8000-000000000003';
+    const ESCALATE_ID = 'eeeeeeee-0000-4000-8000-000000000004';
+    const step = (ID: string, Name: string, over: Partial<FlowCompilerStep> = {}): FlowCompilerStep => ({
+        ID, Name, StepType: 'Sub-Agent', StartingStep: false, Status: 'Active', SubAgentID: `agent-${Name}`, ...over,
+    });
+    const flowPath = (ID: string, from: string, to: string, condition: string | null): FlowCompilerPath => ({
+        ID, OriginStepID: from, DestinationStepID: to, Condition: condition, Priority: 0,
+    });
+
+    /** The compiled graph as the dispatcher would hold it: one row per node and one edge per dependency. */
+    function compiledGraph(): SupportGraph {
+        const compiled = CompileFlowToTaskGraph(
+            [
+                step(TRIAGE_ID, 'Triage the ticket', {
+                    StepType: 'Decision', StartingStep: true, SubAgentID: null,
+                    Configuration: JSON.stringify({ key: 'triage', state: TRIAGE.state, questions: TRIAGE.questions }),
+                }),
+                step(BILLING_ID, 'Billing'),
+                step(REFUND_ID, 'Refund'),
+                step(ESCALATE_ID, 'Escalate'),
+            ],
+            [
+                flowPath('p-billing', TRIAGE_ID, BILLING_ID, "decisions.triage.intent.value === 'billing'"),
+                flowPath('p-refund', TRIAGE_ID, REFUND_ID, "decisions.triage.intent.value === 'refund'"),
+                flowPath('p-escalate', TRIAGE_ID, ESCALATE_ID, 'decisions.triage.urgent.probability >= 0.5'),
+                flowPath('p-join', ESCALATE_ID, BILLING_ID, null),
+            ],
+            {
+                WorkflowName: 'Support triage', TraversalMode: 'parallel',
+                ResolveAgentName: (id) => id.replace('agent-', ''), ResolveActionName: () => null, ResolvePromptName: () => null,
+            },
+        );
+        expect(compiled.Errors).toEqual([]);
+        const spec = compiled.Spec!;
+        expect(ValidateTaskGraphSpec(spec).Errors).toEqual([]);
+
+        const rows = new Map<string, GraphRow>(spec.tasks.map((node): [string, GraphRow] => [
+            node.tempId,
+            node.kind === 'Decision'
+                ? {
+                    ...workRow(node.tempId, node.name), StepType: 'Decision', AgentID: null, PromptID: DECISION_PROMPT_ID,
+                    Configuration: JSON.stringify(BuildStepConfiguration(node)),
+                }
+                : workRow(node.tempId, node.name),
+        ]));
+        const edges = spec.tasks.flatMap((node) => (node.dependsOn ?? []).map(NormalizeDependency).map((d) => ({
+            ...graphEdge(`${d.tempId}->${node.tempId}`, node.tempId, d.tempId, d.condition ?? null, d.exclusiveGroup ?? null),
+            DependencyType: d.dependencyType ?? 'Prerequisite',
+        })));
+        const provider: GraphProvider = {
+            GetEntityObject: async () => ({ InputPayload: null, AgentRunID: null, Load: async () => true }),
+            RunView: async (params: RunViewParams) => ({
+                Success: true,
+                Results: params.EntityName === 'MJ: Task Dependencies' ? edges : [...rows.values()],
+            }),
+        };
+        return { rows, provider, statusOf: (id: string) => rows.get(id)?.Status, triage: () => rows.get(TRIAGE_ID)! };
+    }
+
+    it('keeps the fork on its first answer when the retry would flip it', async () => {
+        const graph = compiledGraph();
+        const runner = answeringRunner([
+            { intent: BILLING_CONFIDENT.intent, urgent: { probability: 0.6 } },
+            { intent: { value: 'refund', confidence: 0.9, probabilities: { billing: 0.05, refund: 0.9, other: 0.05 } }, urgent: { probability: 0.05 } },
+        ]);
+        const dispatcher = dispatcherWith(runner);
+        const input = { ticket: 'I was charged twice' };
+        const statuses = () => [graph.statusOf(BILLING_ID), graph.statusOf(REFUND_ID), graph.statusOf(ESCALATE_ID)];
+
+        await runUntilSettled(dispatcher, graph, input);
+        expect(statuses()).toEqual(['Pending', 'Skipped', 'Pending']);
+
+        expect(RetryRefusal(graph.triage())).toBeNull();
+        PrepareTaskForRetry(graph.triage());
+        await runUntilSettled(dispatcher, graph, input);
+
+        expect(statuses()).toEqual(['Complete', 'Skipped', 'Skipped']);
+        expect(Object.keys(runner.Calls[1].Questions)).toEqual(['urgent']);
+    });
+});
+
 describe('a held exclusive fork says why', () => {
     const LOW_INTENT = { ...BILLING_CONFIDENT, intent: { value: 'billing', confidence: 0.55 } };
 
