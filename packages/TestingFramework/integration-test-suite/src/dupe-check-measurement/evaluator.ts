@@ -5,8 +5,9 @@
  * - Retrieval miss accounting
  * - Pairwise precision, recall, F1 with clustered bootstrap confidence intervals
  * - Vector score threshold sweep (0.60 to 0.95)
- * - Decision probability calibration (ROC AUC, Brier, ECE, Platt A/B)
- * - Band sweep (0.10 to 0.90) for raw and calibrated probabilities
+ * - Decision probability calibration (ROC AUC, Brier, ECE, Platt A/B), scored out of fold
+ * - Band sweep (0.10 to 0.90) for raw and out-of-fold calibrated probabilities
+ * - Failed calls and missing answers per arm
  * - Latency p50/p95 against the 1500ms budget
  * - Cost per 1,000 checks
  * - Repeatability across repetitions
@@ -18,22 +19,24 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-    ApplyPlatt,
     AssertOutputOutsideRepo,
     BrierScore,
     CalibrationBins,
     ConfidenceInterval,
     CreateSeededRandom,
+    DECISION_EVAL_CALIBRATION_FOLDS,
     DECISION_EVAL_ECE_BINS,
     DECISION_EVAL_SEED,
     FitPlatt,
     LabelledProbability,
     OutOfFoldPlatt,
-    PlattParameters,
     Quantile,
     RocAuc,
 } from '@memberjunction/testing-engine';
+import { FindRecordText } from './record-text';
 import type {
+    ArmCallResult,
+    ArmCallSummary,
     ArmCostSummary,
     ArmPerformanceMetrics,
     CandidatePairObservation,
@@ -59,14 +62,6 @@ export const VECTOR_SWEEP_THRESHOLDS = [0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90
 
 /** Default thresholds for decision band sweep. */
 export const BAND_SWEEP_THRESHOLDS = [0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90] as const;
-
-/** Normalizes a UUID string for case-insensitive and hyphen-insensitive comparison. */
-export function NormalizeId(id: string | null | undefined): string {
-    if (!id) {
-        return '';
-    }
-    return id.toLowerCase().replace(/[^a-f0-9]/g, '');
-}
 
 /**
  * Computes retrieval metrics across all duplicate records.
@@ -118,6 +113,54 @@ export function ComputeRetrievalMetrics(checks: readonly RecordCheckObservation[
 }
 
 /**
+ * Whether production's entry check flags a candidate at a decision band. A failed decision flags
+ * nothing. A successful one flags each candidate it gave no answer for (a missing probability fails
+ * toward inclusion, as `DecisionReasoningProvider.IsPlausible(null)` does) and each answered one at
+ * or above the band.
+ *
+ * @param check the check the candidate belongs to; its DecisionResult says whether the call succeeded
+ * @param probability the candidate's probability, or null when the decision gave none
+ * @param threshold the band
+ */
+export function DecisionFlagsAt(check: RecordCheckObservation, probability: number | null, threshold: number): boolean {
+    if (!check.DecisionResult?.Success) {
+        return false;
+    }
+    return probability === null || probability >= threshold;
+}
+
+/**
+ * Whether an arm flags one candidate. `decisionThreshold`, when given, bands the `decision` arm's
+ * raw DecisionProbability instead of its DecisionFlagged; the `decision · production` arm ignores it.
+ */
+function armFlags(
+    check: RecordCheckObservation,
+    candidate: CandidatePairObservation,
+    arm: string,
+    decisionThreshold?: number
+): boolean {
+    switch (arm) {
+        case 'threshold':
+            return candidate.ThresholdFlagged;
+        case 'decision':
+            return decisionThreshold != null
+                ? DecisionFlagsAt(check, candidate.DecisionProbability, decisionThreshold)
+                : candidate.DecisionFlagged;
+        case 'decision · production':
+            // Production's rule, whatever decisionThreshold says: the vector threshold, then the
+            // provider's band on the calibrated probability (DecisionFlagged). DecisionProbability
+            // is raw, so banding it here would not be production.
+            return candidate.PassedThreshold && candidate.DecisionFlagged;
+        case 'prompt':
+            return candidate.PromptFlagged;
+        case 'prompt · production':
+            return candidate.PassedThreshold && candidate.PromptFlagged;
+        default:
+            return false;
+    }
+}
+
+/**
  * Evaluates pairwise performance for an arm on a subset of record checks.
  * Includes retrieval misses as false negatives: total actual positive pairs equals
  * the total number of duplicate records evaluated.
@@ -146,36 +189,16 @@ export function EvaluateArmConfusion(
         }
 
         let recordHasFlag = false;
-
         for (const candidate of check.Candidates) {
-            let flagged = false;
-            if (arm === 'threshold') {
-                flagged = candidate.ThresholdFlagged;
-            } else if (arm === 'decision') {
-                if (decisionThreshold != null) {
-                    flagged = (candidate.DecisionProbability ?? 0) >= decisionThreshold;
-                } else {
-                    flagged = candidate.DecisionFlagged;
-                }
-            } else if (arm === 'decision · production') {
-                // Production's rule, whatever decisionThreshold says: the vector threshold, then the
-                // provider's band on the calibrated probability (DecisionFlagged). DecisionProbability
-                // is raw, so banding it here would not be production.
-                flagged = candidate.PassedThreshold && candidate.DecisionFlagged;
-            } else if (arm === 'prompt') {
-                flagged = candidate.PromptFlagged;
-            } else if (arm === 'prompt · production') {
-                flagged = candidate.PassedThreshold && candidate.PromptFlagged;
+            if (!armFlags(check, candidate, arm, decisionThreshold)) {
+                continue;
             }
-
-            if (flagged) {
-                totalFlaggedPairs++;
-                recordHasFlag = true;
-                if (candidate.IsDuplicatePair) {
-                    tp++;
-                } else {
-                    fp++;
-                }
+            totalFlaggedPairs++;
+            recordHasFlag = true;
+            if (candidate.IsDuplicatePair) {
+                tp++;
+            } else {
+                fp++;
             }
         }
 
@@ -199,9 +222,100 @@ export function EvaluateArmConfusion(
     };
 }
 
+/** The model call behind an arm, for one check: the decision's, the prompt's, or none (the threshold arm). */
+function armCallOf(check: RecordCheckObservation, arm: string): ArmCallResult | undefined {
+    if (arm === 'decision' || arm === 'decision · production') {
+        return check.DecisionResult;
+    }
+    if (arm === 'prompt' || arm === 'prompt · production') {
+        return check.PromptResult;
+    }
+    return undefined;
+}
+
 /**
- * Computes precision, recall, and F1 with clustered bootstrap confidence intervals.
- * Resampling is clustered by corpus record ID.
+ * How often an arm's model call failed, or left candidates unanswered, over rep 1. Null for the
+ * threshold arm, which makes no call.
+ */
+export function ComputeArmCallSummary(
+    checks: readonly RecordCheckObservation[],
+    arm: string
+): ArmCallSummary | null {
+    if (arm === 'threshold') {
+        return null;
+    }
+    let calls = 0;
+    let failedCalls = 0;
+    let candidatesAsked = 0;
+    let missingAnswers = 0;
+    for (const check of checks.filter(c => c.Rep === 1)) {
+        const call = armCallOf(check, arm);
+        if (!call) {
+            continue;
+        }
+        calls++;
+        if (!call.Success) {
+            failedCalls++;
+            continue;
+        }
+        candidatesAsked += check.Candidates.length;
+        missingAnswers += call.MissingAnswers;
+    }
+    return {
+        Calls: calls,
+        FailedCalls: failedCalls,
+        FailedCallRate: calls > 0 ? failedCalls / calls : 0,
+        CandidatesAsked: candidatesAsked,
+        MissingAnswers: missingAnswers,
+        MissingAnswerRate: candidatesAsked > 0 ? missingAnswers / candidatesAsked : 0,
+    };
+}
+
+/** Precision, recall and F1 from a confusion count. */
+function precisionRecallF1(confusion: ReturnType<typeof EvaluateArmConfusion>): { P: number; R: number; F1: number } {
+    const p = confusion.TP + confusion.FP > 0 ? confusion.TP / (confusion.TP + confusion.FP) : 0;
+    const r = confusion.TotalDuplicates > 0 ? confusion.TP / confusion.TotalDuplicates : 0;
+    return { P: p, R: r, F1: p + r > 0 ? (2 * p * r) / (p + r) : 0 };
+}
+
+/** The 95% interval of a bootstrap distribution, or null when it has no values. */
+function percentileInterval(values: readonly number[]): ConfidenceInterval | null {
+    const lower = Quantile(values, 0.025);
+    const upper = Quantile(values, 0.975);
+    return lower !== null && upper !== null ? { Lower: lower, Upper: upper } : null;
+}
+
+/** Clustered bootstrap intervals for precision, recall and F1: records are resampled whole. */
+function bootstrapArmIntervals(
+    rep1Checks: readonly RecordCheckObservation[],
+    arm: string,
+    decisionThreshold: number | undefined,
+    resamples: number,
+    seed: number
+): { Precision: ConfidenceInterval | null; Recall: ConfidenceInterval | null; F1: ConfidenceInterval | null } {
+    if (rep1Checks.length === 0) {
+        return { Precision: null, Recall: null, F1: null };
+    }
+    const random = CreateSeededRandom(seed);
+    const precisions: number[] = [];
+    const recalls: number[] = [];
+    const f1s: number[] = [];
+    for (let r = 0; r < resamples; r++) {
+        const sample = Array.from(
+            { length: rep1Checks.length },
+            () => rep1Checks[Math.floor(random() * rep1Checks.length)]
+        );
+        const scores = precisionRecallF1(EvaluateArmConfusion(sample, arm, decisionThreshold));
+        precisions.push(scores.P);
+        recalls.push(scores.R);
+        f1s.push(scores.F1);
+    }
+    return { Precision: percentileInterval(precisions), Recall: percentileInterval(recalls), F1: percentileInterval(f1s) };
+}
+
+/**
+ * Computes precision, recall, and F1 with clustered bootstrap confidence intervals, and how the
+ * arm's model calls went. Resampling is clustered by corpus record ID.
  */
 export function ComputeArmPerformance(
     checks: readonly RecordCheckObservation[],
@@ -214,79 +328,26 @@ export function ComputeArmPerformance(
 ): ArmPerformanceMetrics {
     const rep1Checks = checks.filter(c => c.Rep === 1);
     const confusion = EvaluateArmConfusion(rep1Checks, arm, options?.DecisionThreshold);
-
-    const precision = confusion.TP + confusion.FP > 0 ? confusion.TP / (confusion.TP + confusion.FP) : 0;
-    const recall = confusion.TotalDuplicates > 0 ? confusion.TP / confusion.TotalDuplicates : 0;
-    const f1 = precision + recall > 0 ? (2 * precision * recall) / (precision + recall) : 0;
-
-    const falseFlagRateOnNew = confusion.TotalNew > 0 ? confusion.NewFlaggedCount / confusion.TotalNew : 0;
-    const flagsPerCheck = rep1Checks.length > 0 ? confusion.TotalFlaggedPairs / rep1Checks.length : 0;
-
-    // Clustered bootstrap over records
-    const resamples = options?.BootstrapResamples ?? DEFAULT_BOOTSTRAP_RESAMPLES;
-    const seed = options?.Seed ?? DECISION_EVAL_SEED;
-    const random = CreateSeededRandom(seed);
-
-    let precisionCI: ConfidenceInterval | null = null;
-    let recallCI: ConfidenceInterval | null = null;
-    let f1CI: ConfidenceInterval | null = null;
-
-    if (rep1Checks.length > 0) {
-        const precisions: number[] = [];
-        const recalls: number[] = [];
-        const f1s: number[] = [];
-
-        for (let r = 0; r < resamples; r++) {
-            const sample = Array.from(
-                { length: rep1Checks.length },
-                () => rep1Checks[Math.floor(random() * rep1Checks.length)]
-            );
-            const sampleConfusion = EvaluateArmConfusion(sample, arm, options?.DecisionThreshold);
-
-            const sampleP =
-                sampleConfusion.TP + sampleConfusion.FP > 0
-                    ? sampleConfusion.TP / (sampleConfusion.TP + sampleConfusion.FP)
-                    : 0;
-            const sampleR =
-                sampleConfusion.TotalDuplicates > 0
-                    ? sampleConfusion.TP / sampleConfusion.TotalDuplicates
-                    : 0;
-            const sampleF1 = sampleP + sampleR > 0 ? (2 * sampleP * sampleR) / (sampleP + sampleR) : 0;
-
-            precisions.push(sampleP);
-            recalls.push(sampleR);
-            f1s.push(sampleF1);
-        }
-
-        const pLow = Quantile(precisions, 0.025);
-        const pHigh = Quantile(precisions, 0.975);
-        if (pLow !== null && pHigh !== null) {
-            precisionCI = { Lower: pLow, Upper: pHigh };
-        }
-
-        const rLow = Quantile(recalls, 0.025);
-        const rHigh = Quantile(recalls, 0.975);
-        if (rLow !== null && rHigh !== null) {
-            recallCI = { Lower: rLow, Upper: rHigh };
-        }
-
-        const fLow = Quantile(f1s, 0.025);
-        const fHigh = Quantile(f1s, 0.975);
-        if (fLow !== null && fHigh !== null) {
-            f1CI = { Lower: fLow, Upper: fHigh };
-        }
-    }
+    const scores = precisionRecallF1(confusion);
+    const intervals = bootstrapArmIntervals(
+        rep1Checks,
+        arm,
+        options?.DecisionThreshold,
+        options?.BootstrapResamples ?? DEFAULT_BOOTSTRAP_RESAMPLES,
+        options?.Seed ?? DECISION_EVAL_SEED
+    );
 
     return {
         ArmName: arm,
-        Precision: precision,
-        PrecisionCI: precisionCI,
-        Recall: recall,
-        RecallCI: recallCI,
-        F1: f1,
-        F1CI: f1CI,
-        FalseFlagRateOnNew: falseFlagRateOnNew,
-        FlagsPerCheck: flagsPerCheck,
+        Precision: scores.P,
+        PrecisionCI: intervals.Precision,
+        Recall: scores.R,
+        RecallCI: intervals.Recall,
+        F1: scores.F1,
+        F1CI: intervals.F1,
+        FalseFlagRateOnNew: confusion.TotalNew > 0 ? confusion.NewFlaggedCount / confusion.TotalNew : 0,
+        FlagsPerCheck: rep1Checks.length > 0 ? confusion.TotalFlaggedPairs / rep1Checks.length : 0,
+        Calls: ComputeArmCallSummary(rep1Checks, arm),
     };
 }
 
@@ -345,203 +406,210 @@ export function ComputeThresholdSweep(
     });
 }
 
+/** One answered decision candidate from rep 1: its raw probability, and its out-of-fold calibrated one. */
+export interface ScoredDecisionCandidate {
+    Check: RecordCheckObservation;
+    Candidate: CandidatePairObservation;
+    /** The model that answered. */
+    Model: string;
+    RawProbability: number;
+    /**
+     * Calibrated by a Platt fit on the model's other folds, which never saw this candidate. Null when
+     * the model has too few answered candidates to calibrate out of fold.
+     */
+    OutOfFoldProbability: number | null;
+}
+
+/** Rep 1's answered decision candidates, grouped by the model that answered, in check order. */
+function answeredCandidatesByModel(
+    checks: readonly RecordCheckObservation[]
+): Map<string, { Check: RecordCheckObservation; Candidate: CandidatePairObservation; RawProbability: number }[]> {
+    const byModel = new Map<string, { Check: RecordCheckObservation; Candidate: CandidatePairObservation; RawProbability: number }[]>();
+    for (const check of checks.filter(c => c.Rep === 1)) {
+        const model = check.DecisionResult?.Model ?? 'Default';
+        for (const candidate of check.Candidates) {
+            if (candidate.DecisionProbability === null) {
+                continue;
+            }
+            const list = byModel.get(model) ?? [];
+            list.push({ Check: check, Candidate: candidate, RawProbability: candidate.DecisionProbability });
+            byModel.set(model, list);
+        }
+    }
+    return byModel;
+}
+
 /**
- * Computes decision probability calibration per model:
- * ROC AUC, Brier Score, ECE, and fitted Platt parameters A and B.
+ * Scores rep 1's answered decision candidates, each model on its own: the raw probability, and the
+ * probability calibrated out of fold ({@link OutOfFoldPlatt}, 5 folds, seeded), so a calibrated
+ * figure is never scored on the data its fit saw. Candidates with no answer are left out: they have
+ * nothing to calibrate.
+ */
+export function ScoreDecisionCandidates(
+    checks: readonly RecordCheckObservation[],
+    seed: number = DECISION_EVAL_SEED
+): ScoredDecisionCandidate[] {
+    const scored: ScoredDecisionCandidate[] = [];
+    for (const [model, items] of answeredCandidatesByModel(checks)) {
+        const points = items.map(i => ({ Probability: i.RawProbability, Positive: i.Candidate.IsDuplicatePair }));
+        const outOfFold = OutOfFoldPlatt(points, DECISION_EVAL_CALIBRATION_FOLDS, seed);
+        items.forEach((item, index) => {
+            scored.push({ ...item, Model: model, OutOfFoldProbability: outOfFold?.[index] ?? null });
+        });
+    }
+    return scored;
+}
+
+/** Calibration metrics for one model's scored candidates. */
+function calibrationFor(model: string, scored: readonly ScoredDecisionCandidate[]): DecisionModelCalibration {
+    const rawPoints: LabelledProbability[] = scored.map(s => ({ Probability: s.RawProbability, Positive: s.Candidate.IsDuplicatePair }));
+    const outOfFoldPoints: LabelledProbability[] = [];
+    for (const s of scored) {
+        if (s.OutOfFoldProbability !== null) {
+            outOfFoldPoints.push({ Probability: s.OutOfFoldProbability, Positive: s.Candidate.IsDuplicatePair });
+        }
+    }
+    const calibrated = outOfFoldPoints.length === scored.length && scored.length > 0;
+    // The parameters to ship are fitted on every candidate; only the out-of-fold ones are scored.
+    const shippedFit = FitPlatt(rawPoints);
+
+    return {
+        ModelName: model,
+        TotalCandidates: scored.length,
+        RawAuc: RocAuc(rawPoints),
+        CalibratedAuc: calibrated ? RocAuc(outOfFoldPoints) : null,
+        RawBrier: BrierScore(rawPoints),
+        CalibratedBrier: calibrated ? BrierScore(outOfFoldPoints) : null,
+        RawEce: CalibrationBins(rawPoints, DECISION_EVAL_ECE_BINS).ECE,
+        CalibratedEce: calibrated ? CalibrationBins(outOfFoldPoints, DECISION_EVAL_ECE_BINS).ECE : null,
+        PlattA: shippedFit.A,
+        PlattB: shippedFit.B,
+    };
+}
+
+/**
+ * Computes decision probability calibration per model: ROC AUC, Brier score and ECE, raw and
+ * calibrated out of fold, and the Platt parameters fitted on every candidate (the ones to ship).
  */
 export function ComputeDecisionCalibration(
     checks: readonly RecordCheckObservation[],
     seed: number = DECISION_EVAL_SEED
 ): DecisionModelCalibration[] {
-    const rep1Checks = checks.filter(c => c.Rep === 1);
+    const byModel = new Map<string, ScoredDecisionCandidate[]>();
+    for (const s of ScoreDecisionCandidates(checks, seed)) {
+        const list = byModel.get(s.Model) ?? [];
+        list.push(s);
+        byModel.set(s.Model, list);
+    }
+    return [...byModel].map(([model, scored]) => calibrationFor(model, scored));
+}
 
-    // Group candidate pairs by model name
-    const pairsByModel = new Map<string, { cand: CandidatePairObservation; check: RecordCheckObservation }[]>();
+/** One band's outcome over rep 1. */
+interface BandOutcome {
+    Precision: number;
+    Recall: number;
+    FalseFlagRateOnNew: number;
+    ShareCandidatesFlagged: number;
+}
 
+/**
+ * Scores one band over rep 1. Recall's denominator is every duplicate record, so a retrieval miss is
+ * a false negative; the share's is every candidate the decision was asked about.
+ */
+function scoreBand(
+    rep1Checks: readonly RecordCheckObservation[],
+    flags: (check: RecordCheckObservation, candidate: CandidatePairObservation) => boolean
+): BandOutcome {
+    let tp = 0;
+    let fp = 0;
+    let newFlagged = 0;
+    let flaggedCount = 0;
+    let asked = 0;
     for (const check of rep1Checks) {
-        const modelName = check.DecisionResult?.Model ?? 'Default';
-        for (const cand of check.Candidates) {
-            if (cand.DecisionProbability !== null) {
-                const list = pairsByModel.get(modelName) ?? [];
-                list.push({ cand, check });
-                pairsByModel.set(modelName, list);
+        if (check.DecisionResult) {
+            asked += check.Candidates.length;
+        }
+        let checkFlagged = false;
+        for (const candidate of check.Candidates) {
+            if (!flags(check, candidate)) {
+                continue;
+            }
+            flaggedCount++;
+            checkFlagged = true;
+            if (candidate.IsDuplicatePair) {
+                tp++;
+            } else {
+                fp++;
             }
         }
-    }
-
-    const results: DecisionModelCalibration[] = [];
-
-    for (const [modelName, items] of pairsByModel) {
-        if (items.length === 0) {
-            continue;
+        if (checkFlagged && check.Label.Label === 'new') {
+            newFlagged++;
         }
-
-        const rawPoints: LabelledProbability[] = items.map(i => ({
-            Probability: i.cand.DecisionProbability as number,
-            Positive: i.cand.IsDuplicatePair,
-        }));
-        const rawAuc = RocAuc(rawPoints);
-        const rawBrier = BrierScore(rawPoints);
-        const rawBins = CalibrationBins(rawPoints, DECISION_EVAL_ECE_BINS);
-        const rawEce = rawBins.ECE;
-
-        // 5-fold OOF Platt calibration
-        const oofProbs = OutOfFoldPlatt(rawPoints, 5, seed);
-        let calAuc: number | null = null;
-        let calBrier: number | null = null;
-        let calEce: number | null = null;
-
-        if (oofProbs !== null && oofProbs.length === rawPoints.length) {
-            const calPoints: LabelledProbability[] = oofProbs.map((p, idx) => ({
-                Probability: p,
-                Positive: rawPoints[idx].Positive,
-            }));
-            calAuc = RocAuc(calPoints);
-            calBrier = BrierScore(calPoints);
-            const calBins = CalibrationBins(calPoints, DECISION_EVAL_ECE_BINS);
-            calEce = calBins.ECE;
-        }
-
-        // Fit Platt parameters on all data points
-        const plattFit = FitPlatt(rawPoints);
-
-        results.push({
-            ModelName: modelName,
-            TotalCandidates: items.length,
-            RawAuc: rawAuc,
-            CalibratedAuc: calAuc,
-            RawBrier: rawBrier,
-            CalibratedBrier: calBrier,
-            RawEce: rawEce,
-            CalibratedEce: calEce,
-            PlattA: plattFit.A,
-            PlattB: plattFit.B,
-        });
     }
-
-    return results;
+    const dupeCount = rep1Checks.filter(c => c.Label.Label === 'duplicate').length;
+    const newCount = rep1Checks.filter(c => c.Label.Label === 'new').length;
+    return {
+        Precision: tp + fp > 0 ? tp / (tp + fp) : 0,
+        Recall: dupeCount > 0 ? tp / dupeCount : 0,
+        FalseFlagRateOnNew: newCount > 0 ? newFlagged / newCount : 0,
+        ShareCandidatesFlagged: asked > 0 ? flaggedCount / asked : 0,
+    };
 }
 
 /**
  * Sweeps the decision probability threshold ("Uncertain" band lower bound) from 0.10 to 0.90,
- * reporting raw and calibrated precision, recall, false-flag rate on new, and candidate share.
+ * reporting precision, recall, false-flag rate on new records and the share of candidates flagged,
+ * on raw probabilities and on out-of-fold calibrated ones (see {@link ScoreDecisionCandidates}).
+ *
+ * Both columns flag as production's entry check does: a candidate a successful decision gave no
+ * answer for is flagged at every band, and a failed decision flags nothing. A candidate whose model
+ * has too few answers to calibrate out of fold is left out of the calibrated columns.
  */
 export function ComputeDecisionBandSweep(
     checks: readonly RecordCheckObservation[],
-    plattFits: readonly DecisionModelCalibration[],
-    thresholds: readonly number[] = BAND_SWEEP_THRESHOLDS
+    thresholds: readonly number[] = BAND_SWEEP_THRESHOLDS,
+    seed: number = DECISION_EVAL_SEED
 ): DecisionBandSweepRow[] {
     const rep1Checks = checks.filter(c => c.Rep === 1);
-    const dupeCount = rep1Checks.filter(c => c.Label.Label === 'duplicate').length;
-    const newCount = rep1Checks.filter(c => c.Label.Label === 'new').length;
-
-    const plattMap = new Map<string, Pick<PlattParameters, 'A' | 'B'>>();
-    for (const fit of plattFits) {
-        plattMap.set(fit.ModelName, { A: fit.PlattA, B: fit.PlattB });
-    }
-
-    // Collect all candidates with decision probabilities
-    interface CandidateWithProb {
-        Cand: CandidatePairObservation;
-        Check: RecordCheckObservation;
-        RawProb: number;
-        CalProb: number;
-    }
-
-    const scoredCandidates: CandidateWithProb[] = [];
-    for (const check of rep1Checks) {
-        const modelName = check.DecisionResult?.Model ?? 'Default';
-        const fit = plattMap.get(modelName) ?? { A: 1, B: 0 };
-        for (const cand of check.Candidates) {
-            if (cand.DecisionProbability !== null) {
-                const rawProb = cand.DecisionProbability;
-                const calProb = ApplyPlatt(rawProb, fit);
-                scoredCandidates.push({ Cand: cand, Check: check, RawProb: rawProb, CalProb: calProb });
-            }
+    const outOfFold = new Map<CandidatePairObservation, number>();
+    for (const s of ScoreDecisionCandidates(rep1Checks, seed)) {
+        if (s.OutOfFoldProbability !== null) {
+            outOfFold.set(s.Candidate, s.OutOfFoldProbability);
         }
     }
-
-    const totalScored = scoredCandidates.length;
+    const calibratedFlags = (check: RecordCheckObservation, candidate: CandidatePairObservation, threshold: number): boolean => {
+        if (candidate.DecisionProbability === null) {
+            return DecisionFlagsAt(check, null, threshold);
+        }
+        const calibrated = outOfFold.get(candidate);
+        return calibrated !== undefined && DecisionFlagsAt(check, calibrated, threshold);
+    };
 
     return thresholds.map(threshold => {
-        // Raw evaluation at threshold
-        let rawTp = 0;
-        let rawFp = 0;
-        let rawNewFlagged = 0;
-        let rawFlaggedCount = 0;
-
-        // Calibrated evaluation at threshold
-        let calTp = 0;
-        let calFp = 0;
-        let calNewFlagged = 0;
-        let calFlaggedCount = 0;
-
-        for (const check of rep1Checks) {
-            const isNew = check.Label.Label === 'new';
-            let checkRawFlagged = false;
-            let checkCalFlagged = false;
-
-            const checkCandidates = scoredCandidates.filter(sc => sc.Check === check);
-            for (const { Cand, RawProb, CalProb } of checkCandidates) {
-                if (RawProb >= threshold) {
-                    rawFlaggedCount++;
-                    checkRawFlagged = true;
-                    if (Cand.IsDuplicatePair) {
-                        rawTp++;
-                    } else {
-                        rawFp++;
-                    }
-                }
-                if (CalProb >= threshold) {
-                    calFlaggedCount++;
-                    checkCalFlagged = true;
-                    if (Cand.IsDuplicatePair) {
-                        calTp++;
-                    } else {
-                        calFp++;
-                    }
-                }
-            }
-
-            if (isNew) {
-                if (checkRawFlagged) {
-                    rawNewFlagged++;
-                }
-                if (checkCalFlagged) {
-                    calNewFlagged++;
-                }
-            }
-        }
-
-        const rawP = rawTp + rawFp > 0 ? rawTp / (rawTp + rawFp) : 0;
-        const rawR = dupeCount > 0 ? rawTp / dupeCount : 0;
-        const rawFalseFlagOnNew = newCount > 0 ? rawNewFlagged / newCount : 0;
-        const rawShare = totalScored > 0 ? rawFlaggedCount / totalScored : 0;
-
-        const calP = calTp + calFp > 0 ? calTp / (calTp + calFp) : 0;
-        const calR = dupeCount > 0 ? calTp / dupeCount : 0;
-        const calFalseFlagOnNew = newCount > 0 ? calNewFlagged / newCount : 0;
-        const calShare = totalScored > 0 ? calFlaggedCount / totalScored : 0;
-
+        const raw = scoreBand(rep1Checks, (check, candidate) => DecisionFlagsAt(check, candidate.DecisionProbability, threshold));
+        const calibrated = scoreBand(rep1Checks, (check, candidate) => calibratedFlags(check, candidate, threshold));
         return {
             Threshold: threshold,
-            RawPrecision: rawP,
-            RawRecall: rawR,
-            RawFalseFlagRateOnNew: rawFalseFlagOnNew,
-            RawShareCandidatesFlagged: rawShare,
-            CalibratedPrecision: calP,
-            CalibratedRecall: calR,
-            CalibratedFalseFlagRateOnNew: calFalseFlagOnNew,
-            CalibratedShareCandidatesFlagged: calShare,
+            RawPrecision: raw.Precision,
+            RawRecall: raw.Recall,
+            RawFalseFlagRateOnNew: raw.FalseFlagRateOnNew,
+            RawShareCandidatesFlagged: raw.ShareCandidatesFlagged,
+            CalibratedPrecision: calibrated.Precision,
+            CalibratedRecall: calibrated.Recall,
+            CalibratedFalseFlagRateOnNew: calibrated.FalseFlagRateOnNew,
+            CalibratedShareCandidatesFlagged: calibrated.ShareCandidatesFlagged,
         };
     });
 }
 
 /**
- * Computes latency percentiles (p50 and p95) and budget compliance.
+ * Computes latency percentiles (p50 and p95) and budget compliance. The entry check path is the
+ * preparation (building the record, the vector query, the permission narrowing and the candidate
+ * load) plus the decision call, as production's `CheckRecordValues` times it.
  */
 export function ComputeLatencySummary(checks: readonly RecordCheckObservation[]): LatencySummary {
     const retrievalLatencies: number[] = [];
+    const preparationLatencies: number[] = [];
     const thresholdLatencies: number[] = [];
     const decisionLatencies: number[] = [];
     const promptLatencies: number[] = [];
@@ -551,13 +619,15 @@ export function ComputeLatencySummary(checks: readonly RecordCheckObservation[])
         if (check.RetrievalLatencyMs > 0) {
             retrievalLatencies.push(check.RetrievalLatencyMs);
         }
+        if (check.PreparationLatencyMs > 0) {
+            preparationLatencies.push(check.PreparationLatencyMs);
+        }
         if (check.ThresholdLatencyMs && check.ThresholdLatencyMs > 0) {
             thresholdLatencies.push(check.ThresholdLatencyMs);
         }
         if (check.DecisionResult && check.DecisionResult.LatencyMs > 0) {
             decisionLatencies.push(check.DecisionResult.LatencyMs);
-            // Entry check path latency is retrieval + decision
-            entryCheckLatencies.push(check.RetrievalLatencyMs + check.DecisionResult.LatencyMs);
+            entryCheckLatencies.push(check.PreparationLatencyMs + check.DecisionResult.LatencyMs);
         }
         if (check.PromptResult && check.PromptResult.LatencyMs > 0) {
             promptLatencies.push(check.PromptResult.LatencyMs);
@@ -570,6 +640,8 @@ export function ComputeLatencySummary(checks: readonly RecordCheckObservation[])
     return {
         RetrievalP50: Quantile(retrievalLatencies, 0.5),
         RetrievalP95: Quantile(retrievalLatencies, 0.95),
+        PreparationP50: Quantile(preparationLatencies, 0.5),
+        PreparationP95: Quantile(preparationLatencies, 0.95),
         ThresholdP50: thresholdLatencies.length > 0 ? Quantile(thresholdLatencies, 0.5) : null,
         ThresholdP95: thresholdLatencies.length > 0 ? Quantile(thresholdLatencies, 0.95) : null,
         DecisionP50: Quantile(decisionLatencies, 0.5),
@@ -584,22 +656,39 @@ export function ComputeLatencySummary(checks: readonly RecordCheckObservation[])
 }
 
 /**
+ * One model arm's cost. A check whose run recorded no cost is counted as missing, not as $0, and is
+ * left out of the cost per 1,000 checks.
+ */
+function armCostSummary(arm: 'decision' | 'prompt', calls: readonly ArmCallResult[]): ArmCostSummary {
+    let totalCost = 0;
+    let checksWithCost = 0;
+    for (const call of calls) {
+        if (call.CostUSD !== null) {
+            totalCost += call.CostUSD;
+            checksWithCost++;
+        }
+    }
+    return {
+        ArmName: arm,
+        TotalCostUSD: totalCost,
+        TotalChecks: calls.length,
+        ChecksMissingCost: calls.length - checksWithCost,
+        CostPer1000ChecksUSD: checksWithCost > 0 ? (totalCost / checksWithCost) * 1000 : null,
+    };
+}
+
+/**
  * Computes arm costs and estimated cost per 1,000 checks.
  */
 export function ComputeCostSummary(checks: readonly RecordCheckObservation[]): ArmCostSummary[] {
-    let decisionCost = 0;
-    let decisionChecks = 0;
-    let promptCost = 0;
-    let promptChecks = 0;
-
+    const decisionCalls: ArmCallResult[] = [];
+    const promptCalls: ArmCallResult[] = [];
     for (const check of checks) {
         if (check.DecisionResult) {
-            decisionChecks++;
-            decisionCost += check.DecisionResult.CostUSD ?? 0;
+            decisionCalls.push(check.DecisionResult);
         }
         if (check.PromptResult) {
-            promptChecks++;
-            promptCost += check.PromptResult.CostUSD ?? 0;
+            promptCalls.push(check.PromptResult);
         }
     }
 
@@ -608,20 +697,11 @@ export function ComputeCostSummary(checks: readonly RecordCheckObservation[]): A
             ArmName: 'threshold',
             TotalCostUSD: 0,
             TotalChecks: checks.length,
+            ChecksMissingCost: 0,
             CostPer1000ChecksUSD: 0,
         },
-        {
-            ArmName: 'decision',
-            TotalCostUSD: decisionCost,
-            TotalChecks: decisionChecks,
-            CostPer1000ChecksUSD: decisionChecks > 0 ? (decisionCost / decisionChecks) * 1000 : 0,
-        },
-        {
-            ArmName: 'prompt',
-            TotalCostUSD: promptCost,
-            TotalChecks: promptChecks,
-            CostPer1000ChecksUSD: promptChecks > 0 ? (promptCost / promptChecks) * 1000 : 0,
-        },
+        armCostSummary('decision', decisionCalls),
+        armCostSummary('prompt', promptCalls),
     ];
 }
 
@@ -713,6 +793,24 @@ export interface ReportOptions {
 }
 
 /**
+ * The report's caveats. The candidate counts are rep 1's, so a note says whether a caveat touched
+ * this run.
+ */
+function buildReportNotes(checks: readonly RecordCheckObservation[]): string[] {
+    const rep1Candidates = checks.filter(c => c.Rep === 1).flatMap(c => c.Candidates);
+    const belowThreshold = rep1Candidates.filter(c => !c.PassedThreshold).length;
+    return [
+        'The corpus is synthetic (LLM rewrites of MJ metadata); refit on real labelled duplicates before relying on it.',
+        'A duplicate whose source was not retrieved is a false negative for all arms (reported separately in retrieval).',
+        'The decision arms flag as production\'s entry check does: a candidate a successful decision gave no answer for is flagged, and a failed decision flags nothing. The arm table counts failed calls and missing answers. The prompt arm counts a candidate it gave no verdict for as not flagged.',
+        'The calibrated AUC, Brier, ECE and band sweep are out of fold (5-fold Platt, seeded): each candidate is calibrated by a fit that never saw it. The Platt fit shown is on every candidate: the parameters to ship.',
+        `The decision and prompt arms are each asked about every readable top-K candidate in one call, including any below PotentialMatchThreshold (${belowThreshold} of ${rep1Candidates.length} candidates in rep 1); the \`· production\` views filter the verdicts afterwards. Where candidates fall below the threshold, the set the model sees differs from production's.`,
+        'New (hard-negative) records were screened only for an exact match with existing rows. One may already exist under other wording; the decision would then flag it correctly, and the false-flag rate would read high.',
+        'Cost notes: a failover or chat model cost may be missing on branches without #4880. A check with no recorded cost is left out of the cost per 1,000 checks.',
+    ];
+}
+
+/**
  * Builds the complete structured measurement report.
  */
 export function BuildMeasurementReport(
@@ -720,24 +818,9 @@ export function BuildMeasurementReport(
     options: ReportOptions
 ): DupeMeasurementReport {
     const configuredArms = options.Arms ?? ['threshold', 'decision', 'decision · production', 'prompt', 'prompt · production'];
-    const retrieval = ComputeRetrievalMetrics(checks);
-
     const armMetrics: ArmPerformanceMetrics[] = configuredArms.map(arm =>
         ComputeArmPerformance(checks, arm, { Seed: options.Seed })
     );
-
-    const thresholdSweep = ComputeThresholdSweep(checks);
-    const calibration = ComputeDecisionCalibration(checks, options.Seed);
-    const bandSweep = ComputeDecisionBandSweep(checks, calibration);
-    const latency = ComputeLatencySummary(checks);
-    const costs = ComputeCostSummary(checks);
-    const repeatability = options.Reps >= 2 ? ComputeRepeatability(checks) : undefined;
-
-    const notes: string[] = [
-        'The corpus is synthetic (LLM rewrites of MJ metadata); refit on real labelled duplicates before relying on it.',
-        'A duplicate whose source was not retrieved is a false negative for all arms (reported separately in retrieval).',
-        'Cost notes: a failover or chat model cost may be missing on branches without #4880.',
-    ];
 
     return {
         EntityName: options.EntityName,
@@ -747,15 +830,15 @@ export function BuildMeasurementReport(
         Reps: options.Reps,
         TopK: options.TopK,
         DecisionPrompt: options.DecisionPrompt,
-        Retrieval: retrieval,
+        Retrieval: ComputeRetrievalMetrics(checks),
         ArmMetrics: armMetrics,
-        ThresholdSweep: thresholdSweep,
-        DecisionCalibration: calibration,
-        DecisionBandSweep: bandSweep,
-        Latency: latency,
-        Costs: costs,
-        Repeatability: repeatability,
-        Notes: notes,
+        ThresholdSweep: ComputeThresholdSweep(checks),
+        DecisionCalibration: ComputeDecisionCalibration(checks, options.Seed),
+        DecisionBandSweep: ComputeDecisionBandSweep(checks, BAND_SWEEP_THRESHOLDS, options.Seed),
+        Latency: ComputeLatencySummary(checks),
+        Costs: ComputeCostSummary(checks),
+        Repeatability: options.Reps >= 2 ? ComputeRepeatability(checks) : undefined,
+        Notes: buildReportNotes(checks),
     };
 }
 
@@ -777,73 +860,81 @@ function pct(val: number | null | undefined, digits: number = 1): string {
     return (val * 100).toFixed(digits) + '%';
 }
 
-/**
- * Renders the markdown report.
- * Guaranteed to NEVER include record text; uses IDs and aggregate metrics only.
- */
-export function RenderMarkdownReport(report: DupeMeasurementReport): string {
-    const lines: string[] = [];
+/** "count / total (rate)", or '-' when there is no total. */
+function countOf(count: number, total: number): string {
+    return total > 0 ? `${count} / ${total} (${pct(count / total)})` : '-';
+}
 
-    lines.push(`# Duplicate Check Measurement: ${report.EntityName}`);
-    lines.push('');
-    lines.push(`**Corpus**: \`${report.CorpusPath}\` (${report.DuplicatesCount} duplicates, ${report.NewCount} new records)  `);
-    lines.push(`**Reps**: ${report.Reps} | **Top-K**: ${report.TopK} | **Decision Prompt**: "${report.DecisionPrompt}"`);
-    lines.push('');
+function renderHeader(report: DupeMeasurementReport): string[] {
+    return [
+        `# Duplicate Check Measurement: ${report.EntityName}`,
+        '',
+        `**Corpus**: \`${report.CorpusPath}\` (${report.DuplicatesCount} duplicates, ${report.NewCount} new records)  `,
+        `**Reps**: ${report.Reps} | **Top-K**: ${report.TopK} | **Decision Prompt**: "${report.DecisionPrompt}"`,
+        '',
+        '> [!NOTE]',
+        ...report.Notes.map(note => `> - ${note}`),
+        '',
+    ];
+}
 
-    // Notes
-    lines.push('> [!NOTE]');
-    for (const note of report.Notes) {
-        lines.push(`> - ${note}`);
-    }
-    lines.push('');
+function renderRetrieval(report: DupeMeasurementReport): string[] {
+    const r = report.Retrieval;
+    return [
+        '## 1. Retrieval Performance',
+        '',
+        'A source that is not retrieved is a miss for every arm. Retrieval is evaluated separately:',
+        '',
+        '| Metric | Count | Rate |',
+        '|---|---|---|',
+        `| Total Duplicates | ${r.TotalDuplicates} | 100.0% |`,
+        `| Sources in Top-K | ${r.SourcesInTopK} | ${pct(r.SourcesInTopKRate)} |`,
+        `| Sources After PotentialMatchThreshold | ${r.SourcesAfterThreshold} | ${pct(r.SourcesAfterThresholdRate)} |`,
+        `| Sources Missed at Retrieval | ${r.SourcesMissed} | ${pct(r.SourcesMissedRate)} |`,
+        '',
+    ];
+}
 
-    // Retrieval
-    lines.push('## 1. Retrieval Performance');
-    lines.push('');
-    lines.push('A source that is not retrieved is a miss for every arm. Retrieval is evaluated separately:');
-    lines.push('');
-    lines.push('| Metric | Count | Rate |');
-    lines.push('|---|---|---|');
-    lines.push(`| Total Duplicates | ${report.Retrieval.TotalDuplicates} | 100.0% |`);
-    lines.push(`| Sources in Top-K | ${report.Retrieval.SourcesInTopK} | ${pct(report.Retrieval.SourcesInTopKRate)} |`);
-    lines.push(`| Sources After PotentialMatchThreshold | ${report.Retrieval.SourcesAfterThreshold} | ${pct(report.Retrieval.SourcesAfterThresholdRate)} |`);
-    lines.push(`| Sources Missed at Retrieval | ${report.Retrieval.SourcesMissed} | ${pct(report.Retrieval.SourcesMissedRate)} |`);
-    lines.push('');
+function renderArmRow(arm: ArmPerformanceMetrics): string {
+    const pCI = arm.PrecisionCI ? ` [${fmt(arm.PrecisionCI.Lower)}, ${fmt(arm.PrecisionCI.Upper)}]` : '';
+    const rCI = arm.RecallCI ? ` [${fmt(arm.RecallCI.Lower)}, ${fmt(arm.RecallCI.Upper)}]` : '';
+    const fCI = arm.F1CI ? ` [${fmt(arm.F1CI.Lower)}, ${fmt(arm.F1CI.Upper)}]` : '';
+    const failed = arm.Calls ? countOf(arm.Calls.FailedCalls, arm.Calls.Calls) : '-';
+    const missing = arm.Calls ? countOf(arm.Calls.MissingAnswers, arm.Calls.CandidatesAsked) : '-';
+    return `| \`${arm.ArmName}\` | ${fmt(arm.Precision)}${pCI} | ${fmt(arm.Recall)}${rCI} | ${fmt(arm.F1)}${fCI} | ${pct(arm.FalseFlagRateOnNew)} | ${fmt(arm.FlagsPerCheck, 2)} | ${failed} | ${missing} |`;
+}
 
-    // Arm Performance Comparison
-    lines.push('## 2. Reasoning Arm Comparison');
-    lines.push('');
-    lines.push('| Arm | Precision (95% CI) | Recall (95% CI) | F1 (95% CI) | False-Flag Rate on New | Flags / Check |');
-    lines.push('|---|---|---|---|---|---|');
-    for (const arm of report.ArmMetrics) {
-        const pCI = arm.PrecisionCI ? ` [${fmt(arm.PrecisionCI.Lower)}, ${fmt(arm.PrecisionCI.Upper)}]` : '';
-        const rCI = arm.RecallCI ? ` [${fmt(arm.RecallCI.Lower)}, ${fmt(arm.RecallCI.Upper)}]` : '';
-        const fCI = arm.F1CI ? ` [${fmt(arm.F1CI.Lower)}, ${fmt(arm.F1CI.Upper)}]` : '';
+function renderArms(report: DupeMeasurementReport): string[] {
+    return [
+        '## 2. Reasoning Arm Comparison',
+        '',
+        '| Arm | Precision (95% CI) | Recall (95% CI) | F1 (95% CI) | False-Flag Rate on New | Flags / Check | Failed Calls | Missing Answers |',
+        '|---|---|---|---|---|---|---|---|',
+        ...report.ArmMetrics.map(renderArmRow),
+        '',
+    ];
+}
 
-        lines.push(
-            `| \`${arm.ArmName}\` | ${fmt(arm.Precision)}${pCI} | ${fmt(arm.Recall)}${rCI} | ${fmt(arm.F1)}${fCI} | ${pct(arm.FalseFlagRateOnNew)} | ${fmt(arm.FlagsPerCheck, 2)} |`
-        );
-    }
-    lines.push('');
-
-    // Threshold Sweep
-    lines.push('## 3. Threshold Arm: Vector Score Sweep');
-    lines.push('');
-    lines.push('| Vector Threshold | Precision | Recall | F1 | False-Flag Rate on New | Flags / Check |');
-    lines.push('|---|---|---|---|---|---|');
-    for (const row of report.ThresholdSweep) {
-        lines.push(
+function renderThresholdSweep(report: DupeMeasurementReport): string[] {
+    return [
+        '## 3. Threshold Arm: Vector Score Sweep',
+        '',
+        '| Vector Threshold | Precision | Recall | F1 | False-Flag Rate on New | Flags / Check |',
+        '|---|---|---|---|---|---|',
+        ...report.ThresholdSweep.map(row =>
             `| ${row.Threshold.toFixed(2)} | ${fmt(row.Precision)} | ${fmt(row.Recall)} | ${fmt(row.F1)} | ${pct(row.FalseFlagRateOnNew)} | ${fmt(row.FlagsPerCheck, 2)} |`
-        );
-    }
-    lines.push('');
+        ),
+        '',
+    ];
+}
 
-    // Decision Calibration
-    lines.push('## 4. Decision Arm: Probability Calibration & Model Analysis');
-    lines.push('');
+function renderCalibration(report: DupeMeasurementReport): string[] {
+    const lines = ['## 4. Decision Arm: Probability Calibration & Model Analysis', ''];
     if (report.DecisionCalibration.length === 0) {
         lines.push('*(No decision arm data recorded)*');
     } else {
+        lines.push('Calibrated columns are out of fold. The Platt fit is on every candidate: the parameters to ship.');
+        lines.push('');
         lines.push('| Model | Candidates | Raw AUC | Calibrated AUC | Raw Brier | Calibrated Brier | Raw ECE | Calibrated ECE | Platt Fit (A, B) |');
         lines.push('|---|---|---|---|---|---|---|---|---|');
         for (const c of report.DecisionCalibration) {
@@ -853,61 +944,93 @@ export function RenderMarkdownReport(report: DupeMeasurementReport): string {
         }
     }
     lines.push('');
+    return lines;
+}
 
-    // Band Sweep
-    lines.push('### Decision Band Sweep');
-    lines.push('');
-    lines.push('| Band Threshold | Raw Prec | Raw Rec | Raw False-Flag (New) | Raw Share | Cal Prec | Cal Rec | Cal False-Flag (New) | Cal Share |');
-    lines.push('|---|---|---|---|---|---|---|---|---|');
-    for (const row of report.DecisionBandSweep) {
-        lines.push(
+function renderBandSweep(report: DupeMeasurementReport): string[] {
+    return [
+        '### Decision Band Sweep',
+        '',
+        'Calibrated columns band each candidate\'s out-of-fold calibrated probability.',
+        '',
+        '| Band Threshold | Raw Prec | Raw Rec | Raw False-Flag (New) | Raw Share | Cal Prec | Cal Rec | Cal False-Flag (New) | Cal Share |',
+        '|---|---|---|---|---|---|---|---|---|',
+        ...report.DecisionBandSweep.map(row =>
             `| ${row.Threshold.toFixed(2)} | ${fmt(row.RawPrecision)} | ${fmt(row.RawRecall)} | ${pct(row.RawFalseFlagRateOnNew)} | ${pct(row.RawShareCandidatesFlagged)} | ${fmt(row.CalibratedPrecision)} | ${fmt(row.CalibratedRecall)} | ${pct(row.CalibratedFalseFlagRateOnNew)} | ${pct(row.CalibratedShareCandidatesFlagged)} |`
-        );
-    }
-    lines.push('');
+        ),
+        '',
+    ];
+}
 
-    // Latency
-    lines.push('## 5. Latency Analysis');
-    lines.push('');
-    lines.push(`**Budget**: ${report.Latency.EntryCheckBudgetMs} ms  `);
-    lines.push(`**Entry Check Within Budget**: ${pct(report.Latency.EntryCheckWithinBudgetRate)} (p50: ${fmt(report.Latency.EntryCheckP50, 0)} ms, p95: ${fmt(report.Latency.EntryCheckP95, 0)} ms)`);
-    lines.push('');
-    lines.push('| Operation / Arm | p50 (ms) | p95 (ms) |');
-    lines.push('|---|---|---|');
-    lines.push(`| Vector Retrieval | ${fmt(report.Latency.RetrievalP50, 0)} | ${fmt(report.Latency.RetrievalP95, 0)} |`);
-    if (report.Latency.ThresholdP50 !== null && report.Latency.ThresholdP50 !== undefined) {
-        lines.push(`| Threshold Arm | ${fmt(report.Latency.ThresholdP50, 0)} | ${fmt(report.Latency.ThresholdP95, 0)} |`);
+function renderLatency(report: DupeMeasurementReport): string[] {
+    const l = report.Latency;
+    const lines = [
+        '## 5. Latency Analysis',
+        '',
+        `**Budget**: ${l.EntryCheckBudgetMs} ms  `,
+        `**Entry Check Within Budget**: ${pct(l.EntryCheckWithinBudgetRate)} (p50: ${fmt(l.EntryCheckP50, 0)} ms, p95: ${fmt(l.EntryCheckP95, 0)} ms)`,
+        '',
+        '| Operation / Arm | p50 (ms) | p95 (ms) |',
+        '|---|---|---|',
+        `| Vector Retrieval | ${fmt(l.RetrievalP50, 0)} | ${fmt(l.RetrievalP95, 0)} |`,
+        `| Preparation (record, retrieval, permission, candidate load) | ${fmt(l.PreparationP50, 0)} | ${fmt(l.PreparationP95, 0)} |`,
+    ];
+    if (l.ThresholdP50 !== null && l.ThresholdP50 !== undefined) {
+        lines.push(`| Threshold Arm | ${fmt(l.ThresholdP50, 0)} | ${fmt(l.ThresholdP95, 0)} |`);
     }
-    lines.push(`| Decision Arm | ${fmt(report.Latency.DecisionP50, 0)} | ${fmt(report.Latency.DecisionP95, 0)} |`);
-    lines.push(`| Prompt Arm | ${fmt(report.Latency.PromptP50, 0)} | ${fmt(report.Latency.PromptP95, 0)} |`);
-    lines.push(`| **Full Entry Check** (Retrieval + Decision) | **${fmt(report.Latency.EntryCheckP50, 0)}** | **${fmt(report.Latency.EntryCheckP95, 0)}** |`);
+    lines.push(`| Decision Arm | ${fmt(l.DecisionP50, 0)} | ${fmt(l.DecisionP95, 0)} |`);
+    lines.push(`| Prompt Arm | ${fmt(l.PromptP50, 0)} | ${fmt(l.PromptP95, 0)} |`);
+    lines.push(`| **Full Entry Check** (Preparation + Decision) | **${fmt(l.EntryCheckP50, 0)}** | **${fmt(l.EntryCheckP95, 0)}** |`);
     lines.push('');
+    return lines;
+}
 
-    // Cost
-    lines.push('## 6. Cost Analysis');
-    lines.push('');
-    lines.push('| Arm | Total Cost ($) | Checks Run | Cost / 1,000 Checks ($) |');
-    lines.push('|---|---|---|---|');
-    for (const cost of report.Costs) {
-        lines.push(
-            `| \`${cost.ArmName}\` | $${cost.TotalCostUSD.toFixed(4)} | ${cost.TotalChecks} | $${cost.CostPer1000ChecksUSD.toFixed(4)} |`
-        );
+function renderCosts(report: DupeMeasurementReport): string[] {
+    return [
+        '## 6. Cost Analysis',
+        '',
+        '| Arm | Total Cost ($) | Checks Run | Checks Missing a Cost | Cost / 1,000 Checks ($) |',
+        '|---|---|---|---|---|',
+        ...report.Costs.map(cost => {
+            const per1000 = cost.CostPer1000ChecksUSD === null ? 'unknown' : `$${cost.CostPer1000ChecksUSD.toFixed(4)}`;
+            return `| \`${cost.ArmName}\` | $${cost.TotalCostUSD.toFixed(4)} | ${cost.TotalChecks} | ${cost.ChecksMissingCost} | ${per1000} |`;
+        }),
+        '',
+    ];
+}
+
+function renderRepeatability(report: DupeMeasurementReport): string[] {
+    if (!report.Repeatability) {
+        return [];
     }
-    lines.push('');
+    return [
+        '## 7. Repeatability (Rep 1 vs Rep 2)',
+        '',
+        '| Metric | Value |',
+        '|---|---|',
+        `| Decision Probability Mean Absolute Difference | ${fmt(report.Repeatability.DecisionProbabilityMeanAbsDiff, 4)} |`,
+        `| Decision Flag Agreement Rate | ${pct(report.Repeatability.DecisionVerdictAgreementRate)} |`,
+        `| Prompt Recommendation Agreement Rate | ${pct(report.Repeatability.PromptRecommendationAgreementRate)} |`,
+        '',
+    ];
+}
 
-    // Repeatability
-    if (report.Repeatability) {
-        lines.push('## 7. Repeatability (Rep 1 vs Rep 2)');
-        lines.push('');
-        lines.push('| Metric | Value |');
-        lines.push('|---|---|');
-        lines.push(`| Decision Probability Mean Absolute Difference | ${fmt(report.Repeatability.DecisionProbabilityMeanAbsDiff, 4)} |`);
-        lines.push(`| Decision Flag Agreement Rate | ${pct(report.Repeatability.DecisionVerdictAgreementRate)} |`);
-        lines.push(`| Prompt Recommendation Agreement Rate | ${pct(report.Repeatability.PromptRecommendationAgreementRate)} |`);
-        lines.push('');
-    }
-
-    return lines.join('\n');
+/**
+ * Renders the markdown report.
+ * Guaranteed to NEVER include record text; uses IDs and aggregate metrics only.
+ */
+export function RenderMarkdownReport(report: DupeMeasurementReport): string {
+    return [
+        ...renderHeader(report),
+        ...renderRetrieval(report),
+        ...renderArms(report),
+        ...renderThresholdSweep(report),
+        ...renderCalibration(report),
+        ...renderBandSweep(report),
+        ...renderLatency(report),
+        ...renderCosts(report),
+        ...renderRepeatability(report),
+    ].join('\n');
 }
 
 /**
@@ -918,20 +1041,9 @@ export function AssertNoRecordTextInReport(
     reportContent: string,
     corpusRecords: readonly CorpusRecord[]
 ): void {
-    const lowerContent = reportContent.toLowerCase();
-
-    for (const record of corpusRecords) {
-        for (const val of Object.values(record.Values)) {
-            const trimmed = String(val).trim();
-            // Disqualify trivial or single-word strings (e.g. "true", numbers, short words)
-            if (trimmed.length > 5 && !/^[0-9a-f-]{10,}$/i.test(trimmed)) {
-                if (lowerContent.includes(trimmed.toLowerCase())) {
-                    throw new Error(
-                        `Sanitization violation: record text "${trimmed.slice(0, 30)}..." found in generated report!`
-                    );
-                }
-            }
-        }
+    const found = FindRecordText(reportContent, corpusRecords.flatMap(r => Object.values(r.Values).map(v => String(v))));
+    if (found !== null) {
+        throw new Error(`Sanitization violation: record text "${found.slice(0, 30)}..." found in generated report!`);
     }
 }
 

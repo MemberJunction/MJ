@@ -2,7 +2,7 @@
  * @fileoverview Unit tests for report rendering and strict record-text sanitization.
  *
  * Verifies that:
- * - RenderMarkdownReport and RenderJsonReport produce structured outputs with record IDs only.
+ * - RenderMarkdownReport and the report JSON hold record IDs only.
  * - Under NO circumstances does any record text (names, descriptions, values) leak into
  *   report.md or report.json.
  * - Out-of-repo path enforcement operates via AssertOutputOutsideRepo.
@@ -16,7 +16,6 @@ import { OutputInsideRepoError } from '@memberjunction/testing-engine';
 import {
     AssertNoRecordTextInReport,
     BuildMeasurementReport,
-    RenderJsonReport,
     RenderMarkdownReport,
     WriteReportFiles,
 } from '../../dupe-check-measurement/evaluator';
@@ -50,17 +49,22 @@ describe('Report Rendering and Text Sanitization', () => {
             RecordId: 'rec-uuid-1111-2222-3333',
             Label: { Id: 'rec-uuid-1111-2222-3333', Label: 'duplicate', SourceRecordId: 'cand-uuid-9999' },
             RetrievalLatencyMs: 40,
+            PreparationLatencyMs: 90,
             ThresholdLatencyMs: 2,
             DecisionResult: {
                 LatencyMs: 250,
                 Model: 'test-model-4o',
                 PromptRunId: 'pr-run-12345',
                 CostUSD: 0.0035,
+                Success: true,
+                MissingAnswers: 0,
             },
             PromptResult: {
                 LatencyMs: 450,
                 PromptRunId: 'pr-run-67890',
                 CostUSD: 0.012,
+                Success: true,
+                MissingAnswers: 0,
             },
             Candidates: [
                 {
