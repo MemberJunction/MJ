@@ -1331,9 +1331,10 @@ import {
     UpdateScheduledJobAction,
 } from '@memberjunction/scheduling-actions';
 
-// @memberjunction/testing-engine (2 classes)
+// @memberjunction/testing-engine (3 classes)
 import {
     AgentEvalDriver,
+    DecisionEvalDriver,
     PromptEvalDriver,
 } from '@memberjunction/testing-engine';
 
@@ -2441,6 +2442,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     QueryScheduledJobsAction,
     UpdateScheduledJobAction,
     AgentEvalDriver,
+    DecisionEvalDriver,
     PromptEvalDriver,
     ComputerUseAction,
     ComputerUseTestDriver,
@@ -2547,11 +2549,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MoveListMembersAction,
     MoveObjectAction,
     OAuthFlowAction,
-    ObjectExistsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ObjectExistsAction,
     PDFExtractorAction,
     ParallelExecuteAction,
     PasswordStrengthAction,
@@ -2624,7 +2626,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1056;
+export const CLASS_REGISTRATIONS_COUNT = 1057;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
