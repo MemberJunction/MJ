@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
-import type { BaseLLM } from '@memberjunction/ai';
+import { ChatResult, type BaseLLM } from '@memberjunction/ai';
 import { FormatMemoryNoteExcerpt } from '@memberjunction/ai-agents';
 import { OutputInsideRepoError } from '@memberjunction/testing-engine';
 import {
@@ -17,6 +18,15 @@ import {
 } from '../../memory-gate-measurement/corpus-generator';
 import type { CorpusLabelRecord, CorpusScenario } from '../../memory-gate-measurement/corpus-types';
 
+/** A chat reply whose only choice says `content`. */
+function reply(content: string): ChatResult {
+    const result = new ChatResult(true, new Date(), new Date());
+    result.data = { choices: [{ message: { role: 'assistant', content }, finish_reason: 'stop', index: 0 }] };
+    return result;
+}
+
+/** This test's own directory: inside a git working tree, where no output may go. */
+const HERE = dirname(fileURLToPath(import.meta.url));
 describe('corpus-generator', () => {
     const validRawScenario = {
         turns: [
@@ -110,19 +120,12 @@ describe('corpus-generator', () => {
 
     it('generates scenario with retry when model output is valid on second try', async () => {
         let calls = 0;
-        const mockDriver = {
-            ChatCompletion: vi.fn().mockImplementation(async () => {
+        const mockDriver: Pick<BaseLLM, 'ChatCompletion'> = {
+            ChatCompletion: vi.fn(async (): Promise<ChatResult> => {
                 calls++;
-                if (calls === 1) {
-                    return { data: { choices: [{ message: { content: 'invalid json' } }] } };
-                }
-                return {
-                    data: {
-                        choices: [{ message: { content: JSON.stringify(validRawScenario) } }]
-                    }
-                };
+                return calls === 1 ? reply('invalid json') : reply(JSON.stringify(validRawScenario));
             })
-        } as unknown as BaseLLM;
+        };
 
         const scenario = await GenerateScenarioWithRetry(mockDriver, 'test-model', 0, 10, 2);
         expect(calls).toBe(2);
@@ -176,7 +179,7 @@ describe('corpus-generator', () => {
 
     describe('WriteCorpusFiles and Path Refusal', () => {
         it('refuses writing inside repository root', () => {
-            const fakeRepoRoot = '/Users/colinbrockman/Projects/MJ-memory-gate';
+            const fakeRepoRoot = HERE; // inside this repository's working tree
             expect(() =>
                 WriteCorpusFiles(join(fakeRepoRoot, 'packages/test-out'), [], [], [fakeRepoRoot])
             ).toThrow(OutputInsideRepoError);

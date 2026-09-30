@@ -211,7 +211,7 @@ export function FormatConversationExcerpt(turns: readonly { role: string; text: 
 
 /** Generates a single scenario with retry. */
 export async function GenerateScenarioWithRetry(
-    driver: BaseLLM,
+    driver: Pick<BaseLLM, 'ChatCompletion'>,
     modelName: string,
     scenarioIndex: number,
     totalScenarios: number,

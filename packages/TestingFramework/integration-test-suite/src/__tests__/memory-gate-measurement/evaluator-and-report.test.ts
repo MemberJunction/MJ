@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { OutputInsideRepoError } from '@memberjunction/testing-engine';
 import {
@@ -27,6 +28,8 @@ import type { CorpusLabel, CorpusScenario, DecisionObservation } from '../../mem
 import { ParseArgs as ParseCorpusArgs } from '../../../rigs/generate-memory-note-corpus';
 import { ParseArgs as ParseMeasurementArgs } from '../../../rigs/memory-note-gate-measurement';
 
+/** This test's own directory: inside a git working tree, where no output may go. */
+const HERE = dirname(fileURLToPath(import.meta.url));
 describe('memory-gate evaluator and report builder', () => {
     const sampleEvaluatedNotes: EvaluatedNote[] = [
         {
@@ -186,7 +189,7 @@ describe('memory-gate evaluator and report builder', () => {
     });
 
     it('writes report.json and report.md outside repo and refuses repo path', () => {
-        const fakeRepoRoot = '/Users/colinbrockman/Projects/MJ-memory-gate';
+        const fakeRepoRoot = HERE; // inside this repository's working tree
         const sampleReport = EvaluateMemoryGateMeasurement(sampleEvaluatedNotes, [], 1);
 
         expect(() =>

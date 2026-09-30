@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { BaseLLM } from '@memberjunction/ai';
+import { ChatResult, type BaseLLM } from '@memberjunction/ai';
 import {
     BuildConfidenceScoringPrompt,
     MEMORY_NOTE_CONFIDENCE_PROMPT_GUIDANCE,
@@ -7,6 +7,13 @@ import {
     ScoreNotesWithRetry,
     type ScorableCandidate
 } from '../../memory-gate-measurement/confidence-scorer';
+
+/** A chat reply whose only choice says `content`. */
+function reply(content: string): ChatResult {
+    const result = new ChatResult(true, new Date(), new Date());
+    result.data = { choices: [{ message: { role: 'assistant', content }, finish_reason: 'stop', index: 0 }] };
+    return result;
+}
 
 describe('confidence-scorer', () => {
     const sampleNotes: ScorableCandidate[] = [
@@ -65,19 +72,12 @@ describe('confidence-scorer', () => {
 
     it('retries when response fails to parse, succeeding on retry', async () => {
         let calls = 0;
-        const mockDriver = {
-            ChatCompletion: vi.fn().mockImplementation(async () => {
+        const mockDriver: Pick<BaseLLM, 'ChatCompletion'> = {
+            ChatCompletion: vi.fn(async (): Promise<ChatResult> => {
                 calls++;
-                if (calls === 1) {
-                    return { data: { choices: [{ message: { content: 'not valid json' } }] } };
-                }
-                return {
-                    data: {
-                        choices: [{ message: { content: JSON.stringify({ scores: { n1: 90, n2: 70 } }) } }]
-                    }
-                };
+                return calls === 1 ? reply('not valid json') : reply(JSON.stringify({ scores: { n1: 90, n2: 70 } }));
             })
-        } as unknown as BaseLLM;
+        };
 
         const scores = await ScoreNotesWithRetry(mockDriver, 'test-model', sampleExcerpt, sampleNotes, 2);
         expect(calls).toBe(2);
@@ -85,11 +85,9 @@ describe('confidence-scorer', () => {
     });
 
     it('throws error when all retries fail', async () => {
-        const mockDriver = {
-            ChatCompletion: vi.fn().mockResolvedValue({
-                data: { choices: [{ message: { content: 'broken json' } }] }
-            })
-        } as unknown as BaseLLM;
+        const mockDriver: Pick<BaseLLM, 'ChatCompletion'> = {
+            ChatCompletion: vi.fn(async (): Promise<ChatResult> => reply('broken json'))
+        };
 
         await expect(ScoreNotesWithRetry(mockDriver, 'test-model', sampleExcerpt, sampleNotes, 1))
             .rejects.toThrow(/Confidence scoring failed after 1 retries/);

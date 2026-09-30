@@ -113,7 +113,7 @@ export function ParseConfidenceScores(
  * Calls chat driver to score candidate notes with at most 2 retries.
  */
 export async function ScoreNotesWithRetry(
-    driver: BaseLLM,
+    driver: Pick<BaseLLM, 'ChatCompletion'>,
     modelName: string,
     excerpt: string,
     notes: readonly ScorableCandidate[],
