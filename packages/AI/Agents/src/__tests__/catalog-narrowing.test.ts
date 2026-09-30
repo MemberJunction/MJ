@@ -11,11 +11,13 @@ import {
     CatalogNarrowingCandidate,
     CatalogNarrowingCandidatesToAsk,
     CatalogNarrowingLimits,
+    CatalogNarrowingNote,
     CatalogNarrowingQuestion,
     IsAlwaysShownAction,
     IsCatalogListNarrowed,
     NoCatalogNarrowing,
     OpeningRequestText,
+    ReachableCatalogNarrowingLimits,
     ResolveCatalogNarrowingLimits,
     SelectCatalogNarrowing,
 } from '../catalog-narrowing';
@@ -64,6 +66,32 @@ describe('IsAlwaysShownAction', () => {
         expect(IsAlwaysShownAction('  find candidate agents ')).toBe(true);
         expect(IsAlwaysShownAction('Find Best Action')).toBe(false);
         expect(IsAlwaysShownAction(undefined)).toBe(false);
+    });
+});
+
+describe('ReachableCatalogNarrowingLimits', () => {
+    it('keeps every limit when the agent has Find Candidate Actions, matched without case or spaces', () => {
+        expect(ReachableCatalogNarrowingLimits(LIMITS, ['Send Email', '  find candidate actions '])).toEqual(LIMITS);
+    });
+
+    it('turns off only the action limit when the agent lacks it: sub-agents and skills are reached by name', () => {
+        expect(ReachableCatalogNarrowingLimits(LIMITS, ['Send Email', 'Find Candidate Agents'])).toEqual({ Actions: 0, SubAgents: 1, Skills: 2 });
+        expect(ReachableCatalogNarrowingLimits(LIMITS, [])).toEqual({ Actions: 0, SubAgents: 1, Skills: 2 });
+    });
+});
+
+describe('CatalogNarrowingNote', () => {
+    it('counts hidden actions and points to Find Candidate Actions, without naming them', () => {
+        expect(CatalogNarrowingNote('action', ['Look Up Weather'])).toBe(
+            '1 of your actions is not described below. If none below fits the task, call Find Candidate Actions to find one and its parameters, then call it by name.');
+        expect(CatalogNarrowingNote('action', ['A', 'B', 'C'])).toMatch(/^3 of your actions are not described below\. /);
+    });
+
+    it('names hidden sub-agents and skills, which are called by name alone', () => {
+        expect(CatalogNarrowingNote('agent', ['Research Agent', 'Billing Agent'])).toBe(
+            '2 of your sub-agents are not described below: Research Agent, Billing Agent. Call one by name if it fits the task.');
+        expect(CatalogNarrowingNote('skill', ['Poet'])).toBe(
+            '1 of your skills is not described below: Poet. Activate one by name if it fits the task.');
     });
 });
 

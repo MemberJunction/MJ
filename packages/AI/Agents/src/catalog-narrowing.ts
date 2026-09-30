@@ -11,6 +11,10 @@
  * permitted to. It is off unless `maxActionsInPrompt` or `maxSubAgentsInPrompt` is a positive number
  * and the list is longer than it.
  *
+ * Hidden must never mean unreachable, so a narrowed list starts with a note saying how many items it
+ * hides and how to reach them ({@link CatalogNarrowingNote}), and actions are narrowed only when the
+ * agent has Find Candidate Actions ({@link ReachableCatalogNarrowingLimits}).
+ *
  * @module @memberjunction/ai-agents
  */
 
@@ -23,10 +27,17 @@ export type CatalogNarrowingKind = 'action' | 'agent' | 'skill';
 const CATALOG_NARROWING_KINDS: readonly CatalogNarrowingKind[] = ['action', 'agent', 'skill'];
 
 /**
- * Actions never narrowed out, by name. They are how the model finds anything narrowing hid, so
- * hiding them would turn "hidden" into "unreachable".
+ * The action through which the model reaches an action narrowing hid. Calling an action takes its
+ * parameters, which only its catalog entry or this search gives, so actions are narrowed only when
+ * the agent has it.
  */
-export const CATALOG_NARROWING_ALWAYS_SHOWN_ACTIONS: readonly string[] = ['Find Candidate Actions', 'Find Candidate Agents'];
+export const CATALOG_NARROWING_FIND_ACTIONS = 'Find Candidate Actions';
+
+/**
+ * Actions never narrowed out, by name: the search tools the model uses to look past its catalog.
+ * Hiding Find Candidate Actions would turn "hidden" into "unreachable".
+ */
+export const CATALOG_NARROWING_ALWAYS_SHOWN_ACTIONS: readonly string[] = [CATALOG_NARROWING_FIND_ACTIONS, 'Find Candidate Agents'];
 
 /** The most characters of the opening request sent to the decision model as its state. */
 export const CATALOG_NARROWING_REQUEST_MAX_CHARS = 8000;
@@ -111,10 +122,25 @@ export function CatalogNarrowingLimitFor(limits: CatalogNarrowingLimits, kind: C
     }
 }
 
+/** Whether two action names match, ignoring case and surrounding spaces. */
+function sameActionName(a: string | null | undefined, b: string): boolean {
+    return (a ?? '').trim().toLowerCase() === b.toLowerCase();
+}
+
 /** Whether an action is one of {@link CATALOG_NARROWING_ALWAYS_SHOWN_ACTIONS}. */
 export function IsAlwaysShownAction(name: string | null | undefined): boolean {
-    const normalized = (name ?? '').trim().toLowerCase();
-    return CATALOG_NARROWING_ALWAYS_SHOWN_ACTIONS.some(n => n.toLowerCase() === normalized);
+    return CATALOG_NARROWING_ALWAYS_SHOWN_ACTIONS.some(n => sameActionName(name, n));
+}
+
+/**
+ * The limits with narrowing turned off for any list whose hidden items the model could not reach.
+ * Actions need {@link CATALOG_NARROWING_FIND_ACTIONS} among the agent's actions. Sub-agents and
+ * skills are called by name alone, and the note on a narrowed list names what it hides, so they
+ * need nothing.
+ */
+export function ReachableCatalogNarrowingLimits(limits: CatalogNarrowingLimits, actionNames: readonly string[]): CatalogNarrowingLimits {
+    const canFindActions = actionNames.some(n => sameActionName(n, CATALOG_NARROWING_FIND_ACTIONS));
+    return canFindActions ? limits : { ...limits, Actions: 0 };
 }
 
 /**
@@ -244,4 +270,24 @@ export function ApplyCatalogNarrowing<T extends { ID: string }>(items: T[], hidd
         return items;
     }
     return items.filter(item => !hidden.has(NormalizeUUID(item?.ID)));
+}
+
+const NOTE_NOUNS: Record<CatalogNarrowingKind, string> = { action: 'action', agent: 'sub-agent', skill: 'skill' };
+
+/**
+ * The line a narrowed list starts with: how many items it hides, and how the model reaches them.
+ * Actions point to {@link CATALOG_NARROWING_FIND_ACTIONS}, since calling one takes its parameters.
+ * Sub-agents and skills are called by name alone, so the note names them.
+ */
+export function CatalogNarrowingNote(kind: CatalogNarrowingKind, hiddenNames: readonly string[]): string {
+    const count = hiddenNames.length;
+    const lead = `${count} of your ${NOTE_NOUNS[kind]}s ${count === 1 ? 'is' : 'are'} not described below`;
+    switch (kind) {
+        case 'action':
+            return `${lead}. If none below fits the task, call ${CATALOG_NARROWING_FIND_ACTIONS} to find one and its parameters, then call it by name.`;
+        case 'agent':
+            return `${lead}: ${hiddenNames.join(', ')}. Call one by name if it fits the task.`;
+        case 'skill':
+            return `${lead}: ${hiddenNames.join(', ')}. Activate one by name if it fits the task.`;
+    }
 }

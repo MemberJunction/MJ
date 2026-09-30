@@ -10,6 +10,9 @@
  *   2. With a limit: one decision per run, not per step; the top N plus every MinExecutionsPerRun item
  *      and the Find Candidate tools are shown; _effectiveActions / _effectiveSubAgents stay whole, so
  *      a hidden action can still be called; one `Catalog narrowing` Decision step is recorded.
+ *      Hidden is never unreachable: each narrowed list starts with a note on how many it hides and how
+ *      to reach them, the counts stay whole, and actions are narrowed only when the agent has Find
+ *      Candidate Actions.
  *   3. Fail open: a failed, throwing, timed-out or answer-less decision, or a missing prompt, shows the
  *      full catalog and logs a warning.
  *   4. Skills: narrowed in the catalog only, after the filterAvailableSkills policy (which stays the
@@ -319,6 +322,8 @@ class ScriptedPromptRunner {
 /** Everything the mocked singletons and the provider read, rebuilt per test. */
 class CatalogHarness {
     public agent: AgentRow = makeAgentRow();
+    /** The agent's actions. */
+    public actions: ActionRow[] = ACTIONS;
     public minExecutionsByAction = new Map<string, number>([[ACTIONS[2].ID, 1]]);
     public steps: MockStepEntity[] = [];
     public actionsRun: string[] = [];
@@ -327,7 +332,7 @@ class CatalogHarness {
     private readonly catalog = new Map<string, unknown>();
 
     public get engineInstance(): Record<string, unknown> {
-        const agentActions: AgentActionRow[] = ACTIONS.map((a, i) => ({
+        const agentActions: AgentActionRow[] = this.actions.map((a, i) => ({
             ID: `cccccccc-6000-4000-8000-00000000000${i + 1}`,
             AgentID: AGENT_ID,
             ActionID: a.ID,
@@ -381,7 +386,7 @@ class CatalogHarness {
     public get actionEngineInstance(): Record<string, unknown> {
         return {
             Config: async (): Promise<void> => undefined,
-            Actions: ACTIONS,
+            Actions: this.actions,
             RunAction: async (input: { Action: { Name: string } }): Promise<Record<string, unknown>> => {
                 this.actionsRun.push(input.Action.Name);
                 return { Success: true, Message: 'done', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null };
@@ -529,6 +534,13 @@ function subAgentDetailsFor(...names: string[]): string {
 function skillsCatalogFor(...names: string[]): string {
     return names.map(n => `- **${n}** — ${SKILLS.find(s => s.Name === n)?.Description}`).join('\n');
 }
+
+/** A narrowed section: the note on what it hides and how to reach it, then the items it shows. */
+function narrowedSection(note: string, details: string): string {
+    return `${note}\n\n${details}`;
+}
+
+const ONE_ACTION_HIDDEN = '1 of your actions is not described below. If none below fits the task, call Find Candidate Actions to find one and its parameters, then call it by name.';
 
 const TEST_USER = { ID: USER_ID, Name: 'Catalog Tester', Email: 'catalog@test.mj' } as unknown as UserInfo;
 
@@ -685,14 +697,62 @@ describe('catalog narrowing — with a limit', () => {
         const data = templateData(runner.Calls[0]);
         // Actions: Send Email and Translate Text win; Create Invoice (MinExecutionsPerRun) and Find
         // Candidate Actions are pinned; Look Up Weather is hidden. Catalog order is kept.
-        expect(data.actionCount).toBe(4);
-        expect(data.actionDetails).toBe(actionDetailsFor('Send Email', 'Create Invoice', 'Find Candidate Actions', 'Translate Text'));
+        expect(data.actionDetails).toBe(narrowedSection(
+            ONE_ACTION_HIDDEN,
+            actionDetailsFor('Send Email', 'Create Invoice', 'Find Candidate Actions', 'Translate Text')));
         // Sub-agents: Billing Agent wins; Audit Agent (MinExecutionsPerRun) is pinned.
-        expect(data.subAgentCount).toBe(2);
-        expect(data.subAgentDetails).toBe(subAgentDetailsFor('Billing Agent', 'Audit Agent'));
+        expect(data.subAgentDetails).toBe(narrowedSection(
+            '1 of your sub-agents is not described below: Research Agent. Call one by name if it fits the task.',
+            subAgentDetailsFor('Billing Agent', 'Audit Agent')));
         // Skills share the action limit of 2.
-        expect(data.skillCount).toBe(2);
-        expect(data.skillsCatalog).toBe(skillsCatalogFor('Tax Advisor', 'Accountant'));
+        expect(data.skillsCatalog).toBe(narrowedSection(
+            '1 of your skills is not described below: Poet. Activate one by name if it fits the task.',
+            skillsCatalogFor('Tax Advisor', 'Accountant')));
+    });
+
+    it('keeps each count whole: it is what the model can call, and the native tool path declares all of it', async () => {
+        vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answerByName(PROBABILITIES));
+        const { agent, runner } = makeAgent(twoTurnScript());
+
+        await agent.Execute(makeParams());
+
+        const data = templateData(runner.Calls[0]);
+        expect([data.actionCount, data.subAgentCount, data.skillCount]).toEqual([GOLDEN.actionCount, GOLDEN.subAgentCount, GOLDEN.skillCount]);
+    });
+
+    it('names every hidden sub-agent and skill, and counts the hidden actions', async () => {
+        // A limit of 1 hides two actions and two skills.
+        harness.agent = makeAgentRow({ maxActionsInPrompt: 1, maxSubAgentsInPrompt: 1 });
+        vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answerByName(PROBABILITIES));
+        const { agent, runner } = makeAgent(twoTurnScript());
+
+        await agent.Execute(makeParams());
+
+        const data = templateData(runner.Calls[0]);
+        expect(String(data.actionDetails)).toMatch(/^2 of your actions are not described below\. If none below fits the task, call Find Candidate Actions/);
+        expect(String(data.skillsCatalog)).toMatch(/^2 of your skills are not described below: Tax Advisor, Poet\. Activate one by name/);
+    });
+
+    it('leaves the actions whole, and warns, when the agent has no Find Candidate Actions; sub-agents and skills still narrow', async () => {
+        harness.actions = ACTIONS.filter(a => a.Name !== 'Find Candidate Actions');
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answerByName(PROBABILITIES));
+        const { agent, runner } = makeAgent(twoTurnScript());
+
+        await agent.Execute(makeParams());
+
+        const asked = Object.values(ask.mock.calls[0][0].Questions).map(q => q.Instructions);
+        expect(asked.filter(i => i.startsWith('This action'))).toEqual([]);
+        expect(asked).toHaveLength(5);
+        const data = templateData(runner.Calls[0]);
+        expect(data.actionCount).toBe(4);
+        expect(data.actionDetails).toBe(actionDetailsFor('Look Up Weather', 'Send Email', 'Create Invoice', 'Translate Text'));
+        expect(String(data.subAgentDetails)).toMatch(/^1 of your sub-agents is not described below: Research Agent\./);
+        expect(String(data.skillsCatalog)).toMatch(/^1 of your skills is not described below: Poet\./);
+        expect(vi.mocked(LogErrorEx)).toHaveBeenCalledWith(expect.objectContaining({
+            severity: 'warning',
+            category: 'CatalogNarrowing',
+            message: expect.stringContaining('has no Find Candidate Actions action'),
+        }));
     });
 
     it('hides, never forbids: _effectiveActions and _effectiveSubAgents stay whole, and a hidden action still runs', async () => {
@@ -765,7 +825,9 @@ describe('catalog narrowing — with a limit', () => {
         const data = templateData(runner.Calls[0]);
         expect(data.actionDetails).toBe(GOLDEN.actionDetails);
         expect(data.skillsCatalog).toBe(GOLDEN.skillsCatalog);
-        expect(data.subAgentDetails).toBe(subAgentDetailsFor('Billing Agent', 'Audit Agent'));
+        expect(data.subAgentDetails).toBe(narrowedSection(
+            '1 of your sub-agents is not described below: Research Agent. Call one by name if it fits the task.',
+            subAgentDetailsFor('Billing Agent', 'Audit Agent')));
     });
 
     it('reads the decision prompt name from the merged prompt params', async () => {
@@ -833,6 +895,20 @@ describe('catalog narrowing — fails open', () => {
         expect(ask).not.toHaveBeenCalled();
         expectFullCatalogAndWarning(runner);
         expect(narrowingSteps()).toHaveLength(0);
+    });
+
+    it('shows every list whole, and logs a warning, when narrowing a list throws after a good decision', async () => {
+        vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answerByName(PROBABILITIES));
+        const { agent, runner } = makeAgent(twoTurnScript());
+        agent['hideNarrowedOut'] = (): never => {
+            throw new Error('boom');
+        };
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        expectFullCatalogAndWarning(runner);
+        expect(vi.mocked(LogErrorEx)).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('could not narrow the skill list') }));
     });
 
     describe('the decision call', () => {
@@ -913,17 +989,8 @@ describe('catalog narrowing — skills', () => {
             'This skill is useful for the request: Accountant: Keeps the books',
         ]);
         const data = templateData(runner.Calls[0]);
-        expect(data.skillsCatalog).toBe(skillsCatalogFor('Accountant'));
-    });
-
-    it('an error while narrowing the skill catalog returns every skill it was given, and logs a warning', () => {
-        const agent = new HarnessAgent();
-        hidePoet(agent);
-        agent['hideNarrowedOut'] = (): never => {
-            throw new Error('boom');
-        };
-
-        expect(agent['narrowSkillCatalog'](skills)).toBe(skills);
-        expect(vi.mocked(LogErrorEx)).toHaveBeenCalledWith(expect.objectContaining({ severity: 'warning', category: 'CatalogNarrowing' }));
+        expect(data.skillsCatalog).toBe(narrowedSection(
+            '1 of your skills is not described below: Poet. Activate one by name if it fits the task.',
+            skillsCatalogFor('Accountant')));
     });
 });
