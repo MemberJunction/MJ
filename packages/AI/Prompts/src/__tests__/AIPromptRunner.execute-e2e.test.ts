@@ -263,6 +263,51 @@ describe('ExecutePrompt — hierarchical child-prompt composition', () => {
   });
 });
 
+describe('RenderChildPromptTemplates — public child render without execution', () => {
+  it('renders the children keyed by parent placeholder and makes no model call', async () => {
+    testLLM.Script({ kind: 'succeed', content: 'must not be called' });
+    const te = mockTemplateEngine();
+    (runner as unknown as { _templateEngine: unknown })._templateEngine = te;
+    const parent = makePrompt({ TemplateID: 'tmpl-parent', OutputType: 'string' });
+    const child = makePrompt({ ID: 'child-1', Name: 'Child', TemplateID: 'tmpl-child', OutputType: 'string' });
+    const childParams = { prompt: child, contextUser: { ID: 'u1' }, data: {} };
+    const params = makeParams(parent, { conversationMessages: undefined, templateMessageRole: 'system' });
+
+    const out = await runner.RenderChildPromptTemplates([new ChildPromptParam(childParams as never, 'agentSpecificPrompt')], params as never);
+
+    expect(out.renderedTemplates).toEqual({ agentSpecificPrompt: 'rendered:tmpl-child' });
+    const renderCalls = (te as { __renderCalls: string[] }).__renderCalls;
+    expect(renderCalls).toEqual(['tmpl-child']);          // only the child — the parent is untouched
+    expect(testLLM.CallCount).toBe(0);                     // nothing executed
+  });
+
+  it('returns an empty map for no children', async () => {
+    const params = makeParams(makePrompt(), {});
+    const out = await runner.RenderChildPromptTemplates([], params as never);
+    expect(out.renderedTemplates).toEqual({});
+  });
+
+  it('produces the same text the hierarchical execution path embeds', async () => {
+    testLLM.Script({ kind: 'succeed', content: 'composed answer' });
+    const te = mockTemplateEngine();
+    (runner as unknown as { _templateEngine: unknown })._templateEngine = te;
+    const parent = makePrompt({ TemplateID: 'tmpl-parent', OutputType: 'string' });
+    const child = makePrompt({ ID: 'child-1', Name: 'Child', TemplateID: 'tmpl-child', OutputType: 'string' });
+    const childParams = { prompt: child, contextUser: { ID: 'u1' }, data: {} };
+    const children = [new ChildPromptParam(childParams as never, 'agentSpecificPrompt')];
+    const params = makeParams(parent, { conversationMessages: undefined, templateMessageRole: 'system', childPrompts: children });
+
+    const pre = await runner.RenderChildPromptTemplates(children, params as never);
+    const result = await runner.ExecutePrompt(params as never);
+
+    expect(result.success).toBe(true);
+    // The execution path rendered the same child template (same ID) — pre-render and in-run agree.
+    const renderCalls = (te as { __renderCalls: string[] }).__renderCalls;
+    expect(renderCalls.filter(c => c === 'tmpl-child')).toHaveLength(2);
+    expect(pre.renderedTemplates.agentSpecificPrompt).toBe('rendered:tmpl-child');
+  });
+});
+
 describe('ExecutePrompt — parallel execution aggregation', () => {
   it('aggregates tokens across tasks, selects a result, and surfaces additionalResults', async () => {
     testLLM.Script({ kind: 'succeed', content: 'unused' });

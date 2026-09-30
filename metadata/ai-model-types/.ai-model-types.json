@@ -43,7 +43,8 @@
       "ID": "5E527CEF-46EC-421F-9AAC-C69E22426402"
     },
     "deleteRecord": {
-      "delete": true
+      "delete": true,
+      "deletedAt": "2026-09-29T19:22:28.945Z"
     }
   },
   {
@@ -57,6 +58,10 @@
     "relatedEntities": {},
     "primaryKey": {
       "ID": "54866355-E16E-49ED-80A9-79E151A81281"
+    },
+    "sync": {
+      "lastModified": "2026-09-29T19:19:09.037Z",
+      "checksum": "65bbc642ebf3ce31148b2383a4af9fa0d8ab5aff70ea941ba2de3818c932a5f8"
     }
   }
 ]
