@@ -30,8 +30,8 @@ import {
     type FormContributionSlot, type FormContributionSpec,
 } from '@memberjunction/interactive-component-types/forms';
 import {
-    ApplyDecisionToSpec, CollectFormContributionRegistrations, FieldGroupsInDetails, HumanizeEntityTitle,
-    MjFormPlacementDialogComponent,
+    ApplyDecisionToSpec, CollapseFormPanelRegistrations, CollectFormContributionRegistrations,
+    FieldGroupsInDetails, HumanizeEntityTitle, MjFormPlacementDialogComponent, ResolveContributionKey,
     type FormCompositionSnapshot, type FormPlacementContext, type FormPlacementDecision,
 } from '@memberjunction/ng-base-forms';
 
@@ -461,8 +461,10 @@ export class InteractiveFormApplyService {
     }
 
     /**
-     * The installed compiled contribution holding this key, if any. Read from the open form when
-     * there is one, else from the compiled registrations for the entity.
+     * The installed compiled contribution holding this key, if any: the registration that wins
+     * the key, when it is a compiled one. Read from the open form when there is one, else from
+     * the entity's registrations collapsed the way the form collapses them. Panels this user has
+     * hidden are included, since they still hold their key.
      */
     private compiledIncumbent(
         key: string,
@@ -471,11 +473,12 @@ export class InteractiveFormApplyService {
         provider: IMetadataProvider,
     ): { Title: string; Precedence: number } | null {
         if (snapshot) return snapshot.Contributions.find(c => c.Key === key && c.Source === 'class') ?? null;
-        const registration = CollectFormContributionRegistrations(entity, provider).find(reg =>
-            reg.Source === 'class'
-            && (reg.Metadata.entity === '*' || reg.Metadata.entity === entity.Name)
-            && ResolveContributionWriteKey(reg.Metadata, reg.Metadata.relatedEntity ?? null) === key);
-        return registration ? { Title: registration.Title ?? key, Precedence: registration.Priority } : null;
+        const applicable = CollectFormContributionRegistrations(entity, provider, { IncludeHidden: true })
+            .filter(reg => reg.Metadata.entity === '*' || reg.Metadata.entity === entity.Name);
+        const winner = CollapseFormPanelRegistrations(applicable)
+            .find(reg => ResolveContributionKey(reg.Metadata) === key);
+        if (!winner || (winner.Source ?? 'class') !== 'class') return null;
+        return { Title: winner.Title ?? key, Precedence: winner.Priority };
     }
 
     /** The registered name of the entity a grid claim names, which the write path derives the key from. */

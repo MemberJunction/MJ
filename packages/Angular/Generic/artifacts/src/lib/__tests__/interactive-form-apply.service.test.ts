@@ -15,7 +15,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { CompositeKey } from '@memberjunction/core';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
-import type { FieldGroupsInDetails, HumanizeEntityTitle } from '@memberjunction/ng-base-forms';
+import type {
+    CollapseFormPanelRegistrations, FieldGroupsInDetails, HumanizeEntityTitle, ResolveContributionKey,
+} from '@memberjunction/ng-base-forms';
 
 // ─── Hoisted state buckets the mocks read/write ──────────────────────────
 
@@ -46,8 +48,10 @@ const hoisted = vi.hoisted(() => ({
     placementContext: null as Record<string, unknown> | null,
     /** The record the dialog's preview was told to show. */
     placementRecordKey: null as CompositeKey | null,
-    /** Compiled `BaseFormPanel` registrations the collector reports. */
-    compiledRegistrations: [] as Array<{ Priority: number; Source: 'class' | 'metadata'; Title?: string; Metadata: Record<string, unknown> }>,
+    /** Registrations the collector reports. */
+    registrations: [] as Array<{ Priority: number; Source: 'class' | 'metadata'; Title?: string; Metadata: Record<string, unknown> }>,
+    /** Registrations the collector reports only when asked for the ones the user hid. */
+    hiddenRegistrations: [] as Array<{ Priority: number; Source: 'class' | 'metadata'; Title?: string; Metadata: Record<string, unknown> }>,
 }));
 
 // ─── Module mocks ────────────────────────────────────────────────────────
@@ -124,21 +128,29 @@ const mockDialog = {
 /**
  * The placement dialog is an Angular component; importing the package root here would drag
  * the framework into a node-preset suite. `ApplyDecisionToSpec` is reproduced exactly so the
- * test still asserts the real merge. The chrome helpers are pure and framework-free, so the
- * built ones run. The collector reads the ClassFactory, so it reports what a test sets.
+ * test still asserts the real merge. The chrome and key helpers are pure and framework-free,
+ * so the built ones run. The collector reads the ClassFactory, so it reports what a test sets.
  */
 vi.mock('@memberjunction/ng-base-forms', async () => {
+    // Loads from ng-base-forms' dist, so that package must be built first.
     const chrome = await vi.importActual<{
         FieldGroupsInDetails: typeof FieldGroupsInDetails;
         HumanizeEntityTitle: typeof HumanizeEntityTitle;
     }>('@memberjunction/ng-base-forms/dist/lib/chrome/form-chrome.js');
+    const keys = await vi.importActual<{
+        CollapseFormPanelRegistrations: typeof CollapseFormPanelRegistrations;
+        ResolveContributionKey: typeof ResolveContributionKey;
+    }>('@memberjunction/ng-base-forms/dist/lib/panel-slot/form-contribution.js');
     return {
         MjFormPlacementDialogComponent: class MjFormPlacementDialogComponent {},
         ApplyDecisionToSpec: (spec: Record<string, unknown>, decision: { Contribution: unknown }) =>
             ({ ...spec, formContribution: decision.Contribution }),
         FieldGroupsInDetails: chrome.FieldGroupsInDetails,
         HumanizeEntityTitle: chrome.HumanizeEntityTitle,
-        CollectFormContributionRegistrations: () => hoisted.compiledRegistrations,
+        CollapseFormPanelRegistrations: keys.CollapseFormPanelRegistrations,
+        ResolveContributionKey: keys.ResolveContributionKey,
+        CollectFormContributionRegistrations: (_entity: unknown, _provider: unknown, options?: { IncludeHidden?: boolean }) =>
+            options?.IncludeHidden ? [...hoisted.registrations, ...hoisted.hiddenRegistrations] : hoisted.registrations,
     };
 });
 
@@ -204,7 +216,8 @@ beforeEach(() => {
     hoisted.confirmResult = null;
     hoisted.resolveActionIdsByName = false;
     hoisted.placementRecordKey = null;
-    hoisted.compiledRegistrations = [];
+    hoisted.registrations = [];
+    hoisted.hiddenRegistrations = [];
     hoisted.actionResponses.clear();
     hoisted.actionCalls.length = 0;
     hoisted.runViewResponses.length = 0;
@@ -767,21 +780,58 @@ describe('InteractiveFormApplyService — form-panel specs', () => {
     });
 
     describe('replacing an installed panel with no open form', () => {
+        const header = (priority: number, source: 'class' | 'metadata', entity = ENTITY) =>
+            ({ Priority: priority, Source: source, Title: 'Header', Metadata: { entity, slot: 'before-fields', contributionKey: 'header' } });
+        const precedenceSent = () => {
+            const create = hoisted.actionCalls.find(c => c.id === 'Create Form Contribution')!;
+            return (create.params as Array<{ Name: string; Value: string }>).find(p => p.Name === 'Precedence')?.Value;
+        };
+
         beforeEach(() => {
             hoisted.placement.contribution = {
                 slot: 'after-fields', presentation: 'panel', title: 'Lifetime value', contributionKey: 'header',
             };
-            hoisted.compiledRegistrations = [
-                { Priority: 3, Source: 'class', Title: 'Header', Metadata: { entity: ENTITY, slot: 'before-fields', contributionKey: 'header' } },
-                { Priority: 9, Source: 'class', Metadata: { entity: 'Some Other Entity', slot: 'before-fields', contributionKey: 'header' } },
-            ];
+            hoisted.registrations = [header(3, 'class'), header(9, 'class', 'Some Other Entity')];
         });
 
         it('ranks the new row one above the compiled panel holding its key', async () => {
             const svc = new InteractiveFormApplyService();
             await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
-            const create = hoisted.actionCalls.find(c => c.id === 'Create Form Contribution')!;
-            expect((create.params as Array<{ Name: string; Value: string }>).find(p => p.Name === 'Precedence')?.Value).toBe('4');
+            expect(precedenceSent()).toBe('4');
+        });
+
+        it('ranks it above the compiled override that wins the key, not the one it overrides', async () => {
+            hoisted.registrations = [header(3, 'class'), header(7, 'class')];
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
+            expect(precedenceSent()).toBe('8');
+        });
+
+        it('counts a compiled panel the user has hidden, which still holds its key', async () => {
+            hoisted.registrations = [];
+            hoisted.hiddenRegistrations = [header(3, 'class')];
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
+            expect(precedenceSent()).toBe('4');
+        });
+
+        it('does not ask again when the user\'s own row already wins the key', async () => {
+            hoisted.registrations = [header(3, 'class'), header(4, 'metadata')];
+            hoisted.actionResponses.set('Get Form Contributions For Entity', {
+                Success: true,
+                Message: JSON.stringify({ EntityName: ENTITY, Contributions: [
+                    { ContributionID: 'ROW-MINE', ContributionKey: 'header', Status: 'Active', Scope: 'User', ComponentName: 'PersonLtvStrip' },
+                ] }),
+            });
+            hoisted.actionResponses.set('Modify Form Contribution', {
+                Success: true, Message: JSON.stringify({ ContributionID: 'ROW-NEXT', ComponentID: 'C', Version: '1.1.0', Mode: 'new-version' }),
+            });
+            // A replace confirm would cancel, so reaching Modify shows it was not asked.
+            hoisted.confirmResult = 'cancel';
+            const svc = new InteractiveFormApplyService();
+            const result = await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
+            expect(result.Success).toBe(true);
+            expect(hoisted.actionCalls.map(c => c.id)).toContain('Modify Form Contribution');
         });
 
         it('cancels without writing when the user declines', async () => {
