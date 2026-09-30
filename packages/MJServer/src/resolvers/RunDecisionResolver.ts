@@ -1,12 +1,13 @@
 import { Resolver, Mutation, Arg, Ctx, ObjectType, Field, Int } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
-import { LogError, UserInfo } from '@memberjunction/core';
+import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIDecisionRunner, AIDecisionParams, AIDecisionRunResult, ParseDecisionQuestions } from '@memberjunction/ai-prompts';
 import { DecisionQuestion } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ResolverBase } from '../generic/ResolverBase.js';
+import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 
 /**
  * The result of the `RunDecision` mutation. Every failure, an authorization denial included, comes
@@ -76,6 +77,12 @@ export class RunDecisionResolver extends ResolverBase {
      * the ID of the prompt that will run, whether the caller named it by ID or by name, so a rule on
      * a prompt's ID holds on both. A denial is returned as `success: false`, not thrown.
      *
+     * Scope-limited sessions (magic-link guests and resource-scoped sessions) are refused. The
+     * prompt is read from `AIEngine`'s cache, around entity permissions and row-level security, so
+     * the confinement those sessions rely on would not apply here. For the same reason, a prompt
+     * that cannot run gets one neutral message, whatever the reason, that names nothing the caller
+     * did not send.
+     *
      * @param state The state the questions are about: text, or the JSON text of an object.
      * @param questions The `DecisionQuestion` map by question key, as JSON: the shape `Run Decision` accepts.
      * @param promptId The decision prompt's ID. Takes precedence over `promptName`.
@@ -110,6 +117,11 @@ export class RunDecisionResolver extends ResolverBase {
         const currentUser = this.GetUserFromPayload(userPayload);
         if (!currentUser) {
             return this.failure('Unable to determine current user', startTime);
+        }
+        // A scope-limited session is confined only by entity permissions and RLS, and the prompt comes
+        // from the cache, around both. There is no narrower read to fall back to, so it is refused.
+        if (IsScopeLimitedPrincipal(currentUser)) {
+            return this.failure('RunDecision is not permitted for scope-limited sessions', startTime);
         }
         const inputs = this.validateInputs(request);
         if ('Error' in inputs) {
@@ -227,18 +239,36 @@ export class RunDecisionResolver extends ResolverBase {
     ): Promise<MJAIPromptEntityExtended | string> {
         await AIEngine.Instance.Config(false, contextUser);
         const prompt = authorized ?? (await this.findAndAuthorizeLoadedPrompt(reference, userPayload));
-        if (!prompt) {
-            return reference.By === 'ID'
-                ? `AI Prompt with ID ${reference.Value} not found`
-                : `AI Prompt '${reference.Value}' not found`;
-        }
-        if (!this.isDecisionPrompt(prompt, runner)) {
-            return `AI Prompt '${prompt.Name}' is not a Decision prompt: its AI model type must be '${runner.RequiredModelType}'`;
-        }
-        if (prompt.Status !== 'Active') {
-            return `AI Prompt '${prompt.Name}' is not active (Status: ${prompt.Status})`;
+        if (!prompt || !this.canRunDecision(prompt, runner)) {
+            return this.unavailablePromptMessage(reference);
         }
         return prompt;
+    }
+
+    /**
+     * Whether the prompt can run a decision: Decision-typed and Active. When it cannot, the reason,
+     * which names the prompt and its status, goes to the server log only.
+     */
+    private canRunDecision(prompt: MJAIPromptEntityExtended, runner: AIDecisionRunner): boolean {
+        if (!this.isDecisionPrompt(prompt, runner)) {
+            LogStatus(`RunDecision: AI Prompt '${prompt.Name}' (${prompt.ID}) is not a Decision prompt: its AI model type must be '${runner.RequiredModelType}'`);
+            return false;
+        }
+        if (prompt.Status !== 'Active') {
+            LogStatus(`RunDecision: AI Prompt '${prompt.Name}' (${prompt.ID}) is not active (Status: ${prompt.Status})`);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * The one message for a prompt that cannot run, whether it is missing, not Decision-typed or not
+     * Active. It repeats only what the caller sent: this path reads the cache around entity
+     * permissions, so it must not tell a caller the name or status of a prompt it may not read.
+     */
+    private unavailablePromptMessage(reference: DecisionPromptReference): string {
+        const named = reference.By === 'ID' ? `with ID ${reference.Value}` : `'${reference.Value}'`;
+        return `AI Prompt ${named} was not found or is not an active Decision prompt`;
     }
 
     /** Looks the prompt up in the loaded cache, and authorizes it by its ID when it is found. */

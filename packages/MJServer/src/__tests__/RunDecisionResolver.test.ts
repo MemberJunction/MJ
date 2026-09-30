@@ -110,11 +110,14 @@ const MODEL_TYPES = [
   makeModelType({ ID: LLM_TYPE_ID, Name: 'LLM' }),
 ];
 
-/** Gives AIEngine a fixed prompt set and the two model types the tests use; its load does nothing. */
-function stubEngine(prompts: MJAIPromptEntityExtended[]): void {
-  vi.spyOn(AIEngine.prototype, 'Config').mockResolvedValue(undefined);
+/**
+ * Gives AIEngine a fixed prompt set and the two model types the tests use; its load does nothing.
+ * @returns The spy on the engine's load.
+ */
+function stubEngine(prompts: MJAIPromptEntityExtended[]): MockInstance<AIEngine['Config']> {
   vi.spyOn(AIEngine.prototype, 'Prompts', 'get').mockReturnValue(prompts);
   vi.spyOn(AIEngine.prototype, 'ModelTypes', 'get').mockReturnValue(MODEL_TYPES);
+  return vi.spyOn(AIEngine.prototype, 'Config').mockResolvedValue(undefined);
 }
 
 const QUESTIONS: Record<string, DecisionQuestion> = {
@@ -203,13 +206,17 @@ const allowPromptsExcept = (...denied: string[]) =>
     return { Allowed: allowed, Reason: allowed ? 'Allowed' : 'Denied by a rule' };
   });
 
+/** The one message for a prompt, named by ID, that cannot run. */
+const unavailableById = (id: string) => `AI Prompt with ID ${id} was not found or is not an active Decision prompt`;
+
 let executeDecision: MockInstance<AIDecisionRunner['ExecuteDecision']>;
+let engineLoad: MockInstance<AIEngine['Config']>;
 const sentParams = (): AIDecisionParams => executeDecision.mock.calls[0][0];
 
 beforeEach(() => {
   vi.restoreAllMocks();
   mockAuthorize.mockReset();
-  stubEngine([DEFAULT_PROMPT, ROUTING_PROMPT, CHAT_PROMPT, UNTYPED_PROMPT, INACTIVE_PROMPT]);
+  engineLoad = stubEngine([DEFAULT_PROMPT, ROUTING_PROMPT, CHAT_PROMPT, UNTYPED_PROMPT, INACTIVE_PROMPT]);
   vi.spyOn(UserCache.prototype, 'GetSystemUser').mockReturnValue(SYSTEM_USER);
   executeDecision = vi.spyOn(AIDecisionRunner.prototype, 'ExecuteDecision').mockResolvedValue(successResult());
 });
@@ -248,32 +255,74 @@ describe('RunDecision: prompt resolution', () => {
     const byId = await runDecision({ PromptID: 'prompt-missing' });
     const byName = await runDecision({ PromptName: 'No Such Prompt' });
 
-    expect(byId).toMatchObject({ success: false, errorMessage: 'AI Prompt with ID prompt-missing not found' });
-    expect(byName).toMatchObject({ success: false, errorMessage: "AI Prompt 'No Such Prompt' not found" });
+    expect(byId).toMatchObject({ success: false, errorMessage: unavailableById('prompt-missing') });
+    expect(byName).toMatchObject({ success: false, errorMessage: "AI Prompt 'No Such Prompt' was not found or is not an active Decision prompt" });
     expect(executeDecision).not.toHaveBeenCalled();
   });
 
   it('rejects a prompt whose AI model type is not Decision', async () => {
     const result = await runDecision({ PromptID: CHAT_PROMPT.ID });
 
-    expect(result.success).toBe(false);
-    expect(result.errorMessage).toBe("AI Prompt 'Summarize Text' is not a Decision prompt: its AI model type must be 'Decision'");
+    expect(result).toMatchObject({ success: false, errorMessage: unavailableById(CHAT_PROMPT.ID) });
     expect(executeDecision).not.toHaveBeenCalled();
   });
 
   it('rejects a prompt with no AI model type', async () => {
     const result = await runDecision({ PromptName: 'Untyped Prompt' });
 
-    expect(result.success).toBe(false);
-    expect(result.errorMessage).toContain('is not a Decision prompt');
+    expect(result).toMatchObject({ success: false, errorMessage: "AI Prompt 'Untyped Prompt' was not found or is not an active Decision prompt" });
     expect(executeDecision).not.toHaveBeenCalled();
   });
 
   it('rejects an inactive prompt', async () => {
     const result = await runDecision({ PromptID: INACTIVE_PROMPT.ID });
 
-    expect(result).toMatchObject({ success: false, errorMessage: "AI Prompt 'Retired Decision' is not active (Status: Disabled)" });
+    expect(result).toMatchObject({ success: false, errorMessage: unavailableById(INACTIVE_PROMPT.ID) });
     expect(executeDecision).not.toHaveBeenCalled();
+  });
+
+  it('gives the same message whether a prompt is missing, not Decision-typed or inactive, naming nothing the caller did not send', async () => {
+    const refusals = [
+      { ID: 'prompt-missing', Result: await runDecision({ PromptID: 'prompt-missing' }) },
+      { ID: CHAT_PROMPT.ID, Result: await runDecision({ PromptID: CHAT_PROMPT.ID }) },
+      { ID: UNTYPED_PROMPT.ID, Result: await runDecision({ PromptID: UNTYPED_PROMPT.ID }) },
+      { ID: INACTIVE_PROMPT.ID, Result: await runDecision({ PromptID: INACTIVE_PROMPT.ID }) },
+    ];
+
+    for (const refusal of refusals) {
+      expect(refusal.Result.errorMessage).toBe(unavailableById(refusal.ID));
+    }
+    const messages = refusals.map(refusal => refusal.Result.errorMessage ?? '').join('\n');
+    for (const hidden of [CHAT_PROMPT.Name, UNTYPED_PROMPT.Name, INACTIVE_PROMPT.Name, INACTIVE_PROMPT.Status]) {
+      expect(messages).not.toContain(hidden);
+    }
+  });
+});
+
+// ─── Scope-limited sessions ──────────────────────────────────────────────────
+
+describe('RunDecision: scope-limited sessions', () => {
+  /** A session whose user is a magic-link guest or a resource-scoped session. */
+  const scopeLimitedPayload = (limit: Pick<UserInfo, 'IsMagicLinkAnonymous' | 'MagicLinkScope'>): UserPayload => {
+    const user = Object.assign(makeUser({ ID: 'user-guest', Name: 'Guest', Email: 'guest@example.com' }), limit);
+    return { email: user.Email, userRecord: user, sessionId: 'session-guest' };
+  };
+
+  it.each([
+    ['an anonymous magic-link guest', { IsMagicLinkAnonymous: true, MagicLinkScope: undefined }],
+    ['a resource-scoped session', { IsMagicLinkAnonymous: false, MagicLinkScope: { ResourceID: 'resource-1', ResourceType: 'Dashboards' } }],
+  ])('refuses %s before it loads a prompt or runs anything', async (_label, limit) => {
+    const result = await runDecision({ PromptID: ROUTING_PROMPT.ID, Payload: scopeLimitedPayload(limit) });
+
+    expect(result).toMatchObject({ success: false, errorMessage: 'RunDecision is not permitted for scope-limited sessions' });
+    expect(engineLoad).not.toHaveBeenCalled();
+    expect(executeDecision).not.toHaveBeenCalled();
+  });
+
+  it('runs for a session whose scope object carries no confinement', async () => {
+    const result = await runDecision({ Payload: scopeLimitedPayload({ IsMagicLinkAnonymous: false, MagicLinkScope: {} }) });
+
+    expect(result.success).toBe(true);
   });
 });
 
@@ -486,7 +535,7 @@ describe('RunDecision: authorization mirrors RunAIPrompt', () => {
     const allowed = await runDecision({ PromptName: 'No Such Prompt', Payload: apiKeyPayload() });
 
     expect(checkedResources()).toEqual(['No Such Prompt']);
-    expect(allowed).toMatchObject({ success: false, errorMessage: "AI Prompt 'No Such Prompt' not found" });
+    expect(allowed).toMatchObject({ success: false, errorMessage: "AI Prompt 'No Such Prompt' was not found or is not an active Decision prompt" });
     expect(executeDecision).not.toHaveBeenCalled();
   });
 
