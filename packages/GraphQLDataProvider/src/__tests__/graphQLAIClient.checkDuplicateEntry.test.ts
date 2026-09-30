@@ -112,6 +112,16 @@ describe('GraphQLAIClient.CheckDuplicateEntry: the result', () => {
         expect(result).toEqual({ Status: 'NotConfigured', ElapsedMs: 4, Candidates: [] });
     });
 
+    it('passes NotAuthorized through with its reason', async () => {
+        const { client } = makeClient({
+            CheckDuplicateEntry: { Status: 'NotAuthorized', ErrorMessage: 'no read permission', ElapsedMs: 2, Candidates: [] },
+        });
+
+        const result = await client.CheckDuplicateEntry(PARAMS);
+
+        expect(result).toEqual({ Status: 'NotAuthorized', ErrorMessage: 'no read permission', ElapsedMs: 2, Candidates: [] });
+    });
+
     it('passes a server failure through with its reason', async () => {
         const { client } = makeClient({
             CheckDuplicateEntry: { Status: 'Failed', ErrorMessage: 'Decision failed: overloaded', ElapsedMs: 900, Candidates: [] },
