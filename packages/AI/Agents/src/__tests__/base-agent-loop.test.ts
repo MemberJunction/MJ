@@ -50,6 +50,7 @@ import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEn
 import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { RecordToolCallingDecision } from '@memberjunction/ai-prompts';
 import { SanitizeToolName } from '../native-tools/action-tool-builder';
+import { FINISH_IF_MODE_WARNING_SHOWN_MAX, FINISH_IF_MODE_WARNINGS_REMEMBERED } from '../finish-if-mode-warnings';
 import { LogErrorEx, LogStatus } from '@memberjunction/core';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
@@ -438,6 +439,11 @@ let harness: LoopHarness;
 class HarnessAgent extends BaseAgent {
     protected override async InjectPreExecutionRAG(): Promise<AgentPreExecutionRAGResult | null> {
         return null;
+    }
+
+    /** Merges the agent's prompt params as each turn of a run does, with `overrides` as the run's runtime overrides. */
+    public MergePromptParams(agent: MJAIAgentEntityExtended, overrides: Record<string, unknown>): Record<string, unknown> {
+        return this.buildAgentTypePromptParams(undefined, agent, overrides);
     }
 }
 
@@ -1494,5 +1500,43 @@ describe('BaseAgent.Execute — a finishIfMode that is not a mode', () => {
         await agent.Execute(makeParams());
 
         expect(finishIfModeWarnings()).toEqual([]);
+    });
+
+    it('logs only the start of a huge value from a run request, and still warns about it once', async () => {
+        const huge = `huge-${'x'.repeat(200_000)}`;
+
+        await runWithMode(huge);
+        await runWithMode(huge);
+
+        expect(finishIfModeWarnings()).toHaveLength(1);
+        const [warning] = finishIfModeWarnings();
+        expect(warning).toContain(`finishIfMode "${huge.slice(0, FINISH_IF_MODE_WARNING_SHOWN_MAX)}"… (${huge.length} characters)`);
+        expect(warning).not.toContain(huge.slice(0, FINISH_IF_MODE_WARNING_SHOWN_MAX + 1));
+        expect(warning.length).toBeLessThan(500);
+    });
+
+    // Runs last in this block: it fills the process-wide memory of reported values.
+    it(`remembers at most ${FINISH_IF_MODE_WARNINGS_REMEMBERED} agent and value pairs, so a run request per value cannot grow it without bound`, () => {
+        const agent = new HarnessAgent();
+        const agentRow = makeParams().agent;
+        const merge = (finishIfMode: string): void => {
+            agent.MergePromptParams(agentRow, { finishIfMode });
+        };
+
+        merge('flood-first');
+        for (let i = 0; i < FINISH_IF_MODE_WARNINGS_REMEMBERED; i++) {
+            merge(`flood-${i}`);
+        }
+        const newest = `flood-${FINISH_IF_MODE_WARNINGS_REMEMBERED - 1}`;
+        merge(newest);
+        merge('flood-first');
+
+        const warnings = finishIfModeWarnings();
+        // Every value warned once. The newest is still remembered, so it did not warn again, but
+        // 'flood-first' was the pair seen least recently when the memory filled, so it was dropped
+        // to keep the memory at its cap, and it warned a second time.
+        expect(warnings).toHaveLength(FINISH_IF_MODE_WARNINGS_REMEMBERED + 2);
+        expect(warnings.filter((w) => w.includes(`"${newest}"`))).toHaveLength(1);
+        expect(warnings.filter((w) => w.includes('"flood-first"'))).toHaveLength(2);
     });
 });
