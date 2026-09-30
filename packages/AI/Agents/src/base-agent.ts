@@ -145,10 +145,14 @@ import {
     CatalogNarrowingCandidatesToAsk,
     CatalogNarrowingKind,
     CatalogNarrowingLimits,
+    CatalogNarrowingNote,
     CatalogNarrowingOutcome,
+    CATALOG_NARROWING_FIND_ACTIONS,
     IsAlwaysShownAction,
+    IsCatalogListNarrowed,
     NoCatalogNarrowing,
     OpeningRequestText,
+    ReachableCatalogNarrowingLimits,
     ResolveCatalogNarrowingLimits,
     SelectCatalogNarrowing,
 } from './catalog-narrowing';
@@ -4708,6 +4712,9 @@ export class BaseAgent {
             return;
         }
         // ...and a per-agent-ACTION gate: rows that opt out are removed before the tool set is built.
+        // Catalog narrowing (plan Task 3.7) does not apply here, by design: it shortens the prose
+        // catalog only. A call to an undeclared tool is a Retry, and this mode has no `Actions`
+        // envelope step, so a hidden action or sub-agent left undeclared could not be called at all.
         const actions = FilterDeclarableActions(
             this.getEffectiveActionsForValidation(params.agent.ID),
             AIEngine.Instance.AgentActions.filter((aa) => UUIDsEqual(aa.AgentID, params.agent.ID))
@@ -8746,27 +8753,6 @@ The context is now within limits. Please retry your request with the recovered c
             // Store for the finishIf gate, which runs after this prompt in executeActionsStep / executeNextStep
             this._agentTypePromptParams = agentTypePromptParams;
 
-            // Catalog narrowing (plan Task 3.7), off unless maxActionsInPrompt / maxSubAgentsInPrompt is
-            // positive and the list is longer. It narrows what the prompt SHOWS, once per run:
-            // _effectiveActions / _effectiveSubAgents above stay whole, so validation forbids nothing.
-            const gatedSkills = engine.GetAutoActivatableSkillsForAgent(agent, _contextUser);
-            await this.ensureCatalogNarrowing(agent, _contextUser, agentTypePromptParams, activeActions, uniqueActiveSubAgents, gatedSkills);
-            const shownActions = this.hideNarrowedOut('action', activeActions);
-            if (shownActions !== activeActions) {
-                actionDetails = this.formatActionDetails(shownActions);
-            }
-            const shownSubAgents = this.hideNarrowedOut('agent', uniqueActiveSubAgents);
-            if (shownSubAgents !== uniqueActiveSubAgents) {
-                subAgentCount = shownSubAgents.length;
-                subAgentDetails = this.formatSubAgentDetails(shownSubAgents);
-            }
-
-            // Build client tool details for the prompt (per-run; depends on extraData)
-            const clientToolDetails = this.buildClientToolPromptSection(agent, extraData);
-
-            // Build app context section if provided in extraData
-            const appContext = this.buildAppContextSection(extraData);
-
             // Skill catalog (name + description only — progressive disclosure). This is the
             // SELF-ACTIVATION surface, so it uses the double-gated auto set: empty unless the
             // agent's SkillActivationMode is 'Auto', and containing only skills whose own
@@ -8775,8 +8761,25 @@ The context is now within limits. Please retry your request with the recovered c
             // and filtered by the acting user's Run permission (open-by-default) so the agent
             // is never even offered a skill the user isn't entitled to — the permission
             // boundary is enforced at the catalog, not just at activation.
-            const availableSkills = await this.availableSkills(gatedSkills, 'catalog', agent, _contextUser);
-            const skillsCatalog = this.formatSkillsCatalog(availableSkills);
+            const availableSkills = await this.availableSkills(
+                engine.GetAutoActivatableSkillsForAgent(agent, _contextUser), 'catalog', agent, _contextUser);
+
+            // Catalog narrowing (plan Task 3.7), off unless maxActionsInPrompt / maxSubAgentsInPrompt is
+            // positive and the list is longer. It narrows what the prompt SHOWS, once per run:
+            // _effectiveActions / _effectiveSubAgents above stay whole, so validation forbids nothing.
+            // Skills are narrowed here, after the filterAvailableSkills policy, never inside it: the
+            // decision judges only skills the policy offers, and an override that skips `super` keeps it.
+            // The counts stay whole: they are what the model can call, and a narrowed list says what it hides.
+            await this.ensureCatalogNarrowing(agent, _contextUser, agentTypePromptParams, activeActions, uniqueActiveSubAgents, availableSkills);
+            actionDetails = this.narrowedCatalogSection('action', activeActions, actionDetails, shown => this.formatActionDetails(shown));
+            subAgentDetails = this.narrowedCatalogSection('agent', uniqueActiveSubAgents, subAgentDetails, shown => this.formatSubAgentDetails(shown));
+            const skillsCatalog = this.narrowedCatalogSection('skill', availableSkills, this.formatSkillsCatalog(availableSkills), shown => this.formatSkillsCatalog(shown));
+
+            // Build client tool details for the prompt (per-run; depends on extraData)
+            const clientToolDetails = this.buildClientToolPromptSection(agent, extraData);
+
+            // Build app context section if provided in extraData
+            const appContext = this.buildAppContextSection(extraData);
 
             const contextData: AgentContextData = {
                 agentName: agent.Name,
@@ -8784,7 +8787,7 @@ The context is now within limits. Please retry your request with the recovered c
                 parentAgentName: agent.Parent ? agent.Parent.trim() : "",
                 subAgentCount: subAgentCount,
                 subAgentDetails: subAgentDetails,
-                actionCount: shownActions.length,
+                actionCount: activeActions.length,
                 actionDetails: actionDetails,
                 clientToolDetails: clientToolDetails,
                 skillCount: availableSkills.length,
@@ -8826,7 +8829,8 @@ The context is now within limits. Please retry your request with the recovered c
     /**
      * Narrows the catalog once per run, on its first prompt (plan Task 3.7), and caches the result for
      * every later step. With narrowing off it asks nothing and records nothing. Never throws: any
-     * failure leaves the full catalog in place.
+     * failure leaves the full catalog in place. It narrows the prose catalog only:
+     * {@link applyNativeTools} still declares every action and sub-agent.
      */
     private async ensureCatalogNarrowing(
         agent: MJAIAgentEntityExtended,
@@ -8841,8 +8845,8 @@ The context is now within limits. Please retry your request with the recovered c
         }
         // Set first, so a failure below is cached as "hide nothing" rather than retried every step.
         this._catalogNarrowing = NoCatalogNarrowing();
-        const limits = ResolveCatalogNarrowingLimits(promptParams);
-        if (limits.Actions === 0 && limits.SubAgents === 0) {
+        const limits = this.reachableCatalogNarrowingLimits(agent, promptParams, actions);
+        if (limits.Actions === 0 && limits.SubAgents === 0 && limits.Skills === 0) {
             return;
         }
         try {
@@ -8854,6 +8858,28 @@ The context is now within limits. Please retry your request with the recovered c
         } catch (error) {
             this.warnCatalogNarrowing(agent, error instanceof Error ? error.message : String(error));
         }
+    }
+
+    /**
+     * The run's limits, with actions left whole when the agent lacks Find Candidate Actions: a hidden
+     * action would then be unreachable. That case is logged as a warning when it keeps a long action
+     * list whole, since the agent asked for narrowing and did not get it.
+     */
+    private reachableCatalogNarrowingLimits(
+        agent: MJAIAgentEntityExtended,
+        promptParams: Record<string, unknown>,
+        actions: MJActionEntityExtended[]
+    ): CatalogNarrowingLimits {
+        const configured = ResolveCatalogNarrowingLimits(promptParams);
+        const limits = ReachableCatalogNarrowingLimits(configured, actions.map(a => a.Name));
+        if (limits.Actions !== configured.Actions && IsCatalogListNarrowed(configured.Actions, actions.length)) {
+            LogErrorEx({
+                message: `Catalog narrowing for '${agent.Name}' shows every action: the agent has no ${CATALOG_NARROWING_FIND_ACTIONS} action, so a hidden action could not be found`,
+                severity: 'warning',
+                category: 'CatalogNarrowing',
+            });
+        }
+        return limits;
     }
 
     /**
@@ -9028,6 +9054,36 @@ The context is now within limits. Please retry your request with the recovered c
     /** The items of one list the prompt shows. Returns `items` itself when the run's narrowing hides none of them. */
     private hideNarrowedOut<T extends { ID: string }>(kind: CatalogNarrowingKind, items: T[]): T[] {
         return ApplyCatalogNarrowing(items, this._catalogNarrowing?.Hidden[kind]);
+    }
+
+    /**
+     * One catalog section as the prompt shows it: `full` when the run's narrowing hides none of
+     * `items`, otherwise a {@link CatalogNarrowingNote} saying how many are hidden and how to reach
+     * them, then the items still shown. A hidden item can still be called. Fails OPEN, unlike the
+     * skill policy: an error shows `full` and logs a warning.
+     */
+    private narrowedCatalogSection<T extends { ID: string; Name: string }>(
+        kind: CatalogNarrowingKind,
+        items: T[],
+        full: string,
+        format: (shown: T[]) => string
+    ): string {
+        try {
+            const shown = this.hideNarrowedOut(kind, items);
+            if (shown === items) {
+                return full;
+            }
+            const shownSet = new Set(shown);
+            const hiddenNames = items.filter(item => !shownSet.has(item)).map(item => item.Name);
+            return `${CatalogNarrowingNote(kind, hiddenNames)}\n\n${format(shown)}`;
+        } catch (error) {
+            LogErrorEx({
+                message: `Catalog narrowing could not narrow the ${kind} list, so all of it is shown: ${error instanceof Error ? error.message : String(error)}`,
+                severity: 'warning',
+                category: 'CatalogNarrowing',
+            });
+            return full;
+        }
     }
 
     /**
@@ -14550,9 +14606,8 @@ The context is now within limits. Please retry your request with the recovered c
      * them calls this after MJ's gates
      * (AcceptsSkills, Status, agent grant, user Run permission, the ActivationMode double gate) and
      * before anything activates. The default is the identity: MJ's gates are the whole policy.
-     * The one exception is the `'catalog'` purpose, where the default also applies the run's catalog
-     * narrowing (plan Task 3.7; off unless `maxActionsInPrompt` is set), which hides skills from the
-     * catalog but never refuses one. An override that wants it too calls `super.filterAvailableSkills`.
+     * Catalog narrowing (plan Task 3.7) is not part of this policy: it runs after it, at the catalog
+     * site, and only hides skills from the prompt. An override never needs to call `super` for it.
      *
      * Override it to layer a policy MJ has no table for — a tenant licensing model, a per-organization
      * entitlement, a feature flag — and it applies everywhere at once. Without this seam a subclass
@@ -14579,26 +14634,8 @@ The context is now within limits. Please retry your request with the recovered c
         agent: MJAIAgentEntityExtended,
         contextUser?: UserInfo,
     ): Promise<MJAISkillEntity[]> {
-        void agent; void contextUser; // named (not `_`-prefixed) so an override reads naturally
-        return purpose === 'catalog' ? this.narrowSkillCatalog(skills) : skills;
-    }
-
-    /**
-     * Hides the skills the run's catalog narrowing judged out, from the catalog only: a hidden skill
-     * can still be activated. {@link filterAvailableSkills} fails CLOSED on a throw, but narrowing must
-     * fail OPEN, so this catches its own errors and returns every skill it was given.
-     */
-    private narrowSkillCatalog(skills: MJAISkillEntity[]): MJAISkillEntity[] {
-        try {
-            return this.hideNarrowedOut('skill', skills);
-        } catch (error) {
-            LogErrorEx({
-                message: `Catalog narrowing could not filter the skill catalog, so every skill is shown: ${error instanceof Error ? error.message : String(error)}`,
-                severity: 'warning',
-                category: 'CatalogNarrowing',
-            });
-            return skills;
-        }
+        void purpose; void agent; void contextUser; // named (not `_`-prefixed) so an override reads naturally
+        return skills;
     }
 
     /**
