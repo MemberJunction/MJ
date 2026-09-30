@@ -4,7 +4,7 @@
  * the injected message.
  */
 import { describe, it, expect } from 'vitest';
-import { ApplyPlattCalibration, type DecisionAnswer } from '@memberjunction/ai';
+import { ApplyPlattCalibration, DecisionResult, type DecisionAnswer } from '@memberjunction/ai';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import {
     AgentsWithoutDescription,
@@ -20,8 +20,11 @@ import {
     DECISION_DISCOVERY_MAX_RECORDED_IDS,
     DECISION_DISCOVERY_MIN_CONFIDENCE,
     DECISION_DISCOVERY_TIMEOUT_MS,
+    DecisionDiscoveryAnsweringModelOf,
     DecisionDiscoveryFromResult,
     DecisionDiscoveryOption,
+    DescribeDecisionDiscoveryModel,
+    FindDecisionDiscoveryCalibration,
     DecisionDiscoveryOptions,
     DecisionOptionLimit,
     FailedDecisionDiscovery,
@@ -286,10 +289,24 @@ describe('JudgeDecisionDiscovery', () => {
     });
 });
 
+/** The chat model LLM Decision's calibration was fitted on. */
+const LLM_DECISION_CHAT_MODEL = 'GPT-OSS-120B';
+
 describe('DecisionDiscoveryFromResult', () => {
-    /** A decision result; `modelName` null means the result names no model. */
-    function result(success: boolean, given: Record<string, DecisionAnswer>, errorMessage?: string, modelName: string | null = 'Jev'): AIDecisionRunResult {
-        return { success, errorMessage, Answers: given, modelInfo: modelName ? { modelId: 'model-1', modelName } : undefined };
+    /**
+     * A decision result; `modelName` null means the result names no model. `resolvedModel` is what the
+     * driver resolved to: for LLM Decision, the chat model that answered.
+     */
+    function result(
+        success: boolean,
+        given: Record<string, DecisionAnswer>,
+        errorMessage?: string,
+        modelName: string | null = 'Jev',
+        resolvedModel?: string
+    ): AIDecisionRunResult {
+        const driverResult = new DecisionResult(success, new Date(0), new Date(1));
+        driverResult.ResolvedModel = resolvedModel;
+        return { success, errorMessage, Answers: given, modelInfo: modelName ? { modelId: 'model-1', modelName } : undefined, DecisionResult: driverResult };
     }
 
     it('injects the suggestion for an answer whose calibrated values are confident', () => {
@@ -325,9 +342,30 @@ describe('DecisionDiscoveryFromResult', () => {
     ])('treats an answer from %s as unsure, and keeps the raw answer', (_label, modelName) => {
         const outcome = DecisionDiscoveryFromResult(result(true, answers(BILLING.ID, 0.99, 0.99), undefined, modelName), OPTIONS);
 
-        expect(outcome).toMatchObject({ Injected: false, Succeeded: true });
+        expect(outcome).toMatchObject({ Injected: false, Succeeded: true, UncalibratedModel: `'${modelName ?? 'unknown'}'` });
         expect(outcome.Reason).toContain('has no discovery calibration');
         expect(outcome.Answer).toMatchObject({ Agent: BILLING, Confidence: 0.99, AnyApplies: 0.99 });
+    });
+
+    it("calibrates LLM Decision's answers with its parameters when its fitted chat model answered", () => {
+        const outcome = DecisionDiscoveryFromResult(result(true, answers(BILLING.ID, 0.95, 0.99), undefined, 'LLM Decision', LLM_DECISION_CHAT_MODEL), OPTIONS);
+
+        expect(outcome.UncalibratedModel).toBeUndefined();
+        expect(outcome.Answer?.Confidence).toBeCloseTo(calibrated('LLM Decision', 'Confidence', 0.95), 10);
+        expect(outcome.Answer?.AnyApplies).toBeCloseTo(calibrated('LLM Decision', 'AnyApplies', 0.99), 10);
+        expect(outcome.Injected).toBe(true);
+    });
+
+    it.each([
+        ['another chat model', 'GPT 5.5 Instant', "'LLM Decision' (resolved to 'GPT 5.5 Instant')"],
+        ['no named chat model', undefined, "'LLM Decision'"],
+    ])("never gives GPT-OSS-120B's parameters to LLM Decision answering through %s: its answer is unsure", (_label, chatModel, described) => {
+        // Raw answers so confident that any calibration would inject them.
+        const outcome = DecisionDiscoveryFromResult(result(true, answers(BILLING.ID, 0.99, 0.99), undefined, 'LLM Decision', chatModel), OPTIONS);
+
+        expect(outcome).toMatchObject({ Injected: false, Succeeded: true, UncalibratedModel: described });
+        expect(outcome.Reason).toBe(`the answering model ${described} has no discovery calibration, so its answer is treated as unsure`);
+        expect(outcome.Answer).toMatchObject({ Confidence: 0.99, AnyApplies: 0.99 });
     });
 
     it('fails for a failed call or an unusable answer', () => {
@@ -340,10 +378,44 @@ describe('DecisionDiscoveryFromResult', () => {
     });
 });
 
+describe('FindDecisionDiscoveryCalibration', () => {
+    it("finds Jev's calibration whatever version Jev resolved to", () => {
+        expect(FindDecisionDiscoveryCalibration({ ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.13-20260917' })).toBe(DECISION_DISCOVERY_CALIBRATION.Jev);
+        expect(FindDecisionDiscoveryCalibration({ ModelName: ' Jev ' })).toBe(DECISION_DISCOVERY_CALIBRATION.Jev);
+    });
+
+    it("finds LLM Decision's only for the chat model it was fitted on", () => {
+        expect(DECISION_DISCOVERY_CALIBRATION['LLM Decision'].ChatModel).toBe(LLM_DECISION_CHAT_MODEL);
+        expect(FindDecisionDiscoveryCalibration({ ModelName: 'LLM Decision', ResolvedModel: LLM_DECISION_CHAT_MODEL })).toBe(DECISION_DISCOVERY_CALIBRATION['LLM Decision']);
+        expect(FindDecisionDiscoveryCalibration({ ModelName: 'LLM Decision', ResolvedModel: ` ${LLM_DECISION_CHAT_MODEL} ` })).toBe(DECISION_DISCOVERY_CALIBRATION['LLM Decision']);
+        expect(FindDecisionDiscoveryCalibration({ ModelName: 'LLM Decision', ResolvedModel: 'GPT 5.5 Instant' })).toBeUndefined();
+        expect(FindDecisionDiscoveryCalibration({ ModelName: 'LLM Decision' })).toBeUndefined();
+    });
+
+    it('finds nothing for a model with no entry, or no name', () => {
+        expect(FindDecisionDiscoveryCalibration({ ModelName: 'Some Other Model' })).toBeUndefined();
+        expect(FindDecisionDiscoveryCalibration({})).toBeUndefined();
+    });
+
+    it("reads the model from the result: the decision model's name and what its driver resolved to", () => {
+        const driverResult = new DecisionResult(true, new Date(0), new Date(1));
+        driverResult.ResolvedModel = LLM_DECISION_CHAT_MODEL;
+        expect(DecisionDiscoveryAnsweringModelOf({ modelInfo: { modelId: 'm', modelName: 'LLM Decision' }, DecisionResult: driverResult }))
+            .toEqual({ ModelName: 'LLM Decision', ResolvedModel: LLM_DECISION_CHAT_MODEL });
+        expect(DecisionDiscoveryAnsweringModelOf({})).toEqual({ ModelName: undefined, ResolvedModel: undefined });
+    });
+
+    it('describes a model by name, with what it resolved to when that differs', () => {
+        expect(DescribeDecisionDiscoveryModel({ ModelName: 'LLM Decision', ResolvedModel: 'GPT 5.5 Instant' })).toBe("'LLM Decision' (resolved to 'GPT 5.5 Instant')");
+        expect(DescribeDecisionDiscoveryModel({ ModelName: 'Jev', ResolvedModel: 'Jev' })).toBe("'Jev'");
+        expect(DescribeDecisionDiscoveryModel({})).toBe("'unknown'");
+    });
+});
+
 describe('CalibrateDiscoveryAnswers', () => {
     it('calibrates the Choice confidence and the Likelihood with the model\'s Platt parameters', () => {
-        for (const model of Object.keys(DECISION_DISCOVERY_CALIBRATION)) {
-            const out = CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), model);
+        for (const [model, calibration] of Object.entries(DECISION_DISCOVERY_CALIBRATION)) {
+            const out = CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), { ModelName: model, ResolvedModel: calibration.ChatModel });
             const choice = out?.[DECISION_DISCOVERY_AGENT_QUESTION];
             const applies = out?.[DECISION_DISCOVERY_APPLIES_QUESTION];
 
@@ -354,7 +426,7 @@ describe('CalibrateDiscoveryAnswers', () => {
 
     it('leaves the Choice value and distribution as they are, and trims the model name', () => {
         const given = answers(BILLING.ID, 0.6, 0.3);
-        const out = CalibrateDiscoveryAnswers(given, ' Jev ');
+        const out = CalibrateDiscoveryAnswers(given, { ModelName: ' Jev ' });
         const choice = out?.[DECISION_DISCOVERY_AGENT_QUESTION];
         const original = given[DECISION_DISCOVERY_AGENT_QUESTION];
 
@@ -363,8 +435,9 @@ describe('CalibrateDiscoveryAnswers', () => {
     });
 
     it('returns null for a model with no calibration', () => {
-        expect(CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), 'Some Other Model')).toBeNull();
-        expect(CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), undefined)).toBeNull();
+        expect(CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), { ModelName: 'Some Other Model' })).toBeNull();
+        expect(CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), {})).toBeNull();
+        expect(CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), { ModelName: 'LLM Decision', ResolvedModel: 'GPT 5.5 Instant' })).toBeNull();
     });
 });
 

@@ -38,13 +38,16 @@ export const DECISION_DISCOVERY_MAX_OPTIONS = 25;
  * agent applies must reach it.
  *
  * Set from the agent-discovery Decision Eval (plan Task 3.1, 2026-09-29): 258 labelled requests, 198
- * for one of 33 agents and 60 for none, three repeats per model. At a calibrated 0.85, Jev's
- * suggestion covered 23.7% of the requests meant for an agent, and named the right agent for 95.7% of
- * those it covered. It was shown for 6.7% of the requests meant for no agent, all of them multi-agent
- * workflows. LLM Decision covered 19.0% at 91.2% precision, and was shown for 4.4%. A wrong suggestion
- * costs more than a missed one, which is only the two-turn flow the agent used before, so the
- * threshold favours precision. On raw probabilities the old 0.7 almost never fired: Jev's raw
- * any-applies Likelihood never passed 0.8, so it covered 6.9%.
+ * for one of 33 agents and 60 for none, three repeats per model, calibrated out of fold, and scored
+ * as production would, so an answer after {@link DECISION_DISCOVERY_TIMEOUT_MS} injects nothing. At a
+ * calibrated 0.85, Jev's suggestion covered 21.7% of the requests meant for an agent, and named the
+ * right agent for 95.3% of those it covered. It was shown for 5.0% of the requests meant for no agent,
+ * all of them multi-agent workflows. Every Jev discovery but the run's first, which loaded the
+ * embedding model, finished within the timeout. LLM Decision finished within it for at least 67.7% of
+ * requests, and covered at least 16.0% at 92.6% precision, shown for 5.0%. A wrong suggestion costs
+ * more than a missed one, which is only the two-turn flow the agent used before, so the threshold
+ * favours precision. On raw probabilities the old 0.7 almost never fired: Jev's raw any-applies
+ * Likelihood never passed 0.8, so it covered 6.9%.
  */
 export const DECISION_DISCOVERY_MIN_CONFIDENCE = 0.85;
 
@@ -54,34 +57,104 @@ export interface DecisionDiscoveryCalibration {
     Confidence: PlattCalibration;
     /** The Likelihood that a specialist agent should handle the request. */
     AnyApplies: PlattCalibration;
+    /**
+     * For a decision model that answers through a chat model, as `LLM Decision` does, the chat model
+     * the fit was measured on, named as the decision result names it (`DecisionResult.ResolvedModel`,
+     * the chat model's MJ name). The calibration applies only when that chat model answered, on any
+     * of its vendors; an answer from any other chat model is uncalibrated. Absent for a model that
+     * answers itself, such as Jev.
+     */
+    ChatModel?: string;
 }
 
 /**
  * Platt calibration of the discovery answers, per decision model, keyed by the name MJ gives the
- * model that answered (`modelInfo.modelName`). A model's raw answers are not calibrated: Jev's raw
- * any-applies Likelihood sits between 0.1 and 0.8 whatever the request. A model with no entry here
- * is treated as unsure, so its answer suggests nothing.
+ * decision model that answered (`modelInfo.modelName`) and, for one that answers through a chat
+ * model, only for the chat model it was fitted on ({@link DecisionDiscoveryCalibration.ChatModel}).
+ * A model's raw answers are not calibrated: Jev's raw any-applies Likelihood sits between 0.1 and 0.8
+ * whatever the request. A model with no calibration here is treated as unsure, so its answer
+ * suggests nothing.
  *
- * Fitted on the agent-discovery Decision Eval (2026-09-29) with 5-fold out-of-fold checks; the
- * Choice's confidence against whether it named the labelled agent, and the Likelihood against
- * whether the request was meant for an agent. Refit whenever a model, its version, the questions or
- * the catalog's shape changes.
+ * Fitted on the agent-discovery Decision Eval (2026-09-29; 258 requests, 3 repeats per model, 774
+ * answers each): the Choice's confidence against whether it named the labelled agent (594 answers
+ * to requests meant for an agent), and the Likelihood against whether the request was meant for an
+ * agent (all 774). Every fit converged (5 to 7 Newton iterations; a 60-digit refit agrees to 4
+ * places). `LLM Decision`'s answers all came from GPT-OSS-120B. Refit whenever a model, its version,
+ * the questions or the catalog's shape changes.
  */
 export const DECISION_DISCOVERY_CALIBRATION: Readonly<Record<string, DecisionDiscoveryCalibration>> = Object.freeze({
     'Jev': Object.freeze({ Confidence: Object.freeze({ A: 0.4412, B: 0.4571 }), AnyApplies: Object.freeze({ A: 1.2469, B: 1.7700 }) }),
-    'LLM Decision': Object.freeze({ Confidence: Object.freeze({ A: 1.4301, B: -0.0755 }), AnyApplies: Object.freeze({ A: 0.7114, B: 0.9073 }) })
+    'LLM Decision': Object.freeze({
+        ChatModel: 'GPT-OSS-120B',
+        Confidence: Object.freeze({ A: 1.4301, B: -0.0755 }),
+        AnyApplies: Object.freeze({ A: 0.7114, B: 0.9073 })
+    })
 });
 
 /**
+ * The model behind a discovery answer: the decision model, and the model its driver resolved to,
+ * which for a decision model that answers through a chat model (`LLM Decision`) is that chat model.
+ */
+export interface DecisionDiscoveryAnsweringModel {
+    /** The decision model's MJ name (`modelInfo.modelName`), such as 'Jev' or 'LLM Decision'. */
+    ModelName?: string;
+    /** What the driver resolved to (`DecisionResult.ResolvedModel`): LLM Decision's chat model, or a vendor's model version. */
+    ResolvedModel?: string;
+}
+
+/**
+ * The model behind a decision result's answers.
+ *
+ * @param result - The decision call's result.
+ */
+export function DecisionDiscoveryAnsweringModelOf(result: Pick<AIDecisionRunResult, 'modelInfo' | 'DecisionResult'>): DecisionDiscoveryAnsweringModel {
+    return { ModelName: result.modelInfo?.modelName, ResolvedModel: result.DecisionResult?.ResolvedModel };
+}
+
+/**
+ * The discovery calibration for the model that answered, or undefined when it has none: the
+ * decision model has no entry, or its entry was fitted on another chat model than the one that
+ * answered. Names are compared trimmed.
+ *
+ * @param model - The model behind the answer.
+ */
+export function FindDecisionDiscoveryCalibration(model: DecisionDiscoveryAnsweringModel): DecisionDiscoveryCalibration | undefined {
+    const name = model.ModelName?.trim();
+    const calibration = name ? DECISION_DISCOVERY_CALIBRATION[name] : undefined;
+    if (!calibration) {
+        return undefined;
+    }
+    if (calibration.ChatModel !== undefined && model.ResolvedModel?.trim() !== calibration.ChatModel) {
+        return undefined;
+    }
+    return calibration;
+}
+
+/**
+ * The model behind an answer, for a log line or a reason: its name, with what it resolved to when
+ * that differs, such as `'LLM Decision' (resolved to 'GPT 5.5 Instant')`.
+ *
+ * @param model - The model behind the answer.
+ */
+export function DescribeDecisionDiscoveryModel(model: DecisionDiscoveryAnsweringModel): string {
+    const name = model.ModelName?.trim() || 'unknown';
+    const resolved = model.ResolvedModel?.trim();
+    return resolved && resolved !== name ? `'${name}' (resolved to '${resolved}')` : `'${name}'`;
+}
+
+/**
  * The answers with the Choice's confidence and the Likelihood calibrated for the model that gave
- * them, or null when that model has no discovery calibration. Other answers, and the Choice's
- * distribution, are returned as they are.
+ * them ({@link FindDecisionDiscoveryCalibration}), or null when that model has no discovery
+ * calibration. Other answers, and the Choice's distribution, are returned as they are.
+ *
+ * @param answers - The raw answers, by question key.
+ * @param model - The model behind them.
  */
 export function CalibrateDiscoveryAnswers(
     answers: Record<string, DecisionAnswer>,
-    modelName: string | undefined
+    model: DecisionDiscoveryAnsweringModel
 ): Record<string, DecisionAnswer> | null {
-    const calibration = modelName ? DECISION_DISCOVERY_CALIBRATION[modelName.trim()] : undefined;
+    const calibration = FindDecisionDiscoveryCalibration(model);
     if (!calibration) {
         return null;
     }
@@ -191,6 +264,11 @@ export interface DecisionDiscoveryOutcome {
     Answer?: DecisionDiscoveryAnswer;
     /** The decision call's result, for its usage. */
     Result?: AIDecisionRunResult;
+    /**
+     * The model behind the answer ({@link DescribeDecisionDiscoveryModel}), when it has no discovery
+     * calibration, so its answer was treated as unsure: discovery never suggests anything for it.
+     */
+    UncalibratedModel?: string;
 }
 
 /**
@@ -453,11 +531,12 @@ export function DecisionDiscoveryFromResult(
     if (!raw.Answer) {
         return { Injected: false, Succeeded: false, Reason: raw.Reason, Result: result };
     }
-    const modelName = result.modelInfo?.modelName;
-    const calibrated = CalibrateDiscoveryAnswers(result.Answers, modelName);
+    const model = DecisionDiscoveryAnsweringModelOf(result);
+    const calibrated = CalibrateDiscoveryAnswers(result.Answers, model);
     if (!calibrated) {
-        const reason = `the answering model '${modelName ?? 'unknown'}' has no discovery calibration, so its answer is treated as unsure`;
-        return { Injected: false, Succeeded: true, Reason: reason, Answer: raw.Answer, Result: result };
+        const described = DescribeDecisionDiscoveryModel(model);
+        const reason = `the answering model ${described} has no discovery calibration, so its answer is treated as unsure`;
+        return { Injected: false, Succeeded: true, Reason: reason, Answer: raw.Answer, Result: result, UncalibratedModel: described };
     }
     const verdict = JudgeDecisionDiscovery(calibrated, options, minConfidence);
     if (!verdict.Answer) {

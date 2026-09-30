@@ -34,7 +34,7 @@ import {
 } from '../decision-discovery';
 import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
-import type { ChatMessage, ChoiceQuestion, DecisionAnswer, PlattCalibration } from '@memberjunction/ai';
+import { DecisionResult, type ChatMessage, type ChoiceQuestion, type DecisionAnswer, type PlattCalibration } from '@memberjunction/ai';
 import { LogErrorEx } from '@memberjunction/core';
 import type { EntitySearchResult, IMetadataProvider, SearchEntityParams, UserInfo } from '@memberjunction/core';
 
@@ -712,6 +712,37 @@ describe('decision discovery — what reaches the prompt', () => {
         expect(steps[0].Status).toBe('Completed');
         expect(stepOutput(steps[0])).toMatchObject({ injected: false, answer: { agent: 'Billing Agent', confidence: expect.closeTo(confidence, 10), anyApplies: expect.closeTo(applies, 10) } });
         expect(String(stepOutput(steps[0]).reason)).toContain(reason);
+        // An unsure answer from a calibrated model is ordinary: no warning.
+        expect(vi.mocked(LogErrorEx)).not.toHaveBeenCalled();
+    });
+
+    it('injects nothing from a model with no discovery calibration, and warns once per model', async () => {
+        /** LLM Decision answering, very confidently, through `chatModel`, which its calibration was not fitted on. */
+        const throughChatModel = (chatModel: string) => async (args: AgentDecisionAskParams): Promise<AIDecisionRunResult> => {
+            const answer = await answering(BILLING, 0.99, 0.99)(args);
+            const driverResult = new DecisionResult(true, new Date(0), new Date(1));
+            driverResult.ResolvedModel = chatModel;
+            return { ...answer, modelInfo: { modelId: 'model-llm-decision', modelName: 'LLM Decision' }, DecisionResult: driverResult };
+        };
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(throughChatModel('Uncalibrated Chat Model A'));
+        const first = makeAgent();
+        await first.agent.Execute(makeParams());
+        await makeAgent().agent.Execute(makeParams());
+        ask.mockImplementation(throughChatModel('Uncalibrated Chat Model B'));
+        await makeAgent().agent.Execute(makeParams());
+
+        expect(first.runner.MessagesAtCall[0]).toEqual([{ role: 'user', content: OPENING_REQUEST }]);
+        const steps = discoverySteps();
+        expect(steps.map(step => step.Status)).toEqual(['Completed', 'Completed', 'Completed']);
+        expect(String(stepOutput(steps[0]).reason)).toContain("'LLM Decision' (resolved to 'Uncalibrated Chat Model A') has no discovery calibration");
+        const warnings = vi.mocked(LogErrorEx).mock.calls
+            .map(([entry]) => entry)
+            .filter(entry => typeof entry !== 'string' && entry.category === 'DecisionDiscovery' && entry.severity === 'warning')
+            .map(entry => (typeof entry === 'string' ? entry : entry.message));
+        expect(warnings).toEqual([
+            expect.stringContaining("'LLM Decision' (resolved to 'Uncalibrated Chat Model A')"),
+            expect.stringContaining("'LLM Decision' (resolved to 'Uncalibrated Chat Model B')")
+        ]);
     });
 
     it.each([

@@ -252,6 +252,19 @@ describe('DecisionEvalDriver — agent discovery', () => {
             expect(actualOf(result)).toMatchObject({ WouldInject: true, VerdictReason: null, Confidence: 0.99, AnyApplies: 0.9 });
         });
 
+        it('records no injection when LLM Decision answered through a chat model its calibration was not fitted on', async () => {
+            const throughOtherChatModel = async (): Promise<AIDecisionRunResult> => {
+                const answer = decided(BILLING.ID, 0.99, 0.99);
+                const driverResult = new DecisionResult(true, new Date(0), new Date(1));
+                driverResult.ResolvedModel = 'GPT 5.5 Instant';
+                return { ...answer, modelInfo: { modelId: PINNED_MODEL, modelName: 'LLM Decision' }, DecisionResult: driverResult, DriverClass: 'LLMDecision' };
+            };
+            const { result } = await run({ respond: throughOtherChatModel });
+            const actual = actualOf(result);
+            expect(actual).toMatchObject({ WouldInject: false, Confidence: 0.99, AnyApplies: 0.99 });
+            expect(actual.VerdictReason).toContain("'LLM Decision' (resolved to 'GPT 5.5 Instant') has no discovery calibration");
+        });
+
         it("judges an unsure answer as production would: no injection, and why", async () => {
             const { result } = await run({ respond: async () => decided(BILLING.ID, 0.6, 0.9) });
             expect(actualOf(result)).toMatchObject({ WouldInject: false, Confidence: 0.6 });
