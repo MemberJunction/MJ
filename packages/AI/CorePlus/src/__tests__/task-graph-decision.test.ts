@@ -199,6 +199,114 @@ describe('the decisions condition root', () => {
     });
 });
 
+describe('a decision must be able to answer before the edge that reads it is decided', () => {
+    const reads = (tempId: string, condition = "decisions.triage.intent.value === 'billing'"): TaskGraphDependency =>
+        ({ tempId, condition });
+    const timingErrors = (s: TaskGraphSpec) =>
+        errorsOf(s).filter((e) => e.Code === 'InvalidCondition' && /wait for it forever|does not wait for:/.test(e.Message));
+
+    it('REFUSES a decision that depends on the edge\'s target — the probe: A→B reads triage, triage depends on B', () => {
+        const s = spec([
+            agentStep('A', []),
+            agentStep('B', [reads('A')]),
+            TaskNode.Decision(base('triage', ['B'], 'Triage the ticket'), TRIAGE),
+        ]);
+        const result = ValidateTaskGraphSpec(s);
+        expect(result.Valid).toBe(false);
+        const [error] = timingErrors(s);
+        expect(error.Message).toContain('"Triage the ticket", which comes after "B"');
+        expect(error.TempId).toBe('B');
+    });
+
+    it('REFUSES a decision further downstream of the target', () => {
+        const s = spec([
+            agentStep('A', []),
+            agentStep('B', [reads('A')]),
+            agentStep('C', ['B']),
+            TaskNode.Decision(base('triage', ['C'], 'Triage the ticket'), TRIAGE),
+        ]);
+        expect(timingErrors(s)[0]?.Message).toContain('which comes after "B"');
+    });
+
+    it('REFUSES an edge that reads its own target\'s decision', () => {
+        const s = spec([
+            agentStep('A', []),
+            TaskNode.Decision(base('triage', [reads('A')], 'Triage the ticket'), TRIAGE),
+        ]);
+        expect(timingErrors(s)[0]?.Message).toContain('the step this edge leads to');
+    });
+
+    it('REFUSES a decision on a sibling branch of a fork, which is skipped whenever the other branch wins', () => {
+        const s = spec([
+            agentStep('X', []),
+            TaskNode.Decision(base('triage', [{ tempId: 'X', condition: 'payload.kind === "ticket"', exclusiveGroup: 'kind' }], 'Triage the ticket'), TRIAGE),
+            agentStep('E', [{ tempId: 'X', condition: 'payload.kind !== "ticket"', exclusiveGroup: 'kind' }]),
+            agentStep('F', [reads('E')]),
+        ]);
+        expect(timingErrors(s)[0]?.Message).toContain('"E" does not wait for: it may not have answered');
+    });
+
+    it('REFUSES a decision upstream of a join it is not certain for — its branch can be skipped while the join runs', () => {
+        const s = spec([
+            agentStep('X', []),
+            TaskNode.Decision(base('triage', [{ tempId: 'X', condition: 'payload.kind === "ticket"', exclusiveGroup: 'kind' }], 'Triage the ticket'), TRIAGE),
+            agentStep('E', [{ tempId: 'X', condition: 'payload.kind !== "ticket"', exclusiveGroup: 'kind' }]),
+            agentStep('J', ['triage', 'E']),
+            agentStep('K', [reads('J')]),
+        ]);
+        expect(timingErrors(s)[0]?.Message).toContain('on a branch that can be skipped while "J" still runs');
+    });
+
+    it('REFUSES a decision running in parallel that the origin does not wait for', () => {
+        const s = spec([
+            agentStep('A', []),
+            triage(),
+            agentStep('B', [reads('A')]),
+        ]);
+        expect(timingErrors(s)[0]?.Message).toContain('"A" does not wait for: it may not have answered');
+    });
+
+    it('reports one timing error per decision, however many of its questions the condition reads', () => {
+        const s = spec([
+            agentStep('A', []),
+            agentStep('B', [reads('A', "decisions.triage.intent.value === 'billing' && decisions.triage.urgent.probability > 0.5")]),
+            TaskNode.Decision(base('triage', ['B'], 'Triage the ticket'), TRIAGE),
+        ]);
+        expect(timingErrors(s)).toHaveLength(1);
+    });
+
+    it('accepts an edge leaving the Decision step itself', () => {
+        expect(ValidateTaskGraphSpec(spec([triage(), agentStep('B', [reads('triage')])])).Errors).toEqual([]);
+    });
+
+    it('accepts an edge leaving a step that runs only after the decision', () => {
+        const s = spec([triage(), agentStep('gather', ['triage']), agentStep('B', [reads('gather')])]);
+        expect(ValidateTaskGraphSpec(s).Errors).toEqual([]);
+    });
+
+    it('accepts a join after a fork on the decision — every branch ran after it', () => {
+        const s = spec([
+            triage(),
+            agentStep('billing', [fork("decisions.triage.intent.value === 'billing'")]),
+            agentStep('refund', [fork("decisions.triage.intent.value === 'refund'")]),
+            agentStep('other', [fork("decisions.triage.intent.value === 'other'")]),
+            agentStep('wrap', ['billing', 'refund', 'other']),
+            agentStep('escalate', [reads('wrap', 'decisions.triage.urgent.probability >= 0.8')]),
+        ]);
+        expect(ValidateTaskGraphSpec(s).Errors).toEqual([]);
+    });
+
+    it('accepts an AND-join that waits for a decision made in parallel', () => {
+        const s = spec([
+            agentStep('fetch', []),
+            triage(),
+            agentStep('merge', ['fetch', 'triage']),
+            agentStep('B', [reads('merge')]),
+        ]);
+        expect(ValidateTaskGraphSpec(s).Errors).toEqual([]);
+    });
+});
+
 describe('DecisionReferencesIn', () => {
     it('finds every reference, with its field', () => {
         const scan = DecisionReferencesIn("decisions.a.q.value === 'x' && decisions.b?.r?.probability > 0.5");
