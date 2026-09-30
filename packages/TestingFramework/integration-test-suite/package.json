@@ -18,6 +18,7 @@
     "@memberjunction/ai": "6.2.0-edge.0",
     "@memberjunction/ai-agent-harness": "6.2.0-edge.0",
     "@memberjunction/ai-agents": "6.2.0-edge.0",
+    "@memberjunction/ai-anthropic": "6.2.0-edge.0",
     "@memberjunction/ai-bridge-base": "6.2.0-edge.0",
     "@memberjunction/ai-bridge-server": "6.2.0-edge.0",
     "@memberjunction/ai-core-plus": "6.2.0-edge.0",

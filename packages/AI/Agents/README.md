@@ -460,6 +460,17 @@ The Memory Manager runs on a schedule (every ~15 minutes). `AIEngineBase` alread
 * **Single source of truth for status**: note status filtering reuses `IsInjectableNoteStatus()` from `@memberjunction/core-entities` (Active + Provisional), the same predicate the read-path injection/scoping queries use, so the maintenance set can never drift from the injectable set.
 * **Intentional exceptions** (still hit the DB): the **hardening pass** loads `entity_object` provisional notes *specifically to mutate them*, so it reads fresh, owned entities; the resolved-source-chain loader keeps a targeted `RunView` **only** for note IDs the cache misses; and `MJ: AI Agent Runs` reads stay as queries because runs are transactional and not cached by `AIEngineBase`.
 
+### 6. Trailing Runtime State (prompt-cache layout)
+The Loop agent's volatile per-iteration state — current date/time, Scratchpad State and Payload — is never rendered in the system prompt. `preparePromptParams` builds it into a `<mj-runtime-state>` fragment (`RuntimeStateFragmentBuilder`) appended as the **final user message** of each request, and the system prompt carries a static `## Runtime State` pointer. Provider prompt caching is a prefix match over `tools → system → messages`, so a byte-stable system prompt lets the entire history cache incrementally: measured on Sage, 0% → 78–90% cached on Anthropic and OpenAI, 21% → 91% on xAI, 30–65% → 66–96% on Gemini and Cerebras, with prompt cost per million tokens down 37–80%.
+
+* **Per-provider retention** — providers with a byte-prefix cache (OpenAI, xAI) need prior fragments *retained* and the new one appended; block-cache providers (Anthropic, Gemini, Cerebras) get the previous fragment *replaced*. The choice is the model catalog's `ModelConfiguration.LLM.PrefixPromptCache` flag, set under the vendor row's `Configuration.ModelDefaults` and inherited by every model it serves unless a model-vendor row overrides it (`BaseAgent.resolvePrefixPromptCache` → `AIEngine.GetEffectiveModelConfiguration`, cascade Model Types < Models < Vendors' `Configuration.ModelDefaults` < Model Vendors), decided once per run and frozen. No provider names live in code.
+* **Escaping at send time** — the fragment tag literals are escaped in every non-system message of the outgoing *copy* of the history, so no tool result, user turn or tool-call argument can pose as framework state; the stored history is never mutated.
+* **Delivery gate** — the fragment is only sent when the system prompt template carries the pointer; a template still embedding the old blocks (unsynced database) or one with neither (Flow, custom prompts) gets none. Markers: `VOLATILE_TEMPLATE_MARKERS`, overridable via the protected `volatileTemplateMarkers` getter.
+* **Specialization placement** — `specializationPlacement: auto` relocates a child prompt into the fragment (`<mj-agent-specialization>`) only when its unrendered template references a volatile placeholder, handing the runner the pre-rendered text via `AIPromptParams.PreRenderedChildTemplates`.
+* **Anthropic breakpoint** — `BaseLLM.splitTrailingVolatileState` lets `AnthropicLLM` place its `cache_control` breakpoint on the last real history message and send the fragment uncached.
+
+All placeholder names, tag literals and headings are in [`src/constants.ts`](./src/constants.ts). Full mechanism: [Agent Prompt Caching Guide](../../../guides/AGENT_PROMPT_CACHING_GUIDE.md); numbers: [Performance and Cost Briefing](./docs/PROMPT_CACHE_PERFORMANCE_BRIEFING.md).
+
 ## Cross-Turn Conversation Compaction & History Retrieval
 
 Long conversations no longer grow the agent's context without bound. Two cooperating layers (design: [`plans/agent-conversation-compaction.md`](../../../plans/agent-conversation-compaction.md)) activate **only when a run carries `ExecuteAgentParams.conversationId`** — programmatic runs, sub-agents, and tests without a conversation are untouched:
@@ -472,6 +483,18 @@ Long conversations no longer grow the agent's context without bound. Two coopera
 
 **Prior-turn tool-result carry-forward.** Because each turn rebuilds its messages from the conversation window, a tool result paged in on turn N would be gone on turn N+1. `injectPriorTurnToolResults` re-injects the same agent's immediately previous settled root run's successful read-tool results (eligibility decided by the `toolFamily` stamped in each Tool step's `OutputData`) as one transient, compactable message — one-turn memory by construction, scoped by `AgentID` so parallel agents in one conversation never inherit each other's results. The per-turn prior-run lookup is served by `PriorTurnToolResultCache` (a `BaseSingleton` wrapping `MJLruCache`, keyed by conversation + agent): the settling root run publishes its own Tool-step projections from memory at finalize — an empty array for tool-free runs, so the common case costs **zero DB queries per turn** — and the loader falls back to the original RunView pair only on a cache miss. Both loaders share one entity-typed predicate (`BaseAgent.carryForwardPredicate` + `settledRunStatuses`) so the SQL filter and the in-memory projection cannot drift; freshness semantics and the multi-node staleness bound are documented on the cache class.
 
+## Action Failure Circuit Breaker
+
+`executeActionsStep` now reports an action's real outcome (`ActionResult.Success`, result code, message) — previously a failed action was reported to the model as a success and agents retried unconfigured tools until the run timed out. On top of that, `ExecuteSingleAction` applies a run-scoped breaker before dispatching, checked fatal → identical-arguments → budget:
+
+| Rule | Trigger | Effect |
+|---|---|---|
+| Fatal lockout | One credential / service-configuration failure (`isFatalActionError`; parameter-level "not configured" messages are deliberately non-fatal) | Action disabled for the run, any arguments |
+| Identical arguments | `IDENTICAL_FAILURE_THRESHOLD` (2) failures with the same normalized arguments | Calls with those arguments blocked; other arguments dispatch |
+| Attempt budget | `ACTION_FAILURE_BUDGET` (5) consecutive failures, any arguments | Action disabled for the run |
+
+A success clears both counters. A blocked call returns a `CircuitBreakerActionResult` (carrying `Reason`) in ~0 ms without reaching the action engine, and the model receives a `[CRITICAL/ACTION_UNAVAILABLE | REPEATED_IDENTICAL_CALL | ATTEMPTS_EXHAUSTED]` directive as a user message (a `[WARNING/ACTION_FAILURE]` with an "attempt N of 5" counter otherwise). Argument identity is `normalizeActionParams` (three protected layers: outer → per-entry → recursive value). The pipeline registry and the ForEach / While operators pass `{ skipCircuitBreaker: true }` and bypass every rule, leaving the history untouched. Evidence and thresholds: [Performance and Cost Briefing §4](./docs/PROMPT_CACHE_PERFORMANCE_BRIEFING.md).
+
 ## Documentation
 
 Detailed guides are available in the [`docs/`](./docs/) directory:
@@ -479,6 +502,8 @@ Detailed guides are available in the [`docs/`](./docs/) directory:
 | Guide | Description |
 |---|---|
 | [Actions Guide](./docs/actions-guide.md) | Action discovery, execution, result lifecycle, expiration/compaction, context recovery |
+| [Prompt-Cache Performance and Cost Briefing](./docs/PROMPT_CACHE_PERFORMANCE_BRIEFING.md) | Before/after cached share and cost per model and topology for the trailing runtime-state layout; the action circuit breaker's before/after; what to re-measure |
+| [Agent Prompt Caching Guide](../../../guides/AGENT_PROMPT_CACHING_GUIDE.md) | Repo-level guide: the trailing-state layout, the `PrefixPromptCache` flag from the model catalog, the Anthropic breakpoint seam, specialization placement, the circuit breaker |
 | [Client Tools Guide](./docs/CLIENT_TOOLS_GUIDE.md) | Browser-side tool invocation, runtime decoration, timeout config, prompt design, security |
 | [Sub-Agents Guide](./docs/sub-agents-guide.md) | Child agents, related agents, payload flow, context propagation, loops |
 | [Human-in-the-Loop](./docs/HUMAN_IN_THE_LOOP.md) | Feedback requests, assignment strategies, request lifecycle |
