@@ -1,14 +1,17 @@
 /**
- * Tests for loop-step validation.
+ * Tests for loop-step validation, and for validating a flow as the runtime does.
  *
- * The assertion that matters most here is the one about a loop that saves cleanly and then does
+ * The assertion that matters most for loops is the one about a loop that saves cleanly and then does
  * nothing: a `ForEach` with no `collectionPath` is structurally valid SQL, passes every other check,
  * and at runtime iterates zero times — which reads as the agent declining to do the work rather than
  * as a malformed step. That is precisely the class of error the Architect has to catch before save.
+ *
+ * For a flow as a whole, the property is agreement with the runtime: `ValidateFlowGraph` refuses
+ * exactly what `CompileFlowToTaskGraph` + `ValidateTaskGraphSpec` refuse, and passes what they run.
  */
 import { describe, it, expect } from 'vitest';
 import type { AgentStep, AgentStepPath } from '@memberjunction/ai-core-plus';
-import { IsLoopStep, ValidateLoopStep, IsDecisionStep, ValidateDecisionStep, ValidateDecisionSteps, StepConfigurationText } from '../flow-step-validation';
+import { IsLoopStep, ValidateLoopStep, IsDecisionStep, ValidateFlowGraph, StepConfigurationText } from '../flow-step-validation';
 
 const step = (over: Partial<AgentStep> = {}): AgentStep => ({
     ID: '',
@@ -160,27 +163,70 @@ describe('ValidateLoopStep — reporting', () => {
     });
 });
 
+
+/** A Choice and a Likelihood about one ticket, written the way the Architect's template teaches. */
+const TRIAGE_CONFIGURATION = {
+    key: 'triage',
+    questions: {
+        category: {
+            instructions: 'What category best describes this issue?',
+            kind: 'Choice',
+            options: [
+                { value: 'billing', description: 'Billing inquiry or invoice problem' },
+                { value: 'technical', description: 'Technical defect or system error' },
+                { value: 'general', description: 'General question or account update' },
+            ],
+        },
+        urgent: { instructions: 'The customer cannot work until this is resolved.', kind: 'Likelihood' },
+    },
+};
+
+const actionStep = (name: string, over: Partial<AgentStep> = {}): AgentStep => ({
+    ID: '',
+    Name: name,
+    StepType: 'Action',
+    StartingStep: false,
+    ActionID: 'AC71E1DA-1111-2222-3333-444455556666',
+    ...over,
+});
+
 const decisionStep = (over: Partial<AgentStep> = {}): AgentStep => ({
-    ID: 'step-decision-1',
+    ID: '',
     Name: 'Triage Issue',
     StepType: 'Decision',
     StartingStep: true,
-    Configuration: JSON.stringify({
-        key: 'triage',
-        questions: {
-            category: {
-                text: 'What category best describes this issue?',
-                kind: 'Choice',
-                options: [
-                    { value: 'billing', text: 'Billing' },
-                    { value: 'technical', text: 'Technical' },
-                    { value: 'general', text: 'General' },
-                ],
-            },
-        },
-    }),
+    Configuration: TRIAGE_CONFIGURATION,
     ...over,
 });
+
+const path = (from: string, to: string, condition?: string, over: Partial<AgentStepPath> = {}): AgentStepPath => ({
+    ID: '',
+    OriginStepID: from,
+    DestinationStepID: to,
+    Condition: condition,
+    Priority: 10,
+    ...over,
+});
+
+type Flow = { Steps: AgentStep[]; Paths: AgentStepPath[] };
+
+/** The Decision step, a handler per category, and a path to each: a Choice fork covering every option. */
+const triageFlow = (): Flow => ({
+    Steps: [decisionStep(), actionStep('Handle Billing'), actionStep('Handle Technical'), actionStep('Handle General')],
+    Paths: [
+        path('Triage Issue', 'Handle Billing', "decisions.triage.category.value === 'billing'"),
+        path('Triage Issue', 'Handle Technical', "decisions.triage.category.value === 'technical'"),
+        path('Triage Issue', 'Handle General', "decisions.triage.category.value === 'general'"),
+    ],
+});
+
+/** The Decision step and one path from it to a single handler. */
+const gateFlow = (condition: string): Flow => ({
+    Steps: [decisionStep(), actionStep('Handle Billing')],
+    Paths: [path('Triage Issue', 'Handle Billing', condition)],
+});
+
+const validate = (flow: Flow): string[] => ValidateFlowGraph(flow.Steps, flow.Paths, 'Customer Issue Triager');
 
 describe('IsDecisionStep', () => {
     it('recognises Decision steps', () => {
@@ -193,164 +239,223 @@ describe('IsDecisionStep', () => {
     });
 });
 
-describe('ValidateDecisionStep — happy paths', () => {
-    it('accepts a valid Decision step with string configuration', () => {
-        const s = decisionStep();
-        expect(ValidateDecisionStep(s, 0)).toEqual([]);
+describe('ValidateFlowGraph — flows the runtime runs', () => {
+    it('accepts a Choice fork with a path for every option', () => {
+        expect(validate(triageFlow())).toEqual([]);
     });
 
-    it('accepts a valid Decision step with object configuration', () => {
-        const s = decisionStep({
+    it('accepts the Configuration as JSON text as well as an object', () => {
+        const flow = triageFlow();
+        flow.Steps[0] = decisionStep({ Configuration: JSON.stringify(TRIAGE_CONFIGURATION) });
+        expect(validate(flow)).toEqual([]);
+    });
+
+    it('accepts the aliases a model writes: text for instructions and for an option description', () => {
+        const flow = triageFlow();
+        flow.Steps[0] = decisionStep({
             Configuration: {
                 key: 'triage',
                 questions: {
                     category: {
-                        text: 'What category?',
+                        text: 'What category best describes this issue?',
                         kind: 'Choice',
                         options: [
-                            { value: 'a', text: 'A' },
-                            { value: 'b', text: 'B' },
+                            { value: 'billing', text: 'Billing' },
+                            { value: 'technical', text: 'Technical' },
+                            { value: 'general', text: 'General' },
                         ],
                     },
                 },
             },
         });
-        expect(ValidateDecisionStep(s, 0)).toEqual([]);
+        expect(validate(flow)).toEqual([]);
     });
 
-    it('accepts a complete Choice fork covering all options', () => {
-        const s = decisionStep();
-        const paths: AgentStepPath[] = [
-            { ID: 'p1', OriginStepID: 'Triage Issue', DestinationStepID: 'BillingStep', Condition: "decisions.triage.category.value === 'billing'", Priority: 1 },
-            { ID: 'p2', OriginStepID: 'Triage Issue', DestinationStepID: 'TechStep', Condition: "decisions.triage.category.value === 'technical'", Priority: 2 },
-            { ID: 'p3', OriginStepID: 'Triage Issue', DestinationStepID: 'GeneralStep', Condition: "decisions.triage.category.value === 'general'", Priority: 3 },
-        ];
-        expect(ValidateDecisionStep(s, 0, { Steps: [s], Paths: paths })).toEqual([]);
+    it('accepts a single conditional path from a Decision step: a gate on one option', () => {
+        // The compiler makes an exclusive group only when a step has two or more paths, so a gate is
+        // not a fork and the runtime runs it. The Agent Manager used to refuse it.
+        expect(validate(gateFlow("decisions.triage.category.value === 'billing'"))).toEqual([]);
     });
 
-    it('ignores non-decision steps entirely', () => {
-        expect(ValidateDecisionStep({ ID: '1', Name: 'ActionStep', StepType: 'Action', StartingStep: true }, 0)).toEqual([]);
-    });
-});
-
-describe('ValidateDecisionStep — bad configuration', () => {
-    it('reports missing configuration error verbatim from ReadFlowDecisionStepConfiguration', () => {
-        const s = decisionStep({ Configuration: undefined });
-        const errors = ValidateDecisionStep(s, 2);
-        expect(errors).toHaveLength(1);
-        expect(errors[0]).toContain('it has no configuration; it needs a key and at least one question');
-        expect(errors[0]).toContain('index 2');
+    it("accepts a Likelihood gate that reads the answer's probability", () => {
+        expect(validate(gateFlow('decisions.triage.urgent.probability >= 0.8'))).toEqual([]);
     });
 
-    it('reports invalid JSON error verbatim', () => {
-        const s = decisionStep({ Configuration: '{not json' });
-        const errors = ValidateDecisionStep(s, 0);
-        expect(errors).toHaveLength(1);
-        expect(errors[0]).toContain('its configuration is not valid JSON');
-    });
-
-    it('reports missing questions verbatim', () => {
-        const s = decisionStep({ Configuration: JSON.stringify({ key: 'triage' }) });
-        const errors = ValidateDecisionStep(s, 0);
-        expect(errors).toHaveLength(1);
-        expect(errors[0]).toContain('it asks no questions');
-    });
-
-    it('reports invalid question definition verbatim', () => {
-        const s = decisionStep({
-            Configuration: JSON.stringify({
-                key: 'triage',
+    it('accepts every field the template documents for each kind of answer', () => {
+        const scored = decisionStep({
+            Configuration: {
+                ...TRIAGE_CONFIGURATION,
                 questions: {
-                    category: { instructions: 'What category?', kind: 'Choice' },
+                    ...TRIAGE_CONFIGURATION.questions,
+                    severity: { instructions: 'How severe is the impact?', kind: 'Score', levels: ['low', 'medium', 'high'] },
                 },
-            }),
+            },
         });
-        const errors = ValidateDecisionStep(s, 0);
-        expect(errors).toHaveLength(1);
-        expect(errors[0]).toContain('Choice question "category" needs at least two options');
+        for (const condition of [
+            "decisions.triage.category.confidence >= 0.7 && decisions.triage.category.probabilities.billing > 0.5",
+            'decisions.triage.severity.value >= 1',
+            'decisions.triage.severity.confidence >= 0.7',
+            'decisions.triage.severity.probabilities.high > 0.5',
+            'decisions.triage.urgent.probability >= 0.8',
+        ]) {
+            const flow = gateFlow(condition);
+            flow.Steps[0] = scored;
+            expect(validate(flow)).toEqual([]);
+        }
     });
-});
 
-describe('ValidateDecisionStep — duplicate keys', () => {
-    it('reports duplicate keys across Decision steps', () => {
-        const step1 = decisionStep({ ID: 's1', Name: 'Triage Step 1' });
-        const step2 = decisionStep({ ID: 's2', Name: 'Triage Step 2' });
-        const steps = [step1, step2];
-
-        const errors = ValidateDecisionStep(step1, 0, { Steps: steps });
-        expect(errors.join(' ')).toContain('both use the key "triage"');
-        expect(errors.join(' ')).toContain('duplicate key');
-    });
-});
-
-describe('ValidateDecisionStep — unknown key in path', () => {
-    it('reports when an outgoing path references an unknown decision key', () => {
-        const s = decisionStep();
-        const paths: AgentStepPath[] = [
-            { ID: 'p1', OriginStepID: 'Triage Issue', DestinationStepID: 'Next', Condition: "decisions.nonexistent.category.value === 'billing'", Priority: 1 },
+    it('accepts a fork whose other options go to an unconditional default path', () => {
+        const flow = triageFlow();
+        flow.Paths = [
+            path('Triage Issue', 'Handle Billing', "decisions.triage.category.value === 'billing'"),
+            path('Triage Issue', 'Handle General', undefined, { Priority: 0 }),
         ];
-        const errors = ValidateDecisionStep(s, 0, { Steps: [s], Paths: paths });
-        expect(errors).toHaveLength(1);
-        expect(errors[0]).toContain('nonexistent');
-        expect(errors[0]).toContain('no Decision step in this workflow has the key "nonexistent"');
+        expect(validate(flow)).toEqual([]);
+    });
+
+    it('matches a path end to a step ID as a UUID, whatever its case', () => {
+        const triageID = 'A1B2C3D4-0000-4000-8000-000000000001';
+        const billingID = 'A1B2C3D4-0000-4000-8000-000000000002';
+        const flow: Flow = {
+            Steps: [decisionStep({ ID: triageID }), actionStep('Handle Billing', { ID: billingID })],
+            Paths: [path(triageID.toLowerCase(), billingID.toLowerCase(), "decisions.triage.category.value === 'billing'")],
+        };
+        expect(validate(flow)).toEqual([]);
     });
 });
 
-describe('ValidateDecisionStep — Choice fork exhaustiveness', () => {
-    it('reports an incomplete Choice fork when options are missing', () => {
-        const s = decisionStep();
-        const paths: AgentStepPath[] = [
-            { ID: 'p1', OriginStepID: 'Triage Issue', DestinationStepID: 'BillingStep', Condition: "decisions.triage.category.value === 'billing'", Priority: 1 },
-            { ID: 'p2', OriginStepID: 'Triage Issue', DestinationStepID: 'TechStep', Condition: "decisions.triage.category.value === 'technical'", Priority: 2 },
-        ];
-        const errors = ValidateDecisionStep(s, 0, { Steps: [s], Paths: paths });
-        expect(errors).toHaveLength(1);
-        expect(errors[0]).toContain('incomplete Choice fork');
-        expect(errors[0]).toContain('"general"');
-        expect(errors[0]).toContain('A Choice fork must cover every option');
-    });
-});
-
-describe('ValidateDecisionStep — several problems returned together', () => {
-    it('returns all errors when multiple validation checks fail', () => {
-        const step1 = decisionStep({
-            ID: 's1',
-            Name: 'Triage Step 1',
-            Configuration: JSON.stringify({
-                key: 'triage',
-                questions: {
-                    category: {
-                        instructions: 'What category?',
-                        kind: 'Choice',
-                        options: [
-                            { value: 'a', description: 'Option A' },
-                            { value: 'b', description: 'Option B' },
-                        ],
+describe('ValidateFlowGraph — what the runtime refuses is refused here', () => {
+    // The first three are the specs a review probed: the Agent Manager passed each one, and the runtime
+    // refused it.
+    it.each([
+        {
+            what: 'a path from a later step that reads an unknown Decision key',
+            flow: (): Flow => ({
+                Steps: [
+                    decisionStep(),
+                    { ID: '', Name: 'Summarize', StepType: 'Prompt', StartingStep: false, PromptText: 'Summarize the ticket.' },
+                    actionStep('Handle Billing'),
+                ],
+                Paths: [
+                    path('Triage Issue', 'Summarize'),
+                    path('Summarize', 'Handle Billing', "decisions.triag.category.value === 'billing'"),
+                ],
+            }),
+            code: '[UnknownDecisionKey]',
+            mentions: 'decisions.triag',
+        },
+        {
+            what: 'a Likelihood read through .value, a field its answer does not have',
+            flow: (): Flow => gateFlow('decisions.triage.urgent.value >= 0.8'),
+            code: '[InvalidCondition]',
+            mentions: 'reads "value" from the Likelihood question "urgent"',
+        },
+        {
+            what: 'a question the Decision step does not ask',
+            flow: (): Flow => gateFlow('decisions.triage.urgency.probability >= 0.8'),
+            code: '[InvalidCondition]',
+            mentions: 'reads the question "urgency"',
+        },
+        {
+            what: 'a Score read through .probability, a field only a Likelihood has',
+            flow: (): Flow => {
+                const flow = gateFlow('decisions.triage.severity.probability >= 0.8');
+                flow.Steps[0] = decisionStep({
+                    Configuration: {
+                        key: 'triage',
+                        questions: { severity: { instructions: 'How severe is the impact?', kind: 'Score', levels: ['low', 'medium', 'high'] } },
                     },
-                },
-            }),
-        });
-        const step2 = decisionStep({ ID: 's2', Name: 'Triage Step 2' });
-        const paths: AgentStepPath[] = [
-            { ID: 'p1', OriginStepID: 'Triage Step 1', DestinationStepID: 'Next1', Condition: "decisions.unknown1.category.value === 'billing'", Priority: 1 },
-            { ID: 'p2', OriginStepID: 'Triage Step 1', DestinationStepID: 'Next2', Condition: "decisions.unknown2.category.value === 'general'", Priority: 2 },
-        ];
-
-        const errors = ValidateDecisionStep(step1, 0, { Steps: [step1, step2], Paths: paths });
-        expect(errors.length).toBeGreaterThanOrEqual(3);
-        expect(errors.join(' ')).toContain('both use the key "triage"');
-        expect(errors.join(' ')).toContain('unknown1');
-        expect(errors.join(' ')).toContain('unknown2');
+                });
+                return flow;
+            },
+            code: '[InvalidCondition]',
+            mentions: 'reads "probability" from the Score question "severity"',
+        },
+    ])('refuses $what', ({ flow, code, mentions }) => {
+        const errors = validate(flow());
+        expect(errors).toHaveLength(1);
+        expect(errors[0]).toContain(code);
+        expect(errors[0]).toContain(mentions);
     });
-});
 
-describe('ValidateDecisionSteps', () => {
-    it('validates all Decision steps in a flow', () => {
-        const step1 = decisionStep({ ID: 's1', Name: 'Triage 1' });
-        const step2 = decisionStep({ ID: 's2', Name: 'Triage 2' });
-        const errors = ValidateDecisionSteps([step1, step2]);
-        expect(errors.length).toBeGreaterThanOrEqual(2);
-        expect(errors.join(' ')).toContain('both use the key "triage"');
+    it('refuses a Choice fork with no path for one of its options, naming the step rather than its ID', () => {
+        const triageID = 'A1B2C3D4-0000-4000-8000-000000000001';
+        const flow = triageFlow();
+        flow.Steps[0] = decisionStep({ ID: triageID });
+        flow.Paths = flow.Paths.filter((p) => !p.Condition?.includes('general'));
+
+        const errors = validate(flow);
+        expect(errors).toHaveLength(1);
+        expect(errors[0]).toContain('[IncompleteFork]');
+        expect(errors[0]).toContain('no path for "general"');
+        expect(errors[0]).toContain('"Triage Issue"');
+        expect(errors[0]).not.toContain(triageID);
+    });
+
+    it('refuses a configuration a Decision step cannot run with', () => {
+        const flow = gateFlow('decisions.nope.q');
+        flow.Steps[0] = decisionStep({ Configuration: { key: '1bad' } });
+
+        const errors = validate(flow).join('\n');
+        expect(errors).toContain('[InvalidDecisionStep]');
+        expect(errors).toContain('its key "1bad" cannot be named in a path condition');
+        expect(errors).toContain('it asks no questions');
+        expect(errors).toContain('[UnknownDecisionKey]');
+    });
+
+    it('refuses a Decision step with no configuration at all', () => {
+        const flow = gateFlow("decisions.triage.category.value === 'billing'");
+        flow.Steps[0] = decisionStep({ Configuration: undefined });
+        expect(validate(flow).join('\n')).toContain('it has no configuration; it needs a key and at least one question');
+    });
+
+    it('refuses a key two Decision steps share, once', () => {
+        const flow: Flow = {
+            Steps: [decisionStep(), decisionStep({ Name: 'Triage Again', StartingStep: false }), actionStep('Handle Billing')],
+            Paths: [
+                path('Triage Issue', 'Triage Again'),
+                path('Triage Again', 'Handle Billing', "decisions.triage.category.value === 'billing'"),
+            ],
+        };
+        const errors = validate(flow);
+        expect(errors.filter((e) => e.includes('[DuplicateDecisionKey]'))).toHaveLength(1);
+        expect(errors.join('\n')).toContain('both use the key "triage"');
+    });
+
+    it('refuses a shared key even when the flow cannot reach one of the steps, as the in-run walker does', () => {
+        const flow = triageFlow();
+        flow.Steps.push(decisionStep({ Name: 'Unwired Triage', StartingStep: false }));
+        expect(validate(flow)).toEqual([expect.stringContaining('[DuplicateDecisionKey]')]);
+    });
+
+    it('refuses a path that names no step, which the compiler would drop without a word', () => {
+        const flow = triageFlow();
+        flow.Paths[2] = path('Triage Issue', 'Handle Genral', "decisions.triage.category.value === 'general'");
+
+        const errors = validate(flow).join('\n');
+        expect(errors).toContain('names no step as its destination');
+        // Dropping the path left the fork without "general", which is refused as well.
+        expect(errors).toContain('[IncompleteFork]');
+    });
+
+    it('matches a path end to a step name exactly, as AgentSpecSync does', () => {
+        const flow = gateFlow("decisions.triage.category.value === 'billing'");
+        flow.Paths = [path('triage issue', 'Handle Billing', "decisions.triage.category.value === 'billing'")];
+        expect(validate(flow).join('\n')).toContain('names no step as its origin');
+    });
+
+    it('returns every problem the compiler finds at once', () => {
+        const flow: Flow = {
+            Steps: [decisionStep({ Configuration: { key: 'triage' } }), actionStep('Handle Billing'), actionStep('Handle General')],
+            Paths: [
+                path('Triage Issue', 'Handle Billing', "decisions.unknown1.category.value === 'billing'"),
+                path('Triage Issue', 'Handle General', "decisions.unknown2.category.value === 'general'"),
+            ],
+        };
+        const errors = validate(flow).join('\n');
+        expect(errors).toContain('it asks no questions');
+        expect(errors).toContain('decisions.unknown1');
+        expect(errors).toContain('decisions.unknown2');
     });
 });
 

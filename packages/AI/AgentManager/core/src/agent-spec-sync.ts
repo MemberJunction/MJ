@@ -1390,7 +1390,7 @@ export class AgentSpecSync {
             // being a loop must have these cleared, not left behind from its previous shape.
             stepEntity.LoopBodyType = stepSpec.LoopBodyType || null;
             // Stored as JSON text even when the model wrote an object, with a Decision step's aliases
-            // normalized.
+            // normalized: the text the Architect's validator compiled.
             stepEntity.Configuration = StepConfigurationText(stepSpec);
 
             // Handle inline prompt creation for Prompt-type steps

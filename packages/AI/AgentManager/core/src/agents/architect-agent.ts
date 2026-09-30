@@ -1,10 +1,10 @@
 import { BaseAgent, PayloadManager } from '@memberjunction/ai-agents';
-import { ExecuteAgentParams, BaseAgentNextStep, AgentSpec, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentParams, BaseAgentNextStep, AgentSpec, AgentStep, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJActionEntity } from "@memberjunction/core-entities";
 import { RunView } from '@memberjunction/core';
 import { RegisterClass, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
-import { IsLoopStep, ValidateLoopStep, IsDecisionStep, ValidateDecisionStep } from '../flow-step-validation';
+import { ValidateLoopStep, ValidateFlowGraph } from '../flow-step-validation';
 
 /**
  * Architect Agent - Transforms technical design into validated AgentSpec JSON
@@ -190,86 +190,7 @@ export class AgentArchitectAgent extends BaseAgent {
                 }
             }
 
-            // Validate that at least one step is marked as StartingStep
-            if (correctedSpec.Steps && correctedSpec.Steps.length > 0) {
-                const hasStartingStep = correctedSpec.Steps.some(step => step.StartingStep === true);
-                if (!hasStartingStep) {
-                    errors.push('❌ Flow agents require at least ONE step with StartingStep: true');
-                }
-
-                // Validate each step based on its type
-                for (let i = 0; i < correctedSpec.Steps.length; i++) {
-                    const step = correctedSpec.Steps[i];
-
-                    // Validate Action steps
-                    if (step.StepType === 'Action') {
-                        if (!step.ActionID) {
-                            errors.push(`❌ Action step "${step.Name}" (index ${i}) must have ActionID field`);
-                        }
-
-                        // Validate ActionInputMapping if provided (supports both string and object)
-                        if (step.ActionInputMapping) {
-                            try {
-                                if (typeof step.ActionInputMapping === 'string') {
-                                    JSON.parse(step.ActionInputMapping);
-                                }
-                                // else it's already an object, which is valid and will be stringified later
-                            } catch (e: any) {
-                                errors.push(`❌ Step "${step.Name}" (index ${i}) has invalid ActionInputMapping JSON: ${e?.message || String(e)}`);
-                            }
-                        }
-
-                        // Validate ActionOutputMapping if provided (supports both string and object)
-                        if (step.ActionOutputMapping) {
-                            try {
-                                if (typeof step.ActionOutputMapping === 'string') {
-                                    JSON.parse(step.ActionOutputMapping);
-                                }
-                                // else it's already an object, which is valid and will be stringified later
-                            } catch (e: any) {
-                                errors.push(`❌ Step "${step.Name}" (index ${i}) has invalid ActionOutputMapping JSON: ${e?.message || String(e)}`);
-                            }
-                        }
-                    }
-
-                    // Validate Prompt steps
-                    if (step.StepType === 'Prompt') {
-                        // If PromptID is empty or not provided, PromptText is required for inline creation
-                        if (!step.PromptID || step.PromptID === '') {
-                            if (!step.PromptText || step.PromptText.trim() === '') {
-                                errors.push(`❌ Prompt step "${step.Name}" (index ${i}) has empty PromptID but missing PromptText. For inline prompt creation, PromptText is required.`);
-                            }
-                            // PromptName and PromptDescription are recommended but not required
-                            if (!step.PromptName) {
-                                console.log(`⚠️ Warning: Prompt step "${step.Name}" (index ${i}) is missing PromptName (will default to "[Step Name] Prompt")`);
-                            }
-                        }
-                        // If PromptID is provided (existing prompt), other fields are optional
-                    }
-
-                    // Validate Sub-Agent steps
-                    if (step.StepType === 'Sub-Agent') {
-                        // SubAgentID can be empty "" for new sub-agents (will be linked by name matching)
-                        // No validation needed here - linking happens in AgentSpecSync
-                    }
-
-                    // Validate loop steps (ForEach / While)
-                    //
-                    // A loop is a wrapper, not a leaf: LoopBodyType names which of Action/Prompt/
-                    // Sub-Agent runs each pass, and Configuration carries the bounds. A loop missing
-                    // either is the failure mode worth catching here — it saves cleanly and then
-                    // iterates over nothing at runtime, which looks like the agent doing no work
-                    // rather than like a malformed step.
-                    if (IsLoopStep(step)) {
-                        errors.push(...ValidateLoopStep(step, i));
-                    }
-
-                    // Validate Decision steps
-                    if (IsDecisionStep(step)) {
-                        errors.push(...ValidateDecisionStep(step, i, { Steps: correctedSpec.Steps, Paths: correctedSpec.Paths }));
-                    }
-                }
-            }
+            errors.push(...this.validateFlowSteps(correctedSpec));
         }
 
         // 6. Validate optional but important fields
@@ -486,6 +407,75 @@ export class AgentArchitectAgent extends BaseAgent {
     }
 
     /**
+     * Every problem with a Flow agent's steps and paths: a starting step, each step on its own, and
+     * then the flow as the runtime compiles and validates it ({@link ValidateFlowGraph}).
+     */
+    private validateFlowSteps(spec: Pick<AgentSpec, 'Name' | 'Steps' | 'Paths'>): string[] {
+        const steps = spec.Steps ?? [];
+        if (steps.length === 0) {
+            return [];
+        }
+        const stepErrors = steps.flatMap((step, i) => this.validateFlowStep(step, i));
+        if (!steps.some(step => step.StartingStep === true)) {
+            // The compiler would refuse the flow for this alone, so there is nothing more to learn from it.
+            return ['❌ Flow agents require at least ONE step with StartingStep: true', ...stepErrors];
+        }
+        return [...stepErrors, ...ValidateFlowGraph(steps, spec.Paths ?? [], spec.Name)];
+    }
+
+    /** The checks one step gets on its own, by type. */
+    private validateFlowStep(step: AgentStep, index: number): string[] {
+        switch (step.StepType) {
+            case 'Action':
+                return this.validateActionStep(step, index);
+            case 'Prompt':
+                return this.validatePromptStep(step, index);
+            case 'ForEach':
+            case 'While':
+                // A loop is a wrapper, not a leaf: LoopBodyType names which of Action/Prompt/Sub-Agent
+                // runs each pass, and Configuration carries the bounds. A loop missing either saves
+                // cleanly and then iterates over nothing, which looks like the agent doing no work
+                // rather than like a malformed step.
+                return ValidateLoopStep(step, index);
+            default:
+                // A Sub-Agent step's SubAgentID may be empty for a sub-agent this spec creates.
+                return [];
+        }
+    }
+
+    /** An Action step needs its action, and any mapping written as text must be JSON. */
+    private validateActionStep(step: AgentStep, index: number): string[] {
+        const errors: string[] = [];
+        if (!step.ActionID) {
+            errors.push(`❌ Action step "${step.Name}" (index ${index}) must have ActionID field`);
+        }
+        for (const [field, mapping] of [['ActionInputMapping', step.ActionInputMapping], ['ActionOutputMapping', step.ActionOutputMapping]] as const) {
+            // An object is valid as it is, and is stringified when saved.
+            if (typeof mapping !== 'string' || !mapping) continue;
+            try {
+                JSON.parse(mapping);
+            } catch (e) {
+                errors.push(`❌ Step "${step.Name}" (index ${index}) has invalid ${field} JSON: ${e instanceof Error ? e.message : String(e)}`);
+            }
+        }
+        return errors;
+    }
+
+    /** A Prompt step names an existing prompt, or writes one inline as PromptText for the Builder to create. */
+    private validatePromptStep(step: AgentStep, index: number): string[] {
+        if (step.PromptID) {
+            return [];
+        }
+        // PromptName and PromptDescription are recommended but not required
+        if (!step.PromptName) {
+            console.log(`⚠️ Warning: Prompt step "${step.Name}" (index ${index}) is missing PromptName (will default to "[Step Name] Prompt")`);
+        }
+        return step.PromptText?.trim()
+            ? []
+            : [`❌ Prompt step "${step.Name}" (index ${index}) has empty PromptID but missing PromptText. For inline prompt creation, PromptText is required.`];
+    }
+
+    /**
      * Deduplicates arrays in AgentSpec to fix common LLM retry issues
      * Modifies spec in place and returns whether duplicates were found
      */
@@ -608,9 +598,6 @@ export class AgentArchitectAgent extends BaseAgent {
     }
 
     /**
-     * Simple hash function for string deduplication
-     */
-    /**
      * The agent type's name for a spec's `TypeID`. The Architect's template has the model write the
      * type's ID (a GUID), which never contains 'Loop' or 'Flow', so the ID is resolved through
      * AIEngine's agent types. Anything that is not a known type's ID (an older spec that wrote the
@@ -622,6 +609,9 @@ export class AgentArchitectAgent extends BaseAgent {
         return type?.Name ?? typeID;
     }
 
+    /**
+     * Simple hash function for string deduplication
+     */
     protected hashString(str: string): string {
         let hash = 0;
         for (let i = 0; i < str.length; i++) {

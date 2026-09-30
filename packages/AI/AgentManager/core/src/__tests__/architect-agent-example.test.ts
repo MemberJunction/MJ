@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import type { AgentSpec, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
+import type { AgentSpec, AgentStep, AgentStepPath, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 import type { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AgentArchitectAgent } from '../agents/architect-agent';
-import { IsDecisionStep, ValidateDecisionStep } from '../flow-step-validation';
+import { ValidateFlowGraph } from '../flow-step-validation';
 
 /** The seeded agent types the Architect's template names by ID. */
 const FLOW_TYPE_ID = '4F6A189B-C068-4736-9F23-3FF540B40FDD';
@@ -28,67 +28,116 @@ class TestArchitectAgent extends AgentArchitectAgent {
     }
 }
 
+/** The Architect's example outputs, keyed by example. */
+type ArchitectExamples = Record<string, { output: AgentSpec }>;
+
+const examplePath = path.resolve(
+    __dirname,
+    '../../../../../../metadata/prompts/output/agent-manager/architect-agent.example.json'
+);
+
+/** A fresh copy of example_4's spec, so a test can change it. */
+function example4(): AgentSpec {
+    const examples: ArchitectExamples = JSON.parse(fs.readFileSync(examplePath, 'utf8'));
+    return examples.example_4_flow_agent_with_decision_step.output;
+}
+
+async function validateSpec(spec: AgentSpec): Promise<string[]> {
+    return (await new TestArchitectAgent().testValidateAgentSpec(spec)).errors;
+}
+
 describe('Architect Agent Example Output and Decision Step Validation', () => {
     beforeEach(() => {
+        vi.restoreAllMocks();
         // validateAgentSpec resolves a spec's TypeID (a GUID) to its type's name through AIEngine.
         vi.spyOn(AIEngine.Instance, 'AgentTypes', 'get').mockReturnValue([agentType(FLOW_TYPE_ID, 'Flow'), agentType(LOOP_TYPE_ID, 'Loop')]);
     });
-
-    const examplePath = path.resolve(
-        __dirname,
-        '../../../../../../metadata/prompts/output/agent-manager/architect-agent.example.json'
-    );
 
     it('parses architect-agent.example.json as valid JSON', () => {
         const rawContent = fs.readFileSync(examplePath, 'utf8');
         expect(() => JSON.parse(rawContent)).not.toThrow();
     });
 
-    it('validates the Decision step in example_4_flow_agent_with_decision_step', () => {
-        const rawContent = fs.readFileSync(examplePath, 'utf8');
-        const parsed = JSON.parse(rawContent);
-        const example4 = parsed.example_4_flow_agent_with_decision_step;
-
-        expect(example4).toBeDefined();
-        expect(example4.output).toBeDefined();
-
-        const spec: AgentSpec = example4.output;
-        expect(spec.Steps).toBeDefined();
-        expect(spec.Paths).toBeDefined();
-
-        const decisionStep = spec.Steps?.find(s => IsDecisionStep(s));
-        expect(decisionStep).toBeDefined();
-        expect(decisionStep?.Name).toBe('Triage Issue');
-
-        if (!decisionStep) return;
-        const stepErrors = ValidateDecisionStep(decisionStep, 0, { Steps: spec.Steps, Paths: spec.Paths });
-        expect(stepErrors).toEqual([]);
+    it('compiles and validates example_4_flow_agent_with_decision_step as the runtime does', () => {
+        const spec = example4();
+        expect(spec.Steps?.find(s => s.StepType === 'Decision')?.Name).toBe('Triage Issue');
+        expect(ValidateFlowGraph(spec.Steps ?? [], spec.Paths ?? [], spec.Name)).toEqual([]);
     });
 
     it('passes full AgentArchitectAgent.validateAgentSpec for example_4', async () => {
-        const rawContent = fs.readFileSync(examplePath, 'utf8');
-        const parsed = JSON.parse(rawContent);
-        const spec: AgentSpec = parsed.example_4_flow_agent_with_decision_step.output;
-
-        const architect = new TestArchitectAgent();
-        const result = await architect.testValidateAgentSpec(spec);
-
-        expect(result.errors).toEqual([]);
+        expect(await validateSpec(example4())).toEqual([]);
     });
 
-    it('catches an invalid Decision step inside validateAgentSpec', async () => {
-        const rawContent = fs.readFileSync(examplePath, 'utf8');
-        const parsed = JSON.parse(rawContent);
-        const spec: AgentSpec = JSON.parse(JSON.stringify(parsed.example_4_flow_agent_with_decision_step.output));
-
-        // Invalidate the Decision step by removing one covering path from the Choice fork
+    it('catches an incomplete Choice fork inside validateAgentSpec', async () => {
+        const spec = example4();
         spec.Paths = spec.Paths?.filter(p => !p.Condition?.includes('general'));
 
-        const architect = new TestArchitectAgent();
-        const result = await architect.testValidateAgentSpec(spec);
+        const errors = (await validateSpec(spec)).join(' ');
+        expect(errors).toContain('[IncompleteFork]');
+        expect(errors).toContain('"general"');
+    });
 
-        expect(result.errors.length).toBeGreaterThan(0);
-        expect(result.errors.join(' ')).toContain('incomplete Choice fork');
-        expect(result.errors.join(' ')).toContain('"general"');
+    it('accepts a single conditional path from a Decision step, which the runtime runs', async () => {
+        const spec = example4();
+        spec.Steps = spec.Steps?.filter(s => s.Name === 'Triage Issue' || s.Name === 'Handle Billing');
+        spec.Paths = spec.Paths?.filter(p => p.DestinationStepID === 'Handle Billing');
+
+        expect(await validateSpec(spec)).toEqual([]);
+    });
+
+    // The three specs a review probed: the Architect passed each one, and the runtime refused it.
+    it.each([
+        {
+            what: 'a path from a later step reading an unknown Decision key',
+            code: '[UnknownDecisionKey]',
+            change: (spec: AgentSpec): void => {
+                const summarize: AgentStep = { ID: '', Name: 'Summarize', StepType: 'Prompt', StartingStep: false, PromptText: 'Summarize the issue.', PromptName: 'Summarize Issue' };
+                spec.Steps = [...(spec.Steps ?? []), summarize];
+                const fromTriage: AgentStepPath = { ID: '', OriginStepID: 'Handle General', DestinationStepID: 'Summarize', Priority: 0 };
+                const fromSummarize: AgentStepPath = { ID: '', OriginStepID: 'Summarize', DestinationStepID: 'Handle Billing', Condition: "decisions.triag.category.value === 'billing'", Priority: 0 };
+                spec.Paths = [...(spec.Paths ?? []), fromTriage, fromSummarize];
+            },
+        },
+        {
+            what: 'a Likelihood read through .value',
+            code: '[InvalidCondition]',
+            change: (spec: AgentSpec): void => addUrgentGate(spec, 'decisions.triage.urgent.value >= 0.8'),
+        },
+        {
+            what: 'a question the Decision step does not ask',
+            code: '[InvalidCondition]',
+            change: (spec: AgentSpec): void => addUrgentGate(spec, 'decisions.triage.urgency.probability >= 0.8'),
+        },
+    ])('refuses $what inside validateAgentSpec', async ({ code, change }) => {
+        const spec = example4();
+        change(spec);
+        expect((await validateSpec(spec)).join('\n')).toContain(code);
     });
 });
+
+/** example_4's triage, asking a Likelihood as well as the Choice. */
+const TRIAGE_WITH_URGENT = {
+    key: 'triage',
+    questions: {
+        category: {
+            instructions: 'What category best describes this issue?',
+            kind: 'Choice',
+            options: [
+                { value: 'billing', description: 'Billing inquiry or invoice problem' },
+                { value: 'technical', description: 'Technical defect or system error' },
+                { value: 'general', description: 'General question or account update' },
+            ],
+        },
+        urgent: { instructions: 'The customer cannot work until this is resolved.', kind: 'Likelihood' },
+    },
+};
+
+/** Has the triage ask whether the issue is urgent, and gates a new step on the answer. */
+function addUrgentGate(spec: AgentSpec, condition: string): void {
+    const triage = spec.Steps?.find(s => s.Name === 'Triage Issue');
+    if (triage) triage.Configuration = TRIAGE_WITH_URGENT;
+    const escalate: AgentStep = { ID: '', Name: 'Escalate', StepType: 'Action', StartingStep: false, ActionID: 'escalate-action-guid' };
+    spec.Steps = [...(spec.Steps ?? []), escalate];
+    const gate: AgentStepPath = { ID: '', OriginStepID: 'Handle Technical', DestinationStepID: 'Escalate', Condition: condition, Priority: 0 };
+    spec.Paths = [...(spec.Paths ?? []), gate];
+}

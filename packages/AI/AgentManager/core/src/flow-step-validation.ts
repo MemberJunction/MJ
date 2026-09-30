@@ -1,5 +1,5 @@
 /**
- * @fileoverview Validation for the flow step types the Architect authors — specifically loops.
+ * @fileoverview Validation for the flow step types the Architect authors, and for a flow as a whole.
  *
  * **Why loops needed their own module.** The Architect's spec taught three step types
  * (`Action`, `Prompt`, `Sub-Agent`) while `AIAgentStep.StepType` has accepted five for releases —
@@ -9,17 +9,28 @@
  * `ForEach` with no `collectionPath` iterates over nothing, and at runtime that reads as the agent
  * declining to work rather than as a malformed step.
  *
- * Pure and dependency-free so the rules are unit-testable without an agent run.
+ * **A flow as a whole is checked by the runtime's own code.** {@link ValidateFlowGraph} compiles the
+ * flow with `CompileFlowToTaskGraph` and validates the result with `ValidateTaskGraphSpec`, as a Flow
+ * agent is before it runs, rather than re-implementing any of their rules. A second copy of those
+ * rules is a copy that drifts: it passed conditions the runtime refused and refused forks the
+ * runtime ran.
+ *
+ * Pure: no database and no engine, so the rules are unit-testable without an agent run.
  *
  * @module @memberjunction/ai-agent-manager
  */
-import type { AgentStep, AgentStepPath } from '@memberjunction/ai-core-plus';
-import {
-    ReadFlowDecisionStepConfiguration,
-    CollectDecisionStepKeys,
-    DecisionReferencesIn,
-    DecisionChoiceTestOf,
+import type {
+    AgentStep,
+    AgentStepPath,
+    FlowCompileError,
+    FlowCompilerOptions,
+    FlowCompilerPath,
+    FlowCompilerStep,
+    TaskGraphSpec,
+    TaskGraphValidationError,
 } from '@memberjunction/ai-core-plus';
+import { CollectDecisionStepKeys, CompileFlowToTaskGraph, ValidateTaskGraphSpec } from '@memberjunction/ai-core-plus';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /** The step types that wrap a body and repeat it. */
 export type LoopStepType = Extract<AgentStep['StepType'], 'ForEach' | 'While'>;
@@ -32,14 +43,6 @@ export function IsLoopStep(step: Pick<AgentStep, 'StepType'>): boolean {
 /** True when this step is a fast typed decision. */
 export function IsDecisionStep(step: Pick<AgentStep, 'StepType'>): boolean {
     return step.StepType === 'Decision';
-}
-
-/** Context for validating Decision steps within a flow. */
-export interface DecisionValidationContext {
-    /** The flow's steps, for the key and reference checks. */
-    Steps?: readonly AgentStep[];
-    /** The flow's paths, for the reference and Choice-fork checks. */
-    Paths?: readonly AgentStepPath[];
 }
 
 /**
@@ -158,7 +161,7 @@ function parseLoopConfiguration(step: AgentStep, where: string, errors: string[]
 /**
  * Normalizes a Decision step's configuration so the aliases a model tends to write (`text` for a
  * question's `instructions`, and `text` for an option's `description`) read as the fields
- * {@link ReadFlowDecisionStepConfiguration} expects. Returns a copy; the input is not changed.
+ * `ReadFlowDecisionStepConfiguration` expects. Returns a copy; the input is not changed.
  */
 export function NormalizeDecisionConfiguration(raw: Record<string, unknown>): Record<string, unknown> {
     const cloned = structuredClone(raw);
@@ -192,7 +195,7 @@ function copyAlias(record: Record<string, unknown>, from: string, to: string): v
 /**
  * A Decision step's configuration as JSON text, normalized. A model may write the configuration as
  * an object rather than as JSON text, as it may for a loop; text that is not a JSON object is
- * returned unchanged, so {@link ReadFlowDecisionStepConfiguration} reports why it cannot be read.
+ * returned unchanged, so `ReadFlowDecisionStepConfiguration` reports why it cannot be read.
  */
 export function DecisionConfigurationText(raw: AgentStep['Configuration'] | null): string | null {
     if (raw == null) return null;
@@ -212,7 +215,8 @@ export function DecisionConfigurationText(raw: AgentStep['Configuration'] | null
 /**
  * A step's `Configuration` as the JSON text `AIAgentStep.Configuration` stores, which is what the
  * runtime reads. An object is written as text, and a Decision step's is normalized
- * ({@link DecisionConfigurationText}).
+ * ({@link DecisionConfigurationText}). `AgentSpecSync` saves this and {@link ValidateFlowGraph}
+ * compiles it, so what is validated is what is saved.
  */
 export function StepConfigurationText(step: Pick<AgentStep, 'StepType' | 'Configuration'>): string | null {
     if (step.StepType === 'Decision') return DecisionConfigurationText(step.Configuration);
@@ -221,135 +225,164 @@ export function StepConfigurationText(step: Pick<AgentStep, 'StepType' | 'Config
     return typeof raw === 'string' ? raw : JSON.stringify(raw);
 }
 
+/**
+ * Every problem the runtime would refuse a Flow agent's steps and paths for, as messages that name
+ * the steps. Empty when the flow can run.
+ *
+ * The flow is compiled with `CompileFlowToTaskGraph` and the result validated with
+ * `ValidateTaskGraphSpec`, exactly as a Flow agent is before it runs, so a flow this passes is one
+ * the runtime runs and a flow it refuses is one the runtime refuses. That covers every Decision step
+ * the flow can reach: its configuration, its key, each condition that reads `decisions.<key>` (the
+ * key, the question, and whether that question's answer has the field read), and a fork on a Choice
+ * question that has no path for one of its options.
+ *
+ * Two checks come from outside the compiler, because it cannot see what they catch:
+ *  - a path whose origin or destination names no step, which the compiler drops without a word and
+ *    `AgentSpecSync` cannot save;
+ *  - a key two Decision steps share when the flow cannot reach one of them. The compiler checks only
+ *    the steps it compiles, but the in-run walker checks every step, since it can start at any.
+ *
+ * Names behind IDs are not resolved here: each ID stands in for its own name. The Architect checks
+ * a spec's actions, and a Decision step's prompt, separately. It also accepts a step whose sub-agent
+ * or inline prompt has no ID until the spec is saved, so a placeholder stands in for that ID.
+ *
+ * @param steps the flow's steps
+ * @param paths the flow's paths: `AgentSpec.Paths`, which is what `AgentSpecSync` saves
+ * @param workflowName the agent's name, which the compiled workflow carries
+ */
+export function ValidateFlowGraph(
+    steps: readonly AgentStep[],
+    paths: readonly AgentStepPath[],
+    workflowName: string | undefined,
+): string[] {
+    const compilerSteps = steps.map(toCompilerStep);
+    const resolved = resolvePaths(paths, steps);
+    const compiled = CompileFlowToTaskGraph(compilerSteps, resolved.Paths, compilerOptions(workflowName));
+    return [
+        ...resolved.Errors,
+        // Over every step, as the in-run walker checks them. The compiler's own check covers only the
+        // steps it compiles, so every step it flags is flagged here too.
+        ...CollectDecisionStepKeys(compilerSteps).Errors.map(compileErrorMessage),
+        ...compiled.Errors.filter((e) => e.Code !== 'DuplicateDecisionKey').map(compileErrorMessage),
+        ...(compiled.Spec ? graphErrorMessages(compiled.Spec) : []),
+    ];
+}
+
+/** What stands in for an ID the Architect lets a spec leave empty until it is saved. */
+const FILLED_ON_SAVE = '(set when the spec is saved)';
+
 /** A step's identity in a spec: its ID, or its name for a step not yet saved. */
 function stepRef(step: Pick<AgentStep, 'ID' | 'Name'>): string {
     return step.ID || step.Name;
 }
 
-/** The step's Decision configuration, or why it cannot be read. */
-function readDecisionStep(step: AgentStep): ReturnType<typeof ReadFlowDecisionStepConfiguration> {
-    return ReadFlowDecisionStepConfiguration(DecisionConfigurationText(step.Configuration));
+/** A spec step as the compiler reads it: the row `AgentSpecSync` would save. */
+function toCompilerStep(step: AgentStep): FlowCompilerStep {
+    return {
+        ID: stepRef(step),
+        Name: step.Name,
+        Description: step.Description ?? null,
+        StepType: step.StepType,
+        StartingStep: step.StartingStep === true,
+        // AgentSpecSync saves every step Active.
+        Status: 'Active',
+        ActionID: step.ActionID || null,
+        SubAgentID: step.SubAgentID || (runsSubAgent(step) ? FILLED_ON_SAVE : null),
+        PromptID: step.PromptID || (hasInlinePrompt(step) ? FILLED_ON_SAVE : null),
+        LoopBodyType: step.LoopBodyType,
+        Configuration: StepConfigurationText(step),
+        ActionInputMapping: mappingText(step.ActionInputMapping),
+        ActionOutputMapping: mappingText(step.ActionOutputMapping),
+    };
+}
+
+/** A Sub-Agent step, or a loop whose body is one. The Architect accepts either with no sub-agent ID yet. */
+function runsSubAgent(step: AgentStep): boolean {
+    return step.StepType === 'Sub-Agent' || (IsLoopStep(step) && step.LoopBodyType === 'Sub-Agent');
+}
+
+/** A Prompt step, or a loop whose body is one, with its prompt written inline as `PromptText`. */
+function hasInlinePrompt(step: AgentStep): boolean {
+    const runsPrompt = step.StepType === 'Prompt' || (IsLoopStep(step) && step.LoopBodyType === 'Prompt');
+    return runsPrompt && !!step.PromptText?.trim();
+}
+
+/** An action mapping as the JSON text the column stores. */
+function mappingText(mapping: AgentStep['ActionInputMapping']): string | null {
+    if (mapping == null || mapping === '') return null;
+    return typeof mapping === 'string' ? mapping : JSON.stringify(mapping);
 }
 
 /**
- * Checks one Decision step, returning every problem rather than the first. A Decision step is valid
- * when its configuration can be read, its key is unique across the flow's Decision steps, every
- * outgoing path condition that reads `decisions.<key>` names a key that exists, and a Choice fork
- * (every outgoing path testing one Choice question's value) covers every option.
- *
- * @param index the step's position in the spec, named in every message so the model can find it
- * @param context the flow's steps and paths; without them only the configuration is checked
+ * The spec's paths with both ends resolved to their steps, and a message for each path that names a
+ * step no spec step has. An end names a step by its ID, compared as a UUID, or by its name, exactly
+ * as written — the match `AgentSpecSync` makes when it saves the path.
  */
-export function ValidateDecisionStep(step: AgentStep, index: number, context: DecisionValidationContext = {}): string[] {
-    if (!IsDecisionStep(step)) return [];
-    const where = `Decision step "${step.Name}" (index ${index})`;
-    const read = readDecisionStep(step);
-    const steps = context.Steps ?? [step];
-    const outgoing = outgoingPaths(step, context.Paths ?? []);
-    return [
-        ...('Error' in read ? [`❌ ${where} cannot run: ${read.Error}`] : []),
-        ...duplicateKeyErrors(step, steps, where),
-        ...unknownReferenceErrors(outgoing, decisionKeys(steps), where),
-        ...choiceForkErrors(outgoing, steps, where),
-    ];
-}
-
-/** The duplicate-key problems {@link CollectDecisionStepKeys} finds that involve this step's key. */
-function duplicateKeyErrors(step: AgentStep, steps: readonly AgentStep[], where: string): string[] {
-    const read = readDecisionStep(step);
-    if ('Error' in read) return [];
-    const keyed = steps.map((s) => ({ ID: stepRef(s), Name: s.Name, StepType: s.StepType, Configuration: DecisionConfigurationText(s.Configuration) }));
-    const keyOf = new Map(steps.map((s) => [stepRef(s), readDecisionStep(s)] as const));
-    return CollectDecisionStepKeys(keyed).Errors
-        .filter((e) => {
-            const other = e.StepID ? keyOf.get(e.StepID) : undefined;
-            return other !== undefined && 'Config' in other && other.Config.key === read.Config.key;
-        })
-        .map((e) => `❌ ${where} has a duplicate key: ${e.Message}`);
-}
-
-/** The keys of every readable Decision step in the flow. */
-function decisionKeys(steps: readonly AgentStep[]): Set<string> {
-    const keys = new Set<string>();
-    for (const s of steps) {
-        if (!IsDecisionStep(s)) continue;
-        const read = readDecisionStep(s);
-        if ('Config' in read) keys.add(read.Config.key);
-    }
-    return keys;
-}
-
-/**
- * The paths leaving this step, from the flow's paths and the step's own `Paths`, each once. A spec
- * names a path's origin by the step's ID, or by its name for a step not yet saved.
- */
-function outgoingPaths(step: AgentStep, flowPaths: readonly AgentStepPath[]): AgentStepPath[] {
-    const refs = new Set([step.ID?.toLowerCase(), step.Name].filter((r): r is string => !!r));
-    const seen = new Set<string>();
-    const outgoing: AgentStepPath[] = [];
-    for (const path of [...flowPaths, ...(step.Paths ?? [])]) {
-        const origin = path.OriginStepID;
-        if (!origin || !(refs.has(origin.toLowerCase()) || refs.has(origin))) continue;
-        const identity = `${path.ID ?? ''}|${origin}|${path.DestinationStepID}|${path.Condition ?? ''}`;
-        if (seen.has(identity)) continue;
-        seen.add(identity);
-        outgoing.push(path);
-    }
-    return outgoing;
-}
-
-/** Every `decisions.<key>` a condition reads that no Decision step has, and every malformed reference. */
-function unknownReferenceErrors(outgoing: readonly AgentStepPath[], knownKeys: ReadonlySet<string>, where: string): string[] {
-    const errors: string[] = [];
-    for (const path of outgoing) {
-        const condition = path.Condition?.trim();
-        if (!condition) continue;
-        const scan = DecisionReferencesIn(condition);
-        const target = `Outgoing path from ${where} to "${path.DestinationStepID}"`;
-        for (const ref of scan.References) {
-            if (!knownKeys.has(ref.NodeId)) {
-                errors.push(`❌ ${target} reads decisions.${ref.NodeId}, but no Decision step in this workflow has the key "${ref.NodeId}". The condition was: ${condition}`);
-            }
+function resolvePaths(
+    paths: readonly AgentStepPath[],
+    steps: readonly AgentStep[],
+): { Paths: FlowCompilerPath[]; Errors: string[] } {
+    const resolved: { Paths: FlowCompilerPath[]; Errors: string[] } = { Paths: [], Errors: [] };
+    paths.forEach((path, index) => {
+        const origin = findStep(steps, path.OriginStepID);
+        const destination = findStep(steps, path.DestinationStepID);
+        if (!origin || !destination) {
+            resolved.Errors.push(unknownEndMessage(path, !origin, !destination));
+            return;
         }
-        for (const malformed of scan.Malformed) {
-            errors.push(`❌ ${target} has a malformed decision reference "${malformed}". The condition was: ${condition}`);
-        }
-    }
-    return errors;
+        resolved.Paths.push({
+            // A new path has no ID yet, and the compiler tells a fork's paths apart by ID.
+            ID: path.ID || `new-path-${index}`,
+            OriginStepID: stepRef(origin),
+            DestinationStepID: stepRef(destination),
+            Condition: path.Condition ?? null,
+            Priority: Number.isFinite(path.Priority) ? path.Priority : 0,
+            PathPoints: path.PathPoints ?? null,
+        });
+    });
+    return resolved;
+}
+
+/** The step a path end names, if any. */
+function findStep(steps: readonly AgentStep[], ref: string | undefined): AgentStep | undefined {
+    if (!ref) return undefined;
+    return steps.find((s) => !!s.ID && UUIDsEqual(s.ID, ref)) ?? steps.find((s) => s.Name === ref);
+}
+
+function unknownEndMessage(path: AgentStepPath, originUnknown: boolean, destinationUnknown: boolean): string {
+    const ends = [originUnknown ? 'origin' : null, destinationUnknown ? 'destination' : null].filter((e) => e !== null);
+    return `❌ The path from "${path.OriginStepID}" to "${path.DestinationStepID}" names no step as its ${ends.join(' or ')}. `
+        + 'Name each end by a step\'s exact Name, or by its ID for a step that already exists.';
+}
+
+/** The compiler's settings: names are placeholders, and a fork is an exclusive choice, as when a Flow agent runs. */
+function compilerOptions(workflowName: string | undefined): FlowCompilerOptions {
+    const placeholderName = (id: string): string => id;
+    return {
+        WorkflowName: workflowName?.trim() || 'Flow agent',
+        ResolveAgentName: placeholderName,
+        ResolveActionName: placeholderName,
+        ResolvePromptName: placeholderName,
+        TraversalMode: 'sequential',
+    };
+}
+
+function compileErrorMessage(error: FlowCompileError): string {
+    return `❌ [${error.Code}] ${error.Message}`;
 }
 
 /**
- * The missing options of a Choice fork: when every outgoing path tests the same Choice question's
- * `value`, the paths together must cover every one of its options.
+ * What `ValidateTaskGraphSpec` refuses in the compiled workflow. A compiled step is named by its
+ * spec step's ID where it has one, so each ID in a message becomes the step's name, as the Flow agent
+ * does when it reports these.
  */
-function choiceForkErrors(outgoing: readonly AgentStepPath[], steps: readonly AgentStep[], where: string): string[] {
-    const tests = outgoing.map((p) => (p.Condition?.trim() ? DecisionChoiceTestOf(p.Condition) : null));
-    const first = tests[0];
-    if (!first || !tests.every((t) => t !== null && t.NodeId === first.NodeId && t.QuestionKey === first.QuestionKey)) {
-        return [];
-    }
-    const options = choiceOptions(steps, first.NodeId, first.QuestionKey);
-    if (!options) return [];
-    const covered = new Set(tests.flatMap((t) => t?.Values ?? []));
-    const missing = options.filter((o) => !covered.has(o));
-    if (missing.length === 0) return [];
-    const quoted = missing.map((v) => `"${v}"`).join(', ');
-    return [`❌ ${where} has an incomplete Choice fork on question "${first.QuestionKey}": no path for ${quoted}. A Choice fork must cover every option.`];
+function graphErrorMessages(spec: TaskGraphSpec): string[] {
+    return ValidateTaskGraphSpec(spec).Errors.map((e: TaskGraphValidationError) => `❌ [${e.Code}] ${namedBySteps(e.Message, spec)}`);
 }
 
-/** The option values of the Choice question `questionKey` on the Decision step keyed `key`, if there is one. */
-function choiceOptions(steps: readonly AgentStep[], key: string, questionKey: string): string[] | null {
-    for (const s of steps) {
-        if (!IsDecisionStep(s)) continue;
-        const read = readDecisionStep(s);
-        if (!('Config' in read) || read.Config.key !== key) continue;
-        const question = read.Config.questions[questionKey];
-        return question?.kind === 'Choice' ? question.options.map((o) => o.value) : null;
-    }
-    return null;
-}
-
-/** Validates every Decision step in a flow, returning every problem across them. */
-export function ValidateDecisionSteps(steps: readonly AgentStep[], paths?: readonly AgentStepPath[]): string[] {
-    return steps.flatMap((step, i) => ValidateDecisionStep(step, i, { Steps: steps, Paths: paths }));
+function namedBySteps(message: string, spec: TaskGraphSpec): string {
+    return spec.tasks.reduce(
+        (text, task) => (task.tempId && task.name && task.tempId !== task.name ? text.split(task.tempId).join(task.name) : text),
+        message,
+    );
 }
