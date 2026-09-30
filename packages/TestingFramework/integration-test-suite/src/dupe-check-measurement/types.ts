@@ -60,14 +60,15 @@ export interface CandidatePairObservation {
     /** Threshold arm: flagged when VectorScore >= PotentialMatchThreshold. */
     ThresholdFlagged: boolean;
     /**
-     * Decision arm: probability in [0, 1] from DecisionReasoningProvider. Null when the decision
-     * gave no answer for this candidate, or when the call failed (see the check's DecisionResult).
+     * Decision arm: the model's own probability in [0, 1], before calibration (the provider's
+     * RawProbability), which the calibration section fits on. Null when the decision gave no
+     * answer for this candidate, or when the call failed (see the check's DecisionResult).
      */
     DecisionProbability: number | null;
     /**
-     * Decision arm: flagged as production's entry check flags it, when the provider bands it
-     * 'Uncertain'. A candidate a successful decision gave no answer for is flagged (a missing
-     * probability fails toward inclusion); a failed decision flags nothing.
+     * Decision arm: flagged as production's entry check flags it, when the provider bands its
+     * calibrated probability 'Uncertain'. A candidate a successful decision gave no answer for is
+     * flagged (a missing probability fails toward inclusion); a failed decision flags nothing.
      */
     DecisionFlagged: boolean;
     /** Answering model name for the decision call. */
@@ -99,6 +100,11 @@ export interface ArmCallResult {
 export interface DecisionCallResult extends ArmCallResult {
     /** The model that answered (`MJ: AI Prompt Runs.Model`), backfilled after the run. */
     Model: string;
+    /**
+     * Set when the answering model has no calibration: production's entry check flags nothing for
+     * it, so no candidate of the check is flagged. Its raw probabilities are still recorded.
+     */
+    UncalibratedModel?: string;
 }
 
 /** The results of running one entry check for a corpus record across all arms. */

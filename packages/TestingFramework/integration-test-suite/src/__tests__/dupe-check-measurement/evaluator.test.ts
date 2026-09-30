@@ -995,3 +995,51 @@ describe('Decision calibration is scored out of fold', () => {
         });
     });
 });
+
+describe('The decision arm on calibrated flags, over raw probabilities', () => {
+    /** Two reps of one candidate: raw probabilities as the model gave them, flags as production banded them. */
+    function reps(raw: [number, number], flagged: [boolean, boolean]): RecordCheckObservation[] {
+        return [1, 2].map((rep, i) => {
+            const check = decisionCheck('d1', 'duplicate', [{ Id: 's1', Source: true, Probability: raw[i] }]);
+            check.Rep = rep;
+            check.Candidates[0].DecisionFlagged = flagged[i];
+            return check;
+        });
+    }
+
+    it('measures repeatability on production\'s flag, not on the raw probability at 0.5', () => {
+        // Raw straddles 0.5, but both calibrated flags agree
+        expect(ComputeRepeatability(reps([0.45, 0.55], [false, false]))?.DecisionVerdictAgreementRate).toBe(1);
+        // Raw agrees above 0.5, but the calibrated flags differ
+        expect(ComputeRepeatability(reps([0.88, 0.9], [false, true]))?.DecisionVerdictAgreementRate).toBe(0);
+    });
+
+    it('bands the raw probability in the decision arm when asked, but never in the production view', () => {
+        // Raw 0.9 but not flagged by the calibrated band
+        const [check] = reps([0.9, 0.9], [false, false]);
+
+        expect(ComputeArmPerformance([check], 'decision', { DecisionThreshold: 0.5, BootstrapResamples: 10 }).Recall).toBe(1);
+        expect(ComputeArmPerformance([check], 'decision · production', { DecisionThreshold: 0.5, BootstrapResamples: 10 }).Recall).toBe(0);
+        expect(ComputeArmPerformance([check], 'decision · production', { BootstrapResamples: 10 }).Recall).toBe(0);
+    });
+
+    it('notes decision calls from a model with no calibration', () => {
+        const check = decisionCheck('n1', 'new', [{ Id: 'c1', Probability: 0.9 }]);
+        check.Candidates[0].DecisionFlagged = false;
+        if (check.DecisionResult) {
+            check.DecisionResult.UncalibratedModel = 'Some New Decision Model';
+        }
+
+        const report = BuildMeasurementReport([check], {
+            EntityName: 'MJ: Actions',
+            CorpusPath: '/mock/outside/corpus',
+            DuplicatesCount: 0,
+            NewCount: 1,
+            Reps: 1,
+            TopK: 5,
+            DecisionPrompt: 'Default Decision',
+        });
+
+        expect(report.Notes.some(note => note.includes('no calibration (Some New Decision Model)'))).toBe(true);
+    });
+});

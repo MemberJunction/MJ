@@ -129,7 +129,10 @@ export function DecisionFlagsAt(check: RecordCheckObservation, probability: numb
     return probability === null || probability >= threshold;
 }
 
-/** Whether an arm flags one candidate. `decisionThreshold`, when given, bands the decision arms' probability. */
+/**
+ * Whether an arm flags one candidate. `decisionThreshold`, when given, bands the `decision` arm's
+ * raw DecisionProbability instead of its DecisionFlagged; the `decision · production` arm ignores it.
+ */
 function armFlags(
     check: RecordCheckObservation,
     candidate: CandidatePairObservation,
@@ -144,7 +147,10 @@ function armFlags(
                 ? DecisionFlagsAt(check, candidate.DecisionProbability, decisionThreshold)
                 : candidate.DecisionFlagged;
         case 'decision · production':
-            return candidate.PassedThreshold && armFlags(check, candidate, 'decision', decisionThreshold);
+            // Production's rule, whatever decisionThreshold says: the vector threshold, then the
+            // provider's band on the calibrated probability (DecisionFlagged). DecisionProbability
+            // is raw, so banding it here would not be production.
+            return candidate.PassedThreshold && candidate.DecisionFlagged;
         case 'prompt':
             return candidate.PromptFlagged;
         case 'prompt · production':
@@ -158,6 +164,9 @@ function armFlags(
  * Evaluates pairwise performance for an arm on a subset of record checks.
  * Includes retrieval misses as false negatives: total actual positive pairs equals
  * the total number of duplicate records evaluated.
+ *
+ * `decisionThreshold`, when given, bands the `decision` arm's raw DecisionProbability instead of
+ * its DecisionFlagged. The `decision · production` arm ignores it.
  */
 export function EvaluateArmConfusion(
     checks: readonly RecordCheckObservation[],
@@ -742,9 +751,8 @@ export function ComputeRepeatability(
             if (cand1.DecisionProbability !== null && cand2.DecisionProbability !== null) {
                 decisionDiffs.push(Math.abs(cand1.DecisionProbability - cand2.DecisionProbability));
                 decisionPairs++;
-                const verdict1 = cand1.DecisionProbability >= 0.5;
-                const verdict2 = cand2.DecisionProbability >= 0.5;
-                if (verdict1 === verdict2) {
+                // The verdict is production's flag (the calibrated band), not the raw probability.
+                if (cand1.DecisionFlagged === cand2.DecisionFlagged) {
                     decisionAgreements++;
                 }
             }
@@ -789,9 +797,13 @@ export interface ReportOptions {
  * this run.
  */
 function buildReportNotes(checks: readonly RecordCheckObservation[]): string[] {
-    const rep1Candidates = checks.filter(c => c.Rep === 1).flatMap(c => c.Candidates);
+    const rep1Checks = checks.filter(c => c.Rep === 1);
+    const rep1Candidates = rep1Checks.flatMap(c => c.Candidates);
     const belowThreshold = rep1Candidates.filter(c => !c.PassedThreshold).length;
-    return [
+    const uncalibrated = [...new Set(rep1Checks
+        .map(c => c.DecisionResult?.UncalibratedModel)
+        .filter((model): model is string => model !== undefined))];
+    const notes = [
         'The corpus is synthetic (LLM rewrites of MJ metadata); refit on real labelled duplicates before relying on it.',
         'A duplicate whose source was not retrieved is a false negative for all arms (reported separately in retrieval).',
         'The decision arms flag as production\'s entry check does: a candidate a successful decision gave no answer for is flagged, and a failed decision flags nothing. The arm table counts failed calls and missing answers. The prompt arm counts a candidate it gave no verdict for as not flagged.',
@@ -800,6 +812,10 @@ function buildReportNotes(checks: readonly RecordCheckObservation[]): string[] {
         'New (hard-negative) records were screened only for an exact match with existing rows. One may already exist under other wording; the decision would then flag it correctly, and the false-flag rate would read high.',
         'Cost notes: a failover or chat model cost may be missing on branches without #4880. A check with no recorded cost is left out of the cost per 1,000 checks.',
     ];
+    if (uncalibrated.length > 0) {
+        notes.push(`Decision calls answered by a model with no calibration (${uncalibrated.join(', ')}) flag nothing, as the entry check treats them. Their raw probabilities are fitted in the calibration section, and its band sweep shows where to set a band once a calibration ships.`);
+    }
+    return notes;
 }
 
 /**
