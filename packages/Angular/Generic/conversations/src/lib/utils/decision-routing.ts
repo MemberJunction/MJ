@@ -47,6 +47,13 @@ const ARTIFACT_QUESTION = 'artifact';
 /** The artifact question's option for "the message modifies no artifact". */
 const NO_ARTIFACT = 'none';
 
+/**
+ * The most artifact versions the artifact question offers, besides "none". Each participant can
+ * bring up to 40, and the server refuses the whole request, agent Choice included, when one Choice
+ * lists more than 255 options. A long list also lengthens the prompt the time limit has to cover.
+ */
+export const MAX_ROUTING_ARTIFACT_VERSIONS = 20;
+
 /** How many turns before the new message the decision reads. */
 const RECENT_TURN_COUNT = 6;
 
@@ -226,18 +233,27 @@ export function BuildRecentTurns(
  * agent's newest first, labelled with the artifact's name, type and version and the agent that
  * made it.
  *
- * @param artifactsByAgent Each participant with its artifacts in the conversation.
+ * At most {@link MAX_ROUTING_ARTIFACT_VERSIONS} are offered, each once. Every artifact's latest
+ * version comes first, in participant order, then each artifact's next newest, and so on; the
+ * versions kept stay in the order above.
+ *
+ * @param artifactsByAgent Each participant with its artifacts in the conversation, newest first.
  */
 export function BuildRoutingArtifactVersions(
     artifactsByAgent: ReadonlyArray<{ Agent: RoutingAgent; Artifacts: readonly AgentArtifactSummary[] }>
 ): RoutingArtifactVersion[] {
-    return artifactsByAgent.flatMap(({ Agent, Artifacts }) =>
-        Artifacts.flatMap(artifact => artifact.Versions.map((version, index) => ({
-            AgentId: Agent.ID,
-            ArtifactVersionId: version.versionId,
-            Description: describeArtifactVersion(artifact, version, index === 0, Agent)
+    const ranked = artifactsByAgent.flatMap(({ Agent, Artifacts }) =>
+        Artifacts.flatMap(artifact => artifact.Versions.map((version, index): RankedArtifactVersion => ({
+            Recency: index,
+            Version: {
+                AgentId: Agent.ID,
+                ArtifactVersionId: version.versionId,
+                Description: describeArtifactVersion(artifact, version, index === 0, Agent)
+            }
         })))
     );
+    const kept = pickArtifactVersions(ranked, MAX_ROUTING_ARTIFACT_VERSIONS);
+    return ranked.filter(entry => kept.has(entry)).map(entry => entry.Version);
 }
 
 /**
@@ -364,6 +380,30 @@ function buildRouteOptions(input: RoutingDecisionInput): ChoiceOption[] {
         options.push({ Value: manager.ID, Description: describeSomeoneElse(manager) });
     }
     return options;
+}
+
+/** An artifact version, with its place in its artifact's history: 0 for the latest. */
+interface RankedArtifactVersion {
+    Recency: number;
+    Version: RoutingArtifactVersion;
+}
+
+/**
+ * Up to `max` versions, each once, the newest in their artifacts first: every artifact's latest,
+ * then every artifact's second newest, and so on. Versions equally new keep their order.
+ */
+function pickArtifactVersions(ranked: readonly RankedArtifactVersion[], max: number): Set<RankedArtifactVersion> {
+    const kept = new Set<RankedArtifactVersion>();
+    for (const entry of [...ranked].sort((a, b) => a.Recency - b.Recency)) {
+        if (kept.size >= max) {
+            break;
+        }
+        const id = entry.Version.ArtifactVersionId;
+        if (![...kept].some(k => UUIDsEqual(k.Version.ArtifactVersionId, id))) {
+            kept.add(entry);
+        }
+    }
+    return kept;
 }
 
 /** The artifact Choice's options: each version, then "none". */

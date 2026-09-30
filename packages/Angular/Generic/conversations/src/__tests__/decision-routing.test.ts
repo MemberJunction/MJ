@@ -24,6 +24,7 @@ import {
     DECISION_ROUTING_TIMEOUT_MS,
     InterpretRoutingAnswers,
     IsRoutableAgent,
+    MAX_ROUTING_ARTIFACT_VERSIONS,
     RunRoutingDecision,
     ShouldRunRoutingDecision,
     type RoutingAgent,
@@ -287,6 +288,51 @@ describe('decision routing', () => {
 
             expect(optionsFor(before, RESEARCH.ID)).toEqual([RESEARCH.ID, MANAGER.ID]);
             expect(optionsFor(after, WRITER.ID)).toEqual([WRITER.ID, RESEARCH.ID, MANAGER.ID]);
+        });
+    });
+
+    describe('BuildRoutingArtifactVersions', () => {
+        /** A version ID for artifact `artifact`, `age` versions older than its latest. */
+        const versionId = (artifact: number, age: number): string =>
+            `CCCCCCCC-0000-0000-${String(artifact).padStart(4, '0')}-${String(age).padStart(12, '0')}`;
+
+        /** An artifact with `count` versions, newest first. */
+        function deepArtifact(name: string, artifact: number, count: number): AgentArtifactSummary {
+            return artifactSummary(name, Array.from({ length: count }, (_, age): [string, number, string | null] =>
+                [versionId(artifact, age), count - age, null]));
+        }
+
+        const ids = (versions: ReturnType<typeof BuildRoutingArtifactVersions>): string[] => versions.map(v => v.ArtifactVersionId);
+        const range = (artifact: number, count: number): string[] => Array.from({ length: count }, (_, age) => versionId(artifact, age));
+
+        it(`offers at most ${MAX_ROUTING_ARTIFACT_VERSIONS}: every artifact's latest first, then older ones, in their order`, () => {
+            const versions = BuildRoutingArtifactVersions([
+                { Agent: WRITER, Artifacts: [deepArtifact('Press kit', 1, 30)] },
+                { Agent: RESEARCH, Artifacts: [deepArtifact('Sources', 2, 5), deepArtifact('Notes', 3, 1)] },
+            ]);
+
+            expect(versions).toHaveLength(MAX_ROUTING_ARTIFACT_VERSIONS);
+            expect(ids(versions)).toEqual([...range(1, 14), ...range(2, 5), ...range(3, 1)]);
+        });
+
+        it('keeps a crowded conversation under the server\'s option limit, so the agent choice is still asked', () => {
+            const agents = Array.from({ length: 7 }, (_, i): RoutingAgent => ({ ID: `DDDDDDDD-0000-0000-0000-00000000000${i}`, Name: `Agent ${i}`, Description: null }));
+            const versions = BuildRoutingArtifactVersions(agents.map((agent, i) => ({ Agent: agent, Artifacts: [deepArtifact(`Doc ${i}`, i, 40)] })));
+            const questions = BuildRoutingQuestions(input({ ArtifactVersions: versions }));
+            const artifact = questions['artifact'];
+
+            expect(ids(versions)).toEqual(expect.arrayContaining(agents.map((_, i) => versionId(i, 0))));
+            expect(artifact?.Kind === 'Choice' ? artifact.Options.length : 0).toBe(MAX_ROUTING_ARTIFACT_VERSIONS + 1);
+            // RunDecisionResolver.MAX_OPTIONS_PER_QUESTION: over it, the server refuses the whole request.
+            expect(MAX_ROUTING_ARTIFACT_VERSIONS + 1).toBeLessThanOrEqual(255);
+            expect(questions['route']?.Kind).toBe('Choice');
+        });
+
+        it('offers a version once, even when two agents\' replies carry it', () => {
+            const shared = artifactSummary('Press kit', [[VERSION_1, 1, null]]);
+            const versions = BuildRoutingArtifactVersions([{ Agent: WRITER, Artifacts: [shared] }, { Agent: RESEARCH, Artifacts: [shared] }]);
+
+            expect(versions).toEqual([{ AgentId: WRITER.ID, ArtifactVersionId: VERSION_1, Description: expect.stringContaining('made by Writer') }]);
         });
     });
 
