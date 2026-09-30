@@ -412,6 +412,73 @@ describe('Decision pipeline escalation', () => {
     });
 
     // ================================================================
+    // The Decision pipeline's own constraints
+    // ================================================================
+
+    describe('the Decision pipeline\'s own constraints', () => {
+        /** The LLM pipeline's outputs, with Seniority unconstrained or a wider enum that allows Director. */
+        const looserTargets: Array<{ name: string; seniority: DataFeatureOutput['Constraint'] }> = [
+            { name: 'no constraint', seniority: undefined },
+            { name: 'a wider enum', seniority: { Type: 'enum', Values: ['Executive', 'Director', 'Manager', 'Staff'], OnViolation: 'fail' } },
+        ];
+
+        /** Points the escalation at an LLM pipeline whose Seniority output has the given constraint, and has it answer Director. */
+        function escalateToDirector(seniority: DataFeatureOutput['Constraint']): void {
+            const [seniorityOutput, isVip] = outputs();
+            targetRow.Configuration = JSON.stringify(llmSpec({ Outputs: [{ ...seniorityOutput, Constraint: seniority }, isVip] }));
+            llmResults.set('r1', { Success: true, RawResult: { seniority: 'Director', isVip: true }, AIPromptRunID: 'LLM-RUN-r1' });
+            decisionAnswers.set('r1', BELOW_FLOOR);
+        }
+
+        for (const target of looserTargets) {
+            it(`fails the record when the LLM, with ${target.name}, answers outside the Decision pipeline's enum, and writes nothing`, async () => {
+                escalateToDirector(target.seniority);
+                const log = vi.spyOn(console, 'log');
+                const processor = new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec());
+                const writeBack = new WriteBackProcessor(processor, { fields: { Seniority: '$.seniority', IsVIP: '$.isVip' } }, true);
+                const result = await writeBack.ProcessRecord(makeRecord('r1'), context);
+
+                expect(result).toEqual({
+                    Status: 'Failed',
+                    ErrorMessage:
+                        "Decision confidence below 0.7 (IsVIP 0.4); escalation to LLM pipeline 'Seniority (LLM)' failed: " +
+                        "its answer is outside this Decision pipeline's own constraints: Constraint violation for 'Seniority': " +
+                        "Value 'Director' is not in the allowed vocabulary: [Executive, Manager, Staff].",
+                    AIPromptRunID: 'LLM-RUN-r1',
+                });
+                expect(llmCalls).toEqual(['r1']);
+                expect(historyCalls).toEqual([]);
+                expect(store).not.toHaveBeenCalled();
+                expect(processor.EscalatedRecordCount).toBe(1);
+                expect(log).toHaveBeenCalledWith(expect.stringContaining("to Feature Pipeline 'LLM-PIPE-1' (1 failed)"));
+            });
+        }
+
+        it('applies the Decision pipeline\'s null policy to an escalated value outside its enum', async () => {
+            escalateToDirector(undefined);
+            const [seniority, isVip] = outputs();
+            const spec = decisionSpec({ Outputs: [{ ...seniority, Constraint: { ...seniority.Constraint, OnViolation: 'null' } }, isVip] });
+            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, spec).ProcessRecord(makeRecord('r1'), context);
+
+            expect(result.Status).toBe('Succeeded');
+            expect(result.ResultPayload).toMatchObject({ seniority: null, isVip: true });
+            expect(result.ResultPayload).toHaveProperty('_violations', [
+                { outputName: 'Seniority', violationMessage: "Value 'Director' is not in the allowed vocabulary: [Executive, Manager, Staff].", policy: 'null' },
+            ]);
+            expect(valuesOf(answersFor('r1')[0])).toEqual({ Seniority: null, IsVIP: true });
+        });
+
+        it('keeps an escalated value inside the Decision pipeline\'s enum, in the enum\'s casing', async () => {
+            escalateToDirector(undefined);
+            llmResults.set('r1', { Success: true, RawResult: { seniority: 'manager', isVip: true }, AIPromptRunID: 'LLM-RUN-r1' });
+            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec()).ProcessRecord(makeRecord('r1'), context);
+
+            expect(result).toMatchObject({ Status: 'Succeeded', ResultPayload: { seniority: 'Manager', isVip: true } });
+            expect(valuesOf(answersFor('r1')[0])).toEqual({ Seniority: 'Manager', IsVIP: true });
+        });
+    });
+
+    // ================================================================
     // The escalation target
     // ================================================================
 

@@ -75,6 +75,8 @@ export interface EscalatedAnswer {
     FeatureValueCacheID?: string;
     /** For the history row's reasoning: that the record escalated, to which pipeline, and from what confidence. */
     Note: string;
+    /** Why the record escalated (`Decision confidence below 0.7 (IsVIP 0.4)`), for a failure message. */
+    EscalationReason: string;
     /** The target pipeline's name, for a failure message. */
     PipelineName: string;
     /** The reasoning of the history row that links the superseded decision's prompt run to the process run. */
@@ -253,8 +255,7 @@ export class FeaturePipelineEscalator {
         if (!result || result.Status !== 'Succeeded') {
             return {
                 ErrorMessage: DescribeEscalationFailure(
-                    this.settings.BelowConfidence,
-                    request.BelowFloor,
+                    this.escalationReason(request.BelowFloor),
                     target.Name,
                     result?.ErrorMessage ?? 'it returned no result'
                 ),
@@ -270,6 +271,7 @@ export class FeaturePipelineEscalator {
             ConstraintHash: target.Processor.ConstraintHash,
             FeatureValueCacheID: result.FeatureValueCacheID,
             Note: BuildEscalationNote(target.Name, this.settings.BelowConfidence, request.BelowFloor, result.ResultPayload),
+            EscalationReason: this.escalationReason(request.BelowFloor),
             PipelineName: target.Name,
             SupersededNote: BuildSupersededDecisionNote(target.Name, this.settings.BelowConfidence, request.BelowFloor),
         };
@@ -367,11 +369,11 @@ export function BuildEscalationNote(pipelineName: string, floor: number, belowFl
 }
 
 /**
- * Why an escalated record failed: why it escalated (the outputs below the floor), and why its escalation
- * to the named LLM pipeline failed.
+ * Why an escalated record failed: why it escalated (`Decision confidence below 0.7 (IsVIP 0.4)`), and why
+ * its escalation to the named LLM pipeline failed.
  */
-export function DescribeEscalationFailure(floor: number, belowFloor: BelowFloorOutput[], pipelineName: string, reason: string): string {
-    return `Decision confidence below ${floor} (${DescribeBelowFloor(belowFloor)}); escalation to LLM pipeline '${pipelineName}' failed: ${reason}`;
+export function DescribeEscalationFailure(escalationReason: string, pipelineName: string, reason: string): string {
+    return `${escalationReason}; escalation to LLM pipeline '${pipelineName}' failed: ${reason}`;
 }
 
 /**
