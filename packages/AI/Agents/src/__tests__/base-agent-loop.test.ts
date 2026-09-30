@@ -46,7 +46,7 @@ import { BaseAgentType } from '../agent-types/base-agent-type';
 import '../agent-types/loop-agent-type';
 import type { LoopAgentResponse } from '../agent-types/loop-agent-response-type';
 import type { AgentPreExecutionRAGResult } from '../agent-pre-execution-rag';
-import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended, AgentDecisionRequest, AgentFinishIf, BaseAgentNextStep } from '@memberjunction/ai-core-plus';
+import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended, AgentDecisionRequest, AgentFinishIf, BaseAgentNextStep, AgentChatMessage } from '@memberjunction/ai-core-plus';
 import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { RecordToolCallingDecision } from '@memberjunction/ai-prompts';
 import { SanitizeToolName } from '../native-tools/action-tool-builder';
@@ -55,6 +55,7 @@ import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { MJActionEntityExtended } from '@memberjunction/actions-base';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS } from '../agent-types/loop-agent-prompt-params';
+import { PayloadFeedbackManager } from '../PayloadFeedbackManager';
 
 // ============================================================================
 // Module mocks (boundaries only)
@@ -1168,6 +1169,10 @@ describe('BaseAgent.Execute — the payload change check (opt-in with payloadFee
             harness.agent = makeAgentRow({ AgentTypePromptParams: CHECK_ON });
         });
 
+        afterEach(() => {
+            vi.restoreAllMocks();
+        });
+
         it('asks one Likelihood per flagged change, in one call, about the reasoning and never the payload', async () => {
             const turns: string[][] = [];
             const { agent } = makeAgent(truncatingScript(turns));
@@ -1218,6 +1223,45 @@ describe('BaseAgent.Execute — the payload change check (opt-in with payloadFee
             expect(injectedPayload(runner.Calls[1])).toEqual({ summary: SHORT_SUMMARY });
             expect(result.payload).toEqual({ summary: SHORT_SUMMARY });
             expect(JSON.parse(harness.run.FinalPayload ?? 'null')).toEqual({ summary: SHORT_SUMMARY });
+        });
+
+        it('adds its message as a tool result that expires after three turns, like other results', async () => {
+            const { agent } = makeAgent(truncatingScript([]));
+            vi.spyOn(agent.DecisionService, 'Ask').mockResolvedValueOnce(likelihood(0.1));
+            const params = makeParams({ payload: { summary: LONG_SUMMARY } });
+
+            await agent.Execute(params);
+
+            const message: AgentChatMessage | undefined = params.conversationMessages.find((m) => contentOf(m).startsWith('Payload change check:'));
+            expect(message?.role).toBe('user');
+            expect(message?.metadata).toEqual({
+                turnAdded: 1,
+                messageType: 'tool-result',
+                expirationTurns: 3,
+                expirationMode: 'Compact',
+                compactMode: 'First N Chars',
+                compactLength: 500,
+                compactPromptId: '',
+            });
+        });
+
+        it('never fails the turn: a throw inside the check fails its step, and the turn goes on', async () => {
+            const turns: string[][] = [];
+            const { agent, runner } = makeAgent(truncatingScript(turns));
+            // QueryAgent never throws by contract; this is the guard for anything else in the check that does.
+            vi.spyOn(PayloadFeedbackManager.prototype, 'QueryAgent').mockRejectedValueOnce(new Error('unexpected failure'));
+
+            const result = await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY } }));
+
+            expect(result.success).toBe(true);
+            expect(harness.steps.map((s) => s.StepType)).toEqual(['Validation', 'Prompt', 'Decision', 'Actions', 'Prompt']);
+            expect(harness.steps.map((s) => s.Status)).toEqual(['Completed', 'Completed', 'Failed', 'Completed', 'Completed']);
+            expect(harness.steps[2].ErrorMessage).toBe('unexpected failure');
+            // Turn 2 is exactly what it would be with the check off, and the change stands.
+            expect(addedBeforeTurn2(turns)).toHaveLength(2);
+            expect(runner.Calls).toHaveLength(2);
+            expect(injectedPayload(runner.Calls[1])).toEqual({ summary: SHORT_SUMMARY });
+            expect(result.payload).toEqual({ summary: SHORT_SUMMARY });
         });
 
         it('adds nothing to the next turn for a change judged intended', async () => {
@@ -1310,10 +1354,6 @@ describe('BaseAgent.Execute — the payload change check (opt-in with payloadFee
 
         describe('on a step that ends the run, where no turn would read its message', () => {
             const CHANGE: LoopAgentResponse['payloadChangeRequest'] = { updateElements: { summary: SHORT_SUMMARY }, reasoning: CHANGE_REASONING };
-
-            afterEach(() => {
-                vi.restoreAllMocks();
-            });
 
             it.each<[string, LoopAgentResponse]>([
                 ['a Success step', successEnvelope({ reasoning: REASONING, payloadChangeRequest: CHANGE })],
