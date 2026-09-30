@@ -9,6 +9,9 @@
  *   2. `PromptReasoningProvider` reasons over **only the survivors**, so auto-merge still works
  *      wherever the prompt provider allows it.
  *
+ * Both stages resolve through the class factory under the 'Decision' and 'Prompt' modes, so an
+ * application's override of either mode applies inside the chain as well.
+ *
  * With no survivors the set is `NotDuplicate` and the prompt never runs. If the decision fails,
  * every candidate goes to the prompt provider, which is the `Prompt` mode's behaviour: narrowing is
  * an optimisation, so its failure must never hide a candidate.
@@ -21,10 +24,12 @@
  */
 
 import { LogError } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import {
     DuplicateReasoningProvider,
-    DECISION_THEN_PROMPT_REASONING_PROVIDER_KEY
+    DECISION_REASONING_PROVIDER_KEY,
+    DECISION_THEN_PROMPT_REASONING_PROVIDER_KEY,
+    PROMPT_REASONING_PROVIDER_KEY
 } from './DuplicateReasoningProvider';
 import { PromptReasoningProvider } from './PromptReasoningProvider';
 import {
@@ -51,15 +56,17 @@ export class DecisionThenPromptReasoningProvider extends DuplicateReasoningProvi
     protected readonly PromptStage: DuplicateReasoningProvider;
 
     /**
-     * The class factory passes no arguments, so both stages default to the shipped providers.
+     * The class factory passes no arguments, so both stages resolve through the class factory
+     * under the 'Decision' and 'Prompt' modes: an application's override of either mode applies
+     * inside the chain too.
      *
-     * @param decisionStage the filter stage; defaults to a `DecisionReasoningProvider` at its default threshold
-     * @param promptStage the reasoning stage; defaults to a `PromptReasoningProvider`
+     * @param decisionStage the filter stage; defaults to {@link ResolveDecisionStage}
+     * @param promptStage the reasoning stage; defaults to {@link ResolvePromptStage}
      */
     constructor(decisionStage?: DecisionReasoningProvider, promptStage?: DuplicateReasoningProvider) {
         super();
-        this.DecisionStage = decisionStage ?? new DecisionReasoningProvider();
-        this.PromptStage = promptStage ?? new PromptReasoningProvider();
+        this.DecisionStage = decisionStage ?? this.ResolveDecisionStage();
+        this.PromptStage = promptStage ?? this.ResolvePromptStage();
     }
 
     /**
@@ -100,6 +107,27 @@ export class DecisionThenPromptReasoningProvider extends DuplicateReasoningProvi
                 .map(d => ({ FieldName: d.FieldName, Values: d.Values.filter(v => keep(v.RecordID)) }))
                 .filter(d => this.stillDiffers(d))
         };
+    }
+
+    /**
+     * The filter stage: the provider registered for the 'Decision' mode. The chain needs its
+     * probability API, so a registration that is not a `DecisionReasoningProvider` falls back to
+     * the shipped one.
+     */
+    protected ResolveDecisionStage(): DecisionReasoningProvider {
+        const registered = this.resolveRegisteredProvider(DECISION_REASONING_PROVIDER_KEY);
+        return registered instanceof DecisionReasoningProvider ? registered : new DecisionReasoningProvider();
+    }
+
+    /** The reasoning stage: the provider registered for the 'Prompt' mode, else the shipped one. */
+    protected ResolvePromptStage(): DuplicateReasoningProvider {
+        return this.resolveRegisteredProvider(PROMPT_REASONING_PROVIDER_KEY) ?? new PromptReasoningProvider();
+    }
+
+    /** The provider the class factory registers for a mode, or null when none is registered. */
+    private resolveRegisteredProvider(mode: string): DuplicateReasoningProvider | null {
+        const result = MJGlobal.Instance.ClassFactory.TryCreateInstance<DuplicateReasoningProvider>(DuplicateReasoningProvider, mode);
+        return result.Resolved ? result.Instance : null;
     }
 
     /** No candidate survived: `NotDuplicate` for the set, from the decision alone, with no prompt call. */

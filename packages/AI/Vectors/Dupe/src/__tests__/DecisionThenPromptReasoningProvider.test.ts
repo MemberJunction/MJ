@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import type { AIDecisionParams, AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import type { AIPromptParams, AIPromptRunResult } from '@memberjunction/ai-core-plus';
 import type { ChatResult, DecisionAnswer } from '@memberjunction/ai';
@@ -41,7 +41,9 @@ vi.mock('@memberjunction/ai-core-plus', () => ({
 }));
 
 import { LogError } from '@memberjunction/core';
+import { MJGlobal } from '@memberjunction/global';
 import { DecisionThenPromptReasoningProvider } from '../reasoning/DecisionThenPromptReasoningProvider';
+import { PromptReasoningProvider } from '../reasoning/PromptReasoningProvider';
 import { DecisionReasoningProvider } from '../reasoning/DecisionReasoningProvider';
 import { DuplicateReasoningProvider } from '../reasoning/DuplicateReasoningProvider';
 import {
@@ -270,6 +272,53 @@ describe('DecisionThenPromptReasoningProvider', () => {
             const promptData = mockExecutePrompt.mock.calls[0][0].data;
             expect(promptData?.['candidateCount']).toBe(3);
             expect(output.AIPromptRunID).toBe('prompt-run-2');
+        });
+    });
+
+    // Registered in the last block only, so every earlier test builds its chain from the shipped
+    // providers. Both overrides extend a shipped provider, as an application's override would.
+    describe('class-factory overrides of the Decision and Prompt modes', () => {
+        const overridePromptInputs = new Array<DuplicateReasoningInput>();
+
+        class RecordingPromptProvider extends PromptReasoningProvider {
+            public async Reason(input: DuplicateReasoningInput, context: DuplicateReasoningContext): Promise<DuplicateReasoningOutput> {
+                overridePromptInputs.push(input);
+                return super.Reason(input, context);
+            }
+        }
+
+        class StrictDecisionProvider extends DecisionReasoningProvider {
+            constructor() {
+                super(0.95);
+            }
+        }
+
+        beforeAll(() => {
+            MJGlobal.Instance.ClassFactory.Register(DuplicateReasoningProvider, RecordingPromptProvider, 'Prompt');
+            MJGlobal.Instance.ClassFactory.Register(DuplicateReasoningProvider, StrictDecisionProvider, 'Decision');
+        });
+
+        beforeEach(() => {
+            overridePromptInputs.length = 0;
+        });
+
+        it('reasons over the survivors with the provider registered for the Prompt mode', async () => {
+            answerByRecord({ 'ID|c1': 0.99, 'ID|c2': 0.2, 'ID|c3': 0.5 });
+            mockExecutePrompt.mockResolvedValue(promptRunResult({ recommendation: 'Uncertain' }, 'prompt-run-3'));
+            await new DecisionThenPromptReasoningProvider().Reason(input(), CONTEXT);
+
+            expect(overridePromptInputs).toHaveLength(1);
+            expect(overridePromptInputs[0].Candidates.map(c => c.RecordID)).toEqual(['ID|c1']);
+        });
+
+        it('filters with the provider registered for the Decision mode, at its threshold', async () => {
+            answerByRecord({ 'ID|c1': 0.9, 'ID|c2': 0.2, 'ID|c3': 0.5 });
+            const output = await new DecisionThenPromptReasoningProvider().Reason(input(), CONTEXT);
+
+            expect(overridePromptInputs).toHaveLength(0);
+            expect(mockExecutePrompt).not.toHaveBeenCalled();
+            expect(output.Recommendation).toBe('NotDuplicate');
+            expect(output.Reasoning).toContain('0.95');
         });
     });
 });
