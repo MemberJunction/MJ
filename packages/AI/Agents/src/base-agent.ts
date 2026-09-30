@@ -8053,13 +8053,16 @@ The context is now within limits. Please retry your request with the recovered c
         return Array.isArray(target) ? Math.min(target.length, this.decisionMaxItems(agentTypePromptParams)) : 0;
     }
 
-    /** The result of a request the turn's decision-call budget left no calls for. It was not run. */
+    /**
+     * The result of a request the turn's decision-call budget left no calls for. It was not run.
+     * A budget of 0 turns decision calls off for the agent, so then asking again on a later turn
+     * cannot help, and the result does not invite it.
+     */
     private overBudgetDecisionResult(request: AgentDecisionRequest, index: number, budget: number): AgentDecisionResult {
-        return {
-            id: this.decisionRequestId(request, index),
-            success: false,
-            error: `Not run: one turn's decisions make at most ${budget} decision calls in total, counting each forEachItemIn item, and the requests before this one used them all. Ask again next turn if you still need it.`,
-        };
+        const error = budget === 0
+            ? 'Not run: this agent\'s decision-call budget is 0 (decisionsMaxCallsPerTurn), so it makes no decision calls on any turn. Asking again will not help: carry on without the answer.'
+            : `Not run: one turn's decisions make at most ${budget} decision calls in total, counting each forEachItemIn item, and the requests before this one used them all. Ask again next turn if you still need it.`;
+        return { id: this.decisionRequestId(request, index), success: false, error };
     }
 
     /** A request's id for its result, or its position when the model sent no usable id. */

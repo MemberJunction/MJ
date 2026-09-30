@@ -438,6 +438,8 @@ export interface LoopAgentTypePromptParams {
      * `forEachItemIn` item. The budget is handed out in request order before any call is made. A
      * `forEachItemIn` request it cuts short asks its first items and reports the rest in
      * `skippedCount`. A request it leaves no calls for is not run, and gets a failed result saying why.
+     * 0 turns decision calls off: every request gets a failed result that says so, and does not
+     * invite the agent to ask again.
      * @default MAX_DECISION_CALLS_PER_TURN (100)
      */
     decisionsMaxCallsPerTurn?: number;

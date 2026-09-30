@@ -1219,7 +1219,7 @@ describe('Agent Decisions', () => {
             expect(stepNamed('after')).toBeDefined();
         });
 
-        it('with a budget of 0, makes no call and records no step, and every request says why', async () => {
+        it('with a budget of 0, makes no call and records no step, and every request says the budget is 0 without inviting a retry', async () => {
             const ask = vi.spyOn(mockService, 'Ask').mockResolvedValue(answered());
 
             const results = await agent.testExecuteDecisionRequestsAsSteps([
@@ -1230,7 +1230,25 @@ describe('Agent Decisions', () => {
             expect(ask).not.toHaveBeenCalled();
             expect(createdSteps).toHaveLength(0);
             expect(results.map(r => [r.id, r.success])).toEqual([['single', false], ['batch', false]]);
-            expect(results.every(r => r.error?.includes('at most 0 decision calls in total'))).toBe(true);
+            for (const result of results) {
+                expect(result.error).toContain("this agent's decision-call budget is 0");
+                expect(result.error).toContain('no decision calls on any turn');
+                expect(result.error).not.toMatch(/ask again next turn/i);
+                expect(result.error).not.toContain('the requests before this one used them all');
+            }
+        });
+
+        it('with a budget above 0, still invites the request the budget ran out on to ask again next turn', async () => {
+            vi.spyOn(mockService, 'Ask').mockResolvedValue(answered());
+
+            const results = await agent.testExecuteDecisionRequestsAsSteps([
+                { id: 'first', state: 'First.', questions: QUESTIONS },
+                { id: 'second', state: 'Second.', questions: QUESTIONS },
+            ], {}, { decisionsMaxCallsPerTurn: 1 }, stepParams());
+
+            expect(results.map(r => [r.id, r.success])).toEqual([['first', true], ['second', false]]);
+            expect(results[1].error).toContain('at most 1 decision calls in total');
+            expect(results[1].error).toContain('Ask again next turn');
         });
 
         it('charges nothing for a request that makes no calls, so it cannot starve the requests after it', async () => {
