@@ -548,20 +548,21 @@ export class MemoryManagerAgent extends BaseAgent {
     /**
      * Create an agent run step record for observability.
      * Returns null if agentRunID is not set (defensive check).
+     * Protected so a test can stand in for the database.
      */
-    private async createRunStep(
+    protected async createRunStep(
         stepType: 'Prompt' | 'Decision' | 'Validation',
         stepName: string,
         inputData?: Record<string, unknown>,
         targetId?: string
-    ): Promise<MJAIAgentRunStepEntity | null> {
+    ): Promise<MJAIAgentRunStepEntityExtended | null> {
         if (!this._agentRunID || !this._contextUser) {
             return null;
         }
 
         try {
             const md = this.ProviderToUse;
-            const step = await md.GetEntityObject<MJAIAgentRunStepEntity>('MJ: AI Agent Run Steps', this._contextUser);
+            const step = await md.GetEntityObject<MJAIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', this._contextUser);
 
             step.AgentRunID = this._agentRunID;
             step.StepNumber = ++this._stepCounter;
@@ -1193,8 +1194,9 @@ export class MemoryManagerAgent extends BaseAgent {
     /**
      * Filters candidate notes using either the typed decision gate (if enabled)
      * or the traditional self-reported confidence and length filters.
+     * Protected so a test can run the gate the way extraction does.
      */
-    private async filterCandidateNotes(
+    protected async filterCandidateNotes(
         notes: ExtractedNote[],
         conversationThreads: ConversationThread[],
         contextUser: UserInfo
@@ -1247,7 +1249,8 @@ export class MemoryManagerAgent extends BaseAgent {
 
     /**
      * Runs a decision prompt call for a single batch of candidate notes, falling back
-     * to the confidence filter if the decision call fails.
+     * to the confidence filter if the decision call fails. The call's step joins the agent run's
+     * steps, and carries the call's prompt run, so the run's cost and token totals count it.
      */
     private async judgeDecisionBatch(
         batch: ExtractedNote[],
@@ -1261,6 +1264,9 @@ export class MemoryManagerAgent extends BaseAgent {
             noteCount: batch.length,
             modelCap
         });
+        if (step) {
+            this.AgentRun?.Steps.push(step);
+        }
 
         const decisionService = this._agentDecisionService ?? new AgentDecisionService();
         const result = await decisionService.Ask({
@@ -1282,16 +1288,15 @@ export class MemoryManagerAgent extends BaseAgent {
     }
 
     /**
-     * Attaches decision prompt run telemetry to the step and marks it complete.
+     * Puts the decision's prompt run on its step, which is how the agent run counts the call's cost
+     * and tokens, and marks the step complete.
      */
     private async recordDecisionStep(
-        step: MJAIAgentRunStepEntity | null,
+        step: MJAIAgentRunStepEntityExtended | null,
         result: AIDecisionRunResult
     ): Promise<void> {
         if (!step) return;
-        if (step instanceof MJAIAgentRunStepEntityExtended && result.promptRun) {
-            this.attachDecisionPromptRun(step, result);
-        }
+        this.attachDecisionPromptRun(step, result);
         await this.finalizeRunStep(
             step,
             result.success,
