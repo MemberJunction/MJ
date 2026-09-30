@@ -400,13 +400,9 @@ export class EntityVectorSyncer extends VectorBase {
 
     let embeddings: EmbeddingRunResult;
     try {
-      embeddings = await embeddingRunner.RunEmbedding({
-        Texts: validEntries.map(e => e.text),
-        ModelID: aiModelID,
-        Dimensions: embeddingDimensions,
-        ContextUser: this.CurrentUser,
-        Description: `Vector sync batch (${template.Name})`,
-      });
+      embeddings = await this.EmbedRenderedTexts(
+        validEntries.map(e => e.text), embeddingRunner, aiModelID, embeddingDimensions, template.Name
+      );
     } catch (err) {
       const msg = `Embedding model "${embeddingModelAPIName}" threw an error: ${err instanceof Error ? err.message : String(err)}`;
       LogError(msg);
@@ -450,6 +446,28 @@ export class EntityVectorSyncer extends VectorBase {
       VectorIndexID: String(validEntries[index].record.VectorIndexID ?? ''),
       TemplateContent: templateContent.TemplateText,
     }));
+  }
+
+  /**
+   * Embeds one batch of rendered texts on the entity document's model. The `ModelID` pin keeps the
+   * vector index single-model: unpinned, the runner may answer from any Embeddings model.
+   * `embeddingDimensions` is the index's `MJ: Vector Indexes.Dimensions` (undefined for the model's
+   * native size).
+   */
+  protected async EmbedRenderedTexts(
+    texts: string[],
+    embeddingRunner: AIEmbeddingRunner,
+    aiModelID: string,
+    embeddingDimensions: number | undefined,
+    templateName: string
+  ): Promise<EmbeddingRunResult> {
+    return embeddingRunner.RunEmbedding({
+      Texts: texts,
+      ModelID: aiModelID,
+      Dimensions: embeddingDimensions,
+      ContextUser: this.CurrentUser,
+      Description: `Vector sync batch (${templateName})`,
+    });
   }
 
   /**

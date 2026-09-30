@@ -1,9 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { LogError } from '@memberjunction/core';
+import type { EmbeddingRunParams, EmbeddingRunResult } from '@memberjunction/ai-prompts';
 
 // Hoisted mock variables
-const { mockRunViewFn, mockAvailable, mockKHConfig, mockEntityDocumentsRef, mockContentSourcesRef, mockEntitiesRef, mockConstrainedRef } = vi.hoisted(() => {
+const { mockRunViewFn, mockAvailable, mockKHConfig, mockEntityDocumentsRef, mockContentSourcesRef, mockEntitiesRef, mockConstrainedRef, mockRunEmbeddingFn, mockModelsRef } = vi.hoisted(() => {
     const mockRunViewFn = vi.fn();
+    /** Every AIEmbeddingRunner instance shares this, so a test can read the params the provider passed. */
+    const mockRunEmbeddingFn = vi.fn(async (params: EmbeddingRunParams): Promise<EmbeddingRunResult> => ({
+        Success: true,
+        Vectors: params.Texts.map(() => [0.1, 0.2, 0.3]),
+        PromptRunID: null,
+        TokensUsed: 0,
+        Cost: 0,
+        ErrorMessage: null,
+        ExecutionTimeMs: 0,
+    }));
+    /** The embedding models AIEngine knows, looked up by an index's EmbeddingModelID. */
+    const mockModelsRef: { value: Array<{ ID: string; Name: string; DriverClass: string; APIName: string }> } = { value: [] };
     const mockAvailable = { value: false };
     const mockKHConfig = vi.fn();
     const mockEntityDocumentsRef: { value: Array<{ VectorIndexID: string; Entity: string }> } = { value: [] };
@@ -15,7 +28,7 @@ const { mockRunViewFn, mockAvailable, mockKHConfig, mockEntityDocumentsRef, mock
         value: Array<{ ID: string; Name: string; ParentID: string | null; Fields: Array<{ Name: string; IsNameField: boolean; Sequence: number }>; NameField: { Name: string } | null }>
     } = { value: [] };
     const mockConstrainedRef = { value: false };
-    return { mockRunViewFn, mockAvailable, mockKHConfig, mockEntityDocumentsRef, mockContentSourcesRef, mockEntitiesRef, mockConstrainedRef };
+    return { mockRunViewFn, mockAvailable, mockKHConfig, mockEntityDocumentsRef, mockContentSourcesRef, mockEntitiesRef, mockConstrainedRef, mockRunEmbeddingFn, mockModelsRef };
 });
 
 vi.mock('@memberjunction/core', () => {
@@ -84,7 +97,7 @@ vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: {
         Instance: {
             Config: vi.fn(),
-            Models: [],
+            get Models() { return mockModelsRef.value; },
         },
     },
 }));
@@ -96,10 +109,7 @@ vi.mock('@memberjunction/ai', () => ({
 
 vi.mock('@memberjunction/ai-prompts', () => {
     class MockAIEmbeddingRunner {
-        RunEmbedding = vi.fn().mockResolvedValue({
-            Success: true,
-            Vectors: [[0.1, 0.2, 0.3]],
-        });
+        RunEmbedding = mockRunEmbeddingFn;
     }
     return {
         AIEmbeddingRunner: MockAIEmbeddingRunner,
@@ -793,6 +803,53 @@ describe('VectorSearchProvider', () => {
             ]);
 
             expect(results[0].Title).toBe('MJ: Content Items Record');
+        });
+    });
+
+    // ────────────────────────────────────────────────────────────────
+    // The query embedding must come from the model the index's vectors came from. The ModelID pin
+    // is what guarantees it: unpinned, the runner may answer from any Embeddings model.
+    // ────────────────────────────────────────────────────────────────
+    describe('Search — the query embedding is pinned to each index\'s model', () => {
+        beforeEach(() => {
+            mockModelsRef.value = [
+                { ID: 'embed-model-1', Name: 'Embed One', DriverClass: 'LocalEmbedding', APIName: 'Xenova/one' },
+                { ID: 'embed-model-2', Name: 'Embed Two', DriverClass: 'OpenAIEmbedding', APIName: 'text-embedding-3-small' },
+            ];
+            mockRunEmbeddingFn.mockClear();
+        });
+
+        it("passes the index's EmbeddingModelID as ModelID, and its Dimensions", async () => {
+            mockRunViewFn.mockResolvedValue({
+                Success: true,
+                Results: [{ ID: 'idx-1', Name: 'people', VectorDatabaseID: 'db-1', EmbeddingModelID: 'embed-model-1', Dimensions: 384 }],
+            });
+
+            await provider.Search('pinned query: people', 5, undefined, contextUser);
+
+            expect(mockRunEmbeddingFn).toHaveBeenCalledTimes(1);
+            expect(mockRunEmbeddingFn).toHaveBeenCalledWith(expect.objectContaining({
+                Texts: ['pinned query: people'],
+                ModelID: 'embed-model-1',
+                Dimensions: 384,
+                ContextUser: contextUser,
+            }));
+        });
+
+        it('embeds once per model group, each pinned to its own model', async () => {
+            mockRunViewFn.mockResolvedValue({
+                Success: true,
+                Results: [
+                    { ID: 'idx-1', Name: 'people', VectorDatabaseID: 'db-1', EmbeddingModelID: 'embed-model-1', Dimensions: null },
+                    { ID: 'idx-2', Name: 'docs', VectorDatabaseID: 'db-1', EmbeddingModelID: 'embed-model-2', Dimensions: 1024 },
+                ],
+            });
+
+            await provider.Search('pinned query: two models', 5, undefined, contextUser);
+
+            const pinned = mockRunEmbeddingFn.mock.calls.map(([params]) => [params.ModelID, params.Dimensions]);
+            expect(pinned).toHaveLength(2);
+            expect(pinned).toEqual(expect.arrayContaining([['embed-model-1', undefined], ['embed-model-2', 1024]]));
         });
     });
 
