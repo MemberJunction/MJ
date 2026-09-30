@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { GetAIAPIKey } from '@memberjunction/ai';
+import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai';
 import { AIEmbeddingRunner, EmbeddingRunResult } from '@memberjunction/ai-prompts';
 import { CredentialEngine } from '@memberjunction/credentials';
 import { BaseResponse, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
@@ -989,18 +989,15 @@ export class EntityVectorSyncer extends VectorBase {
     const vectorDBEntity: MJVectorDatabaseEntity = this.GetVectorDatabase(entityDocument.VectorDatabaseID);
     const aiModelEntity: MJAIModelEntity = this.GetAIModel(entityDocument.AIModelID);
 
-    // Resolve API keys. Empty/null is legitimate for local-only providers
-    // (e.g., LocalEmbedding ONNX runtime, SimpleVectorServiceProvider in-process
-    // vector pool) so we no longer throw on missing keys — the driver class
-    // constructors decide whether they actually need one. If a cloud driver
-    // genuinely needs a key, the downstream inference call will fail with a
-    // real provider-level auth error that's more actionable than this guard.
+    // Embedding credentials are not resolved here. AIEmbeddingRunner resolves them on every call
+    // (credential bindings first, then AI_VENDOR_API_KEY__<DRIVER>) and runs a driver that needs no
+    // key, such as LocalEmbedding, without one. A cloud model with no credentials fails that call with
+    // "No Embeddings model has credentials available", naming the candidates. This legacy lookup only
+    // fills the deprecated `embeddingAPIKey` / `embedding` fields for older callers.
     const embeddingAPIKey: string = GetAIAPIKey(aiModelEntity.DriverClass) || '';
+    // An empty vector-DB key is legitimate for in-process and colocated providers; whether the
+    // database really needs one is decided after instantiation, below.
     const vectorDBAPIKey: string = (await this.ResolveVectorDBAPIKey(vectorDBEntity)) || '';
-
-    if (!embeddingAPIKey) {
-      LogStatus(`[EntityVectorSyncer] No API key found for embedding driver "${aiModelEntity.DriverClass}" (expected env variable AI_VENDOR_API_KEY__${aiModelEntity.DriverClass.toUpperCase()}). If this is a cloud provider, embedding generation will fail.`);
-    }
 
     const embeddingRunner = new AIEmbeddingRunner();
     // Pass a sentinel when there's no key so the base ctor's non-empty requirement is satisfied
@@ -1021,7 +1018,11 @@ export class EntityVectorSyncer extends VectorBase {
 
     LogStatus(`Using vector database ${vectorDBEntity.Name} and AI Model ${aiModelEntity.Name}`);
 
+    const legacyEmbedding = this.legacyEmbeddingAccessor(aiModelEntity.DriverClass, embeddingAPIKey);
     const obj: VectorEmeddingData = {
+      get embedding(): BaseEmbeddings | undefined {
+        return legacyEmbedding();
+      },
       embeddingRunner,
       aiModelID: aiModelEntity.ID,
       vectorDB,
@@ -1033,6 +1034,18 @@ export class EntityVectorSyncer extends VectorBase {
     };
 
     return obj;
+  }
+
+  /**
+   * Backs the deprecated `VectorEmeddingData.embedding`: builds the driver the way this class did
+   * before AIEmbeddingRunner, on first read only. Nothing in MJ reads it, so normally nothing is built.
+   */
+  private legacyEmbeddingAccessor(driverClass: string, apiKey: string): () => BaseEmbeddings | undefined {
+    let driver: BaseEmbeddings | undefined;
+    return () => {
+      driver ??= MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(BaseEmbeddings, driverClass, apiKey) ?? undefined;
+      return driver;
+    };
   }
 
   /**

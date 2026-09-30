@@ -598,12 +598,11 @@ export class DuplicateRecordDetector extends VectorBase {
         this.entityDocumentID = entityDocument.ID;
         const vectorDB = this.GetVectorDatabase(entityDocument.VectorDatabaseID);
 
-        // Resolve API keys. Empty/null is legitimate for local providers — local
-        // embeddings (ONNX runtime) and the in-process SimpleVectorServiceProvider need
-        // no remote credential — so we don't pre-throw on a missing key. Whether the vector
-        // DB genuinely needs one is decided AFTER instantiation via VectorDBBase.RequiresAPIKey;
-        // a cloud provider that truly needs a key will otherwise fail at the inference call
-        // with a more actionable provider-level error. Mirrors EntityVectorSyncer.
+        // Only the vector DB key is resolved here. AIEmbeddingRunner resolves embedding
+        // credentials on each call and runs a keyless driver (LocalEmbedding) without one.
+        // An empty vector-DB key is legitimate for in-process and colocated providers, so we
+        // don't pre-throw; whether the DB genuinely needs one is decided AFTER instantiation
+        // via VectorDBBase.RequiresAPIKey. Mirrors EntityVectorSyncer.
         const vectorDBAPIKey = GetAIAPIKey(vectorDB.ClassKey) || '';
 
         this._embeddingRunner = new AIEmbeddingRunner();

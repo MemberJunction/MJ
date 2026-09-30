@@ -95,14 +95,24 @@ export type EmbeddingData = {
 };
 
 export type VectorEmeddingData = {
-    /** @deprecated Use embeddingRunner instead */
+    /**
+     * @deprecated Use {@link embeddingRunner}. Embedding now goes through AIEmbeddingRunner, which
+     * brings credential resolution, failover and run rows. For older callers this is still a working
+     * driver, built on first read with the legacy environment-variable key.
+     */
     embedding?: BaseEmbeddings;
+    /** Runs the embedding calls. Pass {@link aiModelID} as `ModelID` so every vector comes from the document's model. */
     embeddingRunner: AIEmbeddingRunner;
+    /** The entity document's embedding model (`MJ: AI Models.ID`). */
     aiModelID: string;
     vectorDB: VectorDBBase;
     vectorDBClassKey: string;
     vectorDBAPIKey: string;
     embeddingDriverClass: string;
+    /**
+     * The legacy `AI_VENDOR_API_KEY__<DRIVER>` value, or '' when unset (normal for keyless drivers).
+     * Informational only: AIEmbeddingRunner resolves credentials itself.
+     */
     embeddingAPIKey: string;
     /** The AIModel's APIName (e.g. 'Xenova/gte-small') — required by some providers
      *  (LocalEmbedding throws if absent) to identify the underlying model. */

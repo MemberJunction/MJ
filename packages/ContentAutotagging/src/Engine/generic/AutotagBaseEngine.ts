@@ -24,7 +24,7 @@ import * as cheerio from 'cheerio'
 import crypto from 'crypto'
 import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai'
 import { AIEngine } from '@memberjunction/aiengine'
-import { AIPromptRunner, AIModelRunner, AIEmbeddingRunner } from '@memberjunction/ai-prompts'
+import { AIPromptRunner, AIEmbeddingRunner } from '@memberjunction/ai-prompts'
 import type { EmbeddingRunResult } from '@memberjunction/ai-prompts'
 import { AIPromptParams } from '@memberjunction/ai-core-plus'
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus'
@@ -44,13 +44,19 @@ import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities'
  * Items sharing the same pair are batched together for efficient processing.
  */
 export interface ResolvedVectorInfrastructure {
-    /** @deprecated Use embeddingRunner instead */
+    /**
+     * @deprecated Embedding goes through AIEmbeddingRunner, pinned to {@link embeddingModelID}. For
+     * older callers this is still a working driver, built on first read with the legacy
+     * environment-variable key.
+     */
     embedding?: BaseEmbeddings;
-    embeddingRunner?: AIEmbeddingRunner;
     vectorDB: VectorDBBase;
     indexName: string;
     embeddingModelName: string;
-    /** The AI model ID for the embedding model (UUID), used by AIModelRunner for tracking */
+    /**
+     * The embedding model (`MJ: AI Models.ID`). Every embedding call for this index pins it as
+     * `ModelID`, so the index only ever holds vectors from this model.
+     */
     embeddingModelID: string;
     /**
      * Reduced embedding dimensions from `MJ: Vector Indexes.Dimensions`, when set. Passed to the
@@ -1716,7 +1722,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * (first active VectorIndex). Each group is processed in configurable batches with
      * parallel upserts within each batch.
      *
-     * Uses AIModelRunner to create AIPromptRun records for each embedding batch,
+     * Uses AIEmbeddingRunner to create AIPromptRun records for each embedding batch,
      * enabling token/cost tracking and linking to ContentProcessRunDetail records.
      *
      * @param items - content items to vectorize
@@ -1773,14 +1779,14 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
     /**
      * Process a single infrastructure group: embed texts in batches and upsert to vector DB.
-     * Uses AIModelRunner for each embedding batch to create AIPromptRun records with
+     * Uses AIEmbeddingRunner for each embedding batch to create AIPromptRun records with
      * token/cost tracking. Upserts within each batch run in parallel for throughput.
      *
      * @param items - content items in this infrastructure group
      * @param infra - resolved embedding + vector DB infrastructure
      * @param tagMap - pre-loaded tags for metadata enrichment
      * @param batchSize - number of items per embedding batch
-     * @param contextUser - current user for AIModelRunner tracking
+     * @param contextUser - current user for AIEmbeddingRunner tracking
      * @param onBatchComplete - callback invoked after each batch with item count
      * @returns count of vectorized items and collected AIPromptRun IDs
      */
@@ -1874,9 +1880,9 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     /**
-     * Resolve the "Content Embedding" prompt ID from AIEngine for AIModelRunner tracking.
-     * Returns undefined if the prompt is not found (AIModelRunner will fall back to
-     * the first active Embedding-type prompt).
+     * Resolve the "Content Embedding" prompt ID from AIEngine for AIEmbeddingRunner tracking.
+     * Returns undefined if the prompt is not found (AIEmbeddingRunner then uses the first
+     * active Embedding-type prompt).
      */
     private resolveEmbeddingPromptID(): string | undefined {
         const prompt = AIEngine.Instance.Prompts.find(
@@ -1885,8 +1891,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         if (prompt) {
             return prompt.ID;
         }
-        // Fall back: let AIModelRunner find the first active Embedding prompt
-        LogStatus('[Autotag] "Content Embedding" prompt not found — AIModelRunner will use default embedding prompt');
+        // Fall back: let AIEmbeddingRunner find the first active Embedding prompt
+        LogStatus('[Autotag] "Content Embedding" prompt not found — AIEmbeddingRunner will use default embedding prompt');
         return undefined;
     }
 
@@ -2873,10 +2879,12 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         LogStatus(`VectorizeContentItems: USING embedding model "${aiModel.Name}" (${driverClass}), vector DB "${vectorDBClassKey}", index "${externalIndexName}" (Vector Index "${vectorIndex.Name}")`);
 
         const vectorDB = this.createVectorDBInstance(vectorDBClassKey);
-        const embeddingRunner = new AIEmbeddingRunner();
+        const legacyEmbedding = this.legacyEmbeddingAccessor(driverClass);
 
         return {
-            embeddingRunner,
+            get embedding(): BaseEmbeddings | undefined {
+                return legacyEmbedding();
+            },
             vectorDB,
             indexName: externalIndexName,
             embeddingModelName,
@@ -2914,6 +2922,21 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             throw new Error(`Embedding model ${embeddingModelID} not found in AIEngine — ensure AIEngine is configured`);
         }
         return aiModel;
+    }
+
+    /**
+     * Backs the deprecated `ResolvedVectorInfrastructure.embedding`: builds the driver the way this
+     * engine did before AIEmbeddingRunner, on first read only. Nothing in MJ reads it, so normally
+     * nothing is built. An empty key is fine for keyless drivers such as LocalEmbedding.
+     */
+    private legacyEmbeddingAccessor(driverClass: string): () => BaseEmbeddings | undefined {
+        let driver: BaseEmbeddings | undefined;
+        return () => {
+            driver ??= MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
+                BaseEmbeddings, driverClass, GetAIAPIKey(driverClass) || ''
+            ) ?? undefined;
+            return driver;
+        };
     }
 
     /**
