@@ -385,7 +385,7 @@ describe('RerankerService', () => {
                     { id: 'e2', text: 'Input: Where is my invoice?\nOutput: Under Billing.', originalScore: 0.7 }
                 ],
                 topK: 2,
-                options: { TimeoutMS: undefined },
+                options: { TimeoutMS: undefined, MaxDocumentsPerCall: undefined },
                 ContextUser: mockUser,
                 ModelID: 'model-1',
                 ChatPromptID: 'prompt-9',
@@ -394,12 +394,14 @@ describe('RerankerService', () => {
             expect(result).toEqual([{ example: invoice.example, similarity: 0.9 }]);
         });
 
-        it("passes the configuration's decisionTimeoutMS to the reranker as options.TimeoutMS", async () => {
+        it("passes the configuration's DecisionReranker settings to the reranker as its options", async () => {
             mockRunRerank.mockResolvedValue({ Success: true, ExecutionTimeMS: 1, Response: { success: true, durationMs: 1, results: [] } });
 
-            await RerankerService.Instance.RerankExamples([reset], 'query', makeConfig({ decisionTimeoutMS: 5000 }), mockUser);
+            await RerankerService.Instance.RerankExamples(
+                [reset], 'query', makeConfig({ decisionTimeoutMS: 5000, decisionMaxDocumentsPerCall: 10 }), mockUser
+            );
 
-            expect(mockRunRerank).toHaveBeenCalledWith(expect.objectContaining({ options: { TimeoutMS: 5000 } }));
+            expect(mockRunRerank).toHaveBeenCalledWith(expect.objectContaining({ options: { TimeoutMS: 5000, MaxDocumentsPerCall: 10 } }));
         });
 
         it("records a Rerank Examples step for the agent run, linked to the rerank's run, as notes are", async () => {

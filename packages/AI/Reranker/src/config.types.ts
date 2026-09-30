@@ -83,6 +83,15 @@ export interface RerankerConfiguration {
      */
     // case-violation-ok-legacy-back-compat: a key of the camelCase JSON stored in AIAgent.RerankerConfiguration
     decisionTimeoutMS?: number;
+
+    /**
+     * Optional: the most documents one DecisionReranker decision call carries, when no model its
+     * decision prompt can run on declares Decision.MaxQuestionsPerCall (a declared limit always wins).
+     * Larger reranks are split across parallel calls. Other rerankers ignore it.
+     * Default: 20 (DEFAULT_DECISION_RERANK_DOCUMENTS_PER_CALL)
+     */
+    // case-violation-ok-legacy-back-compat: a key of the camelCase JSON stored in AIAgent.RerankerConfiguration
+    decisionMaxDocumentsPerCall?: number;
 }
 
 /**
@@ -121,7 +130,8 @@ export function ParseRerankerConfiguration(configJson: string | null | undefined
             contextFields: parsed.contextFields ?? [],
             fallbackOnError: parsed.fallbackOnError ?? true,
             rerankExamples: parsed.rerankExamples,
-            decisionTimeoutMS: parsed.decisionTimeoutMS
+            decisionTimeoutMS: parsed.decisionTimeoutMS,
+            decisionMaxDocumentsPerCall: parsed.decisionMaxDocumentsPerCall
         };
     } catch {
         return null;

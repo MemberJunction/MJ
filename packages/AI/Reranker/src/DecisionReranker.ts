@@ -32,6 +32,14 @@ const QUESTION_STATEMENT = 'This note bears on the request: ';
 export const DEFAULT_DECISION_RERANK_TIMEOUT_MS = 15_000;
 
 /**
+ * The most documents one decision call carries when no model the decision prompt can run on declares
+ * `Decision.MaxQuestionsPerCall`, unless the caller sets `DecisionRerankOptions.MaxDocumentsPerCall`.
+ * Every question carries a document's full text, so this keeps each call to a bounded size; larger
+ * reranks are split across parallel calls.
+ */
+export const DEFAULT_DECISION_RERANK_DOCUMENTS_PER_CALL = 20;
+
+/**
  * Settings a caller can give one `DecisionReranker` rerank, in `RerankParams.options`. Other rerankers
  * ignore them. `RerankerService` fills them from the agent's `RerankerConfiguration`. A setting that is
  * not a positive number is ignored, and its default applies.
@@ -44,6 +52,13 @@ export type DecisionRerankOptions = {
      * the calls are aborted and the rerank fails. Default: {@link DEFAULT_DECISION_RERANK_TIMEOUT_MS}.
      */
     TimeoutMS?: number;
+
+    /**
+     * The most documents one decision call carries, when no model the decision prompt can run on
+     * declares `Decision.MaxQuestionsPerCall` (a declared limit always wins, because a call over it
+     * fails). A fraction is rounded down. Default: {@link DEFAULT_DECISION_RERANK_DOCUMENTS_PER_CALL}.
+     */
+    MaxDocumentsPerCall?: number;
 };
 
 /**
@@ -103,8 +118,10 @@ class DecisionRerankRunner extends AIDecisionRunner {
  * - The decision prompt is the one whose ID the reranker is given, or `Default Decision` when it is
  *   given none. It receives that ID the same way `LLMReranker` receives its prompt's.
  * - It needs no API key: the decision runner resolves its own models' keys.
- * - When there are more documents than the smallest `MaxQuestionsPerCall` among the prompt's models,
- *   they are split across parallel calls.
+ * - When there are more documents than one call may carry, they are split across parallel calls. A
+ *   call carries at most the smallest `MaxQuestionsPerCall` among the prompt's models, or, when none
+ *   declares one, `DecisionRerankOptions.MaxDocumentsPerCall` in the rerank's `options`, or
+ *   {@link DEFAULT_DECISION_RERANK_DOCUMENTS_PER_CALL}.
  * - The decision calls share one time budget, `DecisionRerankOptions.TimeoutMS` in the rerank's
  *   `options`, or {@link DEFAULT_DECISION_RERANK_TIMEOUT_MS}.
  *
@@ -160,7 +177,7 @@ export class DecisionReranker extends BasePromptBackedReranker {
     protected async doRerank(params: RerankParams): Promise<RerankResult[]> {
         const prompt = this.resolvePrompt();
         const runner = new DecisionRerankRunner();
-        const batches = this.splitIntoBatches(params.documents, runner.GetMaxQuestionsPerCall(prompt));
+        const batches = this.splitIntoBatches(params.documents, this.documentsPerCall(runner, prompt, params));
         LogStatus(`DecisionReranker: Scoring ${params.documents.length} documents in ${batches.length} decision call(s)`);
         const timeoutMS = this.positiveOption(params, 'TimeoutMS') ?? DEFAULT_DECISION_RERANK_TIMEOUT_MS;
         const results = await this.askWithinBudget(runner, prompt, params.query, batches, timeoutMS);
@@ -189,6 +206,20 @@ export class DecisionReranker extends BasePromptBackedReranker {
             throw new Error(`DecisionReranker: The '${DEFAULT_DECISION_PROMPT_NAME}' prompt was not found`);
         }
         return fallback;
+    }
+
+    /**
+     * How many documents one decision call carries: the smallest `MaxQuestionsPerCall` the prompt's
+     * models declare, since a call over it fails; otherwise the caller's `MaxDocumentsPerCall`, rounded
+     * down, or {@link DEFAULT_DECISION_RERANK_DOCUMENTS_PER_CALL}.
+     */
+    private documentsPerCall(runner: DecisionRerankRunner, prompt: MJAIPromptEntityExtended, params: RerankParams): number {
+        const modelLimit = runner.GetMaxQuestionsPerCall(prompt);
+        if (modelLimit !== undefined) {
+            return modelLimit;
+        }
+        const configured = this.positiveOption(params, 'MaxDocumentsPerCall');
+        return configured !== undefined && configured >= 1 ? Math.floor(configured) : DEFAULT_DECISION_RERANK_DOCUMENTS_PER_CALL;
     }
 
     /** A setting the caller gave in `params.options`, when it is a positive number. */
@@ -227,9 +258,9 @@ export class DecisionReranker extends BasePromptBackedReranker {
         }
     }
 
-    /** Splits the documents into batches of at most `limit`, or one batch when there is no limit. */
-    private splitIntoBatches(documents: RerankDocument[], limit: number | undefined): RerankDocument[][] {
-        if (limit === undefined || documents.length <= limit) {
+    /** Splits the documents, in order, into batches of at most `limit`. */
+    private splitIntoBatches(documents: RerankDocument[], limit: number): RerankDocument[][] {
+        if (documents.length <= limit) {
             return [documents];
         }
         const batches: RerankDocument[][] = [];

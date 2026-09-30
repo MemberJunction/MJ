@@ -110,5 +110,15 @@ describe('parseRerankerConfiguration', () => {
             const result = ParseRerankerConfiguration(JSON.stringify({ rerankerModelId: 'model-1', decisionTimeoutMS: 5000 }));
             expect(result?.decisionTimeoutMS).toBe(5000);
         });
+
+        it('should leave decisionMaxDocumentsPerCall unset, so the reranker applies its default, when the config omits it', () => {
+            const result = ParseRerankerConfiguration(JSON.stringify({ rerankerModelId: 'model-1' }));
+            expect(result?.decisionMaxDocumentsPerCall).toBeUndefined();
+        });
+
+        it('should pass decisionMaxDocumentsPerCall through when it is set', () => {
+            const result = ParseRerankerConfiguration(JSON.stringify({ rerankerModelId: 'model-1', decisionMaxDocumentsPerCall: 10 }));
+            expect(result?.decisionMaxDocumentsPerCall).toBe(10);
+        });
     });
 });

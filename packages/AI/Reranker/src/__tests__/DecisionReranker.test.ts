@@ -17,7 +17,7 @@ import type { AIModelConfiguration, DecisionAnswer, RerankDocument, RerankRespon
 import { AIDecisionRunner } from '@memberjunction/ai-prompts';
 import type { AIDecisionParams, AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
-import { DecisionReranker, DEFAULT_DECISION_RERANK_TIMEOUT_MS } from '../DecisionReranker';
+import { DecisionReranker, DEFAULT_DECISION_RERANK_DOCUMENTS_PER_CALL, DEFAULT_DECISION_RERANK_TIMEOUT_MS } from '../DecisionReranker';
 import { LLMReranker } from '../LLMReranker';
 import { AIRerankerRunner } from '../AIRerankerRunner';
 import { RerankerService } from '../RerankerService';
@@ -451,13 +451,49 @@ describe('DecisionReranker', () => {
         expect(batchSizes()).toEqual([4, 4, 1]);
     });
 
-    it('makes one call, however many documents, when no model declares a limit', async () => {
+    it(`caps each call at ${DEFAULT_DECISION_RERANK_DOCUMENTS_PER_CALL} documents when no model declares a limit, and keeps every score`, async () => {
         stubDecisions();
 
-        const response = await rerank(new DecisionReranker('', '', '', contextUser), notes(300));
+        const response = await rerank(new DecisionReranker('', '', '', contextUser), notes(45));
 
-        expect(batchSizes()).toEqual([300]);
-        expect(response.results).toHaveLength(300);
+        expect(DEFAULT_DECISION_RERANK_DOCUMENTS_PER_CALL).toBe(20);
+        expect(batchSizes()).toEqual([20, 20, 5]);
+        expect(response.results).toHaveLength(45);
+        expect(response.results[0].id).toBe('doc-44');
+        expect(response.results[44].id).toBe('doc-0');
+    });
+
+    it('makes one call when the documents fit in one', async () => {
+        stubDecisions();
+
+        await rerank(new DecisionReranker('', '', '', contextUser), notes(DEFAULT_DECISION_RERANK_DOCUMENTS_PER_CALL));
+
+        expect(batchSizes()).toEqual([DEFAULT_DECISION_RERANK_DOCUMENTS_PER_CALL]);
+    });
+
+    it('takes the cap from options.MaxDocumentsPerCall, rounded down', async () => {
+        stubDecisions();
+
+        await rerank(new DecisionReranker('', '', '', contextUser), notes(7), { MaxDocumentsPerCall: 3.9 });
+
+        expect(batchSizes()).toEqual([3, 3, 1]);
+    });
+
+    it.each([0, 0.5, -3, '3'])('ignores a MaxDocumentsPerCall of %s, which is not a number of at least 1, and keeps the default', async maxDocumentsPerCall => {
+        stubDecisions();
+
+        await rerank(new DecisionReranker('', '', '', contextUser), notes(25), { MaxDocumentsPerCall: maxDocumentsPerCall });
+
+        expect(batchSizes()).toEqual([20, 5]);
+    });
+
+    it("keeps a model's declared limit over the cap, because a call over it fails", async () => {
+        setModelLimit(PRIMARY_DECISION_MODEL_ID, 30);
+        stubDecisions();
+
+        await rerank(new DecisionReranker('', '', '', contextUser), notes(45), { MaxDocumentsPerCall: 5 });
+
+        expect(batchSizes()).toEqual([30, 15]);
     });
 
     it('returns a failed response, with no scores, when the decision call fails', async () => {

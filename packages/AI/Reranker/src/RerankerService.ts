@@ -451,7 +451,7 @@ export class RerankerService extends BaseSingleton<RerankerService> {
 
     /** The settings a DecisionReranker takes from the configuration. Other rerankers ignore them. */
     private decisionRerankOptions(config: RerankerConfiguration): DecisionRerankOptions {
-        return { TimeoutMS: config.decisionTimeoutMS };
+        return { TimeoutMS: config.decisionTimeoutMS, MaxDocumentsPerCall: config.decisionMaxDocumentsPerCall };
     }
 
     /**
