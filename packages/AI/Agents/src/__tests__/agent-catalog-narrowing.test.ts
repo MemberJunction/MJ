@@ -30,7 +30,7 @@ import { NoCatalogNarrowing, type CatalogNarrowingKind, type CatalogNarrowingOut
 import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended, SkillAvailabilityPurpose } from '@memberjunction/ai-core-plus';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import type { DecisionQuestion } from '@memberjunction/ai';
-import type { MJAISkillEntity } from '@memberjunction/core-entities';
+import type { MJAIPromptRunEntity, MJAISkillEntity } from '@memberjunction/core-entities';
 import { LogErrorEx } from '@memberjunction/core';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
@@ -260,6 +260,7 @@ class MockStepEntity {
     public PayloadAtStart: string | null = null;
     public PayloadAtEnd: string | null = null;
     public Skills: string | null = null;
+    public PromptRun: MJAIPromptRunEntity | undefined = undefined;
 
     constructor(private readonly seq: number) {}
 
@@ -325,6 +326,7 @@ class CatalogHarness {
     /** The agent's actions. */
     public actions: ActionRow[] = ACTIONS;
     public minExecutionsByAction = new Map<string, number>([[ACTIONS[2].ID, 1]]);
+    public runs: FakeAgentRun[] = [];
     public steps: MockStepEntity[] = [];
     public actionsRun: string[] = [];
 
@@ -397,7 +399,9 @@ class CatalogHarness {
     public readonly provider = {
         GetEntityObject: async (entityName: string): Promise<unknown> => {
             if (entityName === 'MJ: AI Agent Runs') {
-                return new FakeAgentRun();
+                const run = new FakeAgentRun();
+                this.runs.push(run);
+                return run;
             }
             if (entityName === 'MJ: AI Agent Run Steps') {
                 const step = new MockStepEntity(++this.stepSeq);
@@ -586,6 +590,30 @@ function twoTurnScript(...extraActions: string[]): Array<() => AIPromptRunResult
 
 function narrowingSteps(): MockStepEntity[] {
     return harness.steps.filter(s => s.StepName.includes('Catalog narrowing'));
+}
+
+/** The narrowing decision's own prompt run, as AIDecisionRunner returns it once finalized. */
+const NARROWING_RUN = {
+    ID: 'cccccccc-8000-4000-8000-000000000001',
+    TokensUsedRollup: 900,
+    TokensPromptRollup: 850,
+    TokensCompletionRollup: 50,
+    TokensCacheReadRollup: 0,
+    TokensCacheWriteRollup: 0,
+    TotalCost: 0.0031,
+} satisfies Pick<MJAIPromptRunEntity, 'ID' | 'TokensUsedRollup' | 'TokensPromptRollup' | 'TokensCompletionRollup' | 'TokensCacheReadRollup' | 'TokensCacheWriteRollup' | 'TotalCost'>;
+
+/** The narrowing step links NARROWING_RUN, and the run's totals include it. */
+function expectNarrowingRunCounted(): void {
+    const step = narrowingSteps()[0];
+    expect(step.TargetLogID).toBe(NARROWING_RUN.ID);
+    expect(step.PromptRun).toBe(NARROWING_RUN);
+    // The scripted prompts carry no prompt run, so the narrowing call is the run's whole spend.
+    const run = harness.runs[0];
+    expect(run.TotalCost).toBe(NARROWING_RUN.TotalCost);
+    expect(run.TotalTokensUsed).toBe(NARROWING_RUN.TokensUsedRollup);
+    expect(run.TotalPromptTokensUsed).toBe(NARROWING_RUN.TokensPromptRollup);
+    expect(run.TotalCompletionTokensUsed).toBe(NARROWING_RUN.TokensCompletionRollup);
 }
 
 /** Exposes the protected skill hook. */
@@ -826,6 +854,33 @@ describe('catalog narrowing — with a limit', () => {
                 probabilities: { 'Tax Advisor': 0.7, 'Poet': 0.05, 'Accountant': 0.95 },
             },
         });
+    });
+
+    it('counts the decision toward the run\'s tokens and cost: its step links the prompt run', async () => {
+        vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(async (args) => ({
+            ...(await answerByName(PROBABILITIES)(args)),
+            promptRun: NARROWING_RUN as MJAIPromptRunEntity,
+        }));
+        const { agent } = makeAgent(twoTurnScript());
+
+        await agent.Execute(makeParams());
+
+        expectNarrowingRunCounted();
+        expect(narrowingSteps()[0].Status).toBe('Completed');
+    });
+
+    it('counts the decision even when it fails open', async () => {
+        vi.spyOn(AgentDecisionService.prototype, 'Ask').mockResolvedValue({
+            success: true,
+            Answers: {},
+            promptRun: NARROWING_RUN as MJAIPromptRunEntity,
+        });
+        const { agent } = makeAgent(twoTurnScript());
+
+        await agent.Execute(makeParams());
+
+        expectNarrowingRunCounted();
+        expect(narrowingSteps()[0].Status).toBe('Failed');
     });
 
     it('narrows only the list whose limit is set', async () => {
