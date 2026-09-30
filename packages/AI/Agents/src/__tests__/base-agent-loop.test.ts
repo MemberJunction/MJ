@@ -1280,6 +1280,58 @@ describe('BaseAgent.Execute — the payload change check (opt-in with payloadFee
             expect(harness.steps.map((s) => s.StepType)).toEqual(['Validation', 'Prompt', 'Actions', 'Prompt']);
             expect(addedBeforeTurn2(turns)).toHaveLength(2);
         });
+
+        describe('on a step that ends the run, where no turn would read its message', () => {
+            const CHANGE: LoopAgentResponse['payloadChangeRequest'] = { updateElements: { summary: SHORT_SUMMARY }, reasoning: CHANGE_REASONING };
+
+            afterEach(() => {
+                vi.restoreAllMocks();
+            });
+
+            it.each<[string, LoopAgentResponse]>([
+                ['a Success step', successEnvelope({ reasoning: REASONING, payloadChangeRequest: CHANGE })],
+                ['a Chat step', { taskComplete: false, message: 'Which region should the summary cover?', nextStep: { type: 'Chat' }, reasoning: REASONING, payloadChangeRequest: CHANGE }],
+                [
+                    'a step that terminates (client tools sent with taskComplete)',
+                    { taskComplete: true, message: 'I opened the record.', nextStep: { type: 'ClientTools', clientTools: [{ name: 'OpenRecord', params: {} }] }, reasoning: REASONING, payloadChangeRequest: CHANGE },
+                ],
+            ])('skips it on %s: no decision call, no step, and nothing added to the caller\'s conversation', async (_label, envelope) => {
+                vi.spyOn(ClientToolRequestManager.Instance, 'RequestClientTool').mockResolvedValue({ RequestID: 'ct-1', Success: true, Result: 'opened' });
+                const { agent, runner } = makeAgent([() => llmEnvelope(envelope), () => llmEnvelope(successEnvelope())]);
+                // Answered "unintended", so a check that ran would add its message.
+                const ask = vi.spyOn(agent.DecisionService, 'Ask').mockResolvedValue(likelihood(0.1));
+                const params = makeParams({ payload: { summary: LONG_SUMMARY }, sessionID: 'session-1' });
+
+                const result = await agent.Execute(params);
+
+                expect(result.success).toBe(true);
+                expect(runner.Calls).toHaveLength(1);
+                expect(ask).not.toHaveBeenCalled();
+                expect(harness.steps.some((s) => s.StepType === 'Decision')).toBe(false);
+                // The analyzer still flagged the change, so the check was on and skipped.
+                const payloadChangeResult = outputOf(harness.steps[1]).payloadChangeResult as { requiresFeedback: boolean };
+                expect(payloadChangeResult.requiresFeedback).toBe(true);
+                // params.conversationMessages is the caller's own array, so nothing may be left in it.
+                expect(params.conversationMessages.map(contentOf).some((c) => c.includes('Payload change check'))).toBe(false);
+            });
+
+            it('still runs on client tools sent without taskComplete: the prompt after the tools reads it', async () => {
+                vi.spyOn(ClientToolRequestManager.Instance, 'RequestClientTool').mockResolvedValue({ RequestID: 'ct-1', Success: true, Result: 'opened' });
+                const clientTools: LoopAgentResponse = {
+                    taskComplete: false,
+                    nextStep: { type: 'ClientTools', clientTools: [{ name: 'OpenRecord', params: {} }] },
+                    reasoning: REASONING,
+                    payloadChangeRequest: CHANGE,
+                };
+                const { agent, runner } = makeAgent([() => llmEnvelope(clientTools), () => llmEnvelope(successEnvelope())]);
+                const ask = vi.spyOn(agent.DecisionService, 'Ask').mockResolvedValue(likelihood(0.1));
+
+                await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY }, sessionID: 'session-1' }));
+
+                expect(ask).toHaveBeenCalledOnce();
+                expect(runner.Calls[1].conversationMessages?.map(contentOf).some((c) => c.startsWith('Payload change check:'))).toBe(true);
+            });
+        });
     });
 });
 

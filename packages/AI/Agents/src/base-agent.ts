@@ -9022,6 +9022,14 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Whether the step ends the run, so no turn would read the payload change check's message: it
+     * terminates, or it is a `Success` or `Chat` step, which hand the run back to the caller.
+     */
+    private stepEndsRun(step: BaseAgentNextStep): boolean {
+        return step.terminate === true || step.step === 'Success' || step.step === 'Chat';
+    }
+
+    /**
      * The payload change check. Asks whether each change the analyzer flagged was intended, as one
      * Likelihood per change in one decision call, and records it as a `Payload change check`
      * Decision step. The changes judged unintended are listed in a message for the agent's next
@@ -9076,16 +9084,16 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * What the payload change check's decision reads: the agent's own reasoning and message for the
-     * step (from its response, else from the step), and the reasoning it gave with the change.
+     * What the payload change check's decision reads: the agent's own reasoning for the step (from its
+     * response, else from the step), its message, and the reasoning it gave with the change. The check
+     * never runs on a `Chat` or `Success` step, so the message comes from the response alone.
      */
     private payloadFeedbackContext(nextStep: BaseAgentNextStep, promptResult: AIPromptRunResult, params: ExecuteAgentParams): PayloadFeedbackContext {
         const response = responseReasoningAndMessage(promptResult?.result);
-        const stepMessage = nextStep.step === 'Chat' || nextStep.step === 'Success' ? nextStep.message : undefined;
         return {
             Reasoning: response.Reasoning ?? nextStep.reasoning,
             ChangeReasoning: nextStep.payloadChangeRequest?.reasoning,
-            Message: response.Message ?? stepMessage,
+            Message: response.Message,
             AgentID: params.agent?.ID ?? this._agentRun?.AgentID,
             CancellationToken: params.cancellationToken
         };
@@ -11515,10 +11523,15 @@ The context is now within limits. Please retry your request with the recovered c
                 finalPayload = changeResult.result;
 
                 // Opt-in payload change check: asks whether the flagged changes were intended. It never
-                // reverts or blocks a change; the agent reads the result on its next turn.
+                // reverts or blocks a change; the agent reads the result on its next turn, so a step
+                // that ends the run skips it (no call to pay for, no message left in the conversation).
                 const payloadCheckParams = promptParams.data?.__agentTypePromptParams as Record<string, unknown> | undefined;
                 if (changeResult.requiresFeedback && this.isPayloadFeedbackCheckOn(payloadCheckParams)) {
-                    await this.checkPayloadChanges(changeResult.analysis, initialNextStep, promptResult, payloadCheckParams, params);
+                    if (this.stepEndsRun(initialNextStep)) {
+                        this.logStatus(`[Payload check] Skipped: the ${initialNextStep.step} step ends the run, so no turn would read the result`, true, params);
+                    } else {
+                        await this.checkPayloadChanges(changeResult.analysis, initialNextStep, promptResult, payloadCheckParams, params);
+                    }
                 }
             }
 
