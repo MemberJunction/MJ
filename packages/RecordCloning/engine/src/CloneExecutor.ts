@@ -144,6 +144,7 @@ export class CloneExecutor {
                     StagedEntities: stagedEntities,
                     SidecarEntities: sidecarEntities,
                     PrerequisiteEntities: prerequisiteEntities,
+                    DeferredNodeKeys: deferredNodeKeys,
                 } = await materializer.Materialize(plan, contextUser);
 
                 // 4. Attach CloneContext to all staged entities (§10)
@@ -157,7 +158,8 @@ export class CloneExecutor {
                         RootSourceRecordID: ToRecordKeyString(plan.RootSourceKey),
                         RootTargetRecordID: ToRecordKeyString(plan.RootTargetKey),
                         Depth: planNode?.Depth ?? 0,
-                        Route: planNode?.Route ?? 'RootSave',
+                        // A row deferred behind another new row saves as a sidecar, whatever the plan said.
+                        Route: deferredNodeKeys?.has(nodeKey) ? 'Sidecar' : planNode?.Route ?? 'RootSave',
                         FieldChangeSummary: [],
                         Reason: plan.Reason,
                     });

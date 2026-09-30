@@ -34,6 +34,8 @@ export interface MaterializedGraph {
     StagedEntities: Map<string, BaseEntity>;
     SidecarEntities: BaseEntity[];
     PrerequisiteEntities?: BaseEntity[];
+    /** Plan nodes saved as sidecars although planned in a collection (they point at another new row). */
+    DeferredNodeKeys?: Set<string>;
 }
 
 export class CloneMaterializer {
@@ -78,6 +80,13 @@ export class CloneMaterializer {
         const rootNodeKey = rootPlanNode.NodeKey ?? rootPlanNode.Key;
         stagedEntities.set(rootNodeKey, rootEntity);
 
+        // Rows that point at another new row through a column other than their join field (a step
+        // path's DestinationStepID, a step's SubAgentID) can't save inside the root's graph save,
+        // which saves each row's children before its next sibling: the row they point at may not
+        // exist yet. They become sidecars, saved after the graph in dependency order.
+        const deferred = CloneMaterializer.rowsToDefer(plan);
+        const sidecarKeys = new Map<BaseEntity, string>();
+
         // 2. Build Children by Depth (Depth 1, 2, ...)
         const maxDepth = Math.max(...plan.Nodes.map((n) => n.Depth));
 
@@ -106,14 +115,17 @@ export class CloneMaterializer {
                     childEntity.NewRecord();
                     prerequisiteEntities.push(childEntity);
                 } else {
-                    const collection = this.resolveOrCreateCollection(parentEntity, childNode.EntityName, edge.JoinField, edge.RelationshipID);
+                    const collection = deferred.has(childNodeKey)
+                        ? null
+                        : this.resolveOrCreateCollection(parentEntity, childNode.EntityName, edge.JoinField, edge.RelationshipID);
                     if (collection) {
                         childEntity = await collection.Create();
                     } else {
-                        // Sidecar route when collection cannot be declared
+                        // Sidecar route: a deferred row, or one whose collection can't be declared
                         childEntity = await md.GetEntityObject<BaseEntity>(childNode.EntityName, contextUser);
                         childEntity.NewRecord();
                         sidecarEntities.push(childEntity);
+                        sidecarKeys.set(childEntity, childNodeKey);
                     }
                 }
 
@@ -145,9 +157,89 @@ export class CloneMaterializer {
         return {
             RootEntity: rootEntity,
             StagedEntities: stagedEntities,
-            SidecarEntities: sidecarEntities,
+            SidecarEntities: CloneMaterializer.orderSidecars(plan, sidecarEntities, sidecarKeys),
+            DeferredNodeKeys: deferred,
             PrerequisiteEntities: prerequisiteEntities,
         };
+    }
+
+    /**
+     * Create rows with a remapped column, other than the join field to their parent, whose new
+     * value is another new row's key: they must save after that row, not inside the graph save.
+     */
+    private static rowsToDefer(plan: ClonePlan): Set<string> {
+        const newRowByKey = CloneMaterializer.newRowsByTargetKey(plan);
+        const deferred = new Set<string>();
+        for (const node of plan.Nodes) {
+            if (node.Depth === 0 || node.Action !== 'Create') continue;
+            const nodeKey = node.NodeKey ?? node.Key;
+            const edge = plan.Edges.find((e) => e.ToKey === nodeKey && e.Policy === 'Deep');
+            if (!edge || edge.Kind === 'ForwardFK') continue;
+            const pointsAtNewRow = CloneMaterializer.remappedTargets(node, edge.JoinField, newRowByKey).some((target) => target !== nodeKey);
+            if (pointsAtNewRow) deferred.add(nodeKey);
+        }
+        return deferred;
+    }
+
+    /** New rows by their planned key, lower-cased, for matching a remapped column's value. */
+    private static newRowsByTargetKey(plan: ClonePlan): Map<string, string> {
+        const byKey = new Map<string, string>();
+        for (const node of plan.Nodes) {
+            if (node.Action !== 'Create') continue;
+            const key = ToRecordKeyString(node.TargetKey);
+            if (key) byKey.set(key.toLowerCase(), node.NodeKey ?? node.Key);
+        }
+        return byKey;
+    }
+
+    /** Plan nodes a row points at through remapped columns other than `joinField`. */
+    private static remappedTargets(node: ClonePlanNode, joinField: string, newRowByKey: Map<string, string>): string[] {
+        const targets: string[] = [];
+        for (const change of node.FieldChanges) {
+            if (change.Kind !== 'Remap' || change.Field.toLowerCase() === joinField.toLowerCase()) continue;
+            if (typeof change.NewValue !== 'string') continue;
+            const target = newRowByKey.get(change.NewValue.toLowerCase());
+            if (target) targets.push(target);
+        }
+        return targets;
+    }
+
+    /**
+     * Sidecars in an order where each saves after the sidecars it depends on: its parent, when
+     * the parent is a sidecar too, and the new rows its remapped columns point at. Rows saved in
+     * the graph save come first anyway. Stable: independent sidecars keep their planned order.
+     */
+    private static orderSidecars(plan: ClonePlan, sidecars: BaseEntity[], keys: Map<BaseEntity, string>): BaseEntity[] {
+        if (sidecars.length < 2) return sidecars;
+        const newRowByKey = CloneMaterializer.newRowsByTargetKey(plan);
+        const sidecarKeys = new Set(keys.values());
+        const dependsOn = new Map<string, string[]>();
+        for (const [, nodeKey] of keys) {
+            const node = plan.Nodes.find((n) => (n.NodeKey ?? n.Key) === nodeKey);
+            const edge = plan.Edges.find((e) => e.ToKey === nodeKey && e.Policy === 'Deep');
+            if (!node || !edge) continue;
+            const deps = [edge.FromKey, ...CloneMaterializer.remappedTargets(node, edge.JoinField, newRowByKey)]
+                .filter((k) => k !== nodeKey && sidecarKeys.has(k));
+            dependsOn.set(nodeKey, deps);
+        }
+        const ordered: BaseEntity[] = [];
+        const done = new Set<string>();
+        const visiting = new Set<string>();
+        const byKey = new Map([...keys].map(([entity, key]) => [key, entity]));
+        const visit = (key: string) => {
+            if (done.has(key) || visiting.has(key)) return; // a cycle can't all be inserted anyway; keep the planned order
+            visiting.add(key);
+            for (const dep of dependsOn.get(key) ?? []) visit(dep);
+            visiting.delete(key);
+            done.add(key);
+            const entity = byKey.get(key);
+            if (entity) ordered.push(entity);
+        };
+        for (const entity of sidecars) {
+            const key = keys.get(entity);
+            if (key) visit(key);
+        }
+        return ordered;
     }
 
     /**
