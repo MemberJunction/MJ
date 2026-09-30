@@ -1417,7 +1417,7 @@ export class DuplicateRecordDetector extends VectorBase {
     }
 
     /** This candidate's own verdict, matched by record id, or undefined when the reasoner returned none for it. */
-    protected findCandidateVerdict(
+    private findCandidateVerdict(
         reasoning: DuplicateReasoningOutput,
         candidateRecordID: string
     ): DuplicateReasoningCandidateVerdict | undefined {
