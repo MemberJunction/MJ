@@ -73,6 +73,11 @@ on:
       # The MJExplorer @angular/compiler guard (guards job). The manifest it reads is already
       # under packages/**; the script is not, so a PR weakening only the guard must still run it.
       - '.github/scripts/check-explorer-angular-compiler.mjs'
+      # The AI model rank-lineage guard (guards job) reads metadata/ai-models, which is outside
+      # packages/**. Without these entries a PR that edits only the catalog — the one change
+      # that can introduce an inversion — never runs the guard.
+      - '.github/scripts/check-ai-model-ranks.mjs'
+      - 'metadata/ai-models/**'
       # The remote-cache preflight runs as a step in this workflow (see "Verify turbo
       # remote-cache configuration"), and its own suite lives in __tests__ above.
       - '.github/scripts/check-turbo-cache-env.mjs'
@@ -233,6 +238,13 @@ jobs:
         run: |
           node .github/scripts/check-explorer-angular-compiler.mjs --self-test
           node .github/scripts/check-explorer-angular-compiler.mjs
+
+      # Within a model's version lineage (AIModel.PriorVersionID) a later model must not rank
+      # below the model it succeeds, or rank-based model selection keeps preferring the older
+      # one (MJ#4912). Reads metadata/ai-models only — no DB, no build.
+      - name: AI model rank-lineage guard
+        if: ${{ !cancelled() }}
+        run: node .github/scripts/check-ai-model-ranks.mjs
 
       # Repo-wide compliance scanners. They live in packages/MJGlobal/src/__tests__ for historical
       # reasons but scan `packages/**` off disk and assert about every package, so they belong here
