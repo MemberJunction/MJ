@@ -24,6 +24,7 @@ import type { BaseLLM, ChatMessage, ChatResult } from '@memberjunction/ai';
 import { ChatMessageRole, ChatParams } from '@memberjunction/ai';
 import { DecisionDiscoveryCatalog, DecisionDiscoveryOptions, type DecisionDiscoveryAgent, type DecisionDiscoveryOption } from '@memberjunction/ai-agents';
 import type { MJAIModelEntity, MJAIModelVendorEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import {
     AssertOutputOutsideRepo,
     DISCOVERY_NONE_KINDS,
@@ -250,7 +251,7 @@ export function PlanDiscoveryCorpus(agents: ReadonlyArray<DecisionDiscoveryOptio
         Key: part.Key,
         Label: { label: 'agent' as const, agentId: agent.ID },
         Count: part.Count,
-        Prompt: BuildAgentRequestsPrompt(agent, agents.filter(a => a.ID !== agent.ID), part.Count)
+        Prompt: BuildAgentRequestsPrompt(agent, agents.filter(a => !UUIDsEqual(a.ID, agent.ID)), part.Count)
     })));
     const split = SplitNoneCount(none);
     const noneTasks = DISCOVERY_NONE_KINDS.flatMap(kind => splitTask(`none:${kind}`, split[kind]).map(part => ({
