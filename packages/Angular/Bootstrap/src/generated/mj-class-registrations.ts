@@ -1389,11 +1389,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     FormBuilderResourceComponent,
     GraphQLConsoleComponent,
     GridWidthLabComponent,
-    HomeApplication,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    HomeApplication,
     HomeDashboardComponent,
     KnowledgeConfigResourceComponent,
     LayoutInspectorComponent,
