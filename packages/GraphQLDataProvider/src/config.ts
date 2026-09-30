@@ -56,10 +56,14 @@ export async function SetupGraphQLClient(config: GraphQLProviderConfigData): Pro
  * Connects and registers the GraphQL provider WITHOUT booting metadata. For anonymous/embedded
  * surfaces that only make their own GraphQL calls (and MJ's realtime runtime): no metadata
  * download, no current-user fetch, no LoggedIn event, no startup engines. Call
- * {@link SetupGraphQLClient} later with the same config to finish the full boot on the same instance.
+ * {@link SetupGraphQLClient} later to finish the full boot on the same instance.
  *
  * If the global provider already has metadata loaded this is a no-op that returns it, so it can
- * never downgrade a fully booted provider.
+ * never downgrade a fully booted provider. Called again on a connected but unbooted provider, it
+ * replaces `ConfigData` and keeps the session id; when the URL, token or API keys differ from the
+ * ones the current client was built with, it rebuilds the client so requests carry the new
+ * identity. The same applies when {@link SetupGraphQLClient} later runs with a login's config
+ * (an anonymous connect upgraded to a signed-in user).
  */
 export async function ConnectGraphQLClient(config: GraphQLProviderConfigData): Promise<GraphQLDataProvider> {
     const provider = new GraphQLDataProvider(); // returns the global singleton when one exists

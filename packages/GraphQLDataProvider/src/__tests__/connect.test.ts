@@ -7,8 +7,19 @@ import { ResetGraphQLProviderSingleton } from './support/wireTestHarness';
 // Exercises the REAL GraphQLDataProvider (no module mocks): Connect must authenticate and
 // register the provider without touching metadata, and must not break a later full boot.
 
-function makeConfig(url = 'http://localhost:4000/'): GraphQLProviderConfigData {
-    return new GraphQLProviderConfigData('test-token', url, 'ws://localhost:4000/');
+function makeConfig(url = 'http://localhost:4000/', token = 'test-token'): GraphQLProviderConfigData {
+    return new GraphQLProviderConfigData(token, url, 'ws://localhost:4000/');
+}
+
+/** A GraphQL success response for the fetch the client makes. */
+function okResponse(): Response {
+    return new Response(JSON.stringify({ data: { Ok: true } }), { headers: { 'content-type': 'application/json' } });
+}
+
+/** The Authorization header of the request the client sent in fetch call `n`. */
+function authorizationOfCall(fetchSpy: ReturnType<typeof vi.spyOn>, n: number): string | null {
+    const init = fetchSpy.mock.calls[n][1] as RequestInit;
+    return new Headers(init.headers).get('authorization');
 }
 
 describe('ConnectGraphQLClient (real provider)', () => {
@@ -63,5 +74,37 @@ describe('ConnectGraphQLClient (real provider)', () => {
         await provider.Config(cfg);
 
         expect(getAllMetadata).toHaveBeenCalledTimes(1);
+    });
+
+    it('rebuilds the client when a later connect brings different credentials (#4887)', async () => {
+        // An anonymous embed connects, then the user logs in on the same provider: requests must
+        // carry the new token, not the one the first client was built with.
+        const provider = await ConnectGraphQLClient(makeConfig(undefined, 'anon-token'));
+        await provider.Connect(makeConfig(undefined, 'user-token'));
+        fetchSpy.mockResolvedValueOnce(okResponse());
+
+        await provider.ExecuteGQL('query { Ok }', null);
+
+        expect(authorizationOfCall(fetchSpy, 0)).toBe('Bearer user-token');
+    });
+
+    it('keeps the client and session id when a later connect brings the same credentials', async () => {
+        const provider = await ConnectGraphQLClient(makeConfig());
+        const client = (provider as never)['_client'];
+        const sessionId = provider.sessionId;
+
+        await provider.Connect(makeConfig());
+
+        expect((provider as never)['_client']).toBe(client);
+        expect(provider.sessionId).toBe(sessionId);
+    });
+
+    it('keeps the session id when it rebuilds the client', async () => {
+        const provider = await ConnectGraphQLClient(makeConfig(undefined, 'anon-token'));
+        const sessionId = provider.sessionId;
+
+        await provider.Connect(makeConfig(undefined, 'user-token'));
+
+        expect(provider.sessionId).toBe(sessionId);
     });
 });

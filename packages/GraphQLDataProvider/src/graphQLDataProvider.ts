@@ -34,6 +34,17 @@ import { SanitizeGraphQLError, ToSafeGraphQLError } from "./sanitizeGraphQLError
 export type RefreshTokenFunction = () => Promise<string>;
 
 /**
+ * The URL and credentials each GraphQL client was built with (recorded by CreateNewGraphQLClient).
+ * A client's headers are fixed at construction, so a connect bringing different credentials must
+ * build a new client rather than reuse one that would keep sending the old identity (#4887).
+ */
+const clientCredentials = new WeakMap<GraphQLClient, string>();
+
+function credentialsKey(url: string, token: string, mjAPIKey: string, userAPIKey?: string): string {
+    return JSON.stringify([url, token ?? null, mjAPIKey ?? null, userAPIKey ?? null]);
+}
+
+/**
  * State of the provider's graphql-ws WebSocket connection.
  * - 'connected': socket is open and ready
  * - 'disconnected': socket failed after graphql-ws exhausted its retries
@@ -410,7 +421,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * their own GraphQL calls. After it resolves, {@link ExecuteGQL} works. No metadata is fetched,
      * so entity metadata (`Entities`, `EntityByName`, `RunView`, `GetEntityObject`) is NOT available
      * until the full boot runs (`SetupGraphQLClient`, or {@link Config}) on this same instance.
-     * Always uses the shared singleton connection.
+     * Always uses the shared singleton connection. A later Connect/Config with a different URL,
+     * token or API key rebuilds that connection's client (keeping the session id).
      */
     public async Connect(configData: GraphQLProviderConfigData): Promise<void> {
         await this.connectClient(configData, false, false);
@@ -419,7 +431,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     /**
      * The connection half of {@link Config}: stores the config, resolves the session id and creates the
      * GraphQL client (this instance's own client when separateConnection is true, otherwise the shared
-     * singleton client). Loads no metadata.
+     * singleton client, which is reused unless the credentials changed). Loads no metadata.
      */
     private async connectClient(configData: GraphQLProviderConfigData, separateConnection?: boolean, forceRefreshSessionId?: boolean): Promise<void> {
         // Enhanced logging to diagnose token issues
@@ -451,8 +463,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 GraphQLDataProvider.Instance._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
             }
 
-            // now create the new client, if it isn't already created
-            if (!GraphQLDataProvider.Instance._client)
+            // Create the client if there is none, or rebuild it (same session id) when this config
+            // brings different credentials — e.g. an anonymous connect upgraded to a login.
+            const existing = GraphQLDataProvider.Instance._client;
+            if (!existing || this.isBuiltWithOtherCredentials(existing, configData))
                 GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId, configData.MJAPIKey, configData.UserAPIKey);
 
             // Store the session ID for the global instance
@@ -463,6 +477,16 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             this._sessionId = GraphQLDataProvider.Instance._sessionId;
             this._client = GraphQLDataProvider.Instance._client;
         }
+    }
+
+    /**
+     * True when `client` was built with a URL or credentials other than `configData`'s. A client this
+     * class did not record (a subclass's own CreateNewGraphQLClient, a test harness) is kept as-is.
+     */
+    private isBuiltWithOtherCredentials(client: GraphQLClient, configData: GraphQLProviderConfigData): boolean {
+        const builtWith = clientCredentials.get(client);
+        return builtWith !== undefined &&
+            builtWith !== credentialsKey(configData.URL, configData.Token, configData.MJAPIKey, configData.UserAPIKey);
     }
 
     public get sessionId(): string {
@@ -3140,6 +3164,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             client.setHeader(key, value);
         }
 
+        clientCredentials.set(client, credentialsKey(url, token, mjAPIKey, userAPIKey));
         return client;
     }
 
