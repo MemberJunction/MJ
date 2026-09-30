@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 import { AIEngine } from '@memberjunction/aiengine';
 import { UserInfo } from '@memberjunction/core';
 import type { IMetadataProvider } from '@memberjunction/core';
@@ -128,6 +131,17 @@ function seedDecisionRun(agent: TestAgent, createdSteps: MockStepEntity[]): void
 
 describe('Agent Decisions', () => {
     describe('1. Schema and defaults', () => {
+        it('declares both opt-in switches off in the Loop agent type metadata, the defaults that apply at runtime once synced', () => {
+            // src/__tests__/ → repo root is 5 levels up (Agents → AI → packages → root).
+            const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../../..');
+            const agentTypes: Array<{ fields: { Name: string; PromptParamsSchema?: { properties?: Record<string, { default?: string | boolean }> } } }> =
+                JSON.parse(readFileSync(join(repoRoot, 'metadata/agent-types/.agent-types.json'), 'utf8'));
+            const loop = agentTypes.find((t) => t.fields.Name === 'Loop');
+            const properties = loop?.fields.PromptParamsSchema?.properties;
+            expect(properties?.includeDecisionsDocs?.default).toBe(false);
+            expect(properties?.finishIfMode?.default).toBe('off');
+        });
+
         it('has decisions enabled by default in DEFAULT_RESPONSE_TYPE_INCLUSION_RULES', () => {
             expect(DEFAULT_RESPONSE_TYPE_INCLUSION_RULES.decisions).toBe(true);
         });
