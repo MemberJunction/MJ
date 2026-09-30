@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import type { BaseLLM } from '@memberjunction/ai';
+import { FormatMemoryNoteExcerpt } from '@memberjunction/ai-agents';
 import { OutputInsideRepoError } from '@memberjunction/testing-engine';
 import {
     BuildScenarioGenerationPrompt,
@@ -100,6 +101,11 @@ describe('corpus-generator', () => {
         const excerpt = FormatConversationExcerpt(validRawScenario.turns);
         expect(excerpt).toContain('[user]: Hi, I need help with Postgres.');
         expect(excerpt).toContain('[assistant]: Sure, what do you need?');
+    });
+
+    it("formats the excerpt exactly as production's gate quotes a conversation", () => {
+        const turns = [{ role: 'user', text: 'Always answer me in Spanish.' }, { role: 'assistant', text: 'Entendido.' }];
+        expect(FormatConversationExcerpt(turns)).toBe(FormatMemoryNoteExcerpt(turns));
     });
 
     it('generates scenario with retry when model output is valid on second try', async () => {

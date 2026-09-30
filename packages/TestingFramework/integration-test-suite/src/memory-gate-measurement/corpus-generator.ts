@@ -7,6 +7,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { BaseLLM } from '@memberjunction/ai';
+import { FormatMemoryNoteExcerpt } from '@memberjunction/ai-agents';
 import { AssertOutputOutsideRepo } from '@memberjunction/testing-engine';
 import type {
     CorpusLabel,
@@ -200,9 +201,12 @@ export function ValidateRawScenario(scenario: unknown): RawGeneratedScenario {
     return { Turns: validatedTurns, Notes: validatedNotes };
 }
 
-/** Formats transcript turns into readable conversation excerpt. */
+/**
+ * Formats transcript turns into a conversation excerpt, exactly as production's gate quotes the
+ * conversation a note came from (`FormatMemoryNoteExcerpt`), so the corpus measures what ships.
+ */
 export function FormatConversationExcerpt(turns: readonly { role: string; text: string }[]): string {
-    return turns.map(t => `[${t.role}]: ${t.text}`).join('\n');
+    return FormatMemoryNoteExcerpt(turns);
 }
 
 /** Generates a single scenario with retry. */

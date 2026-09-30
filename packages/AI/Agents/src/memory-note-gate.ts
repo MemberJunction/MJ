@@ -70,6 +70,35 @@ export interface MemoryNoteCandidate {
     readonly agentId?: string | null;
     readonly userId?: string | null;
     readonly companyId?: string | null;
+    /** The conversation the note was extracted from: the one it is judged against. */
+    readonly sourceConversationId?: string | null;
+}
+
+/** One turn of the conversation a note came from, as the gate's state quotes it. */
+export interface MemoryNoteExcerptTurn {
+    readonly role: string;
+    readonly text: string;
+}
+
+/** A conversation candidate notes may have come from. */
+export interface MemoryNoteConversation {
+    readonly ConversationId: string;
+    readonly Turns: ReadonlyArray<MemoryNoteExcerptTurn>;
+}
+
+/** The candidate notes of one conversation, with that conversation's excerpt: one decision state. */
+export interface MemoryNoteConversationBatch<T extends MemoryNoteCandidate = MemoryNoteCandidate> {
+    readonly ConversationId: string;
+    readonly Excerpt: string;
+    readonly Notes: T[];
+}
+
+/** Candidate notes grouped by the conversation they came from. */
+export interface MemoryNoteConversationGrouping<T extends MemoryNoteCandidate = MemoryNoteCandidate> {
+    /** One batch per conversation with notes, in the conversations' order; each keeps its notes' order. */
+    readonly Batches: MemoryNoteConversationBatch<T>[];
+    /** The notes whose conversation could not be told: they must not be judged against any. */
+    readonly Unattributed: T[];
 }
 
 /**
@@ -146,6 +175,53 @@ export function BuildMemoryNoteQuestions(
 export function MemoryNoteQuestionInstructions(note: MemoryNoteCandidate): string {
     const content = (note.content ?? '').slice(0, MEMORY_NOTE_MAX_CONTENT_CHARS);
     return `${MEMORY_NOTE_QUESTION_INSTRUCTIONS}\n\nThe note (${note.type}, ${note.scopeLevel ?? 'user'} scope): "${content}"`;
+}
+
+/**
+ * The conversation a batch of notes came from, as the gate's state quotes it: one `[role]: text`
+ * line per turn. The measurement rig wrote its corpus excerpts with this, one conversation per
+ * state, which is what the Platt fit and the threshold were set on; {@link BuildMemoryNoteState}
+ * caps it.
+ *
+ * @param turns The conversation's turns, in order.
+ */
+export function FormatMemoryNoteExcerpt(turns: ReadonlyArray<MemoryNoteExcerptTurn>): string {
+    return turns.map(turn => `[${turn.role}]: ${turn.text}`).join('\n');
+}
+
+/** The conversation a note names, compared as UUIDs, or null when it names none of them. */
+function conversationOf(note: MemoryNoteCandidate, conversations: ReadonlyArray<MemoryNoteConversation>): MemoryNoteConversation | null {
+    const source = note.sourceConversationId;
+    return source ? conversations.find(c => UUIDsEqual(c.ConversationId, source)) ?? null : null;
+}
+
+/**
+ * Groups candidate notes by the conversation they came from, so each note is judged against its own
+ * conversation, as the gate was measured: one conversation per decision state. A note whose
+ * `sourceConversationId` names none of the conversations belongs to the only conversation when there
+ * is one; with several, it is unattributed, and must not be judged against another conversation.
+ *
+ * @param notes The candidate notes.
+ * @param conversations The conversations they were extracted from.
+ */
+export function GroupMemoryNotesByConversation<T extends MemoryNoteCandidate>(
+    notes: ReadonlyArray<T>,
+    conversations: ReadonlyArray<MemoryNoteConversation>
+): MemoryNoteConversationGrouping<T> {
+    const byConversation = new Map<MemoryNoteConversation, T[]>();
+    const unattributed: T[] = [];
+    for (const note of notes) {
+        const conversation = conversationOf(note, conversations) ?? (conversations.length === 1 ? conversations[0] : null);
+        if (!conversation) {
+            unattributed.push(note);
+            continue;
+        }
+        byConversation.set(conversation, [...(byConversation.get(conversation) ?? []), note]);
+    }
+    const batches = conversations
+        .filter(c => byConversation.has(c))
+        .map(c => ({ ConversationId: c.ConversationId, Excerpt: FormatMemoryNoteExcerpt(c.Turns), Notes: byConversation.get(c) ?? [] }));
+    return { Batches: batches, Unattributed: unattributed };
 }
 
 /**

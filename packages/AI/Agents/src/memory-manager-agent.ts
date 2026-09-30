@@ -30,6 +30,7 @@ import {
     JudgeMemoryNotes,
     MemoryNotePromptQuestionCap,
     ChunkMemoryNotes,
+    GroupMemoryNotesByConversation,
     MEMORY_NOTE_MIN_PROBABILITY
 } from './memory-note-gate';
 
@@ -1208,8 +1209,10 @@ export class MemoryManagerAgent extends BaseAgent {
     }
 
     /**
-     * Evaluates candidate notes through the typed decision gate in batches conforming
-     * to the prompt model's declared MaxQuestionsPerCall limit.
+     * Evaluates candidate notes through the typed decision gate, one conversation at a time: each note
+     * is judged against the conversation it came from, as the gate was measured and calibrated, in
+     * batches no larger than the prompt models' declared MaxQuestionsPerCall. A note whose conversation
+     * can't be told keeps the self-reported rule. The kept notes keep their original order.
      */
     private async filterWithDecisionGate(
         notes: ExtractedNote[],
@@ -1225,42 +1228,41 @@ export class MemoryManagerAgent extends BaseAgent {
         }
 
         const cap = MemoryNotePromptQuestionCap(AIEngine.Instance, 'Default Decision');
-        const batches = ChunkMemoryNotes(lengthFiltered, cap);
-        const kept: ExtractedNote[] = [];
-        const threadExcerpts = this.formatThreadExcerpts(conversationThreads);
-
-        for (const batch of batches) {
-            const batchPassed = await this.judgeDecisionBatch(batch, threadExcerpts, contextUser, cap);
-            kept.push(...batchPassed);
+        const grouping = GroupMemoryNotesByConversation(lengthFiltered, conversationThreads.map(t => ({
+            ConversationId: t.conversationId,
+            Turns: t.messages.map(m => ({ role: m.role, text: m.message }))
+        })));
+        const kept = new Set<ExtractedNote>(this.filterByConfidenceAndLength(grouping.Unattributed));
+        if (grouping.Unattributed.length > 0) {
+            LogStatus(`Memory Manager: ${grouping.Unattributed.length} note(s) name no conversation of this batch, so they keep the confidence filter`);
         }
 
-        return kept;
+        for (const conversation of grouping.Batches) {
+            for (const batch of ChunkMemoryNotes(conversation.Notes, cap)) {
+                const batchPassed = await this.judgeDecisionBatch(batch, conversation.ConversationId, conversation.Excerpt, contextUser, cap);
+                batchPassed.forEach(note => kept.add(note));
+            }
+        }
+
+        return lengthFiltered.filter(note => kept.has(note));
     }
 
     /**
-     * Formats conversation thread history for decision state projection.
-     */
-    private formatThreadExcerpts(threads: ConversationThread[]): string {
-        return threads.map(t =>
-            `Conversation ${t.conversationId}:\n` +
-            t.messages.map(m => `[${m.role}]: ${m.message}`).join('\n')
-        ).join('\n---\n');
-    }
-
-    /**
-     * Runs a decision prompt call for a single batch of candidate notes, falling back
-     * to the confidence filter if the decision call fails. The call's step joins the agent run's
+     * Runs a decision prompt call for a single batch of candidate notes from one conversation, falling
+     * back to the confidence filter if the decision call fails. The call's step joins the agent run's
      * steps, and carries the call's prompt run, so the run's cost and token totals count it.
      */
     private async judgeDecisionBatch(
         batch: ExtractedNote[],
-        threadExcerpts: string,
+        conversationId: string,
+        excerpt: string,
         contextUser: UserInfo,
         modelCap: number | undefined
     ): Promise<ExtractedNote[]> {
         const questions = BuildMemoryNoteQuestions(batch);
-        const state = BuildMemoryNoteState(batch, threadExcerpts);
+        const state = BuildMemoryNoteState(batch, excerpt);
         const step = await this.createRunStep('Decision', 'Judge Extracted Notes', {
+            conversationId,
             noteCount: batch.length,
             modelCap
         });

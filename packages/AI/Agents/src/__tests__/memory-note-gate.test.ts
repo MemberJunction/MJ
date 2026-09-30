@@ -6,12 +6,15 @@ import {
     JudgeMemoryNotes,
     MemoryNotePromptQuestionCap,
     ChunkMemoryNotes,
+    FormatMemoryNoteExcerpt,
+    GroupMemoryNotesByConversation,
     MEMORY_NOTE_QUESTION_INSTRUCTIONS,
     MEMORY_NOTE_MAX_CONTENT_CHARS,
     MEMORY_NOTE_MAX_EXCERPT_CHARS,
     MEMORY_NOTE_MIN_PROBABILITY,
     MEMORY_NOTE_DECISION_CALIBRATION,
     type MemoryNoteCandidate,
+    type MemoryNoteConversation,
     type MemoryNoteEngineSource
 } from '../memory-note-gate';
 
@@ -99,6 +102,54 @@ describe('memory-note-gate', () => {
             expect(Object.keys(MEMORY_NOTE_DECISION_CALIBRATION)).toEqual(['Jev']);
             expect(Object.isFrozen(MEMORY_NOTE_DECISION_CALIBRATION)).toBe(true);
             expect(Object.isFrozen(MEMORY_NOTE_DECISION_CALIBRATION['Jev'])).toBe(true);
+        });
+    });
+
+    describe('FormatMemoryNoteExcerpt', () => {
+        it("quotes one conversation as the measurement's corpus did: one `[role]: text` line per turn", () => {
+            expect(FormatMemoryNoteExcerpt([
+                { role: 'user', text: 'I prefer dark mode' },
+                { role: 'assistant', text: 'Understood' }
+            ])).toBe('[user]: I prefer dark mode\n[assistant]: Understood');
+            expect(FormatMemoryNoteExcerpt([])).toBe('');
+        });
+    });
+
+    describe('GroupMemoryNotesByConversation', () => {
+        const A = 'aaaaaaaa-1111-4000-8000-000000000001';
+        const B = 'aaaaaaaa-1111-4000-8000-000000000002';
+        const conversations: MemoryNoteConversation[] = [
+            { ConversationId: A, Turns: [{ role: 'user', text: 'About the revenue report' }] },
+            { ConversationId: B, Turns: [{ role: 'user', text: 'Always answer me in Spanish' }] }
+        ];
+
+        it("puts each note with its own conversation, comparing IDs as UUIDs, in the conversations' order", () => {
+            const fromB: MemoryNoteCandidate = { type: 'Preference', content: 'Wants answers in Spanish', sourceConversationId: B.toUpperCase() };
+            const fromA: MemoryNoteCandidate = { type: 'Context', content: 'Owns the revenue report', sourceConversationId: A };
+            const grouping = GroupMemoryNotesByConversation([fromB, fromA], conversations);
+
+            expect(grouping.Unattributed).toEqual([]);
+            expect(grouping.Batches).toEqual([
+                { ConversationId: A, Excerpt: '[user]: About the revenue report', Notes: [fromA] },
+                { ConversationId: B, Excerpt: '[user]: Always answer me in Spanish', Notes: [fromB] }
+            ]);
+        });
+
+        it('leaves a note naming none of several conversations unattributed', () => {
+            const unnamed: MemoryNoteCandidate = { type: 'Preference', content: 'Prefers concise replies' };
+            const elsewhere: MemoryNoteCandidate = { type: 'Preference', content: 'Prefers tables', sourceConversationId: 'aaaaaaaa-1111-4000-8000-000000000009' };
+            const grouping = GroupMemoryNotesByConversation([unnamed, elsewhere], conversations);
+
+            expect(grouping.Batches).toEqual([]);
+            expect(grouping.Unattributed).toEqual([unnamed, elsewhere]);
+        });
+
+        it('puts every note with the only conversation when there is one', () => {
+            const unnamed: MemoryNoteCandidate = { type: 'Preference', content: 'Prefers concise replies' };
+            const grouping = GroupMemoryNotesByConversation([unnamed], [conversations[1]]);
+
+            expect(grouping.Batches.map(b => [b.ConversationId, b.Notes])).toEqual([[B, [unnamed]]]);
+            expect(grouping.Unattributed).toEqual([]);
         });
     });
 

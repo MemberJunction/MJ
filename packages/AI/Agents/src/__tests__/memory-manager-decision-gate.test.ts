@@ -7,6 +7,7 @@ import { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { MemoryManagerAgent } from '../memory-manager-agent';
 import { AgentDecisionService, type AgentDecisionAskParams } from '../AgentDecisionService';
 import * as MemoryNoteGate from '../memory-note-gate';
+import { FormatMemoryNoteExcerpt, MEMORY_NOTE_MAX_EXCERPT_CHARS } from '../memory-note-gate';
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
@@ -26,6 +27,7 @@ interface NoteShape {
     content: string;
     confidence: number;
     scopeLevel?: 'global' | 'company' | 'user';
+    sourceConversationId?: string;
 }
 
 /** A conversation thread, in the shape extraction reads it. */
@@ -35,6 +37,7 @@ interface ThreadShape {
 }
 
 const CONVERSATION_A = 'aaaaaaaa-1111-4000-8000-000000000001';
+const CONVERSATION_B = 'aaaaaaaa-1111-4000-8000-000000000002';
 
 function thread(conversationId: string, turns: Array<[string, string]>): ThreadShape {
     return {
@@ -126,6 +129,16 @@ class TestMemoryManagerAgent extends MemoryManagerAgent {
         this.CreatedSteps.push(step);
         return step;
     }
+}
+
+/** The conversation excerpt of the state a decision was asked about. */
+function excerptOf(call: AgentDecisionAskParams): string | undefined {
+    const state = call.State;
+    if (typeof state === 'string' || !('notes' in state)) {
+        throw new Error('The gate asks about a note state');
+    }
+    const excerpt = state.conversationExcerpt;
+    return typeof excerpt === 'string' ? excerpt : undefined;
 }
 
 // ─── Specs ───────────────────────────────────────────────────────────────────────────────────────
@@ -237,6 +250,65 @@ describe('MemoryManagerAgent - Decision Gate Integration', () => {
             await agent.RunGate(sampleNotes, oneThread, user);
 
             expect(agent.Run.Steps.map(s => [s.StepType, s.Status])).toEqual([['Decision', 'Failed'], ['Decision', 'Failed']]);
+        });
+    });
+
+    describe('each note is judged against its own conversation', () => {
+        // The review's probe: A is a long conversation, B a short one that states the preference.
+        const longA = thread(CONVERSATION_A, Array.from({ length: 30 }, (_, i): [string, string] => [
+            i % 2 === 0 ? 'user' : 'assistant',
+            `Turn ${i} about the quarterly revenue report: its columns, its filters, its export options and who reads it, discussed at length.`
+        ]));
+        const shortB = thread(CONVERSATION_B, [['user', 'Please always answer me in Spanish from now on.'], ['assistant', 'Entendido.']]);
+        const fromA: NoteShape = { type: 'Context', content: 'Works on the quarterly revenue report', confidence: 90, sourceConversationId: CONVERSATION_A };
+        const fromB: NoteShape = { type: 'Preference', content: 'User wants all answers in Spanish', confidence: 90, sourceConversationId: CONVERSATION_B.toUpperCase() };
+
+        it('asks about each conversation separately, with only that conversation as the excerpt', async () => {
+            agent.EnableDecisionGate = true;
+            const decisions = new ScriptedDecisionService(args => answered('Jev', Object.fromEntries(Object.keys(args.Questions).map(k => [k, 0.95]))));
+            agent.SetDecisionService(decisions);
+
+            const filtered = await agent.RunGate([fromA, fromB], [longA, shortB], user);
+
+            expect(filtered).toEqual([fromA, fromB]);
+            expect(decisions.Calls).toHaveLength(2);
+            const askedAboutB = decisions.Calls.find(call => Object.values(call.Questions).some(q => q.Instructions.includes('Spanish')));
+            const askedAboutA = decisions.Calls.find(call => call !== askedAboutB);
+            if (!askedAboutA || !askedAboutB) {
+                throw new Error('Expected one call per conversation');
+            }
+            const excerptB = excerptOf(askedAboutB) ?? '';
+            const excerptA = excerptOf(askedAboutA) ?? '';
+            expect(Object.keys(askedAboutB.Questions)).toEqual(['n1']);
+            expect(excerptB).toContain('always answer me in Spanish');
+            expect(excerptB).not.toContain('quarterly revenue');
+            expect(excerptA).not.toContain('Spanish');
+            expect(excerptA.length).toBe(MEMORY_NOTE_MAX_EXCERPT_CHARS);
+        });
+
+        it("quotes the conversation exactly as the measurement's corpus did", async () => {
+            agent.EnableDecisionGate = true;
+            const decisions = new ScriptedDecisionService(() => answered('Jev', { n1: 0.95 }));
+            agent.SetDecisionService(decisions);
+
+            await agent.RunGate([fromB], [longA, shortB], user);
+
+            expect(excerptOf(decisions.Calls[0])).toBe(
+                FormatMemoryNoteExcerpt(shortB.messages.map(m => ({ role: m.role, text: m.message })))
+            );
+            expect(excerptOf(decisions.Calls[0])).toBe('[user]: Please always answer me in Spanish from now on.\n[assistant]: Entendido.');
+        });
+
+        it('never judges a note against another conversation when it names none of them', async () => {
+            agent.EnableDecisionGate = true;
+            const decisions = new ScriptedDecisionService(() => answered('Jev', { n1: 0.01 }));
+            agent.SetDecisionService(decisions);
+            const unnamed: NoteShape = { type: 'Preference', content: 'Prefers concise replies', confidence: 90 };
+
+            const filtered = await agent.RunGate([unnamed], [longA, shortB], user);
+
+            expect(decisions.Calls).toEqual([]);
+            expect(filtered).toEqual([unnamed]);
         });
     });
 
