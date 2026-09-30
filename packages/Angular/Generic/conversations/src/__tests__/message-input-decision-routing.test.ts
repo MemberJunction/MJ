@@ -22,6 +22,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 import { MessageInputComponent } from '../lib/components/message/message-input.component';
 import type { BeforeAgentTurnEventArgs } from '../lib/events/chat-events';
+import type { AgentTurnHandler } from '../lib/models/agent-turn.model';
 import { PlanModePreference } from '../lib/utils/plan-mode-preference';
 import type { AgentArtifactSummary } from '../lib/utils/agent-artifact-summary';
 import type { AgentPayloadSource } from '../lib/services/conversation-agent.service';
@@ -502,6 +503,37 @@ describe('MessageInputComponent — decision routing', () => {
 
                 expect(h.invokeSubAgent.mock.calls[0][0]).toBe('Writer');
                 expect(h.invokeSubAgent.mock.calls[0][9]).toBe(VERSION);
+            });
+
+            describe('with a host AgentTurnHandler', () => {
+                let handler: Mock<AgentTurnHandler>;
+
+                beforeEach(() => {
+                    handler = vi.fn<AgentTurnHandler>(async () => ({ Success: true }));
+                    h.set({ AgentTurnHandler: handler });
+                });
+
+                it('hands the handler the version, since the host runs the turn', async () => {
+                    h.runDecision.mockResolvedValue(answered({
+                        route: choice(WRITER.ID, 0.9), continues: likelihood(0.9), artifact: choice(VERSION, 0.9),
+                    }));
+
+                    await h.route(userMessage());
+
+                    expect(handler).toHaveBeenCalledOnce();
+                    expect(handler.mock.calls[0][0]).toMatchObject({ AgentId: WRITER.ID, Route: 'Continuity', TargetArtifactVersionId: VERSION });
+                    expect(h.invokeSubAgent).not.toHaveBeenCalled();
+                });
+
+                it('hands it no version for another agent\'s turn, or without a confident answer', async () => {
+                    h.runDecision.mockResolvedValueOnce(leavesTo(RESEARCH, { artifact: choice(VERSION, 0.9) }));
+                    await h.route(userMessage());
+                    h.runDecision.mockResolvedValueOnce(answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.9) }));
+                    await h.route(userMessage());
+
+                    expect(handler.mock.calls.map(([request]) => [request.AgentId, request.TargetArtifactVersionId]))
+                        .toEqual([[RESEARCH.ID, null], [WRITER.ID, null]]);
+                });
             });
 
             it('does not hand one agent\'s version to another agent\'s turn', async () => {
