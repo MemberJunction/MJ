@@ -428,13 +428,10 @@ export function ParseConfidenceFloor(raw: string): number {
                         <div class="rpe-grid2 rpe-mt">
                             <div class="field">
                                 <label>Target LLM Pipeline</label>
-                                <select
-                                    class="mj-input"
-                                    [value]="spec.Escalation?.PipelineID || ''"
-                                    (change)="OnEscalationTargetChange($event)">
-                                    <option value="" disabled>{{ EscalationTargetsPlaceholder }}</option>
+                                <select class="mj-input" (change)="OnEscalationTargetChange($event)">
+                                    <option value="" disabled [selected]="!SavedEscalationTargetListed">{{ EscalationTargetsPlaceholder }}</option>
                                     @for (target of AvailableEscalationTargets; track target.ID) {
-                                        <option [value]="target.ID" [disabled]="!!GetTargetProblem(target)">
+                                        <option [value]="target.ID" [disabled]="!!GetTargetProblem(target)" [selected]="IsSavedEscalationTarget(target)">
                                             {{ target.Name }}{{ GetTargetProblem(target) ? ' (' + GetTargetProblem(target) + ')' : '' }}
                                         </option>
                                     }
@@ -639,6 +636,16 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
             return '— Pipelines could not be loaded —';
         }
         return this.AvailableEscalationTargets.length > 0 ? '— Select LLM Pipeline —' : '— No other Infer pipelines on this entity —';
+    }
+
+    /** Whether `target` is the spec's escalation target. IDs compare through UUIDsEqual, as the target check does. */
+    public IsSavedEscalationTarget(target: EscalationTargetCandidate): boolean {
+        return UUIDsEqual(target.ID, this.spec.Escalation?.PipelineID);
+    }
+
+    /** Whether the target picker lists the spec's escalation target. Until the targets load, or when it is not among them, the placeholder shows. */
+    public get SavedEscalationTargetListed(): boolean {
+        return this.AvailableEscalationTargets.some((t) => this.IsSavedEscalationTarget(t));
     }
 
     /**

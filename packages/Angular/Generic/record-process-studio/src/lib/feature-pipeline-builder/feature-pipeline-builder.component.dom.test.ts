@@ -1063,6 +1063,72 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
       expect(shownText(tagsModeSelect)).toBe('— Select Target Mode —');
     });
 
+    describe('the escalation target picker', () => {
+      /** An Active LLM pipeline on the entity that produces the Decision pipeline's output, so the picker offers it. */
+      const llmTarget = (ID: string, Name: string) => ({
+        ID,
+        Name,
+        WorkType: 'Infer',
+        Status: 'Active',
+        EntityID: 'e1',
+        Entity: 'Accounts',
+        PromptID: 'llm-prompt',
+        Configuration: JSON.stringify({
+          Name,
+          Description: Name,
+          PromptID: 'llm-prompt',
+          Context: { Fields: ['Name'] },
+          Caching: { Cacheable: false },
+          Outputs: [{ Name: 'IsAtRisk', Ref: '$', Target: { Mode: 'field', EntityFieldName: 'IsAtRisk' } }],
+        }),
+      });
+      const decisionEscalatingTo = (pipelineID: string) =>
+        makeRecord({
+          PipelineType: 'Decision',
+          Outputs: [
+            {
+              Name: 'IsAtRisk',
+              Ref: '$',
+              Target: { Mode: 'field', EntityFieldName: 'IsAtRisk' },
+              Constraint: { Type: 'boolean', OnViolation: 'fail' },
+            },
+          ],
+          Escalation: { PipelineID: pipelineID, BelowConfidence: 0.7 },
+        });
+      const renderWithTargets = async (pipelineID: string) => {
+        const f = renderWithProvider(
+          decisionEscalatingTo(pipelineID),
+          providerWithRows({ 'MJ: Record Processes': [llmTarget('t-a', 'Alpha'), llmTarget('t-b', 'Beta')] })
+        );
+        await vi.waitFor(() => expect(selectFor(f, 'Target LLM Pipeline').options.length).toBe(3));
+        return f;
+      };
+
+      it('shows the saved target once the targets load after the first render', async () => {
+        const f = await renderWithTargets('t-b');
+
+        const select = selectFor(f, 'Target LLM Pipeline');
+        expect(Array.from(select.options).map((o) => o.disabled)).toEqual([true, false, false]);
+        expect(select.value).toBe('t-b');
+        expect(shownText(select)).toBe('Beta');
+      });
+
+      it('matches a saved target ID in another case', async () => {
+        const f = await renderWithTargets('T-B');
+
+        expect(selectFor(f, 'Target LLM Pipeline').value).toBe('t-b');
+        expect(f.componentInstance.ValidationErrors.filter((e) => e.Path === 'Escalation.PipelineID')).toEqual([]);
+      });
+
+      it('shows the placeholder when the saved target is not among the loaded pipelines', async () => {
+        const f = await renderWithTargets('t-gone');
+
+        const select = selectFor(f, 'Target LLM Pipeline');
+        expect(select.value).toBe('');
+        expect(shownText(select)).toBe('— Select LLM Pipeline —');
+      });
+    });
+
     it('moves the constraint picker with the spec when the user changes the type', () => {
       const f = render(makeRecord());
 
