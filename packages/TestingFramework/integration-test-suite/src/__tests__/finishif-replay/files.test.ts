@@ -9,8 +9,10 @@ import {
     AUTHORED_FILE,
     CreateReplayFileSink,
     DECISIONS_FILE,
+    ParseDecisionCache,
     PrepareReplayOutputDir,
     ReadAuthoredCacheFile,
+    ReadDecisionCacheFile,
     REPORT_JSON_FILE,
     REPORT_MARKDOWN_FILE
 } from '../../finishif-replay/files';
@@ -63,6 +65,7 @@ async function runInto(outDir: string): Promise<string[]> {
         Settings: {
             CorpusDatabase: 'corpus_db',
             DecisionPrompt: 'Default Decision',
+            DecisionModel: null,
             AuthorModel: 'Author Model',
             Arms: ['authored', 'generic'],
             Reps: 2,
@@ -76,7 +79,8 @@ async function runInto(outDir: string): Promise<string[]> {
         },
         DryRun: false,
         Concurrency: 3,
-        AuthoredCache: ReadAuthoredCacheFile(outDir)
+        AuthoredCache: ReadAuthoredCacheFile(outDir),
+        DecisionCache: ReadDecisionCacheFile(outDir)
     }, deps(outDir, logs));
     return logs;
 }
@@ -117,13 +121,37 @@ describe('the written report', () => {
         expect(JSON.parse(json).Rounds).toHaveLength(5);
     });
 
-    it('caches what was authored, and a re-run reuses it', async () => {
+    it('caches what was authored and decided, and a re-run reuses both, making no call', async () => {
         const out = PrepareReplayOutputDir(join(scratchDir(), 'out'), []);
         await runInto(out);
         const cached = ReadAuthoredCacheFile(out);
         expect(cached.size).toBe(3);
+        expect(ReadDecisionCacheFile(out).size).toBe(12);
+        const firstReport = readFileSync(join(out, REPORT_MARKDOWN_FILE), 'utf-8');
         const logs = await runInto(out);
-        expect(logs.join('\n')).toContain('planned: 0 rounds to author');
+        expect(logs.join('\n')).toContain('planned: 0 rounds to author (1-3 calls each); 0 decision calls; 12 decisions from the cache');
         expect(readFileSync(join(out, AUTHORED_FILE), 'utf-8').trim().split('\n')).toHaveLength(3);
+        expect(readFileSync(join(out, DECISIONS_FILE), 'utf-8').trim().split('\n')).toHaveLength(12);
+        const secondReport = readFileSync(join(out, REPORT_MARKDOWN_FILE), 'utf-8');
+        expect(secondReport).toContain('(6 reused from an earlier run)');
+        expect(sweepsOf(secondReport)).toEqual(sweepsOf(firstReport));
+    });
+});
+
+/** A report's threshold-sweep rows, which a re-score must reproduce. */
+function sweepsOf(markdown: string): string[] {
+    return markdown.split('\n').filter(line => /^\| \*{0,2}0\.\d/.test(line));
+}
+
+describe('ParseDecisionCache', () => {
+    it('keys each decision by round, arm and rep, keeps its numbers, and skips lines that are not decisions', () => {
+        const decision = {
+            RoundId: Guid(1, 5).toLowerCase(), Arm: 'authored', Rep: 2, CallSucceeded: true, Probabilities: { q1: 0.9, q2: null },
+            Score: 0.9, Passed: true, ModelName: 'Model A', PromptRunID: Guid(7, 1), LatencyMs: 12, CostUSD: 0.5
+        };
+        const text = [JSON.stringify(decision), 'not json', JSON.stringify({ RoundId: 'x', Arm: 'other', Rep: 1 }), ''].join('\n');
+        const cache = ParseDecisionCache(text);
+        expect([...cache.keys()]).toEqual([`${Guid(1, 5)}|authored|2`]);
+        expect(cache.get(`${Guid(1, 5)}|authored|2`)).toEqual({ ...decision, Probabilities: { q1: 0.9 }, CostUSD: null });
     });
 });

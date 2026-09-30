@@ -4,6 +4,8 @@ import type { AgentFinishIf } from '@memberjunction/ai-core-plus';
 import type { AuthorOutcome } from '../../finishif-replay/author';
 import { FINISH_IF_SWEEP_THRESHOLDS } from '../../finishif-replay/metrics';
 import {
+    CachedDecision,
+    DecisionCacheKey,
     MapWithConcurrency,
     ObservationFromReply,
     RunFinishIfReplay,
@@ -25,6 +27,7 @@ function settings(arms: FinishIfReplayArm[] = ['authored', 'generic'], reps = 2)
     return {
         CorpusDatabase: 'corpus_db',
         DecisionPrompt: 'Default Decision',
+        DecisionModel: null,
         AuthorModel: 'Author Model',
         Arms: arms,
         Reps: reps,
@@ -101,7 +104,7 @@ function harness(corpus: FixtureCorpus, failAuthoringFor: string | null = null):
 }
 
 function options(overrides: Partial<FinishIfReplayOptions> = {}): FinishIfReplayOptions {
-    return { Settings: settings(), DryRun: false, Concurrency: 2, AuthoredCache: new Map(), ...overrides };
+    return { Settings: settings(), DryRun: false, Concurrency: 2, AuthoredCache: new Map(), DecisionCache: new Map(), ...overrides };
 }
 
 describe('RunFinishIfReplay', () => {
@@ -120,6 +123,7 @@ describe('RunFinishIfReplay', () => {
             Gated: 3,
             Sampled: 3,
             RoundsToAuthor: 3,
+            DecisionsFromCache: 0,
             DecisionCalls: 12
         });
         expect(h.Corpus.ReadSteps).toHaveBeenCalledTimes(1);
@@ -212,6 +216,82 @@ describe('RunFinishIfReplay', () => {
         ]);
     });
 });
+
+describe('RunFinishIfReplay, re-run on its own decisions', () => {
+    /** A first run's decisions, as the next run reads them back from `decisions.jsonl`. */
+    async function firstRun(corpus: FixtureCorpus): Promise<{ Decisions: Map<string, GateObservation>; Authored: Map<string, AuthoredFinishIf>; Report: string }> {
+        const h = harness(corpus);
+        const result = await RunFinishIfReplay(options(), h.Deps);
+        return {
+            Decisions: new Map(h.Decisions.map(d => [DecisionCacheKey(d.RoundId, d.Arm, d.Rep), d] as const)),
+            Authored: new Map(h.Authored.map(a => [a.RoundId, a] as const)),
+            Report: JSON.stringify(result.Report?.Arms.map(a => [a.Auc, a.Production.Raw, a.Sweep]))
+        };
+    }
+
+    it('re-scores with no decision or author call, and reports the same numbers', async () => {
+        const corpus = BuildCorpus();
+        const first = await firstRun(corpus);
+        const h = harness(corpus);
+        const dry = await RunFinishIfReplay(options({ DryRun: true, AuthoredCache: first.Authored, DecisionCache: first.Decisions }), h.Deps);
+        expect(dry.Plan).toMatchObject({ RoundsToAuthor: 0, DecisionsFromCache: 12, DecisionCalls: 0 });
+
+        const result = await RunFinishIfReplay(options({ AuthoredCache: first.Authored, DecisionCache: first.Decisions }), h.Deps);
+        expect(h.Author).not.toHaveBeenCalled();
+        expect(h.Decide).not.toHaveBeenCalled();
+        expect(h.Decisions).toEqual([]);
+        expect(h.ReadCosts).toHaveBeenCalledTimes(1);
+        expect(result.Report?.Arms.map(a => [a.Calls, a.CachedCalls])).toEqual([[6, 6], [6, 6]]);
+        expect(JSON.stringify(result.Report?.Arms.map(a => [a.Auc, a.Production.Raw, a.Sweep]))).toBe(first.Report);
+    });
+
+    it('asks again when the cached decision failed, answers other questions, or came from another model than the pinned one', async () => {
+        const corpus = BuildCorpus();
+        const first = await firstRun(corpus);
+        const cache = new Map(first.Decisions);
+        const failed = DecisionCacheKey(corpus.Rounds.GatedFinish, 'generic', 1);
+        const otherQuestions = DecisionCacheKey(corpus.Rounds.GatedFinish, 'generic', 2);
+        cache.set(failed, { ...(cache.get(failed) ?? decisionFor(corpus.Rounds.GatedFinish)), CallSucceeded: false });
+        cache.set(otherQuestions, { ...(cache.get(otherQuestions) ?? decisionFor(corpus.Rounds.GatedFinish)), Probabilities: { q9: 0.99 } });
+
+        const h = harness(corpus);
+        await RunFinishIfReplay(options({ AuthoredCache: first.Authored, DecisionCache: cache }), h.Deps);
+        expect(h.Decide).toHaveBeenCalledTimes(2);
+
+        const pinned = harness(corpus);
+        await RunFinishIfReplay(options({ Settings: { ...settings(), DecisionModel: 'Model B' }, AuthoredCache: first.Authored, DecisionCache: first.Decisions }), pinned.Deps);
+        expect(pinned.Decide).toHaveBeenCalledTimes(12);
+    });
+
+    it('rejudges a cached decision at the threshold of the run', () => {
+        const round = ExtractRounds(BuildCorpus().Steps).Rounds[0];
+        const questions = { q1: { Kind: 'Likelihood' as const, Instructions: 'one' } };
+        const cached = decisionFor(round.RoundId, { Probabilities: { q1: 0.85 }, Score: 0.85, Passed: false });
+        const cache = new Map([[DecisionCacheKey(round.RoundId, 'generic', 1), cached]]);
+        const lower = { ...settings(), ProductionThreshold: 0.8 };
+        expect(CachedDecision({ Round: round, Arm: 'generic', Rep: 1, Questions: questions }, { DecisionCache: cache, Settings: lower }))
+            .toMatchObject({ Score: 0.85, Passed: true, CostUSD: null });
+        expect(CachedDecision({ Round: round, Arm: 'generic', Rep: 2, Questions: questions }, { DecisionCache: cache, Settings: lower })).toBeNull();
+    });
+});
+
+/** A successful generic decision about a round, as `decisions.jsonl` holds it. */
+function decisionFor(roundId: string, fields: Partial<GateObservation> = {}): GateObservation {
+    return {
+        RoundId: roundId,
+        Arm: 'generic',
+        Rep: 1,
+        CallSucceeded: true,
+        Probabilities: { q1: 0.95 },
+        Score: 0.95,
+        Passed: true,
+        ModelName: 'Model A',
+        PromptRunID: Guid(7, 99),
+        LatencyMs: 50,
+        CostUSD: 0.0001,
+        ...fields
+    };
+}
 
 describe('ObservationFromReply', () => {
     const round = ExtractRounds(BuildCorpus().Steps).Rounds[0];

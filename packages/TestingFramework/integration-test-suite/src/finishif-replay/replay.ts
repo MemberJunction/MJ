@@ -4,7 +4,8 @@
  * 1. Reads the corpus steps and extracts the rounds; production's code checks leave some never gated.
  * 2. Samples the gated rounds (`--limit`), and reads their label turns' latency, cost and tokens.
  * 3. For the `authored` arm, writes each round's finishIf, or takes it from the cache.
- * 4. Asks the decision about each round, per arm and rep, and judges it with production's rule.
+ * 4. Asks the decision about each round, per arm and rep, and judges it with production's rule. A
+ *    decision an earlier run made about the same round, arm, rep and questions is reused instead.
  * 5. Reads each decision's cost back, and builds the report.
  *
  * A dry run stops after step 2 and prints the plan: it makes no model and no decision call.
@@ -73,6 +74,13 @@ export interface FinishIfReplayOptions {
     Concurrency: number;
     /** Authored finishIfs from earlier runs, by normalized round ID. */
     AuthoredCache: ReadonlyMap<string, AuthoredFinishIf>;
+    /**
+     * Decisions from earlier runs, by {@link DecisionCacheKey}. One is reused, with no call, when it
+     * succeeded, answers every question the round is asked now, and (with a pinned decision model)
+     * came from that model; so a re-run with the same arms, reps and authored questions re-scores
+     * the rounds without a model call.
+     */
+    DecisionCache: ReadonlyMap<string, GateObservation>;
 }
 
 /** What the replay runs against. */
@@ -97,8 +105,17 @@ export interface ReplayPlan {
     Sampled: number;
     /** Rounds the author must write; each takes one to three calls. */
     RoundsToAuthor: number;
+    /** Decisions reused from earlier runs, with no call. */
+    DecisionsFromCache: number;
     /** Decision calls, if every round is authored. */
     DecisionCalls: number;
+}
+
+/** The decisions of a run: reused and made. */
+interface DecidedRounds {
+    Observations: GateObservation[];
+    /** The reused decisions, per arm. */
+    FromCache: Record<FinishIfReplayArm, number>;
 }
 
 /** What a run did. */
@@ -158,6 +175,11 @@ export function PlanReplay(prepared: PreparedRounds, options: FinishIfReplayOpti
     const rounds = prepared.Extraction.Rounds;
     const neverGated = rounds.filter(r => r.GateStatus !== 'gated');
     const authored = options.Settings.Arms.includes('authored');
+    const cachedFinishIfs = new Map(prepared.Sampled.flatMap(r => {
+        const cached = options.AuthoredCache.get(NormalizeId(r.RoundId));
+        return cached ? [[r.RoundId, cached] as const] : [];
+    }));
+    const fromCache = decisionTasks(prepared.Sampled, cachedFinishIfs, options.Settings).filter(task => CachedDecision(task, options) !== null).length;
     return {
         Rounds: rounds.length,
         Labels: labelCounts(rounds),
@@ -167,14 +189,15 @@ export function PlanReplay(prepared: PreparedRounds, options: FinishIfReplayOpti
         Gated: rounds.length - neverGated.length,
         Sampled: prepared.Sampled.length,
         RoundsToAuthor: authored ? prepared.Sampled.filter(r => !options.AuthoredCache.has(NormalizeId(r.RoundId))).length : 0,
-        DecisionCalls: prepared.Sampled.length * options.Settings.Arms.length * options.Settings.Reps
+        DecisionsFromCache: fromCache,
+        DecisionCalls: prepared.Sampled.length * options.Settings.Arms.length * options.Settings.Reps - fromCache
     };
 }
 
 function logPlan(plan: ReplayPlan, sink: ReplaySink): void {
     sink.Log(`${plan.Rounds} rounds (${plan.Labels.Finish} finish, ${plan.Labels.Continue} continue); ${plan.Excluded} stretches of actions excluded`);
     sink.Log(`${plan.NeverGated} never gated by the code checks (${plan.NeverGatedLabels.Finish} finish, ${plan.NeverGatedLabels.Continue} continue); ${plan.Gated} gated; ${plan.Sampled} sent to the decision`);
-    sink.Log(`planned: ${plan.RoundsToAuthor} rounds to author (1-3 calls each); ${plan.DecisionCalls} decision calls`);
+    sink.Log(`planned: ${plan.RoundsToAuthor} rounds to author (1-3 calls each); ${plan.DecisionCalls} decision calls; ${plan.DecisionsFromCache} decisions from the cache`);
 }
 
 /** Authors the rounds missing from the cache into `into`, and returns how many failed. */
@@ -241,6 +264,36 @@ function decisionTasks(sampled: readonly ReplayRound[], authored: ReadonlyMap<st
     return tasks;
 }
 
+/** The key a decision is cached under: its round, arm and rep. */
+export function DecisionCacheKey(roundId: string, arm: FinishIfReplayArm, rep: number): string {
+    return `${NormalizeId(roundId)}|${arm}|${rep}`;
+}
+
+/**
+ * An earlier run's decision for this task, rejudged at this run's threshold, or null when there is
+ * none to reuse: it failed, it does not answer every question the round is asked now, or a pinned
+ * decision model did not answer it.
+ */
+export function CachedDecision(
+    task: Pick<DecisionTask, 'Round' | 'Arm' | 'Rep' | 'Questions'>,
+    options: Pick<FinishIfReplayOptions, 'DecisionCache' | 'Settings'>
+): GateObservation | null {
+    const cached = options.DecisionCache.get(DecisionCacheKey(task.Round.RoundId, task.Arm, task.Rep));
+    if (!cached?.CallSucceeded) {
+        return null;
+    }
+    const pinned = options.Settings.DecisionModel?.trim().toLowerCase();
+    if (pinned && (cached.ModelName ?? '').trim().toLowerCase() !== pinned) {
+        return null;
+    }
+    const score = GateScore(cached.Probabilities, Object.keys(task.Questions));
+    if (score === null) {
+        return null;
+    }
+    // `JudgeFinishIf` passes exactly when the minimum probability over the questions reaches the threshold.
+    return { ...cached, RoundId: task.Round.RoundId, Score: score, Passed: score >= options.Settings.ProductionThreshold, CostUSD: null };
+}
+
 /** A decision's reply, judged with production's rule. A failed call never passes. */
 export function ObservationFromReply(task: Pick<DecisionTask, 'Round' | 'Arm' | 'Rep' | 'Questions'>, reply: DecisionReply, threshold: number): GateObservation {
     const judged = reply.Success ? JudgeFinishIf(reply.Answers, task.Questions, threshold) : { Passed: false, Probabilities: {} };
@@ -259,9 +312,15 @@ export function ObservationFromReply(task: Pick<DecisionTask, 'Round' | 'Arm' | 
     };
 }
 
-async function decideRounds(tasks: readonly DecisionTask[], options: FinishIfReplayOptions, deps: FinishIfReplayDeps): Promise<GateObservation[]> {
+async function decideRounds(tasks: readonly DecisionTask[], options: FinishIfReplayOptions, deps: FinishIfReplayDeps): Promise<DecidedRounds> {
     let done = 0;
-    return MapWithConcurrency(tasks, options.Concurrency, async task => {
+    const fromCache: Record<FinishIfReplayArm, number> = { authored: 0, generic: 0 };
+    const observations = await MapWithConcurrency(tasks, options.Concurrency, async task => {
+        const cached = CachedDecision(task, options);
+        if (cached) {
+            fromCache[task.Arm]++;
+            return cached;
+        }
         const reply = await deps.Decider.Decide(BuildRoundState(task.Round), task.Questions);
         const observation = ObservationFromReply(task, reply, options.Settings.ProductionThreshold);
         deps.Sink.AppendDecision(observation);
@@ -273,6 +332,7 @@ async function decideRounds(tasks: readonly DecisionTask[], options: FinishIfRep
         }
         return observation;
     });
+    return { Observations: observations, FromCache: fromCache };
 }
 
 /** Each decision's cost, read back after its prompt run is saved. */
@@ -300,7 +360,8 @@ export async function RunFinishIfReplay(options: FinishIfReplayOptions, deps: Fi
         Extraction: prepared.Extraction,
         Sampled: prepared.Sampled,
         Savings: prepared.Savings,
-        Observations: await withCosts(decided, deps.Costs),
+        Observations: await withCosts(decided.Observations, deps.Costs),
+        CachedCalls: decided.FromCache,
         Authoring: authored.Summary
     });
     deps.Sink.WriteReport(report, RenderFinishIfReplayReport(report));

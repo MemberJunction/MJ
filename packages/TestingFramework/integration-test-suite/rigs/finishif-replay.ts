@@ -11,6 +11,11 @@
  * - The `authored` arm's finishIfs are written by `--author-model` through a `BaseLLM` driver, and
  *   cached in `<out>/authored.jsonl`; each decision is appended to `<out>/decisions.jsonl` as it
  *   returns. The report (`report.md`, `report.json`) names rounds by ID only.
+ * - A re-run into the same `--out` reuses both: a round's authored finishIf, and each successful
+ *   decision about the same round, arm, rep and questions. A re-run with the same arms and reps
+ *   therefore re-scores the corpus with no model call (`--dry-run` prints how many calls remain).
+ * - `--decision-model` pins every decision to one model, with failover off, as the other
+ *   measurement rigs do; without it the decision prompt selects the model and fails over as usual.
  * - `--out` must be outside every git working tree: the rig refuses outright otherwise.
  * - `--dry-run` reads the corpus, loads the guidance, resolves the author's vendors, checks the
  *   decision prompt exists, and prints the plan. It makes no model or decision call.
@@ -22,27 +27,30 @@
  * USAGE (from the repo root; the decision calls use the database in .env):
  *   npx tsx packages/TestingFramework/integration-test-suite/rigs/finishif-replay.ts \
  *     --corpus-db <database> --out <dir> [--arms authored,generic] [--reps 2] [--limit N] [--seed 7] \
- *     [--author-model "<MJ: AI Models name>"] [--decision-prompt "Default Decision"] [--concurrency 4] [--dry-run]
+ *     [--author-model "<MJ: AI Models name>"] [--decision-prompt "Default Decision"] [--decision-model "<MJ: AI Models name>"]
+ *     [--concurrency 4] [--dry-run]
  */
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sql from 'mssql';
 import { RunView, type UserInfo } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
-import { BaseLLM, GetAIAPIKey } from '@memberjunction/ai';
+import { BaseLLM, GetAIAPIKey, type DecisionQuestion } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AgentDecisionService } from '@memberjunction/ai-agents';
+import { AIDecisionParams } from '@memberjunction/ai-prompts';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { LoadDbConfig, type DbConfig } from '@memberjunction/testing-integration';
 import {
     DECISION_EVAL_BOOTSTRAP_RESAMPLES,
     DECISION_EVAL_CALIBRATION_FOLDS,
-    FindRepoRoot
+    FindRepoRoot,
+    PinnedDecisionRunner
 } from '@memberjunction/testing-engine';
 import { BootstrapAI, Settle, type AICtx } from './lib/ai-bootstrap';
 import { AuthorFinishIf, ExtractFinishIfGuidance } from '../src/finishif-replay/author';
 import { SelectAuthorCandidates, VendorFailoverChat, type AuthorCandidate } from '../src/finishif-replay/author-chat';
-import { CreateReplayFileSink, PrepareReplayOutputDir, ReadAuthoredCacheFile } from '../src/finishif-replay/files';
+import { CreateReplayFileSink, PrepareReplayOutputDir, ReadAuthoredCacheFile, ReadDecisionCacheFile } from '../src/finishif-replay/files';
 import { FINISH_IF_PRODUCTION_THRESHOLD, FINISH_IF_SWEEP_THRESHOLDS } from '../src/finishif-replay/metrics';
 import { GENERIC_FINISH_IF_QUESTION, type FinishIfReplaySettings } from '../src/finishif-replay/report';
 import {
@@ -61,7 +69,7 @@ const RIG_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = FindRepoRoot(RIG_DIR) ?? resolve(RIG_DIR, '../../../..');
 
 const USAGE = 'usage: finishif-replay.ts --corpus-db <database> --out <dir> [--arms authored,generic] [--reps 2] [--limit N] [--seed 7] '
-    + '[--author-model "<MJ: AI Models name>"] [--decision-prompt "Default Decision"] [--concurrency 4] [--dry-run]';
+    + '[--author-model "<MJ: AI Models name>"] [--decision-prompt "Default Decision"] [--decision-model "<MJ: AI Models name>"] [--concurrency 4] [--dry-run]';
 
 /** IDs per `IN (...)` list, so no one query grows without bound. */
 const ID_CHUNK = 300;
@@ -83,6 +91,7 @@ interface ReplayArgs {
     Seed: number;
     AuthorModel: string | null;
     DecisionPrompt: string;
+    DecisionModel: string | null;
     Concurrency: number;
     DryRun: boolean;
 }
@@ -131,6 +140,7 @@ function parseArgs(argv: readonly string[]): ReplayArgs {
         Seed: readInteger(argv, 'seed', 7, 0) ?? 7,
         AuthorModel: readFlag(argv, 'author-model') ?? null,
         DecisionPrompt: readFlag(argv, 'decision-prompt') ?? AgentDecisionService.DEFAULT_PROMPT_NAME,
+        DecisionModel: readFlag(argv, 'decision-model') ?? null,
         Concurrency: readInteger(argv, 'concurrency', 4, 1) ?? 4,
         DryRun: argv.includes('--dry-run')
     };
@@ -144,6 +154,7 @@ function settingsOf(args: ReplayArgs): FinishIfReplaySettings {
     return {
         CorpusDatabase: args.CorpusDb,
         DecisionPrompt: args.DecisionPrompt,
+        DecisionModel: args.DecisionModel,
         AuthorModel: args.AuthorModel,
         Arms: args.Arms,
         Reps: args.Reps,
@@ -257,16 +268,42 @@ async function buildAuthor(args: ReplayArgs, ctx: AICtx): Promise<FinishIfRoundA
 
 // ─── The decision and its cost, on the dev database ──────────────────────────────────────────
 
+/** The ID of the model `--decision-model` names. */
+function pinnedModelId(modelName: string): string {
+    const target = modelName.trim().toLowerCase();
+    const model = AIEngine.Instance.Models.find(m => (m.Name ?? '').trim().toLowerCase() === target);
+    if (!model) {
+        throw new Error(`No AI model named "${modelName}" to pin the decision to`);
+    }
+    return model.ID;
+}
+
 function buildDecider(args: ReplayArgs, user: UserInfo): FinishIfDecider {
     const target = args.DecisionPrompt.trim().toLowerCase();
-    if (!AIEngine.Instance.Prompts.some(p => (p.Name ?? '').trim().toLowerCase() === target)) {
+    const prompt = AIEngine.Instance.Prompts.find(p => (p.Name ?? '').trim().toLowerCase() === target);
+    if (!prompt) {
         throw new Error(`No decision prompt named "${args.DecisionPrompt}"`);
     }
+    const modelId = args.DecisionModel ? pinnedModelId(args.DecisionModel) : null;
     const service = new AgentDecisionService();
+    // Pinned: the model through the runner's own override, with failover off, as the other rigs pin it.
+    // Otherwise: the service the loop agent's gate calls, which selects the model and fails over.
+    const ask = modelId
+        ? (state: string, questions: Record<string, DecisionQuestion>) => {
+            const params = new AIDecisionParams();
+            params.prompt = prompt;
+            params.contextUser = user;
+            params.State = state;
+            params.Questions = questions;
+            params.override = { modelId };
+            return new PinnedDecisionRunner().ExecuteDecision(params);
+        }
+        : (state: string, questions: Record<string, DecisionQuestion>) =>
+            service.Ask({ State: state, Questions: questions, ContextUser: user, PromptName: args.DecisionPrompt });
     return {
         Decide: async (state, questions): Promise<DecisionReply> => {
             const started = Date.now();
-            const result = await service.Ask({ State: state, Questions: questions, ContextUser: user, PromptName: args.DecisionPrompt });
+            const result = await ask(state, questions);
             return {
                 Success: result.success,
                 Answers: result.Answers,
@@ -331,8 +368,17 @@ async function main(): Promise<void> {
             Now: () => new Date()
         };
         const authoredCache = ReadAuthoredCacheFile(outDir);
-        console.log(`${args.DryRun ? 'DRY RUN: ' : ''}corpus ${args.CorpusDb}; decisions through "${args.DecisionPrompt}" on ${db.Database}; ${authoredCache.size} authored finishIfs cached`);
-        await RunFinishIfReplay({ Settings: settingsOf(args), DryRun: args.DryRun, Concurrency: args.Concurrency, AuthoredCache: authoredCache }, deps);
+        const decisionCache = ReadDecisionCacheFile(outDir);
+        console.log(`${args.DryRun ? 'DRY RUN: ' : ''}corpus ${args.CorpusDb}; decisions through "${args.DecisionPrompt}"`
+            + `${args.DecisionModel ? ` pinned to ${args.DecisionModel}` : ''} on ${db.Database}; `
+            + `${authoredCache.size} authored finishIfs and ${decisionCache.size} decisions cached`);
+        await RunFinishIfReplay({
+            Settings: settingsOf(args),
+            DryRun: args.DryRun,
+            Concurrency: args.Concurrency,
+            AuthoredCache: authoredCache,
+            DecisionCache: decisionCache
+        }, deps);
     } finally {
         await corpus.close();
         await ctx.pool.close();

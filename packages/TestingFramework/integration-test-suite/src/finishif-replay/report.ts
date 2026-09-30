@@ -26,6 +26,8 @@ export const GENERIC_FINISH_IF_QUESTION = 'The action results fully complete wha
 export interface FinishIfReplaySettings {
     CorpusDatabase: string;
     DecisionPrompt: string;
+    /** The decision model every call is pinned to, with failover off; null for the prompt's own selection and failover. */
+    DecisionModel: string | null;
     AuthorModel: string | null;
     Arms: FinishIfReplayArm[];
     Reps: number;
@@ -76,6 +78,8 @@ export interface AuthoringSummary {
 /** One arm's metrics, with its authoring summary for the `authored` arm. */
 export interface ArmReport extends ArmMetrics {
     Authoring: AuthoringSummary | null;
+    /** Of `Calls`, the decisions reused from an earlier run's `decisions.jsonl`, with no call. */
+    CachedCalls: number;
     /** The decided rounds per next step, and how many pass at the production threshold. */
     ProductionByNextStep: NextStepPasses[];
 }
@@ -116,6 +120,8 @@ export interface FinishIfReplayReportInput {
     /** Each sampled round's savings, by round ID. */
     Savings: ReadonlyMap<string, RoundSavings>;
     Observations: readonly GateObservation[];
+    /** The decisions reused from an earlier run, per arm. */
+    CachedCalls: Readonly<Record<FinishIfReplayArm, number>>;
     Authoring: AuthoringSummary | null;
 }
 
@@ -210,6 +216,7 @@ export function BuildFinishIfReplayReport(input: FinishIfReplayReportInput): Fin
         return {
             ...ComputeArmMetrics(arm, outcomes, observations, options),
             Authoring: arm === 'authored' ? input.Authoring : null,
+            CachedCalls: input.CachedCalls[arm],
             ProductionByNextStep: PassesByNextStep(input.Sampled, outcomes, options.ProductionThreshold)
         };
     });
@@ -245,6 +252,7 @@ function renderSettings(settings: FinishIfReplaySettings): string[] {
     return [
         `- Corpus database: \`${settings.CorpusDatabase}\``,
         `- Decision prompt: ${settings.DecisionPrompt}`,
+        `- Decision model: ${settings.DecisionModel ? `${settings.DecisionModel}, pinned, failover off` : "the prompt's own selection, with failover"}`,
         `- Author model: ${settings.AuthorModel ?? '—'}`,
         `- Arms: ${settings.Arms.join(', ')}; reps: ${settings.Reps}; seed: ${settings.Seed}; limit: ${settings.Limit ?? 'none'}`,
         `- Generic question: "${settings.GenericQuestion}"`,
@@ -320,7 +328,7 @@ function renderArmSummary(arm: ArmReport): string[] {
         '',
         ...authoring,
         `- Decided rounds: ${arm.Rounds} (${labels(arm.Labels)}); scored: ${arm.ScoredRounds}.`,
-        `- Decision calls: ${arm.Calls}; failed: ${arm.FailedCalls}; reps without a usable score: ${arm.UnusableReps}.`,
+        `- Decision calls: ${arm.Calls} (${arm.CachedCalls} reused from an earlier run); failed: ${arm.FailedCalls}; reps without a usable score: ${arm.UnusableReps}.`,
         `- Gate score (the minimum probability over the round's questions): AUC ${num(arm.Auc)} ${interval(arm.AucCI)} (runs resampled); calibrated AUC ${num(arm.CalibratedAuc)}; ECE ${num(arm.Ece)} raw, ${num(arm.CalibratedEce)} calibrated.`,
         `- The gate itself: p50 ${num(arm.Gate.LatencyP50Ms, 0)} ms, p95 ${num(arm.Gate.LatencyP95Ms, 0)} ms; ${num(arm.Gate.LatencyMsPer1k, 0)} ms and $${num(arm.Gate.CostUSDPer1k, 4)} per 1k rounds; ${arm.Gate.CallsWithoutCost} calls without a cost.`,
         `- Repeatability of the verdict at ${arm.Production.Threshold}: ${arm.Repeatability.Rounds} rounds with 2+ reps, mean agreement ${pct(arm.Repeatability.MeanVerdictAgreement)}, unanimous ${pct(arm.Repeatability.UnanimousShare)}, mean score SD ${num(arm.Repeatability.MeanScoreStdDev)}.`
