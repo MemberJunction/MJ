@@ -1,5 +1,5 @@
 /**
- * permission-engine.checks.ts — the 'permission-engine' bundle (PE1–PE15): live proof of the
+ * permission-engine.checks.ts — the 'permission-engine' bundle (PE1–PE14, plus PE3b): live proof of the
  * UNIFIED PERMISSIONS model described in guides/UNIFIED_PERMISSIONS_GUIDE.md.
  *
  * TRANSPORT: **CLIENT-FIRST**. Every check here runs over the real GraphQL wire via

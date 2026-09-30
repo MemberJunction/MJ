@@ -26,7 +26,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { BaseEngineRegistry, BaseEntity, Metadata, RunView } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import type { MJActionEntity, MJActionParamEntity, MJAIVendorEntity } from '@memberjunction/core-entities';
 import { PushAbortedError, PushService, SyncEngine } from '@memberjunction/metadata-sync';
 import type { PushCallbacks, PushOptions } from '@memberjunction/metadata-sync';
@@ -517,7 +517,7 @@ async function checkMsp9UncommittedAuthorizationIsVisibleToTheNextDirectory(ctx:
                 if (!message.includes('b-vendors')) {
                     return;
                 }
-                const names = Metadata.Provider?.Authorizations?.map((auth) => auth.Name) ?? [];
+                const names = Metadata.Provider?.Authorizations?.map((auth) => auth.Name) ?? []; // global-provider-ok: the check reads the provider the push reloads
                 seenAtSecondFolder = names.includes(authName);
             },
         });
@@ -529,7 +529,7 @@ async function checkMsp9UncommittedAuthorizationIsVisibleToTheNextDirectory(ctx:
     }
 
     Assert(pushError === undefined, `MSP9: push failed: ${pushError instanceof Error ? pushError.message : String(pushError)}`);
-    Assert(seenAtSecondFolder === true, 'MSP9: the authorization created in the first folder was not in Metadata.Provider.Authorizations when the second folder started');
+    Assert(seenAtSecondFolder === true, 'MSP9: the authorization created in the first folder was not in the provider the push reloads when the second folder started');
 }
 
 /**
@@ -575,7 +575,7 @@ async function checkMsp10OneRecordPushOfARowLevelSecurityFilter(ctx: Integration
         Assert(found.Success, `MSP10: counting the new filter failed: ${found.ErrorMessage}`);
         AssertEqual(found.TotalRowCount, 1, 'MSP10: the pushed filter is not in the database');
     } finally {
-        await deleteAll<BaseEntity>(ctx, entityName, `Name='${name.replace(/'/g, "''")}'`);
+        await deleteAll<BaseEntity>(ctx, entityName, `Name='${EscapeSQLString(name)}'`);
         fs.rmSync(root, { recursive: true, force: true });
     }
 }
