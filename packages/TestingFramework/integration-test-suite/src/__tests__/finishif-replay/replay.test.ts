@@ -202,6 +202,15 @@ describe('RunFinishIfReplay', () => {
         expect(result.Report?.Corpus).toMatchObject({ Rounds: 6, NeverGatedLoopIteration: { Finish: 1, Continue: 0 }, Gated: { Finish: 2, Continue: 1 } });
         expect(result.Plan.NeverGated).toBe(3);
     });
+
+    it('splits the decided rounds by next step at the production threshold, so a Chat reply is not taken for a Success', async () => {
+        const result = await RunFinishIfReplay(options(), harness(BuildCorpus()).Deps);
+        expect(result.Report?.Arms[1].ProductionByNextStep).toEqual([
+            { NextStep: 'Actions', Label: 'continue', Rounds: 1, Passes: 0 },
+            { NextStep: 'Chat', Label: 'finish', Rounds: 1, Passes: 1 },
+            { NextStep: 'Success', Label: 'finish', Rounds: 1, Passes: 1 }
+        ]);
+    });
 });
 
 describe('ObservationFromReply', () => {

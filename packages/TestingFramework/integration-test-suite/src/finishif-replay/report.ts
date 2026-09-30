@@ -6,7 +6,7 @@
  * no action params or results, no authored question.
  */
 import type { ConfidenceInterval } from '@memberjunction/testing-engine';
-import { ComputeArmMetrics, SummarizeRoundOutcomes, type ArmMetricOptions, type ArmMetrics, type SweepRow } from './metrics';
+import { ComputeArmMetrics, PassesByNextStep, SummarizeRoundOutcomes, type ArmMetricOptions, type ArmMetrics, type NextStepPasses, type SweepRow } from './metrics';
 import type {
     FinishIfNextStepName,
     FinishIfReplayArm,
@@ -76,6 +76,8 @@ export interface AuthoringSummary {
 /** One arm's metrics, with its authoring summary for the `authored` arm. */
 export interface ArmReport extends ArmMetrics {
     Authoring: AuthoringSummary | null;
+    /** The decided rounds per next step, and how many pass at the production threshold. */
+    ProductionByNextStep: NextStepPasses[];
 }
 
 /** One round, by ID. */
@@ -122,6 +124,7 @@ export const FINISH_IF_REPLAY_NOTES: readonly string[] = [
     'The corpus is simulated users talking to real MJ agents.',
     "The authored arm's questions are an LLM's reconstruction from the turn that asked for the actions, not what the loop model would have written live.",
     'A label is `finish` when the next turn is Success, or terminates without asking for actions (a Chat reply included); every other next turn is `continue`.',
+    'A loop Chat step always terminates, a clarifying question included, so a `finish` round that ended in a Chat reply may be one where a passing gate would have replaced the question with its pre-written message. The per-next-step table at the production threshold separates them.',
     "Production gates only the Actions step a Loop agent's turn asked for: a ForEach or While loop's iterations, actions after any other kind of turn, and a non-Loop agent's actions are never gated.",
     'Recorded Actions steps do not keep AIDirectives. A round with an action that can return them is treated as never gated.',
     'The state is formatted from the recorded, JSON-serialized results; media outputs keep their data instead of the placeholder production would show.',
@@ -204,7 +207,11 @@ export function BuildFinishIfReplayReport(input: FinishIfReplayReportInput): Fin
     const arms = input.Settings.Arms.map(arm => {
         const observations = input.Observations.filter(o => o.Arm === arm);
         const outcomes = SummarizeRoundOutcomes(input.Sampled, observations, input.Savings);
-        return { ...ComputeArmMetrics(arm, outcomes, observations, options), Authoring: arm === 'authored' ? input.Authoring : null };
+        return {
+            ...ComputeArmMetrics(arm, outcomes, observations, options),
+            Authoring: arm === 'authored' ? input.Authoring : null,
+            ProductionByNextStep: PassesByNextStep(input.Sampled, outcomes, options.ProductionThreshold)
+        };
     });
     return {
         GeneratedAt: input.GeneratedAt,
@@ -286,7 +293,11 @@ function renderProduction(arm: ArmReport): string[] {
         '',
         `- Round scores: skippable share ${pct(p.Raw.SkippableShare)}, false-finish rate ${pct(p.Raw.FalseFinishRate)}, precision ${pct(p.Raw.Precision)}, net ${num(p.Raw.NetLatencySavedMsPer1k, 0)} ms and $${num(p.Raw.NetCostSavedUSDPer1k, 4)} saved per 1k rounds.`,
         `- Calibrated: skippable share ${pct(p.Calibrated?.SkippableShare ?? null)}, false-finish rate ${pct(p.Calibrated?.FalseFinishRate ?? null)}.`,
-        `- Every rep, as \`JudgeFinishIf\` judged it: ${p.PerRep.FinishPasses} of ${p.PerRep.FinishReps} finish reps passed (${pct(p.PerRep.SkippableShare)}), ${p.PerRep.ContinuePasses} of ${p.PerRep.ContinueReps} continue reps passed (${pct(p.PerRep.FalseFinishRate)}).`
+        `- Every rep, as \`JudgeFinishIf\` judged it: ${p.PerRep.FinishPasses} of ${p.PerRep.FinishReps} finish reps passed (${pct(p.PerRep.SkippableShare)}), ${p.PerRep.ContinuePasses} of ${p.PerRep.ContinueReps} continue reps passed (${pct(p.PerRep.FalseFinishRate)}).`,
+        '',
+        '| Next step | Label | Decided rounds | Passing |',
+        '|---|---|---|---|',
+        ...arm.ProductionByNextStep.map(n => `| ${n.NextStep} | ${n.Label} | ${n.Rounds} | ${n.Passes} |`)
     ];
 }
 

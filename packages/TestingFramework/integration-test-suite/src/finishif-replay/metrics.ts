@@ -30,7 +30,7 @@ import {
     type ConfidenceInterval,
     type LabelledProbability
 } from '@memberjunction/testing-engine';
-import type { FinishIfReplayArm, FinishIfReplayLabel, GateObservation, LabelCounts, ReplayRound, RoundSavings } from './types';
+import type { FinishIfNextStepName, FinishIfReplayArm, FinishIfReplayLabel, GateObservation, LabelCounts, ReplayRound, RoundSavings } from './types';
 
 /** The threshold production gates on. */
 export const FINISH_IF_PRODUCTION_THRESHOLD = DEFAULT_LOOP_AGENT_PROMPT_PARAMS.finishIfThreshold;
@@ -373,6 +373,42 @@ export function GateCostSummaryOf(outcomes: readonly RoundOutcome[], observation
         CostUSDPer1k: per1k(outcomes.reduce((sum, o) => sum + (o.GateCostUSD ?? 0), 0), outcomes.length),
         CallsWithoutCost: observations.filter(o => o.CostUSD === null).length
     };
+}
+
+/** Decided rounds per next step and label, and how many of them pass at a threshold. */
+export interface NextStepPasses {
+    NextStep: FinishIfNextStepName;
+    Label: FinishIfReplayLabel;
+    Rounds: number;
+    Passes: number;
+}
+
+/**
+ * The decided rounds per next step and label, and how many pass at the threshold on their round
+ * score, largest group first. It separates a `finish` round that ended in a Success from one that
+ * ended in a Chat reply: every loop Chat step terminates, a clarifying question included, and a
+ * passing gate would have replaced that reply with its pre-written message.
+ *
+ * @param rounds The rounds, with their next steps.
+ * @param outcomes The decided rounds' outcomes.
+ * @param threshold The threshold.
+ */
+export function PassesByNextStep(
+    rounds: ReadonlyArray<Pick<ReplayRound, 'RoundId' | 'NextStep' | 'Label'>>,
+    outcomes: readonly RoundOutcome[],
+    threshold: number
+): NextStepPasses[] {
+    const scores = new Map(outcomes.map(o => [o.RoundId, o.Score] as const));
+    const tally = new Map<string, NextStepPasses>();
+    for (const round of rounds.filter(r => scores.has(r.RoundId))) {
+        const key = `${round.NextStep}|${round.Label}`;
+        const entry = tally.get(key) ?? { NextStep: round.NextStep, Label: round.Label, Rounds: 0, Passes: 0 };
+        const score = scores.get(round.RoundId) ?? null;
+        entry.Rounds++;
+        entry.Passes += score !== null && score >= threshold ? 1 : 0;
+        tally.set(key, entry);
+    }
+    return [...tally.values()].sort((a, b) => b.Rounds - a.Rounds || a.NextStep.localeCompare(b.NextStep) || a.Label.localeCompare(b.Label));
 }
 
 /** Out-of-fold calibrated scores aligned with `outcomes`, or null with too few scored rounds. */
