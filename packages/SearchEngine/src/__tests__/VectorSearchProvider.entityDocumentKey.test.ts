@@ -64,8 +64,16 @@ vi.mock('@memberjunction/aiengine', () => ({
 }));
 
 vi.mock('@memberjunction/ai', () => ({
-    BaseEmbeddings: class {},
     GetAIAPIKey: () => 'key',
+}));
+
+// The query embedding comes from AIEmbeddingRunner: one fixed vector per text.
+vi.mock('@memberjunction/ai-prompts', () => ({
+    AIEmbeddingRunner: class {
+        async RunEmbedding(params: { Texts: string[] }) {
+            return { Success: true, Vectors: params.Texts.map(() => [0.1, 0.2, 0.3]) };
+        }
+    },
 }));
 
 vi.mock('@memberjunction/ai-vectordb', () => ({
@@ -74,6 +82,7 @@ vi.mock('@memberjunction/ai-vectordb', () => ({
 
 vi.mock('@memberjunction/global', () => ({
     MJGlobal: { Instance: { ClassFactory: { CreateInstance: mockCreateInstance } } },
+    NormalizeUUID: (id: string) => id.trim().toLowerCase(),
     UUIDsEqual: (a: string | null | undefined, b: string | null | undefined) =>
         !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase(),
     RegisterClass: () => <T>(target: T) => target,
@@ -103,10 +112,9 @@ function fakeVectorDB(keyedByEntityDocument: boolean, pools: Record<string, Fake
     };
 }
 
-/** Routes ClassFactory: the embedding driver, then the vector DB driver. */
+/** Routes ClassFactory to the vector DB driver; the embedding goes through the mocked AIEmbeddingRunner. */
 function wireDrivers(vectorDB: ReturnType<typeof fakeVectorDB>): void {
-    const embedder = { EmbedText: async () => ({ vector: [0.1, 0.2, 0.3] }) };
-    mockCreateInstance.mockImplementation((_base: object, key: string) => (key === 'LocalEmbedding' ? embedder : vectorDB));
+    mockCreateInstance.mockImplementation(() => vectorDB);
 }
 
 function match(id: string, score: number, recordID: string): FakeMatch {
