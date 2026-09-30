@@ -121,6 +121,8 @@ flowchart LR
 
 The chain is **bidirectional** — `_parentEntity` links upward and `_childEntity` links downward. Both directions share the **same object instances**, so dirty state, PK values, and field values are always in sync.
 
+A chain built from the child is linked both ways. `GetEntityObject('Webinars')` then `NewRecord()` points each parent that does not allow multiple subtypes back at that webinar, so `meeting.LeafEntity` and `product.LeafEntity` are the webinar. A parent save hook therefore sees the child's dirty fields, their old values, and their new values. `AttachToParent()` keeps that link when the parent row loads and when it is missing.
+
 When you work with a `WebinarEntity`:
 - `webinar.Set('StreamURL', '...')` → sets on Webinar's own fields
 - `webinar.Set('Name', '...')` → routes to `_parentEntity._parentEntity.Set('Name', ...)`
@@ -483,6 +485,10 @@ sequenceDiagram
 
 This order is required because of foreign key constraints — the child row references the parent row.
 
+A parent `Delete()` that the leaf calls with `IsParentEntityDelete` returns after that row is deleted. The call the application awaits is the leaf's.
+
+The GraphQL client sends one delete for the chain. `Delete()` with `IsParentEntityDelete` records success and does not send a second mutation for a row the leaf's mutation already removed.
+
 ### Parent Delete Protection
 
 If you try to delete a Product that has a Meeting record:
@@ -695,6 +701,10 @@ webinar.NewRecord();
 ```
 
 You never set the ID yourself — that shared key IS the relationship.
+
+### EnsureISAChild on a new record
+
+`EnsureISAChild()` attaches the declared child and copies the shared key onto it. A record that is not saved yet has no child row to read, so this does not load one. A saved parent still reads, and an empty result is an answer rather than a logged error.
 
 ## Provider Implementation
 

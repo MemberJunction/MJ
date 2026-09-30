@@ -9,11 +9,12 @@
  */
 
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { BaseReranker, RerankParams, RerankResult } from '@memberjunction/ai';
+import { BaseReranker, ModelUsage, RerankParams, RerankResponse, RerankResult } from '@memberjunction/ai';
 import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import type { AIPromptRunResult } from '@memberjunction/ai-core-plus';
 
 /**
  * Result item from LLM reranking response
@@ -64,6 +65,18 @@ export class LLMReranker extends BaseReranker {
     private _contextUser: UserInfo;
     private _promptRunner: AIPromptRunner;
     private _cachedPrompt: MJAIPromptEntityExtended | null = null;
+    /**
+     * The chat call's usage for each rerank in flight, keyed by that call's params, from `doRerank`
+     * until `Rerank` puts it on the response. Keyed per call, so concurrent reranks never mix costs.
+     */
+    private _usageByCall = new WeakMap<RerankParams, ModelUsage>();
+
+    /**
+     * The `MJ: AI Prompt Runs` row this rerank is recorded under. When set, the chat prompt's run
+     * is created as its child (`ParentID`), so the chat call's cost rolls up to the rerank's run.
+     * `AIRerankerRunner` sets it to its own run before it calls the driver.
+     */
+    public ParentPromptRunID?: string;
 
     /**
      * Create a new LLMReranker instance.
@@ -177,6 +190,21 @@ export class LLMReranker extends BaseReranker {
     }
 
     /**
+     * Reranks through `BaseReranker.Rerank`, then puts the chat call's usage and cost on the
+     * response as `Usage`. A failed response carries them too, because a failed call still cost a
+     * model call. No `Usage` when the chat prompt never ran.
+     */
+    public override async Rerank(params: RerankParams): Promise<RerankResponse> {
+        const response = await super.Rerank(params);
+        const usage = this._usageByCall.get(params);
+        if (usage) {
+            this._usageByCall.delete(params);
+            response.Usage = usage;
+        }
+        return response;
+    }
+
+    /**
      * Rerank documents using an LLM via the AI Prompts system.
      *
      * The method:
@@ -197,6 +225,9 @@ export class LLMReranker extends BaseReranker {
         promptParams.prompt = prompt;
         promptParams.contextUser = this._contextUser;
         promptParams.attemptJSONRepair = true;
+        if (this.ParentPromptRunID) {
+            promptParams.parentPromptRunId = this.ParentPromptRunID;
+        }
 
         // Set template data for the rerank prompt
         promptParams.data = {
@@ -211,6 +242,11 @@ export class LLMReranker extends BaseReranker {
         LogStatus(`LLMReranker: Query: "${params.query}"`);
         LogStatus(`LLMReranker: Documents:\n${this.formatDocumentsForPrompt(params.documents)}`);
         const result = await this._promptRunner.ExecutePrompt(promptParams);
+        // The chat run's cost is computed when its row is saved, and the runner saves it
+        // fire-and-forget. Wait for the save, so recordUsage can read the cost, and so the save's
+        // cost rollup to the parent run lands before the parent run is finalized.
+        await this._promptRunner.WaitForPendingPromptRunSaves();
+        this.recordUsage(params, result);
 
         if (!result.success) {
             throw new Error(`LLMReranker: Prompt execution failed: ${result.errorMessage || 'Unknown error'}`);
@@ -223,6 +259,48 @@ export class LLMReranker extends BaseReranker {
         const parsed = this.parseRankingResponse(output, params.documents);
         LogStatus(`LLMReranker: Parsed ${parsed.length} results with scores: ${parsed.map(r => r.relevanceScore.toFixed(2)).join(', ')}`);
         return parsed;
+    }
+
+    /**
+     * Records the chat call's tokens and cost for this rerank, for `Rerank` to put on the response.
+     * Recorded whenever the prompt ran, because a failed call still cost a model call.
+     */
+    private recordUsage(params: RerankParams, promptResult: AIPromptRunResult): void {
+        const cost = this.resolveCost(promptResult);
+        this._usageByCall.set(params, new ModelUsage(
+            promptResult.promptTokens ?? 0,
+            promptResult.completionTokens ?? 0,
+            cost.cost,
+            cost.currency
+        ));
+    }
+
+    /**
+     * The chat call's cost. The runner's reported cost wins when it has one. Otherwise it is the
+     * chat run's saved cost, which the server computes when the run is saved: `TotalCost`, else
+     * `Cost`. Unset when neither is known.
+     */
+    private resolveCost(promptResult: AIPromptRunResult): { cost?: number; currency?: string } {
+        if (promptResult.cost !== undefined) {
+            return { cost: promptResult.cost, currency: promptResult.costCurrency };
+        }
+        const run = promptResult.promptRun;
+        const runCost = run ? this.savedRunCost(run) : undefined;
+        if (runCost === undefined) {
+            return { currency: promptResult.costCurrency };
+        }
+        return { cost: runCost, currency: run?.CostCurrency ?? promptResult.costCurrency };
+    }
+
+    /**
+     * A saved run's cost: `TotalCost`, else `Cost`. The server writes `TotalCost = 0` for a run it
+     * could not price, so `TotalCost` counts only when the run has a `Cost` or a `DescendantCost`.
+     */
+    private savedRunCost(run: NonNullable<AIPromptRunResult['promptRun']>): number | undefined {
+        if (run.Cost == null && run.DescendantCost == null) {
+            return undefined;
+        }
+        return run.TotalCost ?? run.Cost ?? undefined;
     }
 }
 
