@@ -2,12 +2,20 @@ import { describe, it, expect } from 'vitest';
 import { Component, Directive, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { By } from '@angular/platform-browser';
+import { TestBed } from '@angular/core/testing';
 import { renderComponentFixture, query } from '@memberjunction/ng-test-utils';
 import type { IMetadataProvider } from '@memberjunction/core';
 import type { FormContributionSpec } from '@memberjunction/interactive-component-types/forms';
 import { MjIconPickerComponent } from '@memberjunction/ng-ui-components';
 import { MjFormPlacementDialogComponent } from './form-placement-dialog.component';
-import type { FormPlacementContext, FormPlacementDecision } from './form-placement';
+import { FormSlotProbeService, type ProbedFormShape } from './form-slot-probe.service';
+import {
+    PlacementStateFromContribution,
+    type FormPlacementContext,
+    type FormPlacementDecision,
+    type FormPlacementState,
+} from './form-placement';
 
 /**
  * DOM coverage for the placement dialog — the one surface between a generated panel and a
@@ -902,5 +910,133 @@ describe('MjFormPlacementDialogComponent (DOM) — the read-only form preview', 
         f.detectChanges();
         expect(f.componentInstance.PreviewSpec).toMatchObject({ inSectionKey: 'dates', sectionPosition: 'end' });
         expect(f.componentInstance.PlacementLine).toBe('At the bottom of the Dates section');
+    });
+});
+
+/**
+ * The Manage drawer opens the dialog on a saved row and seeds it with the row's placement. The
+ * host below binds the inputs in the drawer's template order, since Angular sets them in that
+ * order: the seed must land whichever of Context, Proposal and SeedState arrives last, and a
+ * probe that answers later must not undo what the user has changed since.
+ */
+describe('MjFormPlacementDialogComponent (DOM) — editing a saved row', () => {
+    const GRID_ROW: FormContributionSpec = {
+        slot: 'after-fields', presentation: 'panel', title: 'Enrollments', sortKey: 0,
+        relatedEntity: 'MoreCheese: Course Enrollments', relatedJoinField: 'CourseID',
+        contributionKey: 'related:MoreCheese: Course Enrollments:CourseID',
+    };
+
+    /** The context the drawer builds: no sections, slots or rail until the dialog reads the form. */
+    const DRAWER_CONTEXT: FormPlacementContext = {
+        ...CONTEXT, Sections: [], Existing: [], SlotsPresent: [], SlotsVerified: false,
+        Rail: [], TargetsVerified: false,
+    };
+
+    @Component({
+        standalone: false,
+        selector: 'mj-test-edit-host',
+        template: `
+          <mj-form-placement-dialog
+            [Provider]="Provider"
+            [Context]="Context"
+            [Proposal]="Proposal"
+            [ComponentName]="'Enrollments'"
+            [SeedState]="Seed"
+            [RecordKey]="null"
+            [ReplacesRowID]="'ROW-1'"
+            [PanelComponentID]="null"
+            (Applied)="Decision = $event">
+          </mj-form-placement-dialog>`,
+    })
+    class EditHost {
+        public Provider: IMetadataProvider | null = null;
+        public Context: FormPlacementContext = DRAWER_CONTEXT;
+        public Proposal: FormContributionSpec = GRID_ROW;
+        public Decision: FormPlacementDecision | null = null;
+        /** What the drawer's seed does: read the row back against the dialog's context, switched on. */
+        public Seed = (dialog: { State: FormPlacementState; Context: FormPlacementContext }): void => {
+            dialog.State = PlacementStateFromContribution(this.Proposal, dialog.Context, true);
+        };
+    }
+
+    /** A probe that answers only when the test says so. */
+    function deferredProbe() {
+        let answer: (shape: ProbedFormShape) => void = () => undefined;
+        const pending = new Promise<ProbedFormShape>((resolve) => { answer = resolve; });
+        return { service: { Probe: () => pending }, answer };
+    }
+
+    function mount(context: FormPlacementContext, proposal: FormContributionSpec, probe = deferredProbe()) {
+        TestBed.configureTestingModule({
+            imports: [CommonModule, FormsModule, AlertStub, ButtonStub, MjIconPickerComponent, PreviewStub],
+            declarations: [MjFormPlacementDialogComponent, EditHost],
+            providers: [{ provide: FormSlotProbeService, useValue: probe.service }],
+        });
+        const fixture = TestBed.createComponent(EditHost);
+        fixture.componentInstance.Context = context;
+        fixture.componentInstance.Proposal = proposal;
+        fixture.detectChanges();
+        const dialog = fixture.debugElement.query(By.directive(MjFormPlacementDialogComponent))
+            .componentInstance as MjFormPlacementDialogComponent;
+        return { fixture, dialog, probe };
+    }
+
+    describe('behind a full custom form, where the form is never read', () => {
+        const fullCustom: FormPlacementContext = { ...DRAWER_CONTEXT, FullCustomForm: true };
+
+        it('opens on the row\'s placement and status', () => {
+            const { dialog } = mount(fullCustom, GRID_ROW);
+            expect(dialog.State.ReplaceMode).toBe('related');
+            expect(dialog.State.ActivateNow).toBe(true);
+        });
+
+        it('keeps the row\'s grid claim and status on Apply', () => {
+            const { fixture, dialog } = mount(fullCustom, GRID_ROW);
+            dialog.OnApply();
+            const decision = fixture.componentInstance.Decision!;
+            expect(decision.ActivateNow).toBe(true);
+            expect(decision.Contribution).toMatchObject({
+                relatedEntity: 'MoreCheese: Course Enrollments', relatedJoinField: 'CourseID',
+            });
+        });
+
+        it('keeps a section claim on Apply', () => {
+            const sectionRow: FormContributionSpec = { slot: 'before-fields', presentation: 'panel', title: 'Summary', replacesSectionKey: 'details' };
+            const { fixture, dialog } = mount(fullCustom, sectionRow);
+            dialog.OnApply();
+            expect(fixture.componentInstance.Decision!.Contribution.replacesSectionKey).toBe('details');
+        });
+    });
+
+    describe('when the form is read after the dialog opens', () => {
+        const shape: ProbedFormShape = {
+            Slots: ['before-fields', 'after-fields', 'after-related', 'after-everything'],
+            Sections: [{ Key: 'details', Title: 'Details', Fields: [{ Name: 'Name', Label: 'Name' }, { Name: 'Code', Label: 'Code' }] }],
+            Panels: [], Groups: [], Layout: 'accordion',
+        };
+        const fieldRow: FormContributionSpec = {
+            slot: 'after-fields', presentation: 'panel', title: 'Identity', replacesFieldNames: ['Name'],
+        };
+
+        async function answer(mounted: ReturnType<typeof mount>): Promise<void> {
+            mounted.probe.answer(shape);
+            await mounted.fixture.whenStable();
+            mounted.fixture.detectChanges();
+        }
+
+        it('reads the row back against the form it found, when the user has changed nothing', async () => {
+            const mounted = mount(DRAWER_CONTEXT, fieldRow);
+            await answer(mounted);
+            expect(mounted.dialog.State.ReplaceMode).toBe('field');
+            expect(mounted.dialog.State.ReplaceFieldSectionKey).toBe('details');
+            expect(mounted.dialog.State.ReplaceFieldNames).toEqual(['Name']);
+        });
+
+        it('keeps what the user changed before the form was read', async () => {
+            const mounted = mount(DRAWER_CONTEXT, fieldRow);
+            mounted.dialog.State = { ...mounted.dialog.State, Title: 'Who they are' };
+            await answer(mounted);
+            expect(mounted.dialog.State.Title).toBe('Who they are');
+        });
     });
 });

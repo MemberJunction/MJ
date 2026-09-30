@@ -56,30 +56,36 @@ import type { ComponentSpec } from '@memberjunction/interactive-component-types'
     styleUrls: ['./form-placement-dialog.component.css'],
 })
 export class MjFormPlacementDialogComponent extends BaseAngularComponent {
-    /** What the form contains. Setting it re-seeds the answers. */
+    /** What the form contains. Setting it resets the answers. */
     @Input()
     set Context(value: FormPlacementContext) {
         this._context = value;
-        this.State = InitialPlacementState(this._proposal, value);
-        this.SeedState?.(this);
+        this.hasContext = true;
+        this.resetState();
         void this.probeSlots();
     }
     get Context(): FormPlacementContext { return this._context; }
 
     /**
-     * A hook to overwrite the starting answers once the context is in.
+     * A hook to overwrite the starting answers.
      *
      * A new panel starts from a fixed default, deliberately. Editing one already on the
      * form has to start from what it is doing now, and only the caller knows that — the
-     * dialog is handed a context, not a row.
+     * dialog is handed a context, not a row. It runs once the context, the proposal and the
+     * hook are all set, in whatever order they arrive.
      */
-    @Input() SeedState: ((dialog: MjFormPlacementDialogComponent) => void) | null = null;
+    @Input()
+    set SeedState(value: ((dialog: MjFormPlacementDialogComponent) => void) | null) {
+        this._seedState = value;
+        this.resetState();
+    }
+    get SeedState(): ((dialog: MjFormPlacementDialogComponent) => void) | null { return this._seedState; }
 
     /** The component's own registration intent. Only identity fields are read from it. */
     @Input()
     set Proposal(value: FormContributionSpec | null) {
         this._proposal = value;
-        this.State = InitialPlacementState(value, this._context);
+        this.resetState();
     }
     get Proposal(): FormContributionSpec | null { return this._proposal; }
 
@@ -129,8 +135,31 @@ export class MjFormPlacementDialogComponent extends BaseAngularComponent {
         TargetsVerified: false,
     };
     private _proposal: FormContributionSpec | null = null;
+    private _seedState: ((dialog: MjFormPlacementDialogComponent) => void) | null = null;
+    private hasContext = false;
+    /** The answers as the seed left them, or null when no seed has run. */
+    private seededAnswers: string | null = null;
 
     public State: FormPlacementState = InitialPlacementState(null, this._context);
+
+    /** Starts the answers from the default, then from the caller's seed when it can run. */
+    private resetState(): void {
+        this.State = InitialPlacementState(this._proposal, this._context);
+        this.seededAnswers = null;
+        this.applySeed();
+    }
+
+    /** Runs the caller's seed once the context, the proposal and the seed are all set. */
+    private applySeed(): void {
+        if (!this.hasContext || !this._proposal || !this._seedState) return;
+        this._seedState(this);
+        this.seededAnswers = JSON.stringify(this.State);
+    }
+
+    /** True while the answers are still the ones the seed produced. */
+    private get unchangedSinceSeed(): boolean {
+        return this.seededAnswers !== null && JSON.stringify(this.State) === this.seededAnswers;
+    }
 
     /**
      * The positions to offer. Once the form's own set is known, a slot it does not emit is
@@ -385,6 +414,7 @@ export class MjFormPlacementDialogComponent extends BaseAngularComponent {
         try {
             const shape = await this.probe.Probe(this.viewContainer, entity, this.ProviderToUse);
             if (shape.Slots.length === 0 || this._context.EntityName !== entity) return;
+            const reseed = this.unchangedSinceSeed;
             this._context = {
                 ...this._context,
                 SlotsPresent: shape.Slots,
@@ -405,9 +435,9 @@ export class MjFormPlacementDialogComponent extends BaseAngularComponent {
             if (!this._context.Rail.some((item) => item.Key === this.State.ReplaceRailKey)) {
                 this.State = { ...this.State, ReplaceRailKey: DefaultRailKeyFor(this._context) };
             }
-            // Re-seed: the caller's answers were set against a context with no sections
-            // or slots in it, so the checks above may have just discarded them.
-            this.SeedState?.(this);
+            // The seed ran against a context with no sections or slots in it, so it runs again
+            // against the form's own — unless the user has changed an answer since.
+            if (reseed) this.applySeed();
             if (!SlotIsOnForm(this._context, this.State.Slot)) {
                 this.State = { ...this.State, Slot: DefaultSlotFor(this._context) };
             }
