@@ -396,52 +396,61 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      */
     public async Config(configData: GraphQLProviderConfigData, providerToUse?: IMetadataProvider, separateConnection?: boolean, forceRefreshSessionId?: boolean): Promise<boolean> {
         try {
-            // Enhanced logging to diagnose token issues
-            // const tokenPreview = configData.Token ? `${configData.Token.substring(0, 20)}...${configData.Token.substring(configData.Token.length - 10)}` : 'NO TOKEN';
-            // console.log('[GraphQL] Config called with token:', {
-            //     tokenPreview,
-            //     tokenLength: configData.Token?.length,
-            //     separateConnection,
-            //     hasRefreshFunction: !!configData.Data?.RefreshTokenFunction
-            // });
-
-            // CRITICAL: Always set this instance's _configData first
-            // This ensures BuildDatasetFilterFromConfig() can access ConfigData.IncludeSchemas
-            this._configData = configData;
-
-            if (separateConnection) {
-                // Get UUID after setting the configData, so that it can be used to get any stored session ID
-                this._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
-
-                this._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, this._sessionId, configData.MJAPIKey, configData.UserAPIKey);
-                // Store the session ID for this connection
-                await this.saveStoredSessionID(this._sessionId);
-            }
-            else {
-                // Update the singleton instance
-                GraphQLDataProvider.Instance._configData = configData;
-
-                if (GraphQLDataProvider.Instance._sessionId === undefined) {
-                    GraphQLDataProvider.Instance._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
-                }
-
-                // now create the new client, if it isn't already created
-                if (!GraphQLDataProvider.Instance._client)
-                    GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId, configData.MJAPIKey, configData.UserAPIKey);
-
-                // Store the session ID for the global instance
-                await GraphQLDataProvider.Instance.saveStoredSessionID(GraphQLDataProvider.Instance._sessionId);
-
-                // CRITICAL: Sync this instance with the singleton
-                // This ensures ExecuteGQL() can use this._client.request()
-                this._sessionId = GraphQLDataProvider.Instance._sessionId;
-                this._client = GraphQLDataProvider.Instance._client;
-            }
+            await this.connectClient(configData, separateConnection, forceRefreshSessionId);
             return super.Config(configData); // now parent class can do it's config
         }
         catch (e) {
             LogError(e);
             throw (e)
+        }
+    }
+
+    /**
+     * The connection half of {@link Config}: stores the config, resolves the session id and creates the
+     * GraphQL client (this instance's own client when separateConnection is true, otherwise the shared
+     * singleton client). Loads no metadata.
+     */
+    private async connectClient(configData: GraphQLProviderConfigData, separateConnection?: boolean, forceRefreshSessionId?: boolean): Promise<void> {
+        // Enhanced logging to diagnose token issues
+        // const tokenPreview = configData.Token ? `${configData.Token.substring(0, 20)}...${configData.Token.substring(configData.Token.length - 10)}` : 'NO TOKEN';
+        // console.log('[GraphQL] Config called with token:', {
+        //     tokenPreview,
+        //     tokenLength: configData.Token?.length,
+        //     separateConnection,
+        //     hasRefreshFunction: !!configData.Data?.RefreshTokenFunction
+        // });
+
+        // CRITICAL: Always set this instance's _configData first
+        // This ensures BuildDatasetFilterFromConfig() can access ConfigData.IncludeSchemas
+        this._configData = configData;
+
+        if (separateConnection) {
+            // Get UUID after setting the configData, so that it can be used to get any stored session ID
+            this._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
+
+            this._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, this._sessionId, configData.MJAPIKey, configData.UserAPIKey);
+            // Store the session ID for this connection
+            await this.saveStoredSessionID(this._sessionId);
+        }
+        else {
+            // Update the singleton instance
+            GraphQLDataProvider.Instance._configData = configData;
+
+            if (GraphQLDataProvider.Instance._sessionId === undefined) {
+                GraphQLDataProvider.Instance._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
+            }
+
+            // now create the new client, if it isn't already created
+            if (!GraphQLDataProvider.Instance._client)
+                GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId, configData.MJAPIKey, configData.UserAPIKey);
+
+            // Store the session ID for the global instance
+            await GraphQLDataProvider.Instance.saveStoredSessionID(GraphQLDataProvider.Instance._sessionId);
+
+            // CRITICAL: Sync this instance with the singleton
+            // This ensures ExecuteGQL() can use this._client.request()
+            this._sessionId = GraphQLDataProvider.Instance._sessionId;
+            this._client = GraphQLDataProvider.Instance._client;
         }
     }
 
