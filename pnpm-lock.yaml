@@ -11667,6 +11667,9 @@ importers:
       '@memberjunction/doc-utils':
         specifier: 6.2.0-edge.1
         version: link:../DocUtils
+      '@memberjunction/feature-pipelines':
+        specifier: 6.2.0-edge.1
+        version: link:../AI/Knowledge/FeaturePipelines
       '@memberjunction/generic-database-provider':
         specifier: 6.2.0-edge.1
         version: link:../GenericDatabaseProvider
