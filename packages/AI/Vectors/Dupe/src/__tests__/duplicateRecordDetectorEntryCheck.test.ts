@@ -80,7 +80,9 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     return { ...actual, LogError: vi.fn(), LogStatus: vi.fn() };
 });
 
-vi.mock('@memberjunction/ai', () => ({
+// The decision provider calibrates with the real Platt scaling.
+vi.mock('@memberjunction/ai', async (importOriginal) => ({
+    ApplyPlattCalibration: (await importOriginal<typeof import('@memberjunction/ai')>()).ApplyPlattCalibration,
     BaseEmbeddings: class {
         EmbedTexts = mocks.EmbedTexts;
     },
@@ -187,6 +189,7 @@ import { DuplicateRecordDetector } from '../duplicateRecordDetector';
 import '../reasoning/PromptReasoningProvider';
 import '../reasoning/DecisionReasoningProvider';
 import '../reasoning/DecisionThenPromptReasoningProvider';
+import { ANSWERING_MODEL, RawFor } from './helpers/decisionCalibration';
 
 // The mocked embedding and vector-database base classes are the doubles; register them under the
 // driver keys the fixtures name, as a provider package registers its real subclass.
@@ -276,17 +279,20 @@ async function loadedAccount(row: object): Promise<AccountRecord> {
     return record;
 }
 
-/** Answers each Likelihood with the probability of the candidate its instructions name; unnamed ones get no answer. */
+/**
+ * Answers each Likelihood, as {@link ANSWERING_MODEL}, so that the candidate its instructions name
+ * gets the **calibrated** probability given here; unnamed ones get no answer.
+ */
 function answerByRecord(probabilities: Record<string, number>): void {
     mocks.ExecuteDecision.mockImplementation(async (params: AIDecisionParams) => {
         const answers: Record<string, DecisionAnswer> = {};
         for (const [key, question] of Object.entries(params.Questions)) {
             const recordID = Object.keys(probabilities).find(id => question.Instructions.includes(`(recordId ${id})`));
             if (recordID !== undefined) {
-                answers[key] = { Kind: 'Likelihood', Probability: probabilities[recordID] };
+                answers[key] = { Kind: 'Likelihood', Probability: RawFor(probabilities[recordID]) };
             }
         }
-        return { success: true, Answers: answers };
+        return { success: true, Answers: answers, modelInfo: ANSWERING_MODEL };
     });
 }
 
@@ -314,7 +320,7 @@ describe('DuplicateRecordDetector.CheckRecordValues', () => {
         mocks.RenderTemplate.mockImplementation(async (_t, _c, data) => ({ Success: true, Output: `${data['Name']} | ${data['City']}` }));
         mocks.EmbedTexts.mockResolvedValue({ vectors: [[0.1, 0.2, 0.3]] });
         mocks.QueryIndex.mockResolvedValue({ success: true, data: { matches: MATCHES } });
-        answerByRecord({ 'cand-a': 0.6, 'cand-b': 0.9, 'cand-c': 0.2 });
+        answerByRecord({ 'cand-a': 0.8, 'cand-b': 0.9, 'cand-c': 0.2 });
     });
 
     describe('the switch', () => {
@@ -390,18 +396,18 @@ describe('DuplicateRecordDetector.CheckRecordValues', () => {
 
             expect(result.Status).toBe('Checked');
             expect(result.Candidates).toEqual([
-                { RecordID: 'cand-b', DisplayName: 'Acme Inc', VectorScore: 0.9, Probability: 0.9 },
-                { RecordID: 'cand-a', DisplayName: 'Acme Corp', VectorScore: 0.95, Probability: 0.6 },
+                { RecordID: 'cand-b', DisplayName: 'Acme Inc', VectorScore: 0.9, Probability: expect.closeTo(0.9, 10) },
+                { RecordID: 'cand-a', DisplayName: 'Acme Corp', VectorScore: 0.95, Probability: expect.closeTo(0.8, 10) },
             ]);
             expect(result.ElapsedMs).toBeGreaterThanOrEqual(0);
         });
 
         it('flags a candidate the decision gave no answer for, after the answered ones', async () => {
-            answerByRecord({ 'cand-a': 0.7, 'cand-b': 0.1 });
+            answerByRecord({ 'cand-a': 0.8, 'cand-b': 0.1 });
 
             const result = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, undefined, USER);
 
-            expect(result.Candidates.map(c => [c.RecordID, c.Probability])).toEqual([['cand-a', 0.7], ['cand-c', null]]);
+            expect(result.Candidates.map(c => [c.RecordID, c.Probability])).toEqual([['cand-a', expect.closeTo(0.8, 10)], ['cand-c', null]]);
         });
 
         it('asks only the decision in DecisionThenPrompt mode', async () => {

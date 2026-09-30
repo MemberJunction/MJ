@@ -54,7 +54,9 @@ vi.mock('@memberjunction/core', () => {
     };
 });
 
-vi.mock('@memberjunction/ai', () => ({
+// The decision provider calibrates with the real Platt scaling.
+vi.mock('@memberjunction/ai', async (importOriginal) => ({
+    ApplyPlattCalibration: (await importOriginal<typeof import('@memberjunction/ai')>()).ApplyPlattCalibration,
     BaseEmbeddings: vi.fn(),
     GetAIAPIKey: vi.fn().mockReturnValue('mock-api-key'),
 }));
@@ -118,6 +120,7 @@ import { DecisionReasoningProvider } from '../reasoning/DecisionReasoningProvide
 import { DecisionThenPromptReasoningProvider } from '../reasoning/DecisionThenPromptReasoningProvider';
 import { DuplicateReasoningProvider } from '../reasoning/DuplicateReasoningProvider';
 import { DuplicateReasoningOutput } from '../reasoning/DuplicateReasoningTypes';
+import { ANSWERING_MODEL, RawFor } from './helpers/decisionCalibration';
 
 // ─────────────────────────────────────────────
 // Typed access to the detector's protected pipeline steps. As in the neighbouring detector
@@ -188,17 +191,20 @@ function promptRunResult(result: Record<string, unknown>, runID: string): AIProm
     return { success: true, result, promptRun: runRow(runID), chatResult: {} as ChatResult };
 }
 
-/** Answers each question with the probability of the candidate its instructions name. */
+/**
+ * Answers each question, as {@link ANSWERING_MODEL}, so that the candidate its instructions name
+ * gets the **calibrated** probability given here.
+ */
 function answerByRecord(probabilities: Record<string, number>): void {
     mockExecuteDecision.mockImplementation(async (params: AIDecisionParams) => {
         const answers: Record<string, DecisionAnswer> = {};
         for (const [key, question] of Object.entries(params.Questions)) {
             const recordID = Object.keys(probabilities).find(id => question.Instructions.includes(`(recordId ${id})`));
             if (recordID !== undefined) {
-                answers[key] = { Kind: 'Likelihood', Probability: probabilities[recordID] };
+                answers[key] = { Kind: 'Likelihood', Probability: RawFor(probabilities[recordID]) };
             }
         }
-        return { success: true, Answers: answers, promptRun: runRow('decision-run-1') };
+        return { success: true, Answers: answers, promptRun: runRow('decision-run-1'), modelInfo: ANSWERING_MODEL };
     });
 }
 
@@ -280,7 +286,8 @@ describe('DuplicateRecordDetector — decision reasoning modes', () => {
         });
 
         it('stamps each candidate with its own band', async () => {
-            answerByRecord({ 'cand-a': 0.8, 'cand-b': 0.3, 'cand-c': 0.5 });
+            const threshold = DecisionReasoningProvider.DEFAULT_UNCERTAIN_ABOVE;
+            answerByRecord({ 'cand-a': 0.8, 'cand-b': 0.3, 'cand-c': threshold + 0.01 });
             const { output } = await reasonOverSet('Decision');
 
             const recommendations = CANDIDATE_IDS.map(id => {

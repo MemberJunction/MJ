@@ -121,6 +121,9 @@ export function ComputeRetrievalMetrics(checks: readonly RecordCheckObservation[
  * Evaluates pairwise performance for an arm on a subset of record checks.
  * Includes retrieval misses as false negatives: total actual positive pairs equals
  * the total number of duplicate records evaluated.
+ *
+ * `decisionThreshold`, when given, bands the `decision` arm's raw DecisionProbability instead of
+ * its DecisionFlagged. The `decision · production` arm ignores it.
  */
 export function EvaluateArmConfusion(
     checks: readonly RecordCheckObservation[],
@@ -155,11 +158,10 @@ export function EvaluateArmConfusion(
                     flagged = candidate.DecisionFlagged;
                 }
             } else if (arm === 'decision · production') {
-                if (decisionThreshold != null) {
-                    flagged = candidate.PassedThreshold && (candidate.DecisionProbability ?? 0) >= decisionThreshold;
-                } else {
-                    flagged = candidate.PassedThreshold && candidate.DecisionFlagged;
-                }
+                // Production's rule, whatever decisionThreshold says: the vector threshold, then the
+                // provider's band on the calibrated probability (DecisionFlagged). DecisionProbability
+                // is raw, so banding it here would not be production.
+                flagged = candidate.PassedThreshold && candidate.DecisionFlagged;
             } else if (arm === 'prompt') {
                 flagged = candidate.PromptFlagged;
             } else if (arm === 'prompt · production') {
@@ -669,9 +671,8 @@ export function ComputeRepeatability(
             if (cand1.DecisionProbability !== null && cand2.DecisionProbability !== null) {
                 decisionDiffs.push(Math.abs(cand1.DecisionProbability - cand2.DecisionProbability));
                 decisionPairs++;
-                const verdict1 = cand1.DecisionProbability >= 0.5;
-                const verdict2 = cand2.DecisionProbability >= 0.5;
-                if (verdict1 === verdict2) {
+                // The verdict is production's flag (the calibrated band), not the raw probability.
+                if (cand1.DecisionFlagged === cand2.DecisionFlagged) {
                     decisionAgreements++;
                 }
             }

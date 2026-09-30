@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AIDecisionParams, AIDecisionRunResult } from '@memberjunction/ai-prompts';
+import type { ModelInfo } from '@memberjunction/ai-core-plus';
 import type { DecisionAnswer } from '@memberjunction/ai';
 import type { UserInfo } from '@memberjunction/core';
 import type { MJAIPromptRunEntity, MJEntityDocumentEntity } from '@memberjunction/core-entities';
@@ -34,8 +35,14 @@ vi.mock('@memberjunction/ai-prompts', () => ({
     AIDecisionParams: class { Questions = {}; },
 }));
 
-import { DecisionReasoningProvider } from '../reasoning/DecisionReasoningProvider';
+import {
+    CalibratedDuplicateProbability,
+    DecisionReasoningProvider,
+    DUPLICATE_DECISION_CALIBRATION,
+    DuplicateDecisionResult,
+} from '../reasoning/DecisionReasoningProvider';
 import { DuplicateReasoningInput, DuplicateReasoningOutput } from '../reasoning/DuplicateReasoningTypes';
+import { ANSWERING_MODEL, RawFor } from './helpers/decisionCalibration';
 
 // ─────────────────────────────────────────────
 // Fixtures
@@ -84,8 +91,11 @@ function probabilityNamedIn(instructions: string, probabilities: Record<string, 
     return recordID === undefined ? undefined : probabilities[recordID];
 }
 
-/** Answers each question with the probability of the candidate it names. Unnamed candidates get no answer. */
-function answerByRecord(probabilities: Record<string, number>): void {
+/**
+ * Answers each question, as `model`, with the **raw** probability of the candidate it names. Unnamed
+ * candidates get no answer. A null `model` is a run that names no model.
+ */
+function answerRawByRecord(probabilities: Record<string, number>, model: ModelInfo | null = ANSWERING_MODEL): void {
     mockExecuteDecision.mockImplementation(async (params: AIDecisionParams) => {
         const answers: Record<string, DecisionAnswer> = {};
         for (const [key, question] of Object.entries(params.Questions)) {
@@ -94,8 +104,16 @@ function answerByRecord(probabilities: Record<string, number>): void {
                 answers[key] = { Kind: 'Likelihood', Probability: probability };
             }
         }
-        return { success: true, Answers: answers, promptRun: runRow('decision-run-1') };
+        return { success: true, Answers: answers, promptRun: runRow('decision-run-1'), modelInfo: model ?? undefined };
     });
+}
+
+/**
+ * Answers each question, as {@link ANSWERING_MODEL}, so that the candidate it names gets the
+ * **calibrated** probability given here. Unnamed candidates get no answer.
+ */
+function answerByRecord(calibrated: Record<string, number>): void {
+    answerRawByRecord(Object.fromEntries(Object.entries(calibrated).map(([id, p]) => [id, RawFor(p)])));
 }
 
 function sentParams(): AIDecisionParams {
@@ -109,6 +127,10 @@ function verdictFor(output: DuplicateReasoningOutput, recordID: string) {
 
 async function reason(provider: DecisionReasoningProvider = new DecisionReasoningProvider()): Promise<DuplicateReasoningOutput> {
     return provider.Reason(input(), { ContextUser: CONTEXT_USER });
+}
+
+async function decide(provider: DecisionReasoningProvider): Promise<DuplicateDecisionResult> {
+    return provider.DecideCandidates(input(), { ContextUser: CONTEXT_USER });
 }
 
 describe('DecisionReasoningProvider', () => {
@@ -172,8 +194,13 @@ describe('DecisionReasoningProvider', () => {
     });
 
     describe('banding', () => {
-        it('flags a candidate at or above 0.5 as Uncertain and one below as NotDuplicate', async () => {
-            answerByRecord({ 'ID|c1': 0.9, 'ID|c2': 0.49, 'ID|c3': 0.5 });
+        const THRESHOLD = DecisionReasoningProvider.DEFAULT_UNCERTAIN_ABOVE;
+
+        // A scripted probability reaches the provider through Jev's calibration, so it can land a
+        // rounding error either side of a threshold. The Reason specs stay clear of the boundary;
+        // the boundary itself is banded directly below.
+        it('flags a candidate above the default threshold as Uncertain and one below as NotDuplicate', async () => {
+            answerByRecord({ 'ID|c1': 0.9, 'ID|c2': THRESHOLD - 0.01, 'ID|c3': THRESHOLD + 0.01 });
             const output = await reason();
 
             expect(verdictFor(output, 'ID|c1')?.Recommendation).toBe('Uncertain');
@@ -181,17 +208,27 @@ describe('DecisionReasoningProvider', () => {
             expect(verdictFor(output, 'ID|c3')?.Recommendation).toBe('Uncertain');
         });
 
-        it('carries each probability as that candidate\'s confidence', async () => {
+        it.each([
+            ['the default', THRESHOLD],
+            ['a custom', 0.8],
+        ])('flags a probability exactly at %s threshold', (_label, threshold) => {
+            const verdict = new DecisionReasoningProvider(threshold).BandCandidate({ RecordID: 'ID|c1', Probability: threshold });
+
+            expect(verdict.Recommendation).toBe('Uncertain');
+        });
+
+        it('carries each calibrated probability as that candidate\'s confidence', async () => {
             answerByRecord({ 'ID|c1': 0.9, 'ID|c2': 0.12, 'ID|c3': 0.5 });
             const output = await reason();
 
-            expect(verdictFor(output, 'ID|c1')?.Confidence).toBe(0.9);
-            expect(verdictFor(output, 'ID|c2')?.Confidence).toBe(0.12);
-            expect(verdictFor(output, 'ID|c3')?.Confidence).toBe(0.5);
+            expect(verdictFor(output, 'ID|c1')?.Confidence).toBeCloseTo(0.9, 10);
+            expect(verdictFor(output, 'ID|c2')?.Confidence).toBeCloseTo(0.12, 10);
+            expect(verdictFor(output, 'ID|c3')?.Confidence).toBeCloseTo(0.5, 10);
         });
 
         it('honours a custom uncertainAbove threshold', async () => {
-            answerByRecord({ 'ID|c1': 0.9, 'ID|c2': 0.7, 'ID|c3': 0.8 });
+            // c2 is above the default threshold, so only the custom one drops it.
+            answerByRecord({ 'ID|c1': 0.9, 'ID|c2': 0.75, 'ID|c3': 0.85 });
             const output = await reason(new DecisionReasoningProvider(0.8));
 
             expect(verdictFor(output, 'ID|c1')?.Recommendation).toBe('Uncertain');
@@ -200,12 +237,12 @@ describe('DecisionReasoningProvider', () => {
         });
 
         it('is Uncertain for the set when any candidate is flagged, with the highest flagged probability', async () => {
-            answerByRecord({ 'ID|c1': 0.7, 'ID|c2': 0.2, 'ID|c3': 0.95 });
+            answerByRecord({ 'ID|c1': 0.8, 'ID|c2': 0.2, 'ID|c3': 0.95 });
             const output = await reason();
 
             expect(output.Success).toBe(true);
             expect(output.Recommendation).toBe('Uncertain');
-            expect(output.Confidence).toBe(0.95);
+            expect(output.Confidence).toBeCloseTo(0.95, 10);
         });
 
         it('is NotDuplicate for the set when every candidate is below the threshold', async () => {
@@ -230,6 +267,68 @@ describe('DecisionReasoningProvider', () => {
 
             expect(output.AIPromptRunID).toBe('decision-run-1');
         });
+    });
+
+    describe('calibration', () => {
+        it.each(Object.entries(DUPLICATE_DECISION_CALIBRATION))(
+            'CalibratedDuplicateProbability applies the Platt parameters of %s',
+            (modelName, calibration) => {
+                // At a raw 0.5 the logit is 0, so the calibrated value is sigmoid(B).
+                expect(CalibratedDuplicateProbability(0.5, modelName)).toBeCloseTo(1 / (1 + Math.exp(-calibration.B)), 10);
+                expect(CalibratedDuplicateProbability(RawFor(0.8, calibration), modelName)).toBeCloseTo(0.8, 10);
+            }
+        );
+
+        it('CalibratedDuplicateProbability trims the model name', () => {
+            const calibrated = CalibratedDuplicateProbability(0.9, 'Jev');
+
+            expect(calibrated).not.toBeNull();
+            expect(CalibratedDuplicateProbability(0.9, '  Jev \n')).toBe(calibrated);
+        });
+
+        it.each([
+            ['an unknown model', 'Some Other Model'],
+            ['an empty model name', ''],
+            ['no model name', undefined],
+        ])('CalibratedDuplicateProbability returns null for %s', (_label, modelName) => {
+            expect(CalibratedDuplicateProbability(0.9, modelName)).toBeNull();
+        });
+
+        it('DecideCandidates returns the calibrated Probability and the model\'s own RawProbability', async () => {
+            answerByRecord({ 'ID|c1': 0.9, 'ID|c2': 0.2, 'ID|c3': 0.6 });
+            const decision = await decide(new DecisionReasoningProvider());
+
+            expect(decision.Success).toBe(true);
+            expect(decision.Candidates).toEqual([
+                { RecordID: 'ID|c1', Probability: expect.closeTo(0.9, 10), RawProbability: RawFor(0.9) },
+                { RecordID: 'ID|c2', Probability: expect.closeTo(0.2, 10), RawProbability: RawFor(0.2) },
+                { RecordID: 'ID|c3', Probability: expect.closeTo(0.6, 10), RawProbability: RawFor(0.6) },
+            ]);
+        });
+
+        const uncalibratedModels: [string, ModelInfo | null][] = [
+            ['a model with no calibration', { modelId: 'model-other', modelName: 'Some Other Model' }],
+            ['a model with an empty name', { modelId: 'model-other', modelName: '' }],
+            ['a run that names no model', null],
+        ];
+
+        it.each(uncalibratedModels)(
+            'gives no Probability for %s, keeps the raw one, and flags every candidate',
+            async (_label, model) => {
+                answerRawByRecord({ 'ID|c1': 0.95, 'ID|c2': 0.05, 'ID|c3': 0.6 }, model);
+                const provider = new DecisionReasoningProvider();
+                const decision = await decide(provider);
+
+                expect(decision.Candidates).toEqual([
+                    { RecordID: 'ID|c1', Probability: null, RawProbability: 0.95 },
+                    { RecordID: 'ID|c2', Probability: null, RawProbability: 0.05 },
+                    { RecordID: 'ID|c3', Probability: null, RawProbability: 0.6 },
+                ]);
+                const verdicts = provider.RecommendFromDecision(decision).CandidateVerdicts;
+                expect(verdicts.map(v => v.Recommendation)).toEqual(['Uncertain', 'Uncertain', 'Uncertain']);
+                expect(verdicts.map(v => v.Confidence)).toEqual([null, null, null]);
+            }
+        );
     });
 
     describe('never merges', () => {

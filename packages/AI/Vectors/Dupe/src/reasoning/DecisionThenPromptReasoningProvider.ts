@@ -49,12 +49,13 @@ export class DecisionThenPromptReasoningProvider extends DuplicateReasoningProvi
     /**
      * The class factory passes no arguments, so both stages default to the shipped providers.
      *
-     * @param decisionStage the filter stage; defaults to a `DecisionReasoningProvider` at its default threshold
+     * @param decisionStage the filter stage; defaults to a `DecisionReasoningProvider` at its pre-filter
+     *   threshold ({@link DecisionReasoningProvider.PRE_FILTER_UNCERTAIN_ABOVE}), which keeps recall
      * @param promptStage the reasoning stage; defaults to a `PromptReasoningProvider`
      */
     constructor(decisionStage?: DecisionReasoningProvider, promptStage?: DuplicateReasoningProvider) {
         super();
-        this.DecisionStage = decisionStage ?? new DecisionReasoningProvider();
+        this.DecisionStage = decisionStage ?? new DecisionReasoningProvider(DecisionReasoningProvider.PRE_FILTER_UNCERTAIN_ABOVE);
         this.PromptStage = promptStage ?? new PromptReasoningProvider();
     }
 

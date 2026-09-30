@@ -19,7 +19,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIDecisionRunner, AIDecisionParams, AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
-import type { DecisionAnswer, DecisionQuestion } from '@memberjunction/ai';
+import { ApplyPlattCalibration, type DecisionAnswer, type DecisionQuestion, type PlattCalibration } from '@memberjunction/ai';
 import {
     DuplicateReasoningProvider,
     DECISION_REASONING_PROVIDER_KEY
@@ -37,8 +37,40 @@ import {
 export interface DuplicateCandidateProbability {
     /** The candidate record id (matches the input candidate's RecordID). */
     RecordID: string;
-    /** The Likelihood's probability in [0, 1], or null when the decision returned no answer for this candidate. */
+    /**
+     * The Likelihood's probability in [0, 1], **calibrated** for the model that answered (see
+     * {@link DUPLICATE_DECISION_CALIBRATION}). Null when the decision returned no answer for this
+     * candidate, or when the answering model has no calibration.
+     */
     Probability: number | null;
+    /** The model's own probability, before calibration; null when there was no answer. */
+    RawProbability?: number | null;
+}
+
+/**
+ * Platt calibration of the duplicate Likelihood ("the candidate is the same real-world entity as
+ * the new record"), per decision model, keyed by the name MJ gives the model that answered
+ * (`modelInfo.modelName`). A model's raw probabilities are not calibrated: Jev ranks candidates almost
+ * perfectly (AUC 0.99) but its raw probabilities run high for similar records that are not
+ * duplicates. A model with no entry gives no probability, and its candidates are flagged, since a
+ * missing probability fails toward inclusion.
+ *
+ * Fitted on the duplicate-check measurement (plan Task 3.8, 2026-09-29): 160 labelled new records for
+ * MJ: Actions (80 rewrites of an existing action, 80 similar actions that don't exist), five vector
+ * candidates each, two repeats per model. Refit whenever a model, its version or the question changes.
+ */
+export const DUPLICATE_DECISION_CALIBRATION: Readonly<Record<string, PlattCalibration>> = Object.freeze({
+    'Jev': Object.freeze({ A: 2.5855, B: -4.4485 }),
+    'LLM Decision': Object.freeze({ A: 0.9918, B: -1.4843 })
+});
+
+/**
+ * The duplicate Likelihood calibrated for the model that answered, or null when that model has no
+ * calibration.
+ */
+export function CalibratedDuplicateProbability(probability: number, modelName: string | undefined): number | null {
+    const calibration = modelName ? DUPLICATE_DECISION_CALIBRATION[modelName.trim()] : undefined;
+    return calibration ? ApplyPlattCalibration(probability, calibration) : null;
 }
 
 /** The outcome of one decision call over a matched set. */
@@ -58,8 +90,22 @@ export interface DuplicateDecisionResult {
  */
 @RegisterClass(DuplicateReasoningProvider, DECISION_REASONING_PROVIDER_KEY)
 export class DecisionReasoningProvider extends DuplicateReasoningProvider {
-    /** The flagging threshold used when none is passed, as it is when the class factory builds the provider. */
-    public static readonly DEFAULT_UNCERTAIN_ABOVE = 0.5;
+    /**
+     * The flagging threshold used when none is passed, as it is when the class factory builds the
+     * provider, on **calibrated** probabilities. A flag asks a person to look, so it favours precision:
+     * a missed duplicate is only today's behaviour, and needless flags teach people to ignore them.
+     * At a calibrated 0.7, Jev flagged the true source at 96.6% precision, caught 71% of duplicates, and
+     * flagged 2.5% of new records; LLM Decision scored 74%, 40% and 14%. The vector threshold alone
+     * flagged every candidate. (Duplicate-check measurement, plan Task 3.8, 2026-09-29.)
+     */
+    public static readonly DEFAULT_UNCERTAIN_ABOVE = 0.7;
+
+    /**
+     * The threshold for the decision stage of `DecisionThenPrompt`, on calibrated probabilities. There
+     * the decision only drops implausible candidates before the prompt reasons over the rest, so it
+     * keeps recall: at a calibrated 0.3, Jev kept 98.8% of true duplicates and passed 14.5% of candidates.
+     */
+    public static readonly PRE_FILTER_UNCERTAIN_ABOVE = 0.3;
     /** The seeded decision prompt whose model bindings choose the decision model. */
     public static readonly DEFAULT_PROMPT_NAME = 'Default Decision';
 
@@ -106,7 +152,7 @@ export class DecisionReasoningProvider extends DuplicateReasoningProvider {
             if (!prompt) {
                 return this.failedDecision(`Decision prompt "${DecisionReasoningProvider.DEFAULT_PROMPT_NAME}" not found`, null);
             }
-            const run = await new AIDecisionRunner().ExecuteDecision(this.buildDecisionParams(prompt, input, context));
+            const run = await new AIDecisionRunner().ExecuteDecision(this.BuildDecisionParams(prompt, input, context));
             return this.readProbabilities(input, run);
         } catch (e) {
             LogError(e);
@@ -192,7 +238,7 @@ export class DecisionReasoningProvider extends DuplicateReasoningProvider {
             `as the new record, the sourceRecord "${source.Label}" (recordId ${source.RecordID}).`;
     }
 
-    private buildDecisionParams(
+    protected BuildDecisionParams(
         prompt: MJAIPromptEntityExtended,
         input: DuplicateReasoningInput,
         context: DuplicateReasoningContext
@@ -205,16 +251,21 @@ export class DecisionReasoningProvider extends DuplicateReasoningProvider {
         return params;
     }
 
-    /** Read each candidate's probability from the run, in input order. */
+    /** Read each candidate's probability from the run, in input order, calibrated for the model that answered. */
     private readProbabilities(input: DuplicateReasoningInput, run: AIDecisionRunResult): DuplicateDecisionResult {
         const runID = run.promptRun?.ID ?? null;
         if (!run.success) {
             return this.failedDecision(run.errorMessage ?? 'Decision execution failed', runID);
         }
-        const candidates = input.Candidates.map((candidate, index) => ({
-            RecordID: candidate.RecordID,
-            Probability: this.likelihoodOf(run.Answers[this.QuestionKey(index)])
-        }));
+        const modelName = run.modelInfo?.modelName;
+        const candidates = input.Candidates.map((candidate, index) => {
+            const raw = this.likelihoodOf(run.Answers[this.QuestionKey(index)]);
+            return {
+                RecordID: candidate.RecordID,
+                Probability: raw == null ? null : CalibratedDuplicateProbability(raw, modelName),
+                RawProbability: raw
+            };
+        });
         return { Success: true, Candidates: candidates, AIPromptRunID: runID };
     }
 

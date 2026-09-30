@@ -59,9 +59,15 @@ export interface CandidatePairObservation {
     PassedThreshold: boolean;
     /** Threshold arm: flagged when VectorScore >= PotentialMatchThreshold. */
     ThresholdFlagged: boolean;
-    /** Decision arm: probability in [0, 1] from DecisionReasoningProvider. */
+    /**
+     * Decision arm: the model's own probability in [0, 1], before calibration (the provider's
+     * RawProbability), which the calibration section fits on. Null when there was no answer.
+     */
     DecisionProbability: number | null;
-    /** Decision arm: flagged when banded 'Uncertain'. */
+    /**
+     * Decision arm: flagged as production flags it, when banded 'Uncertain': IsPlausible on the
+     * calibrated probability, where a missing one flags. False when the decision failed.
+     */
     DecisionFlagged: boolean;
     /** Answering model name for the decision call. */
     DecisionModel?: string;

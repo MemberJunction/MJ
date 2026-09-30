@@ -1,8 +1,8 @@
 /**
  * @fileoverview CLI harness to measure duplicate record entry check across reasoning arms:
  *  1. Vector threshold arm
- *  2. Decision prompt arm (DecisionReasoningProvider)
- *  3. Decision · production arm (PassedThreshold && IsPlausible)
+ *  2. Decision prompt arm (DecisionReasoningProvider: IsPlausible on the calibrated probability)
+ *  3. Decision · production arm (PassedThreshold && IsPlausible on the calibrated probability)
  *  4. Full prompt arm (PromptReasoningProvider)
  *  5. Prompt · production arm (PassedThreshold && (Merge || Uncertain))
  *
@@ -12,6 +12,9 @@
  *   npx tsx rigs/dupe-check-measurement.ts --entity "MJ: Actions" --corpus <dir> --out <dir> \
  *     [--reps 1] [--top-k 5] [--arms threshold,decision,prompt] [--decision-prompt "<name>"] \
  *     [--decision-model "<name>"] [--dry-run]
+ *
+ * Each candidate's DecisionProbability is the model's raw probability, which the report's calibration
+ * section fits on; its DecisionFlagged comes from production's calibrated band.
  *
  * OUTPUTS:
  *   - checks.jsonl: observation for each entry check
@@ -41,10 +44,9 @@ import { KnowledgeHubMetadataEngine, MJEntityDocumentEntity } from '@memberjunct
 import { NormalizeUUID } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
-import { AIDecisionParams, AIDecisionRunner } from '@memberjunction/ai-prompts';
+import type { AIDecisionParams } from '@memberjunction/ai-prompts';
 import {
     DecisionReasoningProvider,
-    DuplicateDecisionResult,
     DuplicateReasoningContext,
     DuplicateReasoningInput,
     DuplicateRecordDetector,
@@ -154,7 +156,8 @@ class MeasuringDuplicateRecordDetector extends DuplicateRecordDetector {
 
 /**
  * Subclass extending DecisionReasoningProvider to support custom decision prompt names
- * and pinned decision models (disabling failover).
+ * and pinned decision models (disabling failover). Everything else, including calibration,
+ * is production's `DecideCandidates`.
  */
 export class MeasuringDecisionReasoningProvider extends DecisionReasoningProvider {
     private readonly customPromptName?: string;
@@ -171,59 +174,17 @@ export class MeasuringDecisionReasoningProvider extends DecisionReasoningProvide
         return AIEngine.Instance.Prompts.find(p => (p.Name ?? '').trim().toLowerCase() === target) ?? null;
     }
 
-    public override async DecideCandidates(
+    /** Production's params, with the pinned model, when there is one, as an override. */
+    protected override BuildDecisionParams(
+        prompt: MJAIPromptEntityExtended,
         input: DuplicateReasoningInput,
         context: DuplicateReasoningContext
-    ): Promise<DuplicateDecisionResult> {
-        if (input.Candidates.length === 0) {
-            return { Success: true, Candidates: [], AIPromptRunID: null };
+    ): AIDecisionParams {
+        const params = super.BuildDecisionParams(prompt, input, context);
+        if (this.pinnedModelId) {
+            params.override = { modelId: this.pinnedModelId };
         }
-        try {
-            await AIEngine.Instance.Config(false, context.ContextUser, context.Provider);
-            const prompt = this.ResolveDecisionPrompt();
-            if (!prompt) {
-                return {
-                    Success: false,
-                    ErrorMessage: `Decision prompt "${this.customPromptName ?? DecisionReasoningProvider.DEFAULT_PROMPT_NAME}" not found`,
-                    Candidates: [],
-                    AIPromptRunID: null,
-                };
-            }
-            const params = new AIDecisionParams();
-            params.prompt = prompt;
-            params.contextUser = context.ContextUser;
-            params.State = this.BuildDecisionState(input);
-            params.Questions = this.BuildQuestions(input);
-            if (this.pinnedModelId) {
-                params.override = { modelId: this.pinnedModelId };
-            }
-            const run = await new AIDecisionRunner().ExecuteDecision(params);
-            const runID = run.promptRun?.ID ?? null;
-            if (!run.success) {
-                return {
-                    Success: false,
-                    ErrorMessage: run.errorMessage ?? 'Decision execution failed',
-                    Candidates: [],
-                    AIPromptRunID: runID,
-                };
-            }
-            const candidates = input.Candidates.map((candidate, index) => {
-                const answer = run.Answers[this.QuestionKey(index)];
-                const prob = answer?.Kind === 'Likelihood' ? answer.Probability : null;
-                return {
-                    RecordID: candidate.RecordID,
-                    Probability: prob,
-                };
-            });
-            return { Success: true, Candidates: candidates, AIPromptRunID: runID };
-        } catch (e) {
-            return {
-                Success: false,
-                ErrorMessage: e instanceof Error ? e.message : String(e),
-                Candidates: [],
-                AIPromptRunID: null,
-            };
-        }
+        return params;
     }
 }
 
@@ -347,6 +308,40 @@ async function setupMeasurementEnvironment(
     };
 }
 
+/** One decision call over a check's candidates, keyed by normalized candidate id. */
+interface DecisionArmResult {
+    LatencyMs: number;
+    PromptRunId: string | null;
+    /** The model's own probability, before calibration: the report's calibration section fits on it. */
+    RawProbabilities: Map<string, number | null>;
+    /** Whether production flags the candidate: the provider's band on the calibrated probability. */
+    Flagged: Map<string, boolean>;
+}
+
+async function runDecisionArm(env: MeasurementEnv, input: DuplicateReasoningInput): Promise<DecisionArmResult> {
+    const { decisionProvider, bootstrapCtx } = env;
+    const start = performance.now();
+    const decision = await decisionProvider.DecideCandidates(input, {
+        Provider: bootstrapCtx.provider,
+        ContextUser: bootstrapCtx.user,
+    });
+    const result: DecisionArmResult = {
+        LatencyMs: performance.now() - start,
+        PromptRunId: decision.AIPromptRunID ?? null,
+        RawProbabilities: new Map(),
+        Flagged: new Map(),
+    };
+    // A failed decision leaves both maps empty: production's entry check then flags nothing.
+    for (const candidate of decision.Success ? decision.Candidates : []) {
+        const id = NormalizeUUID(candidate.RecordID);
+        result.RawProbabilities.set(id, candidate.RawProbability ?? null);
+        // Production's rule, as its entry check bands it: IsPlausible on the calibrated probability,
+        // where a null one (no answer, or a model with no calibration) flags.
+        result.Flagged.set(id, decisionProvider.IsPlausible(candidate.Probability));
+    }
+    return result;
+}
+
 async function executeSingleEntryCheck(
     env: MeasurementEnv,
     record: CorpusRecord,
@@ -354,7 +349,7 @@ async function executeSingleEntryCheck(
     options: MeasurementCliOptions,
     rep: number
 ): Promise<RecordCheckObservation> {
-    const { detector, entityInfo, entityDocument, configuredThreshold, bootstrapCtx, decisionProvider, promptProvider } = env;
+    const { detector, entityInfo, entityDocument, configuredThreshold, bootstrapCtx, promptProvider } = env;
 
     // 1. Unsaved record
     const unsaved = await detector.BuildRecord(entityInfo, record.Values, bootstrapCtx.user);
@@ -399,25 +394,9 @@ async function executeSingleEntryCheck(
     }
 
     // 4. Decision arm
-    let decisionLatencyMs: number | null = null;
-    let decisionPromptRunId: string | null = null;
-    const decisionProbabilities = new Map<string, number | null>();
-
-    if (options.Arms.includes('decision') && reasoningInput && readableCandidates.length > 0) {
-        const dStart = performance.now();
-        const decisionRes = await decisionProvider.DecideCandidates(reasoningInput, {
-            Provider: bootstrapCtx.provider,
-            ContextUser: bootstrapCtx.user,
-        });
-        decisionLatencyMs = performance.now() - dStart;
-        decisionPromptRunId = decisionRes.AIPromptRunID ?? null;
-
-        if (decisionRes.Success && decisionRes.Candidates) {
-            for (const cand of decisionRes.Candidates) {
-                decisionProbabilities.set(NormalizeUUID(cand.RecordID), cand.Probability);
-            }
-        }
-    }
+    const decision = options.Arms.includes('decision') && reasoningInput && readableCandidates.length > 0
+        ? await runDecisionArm(env, reasoningInput)
+        : null;
 
     // 5. Prompt arm
     let promptLatencyMs: number | null = null;
@@ -450,8 +429,10 @@ async function executeSingleEntryCheck(
         const passedThreshold = vectorScore >= configuredThreshold;
         const thresholdFlagged = passedThreshold;
 
-        const decProb = decisionProbabilities.get(NormalizeUUID(candId)) ?? null;
-        const decisionFlagged = decProb !== null && decisionProvider.IsPlausible(decProb);
+        // Recorded raw, for calibration; flagged by production's calibrated band. Both the decision
+        // and the decision · production arms read DecisionFlagged.
+        const decProb = decision?.RawProbabilities.get(NormalizeUUID(candId)) ?? null;
+        const decisionFlagged = decision?.Flagged.get(NormalizeUUID(candId)) ?? false;
 
         const pRec = promptRecommendations.get(NormalizeUUID(candId)) ?? null;
         // Prompt arm flag rule: Merge OR Uncertain counts as flagged; only NotDuplicate does not
@@ -478,15 +459,14 @@ async function executeSingleEntryCheck(
         Label: label,
         RetrievalLatencyMs: retrievalLatencyMs,
         Candidates: candidatePairs,
-        DecisionResult:
-            options.Arms.includes('decision') && decisionLatencyMs !== null
-                ? {
-                      LatencyMs: decisionLatencyMs,
-                      Model: 'Pending',
-                      PromptRunId: decisionPromptRunId,
-                      CostUSD: null,
-                  }
-                : undefined,
+        DecisionResult: decision
+            ? {
+                  LatencyMs: decision.LatencyMs,
+                  Model: 'Pending',
+                  PromptRunId: decision.PromptRunId,
+                  CostUSD: null,
+              }
+            : undefined,
         PromptResult:
             options.Arms.includes('prompt') && promptLatencyMs !== null
                 ? {
