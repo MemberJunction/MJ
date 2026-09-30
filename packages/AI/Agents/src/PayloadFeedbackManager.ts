@@ -12,7 +12,7 @@
 import { LogStatus, LogError, UserInfo } from '@memberjunction/core';
 import { DecisionAnswer, DecisionQuestion } from '@memberjunction/ai';
 import { AIDecisionRunResult } from '@memberjunction/ai-prompts';
-import { PayloadWarning } from './PayloadChangeAnalyzer';
+import { PayloadWarning, PayloadWarningType } from './PayloadChangeAnalyzer';
 import { AgentDecisionService } from './AgentDecisionService';
 
 /**
@@ -281,14 +281,16 @@ export class PayloadFeedbackManager {
     }
 
     /**
-     * The message that lists the changes judged unintended and asks the agent to confirm or restore
-     * them, or `undefined` when every change was judged intended. It reverts nothing itself.
+     * The message that lists the changes judged unintended and asks the agent to confirm them or put
+     * them back, or `undefined` when every change was judged intended. It reverts nothing itself, and
+     * it never carries the original values, so it tells the agent how to rebuild them.
      */
     public BuildUnintendedChangesMessage(
         questions: PayloadFeedbackQuestion[],
         responses: PayloadFeedbackResponse[]
     ): string | undefined {
         const lines: string[] = [];
+        const unintended: PayloadWarning[] = [];
         for (const response of responses) {
             const question = questions.find(q => q.id === response.questionId);
             if (question && !response.intended) {
@@ -296,6 +298,7 @@ export class PayloadFeedbackManager {
                     ? ` (probability it was intended: ${response.probability.toFixed(2)})`
                     : '';
                 lines.push(`- ${this.DescribeChange(question.warning)}${probability}`);
+                unintended.push(question.warning);
             }
         }
         if (lines.length === 0) {
@@ -304,8 +307,27 @@ export class PayloadFeedbackManager {
         return [
             'Payload change check: these changes to the payload may not have been intended.',
             ...lines,
-            'Nothing was reverted. If you meant a change, confirm it in your reasoning and carry on. If not, restore the original value with a payloadChangeRequest.'
+            'Nothing was reverted. If you meant a change, confirm it in your reasoning and carry on.',
+            this.restoreInstructions(unintended)
         ].join('\n');
+    }
+
+    /**
+     * How the agent puts the listed changes back: a removed key is added again under `newElements`,
+     * and any other change is set again under `updateElements`. The message has no original values,
+     * so the agent rebuilds them from their source, or says what was lost.
+     */
+    private restoreInstructions(warnings: PayloadWarning[]): string {
+        const steps: string[] = [];
+        if (warnings.some(w => w.type === PayloadWarningType.KeyRemoval)) {
+            steps.push('add each removed key back under newElements');
+        }
+        if (warnings.some(w => w.type !== PayloadWarningType.KeyRemoval)) {
+            steps.push('set each shortened or changed value again under updateElements');
+        }
+        return `If not, put the data back with a payloadChangeRequest: ${steps.join(', and ')}. `
+            + 'The original values are not shown here, so rebuild each one from where it came from '
+            + '(an action result, a sub-agent result or the conversation). If you cannot, say in your message what was lost.';
     }
 
     /**

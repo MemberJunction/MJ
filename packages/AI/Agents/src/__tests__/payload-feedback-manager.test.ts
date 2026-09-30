@@ -352,7 +352,10 @@ describe('PayloadFeedbackManager.QueryAgent: the time limit and cancellation', (
 });
 
 describe('PayloadFeedbackManager.BuildUnintendedChangesMessage', () => {
-    it('lists only the changes judged unintended, and asks the agent to confirm or restore them', async () => {
+    const REBUILD = 'The original values are not shown here, so rebuild each one from where it came from '
+        + '(an action result, a sub-agent result or the conversation). If you cannot, say in your message what was lost.';
+
+    it('lists only the changes judged unintended, and says how to confirm them or put them back', async () => {
         const { manager, ask } = makeManager();
         ask.mockResolvedValueOnce(likelihoods(0.12, 0.95));
         const questions = manager.GenerateQuestions([truncation(), keyRemoval()]);
@@ -363,8 +366,37 @@ describe('PayloadFeedbackManager.BuildUnintendedChangesMessage', () => {
         expect(message).toBe([
             'Payload change check: these changes to the payload may not have been intended.',
             '- Content reduced by 95.0% (from 1200 to 60 characters) at "summary" (probability it was intended: 0.12)',
-            'Nothing was reverted. If you meant a change, confirm it in your reasoning and carry on. If not, restore the original value with a payloadChangeRequest.',
+            'Nothing was reverted. If you meant a change, confirm it in your reasoning and carry on.',
+            `If not, put the data back with a payloadChangeRequest: set each shortened or changed value again under updateElements. ${REBUILD}`,
         ].join('\n'));
+    });
+
+    it('tells the agent to add a removed key back under newElements, since it is never given the value', async () => {
+        const { manager, ask } = makeManager();
+        ask.mockResolvedValueOnce(likelihoods(0.95, 0.2));
+        const questions = manager.GenerateQuestions([truncation(), keyRemoval()]);
+        const responses = await manager.QueryAgent(questions, {}, USER);
+
+        const message = manager.BuildUnintendedChangesMessage(questions, responses);
+
+        expect(message).toBe([
+            'Payload change check: these changes to the payload may not have been intended.',
+            '- 2 non-empty keys removed (66.7% reduction) at "config" (removed: alpha, beta) (probability it was intended: 0.20)',
+            'Nothing was reverted. If you meant a change, confirm it in your reasoning and carry on.',
+            `If not, put the data back with a payloadChangeRequest: add each removed key back under newElements. ${REBUILD}`,
+        ].join('\n'));
+    });
+
+    it('gives both instructions when both kinds of change are listed', async () => {
+        const { manager, ask } = makeManager();
+        ask.mockResolvedValueOnce(likelihoods(0.1, 0.1));
+        const questions = manager.GenerateQuestions([truncation(), keyRemoval()]);
+        const responses = await manager.QueryAgent(questions, {}, USER);
+
+        const message = manager.BuildUnintendedChangesMessage(questions, responses);
+
+        expect(message).toContain('add each removed key back under newElements, and set each shortened or changed value again under updateElements.');
+        expect(message).not.toContain(SECRET);
     });
 
     it('is undefined when every change was judged intended or accepted by default', async () => {
