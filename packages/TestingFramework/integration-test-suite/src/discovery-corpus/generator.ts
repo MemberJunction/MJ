@@ -436,6 +436,25 @@ export async function GenerateOrPlanDiscoveryCorpus(params: DiscoveryCorpusRunPa
     return GenerateDiscoveryCorpus({ Driver: params.CreateDriver(), Model: params.Model, Tasks: params.Tasks, Log: params.Log });
 }
 
+/** Where the rig reads the catalog from: the database settings it connected with. */
+export interface DiscoveryCorpusDatabase {
+    Host: string;
+    Port: number;
+    Database: string;
+    Schema: string;
+}
+
+/**
+ * The database the corpus's catalog is read from, for the rig's plan: the database, schema, host and
+ * port, and never the user or the password. The rig sends that catalog's agent names and descriptions
+ * to an outside model vendor, so a dry run must show which database it would read.
+ *
+ * @param database The settings the rig connected with.
+ */
+export function DescribeCorpusDatabase(database: DiscoveryCorpusDatabase): string {
+    return `${database.Database} (schema ${database.Schema}) on ${database.Host}:${database.Port}`;
+}
+
 /**
  * Checks where a corpus is going before anything is loaded or asked: the directory must be outside
  * every git working tree (`AssertOutputOutsideRepo`, which throws `OutputInsideRepoError`), and must

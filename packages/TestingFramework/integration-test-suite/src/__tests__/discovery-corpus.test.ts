@@ -30,6 +30,7 @@ import {
     BuildDiscoveryCorpusFiles,
     BuildGenerationParams,
     DeduplicateRequests,
+    DescribeCorpusDatabase,
     DISCOVERY_CORPUS_MAX_REQUESTS_PER_CALL,
     DISCOVERY_CORPUS_MAX_RETRIES,
     DiscoverableAgentsForCorpus,
@@ -369,5 +370,15 @@ describe('where it may write', () => {
         mkdirSync(join(outside, 'used'));
         writeFileSync(join(outside, 'used', 'labels.jsonl'), '');
         expect(() => AssertCorpusOutputDir(join(outside, 'used'), [])).toThrow('Refusing to overwrite');
+    });
+});
+
+describe('the database it reads', () => {
+    it('names the database, schema, host and port, and never the user or the password', () => {
+        const settings = { Host: 'db.example.test', Port: 1433, Database: 'MJ_Dev', Schema: '__mj', User: 'reader', Password: 'secret-value' };
+        const described = DescribeCorpusDatabase(settings);
+        expect(described).toBe('MJ_Dev (schema __mj) on db.example.test:1433');
+        expect(described).not.toContain('reader');
+        expect(described).not.toContain('secret-value');
     });
 });
