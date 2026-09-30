@@ -1,40 +1,37 @@
 /**
  * @fileoverview Decision routing for an unmentioned message, with the decision call mocked.
  *
- * Pins when a message gets a decision at all, how the questions and options are built (and
- * rebuilt) from the conversation, and how the answers are read: a confident answer replaces
- * continuity, and an error, a slow answer or an unsure one keeps it. The component wiring is
+ * Pins when a message gets a decision at all, and how the chat runs it and applies it: a confident
+ * answer replaces continuity, and an error, a slow answer or an unsure one keeps it. How the
+ * questions, options and state are built, and the thresholds, are pinned where those builders live
+ * (`@memberjunction/ai-core-plus`, conversation-routing-decision.test.ts). The component wiring is
  * pinned in message-input-decision-routing.test.ts.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import type { ChoiceAnswer, ChoiceQuestion, DecisionAnswer, LikelihoodAnswer, LikelihoodQuestion } from '@memberjunction/ai';
-import { ConversationUtility } from '@memberjunction/ai-core-plus';
-import type { RunDecisionParams, RunDecisionResult } from '@memberjunction/graphql-dataprovider';
+import type { ChoiceAnswer, DecisionAnswer, LikelihoodAnswer } from '@memberjunction/ai';
+import {
+    BuildRoutingArtifactVersions,
+    BuildRoutingQuestions,
+    BuildRoutingState,
+    ConversationUtility,
+    DECISION_ROUTING_MIN_CONFIDENCE,
+    DECISION_ROUTING_TIMEOUT_MS,
+    InterpretRoutingAnswers,
+    type RoutingAgent,
+    type RoutingCatalogAgent,
+    type RoutingDecisionInput,
+    type RoutingDecisionOutcome,
+    type RoutingParticipant,
+} from '@memberjunction/ai-core-plus';
+import type { RunDecisionResult } from '@memberjunction/graphql-dataprovider';
 
 import {
     ApplyRoutingDecision,
     ArtifactVersionForTurn,
-    BuildRecentTurns,
-    BuildRoutingArtifactVersions,
-    BuildRoutingQuestions,
-    BuildRoutingState,
-    CanAskRoutingDecision,
-    CollectRoutingParticipants,
-    DECISION_ROUTING_MIN_CONFIDENCE,
-    DECISION_ROUTING_TIMEOUT_MS,
-    InterpretRoutingAnswers,
-    IsRoutableAgent,
-    MAX_ROUTING_ARTIFACT_VERSIONS,
     RunRoutingDecision,
     ShouldRunRoutingDecision,
-    type RoutingAgent,
-    type RoutingCatalogAgent,
     type RoutingDecisionGate,
-    type RoutingDecisionInput,
-    type RoutingDecisionOutcome,
     type RoutingDecisionRunner,
-    type RoutingHistoryRow,
-    type RoutingParticipant,
 } from '../lib/utils/decision-routing';
 import { ResolveAgentTurn, type AgentTurnCandidates } from '../lib/utils/agent-turn-routing';
 import type { AgentArtifactSummary } from '../lib/utils/agent-artifact-summary';
@@ -50,14 +47,6 @@ const findAgent = (id: string): RoutingCatalogAgent | undefined => CATALOG.find(
 const VERSION_1 = 'BBBBBBBB-0000-0000-0000-000000000001';
 const VERSION_2 = 'BBBBBBBB-0000-0000-0000-000000000002';
 const PROMPT_RUN = 'EEEEEEEE-0000-0000-0000-000000000001';
-
-function userRow(id: string, message: string): RoutingHistoryRow {
-    return { ID: id, Role: 'User', AgentID: null, Message: message };
-}
-
-function agentRow(id: string, agent: RoutingAgent, message: string): RoutingHistoryRow {
-    return { ID: id, Role: 'AI', AgentID: agent.ID, Message: message };
-}
 
 function participant(agent: RoutingAgent, lastReply: string): RoutingParticipant {
     return { Agent: agent, LastReply: lastReply };
@@ -98,14 +87,6 @@ function runner(result: RunDecisionResult | (() => Promise<RunDecisionResult>)) 
     return vi.fn<RoutingDecisionRunner>(typeof result === 'function' ? result : async () => result);
 }
 
-function routeQuestion(params: RunDecisionParams): ChoiceQuestion {
-    const question = params.Questions['route'];
-    if (question?.Kind !== 'Choice') {
-        throw new Error('no route Choice');
-    }
-    return question;
-}
-
 function artifactSummary(name: string, versions: Array<[string, number, string | null]>): AgentArtifactSummary {
     return {
         artifactId: `artifact-${name}`,
@@ -132,13 +113,6 @@ const ALWAYS = { ReplyMode: 'Always', AllowedAgentIDs: null } as const;
 describe('decision routing', () => {
     afterEach(() => {
         vi.useRealTimers();
-    });
-
-    describe('the thresholds', () => {
-        it('are the brief\'s figures until calibration sets them', () => {
-            expect(DECISION_ROUTING_TIMEOUT_MS).toBe(250);
-            expect(DECISION_ROUTING_MIN_CONFIDENCE).toBe(0.7);
-        });
     });
 
     describe('ShouldRunRoutingDecision', () => {
@@ -171,191 +145,6 @@ describe('decision routing', () => {
         it('does not ask under MentionOnly, or before any agent has answered', () => {
             expect(ShouldRunRoutingDecision(gate({ ReplyMode: 'MentionOnly' }))).toBe(false);
             expect(ShouldRunRoutingDecision(gate({ ContinuityAgentId: null }))).toBe(false);
-        });
-    });
-
-    describe('CollectRoutingParticipants', () => {
-        const history = [
-            userRow('u1', 'Find sources'),
-            agentRow('a1', RESEARCH, 'First pass'),
-            agentRow('m1', MANAGER, 'Handing to Writer'),
-            agentRow('a2', WRITER, 'Draft one'),
-            userRow('u2', 'More sources please'),
-            agentRow('a3', RESEARCH, 'Second   pass,\n with more'),
-        ];
-
-        it('lists each agent that answered once, newest first, with its newest reply on one line', () => {
-            const participants = CollectRoutingParticipants(history, MANAGER.ID, null, findAgent);
-            expect(participants).toEqual([participant(RESEARCH, 'Second pass, with more'), participant(WRITER, 'Draft one')]);
-        });
-
-        it('leaves out agents the host does not allow and agents the catalog does not know', () => {
-            const unknown: RoutingHistoryRow = { ID: 'x1', Role: 'AI', AgentID: 'CCCCCCCC-0000-0000-0000-000000000009', Message: '?' };
-            const participants = CollectRoutingParticipants([...history, unknown], MANAGER.ID, [WRITER.ID, MANAGER.ID], findAgent);
-            expect(participants.map(p => p.Agent.ID)).toEqual([WRITER.ID]);
-        });
-
-        it('leaves out agents that are no longer active or are restricted, as the \'@\' list does', () => {
-            const catalog: RoutingCatalogAgent[] = [MANAGER, { ...RESEARCH, Status: 'Disabled' }, { ...WRITER, IsRestricted: true }, ANALYST];
-            const lookup = (id: string): RoutingCatalogAgent | undefined => catalog.find(a => a.ID === id);
-            const rows = [...history, agentRow('a4', ANALYST, 'Figures attached')];
-
-            expect(CollectRoutingParticipants(rows, MANAGER.ID, null, lookup).map(p => p.Agent.ID)).toEqual([ANALYST.ID]);
-        });
-
-        it('IsRoutableAgent needs an active, unrestricted agent', () => {
-            expect(IsRoutableAgent({ Status: 'Active', IsRestricted: false })).toBe(true);
-            expect(IsRoutableAgent({ Status: 'Pending', IsRestricted: false })).toBe(false);
-            expect(IsRoutableAgent({ Status: 'Disabled', IsRestricted: false })).toBe(false);
-            expect(IsRoutableAgent({ Status: 'Active', IsRestricted: true })).toBe(false);
-        });
-
-        it('truncates a long reply', () => {
-            const long = 'x'.repeat(400);
-            const [only] = CollectRoutingParticipants([agentRow('a1', RESEARCH, long)], MANAGER.ID, null, findAgent);
-            expect(only.LastReply).toBe(`${'x'.repeat(150)}...`);
-        });
-    });
-
-    describe('BuildRecentTurns', () => {
-        it('keeps the last six turns, oldest first, as "Speaker: text"', () => {
-            const history = Array.from({ length: 8 }, (_, i) =>
-                i % 2 === 0 ? userRow(`u${i}`, `question ${i}`) : agentRow(`a${i}`, RESEARCH, `answer ${i}`));
-            expect(BuildRecentTurns(history, findAgent)).toEqual([
-                'User: question 2', 'Research: answer 3', 'User: question 4',
-                'Research: answer 5', 'User: question 6', 'Research: answer 7',
-            ]);
-        });
-
-        it('shows a mention as its name, not its stored JSON', () => {
-            const tagged = ConversationUtility.CreateMention('user', 'user-2', 'Dana');
-            expect(BuildRecentTurns([userRow('u1', `${tagged} can you check this?`)], findAgent))
-                .toEqual(['User: @Dana can you check this?']);
-        });
-    });
-
-    describe('the questions', () => {
-        it('offer every participant by description and last reply, then the conversation manager as someone else', () => {
-            const question = routeQuestion({ State: '', Questions: BuildRoutingQuestions(input()) });
-
-            expect(question.Options.map(o => o.Value)).toEqual([RESEARCH.ID, WRITER.ID, MANAGER.ID]);
-            expect(question.Options[0].Description).toContain('Finds and summarises sources.');
-            expect(question.Options[0].Description).toContain('Here are five sources.');
-            expect(question.Options[2].Description).toMatch(/^Someone else\./);
-            expect(question.Options[2].Description).toContain('Sage');
-        });
-
-        it('ask whether the message continues the thread with the last agent', () => {
-            const expected: LikelihoodQuestion = {
-                Kind: 'Likelihood',
-                Instructions: 'The user\'s new message continues the current thread with Research.',
-            };
-            expect(BuildRoutingQuestions(input())['continues']).toEqual(expected);
-        });
-
-        it('leave the manager out when the chat does not allow it', () => {
-            const question = routeQuestion({ State: '', Questions: BuildRoutingQuestions(input({ AllowedAgentIDs: [RESEARCH.ID, WRITER.ID] })) });
-            expect(question.Options.map(o => o.Value)).toEqual([RESEARCH.ID, WRITER.ID]);
-        });
-
-        it('ask nothing about artifacts when the participants have none', () => {
-            expect(Object.keys(BuildRoutingQuestions(input()))).toEqual(['route', 'continues']);
-        });
-
-        it('with artifacts, ask which version the message modifies, with "none" as an option', () => {
-            const versions = BuildRoutingArtifactVersions([
-                { Agent: WRITER, Artifacts: [artifactSummary('Press kit', [[VERSION_2, 2, 'Final'], [VERSION_1, 1, null]])] },
-                { Agent: RESEARCH, Artifacts: [] },
-            ]);
-            const artifact = BuildRoutingQuestions(input({ ArtifactVersions: versions }))['artifact'];
-
-            expect(artifact?.Kind).toBe('Choice');
-            const options = artifact?.Kind === 'Choice' ? artifact.Options : [];
-            expect(options.map(o => o.Value)).toEqual([VERSION_2, VERSION_1, 'none']);
-            expect(options[0].Description).toBe('"Press kit" (Report), version 2 "Final", the latest, made by Writer');
-            expect(options[1].Description).toBe('"Press kit" (Report), version 1, made by Writer');
-        });
-
-        it('are rebuilt from the conversation\'s agents as they are now', () => {
-            const before = [userRow('u1', 'Find sources'), agentRow('a1', RESEARCH, 'Here you go')];
-            const after = [...before, userRow('u2', 'Draft it'), agentRow('a2', WRITER, 'Drafted')];
-            const optionsFor = (history: RoutingHistoryRow[], continuity: string) => routeQuestion({
-                State: '',
-                Questions: BuildRoutingQuestions(input({
-                    ContinuityAgentId: continuity,
-                    Participants: CollectRoutingParticipants(history, MANAGER.ID, null, findAgent),
-                })),
-            }).Options.map(o => o.Value);
-
-            expect(optionsFor(before, RESEARCH.ID)).toEqual([RESEARCH.ID, MANAGER.ID]);
-            expect(optionsFor(after, WRITER.ID)).toEqual([WRITER.ID, RESEARCH.ID, MANAGER.ID]);
-        });
-    });
-
-    describe('BuildRoutingArtifactVersions', () => {
-        /** A version ID for artifact `artifact`, `age` versions older than its latest. */
-        const versionId = (artifact: number, age: number): string =>
-            `CCCCCCCC-0000-0000-${String(artifact).padStart(4, '0')}-${String(age).padStart(12, '0')}`;
-
-        /** An artifact with `count` versions, newest first. */
-        function deepArtifact(name: string, artifact: number, count: number): AgentArtifactSummary {
-            return artifactSummary(name, Array.from({ length: count }, (_, age): [string, number, string | null] =>
-                [versionId(artifact, age), count - age, null]));
-        }
-
-        const ids = (versions: ReturnType<typeof BuildRoutingArtifactVersions>): string[] => versions.map(v => v.ArtifactVersionId);
-        const range = (artifact: number, count: number): string[] => Array.from({ length: count }, (_, age) => versionId(artifact, age));
-
-        it(`offers at most ${MAX_ROUTING_ARTIFACT_VERSIONS}: every artifact's latest first, then older ones, in their order`, () => {
-            const versions = BuildRoutingArtifactVersions([
-                { Agent: WRITER, Artifacts: [deepArtifact('Press kit', 1, 30)] },
-                { Agent: RESEARCH, Artifacts: [deepArtifact('Sources', 2, 5), deepArtifact('Notes', 3, 1)] },
-            ]);
-
-            expect(versions).toHaveLength(MAX_ROUTING_ARTIFACT_VERSIONS);
-            expect(ids(versions)).toEqual([...range(1, 14), ...range(2, 5), ...range(3, 1)]);
-        });
-
-        it('keeps a crowded conversation under the server\'s option limit, so the agent choice is still asked', () => {
-            const agents = Array.from({ length: 7 }, (_, i): RoutingAgent => ({ ID: `DDDDDDDD-0000-0000-0000-00000000000${i}`, Name: `Agent ${i}`, Description: null }));
-            const versions = BuildRoutingArtifactVersions(agents.map((agent, i) => ({ Agent: agent, Artifacts: [deepArtifact(`Doc ${i}`, i, 40)] })));
-            const questions = BuildRoutingQuestions(input({ ArtifactVersions: versions }));
-            const artifact = questions['artifact'];
-
-            expect(ids(versions)).toEqual(expect.arrayContaining(agents.map((_, i) => versionId(i, 0))));
-            expect(artifact?.Kind === 'Choice' ? artifact.Options.length : 0).toBe(MAX_ROUTING_ARTIFACT_VERSIONS + 1);
-            // RunDecisionResolver.MAX_OPTIONS_PER_QUESTION: over it, the server refuses the whole request.
-            expect(MAX_ROUTING_ARTIFACT_VERSIONS + 1).toBeLessThanOrEqual(255);
-            expect(questions['route']?.Kind).toBe('Choice');
-        });
-
-        it('offers a version once, even when two agents\' replies carry it', () => {
-            const shared = artifactSummary('Press kit', [[VERSION_1, 1, null]]);
-            const versions = BuildRoutingArtifactVersions([{ Agent: WRITER, Artifacts: [shared] }, { Agent: RESEARCH, Artifacts: [shared] }]);
-
-            expect(versions).toEqual([{ AgentId: WRITER.ID, ArtifactVersionId: VERSION_1, Description: expect.stringContaining('made by Writer') }]);
-        });
-    });
-
-    describe('BuildRoutingState', () => {
-        it('holds the recent turns and the new message', () => {
-            expect(BuildRoutingState(input())).toBe([
-                'Recent conversation, oldest first:',
-                'User: Find sources on renewals',
-                'Research: Here are five sources.',
-                '',
-                'The user\'s new message:',
-                'Now turn that into a press release',
-            ].join('\n'));
-        });
-    });
-
-    describe('CanAskRoutingDecision', () => {
-        it('needs the last agent among the participants and two options to choose between', () => {
-            expect(CanAskRoutingDecision(input())).toBe(true);
-            expect(CanAskRoutingDecision(input({ Participants: [participant(WRITER, 'x')] }))).toBe(false);
-            expect(CanAskRoutingDecision(input({ Participants: [participant(RESEARCH, 'x')], ConversationManager: null }))).toBe(false);
-            expect(CanAskRoutingDecision(input({ Participants: [participant(RESEARCH, 'x')] }))).toBe(true);
         });
     });
 
@@ -476,26 +265,6 @@ describe('decision routing', () => {
             ArtifactVersions: BuildRoutingArtifactVersions([
                 { Agent: WRITER, Artifacts: [artifactSummary('Press kit', [[VERSION_2, 2, null], [VERSION_1, 1, null]])] },
             ]),
-        });
-
-        it('names the version when the answer is confident', () => {
-            const outcome = InterpretRoutingAnswers(withArtifacts(), leaves(WRITER.ID, { artifact: choice(VERSION_1, 0.9) }));
-            expect(outcome.TargetArtifact).toEqual({ AgentId: WRITER.ID, ArtifactVersionId: VERSION_1 });
-        });
-
-        it('names nothing for "none"', () => {
-            const outcome = InterpretRoutingAnswers(withArtifacts(), leaves(WRITER.ID, { artifact: choice('none', 0.95) }));
-            expect(outcome.TargetArtifact).toBeNull();
-        });
-
-        it('names nothing when the answer is unsure', () => {
-            const outcome = InterpretRoutingAnswers(withArtifacts(), leaves(WRITER.ID, { artifact: choice(VERSION_1, 0.6) }));
-            expect(outcome.TargetArtifact).toBeNull();
-        });
-
-        it('names nothing for a version it was not offered', () => {
-            const outcome = InterpretRoutingAnswers(withArtifacts(), leaves(WRITER.ID, { artifact: choice('CCCCCCCC-0000-0000-0000-000000000001', 0.9) }));
-            expect(outcome.TargetArtifact).toBeNull();
         });
 
         it('applies only to the turn of the agent that made the version', () => {

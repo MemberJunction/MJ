@@ -17,7 +17,14 @@ import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vite
 import { Injector } from '@angular/core';
 import type { ChoiceAnswer, DecisionAnswer, LikelihoodAnswer } from '@memberjunction/ai';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { ConversationUtility, MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, type ExecuteAgentResult } from '@memberjunction/ai-core-plus';
+import {
+    ConversationUtility,
+    DECISION_ROUTING_TIMEOUT_MS,
+    MJAIAgentEntityExtended,
+    MJAIAgentRunEntityExtended,
+    type ExecuteAgentResult,
+    type RoutingAgent
+} from '@memberjunction/ai-core-plus';
 import { EntityInfo, UserInfo } from '@memberjunction/core';
 import { MJAIAgentRunSchema, MJAIAgentSchema, MJConversationDetailEntity, MJConversationDetailSchema } from '@memberjunction/core-entities';
 import type { RunDecisionParams, RunDecisionResult } from '@memberjunction/graphql-dataprovider';
@@ -36,7 +43,6 @@ import { MentionParserService } from '../lib/services/mention-parser.service';
 import { RealtimeSessionService } from '../lib/services/realtime-session.service';
 import { ToastService } from '../lib/services/toast.service';
 import { PlanModePreference } from '../lib/utils/plan-mode-preference';
-import { DECISION_ROUTING_TIMEOUT_MS, type RoutingAgent } from '../lib/utils/decision-routing';
 import type { MentionParseResult } from '../lib/models/conversation-state.model';
 
 /**
