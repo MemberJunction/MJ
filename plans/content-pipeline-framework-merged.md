@@ -6,6 +6,7 @@
 - **Revised**: 2026-09-28 — per-record detail rows kept in queue mode; heartbeat with buffered progress; cooperative in-flight cancel; record-cap fix; scope-provider registry
 - **Revised**: 2026-09-29 — lease semantics and the 30-second heartbeat ceiling; `MaxProcessingSeconds` honored by the source; stall detection; deployment guidance removed
 - **Revised**: 2026-09-29 — attempt info for final failures; child results; run-time queue scope; delivery reference without a foreign key; queue-scoped subscriptions use `HostType='MJWorker'` with no handler (the Database transport rejects `External`)
+- **Revised**: 2026-09-30 — flagged the lack of scoped claims within a subscription as an unresolved risk
 - **Author**: Dray + Claude
 - **Branch**: dray/content-pipeline-framework
 - **Depends on**: `feat/work-queue` landing on `next`, **and** a small set of generic additions to `packages/RecordSetProcessor` (see API Changes). This is the only one of the three plans in this PR that changes both systems rather than depending on one, unmodified.
@@ -271,7 +272,7 @@ Engine and executor changes:
 - **Record cap:** ask the source for `min(batchSize, maxRecords - processed)`, not `batchSize`, so nothing is claimed that won't be processed.
 - **Per-record context:** build each record's context from the page context plus `source.BindRecord?.(record)`. For the `ProcessBatch` path there is one call per page, so it receives a page-level signal (aborted on run shutdown) and a page-level progress reporter. Per-record cancels are honored when results are settled.
 - **Scope provider:** `RecordProcessExecutor` handles the built-in scopes as today, then consults `RecordScopeProviderRegistry`, then fails — the same fall-through `BuildProcessor` already uses for work types. When a provider supplies a tracker, `Run()` passes it into `Process()`.
-- **Run-time queue scope:** a run can override a queue-scoped Record Process's subscription with `{ Kind: 'queue', SubscriptionID }`, the same way it can already override a filter or view. One Record Process can then drain many subscriptions, for example one per source, without a Record Process row per subscription.
+- **Run-time queue scope:** a run can override a queue-scoped Record Process's subscription with `{ Kind: 'queue', SubscriptionID }`, the same way it can already override a filter or view. One Record Process can then drain many subscriptions without a Record Process row per subscription. This does not by itself let workers isolate by source within one subscription (see Risks).
 - **Child results:** `GenericProcessRunTracker` writes one detail row per entry in `RecordResult.Children`, in both scopes. A child's `RecordID` is its real key once committed, or its ephemeral identity when nothing was committed, as in a dry run.
 
 The source and its tracker come from one factory because they share state: which deliveries are claimed, their lease tokens, their signals and progress buffers.
@@ -336,6 +337,8 @@ Filter, View, List and SingleRecord scopes stay available platform-wide for ad h
 - **Integration tier:** one bundle running the same processor through a `FilterSource` and a `WorkQueueSource`, asserting identical detail rows apart from `WorkQueueDeliveryID`.
 
 ## Risks & Open Questions
+
+- **Unresolved: a worker can't be scoped to a subset of one subscription.** Work Queue routes a message to subscriptions at publish time, by each subscription's filter, and a claim takes whatever is next in its subscription. A queue-scoped run therefore can't be limited to, for example, one content source's records within a shared subscription — the way a filter-scoped run takes a source as an input. Isolating workers by such a value today means one subscription per value (which grows with the number of values and makes every publish evaluate every subscription's filter), partitioning by it (one record in flight per value across all workers), or filter scope (one worker per value). Deployments that dedicate workers to a source at scale have no settled answer until Work Queue supports scoped claims; how it should is for Work Queue's owners to decide. Flagged so it isn't overlooked before any deployment depends on source isolation.
 
 - **Cooperative cancel only.** A processor that never checks `context.Signal` runs to completion. Drivers need to be written with checkpoints where stopping is safe.
 - **Head-of-line blocking within a page.** The engine fetches the next page only after the current page fully settles, so a page moves at the speed of its slowest record. Stages whose records vary widely in duration need a small page size until the engine supports replacing records as they finish, rather than a page at a time.
