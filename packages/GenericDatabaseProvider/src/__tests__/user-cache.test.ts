@@ -565,6 +565,37 @@ describe('UserCache', () => {
             expect(stub.Written).toEqual([]); // a peer's change must not publish another notice
         });
 
+        it("still tells other servers about THIS process's change when a peer notice lands first", async () => {
+            // A local save and an incoming peer notice collapse into one reload, which is the point
+            // of the debounce. But the reload's "announce it" flag belonged to whichever event
+            // scheduled it LAST, so a peer notice arriving inside the debounce window silently
+            // demoted a local write to "someone else's change" and no peer was ever told about it.
+            // The transaction wait stretches that window to seconds, so this is not a thin race.
+            const stub = makeProviderStub({ users: [{ ID: 'id1', Name: 'Alice' }], roles: [], sharedStore: true });
+            await UserCache.Instance.Refresh(stub.Provider);
+            stub.Queries.length = 0;
+            stub.Written.length = 0;
+
+            raiseEntityEvent('MJ: Users');                                                        // ours
+            deliverCacheEvent({ CacheKey: USER_CACHE_STAMP_KEY, Category: 'default', Action: 'set' }); // theirs
+            await settle();
+
+            expect(stub.Queries).toHaveLength(2); // one reload, not two
+            expect(stub.Written).toEqual([{ key: USER_CACHE_STAMP_KEY, category: 'default' }]);
+        });
+
+        it('does not announce when only a peer notice arrived, in either order', async () => {
+            const stub = makeProviderStub({ users: [], roles: [], sharedStore: true });
+            await UserCache.Instance.Refresh(stub.Provider);
+            stub.Written.length = 0;
+
+            deliverCacheEvent({ CacheKey: USER_CACHE_STAMP_KEY, Category: 'default', Action: 'set' });
+            deliverCacheEvent({ CacheKey: 'RunViewCache', Category: 'RunViewCache', Action: 'category_cleared' });
+            await settle();
+
+            expect(stub.Written).toEqual([]); // nothing of ours to announce — no echo
+        });
+
         it('reloads when a tool clears the shared RunView cache, but not for other categories', async () => {
             const stub = makeProviderStub({ users: [], roles: [] });
             await UserCache.Instance.Refresh(stub.Provider);
