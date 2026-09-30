@@ -20,7 +20,7 @@
  *   - FK-ordered deep teardown of every run tree a check spawned.
  */
 import { RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { AgentRunner } from '@memberjunction/ai-agents';
+import { AgentRunner, type PayloadChangeResultSummary } from '@memberjunction/ai-agents';
 import { ResolveContextUserOrThrow, ResolvePromptRunIdsForAgentRuns, RequireRows } from './agent-live-shared';
 import type { MJAIAgentEntity } from '@memberjunction/core-entities';
 import type { ExecuteAgentParams, ExecuteAgentResult } from '@memberjunction/ai-core-plus';
@@ -62,24 +62,6 @@ export interface PromptRunRow {
     AgentID: string | null;
     Messages: string | null;
     Result: string | null;
-}
-
-/** The `payloadChangeResult` shape base-agent persists into a step's OutputData JSON. */
-export interface PayloadChangeResultBlob {
-    Applied?: { additions?: number; updates?: number; deletions?: number };
-    Warnings?: string[];
-    PayloadValidation?: {
-        upstreamMergeViolations?: {
-            subAgentName?: string;
-            attemptedOperations?: Array<{ path?: string; operation?: string; reason?: string }>;
-            authorizedPaths?: string[];
-            timestamp?: string;
-        };
-        selfWriteViolations?: {
-            deniedOperations?: Array<{ path?: string; operation?: string; reason?: string }>;
-            timestamp?: string;
-        };
-    };
 }
 
 /**
@@ -317,18 +299,46 @@ export async function collectRunTree(provider: IMetadataProvider, user: UserInfo
 }
 
 /** Parse the `payloadChangeResult` blob out of a step's OutputData JSON, if present. */
-export function ParseStepPayloadChange(step: AgentStepRow): PayloadChangeResultBlob | undefined {
+export function ParseStepPayloadChange(step: AgentStepRow): PayloadChangeResultSummary | undefined {
     if (!step.OutputData) return undefined;
     try {
-        const parsed = JSON.parse(step.OutputData) as { payloadChangeResult?: PayloadChangeResultBlob };
+        const parsed = JSON.parse(step.OutputData) as { payloadChangeResult?: PayloadChangeResultSummary };
         return parsed.payloadChangeResult;
     } catch {
         return undefined;
     }
 }
 
+type PayloadValidationRecord = NonNullable<PayloadChangeResultSummary['payloadValidation']>;
+type UpstreamOperation = NonNullable<PayloadValidationRecord['upstreamMergeViolations']>['attemptedOperations'][number];
+type SelfWriteOperation = NonNullable<PayloadValidationRecord['selfWriteViolations']>['deniedOperations'][number];
+
+/** The payload-guard audit trail recorded across a set of agent steps. */
+export interface PayloadAudit {
+    /** Operations the upstream (child → parent) merge blocked, from `upstreamMergeViolations`. */
+    UpstreamAttempted: UpstreamOperation[];
+    /** Self-writes the agent's own allow-list denied, from `selfWriteViolations`. */
+    SelfWriteDenied: SelfWriteOperation[];
+    /** Every payload-change warning, in step order. */
+    Warnings: string[];
+}
+
+/**
+ * Read the payload-guard audit trail off a run's steps. Checks go through this instead of spelling
+ * the persisted keys themselves: the keys are PayloadManager's camelCase `PayloadChangeResultSummary`,
+ * and a hand-copied PascalCase mirror of them once made every read come back empty (IT56 PG2/PG7).
+ */
+export function ReadPayloadAudit(steps: AgentStepRow[]): PayloadAudit {
+    const summaries = steps.map(ParseStepPayloadChange);
+    return {
+        UpstreamAttempted: summaries.flatMap((s) => s?.payloadValidation?.upstreamMergeViolations?.attemptedOperations ?? []),
+        SelfWriteDenied: summaries.flatMap((s) => s?.payloadValidation?.selfWriteViolations?.deniedOperations ?? []),
+        Warnings: summaries.flatMap((s) => s?.warnings ?? []),
+    };
+}
+
 /** @deprecated Use {@link ParseStepPayloadChange}. */
-export function parseStepPayloadChange(step: AgentStepRow): PayloadChangeResultBlob | undefined {
+export function parseStepPayloadChange(step: AgentStepRow): PayloadChangeResultSummary | undefined {
     return ParseStepPayloadChange(step);
 }
 
