@@ -642,11 +642,30 @@ jobs:
       fail-fast: false
       matrix:
         shard: ${{ fromJSON(needs.build.outputs.shards) }}
+    # A real Redis for the shard that draws @memberjunction/redis-provider. Its two integration
+    # files are `describe.skipIf(!REDIS_URL)`, so without a server they execute-and-skip — the
+    # index-group pruning, TTL, key-lock and lease behaviour they pin had NO CI coverage at all,
+    # and a fail-open pruning bug that silently disables cross-server invalidation shipped through
+    # a green run (plan §16.3 #2, §16.7). Every other shard ignores the service; it costs seconds.
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
       TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      # Consumed only by the Redis-gated suites; a per-run key prefix keeps concurrent shards and
+      # re-runs from sharing a keyspace.
+      REDIS_URL: redis://127.0.0.1:6379
+      REDIS_KEY_PREFIX: ci-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       # fetch-depth 1: a shard runs tests against the working tree and never diffs a base ref.
       - name: Checkout repo
@@ -719,6 +738,13 @@ jobs:
           # PR #3231, twice. Sharding reduces but does not remove the risk: the planner spreads
           # the heavy DOM packages across shards, yet a shard can still draw several.
           npx turbo run test --concurrency=4 "${FILTER_ARGS[@]}"
+
+      # A skipped suite and a passing suite look identical in the summary, which is how the
+      # Redis-gated files stayed dormant for a whole release. If this shard drew the Redis
+      # provider, assert the gated bodies actually ran.
+      - name: Assert the Redis-gated suites really ran
+        if: contains(matrix.shard.packages, '@memberjunction/redis-provider')
+        run: node .github/scripts/check-redis-suites-ran.mjs
 
   # ---------------------------------------------------------------------------------------
   # Native-ESM import guard (#3142, follow-up to #3137): import every BUILT "type": "module"
