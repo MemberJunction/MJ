@@ -3,12 +3,14 @@
  *
  * `DuplicateReasoningProvider` is an abstract base resolved via `@RegisterClass`. The
  * {@link DuplicateRecordDetector} selects an implementation per Entity Document via
- * `ReasoningMode` ('Prompt' | 'Agent') and calls {@link DuplicateReasoningProvider.Reason}
- * once per source record's matched set. Both shipped implementations
- * (`PromptReasoningProvider`, and `DuplicateReasoningAgentProvider` in `@memberjunction/ai-agents`)
- * consume the same {@link DuplicateReasoningInput} and emit the same
- * {@link DuplicateReasoningOutput}; only the runtime (single-shot prompt vs. orchestrated
- * agent) differs.
+ * `ReasoningMode` ('Prompt' | 'Agent' | 'Decision' | 'DecisionThenPrompt') and calls
+ * {@link DuplicateReasoningProvider.Reason} once per source record's matched set. Every shipped
+ * implementation consumes the same {@link DuplicateReasoningInput} and emits the same
+ * {@link DuplicateReasoningOutput}. `PromptReasoningProvider` and `DuplicateReasoningAgentProvider`
+ * (in `@memberjunction/ai-agents`) run the same instruction set and differ only in runtime
+ * (single-shot prompt vs. orchestrated agent). `DecisionReasoningProvider` asks a typed decision
+ * model instead and never recommends a merge; `DecisionThenPromptReasoningProvider` filters with
+ * the decision and then runs the prompt over the survivors.
  *
  * @module @memberjunction/ai-vector-dupe
  */

@@ -9,18 +9,27 @@
  *   2. `PromptReasoningProvider` reasons over **only the survivors**, so auto-merge still works
  *      wherever the prompt provider allows it.
  *
+ * Both stages resolve through the class factory under the 'Decision' and 'Prompt' modes, so an
+ * application's override of either mode applies inside the chain as well.
+ *
  * With no survivors the set is `NotDuplicate` and the prompt never runs. If the decision fails,
  * every candidate goes to the prompt provider, which is the `Prompt` mode's behaviour: narrowing is
  * an optimisation, so its failure must never hide a candidate.
+ *
+ * Each match row points at the run that produced its verdict: a survivor's at the prompt run, a
+ * dropped candidate's at the decision run. A failed decision's run is named in the error log, since
+ * a match row holds only one prompt run id.
  *
  * @module @memberjunction/ai-vector-dupe
  */
 
 import { LogError } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import {
     DuplicateReasoningProvider,
-    DECISION_THEN_PROMPT_REASONING_PROVIDER_KEY
+    DECISION_REASONING_PROVIDER_KEY,
+    DECISION_THEN_PROMPT_REASONING_PROVIDER_KEY,
+    PROMPT_REASONING_PROVIDER_KEY
 } from './DuplicateReasoningProvider';
 import { PromptReasoningProvider } from './PromptReasoningProvider';
 import {
@@ -47,15 +56,17 @@ export class DecisionThenPromptReasoningProvider extends DuplicateReasoningProvi
     protected readonly PromptStage: DuplicateReasoningProvider;
 
     /**
-     * The class factory passes no arguments, so both stages default to the shipped providers.
+     * The class factory passes no arguments, so both stages resolve through the class factory
+     * under the 'Decision' and 'Prompt' modes: an application's override of either mode applies
+     * inside the chain too.
      *
-     * @param decisionStage the filter stage; defaults to a `DecisionReasoningProvider` at its default threshold
-     * @param promptStage the reasoning stage; defaults to a `PromptReasoningProvider`
+     * @param decisionStage the filter stage; defaults to {@link ResolveDecisionStage}
+     * @param promptStage the reasoning stage; defaults to {@link ResolvePromptStage}
      */
     constructor(decisionStage?: DecisionReasoningProvider, promptStage?: DuplicateReasoningProvider) {
         super();
-        this.DecisionStage = decisionStage ?? new DecisionReasoningProvider();
-        this.PromptStage = promptStage ?? new PromptReasoningProvider();
+        this.DecisionStage = decisionStage ?? this.ResolveDecisionStage();
+        this.PromptStage = promptStage ?? this.ResolvePromptStage();
     }
 
     /**
@@ -67,7 +78,7 @@ export class DecisionThenPromptReasoningProvider extends DuplicateReasoningProvi
     ): Promise<DuplicateReasoningOutput> {
         const decision = await this.DecisionStage.DecideCandidates(input, context);
         if (!decision.Success) {
-            LogError(`DecisionThenPrompt: the decision failed (${decision.ErrorMessage ?? 'unknown error'}); passing every candidate to the prompt.`);
+            LogError(`DecisionThenPrompt: the decision failed (${this.describeFailure(decision)}); passing every candidate to the prompt.`);
             return this.PromptStage.Reason(input, context);
         }
         const dropped = decision.Candidates.filter(c => !this.DecisionStage.IsPlausible(c.Probability));
@@ -75,7 +86,7 @@ export class DecisionThenPromptReasoningProvider extends DuplicateReasoningProvi
             return this.noSurvivorsOutput(decision);
         }
         const output = await this.PromptStage.Reason(this.NarrowToSurvivors(input, dropped), context);
-        return this.withDroppedVerdicts(output, dropped);
+        return this.withDroppedVerdicts(output, dropped, decision.AIPromptRunID);
     }
 
     /**
@@ -98,6 +109,27 @@ export class DecisionThenPromptReasoningProvider extends DuplicateReasoningProvi
         };
     }
 
+    /**
+     * The filter stage: the provider registered for the 'Decision' mode. The chain needs its
+     * probability API, so a registration that is not a `DecisionReasoningProvider` falls back to
+     * the shipped one.
+     */
+    protected ResolveDecisionStage(): DecisionReasoningProvider {
+        const registered = this.resolveRegisteredProvider(DECISION_REASONING_PROVIDER_KEY);
+        return registered instanceof DecisionReasoningProvider ? registered : new DecisionReasoningProvider();
+    }
+
+    /** The reasoning stage: the provider registered for the 'Prompt' mode, else the shipped one. */
+    protected ResolvePromptStage(): DuplicateReasoningProvider {
+        return this.resolveRegisteredProvider(PROMPT_REASONING_PROVIDER_KEY) ?? new PromptReasoningProvider();
+    }
+
+    /** The provider the class factory registers for a mode, or null when none is registered. */
+    private resolveRegisteredProvider(mode: string): DuplicateReasoningProvider | null {
+        const result = MJGlobal.Instance.ClassFactory.TryCreateInstance<DuplicateReasoningProvider>(DuplicateReasoningProvider, mode);
+        return result.Resolved ? result.Instance : null;
+    }
+
     /** No candidate survived: `NotDuplicate` for the set, from the decision alone, with no prompt call. */
     private noSurvivorsOutput(decision: DuplicateDecisionResult): DuplicateReasoningOutput {
         const output = this.DecisionStage.RecommendFromDecision(decision);
@@ -107,13 +139,15 @@ export class DecisionThenPromptReasoningProvider extends DuplicateReasoningProvi
     }
 
     /**
-     * Give each dropped candidate its own `NotDuplicate` verdict from the decision, so its match row
-     * never falls back to the set-level recommendation. The prompt's verdicts and set-level fields
-     * are otherwise left as the prompt returned them.
+     * Give each dropped candidate its own `NotDuplicate` verdict from the decision, carrying the
+     * decision's run id, so its match row neither falls back to the set-level recommendation nor
+     * points at a prompt run that never saw it. The prompt's verdicts and set-level fields are
+     * otherwise left as the prompt returned them.
      */
     private withDroppedVerdicts(
         output: DuplicateReasoningOutput,
-        dropped: DuplicateCandidateProbability[]
+        dropped: DuplicateCandidateProbability[],
+        decisionRunID: string | null
     ): DuplicateReasoningOutput {
         if (!output.Success) {
             return output;
@@ -121,9 +155,15 @@ export class DecisionThenPromptReasoningProvider extends DuplicateReasoningProvi
         const droppedIDs = this.recordIDSet(dropped);
         output.CandidateVerdicts = [
             ...output.CandidateVerdicts.filter(v => !droppedIDs.has(this.normalizeRecordID(v.RecordID))),
-            ...dropped.map(c => this.DecisionStage.BandCandidate(c))
+            ...dropped.map(c => ({ ...this.DecisionStage.BandCandidate(c), AIPromptRunID: decisionRunID }))
         ];
         return output;
+    }
+
+    /** The failure for the log, naming the decision's run when the runner wrote one. */
+    private describeFailure(decision: DuplicateDecisionResult): string {
+        const error = decision.ErrorMessage ?? 'unknown error';
+        return decision.AIPromptRunID ? `${error}; decision run ${decision.AIPromptRunID}` : error;
     }
 
     private stillDiffers(delta: ReasoningFieldDelta): boolean {

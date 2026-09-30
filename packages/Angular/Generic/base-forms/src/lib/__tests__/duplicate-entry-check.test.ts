@@ -3,6 +3,8 @@ import type { DuplicateEntryCandidate, DuplicateEntryCheckResult } from '@member
 import {
     DUPLICATE_ENTRY_CHECK_BUDGET_MS,
     DUPLICATE_ENTRY_CHECK_DEBOUNCE_MS,
+    DUPLICATE_ENTRY_CHECK_IN_FLIGHT_LIMIT_MS,
+    DUPLICATE_ENTRY_CHECK_MAX_FIELD_TEXT_LENGTH,
     DuplicateEntryCheckController,
     DuplicateEntryCheckSession,
     DuplicateEntryCheckValues,
@@ -42,13 +44,13 @@ class FakeRecord implements DuplicateEntryCheckRecord {
     }
 }
 
-/** A session of its own for each test, so NotConfigured answers do not leak between tests. */
+/** A session of its own for each test, so NotConfigured and NotAuthorized answers do not leak between tests. */
 class FakeSession implements DuplicateEntryCheckSessionState {
     private readonly entities = new Set<string>();
-    public IsNotConfigured(entityName: string): boolean {
+    public IsStopped(entityName: string): boolean {
         return this.entities.has(entityName.toLowerCase());
     }
-    public MarkNotConfigured(entityName: string): void {
+    public Stop(entityName: string): void {
         this.entities.add(entityName.toLowerCase());
     }
 }
@@ -128,6 +130,30 @@ describe('DuplicateEntryCheckController: when it calls', () => {
         expect(DuplicateEntryCheckValues(record)).toEqual({ City: 'Boston' });
     });
 
+    it('cuts long text, so a long note never pushes the request over the server\'s limit', () => {
+        record.Edit('Notes', 'n'.repeat(DUPLICATE_ENTRY_CHECK_MAX_FIELD_TEXT_LENGTH * 20));
+
+        const notes = DuplicateEntryCheckValues(record)['Notes'];
+
+        expect(notes).toBe('n'.repeat(DUPLICATE_ENTRY_CHECK_MAX_FIELD_TEXT_LENGTH));
+    });
+
+    it('sends only scalars: numbers and booleans as they are, a date as its ISO string, nothing else', () => {
+        record = new FakeRecord('Accounts', {
+            Name: 'Acme',
+            Employees: 40,
+            Active: false,
+            Founded: new Date('1999-04-01T00:00:00Z'),
+            Invalid: new Date('not a date'),
+            Tags: ['a', 'b'],
+            Settings: { theme: 'dark' },
+        });
+
+        expect(DuplicateEntryCheckValues(record)).toEqual({
+            Name: 'Acme', Employees: 40, Active: false, Founded: '1999-04-01T00:00:00.000Z',
+        });
+    });
+
     it('makes no call while no field holds a value', async () => {
         record = new FakeRecord('Accounts', { Name: '' });
 
@@ -176,10 +202,58 @@ describe('DuplicateEntryCheckController: the budget', () => {
     });
 });
 
-// ─── Which answer wins ───────────────────────────────────────────────────────
+// ─── One at a time, newest wins ──────────────────────────────────────────────
 
-describe('DuplicateEntryCheckController: which answer wins', () => {
-    it('ignores a stale answer that arrives after a newer call has started', async () => {
+describe('DuplicateEntryCheckController: one check at a time, and which answer wins', () => {
+    it('holds a check due while one is in flight, then runs it once, on the latest values', async () => {
+        const first = deferred<DuplicateEntryCheckResult>();
+        check.mockReturnValueOnce(first.Promise);
+        await editAndWait('Name', 'Acme');
+
+        await editAndWait('Name', 'Acme I');
+        await editAndWait('Name', 'Acme Inc');
+        expect(check).toHaveBeenCalledTimes(1);
+
+        first.Resolve(checked());
+        await settle();
+
+        expect(check).toHaveBeenCalledTimes(2);
+        expect(check).toHaveBeenLastCalledWith('Accounts', { Name: 'Acme Inc', City: 'Boston' });
+    });
+
+    it('still waits for a check it has stopped showing: the server is still working on it', async () => {
+        const first = deferred<DuplicateEntryCheckResult>();
+        check.mockReturnValueOnce(first.Promise);
+        await editAndWait('Name', 'Acme');
+        await vi.advanceTimersByTimeAsync(DUPLICATE_ENTRY_CHECK_BUDGET_MS);
+
+        await editAndWait('Name', 'Acme Inc');
+
+        expect(check).toHaveBeenCalledTimes(1);
+        first.Resolve(checked());
+        await settle();
+        expect(check).toHaveBeenCalledTimes(2);
+    });
+
+    it('stops waiting for a check that never answers after the in-flight limit', async () => {
+        check.mockReturnValueOnce(deferred<DuplicateEntryCheckResult>().Promise);
+        await editAndWait('Name', 'Acme');
+        await editAndWait('Name', 'Acme Inc');
+        const waited = DUPLICATE_ENTRY_CHECK_DEBOUNCE_MS;
+
+        await vi.advanceTimersByTimeAsync(DUPLICATE_ENTRY_CHECK_IN_FLIGHT_LIMIT_MS - waited - 1);
+        expect(check).toHaveBeenCalledTimes(1);
+
+        await vi.advanceTimersByTimeAsync(1);
+        expect(check).toHaveBeenCalledTimes(2);
+        expect(check).toHaveBeenLastCalledWith('Accounts', { Name: 'Acme Inc', City: 'Boston' });
+    });
+
+    it('holds the next check back for longer than the form waits for an answer', () => {
+        expect(DUPLICATE_ENTRY_CHECK_IN_FLIGHT_LIMIT_MS).toBeGreaterThan(DUPLICATE_ENTRY_CHECK_BUDGET_MS);
+    });
+
+    it('ignores the answer to a check that newer edits overtook, and shows the newer one', async () => {
         const older = deferred<DuplicateEntryCheckResult>();
         const newer = deferred<DuplicateEntryCheckResult>();
         check.mockReturnValueOnce(older.Promise).mockReturnValueOnce(newer.Promise);
@@ -195,12 +269,14 @@ describe('DuplicateEntryCheckController: which answer wins', () => {
         expect(controller.Candidates.map(c => c.RecordID)).toEqual(['acct-new']);
     });
 
-    it('never lets a stale answer overwrite a fresh one', async () => {
+    it('never lets a late answer overwrite a fresh one', async () => {
         const older = deferred<DuplicateEntryCheckResult>();
         const newer = deferred<DuplicateEntryCheckResult>();
         check.mockReturnValueOnce(older.Promise).mockReturnValueOnce(newer.Promise);
         await editAndWait('Name', 'Acme');
         await editAndWait('Name', 'Acme Inc');
+        await vi.advanceTimersByTimeAsync(DUPLICATE_ENTRY_CHECK_IN_FLIGHT_LIMIT_MS);
+        expect(check).toHaveBeenCalledTimes(2);
 
         newer.Resolve(checked(candidate('acct-new')));
         await settle();
@@ -208,6 +284,34 @@ describe('DuplicateEntryCheckController: which answer wins', () => {
         await settle();
 
         expect(controller.Candidates.map(c => c.RecordID)).toEqual(['acct-new']);
+    });
+
+    it('drops the waiting check when the record is saved', async () => {
+        const first = deferred<DuplicateEntryCheckResult>();
+        check.mockReturnValueOnce(first.Promise);
+        await editAndWait('Name', 'Acme');
+        await editAndWait('Name', 'Acme Inc');
+
+        record.IsSaved = true;
+        controller.RecordSaved();
+        first.Resolve(checked(candidate('acct-1')));
+        await settle();
+
+        expect(check).toHaveBeenCalledTimes(1);
+        expect(controller.Candidates).toEqual([]);
+    });
+
+    it('drops the waiting check when the form is disposed', async () => {
+        const first = deferred<DuplicateEntryCheckResult>();
+        check.mockReturnValueOnce(first.Promise);
+        await editAndWait('Name', 'Acme');
+        await editAndWait('Name', 'Acme Inc');
+
+        controller.Dispose();
+        first.Resolve(checked());
+        await settle();
+
+        expect(check).toHaveBeenCalledTimes(1);
     });
 
     it('shows nothing for a Failed answer or a check that throws', async () => {
@@ -223,9 +327,9 @@ describe('DuplicateEntryCheckController: which answer wins', () => {
     });
 });
 
-// ─── NotConfigured ───────────────────────────────────────────────────────────
+// ─── NotConfigured and NotAuthorized ─────────────────────────────────────────
 
-describe('DuplicateEntryCheckController: NotConfigured', () => {
+describe('DuplicateEntryCheckController: NotConfigured and NotAuthorized', () => {
     it('stops later calls for that entity, on this form and on any other', async () => {
         check.mockResolvedValueOnce({ Status: 'NotConfigured', Candidates: [] });
         await editAndWait();
@@ -250,13 +354,33 @@ describe('DuplicateEntryCheckController: NotConfigured', () => {
         expect(check).toHaveBeenLastCalledWith('Contacts', { Name: 'Ada Lovelace' });
     });
 
+    it('stops later calls for the entity on NotAuthorized too, so a denied user is not asked again', async () => {
+        check.mockResolvedValueOnce({ Status: 'NotAuthorized', ErrorMessage: 'no read permission', Candidates: [] });
+        await editAndWait();
+
+        await editAndWait('Name', 'Acme Corp');
+        await editAndWait('Name', 'Acme Corporation');
+
+        expect(check).toHaveBeenCalledTimes(1);
+        expect(controller.Candidates).toEqual([]);
+    });
+
+    it('keeps asking after a Failed answer: a failure may pass', async () => {
+        check.mockResolvedValueOnce({ Status: 'Failed', ErrorMessage: 'ran out of its budget', Candidates: [] });
+        await editAndWait();
+
+        await editAndWait('Name', 'Acme Corp');
+
+        expect(check).toHaveBeenCalledTimes(2);
+    });
+
     it('is remembered for the session, in memory, by entity name', () => {
         const entityName = `Entry Check Session Spec ${Math.random()}`;
-        expect(DuplicateEntryCheckSession.Instance.IsNotConfigured(entityName)).toBe(false);
+        expect(DuplicateEntryCheckSession.Instance.IsStopped(entityName)).toBe(false);
 
-        DuplicateEntryCheckSession.Instance.MarkNotConfigured(entityName);
+        DuplicateEntryCheckSession.Instance.Stop(entityName);
 
-        expect(DuplicateEntryCheckSession.Instance.IsNotConfigured(` ${entityName.toUpperCase()} `)).toBe(true);
+        expect(DuplicateEntryCheckSession.Instance.IsStopped(` ${entityName.toUpperCase()} `)).toBe(true);
     });
 });
 

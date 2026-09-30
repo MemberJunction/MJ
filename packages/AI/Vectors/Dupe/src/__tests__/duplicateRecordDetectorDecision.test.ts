@@ -2,14 +2,28 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { AIDecisionParams, AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import type { AIPromptParams, AIPromptRunResult } from '@memberjunction/ai-core-plus';
 import type { ChatResult, DecisionAnswer } from '@memberjunction/ai';
-import type { MJAIPromptRunEntity, MJEntityDocumentEntity } from '@memberjunction/core-entities';
+import type {
+    CompositeKey,
+    EntityFieldInfo,
+    EntityInfo,
+    EntityRelationshipInfo,
+    PotentialDuplicate,
+    PotentialDuplicateResult,
+} from '@memberjunction/core';
+import type {
+    MJAIPromptRunEntity,
+    MJDuplicateRunDetailMatchEntity,
+    MJEntityDocumentEntity,
+} from '@memberjunction/core-entities';
 
 // ─────────────────────────────────────────────
 // Hoisted mocks
 // ─────────────────────────────────────────────
 
-const { mockRunViewFn, mockExecuteDecision, mockExecutePrompt, engineState } = vi.hoisted(() => ({
+const { mockRunViewFn, mockGetEntityObject, mockExecuteDecision, mockExecutePrompt, engineState } = vi.hoisted(() => ({
     mockRunViewFn: vi.fn().mockResolvedValue({ Success: true, Results: [], RowCount: 0 }),
+    // A fresh, empty match row per call. The detector sets its columns and saves it.
+    mockGetEntityObject: vi.fn(async () => ({ NewRecord: () => true })),
     mockExecuteDecision: vi.fn<(params: AIDecisionParams) => Promise<AIDecisionRunResult>>(),
     mockExecutePrompt: vi.fn<(params: AIPromptParams) => Promise<AIPromptRunResult>>(),
     engineState: { Prompts: new Array<{ ID: string; Name: string }>() },
@@ -80,6 +94,8 @@ vi.mock('@memberjunction/ai-vectors', () => ({
         _runView = { RunView: mockRunViewFn };
         _provider = { id: 'request-provider' };
         get RunView() { return this._runView; }
+        get Metadata() { return { GetEntityObject: mockGetEntityObject }; }
+        SaveEntity = vi.fn().mockResolvedValue(true);
     },
 }));
 
@@ -120,63 +136,82 @@ import { DuplicateReasoningProvider } from '../reasoning/DuplicateReasoningProvi
 import { DuplicateReasoningOutput } from '../reasoning/DuplicateReasoningTypes';
 
 // ─────────────────────────────────────────────
-// Typed access to the detector's protected pipeline steps. As in the neighbouring detector
-// specs, fixtures are partial doubles, so the parameters are loosely typed.
-// ─────────────────────────────────────────────
-
-/** The fields of a PotentialDuplicateResult that the reasoning and auto-merge steps read and write. */
-interface ResultDouble {
-    ReasoningRecommendation?: string;
-    ReasoningFieldMap?: unknown;
-    ReasoningText?: string;
-}
-
-/** The generated reasoning columns applyReasoningToMatch writes on a match row. */
-interface MatchDouble {
-    LLMRecommendation?: string | null;
-    LLMProposedSurvivorRecordID?: string | null;
-    LLMProposedFieldMap?: string | null;
-}
-
-type DetectorInternals = {
-    ResolveReasoningProvider(entityDocument: unknown): DuplicateReasoningProvider | null;
-    RunReasoningForSet(
-        qr: unknown, entityInfo: unknown, entityDocument: unknown, contextUser: unknown
-    ): Promise<{ Output: DuplicateReasoningOutput; FieldMap: { FieldName: string; Value: unknown }[] } | undefined>;
-    applyReasoningToResult(result: ResultDouble, output: DuplicateReasoningOutput, fieldMap: { FieldName: string; Value: unknown }[]): void;
-    applyReasoningToMatch(match: MatchDouble, reasoning: DuplicateReasoningOutput, candidateRecordID: string): void;
-    IsAutoMergeEligible(dupe: unknown, dupeResult: ResultDouble, entityDocument: unknown, absoluteThreshold: number): boolean;
-};
-const internals = (d: DuplicateRecordDetector): DetectorInternals => d as unknown as DetectorInternals;
-
-// ─────────────────────────────────────────────
-// Fixtures
+// Fixtures. Each is a partial double of the type the detector reads, holding only the members
+// the reasoning and auto-merge steps touch.
 // ─────────────────────────────────────────────
 
 const ABSOLUTE_THRESHOLD = 0.9;
 const CANDIDATE_IDS = ['cand-a', 'cand-b', 'cand-c'];
-const ENTITY_INFO = { Name: 'Accounts', Description: null, RelatedEntities: [], Fields: [], PrimaryKeys: [] };
+const ENTITY_INFO = {
+    Name: 'Accounts',
+    Description: '',
+    RelatedEntities: new Array<EntityRelationshipInfo>(),
+    Fields: new Array<EntityFieldInfo>(),
+    PrimaryKeys: new Array<EntityFieldInfo>(),
+} as EntityInfo;
+
+/** Structural twin of the detector's module-private `RecordQueryResult`. */
+interface QueryResult {
+    SourceKey: CompositeKey;
+    TemplateText: string;
+    Duplicates: PotentialDuplicateResult;
+}
+
+/** Exposes the protected pipeline steps under test. */
+class TestableDetector extends DuplicateRecordDetector {
+    public Resolve(entityDocument: MJEntityDocumentEntity): DuplicateReasoningProvider | null {
+        return this.ResolveReasoningProvider(entityDocument);
+    }
+    public ReasonOver(qr: QueryResult, entityDocument: MJEntityDocumentEntity) {
+        return this.RunReasoningForSet(qr, ENTITY_INFO, entityDocument, undefined);
+    }
+    public ApplyToResult(result: PotentialDuplicateResult, output: DuplicateReasoningOutput, fieldMap: { FieldName: string; Value: unknown }[]): void {
+        this.applyReasoningToResult(result, output, fieldMap);
+    }
+    public ApplyToMatch(match: MJDuplicateRunDetailMatchEntity, output: DuplicateReasoningOutput, candidateRecordID: string): void {
+        this.applyReasoningToMatch(match, output, candidateRecordID);
+    }
+    public Eligible(dupe: PotentialDuplicate, result: PotentialDuplicateResult, entityDocument: MJEntityDocumentEntity): boolean {
+        return this.IsAutoMergeEligible(dupe, result, entityDocument, ABSOLUTE_THRESHOLD);
+    }
+    public SaveRows(result: PotentialDuplicateResult, output: DuplicateReasoningOutput): Promise<MJDuplicateRunDetailMatchEntity[]> {
+        return this.CreateMatchRecordsForDetail('detail-1', result, output);
+    }
+}
+
+function candidate(id: string): PotentialDuplicate {
+    const dupe: Pick<PotentialDuplicate, 'ProbabilityScore' | 'Values' | 'ToURLSegment' | 'VectorMetadata'> = {
+        ProbabilityScore: 0.99,
+        Values: () => id,
+        ToURLSegment: () => `ID|${id}`,
+        VectorMetadata: { Name: id },
+    };
+    return dupe as PotentialDuplicate;
+}
 
 /** A matched set whose every candidate clears the absolute threshold on vector score alone. */
-function queryResult() {
+function queryResult(): QueryResult {
     return {
-        SourceKey: { Values: () => 'src', ToString: () => 'src' },
+        SourceKey: { Values: () => 'src', ToString: () => 'src' } as CompositeKey,
         TemplateText: '',
-        Duplicates: {
-            Duplicates: CANDIDATE_IDS.map(id => ({ ProbabilityScore: 0.99, Values: () => id, VectorMetadata: { Name: id } })),
-        },
+        Duplicates: { Duplicates: CANDIDATE_IDS.map(candidate) } as PotentialDuplicateResult,
     };
 }
 
 /** An entity document with reasoning on and the most permissive automation level. */
-function entityDoc(mode: MJEntityDocumentEntity['ReasoningMode']) {
+function entityDoc(mode: MJEntityDocumentEntity['ReasoningMode']): MJEntityDocumentEntity {
     return {
         EnableLLMReasoning: true,
         ReasoningThreshold: null,
         ReasoningMode: mode,
         AutomationLevel: 'AutoMergeAboveAbsolute',
         ReasoningPromptID: null,
-    };
+    } as MJEntityDocumentEntity;
+}
+
+/** An empty match row for applyReasoningToMatch to stamp. */
+function matchRow(): MJDuplicateRunDetailMatchEntity {
+    return {} as MJDuplicateRunDetailMatchEntity;
 }
 
 function runRow(id: string): MJAIPromptRunEntity {
@@ -186,6 +221,14 @@ function runRow(id: string): MJAIPromptRunEntity {
 /** A successful prompt run. The prompt provider reads only success, result and promptRun. */
 function promptRunResult(result: Record<string, unknown>, runID: string): AIPromptRunResult {
     return { success: true, result, promptRun: runRow(runID), chatResult: {} as ChatResult };
+}
+
+/** The prompt judges each listed candidate as given. */
+function promptVerdicts(verdicts: Record<string, string>): void {
+    const candidateVerdicts = Object.entries(verdicts).map(([recordId, recommendation]) => ({
+        recordId, recommendation, confidence: 0.9, reasoning: '',
+    }));
+    mockExecutePrompt.mockResolvedValue(promptRunResult({ candidateVerdicts, survivorRecordId: 'src' }, 'prompt-run-1'));
 }
 
 /** Answers each question with the probability of the candidate its instructions name. */
@@ -203,7 +246,7 @@ function answerByRecord(probabilities: Record<string, number>): void {
 }
 
 describe('DuplicateRecordDetector — decision reasoning modes', () => {
-    let detector: DuplicateRecordDetector;
+    let detector: TestableDetector;
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -212,36 +255,37 @@ describe('DuplicateRecordDetector — decision reasoning modes', () => {
             { ID: 'prompt-decision', Name: 'Default Decision' },
             { ID: 'prompt-reasoning', Name: 'Duplicate Resolution' },
         ];
-        detector = new DuplicateRecordDetector();
+        detector = new TestableDetector();
     });
 
     /** Run a set through reasoning, then apply the verdict to the result as the detector does. */
     async function reasonOverSet(mode: MJEntityDocumentEntity['ReasoningMode']) {
         const ed = entityDoc(mode);
         const qr = queryResult();
-        const reasoning = await internals(detector).RunReasoningForSet(qr, ENTITY_INFO, ed, undefined);
+        const reasoning = await detector.ReasonOver(qr, ed);
         if (!reasoning) {
             throw new Error('expected the reasoning gate to be open');
         }
-        const result: ResultDouble = {};
-        internals(detector).applyReasoningToResult(result, reasoning.Output, reasoning.FieldMap);
-        return { ed, qr, result, output: reasoning.Output };
+        detector.ApplyToResult(qr.Duplicates, reasoning.Output, reasoning.FieldMap);
+        return { ed, result: qr.Duplicates, output: reasoning.Output };
+    }
+
+    /** Whether each candidate, in set order, is auto-merge eligible. */
+    function eligibility(result: PotentialDuplicateResult, ed: MJEntityDocumentEntity): boolean[] {
+        return result.Duplicates.map(dupe => detector.Eligible(dupe, result, ed));
     }
 
     describe('ResolveReasoningProvider', () => {
         it('maps Decision to the DecisionReasoningProvider', () => {
-            const provider = internals(detector).ResolveReasoningProvider(entityDoc('Decision'));
-            expect(provider).toBeInstanceOf(DecisionReasoningProvider);
+            expect(detector.Resolve(entityDoc('Decision'))).toBeInstanceOf(DecisionReasoningProvider);
         });
 
         it('maps DecisionThenPrompt to the DecisionThenPromptReasoningProvider', () => {
-            const provider = internals(detector).ResolveReasoningProvider(entityDoc('DecisionThenPrompt'));
-            expect(provider).toBeInstanceOf(DecisionThenPromptReasoningProvider);
+            expect(detector.Resolve(entityDoc('DecisionThenPrompt'))).toBeInstanceOf(DecisionThenPromptReasoningProvider);
         });
 
         it('still maps Prompt to the PromptReasoningProvider', () => {
-            const provider = internals(detector).ResolveReasoningProvider(entityDoc('Prompt'));
-            expect(provider).toBeInstanceOf(PromptReasoningProvider);
+            expect(detector.Resolve(entityDoc('Prompt'))).toBeInstanceOf(PromptReasoningProvider);
         });
     });
 
@@ -258,12 +302,10 @@ describe('DuplicateRecordDetector — decision reasoning modes', () => {
 
         it.each(scenarios)('is not eligible for $name', async ({ arrange }) => {
             arrange();
-            const { ed, qr, result, output } = await reasonOverSet('Decision');
+            const { ed, result, output } = await reasonOverSet('Decision');
 
             expect(output.Recommendation).not.toBe('Merge');
-            for (const dupe of qr.Duplicates.Duplicates) {
-                expect(internals(detector).IsAutoMergeEligible(dupe, result, ed, ABSOLUTE_THRESHOLD)).toBe(false);
-            }
+            expect(eligibility(result, ed)).toEqual([false, false, false]);
         });
 
         it.each(scenarios)('writes no Merge, survivor or field map on a match row for $name', async ({ arrange }) => {
@@ -271,12 +313,37 @@ describe('DuplicateRecordDetector — decision reasoning modes', () => {
             const { output } = await reasonOverSet('Decision');
 
             for (const id of CANDIDATE_IDS) {
-                const match: MatchDouble = {};
-                internals(detector).applyReasoningToMatch(match, output, id);
+                const match = matchRow();
+                detector.ApplyToMatch(match, output, id);
                 expect(match.LLMRecommendation).not.toBe('Merge');
                 expect(match.LLMProposedSurvivorRecordID).toBeNull();
                 expect(match.LLMProposedFieldMap).toBeNull();
             }
+        });
+
+        it('saves a failed decision\'s rows Pending, with no verdict and no run id', async () => {
+            mockExecuteDecision.mockResolvedValue({ success: false, errorMessage: 'overloaded', Answers: {}, promptRun: runRow('decision-run-9') });
+            const { result, output } = await reasonOverSet('Decision');
+
+            expect(output.Success).toBe(false);
+            expect(output.AIPromptRunID).toBe('decision-run-9');
+            const rows = await detector.SaveRows(result, output);
+            expect(rows).toHaveLength(3);
+            for (const row of rows) {
+                expect(row.ApprovalStatus).toBe('Pending');
+                expect(row.LLMRecommendation).toBeUndefined();
+                expect(row.AIPromptRunID).toBeUndefined();
+            }
+            expect(result.ReasoningRecommendation).toBeUndefined();
+        });
+
+        it('saves a successful decision\'s rows with each candidate\'s band and the decision run', async () => {
+            answerByRecord({ 'cand-a': 0.8, 'cand-b': 0.3, 'cand-c': 0.5 });
+            const { result, output } = await reasonOverSet('Decision');
+
+            const rows = await detector.SaveRows(result, output);
+            expect(rows.map(r => r.LLMRecommendation)).toEqual(['Uncertain', 'NotDuplicate', 'Uncertain']);
+            expect(rows.map(r => r.AIPromptRunID)).toEqual(['decision-run-1', 'decision-run-1', 'decision-run-1']);
         });
 
         it('stamps each candidate with its own band', async () => {
@@ -284,49 +351,85 @@ describe('DuplicateRecordDetector — decision reasoning modes', () => {
             const { output } = await reasonOverSet('Decision');
 
             const recommendations = CANDIDATE_IDS.map(id => {
-                const match: MatchDouble = {};
-                internals(detector).applyReasoningToMatch(match, output, id);
+                const match = matchRow();
+                detector.ApplyToMatch(match, output, id);
                 return match.LLMRecommendation;
             });
             expect(recommendations).toEqual(['Uncertain', 'NotDuplicate', 'Uncertain']);
         });
     });
 
-    describe('DecisionThenPrompt keeps the prompt provider\'s auto-merge', () => {
+    describe('DecisionThenPrompt keeps the prompt provider\'s auto-merge, for survivors only', () => {
         it('makes a surviving candidate eligible when the prompt recommends Merge', async () => {
             answerByRecord({ 'cand-a': 0.9, 'cand-b': 0.1, 'cand-c': 0.2 });
-            mockExecutePrompt.mockResolvedValue(promptRunResult({
-                candidateVerdicts: [{ recordId: 'cand-a', recommendation: 'Merge', confidence: 0.95, reasoning: 'Same company' }],
-                survivorRecordId: 'src',
-                reasoning: 'cand-a duplicates the source',
-            }, 'prompt-run-1'));
-            const { ed, qr, result } = await reasonOverSet('DecisionThenPrompt');
+            promptVerdicts({ 'cand-a': 'Merge' });
+            const { ed, result } = await reasonOverSet('DecisionThenPrompt');
 
             expect(result.ReasoningRecommendation).toBe('Merge');
-            const survivor = qr.Duplicates.Duplicates[0];
-            expect(internals(detector).IsAutoMergeEligible(survivor, result, ed, ABSOLUTE_THRESHOLD)).toBe(true);
+            expect(detector.Eligible(result.Duplicates[0], result, ed)).toBe(true);
+        });
+
+        it('never merges a candidate the decision dropped, though its vector score clears the absolute threshold', async () => {
+            answerByRecord({ 'cand-a': 0.9, 'cand-b': 0.1, 'cand-c': 0.2 });
+            promptVerdicts({ 'cand-a': 'Merge' });
+            const { ed, result } = await reasonOverSet('DecisionThenPrompt');
+
+            expect(mockExecutePrompt.mock.calls[0][0].data?.['candidateCount']).toBe(1);
+            expect(result.ReasoningRecommendation).toBe('Merge');
+            expect(result.Duplicates.map(d => d.ReasoningRecommendation)).toEqual(['Merge', 'NotDuplicate', 'NotDuplicate']);
+            expect(eligibility(result, ed)).toEqual([true, false, false]);
         });
 
         it('stamps the dropped candidates NotDuplicate on their match rows', async () => {
             answerByRecord({ 'cand-a': 0.9, 'cand-b': 0.1, 'cand-c': 0.2 });
-            mockExecutePrompt.mockResolvedValue(promptRunResult({
-                candidateVerdicts: [{ recordId: 'cand-a', recommendation: 'Merge', confidence: 0.95, reasoning: '' }],
-            }, 'prompt-run-1'));
+            promptVerdicts({ 'cand-a': 'Merge' });
             const { output } = await reasonOverSet('DecisionThenPrompt');
 
             for (const id of ['cand-b', 'cand-c']) {
-                const match: MatchDouble = {};
-                internals(detector).applyReasoningToMatch(match, output, id);
+                const match = matchRow();
+                detector.ApplyToMatch(match, output, id);
                 expect(match.LLMRecommendation).toBe('NotDuplicate');
             }
         });
 
+        it('points each match row at the run that produced its verdict', async () => {
+            answerByRecord({ 'cand-a': 0.9, 'cand-b': 0.1, 'cand-c': 0.2 });
+            promptVerdicts({ 'cand-a': 'Merge' });
+            const { output } = await reasonOverSet('DecisionThenPrompt');
+
+            const rows = CANDIDATE_IDS.map(id => {
+                const match = matchRow();
+                detector.ApplyToMatch(match, output, id);
+                return [match.AIPromptRunID, match.AIAgentRunID];
+            });
+            expect(rows).toEqual([['prompt-run-1', null], ['decision-run-1', null], ['decision-run-1', null]]);
+        });
+
         it('is NotDuplicate with no prompt call when no candidate survives', async () => {
             answerByRecord({ 'cand-a': 0.1, 'cand-b': 0.1, 'cand-c': 0.2 });
-            const { result } = await reasonOverSet('DecisionThenPrompt');
+            const { ed, result } = await reasonOverSet('DecisionThenPrompt');
 
             expect(mockExecutePrompt).not.toHaveBeenCalled();
             expect(result.ReasoningRecommendation).toBe('NotDuplicate');
+            expect(eligibility(result, ed)).toEqual([false, false, false]);
+        });
+    });
+
+    describe('Prompt mode merges only the candidates the prompt judged Merge', () => {
+        it('leaves a NotDuplicate or Uncertain candidate out of a set-level Merge', async () => {
+            promptVerdicts({ 'cand-a': 'Merge', 'cand-b': 'NotDuplicate', 'cand-c': 'Uncertain' });
+            const { ed, result } = await reasonOverSet('Prompt');
+
+            expect(result.ReasoningRecommendation).toBe('Merge');
+            expect(eligibility(result, ed)).toEqual([true, false, false]);
+        });
+
+        it('never merges a candidate the prompt returned no verdict for', async () => {
+            promptVerdicts({ 'cand-a': 'Merge' });
+            const { ed, result } = await reasonOverSet('Prompt');
+
+            expect(result.Duplicates.map(d => d.ReasoningRecommendation)).toEqual(['Merge', undefined, undefined]);
+            expect(eligibility(result, ed)).toEqual([true, false, false]);
         });
     });
 });
