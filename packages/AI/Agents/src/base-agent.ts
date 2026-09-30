@@ -11,18 +11,19 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity } from '@memberjunction/core-entities';
 import { BuildActionToolSet, FilterDeclarableActions, SanitizeToolName } from './native-tools/action-tool-builder';
 import { BuildNativeToolSet, SUB_AGENT_TOOL_PREFIX, type NativeToolBinding } from './native-tools/control-tools';
 import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactToolResultContent, type NativeToolResult } from './native-tools/tool-result-turns';
 import { LooksLikeLoopEnvelope } from './native-tools/dual-channel';
-import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, ResolvePromptRunUserID } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
-import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, IRealtimeSession, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion } from '@memberjunction/ai';
+import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
-import { CopyScalarsAndArrays, JSONValidator, MJGlobal, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
+import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
+import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
 import { CrushJSON, DescribeCrush, PartitionStablePrefix, type JsonValue } from '@memberjunction/context-crush';
 // AST-aware code reduction (CodeCompressor-inspired) — opt-in per agent type
@@ -113,16 +114,30 @@ import {
     AgentDecisionRequest,
     AgentDecisionResult,
     AgentDecisionAnswerSummary,
-    AgentFinishIf
+    AgentFinishIf,
+    SystemPlaceholderManager
 } from '@memberjunction/ai-core-plus';
-import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver } from '@memberjunction/actions-base';
+import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver, RunActionParams } from '@memberjunction/actions-base';
+import { TemplateEngineServer } from '@memberjunction/templates';
+import { RuntimeStateFragmentBuilder, RuntimeStateDateTime, RuntimeStateScratchpad, EscapeRuntimeStateTagsInMessage } from './runtime-state-fragment';
+import { ResolveSpecializationPlacement } from './volatile-child-prompt';
+import {
+    CURRENT_DATE_PLACEHOLDER,
+    CURRENT_DAY_OF_WEEK_PLACEHOLDER,
+    CURRENT_TIME_PLACEHOLDER,
+    RUNTIME_STATE_TAG,
+    SCRATCHPAD_NOTES_PLACEHOLDER,
+    SCRATCHPAD_TASK_SUMMARY_PLACEHOLDER,
+    SCRATCHPAD_TASKS_PLACEHOLDER,
+    VOLATILE_TEMPLATE_MARKERS,
+} from './constants';
 import { AgentRunner } from './AgentRunner';
 import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from './PayloadManager';
 import { ScratchpadManager } from './ScratchpadManager';
 import { ArtifactToolManager, ArtifactToolCall, StoredToolResult } from './ArtifactToolManager';
 import { MemoryWriteManager, MemoryWriteRequest, MemoryWriteResult } from './MemoryWriteManager';
 import { AgentDecisionService, DecisionQuestionMapping } from './AgentDecisionService';
-import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS, MAX_DECISION_REQUESTS_PER_TURN } from './agent-types/loop-agent-prompt-params';
+import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS, MAX_DECISION_REQUESTS_PER_TURN, ResolveFinishIfMode, type FinishIfMode } from './agent-types/loop-agent-prompt-params';
 import {
     ApplyCatalogNarrowing,
     BuildCatalogNarrowingQuestions,
@@ -188,6 +203,8 @@ interface ActionResultSummary {
     resultCode: string;
     message: string;
     aiDirectives?: AIDirective[];
+    /** Set when the circuit breaker blocked the call without dispatching it. */
+    breakerReason?: ActionCircuitBreakerReason;
 }
 
 /**
@@ -353,6 +370,53 @@ interface ParallelSubAgentDispatch {
 }
 
 /**
+ * Options for {@link BaseAgent.ExecuteSingleAction}.
+ */
+export interface ExecuteSingleActionOptions {
+    /**
+     * When true, the run-scoped action circuit breaker is bypassed for this call: none of the
+     * pre-execution checks (fatal lockout, identical-arguments rule, consecutive-attempt budget)
+     * apply, and the outcome neither increments nor resets the failure history.
+     *
+     * Set by the pipeline registry and by the ForEach / While iteration paths. Those callers do
+     * their own per-element failure accounting and expect elements to be independent, and there
+     * is no model in the loop to act on the breaker's guidance, so counting those calls would let
+     * a run of bad elements block the rest of the batch and then block the model's next direct
+     * call too.
+     */
+    skipCircuitBreaker?: boolean;
+}
+
+/**
+ * Which circuit-breaker rule blocked an action call without dispatching it.
+ *
+ * - `'fatal'` — the action failed earlier in the run with a configuration or credential error and is
+ *   locked out for the rest of the run.
+ * - `'identical-arguments'` — the action already failed {@link IDENTICAL_FAILURE_THRESHOLD} times
+ *   with these exact arguments.
+ * - `'attempts-exhausted'` — the action has failed {@link ACTION_FAILURE_BUDGET} consecutive times
+ *   across any arguments.
+ */
+export type ActionCircuitBreakerReason = 'fatal' | 'identical-arguments' | 'attempts-exhausted';
+
+/** Identical-arguments rule: this many failures with the same arguments block further identical calls. */
+export const IDENTICAL_FAILURE_THRESHOLD = 2;
+
+/** Attempt budget: this many consecutive failures, across any arguments, disable the action for the run. */
+export const ACTION_FAILURE_BUDGET = 5;
+
+/**
+ * The {@link ActionResult} returned when the run-scoped circuit breaker blocks a call before it
+ * reaches the action engine. Carries the rule that fired so the failure directive can name it
+ * directly instead of re-deriving it from the failure history, which a blocked call never updates.
+ */
+export class CircuitBreakerActionResult extends ActionResult {
+    constructor(public readonly Reason: ActionCircuitBreakerReason) {
+        super();
+    }
+}
+
+/**
  * The agent-invariant "base" catalog cached (process-wide) on AIEngine and reused across runs/steps.
  * Holds the resolved sub-agents + actions and their formatted markdown, plus the base merged
  * agent-type prompt params (with NO runtime overrides applied). Runtime `actionChanges` /
@@ -376,7 +440,10 @@ interface AgentBaseCatalog {
 
 /** The finishIf settings of the current step. */
 interface FinishIfSettings {
+    /** Whether a gate is evaluated: `finishIfMode` is `shadow` or `on`, and the response field is on. */
     Enabled: boolean;
+    /** The agent's `finishIfMode`. Only `on` lets a passing gate end the run. */
+    Mode: FinishIfMode;
     Threshold: number;
     PromptName: string;
 }
@@ -533,6 +600,304 @@ export class BaseAgent {
      * @private
      */
     private _lastModelSelectionInfo: AIModelSelectionInfo | undefined;
+
+    /**
+     * The volatile runtime state message generated for the most recent prompt execution.
+     * When append-only trailing state mode is used (e.g. OpenAI prompt caching), this fragment
+     * is retained in conversation history across turns to preserve a byte-exact prompt prefix.
+     * @private
+     */
+    private _lastVolatileStateMessage: AgentChatMessage | undefined;
+
+    /**
+     * The trailing-state retention mode once it has been decided for this run, frozen at the first
+     * model selection so the layout never flips again mid-run. Undefined until then (turn 1 only).
+     * @private
+     */
+    private _resolvedTrailingStateMode: boolean | undefined;
+
+    /**
+     * Index in conversationMessages where this agent run began, used to accurately restore
+     * turn 1's trailing state message in append-only mode without corrupting prior chat turns.
+     * @private
+     */
+    private _turn1InsertionIndex: number = -1;
+
+    /**
+     * Actions that have failed fatally (e.g., missing API key, unauthorized, or repeated unrecoverable errors)
+     * during the current agent run. Subsequent attempts to execute these actions are short-circuited in 0ms.
+     * @private
+     */
+    private _fatalActionFailures: Set<string> = new Set();
+
+    /**
+     * Parameter-aware failure tracking per action name for the current agent run.
+     * Differentiates identical retries (which trip quickly) from parameter modifications (which allow self-correction).
+     * @private
+     */
+    private _actionFailureHistory: Map<string, {
+        lastParamsString: string;
+        identicalFailures: number;
+        totalConsecutiveFailures: number;
+    }> = new Map();
+
+    /**
+     * The identity of one action call's arguments, for the circuit breaker's identical-arguments
+     * rule: two calls with the same normalized string are "the same call", whatever order the model
+     * wrote the keys in.
+     *
+     * Algorithm, top to bottom:
+     * 1. Null, undefined or a non-object yields `''` (a call with no arguments).
+     * 2. The top-level keys are sorted, and each `(key, value)` pair passes through
+     *    {@link normalizeActionParamEntry}, which may rename it, rewrite its value, or drop it.
+     * 3. Every value passes through {@link normalizeActionParamValue}: plain objects are rebuilt with
+     *    sorted keys at EVERY depth, arrays keep their order but normalize each element, and
+     *    anything else (strings, numbers, booleans, null, Dates, entity instances) is kept as is.
+     * 4. The result is serialized with `JSON.stringify`. Should that throw (a circular reference,
+     *    a BigInt), the fallback is a sorted list of the top-level keys — still deterministic, still
+     *    distinguishes differently-shaped calls, and never throws.
+     *
+     * Three protected layers so a subclass can change one part without re-implementing the rest:
+     * override {@link normalizeActionParamEntry} to ignore a key (a trace id, a timestamp the model
+     * regenerates on every call), or {@link normalizeActionParamValue} to canonicalize values
+     * (case-fold a search query, trim whitespace) so near-identical retries count as identical.
+     */
+    protected normalizeActionParams(params: Record<string, unknown> | null | undefined): string {
+        if (!params || typeof params !== 'object') {
+            return '';
+        }
+        try {
+            const normalized: Record<string, unknown> = {};
+            for (const key of Object.keys(params).sort()) {
+                const entry = this.normalizeActionParamEntry(key, params[key]);
+                if (entry) {
+                    normalized[entry.key] = entry.value;
+                }
+            }
+            return JSON.stringify(normalized);
+        } catch {
+            return `[unserializable:${Object.keys(params).sort().join(',')}]`;
+        }
+    }
+
+    /**
+     * Normalizes one top-level `(key, value)` pair of an action's arguments. The default keeps the
+     * key and normalizes the value through {@link normalizeActionParamValue}. Return `null` to drop
+     * the pair from the call's identity — the seam for ignoring arguments that legitimately differ
+     * between otherwise identical retries.
+     */
+    protected normalizeActionParamEntry(key: string, value: unknown): { key: string; value: unknown } | null {
+        return { key, value: this.normalizeActionParamValue(value) };
+    }
+
+    /**
+     * Normalizes one value, recursively: a plain object is rebuilt with its keys sorted, an array
+     * keeps its order with each element normalized, and any other value is returned unchanged. The
+     * seam for canonicalizing values before they are compared.
+     *
+     * "Plain" here is by prototype (`Object.prototype` or none), not the structural
+     * `IsPlainObject` from `@memberjunction/global`: a Date, Map or entity instance must pass through
+     * as an opaque leaf and serialize as itself, not be rebuilt as an empty bag of sorted keys.
+     */
+    protected normalizeActionParamValue(value: unknown): unknown {
+        if (Array.isArray(value)) {
+            return value.map(item => this.normalizeActionParamValue(item));
+        }
+        if (value !== null && typeof value === 'object' && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null)) {
+            const source = value as Record<string, unknown>;
+            const sorted: Record<string, unknown> = {};
+            for (const key of Object.keys(source).sort()) {
+                sorted[key] = this.normalizeActionParamValue(source[key]);
+            }
+            return sorted;
+        }
+        return value;
+    }
+
+    /**
+     * Detects whether an action error message represents a fatal configuration or credential
+     * problem: the tool cannot work in this environment no matter what arguments it is given,
+     * so retrying is pointless and the action is locked out for the rest of the run.
+     *
+     * Deliberately NOT fatal: HTTP 401/403, "unauthorized" and "forbidden". Those are usually
+     * per-resource (one site blocking a fetch, one record the user cannot read) or transient
+     * (a search provider using 403 as a rate limit), so they fall through to the parameter-aware
+     * failure history where the identical-arguments rule and the consecutive-attempt budget
+     * bound them without disabling the tool for every other resource.
+     *
+     * Also NOT fatal, for the same reason: a failure the model can fix by changing its arguments.
+     * A message that names a parameter is treated as an argument problem whatever else it says,
+     * and a call that itself carried credential-shaped arguments (password, API key, token) is
+     * never fatal even on "authentication failed", because the credential came from the model,
+     * not the environment. Demoting a message from fatal costs at most the attempt budget.
+     *
+     * @param message The action's failure message.
+     * @param actionParams The arguments the call was made with, when known.
+     */
+    protected isFatalActionError(message: string | null | undefined, actionParams?: Record<string, unknown> | null): boolean {
+        if (!message) {
+            return false;
+        }
+
+        // 1. Parameter/argument/input problems are recoverable (the agent can adjust inputs), so they
+        // never trip the fatal breaker, however the rest of the message is phrased.
+        const isParamError = /\b(?:parameter|argument|param|input|field|option|property|value|column|filter|header)\b/i.test(message);
+        if (isParamError || this.hasCredentialShapedArguments(actionParams)) {
+            return false;
+        }
+
+        // 2. Missing or invalid credentials, API keys, or authentication failures are unrecoverable in this run
+        const fatalCredentialPattern = /(?:api[\s_-]?key\s+(?:is\s+)?(?:not\s+found|missing|required|invalid)|(?:missing|invalid)\s+api[\s_-]?key|no\s+api[\s_-]?key|credentials?\s+(?:not\s+found|missing)|authentication\s+failed)/i;
+        if (fatalCredentialPattern.test(message)) {
+            return true;
+        }
+
+        // 3. Action/service/provider-level configuration problems where the tool itself cannot execute in this environment
+        const fatalConfigPattern = /(?:(?:action|tool|service|provider|integration|driver|client|api|extension|engine|server)\s+(?:is\s+)?not\s+configured|not\s+configured\s+(?:for\s+(?:this\s+)?tenant|in\s+(?:this\s+)?environment|on\s+this\s+server|in\s+(?:config|mj\.config))|^\s*(?:action\s+)?(?:is\s+)?not\s+configured[.!]*\s*$)/i;
+        return fatalConfigPattern.test(message);
+    }
+
+    /**
+     * True when any top-level argument name looks like a credential the model supplied itself
+     * (password, secret, credential, API key, or an access / auth / bearer / refresh / ID token).
+     * `maxTokens`-style names are deliberately not matched.
+     */
+    protected hasCredentialShapedArguments(actionParams?: Record<string, unknown> | null): boolean {
+        if (!actionParams || typeof actionParams !== 'object') {
+            return false;
+        }
+        const credentialKey = /password|passwd|secret|credential|api[_-]?key|(?:access|auth|bearer|refresh|id)[_-]?token|^token$/i;
+        return Object.keys(actionParams).some(key => credentialKey.test(key));
+    }
+
+    /**
+     * Records a non-successful outcome for the run-scoped action circuit breaker. A fatal
+     * configuration error locks the action out for the rest of the run; any other failure
+     * updates the parameter-aware history behind the identical-arguments rule and the
+     * consecutive-attempt budget.
+     */
+    protected recordActionFailure(action: AgentAction, actionEntity: MJActionEntityExtended | undefined, message: string | null | undefined, normalizedParams: string): void {
+        if (this.isFatalActionError(message, action.params)) {
+            this._fatalActionFailures.add(action.name);
+            if (actionEntity?.Name) {
+                this._fatalActionFailures.add(actionEntity.Name);
+            }
+            return;
+        }
+        const existing = this._actionFailureHistory.get(action.name) || (actionEntity?.Name ? this._actionFailureHistory.get(actionEntity.Name) : undefined);
+        const isIdentical = existing !== undefined && existing.lastParamsString === normalizedParams;
+        const record = {
+            lastParamsString: normalizedParams,
+            identicalFailures: isIdentical && existing ? existing.identicalFailures + 1 : 1,
+            totalConsecutiveFailures: (existing?.totalConsecutiveFailures ?? 0) + 1
+        };
+        this._actionFailureHistory.set(action.name, record);
+        if (actionEntity?.Name) {
+            this._actionFailureHistory.set(actionEntity.Name, record);
+        }
+    }
+
+    /**
+     * Clears the parameter-aware failure history for an action after it succeeds, so the
+     * identical-arguments rule and the consecutive-attempt budget start over.
+     */
+    protected clearActionFailureRecord(action: AgentAction, actionEntity: MJActionEntityExtended | undefined): void {
+        this._actionFailureHistory.delete(action.name);
+        if (actionEntity?.Name) {
+            this._actionFailureHistory.delete(actionEntity.Name);
+        }
+    }
+
+    /**
+     * Applies the three circuit-breaker rules to a call that is about to be dispatched. Returns a
+     * blocked result, with the rule that fired, when the call must not go to the action engine;
+     * null when it may proceed. Rules are checked fatal → identical-arguments → budget.
+     */
+    protected checkActionCircuitBreaker(
+        params: ExecuteAgentParams,
+        action: AgentAction,
+        actionEntity: MJActionEntityExtended,
+        normalizedParams: string
+    ): CircuitBreakerActionResult | null {
+        const entityKey = actionEntity?.Name;
+        if (this._fatalActionFailures.has(action.name) || (entityKey && this._fatalActionFailures.has(entityKey))) {
+            this.logStatus(`   ⚡ Circuit breaker: Action '${action.name}' short-circuited (0ms): fatal configuration or credential error earlier in this run`, false, params);
+            return this.buildBlockedActionResult(actionEntity, 'fatal',
+                `Action '${action.name}' is disabled for this run because it previously failed with an unrecoverable configuration or credential error. You must select an alternative action.`);
+        }
+
+        const record = this._actionFailureHistory.get(action.name) || (entityKey ? this._actionFailureHistory.get(entityKey) : undefined);
+        if (!record) {
+            return null;
+        }
+        if (record.lastParamsString === normalizedParams && record.identicalFailures >= IDENTICAL_FAILURE_THRESHOLD) {
+            this.logStatus(`   ⚡ Circuit breaker: Action '${action.name}' short-circuited on identical retry loop (0ms)`, false, params);
+            return this.buildBlockedActionResult(actionEntity, 'identical-arguments',
+                `Action '${action.name}' is disabled for these inputs because it already failed ${record.identicalFailures} times with identical arguments. You must modify your parameters or select an alternative tool.`);
+        }
+        if (record.totalConsecutiveFailures >= ACTION_FAILURE_BUDGET) {
+            this.logStatus(`   ⚡ Circuit breaker: Action '${action.name}' short-circuited on max retry attempts (0ms)`, false, params);
+            return this.buildBlockedActionResult(actionEntity, 'attempts-exhausted',
+                `Action '${action.name}' is disabled for this run after ${ACTION_FAILURE_BUDGET} consecutive failures across parameter attempts. You must select an alternative tool or proceed with available data.`);
+        }
+        return null;
+    }
+
+    /** The failed {@link ActionResult} a blocked call returns in place of dispatching. */
+    protected buildBlockedActionResult(actionEntity: MJActionEntityExtended, reason: ActionCircuitBreakerReason, message: string): CircuitBreakerActionResult {
+        const blocked = new CircuitBreakerActionResult(reason);
+        blocked.Success = false;
+        blocked.Message = message;
+        blocked.Params = [];
+        blocked.RunParams = new RunActionParams();
+        blocked.RunParams.Action = actionEntity;
+        return blocked;
+    }
+
+    /**
+     * Names the rule behind a failed action summary so the directive matches what actually
+     * happened. A blocked call reports the rule that blocked it. A dispatched failure is fatal if
+     * `recordActionFailure` locked the action out (the summary has no access to the call's
+     * arguments, so the decision is read back rather than re-derived from the message); otherwise
+     * the budget is checked BEFORE the identical-arguments rule, because once the budget is spent
+     * the action is blocked whatever the arguments are, and telling the model to change them
+     * would send it in circles.
+     */
+    protected classifyActionFailure(summary: ActionResultSummary): ActionCircuitBreakerReason | 'warning' {
+        if (summary.breakerReason) {
+            return summary.breakerReason;
+        }
+        if (this._fatalActionFailures.has(summary.actionName)) {
+            return 'fatal';
+        }
+        const record = this._actionFailureHistory.get(summary.actionName);
+        if (!record) {
+            return 'warning';
+        }
+        if (record.totalConsecutiveFailures >= ACTION_FAILURE_BUDGET) {
+            return 'attempts-exhausted';
+        }
+        if (record.identicalFailures >= IDENTICAL_FAILURE_THRESHOLD) {
+            return 'identical-arguments';
+        }
+        return 'warning';
+    }
+
+    /** The guidance line appended to the history for one failed action. */
+    protected formatActionFailureDirective(summary: ActionResultSummary): string {
+        const name = summary.actionName;
+        const record = this._actionFailureHistory.get(name);
+        switch (this.classifyActionFailure(summary)) {
+            case 'fatal':
+                return `[CRITICAL/ACTION_UNAVAILABLE] Action '${name}' failed with an unrecoverable configuration or credential error: "${summary.message}". This action cannot execute in this environment. DO NOT call '${name}' again during this run. You MUST select an alternative tool or proceed with available data.`;
+            case 'attempts-exhausted':
+                return `[CRITICAL/ATTEMPTS_EXHAUSTED] Action '${name}' has failed ${record?.totalConsecutiveFailures ?? ACTION_FAILURE_BUDGET} consecutive times: "${summary.message}". Retries for this action are exhausted. You MUST pivot to an alternative tool or continue with available data.`;
+            case 'identical-arguments':
+                return `[CRITICAL/REPEATED_IDENTICAL_CALL] Action '${name}' failed again with the EXACT SAME arguments: "${summary.message}". Calling '${name}' with these parameters will not work. You MUST either adjust your parameters or pivot to an alternative tool.`;
+            default:
+                return `[WARNING/ACTION_FAILURE] Action '${name}' failed: "${summary.message}". Review the error and adjust your input parameters (attempt ${record?.totalConsecutiveFailures ?? 1} of ${ACTION_FAILURE_BUDGET}). DO NOT retry calling '${name}' with identical arguments.`;
+        }
+    }
 
     /**
      * Returns the active metadata provider for this agent run. Subclasses MUST
@@ -1687,6 +2052,11 @@ export class BaseAgent {
             this._executeParams = wrappedParams;
             this._agentConfig = undefined;
             this._lastModelSelectionInfo = undefined;
+            this._lastVolatileStateMessage = undefined;
+            this._resolvedTrailingStateMode = undefined;
+            this._turn1InsertionIndex = -1;
+            this._fatalActionFailures.clear();
+            this._actionFailureHistory.clear();
 
             // Convert UI markup in conversation messages to plain text if requested (default: true)
             if (params.convertUIMarkupToPlainText !== false) {
@@ -2391,6 +2761,11 @@ export class BaseAgent {
             promptRun.ModelID = modelResolution.modelID;
             promptRun.VendorID = modelResolution.vendorID || null;
             promptRun.AgentID = params.agent.ID;
+            promptRun.UserID = ResolvePromptRunUserID({
+                UserID: params.userId,
+                AgentRun: this._agentRun,
+                ContextUser: params.contextUser,
+            });
             promptRun.Status = 'Running';
             promptRun.RunAt = new Date();
             promptRun.StreamingEnabled = true;
@@ -4125,6 +4500,11 @@ export class BaseAgent {
         // Attribute the resulting AIPromptRun to this agent. Agents share agent-type-level system
         // prompts, so without this a parent's inference and its sub-agent's are indistinguishable.
         promptParams.agentId = params.agent.ID;
+        promptParams.UserID = ResolvePromptRunUserID({
+            UserID: params.userId,
+            AgentRun: this._agentRun,
+            ContextUser: params.contextUser,
+        }) ?? undefined;
 
         // Handle case where systemPrompt is optional (e.g., Flow Agent Type)
         if (systemPrompt) {
@@ -4183,9 +4563,9 @@ export class BaseAgent {
             const agentTypePromptParams = promptParams.data.__agentTypePromptParams as Record<string, unknown> | undefined;
             const scratchpadEnabled = agentTypePromptParams?.includeScratchpadDocs !== false;
             if (scratchpadEnabled && this._scratchpadManager) {
-                promptParams.data['_SCRATCHPAD_NOTES'] = this._scratchpadManager.GetNotes() || '_(no notes yet)_';
-                promptParams.data['_SCRATCHPAD_TASKS'] = this._scratchpadManager.ToPromptString();
-                promptParams.data['_SCRATCHPAD_TASK_SUMMARY'] = this._scratchpadManager.GetTaskSummary();
+                promptParams.data[SCRATCHPAD_NOTES_PLACEHOLDER] = this._scratchpadManager.GetNotes() || '_(no notes yet)_';
+                promptParams.data[SCRATCHPAD_TASKS_PLACEHOLDER] = this._scratchpadManager.ToPromptString();
+                promptParams.data[SCRATCHPAD_TASK_SUMMARY_PLACEHOLDER] = this._scratchpadManager.GetTaskSummary();
             }
 
             // Inject artifact tools template variables if enabled and artifacts are present.
@@ -4346,7 +4726,380 @@ export class BaseAgent {
             );
         }
 
+        // Prompt-cache layout. The per-iteration state (and, when the child prompt is volatile, the
+        // specialization) never lives in the system prompt; it rides as the FINAL message of THIS request.
+        // In append-only mode (OpenAI prompt caching), prior runtime-state fragments are retained in history
+        // so each turn extends the exact byte prefix of the previous request, maintaining ~93% cache hits.
+        // In replace-in-place mode (Gemini/Cerebras), only the latest fragment is attached, keeping history lean.
+        const volatileStateMessage = await this.buildVolatileStateMessage(params, promptParams, payload, childPrompt, agentType, systemPrompt);
+        if (volatileStateMessage) {
+            const isAppendOnly = this.shouldUseAppendOnlyTrailingState(promptParams);
+            this.restoreTurn1VolatileStateIfNeeded(params, isAppendOnly);
+            promptParams.conversationMessages = this.assembleOutgoingMessages(params.conversationMessages, volatileStateMessage, isAppendOnly);
+            if (isAppendOnly) {
+                params.conversationMessages.push(volatileStateMessage);
+            }
+            this._lastVolatileStateMessage = volatileStateMessage;
+        }
+
         return promptParams;
+    }
+
+    /**
+     * In append-only mode, restores turn 1's volatile state fragment if mode resolution
+     * was deferred until after turn 1 (e.g. dynamic model selection).
+     *
+     * Restores the fragment at the exact message boundary where turn 1 executed, ensuring
+     * earlier turns in multi-turn conversations are not corrupted.
+     *
+     * This is only correct for a replace → append-only flip between turn 1 and turn 2, when
+     * `_lastVolatileStateMessage` still holds turn 1's fragment. `shouldUseAppendOnlyTrailingState`
+     * freezes the mode at the first model selection precisely so that no later flip can occur.
+     */
+    protected restoreTurn1VolatileStateIfNeeded(
+        params: ExecuteAgentParams,
+        isAppendOnly: boolean
+    ): void {
+        if (this._turn1InsertionIndex < 0) {
+            // Record the message boundary at Turn 1 before any loop messages are added
+            this._turn1InsertionIndex = params.conversationMessages.length;
+        } else if (isAppendOnly && this._lastVolatileStateMessage && !this.runHasVolatileStateMessage(params)) {
+            // If append-only was resolved after turn 1 (via _lastModelSelectionInfo),
+            // restore turn 1's fragment at the exact position where turn 1 executed it (the turn 1 boundary)
+            // to ensure exact prefix match without corrupting pre-existing conversation history.
+            const insertIdx = Math.min(this._turn1InsertionIndex, params.conversationMessages.length);
+            params.conversationMessages.splice(insertIdx, 0, this._lastVolatileStateMessage);
+        }
+    }
+
+    /**
+     * Whether THIS run has already placed a volatile-state fragment in the history, i.e. at or after
+     * the turn-1 boundary. Fragments before the boundary belong to an earlier run whose history the
+     * caller reused; they must not suppress this run's turn-1 restore.
+     */
+    protected runHasVolatileStateMessage(params: ExecuteAgentParams): boolean {
+        const start = Math.max(0, this._turn1InsertionIndex);
+        return params.conversationMessages.slice(start).some(m => (m as AgentChatMessage).metadata?.volatileState === true);
+    }
+
+    /**
+     * The message array sent for ONE request under `'trailingMessage'` placement: a copy of the history
+     * with every non-system message's fragment tag literals escaped, then the real fragment last.
+     *
+     * Escaping at send time (rather than where text enters the history) covers every source at once —
+     * user turns, action results, sub-agent results, skill activations — without rewriting stored data,
+     * and it is deterministic, so the cached prefix stays byte-stable across iterations. System messages
+     * and framework-authored volatile state messages are left alone.
+     */
+    protected assembleOutgoingMessages(history: ChatMessage[], fragment: AgentChatMessage, isAppendOnly: boolean = false): ChatMessage[] {
+        const source = isAppendOnly ? history : history.filter(m => !(m as AgentChatMessage).metadata?.volatileState);
+        const sanitized = source.map(m => (m.role === 'system' || (m as AgentChatMessage).metadata?.volatileState ? m : EscapeRuntimeStateTagsInMessage(m)));
+        return [...sanitized, fragment];
+    }
+
+    /**
+     * Determines whether the current prompt execution should use append-only trailing state retention.
+     *
+     * Why: OpenAI and xAI prompt caching operate on an exact byte prefix match from token 0. Replacing the
+     * trailing runtime-state fragment turn-over-turn breaks the byte prefix after the system prompt,
+     * dropping cache hit rates significantly. In append-only mode, prior runtime state messages are
+     * retained in the message history so each turn is an exact prefix extension of the prior turn,
+     * achieving ~93% cache hit rate. Providers with block-level or sliding caching (Gemini, Cerebras)
+     * use replace-in-place to keep context compact.
+     *
+     * Which providers are which is METADATA, not code: the `PrefixPromptCache` flag in the model
+     * catalog's `ModelConfiguration` cascade (Model Types < Models < Vendors' `Configuration.ModelDefaults`
+     * < Model Vendors), read through {@link resolvePrefixPromptCache}. `true` means append-only;
+     * anything else means replace.
+     *
+     * Decided ONCE per run. An explicit `trailingStateMode` or a runtime model override answers
+     * immediately. Otherwise the answer is frozen at the first model selection and reused for every
+     * later turn, so a failover to another vendor cannot flip the layout mid-run — a flip after turn 2
+     * would leave stale fragments in the history or, worse, restore the wrong turn's fragment. On turn 1,
+     * before any selection is known, the answer is replace-in-place: turn 1's fragment is kept and, if
+     * turn 2 resolves to append-only, spliced back at the turn-1 boundary, which reproduces exactly the
+     * bytes an append-only turn 1 would have sent. Nothing is lost by deferring, so the prompt's bound
+     * models are deliberately NOT consulted — prompts commonly bind several vendors for failover, and
+     * guessing from them mis-pins runs that end up selecting another vendor.
+     */
+    protected shouldUseAppendOnlyTrailingState(promptParams: AIPromptParams): boolean {
+        const data = promptParams.data ?? {};
+        // An explicit trailingStateMode wins; 'auto' (the default) or an absent key falls through to
+        // vendor/model detection below. See TrailingStateMode for when to force either mode.
+        const agentTypePromptParams = data.__agentTypePromptParams as Partial<LoopAgentTypePromptParams> | undefined;
+        if (agentTypePromptParams?.trailingStateMode === 'appendOnly') {
+            return true;
+        }
+        if (agentTypePromptParams?.trailingStateMode === 'replace') {
+            return false;
+        }
+
+        // A model override pins the serving path for the whole run, so it answers now. A vendor-only
+        // override cannot: the strategy lives on the model-vendor row, which needs the model too, so
+        // that case is decided at the first selection like any other run.
+        if (promptParams.override?.modelId) {
+            const model = AIEngine.Instance?.ModelsByID?.get(NormalizeUUID(promptParams.override.modelId));
+            const vendor = promptParams.override.vendorId ? AIEngine.Instance?.VendorsByID?.get(NormalizeUUID(promptParams.override.vendorId)) : undefined;
+            return this.resolvePrefixPromptCache(model, vendor);
+        }
+
+        if (this._resolvedTrailingStateMode !== undefined) {
+            return this._resolvedTrailingStateMode;
+        }
+        if (this._lastModelSelectionInfo) {
+            const model = this._lastModelSelectionInfo.ModelSelected;
+            const vendor = this._lastModelSelectionInfo.vendorSelected;
+            this._resolvedTrailingStateMode = this.resolvePrefixPromptCache(model, vendor);
+            return this._resolvedTrailingStateMode;
+        }
+
+        // Turn 1, nothing known yet: replace-in-place, resolved for good on turn 2 (see above).
+        return false;
+    }
+
+    /**
+     * Whether a model, as served by a vendor, sits behind a byte-prefix prompt cache
+     * (`LLM.PrefixPromptCache`), read from the model catalog's `ModelConfiguration` cascade —
+     * `AIModelType < AIModel < AIVendor.Configuration.ModelDefaults < AIModelVendor` — via
+     * `AIEngine.GetEffectiveModelConfiguration`. The most specific layer is the INFERENCE-PROVIDER
+     * model-vendor row for `vendor`, whose vendor row supplies the host-wide default that beats the
+     * model's own bag; when the vendor is unknown, or has no inference row for this model, the model
+     * and type layers still answer. False when no layer declares it, which callers
+     * treat as a block cache (replace-in-place).
+     *
+     * Extension point: a subclass with out-of-catalog knowledge (an OpenAI-compatible gateway whose
+     * rows carry no flag, say) can override this rather than the mode decision above.
+     */
+    protected resolvePrefixPromptCache(model: MJAIModelEntityExtended | undefined, vendor: MJAIVendorEntity | undefined): boolean {
+        if (!model) {
+            return false;
+        }
+        const engine = AIEngine.Instance;
+        const modelVendor = vendor
+            ? (engine.ModelVendorsByModelID?.get(NormalizeUUID(model.ID)) ?? []).find(mv => UUIDsEqual(mv.VendorID, vendor.ID) && engine.IsInferenceProvider(mv))
+            : undefined;
+        return IsPrefixPromptCache(engine.GetEffectiveModelConfiguration(model.ID, modelVendor?.ID));
+    }
+
+    /**
+     * Builds the framework-authored `user` message that carries the loop agent's volatile state as the
+     * final message of the request; returns null only when every block is turned off, or when the
+     * system prompt template in this database has not yet synced and still embeds the state itself
+     * (see the guard below). The blocks mirror the sections the template used to render (see
+     * {@link RuntimeStateFragmentBuilder}), and each honors the same include flag the template did.
+     *
+     * Why this exists: provider prompt caching is a prefix match over tools → system → messages, so
+     * state that changes every iteration INSIDE the system prompt invalidates the entire history each
+     * call. Measured on Sage: 36% → 83% cached on Gemini 2.5 Flash, 12% → 96% on Claude Opus 5 (with the
+     * Anthropic adapter placing its breakpoint before this message), output quality unchanged.
+     *
+     * The message carries STATE only — never rules. It is marked `metadata.volatileState` so adapters
+     * can recognize it without depending on this package's tag names.
+     */
+    protected async buildVolatileStateMessage<P>(
+        params: ExecuteAgentParams,
+        promptParams: AIPromptParams,
+        payload: P,
+        childPrompt: MJAIPromptEntityExtended | undefined,
+        agentType: MJAIAgentTypeEntity,
+        systemPrompt?: MJAIPromptEntityExtended
+    ): Promise<AgentChatMessage | null> {
+        const data = promptParams.data ?? {};
+        const agentTypePromptParams = data.__agentTypePromptParams as Record<string, unknown> | undefined;
+
+        // Delivery gate: the fragment is emitted only for a system prompt whose template points the model
+        // at it. See resolveRuntimeStateDelivery for the two ways a template can fail that test.
+        const effectiveSystemPrompt = systemPrompt ?? (promptParams.prompt as MJAIPromptEntityExtended | undefined);
+        const delivery = await this.resolveRuntimeStateDelivery(effectiveSystemPrompt, params.contextUser);
+        if (delivery === 'embedded') {
+            this.logStatus(
+                '⚠️ System prompt template still contains volatile blocks (database template unsynced); skipping trailing runtime-state fragment to avoid duplicate state.',
+                true,
+                params
+            );
+            return null;
+        }
+        if (delivery === 'unsupported') {
+            this.logStatus(
+                `System prompt template has no <${RUNTIME_STATE_TAG}> pointer (not a Loop agent system prompt); skipping trailing runtime-state fragment.`,
+                true,
+                params
+            );
+            return null;
+        }
+
+        const includeDateTime = agentTypePromptParams?.includeDateTimeInPrompt !== false;
+        const includeScratchpad = agentTypePromptParams?.includeScratchpadDocs !== false;
+        const includePayload = agentTypePromptParams?.includePayloadInPrompt !== false;
+
+        const specialization = await this.resolveRelocatedSpecialization(promptParams, childPrompt, agentType, params.contextUser);
+        const fragment = new RuntimeStateFragmentBuilder().Build({
+            DateTime: includeDateTime ? await this.resolveFragmentDateTime(promptParams) : null,
+            Scratchpad: includeScratchpad ? this.readScratchpadFromTemplateData(data) : null,
+            // Same value the agent type injects for the template (`payload || {}`), so both placements agree.
+            Payload: includePayload ? { Value: payload || {} } : null,
+            Specialization: specialization,
+        });
+        if (!fragment) {
+            return null;
+        }
+        this.logStatus(`📦 Volatile state → trailing message (${fragment.length} chars${specialization ? ', specialization relocated' : ''})`, true, params);
+        return { role: 'user', content: fragment, metadata: { volatileState: true, turnAdded: this._promptTurnCount } };
+    }
+
+    /**
+     * Decides whether this run's specialization (child prompt) rides in the trailing message, and if so
+     * pre-renders it and flags the template to render a stub in its place. Decided from the child
+     * template's UNRENDERED text via {@link ResolveSpecializationPlacement}, so the answer is the same on
+     * every iteration and the layout never flips mid-run. Returns the rendered specialization, or null
+     * when it stays in the system prompt.
+     */
+    protected async resolveRelocatedSpecialization(
+        promptParams: AIPromptParams,
+        childPrompt: MJAIPromptEntityExtended | undefined,
+        agentType: MJAIAgentTypeEntity,
+        contextUser: UserInfo
+    ): Promise<string | null> {
+        const placeholder = agentType.AgentPromptPlaceholder;
+        if (!childPrompt || !placeholder || !promptParams.childPrompts || promptParams.childPrompts.length === 0) {
+            return null;
+        }
+        const templateText = await this.loadChildPromptTemplateText(childPrompt, contextUser);
+        const agentTypePromptParams = promptParams.data?.__agentTypePromptParams as Record<string, unknown> | undefined;
+        if (ResolveSpecializationPlacement(agentTypePromptParams, templateText) !== 'trailingMessage') {
+            return null;
+        }
+        const rendered = await this._promptRunner.RenderChildPromptTemplates(promptParams.childPrompts, promptParams);
+        const text = rendered.renderedTemplates[placeholder];
+        if (!text || text.trim().length === 0) {
+            return null;
+        }
+        // Cache pre-rendered child templates so AIPromptRunner.ExecutePrompt does not re-render them
+        promptParams.PreRenderedChildTemplates = rendered.renderedTemplates;
+        // The same data object the parent template renders against — this switches the `## Specialization`
+        // block to its stub and extends the Runtime State pointer.
+        if (promptParams.data) {
+            promptParams.data._SPECIALIZATION_RELOCATED = true;
+        }
+        return text;
+    }
+
+    /**
+     * Decides, from the system prompt's UNRENDERED template text, whether the trailing runtime-state
+     * fragment belongs on this request:
+     *
+     * - `'trailing'` — the template carries the `<mj-runtime-state>` pointer, so the model is told where
+     *   the state lives. The Loop agent system prompt.
+     * - `'embedded'` — the template still renders the state blocks itself (an environment whose
+     *   TemplateContent has not synced the new Loop template, or the Flow template, which embeds the
+     *   payload). Emitting the fragment would deliver the same state twice.
+     * - `'unsupported'` — the template has neither. The Harness system prompt, or a custom prompt run
+     *   without the Loop system prompt. The model would receive an unexplained block.
+     * - `'unknown'` — no template text to inspect (no TemplateID, or the lookup failed). The caller
+     *   fails OPEN here: a Loop agent losing its payload from the model's view is far worse than a
+     *   non-Loop agent receiving an unexplained fragment, and in practice every agent type's system
+     *   prompt has a template, so this arises only from a lookup failure.
+     */
+    protected async resolveRuntimeStateDelivery(
+        systemPrompt: MJAIPromptEntityExtended | undefined,
+        contextUser: UserInfo
+    ): Promise<'trailing' | 'embedded' | 'unsupported' | 'unknown'> {
+        const templateText = await this.loadPromptTemplateText(systemPrompt, contextUser);
+        if (templateText === null) {
+            return 'unknown';
+        }
+        if (this.templateTextEmbedsVolatileState(templateText)) {
+            return 'embedded';
+        }
+        return templateText.includes(`<${RUNTIME_STATE_TAG}>`) ? 'trailing' : 'unsupported';
+    }
+
+    /**
+     * The strings whose presence in a system prompt's unrendered template text means the template
+     * still renders the volatile state itself, so the trailing fragment must be suppressed. Defaults
+     * to {@link VOLATILE_TEMPLATE_MARKERS}: the three block headings plus the date and payload
+     * placeholders. Extension point — an agent type whose template lays the state out under other
+     * headings overrides this to return its own markers.
+     */
+    protected get volatileTemplateMarkers(): readonly string[] {
+        return VOLATILE_TEMPLATE_MARKERS;
+    }
+
+    /**
+     * True when unrendered template text contains any of {@link volatileTemplateMarkers} — the legacy
+     * Loop layout, or any template that embeds the payload.
+     */
+    protected templateTextEmbedsVolatileState(templateText: string): boolean {
+        return this.volatileTemplateMarkers.some(marker => templateText.includes(marker));
+    }
+
+    /**
+     * Raw template text (placeholders intact) for an AI prompt from the cached template engine.
+     * Null when the prompt has no template or the lookup fails.
+     */
+    protected async loadPromptTemplateText(
+        prompt: MJAIPromptEntityExtended | undefined,
+        contextUser: UserInfo
+    ): Promise<string | null> {
+        if (!prompt?.TemplateID) {
+            return null;
+        }
+        try {
+            await TemplateEngineServer.Instance.Config(false, contextUser);
+            const template = TemplateEngineServer.Instance.Templates?.find(t => UUIDsEqual(t.ID, prompt.TemplateID));
+            return template?.GetHighestPriorityContent()?.TemplateText ?? null;
+        } catch (e) {
+            this.logError(e instanceof Error ? e : String(e), { category: 'RuntimeStateFragment', severity: 'warning' });
+            return null;
+        }
+    }
+
+    /**
+     * The child prompt's raw template text (placeholders intact), from the cached template engine.
+     * Null when the prompt has no template or the lookup fails — which fails CLOSED: with no text to
+     * inspect, {@link ResolveSpecializationPlacement} keeps the specialization in the system prompt.
+     */
+    protected async loadChildPromptTemplateText(childPrompt: MJAIPromptEntityExtended, contextUser: UserInfo): Promise<string | null> {
+        return this.loadPromptTemplateText(childPrompt, contextUser);
+    }
+
+    /**
+     * The date/time strings exactly as the system placeholders would render them into the template.
+     * Resolves only the three temporal placeholders (by name, through the same registry the template
+     * uses, so a registered override applies here too) rather than every system placeholder — this runs
+     * on every loop iteration.
+     */
+    protected async resolveFragmentDateTime(promptParams: AIPromptParams): Promise<RuntimeStateDateTime | null> {
+        const resolve = async (name: string): Promise<string | null> => {
+            const placeholder = SystemPlaceholderManager.getPlaceholders().find(p => p.name === name);
+            if (!placeholder) {
+                return null;
+            }
+            try {
+                const value = await placeholder.getValue(promptParams);
+                return value == null ? null : String(value);
+            } catch (e) {
+                this.logError(e instanceof Error ? e : String(e), { category: 'RuntimeStateFragment', severity: 'warning', metadata: { placeholder: name } });
+                return null;
+            }
+        };
+        const [date, dayOfWeek, time] = await Promise.all([resolve(CURRENT_DATE_PLACEHOLDER), resolve(CURRENT_DAY_OF_WEEK_PLACEHOLDER), resolve(CURRENT_TIME_PLACEHOLDER)]);
+        if (!date || !dayOfWeek || !time) {
+            return null;
+        }
+        return { Date: date, DayOfWeek: dayOfWeek, Time: time };
+    }
+
+    /**
+     * The scratchpad strings already placed in the template data by the prep step (so the fragment shows
+     * exactly what the template would have). Null when the scratchpad is disabled or absent.
+     */
+    protected readScratchpadFromTemplateData(data: Record<string, unknown>): RuntimeStateScratchpad | null {
+        const notes = data[SCRATCHPAD_NOTES_PLACEHOLDER], tasks = data[SCRATCHPAD_TASKS_PLACEHOLDER], summary = data[SCRATCHPAD_TASK_SUMMARY_PLACEHOLDER];
+        if (typeof notes !== 'string' || typeof tasks !== 'string' || typeof summary !== 'string') {
+            return null;
+        }
+        return { Notes: notes, Tasks: tasks, TaskSummary: summary };
     }
 
     /**
@@ -5323,7 +6076,7 @@ export class BaseAgent {
         // Check absolute maximum iterations (safety net to prevent infinite loops)
         const absoluteMaxIterations = params.absoluteMaxIterations ?? BaseAgent.DEFAULT_ABSOLUTE_MAX_ITERATIONS;
 
-        if (agentRun.TotalPromptIterations && agentRun.TotalPromptIterations >= absoluteMaxIterations) {
+        if (agentRun.TotalPromptIterations != null && agentRun.TotalPromptIterations >= absoluteMaxIterations) {
             return {
                 exceeded: true,
                 type: 'iterations',
@@ -5334,7 +6087,7 @@ export class BaseAgent {
         }
 
         // Check cost limit
-        if (agent.MaxCostPerRun && agentRun.TotalCost) {
+        if (agent.MaxCostPerRun != null && agentRun.TotalCost != null) {
             if (agentRun.TotalCost >= agent.MaxCostPerRun) {
                 return {
                     exceeded: true,
@@ -5347,7 +6100,7 @@ export class BaseAgent {
         }
         
         // Check token limit
-        if (agent.MaxTokensPerRun && agentRun.TotalTokensUsed) {
+        if (agent.MaxTokensPerRun != null && agentRun.TotalTokensUsed != null) {
             if (agentRun.TotalTokensUsed >= agent.MaxTokensPerRun) {
                 return {
                     exceeded: true,
@@ -5360,7 +6113,7 @@ export class BaseAgent {
         }
         
         // Check iteration limit
-        if (agent.MaxIterationsPerRun && agentRun.TotalPromptIterations) {
+        if (agent.MaxIterationsPerRun != null && agentRun.TotalPromptIterations != null) {
             if (agentRun.TotalPromptIterations >= agent.MaxIterationsPerRun) {
                 return {
                     exceeded: true,
@@ -5373,7 +6126,7 @@ export class BaseAgent {
         }
         
         // Check time limit
-        if (agent.MaxTimePerRun && agentRun.StartedAt) {
+        if (agent.MaxTimePerRun != null && agentRun.StartedAt) {
             const elapsedSeconds = Math.floor((Date.now() - new Date(agentRun.StartedAt).getTime()) / 1000);
             if (elapsedSeconds >= agent.MaxTimePerRun) {
                 return {
@@ -5772,6 +6525,71 @@ export class BaseAgent {
     }
 
     /**
+     * Recovery Strategy 0: drop stale runtime-state fragments.
+     *
+     * Under append-only trailing-state retention (prefix-cache providers: OpenAI, xAI) every
+     * iteration leaves its `<mj-runtime-state>` message in the history so the next request is an
+     * exact prefix extension of the last. Those copies are cached tokens on the wire, but they are
+     * context all the same, and they carry nothing the model needs: the CURRENT state always rides
+     * as the fresh fragment appended to the outgoing request. So when the context overflows they
+     * are the first thing to go, oldest first, all but the most recent. Keeping the newest one
+     * matters for two reasons: it is the history's only fragment after this pass, so
+     * {@link restoreTurn1VolatileStateIfNeeded} does not splice a turn-1 copy back in, and it
+     * keeps the prefix intact from that point forward. The cost is one cache miss on the next call;
+     * the alternative was a failed run.
+     *
+     * A no-op under replace-in-place retention, where the history never holds a fragment.
+     *
+     * @param params - Agent execution parameters
+     * @param tokensToSave - Target number of tokens to free
+     * @param currentStepCount - Current turn number, for the lifecycle event
+     * @returns Result with tokens saved and strategy description
+     * @protected
+     */
+    protected recoveryStrategy_DropStaleVolatileState(
+        params: ExecuteAgentParams,
+        tokensToSave: number,
+        currentStepCount: number
+    ): { tokensSaved: number; strategyName: string } {
+        const fragmentIndices = params.conversationMessages
+            .map((msg, index) => ((msg as AgentChatMessage).metadata?.volatileState === true ? index : -1))
+            .filter(index => index >= 0);
+        // All but the most recent, oldest first.
+        const stale = fragmentIndices.slice(0, -1);
+        if (stale.length === 0) {
+            return { tokensSaved: 0, strategyName: 'No stale runtime-state fragments to drop' };
+        }
+
+        let tokensSaved = 0;
+        const removedIndices: number[] = [];
+        for (const index of stale) {
+            if (tokensSaved >= tokensToSave) break;
+            removedIndices.push(index);
+            tokensSaved += this.estimateTokens(params.conversationMessages[index].content);
+        }
+
+        // Remove in reverse order to keep the remaining indices valid.
+        removedIndices.sort((a, b) => b - a).forEach(index => {
+            const removed = params.conversationMessages.splice(index, 1)[0];
+            this.emitMessageLifecycleEvent({
+                type: 'message-removed',
+                turn: currentStepCount,
+                messageIndex: index,
+                message: removed as AgentChatMessage,
+                reason: 'Context recovery - stale runtime-state fragment (append-only retention)',
+                tokensSaved: this.estimateTokens(removed.content)
+            });
+        });
+
+        this.logStatus(
+            `Dropped ${removedIndices.length} stale runtime-state fragment(s) (${tokensSaved} tokens); ${fragmentIndices.length - removedIndices.length} retained`,
+            true,
+            params
+        );
+        return { tokensSaved, strategyName: `Dropped ${removedIndices.length} stale runtime-state fragment(s) retained for prefix caching` };
+    }
+
+    /**
      * Recovery Strategy 1: Remove oldest tool-result messages.
      * Targets messages older than minAge turns for removal.
      *
@@ -6046,10 +6864,13 @@ export class BaseAgent {
         params: ExecuteAgentParams,
         tokensToSave: number
     ): { tokensSaved: number; strategyName: string } {
-        // Find the last user message (reverse search for compatibility)
+        // Find the last user message (reverse search for compatibility). A retained runtime-state
+        // fragment is user-role but is framework state, not the user's request: trimming it would
+        // leave a damaged copy in the history and spare the message this strategy is meant to trim.
         let lastUserMessageIndex = -1;
         for (let i = params.conversationMessages.length - 1; i >= 0; i--) {
-            if (params.conversationMessages[i].role === 'user') {
+            const candidate = params.conversationMessages[i] as AgentChatMessage;
+            if (candidate.role === 'user' && candidate.metadata?.volatileState !== true) {
                 lastUserMessageIndex = i;
                 break;
             }
@@ -6151,6 +6972,9 @@ export class BaseAgent {
 
         // Try multiple recovery strategies in order
         const strategies = [
+            // Retained runtime-state fragments (append-only mode) are pure cache filler: stale copies of
+            // state the next request re-sends anyway. Freeing them costs one cache miss, never content.
+            () => this.recoveryStrategy_DropStaleVolatileState(params, tokensToSave, currentPromptTurn),
             () => this.recoveryStrategy_RemoveOldestToolResults(params, tokensToSave, currentPromptTurn, 5),
             () => this.recoveryStrategy_CompactOldToolResults(params, tokensToSave, currentPromptTurn, 3),
             () => this.recoveryStrategy_RemoveOldestToolResults(params, tokensToSave, currentPromptTurn, 2),
@@ -6601,6 +7425,11 @@ The context is now within limits. Please retry your request with the recovered c
                 promptParams.data = { lens, messages: rangeText };
                 promptParams.contextUser = params.contextUser;
                 promptParams.agentId = params.agent.ID;
+                promptParams.UserID = ResolvePromptRunUserID({
+                    UserID: params.userId,
+                    AgentRun: this._agentRun,
+                    ContextUser: params.contextUser,
+                }) ?? undefined;
                 const result = await this._promptRunner.ExecutePrompt<string>(promptParams);
                 const text = ExtractPromptResultText(result);
                 if (!result.success || text.length === 0) {
@@ -6975,11 +7804,14 @@ The context is now within limits. Please retry your request with the recovered c
         // Operators (where/select/map/…) are pure code-defined verbs, not registry tools — only
         // capabilities (Actions + artifact tools) live here as pipeline sources/stages.
 
-        // Actions — each wrapped to run via the existing single-action execution path.
+        // Actions — each wrapped to run via the existing single-action execution path. The
+        // run-scoped circuit breaker is bypassed here: the pipeline executor's `map` stage does
+        // its own per-element failure accounting and expects elements to be independent, and
+        // there is no model in that loop to act on the breaker's guidance.
         this.getEffectiveActionsForValidation(params.agent.ID).forEach((actionEntity) =>
             register(
                 new ActionInvocable(actionEntity.Name, (p) =>
-                    this.ExecuteSingleAction(params, { name: actionEntity.Name, params: p }, actionEntity, params.contextUser),
+                    this.ExecuteSingleAction(params, { name: actionEntity.Name, params: p }, actionEntity, params.contextUser, { skipCircuitBreaker: true }),
                 ),
             ),
         );
@@ -7420,7 +8252,7 @@ The context is now within limits. Please retry your request with the recovered c
      */
     private decisionsHoldReason(step: BaseAgentNextStep): string | undefined {
         const isSingleSubAgent = step.step === 'Sub-Agent' && !!step.subAgent && !step.subAgents?.length;
-        if (step.finishIf && (step.step === 'Actions' || isSingleSubAgent) && this.finishIfSettings().Enabled) {
+        if (step.finishIf && (step.step === 'Actions' || isSingleSubAgent) && this.finishIfActs()) {
             return `the ${step.step} step carries a finishIf gate, and a passing gate ends the run`;
         }
         if (step.step === 'Sub-Agent' && this.getRequestedSubAgents(step).some(r => r.terminateAfter === true)) {
@@ -8084,6 +8916,12 @@ The context is now within limits. Please retry your request with the recovered c
 
         const responseType = params.includeResponseTypeDefinition as Record<string, unknown>;
 
+        // finishIf gates are opt-in (`finishIfMode`). While off, the model is not taught to write one,
+        // whatever includeFinishIfDocs says, so the response field below follows it off too.
+        if (ResolveFinishIfMode(params.finishIfMode) === 'off') {
+            params.includeFinishIfDocs = false;
+        }
+
         // Auto-alignment mappings: docs flag → response type property
         const alignmentMappings: Array<{ docsFlag: string; responseTypeKey: string }> = [
             { docsFlag: 'includePayloadInPrompt', responseTypeKey: 'payload' },
@@ -8168,15 +9006,18 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * The finishIf settings of the current step, from its merged agent-type prompt params. The gate is
-     * on unless `includeResponseTypeDefinition.finishIf` is `false`.
+     * The finishIf settings of the current step, from its merged agent-type prompt params. A gate is
+     * evaluated when `finishIfMode` is `shadow` or `on` and `includeResponseTypeDefinition.finishIf`
+     * is not `false`; it ends the run only in `on`.
      */
     private finishIfSettings(): FinishIfSettings {
         const promptParams = this._agentTypePromptParams;
         const rules = promptParams?.includeResponseTypeDefinition as Record<string, unknown> | undefined;
         const threshold = promptParams?.finishIfThreshold;
+        const mode = ResolveFinishIfMode(promptParams?.finishIfMode);
         return {
-            Enabled: rules?.finishIf !== false,
+            Enabled: mode !== 'off' && rules?.finishIf !== false,
+            Mode: mode,
             Threshold: typeof threshold === 'number' && threshold > 0 && threshold <= 1
                 ? threshold
                 : DEFAULT_LOOP_AGENT_PROMPT_PARAMS.finishIfThreshold,
@@ -8184,6 +9025,27 @@ The context is now within limits. Please retry your request with the recovered c
                 ? promptParams.decisionPromptName
                 : AgentDecisionService.DEFAULT_PROMPT_NAME,
         };
+    }
+
+    /** Whether a passing finishIf gate ends the run: only in `on` mode. */
+    private finishIfActs(): boolean {
+        const settings = this.finishIfSettings();
+        return settings.Enabled && settings.Mode === 'on';
+    }
+
+    /**
+     * Whether an evaluated gate ends the run. In shadow mode a passing gate is only logged: the
+     * outcome is already recorded on its `Finish check` step, and the model takes its next turn.
+     */
+    private gateEndsRun(outcome: FinishIfOutcome, params: ExecuteAgentParams): boolean {
+        if (!outcome.Passed) {
+            return false;
+        }
+        if (!this.finishIfActs()) {
+            this.logStatus('[finishIf] Shadow mode: the gate passed, and the run continues as it would have', true, params);
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -8203,6 +9065,7 @@ The context is now within limits. Please retry your request with the recovered c
         if (!finishIf || !addConversationMessage || !this.finishIfSettings().Enabled) {
             return undefined;
         }
+        // (In shadow mode the gate below is still evaluated and recorded; it just never ends the run.)
         // `success` means only that the action did not throw; `result.Success` is its outcome.
         if (!actionResults.every(r => r.success && r.result?.Success === true)) {
             return undefined;
@@ -8215,7 +9078,7 @@ The context is now within limits. Please retry your request with the recovered c
         }
         const state = capFinishIfState(actionSummaries.map(formatActionForFinishIf).join('\n\n'));
         const outcome = await this.evaluateFinishIf(finishIf, state, params, decision, payload, parentStepId);
-        return outcome.Passed
+        return this.gateEndsRun(outcome, params)
             ? { ...this.finishIfSuccessStep(finishIf, decision, payload), priorStepResult: actionSummaries }
             : undefined;
     }
@@ -8234,7 +9097,7 @@ The context is now within limits. Please retry your request with the recovered c
             return undefined;
         }
         const outcome = await this.evaluateFinishIf(finishIf, formatSubAgentForFinishIf(result), params, decision, result.newPayload);
-        return outcome.Passed ? { ...result, terminate: true, message: finishIf.message } : undefined;
+        return this.gateEndsRun(outcome, params) ? { ...result, terminate: true, message: finishIf.message } : undefined;
     }
 
     /**
@@ -8379,6 +9242,8 @@ The context is now within limits. Please retry your request with the recovered c
         try {
             await this.finalizeStepEntity(step, true, undefined, {
                 passed: outcome.Passed,
+                mode: settings.Mode,
+                endedRun: outcome.Passed && settings.Mode === 'on',
                 threshold: settings.Threshold,
                 probabilities: outcome.Probabilities,
                 reason: outcome.Reason
@@ -8425,14 +9290,28 @@ The context is now within limits. Please retry your request with the recovered c
      * @param {ExecuteAgentParams} params - Parameters from agent execution for context passing
      * @param {AgentAction} action - Action to execute
      * @param {UserInfo} [contextUser] - Optional user context for permissions
+     * @param {ExecuteSingleActionOptions} [options] - `skipCircuitBreaker` bypasses the run-scoped
+     *   circuit breaker for callers that do their own failure accounting (the pipeline executor)
      * 
      * @returns {Promise<ActionResult>} ActionResult object from the action execution
      * 
      * @throws {Error} If the action fails to execute
      */
     public async ExecuteSingleAction(params: ExecuteAgentParams, action: AgentAction, actionEntity: MJActionEntityExtended, 
-        contextUser?: UserInfo): Promise<ActionResult> {
+        contextUser?: UserInfo, options?: ExecuteSingleActionOptions): Promise<ActionResult> {
         
+        const skipBreaker = options?.skipCircuitBreaker === true;
+        const normalizedParams = this.normalizeActionParams(action.params);
+
+        // Run-scoped circuit breaker: each rule short-circuits in 0ms with a result that carries the
+        // rule that fired, so the failure directive can name it without consulting the history.
+        if (!skipBreaker) {
+            const blocked = this.checkActionCircuitBreaker(params, action, actionEntity, normalizedParams);
+            if (blocked) {
+                return blocked;
+            }
+        }
+
         try {
             const actionEngine = ActionEngineServer.Instance;
 
@@ -8478,13 +9357,23 @@ The context is now within limits. Please retry your request with the recovered c
             
             if (result.Success) {
                 this.logStatus(`   ✅ Action '${action.name}' completed successfully`, true, params);
+                if (!skipBreaker) {
+                    this.clearActionFailureRecord(action, actionEntity);
+                }
             } else {
                 this.logStatus(`   ❌ Action '${action.name}' failed: ${result.Message || 'Unknown error'}`, false, params);
+                if (!skipBreaker) {
+                    this.recordActionFailure(action, actionEntity, result.Message, normalizedParams);
+                }
             }
             
             return result;
             
         } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            if (!skipBreaker) {
+                this.recordActionFailure(action, actionEntity, errorMsg, normalizedParams);
+            }
             this.logError(error, {
                 category: 'ActionExecution',
                 metadata: {
@@ -8564,6 +9453,13 @@ The context is now within limits. Please retry your request with the recovered c
      * **Priority:** AIAgentRelationship.MessageMode takes precedence over AIAgent.MessageMode
      * to allow different parent agents to pass messages differently to the same sub-agent.
      *
+     * **Runtime state never crosses the boundary.** The parent's trailing runtime-state messages
+     * (`metadata.volatileState` — its payload, scratchpad and, when relocated, its specialization;
+     * retained in the history under append-only mode) are dropped BEFORE any mode slices the
+     * history, so a sub-agent never sees the parent's state, never has it counted against
+     * `MaxMessages`, and never receives it unescaped when it builds no fragment of its own. The
+     * sub-agent builds its own fragment at its prompt step.
+     *
      * Subclasses can override this method to implement custom message preparation logic
      * specific to their domain (e.g., Skip agents adding special context).
      *
@@ -8593,6 +9489,10 @@ The context is now within limits. Please retry your request with the recovered c
         let messageMode = relationship?.MessageMode || subAgent.MessageMode || 'None';
         let maxMessages = relationship?.MaxMessages || subAgent.MaxMessages || null;
 
+        // The parent's history minus its runtime-state messages (see the doc comment): every mode
+        // slices THIS, so no fragment reaches the sub-agent and none spends a MaxMessages slot.
+        const history = params.conversationMessages.filter(m => (m as AgentChatMessage).metadata?.volatileState !== true);
+
         // Apply message mode
         switch (messageMode) {
             case 'None':
@@ -8602,24 +9502,24 @@ The context is now within limits. Please retry your request with the recovered c
 
             case 'All':
                 // Pass all parent conversation history
-                messages = [...params.conversationMessages];
+                messages = [...history];
                 break;
 
             case 'Latest':
                 // Pass most recent N messages
                 if (maxMessages && maxMessages > 0) {
-                    messages = this.makeToolTurnsSelfConsistent(params.conversationMessages.slice(-maxMessages));
+                    messages = this.makeToolTurnsSelfConsistent(history.slice(-maxMessages));
                 } else {
-                    messages = [...params.conversationMessages];
+                    messages = [...history];
                 }
                 break;
 
             case 'Bookend':
                 // Pass first 2 + most recent (N-2) with indicator message between
-                if (maxMessages && maxMessages > 2 && params.conversationMessages.length > maxMessages) {
-                    const firstTwo = params.conversationMessages.slice(0, 2);
-                    const remaining = params.conversationMessages.slice(-(maxMessages - 2));
-                    const omittedCount = params.conversationMessages.length - maxMessages;
+                if (maxMessages && maxMessages > 2 && history.length > maxMessages) {
+                    const firstTwo = history.slice(0, 2);
+                    const remaining = history.slice(-(maxMessages - 2));
+                    const omittedCount = history.length - maxMessages;
 
                     messages = this.makeToolTurnsSelfConsistent([
                         ...firstTwo,
@@ -8630,7 +9530,7 @@ The context is now within limits. Please retry your request with the recovered c
                         ...remaining
                     ]);
                 } else {
-                    messages = [...params.conversationMessages];
+                    messages = [...history];
                 }
                 break;
 
@@ -8753,6 +9653,7 @@ The context is now within limits. Please retry your request with the recovered c
                 subAgentChanges: subAgentSubAgentChanges, // propagate filtered sub-agent changes to sub-agent
                 PrimaryScopeEntityName: params.PrimaryScopeEntityName, // propagate scope to sub-agent
                 PrimaryScopeRecordID: params.PrimaryScopeRecordID,
+                companyId: params.companyId,
                 SecondaryScopes: params.SecondaryScopes,
                 onAgentRunCreated: async (agentRunId: string) => {
                     stepEntity.TargetLogID = agentRunId;
@@ -10306,7 +11207,7 @@ The context is now within limits. Please retry your request with the recovered c
                 return (await this.finishAfterSubAgent<P>(params, previousDecision, subAgentResult)) ?? subAgentResult;
             }
             case 'Actions':
-                return await this.executeActionsStep(params, previousDecision, undefined, true, stepCount);
+                return await this.executeActionsStep(params, previousDecision, undefined, true, stepCount, this.actionOptionsForAgentType());
             // Type assertion required because 'Skill' is not part of the BaseAgentNextStep step
             // union (non-terminal, like 'ClientTools') — LoopAgentType.DetermineNextStep() emits it
             // when the LLM chooses to activate a skill.
@@ -12643,6 +13544,16 @@ The context is now within limits. Please retry your request with the recovered c
      *
 
     /**
+     * The {@link ExecuteSingleActionOptions} the main loop passes for this run's agent type: the
+     * circuit-breaker exemption when the type has opted out (`BaseAgentType.UsesActionCircuitBreaker`
+     * is false — Flow), otherwise none. Kept as a seam so a subclass can widen or narrow the
+     * exemption without touching the loop.
+     */
+    protected actionOptionsForAgentType(): ExecuteSingleActionOptions | undefined {
+        return this.AgentTypeInstance?.UsesActionCircuitBreaker === false ? { skipCircuitBreaker: true } : undefined;
+    }
+
+    /**
      * Executes actions step and tracks it.
      * 
      * @private
@@ -12652,7 +13563,8 @@ The context is now within limits. Please retry your request with the recovered c
         previousDecision: BaseAgentNextStep,
         parentStepId: string,
         addConversationMessage: boolean = true,
-        stepCount: number = 0
+        stepCount: number = 0,
+        actionOptions?: ExecuteSingleActionOptions
     ): Promise<BaseAgentNextStep> {
         
         try {
@@ -12837,7 +13749,7 @@ The context is now within limits. Please retry your request with the recovered c
                 let actionResult: ActionResult;
                 try {
                     // Execute the action
-                    actionResult = await this.ExecuteSingleAction(params, aa, actionEntity, params.contextUser);
+                    actionResult = await this.ExecuteSingleAction(params, aa, actionEntity, params.contextUser, actionOptions);
                     
                     // Update step entity with ActionExecutionLog ID if available
                     if (actionResult.LogEntry?.ID) {
@@ -12862,7 +13774,7 @@ The context is now within limits. Please retry your request with the recovered c
                     await this.finalizeStepEntity(stepEntity, actionResult.Success, 
                         actionResult.Success ? undefined : actionResult.Message, outputData);
                     
-                    return { success: true, result: actionResult, action: aa, actionEntity, stepEntity };
+                    return { success: actionResult.Success, result: actionResult, action: aa, actionEntity, stepEntity, error: actionResult.Success ? undefined : actionResult.Message };
                     
                 } catch (error) {
                     await this.finalizeStepEntity(stepEntity, false, error.message);
@@ -12882,10 +13794,11 @@ The context is now within limits. Please retry your request with the recovered c
             // Build a clean summary of action results
             // Apply large binary content interception to prevent context overflow
             const actionSummaries: ActionResultSummary[] = actionResults.map(result => {
-                const actionResult = result.success ? result.result : null;
+                const actionResult = result.result;
+                const isActionSuccess = Boolean(result.success && (actionResult ? actionResult.Success : true));
 
                 // Filter to output params only
-                const outputParams = result.result?.Params?.filter(p => p.Type === 'Both' || p.Type === 'Output') || [];
+                const outputParams = actionResult?.Params?.filter(p => p.Type === 'Both' || p.Type === 'Output') || [];
 
                 // Intercept large media content (images, audio, video) and replace with placeholders
                 // This prevents context overflow from base64 data (~700K tokens per 1024x1024 image)
@@ -12898,11 +13811,12 @@ The context is now within limits. Please retry your request with the recovered c
 
                 return {
                     actionName: result.action.name,
-                    success: result.success,
+                    success: isActionSuccess,
                     params: sanitizedParams,
-                    resultCode: actionResult?.Result?.ResultCode || (result.success ? 'SUCCESS' : 'ERROR'),
-                    message: result.success ? actionResult?.Message || 'Action completed' : result.error || 'Unknown error',
-                    aiDirectives: result.success ? actionResult?.AIDirectives : undefined
+                    resultCode: actionResult?.Result?.ResultCode || (isActionSuccess ? 'SUCCESS' : 'ERROR'),
+                    message: actionResult?.Message || (isActionSuccess ? 'Action completed' : result.error || 'Unknown error'),
+                    aiDirectives: isActionSuccess ? actionResult?.AIDirectives : undefined,
+                    breakerReason: actionResult instanceof CircuitBreakerActionResult ? actionResult.Reason : undefined
                 };
             });
             
@@ -12974,6 +13888,18 @@ The context is now within limits. Please retry your request with the recovered c
                     params.conversationMessages.push({
                         role: 'user',
                         content: `IMPORTANT — Follow these directives from the action results:\n\n${directiveText}`
+                    });
+                }
+
+                // Surface failure guidance for failed actions so the model does not repeatedly loop on broken
+                // tools. Not when the breaker is bypassed for this step: there is then no model in the loop to
+                // act on it (Flow, ForEach, While, pipeline), and the directive would only pollute the history.
+                if (failedActions.length > 0 && actionOptions?.skipCircuitBreaker !== true) {
+                    const failureText = failedActions.map(f => this.formatActionFailureDirective(f)).join('\n\n');
+
+                    params.conversationMessages.push({
+                        role: 'user',
+                        content: `IMPORTANT — Action Execution Failure Guidance:\n\n${failureText}`
                     });
                 }
             }
@@ -14889,7 +15815,9 @@ The context is now within limits. Please retry your request with the recovered c
                     params: resolvedParams
                 }
                 const actionStep = { step: 'Actions' as const, actions: [resolvedAction], newPayload: currentPayload, previousPayload: currentPayload, terminate: false };
-                result = await this.executeActionsStep(params, actionStep as BaseAgentNextStep, parentStepId, false);
+                // Loop iterations bypass the circuit breaker: the loop does its own per-item accounting and
+                // there is no model between items to act on the breaker's guidance.
+                result = await this.executeActionsStep(params, actionStep as BaseAgentNextStep, parentStepId, false, 0, { skipCircuitBreaker: true });
             } else if (forEach.subAgent) {
                 const subAgentStep = { step: 'Sub-Agent' as const, subAgent: forEach.subAgent, newPayload: currentPayload, previousPayload: currentPayload };
                 result = await this.processSubAgentStep(params, subAgentStep as BaseAgentNextStep, parentStepId, item);
@@ -15330,7 +16258,8 @@ The context is now within limits. Please retry your request with the recovered c
                     params: resolvedParams
                 };
                 const actionStep = { step: 'Actions' as const, actions: [resolvedAction], newPayload: currentPayload, previousPayload: currentPayload, terminate: false };
-                result = await this.executeActionsStep(params, actionStep as BaseAgentNextStep, parentStepId, false);
+                // Same exemption as ForEach: the loop owns per-iteration accounting.
+                result = await this.executeActionsStep(params, actionStep as BaseAgentNextStep, parentStepId, false, 0, { skipCircuitBreaker: true });
             } else if (whileOp.subAgent) {
                 const subAgentStep = { step: 'Sub-Agent' as const, subAgent: whileOp.subAgent, newPayload: currentPayload, previousPayload: currentPayload };
                 result = await this.processSubAgentStep(params, subAgentStep as BaseAgentNextStep, parentStepId, attemptContext);
@@ -16326,6 +17255,11 @@ The context is now within limits. Please retry your request with the recovered c
                     };
                     promptParams.contextUser = params.contextUser;
                     promptParams.agentId = params.agent.ID;
+                    promptParams.UserID = ResolvePromptRunUserID({
+                        UserID: params.userId,
+                        AgentRun: this._agentRun,
+                        ContextUser: params.contextUser,
+                    }) ?? undefined;
 
                     const runner = new AIPromptRunner();
                     const result = await runner.ExecutePrompt<{ summary: string }>(promptParams);
