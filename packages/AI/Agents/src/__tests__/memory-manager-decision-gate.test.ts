@@ -222,6 +222,21 @@ describe('MemoryManagerAgent - Decision Gate Integration', () => {
         expect(filtered.map(n => n.content)).toEqual(['Prefers dark mode theme', 'Build failed on missing module']);
     });
 
+    it("cuts at Jev's shipped operating point: raw 0.85 is kept, raw 0.835 is not, whatever the self-report", async () => {
+        agent.EnableDecisionGate = true;
+        // Jev (A 3.6391, B -5.7059) reaches a calibrated 0.6 at a raw 0.8428: raw 0.85 calibrates to
+        // 0.647 and raw 0.835 to 0.549. The self-report would have kept the second and dropped the first.
+        const notes: NoteShape[] = [
+            { type: 'Preference', content: 'Prefers weekly summaries', confidence: 70 },
+            { type: 'Preference', content: 'Prefers metric units', confidence: 95 }
+        ];
+        agent.SetDecisionService(new ScriptedDecisionService(() => answered('Jev', { n1: 0.85, n2: 0.835 })));
+
+        const filtered = await agent.RunGate(notes, oneThread, user);
+
+        expect(filtered.map(n => n.content)).toEqual(['Prefers weekly summaries']);
+    });
+
     describe("the gate's cost counts toward the agent run", () => {
         it("adds the decision's step to the run's steps, carrying the decision's prompt run", async () => {
             agent.EnableDecisionGate = true;

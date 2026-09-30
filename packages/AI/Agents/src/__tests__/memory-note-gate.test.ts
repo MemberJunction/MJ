@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { LikelihoodAnswer, PlattCalibration } from '@memberjunction/ai';
+import { ApplyPlattCalibration, type LikelihoodAnswer, type PlattCalibration } from '@memberjunction/ai';
 import {
     BuildMemoryNoteQuestions,
     BuildMemoryNoteState,
@@ -102,6 +102,39 @@ describe('memory-note-gate', () => {
             expect(Object.keys(MEMORY_NOTE_DECISION_CALIBRATION)).toEqual(['Jev']);
             expect(Object.isFrozen(MEMORY_NOTE_DECISION_CALIBRATION)).toBe(true);
             expect(Object.isFrozen(MEMORY_NOTE_DECISION_CALIBRATION['Jev'])).toBe(true);
+        });
+    });
+
+    describe('the shipped operating point, as measured (plan Task 3.4, 2026-09-29)', () => {
+        // Changing any of these changes what the gate keeps: refit and re-measure first, then update
+        // them together with the results doc.
+        it('keeps a note at a calibrated 0.6', () => {
+            expect(MEMORY_NOTE_MIN_PROBABILITY).toBe(0.6);
+        });
+
+        it("holds Jev's measured Platt parameters", () => {
+            expect(MEMORY_NOTE_DECISION_CALIBRATION['Jev']).toEqual({ A: 3.6391, B: -5.7059 });
+        });
+
+        it('puts the cut at a raw 0.8428 for Jev: raw 0.843 calibrates to 0.601, raw 0.842 to 0.595', () => {
+            const jev = MEMORY_NOTE_DECISION_CALIBRATION['Jev'];
+            expect(ApplyPlattCalibration(0.843, jev)).toBeCloseTo(0.6012, 4);
+            expect(ApplyPlattCalibration(0.842, jev)).toBeCloseTo(0.5946, 4);
+            expect(ApplyPlattCalibration(0.9, jev)).toBeCloseTo(0.908, 3);
+            expect(ApplyPlattCalibration(0.6, jev)).toBeCloseTo(0.0143, 4);
+        });
+
+        it("keeps and drops Jev's answers either side of the cut, by default", () => {
+            const notes: MemoryNoteCandidate[] = [
+                { type: 'Preference', content: 'Prefers weekly summaries' },
+                { type: 'Preference', content: 'Prefers metric units' }
+            ];
+            const answers: Record<string, LikelihoodAnswer> = {
+                n1: { Kind: 'Likelihood', Probability: 0.843 },
+                n2: { Kind: 'Likelihood', Probability: 0.842 }
+            };
+            const verdict = JudgeMemoryNotes(answers, notes, 'Jev');
+            expect(verdict.KeptNotes).toEqual([notes[0]]);
         });
     });
 
