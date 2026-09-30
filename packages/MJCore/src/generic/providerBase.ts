@@ -319,8 +319,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * acts on its answer. Held as the promise (not a flag) so only its owner clears it.
      */
     private _refreshCheckInFlight: Promise<boolean> | null = null;
-    /** When a server-loaded metadata snapshot was last adopted (see adoptServerMetadata); 0 = never. */
-    private _lastServerMetadataLoadAt = 0;
+    /**
+     * Set when Config() adopts a snapshot it loaded from the server (which fetched the current user
+     * with it); consumed by the next {@link preValidateAndRefresh}, which then has nothing to check.
+     */
+    private _configLoadedFromServer = false;
     private _lastMetadataLoadError: Error | null = null;
 
     /**
@@ -4659,6 +4662,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     public async Config(data: ProviderConfigDataBase, providerToUse?: IMetadataProvider): Promise<boolean> {
         this._ConfigData = data;
+        // Describes THIS Config only: a flag left by an earlier Refresh() must not make the
+        // pre-validation that follows a Config which loaded nothing skip its check.
+        this._configLoadedFromServer = false;
 
         // Initialize LocalCacheManager early so dataset loading can use the cache.
         // Initialize() is idempotent — subsequent calls (e.g. from StartupManager) are no-ops.
@@ -4760,6 +4766,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     LogStatusEx({ message: `GetAllMetadata() took ${end - start} ms`, verboseOnly: true });
                     if (res) {
                         await this.adoptServerMetadata(res);
+                        this._configLoadedFromServer = true;
                     }
                     else {
                         // GetAllMetadata failed - log error but keep existing metadata
@@ -4793,7 +4800,6 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         this.UpdateLocalMetadata(res);
         this._latestLocalMetadataTimestamps = this._latestRemoteMetadataTimestamps; // we just used the server to get all the stuff
         await this.SaveLocalMetadataToStorage();
-        this._lastServerMetadataLoadAt = Date.now();
     }
 
     /**
@@ -4842,16 +4848,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * avoid serving stale data to the UI in the first place.
      *
      * On a cold boot, where Config() just loaded the graph (and the current user) from the
-     * server within {@link MinRefreshCheckIntervalMs}, this returns immediately — no check,
-     * no current-user re-fetch.
+     * server, the first call after that load returns immediately — no check, no current-user
+     * re-fetch. Later calls, and calls after a background refresh, check as usual.
      *
      * Caller contract: invoke this before `StartupManager.Startup()`.
      */
     public async preValidateAndRefresh(providerToUse?: IMetadataProvider): Promise<void> {
-        // A snapshot adopted from the server moments ago (a cold boot's Config) is current by
-        // construction, and GetAllMetadata fetched CurrentUser with it. Checking again would hit
-        // the refresh throttle, read "current", and re-fetch the same user serially (#4887).
-        if (Date.now() - this._lastServerMetadataLoadAt < ProviderBase.MinRefreshCheckIntervalMs) {
+        // The snapshot Config just loaded from the server (a cold boot) is current by construction,
+        // and GetAllMetadata fetched CurrentUser with it. Checking again would hit the refresh
+        // throttle, read "current", and re-fetch the same user serially (#4887). One-shot: only the
+        // first pre-validation after that load skips.
+        if (this._configLoadedFromServer) {
+            this._configLoadedFromServer = false;
             LogStatusEx({ message: `⚡ [Metadata Cache] Pre-validation: metadata was just loaded from the server — skipping`, verboseOnly: true });
             return;
         }
