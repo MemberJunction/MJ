@@ -3976,9 +3976,10 @@ export class BaseAgent {
 
     /**
      * Warns, once per model, that discovery answered by a model with no discovery calibration
-     * suggests nothing. That happens when a decision model is added or renamed, or when LLM Decision
-     * answers through a chat model other than the one its calibration was fitted on; without the
-     * warning the only trace is each `Agent discovery` step's reason.
+     * suggests nothing. That happens when a decision model is added or renamed, when a vendor model
+     * moves to another version (Jev's `APIName`), or when LLM Decision answers through a chat model
+     * other than the one its calibration was fitted on; without the warning the only trace is each
+     * `Agent discovery` step's reason.
      */
     private static warnUncalibratedDiscoveryModel(model: string): void {
         if (BaseAgent._uncalibratedDiscoveryModelsWarned.has(model)) {
@@ -3988,7 +3989,7 @@ export class BaseAgent {
         LogErrorEx({
             message: `Decision discovery answered by ${model} suggests nothing: the model has no discovery calibration `
                 + '(DECISION_DISCOVERY_CALIBRATION), so its answers are treated as unsure. Fit one with the agent-discovery '
-                + 'Decision Eval, or check that the model was not renamed.',
+                + 'Decision Eval, or check that the model was not renamed or moved to another version.',
             severity: 'warning',
             category: 'DecisionDiscovery',
         });

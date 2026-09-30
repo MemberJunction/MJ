@@ -35,6 +35,8 @@ import type { DriverExecutionContext, DriverExecutionResult } from '../types';
 import type { IOracle } from '../oracles/IOracle';
 
 const PINNED_MODEL = '0B000000-0000-4000-8000-000000000001';
+/** Jev's pinned `APIName`, which it reports back as the resolved model. */
+const JEV_RESOLVED_MODEL = 'typesafe/jev-1.13-20260917';
 const PINNED_VENDOR = '0C000000-0000-4000-8000-000000000001';
 const REQUEST = '  Can you send Acme their invoice for the March consulting hours?  ';
 const STATE = REQUEST.trim();
@@ -129,7 +131,8 @@ function decided(choice: string, confidence: number, applies: number): AIDecisio
         anyApplies: { Kind: 'Likelihood', Probability: applies }
     };
     const driverResult = new DecisionResult(true, new Date(0), new Date(1));
-    driverResult.ResolvedModel = 'jev-2026-09-01';
+    // The version Jev's discovery calibration was fitted on: another version's answers are uncalibrated.
+    driverResult.ResolvedModel = JEV_RESOLVED_MODEL;
     const promptRun = { ID: 'prun-1', TotalCost: 0.002, Cost: 0.002 } satisfies Pick<MJAIPromptRunEntity, 'ID' | 'TotalCost' | 'Cost'>;
     return {
         success: true,
@@ -241,7 +244,7 @@ describe('DecisionEvalDriver — agent discovery', () => {
             });
             expect(actual.Answers.agent).toEqual({ Kind: 'Choice', Value: BILLING.ID, Confidence: 0.9, Probabilities: { [BILLING.ID]: 0.9, [RESEARCH.ID]: expect.closeTo(0.1, 10) } });
             expect(actual.Answers.anyApplies).toEqual({ Kind: 'Likelihood', Probability: 0.9 });
-            expect(actual.Model).toMatchObject({ PinnedModelId: PINNED_MODEL, AnsweredModelName: 'Jev', ResolvedModel: 'jev-2026-09-01', FailedOver: false });
+            expect(actual.Model).toMatchObject({ PinnedModelId: PINNED_MODEL, AnsweredModelName: 'Jev', ResolvedModel: JEV_RESOLVED_MODEL, FailedOver: false });
             expect(actual.LatencyMs).toBeGreaterThanOrEqual(0);
             expect(actual.DiscoveryLatencyMs).toBeGreaterThanOrEqual(actual.LatencyMs ?? 0);
             expect(result).toMatchObject({ status: 'Passed', targetType: 'AI Prompt', targetLogId: 'prun-1', totalCost: 0.002 });
@@ -262,7 +265,7 @@ describe('DecisionEvalDriver — agent discovery', () => {
             const { result } = await run({ respond: throughOtherChatModel });
             const actual = actualOf(result);
             expect(actual).toMatchObject({ WouldInject: false, Confidence: 0.99, AnyApplies: 0.99 });
-            expect(actual.VerdictReason).toContain("'LLM Decision' (resolved to 'GPT 5.5 Instant') has no discovery calibration");
+            expect(actual.VerdictReason).toContain('LLM Decision (GPT 5.5 Instant) has no discovery calibration');
         });
 
         it("judges an unsure answer as production would: no injection, and why", async () => {

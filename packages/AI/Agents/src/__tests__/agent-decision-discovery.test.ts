@@ -30,6 +30,7 @@ import {
     DECISION_DISCOVERY_TIMEOUT_MS,
     SuggestedAgentMessage,
     DECISION_DISCOVERY_CALIBRATION,
+    type DecisionDiscoveryCalibration,
     DECISION_DISCOVERY_MIN_CONFIDENCE,
 } from '../decision-discovery';
 import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
@@ -410,6 +411,18 @@ function makeParams(overrides: Partial<ExecuteAgentParams> = {}): ExecuteAgentPa
 /** The model the scripted answers come from; discovery calibrates its answers per model. */
 const ANSWERING_MODEL = 'Jev';
 
+/** The exact model the scripted answers come from: Jev at the version its calibration was fitted on. */
+const ANSWERING_RESOLVED_MODEL = 'typesafe/jev-1.13-20260917';
+
+/** The answering model's discovery calibration. */
+function answeringCalibration(): DecisionDiscoveryCalibration {
+    const entry = DECISION_DISCOVERY_CALIBRATION.find(c => c.ModelName === ANSWERING_MODEL && c.ResolvedModel === ANSWERING_RESOLVED_MODEL);
+    if (!entry) {
+        throw new Error(`no discovery calibration for ${ANSWERING_MODEL} (${ANSWERING_RESOLVED_MODEL})`);
+    }
+    return entry.Calibration;
+}
+
 /** The raw probability that the answering model's calibration maps to `calibrated` (Platt, inverted). */
 function rawFor(calibrated: number, calibration: PlattCalibration): number {
     const logit = Math.log(calibrated / (1 - calibrated));
@@ -418,7 +431,7 @@ function rawFor(calibrated: number, calibration: PlattCalibration): number {
 
 /** The raw Choice confidence whose calibrated value is `calibrated`. */
 function rawConfidence(calibrated: number): number {
-    return rawFor(calibrated, DECISION_DISCOVERY_CALIBRATION[ANSWERING_MODEL].Confidence);
+    return rawFor(calibrated, answeringCalibration().Confidence);
 }
 
 /**
@@ -427,7 +440,7 @@ function rawConfidence(calibrated: number): number {
  * the ones the model's calibration maps to them.
  */
 function answering(agent: AgentRow, confidence: number, applies: number): (args: AgentDecisionAskParams) => Promise<AIDecisionRunResult> {
-    const calibration = DECISION_DISCOVERY_CALIBRATION[ANSWERING_MODEL];
+    const calibration = answeringCalibration();
     const rawChoice = rawFor(confidence, calibration.Confidence);
     const rawApplies = rawFor(applies, calibration.AnyApplies);
     return async (args) => {
@@ -441,7 +454,9 @@ function answering(agent: AgentRow, confidence: number, applies: number): (args:
             agent: { Kind: 'Choice', Value: agent.ID, Confidence: rawChoice, Probabilities: probabilities },
             anyApplies: { Kind: 'Likelihood', Probability: rawApplies },
         };
-        return { success: true, Answers: answers, modelInfo: { modelId: 'model-jev', modelName: ANSWERING_MODEL } };
+        const driverResult = new DecisionResult(true, new Date(0), new Date(1));
+        driverResult.ResolvedModel = ANSWERING_RESOLVED_MODEL;
+        return { success: true, Answers: answers, modelInfo: { modelId: 'model-jev', modelName: ANSWERING_MODEL }, DecisionResult: driverResult };
     };
 }
 
@@ -734,14 +749,14 @@ describe('decision discovery — what reaches the prompt', () => {
         expect(first.runner.MessagesAtCall[0]).toEqual([{ role: 'user', content: OPENING_REQUEST }]);
         const steps = discoverySteps();
         expect(steps.map(step => step.Status)).toEqual(['Completed', 'Completed', 'Completed']);
-        expect(String(stepOutput(steps[0]).reason)).toContain("'LLM Decision' (resolved to 'Uncalibrated Chat Model A') has no discovery calibration");
+        expect(String(stepOutput(steps[0]).reason)).toContain('LLM Decision (Uncalibrated Chat Model A) has no discovery calibration');
         const warnings = vi.mocked(LogErrorEx).mock.calls
             .map(([entry]) => entry)
             .filter(entry => typeof entry !== 'string' && entry.category === 'DecisionDiscovery' && entry.severity === 'warning')
             .map(entry => (typeof entry === 'string' ? entry : entry.message));
         expect(warnings).toEqual([
-            expect.stringContaining("'LLM Decision' (resolved to 'Uncalibrated Chat Model A')"),
-            expect.stringContaining("'LLM Decision' (resolved to 'Uncalibrated Chat Model B')")
+            expect.stringContaining('LLM Decision (Uncalibrated Chat Model A)'),
+            expect.stringContaining('LLM Decision (Uncalibrated Chat Model B)')
         ]);
     });
 

@@ -20,11 +20,8 @@ import {
     DECISION_DISCOVERY_MAX_RECORDED_IDS,
     DECISION_DISCOVERY_MIN_CONFIDENCE,
     DECISION_DISCOVERY_TIMEOUT_MS,
-    DecisionDiscoveryAnsweringModelOf,
     DecisionDiscoveryFromResult,
     DecisionDiscoveryOption,
-    DescribeDecisionDiscoveryModel,
-    FindDecisionDiscoveryCalibration,
     DecisionDiscoveryOptions,
     DecisionOptionLimit,
     FailedDecisionDiscovery,
@@ -73,8 +70,20 @@ const JUDGE_THRESHOLD = 0.7;
 
 /** A raw probability as the named model's discovery calibration maps it. */
 function calibrated(model: string, question: 'Confidence' | 'AnyApplies', p: number): number {
-    return ApplyPlattCalibration(p, DECISION_DISCOVERY_CALIBRATION[model][question]);
+    return ApplyPlattCalibration(p, calibrationEntry(model).Calibration[question]);
 }
+
+/** The calibration table's entry for a decision model. */
+function calibrationEntry(model: string): (typeof DECISION_DISCOVERY_CALIBRATION)[number] {
+    const entry = DECISION_DISCOVERY_CALIBRATION.find(c => c.ModelName === model);
+    if (!entry) {
+        throw new Error(`no discovery calibration for ${model}`);
+    }
+    return entry;
+}
+
+/** The exact model Jev's calibration was fitted on: its pinned APIName, which it reports back. */
+const JEV_RESOLVED_MODEL = 'typesafe/jev-1.13-20260917';
 
 describe('the named constants', () => {
     it('start where the brief puts them', () => {
@@ -294,18 +303,19 @@ const LLM_DECISION_CHAT_MODEL = 'GPT-OSS-120B';
 
 describe('DecisionDiscoveryFromResult', () => {
     /**
-     * A decision result; `modelName` null means the result names no model. `resolvedModel` is what the
-     * driver resolved to: for LLM Decision, the chat model that answered.
+     * A decision result, from Jev at its calibrated version unless told otherwise; `modelName` null
+     * means the result names no model. `resolvedModel` is what the driver reports behind the model:
+     * Jev's dated version, or LLM Decision's chat model; null means it reports none.
      */
     function result(
         success: boolean,
         given: Record<string, DecisionAnswer>,
         errorMessage?: string,
         modelName: string | null = 'Jev',
-        resolvedModel?: string
+        resolvedModel: string | null = modelName === 'Jev' ? JEV_RESOLVED_MODEL : null
     ): AIDecisionRunResult {
         const driverResult = new DecisionResult(success, new Date(0), new Date(1));
-        driverResult.ResolvedModel = resolvedModel;
+        driverResult.ResolvedModel = resolvedModel ?? undefined;
         return { success, errorMessage, Answers: given, modelInfo: modelName ? { modelId: 'model-1', modelName } : undefined, DecisionResult: driverResult };
     }
 
@@ -342,7 +352,7 @@ describe('DecisionDiscoveryFromResult', () => {
     ])('treats an answer from %s as unsure, and keeps the raw answer', (_label, modelName) => {
         const outcome = DecisionDiscoveryFromResult(result(true, answers(BILLING.ID, 0.99, 0.99), undefined, modelName), OPTIONS);
 
-        expect(outcome).toMatchObject({ Injected: false, Succeeded: true, UncalibratedModel: `'${modelName ?? 'unknown'}'` });
+        expect(outcome).toMatchObject({ Injected: false, Succeeded: true, UncalibratedModel: `${modelName ?? 'an unnamed model'} (resolved model not reported)` });
         expect(outcome.Reason).toContain('has no discovery calibration');
         expect(outcome.Answer).toMatchObject({ Agent: BILLING, Confidence: 0.99, AnyApplies: 0.99 });
     });
@@ -357,11 +367,14 @@ describe('DecisionDiscoveryFromResult', () => {
     });
 
     it.each([
-        ['another chat model', 'GPT 5.5 Instant', "'LLM Decision' (resolved to 'GPT 5.5 Instant')"],
-        ['no named chat model', undefined, "'LLM Decision'"],
-    ])("never gives GPT-OSS-120B's parameters to LLM Decision answering through %s: its answer is unsure", (_label, chatModel, described) => {
+        ["LLM Decision answering through another chat model, which gets no GPT-OSS-120B parameters", 'LLM Decision', 'GPT 5.5 Instant', 'LLM Decision (GPT 5.5 Instant)'],
+        ['LLM Decision with no chat model reported', 'LLM Decision', null, 'LLM Decision (resolved model not reported)'],
+        ['Jev at another version than its calibration was fitted on', 'Jev', 'typesafe/jev-1.14-20261001', 'Jev (typesafe/jev-1.14-20261001)'],
+        ['Jev with no version reported', 'Jev', null, 'Jev (resolved model not reported)'],
+        ['a model named after an inherited member', 'constructor', 'toString', 'constructor (toString)'],
+    ])('treats an answer from %s as unsure', (_label, modelName, resolvedModel, described) => {
         // Raw answers so confident that any calibration would inject them.
-        const outcome = DecisionDiscoveryFromResult(result(true, answers(BILLING.ID, 0.99, 0.99), undefined, 'LLM Decision', chatModel), OPTIONS);
+        const outcome = DecisionDiscoveryFromResult(result(true, answers(BILLING.ID, 0.99, 0.99), undefined, modelName, resolvedModel), OPTIONS);
 
         expect(outcome).toMatchObject({ Injected: false, Succeeded: true, UncalibratedModel: described });
         expect(outcome.Reason).toBe(`the answering model ${described} has no discovery calibration, so its answer is treated as unsure`);
@@ -378,55 +391,30 @@ describe('DecisionDiscoveryFromResult', () => {
     });
 });
 
-describe('FindDecisionDiscoveryCalibration', () => {
-    it("finds Jev's calibration whatever version Jev resolved to", () => {
-        expect(FindDecisionDiscoveryCalibration({ ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.13-20260917' })).toBe(DECISION_DISCOVERY_CALIBRATION.Jev);
-        expect(FindDecisionDiscoveryCalibration({ ModelName: ' Jev ' })).toBe(DECISION_DISCOVERY_CALIBRATION.Jev);
-    });
-
-    it("finds LLM Decision's only for the chat model it was fitted on", () => {
-        expect(DECISION_DISCOVERY_CALIBRATION['LLM Decision'].ChatModel).toBe(LLM_DECISION_CHAT_MODEL);
-        expect(FindDecisionDiscoveryCalibration({ ModelName: 'LLM Decision', ResolvedModel: LLM_DECISION_CHAT_MODEL })).toBe(DECISION_DISCOVERY_CALIBRATION['LLM Decision']);
-        expect(FindDecisionDiscoveryCalibration({ ModelName: 'LLM Decision', ResolvedModel: ` ${LLM_DECISION_CHAT_MODEL} ` })).toBe(DECISION_DISCOVERY_CALIBRATION['LLM Decision']);
-        expect(FindDecisionDiscoveryCalibration({ ModelName: 'LLM Decision', ResolvedModel: 'GPT 5.5 Instant' })).toBeUndefined();
-        expect(FindDecisionDiscoveryCalibration({ ModelName: 'LLM Decision' })).toBeUndefined();
-    });
-
-    it('finds nothing for a model with no entry, or no name', () => {
-        expect(FindDecisionDiscoveryCalibration({ ModelName: 'Some Other Model' })).toBeUndefined();
-        expect(FindDecisionDiscoveryCalibration({})).toBeUndefined();
-    });
-
-    it("reads the model from the result: the decision model's name and what its driver resolved to", () => {
-        const driverResult = new DecisionResult(true, new Date(0), new Date(1));
-        driverResult.ResolvedModel = LLM_DECISION_CHAT_MODEL;
-        expect(DecisionDiscoveryAnsweringModelOf({ modelInfo: { modelId: 'm', modelName: 'LLM Decision' }, DecisionResult: driverResult }))
-            .toEqual({ ModelName: 'LLM Decision', ResolvedModel: LLM_DECISION_CHAT_MODEL });
-        expect(DecisionDiscoveryAnsweringModelOf({})).toEqual({ ModelName: undefined, ResolvedModel: undefined });
-    });
-
-    it('describes a model by name, with what it resolved to when that differs', () => {
-        expect(DescribeDecisionDiscoveryModel({ ModelName: 'LLM Decision', ResolvedModel: 'GPT 5.5 Instant' })).toBe("'LLM Decision' (resolved to 'GPT 5.5 Instant')");
-        expect(DescribeDecisionDiscoveryModel({ ModelName: 'Jev', ResolvedModel: 'Jev' })).toBe("'Jev'");
-        expect(DescribeDecisionDiscoveryModel({})).toBe("'unknown'");
+describe('DECISION_DISCOVERY_CALIBRATION', () => {
+    it('ties each calibration to the exact model it was fitted on: Jev at its pinned version, LLM Decision through GPT-OSS-120B', () => {
+        expect(DECISION_DISCOVERY_CALIBRATION.map(c => [c.ModelName, c.ResolvedModel])).toEqual([
+            ['Jev', JEV_RESOLVED_MODEL],
+            ['LLM Decision', LLM_DECISION_CHAT_MODEL]
+        ]);
     });
 });
 
 describe('CalibrateDiscoveryAnswers', () => {
     it('calibrates the Choice confidence and the Likelihood with the model\'s Platt parameters', () => {
-        for (const [model, calibration] of Object.entries(DECISION_DISCOVERY_CALIBRATION)) {
-            const out = CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), { ModelName: model, ResolvedModel: calibration.ChatModel });
+        for (const entry of DECISION_DISCOVERY_CALIBRATION) {
+            const out = CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), { ModelName: entry.ModelName, ResolvedModel: entry.ResolvedModel });
             const choice = out?.[DECISION_DISCOVERY_AGENT_QUESTION];
             const applies = out?.[DECISION_DISCOVERY_APPLIES_QUESTION];
 
-            expect(choice?.Kind === 'Choice' ? choice.Confidence : null).toBeCloseTo(calibrated(model, 'Confidence', 0.6), 10);
-            expect(applies?.Kind === 'Likelihood' ? applies.Probability : null).toBeCloseTo(calibrated(model, 'AnyApplies', 0.3), 10);
+            expect(choice?.Kind === 'Choice' ? choice.Confidence : null).toBeCloseTo(ApplyPlattCalibration(0.6, entry.Calibration.Confidence), 10);
+            expect(applies?.Kind === 'Likelihood' ? applies.Probability : null).toBeCloseTo(ApplyPlattCalibration(0.3, entry.Calibration.AnyApplies), 10);
         }
     });
 
     it('leaves the Choice value and distribution as they are, and trims the model name', () => {
         const given = answers(BILLING.ID, 0.6, 0.3);
-        const out = CalibrateDiscoveryAnswers(given, { ModelName: ' Jev ' });
+        const out = CalibrateDiscoveryAnswers(given, { ModelName: ' Jev ', ResolvedModel: ` ${JEV_RESOLVED_MODEL} ` });
         const choice = out?.[DECISION_DISCOVERY_AGENT_QUESTION];
         const original = given[DECISION_DISCOVERY_AGENT_QUESTION];
 
@@ -435,8 +423,9 @@ describe('CalibrateDiscoveryAnswers', () => {
     });
 
     it('returns null for a model with no calibration', () => {
-        expect(CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), { ModelName: 'Some Other Model' })).toBeNull();
+        expect(CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), { ModelName: 'Some Other Model', ResolvedModel: 'x' })).toBeNull();
         expect(CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), {})).toBeNull();
+        expect(CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), { ModelName: 'Jev' })).toBeNull();
         expect(CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), { ModelName: 'LLM Decision', ResolvedModel: 'GPT 5.5 Instant' })).toBeNull();
     });
 });
