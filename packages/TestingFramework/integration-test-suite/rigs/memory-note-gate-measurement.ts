@@ -126,7 +126,9 @@ export function LoadCorpusData(corpusDir: string): {
 function writeReport(args: MeasurementArgs, outDir: string, observations: readonly DecisionObservation[]): void {
     const { scenarios, labels } = LoadCorpusData(args.CorpusDir);
     const evaluated = BuildEvaluatedNotes(scenarios, labels, observations);
-    const report = EvaluateMemoryGateMeasurement(evaluated.Notes, observations, args.Reps, evaluated);
+    // A rescore reports the reps its observations hold, whatever --reps says.
+    const reps = observations.reduce((most, o) => Math.max(most, o.Rep), 0) || args.Reps;
+    const report = EvaluateMemoryGateMeasurement(evaluated.Notes, observations, reps, evaluated);
     const { jsonPath, mdPath } = WriteMeasurementReportFiles(outDir, report, [REPO_ROOT]);
     const e = report.Exclusions;
     console.log(`not scored: ${e.FailedCalls} failed calls, ${e.NoAnswer} missing answers, ${e.UnscoredNotes} notes never answered, ${e.UnlabelledNotes} notes unlabelled`);
