@@ -60,7 +60,7 @@ const { mocks, state } = vi.hoisted(() => ({
         GetEntityDocumentByID: vi.fn<(id: string) => EntityDocumentFixture | undefined>(),
         GetVectorIndexByID: vi.fn<(id: string) => { Name: string } | undefined>(),
         RenderTemplate: vi.fn<(template: object, content: object, data: Record<string, unknown>) => Promise<{ Success: boolean; Output: string }>>(),
-        EmbedTexts: vi.fn<(params: { texts: string[]; model: string | null }) => Promise<{ vectors: number[][] }>>(),
+        RunEmbedding: vi.fn<(params: { Texts: string[]; ModelID?: string; ContextUser?: object; Description?: string }) => Promise<{ Success: boolean; Vectors?: number[][]; ErrorMessage?: string }>>(),
         QueryIndex: vi.fn<(params: { id: string; vector: number[]; topK: number }) => Promise<{ success: boolean; data: { matches: VectorMatchFixture[] } }>>(),
         ExecuteDecision: vi.fn<(params: AIDecisionParams) => Promise<AIDecisionRunResult>>(),
         ExecutePrompt: vi.fn<(params: AIPromptParams) => Promise<AIPromptRunResult>>(),
@@ -81,9 +81,6 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 });
 
 vi.mock('@memberjunction/ai', () => ({
-    BaseEmbeddings: class {
-        EmbedTexts = mocks.EmbedTexts;
-    },
     GetAIAPIKey: vi.fn().mockReturnValue(''),
 }));
 
@@ -166,6 +163,7 @@ vi.mock('@memberjunction/aiengine', () => ({
 }));
 
 vi.mock('@memberjunction/ai-prompts', () => ({
+    AIEmbeddingRunner: class { RunEmbedding = mocks.RunEmbedding; },
     AIDecisionRunner: class { ExecuteDecision = mocks.ExecuteDecision; },
     AIDecisionParams: class { Questions = {}; },
     AIPromptRunner: class { ExecutePrompt = mocks.ExecutePrompt; },
@@ -181,7 +179,6 @@ vi.mock('@memberjunction/ai-core-plus', () => ({
 
 import { BaseEntity, EntityInfo, LogError, UserInfo } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
-import { BaseEmbeddings } from '@memberjunction/ai';
 import { VectorDBBase } from '@memberjunction/ai-vectordb';
 import { DuplicateRecordDetector } from '../duplicateRecordDetector';
 import {
@@ -195,9 +192,9 @@ import '../reasoning/PromptReasoningProvider';
 import '../reasoning/DecisionReasoningProvider';
 import '../reasoning/DecisionThenPromptReasoningProvider';
 
-// The mocked embedding and vector-database base classes are the doubles; register them under the
-// driver keys the fixtures name, as a provider package registers its real subclass.
-MJGlobal.Instance.ClassFactory.Register(BaseEmbeddings, BaseEmbeddings, 'FakeEmbeddings');
+// The mocked vector-database base class is the double; register it under the driver key the
+// fixtures name, as a provider package registers its real subclass. Embedding goes through the
+// mocked AIEmbeddingRunner.
 MJGlobal.Instance.ClassFactory.Register(VectorDBBase, VectorDBBase, 'FakeVectorDB');
 
 // ─────────────────────────────────────────────
@@ -370,7 +367,7 @@ describe('DuplicateRecordDetector.CheckRecordValues', () => {
         mocks.GetEntityDocumentsForEntity.mockReturnValue([entityDocument()]);
         mocks.GetVectorIndexByID.mockImplementation((id: string) => ({ Name: `index-${id}` }));
         mocks.RenderTemplate.mockImplementation(async (_t, _c, data) => ({ Success: true, Output: `${data['Name']} | ${data['City']}` }));
-        mocks.EmbedTexts.mockResolvedValue({ vectors: [[0.1, 0.2, 0.3]] });
+        mocks.RunEmbedding.mockResolvedValue({ Success: true, Vectors: [[0.1, 0.2, 0.3]] });
         mocks.QueryIndex.mockResolvedValue({ success: true, data: { matches: MATCHES } });
         answerByRecord({ 'cand-a': 0.6, 'cand-b': 0.9, 'cand-c': 0.2 });
     });
@@ -387,7 +384,7 @@ describe('DuplicateRecordDetector.CheckRecordValues', () => {
             expect(result.Status).toBe('NotConfigured');
             expect(result.Candidates).toEqual([]);
             expect(mocks.GetEntityObject).not.toHaveBeenCalled();
-            expect(mocks.EmbedTexts).not.toHaveBeenCalled();
+            expect(mocks.RunEmbedding).not.toHaveBeenCalled();
             expect(mocks.ExecuteDecision).not.toHaveBeenCalled();
         });
 
@@ -397,7 +394,7 @@ describe('DuplicateRecordDetector.CheckRecordValues', () => {
             const result = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, USER);
 
             expect(result.Status).toBe('NotConfigured');
-            expect(mocks.EmbedTexts).not.toHaveBeenCalled();
+            expect(mocks.RunEmbedding).not.toHaveBeenCalled();
             expect(mocks.ExecuteDecision).not.toHaveBeenCalled();
         });
 
@@ -425,7 +422,7 @@ describe('DuplicateRecordDetector.CheckRecordValues', () => {
             expect(rendered['City']).toBe('Boston');
             expect(rendered['NotAField']).toBeUndefined();
             expect(typeof rendered['ID']).toBe('string');
-            expect(mocks.EmbedTexts).toHaveBeenCalledWith({ texts: ['Acme | Boston'], model: 'fake-embedding' });
+            expect(mocks.RunEmbedding).toHaveBeenCalledWith(expect.objectContaining({ Texts: ['Acme | Boston'], ModelID: 'model-1', ContextUser: USER }));
             expect(mocks.QueryIndex).toHaveBeenCalledWith(
                 expect.objectContaining({ id: 'index-vi-1', vector: [0.1, 0.2, 0.3], topK: 5 }),
                 USER
@@ -573,7 +570,7 @@ describe('DuplicateRecordDetector.CheckRecordValues', () => {
         });
 
         it('stops a hung embedding at the budget, starts nothing after it, and logs no error', async () => {
-            mocks.EmbedTexts.mockReturnValue(never());
+            mocks.RunEmbedding.mockReturnValue(never());
 
             const result = await checkUntilTheBudgetRunsOut();
 
@@ -624,7 +621,7 @@ describe('DuplicateRecordDetector.CheckRecordValues', () => {
         });
 
         it('applies a TimeoutMS option in place of the default budget', async () => {
-            mocks.EmbedTexts.mockReturnValue(never());
+            mocks.RunEmbedding.mockReturnValue(never());
 
             const result = await checkUntilTheBudgetRunsOut({ TimeoutMS: 250 });
 
@@ -664,7 +661,7 @@ describe('DuplicateRecordDetector.CheckRecordValues', () => {
 
             expect(result).toMatchObject({ Status: 'Failed', ErrorMessage: 'The duplicate entry check was cancelled while finding the entity document' });
             expect(mocks.GetEntityDocumentsForEntity).not.toHaveBeenCalled();
-            expect(mocks.EmbedTexts).not.toHaveBeenCalled();
+            expect(mocks.RunEmbedding).not.toHaveBeenCalled();
         });
     });
 
@@ -728,7 +725,7 @@ describe('DuplicateRecordDetector.CheckSingleRecord, through the shared query st
         mocks.GetEntityDocumentByID.mockReturnValue(entityDocument({ EnableLLMReasoning: false }));
         mocks.GetVectorIndexByID.mockImplementation((id: string) => ({ Name: `index-${id}` }));
         mocks.RenderTemplate.mockImplementation(async (_t, _c, data) => ({ Success: true, Output: `${data['Name']} | ${data['City']}` }));
-        mocks.EmbedTexts.mockResolvedValue({ vectors: [[0.4, 0.5]] });
+        mocks.RunEmbedding.mockResolvedValue({ Success: true, Vectors: [[0.4, 0.5]] });
         mocks.QueryIndex.mockResolvedValue({ success: true, data: { matches: MATCHES } });
     });
 
@@ -737,7 +734,7 @@ describe('DuplicateRecordDetector.CheckSingleRecord, through the shared query st
 
         const result = await new DuplicateRecordDetector().CheckSingleRecord('doc-1', key, {}, USER);
 
-        expect(mocks.EmbedTexts).toHaveBeenCalledWith({ texts: ['Acme Saved | Boston'], model: 'fake-embedding' });
+        expect(mocks.RunEmbedding).toHaveBeenCalledWith(expect.objectContaining({ Texts: ['Acme Saved | Boston'], ModelID: 'model-1', ContextUser: USER }));
         expect(result.Duplicates.map(d => d.ToCompactURLSegment())).toEqual(['cand-a', 'cand-b', 'cand-c']);
         expect(mocks.ExecuteDecision).not.toHaveBeenCalled();
     });
