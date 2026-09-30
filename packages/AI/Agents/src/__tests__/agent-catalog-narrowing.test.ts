@@ -15,7 +15,8 @@
  *      to reach them, the counts stay whole, and actions are narrowed only when the agent has Find
  *      Candidate Actions.
  *   3. Fail open: a failed, throwing, timed-out, cancelled or answer-less decision, or a missing
- *      prompt, shows the full catalog and logs a warning.
+ *      prompt, shows the full catalog and logs a warning. A timed-out or cancelled call's prompt run
+ *      is still linked to the step once the call settles, so the run counts it.
  *   4. Skills: narrowed in the catalog only, after the filterAvailableSkills policy (which stays the
  *      identity, so an override that skips super keeps narrowing), and an error while narrowing
  *      returns them all.
@@ -1067,6 +1068,97 @@ describe('catalog narrowing — fails open', () => {
             expect(result?.success).toBe(false);
             expect(result?.errorMessage).toContain('cancelled');
             expect(signal?.aborted).toBe(true);
+        });
+    });
+
+    describe('a call the run stopped waiting for still counts', () => {
+        /** What AIDecisionRunner returns for an aborted call: it wrote the prompt run before calling the model. */
+        const ABORTED: AIDecisionRunResult = { success: false, errorMessage: 'The operation was aborted', Answers: {}, promptRun: NARROWING_RUN as MJAIPromptRunEntity };
+
+        let markAsked: () => void;
+        let asked: Promise<void>;
+
+        /** An Ask that settles with `result` once its signal aborts, as the runner finalizes its row after the abort. */
+        function settlesOnAbort(result: AIDecisionRunResult): (args: AgentDecisionAskParams) => Promise<AIDecisionRunResult> {
+            return (args) => new Promise<AIDecisionRunResult>(resolve => {
+                args.CancellationToken?.addEventListener('abort', () => resolve(result), { once: true });
+                markAsked();
+            });
+        }
+
+        beforeEach(() => {
+            asked = new Promise<void>(resolve => {
+                markAsked = resolve;
+            });
+        });
+
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        it('links the prompt run of a timed-out call to the step, and the run counts it', async () => {
+            vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+            vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(settlesOnAbort(ABORTED));
+            const { agent, runner } = makeAgent(twoTurnScript());
+
+            const pending = agent.Execute(makeParams());
+            await asked;
+            await vi.advanceTimersByTimeAsync(30000);
+            const result = await pending;
+
+            expect(result.success).toBe(true);
+            expectFullCatalogAndWarning(runner);
+            const step = narrowingSteps()[0];
+            expect(step.Status).toBe('Failed');
+            expect(JSON.parse(step.OutputData ?? '{}')).toMatchObject({ failedOpen: true, reason: expect.stringContaining('timed out') });
+            expectNarrowingRunCounted();
+        });
+
+        it('links the prompt run of a call the run cancelled to the step, and the cancelled run counts it', async () => {
+            const run = new AbortController();
+            vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(settlesOnAbort(ABORTED));
+            const { agent } = makeAgent(twoTurnScript());
+
+            const pending = agent.Execute({ ...makeParams(), cancellationToken: run.signal });
+            await asked;
+            run.abort('user cancelled');
+            const result = await pending;
+
+            expect(result.success).toBe(false);
+            const step = narrowingSteps()[0];
+            expect(step.Status).toBe('Failed');
+            expect(JSON.parse(step.OutputData ?? '{}')).toMatchObject({ failedOpen: true, reason: expect.stringContaining('cancelled') });
+            expectNarrowingRunCounted();
+        });
+
+        it('links a prompt run that arrives after the run ended, so the trace still finds it', async () => {
+            vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+            let settle: (result: AIDecisionRunResult) => void = () => undefined;
+            vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(() => new Promise<AIDecisionRunResult>(resolve => {
+                settle = resolve;
+                markAsked();
+            }));
+            const { agent } = makeAgent(twoTurnScript());
+
+            const pending = agent.Execute(makeParams());
+            await asked;
+            await vi.advanceTimersByTimeAsync(30000);
+            await pending;
+            const step = narrowingSteps()[0];
+            expect(step.Status).toBe('Failed');
+            expect(step.TargetLogID).toBeNull();
+            const savedLinks: Array<string | null> = [];
+            vi.spyOn(step, 'Save').mockImplementation(async () => {
+                savedLinks.push(step.TargetLogID);
+                return true;
+            });
+            settle(ABORTED);
+            await vi.advanceTimersByTimeAsync(0);
+
+            expect(step.TargetLogID).toBe(NARROWING_RUN.ID);
+            expect(step.PromptRun).toBe(NARROWING_RUN);
+            // The step was already finalized, so the link is saved on its own.
+            expect(savedLinks).toEqual([NARROWING_RUN.ID]);
         });
     });
 });
