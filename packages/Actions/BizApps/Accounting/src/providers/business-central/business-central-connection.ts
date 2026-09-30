@@ -76,9 +76,10 @@ export function ParseJSONObject(text: string | null | undefined, what: string): 
     let parsed: unknown;
     try {
         parsed = JSON.parse(text);
-    } catch (error: unknown) {
-        const msg = error instanceof Error ? error.message : String(error);
-        throw new Error(`${what} is not valid JSON: ${msg}`);
+    } catch {
+        // The parser's message can quote the text around the bad token, and this text can hold a
+        // secret (Credential Values, or a Configuration carrying ClientSecret), so it is not repeated.
+        throw new Error(`${what} is not valid JSON.`);
     }
     if (!IsJSONObject(parsed)) {
         throw new Error(`${what} must be a JSON object.`);
@@ -172,7 +173,7 @@ export function ResolveBusinessCentralConnectorConfig(
 
 /** The client-credentials token endpoint for a resolved connection. */
 export function BusinessCentralTokenURL(config: Pick<BusinessCentralConnectorConfig, 'AuthorityHost' | 'TenantId'>): string {
-    return `${config.AuthorityHost}/${config.TenantId}/oauth2/v2.0/token`;
+    return `${config.AuthorityHost}/${encodeURIComponent(config.TenantId)}/oauth2/v2.0/token`;
 }
 
 interface CachedTokenManager {

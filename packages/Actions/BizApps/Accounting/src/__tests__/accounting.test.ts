@@ -3,6 +3,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock external dependencies
 vi.mock('@memberjunction/actions', () => ({
     BaseAction: class BaseAction {
+        async Run(params: unknown): Promise<unknown> {
+            return (this as unknown as { InternalRunAction(p: unknown): Promise<unknown> }).InternalRunAction(params);
+        }
         protected async InternalRunAction(): Promise<unknown> { return {}; }
     }
 }));
@@ -317,6 +320,16 @@ describe('BaseAccountingAction', () => {
             expect(filter).toContain("'Microsoft Dynamics 365 Business Central'");
         });
 
+        it('should escape a quote in IntegrationName so it cannot widen the filter', async () => {
+            const runViewFn = mockRunViewResults([]);
+
+            await expect(action['resolveCompanyAccountingIntegration'](COMPANY_ID, {} as never, "x') OR (1=1"))
+                .rejects.toThrow(/No active/);
+
+            const filter = runViewFn.mock.calls[0][0].ExtraFilter as string;
+            expect(filter).toBe(`CompanyID = '${COMPANY_ID}' AND IsActive = 1 AND Integration IN ('x'') OR (1=1')`);
+        });
+
         it('should fail with AMBIGUOUS_ACCOUNTING_INTEGRATION when two ERPs are active', async () => {
             const { RunView } = await import('@memberjunction/core');
             const runViewFn = vi.fn().mockResolvedValue({
@@ -481,6 +494,27 @@ describe('BaseAccountingAction.getCompanyIntegration', () => {
         expect(getEntityObject).toHaveBeenCalledWith('MJ: Company Integrations', {});
         expect(loadFn).toHaveBeenCalledWith(CI_UAT);
         expect(runViewFn).not.toHaveBeenCalled();
+        expect(record.ID).toBe(CI_UAT);
+    });
+
+    it('should load the connection through the provider the request was run with', async () => {
+        mockRunViewResults([]);
+        mockCompanyIntegrationLoad(null);
+        vi.mocked(Metadata).mockClear();
+        const row = bcRow(CI_UAT, 'BC UAT', 'business-central');
+        const providerGetEntityObject = vi.fn(async () => ({
+            async Load(this: Row) {
+                Object.assign(this, row);
+                return true;
+            },
+        }));
+        const provider = { GetEntityObject: providerGetEntityObject };
+
+        await action.Run({ Params: [], ContextUser: {}, Provider: provider } as never);
+        const record = await action['getCompanyIntegration'](COMPANY_ID, {} as never, CI_UAT);
+
+        expect(providerGetEntityObject).toHaveBeenCalledWith('MJ: Company Integrations', {});
+        expect(Metadata).not.toHaveBeenCalled();
         expect(record.ID).toBe(CI_UAT);
     });
 

@@ -69,7 +69,7 @@ export abstract class BusinessCentralBaseAction extends BaseAccountingAction {
 
         // Build the full URL
         const baseUrl = await this.getBusinessCentralAPIUrl(integration, connection.TenantId, connection.Environment);
-        const fullUrl = `${baseUrl}/companies(${connection.CompanyId})/${endpoint}`;
+        const fullUrl = `${baseUrl}/companies(${encodeURIComponent(connection.CompanyId)})/${endpoint}`;
 
         // Prepare headers
         const headers: Record<string, string> = {
@@ -195,7 +195,7 @@ export abstract class BusinessCentralBaseAction extends BaseAccountingAction {
         companyIntegrationId: string,
         contextUser: UserInfo
     ): Promise<JSONObject> {
-        const md = new Metadata();
+        const md = this.requestProvider ?? new Metadata();
         const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
         const loaded = await credential.Load(credentialId);
         if (!loaded) {
@@ -333,7 +333,7 @@ export abstract class BusinessCentralBaseAction extends BaseAccountingAction {
     ): Promise<string> {
         // Default Business Central API URL pattern
         // Format: https://api.businesscentral.dynamics.com/v2.0/{tenant-id}/{environment}/api/v2.0
-        return `https://api.businesscentral.dynamics.com/v2.0/${tenantId}/${environment}/api/${this.apiVersion}`;
+        return `https://api.businesscentral.dynamics.com/v2.0/${encodeURIComponent(tenantId)}/${encodeURIComponent(environment)}/api/${this.apiVersion}`;
     }
 
     /**
