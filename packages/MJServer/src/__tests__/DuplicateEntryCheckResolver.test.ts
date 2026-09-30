@@ -170,7 +170,7 @@ describe('CheckDuplicateEntry: the values', () => {
   it('ignores the fields the entity does not have, and keys the rest by the real field name', async () => {
     await check('Accounts', JSON.stringify({ name: 'Acme', City: 'Boston', Revenue: 5, NotAField: 'x' }));
 
-    expect(resolver.Checker.CheckRecordValues).toHaveBeenCalledWith('Accounts', { Name: 'Acme', City: 'Boston' }, undefined, USER);
+    expect(resolver.Checker.CheckRecordValues).toHaveBeenCalledWith('Accounts', { Name: 'Acme', City: 'Boston' }, USER);
   });
 });
 

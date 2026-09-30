@@ -1,7 +1,13 @@
 export { DuplicateRecordDetector } from './duplicateRecordDetector';
+export {
+    DUPLICATE_ENTRY_CHECK_SERVER_BUDGET_MS,
+    DUPLICATE_ENTRY_CHECK_MAX_FIELD_TEXT_LENGTH,
+    DUPLICATE_ENTRY_CHECK_MAX_DECISION_FIELDS,
+} from './duplicateEntryCheckTypes';
 export type {
     DuplicateEntryCheckStatus,
     DuplicateEntryCandidate,
+    DuplicateEntryCheckOptions,
     DuplicateEntryCheckResult,
 } from './duplicateEntryCheckTypes';
 

@@ -104,7 +104,7 @@ export class DuplicateEntryCheckResolver extends ResolverBase {
             if ('Error' in values) {
                 return this.failure(values.Error, startTime);
             }
-            const result = await this.CreateEntryChecker(provider).CheckRecordValues(entity.Name, values.Values, undefined, user);
+            const result = await this.CreateEntryChecker(provider).CheckRecordValues(entity.Name, values.Values, user);
             return this.mapResult(result);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
