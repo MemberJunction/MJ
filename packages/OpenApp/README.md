@@ -787,22 +787,27 @@ After install/upgrade/remove, you must:
 
 **Fallback.** Two permissions are needed, and the engine checks both before it creates anything:
 
-- `IMPERSONATE` on the owner — required to name another user in `CREATE SCHEMA … AUTHORIZATION` (`HAS_PERMS_BY_NAME(<owner>, 'USER', 'IMPERSONATE')`).
-- `CONTROL` on the database — once the schema belongs to `dbo`, the installer no longer owns the objects its migrations create, and the migrations' own `GRANT … ON <app view>` statements need `CONTROL` on those objects (`HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'CONTROL')`).
+- `IMPERSONATE` on the owner — required to name another user in `CREATE SCHEMA … AUTHORIZATION` (`HAS_PERMS_BY_NAME(QUOTENAME(<owner>), 'USER', 'IMPERSONATE')`).
+- `CONTROL` on the database — once the schema belongs to `dbo`, the installer no longer owns the objects its migrations create, and the migrations' own `GRANT … ON <app view>` statements need `CONTROL` on those objects (`HAS_PERMS_BY_NAME(QUOTENAME(DB_NAME()), 'DATABASE', 'CONTROL')`).
 
-Members of `db_owner` have both. When the installer lacks either one — or cannot see the core schema — the install still succeeds with a plain `CREATE SCHEMA` (owned by the installer, so its migrations can still grant), and a `Schema` warning is printed naming the cause and the consequence. If a permission was missing, remove the app and reinstall it as a member of `db_owner`, or retrofit the schema as below to keep its data. Removing with `--keep-data` does not help on its own: the next install reuses the kept schema as it is and never changes its owner. If the core schema was not found, check the configured core schema (`coreSchema` in `mj.config.cjs`) and that the installing login can see it.
+Members of `db_owner` have both. When the installer lacks either one — or cannot see the core schema — the install still succeeds with a plain `CREATE SCHEMA` (owned by the installer, so its migrations can still grant), and a `Schema` warning is printed naming the cause and the consequence. If a permission was missing, either remove the app without `--keep-data` (**this drops its schema and all of its data**) and install it again as a member of `db_owner`, or keep the data and retrofit the schema as below. Any install that finds the schema already there never changes its owner. That covers a reinstall after `mj app remove --keep-data` and adopting an existing schema through `createIfNotExists`. For those, only the retrofit changes ownership. If the core schema was not found, check the configured core schema (`coreSchema` in `mj.config.cjs`) and that the installing login can see it.
 
 > Granting `IMPERSONATE ON USER::[dbo]` alone is **not** enough. Verified on SQL Server 2022: a `db_ddladmin` login with that grant creates the `dbo`-owned schema and its views, then fails the migration's `GRANT SELECT` with *Cannot find the object '…', because it does not exist or you do not have permission* — which is why the engine requires `CONTROL` on the database as well.
 
+**What a grant on an app object now reaches.** With the app schema owned by `dbo`, a grant on an app view or procedure also reaches every `dbo`-owned table it reads, `__mj` tables included, without a grant on those tables. That is the point of the fix, but it means granting an app object grants whatever that object reads. Review third-party app views and procedures before you grant them to a role.
+
 **PostgreSQL is not affected.** PostgreSQL has no ownership chaining through schemas: a view checks its base tables' privileges as the *view's* owner, not the schema's, so install creates the schema exactly as before.
 
-**Retrofitting an existing install.** An app schema created before this change is owned by whichever login installed it. Transfer it to the core schema's owner with:
+**Retrofitting an existing install.** An app schema created before this change is owned by whichever login installed it. Look up the core schema's owner, then transfer the app schema to that owner:
 
 ```sql
-ALTER AUTHORIZATION ON SCHEMA::[acme_crm] TO [dbo];
+SELECT USER_NAME(principal_id) AS CoreOwner FROM sys.schemas WHERE name = N'__mj'; -- your MJ core schema
+ALTER AUTHORIZATION ON SCHEMA::[acme_crm] TO [dbo]; -- replace [dbo] with CoreOwner
 ```
 
-> **Caution — this drops permissions.** `ALTER AUTHORIZATION` removes every explicit permission on the schema **and** on the objects in it that are owned through the schema (verified on SQL Server 2022: both a `GRANT EXECUTE ON SCHEMA::` and an object-level `GRANT SELECT` on a view disappeared). Script the grants out **first**, run the `ALTER AUTHORIZATION`, then run the scripted statements:
+> **After the retrofit, installs and upgrades of that app need `CONTROL` on its schema.** The installing login no longer owns the schema. Its migrations then cannot write the schema's migration history (the `flyway_schema_history` table lives in the app schema) or grant on the objects they create. Verified on SQL Server 2022: a `db_ddladmin` login's history `INSERT` was denied and its `GRANT` failed. From then on, run `mj app install` and `mj app upgrade` for that app as a member of `db_owner`, or `GRANT CONTROL ON SCHEMA::[acme_crm] TO [<installer>]`. Upgrades, and installs that reuse an existing schema, check this before they change anything. Without it they stop with an error that names the owner and the login.
+
+> **Caution — this drops permissions.** `ALTER AUTHORIZATION` removes every explicit permission on the schema **and** on the objects in it that are owned through the schema (verified on SQL Server 2022: a `GRANT EXECUTE ON SCHEMA::`, object- and column-level `GRANT SELECT`s, a `GRANT EXECUTE ON TYPE::` on a table type, and a `GRANT REFERENCES ON XML SCHEMA COLLECTION::` all disappeared). Script the grants out **first**, run the `ALTER AUTHORIZATION`, then run the scripted statements:
 
 ```sql
 DECLARE @app sysname = N'acme_crm';
@@ -812,7 +817,10 @@ SELECT
     CASE p.state WHEN 'W' THEN N'GRANT' ELSE p.state_desc COLLATE DATABASE_DEFAULT END
     + N' ' + p.permission_name COLLATE DATABASE_DEFAULT
     + N' ON ' + CASE p.class
-                  WHEN 3 THEN N'SCHEMA::' + QUOTENAME(s.name)
+                  WHEN 3  THEN N'SCHEMA::' + QUOTENAME(s.name)
+                  -- OBJECT_NAME returns NULL for types and XML schema collections, so name them from their own catalogs.
+                  WHEN 6  THEN N'TYPE::' + QUOTENAME(SCHEMA_NAME(t.schema_id)) + N'.' + QUOTENAME(t.name)
+                  WHEN 10 THEN N'XML SCHEMA COLLECTION::' + QUOTENAME(SCHEMA_NAME(x.schema_id)) + N'.' + QUOTENAME(x.name)
                   ELSE N'OBJECT::' + QUOTENAME(OBJECT_SCHEMA_NAME(p.major_id)) + N'.' + QUOTENAME(OBJECT_NAME(p.major_id))
                 END
     + CASE WHEN p.class = 1 AND p.minor_id > 0 THEN N' (' + QUOTENAME(COL_NAME(p.major_id, p.minor_id)) + N')' ELSE N'' END
@@ -820,9 +828,13 @@ SELECT
     + CASE p.state WHEN 'W' THEN N' WITH GRANT OPTION' ELSE N'' END
     + N';' AS ReapplyStatement
 FROM sys.database_permissions p
-LEFT JOIN sys.schemas s ON p.class = 3 AND s.schema_id = p.major_id
-WHERE (p.class = 3 AND s.name = @app)
-   OR (p.class = 1 AND OBJECT_SCHEMA_NAME(p.major_id) = @app);
+LEFT JOIN sys.schemas s                ON p.class = 3  AND s.schema_id = p.major_id
+LEFT JOIN sys.types t                  ON p.class = 6  AND t.user_type_id = p.major_id
+LEFT JOIN sys.xml_schema_collections x ON p.class = 10 AND x.xml_collection_id = p.major_id
+WHERE (p.class = 3  AND s.name = @app)
+   OR (p.class = 1  AND OBJECT_SCHEMA_NAME(p.major_id) = @app)
+   OR (p.class = 6  AND SCHEMA_NAME(t.schema_id) = @app)
+   OR (p.class = 10 AND SCHEMA_NAME(x.schema_id) = @app);
 ```
 
 ---
