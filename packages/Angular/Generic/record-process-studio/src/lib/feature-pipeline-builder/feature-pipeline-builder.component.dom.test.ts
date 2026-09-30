@@ -1,7 +1,7 @@
 import '@angular/compiler';
-import { getTestBed } from '@angular/core/testing';
+import { ComponentFixture, getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { EntityInfo, type RunViewParams, type RunViewResult } from '@memberjunction/core';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { MJRecordProcessEntity } from '@memberjunction/core-entities';
@@ -845,6 +845,230 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
       expect(savedSpec(rec)).not.toHaveProperty('CaptureReasoning');
       expect(validity[validity.length - 1]).toBe(true);
       expect(query(f, '.fpb-reasoning-select')).toBeNull();
+    });
+  });
+
+  // A <select> whose options come from @for gets its [value] before the options exist, so the browser
+  // falls back to the first option. These read what the user sees, not what the spec says.
+  describe('the pickers show the saved values', () => {
+    const CONTACTS = new EntityInfo({ ID: 'e2', Name: 'Contacts', DisplayName: 'Contacts', Fields: [] });
+
+    /** A fake provider whose RunView answers each entity with the rows given for it, or none. */
+    const providerWithRows = (rowsByEntity: Record<string, object[]>, entities: EntityInfo[] = ENTITIES) =>
+      Object.assign(createFakeProvider({ entities, runViewResults: (params) => rowsByEntity[params.EntityName ?? ''] ?? [] }), {
+        EntityByID: (id: string) => entities.find((e) => UUIDsEqual(e.ID, id)),
+      });
+
+    const renderWithProvider = (record: MJRecordProcessEntity, provider: ReturnType<typeof providerWithRows>) =>
+      renderComponentFixture(FeaturePipelineBuilderComponent, {
+        inputs: { Record: record, Provider: provider, EntityID: record.EntityID },
+      });
+
+    /** The <select> in the field under `root` whose label reads `label`. */
+    const selectIn = (root: Element, label: string): HTMLSelectElement => {
+      const field = Array.from(root.querySelectorAll('.field')).find((el) => el.querySelector('label')?.textContent?.trim() === label);
+      const select = field?.querySelector('select');
+      if (!select) {
+        throw new Error(`no select labelled '${label}'`);
+      }
+      return select;
+    };
+
+    /** The first <select> in the builder whose label reads `label`. */
+    const selectFor = (f: ComponentFixture<FeaturePipelineBuilderComponent>, label: string): HTMLSelectElement =>
+      selectIn(f.nativeElement as Element, label);
+
+    /** The text of the option the user sees. */
+    const shownText = (select: HTMLSelectElement): string => select.options[select.selectedIndex]?.textContent?.trim() ?? '';
+
+    it('shows a saved enum output as Enum, on its saved field', () => {
+      const f = render(makeRecord());
+
+      expect(selectFor(f, 'Constraint Type').value).toBe('enum');
+      expect(selectFor(f, 'Target Field').value).toBe('Rating');
+    });
+
+    it('shows a saved Decision spec as Decision, with its numeric output as Numeric', () => {
+      const f = render(
+        makeRecord({
+          PipelineType: 'Decision',
+          Outputs: [
+            {
+              Name: 'RiskLevel',
+              Ref: '$',
+              Target: { Mode: 'field', EntityFieldName: 'ChurnRiskScore' },
+              Constraint: { Type: 'numeric', Levels: ['Low', 'High'], OnViolation: 'fail' },
+            },
+          ],
+        })
+      );
+
+      expect(selectFor(f, 'Pipeline Type').value).toBe('Decision');
+      expect(selectFor(f, 'Constraint Type').value).toBe('numeric');
+    });
+
+    it('matches the saved pipeline type to the listed one whatever its case', () => {
+      const record = makeRecord({ PipelineType: 'decision', Outputs: [] });
+      const f = renderComponentFixture(FeaturePipelineBuilderComponent, {
+        inputs: { Record: record, Provider: fakeProvider(), EntityID: record.EntityID },
+        setup: (instance) => {
+          instance.AvailablePipelineTypes = [{ Name: 'LLM' }, { Name: 'Decision' }];
+        },
+      });
+
+      expect(selectFor(f, 'Pipeline Type').value).toBe('Decision');
+    });
+
+    it('shows the placeholder, not Boolean, for an unconstrained Decision output', () => {
+      const f = render(
+        makeRecord({
+          PipelineType: 'Decision',
+          Outputs: [{ Name: 'Left', Ref: '$', Target: { Mode: 'field', EntityFieldName: 'IsAtRisk' } }],
+        })
+      );
+
+      const select = selectFor(f, 'Constraint Type');
+      expect(select.value).toBe('none');
+      expect(shownText(select)).toBe('— Select Constraint —');
+    });
+
+    it('shows the placeholder for a Decision output kept with a constraint type Decision cannot produce', () => {
+      const f = render(
+        makeRecord({
+          PipelineType: 'Decision',
+          Outputs: [
+            {
+              Name: 'Summary',
+              Ref: '$',
+              Target: { Mode: 'field', EntityFieldName: 'Summary' },
+              Constraint: { Type: 'freetext', MaxLength: 500, OnViolation: 'fail' },
+            },
+          ],
+        })
+      );
+
+      expect(shownText(selectFor(f, 'Constraint Type'))).toBe('— Select Constraint —');
+    });
+
+    it('shows a saved tags output as Taxonomy Tags', () => {
+      const f = render(
+        makeRecord({
+          Outputs: [{ Name: 'Topics', Ref: '$.topics', Target: { Mode: 'tags', RootTagID: 'root-1' } }],
+        })
+      );
+
+      expect(selectFor(f, 'Target Mode').value).toBe('tags');
+    });
+
+    it('shows the placeholder for a Decision output kept with a target mode Decision cannot write', () => {
+      const f = render(
+        makeRecord({
+          PipelineType: 'Decision',
+          Outputs: [
+            {
+              Name: 'Topics',
+              Ref: '$',
+              Target: { Mode: 'tags', RootTagID: 'root-1' },
+              Constraint: { Type: 'boolean', OnViolation: 'fail' },
+            },
+          ],
+        })
+      );
+
+      const select = selectFor(f, 'Target Mode');
+      expect(select.value).toBe('');
+      expect(shownText(select)).toBe('— Select Target Mode —');
+    });
+
+    it('shows the placeholder for a saved field the entity no longer has', () => {
+      const f = render(
+        makeRecord({
+          Outputs: [{ Name: 'Gone', Ref: '$', Target: { Mode: 'field', EntityFieldName: 'Dropped' } }],
+        })
+      );
+
+      const select = selectFor(f, 'Target Field');
+      expect(select.value).toBe('');
+      expect(shownText(select)).toBe('— Select Column —');
+    });
+
+    it('shows a saved child entity once the entity list renders', async () => {
+      const f = renderWithProvider(
+        makeRecord({
+          Outputs: [
+            { Name: 'Kids', Ref: '$.kids', Target: { Mode: 'child', EntityName: 'Contacts', ParentField: 'AccountID', Map: {} } },
+          ],
+        }),
+        providerWithRows({}, [...ENTITIES, CONTACTS])
+      );
+
+      await vi.waitFor(() => expect(selectFor(f, 'Child Entity').options.length).toBe(3));
+
+      expect(selectFor(f, 'Child Entity').value).toBe('Contacts');
+    });
+
+    it('shows the saved prompt once the prompts load after the first render, whatever the ID case', async () => {
+      const record = makeRecord();
+      record.PromptID = 'PROMPT-1';
+      const f = renderWithProvider(
+        record,
+        providerWithRows({
+          'MJ: AI Prompts': [
+            { ID: 'prompt-0', Name: 'Alpha', Description: null },
+            { ID: 'prompt-1', Name: 'Beta', Description: null },
+          ],
+        })
+      );
+
+      await vi.waitFor(() => expect(selectFor(f, 'Prompt').options.length).toBe(3));
+
+      const select = selectFor(f, 'Prompt');
+      expect(select.value).toBe('prompt-1');
+      expect(shownText(select)).toBe('Beta');
+    });
+
+    it('shows the saved entity document once the documents load after the first render', async () => {
+      const f = renderWithProvider(
+        makeRecord({ Context: { EntityDocumentID: 'doc-1' }, Outputs: [] }),
+        providerWithRows({
+          'MJ: Entity Documents': [
+            { ID: 'doc-0', Name: 'Account Summary', EntityID: 'e1' },
+            { ID: 'doc-1', Name: 'Account Detail', EntityID: 'e1' },
+          ],
+        })
+      );
+
+      await vi.waitFor(() => expect(selectFor(f, 'Entity Document').options.length).toBe(3));
+
+      expect(selectFor(f, 'Entity Document').value).toBe('doc-1');
+    });
+
+    it('shows the placeholders when a switch to Decision leaves an output unconstrained and on tags', () => {
+      const f = render(
+        makeRecord({
+          Outputs: [
+            { Name: 'Left', Ref: '$', Target: { Mode: 'field', EntityFieldName: 'IsAtRisk' } },
+            { Name: 'Topics', Ref: '$', Target: { Mode: 'tags', RootTagID: 'root-1' }, Constraint: { Type: 'boolean', OnViolation: 'fail' } },
+          ],
+        })
+      );
+      const [constraintSelect] = queryAll(f, '.fpb-output-card').map((card) => selectIn(card, 'Constraint Type'));
+      const tagsModeSelect = selectIn(queryAll(f, '.fpb-output-card')[1], 'Target Mode');
+      expect(constraintSelect.value).toBe('none');
+      expect(tagsModeSelect.value).toBe('tags');
+
+      f.componentInstance.ApplyPipelineTypeChange('Decision');
+
+      expect(shownText(constraintSelect)).toBe('— Select Constraint —');
+      expect(shownText(tagsModeSelect)).toBe('— Select Target Mode —');
+    });
+
+    it('moves the constraint picker with the spec when the user changes the type', () => {
+      const f = render(makeRecord());
+
+      f.componentInstance.UpdateConstraintType(0, eventWithValue('boolean'));
+
+      expect(selectFor(f, 'Constraint Type').value).toBe('boolean');
     });
   });
 });
