@@ -3601,7 +3601,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // row does not stay In-Progress until the conversation is opened again. Register the row
     // for the live callback either way — an update of an existing In-Progress row included.
     if (message.Status === 'In-Progress' && message.ID) {
-      if (!this.InProgressMessageIds.includes(message.ID)) {
+      if (!this.InProgressMessageIds.some((id) => UUIDsEqual(id, message.ID))) {
         this.InProgressMessageIds = [...this.InProgressMessageIds, message.ID];
       }
       const recentCompletion = this.streamingService.GetRecentCompletion(message.ID);
