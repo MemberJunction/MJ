@@ -31,7 +31,7 @@ function options(overrides: Partial<MeasurementOptions> = {}): MeasurementOption
     return {
         EntityName: 'MJ: Actions', TextFields: ['Name', 'Description'], LabelField: 'Category', Values: ['A', 'B'],
         SampleSize: 8, Reps: 2, Seed: 7, BatchSize: 3, LLMPromptName: 'LLM prompt', DecisionPromptName: 'Default Decision',
-        LLMModelName: null, DecisionModelName: null, RequireModel: false, OutDir: join(outDir, 'report'), DryRun: false, ...overrides,
+        LLMModelName: null, DecisionModelName: null, RequireModel: false, AllowDatabase: null, OutDir: join(outDir, 'report'), DryRun: false, ...overrides,
     };
 }
 

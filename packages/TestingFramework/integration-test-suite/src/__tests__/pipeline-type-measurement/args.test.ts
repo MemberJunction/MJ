@@ -16,7 +16,7 @@ describe('ParseMeasurementArgs', () => {
             EntityName: 'MJ: Actions', TextFields: ['Name', 'Description'], LabelField: 'Category',
             Values: ['System', 'Data', 'Utilities', 'File Storage'], SampleSize: 200, Reps: 2, Seed: 7, BatchSize: 100,
             LLMPromptName: 'Decision Eval - Action Category (LLM)', DecisionPromptName: 'Default Decision',
-            LLMModelName: null, DecisionModelName: null, RequireModel: false, OutDir: '/tmp/measure', DryRun: false,
+            LLMModelName: null, DecisionModelName: null, RequireModel: false, AllowDatabase: null, OutDir: '/tmp/measure', DryRun: false,
         });
     });
 
@@ -29,6 +29,11 @@ describe('ParseMeasurementArgs', () => {
         const parsed = ParseMeasurementArgs([...REQUIRED, '--llm-model', ' Gemini 3.1 Flash-Lite ', '--decision-model', 'Jev', '--require-model']);
         expect(parsed).toMatchObject({ LLMModelName: 'Gemini 3.1 Flash-Lite', DecisionModelName: 'Jev', RequireModel: true });
         expect(() => ParseMeasurementArgs([...REQUIRED, '--decision-model', ' '])).toThrow(/--decision-model needs a value/);
+    });
+
+    it('reads the database --allow-db allows', () => {
+        expect(ParseMeasurementArgs([...REQUIRED, '--allow-db', 'CustomerCopy']).AllowDatabase).toBe('CustomerCopy');
+        expect(() => ParseMeasurementArgs([...REQUIRED, '--allow-db'])).toThrow(/--allow-db needs a value/);
     });
 
     it('requires --out and the other required flags', () => {

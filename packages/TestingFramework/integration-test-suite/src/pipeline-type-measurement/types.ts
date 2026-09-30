@@ -64,6 +64,8 @@ export interface MeasurementOptions {
     DecisionModelName: string | null;
     /** Whether an answer from any other model stops the run (`--require-model`). */
     RequireModel: boolean;
+    /** The database the operator allows although its name does not look like a development one (`--allow-db`); null when not given. */
+    AllowDatabase: string | null;
     OutDir: string;
     DryRun: boolean;
 }

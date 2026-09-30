@@ -12,7 +12,7 @@ import { COSTS, EXPECTED_MODELS, PREDICTIONS, RunCost, SAMPLE } from './fixtures
 const OPTIONS: MeasurementOptions = {
     EntityName: 'MJ: Actions', TextFields: ['Name', 'Description'], LabelField: 'Category', Values: ['A', 'B'],
     SampleSize: 4, Reps: 2, Seed: 7, BatchSize: 100, LLMPromptName: 'LLM prompt', DecisionPromptName: 'Default Decision',
-    LLMModelName: null, DecisionModelName: 'Jev', RequireModel: false, OutDir: '/tmp/out', DryRun: false,
+    LLMModelName: null, DecisionModelName: 'Jev', RequireModel: false, AllowDatabase: null, OutDir: '/tmp/out', DryRun: false,
 };
 
 const INPUT: ReportInput = {

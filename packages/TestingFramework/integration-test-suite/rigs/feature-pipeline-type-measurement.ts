@@ -79,15 +79,24 @@
  * The logic (sampling, specs, processors, metrics, report) lives in `../src/pipeline-type-measurement/`
  * and is unit-tested there.
  *
+ * THE DATABASE. The rig connects to whatever `mj.config.cjs` `databaseSettings` or the repo-root `.env`
+ * `DB_*` name. Every run, dry run included, first prints that database (name, host and port, never a
+ * credential). It then refuses a database whose name has none of the words that mark a development or
+ * clean-room one (`dev`, `test`, `clean`, `local`, `sandbox`, … — see `db-guard.ts`), because a live
+ * run writes prompt runs there and sends the `--text-fields` of its records to outside model vendors.
+ * `--allow-db <name>` allows it, and must name the configured database exactly.
+ *
  * USAGE (from the repo root, which holds `.env` for the database):
  *   npx tsx packages/TestingFramework/integration-test-suite/rigs/feature-pipeline-type-measurement.ts \
  *     --entity "MJ: Actions" --text-fields Name,Description --label-field Category \
  *     --values "System,Data,Utilities,File Storage" --llm-prompt "Decision Eval - Action Category (LLM)" \
  *     [--decision-prompt "Default Decision"] [--llm-model "<model>"] [--decision-model Jev] [--require-model] \
- *     [--sample 200] [--reps 2] [--seed 7] [--batch-size 100] --out <dir outside any repo> [--dry-run]
+ *     [--sample 200] [--reps 2] [--seed 7] [--batch-size 100] [--allow-db <database name>] \
+ *     --out <dir outside any repo> [--dry-run]
  *
- * `--dry-run` reads the database to draw the sample, then prints the sample size, the per-value
- * counts and the planned calls, and runs no prompt.
+ * `--dry-run` prints the database, reads it to draw the sample, then prints the sample size, the
+ * per-value counts, the value descriptions, the expected models and the planned calls, and runs no
+ * prompt.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -98,13 +107,14 @@ import { AIEngine } from '@memberjunction/aiengine';
 import type { RecordProcessorContext, RecordRef } from '@memberjunction/record-set-processor-base';
 import { BootstrapAI, Settle } from './lib/ai-bootstrap';
 import type { AICtx } from './lib/ai-bootstrap';
-import { ParseMeasurementArgs } from '../src/pipeline-type-measurement/args';
+import { LoadDbConfig, LoadEnv } from './lib/harness';
+import type { DbConfig } from './lib/harness';
 import { IsPromptRunFinished, PROMPT_RUN_COST_FIELDS, ToPromptRunCost } from '../src/pipeline-type-measurement/cost-and-time';
 import type { PromptRunCostRow } from '../src/pipeline-type-measurement/cost-and-time';
 import { FirstChoiceModel } from '../src/pipeline-type-measurement/models';
 import { CreateMeasurementProcessor } from '../src/pipeline-type-measurement/processors';
-import { AssertOutputOutsideRepo } from '../src/pipeline-type-measurement/repo-guard';
-import { RunMeasurement } from '../src/pipeline-type-measurement/run';
+import { RunMeasurementRig } from '../src/pipeline-type-measurement/rig';
+import type { RigSession } from '../src/pipeline-type-measurement/rig';
 import type { BatchProcessor, MeasurementBackend, MeasurementIO } from '../src/pipeline-type-measurement/run';
 import { CanonicalLabel } from '../src/pipeline-type-measurement/sampling';
 import { AssertTextFieldsExcludeLabel, ResolveLabelColumn } from '../src/pipeline-type-measurement/spec';
@@ -335,17 +345,23 @@ function firstDescriptionPerName(rows: EntityRow[], nameField: string, descripti
     return descriptions;
 }
 
+/** Connects to the database the guards allowed, and wraps it in the live backend. */
+async function connect(db: DbConfig, options: MeasurementOptions): Promise<RigSession> {
+    const ctx = await BootstrapAI(db);
+    return { Backend: new LiveMeasurementBackend(options, ctx), Close: () => ctx.pool.close() };
+}
+
 async function main(): Promise<number> {
-    const options = ParseMeasurementArgs(process.argv.slice(2));
-    // Refuse a repo output path before touching the database.
-    AssertOutputOutsideRepo(options.OutDir);
-    const ctx = await BootstrapAI();
-    try {
-        await RunMeasurement(options, new LiveMeasurementBackend(options, ctx), CONSOLE_IO);
-        return 0;
-    } finally {
-        await ctx.pool.close();
-    }
+    // Prints the target database, and refuses a repo output path or a non-development database, before connecting.
+    await RunMeasurementRig(process.argv.slice(2), {
+        LoadDatabaseTarget: async () => {
+            LoadEnv();
+            return LoadDbConfig();
+        },
+        Connect: connect,
+        IO: CONSOLE_IO,
+    });
+    return 0;
 }
 
 main().then(

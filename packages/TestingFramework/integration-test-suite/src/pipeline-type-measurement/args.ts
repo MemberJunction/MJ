@@ -23,11 +23,11 @@ export const MEASUREMENT_USAGE =
     '--entity "<entity>" --text-fields <f1,f2> --label-field <field> --values "<v1,v2,...>" ' +
     '--llm-prompt "<prompt name>" --out <dir outside any git working tree> ' +
     '[--decision-prompt "Default Decision"] [--llm-model "<model>"] [--decision-model "<model>"] [--require-model] ' +
-    '[--sample 200] [--reps 2] [--seed 7] [--batch-size 100] [--dry-run]';
+    '[--sample 200] [--reps 2] [--seed 7] [--batch-size 100] [--allow-db <database name>] [--dry-run]';
 
 const VALUE_FLAGS = [
     'entity', 'text-fields', 'label-field', 'values', 'sample', 'reps', 'seed', 'batch-size', 'llm-prompt', 'decision-prompt', 'out',
-    'llm-model', 'decision-model',
+    'llm-model', 'decision-model', 'allow-db',
 ];
 const SWITCH_FLAGS = ['dry-run', 'require-model'];
 
@@ -51,6 +51,7 @@ export function ParseMeasurementArgs(argv: readonly string[]): MeasurementOption
         LLMModelName: readOptionalName(argv, 'llm-model'),
         DecisionModelName: readOptionalName(argv, 'decision-model'),
         RequireModel: argv.includes('--require-model'),
+        AllowDatabase: readOptionalName(argv, 'allow-db'),
         OutDir: requireFlag(argv, 'out'),
         DryRun: argv.includes('--dry-run'),
     };

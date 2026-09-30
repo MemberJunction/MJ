@@ -13,7 +13,7 @@ import { Answer, EXPECTED_MODELS, RunCost } from './fixtures';
 const OPTIONS: MeasurementOptions = {
     EntityName: 'MJ: Actions', TextFields: ['Name'], LabelField: 'Category', Values: ['A', 'B'], SampleSize: 4, Reps: 1, Seed: 7, BatchSize: 10,
     LLMPromptName: 'LLM prompt', DecisionPromptName: 'Default Decision', LLMModelName: null, DecisionModelName: null, RequireModel: false,
-    OutDir: '/tmp/out', DryRun: false,
+    AllowDatabase: null, OutDir: '/tmp/out', DryRun: false,
 };
 
 const PROMPTS: Record<MeasuredPipelineType, ArmPrompt> = {
