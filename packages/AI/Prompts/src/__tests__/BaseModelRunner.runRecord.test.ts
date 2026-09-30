@@ -302,4 +302,44 @@ describe('BaseModelRunner run record lifecycle', () => {
     expect(fakeRunEntity.Success).toBe(true);
     expect(fakeRunEntity.TokensUsedRollup).toBeUndefined();
   });
+
+  it('FinalizeRunRecord keeps the TotalCost applyResultFields set when the run has no Cost of its own', async () => {
+    const runner = new TestModelRunner();
+    const run = reloadedCostColumns('run-with-descendant-cost');
+
+    await runner.invokeFinalizeRunRecord(asPromptRun(run), true, new Date(), 10, (promptRun) => {
+      promptRun.DescendantCost = 0.0007;
+      promptRun.TotalCost = 0.0007;
+    });
+    await runner.WaitForPendingPromptRunSaves();
+
+    expect(run.Cost).toBeNull();
+    expect(run.TotalCost).toBe(0.0007);
+  });
+
+  it('FinalizeRunRecord sets TotalCost to Cost plus DescendantCost', async () => {
+    const runner = new TestModelRunner();
+    const run = reloadedCostColumns('run-with-both-costs');
+
+    await runner.invokeFinalizeRunRecord(asPromptRun(run), true, new Date(), 10, (promptRun) => {
+      promptRun.Cost = 0.0005;
+      promptRun.DescendantCost = 0.0002;
+    });
+    await runner.WaitForPendingPromptRunSaves();
+
+    expect(run.TotalCost).toBeCloseTo(0.0007, 10);
+  });
 });
+
+/** The prompt-run members FinalizeRunRecord's cost handling reads and writes, plus the save it queues. */
+type CostColumns = Pick<MJAIPromptRunEntityExtended, 'ID' | 'Cost' | 'DescendantCost' | 'TotalCost' | 'Save'>;
+
+/** A run's cost columns as its INSERT's reload leaves them: NULL, because nothing has set them. */
+function reloadedCostColumns(id: string): CostColumns {
+  return { ID: id, Cost: null, DescendantCost: null, TotalCost: null, Save: async () => true };
+}
+
+/** The seam onto the full prompt-run entity FinalizeRunRecord takes. */
+function asPromptRun(run: CostColumns): MJAIPromptRunEntityExtended {
+  return run as MJAIPromptRunEntityExtended;
+}
