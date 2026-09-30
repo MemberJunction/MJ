@@ -118,6 +118,16 @@
             "default": "auto",
             "description": "How the trailing runtime-state message is carried across iterations. OpenAI's automatic prompt cache only reuses a request whose entire prompt is a byte prefix of the new one, so replacing the fragment each iteration caps caching at the system prompt; retaining prior fragments and appending the new one keeps each request a prefix extension of the last. 'auto' appends when the model catalog's ModelConfiguration.LLM.PrefixPromptCache resolves to true for the serving path (Model Types < Models < Vendors' Configuration.ModelDefaults < Model Vendors: the vendor's defaults beat the model's own bag and the inference provider's row is the tie-breaker) and replaces otherwise; the answer is taken from the runtime model override or the first iteration's model selection and then frozen for the run, so a failover never flips the layout. 'appendOnly' forces append — use for a serving path whose catalog rows carry no flag yet. 'replace' forces replace-in-place to keep context compact."
           },
+          "finishIfMode": {
+            "type": "string",
+            "enum": [
+              "off",
+              "shadow",
+              "on"
+            ],
+            "default": "off",
+            "description": "Whether this agent writes finishIf gates (one to three yes/no questions and a final message on an Actions or single Sub-Agent step), and whether they act. 'off' (the default): the model is not taught finishIf and a gate is never evaluated. 'shadow': the model writes gates and each is evaluated and recorded as a Finish check step, but never ends the run, which measures the agent's gates on real traffic. 'on': a passing gate ends the run with the model's message, without another LLM turn. Off by default because a replay of recorded action rounds found a gate at the 0.9 threshold would have ended 22% of the rounds where the agent went on to act (typed-decision plan, Task 4.6)."
+          },
           "enableTaskGraphs": {
             "type": "boolean",
             "default": false,

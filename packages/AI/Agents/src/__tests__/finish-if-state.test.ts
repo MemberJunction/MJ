@@ -154,6 +154,7 @@ type PinnedSubAgentResult = BaseAgentNextStep & { agentRun?: { Message?: string 
 /** The BaseAgent members these tests reach. */
 interface AgentInternals {
     _agentRun: { ID: string; AgentID: string; Steps: MockStepEntity[] };
+    _agentTypePromptParams?: Record<string, unknown>;
     _activeProvider: { GetEntityObject: () => Promise<MockStepEntity> };
     finalizeStepEntity: (step: MockStepEntity, success: boolean, error?: string, output?: Record<string, unknown>) => Promise<void>;
     finishAfterActions: (
@@ -193,6 +194,8 @@ describe('finishIf state and verdict, as BaseAgent produces them', () => {
         internals = agent as unknown as AgentInternals;
         internals._activeProvider = { GetEntityObject: vi.fn(async () => new MockStepEntity()) };
         internals._agentRun = { ID: 'run-1', AgentID: 'agent-1', Steps: [] };
+        // The gate is evaluated only when finishIfMode is shadow or on (it defaults to off).
+        internals._agentTypePromptParams = { finishIfMode: 'on' };
         decisions = new AgentDecisionService();
         agent.SetDecisionService(decisions);
         finishChecks = [];
