@@ -7,6 +7,10 @@ const { mockRunView, mockRunViews, mockEntities, mockModels, mockVectorDBs, mock
   const mockRunViews = vi.fn();
   const mockEntities = [
     { ID: 'entity-1', Name: 'MJTestEntity', FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true } },
+    { ID: 'entity-sized-pk', Name: 'MJSizedKey', FirstPrimaryKey: { Name: 'Code', Type: 'NVarChar(255)' }, PrimaryKeys: [{ Name: 'Code' }] },
+    { ID: 'entity-scaled-pk', Name: 'MJScaledKey', FirstPrimaryKey: { Name: 'Amount', Type: ' decimal (10, 2) ' }, PrimaryKeys: [{ Name: 'Amount' }] },
+    { ID: 'entity-xml-pk', Name: 'MJXmlKey', FirstPrimaryKey: { Name: 'Doc', Type: 'xml' }, PrimaryKeys: [{ Name: 'Doc' }] },
+    { ID: 'entity-odd-pk', Name: 'MJOddKey', FirstPrimaryKey: { Name: 'Odd', Type: 'int(1)x)' }, PrimaryKeys: [{ Name: 'Odd' }] },
   ];
   const mockModels = [
     { ID: 'model-1', AIModelType: 'Embeddings', DriverClass: 'TestDriver' },
@@ -72,6 +76,13 @@ vi.mock('@memberjunction/ai-core-plus', () => ({
 }));
 
 import { VectorBase } from '../models/VectorBase';
+
+/** Exposes the protected keyset check. */
+class KeysetProbe extends VectorBase {
+  public CanSeek(entityID: string): boolean {
+    return this.CanUseKeysetPagination(entityID);
+  }
+}
 
 describe('VectorBase', () => {
   let vectorBase: VectorBase;
@@ -322,6 +333,22 @@ describe('VectorBase', () => {
           ResultType: 'simple',
         })
       ).rejects.toThrow('Entity with ID non-existent not found');
+    });
+  });
+
+  describe('CanUseKeysetPagination (protected)', () => {
+    it('drops a size spec from the key type before the allowlist check', () => {
+      const probe = new KeysetProbe();
+      expect(probe.CanSeek('entity-sized-pk')).toBe(true);
+      expect(probe.CanSeek('entity-scaled-pk')).toBe(true);
+    });
+
+    it('rejects a key type that is not orderable', () => {
+      expect(new KeysetProbe().CanSeek('entity-xml-pk')).toBe(false);
+    });
+
+    it('keeps a type whose trailing parenthesis does not close a size spec', () => {
+      expect(new KeysetProbe().CanSeek('entity-odd-pk')).toBe(false);
     });
   });
 });
