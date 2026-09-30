@@ -1,10 +1,13 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   LLM_FEATURE_PIPELINE_CAPABILITIES,
   DECISION_FEATURE_PIPELINE_CAPABILITIES,
+  BuildEntityFieldValueLookup,
   GetFeaturePipelineCapabilities,
   GetOutputCapabilityIssues,
+  ResolveEnumChoices,
   ValidateOutputsAgainstCapabilities,
+  type FeaturePipelineFieldValueLookup,
 } from '../spec/feature-pipeline-driver-capabilities.js';
 import type { DataFeatureOutput, DataFeatureSpec } from '../spec/data-feature-spec.js';
 
@@ -52,6 +55,7 @@ describe('DECISION_FEATURE_PIPELINE_CAPABILITIES', () => {
   it('declares constraint and enum/numeric requirements', () => {
     expect(DECISION_FEATURE_PIPELINE_CAPABILITIES.RequiresConstraint).toBe(true);
     expect(DECISION_FEATURE_PIPELINE_CAPABILITIES.RequiresNumericLevels).toBe(true);
+    expect(DECISION_FEATURE_PIPELINE_CAPABILITIES.RequiresEnumValues).toBe(true);
     expect(DECISION_FEATURE_PIPELINE_CAPABILITIES.RequiresEnumValueDescriptions).toBe(true);
     expect(DECISION_FEATURE_PIPELINE_CAPABILITIES.MaxEnumValues).toBe(255);
   });
@@ -127,7 +131,7 @@ describe('GetOutputCapabilityIssues and ValidateOutputsAgainstCapabilities', () 
       Outputs: [validDecisionOutput],
     };
     const errors = ValidateOutputsAgainstCapabilities(spec, DECISION_FEATURE_PIPELINE_CAPABILITIES);
-    expect(errors).toContain('Decision pipelines do not produce reasoning; remove CaptureReasoning or use an LLM pipeline.');
+    expect(errors).toContain('This pipeline type does not produce reasoning; turn off CaptureReasoning or use an LLM pipeline.');
   });
 
   it('rejects unconstrained outputs when RequiresConstraint is true', () => {
@@ -135,7 +139,7 @@ describe('GetOutputCapabilityIssues and ValidateOutputsAgainstCapabilities', () 
       Outputs: [unconstrainedOutput],
     };
     const errors = ValidateOutputsAgainstCapabilities(spec, DECISION_FEATURE_PIPELINE_CAPABILITIES);
-    expect(errors).toContain("Output 'RawData' has no constraint; Decision pipelines require boolean, enum, or leveled numeric constraints.");
+    expect(errors).toContain("Output 'RawData' has no constraint; this pipeline type requires one of: boolean, enum, numeric.");
   });
 
   it('validates numeric outputs have between 2 and 10 levels when RequiresNumericLevels is true', () => {
@@ -178,7 +182,9 @@ describe('GetOutputCapabilityIssues and ValidateOutputsAgainstCapabilities', () 
       ],
     };
     const errorsEmpty = ValidateOutputsAgainstCapabilities(specEmpty, DECISION_FEATURE_PIPELINE_CAPABILITIES);
-    expect(errorsEmpty).toContain("Enum output 'StatusOut' has no values defined.");
+    expect(errorsEmpty).toContain(
+      "Enum output 'StatusOut' has no values defined; list them in Values, or set FromFieldMetadata on a field that has a value list."
+    );
 
     const specMissingDesc: DataFeatureSpec = {
       Outputs: [
@@ -194,7 +200,9 @@ describe('GetOutputCapabilityIssues and ValidateOutputsAgainstCapabilities', () 
       ],
     };
     const errorsMissing = ValidateOutputsAgainstCapabilities(specMissingDesc, DECISION_FEATURE_PIPELINE_CAPABILITIES);
-    expect(errorsMissing).toContain("Enum output 'StatusOut' values missing descriptions: Pending, Inactive. Decision models require a description for every choice option.");
+    expect(errorsMissing).toContain(
+      "Enum output 'StatusOut' values missing descriptions: Pending, Inactive. This pipeline type requires a description for every value."
+    );
 
     const specTooManyValues: DataFeatureSpec = {
       Outputs: [
@@ -210,7 +218,7 @@ describe('GetOutputCapabilityIssues and ValidateOutputsAgainstCapabilities', () 
       ],
     };
     const errorsTooMany = ValidateOutputsAgainstCapabilities(specTooManyValues, DECISION_FEATURE_PIPELINE_CAPABILITIES);
-    expect(errorsTooMany).toContain("Enum output 'HugeEnum' has 256 values; maximum supported for Decision is 255.");
+    expect(errorsTooMany).toContain("Enum output 'HugeEnum' has 256 values; this pipeline type supports at most 255.");
   });
 
   it('populates missing enum values and descriptions from fieldValues lookup for field targets', () => {
@@ -236,32 +244,6 @@ describe('GetOutputCapabilityIssues and ValidateOutputsAgainstCapabilities', () 
 
     const errors = ValidateOutputsAgainstCapabilities(spec, DECISION_FEATURE_PIPELINE_CAPABILITIES, mockLookup);
     expect(errors).toEqual([]);
-  });
-
-  it('proves that a same-named field on another entity is not used by the scoped lookup', () => {
-    const spec: DataFeatureSpec = {
-      Outputs: [
-        {
-          Name: 'StatusOut',
-          Target: { Mode: 'field', EntityFieldName: 'Status' },
-          Constraint: { Type: 'enum' },
-        },
-      ],
-    };
-
-    // Pipeline entity is "Orders" which has no Status field, but another entity "Customers" has Status
-    const pipelineEntityFields = new Map<string, Array<{ Value: string; Description?: string }>>([
-      ['priority', [{ Value: 'High', Description: 'Urgent' }]],
-    ]);
-    const otherEntityFields = new Map<string, Array<{ Value: string; Description?: string }>>([
-      ['status', [{ Value: 'Active', Description: 'Active' }]],
-    ]);
-
-    // Scoped lookup only consults the pipeline's entity fields
-    const scopedLookup = (fieldName: string) => pipelineEntityFields.get(fieldName.toLowerCase());
-
-    const errors = ValidateOutputsAgainstCapabilities(spec, DECISION_FEATURE_PIPELINE_CAPABILITIES, scopedLookup);
-    expect(errors).toContain("Enum output 'StatusOut' has no values defined.");
   });
 
   it('passes a fully valid Decision pipeline spec', () => {
@@ -301,3 +283,133 @@ describe('GetOutputCapabilityIssues and ValidateOutputsAgainstCapabilities', () 
 });
 
 
+
+// ---------------------------------------------------------------------------------------------------
+// Enum choices: field metadata is read only where the spec asks for it (FromFieldMetadata) or lists
+// no values, as ResolveConstraint reads it
+// ---------------------------------------------------------------------------------------------------
+
+/** A complete spec around the given outputs. */
+function specWith(outputs: DataFeatureOutput[], extra: Partial<DataFeatureSpec> = {}): DataFeatureSpec {
+  return {
+    Name: 'Spec',
+    Description: 'A test spec',
+    PromptID: 'PROMPT-1',
+    Context: { Fields: ['Title'] },
+    Caching: { Cacheable: false },
+    Outputs: outputs,
+    ...extra,
+  };
+}
+
+/** A lookup that knows one field, 'Seniority', with described values. */
+const SENIORITY_VALUES = [
+  { Value: 'Executive', Description: 'Runs a function' },
+  { Value: 'Manager', Description: 'Leads a team' },
+  { Value: 'Staff', Description: 'Individual contributor' },
+];
+const seniorityLookup: FeaturePipelineFieldValueLookup = (fieldName) =>
+  fieldName.toLowerCase() === 'seniority' ? SENIORITY_VALUES : undefined;
+
+function seniorityOutput(constraint: DataFeatureOutput['Constraint'], target: DataFeatureOutput['Target'] = { Mode: 'field', EntityFieldName: 'Seniority' }): DataFeatureOutput {
+  return { Name: 'Seniority', Ref: '$.seniority', Target: target, Constraint: constraint };
+}
+
+describe('ResolveEnumChoices', () => {
+  it('replaces the spec Values with the field list when FromFieldMetadata is set, keeping the spec descriptions', () => {
+    const output = seniorityOutput({
+      Type: 'enum',
+      Values: ['Old'],
+      FromFieldMetadata: true,
+      ValueDescriptions: { Manager: 'Spec wording wins' },
+      OnViolation: 'fail',
+    });
+    expect(ResolveEnumChoices(output, seniorityLookup)).toEqual({
+      Values: ['Executive', 'Manager', 'Staff'],
+      Descriptions: { Executive: 'Runs a function', Manager: 'Spec wording wins', Staff: 'Individual contributor' },
+    });
+  });
+
+  it('fills the values from the field when the spec lists none', () => {
+    const output = seniorityOutput({ Type: 'enum', OnViolation: 'fail' });
+    expect(ResolveEnumChoices(output, seniorityLookup)?.Values).toEqual(['Executive', 'Manager', 'Staff']);
+  });
+
+  it('does not read the field when the spec lists Values without FromFieldMetadata', () => {
+    const lookup = vi.fn(seniorityLookup);
+    const output = seniorityOutput({ Type: 'enum', Values: ['Executive', 'Staff'], OnViolation: 'fail' });
+    expect(ResolveEnumChoices(output, lookup)).toEqual({ Values: ['Executive', 'Staff'], Descriptions: {} });
+    expect(lookup).not.toHaveBeenCalled();
+  });
+
+  it('keeps the spec Values when FromFieldMetadata is set but the field has no list', () => {
+    const output = seniorityOutput(
+      { Type: 'enum', Values: ['A'], FromFieldMetadata: true, OnViolation: 'fail' },
+      { Mode: 'field', EntityFieldName: 'Title' }
+    );
+    expect(ResolveEnumChoices(output, seniorityLookup)?.Values).toEqual(['A']);
+  });
+
+  it('reads no field for a child target, and returns undefined for a constraint that is not enum', () => {
+    const child = seniorityOutput(
+      { Type: 'enum', FromFieldMetadata: true, OnViolation: 'fail' },
+      { Mode: 'child', EntityName: 'Kinds', ParentField: 'ParentID', Map: { Kind: '$.kind' } }
+    );
+    expect(ResolveEnumChoices(child, seniorityLookup)).toEqual({ Values: [], Descriptions: {} });
+    expect(ResolveEnumChoices(seniorityOutput({ Type: 'boolean', OnViolation: 'fail' }), seniorityLookup)).toBeUndefined();
+  });
+});
+
+describe('ValidateOutputsAgainstCapabilities: enum values', () => {
+  it('accepts an LLM child-target enum with FromFieldMetadata, as ValidateSpec does', () => {
+    const spec = specWith([
+      seniorityOutput(
+        { Type: 'enum', FromFieldMetadata: true, OnViolation: 'fail' },
+        { Mode: 'child', EntityName: 'Kinds', ParentField: 'ParentID', Map: { Kind: '$.kind' } }
+      ),
+    ]);
+    expect(ValidateOutputsAgainstCapabilities(spec, LLM_FEATURE_PIPELINE_CAPABILITIES)).toEqual([]);
+  });
+
+  it('accepts an LLM field-target enum with FromFieldMetadata when the entity is unknown', () => {
+    const spec = specWith([seniorityOutput({ Type: 'enum', FromFieldMetadata: true, OnViolation: 'fail' })]);
+    expect(ValidateOutputsAgainstCapabilities(spec, LLM_FEATURE_PIPELINE_CAPABILITIES, undefined)).toEqual([]);
+  });
+
+  it('resolves a Decision enum with FromFieldMetadata from the field, and fails it when the field has no list', () => {
+    const spec = specWith([seniorityOutput({ Type: 'enum', FromFieldMetadata: true, OnViolation: 'fail' })]);
+    expect(ValidateOutputsAgainstCapabilities(spec, DECISION_FEATURE_PIPELINE_CAPABILITIES, seniorityLookup)).toEqual([]);
+    expect(ValidateOutputsAgainstCapabilities(spec, DECISION_FEATURE_PIPELINE_CAPABILITIES, () => undefined)).toEqual([
+      "Enum output 'Seniority' has no values defined; list them in Values, or set FromFieldMetadata on a field that has a value list.",
+    ]);
+  });
+
+  it('does not take a Decision enum\'s descriptions from the field when the spec lists its own Values', () => {
+    const spec = specWith([seniorityOutput({ Type: 'enum', Values: ['Executive', 'Staff'], OnViolation: 'fail' })]);
+    expect(ValidateOutputsAgainstCapabilities(spec, DECISION_FEATURE_PIPELINE_CAPABILITIES, seniorityLookup)).toEqual([
+      "Enum output 'Seniority' values missing descriptions: Executive, Staff. This pipeline type requires a description for every value.",
+    ]);
+  });
+});
+
+describe('BuildEntityFieldValueLookup', () => {
+  const pipelineEntity = {
+    Fields: [
+      { Name: 'Seniority', EntityFieldValues: SENIORITY_VALUES },
+      { Name: 'Title', EntityFieldValues: [] },
+    ],
+  };
+
+  it('returns the named field\'s value list from this entity only, matching the name case-insensitively', () => {
+    const lookup = BuildEntityFieldValueLookup(pipelineEntity);
+    expect(lookup?.('seniority')).toBe(SENIORITY_VALUES);
+    expect(lookup?.(' SENIORITY ')).toBe(SENIORITY_VALUES);
+    expect(lookup?.('Status')).toBeUndefined();
+  });
+
+  it('returns undefined when the entity or its fields are unknown', () => {
+    expect(BuildEntityFieldValueLookup(undefined)).toBeUndefined();
+    expect(BuildEntityFieldValueLookup(null)).toBeUndefined();
+    expect(BuildEntityFieldValueLookup({})).toBeUndefined();
+  });
+});
