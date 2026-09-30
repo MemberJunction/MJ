@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT95 - Trailing Runtime State",
+    "Description": "The loop agent's prompt-cache layout at the assembly layer, against this database's metadata and without any LLM: the synced Loop system-prompt template (read by TemplateID) carries the runtime-state pointer and none of the volatile blocks (TRS1); buildVolatileStateMessage renders date/time from the live placeholders plus scratchpad and payload, flagged volatileState (TRS2); the append-only vs replace mode comes from the model catalog's PromptCacheStrategy on the inference provider's model-vendor row, frozen per run (TRS3); every Active Loop agent's child prompt template resolves by TemplateID and its volatile/static placement follows the stored text (TRS4); the outgoing request is a copy with the fragment last, prior fragments replaced or retained per mode, forged tags escaped, stored history byte-identical (TRS5); the Anthropic driver places its cache breakpoint on the last real history message, never the fragment (TRS6, env-aware). 6 checks, read-only, server transport.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "The synced template, the live placeholders, the catalog-driven mode, by-ID child template resolution, copy-on-assemble with escaping, and the Anthropic breakpoint all hold against real metadata with no model call."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "trailing-runtime-state"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "594DFA19-CFBE-44F8-B642-D646C494E7DA"
+  },
+  "sync": {
+    "lastModified": "2026-09-27T00:45:39.032Z",
+    "checksum": "c636f7282bd93ca773671a1c8cac014878dd2d003310496b32bad48b9aba944b"
+  }
+}

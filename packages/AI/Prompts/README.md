@@ -110,6 +110,8 @@ Execution order:
 3. Child results replace placeholders in parent template
 4. Final composed prompt executes as a single LLM call
 
+**Rendering children without executing.** `AIPromptRunner.RenderChildPromptTemplates(childPrompts, params)` renders the child templates and returns `{ renderedTemplates }` keyed by each child's `parentPlaceholder`, with no model call. A caller that needs the rendered text before execution — the loop agent uses it to relocate a volatile specialization into its trailing runtime-state message — passes the map back as `AIPromptParams.PreRenderedChildTemplates`, and `ExecutePrompt` embeds those strings instead of rendering the children a second time. Rendering is deterministic for the same inputs, so both paths produce the same text.
+
 ### Model Selection Strategies
 
 Three strategies for selecting which AI model executes a prompt:
