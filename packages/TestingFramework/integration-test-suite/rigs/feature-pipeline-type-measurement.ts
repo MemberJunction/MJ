@@ -60,6 +60,15 @@
  *
  * Bind it to one chat model, with `ResponseFormat` JSON.
  *
+ * MODELS. The rig does not pin a model: each arm's prompt bindings choose, as in production, so a
+ * model with no API key is skipped and a failing one fails over. `Default Decision` binds Jev first and
+ * LLM Decision second, so without an OpenRouter key (or after a failover) "Decision" is LLM Decision.
+ * Each answer's model is read from its prompt run (`Model`), recorded per record in `report.json`, and
+ * checked against the model the arm is meant to measure: `--llm-model` / `--decision-model`, or else
+ * the prompt's first-choice binding. Any other model is a warning at the top of both reports; with
+ * `--require-model` it stops the run, after that arm's first batch or, if it happens later, at the end
+ * (the report is still written).
+ *
  * COST. Each prompt run's `TotalCost` (own plus descendant cost), falling back to `Cost`, read once
  * the rows reach a final status (their finalize save sets status and cost together). A Decision
  * failover or delegated chat run is a child prompt run whose cost reaches the parent's `TotalCost` only
@@ -74,8 +83,8 @@
  *   npx tsx packages/TestingFramework/integration-test-suite/rigs/feature-pipeline-type-measurement.ts \
  *     --entity "MJ: Actions" --text-fields Name,Description --label-field Category \
  *     --values "System,Data,Utilities,File Storage" --llm-prompt "Decision Eval - Action Category (LLM)" \
- *     [--decision-prompt "Default Decision"] [--sample 200] [--reps 2] [--seed 7] [--batch-size 100] \
- *     --out <dir outside any repo> [--dry-run]
+ *     [--decision-prompt "Default Decision"] [--llm-model "<model>"] [--decision-model Jev] [--require-model] \
+ *     [--sample 200] [--reps 2] [--seed 7] [--batch-size 100] --out <dir outside any repo> [--dry-run]
  *
  * `--dry-run` reads the database to draw the sample, then prints the sample size, the per-value
  * counts and the planned calls, and runs no prompt.
@@ -84,7 +93,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { CompositeKey, EntityFieldInfo, EntityInfo, RunView } from '@memberjunction/core';
-import { EscapeSQLString } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import type { RecordProcessorContext, RecordRef } from '@memberjunction/record-set-processor-base';
 import { BootstrapAI, Settle } from './lib/ai-bootstrap';
@@ -92,6 +101,7 @@ import type { AICtx } from './lib/ai-bootstrap';
 import { ParseMeasurementArgs } from '../src/pipeline-type-measurement/args';
 import { IsPromptRunFinished, PROMPT_RUN_COST_FIELDS, ToPromptRunCost } from '../src/pipeline-type-measurement/cost-and-time';
 import type { PromptRunCostRow } from '../src/pipeline-type-measurement/cost-and-time';
+import { FirstChoiceModel } from '../src/pipeline-type-measurement/models';
 import { CreateMeasurementProcessor } from '../src/pipeline-type-measurement/processors';
 import { AssertOutputOutsideRepo } from '../src/pipeline-type-measurement/repo-guard';
 import { RunMeasurement } from '../src/pipeline-type-measurement/run';
@@ -99,7 +109,9 @@ import type { BatchProcessor, MeasurementBackend, MeasurementIO } from '../src/p
 import { CanonicalLabel } from '../src/pipeline-type-measurement/sampling';
 import { AssertTextFieldsExcludeLabel, ResolveLabelColumn } from '../src/pipeline-type-measurement/spec';
 import type { LabelColumnResolution, LabelFieldStub } from '../src/pipeline-type-measurement/spec';
-import type { CandidateSet, LabeledRecord, MeasuredPipelineType, MeasurementOptions, MeasurementSpec, PromptRunCost } from '../src/pipeline-type-measurement/types';
+import type {
+    ArmPrompt, CandidateSet, LabeledRecord, MeasuredPipelineType, MeasurementOptions, MeasurementSpec, PromptRunCost,
+} from '../src/pipeline-type-measurement/types';
 
 /** How long to wait for the prompt runs' fire-and-forget saves before reading what is there. */
 const SAVE_WAIT_MS = 120_000;
@@ -150,9 +162,9 @@ class LiveMeasurementBackend implements MeasurementBackend {
         return Object.fromEntries((field.EntityFieldValues ?? []).map((v) => [v.Value, v.Description ?? null]));
     }
 
-    public async ResolvePromptIDs(): Promise<Record<MeasuredPipelineType, string>> {
+    public async ResolvePrompts(): Promise<Record<MeasuredPipelineType, ArmPrompt>> {
         await AIEngine.Instance.Config(false, this.ctx.user);
-        return { LLM: promptIDNamed(this.options.LLMPromptName), Decision: promptIDNamed(this.options.DecisionPromptName) };
+        return { LLM: armPrompt(this.options.LLMPromptName), Decision: armPrompt(this.options.DecisionPromptName) };
     }
 
     public CreateBatchProcessor(type: MeasuredPipelineType, spec: MeasurementSpec): BatchProcessor {
@@ -292,6 +304,13 @@ function promptIDNamed(name: string): string {
         throw new Error(`Expected exactly one AI prompt named '${name}', found ${matches.length}.`);
     }
     return matches[0].ID;
+}
+
+/** The prompt with this name, and the model its bindings try first. */
+function armPrompt(name: string): ArmPrompt {
+    const promptID = promptIDNamed(name);
+    const bindings = AIEngine.Instance.PromptModels.filter((pm) => UUIDsEqual(pm.PromptID, promptID));
+    return { PromptID: promptID, FirstChoiceModel: FirstChoiceModel(bindings) };
 }
 
 /** A SQL `IN` list of escaped string literals. */

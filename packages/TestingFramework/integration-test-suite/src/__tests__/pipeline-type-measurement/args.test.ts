@@ -15,13 +15,20 @@ describe('ParseMeasurementArgs', () => {
         expect(ParseMeasurementArgs(REQUIRED)).toEqual({
             EntityName: 'MJ: Actions', TextFields: ['Name', 'Description'], LabelField: 'Category',
             Values: ['System', 'Data', 'Utilities', 'File Storage'], SampleSize: 200, Reps: 2, Seed: 7, BatchSize: 100,
-            LLMPromptName: 'Decision Eval - Action Category (LLM)', DecisionPromptName: 'Default Decision', OutDir: '/tmp/measure', DryRun: false,
+            LLMPromptName: 'Decision Eval - Action Category (LLM)', DecisionPromptName: 'Default Decision',
+            LLMModelName: null, DecisionModelName: null, RequireModel: false, OutDir: '/tmp/measure', DryRun: false,
         });
     });
 
     it('reads the optional flags', () => {
         const parsed = ParseMeasurementArgs([...REQUIRED, '--sample', '40', '--reps', '3', '--seed', '0', '--batch-size', '10', '--decision-prompt', 'Other', '--dry-run']);
         expect(parsed).toMatchObject({ SampleSize: 40, Reps: 3, Seed: 0, BatchSize: 10, DecisionPromptName: 'Other', DryRun: true });
+    });
+
+    it('reads the model each arm must be answered by, and --require-model', () => {
+        const parsed = ParseMeasurementArgs([...REQUIRED, '--llm-model', ' Gemini 3.1 Flash-Lite ', '--decision-model', 'Jev', '--require-model']);
+        expect(parsed).toMatchObject({ LLMModelName: 'Gemini 3.1 Flash-Lite', DecisionModelName: 'Jev', RequireModel: true });
+        expect(() => ParseMeasurementArgs([...REQUIRED, '--decision-model', ' '])).toThrow(/--decision-model needs a value/);
     });
 
     it('requires --out and the other required flags', () => {

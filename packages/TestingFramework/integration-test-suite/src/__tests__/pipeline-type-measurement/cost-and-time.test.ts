@@ -4,14 +4,14 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-    IsPromptRunFinished, Per1000, PredictionCost, SummarizeCost, SummarizeLatency, SummarizeWallTime, ToPromptRunCost,
+    DistinctPromptRunIDs, IsPromptRunFinished, PROMPT_RUN_COST_FIELDS, Per1000, PredictionCost, SummarizeCost, SummarizeLatency, SummarizeWallTime, ToPromptRunCost,
 } from '../../pipeline-type-measurement/cost-and-time';
 import type { PromptRunCostRow } from '../../pipeline-type-measurement/cost-and-time';
 import type { BatchTiming } from '../../pipeline-type-measurement/types';
 import { Answer, RunCost } from './fixtures';
 
 function row(overrides: Partial<PromptRunCostRow>): PromptRunCostRow {
-    return { ID: 'run', Status: 'Completed', TotalCost: null, Cost: null, CostCurrency: 'USD', ExecutionTimeMS: 250, ...overrides };
+    return { ID: 'run', Status: 'Completed', TotalCost: null, Cost: null, CostCurrency: 'USD', ExecutionTimeMS: 250, Model: 'Jev', Vendor: 'OpenRouter', ...overrides };
 }
 
 describe('Per1000', () => {
@@ -65,6 +65,13 @@ describe('SummarizeCost', () => {
     });
 });
 
+describe('DistinctPromptRunIDs', () => {
+    it('lists each prompt run once, in first-seen order, skipping answers with none', () => {
+        const runA = Answer('LLM', 1, 'a', 'A');
+        expect(DistinctPromptRunIDs([runA, { ...Answer('LLM', 1, 'b', null), PromptRunID: null }, runA, Answer('LLM', 1, 'c', 'B')])).toEqual(['LLM-1-a', 'LLM-1-c']);
+    });
+});
+
 describe('SummarizeLatency', () => {
     it('takes the nearest-rank median and 90th percentile of the runs\' ExecutionTimeMS', () => {
         const answers = ['r1', 'r2', 'r3', 'r4', 'r5'].map((id) => Answer('Decision', 1, id, 'A'));
@@ -92,7 +99,15 @@ describe('ToPromptRunCost', () => {
 
     it('has no cost when neither is set, or when the row was not found', () => {
         expect(ToPromptRunCost('run', row({})).Cost).toBeNull();
-        expect(ToPromptRunCost('run', undefined)).toEqual({ PromptRunID: 'run', Cost: null, Currency: null, ExecutionTimeMS: null, Finished: false });
+        expect(ToPromptRunCost('run', undefined)).toEqual({ PromptRunID: 'run', Cost: null, Currency: null, ExecutionTimeMS: null, Model: null, Vendor: null, Finished: false });
+    });
+
+    it('reads the model that answered and its vendor', () => {
+        expect(ToPromptRunCost('run', row({ Model: 'LLM Decision', Vendor: 'MemberJunction' }))).toMatchObject({ Model: 'LLM Decision', Vendor: 'MemberJunction' });
+    });
+
+    it('reads the model and vendor columns', () => {
+        expect(PROMPT_RUN_COST_FIELDS).toEqual(expect.arrayContaining(['Model', 'Vendor']));
     });
 
     it('is finished only once the finalize save set a terminal status', () => {

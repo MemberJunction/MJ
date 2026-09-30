@@ -1,6 +1,8 @@
 /**
  * run.ts — the measurement's flow: refuse a repo output path, sample, build the two specs, plan the
- * calls, and then (unless it is a dry run) run every batch, read the costs and write the report.
+ * calls, and then (unless it is a dry run) run every batch, read the costs and models, and write the
+ * report. With `--require-model`, an answer from a model other than the arm's expected one stops the
+ * run: after each arm's first batch (before most of the budget is spent), and again at the end.
  *
  * Everything that touches MJ sits behind {@link MeasurementBackend}, which the rig implements with
  * `RunView`, `AIEngine` and `InferProcessor`. The backend keeps each record's text to itself: it hands
@@ -8,14 +10,17 @@
  * backend, dry run included, and keeps record text out of everything this module writes.
  */
 import { join } from 'node:path';
+import { DistinctPromptRunIDs } from './cost-and-time';
+import { AssertModelsToRequire, FormatExpectedModel, FormatModelCounts, ModelMismatch, ResolveExpectedModels, SummarizeArmModels } from './models';
 import { BuildMeasurementReport } from './report';
 import type { MeasurementReport } from './report';
 import { RenderReportMarkdown } from './render';
 import { AssertOutputOutsideRepo } from './repo-guard';
 import { CountPerValue, StratifiedSample } from './sampling';
 import { BuildMeasurementSpecs, BuildValueDescriptions, ReadPrediction } from './spec';
+import { MEASURED_PIPELINE_TYPES } from './types';
 import type {
-    BatchTiming, CandidateSet, LabeledRecord, MeasuredPipelineType, MeasuredRecordResult, MeasurementOptions,
+    ArmPrompt, BatchTiming, CandidateSet, ExpectedModel, LabeledRecord, MeasuredPipelineType, MeasuredRecordResult, MeasurementOptions,
     MeasurementSpec, PromptRunCost, RecordPrediction, ValueDescriptionSet,
 } from './types';
 
@@ -30,11 +35,11 @@ export interface MeasurementBackend {
     LoadCandidates(): Promise<CandidateSet>;
     /** Each value's own description, where the metadata has one. */
     LoadDescriptionSources(values: readonly string[]): Promise<Record<string, string | null>>;
-    /** The prompt each type runs, resolved from its name. */
-    ResolvePromptIDs(): Promise<Record<MeasuredPipelineType, string>>;
+    /** The prompt each type runs, resolved from its name, with the model its bindings try first. */
+    ResolvePrompts(): Promise<Record<MeasuredPipelineType, ArmPrompt>>;
     /** A processor for one type in one rep (the rig's is `CreateMeasurementProcessor`'s). */
     CreateBatchProcessor(type: MeasuredPipelineType, spec: MeasurementSpec): BatchProcessor;
-    /** Each prompt run's cost and latency, once its saves have finished. */
+    /** Each prompt run's cost, latency and model, once its saves have finished. */
     ReadPromptRunCosts(promptRunIDs: readonly string[]): Promise<Map<string, PromptRunCost>>;
 }
 
@@ -63,6 +68,8 @@ export interface MeasurementSetup {
     Sample: LabeledRecord[];
     Descriptions: ValueDescriptionSet;
     Specs: Record<MeasuredPipelineType, MeasurementSpec>;
+    /** The model each arm is meant to measure. */
+    ExpectedModels: Record<MeasuredPipelineType, ExpectedModel>;
     Plan: PlannedRun[];
 }
 
@@ -98,12 +105,20 @@ export async function PrepareMeasurement(options: MeasurementOptions, backend: M
         throw new Error(`No ${options.EntityName} records have a ${options.LabelField} in: ${options.Values.join(', ')}.`);
     }
     const descriptions = BuildValueDescriptions(options.Values, await backend.LoadDescriptionSources(options.Values));
+    const prompts = await backend.ResolvePrompts();
+    const expectedModels = ResolveExpectedModels(options, prompts);
+    if (options.RequireModel) {
+        AssertModelsToRequire(expectedModels);
+    }
     const specs = BuildMeasurementSpecs({
         EntityName: options.EntityName, LabelColumn: candidates.LabelColumn, TextFields: options.TextFields,
-        Values: options.Values, Descriptions: descriptions.Descriptions, PromptIDs: await backend.ResolvePromptIDs(),
+        Values: options.Values, Descriptions: descriptions.Descriptions, PromptIDs: { LLM: prompts.LLM.PromptID, Decision: prompts.Decision.PromptID },
     });
     const plan = PlanRuns(sample.map((r) => r.RecordID), options.Reps, options.BatchSize);
-    return { LabelColumn: candidates.LabelColumn, CandidateCount: candidates.Records.length, Sample: sample, Descriptions: descriptions, Specs: specs, Plan: plan };
+    return {
+        LabelColumn: candidates.LabelColumn, CandidateCount: candidates.Records.length, Sample: sample, Descriptions: descriptions,
+        Specs: specs, ExpectedModels: expectedModels, Plan: plan,
+    };
 }
 
 /**
@@ -120,6 +135,10 @@ export function FormatPlan(setup: MeasurementSetup, options: MeasurementOptions)
         fallback.length > 0 ? `Descriptions: no source description for ${fallback.join(', ')}; the value is used.` : 'Descriptions: every value has its own.',
         'Value descriptions (Decision: Choice option descriptions; LLM: listed in its constraint block and in valueDescriptions):',
         ...options.Values.map((value) => `  ${value}: ${setup.Descriptions.Descriptions[value]}`),
+        ...MEASURED_PIPELINE_TYPES.map((type) => `${type} model expected: ${FormatExpectedModel(setup.ExpectedModels[type])}.`),
+        options.RequireModel
+            ? '--require-model: an answer from another model stops the run (checked after each arm\'s first batch, and at the end).'
+            : 'Models are not required: an answer from another model is reported as a warning (pass --require-model to stop instead).',
         `Planned calls: ${options.Reps} rep(s) x 2 types x ${setup.Sample.length} records = ${calls} prompt runs, in ${batchCalls} ProcessBatch calls of up to ${options.BatchSize} records.`,
         ...setup.Plan.map((run) => `  rep ${run.Rep}: ${run.Type} (${run.Batches.length} batch(es))`),
     ];
@@ -127,7 +146,9 @@ export function FormatPlan(setup: MeasurementSetup, options: MeasurementOptions)
 
 /**
  * Runs the measurement. A dry run prints the sample and the planned calls and makes none.
- * @throws Error when `--out` is inside a git working tree (checked before anything else), or no record matches.
+ * @throws Error when `--out` is inside a git working tree (checked before anything else), or no record
+ * matches; with `--require-model`, when an arm has no expected model, or an answer came from another
+ * model (after its first batch, or at the end, once the report is written).
  */
 export async function RunMeasurement(options: MeasurementOptions, backend: MeasurementBackend, io: MeasurementIO): Promise<MeasurementOutcome> {
     const outDir = AssertOutputOutsideRepo(options.OutDir);
@@ -137,25 +158,52 @@ export async function RunMeasurement(options: MeasurementOptions, backend: Measu
         io.Log('--dry-run: no prompt was run.');
         return { DryRun: true, Setup: setup };
     }
-    const { Predictions, Timings } = await executePlan(setup, backend, io);
-    const runIDs = [...new Set(Predictions.map((p) => p.PromptRunID).filter((id): id is string => !!id))];
-    io.Log(`Reading cost for ${runIDs.length} prompt run(s) once their saves finish...`);
+    const { Predictions, Timings } = await executePlan(setup, backend, io, options.RequireModel);
+    const runIDs = DistinctPromptRunIDs(Predictions);
+    io.Log(`Reading cost and model for ${runIDs.length} prompt run(s) once their saves finish...`);
     const costs = await backend.ReadPromptRunCosts(runIDs);
     const report = BuildMeasurementReport({
         Options: options, LabelColumn: setup.LabelColumn, Sample: setup.Sample, Descriptions: setup.Descriptions,
-        Predictions, Timings, Costs: costs, GeneratedAt: io.Timestamp(),
+        Predictions, Timings, Costs: costs, ExpectedModels: setup.ExpectedModels, GeneratedAt: io.Timestamp(),
     });
+    const paths = writeReport(report, outDir, io);
+    report.Warnings.forEach((warning) => io.Log(`WARNING: ${warning}`));
+    if (options.RequireModel) {
+        assertExpectedModelsAnswered(report, paths);
+    }
+    return { DryRun: false, Setup: setup, Report: report, ReportPaths: paths };
+}
+
+/** Writes `report.json` and `report.md` to `outDir`, and returns their paths. */
+function writeReport(report: MeasurementReport, outDir: string, io: MeasurementIO): string[] {
     const paths = [join(outDir, 'report.json'), join(outDir, 'report.md')];
     io.WriteFile(paths[0], JSON.stringify(report, null, 2) + '\n');
     io.WriteFile(paths[1], RenderReportMarkdown(report));
     paths.forEach((path) => io.Log(`Wrote ${path}`));
-    return { DryRun: false, Setup: setup, Report: report, ReportPaths: paths };
+    return paths;
 }
 
-/** Runs every planned batch: a new processor per type per rep, timed around each `ProcessBatch` call. */
-async function executePlan(setup: MeasurementSetup, backend: MeasurementBackend, io: MeasurementIO): Promise<{ Predictions: RecordPrediction[]; Timings: BatchTiming[] }> {
+/** `--require-model` at the end: fails when any arm was answered by another model. */
+function assertExpectedModelsAnswered(report: MeasurementReport, paths: readonly string[]): void {
+    const mismatches = MEASURED_PIPELINE_TYPES.map((type) => ModelMismatch(type, report.Types[type].Models)).filter((m): m is string => m !== null);
+    if (mismatches.length > 0) {
+        throw new Error(`--require-model: ${mismatches.join(' ')} The report was written, with this warning at the top: ${paths.join(', ')}.`);
+    }
+}
+
+/**
+ * Runs every planned batch: a new processor per type per rep, timed around each `ProcessBatch` call.
+ * With `requireModel`, each arm's first batch is checked for its expected model before the run goes on.
+ */
+async function executePlan(
+    setup: MeasurementSetup,
+    backend: MeasurementBackend,
+    io: MeasurementIO,
+    requireModel: boolean
+): Promise<{ Predictions: RecordPrediction[]; Timings: BatchTiming[] }> {
     const predictions: RecordPrediction[] = [];
     const timings: BatchTiming[] = [];
+    const checked = new Set<MeasuredPipelineType>();
     for (const run of setup.Plan) {
         const processor = backend.CreateBatchProcessor(run.Type, setup.Specs[run.Type]);
         for (const [i, batch] of run.Batches.entries()) {
@@ -163,9 +211,30 @@ async function executePlan(setup: MeasurementSetup, backend: MeasurementBackend,
             predictions.push(...outcome.Predictions);
             timings.push(outcome.Timing);
             io.Log(`${run.Type} rep ${run.Rep} batch ${i + 1}/${run.Batches.length}: ${batch.length} records in ${(outcome.Timing.WallMs / 1000).toFixed(1)} s`);
+            if (requireModel && !checked.has(run.Type)) {
+                checked.add(run.Type);
+                await assertFirstBatchModel(run.Type, outcome.Predictions, setup.ExpectedModels[run.Type], backend, io);
+            }
         }
     }
     return { Predictions: predictions, Timings: timings };
+}
+
+/** `--require-model` after an arm's first batch: reads its prompt runs' models and stops on another model. */
+async function assertFirstBatchModel(
+    type: MeasuredPipelineType,
+    predictions: readonly RecordPrediction[],
+    expected: ExpectedModel,
+    backend: MeasurementBackend,
+    io: MeasurementIO
+): Promise<void> {
+    const costs = await backend.ReadPromptRunCosts(DistinctPromptRunIDs(predictions));
+    const summary = SummarizeArmModels(predictions, costs, expected);
+    io.Log(`${type} first batch answered by: ${FormatModelCounts(summary.Answered)}.`);
+    const mismatch = ModelMismatch(type, summary);
+    if (mismatch) {
+        throw new Error(`--require-model: ${mismatch} Stopped after the first ${type} batch; no report was written.`);
+    }
 }
 
 /** One timed `ProcessBatch` call. A batch that throws fails its records; the measurement goes on. */

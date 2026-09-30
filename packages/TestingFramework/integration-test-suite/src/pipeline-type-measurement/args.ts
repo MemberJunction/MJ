@@ -22,10 +22,14 @@ export const MEASUREMENT_USAGE =
     'Usage: npx tsx packages/TestingFramework/integration-test-suite/rigs/feature-pipeline-type-measurement.ts ' +
     '--entity "<entity>" --text-fields <f1,f2> --label-field <field> --values "<v1,v2,...>" ' +
     '--llm-prompt "<prompt name>" --out <dir outside any git working tree> ' +
-    '[--decision-prompt "Default Decision"] [--sample 200] [--reps 2] [--seed 7] [--batch-size 100] [--dry-run]';
+    '[--decision-prompt "Default Decision"] [--llm-model "<model>"] [--decision-model "<model>"] [--require-model] ' +
+    '[--sample 200] [--reps 2] [--seed 7] [--batch-size 100] [--dry-run]';
 
-const VALUE_FLAGS = ['entity', 'text-fields', 'label-field', 'values', 'sample', 'reps', 'seed', 'batch-size', 'llm-prompt', 'decision-prompt', 'out'];
-const SWITCH_FLAGS = ['dry-run'];
+const VALUE_FLAGS = [
+    'entity', 'text-fields', 'label-field', 'values', 'sample', 'reps', 'seed', 'batch-size', 'llm-prompt', 'decision-prompt', 'out',
+    'llm-model', 'decision-model',
+];
+const SWITCH_FLAGS = ['dry-run', 'require-model'];
 
 /**
  * Parses the rig's arguments.
@@ -44,6 +48,9 @@ export function ParseMeasurementArgs(argv: readonly string[]): MeasurementOption
         BatchSize: readInteger(argv, 'batch-size', DEFAULT_BATCH_SIZE, 1),
         LLMPromptName: requireFlag(argv, 'llm-prompt'),
         DecisionPromptName: readFlag(argv, 'decision-prompt') ?? DEFAULT_DECISION_PROMPT,
+        LLMModelName: readOptionalName(argv, 'llm-model'),
+        DecisionModelName: readOptionalName(argv, 'decision-model'),
+        RequireModel: argv.includes('--require-model'),
         OutDir: requireFlag(argv, 'out'),
         DryRun: argv.includes('--dry-run'),
     };
@@ -91,6 +98,18 @@ function requireFlag(argv: readonly string[], name: string): string {
         throw argumentError(`--${name} is required.`);
     }
     return value;
+}
+
+/** An optional name flag, trimmed; null when absent. A blank value is refused. */
+function readOptionalName(argv: readonly string[], name: string): string | null {
+    const raw = readFlag(argv, name);
+    if (raw === undefined) {
+        return null;
+    }
+    if (!raw.trim()) {
+        throw argumentError(`--${name} needs a value.`);
+    }
+    return raw.trim();
 }
 
 function readList(argv: readonly string[], name: string): string[] {

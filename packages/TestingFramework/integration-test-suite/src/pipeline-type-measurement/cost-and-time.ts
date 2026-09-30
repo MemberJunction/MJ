@@ -1,20 +1,23 @@
 /**
  * cost-and-time.ts — wall time, cost and latency per pipeline type.
  *
- * Pure. Wall time comes from the rig's clock around each `ProcessBatch` call. Cost and latency come from
- * each record's `MJ: AI Prompt Runs` row, read after its saves finished: cost is `TotalCost` (own plus
- * descendant cost), falling back to `Cost`. A run whose cost is unknown adds nothing and is counted, so
- * the report can say its per-1,000 figure is a lower bound.
+ * Pure. Wall time comes from the rig's clock around each `ProcessBatch` call. Cost, latency and the
+ * model that answered come from each record's `MJ: AI Prompt Runs` row, read after its saves finished:
+ * cost is `TotalCost` (own plus descendant cost), falling back to `Cost`. A run whose cost is unknown
+ * adds nothing and is counted, so the report can say its per-1,000 figure is a lower bound.
  */
 import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { NearestRankQuantile } from './metrics';
 import type { BatchTiming, MeasuredPipelineType, PromptRunCost, RecordPrediction } from './types';
 
-/** The `MJ: AI Prompt Runs` columns the rig reads for cost and latency. */
-export type PromptRunCostRow = Pick<MJAIPromptRunEntity, 'ID' | 'Status' | 'TotalCost' | 'Cost' | 'CostCurrency' | 'ExecutionTimeMS'>;
+/**
+ * The `MJ: AI Prompt Runs` columns the rig reads for cost, latency and the model. `Model` and `Vendor`
+ * are the view's names for `ModelID` and `VendorID`, which a failover moves to the model that answered.
+ */
+export type PromptRunCostRow = Pick<MJAIPromptRunEntity, 'ID' | 'Status' | 'TotalCost' | 'Cost' | 'CostCurrency' | 'ExecutionTimeMS' | 'Model' | 'Vendor'>;
 
 /** The columns of {@link PromptRunCostRow}, for `RunView`'s `Fields`. */
-export const PROMPT_RUN_COST_FIELDS: ReadonlyArray<keyof PromptRunCostRow> = ['ID', 'Status', 'TotalCost', 'Cost', 'CostCurrency', 'ExecutionTimeMS'];
+export const PROMPT_RUN_COST_FIELDS: ReadonlyArray<keyof PromptRunCostRow> = ['ID', 'Status', 'TotalCost', 'Cost', 'CostCurrency', 'ExecutionTimeMS', 'Model', 'Vendor'];
 
 /** The statuses a prompt run's finalize save leaves it in. The same save sets its cost. */
 const FINISHED_PROMPT_RUN_STATUSES: ReadonlyArray<MJAIPromptRunEntity['Status']> = ['Completed', 'Failed', 'Cancelled'];
@@ -24,15 +27,22 @@ export function IsPromptRunFinished(row: PromptRunCostRow | undefined): boolean 
     return !!row && FINISHED_PROMPT_RUN_STATUSES.includes(row.Status);
 }
 
-/** A prompt run's cost (`TotalCost`, falling back to `Cost`) and latency; all null when its row was not found. */
+/** A prompt run's cost (`TotalCost`, falling back to `Cost`), latency and model; all null when its row was not found. */
 export function ToPromptRunCost(promptRunID: string, row: PromptRunCostRow | undefined): PromptRunCost {
     return {
         PromptRunID: promptRunID,
         Cost: row?.TotalCost ?? row?.Cost ?? null,
         Currency: row?.CostCurrency ?? null,
         ExecutionTimeMS: row?.ExecutionTimeMS ?? null,
+        Model: row?.Model || null,
+        Vendor: row?.Vendor || null,
         Finished: IsPromptRunFinished(row),
     };
+}
+
+/** The distinct prompt runs behind some answers, in first-seen order. */
+export function DistinctPromptRunIDs(predictions: readonly RecordPrediction[]): string[] {
+    return [...new Set(predictions.map((p) => p.PromptRunID).filter((id): id is string => !!id))];
 }
 
 /** A type's wall time over all its `ProcessBatch` calls. */
@@ -83,7 +93,7 @@ export function SummarizeWallTime(timings: readonly BatchTiming[], type: Measure
 
 /** A type's cost per 1,000 answers, over its distinct prompt runs. */
 export function SummarizeCost(predictions: readonly RecordPrediction[], costs: ReadonlyMap<string, PromptRunCost>): CostSummary {
-    const runIDs = [...new Set(predictions.map((p) => p.PromptRunID).filter((id): id is string => !!id))];
+    const runIDs = DistinctPromptRunIDs(predictions);
     const known = runIDs.map((id) => costs.get(id)).filter((c): c is PromptRunCost & { Cost: number } => typeof c?.Cost === 'number');
     const totalCost = known.reduce((sum, c) => sum + c.Cost, 0);
     return {

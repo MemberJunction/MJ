@@ -6,13 +6,13 @@ import { describe, expect, it } from 'vitest';
 import { BuildMeasurementReport } from '../../pipeline-type-measurement/report';
 import type { ReportInput } from '../../pipeline-type-measurement/report';
 import { FormatCost, FormatPercent, RenderReportMarkdown, TableCellText } from '../../pipeline-type-measurement/render';
-import type { MeasurementOptions } from '../../pipeline-type-measurement/types';
-import { COSTS, PREDICTIONS, RunCost, SAMPLE } from './fixtures';
+import type { MeasurementOptions, PromptRunCost } from '../../pipeline-type-measurement/types';
+import { COSTS, EXPECTED_MODELS, PREDICTIONS, RunCost, SAMPLE } from './fixtures';
 
 const OPTIONS: MeasurementOptions = {
     EntityName: 'MJ: Actions', TextFields: ['Name', 'Description'], LabelField: 'Category', Values: ['A', 'B'],
     SampleSize: 4, Reps: 2, Seed: 7, BatchSize: 100, LLMPromptName: 'LLM prompt', DecisionPromptName: 'Default Decision',
-    OutDir: '/tmp/out', DryRun: false,
+    LLMModelName: null, DecisionModelName: 'Jev', RequireModel: false, OutDir: '/tmp/out', DryRun: false,
 };
 
 const INPUT: ReportInput = {
@@ -26,8 +26,18 @@ const INPUT: ReportInput = {
         { Type: 'Decision', Rep: 1, RecordCount: 4, WallMs: 400 }, { Type: 'Decision', Rep: 2, RecordCount: 4, WallMs: 400 },
     ],
     Costs: COSTS,
+    ExpectedModels: EXPECTED_MODELS,
     GeneratedAt: '2026-09-29T00:00:00.000Z',
 };
+
+/** The costs with some Decision runs answered by `LLM Decision` instead of Jev. */
+function decisionAnsweredBy(model: string, runIDs: readonly string[]): Map<string, PromptRunCost> {
+    const costs = new Map(COSTS);
+    for (const id of runIDs) {
+        costs.set(id, RunCost(id, 0.02, 500, model));
+    }
+    return costs;
+}
 
 describe('BuildMeasurementReport', () => {
     const report = BuildMeasurementReport(INPUT);
@@ -72,11 +82,29 @@ describe('BuildMeasurementReport', () => {
         expect(report.Setup.ValueDescriptions).toEqual({ A: 'A', B: 'About B' });
     });
 
+    it('records which model answered, per arm and per record, and warns of nothing when each arm got its model', () => {
+        expect(report.Types.LLM.Models).toMatchObject({ Answered: [{ Model: 'Chat Model', Answers: 8 }], AnswersWithRun: 8, UnexpectedAnswers: 0 });
+        expect(report.Types.Decision.Models).toMatchObject({ Expected: EXPECTED_MODELS.Decision, Answered: [{ Model: 'Jev', Answers: 8 }], UnexpectedAnswers: 0 });
+        expect(report.Records.filter((r) => r.Type === 'Decision').every((r) => r.Model === 'Jev')).toBe(true);
+        expect(report.Warnings).toEqual([]);
+        expect(report.Notes.join('\n')).toMatch(/The rig does not pin models/);
+    });
+
+    it('warns when the Decision arm was answered by another model', () => {
+        const failedOver = BuildMeasurementReport({ ...INPUT, Costs: decisionAnsweredBy('LLM Decision', ['Decision-1-r1', 'Decision-2-r3']) });
+        expect(failedOver.Types.Decision.Models).toMatchObject({ Answered: [{ Model: 'Jev', Answers: 6 }, { Model: 'LLM Decision', Answers: 2 }], UnexpectedAnswers: 2 });
+        expect(failedOver.Warnings).toEqual([
+            'The Decision arm was meant to measure Jev (from --decision-model), but 2 of its 8 answers came from another model: LLM Decision (2). ' +
+            'Read the Decision column as that model\'s results, not Jev\'s.',
+        ]);
+        expect(failedOver.Records.find((r) => r.Type === 'Decision' && r.Rep === 1 && r.RecordID === 'r1')?.Model).toBe('LLM Decision');
+    });
+
     it('holds one ID-only row per answer', () => {
         expect(report.Records).toHaveLength(16);
         for (const row of report.Records) {
             expect(Object.keys(row).sort()).toEqual(
-                ['Confidence', 'Correct', 'Cost', 'Label', 'LatencyMs', 'Predicted', 'PromptRunID', 'RecordID', 'Rep', 'Succeeded', 'Type']
+                ['Confidence', 'Correct', 'Cost', 'Label', 'LatencyMs', 'Model', 'Predicted', 'PromptRunID', 'RecordID', 'Rep', 'Succeeded', 'Type']
             );
         }
         expect(report.Records.find((r) => r.Type === 'LLM' && r.Rep === 2 && r.RecordID === 'r4')).toMatchObject({ Succeeded: false, Predicted: null, Correct: false });
@@ -96,6 +124,19 @@ describe('RenderReportMarkdown', () => {
         expect(markdown).toContain('| Repeatability (rep 1 against rep 2) | 50.0% | 25.0% |');
         expect(markdown).toContain('| 0.60 | 87.5% | 37.5% | 4.750000 USD |');
         expect(markdown).toContain('ECE 0.3125 over 8 answers with a confidence');
+    });
+
+    it('names the expected and answering models', () => {
+        expect(markdown).toContain('| Decision model expected | Jev (from --decision-model) |');
+        expect(markdown).toContain('| LLM model expected | Chat Model (from prompt \'LLM prompt\') |');
+        expect(markdown).toContain('| Answered by (answers) | Chat Model (8) | Jev (8) |');
+        expect(markdown).not.toContain('**Warning:**');
+    });
+
+    it('leads with the warning when an arm was answered by another model', () => {
+        const allLLMDecision = PREDICTIONS.filter((p) => p.Type === 'Decision').map((p) => p.PromptRunID ?? '');
+        const lines = RenderReportMarkdown(BuildMeasurementReport({ ...INPUT, Costs: decisionAnsweredBy('LLM Decision', allLLMDecision) })).split('\n\n');
+        expect(lines[2]).toMatch(/^> \*\*Warning:\*\* The Decision arm was meant to measure Jev .* 8 of its 8 answers came from another model: LLM Decision \(8\)/);
     });
 
     it('lists each value\'s description, safe for a table cell', () => {

@@ -58,8 +58,33 @@ export interface MeasurementOptions {
     BatchSize: number;
     LLMPromptName: string;
     DecisionPromptName: string;
+    /** The model the LLM arm is meant to measure (`--llm-model`); null to take the prompt's first-choice model. */
+    LLMModelName: string | null;
+    /** The model the Decision arm is meant to measure (`--decision-model`); null to take the prompt's first-choice model. */
+    DecisionModelName: string | null;
+    /** Whether an answer from any other model stops the run (`--require-model`). */
+    RequireModel: boolean;
     OutDir: string;
     DryRun: boolean;
+}
+
+/** The prompt an arm runs, and the model its bindings try first. */
+export interface ArmPrompt {
+    PromptID: string;
+    /** The highest-priority Active or Preview model bound to the prompt with no configuration; null when none is. */
+    FirstChoiceModel: string | null;
+}
+
+/** Where the rig took an arm's expected model from. */
+export type ExpectedModelSource = 'flag' | 'prompt binding' | 'none';
+
+/** The model an arm is meant to measure. */
+export interface ExpectedModel {
+    /** The model's name, or null when the rig has none to expect. */
+    Model: string | null;
+    Source: ExpectedModelSource;
+    /** The flag or prompt it came from, for messages: `--decision-model`, or `prompt 'Default Decision'`. */
+    From: string;
 }
 
 /** One record's answer from one pipeline type in one rep. */
@@ -86,13 +111,17 @@ export interface BatchTiming {
     WallMs: number;
 }
 
-/** A prompt run's cost and latency, read after its saves have finished. */
+/** A prompt run's cost, latency and model, read after its saves have finished. */
 export interface PromptRunCost {
     PromptRunID: string;
     /** `TotalCost` (own cost plus descendant cost), falling back to `Cost`; null when neither is set. */
     Cost: number | null;
     Currency: string | null;
     ExecutionTimeMS: number | null;
+    /** The model that answered: the run's `Model` (after a failover, the model it failed over to). Null when the row was not found. */
+    Model: string | null;
+    /** The vendor the model ran on, or null. */
+    Vendor: string | null;
     /** Whether the row reached a terminal status before the rig stopped waiting for its saves. */
     Finished: boolean;
 }

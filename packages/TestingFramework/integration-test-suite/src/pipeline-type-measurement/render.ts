@@ -4,6 +4,7 @@
  * Pure: report in, markdown out. It prints only what the report holds (IDs, labels, numbers), and it
  * leaves the per-record rows to `report.json`.
  */
+import { FormatExpectedModel, FormatModelCounts } from './models';
 import type { MeasurementReport } from './report';
 import { MEASURED_PIPELINE_TYPES } from './types';
 import type { MeasuredPipelineType } from './types';
@@ -60,11 +61,13 @@ function renderSetup(report: MeasurementReport): string {
     return [
         `# Feature Pipeline type measurement: ${s.EntityName}.${s.LabelColumn}`,
         `Generated ${report.GeneratedAt}.`,
+        ...report.Warnings.map((warning) => `> **Warning:** ${warning}`),
         table(['Setting', 'Value'], [
             ['Entity', s.EntityName], ['Label', `${s.LabelField} (column ${s.LabelColumn})`], ['Text fields', s.TextFields.join(', ')],
             ['Values', s.Values.join(', ')], ['Sample', `${report.Sample.Size} of ${s.RequestedSampleSize} requested (${perValue})`],
             ['Reps', String(s.Reps)], ['Seed', String(s.Seed)], ['Batch size', String(s.BatchSize)],
-            ['LLM prompt', s.LLMPrompt], ['Decision prompt', s.DecisionPrompt],
+            ['LLM prompt', s.LLMPrompt], ['LLM model expected', FormatExpectedModel(report.Types.LLM.Models.Expected)],
+            ['Decision prompt', s.DecisionPrompt], ['Decision model expected', FormatExpectedModel(report.Types.Decision.Models.Expected)],
         ]),
     ].join('\n\n');
 }
@@ -86,6 +89,7 @@ function renderHeadline(report: MeasurementReport): string {
         return interval ? `${FormatPercent(t[type].Accuracy.Accuracy)} (95% CI ${FormatPercent(interval.Low)} to ${FormatPercent(interval.High)})` : 'n/a';
     };
     return ['## Results', table(['Metric', ...MEASURED_PIPELINE_TYPES], [
+        ['Answered by (answers)', ...cell((type) => TableCellText(FormatModelCounts(t[type].Models.Answered)))],
         ['Accuracy against labels', ...cell(ci)],
         ['Accuracy per rep', ...cell((type) => t[type].Accuracy.PerRep.map(FormatPercent).join(', '))],
         ['Failed answers per rep', ...cell((type) => t[type].Accuracy.FailuresPerRep.join(', '))],

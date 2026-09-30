@@ -10,9 +10,13 @@ import { PredictionCost, SummarizeCost, SummarizeLatency, SummarizeWallTime } fr
 import type { CostSummary, LatencySummary, WallTimeSummary } from './cost-and-time';
 import { AgreementBetweenTypes, IsCorrect, PerValueRecall, PredictionIndex, Repeatability, SummarizeAccuracy } from './metrics';
 import type { AccuracySummary, MetricContext, TypeAgreement, ValueRecall } from './metrics';
+import { ModelNotes, ModelWarnings, SummarizeModels } from './models';
+import type { ArmModelSummary } from './models';
 import { CountPerValue } from './sampling';
 import { MEASURED_PIPELINE_TYPES } from './types';
-import type { BatchTiming, LabeledRecord, MeasuredPipelineType, MeasurementOptions, PromptRunCost, RecordPrediction, ValueDescriptionSet } from './types';
+import type {
+    BatchTiming, ExpectedModel, LabeledRecord, MeasuredPipelineType, MeasurementOptions, PromptRunCost, RecordPrediction, ValueDescriptionSet,
+} from './types';
 
 /** Everything a report is built from. */
 export interface ReportInput {
@@ -23,6 +27,8 @@ export interface ReportInput {
     Predictions: readonly RecordPrediction[];
     Timings: readonly BatchTiming[];
     Costs: ReadonlyMap<string, PromptRunCost>;
+    /** The model each arm is meant to measure. */
+    ExpectedModels: Record<MeasuredPipelineType, ExpectedModel>;
     /** ISO timestamp, passed in so the report is deterministic under test. */
     GeneratedAt: string;
 }
@@ -35,6 +41,8 @@ export interface TypeReport {
     WallTime: WallTimeSummary;
     Cost: CostSummary;
     Latency: LatencySummary;
+    /** The model the arm was meant to measure, and the models that answered. */
+    Models: ArmModelSummary;
 }
 
 /** One answer, by record ID. */
@@ -48,6 +56,8 @@ export interface ReportRecordRow {
     Confidence: number | null;
     Correct: boolean;
     PromptRunID: string | null;
+    /** The model that answered, from the prompt run; null when there was no run or its row was not found. */
+    Model: string | null;
     Cost: number | null;
     LatencyMs: number | null;
 }
@@ -55,6 +65,8 @@ export interface ReportRecordRow {
 /** The whole report, as written to `report.json`. */
 export interface MeasurementReport {
     GeneratedAt: string;
+    /** What a reader must know before reading any number: an arm answered by a model other than the one it was meant to measure. */
+    Warnings: string[];
     Setup: {
         EntityName: string;
         LabelField: string;
@@ -84,12 +96,14 @@ export interface MeasurementReport {
 /** Builds the report from the run's sample, answers, timings and costs. */
 export function BuildMeasurementReport(input: ReportInput): MeasurementReport {
     const ctx: MetricContext = { Sample: input.Sample, Reps: input.Options.Reps, Index: new PredictionIndex(input.Predictions) };
+    const models = SummarizeModels(input.Predictions, input.Costs, input.ExpectedModels);
     const report: MeasurementReport = {
         GeneratedAt: input.GeneratedAt,
+        Warnings: ModelWarnings(models),
         Setup: buildSetup(input),
         Sample: { Size: input.Sample.length, PerValue: CountPerValue(input.Sample, input.Options.Values) },
         FallbackDescriptionValues: [...input.Descriptions.FallbackValues],
-        Types: { LLM: buildTypeReport(input, ctx, 'LLM'), Decision: buildTypeReport(input, ctx, 'Decision') },
+        Types: { LLM: buildTypeReport(input, ctx, 'LLM', models.LLM), Decision: buildTypeReport(input, ctx, 'Decision', models.Decision) },
         Agreement: AgreementBetweenTypes(ctx),
         Calibration: SummarizeCalibration(ctx, 'Decision'),
         Escalation: SimulateEscalation(ctx, input.Costs),
@@ -110,7 +124,7 @@ function buildSetup(input: ReportInput): MeasurementReport['Setup'] {
     };
 }
 
-function buildTypeReport(input: ReportInput, ctx: MetricContext, type: MeasuredPipelineType): TypeReport {
+function buildTypeReport(input: ReportInput, ctx: MetricContext, type: MeasuredPipelineType, models: ArmModelSummary): TypeReport {
     const own = input.Predictions.filter((p) => p.Type === type);
     return {
         Accuracy: SummarizeAccuracy(ctx, type, input.Options.Seed),
@@ -119,6 +133,7 @@ function buildTypeReport(input: ReportInput, ctx: MetricContext, type: MeasuredP
         WallTime: SummarizeWallTime(input.Timings, type),
         Cost: SummarizeCost(own, input.Costs),
         Latency: SummarizeLatency(own, input.Costs),
+        Models: models,
     };
 }
 
@@ -129,17 +144,27 @@ function buildRecordRows(input: ReportInput): ReportRecordRow[] {
     for (const type of MEASURED_PIPELINE_TYPES) {
         for (let rep = 1; rep <= input.Options.Reps; rep++) {
             for (const record of input.Sample) {
-                const p = index.Get(type, rep, record.RecordID);
-                rows.push({
-                    RecordID: record.RecordID, Label: record.Label, Type: type, Rep: rep,
-                    Succeeded: !!p?.Succeeded, Predicted: p?.Predicted ?? null, Confidence: p?.Confidence ?? null, Correct: IsCorrect(p, record.Label),
-                    PromptRunID: p?.PromptRunID ?? null, Cost: PredictionCost(p, input.Costs),
-                    LatencyMs: p?.PromptRunID ? input.Costs.get(p.PromptRunID)?.ExecutionTimeMS ?? null : null,
-                });
+                rows.push(recordRow(record, type, rep, index.Get(type, rep, record.RecordID), input.Costs));
             }
         }
     }
     return rows;
+}
+
+/** One answer's row: its outcome, and its prompt run's model, cost and latency. */
+function recordRow(
+    record: LabeledRecord,
+    type: MeasuredPipelineType,
+    rep: number,
+    p: RecordPrediction | undefined,
+    costs: ReadonlyMap<string, PromptRunCost>
+): ReportRecordRow {
+    const run = p?.PromptRunID ? costs.get(p.PromptRunID) : undefined;
+    return {
+        RecordID: record.RecordID, Label: record.Label, Type: type, Rep: rep,
+        Succeeded: !!p?.Succeeded, Predicted: p?.Predicted ?? null, Confidence: p?.Confidence ?? null, Correct: IsCorrect(p, record.Label),
+        PromptRunID: p?.PromptRunID ?? null, Model: run?.Model ?? null, Cost: PredictionCost(p, costs), LatencyMs: run?.ExecutionTimeMS ?? null,
+    };
 }
 
 /** The report's notes: how it was measured, and every caveat a reader needs. */
@@ -156,7 +181,7 @@ export function BuildReportNotes(report: MeasurementReport): string[] {
         'The escalation simulation follows InferProcessor: a Decision answer below the floor (or with no confidence) takes the same rep\'s LLM answer, and a failed Decision answer fails without escalating.',
         'Records are identified by ID only. No measured record\'s text is in this report.',
     ];
-    return [...notes, ...costCaveats(report)];
+    return [...notes, ...ModelNotes({ LLM: report.Types.LLM.Models, Decision: report.Types.Decision.Models }), ...costCaveats(report)];
 }
 
 function costCaveats(report: MeasurementReport): string[] {
