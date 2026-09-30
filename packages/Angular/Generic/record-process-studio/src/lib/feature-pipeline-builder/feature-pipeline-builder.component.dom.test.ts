@@ -2,11 +2,11 @@ import '@angular/compiler';
 import { getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { describe, it, expect } from 'vitest';
-import { EntityInfo } from '@memberjunction/core';
+import { EntityInfo, type RunViewParams, type RunViewResult } from '@memberjunction/core';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { renderComponentFixture, query, queryAll, createFakeProvider } from '@memberjunction/ng-test-utils';
-import { FeaturePipelineBuilderComponent } from './feature-pipeline-builder.component';
+import { FeaturePipelineBuilderComponent, ParseConfidenceFloor, type EscalationTargetCandidate } from './feature-pipeline-builder.component';
 import type { DataFeatureSpec } from '@memberjunction/feature-pipelines';
 
 try {
@@ -99,6 +99,33 @@ function eventWithValue(value: string, tag: 'select' | 'input' = 'select'): Even
   const event = new Event('change');
   element.dispatchEvent(event);
   return event;
+}
+
+/** A change event from a real checkbox, checked or not. */
+function checkboxEvent(checked: boolean): Event {
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = checked;
+  const event = new Event('change');
+  input.dispatchEvent(event);
+  return event;
+}
+
+/** A RunView result, successful unless an error message is given. */
+function runViewResult<T>(rows: T[], errorMessage?: string): RunViewResult<T> {
+  return {
+    Success: !errorMessage,
+    Results: rows,
+    RowCount: rows.length,
+    TotalRowCount: rows.length,
+    ExecutionTime: 0,
+    ErrorMessage: errorMessage ?? '',
+  };
+}
+
+/** The fake provider, with its RunView answered by `runView` (to fail, throw, or record the params). */
+function providerWithRunView(runView: (params: RunViewParams) => Promise<RunViewResult>) {
+  return Object.assign(fakeProvider(), { RunView: runView });
 }
 
 /** The spec the builder last wrote to the record. */
@@ -361,6 +388,379 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     expect(opt).toBeDefined();
     expect(opt?.DisplayName).toBe('CustomLegacy (unrecognized)');
   });
+
+  it('renders escalation section only for Decision pipelines', () => {
+    const llmRec = makeRecord({ PipelineType: 'LLM' });
+    const f1 = render(llmRec);
+    expect(query(f1, '.fpb-escalation-sec')).toBeNull();
+
+    const decisionRec = makeRecord({
+      PipelineType: 'Decision',
+      Outputs: [
+        {
+          Name: 'IsAtRisk',
+          Ref: '$',
+          Target: { Mode: 'field', EntityFieldName: 'IsAtRisk' },
+          Constraint: { Type: 'boolean', OnViolation: 'fail' },
+        },
+      ],
+    });
+    const f2 = render(decisionRec);
+    expect(query(f2, '.fpb-escalation-sec')).not.toBeNull();
+  });
+
+  it('toggles escalation on and off and updates spec.Escalation', () => {
+    const rec = makeRecord({
+      PipelineType: 'Decision',
+      Outputs: [
+        {
+          Name: 'IsAtRisk',
+          Ref: '$',
+          Target: { Mode: 'field', EntityFieldName: 'IsAtRisk' },
+          Constraint: { Type: 'boolean', OnViolation: 'fail' },
+        },
+      ],
+    });
+    const f = render(rec);
+    expect(f.componentInstance.IsEscalationEnabled).toBe(false);
+    expect(f.componentInstance.spec.Escalation).toBeUndefined();
+
+    // Toggle ON
+    f.componentInstance.OnEscalationToggle(checkboxEvent(true));
+    f.detectChanges();
+    expect(f.componentInstance.IsEscalationEnabled).toBe(true);
+    expect(f.componentInstance.spec.Escalation).toEqual({
+      PipelineID: '',
+      BelowConfidence: 0.7,
+    });
+
+    // Toggle OFF
+    f.componentInstance.OnEscalationToggle(checkboxEvent(false));
+    f.detectChanges();
+    expect(f.componentInstance.IsEscalationEnabled).toBe(false);
+    expect(f.componentInstance.spec.Escalation).toBeUndefined();
+  });
+
+  it('populates escalation target candidates and identifies problems with invalid targets', () => {
+    const rec = makeRecord({
+      PipelineType: 'Decision',
+      Outputs: [
+        {
+          Name: 'IsAtRisk',
+          Ref: '$',
+          Target: { Mode: 'field', EntityFieldName: 'IsAtRisk' },
+          Constraint: { Type: 'boolean', OnViolation: 'fail' },
+        },
+      ],
+      Escalation: {
+        PipelineID: '',
+        BelowConfidence: 0.7,
+      },
+    });
+    const f = render(rec);
+
+    const validCandidate: EscalationTargetCandidate = {
+      ID: 'target-1',
+      Name: 'Full LLM Pipeline',
+      WorkType: 'Infer',
+      Status: 'Active',
+      EntityID: 'e1',
+      Entity: 'Accounts',
+      ParsedSpec: {
+        Name: 'Full LLM Pipeline',
+        Description: 'Full LLM',
+        PromptID: 'llm-prompt',
+        Context: { Fields: ['Name'] },
+        Caching: { Cacheable: false },
+        Outputs: [
+          {
+            Name: 'IsAtRisk',
+            Ref: '$',
+            Target: { Mode: 'field', EntityFieldName: 'IsAtRisk' },
+          },
+        ],
+      },
+    };
+
+    const wrongEntityCandidate: EscalationTargetCandidate = {
+      ID: 'target-2',
+      Name: 'Wrong Entity Pipeline',
+      WorkType: 'Infer',
+      Status: 'Active',
+      EntityID: 'e2',
+      Entity: 'Contacts',
+    };
+
+    const missingOutputCandidate: EscalationTargetCandidate = {
+      ID: 'target-3',
+      Name: 'Incomplete Pipeline',
+      WorkType: 'Infer',
+      Status: 'Active',
+      EntityID: 'e1',
+      Entity: 'Accounts',
+      ParsedSpec: {
+        Name: 'Incomplete',
+        Description: 'Incomplete',
+        PromptID: 'llm-prompt',
+        Context: { Fields: ['Name'] },
+        Caching: { Cacheable: false },
+        Outputs: [
+          {
+            Name: 'OtherOutput',
+            Ref: '$',
+            Target: { Mode: 'field', EntityFieldName: 'Rating' },
+          },
+        ],
+      },
+    };
+
+    const decisionCandidate: EscalationTargetCandidate = {
+      ID: 'target-4',
+      Name: 'Another Decision Pipeline',
+      WorkType: 'Infer',
+      Status: 'Active',
+      EntityID: 'e1',
+      Entity: 'Accounts',
+      ParsedSpec: {
+        Name: 'Another Decision',
+        Description: 'Another Decision',
+        PromptID: 'decision-prompt',
+        Context: { Fields: ['Name'] },
+        Caching: { Cacheable: false },
+        PipelineType: 'Decision',
+        Outputs: [
+          {
+            Name: 'IsAtRisk',
+            Ref: '$',
+            Target: { Mode: 'field', EntityFieldName: 'IsAtRisk' },
+          },
+        ],
+      },
+    };
+
+    f.componentInstance.AvailableEscalationTargets = [
+      validCandidate,
+      wrongEntityCandidate,
+      missingOutputCandidate,
+      decisionCandidate,
+    ];
+    f.componentInstance.EscalationTargetsLoaded = true;
+    f.detectChanges();
+
+    expect(f.componentInstance.GetTargetProblem(validCandidate)).toBeNull();
+    expect(f.componentInstance.GetTargetProblem(wrongEntityCandidate)).toContain("is on entity 'Contacts'");
+    expect(f.componentInstance.GetTargetProblem(missingOutputCandidate)).toContain("it has no output named 'IsAtRisk'");
+    expect(f.componentInstance.GetTargetProblem(decisionCandidate)).toContain("is a 'Decision' pipeline");
+
+    // Select valid candidate
+    f.componentInstance.OnEscalationTargetChange(eventWithValue('target-1'));
+    expect(f.componentInstance.spec.Escalation?.PipelineID).toBe('target-1');
+    expect(f.componentInstance.ValidationErrors.some((e) => e.Path === 'Escalation.PipelineID')).toBe(false);
+
+    // Select invalid candidate
+    f.componentInstance.OnEscalationTargetChange(eventWithValue('target-3'));
+    expect(f.componentInstance.ValidationErrors.some((e) => e.Path === 'Escalation.PipelineID')).toBe(true);
+  });
+
+  it('stores the confidence floor as a number, keeping an out-of-range or blank entry for the spec check to report', () => {
+    const rec = makeRecord({
+      PipelineType: 'Decision',
+      Outputs: [
+        {
+          Name: 'IsAtRisk',
+          Ref: '$',
+          Target: { Mode: 'field', EntityFieldName: 'IsAtRisk' },
+          Constraint: { Type: 'boolean', OnViolation: 'fail' },
+        },
+      ],
+      Escalation: {
+        PipelineID: 'target-1',
+        BelowConfidence: 0.7,
+      },
+    });
+    const f = render(rec);
+    const floorErrors = () => f.componentInstance.ValidationErrors.filter((e) => e.Path === 'Escalation.BelowConfidence').map((e) => e.Message);
+
+    // A valid floor
+    f.componentInstance.OnEscalationFloorChange(eventWithValue('0.85', 'input'));
+    expect(f.componentInstance.spec.Escalation?.BelowConfidence).toBe(0.85);
+    expect(savedSpec(rec)?.Escalation?.BelowConfidence).toBe(0.85);
+    expect(floorErrors()).toEqual([]);
+
+    // Out of range: kept as typed (not clamped), and reported
+    f.componentInstance.OnEscalationFloorChange(eventWithValue('1.5', 'input'));
+    expect(f.componentInstance.spec.Escalation?.BelowConfidence).toBe(1.5);
+    expect(floorErrors()).toEqual([expect.stringContaining('but is 1.5')]);
+
+    // Cleared: NaN, a number, reported; the pipeline keeps its target
+    f.componentInstance.OnEscalationFloorChange(eventWithValue('', 'input'));
+    expect(f.componentInstance.spec.Escalation).toEqual({ PipelineID: 'target-1', BelowConfidence: Number.NaN });
+    expect(floorErrors()).toEqual([expect.stringContaining('but is NaN')]);
+    // JSON has no NaN, so the record holds null, never a string
+    expect(savedSpec(rec)?.Escalation?.BelowConfidence).toBeNull();
+  });
+
+  it('parses a confidence floor strictly, to NaN when blank or not a number', () => {
+    expect(ParseConfidenceFloor(' 0.25 ')).toBe(0.25);
+    expect(ParseConfidenceFloor('1e-1')).toBe(0.1);
+    expect(ParseConfidenceFloor('')).toBeNaN();
+    expect(ParseConfidenceFloor('   ')).toBeNaN();
+    expect(ParseConfidenceFloor('0.7abc')).toBeNaN();
+  });
+
+  it('deletes Escalation when switching away from Decision pipeline', () => {
+    const rec = makeRecord({
+      PipelineType: 'Decision',
+      Outputs: [
+        {
+          Name: 'IsAtRisk',
+          Ref: '$',
+          Target: { Mode: 'field', EntityFieldName: 'IsAtRisk' },
+          Constraint: { Type: 'boolean', OnViolation: 'fail' },
+        },
+      ],
+      Escalation: {
+        PipelineID: 'target-1',
+        BelowConfidence: 0.7,
+      },
+    });
+    const f = render(rec);
+    expect(f.componentInstance.spec.Escalation).toBeDefined();
+
+    // Switch to LLM
+    f.componentInstance.ApplyPipelineTypeChange('LLM');
+    expect(f.componentInstance.spec.Escalation).toBeUndefined();
+    expect(f.componentInstance.IsEscalationEnabled).toBe(false);
+  });
+
+  describe('escalation targets', () => {
+    const decisionWithTarget = (): MJRecordProcessEntity =>
+      makeRecord({
+        PipelineType: 'Decision',
+        Outputs: [
+          {
+            Name: 'IsAtRisk',
+            Ref: '$',
+            Target: { Mode: 'field', EntityFieldName: 'IsAtRisk' },
+            Constraint: { Type: 'boolean', OnViolation: 'fail' },
+          },
+        ],
+        Escalation: { PipelineID: 'target-1', BelowConfidence: 0.7 },
+      });
+    const renderWith = (record: MJRecordProcessEntity, provider: ReturnType<typeof fakeProvider>, validity?: boolean[]) =>
+      renderComponentFixture(FeaturePipelineBuilderComponent, {
+        inputs: { Record: record, Provider: provider, EntityID: record.EntityID },
+        setup: (instance) => {
+          if (validity) {
+            instance.ValidChange.subscribe((valid) => validity.push(valid));
+          }
+        },
+      });
+    const targetIssues = (f: ReturnType<typeof renderWith>) =>
+      f.componentInstance.ValidationErrors.filter((e) => e.Path === 'Escalation.PipelineID');
+
+    it('reports a failed load as a failure to check the target, a warning, not as "target not found"', async () => {
+      const validity: boolean[] = [];
+      const f = renderWith(decisionWithTarget(), providerWithRunView(async () => runViewResult([], 'Timeout expired')), validity);
+
+      await f.componentInstance.LoadEscalationTargets();
+
+      expect(f.componentInstance.EscalationTargetsLoaded).toBe(false);
+      expect(f.componentInstance.EscalationTargetsLoadError).toBe('Timeout expired');
+      expect(targetIssues(f)).toEqual([
+        expect.objectContaining({ Severity: 'warning', Message: expect.stringContaining('could not be loaded (Timeout expired)') }),
+      ]);
+      expect(targetIssues(f).some((e) => e.Message.includes('was not found'))).toBe(false);
+      expect(validity[validity.length - 1]).toBe(true);
+      expect(f.componentInstance.EscalationTargetsPlaceholder).toBe('— Pipelines could not be loaded —');
+    });
+
+    it('treats a load that throws the same way', async () => {
+      const f = renderWith(
+        decisionWithTarget(),
+        providerWithRunView(async () => {
+          throw new Error('network down');
+        })
+      );
+
+      await f.componentInstance.LoadEscalationTargets();
+
+      expect(f.componentInstance.EscalationTargetsLoadError).toBe('network down');
+      expect(targetIssues(f).map((e) => e.Severity)).toEqual(['warning']);
+    });
+
+    it('still reports a target that a successful load did not find', async () => {
+      const validity: boolean[] = [];
+      const f = renderWith(decisionWithTarget(), providerWithRunView(async () => runViewResult([])), validity);
+
+      await f.componentInstance.LoadEscalationTargets();
+
+      expect(targetIssues(f)).toEqual([
+        expect.objectContaining({ Severity: 'error', Message: "Escalation target pipeline 'target-1' was not found on this entity." }),
+      ]);
+      expect(validity[validity.length - 1]).toBe(false);
+    });
+
+    it('keeps the latest load when an earlier, slower one finishes after it', async () => {
+      let releaseSlow: (result: RunViewResult) => void = () => undefined;
+      const slow = new Promise<RunViewResult>((resolve) => {
+        releaseSlow = resolve;
+      });
+      const answers = [() => slow, async () => runViewResult([{ ID: 'fresh', Name: 'Fresh', WorkType: 'Infer', Status: 'Active', EntityID: 'e1' }])];
+      const f = renderWith(decisionWithTarget(), providerWithRunView(() => (answers.shift() ?? (async () => runViewResult([])))()));
+
+      const earlier = f.componentInstance.LoadEscalationTargets();
+      await f.componentInstance.LoadEscalationTargets();
+      releaseSlow(runViewResult([{ ID: 'stale', Name: 'Stale', WorkType: 'Infer', Status: 'Active', EntityID: 'e1' }]));
+      await earlier;
+
+      expect(f.componentInstance.AvailableEscalationTargets.map((t) => t.ID)).toEqual(['fresh']);
+    });
+
+    it('loads nothing when the pipeline has no entity, and escapes the entity ID in the filter', async () => {
+      const filters: Array<RunViewParams['ExtraFilter']> = [];
+      const provider = providerWithRunView(async (params) => {
+        if (params.EntityName === 'MJ: Record Processes') {
+          filters.push(params.ExtraFilter);
+        }
+        return runViewResult([]);
+      });
+      const noEntity = decisionWithTarget();
+      noEntity.EntityID = '';
+      const f = renderWith(noEntity, provider);
+      await f.whenStable();
+
+      await f.componentInstance.LoadEscalationTargets();
+      expect(filters).toEqual([]);
+
+      noEntity.EntityID = "e'1";
+      await f.componentInstance.LoadEscalationTargets();
+      expect(filters).toEqual(["WorkType='Infer' AND EntityID='e''1'"]);
+    });
+
+    it("rejects a target whose own spec the engine would refuse to build", () => {
+      const f = render(decisionWithTarget());
+      const invalidSpec: EscalationTargetCandidate = {
+        ID: 'target-5',
+        Name: 'No Prompt Pipeline',
+        WorkType: 'Infer',
+        Status: 'Active',
+        EntityID: 'e1',
+        Entity: 'Accounts',
+        ParsedSpec: {
+          Name: 'No Prompt',
+          Description: 'Missing its prompt',
+          PromptID: '',
+          Context: { Fields: ['Name'] },
+          Caching: { Cacheable: false },
+          Outputs: [{ Name: 'IsAtRisk', Ref: '$', Target: { Mode: 'field', EntityFieldName: 'IsAtRisk' } }],
+        },
+      };
+
+      expect(f.componentInstance.GetTargetProblem(invalidSpec)).toBe('has an invalid spec: DataFeatureSpec PromptID is required.');
+    });
+  });
+
   describe('the capability rules, live', () => {
     const REASONING_ERROR = 'This pipeline type does not produce reasoning; turn off CaptureReasoning or use an LLM pipeline.';
     const isAtRisk = {

@@ -13,10 +13,14 @@
  */
 
 import type { IMetadataProvider } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
 import type { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import type { RecordProcessorContext, RecordRef, RecordResult } from '@memberjunction/record-set-processor-base';
-import { IsLLMPipelineType, type DataFeatureOutput, type DataFeatureSpec, type OutputTarget } from '@memberjunction/feature-pipelines';
+import {
+    type DataFeatureOutput,
+    type DataFeatureSpec,
+    FindEscalationTargetRowProblem,
+    FindEscalationTargetSpecProblem,
+} from '@memberjunction/feature-pipelines';
 
 /** A Decision pipeline's escalation settings (`DataFeatureSpec.Escalation`). */
 export type FeaturePipelineEscalationSettings = NonNullable<DataFeatureSpec['Escalation']>;
@@ -278,78 +282,6 @@ export class FeaturePipelineEscalator {
     }
 }
 
-/**
- * Checks the target row itself: it must be an Active Infer pipeline on the Decision pipeline's entity.
- * @returns What is wrong, worded to follow the pipeline's name, or null.
- */
-export function FindEscalationTargetRowProblem(row: MJRecordProcessEntity, entityID: string): string | null {
-    if (row.WorkType !== 'Infer') {
-        return `has WorkType '${row.WorkType}'; only an Infer Feature Pipeline can be escalated to`;
-    }
-    if (row.Status !== 'Active') {
-        return `is ${row.Status}; only an Active pipeline can be escalated to`;
-    }
-    if (!UUIDsEqual(row.EntityID, entityID)) {
-        return `is on entity '${row.Entity ?? row.EntityID}' (${row.EntityID}), not the Decision pipeline's entity (${entityID})`;
-    }
-    return null;
-}
-
-/**
- * Checks the target's spec: its type must be LLM (absent means LLM), and it must produce every output
- * the Decision pipeline has, with the same name and the same target (mode, and field for a field target).
- * @returns What is wrong, worded to follow the pipeline's name, or null.
- */
-export function FindEscalationTargetSpecProblem(targetSpec: DataFeatureSpec | undefined, decisionOutputs: DataFeatureOutput[]): string | null {
-    if (!IsLLMPipelineType(targetSpec?.PipelineType)) {
-        return `is a '${targetSpec?.PipelineType}' pipeline; only an LLM pipeline can be escalated to`;
-    }
-    const targetOutputs = targetSpec?.Outputs ?? [];
-    const missing = decisionOutputs
-        .map((output) => describeMissingOutput(output, targetOutputs))
-        .filter((problem): problem is string => problem !== null);
-    if (missing.length > 0) {
-        return `does not produce every output of the Decision pipeline: ${missing.join('; ')}`;
-    }
-    return null;
-}
-
-/** Why the target does not produce one Decision output, or null when it does. */
-function describeMissingOutput(output: DataFeatureOutput, targetOutputs: DataFeatureOutput[]): string | null {
-    const match = FindOutputByName(targetOutputs, output.Name);
-    if (!match) {
-        return `it has no output named '${output.Name}'`;
-    }
-    if (!sameTarget(match.Target, output.Target)) {
-        return `its output '${output.Name}' targets ${describeTarget(match.Target)}, not ${describeTarget(output.Target)}`;
-    }
-    return null;
-}
-
-/** Finds an output by name, case-insensitively, as `ValidateSpec` compares output names. */
-export function FindOutputByName(outputs: DataFeatureOutput[], name: string): DataFeatureOutput | undefined {
-    const wanted = name.trim().toLowerCase();
-    return outputs.find((o) => o.Name?.trim().toLowerCase() === wanted);
-}
-
-/** Whether two targets are the same mode and, for field targets, the same field (case-insensitive). */
-function sameTarget(a: OutputTarget | undefined, b: OutputTarget | undefined): boolean {
-    if (!a || !b || a.Mode !== b.Mode) {
-        return false;
-    }
-    if (a.Mode === 'field' && b.Mode === 'field') {
-        return a.EntityFieldName?.trim().toLowerCase() === b.EntityFieldName?.trim().toLowerCase();
-    }
-    return true;
-}
-
-/** A target, for a message. */
-function describeTarget(target: OutputTarget | undefined): string {
-    if (!target) {
-        return 'nothing';
-    }
-    return target.Mode === 'field' ? `field '${target.EntityFieldName}'` : `mode '${target.Mode}'`;
-}
 
 /** The outputs below the floor, for a message: `Seniority 0.42, IsVIP none`. */
 export function DescribeBelowFloor(belowFloor: BelowFloorOutput[]): string {

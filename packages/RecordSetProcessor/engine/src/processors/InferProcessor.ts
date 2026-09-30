@@ -41,6 +41,7 @@ import {
     validateSpec,
     type ViolationPolicy,
     type FeaturePipelineFieldValueLookup,
+    FindOutputByName,
 } from '@memberjunction/feature-pipelines';
 import { EntityDocumentCache, EntityDocumentTemplateParser } from '@memberjunction/entity-documents';
 import type { OutputMappingConfig } from '../writeBack';
@@ -54,7 +55,6 @@ import { LLMFeaturePipelineDriver } from '../feature-pipeline-drivers/LLMFeature
 import {
     DescribeEscalationFailure,
     FeaturePipelineEscalator,
-    FindOutputByName,
     type BelowFloorOutput,
     type EscalatedAnswer,
     type EscalationOutcome,

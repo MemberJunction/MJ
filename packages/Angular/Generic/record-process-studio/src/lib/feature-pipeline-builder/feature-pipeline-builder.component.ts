@@ -39,12 +39,15 @@ import {
     validateSpec,
     GetFeaturePipelineCapabilities,
     ValidateOutputsAgainstCapabilities,
+    FindEscalationTargetRowProblem,
+    FindEscalationTargetSpecProblem,
     type FeaturePipelineDriverCapabilities,
     type FeaturePipelineFieldValueLookup,
     type SpecValidationIssue,
     type EntityMetadataStub,
+    type MinimalEscalationTargetRow,
 } from '@memberjunction/feature-pipelines';
-import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { MJButtonDirective, MJConfirmDialogComponent } from '@memberjunction/ng-ui-components';
 
 export type PromptOption = Pick<MJAIPromptEntity, 'ID' | 'Name' | 'Description'>;
@@ -55,6 +58,22 @@ export interface PipelineTypeOption {
     Name: string;
     DisplayName?: string;
     Description?: string | null;
+}
+
+export interface EscalationTargetCandidate extends MinimalEscalationTargetRow {
+    Description?: string | null;
+    Configuration?: string | null;
+    ParsedSpec?: DataFeatureSpec;
+}
+
+/**
+ * The confidence floor typed into the builder, as a number. A blank or non-numeric entry is NaN, so the spec
+ * check reports it ("must be a number greater than 0 and less than 1, but is NaN") instead of the builder
+ * guessing a value; an out-of-range number is kept as typed, for the same check to report.
+ */
+export function ParseConfidenceFloor(raw: string): number {
+    const text = raw.trim();
+    return text.length === 0 ? Number.NaN : Number(text);
 }
 
 @Component({
@@ -383,6 +402,59 @@ export interface PipelineTypeOption {
                 }
             </section>
 
+            <!-- ESCALATION (DECISION PIPELINES ONLY) -->
+            @if (IsDecisionPipeline) {
+                <section class="rpe-sec fpb-escalation-sec">
+                    <div class="rpe-sec-h">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                        <h3>Borderline Escalation</h3>
+                    </div>
+                    <p class="rpe-desc">Records any output of which the decision model answers below this confidence are re-run through the chosen LLM pipeline. Only those records are re-run.</p>
+
+                    <div class="fpb-escalation-toggle-row">
+                        <label class="fpb-checkbox-label">
+                            <input
+                                type="checkbox"
+                                [checked]="IsEscalationEnabled"
+                                (change)="OnEscalationToggle($event)">
+                            <span>Escalate borderline records to an LLM pipeline</span>
+                        </label>
+                    </div>
+
+                    @if (IsEscalationEnabled) {
+                        <div class="rpe-grid2 rpe-mt">
+                            <div class="field">
+                                <label>Target LLM Pipeline</label>
+                                <select
+                                    class="mj-input"
+                                    [value]="spec.Escalation?.PipelineID || ''"
+                                    (change)="OnEscalationTargetChange($event)">
+                                    <option value="" disabled>{{ EscalationTargetsPlaceholder }}</option>
+                                    @for (target of AvailableEscalationTargets; track target.ID) {
+                                        <option [value]="target.ID" [disabled]="!!GetTargetProblem(target)">
+                                            {{ target.Name }}{{ GetTargetProblem(target) ? ' (' + GetTargetProblem(target) + ')' : '' }}
+                                        </option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="field">
+                                <label>Confidence Floor (0.0 to 1.0)</label>
+                                <input
+                                    class="mj-input"
+                                    type="number"
+                                    min="0"
+                                    max="1"
+                                    step="0.05"
+                                    placeholder="0.7"
+                                    [value]="spec.Escalation?.BelowConfidence ?? ''"
+                                    (input)="OnEscalationFloorChange($event)">
+                            </div>
+                        </div>
+                    }
+                </section>
+            }
+
             <!-- STAGE 4: MATERIALIZATION & WATERMARK -->
             <section class="rpe-sec">
                 <div class="rpe-sec-h">
@@ -504,6 +576,9 @@ export interface PipelineTypeOption {
         .fpb-enum-descriptions { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
         .fpb-enum-desc-row { display: flex; align-items: center; gap: 10px; }
         .fpb-enum-val-badge { min-width: 90px; padding: 4px 8px; background: var(--mj-bg-surface-sunken); color: var(--mj-text-primary); border: 1px solid var(--mj-border-subtle); border-radius: var(--mj-radius-sm, 4px); font-size: 12px; font-weight: 600; text-align: center; flex-shrink: 0; }
+        .fpb-escalation-toggle-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+        .fpb-checkbox-label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--mj-text-primary); user-select: none; }
+        .fpb-checkbox-label input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--mj-brand-primary); }
     `],
 })
 export class FeaturePipelineBuilderComponent extends BaseAngularComponent implements OnInit, OnChanges {
@@ -541,6 +616,26 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
 
     public get IsDecisionPipeline(): boolean {
         return this.CurrentPipelineTypeName.toLowerCase() === 'decision';
+    }
+
+    public AvailableEscalationTargets: EscalationTargetCandidate[] = [];
+    /** Whether the escalation targets were loaded. False until a load succeeds, and after one fails. */
+    public EscalationTargetsLoaded = false;
+    /** Why the last load of escalation targets failed, or null when it did not. */
+    public EscalationTargetsLoadError: string | null = null;
+    /** Numbers each target load, so a slower earlier load cannot overwrite a later one. */
+    private escalationTargetsLoadSeq = 0;
+
+    public get IsEscalationEnabled(): boolean {
+        return this.spec.Escalation !== undefined && this.spec.Escalation !== null;
+    }
+
+    /** The target picker's empty option: what to pick, or why there is nothing to pick. */
+    public get EscalationTargetsPlaceholder(): string {
+        if (this.EscalationTargetsLoadError) {
+            return '— Pipelines could not be loaded —';
+        }
+        return this.AvailableEscalationTargets.length > 0 ? '— Select LLM Pipeline —' : '— No other Infer pipelines on this entity —';
     }
 
     /**
@@ -696,12 +791,18 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         await this.loadPipelineTypes();
         await this.loadPrompts();
         await this.loadEntityDocs();
+        await this.LoadEscalationTargets();
         this.SyncFromRecord();
     }
 
     ngOnChanges(changes: SimpleChanges): void {
         if (changes['Record'] || changes['EntityID']) {
             this.SyncFromRecord();
+            // ngOnInit loads the targets for the first binding; reload only when the pipeline or entity changes after it
+            const firstBinding = Object.values(changes).every((change) => change.firstChange);
+            if (!firstBinding) {
+                void this.LoadEscalationTargets();
+            }
         }
     }
 
@@ -719,6 +820,11 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
                     this.spec.Caching = parsed.Caching ?? { Cacheable: false };
                     this.spec.ProcessorExtensionKey = parsed.ProcessorExtensionKey;
                     this.spec.PipelineType = parsed.PipelineType;
+                    if (parsed.Escalation) {
+                        this.spec.Escalation = { ...parsed.Escalation };
+                    } else {
+                        delete this.spec.Escalation;
+                    }
                     // Carried so the capability check sees what the runtime sees, and the next edit keeps them
                     this.spec.CaptureReasoning = parsed.CaptureReasoning;
                     this.spec.Watermark = parsed.Watermark;
@@ -871,6 +977,115 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
             this.AvailableDocs = [];
             LogError('Error loading Entity Documents', undefined, error);
         }
+    }
+
+    /**
+     * Loads the Infer pipelines on this pipeline's entity that it could escalate to. With no entity there is
+     * nothing to offer, so nothing is loaded. A failed load is recorded in {@link EscalationTargetsLoadError},
+     * not taken to mean there are no targets. Only the latest load's result is kept.
+     */
+    public async LoadEscalationTargets(): Promise<void> {
+        const seq = ++this.escalationTargetsLoadSeq;
+        const targetEntityID = this.Record?.EntityID || this.EntityID;
+        const outcome = targetEntityID
+            ? await this.fetchEscalationTargets(targetEntityID)
+            : { Targets: [], Error: null };
+        if (seq !== this.escalationTargetsLoadSeq) {
+            return; // a later load, for a later Record or entity, has superseded this one
+        }
+        this.AvailableEscalationTargets = outcome.Targets;
+        this.EscalationTargetsLoadError = outcome.Error;
+        this.EscalationTargetsLoaded = outcome.Error === null;
+        this.recomputeValidation();
+        this.cdr.detectChanges();
+    }
+
+    /** The Infer pipelines on the entity, other than this one, each with its parsed spec; or why they could not be read. */
+    private async fetchEscalationTargets(entityID: string): Promise<{ Targets: EscalationTargetCandidate[]; Error: string | null }> {
+        try {
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+            const res = await rv.RunView<EscalationTargetCandidate>({
+                EntityName: 'MJ: Record Processes',
+                Fields: ['ID', 'Name', 'Description', 'Entity', 'EntityID', 'WorkType', 'Status', 'Configuration'],
+                ExtraFilter: `WorkType='Infer' AND EntityID='${EscapeSQLString(entityID)}'`,
+                OrderBy: 'Name',
+                ResultType: 'simple',
+            });
+            if (!res.Success) {
+                const reason = res.ErrorMessage || 'unknown error';
+                LogError(`Failed to load Escalation Targets: ${reason}`);
+                return { Targets: [], Error: reason };
+            }
+            const currentID = this.Record?.ID;
+            const targets = (res.Results ?? [])
+                .filter((r) => !currentID || !UUIDsEqual(r.ID, currentID))
+                .map((r) => ({ ...r, ParsedSpec: this.parseTargetSpec(r.Configuration) }));
+            return { Targets: targets, Error: null };
+        } catch (error) {
+            LogError('Error loading Escalation Targets', undefined, error);
+            return { Targets: [], Error: error instanceof Error ? error.message : String(error) };
+        }
+    }
+
+    /** A target's Configuration as a spec, or undefined when it is empty or not a JSON object. */
+    private parseTargetSpec(configuration: string | null | undefined): DataFeatureSpec | undefined {
+        const parsed = configuration ? SafeJSONParse<DataFeatureSpec>(configuration) : null;
+        return parsed && typeof parsed === 'object' ? parsed : undefined;
+    }
+
+    /** @deprecated Use {@link LoadEscalationTargets}. */
+    public async loadEscalationTargets(): Promise<void> {
+        return this.LoadEscalationTargets();
+    }
+
+    /**
+     * Why a pipeline cannot be this pipeline's escalation target, or null when it can. Beyond the shared row and
+     * output checks, its own spec must pass `ValidateSpec`, as the engine requires before it builds the target.
+     */
+    public GetTargetProblem(target: EscalationTargetCandidate): string | null {
+        const targetEntityID = this.Record?.EntityID || this.EntityID || '';
+        const rowProblem = FindEscalationTargetRowProblem(target, targetEntityID);
+        if (rowProblem) {
+            return rowProblem;
+        }
+        const specError = target.ParsedSpec ? validateSpec(target.ParsedSpec).find((issue) => issue.Severity === 'error') : undefined;
+        if (specError) {
+            return `has an invalid spec: ${specError.Message}`;
+        }
+        return FindEscalationTargetSpecProblem(target.ParsedSpec, this.spec.Outputs ?? []);
+    }
+
+    public OnEscalationToggle(event: Event): void {
+        const checked = (event.target as HTMLInputElement).checked;
+        if (checked) {
+            this.spec.Escalation = {
+                PipelineID: this.spec.Escalation?.PipelineID || '',
+                BelowConfidence: this.spec.Escalation?.BelowConfidence ?? 0.7,
+            };
+        } else {
+            delete this.spec.Escalation;
+        }
+        this.emitChanges();
+    }
+
+    public OnEscalationTargetChange(event: Event): void {
+        const val = (event.target as HTMLSelectElement).value;
+        if (!this.spec.Escalation) {
+            this.spec.Escalation = {
+                PipelineID: val,
+                BelowConfidence: 0.7,
+            };
+        } else {
+            this.spec.Escalation.PipelineID = val;
+        }
+        this.emitChanges();
+    }
+
+    /** Sets the confidence floor from its input, as a number; a blank or invalid entry is NaN, which the spec check reports. */
+    public OnEscalationFloorChange(event: Event): void {
+        const floor = ParseConfidenceFloor((event.target as HTMLInputElement).value);
+        this.spec.Escalation = { PipelineID: this.spec.Escalation?.PipelineID ?? '', BelowConfidence: floor };
+        this.emitChanges();
     }
 
     public OnContextModeChange(event: Event): void {
@@ -1257,6 +1472,9 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
             ...this.spec,
             PipelineType: isNewTypeLLM ? undefined : newType.trim(),
         };
+        if (newType.trim().toLowerCase() !== 'decision') {
+            delete candidateSpec.Escalation;
+        }
 
         const newCapabilities = GetFeaturePipelineCapabilities(newType);
         const lookup = this.buildFieldValuesLookup();
@@ -1315,6 +1533,9 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
             delete this.spec.PipelineType;
         } else {
             this.spec.PipelineType = newType.trim();
+        }
+        if (!this.IsDecisionPipeline) {
+            delete this.spec.Escalation;
         }
         this.emitChanges();
     }
@@ -1449,6 +1670,9 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         if (this.spec.PipelineType && this.spec.PipelineType.trim().toLowerCase() === 'llm') {
             delete this.spec.PipelineType;
         }
+        if (!this.IsDecisionPipeline) {
+            delete this.spec.Escalation;
+        }
         if (this.Record) {
             this.spec.Name = this.Record.Name || '';
             this.spec.Description = this.Record.Description || '';
@@ -1501,14 +1725,7 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
             };
             this.ValidationErrors = validateSpec(this.spec, stub);
         } else {
-            this.ValidationErrors = this.spec.Outputs.length === 0
-                ? [{
-                    Path: 'Outputs',
-                    Severity: 'error',
-                    Message: 'At least one output attribute must be configured',
-                    FixRecommendation: 'Click Add Output to configure an output attribute',
-                }]
-                : [];
+            this.ValidationErrors = validateSpec(this.spec);
         }
 
         const lookup = this.buildFieldValuesLookup();
@@ -1520,6 +1737,39 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
                 Message: capIssue,
                 FixRecommendation: 'Adjust output configuration to match the selected pipeline capabilities.',
             });
+        }
+
+        if (this.IsDecisionPipeline && this.spec.Escalation && this.spec.Escalation.PipelineID && this.EscalationTargetsLoadError) {
+            // The targets are unknown, not absent: say so, and leave the target to be checked at run time
+            this.ValidationErrors.push({
+                Path: 'Escalation.PipelineID',
+                Severity: 'warning',
+                Message: `The escalation target could not be checked: the pipelines on this entity could not be loaded (${this.EscalationTargetsLoadError}).`,
+                FixRecommendation: 'Reopen the pipeline to retry. The target is still checked when the pipeline runs.',
+            });
+        } else if (this.IsDecisionPipeline && this.spec.Escalation) {
+            const targetID = this.spec.Escalation.PipelineID;
+            if (targetID && this.EscalationTargetsLoaded) {
+                const match = this.AvailableEscalationTargets.find((t) => UUIDsEqual(t.ID, targetID));
+                if (!match) {
+                    this.ValidationErrors.push({
+                        Path: 'Escalation.PipelineID',
+                        Severity: 'error',
+                        Message: `Escalation target pipeline '${targetID}' was not found on this entity.`,
+                        FixRecommendation: 'Select a valid Active LLM Feature Pipeline on this entity.',
+                    });
+                } else {
+                    const problem = this.GetTargetProblem(match);
+                    if (problem) {
+                        this.ValidationErrors.push({
+                            Path: 'Escalation.PipelineID',
+                            Severity: 'error',
+                            Message: `Escalation target pipeline '${match.Name}' ${problem}.`,
+                            FixRecommendation: 'Select an Active LLM Feature Pipeline that produces every output of this Decision pipeline.',
+                        });
+                    }
+                }
+            }
         }
 
         const hasErrors = this.ValidationErrors.some((i) => i.Severity === 'error');
