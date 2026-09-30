@@ -3,6 +3,7 @@
 import '@angular/compiler';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ConversationChatAreaComponent } from '../lib/components/conversation/conversation-chat-area.component';
+import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 
 /**
  * `ReconcileNow` is the recovery path for MJ #4222 — the case where a completion was
@@ -117,5 +118,99 @@ describe('ConversationChatArea.ReconcileNow', () => {
       await component.ReconcileNow(reason);
       expect(calls, `reason ${reason} should reconcile`).toEqual(['refresh', 'reconnect', 'correctStale']);
     }
+  });
+});
+
+describe('ConversationChatArea.ReconcileNow overlapping callers', () => {
+  /**
+   * REGRESSION: every quiet message asked for its own pass, and nothing stopped passes overlapping.
+   * Each pass tails every in-progress message, so N quiet rows made about N² tail calls per window,
+   * and two overlapping passes could complete the same message twice.
+   */
+
+  /** A refresh stub whose passes stay open until released, recording how many run at once. */
+  function gatedRefresh() {
+    const gates: Array<() => void> = [];
+    let running = 0;
+    let maxConcurrent = 0;
+    const refresh = vi.fn(async () => {
+      running++;
+      maxConcurrent = Math.max(maxConcurrent, running);
+      await new Promise<void>(resolve => gates.push(resolve));
+      running--;
+    });
+    const releaseNext = async () => {
+      gates.shift()?.();
+      // Let the pass finish and any follow-up start.
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    };
+    const releaseAll = async () => {
+      while (gates.length > 0) {
+        await releaseNext();
+      }
+    };
+    return { refresh, releaseNext, releaseAll, maxConcurrent: () => maxConcurrent };
+  }
+
+  it('never runs two passes at once, and folds mid-pass requests into one follow-up', async () => {
+    const gate = gatedRefresh();
+    const { component } = createHarness({ refreshAgentRunsForInProgress: gate.refresh });
+
+    const first = component.ReconcileNow('message-liveness');
+    const second = component.ReconcileNow('message-liveness');
+    const third = component.ReconcileNow('message-liveness');
+
+    await gate.releaseNext(); // first pass ends; one follow-up starts for the two waiting callers
+    await gate.releaseAll(); // follow-up ends
+    await Promise.all([first, second, third]);
+
+    expect(gate.refresh).toHaveBeenCalledTimes(2);
+    expect(gate.maxConcurrent()).toBe(1);
+  });
+
+  it('does not resolve a mid-pass caller until a pass that started after its request has finished', async () => {
+    // A completion can land while a pass is already reading. Handing the caller that pass's result
+    // would drop it; the caller must wait for the follow-up.
+    const gate = gatedRefresh();
+    const { component } = createHarness({ refreshAgentRunsForInProgress: gate.refresh });
+
+    void component.ReconcileNow('socket-reconnected');
+    let lateResolved = false;
+    void component.ReconcileNow('completion-for-unloaded-message').then(() => { lateResolved = true; });
+
+    await gate.releaseNext();
+    expect(lateResolved).toBe(false);
+
+    await gate.releaseNext();
+    expect(lateResolved).toBe(true);
+  });
+
+  it('starts a fresh pass once the previous one has finished, even if it failed', async () => {
+    const refresh = vi.fn()
+      .mockRejectedValueOnce(new Error('network down'))
+      .mockResolvedValue(undefined);
+    const { component } = createHarness({ refreshAgentRunsForInProgress: refresh });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await component.ReconcileNow('browser-online');
+    await component.ReconcileNow('browser-online');
+
+    expect(refresh).toHaveBeenCalledTimes(2);
+    consoleError.mockRestore();
+  });
+});
+
+describe('ConversationChatArea.OnLivenessCheckRequested', () => {
+  it('goes through the coalescing liveness trigger rather than starting a pass directly', () => {
+    // Quiet rows ask within the same second or so. The runtime's trigger collapses a burst into
+    // one pass; calling ReconcileNow per row would start one pass per row.
+    const trigger = vi.spyOn(ConversationsRuntime.Instance.Liveness, 'Trigger').mockImplementation(() => {});
+    const { component, calls } = createHarness();
+
+    component.OnLivenessCheckRequested('MSG-1');
+
+    expect(trigger).toHaveBeenCalledWith('message-liveness');
+    expect(calls).toEqual([]);
+    trigger.mockRestore();
   });
 });

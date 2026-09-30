@@ -45,8 +45,17 @@ import { ReconcileOrphanedConversationDetails, ORPHAN_DETAIL_GRACE_MS } from '..
 const USER = { ID: 'U1' } as unknown as UserInfo;
 const CONVERSATION_ID = 'C1';
 
-/** Provider stub: hands back the entity the reconciler actually writes through. */
-const PROVIDER = { GetEntityObject: mockGetEntityObject } as never;
+/**
+ * Provider stub: hands back the entity the reconciler actually writes through, and quotes names the
+ * way the SQL Server provider does.
+ */
+const PROVIDER = {
+    GetEntityObject: mockGetEntityObject,
+    EntityByName: (name: string) =>
+        name === 'MJ: AI Agent Runs' ? { SchemaName: '__mj', BaseView: 'vwAIAgentRuns' } : undefined,
+    QuoteIdentifier: (name: string) => `[${name}]`,
+    QuoteSchemaAndView: (schema: string, view: string) => `[${schema}].[${view}]`,
+} as never;
 const DETAIL_ID = 'D1';
 
 function detail(over: Record<string, unknown> = {}) {
@@ -58,10 +67,10 @@ function detail(over: Record<string, unknown> = {}) {
  * reconciler deliberately does NOT write the entity RunView returned, because that one carries the
  * system user and the conversation-detail permission gate refuses a non-owner.
  */
-function writable(saveResult = true) {
+function writable(saveResult = true, loadedStatus = 'In-Progress') {
     const w = {
         ID: DETAIL_ID,
-        Status: 'In-Progress',
+        Status: loadedStatus,
         Message: '',
         Load: vi.fn(async () => true),
         Save: vi.fn(async () => saveResult),
@@ -71,7 +80,7 @@ function writable(saveResult = true) {
     return w;
 }
 
-function script(details: unknown[], runs: unknown[], ownerId: string | null = 'OWNER-1') {
+function script(details: unknown[], runs: unknown[], ownerId: string | null = 'OWNER-1', loadedStatus = 'In-Progress') {
     mockRunView.mockImplementation(async (...args: unknown[]) => {
         const params = args[0] as RunViewParams | undefined;
         if (!params) throw new Error('RunView called with no params');
@@ -82,7 +91,7 @@ function script(details: unknown[], runs: unknown[], ownerId: string | null = 'O
         }
         throw new Error(`unexpected entity ${params.EntityName}`);
     });
-    mockGetEntityObject.mockImplementation(async () => writable());
+    mockGetEntityObject.mockImplementation(async () => writable(true, loadedStatus));
 }
 
 const longAgo = () => new Date(Date.now() - ORPHAN_DETAIL_GRACE_MS - 60_000).toISOString();
@@ -232,6 +241,39 @@ describe('ReconcileOrphanedConversationDetails', () => {
         mockRunView.mockImplementation(async () => { throw new Error('db down'); });
 
         await expect(ReconcileOrphanedConversationDetails(PROVIDER, USER)).resolves.toBe(0);
+    });
+
+    it('asks only for details that have a finished run, so stuck rows cannot fill the window', async () => {
+        // Details with no run, or with a run still executing, are never closed here. Read without
+        // this filter, 200 of them pin the oldest-first window and no closable orphan is reached.
+        script([detail()], [{ ConversationDetailID: DETAIL_ID, Status: 'Failed', CompletedAt: longAgo() }]);
+
+        await ReconcileOrphanedConversationDetails(PROVIDER, USER);
+
+        const detailCall = mockRunView.mock.calls.find(
+            c => (c[0] as RunViewParams).EntityName === 'MJ: Conversation Details'
+        );
+        expect((detailCall?.[0] as RunViewParams).ExtraFilter).toBe(
+            "Status = 'In-Progress' AND Role = 'AI' AND ID IN (SELECT [ConversationDetailID] FROM [__mj].[vwAIAgentRuns] " +
+            "WHERE [Status] IN ('Completed','AwaitingFeedback','Failed','Cancelled'))"
+        );
+    });
+
+    it('leaves a detail alone when something else closed it after the list query', async () => {
+        // The normal completion path can close the row between our read and our write. Writing
+        // anyway would stamp this pass's outcome over the one that actually happened.
+        script(
+            [detail()],
+            [{ ConversationDetailID: DETAIL_ID, Status: 'Failed', CompletedAt: longAgo(), ErrorMessage: 'late' }],
+            'OWNER-1',
+            'Complete'
+        );
+
+        const closed = await ReconcileOrphanedConversationDetails(PROVIDER, USER);
+
+        expect(closed).toBe(0);
+        expect(writableStore.last?.Status).toBe('Complete');
+        expect((writableStore.last?.Save as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
     });
 
     it('does nothing when no message is in progress', async () => {

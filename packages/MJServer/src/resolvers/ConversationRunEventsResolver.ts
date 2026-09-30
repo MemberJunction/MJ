@@ -1,8 +1,24 @@
 import { Arg, Ctx, Field, Int, ObjectType, Query, Resolver } from 'type-graphql';
 import { RunView } from '@memberjunction/core';
-import type { UserInfo } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
+import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
 import type { AppContext } from '../types.js';
+import { GetReadOnlyProvider } from '../util.js';
+
+/** The run columns the tail reads. */
+type TailRunRow = Pick<MJAIAgentRunEntity, 'ID' | 'Status' | 'Result'>;
+
+/** The step columns an event carries. The large data columns are never read. */
+type TailStepRow = Pick<
+    MJAIAgentRunStepEntity,
+    'StepNumber' | 'StepType' | 'StepName' | 'Status' | 'Success' | 'ErrorMessage' | 'StartedAt' | 'CompletedAt'
+>;
+
+const RUN_FIELDS: (keyof TailRunRow)[] = ['ID', 'Status', 'Result'];
+const STEP_FIELDS: (keyof TailStepRow)[] = [
+    'StepNumber', 'StepType', 'StepName', 'Status', 'Success', 'ErrorMessage', 'StartedAt', 'CompletedAt',
+];
 
 /**
  * One step of an agent run, projected for the client's progress view.
@@ -62,8 +78,9 @@ export class ConversationRunEventsOutput {
     LatestSeq: number;
 
     /**
-     * True while the run is still executing. False means terminal — stop tailing, and
-     * `FinalPayload` / `RunStatus` hold the outcome.
+     * True while the run is still executing, including a run `Paused` on a workflow that is still
+     * running. False means terminal — stop tailing, and `FinalPayload` / `RunStatus` hold the
+     * outcome. A failed call (`Success` false) reports true, because it knows nothing about the run.
      */
     @Field(() => Boolean)
     IsInFlight: boolean;
@@ -100,8 +117,11 @@ export class ConversationRunEventsOutput {
 /** Ceiling on events returned per call. A client with a gap larger than this pages. */
 const MAX_EVENTS_PER_TAIL = 200;
 
-/** Run statuses that mean execution is still in progress. */
-const IN_FLIGHT_STATUSES = ['Running'];
+/**
+ * Run statuses that mean execution is still in progress. `Paused` is a run parked on a workflow
+ * that is still executing; the orphan reconciler and the process panel treat it the same way.
+ */
+const IN_FLIGHT_STATUSES: MJAIAgentRunEntity['Status'][] = ['Running', 'Paused'];
 
 /**
  * Durable, resumable read of an agent run's progress (MJ #4222).
@@ -138,7 +158,7 @@ export class ConversationRunEventsResolver {
             Message: message,
             Events: [],
             LatestSeq: from,
-            IsInFlight: false,
+            IsInFlight: true,
         });
 
         try {
@@ -147,14 +167,15 @@ export class ConversationRunEventsResolver {
                 return empty('User is not authenticated');
             }
 
-            const detail = await this.loadDetail(conversationDetailID, user);
+            const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true });
+            const detail = await this.loadDetail(provider, conversationDetailID, user);
             if (!detail) {
                 // Not found and not authorized are deliberately indistinguishable — answering
                 // "exists but denied" would confirm the id to someone probing for one.
                 return empty(`Conversation detail '${conversationDetailID}' not found`);
             }
 
-            const run = await this.loadLatestRun(conversationDetailID, user);
+            const run = await this.loadLatestRun(provider, conversationDetailID, user);
             if (!run) {
                 // The mutation is acknowledged before the run row exists, so this is an
                 // ordinary early-poll result, not an error. Reported as success with nothing
@@ -170,7 +191,7 @@ export class ConversationRunEventsResolver {
             }
 
             const isInFlight = IN_FLIGHT_STATUSES.includes(run.Status);
-            const steps = await this.loadSteps(run.ID, from, user);
+            const steps = await this.loadSteps(provider, run.ID, from, user);
             const events = steps.map((s) => this.toEvent(s));
 
             return {
@@ -199,8 +220,12 @@ export class ConversationRunEventsResolver {
     }
 
     /** Loads the conversation detail as the calling user; null when absent or not permitted. */
-    private async loadDetail(conversationDetailID: string, user: UserInfo): Promise<MJConversationDetailEntity | undefined> {
-        const rv = new RunView();
+    private async loadDetail(
+        provider: IMetadataProvider,
+        conversationDetailID: string,
+        user: UserInfo
+    ): Promise<MJConversationDetailEntity | undefined> {
+        const rv = RunView.FromMetadataProvider(provider);
         const result = await rv.RunView<MJConversationDetailEntity>(
             {
                 EntityName: 'MJ: Conversation Details',
@@ -218,15 +243,20 @@ export class ConversationRunEventsResolver {
      * Newest run for the detail. A conversation detail can be retried, and the latest run is
      * the one the UI is showing.
      */
-    private async loadLatestRun(conversationDetailID: string, user: UserInfo): Promise<MJAIAgentRunEntity | undefined> {
-        const rv = new RunView();
-        const result = await rv.RunView<MJAIAgentRunEntity>(
+    private async loadLatestRun(
+        provider: IMetadataProvider,
+        conversationDetailID: string,
+        user: UserInfo
+    ): Promise<TailRunRow | undefined> {
+        const rv = RunView.FromMetadataProvider(provider);
+        const result = await rv.RunView<TailRunRow>(
             {
                 EntityName: 'MJ: AI Agent Runs',
                 ExtraFilter: `ConversationDetailID='${this.escape(conversationDetailID)}'`,
                 OrderBy: '__mj_CreatedAt DESC',
                 MaxRows: 1,
-                ResultType: 'entity_object',
+                Fields: RUN_FIELDS,
+                ResultType: 'simple',
                 BypassCache: true,
             },
             user
@@ -235,15 +265,21 @@ export class ConversationRunEventsResolver {
     }
 
     /** Steps after `sinceSeq`, oldest first, bounded by {@link MAX_EVENTS_PER_TAIL}. */
-    private async loadSteps(agentRunID: string, sinceSeq: number, user: UserInfo): Promise<MJAIAgentRunStepEntity[]> {
-        const rv = new RunView();
-        const result = await rv.RunView<MJAIAgentRunStepEntity>(
+    private async loadSteps(
+        provider: IMetadataProvider,
+        agentRunID: string,
+        sinceSeq: number,
+        user: UserInfo
+    ): Promise<TailStepRow[]> {
+        const rv = RunView.FromMetadataProvider(provider);
+        const result = await rv.RunView<TailStepRow>(
             {
                 EntityName: 'MJ: AI Agent Run Steps',
                 ExtraFilter: `AgentRunID='${this.escape(agentRunID)}' AND StepNumber > ${Math.floor(sinceSeq)}`,
                 OrderBy: 'StepNumber ASC',
                 MaxRows: MAX_EVENTS_PER_TAIL,
-                ResultType: 'entity_object',
+                Fields: STEP_FIELDS,
+                ResultType: 'simple',
                 BypassCache: true,
             },
             user
@@ -251,7 +287,8 @@ export class ConversationRunEventsResolver {
         return result.Success ? (result.Results ?? []) : [];
     }
 
-    private toEvent(step: MJAIAgentRunStepEntity): ConversationRunEvent {
+    /** Projects a plain step row to an event. Plain rows may carry dates as strings. */
+    private toEvent(step: TailStepRow): ConversationRunEvent {
         return {
             Seq: step.StepNumber,
             StepType: step.StepType,
@@ -259,13 +296,13 @@ export class ConversationRunEventsResolver {
             Status: step.Status,
             Success: step.Success ?? undefined,
             ErrorMessage: step.ErrorMessage ?? undefined,
-            StartedAt: step.StartedAt,
-            CompletedAt: step.CompletedAt ?? undefined,
+            StartedAt: new Date(step.StartedAt),
+            CompletedAt: step.CompletedAt != null ? new Date(step.CompletedAt) : undefined,
         };
     }
 
-    /** Escapes single quotes for the `ExtraFilter` string. Ids are UUIDs, but never trust the shape. */
+    /** Escapes a value for the `ExtraFilter` string. Ids are UUIDs, but never trust the shape. */
     private escape(value: string): string {
-        return value.replace(/'/g, "''");
+        return EscapeSQLString(value);
     }
 }

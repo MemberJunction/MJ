@@ -16,8 +16,9 @@ import type { ConversationTailResult } from '@memberjunction/conversations-runti
  *
  * What must hold, and what each failure would look like:
  *
- * - **A failed or inconclusive read completes nothing.** Otherwise a transient network error
- *   would end a live message with no answer on it — worse than the bug being fixed.
+ * - **A failed or inconclusive read completes nothing on its own.** Otherwise a transient network
+ *   error would end a live message with no answer on it — worse than the bug being fixed. A failed
+ *   read falls back to the run list, which completes only a message whose run is already over.
  * - **Completion routes through `handleMessageCompletion`.** Four writers already move a message
  *   out of In-Progress; a fifth would race them.
  * - **A conversation switched mid-read is not written to.** The result belongs to the old view.
@@ -54,6 +55,7 @@ function createHarness(result: ConversationTailResult, opts: { stillActive?: boo
     Forget: (id: string) => forgotten.push(id),
   } as unknown as ConversationsRuntime['Tail']);
 
+  open.AgentRunsByDetailId = new Map();
   open.isActiveConversationLoad = vi.fn(() => opts.stillActive !== false);
   open.handleMessageCompletion = vi.fn(async (msg: { ID: string }) => {
     completions.push(msg.ID);
@@ -104,7 +106,7 @@ describe('ConversationChatAreaComponent.tryRecoverFromTail', () => {
     expect(h.completions).toEqual([]);
   });
 
-  it('completes nothing when the tail read failed', async () => {
+  it('completes nothing when the tail read failed and the run list shows nothing finished', async () => {
     const h = createHarness(tailResult({ Success: false, IsInFlight: false, DetailStatus: 'Complete' }));
 
     await expect(recover(h)).resolves.toBe(false);
@@ -273,6 +275,60 @@ describe('ConversationChatAreaComponent.reconnectInProgressRuns tail usage', () 
 
   it('leaves the message alone when durable state agrees it is running', async () => {
     const h = listHarness(tailResult({ RunID: 'RUN-1', IsInFlight: true }), 'Running');
+    await run(h);
+    expect(h.completions).toEqual([]);
+  });
+});
+
+/**
+ * When the tail call fails, the run list decides, as it did before the tail existed.
+ *
+ * A new client talking to an older server gets a failed tail on every call. Without a fallback, a
+ * message whose run has finished keeps spinning, where the old client settled it from the run list.
+ */
+describe('ConversationChatAreaComponent.reconnectInProgressRuns when the tail fails', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  function failedTailHarness(runStatus?: string) {
+    const component = Object.create(ConversationChatAreaComponent.prototype) as ConversationChatAreaComponent;
+    const open = component as unknown as Record<string, unknown>;
+    const completions: string[] = [];
+    vi.spyOn(ConversationsRuntime.Instance, 'Tail', 'get').mockReturnValue({
+      Tail: vi.fn(async () => tailResult({ Success: false, Message: 'Cannot query field "TailConversationEvents"' })),
+      Forget: vi.fn(),
+    } as unknown as ConversationsRuntime['Tail']);
+    open.messages = [MESSAGE];
+    open.AgentRunsByDetailId = new Map(runStatus ? [[MESSAGE.ID, { ID: 'RUN-1', Status: runStatus }]] : []);
+    open.isActiveConversationLoad = vi.fn(() => true);
+    open.handleMessageCompletion = vi.fn(async (m: { ID: string }, runId: string) => { completions.push(`${m.ID}:${runId}`); });
+    return { component, open, completions };
+  }
+
+  const run = (h: { component: ConversationChatAreaComponent; open: Record<string, unknown> }) =>
+    (h.open.reconnectInProgressRuns as (c: string, t: number) => Promise<void>).call(h.component, 'CONV-1', 7);
+
+  it('completes a message whose run finished, from the run list', async () => {
+    const h = failedTailHarness('Completed');
+    await run(h);
+    expect(h.completions).toEqual(['MSG-1:RUN-1']);
+  });
+
+  it('completes a message whose run failed, from the run list', async () => {
+    const h = failedTailHarness('Failed');
+    await run(h);
+    expect(h.completions).toEqual(['MSG-1:RUN-1']);
+  });
+
+  it('leaves a message alone whose run is still running or parked', async () => {
+    for (const status of ['Running', 'Paused']) {
+      const h = failedTailHarness(status);
+      await run(h);
+      expect(h.completions, status).toEqual([]);
+    }
+  });
+
+  it('leaves a message alone when there is no run to judge', async () => {
+    const h = failedTailHarness();
     await run(h);
     expect(h.completions).toEqual([]);
   });

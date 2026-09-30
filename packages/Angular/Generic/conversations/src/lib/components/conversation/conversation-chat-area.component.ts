@@ -109,6 +109,9 @@ export interface EmptyStateConfig {
   hideDefaultPrompts?: boolean;
 }
 
+/** Run statuses that mean the run is over, for the run-list fallback. `Paused` is still working. */
+const RUN_LIST_TERMINAL_STATUSES: string[] = ['Completed', 'AwaitingFeedback', 'Failed', 'Cancelled'];
+
 /** Default width (percentage) for the artifact viewer pane */
 export const DEFAULT_ARTIFACT_PANE_WIDTH = 40;
 
@@ -1605,6 +1608,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private lastLoadedConversationId: string | null = null; // Track which conversation's peripheral data was loaded
   private currentlyLoadingConversationId: string | null = null; // Track which conversation is currently being loaded
   private conversationLoadToken = 0; // Monotonic token to discard stale async conversation loads
+  /** The reconcile passes in progress, shared by every caller that arrives while they run. */
+  private reconcileInFlight: Promise<void> | null = null;
+  /** Reason for one more reconcile pass, requested while a pass was running. */
+  private reconcileRerunReason: string | null = null;
   public IsProcessing: boolean = false;
 
   /** @deprecated Use {@link IsProcessing}. */
@@ -5738,12 +5745,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    *
    * The reconciliation triggers all fire on transport events — a socket retry, a tab regaining
    * focus. This one fires on the symptom itself: a run that simply stopped reporting, with no event
-   * anywhere to notice it. The message throttles its own requests, so this costs one narrow query
-   * per quiet message per window.
+   * anywhere to notice it. Each pass covers every in-progress message, so the request goes through
+   * the runtime's coalescing trigger: quiet rows asking at about the same time share one pass.
    */
   OnLivenessCheckRequested(messageId: string): void {
     LogStatusEx({ message: `🫀 Message ${messageId} reports no recent progress — reconciling`, verboseOnly: true });
-    void this.ReconcileNow('message-liveness');
+    ConversationsRuntime.Instance.Liveness.Trigger('message-liveness');
   }
 
   /**
@@ -6523,7 +6530,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   /**
    * Re-read the agent-run rows backing this conversation's in-progress messages, refreshing
-   * {@link agentRunsByDetailId} in place.
+   * {@link AgentRunsByDetailId} in place.
    *
    * REQUIRED BEFORE ANY ON-DEMAND RECONCILE. {@link reconnectInProgressRuns} compares against
    * the in-memory map and never reloads it; on the conversation-load path that is safe only
@@ -6532,9 +6539,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * stale `Running` status the outage froze it at — and the reconcile silently finds nothing to
    * do, which is indistinguishable from working (MJ #4222).
    *
-   * Deliberately narrow: only the in-progress details, only the three fields the comparison
-   * needs, `BypassCache` because the server wrote these rows through a different provider.
-   * Cheaper than `windowStore.RefreshLatest()`, and cheap enough to run on every trigger.
+   * Deliberately narrow in rows: only the in-progress details, with `BypassCache` because the
+   * server wrote these rows through a different provider. Cheaper than
+   * `windowStore.RefreshLatest()`, and cheap enough to run on every trigger. Full entity rows are
+   * read, not a few fields: each row replaces the run object the message renders from and that the
+   * completion path reloads, so a partial row would blank the run's duration, tokens and cost.
    */
   private async refreshAgentRunsForInProgress(conversationId: string, loadToken: number): Promise<void> {
     const inProgressIds = this.messages
@@ -6570,10 +6579,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         continue;
       }
       seenDetailIds.add(detailId);
-      this.agentRunsByDetailId.set(detailId, run);
+      this.AgentRunsByDetailId.set(detailId, run);
     }
     // New map reference so OnPush children re-read it.
-    this.agentRunsByDetailId = new Map(this.agentRunsByDetailId);
+    this.AgentRunsByDetailId = new Map(this.AgentRunsByDetailId);
   }
 
   /**
@@ -6583,9 +6592,36 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * completion published while the client's transport was silently dead. Tier 0 makes the socket
    * close; this is what recovers the event that was dropped while it was down.
    *
+   * Only one pass runs at a time. A request that arrives during a pass shares it and schedules one
+   * follow-up pass, so every caller resolves after a pass that started after its request.
+   *
    * @param reason What prompted it — carried only for logging.
    */
   public async ReconcileNow(reason: string): Promise<void> {
+    if (this.reconcileInFlight) {
+      this.reconcileRerunReason = reason;
+      return this.reconcileInFlight;
+    }
+    this.reconcileInFlight = this.runReconcilePasses(reason);
+    return this.reconcileInFlight;
+  }
+
+  /** Runs passes until no caller has asked for another. Clears the in-flight marker on exit. */
+  private async runReconcilePasses(reason: string): Promise<void> {
+    try {
+      let next: string | null = reason;
+      while (next) {
+        this.reconcileRerunReason = null;
+        await this.reconcileOnce(next);
+        next = this.reconcileRerunReason;
+      }
+    } finally {
+      this.reconcileInFlight = null;
+    }
+  }
+
+  /** One reconcile pass over the in-progress messages of the active conversation. */
+  private async reconcileOnce(reason: string): Promise<void> {
     const conversationId = this.conversationId;
     if (!conversationId || !this.currentUser) {
       return;
@@ -6631,8 +6667,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const tail = ConversationsRuntime.Instance.Tail;
     const result = await tail.Tail(message.ID);
 
-    if (!result.Success || !this.isActiveConversationLoad(conversationId, loadToken)) {
+    if (!this.isActiveConversationLoad(conversationId, loadToken)) {
       return false;
+    }
+    if (!result.Success) {
+      // An older server has no tail query, and a new client then gets a failure on every call.
+      // Decide from the run list instead, as the client did before the tail existed.
+      return this.recoverFromRunList(message, conversationId, loadToken);
     }
 
     // `IsInFlight` false means the server considers the run finished. A terminal `DetailStatus`
@@ -6665,6 +6706,32 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     await this.handleMessageCompletion(message, result.RunID ?? '', conversationId, loadToken);
     // The message is terminal, so its cursor will never advance again.
     tail.Forget(message.ID);
+    return true;
+  }
+
+  /**
+   * Complete a message from the run list alone. Used only when the tail call fails.
+   *
+   * Less precise than the tail: it cannot see the conversation detail's own status, so during the
+   * orphan window it reloads the message without settling it. That was the behavior before the
+   * tail existed, and it is better than leaving a finished message spinning.
+   *
+   * @returns true when the message was completed.
+   */
+  private async recoverFromRunList(
+    message: MJConversationDetailEntity,
+    conversationId: string,
+    loadToken: number
+  ): Promise<boolean> {
+    const run = this.AgentRunsByDetailId.get(message.ID);
+    if (!run || !RUN_LIST_TERMINAL_STATUSES.includes(run.Status)) {
+      return false;
+    }
+    LogStatusEx({
+      message: `📼 Tail unavailable; run ${run.ID} (${run.Status}) for message ${message.ID} is finished — completing from the run list`,
+      verboseOnly: true
+    });
+    await this.handleMessageCompletion(message, run.ID, conversationId, loadToken);
     return true;
   }
 

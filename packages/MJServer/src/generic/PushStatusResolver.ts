@@ -57,6 +57,44 @@ export function SetPushStatusPublishHook(hook?: PushStatusPublishHook): void {
 }
 
 /**
+ * Validate an update received from the cross-instance message bus.
+ *
+ * The bus carries messages from other processes, so every field is type-checked before the update
+ * is republished onto the local topic, where {@link StatusUpdatesFilter} compares `ownerUserId`
+ * with the connection's user.
+ *
+ * @param raw The JSON text taken off the bus.
+ * @param localServerId This process's `MJGlobal.ProcessUUID`, used to drop our own echo.
+ * @returns The update to republish, or `null` to drop it.
+ */
+export function ParseReplicatedStatusUpdate(raw: string, localServerId: string): PushStatusNotificationPayload | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== 'object' || parsed === null) {
+    return null;
+  }
+
+  const { sessionId, ownerUserId, message, SourceServerId } = parsed as Record<string, unknown>;
+  const source = typeof SourceServerId === 'string' ? SourceServerId : undefined;
+  const body = typeof message === 'string' ? message : undefined;
+  if ((SourceServerId != null && source === undefined) || (message != null && body === undefined)) {
+    return null; // a present field of the wrong type
+  }
+  if (source === localServerId) {
+    return null; // our own message, echoed back
+  }
+  if (typeof sessionId !== 'string' || !sessionId || typeof ownerUserId !== 'string' || !ownerUserId) {
+    return null; // fail closed: an update with no valid identity can never be routed safely
+  }
+
+  return { sessionId, ownerUserId, message: body, SourceServerId: source };
+}
+
+/**
  * Whether an update is worth sending to other server instances.
  *
  * Streaming content is excluded. It arrives at hundreds of messages per second and each one carries

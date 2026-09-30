@@ -59,7 +59,7 @@ export async function ReconcileOrphanedConversationDetails(
         const detailResult = await rv.RunView<MJConversationDetailEntity>(
             {
                 EntityName: 'MJ: Conversation Details',
-                ExtraFilter: `Status = 'In-Progress' AND Role = 'AI'`,
+                ExtraFilter: `Status = 'In-Progress' AND Role = 'AI'${hasTerminalRunClause(provider)}`,
                 OrderBy: '__mj_CreatedAt ASC',
                 MaxRows: MAX_DETAILS_PER_PASS,
                 ResultType: 'entity_object',
@@ -115,6 +115,10 @@ export async function ReconcileOrphanedConversationDetails(
                 LogError(`[OrphanDetailReconciler] Could not load detail ${detail.ID} for write`);
                 continue;
             }
+            if (writable.Status !== 'In-Progress') {
+                // Closed by something else since the list query. Its outcome stands.
+                continue;
+            }
             // The failure marker belongs only to the error branch. A completed run has nothing to
             // report, so an empty message stays empty rather than contradicting its own status.
             if (SUCCESSFUL_RUN_STATUSES.includes(run.Status)) {
@@ -146,6 +150,39 @@ export async function ReconcileOrphanedConversationDetails(
         LogError(`[OrphanDetailReconciler] Pass failed: ${err instanceof Error ? err.message : String(err)}`);
         return 0;
     }
+}
+
+/** The quoting a database provider offers. Present on every server-side provider. */
+interface QuotingProvider {
+    QuoteIdentifier(name: string): string;
+    QuoteSchemaAndView(schemaName: string, objectName: string): string;
+}
+
+function isQuotingProvider(provider: IMetadataProvider): provider is IMetadataProvider & QuotingProvider {
+    const p = provider as IMetadataProvider & Partial<QuotingProvider>;
+    return typeof p.QuoteIdentifier === 'function' && typeof p.QuoteSchemaAndView === 'function';
+}
+
+/**
+ * Filter clause that keeps only details with at least one finished run.
+ *
+ * Details with no run, or whose run is still executing, are never closed here. Without this clause
+ * they fill the oldest-first window, and once 200 of them accumulate no closable orphan is reached.
+ * The newest-run check in {@link loadTerminalRuns} still decides each remaining detail.
+ *
+ * @returns An ` AND ...` clause, or an empty string when the provider cannot quote names.
+ */
+function hasTerminalRunClause(provider: IMetadataProvider): string {
+    const runs = provider.EntityByName('MJ: AI Agent Runs');
+    if (!runs || !isQuotingProvider(provider)) {
+        return '';
+    }
+    const statuses = TERMINAL_RUN_STATUSES.map(s => `'${s}'`).join(',');
+    return (
+        ` AND ID IN (SELECT ${provider.QuoteIdentifier('ConversationDetailID')}` +
+        ` FROM ${provider.QuoteSchemaAndView(runs.SchemaName, runs.BaseView)}` +
+        ` WHERE ${provider.QuoteIdentifier('Status')} IN (${statuses}))`
+    );
 }
 
 /**

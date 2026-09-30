@@ -3219,11 +3219,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     private _socketStateSubject = new BehaviorSubject<SocketConnectionState>('unknown');
     private _socketReconnectedSubject = new Subject<void>();
     private _isDisposingSocketIntentionally = false;
-    /**
-     * Pending pong watchdog for the current socket, or null when no ping is outstanding.
-     * Armed when we send a keepalive ping, cleared when the pong arrives or the socket closes.
-     */
-    private _pongTimeout: ReturnType<typeof setTimeout> | null = null;
+    /** Disarms the current client's pong watchdog. Each client owns its own timer. */
+    private _disarmPongWatchdog: (() => void) | null = null;
 
     /**
      * Fires each time the socket comes back up after having dropped — never on the first
@@ -3325,6 +3322,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             this._wsClient = client;
             this._wsClientCreatedAt = now;
 
+            // The pong timer belongs to this client alone, so a late event from a replaced client
+            // can never disarm the watchdog of the client that took its place.
+            let pongTimeout: ReturnType<typeof setTimeout> | null = null;
+            const disarmPongWatchdog = (): void => {
+                if (pongTimeout !== null) {
+                    clearTimeout(pongTimeout);
+                    pongTimeout = null;
+                }
+            };
+            this._disarmPongWatchdog = disarmPongWatchdog;
+
             // ── Pong watchdog (MJ #4222) ──
             // graphql-ws sends the keepalive ping but deliberately does nothing when no pong
             // comes back, and re-arms the ping ONLY on pong receipt. So on a half-open socket
@@ -3339,9 +3347,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 if (received) {
                     return;
                 }
-                this.clearPongTimeout();
-                this._pongTimeout = setTimeout(() => {
-                    this._pongTimeout = null;
+                disarmPongWatchdog();
+                pongTimeout = setTimeout(() => {
+                    pongTimeout = null;
                     try {
                         // Issues a synthetic `4499 Terminated` close. graphql-ws treats terminate
                         // as non-fatal, so `retryAttempts`/`shouldRetry` reconnect as normal.
@@ -3354,7 +3362,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             client.on('pong', (received: boolean) => {
                 // The link is proven alive in both directions; stand the watchdog down.
                 if (received) {
-                    this.clearPongTimeout();
+                    disarmPongWatchdog();
                 }
             });
 
@@ -3374,7 +3382,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             client.on('closed', (event: unknown) => {
                 // Whatever closed the socket, no pong can arrive on it now. Disarm first so a
                 // pending watchdog cannot fire against an already-dead client.
-                this.clearPongTimeout();
+                disarmPongWatchdog();
+                // A replaced client's late close says nothing about the socket in use now.
+                if (this._wsClient !== client) {
+                    return;
+                }
                 // Ignore closes we initiated via disposeWSClient() — those already
                 // emit 'unknown' themselves. Only treat unexpected closes (retries
                 // exhausted) as 'disconnected'.
@@ -3406,16 +3418,6 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     /**
-     * Disarms the pong watchdog. Idempotent, and safe to call when none is pending.
-     */
-    private clearPongTimeout(): void {
-        if (this._pongTimeout !== null) {
-            clearTimeout(this._pongTimeout);
-            this._pongTimeout = null;
-        }
-    }
-
-    /**
      * Disposes of the WebSocket client
      * Does NOT complete subjects - caller should handle that separately to avoid double-cleanup
      */
@@ -3423,8 +3425,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         if (this._wsClient) {
             this._isDisposingSocketIntentionally = true;
             // Disarm before disposing: a deliberate teardown must not leave a watchdog running
-            // that would later terminate whatever client has taken this one's place.
-            this.clearPongTimeout();
+            // against a client that is going away.
+            this._disarmPongWatchdog?.();
+            this._disarmPongWatchdog = null;
             try {
                 this._wsClient.dispose();
             } catch (e) {

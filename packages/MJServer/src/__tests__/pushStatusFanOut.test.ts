@@ -19,6 +19,7 @@ import 'reflect-metadata';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
     publishStatusUpdate,
+    ParseReplicatedStatusUpdate,
     ShouldReplicateStatusUpdate,
     SetPushStatusPublishHook,
     type PushStatusNotificationPayload,
@@ -152,5 +153,54 @@ describe('publishStatusUpdate fan-out', () => {
         publishStatusUpdate(engine, { sessionId: SESSION, ownerUserId: OWNER, message: envelope('ExecutionProgress') });
 
         expect(hook).not.toHaveBeenCalled();
+    });
+});
+
+describe('ParseReplicatedStatusUpdate', () => {
+    /**
+     * Messages on the shared channel come from other processes, so every field is checked before
+     * the update is republished onto the local topic, where the subscription filter compares
+     * `ownerUserId` against the connection's user.
+     */
+    const LOCAL = 'LOCAL-PROCESS';
+    const raw = (over: Record<string, unknown> = {}) =>
+        JSON.stringify({ sessionId: SESSION, ownerUserId: OWNER, message: 'hello', SourceServerId: 'OTHER', ...over });
+
+    it('returns the update from another instance', () => {
+        expect(ParseReplicatedStatusUpdate(raw(), LOCAL)).toEqual({
+            sessionId: SESSION,
+            ownerUserId: OWNER,
+            message: 'hello',
+            SourceServerId: 'OTHER',
+        });
+    });
+
+    it('drops our own message echoed back by the bus', () => {
+        expect(ParseReplicatedStatusUpdate(raw({ SourceServerId: LOCAL }), LOCAL)).toBeNull();
+    });
+
+    it('drops an update with no identity', () => {
+        expect(ParseReplicatedStatusUpdate(raw({ ownerUserId: '' }), LOCAL)).toBeNull();
+        expect(ParseReplicatedStatusUpdate(raw({ sessionId: undefined }), LOCAL)).toBeNull();
+    });
+
+    it('drops identity fields that are not strings', () => {
+        // A truthy object would pass a presence check and reach the filter as the wrong type.
+        expect(ParseReplicatedStatusUpdate(raw({ ownerUserId: { ID: OWNER } }), LOCAL)).toBeNull();
+        expect(ParseReplicatedStatusUpdate(raw({ sessionId: 42 }), LOCAL)).toBeNull();
+    });
+
+    it('drops a message body that is not a string', () => {
+        expect(ParseReplicatedStatusUpdate(raw({ message: { type: 'x' } }), LOCAL)).toBeNull();
+    });
+
+    it('accepts an update with no message body', () => {
+        expect(ParseReplicatedStatusUpdate(raw({ message: undefined }), LOCAL)?.message).toBeUndefined();
+    });
+
+    it('drops malformed JSON and values that are not objects', () => {
+        expect(ParseReplicatedStatusUpdate('{not json', LOCAL)).toBeNull();
+        expect(ParseReplicatedStatusUpdate('null', LOCAL)).toBeNull();
+        expect(ParseReplicatedStatusUpdate('42', LOCAL)).toBeNull();
     });
 });

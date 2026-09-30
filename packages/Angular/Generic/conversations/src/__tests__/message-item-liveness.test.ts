@@ -9,6 +9,7 @@ import {
   LIVENESS_RECHECK_THROTTLE_MS,
   type MessageLivenessState,
 } from '../lib/components/message/message-item.component';
+import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 
 /**
  * Tier 3 of MJ #4222: the elapsed timer must stop claiming everything is fine.
@@ -262,5 +263,166 @@ describe('MessageItemComponent elapsed timer re-arming', () => {
     h.component.ngDoCheck();
 
     expect(h.open.startElapsedTimeUpdater).not.toHaveBeenCalled();
+  });
+});
+
+describe('MessageItemComponent liveness on a healthy long run', () => {
+  /**
+   * REGRESSION: every run longer than 90s showed "checking" on a healthy connection.
+   *
+   * Progress frames carry the server's in-memory run entity, which is saved only at creation and
+   * at the end. The watchdog stamps `LastHeartbeatAt` with a direct SQL update that never reaches
+   * that object. So on the healthy path the run's timestamps stay at the start time, and silence
+   * measured from them grows with the run itself.
+   *
+   * The browser's own record of when it last heard from the run is the signal that moves.
+   */
+  let lastHeard: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    lastHeard = vi.spyOn(ConversationsRuntime.Instance.Streaming, 'LastHeardFromRun');
+  });
+
+  afterEach(() => {
+    lastHeard.mockRestore();
+    vi.useRealTimers();
+  });
+
+  it('stays live while frames for the run keep arriving, though the run object never updates', () => {
+    const h = createHarness({ heartbeatAgeMs: 100_000, watchingForMs: 100_000 });
+    lastHeard.mockReturnValue(Date.now() - 5_000);
+
+    expect(stateAfterCheck(h)).toBe('live');
+    expect(lastHeard).toHaveBeenCalledWith('RUN-1');
+  });
+
+  it('reports checking once nothing has been heard for the run in any channel', () => {
+    const h = createHarness({ heartbeatAgeMs: 100_000, watchingForMs: 100_000 });
+    lastHeard.mockReturnValue(Date.now() - (LIVENESS_CHECKING_MS + 5_000));
+
+    expect(stateAfterCheck(h)).toBe('checking');
+  });
+});
+
+describe('MessageItemComponent liveness for a row with no agent run', () => {
+  /**
+   * A row written by a host's own turn handler has no MJ agent run, so there is no run to look
+   * up. It went "checking" and then "no response" on elapsed time alone, even while the host was
+   * reporting its progress. Frames that name the row itself count as signs of life.
+   */
+  let lastHeardForMessage: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    lastHeardForMessage = vi.spyOn(ConversationsRuntime.Instance.Streaming, 'LastHeardForMessage');
+  });
+
+  afterEach(() => {
+    lastHeardForMessage.mockRestore();
+    vi.useRealTimers();
+  });
+
+  function noRunHarness(): Harness {
+    const h = createHarness({ watchingForMs: 100_000 });
+    h.open.AgentRun = null;
+    return h;
+  }
+
+  it('stays live while frames that name the row keep arriving', () => {
+    const h = noRunHarness();
+    lastHeardForMessage.mockReturnValue(Date.now() - 5_000);
+
+    expect(stateAfterCheck(h)).toBe('live');
+    expect(lastHeardForMessage).toHaveBeenCalledWith('MSG-1');
+  });
+
+  it('still degrades when nothing has named the row for a while', () => {
+    const h = noRunHarness();
+    lastHeardForMessage.mockReturnValue(undefined);
+
+    expect(stateAfterCheck(h)).toBe('checking');
+  });
+});
+
+describe('MessageItemComponent elapsed timer shutdown', () => {
+  /**
+   * REGRESSION: the one-second timer kept forcing change detection after the message finished.
+   *
+   * It was cleared only on the change to `Complete`. A message that ended in `Error` never cleared
+   * it, and on `Complete` the same pass re-armed it whenever the run object still read `Running`,
+   * which is the normal order because the message reloads before its run.
+   *
+   * These run the real interval under fake timers and count the forced view updates.
+   */
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Replace the harness stub with the real timer and arm it the way a live row does. */
+  function armRealTimer(h: Harness): void {
+    delete h.open.startElapsedTimeUpdater;
+    h.open._elapsedTimeInterval = null;
+    h.open._loadTime = Date.now();
+    h.component.ngDoCheck();
+  }
+
+  /** How many forced view updates the timer makes over the next `ms`. */
+  function viewUpdatesOver(h: Harness, ms: number): number {
+    const detectChanges = (h.open.cdRef as { detectChanges: ReturnType<typeof vi.fn> }).detectChanges;
+    detectChanges.mockClear();
+    vi.advanceTimersByTime(ms);
+    return detectChanges.mock.calls.length;
+  }
+
+  function setRunStatus(h: Harness, status: string): void {
+    h.open.AgentRun = { ...(h.open.AgentRun as Record<string, unknown>), Status: status };
+  }
+
+  it('ticks once a second while the message is in progress', () => {
+    const h = createHarness({ heartbeatAgeMs: 1_000 });
+    armRealTimer(h);
+
+    expect(viewUpdatesOver(h, 3_000)).toBe(3);
+  });
+
+  it('stops when the message ends in Error', () => {
+    const h = createHarness({ heartbeatAgeMs: 1_000 });
+    armRealTimer(h);
+
+    (h.open.message as Record<string, unknown>).Status = 'Error';
+    setRunStatus(h, 'Failed');
+    h.component.ngDoCheck();
+
+    expect(viewUpdatesOver(h, 5_000)).toBe(0);
+  });
+
+  it('stops once a completed message reloads its run as finished', () => {
+    const h = createHarness({ heartbeatAgeMs: 1_000 });
+    armRealTimer(h);
+
+    // The message reloads first, while the run object still reads Running.
+    (h.open.message as Record<string, unknown>).Status = 'Complete';
+    h.component.ngDoCheck();
+    // Then the run reloads.
+    setRunStatus(h, 'Completed');
+    h.component.ngDoCheck();
+
+    expect(viewUpdatesOver(h, 5_000)).toBe(0);
+  });
+
+  it('stops on its own tick when nothing is in flight, with no change-detection pass', () => {
+    const h = createHarness({ heartbeatAgeMs: 1_000 });
+    armRealTimer(h);
+
+    (h.open.message as Record<string, unknown>).Status = 'Error';
+    setRunStatus(h, 'Failed');
+    vi.advanceTimersByTime(1_000); // the first tick sees the finished state
+
+    expect(viewUpdatesOver(h, 5_000)).toBe(0);
   });
 });

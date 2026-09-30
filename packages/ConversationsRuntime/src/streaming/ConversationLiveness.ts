@@ -38,7 +38,9 @@ export type ReconciliationReason =
     /** The tab regained focus after being hidden. */
     | 'tab-visible'
     /** The browser reported the network came back. A hint only — never proof. */
-    | 'browser-online';
+    | 'browser-online'
+    /** A message's progress pill has heard nothing about its run for a while. */
+    | 'message-liveness';
 
 /**
  * Coalescing window. Closing a laptop lid and reopening it produces a socket reconnect, a stream

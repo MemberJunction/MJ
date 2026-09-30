@@ -65,7 +65,7 @@ import { ReconcileOrphanedConversationDetails } from './generic/OrphanedConversa
 import {
   PUSH_STATUS_UPDATES_TOPIC,
   SetPushStatusPublishHook,
-  type PushStatusNotificationPayload,
+  ParseReplicatedStatusUpdate,
 } from './generic/PushStatusResolver.js';
 import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
@@ -322,12 +322,9 @@ async function wirePushStatusFanOut(redisProvider: RedisLocalStorageProvider, st
   try {
     await redisProvider.SubscribeToChannel(PUSH_STATUS_FANOUT_CHANNEL, (raw: string) => {
       try {
-        const payload = JSON.parse(raw) as PushStatusNotificationPayload;
-        if (payload.SourceServerId === MJGlobal.Instance.ProcessUUID) {
-          return; // our own message, echoed back
-        }
-        if (!payload.sessionId || !payload.ownerUserId) {
-          return; // fail closed — an update with no identity can never be routed safely
+        const payload = ParseReplicatedStatusUpdate(raw, MJGlobal.Instance.ProcessUUID);
+        if (!payload) {
+          return;
         }
         // Rebuilt as a plain record: the topic's publish signature takes an index-signature type,
         // and listing the fields keeps the wire shape explicit at the one place it crosses hosts.

@@ -217,4 +217,44 @@ describe('push-status subscription over a half-open socket', () => {
             unsubscribe();
         });
     });
+
+    describe('a replaced socket cannot interfere with its replacement', () => {
+        /**
+         * REGRESSION. The pong timer lived on the provider, and every client's `closed` handler
+         * cleared it. On a half-open link the old socket's close can arrive after the new socket
+         * has armed its watchdog, which switched off detection for exactly the stuck socket this
+         * work targets.
+         */
+        function replaceClient(provider: GraphQLDataProvider): FakeWsClient {
+            provider.ForceSocketReconnect();
+            provider.PushStatusUpdates('replacement-session').subscribe(() => {});
+            return GraphQLWsWire.LastClient;
+        }
+
+        it("keeps the new socket's watchdog armed when the old socket's close arrives late", async () => {
+            const { provider, client: oldClient, unsubscribe } = openPushStatus();
+            const newClient = replaceClient(provider);
+            expect(newClient).not.toBe(oldClient);
+
+            newClient.GoHalfOpen();
+            newClient.SimulatePingCycle();         // the new socket arms its watchdog
+            oldClient.EmitClosed();                // then the old socket's close lands
+            await vi.advanceTimersByTimeAsync(WS_PONG_TIMEOUT_MS);
+
+            expect(newClient.Terminated).toBe(true);
+            unsubscribe();
+        });
+
+        it("does not report the new socket disconnected because the old one closed", () => {
+            const { provider, client: oldClient, unsubscribe } = openPushStatus();
+            const newClient = replaceClient(provider);
+            const states = trackSocketState(provider);
+
+            newClient.Connect(false);
+            oldClient.EmitClosed();
+
+            expect(states[states.length - 1]).toBe('connected');
+            unsubscribe();
+        });
+    });
 });

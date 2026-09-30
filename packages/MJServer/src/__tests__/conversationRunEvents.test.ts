@@ -16,13 +16,19 @@ import 'reflect-metadata';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { RunViewParams, UserInfo } from '@memberjunction/core';
 
-const { mockRunView } = vi.hoisted(() => ({ mockRunView: vi.fn() }));
+const { mockRunView, providersUsed } = vi.hoisted(() => ({ mockRunView: vi.fn(), providersUsed: [] as unknown[] }));
 
 // RunView is the resolver's only runtime dependency on core — every other import it
 // makes is type-only and erased at compile time, so a narrow mock is sufficient and
 // keeps the real package (which loads config at import) out of the test.
 vi.mock('@memberjunction/core', () => ({
     RunView: class MockRunView {
+        constructor(provider?: unknown) {
+            providersUsed.push(provider);
+        }
+        public static FromMetadataProvider(provider: unknown): MockRunView {
+            return new MockRunView(provider);
+        }
         public async RunView(params: RunViewParams, contextUser?: UserInfo): Promise<unknown> {
             return mockRunView(params, contextUser);
         }
@@ -35,7 +41,16 @@ const DETAIL_ID = 'A1111111-1111-1111-1111-111111111111';
 const RUN_ID = 'B2222222-2222-2222-2222-222222222222';
 const USER = { ID: 'U0000000-0000-0000-0000-000000000000', Email: 'someone@example.com' } as unknown as UserInfo;
 
-const ctxFor = (user?: UserInfo) => ({ userPayload: { userRecord: user } }) as never;
+const READ_WRITE_PROVIDER = { name: 'read-write' };
+const READ_ONLY_PROVIDER = { name: 'read-only' };
+const ctxFor = (user?: UserInfo) =>
+    ({
+        userPayload: { userRecord: user },
+        providers: [
+            { type: 'Read-Write', provider: READ_WRITE_PROVIDER },
+            { type: 'Read-Only', provider: READ_ONLY_PROVIDER },
+        ],
+    }) as never;
 
 /** Scripts RunView per entity so each test states only what it cares about. */
 function scriptRunView(opts: {
@@ -73,7 +88,61 @@ describe('TailConversationEvents', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        providersUsed.length = 0;
         resolver = new ConversationRunEventsResolver();
+    });
+
+    describe('provider', () => {
+        it("reads through the request's read-only provider, not the process-wide one", async () => {
+            // The global provider is shared by every request, including its transaction state.
+            scriptRunView({
+                detail: { ID: DETAIL_ID, Status: 'In-Progress' },
+                run: { ID: RUN_ID, Status: 'Running' },
+                steps: [],
+            });
+
+            await resolver.TailConversationEvents(DETAIL_ID, ctxFor(USER), 0);
+
+            expect(providersUsed.length).toBe(3);
+            expect(providersUsed.every((p) => p === READ_ONLY_PROVIDER)).toBe(true);
+        });
+    });
+
+    describe('columns read', () => {
+        it('reads only the step columns an event carries', async () => {
+            // A step row holds InputData, OutputData and payload snapshots — the largest columns
+            // in the table. Loading 200 of them to return eight small fields wastes MJAPI memory.
+            scriptRunView({ detail: { ID: DETAIL_ID }, run: { ID: RUN_ID, Status: 'Running' }, steps: [] });
+            await resolver.TailConversationEvents(DETAIL_ID, ctxFor(USER), 0);
+
+            const stepCall = mockRunView.mock.calls.find((c) => c[0].EntityName === 'MJ: AI Agent Run Steps');
+            expect(stepCall?.[0].ResultType).toBe('simple');
+            expect([...(stepCall?.[0].Fields ?? [])].sort()).toEqual(
+                ['CompletedAt', 'ErrorMessage', 'StartedAt', 'Status', 'StepName', 'StepNumber', 'StepType', 'Success']
+            );
+        });
+
+        it('reads only the run columns it uses', async () => {
+            scriptRunView({ detail: { ID: DETAIL_ID }, run: { ID: RUN_ID, Status: 'Running' }, steps: [] });
+            await resolver.TailConversationEvents(DETAIL_ID, ctxFor(USER), 0);
+
+            const runCall = mockRunView.mock.calls.find((c) => c[0].EntityName === 'MJ: AI Agent Runs');
+            expect(runCall?.[0].ResultType).toBe('simple');
+            expect([...(runCall?.[0].Fields ?? [])].sort()).toEqual(['ID', 'Result', 'Status']);
+        });
+
+        it('returns real dates when a plain row carries them as strings', async () => {
+            scriptRunView({
+                detail: { ID: DETAIL_ID },
+                run: { ID: RUN_ID, Status: 'Running' },
+                steps: [step(1, { StartedAt: '2026-09-16T04:55:12.000Z', CompletedAt: '2026-09-16T04:55:21.000Z' })],
+            });
+            const out = await resolver.TailConversationEvents(DETAIL_ID, ctxFor(USER), 0);
+
+            expect(out.Events[0].StartedAt).toBeInstanceOf(Date);
+            expect(out.Events[0].StartedAt.toISOString()).toBe('2026-09-16T04:55:12.000Z');
+            expect(out.Events[0].CompletedAt).toBeInstanceOf(Date);
+        });
     });
 
     describe('authorization', () => {
@@ -228,6 +297,20 @@ describe('TailConversationEvents', () => {
             expect(out.Events[0].ErrorMessage).toBe('boom');
         });
 
+        it('treats a Paused run as in flight, because it is parked on a workflow that is still running', async () => {
+            // The orphan reconciler and the process panel both treat Paused as not finished.
+            // Reporting it as terminal would tell a client to complete a message mid-workflow.
+            scriptRunView({
+                detail: { ID: DETAIL_ID, Status: 'In-Progress' },
+                run: { ID: RUN_ID, Status: 'Paused', Result: '{"started":"workflow"}' },
+                steps: [step(1)],
+            });
+            const out = await resolver.TailConversationEvents(DETAIL_ID, ctxFor(USER), 0);
+
+            expect(out.IsInFlight).toBe(true);
+            expect(out.FinalPayload).toBeUndefined();
+        });
+
         it('selects the NEWEST run, so a retried detail does not resolve from a dead run', async () => {
             scriptRunView({ detail: { ID: DETAIL_ID }, run: { ID: RUN_ID, Status: 'Running' }, steps: [] });
             await resolver.TailConversationEvents(DETAIL_ID, ctxFor(USER), 0);
@@ -248,6 +331,14 @@ describe('TailConversationEvents', () => {
             expect(out.Success).toBe(false);
             expect(out.Message).toMatch(/db unavailable/);
             expect(out.LatestSeq).toBe(4);
+        });
+
+        it('reports a failed read as still in flight, matching the client', async () => {
+            // A failure knows nothing about the run. "Not in flight" would claim it is over.
+            mockRunView.mockRejectedValue(new Error('db unavailable'));
+            const out = await resolver.TailConversationEvents(DETAIL_ID, ctxFor(USER), 4);
+
+            expect(out.IsInFlight).toBe(true);
         });
 
         it('escapes quotes in the id instead of interpolating them into the filter', async () => {

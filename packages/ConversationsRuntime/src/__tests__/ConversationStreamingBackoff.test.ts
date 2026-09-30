@@ -12,11 +12,28 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const { mockSubscribe } = vi.hoisted(() => ({ mockSubscribe: vi.fn() }));
+const { mockSubscribe, socketState } = vi.hoisted(() => {
+    // A minimal hot observable, enough for the one subscriber the service creates.
+    const listeners = new Set<(state: string) => void>();
+    return {
+        mockSubscribe: vi.fn(),
+        socketState: {
+            listeners,
+            emit: (state: string) => listeners.forEach(l => l(state)),
+            subscribe: (next: (state: string) => void) => {
+                listeners.add(next);
+                return { unsubscribe: () => listeners.delete(next) };
+            },
+        },
+    };
+});
 
 vi.mock('@memberjunction/graphql-dataprovider', () => ({
     GraphQLDataProvider: {
-        Instance: { PushStatusUpdates: () => ({ subscribe: mockSubscribe }) },
+        Instance: {
+            PushStatusUpdates: () => ({ subscribe: mockSubscribe }),
+            SocketConnectivity$: { subscribe: socketState.subscribe },
+        },
     },
 }));
 
@@ -52,8 +69,14 @@ describe('ConversationStreaming reconnection backoff', () => {
     beforeEach(() => {
         vi.useFakeTimers();
         mockSubscribe.mockReset();
+        socketState.listeners.clear();
+        // No jitter unless a test asks for it, so delays are exact.
+        vi.spyOn(Math, 'random').mockReturnValue(0);
     });
-    afterEach(() => vi.useRealTimers());
+    afterEach(() => {
+        vi.useRealTimers();
+        vi.restoreAllMocks();
+    });
 
     it('escalates across cycles when the transport never delivers', () => {
         const { streaming, open, handlers } = build();
@@ -103,6 +126,45 @@ describe('ConversationStreaming reconnection backoff', () => {
 
         expect(open.reconnectionAttempts).toBe(0);
         expect(streaming.getConnectionStatus()).toBe('connected');
+    });
+
+    it('clears the backoff when the socket is acknowledged, even if no frame follows', () => {
+        // A healthy stream can be quiet for a long time. Waiting for a frame left the counter at
+        // its last value, so the next outage started at the 60s ceiling instead of 5s. The
+        // server's connection acknowledgement is a real round trip, unlike a bare re-subscribe.
+        const { streaming, open, handlers } = build();
+        streaming.Initialize();
+        failCycles(handlers, 6);
+        expect(open.reconnectionAttempts).toBeGreaterThan(0);
+
+        socketState.emit('connected');
+
+        expect(open.reconnectionAttempts).toBe(0);
+    });
+
+    it('does not clear the backoff on a socket state that proves nothing', () => {
+        const { streaming, open, handlers } = build();
+        streaming.Initialize();
+        failCycles(handlers, 3);
+        const attempts = open.reconnectionAttempts;
+
+        socketState.emit('disconnected');
+        socketState.emit('unknown');
+
+        expect(open.reconnectionAttempts).toBe(attempts);
+    });
+
+    it('spreads retries so every tab does not reconnect at the same moment', () => {
+        // After an MJAPI restart, identical delays make every open tab retry in lockstep.
+        vi.spyOn(Math, 'random').mockReturnValue(0.5);
+        const { streaming, handlers } = build();
+        streaming.Initialize();
+
+        handlers[0].error(new Error('dead'));
+        vi.advanceTimersByTime(4_499);
+        expect(handlers.length).toBe(1);
+        vi.advanceTimersByTime(1);
+        expect(handlers.length).toBe(2);
     });
 
     it('holds the retry delay at the ceiling', () => {

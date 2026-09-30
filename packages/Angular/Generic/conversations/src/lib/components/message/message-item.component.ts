@@ -29,6 +29,7 @@ import {
   AfterResponseFormSubmittedEventArgs,
 } from '../../events/chat-events';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { BadgeTextForAttachment } from '../../util/attachment-badge';
 
 /**
@@ -713,11 +714,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
     // Check if status changed from non-Complete to Complete
     if (this._previousMessageStatus !== 'Complete' && currentStatus === 'Complete') {
-      // Stop the elapsed time interval
-      if (this._elapsedTimeInterval !== null) {
-        clearInterval(this._elapsedTimeInterval);
-        this._elapsedTimeInterval = null;
-      }
+      this.stopElapsedTimeUpdater();
 
       // Force immediate synchronous change detection for dynamically created components
       // markForCheck() only schedules a check which may not run for dynamic components
@@ -746,6 +743,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     // state was never recomputed on a schedule.
     if (inFlight && this._elapsedTimeInterval === null) {
       this.startElapsedTimeUpdater();
+    } else if (!inFlight) {
+      this.stopElapsedTimeUpdater();
     }
   }
 
@@ -801,11 +800,17 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   /**
    * How long the server has been silent about this run, in milliseconds.
    *
-   * `LastHeartbeatAt` is stamped on the DATABASE clock and compared here against the browser's, so
-   * the raw difference carries whatever skew exists between them. It is therefore bounded by how
-   * long this component has actually been watching: we can never claim more silence than we have
-   * observed. A browser clock running fast can no longer invent a stall, and the bound lifts on its
-   * own within the first check window.
+   * The primary signal is the browser time at which the last push frame for the run, or for this
+   * message, arrived (progress, streamed content, or the server's 60s liveness pulse). Frames that
+   * name the message cover a row with no MJ agent run, such as one written by a host's own turn
+   * handler. The run's own
+   * `LastHeartbeatAt` / `__mj_UpdatedAt` count too, but on the healthy path they are frozen at the
+   * start time: progress frames carry the server's in-memory entity, which is not saved mid-run.
+   * They matter when the run was re-read from the database.
+   *
+   * Server stamps are on the DATABASE clock and compared against the browser's, so the result is
+   * bounded by how long this component has actually been watching: we can never claim more silence
+   * than we have observed. A browser clock running fast cannot invent a stall.
    */
   private runSilenceMs(): number {
     const now = Date.now();
@@ -815,6 +820,17 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       .filter((d): d is Date => d != null)
       .map(d => new Date(d).getTime())
       .filter(t => !Number.isNaN(t));
+
+    const streaming = ConversationsRuntime.Instance.Streaming;
+    const heard = [
+      this.AgentRun?.ID ? streaming.LastHeardFromRun(this.AgentRun.ID) : undefined,
+      this.message?.ID ? streaming.LastHeardForMessage(this.message.ID) : undefined,
+    ];
+    for (const t of heard) {
+      if (t != null) {
+        stamps.push(t);
+      }
+    }
 
     if (stamps.length === 0) {
       // No run row yet, or one carrying no timestamps. Our own watch time is all we have.
@@ -858,10 +874,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   ngOnDestroy() {
-    if (this._elapsedTimeInterval !== null) {
-      clearInterval(this._elapsedTimeInterval);
-      this._elapsedTimeInterval = null;
-    }
+    this.stopElapsedTimeUpdater();
   }
 
   /**
@@ -941,6 +954,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     }
   }
 
+  /** Clears the elapsed time interval, if one is running. */
+  private stopElapsedTimeUpdater(): void {
+    if (this._elapsedTimeInterval !== null) {
+      clearInterval(this._elapsedTimeInterval);
+      this._elapsedTimeInterval = null;
+    }
+  }
+
   /**
    * Update all timer displays
    * Called every second by the interval timer
@@ -962,6 +983,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     // Silence only grows with time, so it has to be re-evaluated on the clock rather than on
     // change detection. This is the only path that runs while the transport is dead.
     this.refreshLivenessState();
+
+    // The tick stops itself: change detection does not reliably reach this row once it finishes.
+    if (!this.isLivenessInFlight()) {
+      this.stopElapsedTimeUpdater();
+    }
   }
 
   private formatElapsedTime(elapsedTime: number): string {
