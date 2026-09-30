@@ -189,6 +189,17 @@ describe('Decision Eval metrics', () => {
             expect(interval?.Upper).toBeGreaterThan(estimate);
         });
 
+        it('is a 95% interval: the 2.5th and 97.5th percentiles of the resampled statistic', () => {
+            // A statistic that returns 1, 2, …, 1000 on successive resamples, whatever it draws. The
+            // interval is then the type-7 quantiles of 1..1000, by hand 1 + 999 × 0.025 and
+            // 1 + 999 × 0.975. A 90% or 50% interval would give 50.95 and 950.05, or 250.75 and 750.25.
+            let calls = 0;
+            const interval = BootstrapInterval(MIXED, () => ++calls, 1000, 42);
+            expect(calls).toBe(1000);
+            expect(interval?.Lower).toBeCloseTo(25.975, 9);
+            expect(interval?.Upper).toBeCloseTo(975.025, 9);
+        });
+
         it('collapses when every case is right, and is null with no cases', () => {
             expect(BootstrapInterval([point(0.9, true), point(0.1, false)], accuracy, 200, 1)).toEqual({ Lower: 1, Upper: 1 });
             expect(BootstrapInterval([], accuracy, 200, 1)).toBeNull();
@@ -294,6 +305,44 @@ describe('Decision Eval metrics', () => {
             expect(OutOfFoldPlatt(set, 5, 3)).toEqual(OutOfFoldPlatt(set, 5, 3));
             expect(OutOfFoldPlatt([point(0.4, true)], 5, 3)).toBeNull();
             expect(OutOfFoldPlatt([point(0.4, true), point(0.6, false)], 5, 3)).toHaveLength(2);
+        });
+    });
+
+    describe('out of fold is out of sample', () => {
+        // With as many folds as cases, each case is its own fold: leave one out, checkable by hand.
+        const set = overconfidentSet(14, 21);
+        const leaveOneOut = (cases: readonly LabelledProbability[]) => OutOfFoldPlatt(cases, cases.length, 4);
+        const fitWithout = (i: number) => FitPlatt(set.filter((_, j) => j !== i));
+
+        it('the set is one where in-sample and out-of-fold calibration differ', () => {
+            const inSample = FitPlatt(set);
+            const gaps = set.map((p, i) => Math.abs(ApplyPlatt(p.Probability, inSample) - ApplyPlatt(p.Probability, fitWithout(i))));
+            expect(set.some(p => p.Positive) && set.some(p => !p.Positive)).toBe(true);
+            expect(Math.max(...gaps)).toBeGreaterThan(0.01);
+        });
+
+        it('calibrates each case with a fit on the other cases only', () => {
+            const calibrated = leaveOneOut(set);
+            set.forEach((p, i) => {
+                expect(calibrated?.[i]).toBeCloseTo(ApplyPlatt(p.Probability, fitWithout(i)), 12);
+            });
+        });
+
+        it('a case\'s calibrated value does not move when its own label flips', () => {
+            const calibrated = leaveOneOut(set);
+            set.forEach((p, i) => {
+                const flipped = set.map((q, j) => (j === i ? { ...q, Positive: !q.Positive } : q));
+                expect(leaveOneOut(flipped)?.[i]).toBeCloseTo(calibrated?.[i] ?? Number.NaN, 12);
+            });
+        });
+
+        it('ComputeCellMetrics scores the out-of-fold values, not an in-sample fit', () => {
+            // One run per case, with IDs in the input's order, so the cell's cases line up with the set.
+            const runs = set.map((p, i) => observation(`c${String(i).padStart(2, '0')}`, p.Positive ? 'continue' : 'switch', p.Probability));
+            const metrics = ComputeCellMetrics(runs, { CalibrationFolds: runs.length, BootstrapResamples: 10 });
+            const byHand = set.map((p, i) => ({ ...p, Probability: ApplyPlatt(p.Probability, fitWithout(i)) }));
+            expect(metrics.Calibrated?.Brier).toBeCloseTo(BrierScore(byHand) ?? Number.NaN, 12);
+            expect(metrics.Calibrated?.Calibration.ECE).toBeCloseTo(CalibrationBins(byHand).ECE ?? Number.NaN, 12);
         });
     });
 
