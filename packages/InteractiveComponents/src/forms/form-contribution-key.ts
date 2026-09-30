@@ -26,6 +26,13 @@ export function RelatedContributionKey(relatedEntityName: string, joinField: str
     return `related:${relatedEntityName.trim()}:${StripJoinFieldBrackets(joinField)}`;
 }
 
+const PANEL_KEY_PREFIX = 'panel:';
+
+/** True for a key {@link PanelContributionKey} derives. */
+export function IsPanelContributionKey(key: string | null | undefined): key is string {
+    return !!key && key.startsWith(PANEL_KEY_PREFIX);
+}
+
 /**
  * `panel:<component name>`, with characters {@link CONTRIBUTION_KEY_PATTERN} rejects folded
  * to `-`. Null when the name carries nothing usable.
@@ -38,7 +45,7 @@ export function PanelContributionKey(componentName: string | null | undefined): 
         .replace(/^-|-$/g, '')
         .slice(0, 240)
         .trim();
-    return slug ? `panel:${slug}` : null;
+    return slug ? `${PANEL_KEY_PREFIX}${slug}` : null;
 }
 
 /**

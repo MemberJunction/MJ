@@ -3,6 +3,7 @@ import type { FormContributionSpec } from '@memberjunction/interactive-component
 import {
     ApplyContributionSpecToRow,
     ParseClaimedFieldNames,
+    type ContributionRowOptions,
     type FormContributionSpecColumns,
 } from '../custom/FormScope/FormContributionRow';
 
@@ -12,8 +13,8 @@ import {
  */
 
 const TICKETS = 'MJ_BizApps_Orders: Event Order Lines';
-const NO_RELATED = { relatedEntityID: null, relatedEntityName: null, componentName: 'PersonLtvStrip' };
-const TICKETS_RELATED = { relatedEntityID: 'ENT-TICKETS', relatedEntityName: TICKETS, componentName: 'TicketsPanel' };
+const NO_RELATED: ContributionRowOptions = { relatedEntityID: null, relatedEntityName: null, componentName: 'PersonLtvStrip' };
+const TICKETS_RELATED: ContributionRowOptions = { relatedEntityID: 'ENT-TICKETS', relatedEntityName: TICKETS, componentName: 'TicketsPanel' };
 
 function blankRow(): FormContributionSpecColumns {
     return {

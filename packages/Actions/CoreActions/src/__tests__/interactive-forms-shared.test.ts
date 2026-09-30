@@ -248,7 +248,7 @@ describe('ResolveContributionRegistration', () => {
 
     it('resolves the related entity to its registered name and ID and derives the related key', () => {
         const result = ResolveContributionRegistration(
-            provider, panelSpec({ relatedEntity: TICKETS.toLowerCase(), relatedJoinField: '[PersonID]' }), 'TicketsPanel');
+            provider, panelSpec({ relatedEntity: TICKETS.toLowerCase(), relatedJoinField: '[PersonID]' }));
         expect('error' in result).toBe(false);
         if ('error' in result) return;
         expect(result.Contribution.relatedEntity).toBe(TICKETS);
@@ -256,24 +256,38 @@ describe('ResolveContributionRegistration', () => {
         expect(result.WriteKey).toBe(`related:${TICKETS}:PersonID`);
     });
 
-    it('derives the panel key from the component name when the spec names no key and claims no grid', () => {
-        const result = ResolveContributionRegistration(provider, panelSpec({}), 'TicketsPanel');
+    it('derives the panel key from spec.name when the spec names no key and claims no grid', () => {
+        const result = ResolveContributionRegistration(provider, panelSpec({}));
         expect('error' in result ? null : result.WriteKey).toBe('panel:TicketsPanel');
     });
 
+    it('keeps the current panel key of a row whose spec names no key and claims no grid', () => {
+        const result = ResolveContributionRegistration(provider, panelSpec({}), 'panel:OldName');
+        expect('error' in result ? null : result.WriteKey).toBe('panel:OldName');
+    });
+
+    it('derives a new key when the current key is not a panel key, or the spec supplies one', () => {
+        const fromRelated = ResolveContributionRegistration(provider, panelSpec({}), `related:${TICKETS}:PersonID`);
+        expect('error' in fromRelated ? null : fromRelated.WriteKey).toBe('panel:TicketsPanel');
+        const authored = ResolveContributionRegistration(provider, panelSpec({ contributionKey: 'skip:tickets' }), 'panel:OldName');
+        expect('error' in authored ? null : authored.WriteKey).toBe('skip:tickets');
+        const claimed = ResolveContributionRegistration(provider, panelSpec({ relatedEntity: TICKETS }), 'panel:OldName');
+        expect('error' in claimed ? null : claimed.WriteKey).toBe(`related:${TICKETS}:`);
+    });
+
     it('fails with RELATED_ENTITY_NOT_FOUND for an unregistered related entity', () => {
-        const result = ResolveContributionRegistration(provider, panelSpec({ relatedEntity: 'Nope' }), 'TicketsPanel');
+        const result = ResolveContributionRegistration(provider, panelSpec({ relatedEntity: 'Nope' }));
         expect('error' in result ? result.error.ResultCode : null).toBe('RELATED_ENTITY_NOT_FOUND');
     });
 
     it('fails with INVALID_CONTRIBUTION_KEY for a key outside the permitted character set', () => {
-        const result = ResolveContributionRegistration(provider, panelSpec({ contributionKey: "x'; DROP--" }), 'TicketsPanel');
+        const result = ResolveContributionRegistration(provider, panelSpec({ contributionKey: "x'; DROP--" }));
         expect('error' in result ? result.error.ResultCode : null).toBe('INVALID_CONTRIBUTION_KEY');
     });
 
     it('fails with LINT_FAILED when the spec is not a form panel', () => {
         const spec = { ...panelSpec({}), componentRole: 'form' } as ComponentSpec;
-        const result = ResolveContributionRegistration(provider, spec, 'TicketsPanel');
+        const result = ResolveContributionRegistration(provider, spec);
         expect('error' in result ? result.error.ResultCode : null).toBe('LINT_FAILED');
     });
 });

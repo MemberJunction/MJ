@@ -9,6 +9,7 @@ import { IMetadataProvider, UserInfo } from "@memberjunction/core";
 import { EscapeSQLString, UUIDsEqual } from "@memberjunction/global";
 import {
     ApplyContributionSpecToRow,
+    type ContributionRowOptions,
     MJComponentEntity,
     MJEntityFormContributionEntity,
     MJEntityFormOverrideEntity,
@@ -19,6 +20,7 @@ import {
     GetDeclaredFormContribution,
     IsFormPanelRole,
     isFormRole,
+    IsPanelContributionKey,
     ResolveContributionWriteKey,
     type NormalizedFormContributionSpec,
 } from "@memberjunction/interactive-component-types/forms";
@@ -601,7 +603,7 @@ export function parseVersionBumpKind(raw: unknown): VersionBumpKind | null {
 export interface ContributionRegistration {
     Contribution: NormalizedFormContributionSpec;
     /** What {@link ApplyContributionSpecToRow} needs beyond the spec. */
-    RowOptions: Parameters<typeof ApplyContributionSpecToRow>[2];
+    RowOptions: ContributionRowOptions;
     /** The key the row will carry, or null when nothing supplies one. */
     WriteKey: string | null;
 }
@@ -609,18 +611,20 @@ export interface ContributionRegistration {
 /**
  * Reads the `formContribution` block of a linted form-panel spec, resolves the related entity it
  * claims to its registered name and ID, and derives the row's key with
- * `ResolveContributionWriteKey`.
+ * `ResolveContributionWriteKey`, seeding a panel key from `spec.name`.
  *
  * Fails with `LINT_FAILED` when the block cannot be read, `RELATED_ENTITY_NOT_FOUND` when the
  * related entity is not registered, and `INVALID_CONTRIBUTION_KEY` when the key does not match
  * `CONTRIBUTION_KEY_PATTERN`.
  *
- * @param componentName The component name that seeds the key of a panel with no other key.
+ * @param currentKey The key of the row being modified; omit for a new row. When the spec names
+ * no key and claims no grid, a panel key here is kept, so renaming the component does not change
+ * the contribution's identity.
  */
 export function ResolveContributionRegistration(
     provider: IMetadataProvider,
     spec: ComponentSpec,
-    componentName: string | null,
+    currentKey: string | null = null,
 ): ContributionRegistration | { error: ActionResultSimple } {
     const contribution = GetDeclaredFormContribution(spec);
     if (!contribution) return { error: Failure("LINT_FAILED", "Spec.formContribution could not be read.") };
@@ -638,6 +642,10 @@ export function ResolveContributionRegistration(
     }
 
     const relatedEntityName = contribution.relatedEntity ?? null;
+    if (!contribution.contributionKey && !relatedEntityName && IsPanelContributionKey(currentKey)) {
+        contribution.contributionKey = currentKey;
+    }
+    const componentName = spec.name?.trim() || null;
     const writeKey = ResolveContributionWriteKey(contribution, relatedEntityName, componentName);
     if (writeKey && !CONTRIBUTION_KEY_PATTERN.test(writeKey)) {
         return { error: Failure("INVALID_CONTRIBUTION_KEY",

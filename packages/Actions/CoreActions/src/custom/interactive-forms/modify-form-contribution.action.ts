@@ -71,8 +71,7 @@ export class ModifyFormContributionAction extends BaseAction {
 
             const lintFail = await LintFormPanelSpec(spec, user);
             if (lintFail) return lintFail;
-            // The same derivation Create uses, so a modified row keeps the key Create gave it.
-            const registration = ResolveContributionRegistration(provider, spec, spec.name?.trim() || null);
+            const registration = ResolveContributionRegistration(provider, spec, source.ContributionKey);
             if ('error' in registration) return registration.error;
 
             const sourceComponent = await LoadComponent(provider, user, source.ComponentID);

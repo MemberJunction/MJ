@@ -9,11 +9,20 @@ import type { MJEntityFormContributionEntity } from '../../generated/entities/__
 /**
  * The spec-to-row mapping for `MJ: Entity Form Contributions`.
  *
- * Every path that writes a contribution row from a spec — the server actions, the artifact apply
- * flow and the form's Manage drawer — goes through {@link ApplyContributionSpecToRow}, so the
- * same spec always produces the same row. Lives here because both the server and the browser
- * depend on this package.
+ * The Create and Modify Form Contribution actions write rows through
+ * {@link ApplyContributionSpecToRow}, so the same spec produces the same row on either path.
+ * Lives here because both the server and the browser depend on this package.
  */
+
+/** What {@link ApplyContributionSpecToRow} needs beyond the spec. */
+export interface ContributionRowOptions {
+    /** The ID of the entity `spec.relatedEntity` names, or null. */
+    relatedEntityID: string | null;
+    /** The registered name of that entity, which the derived key embeds. */
+    relatedEntityName: string | null;
+    /** The component name that seeds the key of a panel with no other key. */
+    componentName: string | null;
+}
 
 /** The contribution columns a spec's `formContribution` block decides. */
 export type FormContributionSpecColumns = Pick<MJEntityFormContributionEntity,
@@ -25,21 +34,19 @@ export type FormContributionSpecColumns = Pick<MJEntityFormContributionEntity,
  * Writes every column a contribution spec decides onto a row, and clears each claim column the
  * spec does not set, so a row that changes its claim keeps nothing of the old one.
  *
- * The row always satisfies the table's CHECK constraints on these columns: an empty name list
- * is stored as null, a join field only with a related entity, a section position only for a
- * panel drawn inside a section, and no Inclusion or ChromeGroup on a bare panel.
+ * The row it writes satisfies these CHECK constraints: `ReplacesFieldNamesShape` and
+ * `ReplacesSectionKeysShape` (an empty name list is stored as null), `JoinNeedsRelated` (a join
+ * field only with a related entity), `SectionPositionNeedsSection` (a position only for a panel
+ * drawn inside a section) and `BareNoChrome` (no Inclusion or ChromeGroup on a bare panel). It
+ * does not check `OneClaim`: a spec that makes two claims produces a row the database refuses.
  *
  * The caller resolves the related entity, because that needs metadata, and writes the columns
  * that are not in the spec (scope, owner, status, precedence, names).
- *
- * @param opts.relatedEntityID The ID of the entity `spec.relatedEntity` names, or null.
- * @param opts.relatedEntityName The registered name of that entity, which the derived key embeds.
- * @param opts.componentName The component name that seeds the key of a panel with no other key.
  */
 export function ApplyContributionSpecToRow(
     row: FormContributionSpecColumns,
     spec: FormContributionSpec,
-    opts: { relatedEntityID: string | null; relatedEntityName: string | null; componentName: string | null },
+    opts: ContributionRowOptions,
 ): void {
     applyPlacement(row, spec);
     applyChrome(row, spec);

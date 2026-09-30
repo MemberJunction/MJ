@@ -220,23 +220,49 @@ describe('ModifyFormContributionAction', () => {
     });
 
     // Create keys a panel that names no key and claims nothing as panel:<component name>.
-    // Modify must derive the same key, or Activate cannot find the Active row to demote and
-    // the panel renders twice.
+    // Modify must give the row the same key, or Activate cannot find the Active row to demote
+    // and the panel renders twice.
     describe('a panel with no key and no claim', () => {
-        const keyless = { ...spec, formContribution: { slot: 'before-fields', presentation: 'bare', title: 'LTV v2' } };
-        beforeEach(() => { loadedRow.ContributionKey = 'panel:PersonLtvStrip'; });
+        function keyless(name: string) {
+            return {
+                ...spec, name, code: `function ${name}(props) { return null; }`,
+                formContribution: { slot: 'before-fields', presentation: 'bare', title: 'LTV v2' },
+            };
+        }
 
-        it('keeps panel:<name> on the row modified in place', async () => {
-            const result = await run(params({ Spec: keyless }));
+        it('writes panel:<name> on the row modified in place', async () => {
+            loadedRow.ContributionKey = null;
+            const result = await run(params({ Spec: keyless('PersonLtvStrip') }));
             expect(result.Success).toBe(true);
             expect(loadedRow.ContributionKey).toBe('panel:PersonLtvStrip');
         });
 
-        it('keeps panel:<name> on the new-version row', async () => {
-            loadedRow.Status = 'Active';
-            const result = await run(params({ Spec: keyless }));
+        it('writes panel:<name> on the new-version row', async () => {
+            Object.assign(loadedRow, { ContributionKey: null, Status: 'Active' });
+            const result = await run(params({ Spec: keyless('PersonLtvStrip') }));
             expect(result.Success).toBe(true);
             expect(createdRow().fields.ContributionKey).toBe('panel:PersonLtvStrip');
+        });
+
+        // A contribution's identity does not change when its component is renamed.
+        it('keeps the row\'s panel key when the component is renamed, in place', async () => {
+            loadedRow.ContributionKey = 'panel:PersonLtvStrip';
+            const result = await run(params({ Spec: keyless('LifetimeValueStrip') }));
+            expect(result.Success).toBe(true);
+            expect(loadedRow.ContributionKey).toBe('panel:PersonLtvStrip');
+        });
+
+        it('keeps the row\'s panel key when the component is renamed, on the new-version row', async () => {
+            Object.assign(loadedRow, { ContributionKey: 'panel:PersonLtvStrip', Status: 'Active' });
+            const result = await run(params({ Spec: keyless('LifetimeValueStrip') }));
+            expect(result.Success).toBe(true);
+            expect(createdRow().fields.ContributionKey).toBe('panel:PersonLtvStrip');
+        });
+
+        it('derives panel:<name> when the row\'s key was not a panel key', async () => {
+            Object.assign(loadedRow, { ContributionKey: 'related:MJ_BizApps_Orders: Event Order Lines:PersonID', RelatedEntityID: 'ENT-TICKETS' });
+            await run(params({ Spec: keyless('LifetimeValueStrip') }));
+            expect(loadedRow).toMatchObject({ ContributionKey: 'panel:LifetimeValueStrip', RelatedEntityID: null });
         });
     });
 

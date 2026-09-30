@@ -59,9 +59,7 @@ export class CreateFormContributionAction extends BaseAction {
             const lintFail = await LintFormPanelSpec(inputs.Spec, user);
             if (lintFail) return lintFail;
 
-            // The component name seeds the key of a panel that claims nothing and names no key.
-            const componentName = (inputs.Spec.name ?? inputs.Name)?.trim() || inputs.Name;
-            const registration = ResolveContributionRegistration(provider, inputs.Spec, componentName);
+            const registration = ResolveContributionRegistration(provider, inputs.Spec);
             if ('error' in registration) return registration.error;
 
             // The duplicate check runs before the Component row is written, so a rejected

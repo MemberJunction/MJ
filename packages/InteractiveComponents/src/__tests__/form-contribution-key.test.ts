@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
     CONTRIBUTION_KEY_PATTERN,
     FormSectionCamelCase,
+    IsPanelContributionKey,
     PanelContributionKey,
     RelatedContributionKey,
     RelatedGridSectionKey,
@@ -53,6 +54,15 @@ describe('PanelContributionKey', () => {
         expect(PanelContributionKey(undefined)).toBeNull();
         expect(PanelContributionKey('   ')).toBeNull();
         expect(PanelContributionKey("'''")).toBeNull();
+    });
+});
+
+describe('IsPanelContributionKey', () => {
+    it('is true only for a key PanelContributionKey derives', () => {
+        expect(IsPanelContributionKey(PanelContributionKey('PersonLtvStrip'))).toBe(true);
+        expect(IsPanelContributionKey(RelatedContributionKey(TICKETS, 'PersonID'))).toBe(false);
+        expect(IsPanelContributionKey('skip:person-ltv')).toBe(false);
+        expect(IsPanelContributionKey(null)).toBe(false);
     });
 });
 
