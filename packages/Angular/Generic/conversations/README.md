@@ -220,6 +220,14 @@ A host that puts several people in one conversation (a team room, a shared chat)
 
 Routing picks one agent per turn, in this order: a tagged agent, then (under `'Always'` only) the last agent that answered other than the conversation manager, the conversation's pinned agent, the host's `DefaultAgentId`, and the conversation manager. An agent `AllowedAgentIDs` leaves out is skipped. `BeforeAgentTurn` then fires once, carrying the resolved `AgentId`, `AgentName`, `Route` and `UserMessageId`: a listener can cancel the turn, which then writes nothing more, or set `RedirectAgentId` to another allowed agent.
 
+#### Read-only
+
+`ReadOnly` hides every composer and shows a banner. `ReadOnlyMessage` is that banner's text; leave it null to use the View-share sentence. `EffectiveReadOnly` is true when the host set `ReadOnly` or the conversation is shared with View access. A View share with `ReadOnly` left false still shows today's disabled composer.
+
+Pin, edit, and delete on the message list, the mode picker, the agent picker, suggested responses, project assignment, and unpinning all follow `EffectiveReadOnly`. Each `mj-message-input` the chat area renders gets `[ReadOnly]="EffectiveReadOnly"`, so send, the initial auto-send, and starting realtime refuse. Ratings close too: `canEdit` is false while that message is read-only. The pins panel's `AllowUnpin` is bound to `!EffectiveReadOnly`. With it false the panel still lists pins and still jumps, and it hides Unpin.
+
+A reply the host reports as `In-Progress` is followed as soon as the chat area takes the row. If that turn already finished, the completion waiting in the replay window is applied then, so the row does not stay in progress until the conversation is opened again.
+
 The `composerExtra` slot renders host UI directly above the composer, wherever the chat area shows one (the new-conversation composer and the empty state's included). Its context is `IMJChatComposerExtraContext`: the conversation as `$implicit`, plus `ConversationId` and `IsProcessing`.
 
 ```html
