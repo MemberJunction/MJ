@@ -7,6 +7,13 @@
  * `ActualOutput` (the probability falls back to the `decision-label-match` oracle's details in
  * `ResultDetails`). The scorecard names cases by ID only, never by text.
  *
+ * Two kinds of figure, kept apart:
+ * - the accuracy-type metrics score the thread Likelihood alone, on each case's mean over its
+ *   repeats: what calibration is fitted on, and an upper bound on what routing does;
+ * - the routing summary scores production's own verdict per run, end to end: one call, the agent
+ *   Choice and the thread Likelihood read together at the thresholds and calibration the driver
+ *   recorded with the run.
+ *
  * @module @memberjunction/testing-engine
  */
 
@@ -26,11 +33,15 @@ import {
     DecisionEvalExpectedSchema,
     DecisionLabelMatchDetailsSchema,
     type DecisionEvalActualOutput,
-    type DecisionEvalExpected
+    type DecisionEvalExpected,
+    type DecisionEvalRoutingPolicy
 } from './types';
 
 /** The oracle results in a run's `ResultDetails`, as far as the scorecard reads them. */
 const OracleResultsSchema = z.array(z.object({ oracleType: z.string(), details: z.unknown().optional() }));
+
+/** The continue prior the routing summary weights its two classes at: a chat's usual mix. */
+export const DECISION_EVAL_ROUTING_CONTINUE_PRIOR = 0.9;
 
 /** One `MJ: Test Runs` row, with its prompt run's cost, as the scorecard reads it. */
 export interface DecisionEvalRunRow {
@@ -50,10 +61,19 @@ export interface DecisionEvalRunRow {
     PromptRunCost: number | null;
 }
 
+/** A run's recorded routing verdict, and the policy it was reached under. */
+export interface DecisionEvalRoutingRun {
+    Verdict: NonNullable<DecisionEvalActualOutput['RoutingVerdict']>;
+    /** The policy, or null when the run recorded none: a verdict from before routing was calibrated. */
+    Policy: DecisionEvalRoutingPolicy | null;
+}
+
 /** A run the scorecard could read, with its cell and what it tells the metrics. */
 export interface DecisionEvalCellObservation {
     Cell: string;
     Observation: DecisionEvalObservation;
+    /** Production's routing verdict for the run, or null when it recorded none (no answers). */
+    Routing: DecisionEvalRoutingRun | null;
     /** The resolved model that answered, when recorded. */
     ResolvedModel: string | null;
     /** Whether the cell asked for a temperature or seed, and whether it reached the model. */
@@ -66,10 +86,64 @@ export interface DecisionEvalUnreadableRun {
     Unreadable: string;
 }
 
+/** How many of some runs had an outcome. */
+export interface RoutingShare {
+    Runs: number;
+    Count: number;
+    /** Count / Runs, or null with no runs. */
+    Rate: number | null;
+}
+
+/** Production's routing outcomes on one set of runs. */
+export interface RoutingVerdictRates {
+    /**
+     * `switch` runs that left the thread, to another agent or to someone else. A move to the wrong
+     * agent counts: the corpus labels continue or switch, not which agent.
+     */
+    SwitchLeft: RoutingShare;
+    /** `continue` runs that kept the thread. */
+    ContinueKept: RoutingShare;
+    /** `ambiguous` runs that kept the thread. Reported apart, not scored. */
+    AmbiguousKept: RoutingShare;
+    /** The mean of the switch and continue rates, over those defined. */
+    BalancedAccuracy: number | null;
+    /**
+     * Accuracy at a {@link DECISION_EVAL_ROUTING_CONTINUE_PRIOR} continue prior: prior × continue
+     * kept + (1 − prior) × switch left. Always-continue scores the prior.
+     */
+    AccuracyAtContinuePrior: number | null;
+}
+
+/**
+ * Production's routing verdict, end to end, per run: one call each, the agent Choice and the thread
+ * Likelihood read together at the thresholds and calibration the driver recorded with the run.
+ * Usable runs only (a failed-over run in a cell that forbade it is left out), and only verdicts
+ * recorded with their policy: an older verdict used raw thresholds.
+ */
+export interface RoutingVerdictSummary {
+    /** Usable runs whose verdict was recorded with its policy: the runs scored. */
+    Runs: number;
+    /** Usable runs whose verdict was recorded without a policy (before routing was calibrated): not scored. */
+    UnscoredRuns: number;
+    /** Each policy the scored verdicts were reached under, described, with its run count. */
+    Policies: Record<string, number>;
+    /** Scored runs whose in-process latency passed their policy's timeout. */
+    OverTimeoutRuns: number;
+    /** The verdicts as answered. */
+    AsAnswered: RoutingVerdictRates;
+    /**
+     * The same, with a run over its timeout counted as kept, as production keeps it. The latency is
+     * in-process, without the network, so this too is an upper bound on what the chat does.
+     */
+    WithinTimeout: RoutingVerdictRates;
+}
+
 /** One cell's scorecard entry. */
 export interface DecisionEvalScorecardCell {
     Cell: string;
     Metrics: DecisionEvalCellMetrics;
+    /** Production's routing verdict, end to end, per run. */
+    Routing: RoutingVerdictSummary;
     /** How many runs each resolved model answered. */
     ResolvedModels: Record<string, number>;
     SamplingRequested: boolean;
@@ -166,8 +240,50 @@ export function BuildDecisionEvalScorecard(rows: readonly DecisionEvalRunRow[], 
 }
 
 /**
- * The scorecard as Markdown: a summary table, the calibrated table, then each cell's reliability
- * table, operating points and least repeatable cases (by ID).
+ * Production's routing verdicts in a cell, per run: how often a switch left the thread and a
+ * continuation kept it, as answered and within the timeout. See {@link RoutingVerdictSummary}.
+ *
+ * @param observations The cell's runs.
+ */
+export function SummarizeRoutingVerdicts(observations: readonly DecisionEvalCellObservation[]): RoutingVerdictSummary {
+    const usable = observations.filter(o => o.Routing !== null && !(o.Observation.FailedOver && !o.Observation.FailoverAllowed));
+    const scored = usable.flatMap(o => (o.Routing?.Policy ? [{
+        Label: o.Observation.Label,
+        Left: o.Routing.Verdict !== 'KeptContinuity',
+        Policy: o.Routing.Policy,
+        OverTimeout: o.Observation.LatencyMs !== null && o.Observation.LatencyMs > o.Routing.Policy.TimeoutMs
+    }] : []));
+    const policies: Record<string, number> = {};
+    for (const run of scored) {
+        const described = DescribeRoutingPolicy(run.Policy);
+        policies[described] = (policies[described] ?? 0) + 1;
+    }
+    return {
+        Runs: scored.length,
+        UnscoredRuns: usable.length - scored.length,
+        Policies: sortedByKey(policies),
+        OverTimeoutRuns: scored.filter(run => run.OverTimeout).length,
+        AsAnswered: routingRates(scored),
+        WithinTimeout: routingRates(scored.map(run => ({ Label: run.Label, Left: run.Left && !run.OverTimeout })))
+    };
+}
+
+/**
+ * A routing policy in words: `confidence ≥ 0.7, timeout 350 ms, Likelihood calibrated (A 1.7757,
+ * B -3.3506)`, or `…, no calibration for the answering model (keeps continuity)`.
+ *
+ * @param policy The policy.
+ */
+export function DescribeRoutingPolicy(policy: DecisionEvalRoutingPolicy): string {
+    const calibration = policy.Calibration
+        ? `Likelihood calibrated (A ${policy.Calibration.A}, B ${policy.Calibration.B})`
+        : 'no calibration for the answering model (keeps continuity)';
+    return `confidence ≥ ${policy.MinConfidence}, timeout ${policy.TimeoutMs} ms, ${calibration}`;
+}
+
+/**
+ * The scorecard as Markdown: a summary table, the calibrated table, production's routing verdicts,
+ * then each cell's reliability table, operating points and least repeatable cases (by ID).
  *
  * @param scorecard The scorecard.
  */
@@ -176,6 +292,7 @@ export function RenderDecisionEvalScorecard(scorecard: DecisionEvalScorecard): s
         ...renderHeader(scorecard),
         ...renderSummary(scorecard.Cells),
         ...renderCalibratedSummary(scorecard.Cells),
+        ...renderRoutingSummary(scorecard.Cells),
         ...scorecard.Cells.flatMap(renderCellDetail)
     ].join('\n');
 }
@@ -204,6 +321,7 @@ function toObservation(
     const sampling = actual?.Sampling;
     return {
         Cell: cell,
+        Routing: actual?.RoutingVerdict ? { Verdict: actual.RoutingVerdict, Policy: actual.RoutingPolicy ?? null } : null,
         Observation: {
             CaseId: caseId,
             Label: expected.label,
@@ -238,10 +356,40 @@ function scorecardCell(cell: string, observations: readonly DecisionEvalCellObse
     return {
         Cell: cell,
         Metrics: ComputeCellMetrics(observations.map(o => o.Observation), options),
+        Routing: SummarizeRoutingVerdicts(observations),
         ResolvedModels: sortedByKey(resolved),
         SamplingRequested: observations.some(o => o.SamplingRequested),
         SamplingApplied: observations.some(o => o.SamplingApplied)
     };
+}
+
+/** One run's label, and whether production's verdict left the thread. */
+interface RoutingOutcome {
+    Label: DecisionEvalObservation['Label'];
+    Left: boolean;
+}
+
+/** The routing rates of some runs. */
+function routingRates(outcomes: readonly RoutingOutcome[]): RoutingVerdictRates {
+    const switchLeft = share(outcomes.filter(o => o.Label === 'switch'), o => o.Left);
+    const continueKept = share(outcomes.filter(o => o.Label === 'continue'), o => !o.Left);
+    const rates = [switchLeft.Rate, continueKept.Rate].filter((r): r is number => r !== null);
+    const prior = DECISION_EVAL_ROUTING_CONTINUE_PRIOR;
+    return {
+        SwitchLeft: switchLeft,
+        ContinueKept: continueKept,
+        AmbiguousKept: share(outcomes.filter(o => o.Label === 'ambiguous'), o => !o.Left),
+        BalancedAccuracy: rates.length === 0 ? null : rates.reduce((sum, r) => sum + r, 0) / rates.length,
+        AccuracyAtContinuePrior: switchLeft.Rate === null || continueKept.Rate === null
+            ? null
+            : prior * continueKept.Rate + (1 - prior) * switchLeft.Rate
+    };
+}
+
+/** How many of the runs meet the test. */
+function share(outcomes: readonly RoutingOutcome[], test: (o: RoutingOutcome) => boolean): RoutingShare {
+    const count = outcomes.filter(test).length;
+    return { Runs: outcomes.length, Count: count, Rate: outcomes.length === 0 ? null : count / outcomes.length };
 }
 
 /**
@@ -284,6 +432,7 @@ function renderHeader(scorecard: DecisionEvalScorecard): string[] {
             + `${scorecard.UnreadableRuns} unreadable${reasons ? ` (${reasons})` : ''}.`,
         '',
         `Accuracy-type metrics use each case's mean probability over its usable repeats, on \`continue\`/\`switch\` labels. `
+            + 'They score the thread Likelihood alone: an upper bound on what routing does, which the production-verdict table scores end to end. '
             + `95% intervals: percentile bootstrap, ${scorecard.BootstrapResamples} resamples, seed ${scorecard.Seed}. `
             + `Calibration: Platt scaling on logit(p), ${scorecard.CalibrationFolds}-fold out of fold. `
             + 'Signal value = accuracy × mean verdict agreement.',
@@ -325,17 +474,49 @@ function renderCalibratedSummary(cells: readonly DecisionEvalScorecardCell[]): s
     ];
 }
 
+/** A share as `0.750 (3/4)`, or an em dash with no runs. */
+function shareText(value: RoutingShare): string {
+    return value.Rate === null ? '—' : `${num(value.Rate)} (${value.Count}/${value.Runs})`;
+}
+
+/** Production's routing verdicts, per cell. */
+function renderRoutingSummary(cells: readonly DecisionEvalScorecardCell[]): string[] {
+    const prior = `${Math.round(DECISION_EVAL_ROUTING_CONTINUE_PRIOR * 100)}%`;
+    return [
+        '## Production routing verdict (end to end, per run)',
+        '',
+        'Each run is one call, read as production reads it: the agent Choice and the thread Likelihood together, at the '
+            + 'confidence bar and calibration recorded with the run. A switch that left the thread counts whichever agent it went to: '
+            + 'the corpus labels continue or switch, not which agent. "In time" also keeps continuity for a run whose in-process latency '
+            + 'passed the routing timeout; that latency leaves out the network, so it is still an upper bound on the chat. '
+            + `Accuracy at a ${prior} continue prior weights the classes as a chat sees them; always-continue scores ${prior}. `
+            + 'Runs that recorded no policy predate calibration, and are not scored.',
+        '',
+        ...header(['Cell', 'Runs', 'Switch left', 'Continue kept', 'Ambiguous kept', 'Balanced', `Acc. at ${prior} continue`,
+            'Over timeout', 'Switch left (in time)', 'Continue kept (in time)', `Acc. at ${prior} (in time)`, 'Not scored (no policy)']),
+        ...cells.map(({ Cell, Routing: r }) => row([
+            Cell, String(r.Runs), shareText(r.AsAnswered.SwitchLeft), shareText(r.AsAnswered.ContinueKept), shareText(r.AsAnswered.AmbiguousKept),
+            num(r.AsAnswered.BalancedAccuracy), num(r.AsAnswered.AccuracyAtContinuePrior), String(r.OverTimeoutRuns),
+            shareText(r.WithinTimeout.SwitchLeft), shareText(r.WithinTimeout.ContinueKept), num(r.WithinTimeout.AccuracyAtContinuePrior),
+            String(r.UnscoredRuns)
+        ])),
+        ''
+    ];
+}
+
 /** One cell's detail: runs, models, reliability, operating points and least repeatable cases. */
 function renderCellDetail(cell: DecisionEvalScorecardCell): string[] {
     const m = cell.Metrics;
     const models = Object.entries(cell.ResolvedModels).map(([model, n]) => `${model} ×${n}`).join(', ') || 'not recorded';
+    const policies = Object.entries(cell.Routing.Policies).map(([policy, n]) => `${policy} ×${n}`).join('; ') || 'none recorded';
     return [
         `## ${cell.Cell}`,
         '',
         `Runs ${m.Counts.Runs}: ${m.Counts.UsableRuns} usable, ${m.Counts.NoProbabilityRuns} without a probability, `
             + `${m.Counts.FailoverRuns} answered by another model (${m.Counts.ExcludedFailoverRuns} excluded). `
             + `Scored cases ${m.Raw.N}; repeatability over ${m.Repeatability.Cases} case(s). Answered by: ${models}. `
-            + `Sampling: ${cell.SamplingRequested ? (cell.SamplingApplied ? 'requested and applied' : 'requested, NOT applied') : 'not requested'}.`,
+            + `Sampling: ${cell.SamplingRequested ? (cell.SamplingApplied ? 'requested and applied' : 'requested, NOT applied') : 'not requested'}. `
+            + `Routing policies: ${policies}.`,
         '',
         ...renderReliability(m),
         ...renderOperatingPoints(m),

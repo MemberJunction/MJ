@@ -5,12 +5,13 @@
 import { describe, it, expect } from 'vitest';
 import {
     BuildDecisionEvalScorecard,
+    DescribeRoutingPolicy,
     ReadDecisionEvalRun,
     RenderDecisionEvalScorecard,
     SplitDecisionEvalTestName,
     type DecisionEvalRunRow
 } from '../decision-eval/scorecard';
-import type { DecisionEvalActualOutput, DecisionEvalLabel } from '../decision-eval/types';
+import type { DecisionEvalActualOutput, DecisionEvalLabel, DecisionEvalRoutingPolicy } from '../decision-eval/types';
 
 const SECRET_TEXT = 'a message from the corpus that must never reach the scorecard';
 
@@ -74,6 +75,8 @@ describe('Decision Eval scorecard', () => {
             Cell: 'jev · production',
             Observation: { CaseId: 'p1', Label: 'continue', Probability: 0.9, LatencyMs: 200, CostUSD: 0.002, FailedOver: false, FailoverAllowed: false },
             ResolvedModel: 'jev-2026-09-01',
+            // Recorded before routing was calibrated: no policy
+            Routing: { Verdict: 'KeptContinuity', Policy: null },
             SamplingRequested: true,
             SamplingApplied: false
         });
@@ -141,6 +144,79 @@ describe('Decision Eval scorecard', () => {
         expect(reversed).toEqual(forward);
         expect(JSON.stringify(reversed)).toBe(JSON.stringify(forward));
         expect(RenderDecisionEvalScorecard(reversed)).toBe(RenderDecisionEvalScorecard(forward));
+    });
+});
+
+describe('Decision Eval scorecard: production routing verdict', () => {
+    const POLICY: DecisionEvalRoutingPolicy = { MinConfidence: 0.7, TimeoutMs: 350, Calibration: { A: 1.7757, B: -3.3506 } };
+
+    /** One run of the cell 'jev' with a recorded verdict, its policy, and its latency. */
+    function verdictRow(
+        caseId: string,
+        label: DecisionEvalLabel,
+        verdict: NonNullable<DecisionEvalActualOutput['RoutingVerdict']>,
+        overrides: { LatencyMs?: number; Policy?: DecisionEvalRoutingPolicy | undefined; FailedOver?: boolean } = {}
+    ): DecisionEvalRunRow {
+        const output: DecisionEvalActualOutput = {
+            ...actual(0.1, { FailedOver: overrides.FailedOver ?? false }),
+            RoutingVerdict: verdict,
+            RoutingPolicy: 'Policy' in overrides ? overrides.Policy : POLICY,
+            LatencyMs: overrides.LatencyMs ?? 200
+        };
+        return runRow(caseId, 'jev', label, output);
+    }
+
+    const rows: DecisionEvalRunRow[] = [
+        // Switches: two routed, one to someone else, one kept, and one routed too late for the chat.
+        verdictRow('s1', 'switch', 'Routed'),
+        verdictRow('s1', 'switch', 'SomeoneElse'),
+        verdictRow('s2', 'switch', 'KeptContinuity'),
+        verdictRow('s3', 'switch', 'Routed', { LatencyMs: 400 }),
+        // Continuations: two kept, one wrongly routed away.
+        verdictRow('c1', 'continue', 'KeptContinuity'),
+        verdictRow('c1', 'continue', 'KeptContinuity'),
+        verdictRow('c2', 'continue', 'Routed'),
+        verdictRow('a1', 'ambiguous', 'KeptContinuity'),
+        // Not scored: a verdict recorded before calibration, with no policy...
+        verdictRow('s4', 'switch', 'Routed', { Policy: undefined }),
+        // ...not counted at all: a run another model answered in a cell that forbade it, and a failed call.
+        verdictRow('s5', 'switch', 'Routed', { FailedOver: true }),
+        runRow('s6', 'jev', 'switch', actual(null), { Status: 'Error' })
+    ];
+
+    it('scores each run\'s recorded verdict: switches that left, continuations kept', () => {
+        const [cell] = BuildDecisionEvalScorecard(rows, { Suite: 'Suite', GeneratedAt: 'now', BootstrapResamples: 20 }).Cells;
+        const routing = cell.Routing;
+        expect(routing).toMatchObject({ Runs: 8, UnscoredRuns: 1, OverTimeoutRuns: 1 });
+        expect(routing.Policies).toEqual({ [DescribeRoutingPolicy(POLICY)]: 8 });
+        expect(routing.AsAnswered.SwitchLeft).toEqual({ Runs: 4, Count: 3, Rate: 0.75 });
+        expect(routing.AsAnswered.ContinueKept).toEqual({ Runs: 3, Count: 2, Rate: 2 / 3 });
+        expect(routing.AsAnswered.AmbiguousKept).toEqual({ Runs: 1, Count: 1, Rate: 1 });
+        expect(routing.AsAnswered.BalancedAccuracy).toBeCloseTo((0.75 + 2 / 3) / 2, 12);
+        // 0.9 × 2/3 + 0.1 × 0.75
+        expect(routing.AsAnswered.AccuracyAtContinuePrior).toBeCloseTo(0.675, 12);
+    });
+
+    it('keeps continuity for a run over its timeout, as production does', () => {
+        const [cell] = BuildDecisionEvalScorecard(rows, { Suite: 'Suite', GeneratedAt: 'now', BootstrapResamples: 20 }).Cells;
+        expect(cell.Routing.WithinTimeout.SwitchLeft).toEqual({ Runs: 4, Count: 2, Rate: 0.5 });
+        expect(cell.Routing.WithinTimeout.ContinueKept).toEqual({ Runs: 3, Count: 2, Rate: 2 / 3 });
+        expect(cell.Routing.WithinTimeout.AccuracyAtContinuePrior).toBeCloseTo(0.9 * (2 / 3) + 0.1 * 0.5, 12);
+    });
+
+    it('scores nothing, rather than raw-threshold verdicts, when no run recorded its policy', () => {
+        const [cell] = BuildDecisionEvalScorecard(ROWS, { Suite: 'Suite', GeneratedAt: 'now', BootstrapResamples: 20 }).Cells;
+        expect(cell.Routing).toMatchObject({ Runs: 0, UnscoredRuns: 5 });
+        expect(cell.Routing.AsAnswered.SwitchLeft.Rate).toBeNull();
+        expect(cell.Routing.AsAnswered.AccuracyAtContinuePrior).toBeNull();
+    });
+
+    it('renders the table and each cell\'s policies', () => {
+        const markdown = RenderDecisionEvalScorecard(BuildDecisionEvalScorecard(rows, { Suite: 'Suite', GeneratedAt: 'now', BootstrapResamples: 20 }));
+        expect(markdown).toContain('## Production routing verdict (end to end, per run)');
+        expect(markdown).toContain('| jev | 8 | 0.750 (3/4) | 0.667 (2/3) | 1.000 (1/1) | 0.708 | 0.675 | 1 | 0.500 (2/4) | 0.667 (2/3) | 0.650 | 1 |');
+        expect(markdown).toContain('Routing policies: confidence ≥ 0.7, timeout 350 ms, Likelihood calibrated (A 1.7757, B -3.3506) ×8.');
+        expect(DescribeRoutingPolicy({ ...POLICY, Calibration: null })).toBe('confidence ≥ 0.7, timeout 350 ms, no calibration for the answering model (keeps continuity)');
     });
 });
 
