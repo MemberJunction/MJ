@@ -1117,6 +1117,19 @@ corpus. If the answer is "LLM-backed is good enough," record that and skip the p
 Each of these is independently valuable and independently reversible. Do them one at a time, behind
 a config flag where practical.
 
+> **Status, 2026-09-29: the consumers are measured.** The results are in
+> `typed-decision-phase3-results.md`, which also covers Tasks 4.6, 5.4 and 5.5. In short:
+> - **Sage discovery (3.1):** Jev picks the right agent 77% of the time; semantic search, 30%. The
+>   threshold is now a calibrated 0.85 (#4892, #4893).
+> - **The duplicate check (3.8):** calibrated, Jev flags at 97% precision and 71% recall; the vector
+>   threshold alone flags every candidate. The band is now a calibrated 0.7, and the
+>   `DecisionThenPrompt` pre-filter 0.3 (#4894, #4896).
+> - **Self-reported `confidence` (3.4):** it clusters near 1.0 and doesn't track outcomes, so it
+>   should not be made load-bearing; the memory manager's gate on it should move to a typed decision.
+> - **finishIf (4.6):** replayed on 739 recorded action rounds (#4895). At 0.9 the gate would have
+>   ended 22% of the rounds where the agent went on to act. Recommendation: opt-in per agent until
+>   gates authored live are measured. That default is a product decision, not changed here.
+
 ### Task 3.0 — A decision-backed judge oracle *(recommended first)*
 
 Evaluation comes first. It is the one placement where a decision changes nothing the agent does,
@@ -1629,6 +1642,12 @@ one. It uses the same mechanics as `scratchpad` and `artifactToolCalls`.
 ---
 
 ## Phase 5 — Feature pipeline types *(bulk analysis in Knowledge Hub)*
+
+> **Status, 2026-09-29: measured (Tasks 5.4 and 5.5).** See `typed-decision-phase3-results.md` §3
+> (#4890). On distinct categories, `Decision` matched `LLM` (100% each) at a quarter of the latency
+> and a third of the cost. On overlapping categories, both matched the stored labels poorly
+> (38–44%), and Decision's confidence wasn't calibrated. Escalating to the LLM helped on neither
+> task, so no escalation floor is recommended yet.
 
 **Goal:** give Knowledge Hub's Feature Pipelines more than one pipeline **type**, each backed by a
 driver. The type that exists today becomes `LLM`. A new `Decision` type runs typed questions over
