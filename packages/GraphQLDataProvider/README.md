@@ -63,6 +63,30 @@ const dataProvider = new GraphQLDataProvider();
 await dataProvider.Config(config);
 ```
 
+### Connect-only boot for embeds
+
+`setupGraphQLClient` performs the full boot: it connects, downloads the entire entity metadata graph, loads the current user and starts the registered startup engines. An anonymous embed (for example a widget that only needs to run a realtime voice session) needs none of that, and the metadata download dominates the cost. For that case use `ConnectGraphQLClient`, which connects and registers the provider globally (`Metadata.Provider` is set) and stops there.
+
+```typescript
+import { ConnectGraphQLClient, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
+
+const config = new GraphQLProviderConfigData(token, 'https://api.example.com/graphql', 'wss://api.example.com/graphql', refreshToken);
+const provider = await ConnectGraphQLClient(config);
+```
+
+| | `ConnectGraphQLClient` | `setupGraphQLClient` |
+|---|---|---|
+| Client, session id, token, `ConfigData` | Yes | Yes |
+| `Metadata.Provider` set | Yes | Yes |
+| `ExecuteGQL`, subscriptions, the realtime runtime | Works | Works |
+| Entity metadata, `RunView`, `GetEntityObject`, engines, `CurrentUser` | Not available | Available |
+
+Calling `ConnectGraphQLClient` on a provider that is already fully booted is a no-op that returns it; it never drops loaded metadata or recreates the client. Calling it again on a connected but unbooted provider updates `ConfigData` and reuses the existing client, so rotate tokens through `RefreshTokenFunction` / `OnAuthenticationError`.
+
+You can finish the boot later on the same instance by calling `setupGraphQLClient(config)`; it then performs the full metadata load, current-user fetch and startup engines.
+
+`setupGraphQLClient` now rejects when the boot loaded no entity metadata (before the current user is loaded or any startup engine runs), instead of resolving with an empty provider. If you only want a connection, call `ConnectGraphQLClient`.
+
 ### Working with Entities
 
 ```typescript

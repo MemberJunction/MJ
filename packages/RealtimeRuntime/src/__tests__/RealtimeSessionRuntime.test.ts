@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseRealtimeClient } from '@memberjunction/ai-realtime-client';
 import type { IMetadataProvider } from '@memberjunction/core';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
     RealtimeSessionRuntime,
     type IRealtimeMediaHost,
@@ -331,5 +332,40 @@ describe('session lifecycle, driven end to end with fakes', () => {
         await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'));
         expect(runtime.LastStartError).toBeNull();
         await runtime.EndRealtimeSession();
+    });
+});
+
+describe('channel registry on a connect-only provider (#4887)', () => {
+    const fetchChannelDefinitions = (runtime: RealtimeSessionRuntime): Promise<unknown[]> =>
+        (runtime as unknown as { fetchChannelDefinitions(): Promise<unknown[]> }).fetchChannelDefinitions();
+
+    it('returns no channels without touching AIEngineBase when the provider has no entity metadata', async () => {
+        const spy = vi.spyOn(AIEngineBase, 'GetProviderInstance');
+        try {
+            const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
+            runtime.Provider = { Entities: [] } as unknown as IMetadataProvider;
+
+            await expect(fetchChannelDefinitions(runtime)).resolves.toEqual([]);
+            expect(spy).not.toHaveBeenCalled();
+        } finally {
+            spy.mockRestore();
+        }
+    });
+
+    it('still consults AIEngineBase when the provider has entity metadata', async () => {
+        const spy = vi.spyOn(AIEngineBase, 'GetProviderInstance').mockImplementation(() => {
+            throw new Error('engine consulted');
+        });
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+            const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
+            runtime.Provider = { Entities: [{}] } as unknown as IMetadataProvider;
+
+            await expect(fetchChannelDefinitions(runtime)).resolves.toEqual([]);
+            expect(spy).toHaveBeenCalledTimes(1);
+        } finally {
+            spy.mockRestore();
+            warn.mockRestore();
+        }
     });
 });
