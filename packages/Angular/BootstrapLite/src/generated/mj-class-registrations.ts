@@ -1055,11 +1055,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJTestTypeEntity,
     MJThemeEntity,
     MJUserApplicationEntity,
-    MJUserApplicationEntityEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJUserApplicationEntityEntity,
     MJUserEntity,
     MJUserFavoriteEntity,
     MJUserNotificationEntity,

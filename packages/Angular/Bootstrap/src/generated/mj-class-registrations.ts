@@ -1185,11 +1185,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJTestTypeEntity,
     MJThemeEntity,
     MJUserApplicationEntity,
-    MJUserApplicationEntityEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJUserApplicationEntityEntity,
     MJUserEntity,
     MJUserFavoriteEntity,
     MJUserNotificationEntity,
@@ -1389,12 +1389,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     FormBuilderResourceComponent,
     GraphQLConsoleComponent,
     GridWidthLabComponent,
-    HomeApplication,
-    HomeDashboardComponent,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    HomeApplication,
+    HomeDashboardComponent,
     KnowledgeConfigResourceComponent,
     LayoutInspectorComponent,
     LazyModuleStatusComponent,
