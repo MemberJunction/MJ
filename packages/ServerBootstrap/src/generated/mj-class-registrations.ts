@@ -221,7 +221,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (418 classes)
+// @memberjunction/core-entities (419 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -461,6 +461,7 @@ import {
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
+    MJFeaturePipelineTypeEntity,
     MJFeatureValueCacheEntity,
     MJFeatureValueEntity,
     MJFileCategoryEntity,
@@ -1191,8 +1192,9 @@ import {
     ValidateEntitySchemaAction,
 } from '@memberjunction/database-designer-actions';
 
-// @memberjunction/record-set-processor (5 classes)
+// @memberjunction/record-set-processor (6 classes)
 import {
+    LLMFeaturePipelineDriver,
     RecordProcessCancelRunServerOperation,
     RecordProcessGetRunStatusServerOperation,
     RecordProcessPauseRunServerOperation,
@@ -1833,6 +1835,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
+    MJFeaturePipelineTypeEntity,
     MJFeatureValueCacheEntity,
     MJFeatureValueEntity,
     MJFileCategoryEntity,
@@ -1932,11 +1935,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJResourceTypeEntity,
     MJRoleEntity,
     MJRowLevelSecurityFilterEntity,
-    MJSQLDialectEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSQLDialectEntity,
     MJScheduledJobEntity,
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
@@ -2136,11 +2139,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     BufferCreatePostAction,
     BufferDeletePostAction,
     BufferGetAnalyticsAction,
-    BufferGetChannelsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    BufferGetChannelsAction,
     BufferGetPendingPostsAction,
     BufferGetSentPostsAction,
     BufferReorderQueueAction,
@@ -2325,6 +2328,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ListMyEntitiesAction,
     ModifyEntityAction,
     ValidateEntitySchemaAction,
+    LLMFeaturePipelineDriver,
     RecordProcessCancelRunServerOperation,
     RecordProcessGetRunStatusServerOperation,
     RecordProcessPauseRunServerOperation,
@@ -2339,12 +2343,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PredictiveStudioPromoteModelAction,
     PredictiveStudioPromoteModelServerOperation,
     PredictiveStudioRunExperimentAction,
-    PredictiveStudioRunFeaturePipelineServerOperation,
-    PredictiveStudioScheduleModelScoringAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    PredictiveStudioRunFeaturePipelineServerOperation,
+    PredictiveStudioScheduleModelScoringAction,
     PredictiveStudioScoreRecordSetAction,
     PredictiveStudioScoreRecordSetServerOperation,
     PredictiveStudioStartExperimentSessionServerOperation,
@@ -2543,12 +2547,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MoveObjectAction,
     OAuthFlowAction,
     ObjectExistsAction,
-    PDFExtractorAction,
-    ParallelExecuteAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    PDFExtractorAction,
+    ParallelExecuteAction,
     PasswordStrengthAction,
     PerplexitySearchAction,
     PostalCodeLookupAction,
@@ -2618,7 +2622,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1053;
+export const CLASS_REGISTRATIONS_COUNT = 1055;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
