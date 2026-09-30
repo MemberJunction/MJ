@@ -8,7 +8,8 @@ import { BaseTextToSpeech, ModelUsage, SpeechResult, TextToSpeechParams } from '
 import { BaseMediaRunner } from '../media/BaseMediaRunner';
 import { AIMediaRunOutcome } from '../media/media-runner.types';
 import { AITextToSpeechRunParams, AITextToSpeechRunResult } from './audio-runner.types';
-import { Base64ByteLength, CountCharacters, DetectAudioFormat, SecondsIn } from './audio-description';
+import { Base64ByteLength, CountCharacters, DetectAudioFormat } from './audio-description';
+import { SecondsIn } from '../media/media-usage';
 
 /**
  * Runs text-to-speech on `TTS` models (`BaseTextToSpeech` drivers). It does for a speech call what

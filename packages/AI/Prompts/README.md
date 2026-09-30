@@ -211,8 +211,11 @@ Non-chat models run through runners built on the same `BaseModelRunner`, so they
 | `AIImageGenerationRunner` | `Image Generator` | `RunImageGeneration`, `RunImageEdit` | `Default Image Generation` | the driver's, else images returned (`Images`) |
 | `AITextToSpeechRunner` | `TTS` | `RunTextToSpeech` | `Default Text To Speech` | the driver's, else characters sent (`Characters`) |
 | `AISpeechToTextRunner` | `Speech to Text` | `RunSpeechToText` | `Default Speech To Text` | the driver's: audio seconds (`Seconds`) when reported, otherwise nothing |
+| `AIVideoRunner` | `Video` | `RunAvatarVideo` | `Default Video Generation` | the driver's: video seconds (`Seconds`) when reported, otherwise nothing |
 
-`AITextToSpeechRunner`, and the runners after it, share their lifecycle through `BaseMediaRunner`. It follows the carrier prompt's `FailoverStrategy`, narrowing `SameModelDifferentVendor` to the selected model's vendors. A driver that reports a failure with only a message gets the vendor's classification of that message, so an outage fails over and a bad request does not.
+The text-to-speech, speech-to-text and video runners share their lifecycle through `BaseMediaRunner`. It follows the carrier prompt's `FailoverStrategy`, narrowing `SameModelDifferentVendor` to the selected model's vendors. A driver that reports a failure with only a message gets the vendor's classification of that message, so an outage fails over and a bad request does not.
+
+Video generation is asynchronous at the provider, and the primitive offers no status call, so `AIVideoRunner` does not wait for a render. A successful run means the provider accepted the request; the row records the video ID (for HeyGen, the render job's ID) and records the video's length only if a driver reports it.
 
 Usage is recorded with `BaseModelRunner.ApplyUsageToRunRecord`, which writes non-token quantities as `InputUnitsUsed` / `OutputUnitsUsed` with the `MJ: AI Usage Types` row that names their measure. The runners never set a cost. The row's save prices it from the model's cost rows, and declines when no price unit type claims the measure, as none yet does for `Characters`.
 

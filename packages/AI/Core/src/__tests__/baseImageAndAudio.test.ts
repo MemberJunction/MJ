@@ -26,6 +26,7 @@ import {
 import { BaseTextToSpeech } from '../generic/baseTextToSpeech';
 import { BaseSpeechToText } from '../generic/baseSpeechToText';
 import { BaseVideoGenerator, VideoResult, AvatarInfo, AvatarVideoParams, VideoTranslationParams } from '../generic/baseVideo';
+import { ModelUsage } from '../generic/baseModel';
 
 // Test implementations
 class TestImageGenerator extends BaseImageGenerator {
@@ -282,5 +283,15 @@ describe('VideoResult', () => {
         result.videoId = 'vid-abc';
 
         expect(result.videoId).toBe('vid-abc');
+    });
+
+    it('carries the video length as usage when a driver reports it', () => {
+        const result = new VideoResult();
+        result.success = true;
+        result.videoId = 'vid-abc';
+        result.usage = ModelUsage.ForMedia('Seconds', 0, 30);
+
+        expect(result.usage.unitKind).toBe('Seconds');
+        expect(result.usage.outputUnits).toBe(30);
     });
 });

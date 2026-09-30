@@ -5,8 +5,6 @@
  * @module @memberjunction/ai-prompts
  */
 
-import type { ModelUsage } from '@memberjunction/ai';
-
 /**
  * The number of characters in text as a speech vendor counts them: Unicode code points, so an emoji
  * or an accented letter written as one code point counts once, not as two UTF-16 units.
@@ -26,19 +24,6 @@ export function Base64ByteLength(base64: string | undefined): number {
   const compact = base64.replace(/\s/g, '');
   const padding = compact.endsWith('==') ? 2 : compact.endsWith('=') ? 1 : 0;
   return Math.max(0, Math.floor((compact.length * 3) / 4) - padding);
-}
-
-/**
- * The seconds of audio in a usage record, when it is counted in `Seconds`: the output units for
- * audio a model produced, the input units for audio it was given. Undefined otherwise, rather than
- * a guess.
- */
-export function SecondsIn(usage: ModelUsage | undefined, side: 'input' | 'output'): number | undefined {
-  if (usage?.unitKind !== 'Seconds') {
-    return undefined;
-  }
-  const seconds = side === 'input' ? usage.inputUnits : usage.outputUnits;
-  return seconds !== undefined && seconds > 0 ? seconds : undefined;
 }
 
 /** Leading bytes that identify an audio container, checked in order. */

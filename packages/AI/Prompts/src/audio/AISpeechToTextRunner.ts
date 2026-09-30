@@ -8,7 +8,8 @@ import { BaseSpeechToText, SpeechResult, SpeechToTextParams } from '@memberjunct
 import { BaseMediaRunner } from '../media/BaseMediaRunner';
 import { AIMediaRunOutcome } from '../media/media-runner.types';
 import { AISpeechToTextRunParams, AISpeechToTextRunResult } from './audio-runner.types';
-import { Base64ByteLength, SecondsIn } from './audio-description';
+import { Base64ByteLength } from './audio-description';
+import { SecondsIn } from '../media/media-usage';
 
 /**
  * Runs speech-to-text on `Speech to Text` models (`BaseSpeechToText` drivers). It selects a model

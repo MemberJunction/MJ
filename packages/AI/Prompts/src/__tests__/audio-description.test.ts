@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { ModelUsage } from '@memberjunction/ai';
-import { Base64ByteLength, CountCharacters, DetectAudioFormat, SecondsIn } from '../audio/audio-description';
+import { Base64ByteLength, CountCharacters, DetectAudioFormat } from '../audio/audio-description';
+import { SecondsIn } from '../media/media-usage';
 
 describe('audio description helpers', () => {
   describe('DetectAudioFormat', () => {
