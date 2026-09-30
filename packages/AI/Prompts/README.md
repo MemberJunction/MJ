@@ -210,6 +210,7 @@ Non-chat models run through runners built on the same `BaseModelRunner`, so they
 |---|---|---|---|---|
 | `AIImageGenerationRunner` | `Image Generator` | `RunImageGeneration`, `RunImageEdit` | `Default Image Generation` | the driver's, else images returned (`Images`) |
 | `AITextToSpeechRunner` | `TTS` | `RunTextToSpeech` | `Default Text To Speech` | the driver's, else characters sent (`Characters`) |
+| `AISpeechToTextRunner` | `Speech to Text` | `RunSpeechToText` | `Default Speech To Text` | the driver's: audio seconds (`Seconds`) when reported, otherwise nothing |
 
 `AITextToSpeechRunner`, and the runners after it, share their lifecycle through `BaseMediaRunner`. It follows the carrier prompt's `FailoverStrategy`, narrowing `SameModelDifferentVendor` to the selected model's vendors. A driver that reports a failure with only a message gets the vendor's classification of that message, so an outage fails over and a bad request does not.
 
