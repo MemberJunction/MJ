@@ -3933,8 +3933,9 @@ export class BaseAgent {
         data: Record<string, unknown> | undefined
     ): Promise<void> {
         try {
-            const promptParams = this.decisionDiscoveryPromptParams(agent, data);
-            if (!IsDecisionDiscoveryOn(promptParams) || !conversationMessages) {
+            const override = data?.__agentTypePromptParams;
+            const overrides = IsPlainObject(override) ? override : undefined;
+            if (!this.isDecisionDiscoveryOnFor(agent, overrides) || !conversationMessages) {
                 return;
             }
             if (!this._openingRequest || !contextUser) {
@@ -3949,6 +3950,7 @@ export class BaseAgent {
                 this.logStatus(`Decision discovery skipped for '${agent.Name}': the request @mentions an agent`, true);
                 return;
             }
+            const promptParams = this.decisionDiscoveryPromptParams(agent, overrides);
             const outcome = await this.runDecisionDiscovery(agent, contextUser, promptParams, HostAllowedAgentIDs(data));
             if (outcome.Injected && outcome.Message) {
                 conversationMessages.unshift({ role: 'system', content: outcome.Message });
@@ -3959,11 +3961,37 @@ export class BaseAgent {
         }
     }
 
-    /** The run's merged agent-type prompt params (schema defaults < agent < per-run overrides), for the switch. */
-    private decisionDiscoveryPromptParams(agent: MJAIAgentEntityExtended, data: Record<string, unknown> | undefined): Record<string, unknown> {
-        const overrides = data?.__agentTypePromptParams;
+    /**
+     * Whether discovery is on for this run, read without rebuilding the merged prompt params, since it
+     * is asked on every run of every agent: the per-run override's `decisionDiscovery` when it sets
+     * one, otherwise the agent's base params, cached on AIEngine with its base catalog. Only a cold
+     * cache builds them.
+     */
+    private isDecisionDiscoveryOnFor(agent: MJAIAgentEntityExtended, overrides: Record<string, unknown> | undefined): boolean {
+        if (overrides && 'decisionDiscovery' in overrides) {
+            return IsDecisionDiscoveryOn(overrides);
+        }
+        return IsDecisionDiscoveryOn(this.cachedBasePromptParams(agent) ?? this.buildDecisionDiscoveryPromptParams(agent, undefined));
+    }
+
+    /**
+     * The run's merged agent-type prompt params (schema defaults < agent < per-run overrides), once
+     * discovery is on: the cached base params when there is no override, otherwise built.
+     */
+    private decisionDiscoveryPromptParams(agent: MJAIAgentEntityExtended, overrides: Record<string, unknown> | undefined): Record<string, unknown> {
+        const cached = overrides ? undefined : this.cachedBasePromptParams(agent);
+        return cached ?? this.buildDecisionDiscoveryPromptParams(agent, overrides);
+    }
+
+    /** The agent's base prompt params (no per-run overrides), from the base catalog AIEngine caches, when it holds one. */
+    private cachedBasePromptParams(agent: MJAIAgentEntityExtended): Record<string, unknown> | undefined {
+        return AIEngine.Instance.GetAgentBaseCatalog<AgentBaseCatalog>(agent.ID)?.baseAgentTypePromptParams;
+    }
+
+    /** Builds the merged prompt params, as `gatherPromptTemplateData` does. */
+    private buildDecisionDiscoveryPromptParams(agent: MJAIAgentEntityExtended, overrides: Record<string, unknown> | undefined): Record<string, unknown> {
         const agentType = AIEngine.Instance.AgentTypes.find(at => UUIDsEqual(at.ID, agent.TypeID));
-        return this.buildAgentTypePromptParams(agentType, agent, IsPlainObject(overrides) ? overrides : undefined);
+        return this.buildAgentTypePromptParams(agentType, agent, overrides);
     }
 
     /**

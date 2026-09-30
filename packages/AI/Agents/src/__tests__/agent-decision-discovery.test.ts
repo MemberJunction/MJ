@@ -10,6 +10,7 @@
  *   2. On: one call per run, over the agents the user may run (rebuilt every run, minus the running
  *      agent, Sub-Agents and agents without a description), as agent IDs with their descriptions.
  *      An @mention of another agent, a follow-up turn, or fewer than three options means no call.
+ *      The switch is read without rebuilding the prompt params once the agent's catalog is cached.
  *   3. A confident Choice and Likelihood put a <suggested_agent> system message first in the first
  *      prompt; a low Choice confidence, a low Likelihood, an error, a throw, an unusable answer, a
  *      timeout and a cancelled run each inject nothing. Every call is recorded as one
@@ -36,7 +37,7 @@ import {
 import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import type { ChatMessage, ChoiceQuestion, DecisionAnswer } from '@memberjunction/ai';
-import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
+import type { MJAIAgentTypeEntity, MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { LogErrorEx } from '@memberjunction/core';
 import type { EntitySearchResult, IMetadataProvider, SearchEntityParams, UserInfo } from '@memberjunction/core';
 
@@ -390,13 +391,26 @@ class HarnessAgent extends BaseAgent {
     }
 }
 
+/** Counts how often the agent-type prompt params are merged. */
+class ParamBuildCountingAgent extends HarnessAgent {
+    public Builds = 0;
+
+    protected override buildAgentTypePromptParams(
+        agentType: MJAIAgentTypeEntity | undefined,
+        agent: MJAIAgentEntityExtended,
+        runtimeOverrides?: Record<string, unknown>
+    ): Record<string, unknown> {
+        this.Builds++;
+        return super.buildAgentTypePromptParams(agentType, agent, runtimeOverrides);
+    }
+}
+
 /** The private member the tests replace. */
 interface AgentInternals {
     _promptRunner: RecordingPromptRunner;
 }
 
-function makeAgent(): { agent: HarnessAgent; runner: RecordingPromptRunner } {
-    const agent = new HarnessAgent();
+function makeAgent(agent: HarnessAgent = new HarnessAgent()): { agent: HarnessAgent; runner: RecordingPromptRunner } {
     const runner = new RecordingPromptRunner();
     (agent as unknown as AgentInternals)._promptRunner = runner;
     return { agent, runner };
@@ -527,6 +541,21 @@ describe('decision discovery — off by default', () => {
         expect(discoverySteps()).toHaveLength(0);
         expect(harness.steps.map(s => s.StepType)).toEqual(['Validation', 'Prompt']);
         expect(runner.MessagesAtCall[0]).toEqual([{ role: 'user', content: OPENING_REQUEST }]);
+    });
+
+    it("reads the switch without rebuilding the prompt params once the agent's catalog is cached", async () => {
+        const agent = new ParamBuildCountingAgent();
+        const { runner } = makeAgent(agent);
+
+        await agent.Execute(makeParams());
+        const buildsOnFirstRun = agent.Builds;
+        await agent.Execute(makeParams());
+        await agent.Execute(makeParams({ data: { __agentTypePromptParams: { decisionDiscovery: false } } }));
+
+        // The first run fills the cache; after it, only gatherPromptTemplateData merges the override.
+        expect(buildsOnFirstRun).toBeGreaterThan(0);
+        expect(agent.Builds - buildsOnFirstRun).toBe(1);
+        expect(runner.Calls).toHaveLength(3);
     });
 
     it.each([
