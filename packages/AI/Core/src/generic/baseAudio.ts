@@ -29,7 +29,11 @@ export type TranscriptionPiece = {
  * the same keys.
  *
  * @deprecated Use {@link BaseTextToSpeech} for text-to-speech and {@link BaseSpeechToText} for
- * speech-to-text.
+ * speech-to-text. An application that overrides a shipped audio driver must also register the
+ * override against the new class or classes that driver implements, under the same key, for example
+ * `@RegisterClass(BaseTextToSpeech, 'OpenAIAudioGenerator')`. The ClassFactory keeps registrations
+ * per base class, and the text-to-speech and speech-to-text runners resolve drivers through the new
+ * classes, so an override registered only against `BaseAudioGenerator` is not used by them.
  */
 export abstract class BaseAudioGenerator extends BaseModel implements BaseTextToSpeech, BaseSpeechToText {
     public abstract CreateSpeech(params: TextToSpeechParams): Promise<SpeechResult>;
