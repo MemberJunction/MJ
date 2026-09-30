@@ -206,6 +206,22 @@ export const DecisionEvalSamplingSchema = z.object({
 /** The sampling record of one run. */
 export type DecisionEvalSampling = z.infer<typeof DecisionEvalSamplingSchema>;
 
+/** The routing thresholds and calibration a run's verdict was reached under. */
+export const DecisionEvalRoutingPolicySchema = z.object({
+    /** `DECISION_ROUTING_MIN_CONFIDENCE`. */
+    MinConfidence: z.number(),
+    /** `DECISION_ROUTING_TIMEOUT_MS`: past it, production keeps continuity. */
+    TimeoutMs: z.number(),
+    /**
+     * The thread Likelihood's Platt calibration for the model that answered, or null when that
+     * exact model has none, and routing keeps continuity.
+     */
+    Calibration: z.object({ A: z.number(), B: z.number() }).nullable()
+});
+
+/** The routing policy of one run. */
+export type DecisionEvalRoutingPolicy = z.infer<typeof DecisionEvalRoutingPolicySchema>;
+
 /** What a Decision Eval run records as its `ActualOutput`. */
 export const DecisionEvalActualOutputSchema = z.object({
     Decision: z.enum(DECISION_EVAL_DECISIONS),
@@ -219,6 +235,12 @@ export const DecisionEvalActualOutputSchema = z.object({
     Route: z.object({ Value: z.string(), Confidence: z.number() }).nullable(),
     /** What production would do with these answers (`InterpretRoutingAnswers`), or null without answers. */
     RoutingVerdict: z.enum(['Routed', 'SomeoneElse', 'KeptContinuity']).nullable(),
+    /**
+     * The routing policy that verdict was reached under, or null without answers. Absent from runs
+     * recorded before routing was calibrated: their verdicts used raw thresholds, so the scorecard
+     * does not score them as production's.
+     */
+    RoutingPolicy: DecisionEvalRoutingPolicySchema.nullable().optional(),
     Model: DecisionEvalModelRecordSchema,
     Sampling: DecisionEvalSamplingSchema,
     /** Wall-clock time of the one `ExecuteDecision` call, in milliseconds. */

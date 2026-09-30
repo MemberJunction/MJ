@@ -135,6 +135,9 @@ async function loadSuiteTestIds(rv: RunView, suite: string, user: UserInfo): Pro
         EntityName: 'MJ: Test Suite Tests',
         ExtraFilter: `Suite = '${EscapeSQLString(suite)}'`,
         Fields: ['TestID'],
+        // A total order, so the chunks below hold the same tests on every read. The metrics no
+        // longer depend on the order of the runs, but the rig's reads should not vary either.
+        OrderBy: 'TestID',
         IgnoreMaxRows: true, // a suite easily has more tests than the entity's 1000-row view cap
         ResultType: 'simple'
     }, user);
@@ -160,7 +163,7 @@ async function loadTestRuns(rv: RunView, testIds: readonly string[], args: Score
         EntityName: 'MJ: Test Runs',
         ExtraFilter: [`TestID IN (${inList(ids)})`, ...window].join(' AND '),
         Fields: ['ID', 'Test', 'Status', 'ExpectedOutputData', 'ActualOutputData', 'ResultDetails', 'CostUSD', 'TargetLogID'],
-        OrderBy: 'StartedAt',
+        OrderBy: 'StartedAt, ID', // runs started in parallel tie on StartedAt
         IgnoreMaxRows: true,
         ResultType: 'simple' as const
     })), user);

@@ -12,10 +12,15 @@
  * `MJ_DECISION_EVAL_CORPUS_DIR`), and every generated record carries a corpus point verbatim, so
  * `--out` must be outside every git working tree: the rig refuses outright otherwise.
  *
+ * IT NEVER DELETES WHAT IT DIDN'T WRITE. Outside a repository nothing can recover a file, so `--out`
+ * must be a new or empty directory. `--force` lets it replace an earlier run there: it removes only
+ * the files that run listed in its `generated-files.json`, keeps everything else, and refuses to
+ * overwrite a file it didn't write (`WriteGeneratedFiles` in the testing engine).
+ *
  * USAGE (from the repo root):
  *   npx tsx packages/TestingFramework/integration-test-suite/rigs/generate-decision-eval-suite.ts \
- *     --corpus <dir> --out <dir> [--matrix <file>] [--reps N] [--label-source construction] \
- *     [--suite <name>] [--limit N] [--dry-run]
+ *     --corpus <dir> --out <dir> [--decision conversation-routing|agent-discovery] [--matrix <file>] \
+ *     [--reps N] [--label-source construction] [--suite <name>] [--limit N] [--force] [--dry-run]
  *
  * `--matrix` defaults to the committed template, metadata-optional/decision-eval/matrix/example.json,
  * whose cells pin no model: copy it outside the repository and fill in the model IDs locally.
@@ -28,7 +33,7 @@
  * `stateLayout`; without `--matrix` it runs the decision as the prompt selects its model beside the
  * `semantic-search` baseline. A baseline cell's records run once: its search makes no model call.
  */
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -58,13 +63,16 @@ import {
     ParseDiscoveryLabels,
     SelectDiscoveryLabelSource,
     SelectLabelSource,
+    WriteGeneratedFiles,
     type DecisionEvalDecision,
     type DecisionEvalMatrix,
     type DiscoveryCatalogAgent,
     type DiscoveryEvalMatrix,
+    type GeneratedFile,
     type LabelledDecisionPoint,
     type LabelledDiscoveryRequest,
-    type SyncRecord
+    type SyncRecord,
+    type WriteGeneratedFilesResult
 } from '@memberjunction/testing-engine';
 
 // This package is native ESM, so __dirname does not exist.
@@ -72,9 +80,11 @@ const RIG_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = FindRepoRoot(RIG_DIR) ?? resolve(RIG_DIR, '../../../..');
 const TEMPLATE_MATRIX = join(REPO_ROOT, 'metadata-optional/decision-eval/matrix/example.json');
 const CORPUS_ENV = 'MJ_DECISION_EVAL_CORPUS_DIR';
+/** Recorded in the output's manifest: only a manifest this rig wrote lets `--force` remove files. */
+const GENERATOR = 'generate-decision-eval-suite';
 
 const USAGE = 'usage: generate-decision-eval-suite.ts --corpus <dir> --out <dir> [--decision conversation-routing|agent-discovery] '
-    + '[--matrix <file>] [--reps N] [--label-source construction] [--suite <name>] [--limit N] [--dry-run]';
+    + '[--matrix <file>] [--reps N] [--label-source construction] [--suite <name>] [--limit N] [--force] [--dry-run]';
 
 /** The command line, read. */
 interface GeneratorArgs {
@@ -87,6 +97,8 @@ interface GeneratorArgs {
     LabelSource: string;
     Suite: string | null;
     Limit: number | null;
+    /** Replace an earlier run of this rig in `OutDir`: only the files its manifest lists. */
+    Force: boolean;
     DryRun: boolean;
 }
 
@@ -146,6 +158,7 @@ function parseArgs(argv: readonly string[]): GeneratorArgs {
         LabelSource: readFlag(argv, 'label-source') ?? DEFAULT_LABEL_SOURCE,
         Suite: readFlag(argv, 'suite') ?? null,
         Limit: readPositiveInt(argv, 'limit'),
+        Force: argv.includes('--force'),
         DryRun: argv.includes('--dry-run')
     };
 }
@@ -173,15 +186,65 @@ function generate(args: GeneratorArgs): GeneratedSuite {
     };
 }
 
-function writeJson(path: string, value: object): void {
-    writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+function jsonFile(relativePath: string, value: object): GeneratedFile {
+    return { RelativePath: relativePath, Content: `${JSON.stringify(value, null, 2)}\n` };
 }
 
-/** Writes the records, the suite, the sync configs and the provenance into the output directory. */
-function writeSuite(outDir: string, args: GeneratorArgs, suite: GeneratedSuite): void {
+/**
+ * Writes the records, the suite, the sync configs and the provenance into the output directory.
+ * With `--force`, the previous run's files are replaced, so a stale record for a dropped point
+ * doesn't keep running forever; nothing the rig didn't write is touched.
+ */
+function writeSuite(outDir: string, args: GeneratorArgs, suite: GeneratedSuite): WriteGeneratedFilesResult {
     const description = `Generated from ${suite.Cases.length} labelled decision point(s) × ${suite.Matrix.cells.length} cell(s). `
         + 'Regenerate with rigs/generate-decision-eval-suite.ts; do not hand-edit.';
-    writeSyncFiles(outDir, suite.Records, BuildDecisionEvalSuiteRecord(suite.SuiteName, suite.Names, description), {
+    return writeSyncFiles(outDir, args, suite.Records, BuildDecisionEvalSuiteRecord(suite.SuiteName, suite.Names, description), provenance(args, suite));
+}
+
+/**
+ * Writes the test records, the suite record, the sync configs and the provenance, through
+ * `WriteGeneratedFiles`: with `--force` only an earlier run's own files are replaced.
+ */
+function writeSyncFiles(
+    outDir: string,
+    args: GeneratorArgs,
+    records: readonly SyncRecord[],
+    suiteRecord: SyncRecord,
+    generatedFrom: object
+): WriteGeneratedFilesResult {
+    const files: GeneratedFile[] = [
+        ...records.map(record => jsonFile(`tests/.${record.primaryKey.ID}.json`, record)),
+        jsonFile('tests/.mj-sync.json', { entity: 'MJ: Tests', filePattern: '**/.*.json' }),
+        jsonFile('test-suites/.mj-sync.json', { entity: 'MJ: Test Suites', filePattern: '**/.*.json' }),
+        jsonFile('test-suites/.decision-eval-suite.json', [suiteRecord]),
+        // `emitSyncNotes: false`: every push would otherwise write sync blocks back into generated files.
+        jsonFile('.mj-sync.json', {
+            version: '1.0.0',
+            push: { autoCreateMissingRecords: true },
+            directoryOrder: ['tests', 'test-suites'],
+            emitSyncNotes: false
+        }),
+        jsonFile('generated-from.json', generatedFrom)
+    ];
+    return WriteGeneratedFiles(outDir, files, { Generator: GENERATOR, Replace: args.Force });
+}
+
+/** Where a generated suite came from: `generated-from.json`. */
+interface GenerationProvenance {
+    corpus: string;
+    labelSource: string;
+    matrix: string;
+    suiteName: string;
+    reps: number;
+    cells: string[];
+    points: number;
+    records: number;
+    generatedAt: string;
+}
+
+/** Where the suite came from, for `generated-from.json`. */
+function provenance(args: GeneratorArgs, suite: GeneratedSuite): GenerationProvenance {
+    return {
         corpus: args.CorpusDir,
         labelSource: args.LabelSource,
         matrix: args.MatrixPath ?? TEMPLATE_MATRIX,
@@ -191,32 +254,7 @@ function writeSuite(outDir: string, args: GeneratorArgs, suite: GeneratedSuite):
         points: suite.Cases.length,
         records: suite.Records.length,
         generatedAt: new Date().toISOString()
-    });
-}
-
-/** Writes the test records, the suite record, the sync configs and the provenance. */
-function writeSyncFiles(outDir: string, records: readonly SyncRecord[], suiteRecord: SyncRecord, provenance: object): void {
-    const testsDir = join(outDir, 'tests');
-    const suitesDir = join(outDir, 'test-suites');
-    // Regenerate from scratch: a stale record for a dropped point would keep running forever.
-    rmSync(testsDir, { recursive: true, force: true });
-    rmSync(suitesDir, { recursive: true, force: true });
-    mkdirSync(testsDir, { recursive: true });
-    mkdirSync(suitesDir, { recursive: true });
-    for (const record of records) {
-        writeJson(join(testsDir, `.${record.primaryKey.ID}.json`), record);
-    }
-    writeJson(join(testsDir, '.mj-sync.json'), { entity: 'MJ: Tests', filePattern: '**/.*.json' });
-    writeJson(join(suitesDir, '.mj-sync.json'), { entity: 'MJ: Test Suites', filePattern: '**/.*.json' });
-    writeJson(join(suitesDir, '.decision-eval-suite.json'), [suiteRecord]);
-    // `emitSyncNotes: false`: every push would otherwise write sync blocks back into generated files.
-    writeJson(join(outDir, '.mj-sync.json'), {
-        version: '1.0.0',
-        push: { autoCreateMissingRecords: true },
-        directoryOrder: ['tests', 'test-suites'],
-        emitSyncNotes: false
-    });
-    writeJson(join(outDir, 'generated-from.json'), provenance);
+    };
 }
 
 /** Warnings worth reading before spending a run. */
@@ -235,7 +273,7 @@ function warnings(suite: GeneratedSuite): string[] {
     const undecidable = suite.Cases.filter(c => !IsDecidableOffline(c.Point)).length;
     if (undecidable > 0) {
         out.push(`${undecidable} point(s) have nothing to decide (the previous agent never answered in the history): `
-            + 'production makes no call there, so their runs will be Errors with no model call.');
+            + 'production makes no call there, so their runs will be Skipped, with no model call.');
     }
     if (suite.UnlabelledCount > 0) {
         out.push(`${suite.UnlabelledCount} point(s) have no label from this source and are left out.`);
@@ -247,7 +285,7 @@ function warnings(suite: GeneratedSuite): string[] {
 }
 
 /** Prints the counts, the estimate, any warnings, and what to do next. */
-function report(args: GeneratorArgs, outDir: string, suite: GeneratedSuite): void {
+function report(args: GeneratorArgs, outDir: string, suite: GeneratedSuite, written: WriteGeneratedFilesResult | null): void {
     const byLabel = (label: string) => suite.Cases.filter(c => c.Label === label).length;
     const estimate = EstimateDecisionEvalRun(suite.Cases, suite.Matrix.cells, suite.Reps);
     console.log(args.DryRun ? '── decision-eval suite — DRY RUN (nothing written) ──' : '── decision-eval suite generated ──');
@@ -266,12 +304,24 @@ function report(args: GeneratorArgs, outDir: string, suite: GeneratedSuite): voi
     for (const cell of estimate.PerCell) {
         console.log(`                  ${cell.USD === null ? '     ?' : `$${cell.USD.toFixed(2)}`.padStart(8)}  ${cell.Label}`);
     }
+    reportWritten(outDir, written);
     for (const warning of warnings(suite)) {
         console.log(`   ⚠ ${warning}`);
     }
     console.log(args.DryRun
         ? `\n   dry run: re-run without --dry-run to write ${suite.Records.length} record(s) to ${outDir}`
         : `\n   next (push the 'Decision Eval' test type from metadata/test-types first):\n     npx mj sync push --dir=${outDir}`);
+}
+
+/** What replacing an earlier run did: the files removed, and any left alone because this rig didn't write them. */
+function reportWritten(outDir: string, written: WriteGeneratedFilesResult | null): void {
+    if (written && written.Removed > 0) {
+        console.log(`   replaced     : ${written.Removed} file(s) of the earlier run no longer generated were removed`);
+    }
+    if (written && written.Kept.length > 0) {
+        console.log(`   ⚠ ${written.Kept.length} file(s) in ${outDir} were not written by this rig and were left alone `
+            + `(${written.Kept.slice(0, 3).join(', ')}${written.Kept.length > 3 ? ', …' : ''}). mj sync may pick up any under tests/ or test-suites/.`);
+    }
 }
 
 function main(): void {
@@ -283,11 +333,8 @@ function main(): void {
         return;
     }
     const suite = generate(args);
-    if (!args.DryRun) {
-        mkdirSync(outDir, { recursive: true });
-        writeSuite(outDir, args, suite);
-    }
-    report(args, outDir, suite);
+    const written = args.DryRun ? null : writeSuite(outDir, args, suite);
+    report(args, outDir, suite, written);
 }
 
 // ── agent discovery (--decision agent-discovery) ───────────────────────────────────────────────
@@ -331,11 +378,11 @@ function generateDiscovery(args: GeneratorArgs): GeneratedDiscoverySuite {
     };
 }
 
-/** Writes the discovery suite. */
-function writeDiscoverySuite(outDir: string, args: GeneratorArgs, suite: GeneratedDiscoverySuite): void {
+/** Writes the discovery suite, as `writeSyncFiles` writes any suite. */
+function writeDiscoverySuite(outDir: string, args: GeneratorArgs, suite: GeneratedDiscoverySuite): WriteGeneratedFilesResult {
     const description = `Generated from ${suite.Cases.length} labelled agent-discovery request(s) × ${suite.Matrix.cells.length} cell(s). `
         + 'Regenerate with rigs/generate-decision-eval-suite.ts --decision agent-discovery; do not hand-edit.';
-    writeSyncFiles(outDir, suite.Records, BuildDecisionEvalSuiteRecord(suite.SuiteName, suite.Names, description), {
+    return writeSyncFiles(outDir, args, suite.Records, BuildDecisionEvalSuiteRecord(suite.SuiteName, suite.Names, description), {
         decision: 'agent-discovery',
         corpus: args.CorpusDir,
         labelSource: args.LabelSource,
@@ -350,7 +397,7 @@ function writeDiscoverySuite(outDir: string, args: GeneratorArgs, suite: Generat
 }
 
 /** Prints the discovery suite's counts, the estimate, any warnings, and what to do next. */
-function reportDiscovery(args: GeneratorArgs, outDir: string, suite: GeneratedDiscoverySuite): void {
+function reportDiscovery(args: GeneratorArgs, outDir: string, suite: GeneratedDiscoverySuite, written: WriteGeneratedFilesResult | null): void {
     const agentCases = suite.Cases.filter(c => c.Label.label === 'agent').length;
     const estimate = EstimateDiscoveryEvalRun(suite.Cases, suite.Matrix.cells, suite.Reps, suite.Catalog ?? []);
     const calls = suite.Matrix.cells.reduce((sum, cell) => sum + suite.Cases.length * DiscoveryCellRepeats(cell, suite.Reps), 0);
@@ -366,6 +413,7 @@ function reportDiscovery(args: GeneratorArgs, outDir: string, suite: GeneratedDi
     console.log(`   runs         : ${calls.toLocaleString()}`);
     const money = estimate.USD === null ? 'unpriced (a decision cell carries no price)' : `~$${estimate.USD.toFixed(2)}`;
     console.log(`   EST. SPEND   : ${money}  ·  ~${estimate.PromptTokens.toLocaleString()} prompt + ~${estimate.CompletionTokens.toLocaleString()} completion tokens`);
+    reportWritten(outDir, written);
     const unpinned = suite.Matrix.cells.filter(c => !c.baseline && !c.modelId && !c.vendorId).map(c => c.label);
     if (unpinned.length > 0) {
         console.log(`   ⚠ ${unpinned.join(', ')} pin(s) no model: they run whatever the decision prompt selects, with its failover.`);
@@ -381,11 +429,8 @@ function reportDiscovery(args: GeneratorArgs, outDir: string, suite: GeneratedDi
 /** The agent-discovery path. */
 function mainDiscovery(args: GeneratorArgs, outDir: string): void {
     const suite = generateDiscovery(args);
-    if (!args.DryRun) {
-        mkdirSync(outDir, { recursive: true });
-        writeDiscoverySuite(outDir, args, suite);
-    }
-    reportDiscovery(args, outDir, suite);
+    const written = args.DryRun ? null : writeDiscoverySuite(outDir, args, suite);
+    reportDiscovery(args, outDir, suite, written);
 }
 
 try {

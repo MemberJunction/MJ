@@ -92,9 +92,9 @@ function likelihood(probability: number): LikelihoodAnswer {
     return { Kind: 'Likelihood', Probability: probability };
 }
 
-/** A successful decision, answered by Jev, whose thread likelihood routing has a calibration for. */
+/** A successful decision, answered by Jev at the version routing's thread-likelihood calibration was fitted on. */
 function answered(answers: Record<string, DecisionAnswer>): RunDecisionResult {
-    return { Success: true, Answers: answers, ModelName: 'Jev' };
+    return { Success: true, Answers: answers, ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.13-20260917' };
 }
 
 interface Harness {
