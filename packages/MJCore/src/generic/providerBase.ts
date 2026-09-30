@@ -314,6 +314,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     private _lastRefreshCheckAt: number = 0;
     /** Single-flight slot for {@link CheckToSeeIfRefreshNeeded}; null when no check is running. */
     private _refreshCheckInFlight: Promise<boolean> | null = null;
+    /** When a server-loaded metadata snapshot was last adopted (see adoptServerMetadata); 0 = never. */
+    private _lastServerMetadataLoadAt = 0;
 
     // ── Server-Side Auto-Cache ────────────────────────────────────────
     /**
@@ -4770,6 +4772,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         this.UpdateLocalMetadata(res);
         this._latestLocalMetadataTimestamps = this._latestRemoteMetadataTimestamps; // we just used the server to get all the stuff
         await this.SaveLocalMetadataToStorage();
+        this._lastServerMetadataLoadAt = Date.now();
     }
 
     /**
@@ -4817,9 +4820,20 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * on RTT). On the warm-stale path we additionally pay the full metadata fetch but
      * avoid serving stale data to the UI in the first place.
      *
+     * On a cold boot, where Config() just loaded the graph (and the current user) from the
+     * server within {@link MinRefreshCheckIntervalMs}, this returns immediately — no check,
+     * no current-user re-fetch.
+     *
      * Caller contract: invoke this before `StartupManager.Startup()`.
      */
     public async preValidateAndRefresh(providerToUse?: IMetadataProvider): Promise<void> {
+        // A snapshot adopted from the server moments ago (a cold boot's Config) is current by
+        // construction, and GetAllMetadata fetched CurrentUser with it. Checking again would hit
+        // the refresh throttle, read "current", and re-fetch the same user serially (#4887).
+        if (Date.now() - this._lastServerMetadataLoadAt < ProviderBase.MinRefreshCheckIntervalMs) {
+            LogStatusEx({ message: `⚡ [Metadata Cache] Pre-validation: metadata was just loaded from the server — skipping`, verboseOnly: true });
+            return;
+        }
         try {
             const needsRefresh = await this.CheckToSeeIfRefreshNeeded(providerToUse);
             if (needsRefresh) {
