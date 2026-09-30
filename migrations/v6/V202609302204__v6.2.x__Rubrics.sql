@@ -51,9 +51,10 @@
       V202609302206  creates the wrapper views, then the capture that registers their columns
     See the plan, section "Layered base views: the migration sequence".
 
-    TestRubric is DEPRECATED by this migration (description updated below). It has never been
-    read by the test engine, links to nothing, and has no seed rows; it will be dropped at the
-    next major version.
+    TestRubric is DEPRECATED alongside this migration, through metadata rather than DDL:
+    metadata/entities/.test-rubrics-deprecation.json sets the entity's Status to Deprecated and
+    replaces its description. It has never been read by the test engine, links to nothing, and
+    has no seed rows; the table is dropped at the next major version.
 */
 
 -- ════════════════════════════════════════════════════════════════════════════════════
@@ -977,15 +978,4 @@ EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Default rubric
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = 'TestSuite', @level2type = N'COLUMN', @level2name = 'RubricID';
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Suite-level score (0..1): the mean score of the suite''s executed (non-skipped) test runs.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = 'TestSuiteRun', @level2type = N'COLUMN', @level2name = 'Score';
-GO
-
--- TestRubric is superseded by the Rubric tables above.
-IF EXISTS (SELECT 1 FROM sys.extended_properties
-           WHERE major_id = OBJECT_ID('${flyway:defaultSchema}.TestRubric') AND minor_id = 0 AND name = 'MS_Description')
-BEGIN
-    EXEC sp_dropextendedproperty @name = N'MS_Description',
-        @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = 'TestRubric';
-END;
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'DEPRECATED: superseded by MJ: Rubrics (Rubric, RubricVersion, RubricCriterion). Never read by the test engine and linked to nothing; scheduled for removal in the next major version. Use Test.RubricID / TestSuite.RubricID instead.',
-    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = 'TestRubric';
 GO

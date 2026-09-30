@@ -73,7 +73,7 @@ against all of them.
 
 | Area | Current state | Consequence |
 |---|---|---|
-| `MJ: Test Rubrics` (`TestRubric`) | Created in `migrations/v2/V202511091152…`. Untyped `Criteria` JSON, free-text `Version`, scoped to one Test Type, no FK from Test/TestRun/Suite, no seed rows. Cached by `TestEngineBase` and has a custom form; **never read during execution.** | Dead schema. Deprecated by this plan (description updated in the migration), removed at the next major. |
+| `MJ: Test Rubrics` (`TestRubric`) | Created in `migrations/v2/V202511091152…`. Untyped `Criteria` JSON, free-text `Version`, scoped to one Test Type, no FK from Test/TestRun/Suite, no seed rows. Cached by `TestEngineBase` and has a custom form; **never read during execution.** | Dead schema. Deprecated via metadata (`metadata/entities/.test-rubrics-deprecation.json`: `Status = Deprecated` + new description), table dropped at the next major. |
 | Judge criteria | `Test.ExpectedOutcomes.judgeValidationCriteria: string[]`, read by `LLMJudgeOracle` and by Computer Use's judge (`packages/AI/ComputerUse/src/judge/rubric.ts`: `CriterionVerdict {criterion, met, evidence}`). | The de-facto rubric is an unweighted list of binary criteria. It becomes an **inline rubric** (§10.4). |
 | `LLMJudgeOracle` | Looks up a prompt named `"Test LLM Judge"` that **does not exist** in `metadata/`; hardcoded pass thresholds (`LLMJudgeOracle.ts:158` — every criterion ≥ 0.8 in strict mode, else overall ≥ 0.7); ignores `config.model/temperature/promptTemplate`. | Cannot run as shipped. Rebuilt on the rubric engine (§10.4). |
 | `AgentEvalDriver` | `const skipOracles = true` (`AgentEvalDriver.ts:846`); a completed run is marked Passed with score 0. | Agent eval oracles never run. Fixed in §10.1. |
@@ -647,7 +647,9 @@ per-criterion score spread in addition to the overall variance it already report
   [--evaluator]`.
 
 ### 10.11 Deprecate `TestRubric`
-The migration marks it deprecated. Mark `TestEngineBase`'s rubric getter and loader `@deprecated`,
+Deprecation is metadata, not DDL: `metadata/entities/.test-rubrics-deprecation.json` (committed with this plan) sets
+the entity's `Status` to `Deprecated` and replaces its `Description`; it reaches hosts through the
+release's consolidated metadata sync. Mark `TestEngineBase`'s rubric getter and loader `@deprecated`,
 remove the form from the Testing app nav, and file the removal for the next major version. Fix the
 READMEs that claim `LLMJudgeOracle` uses rubrics.
 
@@ -843,6 +845,8 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 
 ## 16. Progress log
 
+- **2026-09-30** — `TestRubric` deprecation moved out of the migration into
+  `metadata/entities/.test-rubrics-deprecation.json` (entity `Status = Deprecated` + description).
 - **2026-09-30** — Design agreed. Hand-written DDL for all three migrations committed (tables,
   constraints, immutability triggers, descriptions, flag UPDATEs, wrapper views). CodeGen captures,
   code, metadata and UI not started. The `Check migrations` job will report the missing codegen
