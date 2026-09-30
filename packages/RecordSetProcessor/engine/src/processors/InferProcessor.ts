@@ -12,7 +12,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { LogError, Metadata, RunQuery, RunView } from '@memberjunction/core';
+import { IMetadataProvider, LogError, Metadata, RunQuery, RunView } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual, Canonicalize, ComputeContentHashAsync, EscapeSQLString, resolveMappingRef, resolveValueMapping } from '@memberjunction/global';
 import { KnowledgeHubMetadataEngine, type MJFeaturePipelineTypeEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -498,7 +498,7 @@ export class InferProcessor implements IRecordProcessor {
         const pipelineType = await this.findPipelineType(typeName, context);
         const driver = pipelineType ? this.createDriver(pipelineType) : this.createDriverWithoutCatalogRow(typeName);
         if (this.spec) {
-            this.assertDriverProducesOutputs(driver, typeName, this.spec);
+            this.assertDriverProducesOutputs(driver, typeName, this.spec, context.provider);
         }
         return driver;
     }
@@ -547,8 +547,13 @@ export class InferProcessor implements IRecordProcessor {
     }
 
     /** Fails when the driver cannot produce one or more of the spec's outputs, naming every one. */
-    private assertDriverProducesOutputs(driver: BaseFeaturePipelineDriver, typeName: string, spec: DataFeatureSpec): void {
-        const messages = driver.ValidateOutputs(spec);
+    private assertDriverProducesOutputs(
+        driver: BaseFeaturePipelineDriver,
+        typeName: string,
+        spec: DataFeatureSpec,
+        provider: IMetadataProvider | undefined
+    ): void {
+        const messages = driver.ValidateOutputs(spec, provider);
         if (messages.length > 0) {
             throw new Error(`Feature Pipeline type '${typeName}' cannot produce every output: ${messages.join(' ')}`);
         }

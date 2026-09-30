@@ -19,7 +19,7 @@
  */
 
 import { RegisterClass, Canonicalize, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
-import { Metadata } from '@memberjunction/core';
+import { IMetadataProvider, Metadata } from '@memberjunction/core';
 import { AIEngine } from '@memberjunction/aiengine';
 import {
     AIDecisionRunner,
@@ -63,14 +63,14 @@ export class DecisionFeaturePipelineDriver extends BaseFeaturePipelineDriver {
      * - Validates numeric constraints require between 2 and 10 Level descriptions.
      * - Validates enum constraints have <= 255 values, each with a description.
      */
-    public override ValidateOutputs(spec: DataFeatureSpec): string[] {
+    public override ValidateOutputs(spec: DataFeatureSpec, provider?: IMetadataProvider): string[] {
         const messages: string[] = [];
 
         if (spec.CaptureReasoning) {
             messages.push('Decision pipelines do not produce reasoning; remove CaptureReasoning or use an LLM pipeline.');
         }
 
-        messages.push(...super.ValidateOutputs(spec));
+        messages.push(...super.ValidateOutputs(spec, provider));
 
         for (const output of spec.Outputs ?? []) {
             if (!output.Constraint) {
@@ -91,9 +91,9 @@ export class DecisionFeaturePipelineDriver extends BaseFeaturePipelineDriver {
                     const fieldName = output.Target.EntityFieldName ?? (output.Target as { Field?: string }).Field;
                     if (fieldName) {
                         try {
-                            const provider = Metadata.Provider;
-                            if (provider?.Entities) {
-                                for (const entity of provider.Entities) {
+                            const md = provider ?? Metadata.Provider;
+                            if (md?.Entities) {
+                                for (const entity of md.Entities) {
                                     const field = entity.Fields?.find((f) => f.Name.toLowerCase() === fieldName.toLowerCase());
                                     if (field?.EntityFieldValues && field.EntityFieldValues.length > 0) {
                                         if (values.length === 0) {
