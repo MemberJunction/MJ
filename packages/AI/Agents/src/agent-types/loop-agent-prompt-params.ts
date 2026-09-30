@@ -489,10 +489,14 @@ export interface LoopAgentTypePromptParams {
     /**
      * Catalog narrowing for sub-agents (plan Task 3.7).
      * -1 or 0 = include all (default: narrowing is off)
-     * N = when the agent has more than N sub-agents, show the N most useful for the run's opening
+     * N = when the agent has more than N sub-agents, describe the N most useful for the run's opening
      *     request, judged once per run by one decision call, plus any with MinExecutionsPerRun set.
-     * Narrowing only hides: every permitted sub-agent can still be called, and a failed decision
-     * shows them all.
+     *     The list starts with a line naming the sub-agents it hides.
+     * Narrowing only hides: every permitted sub-agent can still be called by name, `subAgentCount`
+     * still counts them all, and a failed decision shows them all.
+     * Narrowing is prose-only: it shortens the described list, never the native tool set. With native
+     * tool calling under implicit control flow, every sub-agent is still declared as a
+     * `delegate_to_` tool, since a call to an undeclared tool is refused.
      * @default -1
      */
     maxSubAgentsInPrompt?: number;
@@ -500,11 +504,17 @@ export interface LoopAgentTypePromptParams {
     /**
      * Catalog narrowing for actions and skills (plan Task 3.7).
      * -1 or 0 = include all (default: narrowing is off)
-     * N = when the agent has more than N actions (or skills), show the N most useful for the run's
-     *     opening request, judged once per run by one decision call, plus any action with
-     *     MinExecutionsPerRun set and Find Candidate Actions / Find Candidate Agents.
-     * Narrowing only hides: every permitted action can still be called, and a failed decision shows
-     * them all.
+     * N = when the agent has more than N actions (or skills), describe the N most useful for the
+     *     run's opening request, judged once per run by one decision call, plus any action with
+     *     MinExecutionsPerRun set and Find Candidate Actions / Find Candidate Agents. Each narrowed
+     *     list starts with a line saying how many it hides and how to reach them: hidden skills are
+     *     named, and hidden actions are found with Find Candidate Actions, so actions are narrowed
+     *     only when the agent has that action (skills still are).
+     * Narrowing only hides: every permitted action can still be called, `actionCount` and
+     * `skillCount` still count them all, and a failed decision shows them all.
+     * Narrowing is prose-only: it shortens the described list, never the native tool set. With native
+     * tool calling, every action is still declared as a tool, since a call to an undeclared tool is
+     * refused and that mode has no `Actions` step to fall back on.
      * @default -1
      */
     maxActionsInPrompt?: number;
