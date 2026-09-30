@@ -36,6 +36,17 @@ interface VectorMatch {
     metadata?: Record<string, unknown>;
 }
 
+/**
+ * A query's filters before they are merged into one native metadata filter. A provider keyed by
+ * Entity Document ignores the native filter, so it works from these parts instead.
+ */
+interface UnmergedFilters {
+    /** The caller's search filters. */
+    Search: SearchFilters | undefined;
+    /** Whether the scope sets a MetadataFilter on this index. */
+    ScopeHasMetadataFilter: boolean;
+}
+
 @RegisterClass(BaseSearchProvider, 'VectorSearchProvider')
 export class VectorSearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'vector';
@@ -118,10 +129,9 @@ export class VectorSearchProvider extends BaseSearchProvider {
             }
 
             const indexesByModel = this.groupIndexesByModel(activeIndexes);
-            const baseFilter = this.buildMetadataFilter(filters);
 
             // For each model group: embed + query all indexes in parallel, optionally merging
-            // the scope's per-index MetadataFilter into the baseFilter.
+            // the scope's per-index MetadataFilter into the filter built from `filters`.
             const modelGroupPromises = Array.from(indexesByModel.entries()).map(
                 ([embeddingModelID, indexes]) =>
                     this.embedAndQueryGroup(
@@ -129,7 +139,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
                         embeddingModelID,
                         indexes,
                         topK,
-                        baseFilter,
+                        filters,
                         scopedVectorRows,
                         contextUser
                     )
@@ -199,11 +209,12 @@ export class VectorSearchProvider extends BaseSearchProvider {
         embeddingModelID: string,
         indexes: MJVectorIndexEntity[],
         topK: number,
-        filter: object | undefined,
+        filters: SearchFilters | undefined,
         scopedRows: ScopeExternalIndexConstraint[] | undefined,
         contextUser: UserInfo
     ): Promise<SearchResultItem[]> {
         try {
+            const baseFilter = this.buildMetadataFilter(filters);
             const model = AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, embeddingModelID));
             if (!model) {
                 LogError(`VectorSearchProvider: Embedding model ${embeddingModelID} not found`);
@@ -251,7 +262,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
                 const perIndexRow = scopedRows?.find(
                     r => r.VectorIndexID && UUIDsEqual(r.VectorIndexID, vectorIndex.ID)
                 );
-                const merge = this.mergeMetadataFilters(filter, perIndexRow?.MetadataFilter);
+                const merge = this.mergeMetadataFilters(baseFilter, perIndexRow?.MetadataFilter);
                 if (merge.Status === 'unusable') {
                     // FAIL CLOSED. A filter was authored for this index but cannot be applied,
                     // so querying would silently drop the scope's restriction — including the
@@ -263,8 +274,12 @@ export class VectorSearchProvider extends BaseSearchProvider {
                     return Promise.resolve([] as SearchResultItem[]);
                 }
                 const mergedFilter = merge.Status === 'usable' ? merge.Value : undefined;
+                const unmerged: UnmergedFilters = {
+                    Search: filters,
+                    ScopeHasMetadataFilter: CheckScopeJsonFilter(perIndexRow?.MetadataFilter).Status === 'usable',
+                };
                 const providerConfig = perIndexRow?.ExternalIndexConfig as Record<string, unknown> | undefined;
-                return this.queryOneIndex(vectorIndex, queryVector!, query, topK, mergedFilter, providerConfig, contextUser)
+                return this.queryOneIndex(vectorIndex, queryVector!, query, topK, mergedFilter, providerConfig, contextUser, unmerged)
                     .catch(error => {
                         LogError(`VectorSearchProvider: Error querying index "${vectorIndex.Name}": ${error}`);
                         return [] as SearchResultItem[];
@@ -291,6 +306,8 @@ export class VectorSearchProvider extends BaseSearchProvider {
      * @param providerConfig - Optional opaque config blob passed through to the vector DB
      *   driver. Each driver reads the keys it understands (e.g. Pinecone reads `namespace`).
      *   Sourced from the scope's rendered `ExternalIndexConfig`. Ignored by the colocated path.
+     * @param unmerged - The parts `filter` was merged from. Used only when the provider is keyed by
+     *   Entity Document, since such a provider ignores `filter`.
      */
     private async queryOneIndex(
         vectorIndex: MJVectorIndexEntity,
@@ -299,7 +316,8 @@ export class VectorSearchProvider extends BaseSearchProvider {
         topK: number,
         filter: object | undefined,
         providerConfig: Record<string, unknown> | undefined,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        unmerged: UnmergedFilters
     ): Promise<SearchResultItem[]> {
         const rv = new RunView();
         const dbResult = await rv.RunView<MJVectorDatabaseEntity>({
@@ -347,7 +365,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
 
         const options: QueryByVectorValues = { vector: queryVector, topK, includeMetadata: true, filter, providerConfig };
         const matches = vectorDBInstance.QueryKeyIsEntityDocumentID
-            ? await this.queryEntityDocumentPools(vectorDBInstance, vectorIndex, options, contextUser)
+            ? await this.queryEntityDocumentPools(vectorDBInstance, vectorIndex, options, unmerged, contextUser)
             : await this.queryIndexByName(vectorDBInstance, vectorIndex, options, contextUser);
         if (matches.length === 0) {
             return [];
@@ -387,14 +405,28 @@ export class VectorSearchProvider extends BaseSearchProvider {
      * `RecordID`, so each match is stamped with its document's entity — the index alone cannot name
      * it once it spans more than one entity, and an unattributed match is dropped by the permission
      * filter.
+     *
+     * The same providers ignore `options.filter`, and nothing downstream re-applies it. Each pool is
+     * one entity, so `EntityNames` is applied exactly by querying only the pools it names. Any other
+     * filter cannot be applied, so the index is skipped rather than returning what the filter excludes.
      */
     private async queryEntityDocumentPools(
         vectorDB: VectorDBBase,
         vectorIndex: MJVectorIndexEntity,
         options: QueryByVectorValues,
+        unmerged: UnmergedFilters,
         contextUser: UserInfo
     ): Promise<VectorMatch[]> {
-        const documents = await this.entityDocumentsForIndex(vectorIndex, contextUser);
+        const cannotApply = this.filtersEntityDocumentPoolsCannotApply(unmerged);
+        if (cannotApply.length > 0) {
+            // FAIL CLOSED, as for a scope MetadataFilter that cannot be applied (see embedAndQueryGroup).
+            LogError(
+                `VectorSearchProvider: skipping index "${vectorIndex.Name}" because it cannot apply ${cannotApply.join(' or ')}. ` +
+                `Its vector database keys vectors by Entity Document and returns matches with only a RecordID, so querying it would return results those filters exclude.`
+            );
+            return [];
+        }
+        const documents = this.documentsInEntities(await this.entityDocumentsForIndex(vectorIndex, contextUser), unmerged.Search?.EntityNames);
         const perDocument = await Promise.all(documents.map(async doc => {
             const response: BaseResponse = await vectorDB.QueryIndex({ ...options, id: doc.ID }, contextUser);
             return this.matchesOf(response).map(match => this.withDocumentEntity(match, doc.Entity));
@@ -424,6 +456,25 @@ export class VectorSearchProvider extends BaseSearchProvider {
             );
         }
         return documents;
+    }
+
+    /**
+     * The filters an index keyed by Entity Document cannot apply, named for the log. `EntityNames` is
+     * not one of them: it narrows the pools instead.
+     */
+    private filtersEntityDocumentPoolsCannotApply(unmerged: UnmergedFilters): string[] {
+        const names: string[] = [];
+        if (unmerged.ScopeHasMetadataFilter) names.push(`the scope's MetadataFilter`);
+        if (unmerged.Search?.Tags?.length) names.push('Tags');
+        if (unmerged.Search?.SourceTypes?.length) names.push('SourceTypes');
+        return names;
+    }
+
+    /** The documents whose entity is in `entityNames`, compared case-insensitively as the other lanes do; all of them when none are named. */
+    private documentsInEntities(documents: MJEntityDocumentEntity[], entityNames: string[] | undefined): MJEntityDocumentEntity[] {
+        if (!entityNames?.length) return documents;
+        const allowed = new Set(entityNames.map(n => n.toLowerCase()));
+        return documents.filter(d => allowed.has(d.Entity.toLowerCase()));
     }
 
     /** A match's own `Entity` metadata wins; otherwise it takes the entity its Entity Document vectorizes. */

@@ -22,7 +22,7 @@ const OTHER_INDEX_DOC = 'd4444444-4444-4444-8444-444444444444';
 
 interface FakeEntityDocument { ID: string; VectorIndexID: string; Entity: string; Status: 'Active' | 'Inactive' }
 interface FakeMatch { id: string; score: number; metadata: Record<string, unknown> }
-interface FakeQuery { id: string; topK: number }
+interface FakeQuery { id: string; topK: number; filter?: object }
 
 const { mockRunView, mockCreateInstance, mockKHConfig, entityDocumentsRef, getActiveDocsCalls, modelsRef } = vi.hoisted(() => ({
     mockRunView: vi.fn(),
@@ -80,6 +80,7 @@ vi.mock('@memberjunction/global', () => ({
 }));
 
 import { VectorSearchProvider } from '../generic/VectorSearchProvider';
+import type { ScopeConstraints } from '../generic/search.types';
 
 const contextUser = { ID: 'user-1' } as UserInfo;
 
@@ -111,6 +112,10 @@ function wireDrivers(vectorDB: ReturnType<typeof fakeVectorDB>): void {
 
 function match(id: string, score: number, recordID: string): FakeMatch {
     return { id, score, metadata: { RecordID: recordID } };
+}
+
+function loggedErrors(): string {
+    return vi.mocked(LogError).mock.calls.map(([msg]) => String(msg)).join('\n');
 }
 
 function entityDocumentLookups(): number {
@@ -186,8 +191,7 @@ describe('VectorSearchProvider — indexes keyed by Entity Document (#4911)', ()
 
         expect(results).toEqual([]);
         expect(vectorDB.queries).toEqual([]);
-        expect(vi.mocked(LogError).mock.calls.map(([msg]) => String(msg)).join('\n'))
-            .toContain('is keyed by Entity Document, but no Active Entity Document points at it');
+        expect(loggedErrors()).toContain('is keyed by Entity Document, but no Active Entity Document points at it');
         expect(entityDocumentLookups()).toBe(0);
     });
 
@@ -199,5 +203,91 @@ describe('VectorSearchProvider — indexes keyed by Entity Document (#4911)', ()
 
         expect(vectorDB.queries.map(q => q.id)).toEqual(['Default - SVS + gte-small (Local)']);
         expect(getActiveDocsCalls.count).toBe(0);
+    });
+
+    /**
+     * These providers ignore the native `filter` and return only a RecordID, and nothing downstream
+     * re-applies it. So `EntityNames` is applied by choosing pools, and any other filter skips the index.
+     */
+    describe('filters', () => {
+        let vectorDB: ReturnType<typeof fakeVectorDB>;
+
+        beforeEach(() => {
+            vectorDB = fakeVectorDB(true, {
+                [AGENTS_DOC]: [match('erd-a1', 0.81, 'agent-1')],
+                [ACTIONS_DOC]: [match('erd-b1', 0.93, 'action-1')],
+            });
+            wireDrivers(vectorDB);
+        });
+
+        it('queries only the documents whose entity EntityNames names', async () => {
+            const results = await search.Search('q', 10, { EntityNames: ['MJ: Actions'] }, contextUser);
+
+            expect(vectorDB.queries.map(q => q.id)).toEqual([ACTIONS_DOC]);
+            expect(results.map(r => [r.EntityName, r.RecordID])).toEqual([['MJ: Actions', 'action-1']]);
+        });
+
+        it('matches EntityNames case-insensitively, as the other lanes do', async () => {
+            await search.Search('q', 10, { EntityNames: ['mj: ai agents'] }, contextUser);
+
+            expect(vectorDB.queries.map(q => q.id)).toEqual([AGENTS_DOC]);
+        });
+
+        it('queries nothing, and logs no error, when EntityNames names no entity on the index', async () => {
+            const results = await search.Search('q', 10, { EntityNames: ['MJ: AI Models'] }, contextUser);
+
+            expect(vectorDB.queries).toEqual([]);
+            expect(results).toEqual([]);
+            expect(loggedErrors()).toBe('');
+        });
+
+        it.each([
+            ['Tags', { Tags: ['finance'] }],
+            ['SourceTypes', { SourceTypes: ['Entity'] }],
+        ])('skips the index and logs why when %s is set, even alongside EntityNames', async (name, filter) => {
+            const results = await search.Search('q', 10, { EntityNames: ['MJ: Actions'], ...filter }, contextUser);
+
+            expect(vectorDB.queries).toEqual([]);
+            expect(results).toEqual([]);
+            expect(loggedErrors()).toContain(`skipping index "Default - SVS + gte-small (Local)" because it cannot apply ${name}.`);
+        });
+
+        it("skips the index and logs why when the scope sets a MetadataFilter on it", async () => {
+            const scope: ScopeConstraints = {
+                ExternalIndexes: [{ IndexType: 'Vector', VectorIndexID: INDEX_ID, MetadataFilter: { TenantID: { $eq: 't1' } } }],
+            };
+
+            const results = await search.Search('q', 10, undefined, contextUser, scope);
+
+            expect(vectorDB.queries).toEqual([]);
+            expect(results).toEqual([]);
+            expect(loggedErrors()).toContain(`because it cannot apply the scope's MetadataFilter.`);
+        });
+
+        it('queries every document, as before, when the filters are empty and the scope sets no MetadataFilter', async () => {
+            const scope: ScopeConstraints = { ExternalIndexes: [{ IndexType: 'Vector', VectorIndexID: INDEX_ID }] };
+
+            const results = await search.Search('q', 10, { EntityNames: [], Tags: [], SourceTypes: [] }, contextUser, scope);
+
+            expect(vectorDB.queries.map(q => q.id).sort()).toEqual([AGENTS_DOC, ACTIONS_DOC].sort());
+            expect(results.map(r => r.RecordID)).toEqual(['action-1', 'agent-1']);
+            expect(loggedErrors()).toBe('');
+        });
+
+        it('leaves a name-keyed provider to apply every filter itself', async () => {
+            // A name-keyed store returns its own metadata, `Entity` included.
+            const nameKeyed = fakeVectorDB(false, {
+                'Default - SVS + gte-small (Local)': [{ id: 'v1', score: 0.8, metadata: { RecordID: 'action-1', Entity: 'MJ: Actions' } }],
+            });
+            wireDrivers(nameKeyed);
+
+            await search.Search('q', 10, { EntityNames: ['MJ: Actions'], Tags: ['finance'] }, contextUser);
+
+            expect(nameKeyed.queries).toHaveLength(1);
+            expect(nameKeyed.queries[0].filter).toEqual({
+                $and: [{ Entity: { $in: ['MJ: Actions'] } }, { Tags: { $in: ['finance'] } }],
+            });
+            expect(loggedErrors()).toBe('');
+        });
     });
 });
