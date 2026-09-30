@@ -109,6 +109,36 @@ describe('setupGraphQLClient', () => {
   });
 });
 
+describe('SetupGraphQLClient with an empty metadata graph', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockProviderState.entities = [];
+  });
+
+  afterEach(() => {
+    mockProviderState.entities = [{ Name: 'Stub Entity' }];
+  });
+
+  it('rejects naming the cause and the URL, before LoggedIn or engine startup', async () => {
+    const config = new GraphQLProviderConfigData('t', 'http://meta.example:4000', 'ws://meta.example:4000');
+
+    await expect(SetupGraphQLClient(config)).rejects.toThrow(/no entity metadata.*http:\/\/meta\.example:4000/);
+
+    expect(MJGlobal.Instance.RaiseEvent).not.toHaveBeenCalled();
+    expect(StartupManager.Instance.Startup).not.toHaveBeenCalled();
+  });
+
+  it('resolves and starts engines when entities loaded', async () => {
+    mockProviderState.entities = [{ Name: 'Stub Entity' }];
+    const config = new GraphQLProviderConfigData('t', 'http://meta.example:4000', 'ws://meta.example:4000');
+
+    await expect(SetupGraphQLClient(config)).resolves.toBeDefined();
+
+    expect(MJGlobal.Instance.RaiseEvent).toHaveBeenCalled();
+    expect(StartupManager.Instance.Startup).toHaveBeenCalled();
+  });
+});
+
 describe('ConnectGraphQLClient', () => {
   beforeEach(() => {
     vi.clearAllMocks();

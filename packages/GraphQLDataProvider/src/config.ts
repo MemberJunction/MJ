@@ -23,6 +23,15 @@ export async function SetupGraphQLClient(config: GraphQLProviderConfigData): Pro
     // smart-cache-checks during the engine load.
     await provider.preValidateAndRefresh();
 
+    // A boot with no entities is a failed boot: every EntityByName / RunView / GetEntityObject
+    // would fail later, far from the cause. ProviderBase.Config logs a failed metadata download
+    // and carries on (it must — a timer-driven refresh has to keep the last good graph), so the
+    // boot is where "nothing loaded" becomes an error. Checked before LoggedIn so no engine
+    // starts against an empty graph.
+    if (provider.Entities.length === 0) {
+        throw new Error(`SetupGraphQLClient: no entity metadata was loaded from ${config.URL} — the metadata download failed or returned nothing; see the logged GetAllMetadata error`);
+    }
+
     // Fire LoggedIn event BEFORE awaiting StartupManager, so that subscribers
     // (e.g., SharedService.preWarmEngines) can start overlapping with startup.
     // StartupManager.Startup() is idempotent — SharedService's LoggedIn handler
