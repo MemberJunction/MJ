@@ -4822,10 +4822,10 @@ importers:
         specifier: 6.2.0-edge.1
         version: link:../../../ThemeEngine
       '@memberjunction/work-queue-base':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../../../WorkQueue/base
       '@memberjunction/work-queue-core':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../../../WorkQueue/core
       ag-grid-angular:
         specifier: ^35.0.1
@@ -11418,10 +11418,10 @@ importers:
         specifier: 6.2.0-edge.1
         version: link:../TestingFramework/CLI
       '@memberjunction/work-queue-core':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../WorkQueue/core
       '@memberjunction/work-queue-engine':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../WorkQueue/engine
       '@oclif/core':
         specifier: ^3.27.0
@@ -12574,7 +12574,7 @@ importers:
         specifier: 6.2.0-edge.1
         version: link:../VersionHistory
       '@memberjunction/work-queue-engine':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../WorkQueue/engine
       '@octokit/auth-app':
         specifier: ^7.1.5
@@ -14467,13 +14467,13 @@ importers:
         specifier: 6.2.0-edge.1
         version: link:../WebSearchEngine
       '@memberjunction/work-queue-engine':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../WorkQueue/engine
       '@memberjunction/work-queue-samples':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../WorkQueue/samples
       '@memberjunction/work-queue-server':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../WorkQueue/server
       cosmiconfig:
         specifier: ^9.0.0
@@ -14726,10 +14726,10 @@ importers:
         specifier: 6.2.0-edge.1
         version: link:../TestingFramework/Engine
       '@memberjunction/work-queue-engine':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../WorkQueue/engine
       '@memberjunction/work-queue-samples':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../WorkQueue/samples
     devDependencies:
       '@memberjunction/global':
@@ -15249,13 +15249,13 @@ importers:
         specifier: 6.2.0-edge.1
         version: link:../../UnitTesting
       '@memberjunction/work-queue-core':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../../WorkQueue/core
       '@memberjunction/work-queue-engine':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../../WorkQueue/engine
       '@memberjunction/work-queue-server':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../../WorkQueue/server
       dotenv:
         specifier: 17.2.4
@@ -15454,7 +15454,7 @@ importers:
         specifier: ^3.984.0
         version: 3.1140.0
       '@memberjunction/work-queue-core':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../core
     devDependencies:
       '@types/node':
@@ -15473,16 +15473,16 @@ importers:
   packages/WorkQueue/base:
     dependencies:
       '@memberjunction/core':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../../MJCore
       '@memberjunction/core-entities':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../../MJCoreEntities
       '@memberjunction/global':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../../MJGlobal
       '@memberjunction/work-queue-core':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../core
     devDependencies:
       '@types/node':
@@ -15513,35 +15513,35 @@ importers:
         specifier: ^3.984.0
         version: 3.984.0
       '@memberjunction/core':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../../MJCore
       '@memberjunction/core-entities':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../../MJCoreEntities
       '@memberjunction/credentials':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../../Credentials/Engine
       '@memberjunction/global':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../../MJGlobal
       '@memberjunction/sql-dialect':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../../SQLDialect
       '@memberjunction/work-queue-aws':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../aws
       '@memberjunction/work-queue-base':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../base
       '@memberjunction/work-queue-core':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../core
     devDependencies:
       '@memberjunction/generic-database-provider':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../../GenericDatabaseProvider
       '@memberjunction/sqlserver-dataprovider':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../../SQLServerDataProvider
       '@types/mssql':
         specifier: ^9.1.9
@@ -15562,17 +15562,17 @@ importers:
   packages/WorkQueue/samples:
     dependencies:
       '@memberjunction/global':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../../MJGlobal
       '@memberjunction/work-queue-core':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../core
       '@memberjunction/work-queue-engine':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../engine
     devDependencies:
       '@memberjunction/core':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../../MJCore
       '@types/node':
         specifier: 24.10.11
@@ -15587,25 +15587,25 @@ importers:
   packages/WorkQueue/server:
     dependencies:
       '@memberjunction/api-keys':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../../APIKeys/Engine
       '@memberjunction/core':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../../MJCore
       '@memberjunction/generic-database-provider':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../../GenericDatabaseProvider
       '@memberjunction/global':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../../MJGlobal
       '@memberjunction/server-extensions-core':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../../ServerExtensionsCore
       '@memberjunction/work-queue-core':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../core
       '@memberjunction/work-queue-engine':
-        specifier: 6.2.0-edge.0
+        specifier: 6.2.0-edge.1
         version: link:../engine
       express:
         specifier: ^5.2.1

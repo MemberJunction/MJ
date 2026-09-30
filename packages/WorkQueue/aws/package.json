@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/work-queue-aws",
   "type": "module",
-  "version": "6.2.0-edge.0",
+  "version": "6.2.0-edge.1",
   "description": "MemberJunction: AWS (SNS + SQS) transport and Lambda adapter for the durable work queue. No MemberJunction runtime dependencies.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -35,7 +35,7 @@
   "dependencies": {
     "@aws-sdk/client-sns": "^3.984.0",
     "@aws-sdk/client-sqs": "^3.984.0",
-    "@memberjunction/work-queue-core": "6.2.0-edge.0"
+    "@memberjunction/work-queue-core": "6.2.0-edge.1"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

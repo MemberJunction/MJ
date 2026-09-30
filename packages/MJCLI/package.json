@@ -76,6 +76,8 @@
     "@memberjunction/sqlserver-dataprovider": "6.2.0-edge.1",
     "@memberjunction/standards": "6.2.0-edge.1",
     "@memberjunction/testing-cli": "6.2.0-edge.1",
+    "@memberjunction/work-queue-core": "6.2.0-edge.1",
+    "@memberjunction/work-queue-engine": "6.2.0-edge.1",
     "@oclif/core": "^3.27.0",
     "@oclif/plugin-help": "^6.2.37",
     "@oclif/plugin-version": "^2.2.36",

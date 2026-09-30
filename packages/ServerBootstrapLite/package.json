@@ -110,7 +110,9 @@
     "@memberjunction/tag-engine-base": "6.2.0-edge.1",
     "@memberjunction/task-graph": "6.2.0-edge.1",
     "@memberjunction/templates": "6.2.0-edge.1",
-    "@memberjunction/testing-engine": "6.2.0-edge.1"
+    "@memberjunction/testing-engine": "6.2.0-edge.1",
+    "@memberjunction/work-queue-engine": "6.2.0-edge.1",
+    "@memberjunction/work-queue-samples": "6.2.0-edge.1"
   },
   "devDependencies": {
     "@types/node": "^24.10.11",

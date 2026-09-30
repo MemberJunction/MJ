@@ -4,7 +4,7 @@ import type { BacklogPartitionMode, ClaimPartitionMode, DeadLetterCursor, Delive
 
 /**
  * Every method returns a **procedure call** (plan 12 / CD9): the SQL lives in the `spWorkQueue*` procedures of
- * `V202609291801__v6.2.x__Work_Queue_Guarded_Write_Sprocs.sql`, and the builders only render the call and bind its
+ * `V202609300844__v6.2.x__Work_Queue_Guarded_Write_Sprocs.sql`, and the builders only render the call and bind its
  * parameters in the procedure's declared order. Methods documented as "rows …" are read with `ExecuteRows`; every
  * other method is a guarded write whose single result set carries `AffectedRows`, read with `ExecuteWrite`.
  */
