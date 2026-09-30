@@ -18,6 +18,7 @@ import {
     DECISION_ROUTING_TIMEOUT_MS,
     InterpretRoutingAnswers,
     type RoutingAgent,
+    type RoutingCatalogAgent,
     type RoutingDecisionInput,
     type RoutingDecisionOutcome,
     type RoutingParticipant,
@@ -35,15 +36,17 @@ import {
 import { ResolveAgentTurn, type AgentTurnCandidates } from '../lib/utils/agent-turn-routing';
 import type { AgentArtifactSummary } from '../lib/utils/agent-artifact-summary';
 
-const MANAGER = { ID: 'AAAAAAAA-0000-0000-0000-000000000001', Name: 'Sage', Description: 'Routes each request.' } satisfies RoutingAgent;
-const RESEARCH = { ID: 'AAAAAAAA-0000-0000-0000-000000000002', Name: 'Research', Description: 'Finds and summarises sources.' } satisfies RoutingAgent;
-const WRITER = { ID: 'AAAAAAAA-0000-0000-0000-000000000003', Name: 'Writer', Description: 'Drafts and edits documents.' } satisfies RoutingAgent;
-const ANALYST = { ID: 'AAAAAAAA-0000-0000-0000-000000000004', Name: 'Analyst', Description: null } satisfies RoutingAgent;
-const CATALOG: RoutingAgent[] = [MANAGER, RESEARCH, WRITER, ANALYST];
-const findAgent = (id: string): RoutingAgent | undefined => CATALOG.find(a => a.ID.toUpperCase() === id.toUpperCase());
+const ACTIVE = { Status: 'Active', IsRestricted: false } as const;
+const MANAGER = { ID: 'AAAAAAAA-0000-0000-0000-000000000001', Name: 'Sage', Description: 'Routes each request.', ...ACTIVE } satisfies RoutingCatalogAgent;
+const RESEARCH = { ID: 'AAAAAAAA-0000-0000-0000-000000000002', Name: 'Research', Description: 'Finds and summarises sources.', ...ACTIVE } satisfies RoutingCatalogAgent;
+const WRITER = { ID: 'AAAAAAAA-0000-0000-0000-000000000003', Name: 'Writer', Description: 'Drafts and edits documents.', ...ACTIVE } satisfies RoutingCatalogAgent;
+const ANALYST = { ID: 'AAAAAAAA-0000-0000-0000-000000000004', Name: 'Analyst', Description: null, ...ACTIVE } satisfies RoutingCatalogAgent;
+const CATALOG: RoutingCatalogAgent[] = [MANAGER, RESEARCH, WRITER, ANALYST];
+const findAgent = (id: string): RoutingCatalogAgent | undefined => CATALOG.find(a => a.ID.toUpperCase() === id.toUpperCase());
 
 const VERSION_1 = 'BBBBBBBB-0000-0000-0000-000000000001';
 const VERSION_2 = 'BBBBBBBB-0000-0000-0000-000000000002';
+const PROMPT_RUN = 'EEEEEEEE-0000-0000-0000-000000000001';
 
 function participant(agent: RoutingAgent, lastReply: string): RoutingParticipant {
     return { Agent: agent, LastReply: lastReply };
@@ -236,7 +239,8 @@ describe('decision routing', () => {
 
         it('keeps continuity when the answer takes longer than the timeout, and ignores it when it arrives', async () => {
             vi.useFakeTimers();
-            const run = runner(() => new Promise(resolve => setTimeout(() => resolve(leaves(WRITER.ID)), DECISION_ROUTING_TIMEOUT_MS + 50)));
+            const late = { ...leaves(WRITER.ID), PromptRunID: PROMPT_RUN };
+            const run = runner(() => new Promise(resolve => setTimeout(() => resolve(late), DECISION_ROUTING_TIMEOUT_MS + 50)));
 
             const pending = RunRoutingDecision(input(), run);
             await vi.advanceTimersByTimeAsync(DECISION_ROUTING_TIMEOUT_MS + 1);
@@ -245,6 +249,17 @@ describe('decision routing', () => {
 
             expect(outcome.Verdict).toBe('KeptContinuity');
             expect(outcome.Reason).toContain(`${DECISION_ROUTING_TIMEOUT_MS} ms`);
+            expect(outcome.PromptRunID).toBeNull();
+        });
+
+        it('carries the decision\'s prompt run, answered or failed, so a turn can be traced to it', async () => {
+            const answeredRun = await RunRoutingDecision(input(), runner({ ...leaves(WRITER.ID), PromptRunID: PROMPT_RUN }));
+            const failedRun = await RunRoutingDecision(input(), runner({ Success: false, ErrorMessage: 'unreadable answer', Answers: {}, PromptRunID: PROMPT_RUN }));
+            const noRun = await RunRoutingDecision(input(), runner({ Success: false, ErrorMessage: 'no model', Answers: {} }));
+
+            expect(answeredRun).toMatchObject({ Verdict: 'Routed', PromptRunID: PROMPT_RUN });
+            expect(failedRun).toMatchObject({ Verdict: 'KeptContinuity', PromptRunID: PROMPT_RUN });
+            expect(noRun.PromptRunID).toBeNull();
         });
 
         it('uses an answer that arrives in time', async () => {
@@ -275,7 +290,7 @@ describe('decision routing', () => {
 
     describe('ApplyRoutingDecision, then ResolveAgentTurn', () => {
         const outcome = (overrides: Partial<RoutingDecisionOutcome>): RoutingDecisionOutcome => ({
-            Verdict: 'KeptContinuity', RoutedAgentId: null, TargetArtifact: null, Reason: '', ...overrides,
+            Verdict: 'KeptContinuity', RoutedAgentId: null, TargetArtifact: null, Reason: '', PromptRunID: null, ...overrides,
         });
 
         it('a routed agent takes continuity\'s place, labelled DecisionRouted', () => {
