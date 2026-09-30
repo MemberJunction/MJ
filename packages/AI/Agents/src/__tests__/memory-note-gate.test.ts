@@ -216,8 +216,8 @@ describe('memory-note-gate', () => {
         });
 
         it('applies Platt calibration and keeps notes meeting threshold for calibrated model', () => {
-            // Identity calibration (A = -1, B = 0) maps logit(p) back to p:
-            // sigmoid(-( -1 * logit(p) + 0 )) = sigmoid(logit(p)) = p
+            // Identity calibration (A = 1, B = 0) maps logit(p) back to p:
+            // sigmoid(1 * logit(p) + 0) = p
             const customCalibrations: Record<string, PlattCalibration> = {
                 'gpt-4o': { A: 1, B: 0 }
             };
@@ -316,11 +316,11 @@ describe('memory-note-gate', () => {
             const model1Id = 'model-1';
             const model2Id = 'model-2';
             const engine: MemoryNoteEngineSource = {
-                Prompts: [{ ID: promptId, Name: 'Default Decision' }] as unknown as MemoryNoteEngineSource['Prompts'],
+                Prompts: [{ ID: promptId, Name: 'Default Decision' }],
                 PromptModels: [
-                    { PromptID: promptId, ModelID: model1Id, Status: 'Active' },
-                    { PromptID: promptId, ModelID: model2Id, Status: 'Preview' }
-                ] as unknown as MemoryNoteEngineSource['PromptModels'],
+                    { PromptID: promptId, ModelID: model1Id, VendorID: null, Status: 'Active' },
+                    { PromptID: promptId, ModelID: model2Id, VendorID: null, Status: 'Preview' }
+                ],
                 ModelVendors: [],
                 GetEffectiveModelConfiguration: (modelId: string) => {
                     if (modelId === model1Id) return { Decision: { MaxQuestionsPerCall: 10 } };

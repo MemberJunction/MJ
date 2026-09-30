@@ -112,8 +112,8 @@ class TestMemoryManagerAgent extends MemoryManagerAgent {
         this._agentDecisionService = service;
     }
 
-    public RunGate(notes: NoteShape[], threads: ThreadShape[], user: UserInfo): Promise<NoteShape[]> {
-        return this.filterCandidateNotes(notes, threads, user);
+    public RunGate(notes: NoteShape[], threads: ThreadShape[], user: UserInfo, gateApplies: boolean = true): Promise<NoteShape[]> {
+        return this.filterCandidateNotes(notes, threads, user, gateApplies);
     }
 
     /** As production: no step without a run. */
@@ -186,6 +186,17 @@ describe('MemoryManagerAgent - Decision Gate Integration', () => {
         expect(decisions.Calls).toEqual([]);
     });
 
+    it("never gates a failed run's corrective notes, which the gate was not measured on", async () => {
+        agent.EnableDecisionGate = true;
+        const decisions = new ScriptedDecisionService(() => answered('Jev', { n1: 0.01, n2: 0.01, n3: 0.99 }));
+        agent.SetDecisionService(decisions);
+
+        const filtered = await agent.RunGate(sampleNotes, oneThread, user, false);
+
+        expect(filtered.map(n => n.content)).toEqual(['Prefers dark mode theme', 'Do not touch production DB']);
+        expect(decisions.Calls).toEqual([]);
+    });
+
     it('falls back to the self-confidence filter when the decision call fails', async () => {
         agent.EnableDecisionGate = true;
         const decisions = new ScriptedDecisionService(() => ({ success: false, errorMessage: 'Rate limit exceeded', Answers: {} }));
@@ -235,6 +246,21 @@ describe('MemoryManagerAgent - Decision Gate Integration', () => {
         const filtered = await agent.RunGate(notes, oneThread, user);
 
         expect(filtered.map(n => n.content)).toEqual(['Prefers weekly summaries']);
+    });
+
+    it('keeps the self-reported rule for a note the calibrated model gave no usable answer for', async () => {
+        agent.EnableDecisionGate = true;
+        const notes: NoteShape[] = [
+            { type: 'Preference', content: 'Prefers weekly summaries', confidence: 70 },
+            { type: 'Preference', content: 'Prefers metric units', confidence: 95 },
+            { type: 'Context', content: 'Works on the billing team', confidence: 70 }
+        ];
+        agent.SetDecisionService(new ScriptedDecisionService(() => answered('Jev', { n1: 0.95 })));
+
+        const filtered = await agent.RunGate(notes, oneThread, user);
+
+        // n1 by the gate; n2 and n3 unanswered, so the self-report keeps n2 (95) and drops n3 (70).
+        expect(filtered.map(n => n.content)).toEqual(['Prefers weekly summaries', 'Prefers metric units']);
     });
 
     describe("the gate's cost counts toward the agent run", () => {

@@ -527,6 +527,8 @@ export class MemoryManagerAgent extends BaseAgent {
     private _contextUser: UserInfo | null = null;
     /** Flag to enable typed decision gate instead of self-confidence threshold */
     private _enableDecisionGate: boolean = false;
+    /** The run's cancellation signal, passed to the decision gate's calls */
+    private _cancellationToken: AbortSignal | undefined;
 
     /**
      * Whether the typed decision gate is enabled for filtering extracted memory notes.
@@ -932,7 +934,7 @@ export class MemoryManagerAgent extends BaseAgent {
             }))
         };
 
-        return this.executeNoteExtraction(promptData, existingNotes, contextUser);
+        return this.executeNoteExtraction(promptData, existingNotes, contextUser, true);
     }
 
     /**
@@ -980,7 +982,9 @@ export class MemoryManagerAgent extends BaseAgent {
             }))
         };
 
-        const extracted = await this.executeNoteExtraction(promptData, existingNotes, contextUser);
+        // The decision gate was measured on conversation notes only; a corrective lesson from a failed run
+        // is not the durable user fact its question asks about, so these keep the self-reported rule.
+        const extracted = await this.executeNoteExtraction(promptData, existingNotes, contextUser, false);
         return this.markCorrectiveNotes(extracted);
     }
 
@@ -1024,7 +1028,8 @@ export class MemoryManagerAgent extends BaseAgent {
     private async executeNoteExtraction(
         promptData: { conversationThreads: ConversationThread[]; existingNotes: ExistingNoteProjection[] },
         existingNotes: MJAIAgentNoteEntity[],
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        decisionGateApplies: boolean
     ): Promise<ExtractedNote[]> {
         // Step 1: run the extraction prompt and parse out the raw notes
         const rawNotes = await this.runNoteExtractionPrompt(promptData, existingNotes.length, contextUser);
@@ -1041,7 +1046,7 @@ export class MemoryManagerAgent extends BaseAgent {
         }
 
         // Step 3: filter by decision gate or confidence/content length
-        const candidateNotes = await this.filterCandidateNotes(rawNotes, promptData.conversationThreads, contextUser);
+        const candidateNotes = await this.filterCandidateNotes(rawNotes, promptData.conversationThreads, contextUser, decisionGateApplies);
         if (candidateNotes.length === 0) {
             if (this._verbose) LogStatus('Memory Manager: No candidates passed gating thresholds');
             return [];
@@ -1193,16 +1198,19 @@ export class MemoryManagerAgent extends BaseAgent {
     }
 
     /**
-     * Filters candidate notes using either the typed decision gate (if enabled)
-     * or the traditional self-reported confidence and length filters.
+     * Filters candidate notes using either the typed decision gate (if enabled, and the notes are ones
+     * it was measured on) or the traditional self-reported confidence and length filters.
      * Protected so a test can run the gate the way extraction does.
+     *
+     * @param decisionGateApplies Whether these notes may be gated: conversation notes only.
      */
     protected async filterCandidateNotes(
         notes: ExtractedNote[],
         conversationThreads: ConversationThread[],
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        decisionGateApplies: boolean
     ): Promise<ExtractedNote[]> {
-        if (!this._enableDecisionGate) {
+        if (!this._enableDecisionGate || !decisionGateApplies) {
             return this.filterByConfidenceAndLength(notes);
         }
         return this.filterWithDecisionGate(notes, conversationThreads, contextUser);
@@ -1276,7 +1284,8 @@ export class MemoryManagerAgent extends BaseAgent {
             PromptName: 'Default Decision',
             State: state,
             Questions: questions,
-            AgentID: this.AgentRun?.AgentID ?? undefined
+            AgentID: this.AgentRun?.AgentID ?? undefined,
+            CancellationToken: this._cancellationToken
         });
 
         await this.recordDecisionStep(step, result);
@@ -1309,7 +1318,8 @@ export class MemoryManagerAgent extends BaseAgent {
     }
 
     /**
-     * Applies calibrated probabilities to judge which candidate notes to keep.
+     * Applies calibrated probabilities to judge which candidate notes to keep. A note the calibrated
+     * model gave no usable answer for keeps the self-reported rule, as a failed call's batch does.
      */
     private evaluateDecisionVerdict(
         batch: ExtractedNote[],
@@ -1336,7 +1346,13 @@ export class MemoryManagerAgent extends BaseAgent {
             }
         }
 
-        return verdict.KeptNotes;
+        const unanswered = verdict.JudgedNotes.filter(j => j.CalibratedProbability === undefined).map(j => j.Note);
+        if (unanswered.length === 0) {
+            return verdict.KeptNotes;
+        }
+        LogStatus(`Memory Manager: '${modelName}' gave no usable answer for ${unanswered.length} of ${batch.length} note(s), which keep the confidence filter`);
+        const kept = new Set<ExtractedNote>([...verdict.KeptNotes, ...this.filterByConfidenceAndLength(unanswered)]);
+        return batch.filter(note => kept.has(note));
     }
 
     /**
@@ -3950,6 +3966,7 @@ export class MemoryManagerAgent extends BaseAgent {
             if (typeof params.data?.enableDecisionGate === 'boolean') {
                 this._enableDecisionGate = params.data.enableDecisionGate;
             }
+            this._cancellationToken = params.cancellationToken;
 
             // Initialize observability state for this run
             this._agentRunID = this.AgentRun?.ID || null;

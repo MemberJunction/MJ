@@ -9,11 +9,13 @@
 
 import {
     ApplyPlattCalibration,
+    type AIModelConfiguration,
     type DecisionAnswer,
     type LikelihoodQuestion,
     type PlattCalibration
 } from '@memberjunction/ai';
-import type { AIEngine } from '@memberjunction/aiengine';
+import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import type { MJAIModelVendorEntity, MJAIPromptModelEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 
 /**
@@ -141,12 +143,15 @@ export interface MemoryNoteGateVerdict<T extends MemoryNoteCandidate = MemoryNot
 }
 
 /**
- * Minimal interface needed from AIEngine to resolve model question limits.
+ * What {@link MemoryNotePromptQuestionCap} reads from the AI engine to resolve the question limit.
+ * `AIEngine.Instance` satisfies it.
  */
-export type MemoryNoteEngineSource = Pick<
-    AIEngine,
-    'Prompts' | 'PromptModels' | 'ModelVendors' | 'GetEffectiveModelConfiguration'
->;
+export interface MemoryNoteEngineSource {
+    readonly Prompts: ReadonlyArray<Pick<MJAIPromptEntityExtended, 'ID' | 'Name'>>;
+    readonly PromptModels: ReadonlyArray<Pick<MJAIPromptModelEntity, 'PromptID' | 'ModelID' | 'VendorID' | 'Status'>>;
+    readonly ModelVendors: ReadonlyArray<Pick<MJAIModelVendorEntity, 'ID' | 'ModelID' | 'VendorID'>>;
+    GetEffectiveModelConfiguration(modelID: string, vendorModelVendorID?: string): Pick<AIModelConfiguration, 'Decision'> | null;
+}
 
 /**
  * Builds likelihood questions for each candidate note, keyed n1, n2, etc.
@@ -369,7 +374,7 @@ function judgeCalibratedNote<T extends MemoryNoteCandidate>(
  * @param answers The answers returned by the decision runner.
  * @param notes The candidate notes evaluated.
  * @param modelName The answering model name.
- * @param threshold The probability threshold to keep a note (default: 0.5).
+ * @param threshold The calibrated probability at which a note is kept (default: {@link MEMORY_NOTE_MIN_PROBABILITY}, 0.6).
  * @param calibrations Optional calibration map override (defaults to MEMORY_NOTE_DECISION_CALIBRATION).
  */
 export function JudgeMemoryNotes<T extends MemoryNoteCandidate = MemoryNoteCandidate>(

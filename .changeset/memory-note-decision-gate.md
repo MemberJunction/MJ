@@ -6,3 +6,4 @@ The Memory Manager can gate extracted notes on a typed decision instead of the e
 
 - The decision's run step joins the agent run's steps and carries the decision's prompt run, so the run's cost and token totals count the gate.
 - Each note is judged against the conversation it came from: one decision per conversation, with that conversation's excerpt formatted as the measurement's corpus was (`FormatMemoryNoteExcerpt`, `GroupMemoryNotesByConversation`). A note that names none of several conversations keeps the self-reported rule.
+- A note the calibrated model gave no usable answer for keeps the self-reported rule, as a failed call's batch does. Corrective notes mined from failed runs are not gated, since the gate was measured on conversation notes only. The gate's calls take the run's cancellation signal.
