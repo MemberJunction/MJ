@@ -62,11 +62,18 @@ type FlowPathSelection = {
     HoldReason: string | null;
 };
 
-/** A Decision step's `stepResult`, in the shape a Prompt step's has. */
-type FlowDecisionStepResult = {
+/**
+ * A Decision step's `stepResult`, in the shape a Prompt step's has.
+ *
+ * `result` is the payload the step handed on, which carries no answers — what the dispatched path
+ * exposes as a Decision node's result, less the output copy of its answers that a condition may not
+ * read anyway. A condition reads answers through the `decisions` root, where the hold applies; a
+ * raw answer here would let `stepResult.result.intent.value` route on one below its `minConfidence`.
+ */
+type FlowDecisionStepResult<P> = {
     Success: boolean;
     step: 'Success' | 'Failed';
-    result: Record<string, AgentDecisionAnswerSummary> | { error: string };
+    result: P;
 };
 
 /** How a Decision step ended, as the shared answer rules read it. */
@@ -1096,11 +1103,14 @@ export class FlowAgentType extends BaseAgentType {
      * A call that succeeded makes the step `'Success'`; one that failed makes it `'Failed'`, so a
      * failed decision takes the same recovery handling as any failed step: the paths that read its
      * answers are passed over, and a recovery path is taken whatever its rank.
+     *
+     * @param payload the payload the step hands on, which is its `stepResult.result`
      */
     private completeDecisionStep<P>(
         step: BaseAgentNextStep<P>,
-        flowState: FlowExecutionState
-    ): { Next: BaseAgentNextStep<P>; StepResult: FlowDecisionStepResult } {
+        flowState: FlowExecutionState,
+        payload: P
+    ): { Next: BaseAgentNextStep<P>; StepResult: FlowDecisionStepResult<P> } {
         const node = flowState.currentStepId ? AIEngine.Instance.GetAgentStepByID(flowState.currentStepId) : null;
         const result = step.decisionResults?.[0];
         const answers = result?.success && result.answers && !Array.isArray(result.answers) ? result.answers : null;
@@ -1112,13 +1122,13 @@ export class FlowAgentType extends BaseAgentType {
         if (outcome.Status === 'Complete') {
             return {
                 Next: { ...step, step: 'Success' },
-                StepResult: { Success: true, step: 'Success', result: outcome.Answers }
+                StepResult: { Success: true, step: 'Success', result: payload }
             };
         }
         const errorMessage = `Decision step "${node?.Name ?? flowState.currentStepId}" failed: ${outcome.ErrorMessage}`;
         return {
             Next: { ...step, step: 'Failed', errorMessage },
-            StepResult: { Success: false, step: 'Failed', result: { error: outcome.ErrorMessage } }
+            StepResult: { Success: false, step: 'Failed', result: payload }
         };
     }
 
@@ -1803,7 +1813,7 @@ export class FlowAgentType extends BaseAgentType {
         // A Decision step's answers come back on the 'Retry' BaseAgent returns after running it. They
         // are recorded first, so this step's paths, and every later step's, can read them. From here
         // on the step is its outcome: Success, or Failed when the call failed.
-        const decision = step.decisionResults ? this.completeDecisionStep(step, flowState) : null;
+        const decision = step.decisionResults ? this.completeDecisionStep(step, flowState, currentPayload) : null;
         const finished = decision?.Next ?? step;
 
         // Store the step result so path conditions can access it via stepResult

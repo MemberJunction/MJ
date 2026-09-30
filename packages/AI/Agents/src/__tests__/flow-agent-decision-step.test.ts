@@ -639,6 +639,25 @@ describe('a Decision step walked in-run', () => {
         expect(harness.run.ErrorMessage).toContain('through "payload.decisions"');
     });
 
+    it('routes the 0.55 example on stepResult.result to the fallback, as the dispatched path does', async () => {
+        // The reviewer's probe: a path reading the answer through stepResult.result, at priority 2, and a
+        // fallback at priority 1, with "billing" answered at 0.55 against a minConfidence of 0.7. A
+        // Decision step's result is the payload it hands on, which carries no answers, so the path
+        // cannot route on one below its threshold. task-graph's decision-node tests pin the dispatched
+        // half of the same example.
+        harness.steps = [triageStep(), subAgentStep('Billing'), subAgentStep('Queue')];
+        harness.paths = [
+            path(TRIAGE_STEP_ID, stepID('Billing'), "stepResult.result.intent.value === 'billing'", 2),
+            path(TRIAGE_STEP_ID, stepID('Queue'), null, 1),
+        ];
+        const agent = makeAgent(answered({ value: 'billing', confidence: 0.55 }, 0.1));
+
+        const result = await agent.Execute(makeParams());
+
+        expect(agent.SubAgentCalls).toEqual(['Queue Agent']);
+        expect(result.success).toBe(true);
+    });
+
     it('refuses a flow whose Decision steps share a key before any step runs', async () => {
         harness.steps.push(triageStep({ ID: 'cccccccc-1000-4000-8000-000000000002', Name: 'Triage again', StartingStep: false }));
         const agent = makeAgent(answered({ value: 'billing', confidence: 0.92 }, 0.1));

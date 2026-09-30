@@ -15,8 +15,13 @@ import { describe, it, expect, vi } from 'vitest';
 import { UserInfo, type RunViewParams } from '@memberjunction/core';
 import type { MJTaskDependencyEntity, MJTaskEntity } from '@memberjunction/core-entities';
 import {
+    CompileFlowToTaskGraph,
     CONDITION_ROOTS,
     DecisionAnswerConfidence,
+    NormalizeDependency,
+    ValidateTaskGraphSpec,
+    type FlowCompilerPath,
+    type FlowCompilerStep,
     DecisionHoldReason,
     NO_DECISIONS,
     ResolveExclusiveGroups,
@@ -674,6 +679,69 @@ describe('a failed decision with a recovery path', () => {
         expect([...FailedDecisionIDs([FAILED_ROW, decisionRow('Complete', triageOutput(BILLING_CONFIDENT))])]).toEqual(['triage']);
         expect(ReadsFailedDecision("decisions.triage.intent.value === 'x'", new Set(['triage']))).toBe(true);
         expect(ReadsFailedDecision('stepResult.Success === false', new Set(['triage']))).toBe(false);
+    });
+});
+
+describe('the 0.55 example on stepResult.result, dispatched', () => {
+    // The dispatched half of the reviewer's probe; ai-agents' flow-agent-decision-step tests walk the
+    // same flow in-run. A path reads the answer through stepResult.result at priority 2, a fallback
+    // sits at priority 1, and "billing" is answered at 0.55 against a minConfidence of 0.7.
+    const TRIAGE_ID = 'dddddddd-0000-4000-8000-000000000001';
+    const BILLING_ID = 'dddddddd-0000-4000-8000-000000000002';
+    const QUEUE_ID = 'dddddddd-0000-4000-8000-000000000003';
+    const step = (ID: string, Name: string, over: Partial<FlowCompilerStep>): FlowCompilerStep => ({
+        ID, Name, StepType: 'Sub-Agent', StartingStep: false, Status: 'Active', SubAgentID: `agent-${Name}`, ...over,
+    });
+    const steps: FlowCompilerStep[] = [
+        step(TRIAGE_ID, 'Triage the ticket', {
+            StepType: 'Decision', StartingStep: true, SubAgentID: null,
+            Configuration: JSON.stringify({ key: 'triage', state: TRIAGE.state, questions: TRIAGE.questions }),
+        }),
+        step(BILLING_ID, 'Billing', {}),
+        step(QUEUE_ID, 'Queue', {}),
+    ];
+    const paths: FlowCompilerPath[] = [
+        { ID: 'p-billing', OriginStepID: TRIAGE_ID, DestinationStepID: BILLING_ID, Condition: "stepResult.result.intent.value === 'billing'", Priority: 2 },
+        { ID: 'p-queue', OriginStepID: TRIAGE_ID, DestinationStepID: QUEUE_ID, Condition: null, Priority: 1 },
+    ];
+
+    it('compiles, validates, and routes to the fallback — the same path the walker takes', async () => {
+        const compiled = CompileFlowToTaskGraph(steps, paths, {
+            WorkflowName: 'Support triage',
+            ResolveAgentName: (id) => id.replace('agent-', ''),
+            ResolveActionName: () => null,
+            ResolvePromptName: () => null,
+        });
+        expect(compiled.Errors).toEqual([]);
+        const spec = compiled.Spec!;
+        expect(ValidateTaskGraphSpec(spec).Errors).toEqual([]);
+
+        // The Decision node runs, as the dispatcher runs it, and answers "billing" at 0.55.
+        const node = spec.tasks.find((t) => t.tempId === TRIAGE_ID)!;
+        const runner = decisionRunner({ Success: true, Answers: { intent: { value: 'billing', confidence: 0.55 }, urgent: { probability: 0.1 } } });
+        const task = decisionTask({ ID: TRIAGE_ID, Name: node.name, Configuration: JSON.stringify(BuildStepConfiguration(node)) });
+        const dispatcher = dispatcherWith(runner);
+        const outcome = await dispatcher.runTaskBody(task, fakeProvider(null).Provider, { ticket: 'I was charged twice' }, new Map());
+        const row: DecisionTaskRow = {
+            Name: node.name, Status: 'Complete', StepType: 'Decision', Configuration: task.Configuration,
+            OutputPayload: JSON.stringify(outcome.Output), ErrorMessage: null,
+        };
+
+        const entityById = new Map<string, OriginFields>([[TRIAGE_ID, { ...origin('Complete', outcome.Output), ID: TRIAGE_ID, Name: node.name }]]);
+        const decisions = ResolveGraphDecisions([row]);
+        const edges: EvaluatedEdge[] = spec.tasks.flatMap((t) => (t.dependsOn ?? []).map(NormalizeDependency).map((d) => {
+            const dep: EdgeFields = {
+                ID: `${d.tempId}->${t.tempId}`, TaskID: t.tempId, DependsOnTaskID: d.tempId, Condition: d.condition ?? null,
+                ExclusiveGroup: d.exclusiveGroup ?? null, Priority: d.priority ?? 0, Sequence: d.sequence ?? 0,
+            };
+            return {
+                id: dep.ID, taskId: dep.TaskID, dependsOnTaskId: dep.DependsOnTaskID, exclusiveGroup: d.exclusiveGroup ?? '',
+                originStatus: 'Complete', priority: dep.Priority, sequence: dep.Sequence,
+                conditionOutcome: dispatcher.evaluateExclusiveCondition(dep, entityById, {}, decisions),
+            };
+        }));
+
+        expect(ResolveExclusiveGroups(edges, new Set(['Complete', 'Failed'])).keptEdgeIDs).toEqual([`${TRIAGE_ID}->${QUEUE_ID}`]);
     });
 });
 
