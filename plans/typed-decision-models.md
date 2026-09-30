@@ -1,6 +1,8 @@
 # Typed Decision Models in MemberJunction
 
-**Status:** In progress. Phase −1 is complete; Phases 0 and 1 are in review (see §0.1).
+**Status:** Built, apart from Task 0.6's audio and video runners, which are in progress. The
+milestone PR, #4814, merged into `next` on 2026-09-30. Everything else is in review; see §0.1 for
+the PR behind each task.
 **Audience:** An engineer (with or without an AI coding agent) executing this end to end
 **Owner:** Colin Brockman
 
@@ -35,26 +37,92 @@ Applications built on MJ, Skip among them, get the first route without code chan
 the other two where they fit. §1 gives the outside evidence behind the new scope, and §3.7 gives the
 pattern most of the new consumers share.
 
-### 0.1 Progress and corrections (2026-09-28)
+### 0.1 Progress (updated 2026-09-30)
+
+Every task, with the PR that carries it. "Merged" means merged into `next`. "In review" PRs were
+retargeted to `next` when #4814 merged; before that they were stacked on `train/typed-decisions`.
+
+**Phase −1 and Phase 0**
 
 | Task | PR | State |
 |---|---|---|
-| −1 Feasibility spike | #4660 (this PR) | Done. Recommendation: native provider, with `LLMDecision` as the fallback, on three conditions (`plans/typed-decision-spike-results.md`). |
+| −1 Feasibility spike | #4660 (this PR) | Done. Recommendation: native provider, with `LLMDecision` as the fallback (`typed-decision-spike-results.md`). |
 | 0.1 One speech-to-text model type | #4764 | Merged |
-| 0.2 + 0.3 (1/4) Extract `BaseModelRunner`; delete dead failover code | #4767 | In review |
-| 0.3 (2/4) Split the prompt-run lifecycle into a generic core and a chat hook | #4775 | In review, stacked on #4767 |
-| 0.3 (3/4) Make the failover loop generic | #4777 | In review, stacked on #4775 |
-| 0.3 (4/4) Enforce `RequiredModelType` | not yet opened | Reviewed and verified; stacked on #4777 |
+| 0.2 + 0.3 Extract `BaseModelRunner`, split the prompt-run lifecycle, make failover generic | #4767, #4775, #4777 | Merged |
+| 0.3 (4/4) Enforce `RequiredModelType` | #4801 | Merged |
 | 0.4 Deprecate `ClassifyText` / `SummarizeText` | #4714 | Merged |
-| 0.8 An unevaluable `While` condition fails | #4765 | In review |
-| 1.1 `BaseDecision` | #4776 | In review |
-| 1.2 The `Decision` model type and configuration section | #4811 | In review |
-| 1.4 `LLMDecision` and its `LLM Decision` prompt | #4812 | In review, stacked on #4776. Live on Cerebras: about 400 ms and $0.0004 per decision. |
+| 0.5 `AIEmbeddingRunner` and its call sites | #4843 | In review. Three call sites stay on the drivers on purpose, each with a comment: `AIEngine` (it sits below `ai-prompts`), DBAutoDoc (it has no MJ metadata), and the vectorize worker thread (it has no `AIEngine`). |
+| 0.6 Reranker runner | #4842 | In review |
+| 0.6 Image generation runner | #4844 | In review |
+| 0.6 Audio (TTS and STT runners, `BaseAudioGenerator` split) and video runner | `feat/ai-audio-video-runners` | In progress, stacked on #4844 |
+| 0.7 Delete the in-run flow walker | — | Withdrawn (see Task 0.7) |
+| 0.8 An unevaluable `While` condition fails | #4765 | Merged |
+
+**Phase 1 and the milestone**
+
+| Task | PR | State |
+|---|---|---|
+| 1.1 `BaseDecision` | #4776 | Merged |
+| 1.2 The `Decision` model type and configuration | #4811 | Merged |
+| 1.3 `AIDecisionRunner`; 1.4 `LLMDecision`; 1.5 the config carrier (`MJ: AI Prompts`); 1.6 `Run Decision` | #4814 | Merged (the milestone, §0.2). #4812 carried 1.4 first and was closed as superseded. |
+| 2.3 `OpenRouterDecision` (Jev) | #4814 | Merged |
+| 4.6 `finishIf`; 4.7 `decisions` in the loop response | #4814 | Merged. `finishIf` is opt-in per agent (`finishIfMode`: `off` by default, `shadow`, `on`). |
+| Follow-ups from the #4814 review (#4900, #4901, #4902) | #4906 | In review |
+| Client-callable decisions (`RunDecision` over GraphQL) | #4854 | In review |
+| A delegated decision's chat cost rolls into its run | #4880 | In review |
+
+**Phase 2**
+
+| Task | PR | State |
+|---|---|---|
+| 2.1 The decision eval harness | #4875 | In review |
+| 2.2 The frozen corpus | — | Done. It stays local and is never committed. |
+| 2.4 Calibration, and thresholds from data | #4876 | In review. Per-model Platt calibration; conversation routing's threshold. |
+| 2.5 An open-weights driver | — | Optional; not taken. The plan takes it when a candidate model is published. |
+
+**Phase 3**
+
+| Task | PR | State |
+|---|---|---|
+| 3.0 The decision-backed judge oracle | #4847 | In review |
+| 3.1 Sage discovery | #4873, with its eval #4892 and calibration #4893 | In review |
+| 3.2 The Sage intent check | #4860 | In review, as part of 3.9 |
+| 3.3 `PayloadFeedbackManager` | #4848 | In review |
+| 3.4 Make `confidence` load-bearing | #4897 | Measured: self-reported confidence doesn't track outcomes, so it stays advisory. The memory manager's gate on it moved to a typed decision (#4897, in review). |
+| 3.5 Later candidates | — | Candidates, not commitments; none taken |
+| 3.6 `DecisionReranker` | #4851 | In review |
+| 3.7 Catalog narrowing | #4849 | In review |
+| 3.8 Duplicate detection | #4855, #4869, with its eval #4894 and calibration #4896 | In review |
+| 3.9 Conversation routing | #4860 | In review; its threshold is from #4876 |
+
+**Phase 4**
+
+| Task | PR | State |
+|---|---|---|
+| 4.2 to 4.5 The `decisions` condition root, the task-graph `Decision` node, exhaustive forks, holding on low confidence | #4857 | In review |
+| 4.3 The Flow agent `Decision` step, its editor, and Agent Manager support | #4868, #4874, #4889 | In review |
+| 4.6 The `finishIf` replay | #4895 | In review |
+
+**Phase 5**
+
+| Task | PR | State |
+|---|---|---|
+| 5.1 Pipeline types and the driver seam | #4841 | In review |
+| 5.2 `DecisionFeaturePipelineDriver` | #4856 | In review. Each value's distribution is in its decision run's `AIPromptRun.Result`, which `MJ: Feature Values.AIPromptRunID` links to, as this task specifies. |
+| 5.3 The builder | #4871, with escalation settings #4881 | In review |
+| 5.4 Escalating borderline records | #4872 | In review |
+| 5.5 The measurement | #4890 | In review |
+
+**Known gaps outside the plan's tasks:** issue #4907 (whether the chat runner should honor
+`FailoverStrategy`). Model metadata also names `GeminiAudioGenerator` and `VertexAudioGenerator`
+driver classes that don't exist in the repo.
 
 ### 0.2 The wrap-up milestone (2026-09-28)
 
 Amith asked for the Jev work to be finished first. The milestone is **"MJ agents can call Jev"**,
-and it lands as one PR from `train/typed-decisions`, which merges the in-review PRs above.
+and it landed as one PR, #4814, from `train/typed-decisions`, which merged the in-review PRs of the
+time. #4814 merged into `next` on 2026-09-30. After review, `finishIf` shipped opt-in rather than on
+by default (see §0.1).
 
 | Piece | Task | What it gives |
 |---|---|---|
