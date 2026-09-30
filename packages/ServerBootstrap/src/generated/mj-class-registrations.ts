@@ -151,8 +151,9 @@ import {
     MiniMaxLLM,
 } from '@memberjunction/ai-minimax';
 
-// @memberjunction/ai-openrouter (1 classes)
+// @memberjunction/ai-openrouter (2 classes)
 import {
+    OpenRouterDecision,
     OpenRouterLLM,
 } from '@memberjunction/ai-openrouter';
 
@@ -1080,8 +1081,9 @@ import {
     TemplateRunServerOperation,
 } from '@memberjunction/templates';
 
-// @memberjunction/ai-prompts (1 classes)
+// @memberjunction/ai-prompts (2 classes)
 import {
+    LLMDecision,
     ParallelExecutionCoordinator,
 } from '@memberjunction/ai-prompts';
 
@@ -1359,7 +1361,7 @@ import {
     WebSearchQueryServerOperation,
 } from '@memberjunction/web-search-engine';
 
-// @memberjunction/core-actions (153 classes)
+// @memberjunction/core-actions (154 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1480,6 +1482,7 @@ import {
     RevokeListInvitationAction,
     RunAdhocQueryAction,
     RunClusterAnalysisAction,
+    RunDecisionAction,
     RunRecordProcessAction,
     RunStoredQueryAction,
     ScheduledGeocodingAction,
@@ -1577,6 +1580,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     InceptionLLM,
     LlamaCppLLM,
     MiniMaxLLM,
+    OpenRouterDecision,
     OpenRouterLLM,
     SiliconFlowLLM,
     VertexLLM,
@@ -1736,11 +1740,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
     MJCompanyIntegrationFieldMapEntity,
-    MJCompanyIntegrationRecordMapEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
     MJCompanyIntegrationRunEntity,
@@ -1940,11 +1944,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJResourcePermissionEntityExtended,
     MJResourceTypeEntity,
     MJRoleEntity,
-    MJRowLevelSecurityFilterEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRowLevelSecurityFilterEntity,
     MJSQLDialectEntity,
     MJScheduledJobEntity,
     MJScheduledJobRunEntity,
@@ -2144,11 +2148,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     UpdateUserProgressAction,
     BufferCreatePostAction,
     BufferDeletePostAction,
-    BufferGetAnalyticsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    BufferGetAnalyticsAction,
     BufferGetChannelsAction,
     BufferGetPendingPostsAction,
     BufferGetSentPostsAction,
@@ -2270,6 +2274,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AIPromptExtension,
     TemplateEmbedExtension,
     TemplateRunServerOperation,
+    LLMDecision,
     ParallelExecutionCoordinator,
     LLMReranker,
     AdaptiveBoundarySegmenter,
@@ -2347,12 +2352,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PredictiveStudioPipelineBuilderAgent,
     PredictiveStudioPromoteModelAction,
     PredictiveStudioPromoteModelServerOperation,
-    PredictiveStudioRunExperimentAction,
-    PredictiveStudioRunFeaturePipelineServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    PredictiveStudioRunExperimentAction,
+    PredictiveStudioRunFeaturePipelineServerOperation,
     PredictiveStudioScheduleModelScoringAction,
     PredictiveStudioScoreRecordSetAction,
     PredictiveStudioScoreRecordSetServerOperation,
@@ -2551,12 +2556,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     LoadAgentSpecAction,
     LoopAction,
     MCPToolAction,
-    MaterializeListFromViewAction,
-    ModifyDocumentSectionAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MaterializeListFromViewAction,
+    ModifyDocumentSectionAction,
     ModifyFormContributionAction,
     ModifyInteractiveFormAction,
     MoveListMembersAction,
@@ -2580,6 +2585,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     RevokeListInvitationAction,
     RunAdhocQueryAction,
     RunClusterAnalysisAction,
+    RunDecisionAction,
     RunRecordProcessAction,
     RunStoredQueryAction,
     ScheduledGeocodingAction,
@@ -2634,7 +2640,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1061;
+export const CLASS_REGISTRATIONS_COUNT = 1064;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

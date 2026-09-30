@@ -41,11 +41,11 @@ const OUTPUT_DIR = join(REPO_ROOT, 'metadata/prompts/output');
 const TOP_LEVEL_FIELDS = new Set([
     'taskComplete', 'message', 'responseForm', 'actionableCommands', 'automaticCommands',
     'payloadChangeRequest', 'scratchpad', 'artifactToolCalls', 'conversationToolCalls',
-    'memoryWrites', 'reasoning', 'confidence', 'nextStep'
+    'memoryWrites', 'reasoning', 'confidence', 'nextStep', 'decisions'
 ]);
 const NEXT_STEP_FIELDS = new Set([
     'type', 'actions', 'pipeline', 'messageIndex', 'reason', 'subAgent', 'subAgents',
-    'clientTools', 'forEach', 'while', 'skills', 'plan', 'tasks', 'taskGraph'
+    'clientTools', 'forEach', 'while', 'skills', 'plan', 'tasks', 'taskGraph', 'finishIf'
 ]);
 const ACTION_FIELDS = new Set(['name', 'params']);
 const SUB_AGENT_FIELDS = new Set(['name', 'message', 'templateParameters', 'terminateAfter']);
