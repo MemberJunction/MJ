@@ -3193,14 +3193,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       // Check for missed completions (user navigated away, agent completed, user returned)
       for (const message of this.messages) {
         if (message.Status === 'In-Progress' && message.ID) {
-          const recentCompletion = this.streamingService.getRecentCompletion(message.ID);
+          const recentCompletion = this.streamingService.GetRecentCompletion(message.ID);
           if (recentCompletion) {
             LogStatusEx({message: `📥 Found missed completion for message ${message.ID}, handling...`, verboseOnly: true});
             await this.handleMessageCompletion(message, recentCompletion.agentRunId, conversationId, loadToken);
             if (!this.isActiveConversationLoad(conversationId, loadToken)) {
               return;
             }
-            this.streamingService.clearRecentCompletion(message.ID);
+            this.streamingService.ClearRecentCompletion(message.ID);
           }
         }
       }
@@ -3611,14 +3611,22 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       if (!this.isActiveConversation(message.ConversationID)) {
         return;
       }
+    }
 
-      // CRITICAL: If this is a new In-Progress AI message, add it to inProgressMessageIds
-      // immediately so message-input registers a PubSub streaming callback for it.
-      // buildMessagesFromCache handles the nav-away/nav-back reconnection case;
-      // this handles the active-session case where the agent just started.
-      // Without this, inProgressMessageIds stays [] and the completion event is never received.
-      if (message.Status === 'In-Progress' && message.ID && !this.InProgressMessageIds.includes(message.ID)) {
+    // A host turn can finish before this row is on screen. The completion is already in the
+    // streaming service's replay window; apply it the way a conversation load does, so the
+    // row does not stay In-Progress until the conversation is opened again. Register the row
+    // for the live callback either way — an update of an existing In-Progress row included.
+    if (message.Status === 'In-Progress' && message.ID) {
+      if (!this.InProgressMessageIds.includes(message.ID)) {
         this.InProgressMessageIds = [...this.InProgressMessageIds, message.ID];
+      }
+      const recentCompletion = this.streamingService.GetRecentCompletion(message.ID);
+      if (recentCompletion) {
+        await this.handleMessageCompletion(message, recentCompletion.agentRunId, message.ConversationID);
+        if (this.isActiveConversation(message.ConversationID)) {
+          this.streamingService.ClearRecentCompletion(message.ID);
+        }
       }
     }
 
@@ -3912,12 +3920,23 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * @param message The message that completed
    * @param agentRunId The ID of the agent run that completed
    */
+  /** Detail ids whose completion this instance has already applied. A live callback and the replay window can both deliver one finish. */
+  private handledCompletionIds?: Set<string>;
+
   private async handleMessageCompletion(
     message: MJConversationDetailEntity,
     _agentRunId: string,
     expectedConversationId: string | null | undefined = message.ConversationID,
     loadToken?: number
   ): Promise<void> {
+    if (message.ID) {
+      this.handledCompletionIds ??= new Set();
+      if (this.handledCompletionIds.has(message.ID)) {
+        return;
+      }
+      this.handledCompletionIds.add(message.ID);
+    }
+    let finished = false;
     try {
       const isCurrent = () => this.isCurrentConversationContext(expectedConversationId, loadToken);
 
@@ -3989,9 +4008,15 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.cdr.detectChanges();
 
       LogStatusEx({message: `✅ Completion handled for message ${message.ID}`, verboseOnly: true});
+      finished = true;
     } catch (error) {
       console.error(`Error handling message completion for ${message.ID}:`, error);
       this.cdr.detectChanges();
+    } finally {
+      // A switch away mid-reload must not consume the completion. The next load still has the replay entry.
+      if (!finished && message.ID) {
+        this.handledCompletionIds?.delete(message.ID);
+      }
     }
   }
 
