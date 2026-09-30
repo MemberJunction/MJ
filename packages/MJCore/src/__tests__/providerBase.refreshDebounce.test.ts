@@ -3,7 +3,9 @@
  *
  * Verifies that MinRefreshCheckIntervalMs prevents redundant network calls
  * when CheckToSeeIfRefreshNeeded / RefreshIfNeeded are called in quick
- * succession (e.g., multiple engines during startup).
+ * succession (e.g., multiple engines during startup), that only a check whose
+ * status request succeeded arms that throttle, and that concurrent checks
+ * share one in-flight request.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -80,11 +82,58 @@ describe('ProviderBase Refresh Check Debounce', () => {
             provider.CheckToSeeIfRefreshNeeded(),
         ]);
 
-        // First call goes through, rest are debounced
-        // Note: since CheckToSeeIfRefreshNeeded is async and the first call
-        // sets the timestamp before the network call resolves, all concurrent
-        // calls after the first will be debounced
-        expect(refreshTimestampsSpy.mock.calls.length).toBeLessThanOrEqual(2);
+        // The first call starts the check; the other four join it while it is in flight
+        // (single-flight), so they share its one network request and its answer. The throttle
+        // cannot do this — it is armed only after a check's status request succeeds.
+        expect(refreshTimestampsSpy).toHaveBeenCalledTimes(1);
+        expect(new Set(results).size).toBe(1);
+    });
+
+    it('should not arm the throttle when the status request throws (#4887)', async () => {
+        ProviderBase.MinRefreshCheckIntervalMs = 5000;
+        refreshTimestampsSpy.mockRejectedValueOnce(new Error('network down') as never);
+
+        await expect(provider.CheckToSeeIfRefreshNeeded()).rejects.toThrow('network down');
+        // A retry inside the interval must actually check — a failed check proved nothing.
+        await provider.CheckToSeeIfRefreshNeeded();
+
+        expect(refreshTimestampsSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('should not arm the throttle when the status request returns false (#4887)', async () => {
+        ProviderBase.MinRefreshCheckIntervalMs = 5000;
+        refreshTimestampsSpy.mockResolvedValue(false as never);
+
+        await provider.CheckToSeeIfRefreshNeeded();
+        await provider.CheckToSeeIfRefreshNeeded();
+
+        expect(refreshTimestampsSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('should share one in-flight check among concurrent callers (#4887)', async () => {
+        ProviderBase.MinRefreshCheckIntervalMs = 5000;
+        refreshTimestampsSpy.mockImplementation(
+            (() => new Promise<boolean>(resolve => setTimeout(() => resolve(true), 20))) as never
+        );
+
+        const results = await Promise.all([1, 2, 3, 4, 5].map(() => provider.CheckToSeeIfRefreshNeeded()));
+
+        expect(refreshTimestampsSpy).toHaveBeenCalledTimes(1);
+        expect(new Set(results).size).toBe(1);
+    });
+
+    it('should run its own check for a bypassMinCheckInterval caller during an in-flight check (#4887)', async () => {
+        ProviderBase.MinRefreshCheckIntervalMs = 5000;
+        refreshTimestampsSpy.mockImplementation(
+            (() => new Promise<boolean>(resolve => setTimeout(() => resolve(true), 20))) as never
+        );
+
+        await Promise.all([
+            provider.CheckToSeeIfRefreshNeeded(),
+            provider.CheckToSeeIfRefreshNeeded(undefined, true),
+        ]);
+
+        expect(refreshTimestampsSpy).toHaveBeenCalledTimes(2);
     });
 
     it('should work with debounce disabled (interval = 0)', async () => {

@@ -303,11 +303,17 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Minimum interval (ms) between metadata refresh checks to prevent
      * redundant network calls when Config()/RefreshIfNeeded() fire in
      * quick succession (e.g., multiple engines during startup).
+     * The throttle is armed only by a check whose status request succeeded — a check
+     * that threw or got no timestamps proved nothing, so the next caller checks again.
+     * Concurrent checks share one in-flight request (see {@link CheckToSeeIfRefreshNeeded}).
      * Does NOT affect forced Refresh() calls. Default: 30 000 ms.
      */
     public static MinRefreshCheckIntervalMs: number = 30000;
 
+    /** When the last SUCCESSFUL refresh check's status request completed; 0 = never. */
     private _lastRefreshCheckAt: number = 0;
+    /** Single-flight slot for {@link CheckToSeeIfRefreshNeeded}; null when no check is running. */
+    private _refreshCheckInFlight: Promise<boolean> | null = null;
 
     // ── Server-Side Auto-Cache ────────────────────────────────────────
     /**
@@ -5369,11 +5375,22 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * throttle. Event-driven callers pass true: they hold positive evidence that a metadata
      * member entity was just written, and the throttle otherwise answers "fresh" for any check
      * arriving within the window of the previous one — which would silently drop the second of
-     * two permission changes made less than the window apart.
+     * two permission changes made less than the window apart. For the same reason a bypassing
+     * caller never joins an in-flight check: that check may have started before the write.
+     *
+     * The throttle is armed only when the status request succeeded (returned timestamps). A
+     * check that throws or returns no timestamps leaves it unarmed, so a retried boot inside
+     * the window really checks instead of reading "current" and loading nothing (#4887).
+     * Concurrent non-bypassing callers join the check already in flight and share its answer,
+     * which is what keeps N engines starting together down to one request.
      * @returns True if refresh is needed, false otherwise
      */
     public async CheckToSeeIfRefreshNeeded(providerToUse?: IMetadataProvider, bypassMinCheckInterval?: boolean): Promise<boolean> {
         if (!this.AllowRefresh) return false;
+
+        if (!bypassMinCheckInterval && this._refreshCheckInFlight) {
+            return this._refreshCheckInFlight;
+        }
 
         const now = Date.now();
         if (!bypassMinCheckInterval && (now - this._lastRefreshCheckAt) < ProviderBase.MinRefreshCheckIntervalMs) {
@@ -5383,9 +5400,27 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             });
             return false;
         }
-        this._lastRefreshCheckAt = now;
 
-        await this.RefreshRemoteMetadataTimestamps(providerToUse);
+        const check = this.runRefreshCheck(providerToUse);
+        this._refreshCheckInFlight = check;
+        try {
+            return await check;
+        }
+        finally {
+            // A bypassing caller may have replaced the slot with its own newer check while this
+            // one ran; only the check that still owns the slot clears it.
+            if (this._refreshCheckInFlight === check) {
+                this._refreshCheckInFlight = null;
+            }
+        }
+    }
+
+    /** One refresh check: fetch remote timestamps, arm the throttle only on success, compare. */
+    private async runRefreshCheck(providerToUse?: IMetadataProvider): Promise<boolean> {
+        const gotTimestamps = await this.RefreshRemoteMetadataTimestamps(providerToUse);
+        if (gotTimestamps) {
+            this._lastRefreshCheckAt = Date.now();
+        }
         await this.LoadLocalMetadataFromStorage();
         return this.LocalMetadataObsolete();
     }
