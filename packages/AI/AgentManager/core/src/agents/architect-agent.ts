@@ -7,6 +7,12 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { ValidateLoopStep, ValidateFlowGraph } from '../flow-step-validation';
 
 /**
+ * The model type a Decision step's prompt runs on: the name of an `MJ: AI Model Types` row, and what
+ * the decision runner requires (`AIDecisionRunner.RequiredModelType`).
+ */
+const DECISION_MODEL_TYPE = 'Decision';
+
+/**
  * Architect Agent - Transforms technical design into validated AgentSpec JSON
  *
  * This agent creates AgentSpec objects from technical designs and validates them
@@ -443,6 +449,8 @@ export class AgentArchitectAgent extends BaseAgent {
                 // cleanly and then iterates over nothing, which looks like the agent doing no work
                 // rather than like a malformed step.
                 return ValidateLoopStep(step, index);
+            case 'Decision':
+                return this.validateDecisionPrompt(step, index);
             default:
                 // A Sub-Agent step's SubAgentID may be empty for a sub-agent this spec creates.
                 return [];
@@ -479,6 +487,31 @@ export class AgentArchitectAgent extends BaseAgent {
         return step.PromptText?.trim()
             ? []
             : [`❌ Prompt step "${step.Name}" (index ${index}) has empty PromptID but missing PromptText. For inline prompt creation, PromptText is required.`];
+    }
+
+    /**
+     * A Decision step's `PromptID`, when it sets one, must be a prompt that can run a decision. Empty
+     * means the Default Decision prompt.
+     *
+     * The runtime runs the step's prompt on Decision-type models only, and refuses a prompt whose model
+     * type is set to anything else; it finds that out only when the step runs. A prompt with no model
+     * type takes the runner's, so it is not refused here.
+     */
+    private validateDecisionPrompt(step: AgentStep, index: number): string[] {
+        if (!step.PromptID) {
+            return [];
+        }
+        const where = `Decision step "${step.Name}" (index ${index})`;
+        const prompt = AIEngine.Instance.Prompts.find(p => UUIDsEqual(p.ID, step.PromptID));
+        if (!prompt) {
+            return [`❌ ${where} has PromptID "${step.PromptID}", which is not a prompt. Leave PromptID empty to use the Default Decision prompt.`];
+        }
+        const decisionType = AIEngine.Instance.ModelTypes.find(t => t.Name.trim().toLowerCase() === DECISION_MODEL_TYPE.toLowerCase());
+        if (!prompt.AIModelTypeID || !decisionType || UUIDsEqual(prompt.AIModelTypeID, decisionType.ID)) {
+            return [];
+        }
+        const typeName = AIEngine.Instance.ModelTypes.find(t => UUIDsEqual(t.ID, prompt.AIModelTypeID))?.Name ?? prompt.AIModelTypeID;
+        return [`❌ ${where} uses the prompt "${prompt.Name}", whose model type is "${typeName}". A Decision step's prompt must run on ${DECISION_MODEL_TYPE} models. Leave PromptID empty to use the Default Decision prompt.`];
     }
 
     /**

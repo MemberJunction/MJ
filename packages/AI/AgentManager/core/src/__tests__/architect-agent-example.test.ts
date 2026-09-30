@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import type { AgentSpec, AgentStep, AgentStepPath, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
-import type { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
+import type { AgentSpec, AgentStep, AgentStepPath, ExecuteAgentParams, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import type { MJAIAgentTypeEntity, MJAIModelTypeEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AgentArchitectAgent } from '../agents/architect-agent';
 import { ValidateFlowGraph } from '../flow-step-validation';
@@ -11,8 +11,22 @@ import { ValidateFlowGraph } from '../flow-step-validation';
 const FLOW_TYPE_ID = '4F6A189B-C068-4736-9F23-3FF540B40FDD';
 const LOOP_TYPE_ID = 'F7926101-5099-4FA5-836A-479D9707C818';
 
+const LLM_MODEL_TYPE_ID = 'E8A5CCEC-6A37-EF11-86D4-000D3A4E707E';
+const DECISION_MODEL_TYPE_ID = 'D3C15E6A-0000-4000-8000-00000000DEC1';
+
+const DECISION_PROMPT_ID = 'D3C15E6A-0000-4000-8000-000000000001';
+const CHAT_PROMPT_ID = 'D3C15E6A-0000-4000-8000-000000000002';
+
 function agentType(id: string, name: string): MJAIAgentTypeEntity {
     return { ID: id, Name: name } as MJAIAgentTypeEntity;
+}
+
+function modelType(id: string, name: string): MJAIModelTypeEntity {
+    return { ID: id, Name: name } as MJAIModelTypeEntity;
+}
+
+function prompt(id: string, name: string, modelTypeID: string | null): MJAIPromptEntityExtended {
+    return { ID: id, Name: name, AIModelTypeID: modelTypeID } as MJAIPromptEntityExtended;
 }
 
 class TestArchitectAgent extends AgentArchitectAgent {
@@ -49,8 +63,14 @@ async function validateSpec(spec: AgentSpec): Promise<string[]> {
 describe('Architect Agent Example Output and Decision Step Validation', () => {
     beforeEach(() => {
         vi.restoreAllMocks();
-        // validateAgentSpec resolves a spec's TypeID (a GUID) to its type's name through AIEngine.
+        // validateAgentSpec resolves a spec's TypeID (a GUID) to its type's name through AIEngine, and
+        // a Decision step's PromptID to its prompt and model type.
         vi.spyOn(AIEngine.Instance, 'AgentTypes', 'get').mockReturnValue([agentType(FLOW_TYPE_ID, 'Flow'), agentType(LOOP_TYPE_ID, 'Loop')]);
+        vi.spyOn(AIEngine.Instance, 'ModelTypes', 'get').mockReturnValue([modelType(LLM_MODEL_TYPE_ID, 'LLM'), modelType(DECISION_MODEL_TYPE_ID, 'Decision')]);
+        vi.spyOn(AIEngine.Instance, 'Prompts', 'get').mockReturnValue([
+            prompt(DECISION_PROMPT_ID, 'Fast Triage Decision', DECISION_MODEL_TYPE_ID),
+            prompt(CHAT_PROMPT_ID, 'Summarize Ticket', LLM_MODEL_TYPE_ID),
+        ]);
     });
 
     it('parses architect-agent.example.json as valid JSON', () => {
@@ -143,6 +163,26 @@ describe('Architect Agent Example Output and Decision Step Validation', () => {
         expect(childErrors.join('\n')).toContain('[UnknownDecisionKey]');
         expect(childErrors).toHaveLength(errors.length);
     });
+
+    it('accepts a Decision step whose PromptID is a Decision prompt', async () => {
+        const spec = example4();
+        setTriagePrompt(spec, DECISION_PROMPT_ID.toLowerCase());
+        expect(await validateSpec(spec)).toEqual([]);
+    });
+
+    it('refuses a Decision step whose PromptID is not a prompt', async () => {
+        const spec = example4();
+        setTriagePrompt(spec, 'D3C15E6A-0000-4000-8000-0000000000FF');
+        expect((await validateSpec(spec)).join('\n')).toContain('which is not a prompt');
+    });
+
+    it('refuses a Decision step whose prompt runs on another model type', async () => {
+        const spec = example4();
+        setTriagePrompt(spec, CHAT_PROMPT_ID);
+        const errors = (await validateSpec(spec)).join('\n');
+        expect(errors).toContain('uses the prompt "Summarize Ticket", whose model type is "LLM"');
+        expect(errors).toContain('must run on Decision models');
+    });
 });
 
 /** example_4's triage, asking a Likelihood as well as the Choice. */
@@ -170,4 +210,9 @@ function addUrgentGate(spec: AgentSpec, condition: string): void {
     spec.Steps = [...(spec.Steps ?? []), escalate];
     const gate: AgentStepPath = { ID: '', OriginStepID: 'Handle Technical', DestinationStepID: 'Escalate', Condition: condition, Priority: 0 };
     spec.Paths = [...(spec.Paths ?? []), gate];
+}
+
+function setTriagePrompt(spec: AgentSpec, promptID: string): void {
+    const triage = spec.Steps?.find(s => s.Name === 'Triage Issue');
+    if (triage) triage.PromptID = promptID;
 }
