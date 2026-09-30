@@ -29,6 +29,7 @@ import {
     DataFeatureSpec,
     DataFeatureOutput,
     FeatureValueCacheService,
+    ResolveConstraint,
     type CacheKeyResult,
     IsDecisionPipelineType,
     IsLLMPipelineType,
@@ -350,6 +351,7 @@ export class InferProcessor implements IRecordProcessor {
             };
         }
 
+        const confidence = this.confidenceOfKeptValues(computed.Confidence, validationOutcome.replacedOutputs);
         let featureValueCacheID: string | undefined;
         const reasoning = typeof rawResult === 'object' && rawResult !== null ? (rawResult as Record<string, unknown>).reasoning as string | undefined : undefined;
 
@@ -389,7 +391,7 @@ export class InferProcessor implements IRecordProcessor {
             constraintHash,
             aiPromptRunID,
             featureValueCacheID,
-            ...(computed.Confidence ? { outputConfidence: computed.Confidence } : {}),
+            ...(confidence ? { outputConfidence: confidence } : {}),
         });
 
         return {
@@ -398,7 +400,7 @@ export class InferProcessor implements IRecordProcessor {
             AIPromptRunID: aiPromptRunID,
             PromptVersionHash: promptVersionHash,
             FeatureValueCacheID: featureValueCacheID,
-            ...(computed.Confidence ? { Confidence: computed.Confidence } : {}),
+            ...(confidence ? { Confidence: confidence } : {}),
         };
     }
 
@@ -1074,14 +1076,15 @@ export class InferProcessor implements IRecordProcessor {
 
     /**
      * Layer 2 output validation hook. Evaluates outputs against declared constraints, applies OnViolation
-     * policies (fail, null, coerce-to-other), and builds the processed payload.
+     * policies (fail, null, coerce-to-other), and builds the processed payload. `replacedOutputs` names
+     * the outputs whose value a `null` or `coerce-to-other` policy replaced.
      */
     protected async validateOutputs(
         outputs: DataFeatureOutput[],
         rawResult: unknown,
         record: RecordRef,
         ctx: RecordProcessorContext
-    ): Promise<{ valid: boolean; payload?: unknown; errorMessage?: string }> {
+    ): Promise<{ valid: boolean; payload?: unknown; errorMessage?: string; replacedOutputs?: string[] }> {
         if (!outputs || !Array.isArray(outputs) || outputs.length === 0) {
             return { valid: true, payload: rawResult };
         }
@@ -1100,18 +1103,18 @@ export class InferProcessor implements IRecordProcessor {
             const sources = { $: rawResult };
             const rawVal = resolveMappingRef(output.Ref, sources);
 
-            let targetTSType: string | undefined;
             const target = output.Target;
-            if (target.Mode === 'field') {
-                const entity = ctx.provider?.EntityByID(record.EntityID);
-                const field = entity?.Fields?.find(
+            const field = target.Mode === 'field'
+                ? ctx.provider?.EntityByID(record.EntityID)?.Fields?.find(
                     (f) => f.Name.toLowerCase() === target.EntityFieldName.toLowerCase()
-                );
-                targetTSType = field?.TSType;
-            }
+                )
+                : undefined;
 
+            // The resolved constraint carries the field's value list for an enum with FromFieldMetadata;
+            // without it the check sees only the spec's own Values
             const validation = validateOutputValue(rawVal, output.Constraint, {
-                targetFieldTSType: targetTSType,
+                targetFieldTSType: field?.TSType,
+                resolved: ResolveConstraint(output, field),
             });
 
             if (!validation.valid) {
@@ -1143,7 +1146,24 @@ export class InferProcessor implements IRecordProcessor {
             (payloadCopy as Record<string, unknown>)._violations = violations;
         }
 
-        return { valid: true, payload: payloadCopy };
+        return { valid: true, payload: payloadCopy, replacedOutputs: violations.map((v) => v.outputName) };
+    }
+
+    /**
+     * The driver's per-output confidences, less those of outputs whose value the constraint check replaced:
+     * a confidence belongs to the value the model gave, not to a null or 'Other' written in its place.
+     * Undefined when none remain.
+     */
+    private confidenceOfKeptValues(
+        confidence: Record<string, number> | undefined,
+        replacedOutputs: string[] | undefined
+    ): Record<string, number> | undefined {
+        if (!confidence) {
+            return undefined;
+        }
+        const replaced = new Set(replacedOutputs ?? []);
+        const kept = Object.entries(confidence).filter(([outputName]) => !replaced.has(outputName));
+        return kept.length > 0 ? Object.fromEntries(kept) : undefined;
     }
 
     /** Lifecycle hook to resolve a dedup cache key for this record. Default returns null (computed by cache service). */
