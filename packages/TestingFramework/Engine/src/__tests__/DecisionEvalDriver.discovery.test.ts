@@ -1,10 +1,11 @@
 /**
  * @fileoverview The Decision Eval driver's `agent-discovery` decision, with the runner, the engine
  * and the semantic search faked: it builds the options and questions with production's shared
- * functions, pins the model, records what the brief asks for, runs the `semantic-search` baseline
- * without a decision call, and skips what production would not ask.
+ * functions, pins the model, records what the brief asks for, applies production's timeout to the
+ * whole discovery, runs the `semantic-search` baseline without a decision call, and skips what
+ * production would not ask.
  */
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import type { EntitySearchResult, UserInfo } from '@memberjunction/core';
 import type { MJAIPromptRunEntity, MJTestEntity, MJTestRunEntity } from '@memberjunction/core-entities';
 import { DecisionResult, type DecisionAnswer } from '@memberjunction/ai';
@@ -13,10 +14,12 @@ import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import {
     BuildDecisionDiscoveryOptionSet,
     BuildDecisionDiscoveryQuestions,
+    DECISION_DISCOVERY_TIMEOUT_MS,
     type DecisionDiscoveryAgent
 } from '@memberjunction/ai-agents';
 import {
     DecisionEvalDriver,
+    DiscoveryTimedOutReason,
     type DecisionEvalRunner,
     type DiscoveryEvalEnvironment
 } from '../drivers/DecisionEvalDriver';
@@ -48,15 +51,23 @@ const RUNNABLE = [SAGE, RESEARCH, BILLING, MARKETING, HELPER];
 
 const PROMPT = { ID: 'prompt-1', Name: 'Default Decision' } satisfies Pick<MJAIPromptEntityExtended, 'ID' | 'Name'>;
 
-/** The search's calls, and a search that ranks `ranked` with the given semantic scores. */
+/** Moves the faked clock on, as if `ms` passed. Only `Date` is faked (see the timeout tests). */
+function takes(ms: number): void {
+    vi.setSystemTime(Date.now() + ms);
+}
+
+/** The search's calls, and a search that ranks `ranked` with the given semantic scores, taking `ms`. */
 class FakeSearch {
     public readonly Calls: Array<{ Request: string; TopK: number }> = [];
 
-    constructor(private readonly ranked: Array<{ ID: string; Semantic?: number; Lexical?: number }> = []) {}
+    constructor(private readonly ranked: Array<{ ID: string; Semantic?: number; Lexical?: number }> = [], private readonly ms: number = 0) {}
 
     public For(request: string) {
         return async (topK: number): Promise<EntitySearchResult[]> => {
             this.Calls.push({ Request: request, TopK: topK });
+            if (this.ms > 0) {
+                takes(this.ms);
+            }
             return this.ranked.map((r, i) => ({
                 entityRecordDocumentId: null, recordId: r.ID, score: 1 / (60 + i), matchType: 'hybrid',
                 components: { semantic: r.Semantic, lexical: r.Lexical }
@@ -228,6 +239,7 @@ describe('DecisionEvalDriver — agent discovery', () => {
             expect(actual.Answers.anyApplies).toEqual({ Kind: 'Likelihood', Probability: 0.9 });
             expect(actual.Model).toMatchObject({ PinnedModelId: PINNED_MODEL, AnsweredModelName: 'Jev', ResolvedModel: 'jev-2026-09-01', FailedOver: false });
             expect(actual.LatencyMs).toBeGreaterThanOrEqual(0);
+            expect(actual.DiscoveryLatencyMs).toBeGreaterThanOrEqual(actual.LatencyMs ?? 0);
             expect(result).toMatchObject({ status: 'Passed', targetType: 'AI Prompt', targetLogId: 'prun-1', totalCost: 0.002 });
         });
 
@@ -243,6 +255,55 @@ describe('DecisionEvalDriver — agent discovery', () => {
             const { result } = await run({ expected: { label: 'agent', agentId: HELPER.ID, labelSource: 'construction' } });
             expect(actualOf(result).LabelledAgentOffered).toBe(false);
             expect(result.status).toBe('Failed');
+        });
+    });
+
+    describe("production's timeout", () => {
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        /** A catalog over the option cap, so the semantic search runs, taking `searchMs`; the call takes `callMs`. */
+        async function timed(searchMs: number, callMs: number, expected: DiscoveryEvalExpected = AGENT_LABEL) {
+            vi.useFakeTimers({ toFake: ['Date'] });
+            const search = new FakeSearch([{ ID: BILLING.ID }, { ID: MARKETING.ID }, { ID: RESEARCH.ID }], searchMs);
+            return run({
+                expected,
+                environment: environment(search, { DeclaredCap: 2 }),
+                respond: async () => {
+                    takes(callMs);
+                    return decided(BILLING.ID, 0.9, 0.9);
+                }
+            });
+        }
+
+        it('times the whole discovery, the semantic search included, as production does', async () => {
+            const { result } = await timed(400, 700);
+            expect(actualOf(result)).toMatchObject({ LatencyMs: 700, DiscoveryLatencyMs: 1100, WithinProductionTimeout: true, WouldInject: true });
+        });
+
+        it('records an answer that came after the timeout as not injected, with why, though the call alone was quick enough', async () => {
+            const { result } = await timed(900, 700);
+            const actual = actualOf(result);
+            expect(actual).toMatchObject({
+                LatencyMs: 700, DiscoveryLatencyMs: 1600, WithinProductionTimeout: false, WouldInject: false,
+                // The answer is still recorded, for calibration and top-1.
+                ChosenAgentId: BILLING.ID, Confidence: 0.9, AnyApplies: 0.9
+            });
+            expect(actual.VerdictReason).toBe(DiscoveryTimedOutReason(1600));
+            expect(actual.VerdictReason).toMatch(/^timed out/);
+            expect(result.status).toBe('Passed');
+        });
+
+        it('counts a discovery that took exactly the timeout as on time', async () => {
+            const { result } = await timed(DECISION_DISCOVERY_TIMEOUT_MS - 500, 500);
+            expect(actualOf(result)).toMatchObject({ DiscoveryLatencyMs: DECISION_DISCOVERY_TIMEOUT_MS, WithinProductionTimeout: true, WouldInject: true });
+        });
+
+        it('passes a none label when the suggestion would have come too late', async () => {
+            const { result } = await timed(1000, 1000, NONE_LABEL);
+            expect(actualOf(result).WouldInject).toBe(false);
+            expect(result.status).toBe('Passed');
         });
     });
 

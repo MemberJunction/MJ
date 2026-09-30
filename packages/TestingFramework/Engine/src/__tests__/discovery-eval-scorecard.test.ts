@@ -1,6 +1,7 @@
 /**
  * @fileoverview Turning an agent-discovery suite's runs into a scorecard: runs read and grouped by
- * cell, decision and baseline cells told apart, and cases named by ID only.
+ * cell, decision and baseline cells told apart, the on-time rate per answering model, Platt fits
+ * marked when they did not converge, and cases named by ID only.
  */
 import { describe, it, expect } from 'vitest';
 import {
@@ -10,6 +11,7 @@ import {
     ToDiscoveryObservation
 } from '../decision-eval/discovery-scorecard';
 import type { DecisionEvalRunRow } from '../decision-eval/scorecard';
+import type { DiscoveryDecisionCellMetrics } from '../decision-eval/discovery-metrics';
 import type { DiscoveryEvalActualOutput, DiscoveryEvalExpected } from '../decision-eval/discovery-types';
 
 const SECRET_TEXT = 'a request from the corpus that must never reach the scorecard';
@@ -39,6 +41,7 @@ function decision(chosen: string | null, confidence: number, anyApplies: number,
         },
         Sampling: { RequestedTemperature: null, RequestedSeed: null, Applied: false, Note: null },
         LatencyMs: 250,
+        DiscoveryLatencyMs: 300,
         WithinProductionTimeout: true,
         PromptRunId: 'prun',
         CostUSD: 0.001,
@@ -51,7 +54,7 @@ function baseline(topMatch: string | null): DiscoveryEvalActualOutput {
     return {
         ...decision(topMatch, 0, 0, topMatch !== null),
         Arm: 'semantic-search', PromptName: null, Options: null, Confidence: null, AnyApplies: null, MinConfidence: null, Model: null,
-        WithinProductionTimeout: null, PromptRunId: null, CostUSD: null, VerdictReason: null,
+        DiscoveryLatencyMs: null, WithinProductionTimeout: null, PromptRunId: null, CostUSD: null, VerdictReason: null,
         Baseline: { Floor: 0.5, TopK: 15, Results: 3, TopRanked: candidate, TopMatch: candidate }
     };
 }
@@ -95,8 +98,18 @@ describe('Agent-discovery scorecard', () => {
             if (!('Unreadable' in read)) {
                 expect(read.Cell).toBe('jev');
                 expect(read.ResolvedModel).toBe('jev-2026-09-01');
-                expect(read.Observation).toMatchObject({ CaseId: 'r1', Label: 'agent', ExpectedAgentId: A, Arm: 'decision', ChosenAgentId: A, Confidence: 0.9, CostUSD: 0.002 });
+                expect(read.Observation).toMatchObject({
+                    CaseId: 'r1', Label: 'agent', ExpectedAgentId: A, Arm: 'decision', ChosenAgentId: A, Confidence: 0.9, CostUSD: 0.002,
+                    LatencyMs: 250, DiscoveryLatencyMs: 300, WithinProductionTimeout: true
+                });
             }
+        });
+
+        it('reads a run recorded before the whole discovery was timed, with no discovery latency', () => {
+            const recordedBefore = decision(A, 0.9, 0.9, true);
+            delete recordedBefore.DiscoveryLatencyMs;
+            const read = ReadDiscoveryEvalRun(runRow('r1', 'jev', AGENT_A, null, { ActualOutputData: JSON.stringify(recordedBefore) }));
+            expect('Unreadable' in read ? null : read.Observation).toMatchObject({ Arm: 'decision', DiscoveryLatencyMs: null, WithinProductionTimeout: true });
         });
 
         it('calls a running run, a name without a cell, and an unreadable label unreadable', () => {
@@ -129,9 +142,49 @@ describe('Agent-discovery scorecard', () => {
             const baselineCell = scorecard.Cells[1].Metrics;
             if (baselineCell.Arm === 'semantic-search') {
                 expect(baselineCell.Top1).toMatchObject({ N: 2, Accuracy: 0.5 });
-                expect(baselineCell.NoneBelowFloor).toEqual({ Runs: 1, Injected: 1, Rate: 1 });
+                expect(baselineCell.NoneBelowFloor).toEqual({ Runs: 1, BelowFloor: 1, Rate: 1 });
             }
             expect(scorecard.Cells[0].ResolvedModels).toEqual({ 'jev-2026-09-01': 5 });
+            expect(scorecard.Cells[1].OnTimeByModel).toEqual({});
+        });
+
+        it('reports each answering model\'s on-time rate over its usable runs', () => {
+            const late: DiscoveryEvalActualOutput = { ...decision(A, 0.9, 0.9, false), DiscoveryLatencyMs: 1700, WithinProductionTimeout: false };
+            const base = decision(B, 0.9, 0.9, true);
+            const other: DiscoveryEvalActualOutput = {
+                ...base,
+                Model: base.Model ? { ...base.Model, AnsweredModelName: 'LLM Decision', ResolvedModel: 'GPT-OSS-120B' } : null
+            };
+            const card = BuildDiscoveryEvalScorecard([
+                runRow('r1', 'mixed', AGENT_A, decision(A, 0.9, 0.9, true)),
+                runRow('r2', 'mixed', AGENT_A, late),
+                runRow('r3', 'mixed', AGENT_B, other),
+                runRow('r4', 'mixed', AGENT_B, decision(null, 0, 0, null), { Status: 'Failed' })
+            ], { Suite: 'Discovery', GeneratedAt: '2026-09-29T00:00:00.000Z', BootstrapResamples: 10 });
+            expect(card.Cells[0].OnTimeByModel).toEqual({
+                'jev-2026-09-01': { Runs: 2, OnTime: 1, Rate: 0.5 },
+                'GPT-OSS-120B': { Runs: 1, OnTime: 1, Rate: 1 }
+            });
+            const markdown = RenderDiscoveryEvalScorecard(card);
+            expect(markdown).toContain('jev-2026-09-01 ×3 (on time 1/2, 50.0%)');
+            expect(markdown).toContain('GPT-OSS-120B ×1 (on time 1/1, 100.0%)');
+        });
+
+        it('marks a Platt fit that did not converge', () => {
+            const cell = scorecard.Cells[0];
+            const metrics = cell.Metrics;
+            expect(metrics.Arm).toBe('decision');
+            if (metrics.Arm !== 'decision' || !metrics.AnyAppliesCalibration.Platt) {
+                return;
+            }
+            const stalled: DiscoveryDecisionCellMetrics = {
+                ...metrics,
+                AnyAppliesCalibration: { ...metrics.AnyAppliesCalibration, Platt: { ...metrics.AnyAppliesCalibration.Platt, Iterations: 100, Converged: false } }
+            };
+            const converged = RenderDiscoveryEvalScorecard(scorecard);
+            const marked = RenderDiscoveryEvalScorecard({ ...scorecard, Cells: [{ ...cell, Metrics: stalled }, ...scorecard.Cells.slice(1)] });
+            expect(converged).not.toContain('not converged');
+            expect(marked).toContain('(not converged after 100 iterations)');
         });
 
         it('renders both summaries, the injection table and the reliability tables, by ID only', () => {
@@ -139,7 +192,8 @@ describe('Agent-discovery scorecard', () => {
             expect(markdown).toContain('# Decision Eval scorecard (agent discovery): Discovery');
             expect(markdown).toContain('## Decision cells');
             expect(markdown).toContain("## Baseline cells (Find Candidate Agents' semantic search)");
-            expect(markdown).toContain('### Injection (confidence ≥ T and anyApplies ≥ T)');
+            expect(markdown).toContain('### Injection (on time within 1500 ms, confidence ≥ T and anyApplies ≥ T)');
+            expect(markdown).toContain('On time (≤ 1500 ms)');
             expect(markdown).toContain('### Reliability: Choice confidence as P(correct)');
             expect(markdown).toContain('### Reliability: anyApplies as P(label is agent)');
             expect(markdown).toContain('Catalog drift since the corpus snapshot: 1 added, 0 removed, 2 changed.');

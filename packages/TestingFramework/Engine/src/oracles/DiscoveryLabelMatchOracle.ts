@@ -22,9 +22,10 @@ import {
  * - An `agent` label is correct when the chosen agent is the labelled agent: the Choice's pick for
  *   the decision, whatever its confidence, or the first row `Find Candidate Agents` would return
  *   for the `semantic-search` baseline.
- * - A `none` label is correct when discovery would not inject a suggestion: `JudgeDecisionDiscovery`
- *   not confident at production's threshold (decision), or no candidate reaching the action's
- *   similarity floor (baseline).
+ * - A `none` label is correct when discovery would not inject a suggestion (the run's `WouldInject`):
+ *   `JudgeDecisionDiscovery` not confident at production's threshold, or the discovery finishing
+ *   after production's timeout (decision), or no candidate reaching the action's similarity floor
+ *   (baseline).
  * - A run with no usable answer fails, naming why, with `correct: null`.
  *
  * `details` carry `{ arm, label, kind, expectedAgentId, chosenAgentId, confidence, anyApplies,

@@ -11,17 +11,23 @@
  * - A run is **correct** when its label is `agent` and it chose the labelled agent.
  * - Metrics are over **runs**: each run is one request production would have seen. Intervals
  *   resample **cases** (a cluster bootstrap), so a case's repeats move together, and calibration
- *   folds are dealt by case, so no case's repeats are both fitted and scored.
+ *   folds are dealt by case, so no case's repeats are both fitted and scored. Cases are taken in ID
+ *   order, so the folds and intervals depend on the runs, not on the order they were read in.
  * - **Top-1 accuracy**: among usable `agent` runs, the share that are correct.
  * - **Choice confidence calibration**: the Choice's confidence as P(correct), over usable `agent`
  *   runs.
  * - **`anyApplies` calibration**: the Likelihood as P(label is `agent`), over all usable runs.
  * - Calibration is Platt scaling on logit(p): out of fold for the calibrated metrics, and fitted on
- *   all the data for the parameters a consumer would ship.
- * - **Injection** at threshold T: the confidence and `anyApplies` both at or above T. Coverage is the
- *   share of `agent` runs injected; precision the share of injected `agent` runs naming the labelled
- *   agent (and, counting injections on `none` runs as wrong, the share of all injections that are
- *   right); the false-injection rate the share of `none` runs injected.
+ *   all the data for the parameters a consumer would ship. It is fitted on every usable answer, on
+ *   time or not: when an answer arrived does not change what it says.
+ * - **On time**: the discovery (the options, their semantic search, and the call) finished within
+ *   production's timeout. Production gives up at the timeout and injects nothing, so a late run is
+ *   never injected, at any threshold.
+ * - **Injection** at threshold T: the run is on time, and the confidence and `anyApplies` are both at
+ *   or above T. Coverage is the share of `agent` runs injected; precision the share of injected
+ *   `agent` runs naming the labelled agent (and, counting injections on `none` runs as wrong, the
+ *   share of all injections that are right); the false-injection rate the share of `none` runs
+ *   injected. Late runs stay in the denominators: they are requests production saw and let pass.
  *
  * @module @memberjunction/testing-engine
  */
@@ -79,7 +85,11 @@ export interface DiscoveryEvalObservation {
     WouldInject: boolean | null;
     /** For an `agent` label: whether the labelled agent could be chosen at all. */
     LabelledAgentOffered: boolean | null;
+    /** The decision call's latency, or the baseline's search. */
     LatencyMs: number | null;
+    /** The whole discovery's latency (options, search and call), or null when not recorded. */
+    DiscoveryLatencyMs: number | null;
+    /** Whether the discovery finished within production's timeout; null without an answer. */
     WithinProductionTimeout: boolean | null;
     CostUSD: number | null;
     FailedOver: boolean;
@@ -93,6 +103,8 @@ export interface InjectionRun {
     Correct: boolean;
     Confidence: number;
     AnyApplies: number;
+    /** Finished within production's timeout ({@link IsDiscoveryOnTime}). A late run is never injected. */
+    OnTime: boolean;
 }
 
 /** What injecting at one threshold would do. Ratios are null without a denominator. */
@@ -146,7 +158,23 @@ export interface DiscoveryNoneKindSummary {
     Rate: number | null;
 }
 
-/** What production's current rule (the driver's `WouldInject`) did. */
+/** The baseline's `none` runs where no candidate passes the similarity floor, so the action lists nothing. */
+export interface DiscoveryNoneBelowFloorSummary {
+    Runs: number;
+    /** `none` runs with no candidate at or above the floor: the runs the action gets right. */
+    BelowFloor: number;
+    Rate: number | null;
+}
+
+/** How many answers came within production's discovery timeout. */
+export interface DiscoveryOnTimeSummary {
+    /** Runs whose timing was recorded. */
+    Runs: number;
+    OnTime: number;
+    Rate: number | null;
+}
+
+/** What production's current rule (the driver's `WouldInject`, on time) did. */
 export interface DiscoveryProductionVerdict {
     /** The threshold production uses today. */
     MinConfidence: number;
@@ -198,11 +226,18 @@ export interface DiscoveryDecisionCellMetrics {
     Top1: DiscoveryTop1Summary;
     ConfidenceCalibration: DiscoveryCalibrationSummary;
     AnyAppliesCalibration: DiscoveryCalibrationSummary;
-    /** The injection operating table, raw and on out-of-fold calibrated values (null with fewer than two cases). */
+    /**
+     * The injection operating table, raw and on out-of-fold calibrated values (null with fewer than
+     * two cases). A run that finished after production's timeout is never injected.
+     */
     Injection: { Raw: InjectionOperatingPoint[]; Calibrated: InjectionOperatingPoint[] | null };
     Production: DiscoveryProductionVerdict;
     Repeatability: DiscoveryRepeatabilitySummary;
-    Latency: LatencySummary & { WithinProductionTimeoutRate: number | null };
+    /**
+     * The decision call's latency; `Discovery`, the whole discovery's (options, search and call), the
+     * span production's timeout bounds; and the share of runs that finished within it.
+     */
+    Latency: LatencySummary & { Discovery: LatencySummary; WithinProductionTimeoutRate: number | null };
     Cost: CostSummary;
 }
 
@@ -215,7 +250,7 @@ export interface DiscoveryBaselineCellMetrics {
     /** Accuracy of the best-ranked candidate, ignoring the floor. */
     TopRankedAccuracy: number | null;
     /** `none` runs where no candidate passes the floor, so the action lists nothing. */
-    NoneBelowFloor: DiscoveryNoneKindSummary;
+    NoneBelowFloor: DiscoveryNoneBelowFloorSummary;
     /** `none` runs per kind; `Injected` counts runs where some candidate passes the floor. */
     NoneByKind: Record<DiscoveryNoneKind, DiscoveryNoneKindSummary>;
     Latency: LatencySummary;
@@ -234,12 +269,8 @@ export interface DiscoveryMetricOptions {
 }
 
 /** A usable decision run with the values the metrics read, and its case. */
-interface ScoredRun {
+export interface DiscoveryScoredRun extends InjectionRun {
     CaseId: string;
-    Label: DiscoveryEvalLabel;
-    Correct: boolean;
-    Confidence: number;
-    AnyApplies: number;
 }
 
 /**
@@ -253,8 +284,29 @@ export function IsDiscoveryCorrect(observation: Pick<DiscoveryEvalObservation, '
 }
 
 /**
- * What injecting would do at each threshold: a run is injected when its confidence and its
- * `anyApplies` are both at or above the threshold.
+ * Whether a run's discovery finished within production's timeout. A run with no recorded timing
+ * counts as on time; a usable decision run always has one.
+ *
+ * @param observation The run.
+ */
+export function IsDiscoveryOnTime(observation: Pick<DiscoveryEvalObservation, 'WithinProductionTimeout'>): boolean {
+    return observation.WithinProductionTimeout !== false;
+}
+
+/**
+ * Whether production would have injected the run's suggestion: the driver's `WouldInject`, and only
+ * when the run was on time. New runs already record a late one as not injected; this also holds
+ * for runs recorded before the driver applied the timeout.
+ *
+ * @param observation The run.
+ */
+export function WouldInjectOnTime(observation: Pick<DiscoveryEvalObservation, 'WouldInject' | 'WithinProductionTimeout'>): boolean {
+    return observation.WouldInject === true && IsDiscoveryOnTime(observation);
+}
+
+/**
+ * What injecting would do at each threshold: a run is injected when it was on time and its
+ * confidence and its `anyApplies` are both at or above the threshold.
  *
  * @param runs The usable decision runs.
  * @param thresholds The thresholds.
@@ -266,7 +318,7 @@ export function InjectionOperatingPoints(
     const agentRuns = runs.filter(r => r.Label === 'agent').length;
     const noneRuns = runs.length - agentRuns;
     return thresholds.map(threshold => {
-        const injected = runs.filter(r => r.Confidence >= threshold && r.AnyApplies >= threshold);
+        const injected = runs.filter(r => r.OnTime && r.Confidence >= threshold && r.AnyApplies >= threshold);
         const injectedAgent = injected.filter(r => r.Label === 'agent');
         const right = injectedAgent.filter(r => r.Correct).length;
         return {
@@ -316,9 +368,9 @@ export function CaseBootstrapInterval<T extends { CaseId: string }>(
 }
 
 /**
- * Deals cases into calibration folds: `agent` cases and `none` cases are each shuffled with a
- * seeded generator, then dealt out in turn, so each fold holds both labels where it can. With fewer
- * cases than folds, each case is its own fold (and never fewer than two folds).
+ * Deals cases into calibration folds: `agent` cases and `none` cases are each put in ID order,
+ * shuffled with a seeded generator, then dealt out in turn, so each fold holds both labels where it
+ * can. With fewer cases than folds, each case is its own fold (and never fewer than two folds).
  *
  * @param cases Each case's ID and label, once each.
  * @param folds The fold count.
@@ -331,8 +383,10 @@ export function AssignCaseFolds(
 ): Map<string, number> {
     const foldCount = Math.max(2, Math.min(folds, cases.length));
     const random = CreateSeededRandom(seed);
-    const agentCases = shuffle(cases.filter(c => c.Label === 'agent').map(c => c.CaseId), random);
-    const noneCases = shuffle(cases.filter(c => c.Label === 'none').map(c => c.CaseId), random);
+    // In ID order before the shuffle, so the folds do not depend on the order the cases came in.
+    const idsOf = (label: DiscoveryEvalLabel): string[] => cases.filter(c => c.Label === label).map(c => c.CaseId).sort(compareIds);
+    const agentCases = shuffle(idsOf('agent'), random);
+    const noneCases = shuffle(idsOf('none'), random);
     return new Map([...agentCases, ...noneCases].map((caseId, turn) => [caseId, turn % foldCount]));
 }
 
@@ -348,9 +402,9 @@ export function ComputeDiscoveryDecisionMetrics(
 ): DiscoveryDecisionCellMetrics {
     const resamples = options.BootstrapResamples ?? DECISION_EVAL_BOOTSTRAP_RESAMPLES;
     const seed = options.Seed ?? DECISION_EVAL_SEED;
-    const usable = observations.filter(isUsableDecisionRun);
+    const usable = observations.filter(IsUsableDiscoveryDecisionRun);
     const scored = usable.map(toScoredRun);
-    const calibrated = calibrateOutOfFold(scored, options.CalibrationFolds ?? DECISION_EVAL_CALIBRATION_FOLDS, seed);
+    const calibrated = CalibrateDiscoveryOutOfFold(scored, options.CalibrationFolds ?? DECISION_EVAL_CALIBRATION_FOLDS, seed);
     const thresholds = options.Thresholds ?? DISCOVERY_INJECTION_THRESHOLDS;
     return {
         Arm: 'decision',
@@ -368,7 +422,11 @@ export function ComputeDiscoveryDecisionMetrics(
         },
         Production: productionVerdict(usable),
         Repeatability: summarizeRepeatability(usable, options.WorstCaseCount ?? 10),
-        Latency: { ...summarizeLatency(usable), WithinProductionTimeoutRate: withinTimeoutRate(usable) },
+        Latency: {
+            ...summarizeLatency(usable, o => o.LatencyMs),
+            Discovery: summarizeLatency(usable, o => o.DiscoveryLatencyMs),
+            WithinProductionTimeoutRate: SummarizeDiscoveryOnTime(usable).Rate
+        },
         Cost: summarizeCost(usable)
     };
 }
@@ -392,9 +450,9 @@ export function ComputeDiscoveryBaselineMetrics(
         Counts: countRuns(observations, usable),
         Top1: top1(usable, o => o.ChosenAgentId, options.BootstrapResamples ?? DECISION_EVAL_BOOTSTRAP_RESAMPLES, options.Seed ?? DECISION_EVAL_SEED),
         TopRankedAccuracy: ratio(agentRuns.filter(o => IsDiscoveryCorrect(o, o.TopRankedAgentId)).length, agentRuns.length),
-        NoneBelowFloor: { Runs: noneRuns.length, Injected: below, Rate: ratio(below, noneRuns.length) },
+        NoneBelowFloor: { Runs: noneRuns.length, BelowFloor: below, Rate: ratio(below, noneRuns.length) },
         NoneByKind: noneByKind(noneRuns),
-        Latency: summarizeLatency(usable)
+        Latency: summarizeLatency(usable, o => o.LatencyMs)
     };
 }
 
@@ -413,15 +471,23 @@ export function ComputeDiscoveryCellMetrics(
     return isBaseline ? ComputeDiscoveryBaselineMetrics(observations, options) : ComputeDiscoveryDecisionMetrics(observations, options);
 }
 
-/** A decision run is scored when it has an agent, a confidence and `anyApplies`, and did not fail over in a cell that forbade it. */
-function isUsableDecisionRun(o: DiscoveryEvalObservation): boolean {
+/**
+ * Whether a decision run is scored: it has an agent, a confidence and `anyApplies`, and did not fail
+ * over in a cell that forbade it.
+ *
+ * @param o The run.
+ */
+export function IsUsableDiscoveryDecisionRun(o: DiscoveryEvalObservation): boolean {
     return o.Arm === 'decision' && o.ChosenAgentId !== null && o.Confidence !== null && o.AnyApplies !== null
         && !(o.FailedOver && !o.FailoverAllowed);
 }
 
 /** A usable decision run, reduced. */
-function toScoredRun(o: DiscoveryEvalObservation): ScoredRun {
-    return { CaseId: o.CaseId, Label: o.Label, Correct: IsDiscoveryCorrect(o), Confidence: o.Confidence ?? 0, AnyApplies: o.AnyApplies ?? 0 };
+function toScoredRun(o: DiscoveryEvalObservation): DiscoveryScoredRun {
+    return {
+        CaseId: o.CaseId, Label: o.Label, Correct: IsDiscoveryCorrect(o),
+        Confidence: o.Confidence ?? 0, AnyApplies: o.AnyApplies ?? 0, OnTime: IsDiscoveryOnTime(o)
+    };
 }
 
 /** Top-1 accuracy of an agent pick over the usable `agent` runs, with its cluster-bootstrap interval. */
@@ -438,17 +504,22 @@ function top1(
 }
 
 /**
- * Each usable run with its confidence and `anyApplies` calibrated out of fold: two Platt fits per
- * fold, on the other folds' runs (the confidence on their `agent` runs only). Null with fewer than
- * two cases.
+ * Each usable run with its confidence and `anyApplies` calibrated out of fold: the cases are dealt
+ * into folds ({@link AssignCaseFolds}), and each fold's runs are calibrated by two Platt fits on the
+ * other folds' runs only (the confidence on their `agent` runs). No run is scored by a fit that saw
+ * it. Null with fewer than two cases.
+ *
+ * @param runs The usable runs.
+ * @param folds The fold count.
+ * @param seed The fold generator's seed.
  */
-function calibrateOutOfFold(runs: readonly ScoredRun[], folds: number, seed: number): ScoredRun[] | null {
+export function CalibrateDiscoveryOutOfFold(runs: readonly DiscoveryScoredRun[], folds: number, seed: number): DiscoveryScoredRun[] | null {
     const cases = [...groupByCase(runs)].map(([caseKey, caseRuns]) => ({ CaseId: caseKey, Label: caseRuns[0].Label }));
     if (cases.length < 2) {
         return null;
     }
     const assignment = AssignCaseFolds(cases, folds, seed);
-    const foldOf = (run: ScoredRun): number => assignment.get(run.CaseId.toUpperCase()) ?? 0;
+    const foldOf = (run: DiscoveryScoredRun): number => assignment.get(run.CaseId.toUpperCase()) ?? 0;
     const calibrated = runs.map(run => ({ ...run }));
     for (const fold of new Set(assignment.values())) {
         const training = runs.filter(run => foldOf(run) !== fold);
@@ -479,25 +550,25 @@ function probabilityCalibration(points: readonly LabelledProbability[]): Discove
     return { N: points.length, RocAuc: RocAuc(points), Brier: BrierScore(points), ECE: bins.ECE, Bins: bins.Bins };
 }
 
-/** What production's current rule did, from each run's recorded `WouldInject`. */
+/** What production's current rule did, from each run's recorded `WouldInject`, on time. */
 function productionVerdict(usable: readonly DiscoveryEvalObservation[]): DiscoveryProductionVerdict {
     const agentRuns = usable.filter(o => o.Label === 'agent');
     const noneRuns = usable.filter(o => o.Label === 'none');
-    const injectedAgent = agentRuns.filter(o => o.WouldInject === true);
+    const injectedAgent = agentRuns.filter(WouldInjectOnTime);
     return {
         MinConfidence: DECISION_DISCOVERY_MIN_CONFIDENCE,
         Coverage: ratio(injectedAgent.length, agentRuns.length),
         Precision: ratio(injectedAgent.filter(o => IsDiscoveryCorrect(o)).length, injectedAgent.length),
-        FalseInjectionRate: ratio(noneRuns.filter(o => o.WouldInject === true).length, noneRuns.length),
+        FalseInjectionRate: ratio(noneRuns.filter(WouldInjectOnTime).length, noneRuns.length),
         NoneByKind: noneByKind(noneRuns)
     };
 }
 
-/** The `none` runs per kind, and how many were injected. */
+/** The `none` runs per kind, and how many were injected (on time). */
 function noneByKind(noneRuns: readonly DiscoveryEvalObservation[]): Record<DiscoveryNoneKind, DiscoveryNoneKindSummary> {
     const ofKind = (kind: DiscoveryNoneKind): DiscoveryNoneKindSummary => {
         const runs = noneRuns.filter(o => o.Kind === kind);
-        const injected = runs.filter(o => o.WouldInject === true).length;
+        const injected = runs.filter(WouldInjectOnTime).length;
         return { Runs: runs.length, Injected: injected, Rate: ratio(injected, runs.length) };
     };
     return { chat: ofKind('chat'), direct: ofKind('direct'), workflow: ofKind('workflow') };
@@ -526,7 +597,7 @@ function caseRepeatability(runs: readonly DiscoveryEvalObservation[]): Discovery
         const key = (run.ChosenAgentId ?? '').toUpperCase();
         choices.set(key, (choices.get(key) ?? 0) + 1);
     }
-    const injected = runs.filter(r => r.WouldInject === true).length;
+    const injected = runs.filter(WouldInjectOnTime).length;
     return {
         CaseId: runs[0].CaseId,
         Repeats: runs.length,
@@ -550,16 +621,21 @@ function countRuns(observations: readonly DiscoveryEvalObservation[], usable: re
     };
 }
 
-/** Latency percentiles over the usable runs that recorded one. */
-function summarizeLatency(usable: readonly DiscoveryEvalObservation[]): LatencySummary {
-    const latencies = usable.map(o => o.LatencyMs).filter((l): l is number => l !== null);
+/** Latency percentiles of one timing, over the usable runs that recorded it. */
+function summarizeLatency(usable: readonly DiscoveryEvalObservation[], timing: (o: DiscoveryEvalObservation) => number | null): LatencySummary {
+    const latencies = usable.map(timing).filter((l): l is number => l !== null);
     return { Runs: latencies.length, P50: Quantile(latencies, 0.5), P95: Quantile(latencies, 0.95) };
 }
 
-/** The share of usable runs that answered within production's discovery timeout. */
-function withinTimeoutRate(usable: readonly DiscoveryEvalObservation[]): number | null {
-    const recorded = usable.filter(o => o.WithinProductionTimeout !== null);
-    return ratio(recorded.filter(o => o.WithinProductionTimeout === true).length, recorded.length);
+/**
+ * How many runs finished within production's discovery timeout, of those whose timing was recorded.
+ *
+ * @param runs The runs: a cell's usable decision runs, or one answering model's.
+ */
+export function SummarizeDiscoveryOnTime(runs: readonly Pick<DiscoveryEvalObservation, 'WithinProductionTimeout'>[]): DiscoveryOnTimeSummary {
+    const recorded = runs.filter(o => o.WithinProductionTimeout !== null);
+    const onTime = recorded.filter(o => o.WithinProductionTimeout === true).length;
+    return { Runs: recorded.length, OnTime: onTime, Rate: ratio(onTime, recorded.length) };
 }
 
 /** Mean cost per thousand answered decisions, over the usable runs that recorded a cost. */
@@ -569,14 +645,19 @@ function summarizeCost(usable: readonly DiscoveryEvalObservation[]): CostSummary
     return { RunsWithCost: costs.length, CostPer1kUSD: mean === null ? null : mean * 1000 };
 }
 
-/** Runs grouped by case, in first-seen order. */
+/** Runs grouped by case, in case-ID order, so nothing downstream depends on the order runs were read in. */
 function groupByCase<T extends { CaseId: string }>(runs: readonly T[]): Map<string, T[]> {
     const cases = new Map<string, T[]>();
     for (const run of runs) {
         const key = run.CaseId.toUpperCase();
         cases.set(key, [...(cases.get(key) ?? []), run]);
     }
-    return cases;
+    return new Map([...cases].sort(([x], [y]) => compareIds(x, y)));
+}
+
+/** Orders two IDs by code unit: the same order in every locale. */
+function compareIds(x: string, y: string): number {
+    return x < y ? -1 : x > y ? 1 : 0;
 }
 
 /** A ratio, or null when the denominator is zero. */

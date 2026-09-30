@@ -10,6 +10,7 @@
  * @module @memberjunction/testing-engine
  */
 
+import { DECISION_DISCOVERY_TIMEOUT_MS } from '@memberjunction/ai-agents';
 import {
     DECISION_EVAL_BOOTSTRAP_RESAMPLES,
     DECISION_EVAL_CALIBRATION_FOLDS,
@@ -19,6 +20,8 @@ import {
 import {
     ComputeDiscoveryCellMetrics,
     DISCOVERY_INJECTION_THRESHOLDS,
+    IsUsableDiscoveryDecisionRun,
+    SummarizeDiscoveryOnTime,
     type DiscoveryBaselineCellMetrics,
     type DiscoveryCalibrationSummary,
     type DiscoveryCellMetrics,
@@ -26,6 +29,7 @@ import {
     type DiscoveryEvalObservation,
     type DiscoveryMetricOptions,
     type DiscoveryNoneKindSummary,
+    type DiscoveryOnTimeSummary,
     type InjectionOperatingPoint
 } from './discovery-metrics';
 import {
@@ -54,6 +58,11 @@ export interface DiscoveryEvalScorecardCell {
     Metrics: DiscoveryCellMetrics;
     /** How many runs each resolved model answered. */
     ResolvedModels: Record<string, number>;
+    /**
+     * Per resolved model, how many of its usable decision runs finished within production's discovery
+     * timeout. Empty for a baseline cell.
+     */
+    OnTimeByModel: Record<string, DiscoveryOnTimeSummary>;
     SamplingRequested: boolean;
     SamplingApplied: boolean;
 }
@@ -140,6 +149,7 @@ export function ToDiscoveryObservation(
         WouldInject: actual?.WouldInject ?? null,
         LabelledAgentOffered: actual?.LabelledAgentOffered ?? null,
         LatencyMs: actual?.LatencyMs ?? null,
+        DiscoveryLatencyMs: actual?.DiscoveryLatencyMs ?? null,
         WithinProductionTimeout: actual?.WithinProductionTimeout ?? null,
         CostUSD: costUSD,
         FailedOver: actual?.Model?.FailedOver ?? false,
@@ -216,15 +226,20 @@ function parseJson<T>(text: string | null, schema: { safeParse(value: unknown): 
 /** One cell's entry. */
 function scorecardCell(cell: string, observations: readonly DiscoveryEvalCellObservation[], options: DiscoveryMetricOptions): DiscoveryEvalScorecardCell {
     const resolved: Record<string, number> = {};
+    const usableByModel = new Map<string, DiscoveryEvalObservation[]>();
     for (const o of observations) {
         if (o.ResolvedModel) {
             resolved[o.ResolvedModel] = (resolved[o.ResolvedModel] ?? 0) + 1;
+            if (IsUsableDiscoveryDecisionRun(o.Observation)) {
+                usableByModel.set(o.ResolvedModel, [...(usableByModel.get(o.ResolvedModel) ?? []), o.Observation]);
+            }
         }
     }
     return {
         Cell: cell,
         Metrics: ComputeDiscoveryCellMetrics(observations.map(o => o.Observation), options),
         ResolvedModels: resolved,
+        OnTimeByModel: Object.fromEntries([...usableByModel].map(([model, runs]) => [model, SummarizeDiscoveryOnTime(runs)])),
         SamplingRequested: observations.some(o => o.SamplingRequested),
         SamplingApplied: observations.some(o => o.SamplingApplied)
     };
@@ -245,9 +260,18 @@ function rawToCalibrated(raw: number | null, calibrated: number | null | undefin
     return `${num(raw)} → ${num(calibrated)}`;
 }
 
-/** Platt parameters, or an em dash. */
+/** Platt parameters, marked when the fit did not converge, or an em dash. */
 function platt(summary: DiscoveryCalibrationSummary): string {
-    return summary.Platt ? `${num(summary.Platt.A, 4)} / ${num(summary.Platt.B, 4)}` : '—';
+    const fit = summary.Platt;
+    if (!fit) {
+        return '—';
+    }
+    return `${num(fit.A, 4)} / ${num(fit.B, 4)}${fit.Converged ? '' : ` (not converged after ${fit.Iterations} iterations)`}`;
+}
+
+/** A share as a percentage to one place, or an em dash. */
+function percent(value: number | null): string {
+    return value === null ? '—' : `${(value * 100).toFixed(1)}%`;
 }
 
 /** A count and its rate. */
@@ -279,9 +303,12 @@ function renderHeader(scorecard: DiscoveryEvalScorecard): string[] {
         '',
         'Metrics are over runs; 95% intervals are a percentile bootstrap over cases '
             + `(${scorecard.BootstrapResamples} resamples, seed ${scorecard.Seed}); calibration is Platt scaling on logit(p), `
-            + `${scorecard.CalibrationFolds}-fold out of fold with folds dealt by case, and the Platt A/B shown are fitted on all the runs. `
+            + `${scorecard.CalibrationFolds}-fold out of fold with folds dealt by case, and the Platt A/B shown are fitted on all the runs `
+            + '(a fit that did not converge says so). '
             + 'Top-1 is on `agent` runs. Confidence calibration: the Choice confidence as P(chose the labelled agent), on `agent` runs. '
-            + '`anyApplies` calibration: P(label is `agent`), on all runs. Injection at T: confidence ≥ T and anyApplies ≥ T.',
+            + '`anyApplies` calibration: P(label is `agent`), on all runs. '
+            + `On time: the discovery (the options, their semantic search, and the call) finished within production's ${DECISION_DISCOVERY_TIMEOUT_MS} ms timeout. `
+            + 'Injection at T: on time, confidence ≥ T and anyApplies ≥ T; production gives up at the timeout, so a late answer is never injected.',
         '',
         ...(drift
             ? [`Catalog drift since the corpus snapshot: ${drift.Added.length} added, ${drift.Removed.length} removed, ${drift.Changed.length} changed.`, '']
@@ -299,13 +326,15 @@ function renderDecisionSummary(cells: ReadonlyArray<DiscoveryEvalScorecardCell &
         '',
         ...header(['Cell', 'Agent runs', 'Top-1 [95% CI]', 'Conf. ECE raw → cal.', 'Conf. Platt A / B', 'anyApplies AUC',
             'anyApplies ECE raw → cal.', 'anyApplies Platt A / B', 'Prod. coverage', 'Prod. precision', 'Prod. false inj.',
-            'Choice agreement', 'p50 ms', 'p95 ms', 'Within timeout', '$ / 1k', 'Failovers', 'Label not offered']),
+            'Choice agreement', 'Call p50 ms', 'Call p95 ms', 'Discovery p50 ms', 'Discovery p95 ms',
+            `On time (≤ ${DECISION_DISCOVERY_TIMEOUT_MS} ms)`, '$ / 1k', 'Failovers', 'Label not offered']),
         ...cells.map(({ Cell, Metrics: m }) => row([
             Cell, String(m.Top1.N), withInterval(m.Top1.Accuracy, m.Top1.AccuracyCI),
             rawToCalibrated(m.ConfidenceCalibration.Raw.ECE, m.ConfidenceCalibration.Calibrated?.ECE), platt(m.ConfidenceCalibration),
             num(m.AnyAppliesCalibration.Raw.RocAuc), rawToCalibrated(m.AnyAppliesCalibration.Raw.ECE, m.AnyAppliesCalibration.Calibrated?.ECE),
             platt(m.AnyAppliesCalibration), num(m.Production.Coverage), num(m.Production.Precision), num(m.Production.FalseInjectionRate),
-            num(m.Repeatability.MeanChoiceAgreement), num(m.Latency.P50, 0), num(m.Latency.P95, 0), num(m.Latency.WithinProductionTimeoutRate),
+            num(m.Repeatability.MeanChoiceAgreement), num(m.Latency.P50, 0), num(m.Latency.P95, 0),
+            num(m.Latency.Discovery.P50, 0), num(m.Latency.Discovery.P95, 0), num(m.Latency.WithinProductionTimeoutRate),
             num(m.Cost.CostPer1kUSD, 4), `${m.Counts.FailoverRuns} (${m.Counts.ExcludedFailoverRuns} excluded)`, String(m.Counts.LabelledAgentNotOffered)
         ])),
         ''
@@ -323,7 +352,7 @@ function renderBaselineSummary(cells: ReadonlyArray<DiscoveryEvalScorecardCell &
         ...header(['Cell', 'Agent runs', 'Top-1, first row [95% CI]', 'Top-1, best ranked', '`none` below the floor', 'p50 ms', 'p95 ms']),
         ...cells.map(({ Cell, Metrics: m }) => row([
             Cell, String(m.Top1.N), withInterval(m.Top1.Accuracy, m.Top1.AccuracyCI), num(m.TopRankedAccuracy),
-            `${m.NoneBelowFloor.Injected}/${m.NoneBelowFloor.Runs} (${num(m.NoneBelowFloor.Rate)})`, num(m.Latency.P50, 0), num(m.Latency.P95, 0)
+            `${m.NoneBelowFloor.BelowFloor}/${m.NoneBelowFloor.Runs} (${num(m.NoneBelowFloor.Rate)})`, num(m.Latency.P50, 0), num(m.Latency.P95, 0)
         ])),
         ''
     ];
@@ -332,7 +361,10 @@ function renderBaselineSummary(cells: ReadonlyArray<DiscoveryEvalScorecardCell &
 /** One decision cell's detail. */
 function renderDecisionDetail(cell: DiscoveryEvalScorecardCell & { Metrics: DiscoveryDecisionCellMetrics }): string[] {
     const m = cell.Metrics;
-    const models = Object.entries(cell.ResolvedModels).map(([model, n]) => `${model} ×${n}`).join(', ') || 'not recorded';
+    const models = Object.entries(cell.ResolvedModels).map(([model, n]) => {
+        const onTime = cell.OnTimeByModel[model];
+        return `${model} ×${n}${onTime ? ` (on time ${onTime.OnTime}/${onTime.Runs}, ${percent(onTime.Rate)})` : ''}`;
+    }).join(', ') || 'not recorded';
     return [
         `## ${cell.Cell}`,
         '',
@@ -368,7 +400,7 @@ function renderInjection(m: DiscoveryDecisionCellMetrics): string[] {
     const cells = (p: InjectionOperatingPoint | undefined): string[] =>
         [p ? String(p.Injected) : '—', num(p?.Coverage), num(p?.Precision), num(p?.PrecisionAllInjections), num(p?.FalseInjectionRate)];
     return [
-        '### Injection (confidence ≥ T and anyApplies ≥ T)',
+        `### Injection (on time within ${DECISION_DISCOVERY_TIMEOUT_MS} ms, confidence ≥ T and anyApplies ≥ T)`,
         '',
         ...header(['T', 'Raw injected', 'Raw coverage', 'Raw precision', 'Raw precision (all)', 'Raw false inj.',
             'Cal. injected', 'Cal. coverage', 'Cal. precision', 'Cal. precision (all)', 'Cal. false inj.']),
@@ -376,7 +408,8 @@ function renderInjection(m: DiscoveryDecisionCellMetrics): string[] {
         '',
         `Thresholds: ${DISCOVERY_INJECTION_THRESHOLDS.map(t => t.toFixed(2)).join(', ')}. `
             + 'Coverage: injected `agent` runs / `agent` runs. Precision: of injected `agent` runs, those naming the labelled agent; '
-            + '(all): of every injection, with `none` injections counted wrong. False inj.: injected `none` runs / `none` runs.',
+            + '(all): of every injection, with `none` injections counted wrong. False inj.: injected `none` runs / `none` runs. '
+            + `A run that finished after the ${DECISION_DISCOVERY_TIMEOUT_MS} ms timeout is never injected, but stays in every denominator.`,
         ''
     ];
 }
