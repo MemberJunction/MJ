@@ -15,6 +15,10 @@
  * hides and how to reach them ({@link CatalogNarrowingNote}), and actions are narrowed only when the
  * agent has Find Candidate Actions ({@link ReachableCatalogNarrowingLimits}).
  *
+ * Narrowing is prose-only. It shortens the catalog the prompt describes, never the tools declared
+ * for native tool calling: there, a call to an undeclared tool is refused, so a hidden item has to
+ * stay declared to stay callable.
+ *
  * @module @memberjunction/ai-agents
  */
 

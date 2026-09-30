@@ -494,6 +494,9 @@ export interface LoopAgentTypePromptParams {
      *     The list starts with a line naming the sub-agents it hides.
      * Narrowing only hides: every permitted sub-agent can still be called by name, `subAgentCount`
      * still counts them all, and a failed decision shows them all.
+     * Narrowing is prose-only: it shortens the described list, never the native tool set. With native
+     * tool calling under implicit control flow, every sub-agent is still declared as a
+     * `delegate_to_` tool, since a call to an undeclared tool is refused.
      * @default -1
      */
     maxSubAgentsInPrompt?: number;
@@ -509,6 +512,9 @@ export interface LoopAgentTypePromptParams {
      *     only when the agent has that action (skills still are).
      * Narrowing only hides: every permitted action can still be called, `actionCount` and
      * `skillCount` still count them all, and a failed decision shows them all.
+     * Narrowing is prose-only: it shortens the described list, never the native tool set. With native
+     * tool calling, every action is still declared as a tool, since a call to an undeclared tool is
+     * refused and that mode has no `Actions` step to fall back on.
      * @default -1
      */
     maxActionsInPrompt?: number;

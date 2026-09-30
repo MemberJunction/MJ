@@ -4395,6 +4395,9 @@ export class BaseAgent {
             return;
         }
         // ...and a per-agent-ACTION gate: rows that opt out are removed before the tool set is built.
+        // Catalog narrowing (plan Task 3.7) does not apply here, by design: it shortens the prose
+        // catalog only. A call to an undeclared tool is a Retry, and this mode has no `Actions`
+        // envelope step, so a hidden action or sub-agent left undeclared could not be called at all.
         const actions = FilterDeclarableActions(
             this.getEffectiveActionsForValidation(params.agent.ID),
             AIEngine.Instance.AgentActions.filter((aa) => UUIDsEqual(aa.AgentID, params.agent.ID))
@@ -8509,7 +8512,8 @@ The context is now within limits. Please retry your request with the recovered c
     /**
      * Narrows the catalog once per run, on its first prompt (plan Task 3.7), and caches the result for
      * every later step. With narrowing off it asks nothing and records nothing. Never throws: any
-     * failure leaves the full catalog in place.
+     * failure leaves the full catalog in place. It narrows the prose catalog only:
+     * {@link applyNativeTools} still declares every action and sub-agent.
      */
     private async ensureCatalogNarrowing(
         agent: MJAIAgentEntityExtended,

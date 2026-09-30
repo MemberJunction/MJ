@@ -720,6 +720,20 @@ describe('catalog narrowing — with a limit', () => {
         expect([data.actionCount, data.subAgentCount, data.skillCount]).toEqual([GOLDEN.actionCount, GOLDEN.subAgentCount, GOLDEN.skillCount]);
     });
 
+    it('narrows the prose only: native tool calling still declares every action and sub-agent', async () => {
+        vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answerByName(PROBABILITIES));
+        const { agent, runner } = makeAgent(twoTurnScript());
+
+        await agent.Execute(makeParams());
+
+        const data = templateData(runner.Calls[0]);
+        expect(String(data.actionDetails)).not.toContain('### Look Up Weather');
+        expect(String(data.subAgentDetails)).not.toContain('**Research Agent**');
+        const declared = (runner.Calls[0].tools ?? []).map(t => t.name);
+        expect(declared).toEqual(expect.arrayContaining(['look_up_weather', 'delegate_to_research_agent']));
+        expect(declared).toEqual(expect.arrayContaining(ACTIONS.map(a => a.Name.toLowerCase().replace(/ /g, '_'))));
+    });
+
     it('names every hidden sub-agent and skill, and counts the hidden actions', async () => {
         // A limit of 1 hides two actions and two skills.
         harness.agent = makeAgentRow({ maxActionsInPrompt: 1, maxSubAgentsInPrompt: 1 });
