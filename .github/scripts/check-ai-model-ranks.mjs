@@ -21,6 +21,11 @@
  * An inactive model on either side is exempt: rank-based selection never picks it. SpeedRank
  * and CostRank are not checked — a newer model can legitimately be slower or cheaper.
  *
+ * A tie passes, but it is not a preference for the newer model: rank-based selection sorts on
+ * PowerRank alone, so tied models come back in whatever order the catalog loaded. Tie only
+ * when the two really are equals (an alias of the same API model, or a sibling that
+ * complements rather than replaces); otherwise rank the newer one higher.
+ *
  * PriorVersionID means "the previous version", not "the family's flagship". A tier variant
  * (a Flash, a Turbo, an Edit model) whose own earlier version is not in the catalog should
  * leave it null rather than point at the main model it is cheaper than.
@@ -31,33 +36,37 @@
  */
 import { readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 
 const RED = '\x1b[0;31m', YELLOW = '\x1b[0;33m', GREEN = '\x1b[0;32m', NC = '\x1b[0m';
 const DEFAULT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'metadata', 'ai-models');
 const NAME_LOOKUP_PREFIX = '@lookup:MJ: AI Models.Name=';
 
 /**
- * Every AI model record in a metadata directory: the dot-prefixed record files MetadataSync
- * reads (`**\/.*.json`), minus its own `.mj-sync.json` config.
+ * Every AI model record in a metadata directory tree: the dot-prefixed record files MetadataSync
+ * reads (`**\/.*.json`, recursively), minus its own `.mj-sync.json` config and `.backups`.
+ * `file` is the path relative to `dir`.
  */
 export function loadModels(dir) {
-    return readdirSync(dir)
-        .filter((f) => f.startsWith('.') && f.endsWith('.json') && f !== '.mj-sync.json')
+    return readdirSync(dir, { recursive: true, withFileTypes: true })
+        .filter((d) => d.isFile() && d.name.startsWith('.') && d.name.endsWith('.json') && d.name !== '.mj-sync.json')
+        .map((d) => relative(dir, join(d.parentPath, d.name)))
+        .filter((rel) => !rel.split(sep).includes('.backups'))
         .sort()
-        .flatMap((f) => {
-            const parsed = JSON.parse(readFileSync(join(dir, f), 'utf8'));
-            return (Array.isArray(parsed) ? parsed : [parsed]).map((record) => ({ file: f, record }));
+        .flatMap((rel) => {
+            const parsed = JSON.parse(readFileSync(join(dir, rel), 'utf8'));
+            return (Array.isArray(parsed) ? parsed : [parsed]).map((record) => ({ file: rel, record }));
         });
 }
 
 /**
- * Resolve a PriorVersionID — either a Name lookup or a raw UUID — to a catalog entry.
+ * Resolve a PriorVersionID — either a Name lookup or a raw UUID — to a catalog entry. Name
+ * lookups match case-insensitively, as MetadataSync resolves them.
  * @returns the entry, or null when nothing matches
  */
 function resolvePrior(ref, byName, byId) {
     if (typeof ref !== 'string') return null;
-    if (ref.startsWith(NAME_LOOKUP_PREFIX)) return byName.get(ref.slice(NAME_LOOKUP_PREFIX.length)) ?? null;
+    if (ref.startsWith(NAME_LOOKUP_PREFIX)) return byName.get(ref.slice(NAME_LOOKUP_PREFIX.length).trim().toLowerCase()) ?? null;
     return byId.get(ref.toUpperCase()) ?? null;
 }
 
@@ -67,7 +76,7 @@ function resolvePrior(ref, byName, byId) {
  *             inversions: { file: string, name: string, rank: number, prior: string, priorRank: number }[] }}
  */
 export function findRankViolations(models) {
-    const byName = new Map(models.map((m) => [m.record.fields.Name, m]));
+    const byName = new Map(models.map((m) => [String(m.record.fields.Name).trim().toLowerCase(), m]));
     const byId = new Map(models.filter((m) => m.record.primaryKey?.ID).map((m) => [m.record.primaryKey.ID.toUpperCase(), m]));
     const unresolved = [], inversions = [];
     for (const m of models) {

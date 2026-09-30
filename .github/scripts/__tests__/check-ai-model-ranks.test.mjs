@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,8 +25,14 @@ describe('findRankViolations', () => {
         expect(r.unresolved).toEqual([]);
     });
 
-    it('accepts an equal rank — a tie keeps rank-based selection from preferring the older model', () => {
+    it('accepts an equal rank (for true equals — rank-based selection does not break ties toward the newer model)', () => {
         expect(findRankViolations([model('X 1', 20), model('X 2', 20, { prior: byName('X 1') })]).inversions).toEqual([]);
+    });
+
+    it('resolves a Name lookup case-insensitively, as MetadataSync does', () => {
+        const r = findRankViolations([model('GPT X', 20), model('GPT Y', 12, { prior: byName('gpt x') })]);
+        expect(r.unresolved).toEqual([]);
+        expect(r.inversions.map((i) => i.name)).toEqual(['GPT Y']);
     });
 
     it('resolves a raw-UUID PriorVersionID case-insensitively', () => {
@@ -86,5 +92,21 @@ describe('CLI', () => {
         const r = runOn([model('X 1', 12).record, model('X 2', 20, { prior: byName('X 1') }).record]);
         expect(r.status).toBe(0);
         expect(r.stdout).toContain('1 model lineage links checked across 2 models');
+    });
+
+    it('reads record files in subfolders (MetadataSync matches **/.*.json) but not .backups', () => {
+        const dir = mkdtempSync(join(tmpdir(), 'ai-model-ranks-'));
+        try {
+            mkdirSync(join(dir, 'vendor-x'));
+            mkdirSync(join(dir, '.backups'));
+            writeFileSync(join(dir, '.ai-models.json'), JSON.stringify([model('X 1', 20).record]));
+            writeFileSync(join(dir, 'vendor-x', '.x-models.json'), JSON.stringify([model('X 2', 12, { prior: byName('X 1') }).record]));
+            writeFileSync(join(dir, '.backups', '.ai-models.json'), JSON.stringify([model('X 1', 99).record]));
+            const models = loadModels(dir);
+            expect(models.map((m) => m.file)).toEqual(['.ai-models.json', join('vendor-x', '.x-models.json')]);
+            expect(findRankViolations(models).inversions.map((i) => i.name)).toEqual(['X 2']);
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
     });
 });
