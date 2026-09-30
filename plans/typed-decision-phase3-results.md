@@ -23,12 +23,6 @@ Every measurement:
 | Escalation floors | 5.4 | the same | escalating to the LLM didn't help on either task | no floor recommended yet | #4890 |
 | Self-reported `confidence` | 3.4 | 546 recorded loop turns; 337 memory notes | the loop's carries no usable signal; Jev gates memory notes better than the extraction's own | loop: don't gate on it; memory: Jev at calibrated 0.6, opt-in | #4897 |
 
-## 1. Sage agent discovery (Task 3.1)" up to, not including, "## 2. The duplicate check at entry".
-The Summary table's discovery row still holds as written (77% vs 30%; calibrated 0.85, was raw 0.7).
-Source: the 2026-09-29 run re-scored on 2026-09-30 from its stored per-run results
-(~/Projects/decision-eval-runs/discovery-rescore-2026-09-30/), no new model calls.
--->
-
 ## 1. Sage agent discovery (Task 3.1)
 
 **The corpus:** 258 requests written by Gemini 3 Flash for the 33 agents discoverable in a development database:
