@@ -20,6 +20,10 @@
  * ({@link RewriteDecisionQuestionReferences}, {@link RewriteDecisionChoiceValues}) — so what an
  * editor writes is exactly what this scanner reads back.
  *
+ * Two more readers serve the validator only: every comparison of a Choice `value` with a literal, so
+ * a misspelled option is refused on any edge, and every read of `decisions` as a PROPERTY of another
+ * root (`payload.decisions`), which is a copy no hold applies to.
+ *
  * @module @memberjunction/ai-core-plus
  */
 
@@ -60,6 +64,17 @@ export type DecisionChoiceTest = {
     QuestionKey: string;
     /** The option values the condition accepts. */
     Values: string[];
+};
+
+/**
+ * A comparison of one answer's `value` with a string literal, anywhere in a condition:
+ * `decisions.triage.intent.value !== 'billing'`, or `'refund' == decisions.triage.intent.value`.
+ */
+export type DecisionValueComparison = {
+    NodeId: string;
+    QuestionKey: string;
+    /** The literal as the evaluator reads it, with its escapes resolved. */
+    Value: string;
 };
 
 const ROOT = 'decisions';
@@ -103,6 +118,31 @@ type PathSegment = {
     /** The quote a bracket segment used, or `null` for `.name`. */
     Quote: '\'' | '"' | null;
 };
+
+/** A string literal, captured whole with its quotes. */
+const LITERAL = String.raw`('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")`;
+
+/** Where an operand ends: the end, a closing parenthesis, a logical operator, a ternary or a comma. */
+const OPERAND_END = String.raw`(?:$|[)?:,]|&&|\|\|)`;
+
+/** An (in)equality with a literal right after a value reference, and nothing more to that operand. */
+const COMPARED_WITH_LITERAL = new RegExp(String.raw`^\s*(?:===?|!==?)\s*${LITERAL}\s*(?=${OPERAND_END})`);
+
+/** A literal and an (in)equality right before a value reference, starting its own operand. */
+const LITERAL_COMPARED_WITH = new RegExp(String.raw`(?:^|[(?:,]|&&|\|\|)\s*${LITERAL}\s*(?:===?|!==?)\s*$`);
+
+/** Nothing more to the operand after a value reference. */
+const ENDS_OPERAND = new RegExp(String.raw`^\s*${OPERAND_END}`);
+
+/**
+ * `decisions` read as a PROPERTY — `.decisions`, `?.decisions`, `['decisions']` — rather than as the
+ * root. A spread (`...decisions`) is not a property read, and an array literal (`['decisions']`
+ * after an operator) is not one either.
+ */
+const DECISIONS_PROPERTY = /(?:\?\.|(?<!\.)\.)\s*decisions(?![A-Za-z0-9_$])|(?<=[A-Za-z0-9_$)\]]\s*)(?:\?\.)?\s*\[\s*(?:'decisions'|"decisions")\s*\]/g;
+
+/** The member chain that ends where the text ends: `payload`, `stepResult.result`, `output?.['x']`. */
+const CHAIN_BEFORE = /[A-Za-z_$][A-Za-z0-9_$]*(?:\s*\??\.\s*[A-Za-z_$][A-Za-z0-9_$]*|\s*(?:\?\.)?\s*\[\s*(?:'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|\d+)\s*\])*\s*$/;
 
 /**
  * Every `decisions` reference in a condition, and every use of the root that is not one.
@@ -352,6 +392,59 @@ function formatSegment(segment: PathSegment, name: string): string {
     return `${lead}${optional ? '?.' : ''}[${quote}${escaped}${quote}]`;
 }
 
+/**
+ * Every comparison of a `decisions.<step>.<question>.value` with a string literal, wherever it sits
+ * in a condition — not only in the disjunction a fork is checked on.
+ *
+ * Only a whole operand counts: `decisions.t.q.value === 'a' + suffix` compares with more than the
+ * literal, so it is not reported.
+ */
+export function DecisionValueComparisonsIn(expression: string): DecisionValueComparison[] {
+    const comparisons: DecisionValueComparison[] = [];
+    if (!expression) return comparisons;
+
+    const strings = stringSpans(expression);
+    for (const match of expression.matchAll(ROOT_PATTERN)) {
+        const start = match.index ?? 0;
+        if (strings.some(([from, to]) => start >= from && start < to)) continue;
+        const reference = readValueReference(expression, start);
+        if (!reference) continue;
+
+        const rest = expression.slice(reference.End);
+        const after = COMPARED_WITH_LITERAL.exec(rest);
+        const before = after ? null : ENDS_OPERAND.test(rest) ? LITERAL_COMPARED_WITH.exec(expression.slice(0, start)) : null;
+        const literal = after?.[1] ?? before?.[1];
+        if (literal === undefined) continue;
+        comparisons.push({ NodeId: reference.NodeId, QuestionKey: reference.QuestionKey, Value: unescapeLiteral(literal.slice(1, -1)) });
+    }
+    return comparisons;
+}
+
+/**
+ * Every place a condition reads a PROPERTY named `decisions` — `payload.decisions`,
+ * `output?.decisions`, `stepResult.result['decisions']` — as written, for a message.
+ *
+ * A Decision step also leaves its answers in its output, under `decisions`, for the steps after it
+ * to read. A condition reading that copy is never held, so this is how the validator finds one.
+ * Text inside string literals is ignored.
+ */
+export function DecisionsReadAsProperty(expression: string): string[] {
+    const reads: string[] = [];
+    if (!expression) return reads;
+
+    const strings = stringSpans(expression);
+    for (const match of expression.matchAll(DECISIONS_PROPERTY)) {
+        const start = match.index ?? 0;
+        if (strings.some(([from, to]) => start >= from && start < to)) continue;
+        // The chain it hangs off, for a message the author recognises. Bounded, because a condition
+        // is short and a failed search over a long prefix is the only way this could be slow.
+        const prefix = expression.slice(Math.max(0, start - 200), start);
+        const chain = CHAIN_BEFORE.exec(prefix)?.[0].trim() ?? '…';
+        reads.push(`${chain}${match[0].trim()}`);
+    }
+    return reads;
+}
+
 /** The `[start, end)` ranges of every string literal. */
 function stringSpans(expression: string): Array<[number, number]> {
     return [...expression.matchAll(STRING_LITERAL)].map((m) => [m.index ?? 0, (m.index ?? 0) + m[0].length]);
@@ -443,7 +536,7 @@ function parseChoiceEquality(term: string): { NodeId: string; QuestionKey: strin
         const rest = term.slice(reference.End);
         const operator = EQUALITY.exec(rest);
         const literal = operator ? WHOLE_LITERAL.exec(rest.slice(operator[0].length)) : null;
-        return literal ? { ...reference, Value: literal[1] ?? literal[2] ?? '' } : null;
+        return literal ? { ...reference, Value: unescapeLiteral(literal[1] ?? literal[2] ?? '') } : null;
     }
 
     const literal = LEADING_LITERAL.exec(term);
@@ -454,7 +547,7 @@ function parseChoiceEquality(term: string): { NodeId: string; QuestionKey: strin
     const tail = rest.slice(operator[0].length);
     const reference = tail.startsWith(ROOT) ? readValueReference(tail, 0) : null;
     return reference && reference.End === tail.length
-        ? { NodeId: reference.NodeId, QuestionKey: reference.QuestionKey, Value: literal[1] ?? literal[2] ?? '' }
+        ? { NodeId: reference.NodeId, QuestionKey: reference.QuestionKey, Value: unescapeLiteral(literal[1] ?? literal[2] ?? '') }
         : null;
 }
 
@@ -465,4 +558,29 @@ function readValueReference(text: string, from: number): { NodeId: string; Quest
     const [nodeId, questionKey, field] = path.Segments;
     if (!nodeId || !questionKey || field !== 'value') return null;
     return { NodeId: nodeId, QuestionKey: questionKey, End: path.End };
+}
+
+/** Single-character escapes and what they stand for; any other escaped character stands for itself. */
+const SIMPLE_ESCAPES: Readonly<Record<string, string>> = {
+    n: '\n', t: '\t', r: '\r', b: '\b', f: '\f', v: '\v', '0': '\0',
+};
+
+/**
+ * A string literal's body as the evaluator reads it, with its escapes resolved as JavaScript
+ * resolves them — so `'it\'s'` compares equal to the option `it's`.
+ */
+function unescapeLiteral(body: string): string {
+    return body.replace(
+        /\\(?:u\{([0-9a-fA-F]{1,6})\}|u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|(\r\n|[\s\S]))/g,
+        (_whole: string, braced?: string, unicode?: string, hex?: string, single?: string): string => {
+            const code = braced ?? unicode ?? hex;
+            if (code !== undefined) {
+                const point = parseInt(code, 16);
+                return point <= 0x10ffff ? String.fromCodePoint(point) : '';
+            }
+            // A backslash before a line break continues the line and stands for nothing.
+            if (single === undefined || /^(?:\r\n|[\r\n\u2028\u2029])$/.test(single)) return '';
+            return SIMPLE_ESCAPES[single] ?? single;
+        },
+    );
 }

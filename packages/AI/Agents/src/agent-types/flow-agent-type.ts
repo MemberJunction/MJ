@@ -15,16 +15,20 @@ import { RegisterClass, SafeExpressionEvaluator, UUIDsEqual } from '@memberjunct
 import {
     CollectDecisionStepKeys,
     DecisionHoldReason,
+    DecisionReferencesIn,
     NO_DECISIONS,
     ReadFlowDecisionStepConfiguration,
     ResolveDecisionStepAnswers,
     SelectOutgoingEdges,
     ValidateTaskGraphSpec,
     type AgentDecisionAnswerSummary,
+    type ConditionHold,
     type DecisionStepAnswers,
+    type FlowCompileResult,
     type FlowDecisionStepConfiguration,
     type GraphDecisions,
     type IConditionEvaluator,
+    type TaskGraphSpec,
 } from '@memberjunction/ai-core-plus';
 import { AIEngineGraphRepository, SafeConditionEvaluator } from './flow-graph-adapters';
 import { CompileFlowAgentToTaskGraph, FormatFlowCompileErrors, FormatFlowValidationErrors } from './flow-graph-executor';
@@ -58,11 +62,18 @@ type FlowPathSelection = {
     HoldReason: string | null;
 };
 
-/** A Decision step's `stepResult`, in the shape a Prompt step's has. */
-type FlowDecisionStepResult = {
+/**
+ * A Decision step's `stepResult`, in the shape a Prompt step's has.
+ *
+ * `result` is the payload the step handed on, which carries no answers — what the dispatched path
+ * exposes as a Decision node's result, less the output copy of its answers that a condition may not
+ * read anyway. A condition reads answers through the `decisions` root, where the hold applies; a
+ * raw answer here would let `stepResult.result.intent.value` route on one below its `minConfidence`.
+ */
+type FlowDecisionStepResult<P> = {
     Success: boolean;
     step: 'Success' | 'Failed';
-    result: Record<string, AgentDecisionAnswerSummary> | { error: string };
+    result: P;
 };
 
 /** How a Decision step ended, as the shared answer rules read it. */
@@ -137,6 +148,15 @@ export class FlowExecutionState {
      */
     Decisions: GraphDecisions = NO_DECISIONS;
 
+    /**
+     * The keys of the Decision steps whose call failed in this run.
+     *
+     * A walker cannot retry, so such a decision never answers in this run, and a path reading it can
+     * never be taken: it is passed over, and a recovery path ranked below it can be. An answer below
+     * its `minConfidence` is different — the path might have been the one to take — and holds.
+     */
+    FailedDecisionKeys = new Set<string>();
+
     constructor(agentId: string) {
         this.agentId = agentId;
     }
@@ -203,6 +223,10 @@ export interface FlowAgentExecuteParams {
      *
      * The step must belong to the agent being executed.
      * Use AIEngine.Instance.GetAgentSteps(agentId) to retrieve available steps.
+     *
+     * A Decision step's answers are held by the run, never written into the payload, so a run started
+     * past a Decision step has none from it: every path that reads that decision stops the run with
+     * the reason. Start at or before the Decision step to route on it.
      */
     startAtStep?: MJAIAgentStepEntity;
 
@@ -570,7 +594,7 @@ export class FlowAgentType extends BaseAgentType {
             repo,
             this._conditionEvaluator,
             this.buildConditionContext(payload, flowState, params),
-            (condition) => DecisionHoldReason(condition, flowState.Decisions)
+            (condition) => this.decisionHold(condition, flowState)
         );
 
         for (const rejection of selection.Rejected) {
@@ -594,6 +618,23 @@ export class FlowAgentType extends BaseAgentType {
                 .filter((p): p is MJAIAgentStepPathEntity => !!p),
             HoldReason: selection.Held?.Detail ?? null
         };
+    }
+
+    /**
+     * Why a path condition must not be evaluated, because of a decision it reads, or `null`.
+     *
+     * A condition reading a decision whose call failed is UNANSWERABLE in this run: a walker has no
+     * retry, so the path can never be taken, and a recovery path ranked below it is taken instead.
+     * Any other unusable answer — below its `minConfidence`, or not given — holds, because the path
+     * might have been the one to take.
+     */
+    private decisionHold(condition: string, flowState: FlowExecutionState): ConditionHold | null {
+        const reason = DecisionHoldReason(condition, flowState.Decisions);
+        if (!reason) return null;
+        const failed = DecisionReferencesIn(condition).References.find(r => flowState.FailedDecisionKeys.has(r.NodeId));
+        if (!failed) return { Detail: reason };
+        const unresolved = flowState.Decisions.Unresolved[failed.NodeId];
+        return { Detail: unresolved?.[failed.QuestionKey] ?? reason, Unanswerable: true };
     }
 
     /**
@@ -1064,13 +1105,16 @@ export class FlowAgentType extends BaseAgentType {
      * step's outcome.
      *
      * A call that succeeded makes the step `'Success'`; one that failed makes it `'Failed'`, so a
-     * failed decision takes the same recovery handling as any failed step, and every condition that
-     * reads its answers holds.
+     * failed decision takes the same recovery handling as any failed step: the paths that read its
+     * answers are passed over, and a recovery path is taken whatever its rank.
+     *
+     * @param payload the payload the step hands on, which is its `stepResult.result`
      */
     private completeDecisionStep<P>(
         step: BaseAgentNextStep<P>,
-        flowState: FlowExecutionState
-    ): { Next: BaseAgentNextStep<P>; StepResult: FlowDecisionStepResult } {
+        flowState: FlowExecutionState,
+        payload: P
+    ): { Next: BaseAgentNextStep<P>; StepResult: FlowDecisionStepResult<P> } {
         const node = flowState.currentStepId ? AIEngine.Instance.GetAgentStepByID(flowState.currentStepId) : null;
         const result = step.decisionResults?.[0];
         const answers = result?.success && result.answers && !Array.isArray(result.answers) ? result.answers : null;
@@ -1082,13 +1126,13 @@ export class FlowAgentType extends BaseAgentType {
         if (outcome.Status === 'Complete') {
             return {
                 Next: { ...step, step: 'Success' },
-                StepResult: { Success: true, step: 'Success', result: outcome.Answers }
+                StepResult: { Success: true, step: 'Success', result: payload }
             };
         }
         const errorMessage = `Decision step "${node?.Name ?? flowState.currentStepId}" failed: ${outcome.ErrorMessage}`;
         return {
             Next: { ...step, step: 'Failed', errorMessage },
-            StepResult: { Success: false, step: 'Failed', result: { error: outcome.ErrorMessage } }
+            StepResult: { Success: false, step: 'Failed', result: payload }
         };
     }
 
@@ -1110,6 +1154,8 @@ export class FlowAgentType extends BaseAgentType {
         const given = outcome.Status === 'Complete' ? outcome.Answers : {};
         const resolved = ResolveDecisionStepAnswers(run, read.Config.questions, given);
         flowState.Decisions = withDecisionStep(flowState.Decisions, read.Config, resolved);
+        if (outcome.Status === 'Failed') flowState.FailedDecisionKeys.add(read.Config.key);
+        else flowState.FailedDecisionKeys.delete(read.Config.key);
     }
     
     /**
@@ -1551,24 +1597,12 @@ export class FlowAgentType extends BaseAgentType {
             });
         }
 
-        const compiled = CompileFlowAgentToTaskGraph(params.agent.ID, params.agent.Name, params.agent.Description ?? undefined);
-        if (!compiled.Success || !compiled.Spec) {
-            return this.createNextStep('Failed', {
-                errorMessage: `Workflow '${params.agent.Name}' could not be prepared to run:\n${FormatFlowCompileErrors(compiled)}`
-            });
+        const prepared = this.compileAndValidateFlow(params);
+        if ('ErrorMessage' in prepared) {
+            return this.createNextStep('Failed', { errorMessage: prepared.ErrorMessage });
         }
 
-        // The same check Submit makes, made here so a refusal names the author's steps. A compiled
-        // graph's tempIds are step IDs, and the validator's messages would otherwise name those —
-        // an incomplete Choice fork, for one, is reported by its group, which is its origin's ID.
-        const validation = ValidateTaskGraphSpec(compiled.Spec);
-        if (!validation.Valid) {
-            return this.createNextStep('Failed', {
-                errorMessage: `Workflow '${params.agent.Name}' could not be prepared to run:\n${FormatFlowValidationErrors(validation.Errors, compiled.Spec)}`
-            });
-        }
-
-        this.logCompiledGraph(params.agent.Name, compiled.Spec.tasks.length, compiled.Excluded);
+        this.logCompiledGraph(params.agent.Name, prepared.Spec.tasks.length, prepared.Excluded);
 
         // 'Tasks' is not in the BaseAgentNextStep step union — it is non-terminal in the same sense
         // as 'ClientTools'/'Plan' (see that type's doc comment), and BaseAgent routes it to
@@ -1576,10 +1610,36 @@ export class FlowAgentType extends BaseAgentType {
         return {
             step: 'Tasks' as BaseAgentNextStep<P>['step'],
             terminate: false,
-            taskGraph: { spec: compiled.Spec, folded: false },
+            taskGraph: { spec: prepared.Spec, folded: false },
             previousPayload: payload,
             newPayload: payload
         };
+    }
+
+    /**
+     * Compiles the flow and holds it to the checks `Submit` makes, or says why it cannot run.
+     *
+     * The dispatched path runs this before it submits, and the in-run walker before its first step
+     * when the flow has a Decision step, so a flow one mode accepts the other cannot refuse — an
+     * incomplete Choice fork, a decision read before it can answer, or one read through the payload
+     * is refused in both. The refusal names the author's steps: a compiled graph's tempIds are step
+     * IDs, and an incomplete fork, for one, is reported by its group, which is its origin's ID.
+     */
+    private compileAndValidateFlow<P>(
+        params: ExecuteAgentParams<P>
+    ): { Spec: TaskGraphSpec; Excluded: FlowCompileResult['Excluded'] } | { ErrorMessage: string } {
+        const compiled = CompileFlowAgentToTaskGraph(params.agent.ID, params.agent.Name, params.agent.Description ?? undefined);
+        if (!compiled.Success || !compiled.Spec) {
+            return { ErrorMessage: `Workflow '${params.agent.Name}' could not be prepared to run:\n${FormatFlowCompileErrors(compiled)}` };
+        }
+
+        const validation = ValidateTaskGraphSpec(compiled.Spec);
+        if (!validation.Valid) {
+            return {
+                ErrorMessage: `Workflow '${params.agent.Name}' could not be prepared to run:\n${FormatFlowValidationErrors(validation.Errors, compiled.Spec)}`
+            };
+        }
+        return { Spec: compiled.Spec, Excluded: compiled.Excluded };
     }
 
     /**
@@ -1625,12 +1685,23 @@ export class FlowAgentType extends BaseAgentType {
         // (startAtStep), so it cannot limit itself to what the entry reaches. A shared key would
         // leave a condition's `decisions.<key>` naming two steps, and the dispatched path refuses
         // the same flow before it starts.
-        const duplicateKeys = CollectDecisionStepKeys(AIEngine.Instance.GetAgentSteps(flowState.agentId, 'Active') ?? []).Errors;
+        const activeSteps = AIEngine.Instance.GetAgentSteps(flowState.agentId, 'Active') ?? [];
+        const duplicateKeys = CollectDecisionStepKeys(activeSteps).Errors;
         if (duplicateKeys.length > 0) {
             return this.stopFlow(
                 `Workflow '${params.agent.Name}' cannot run:\n${FormatFlowCompileErrors({ Success: false, Errors: duplicateKeys, Excluded: [] })}`,
                 payloadToUse
             );
+        }
+
+        // A flow with a Decision step gets the dispatched path's whole check, once, before its first
+        // step: an incomplete Choice fork ends the flow "successfully" on the option nobody drew a
+        // path for, and in-run is the default mode for every sub-agent flow. So such a flow must be
+        // one the dispatcher would accept — which also rules out a loop drawn with a path back. A
+        // flow without a Decision step is walked as it always was.
+        if (activeSteps.some(s => s.StepType === 'Decision')) {
+            const prepared = this.compileAndValidateFlow(params);
+            if ('ErrorMessage' in prepared) return this.stopFlow(prepared.ErrorMessage, payloadToUse);
         }
 
         // Check for startAtStep in agentTypeParams (FlowAgentExecuteParams)
@@ -1746,7 +1817,7 @@ export class FlowAgentType extends BaseAgentType {
         // A Decision step's answers come back on the 'Retry' BaseAgent returns after running it. They
         // are recorded first, so this step's paths, and every later step's, can read them. From here
         // on the step is its outcome: Success, or Failed when the call failed.
-        const decision = step.decisionResults ? this.completeDecisionStep(step, flowState) : null;
+        const decision = step.decisionResults ? this.completeDecisionStep(step, flowState, currentPayload) : null;
         const finished = decision?.Next ?? step;
 
         // Store the step result so path conditions can access it via stepResult

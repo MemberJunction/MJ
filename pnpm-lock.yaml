@@ -12673,6 +12673,9 @@ importers:
         specifier: ^3.25.0
         version: 3.25.76
     devDependencies:
+      '@memberjunction/conversations-runtime':
+        specifier: 6.2.0-edge.1
+        version: link:../ConversationsRuntime
       '@types/express':
         specifier: ^5.0.6
         version: 5.0.6

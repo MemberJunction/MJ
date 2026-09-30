@@ -48,6 +48,15 @@ export type DecisionStepRun = {
     ErrorMessage: string | null;
 };
 
+/**
+ * What a Decision step's output carries in place of an answer a condition may not act on: why it is
+ * held, and never the answer itself. {@link ResolveDecisionStepAnswers} reads the reason back.
+ */
+export type HeldDecisionAnswer = {
+    /** Why the answer is held, in the words a hold reports: below its `minConfidence`, or missing. */
+    held: string;
+};
+
 /** One Decision step's answers, split into those a condition may act on and, for the rest, why not. */
 export type DecisionStepAnswers = {
     Answers: Record<string, TaskGraphDecisionAnswer>;
@@ -97,7 +106,8 @@ export function DecisionAnswerConfidence(answer: TaskGraphDecisionAnswer): numbe
  *
  * A step that has not completed contributes only reasons: one still running has not answered, one
  * that failed never will, and one that was skipped was not asked. A completed step's answer is used
- * only when it is there, in an answer's shape, and clears its question's `minConfidence`.
+ * only when it is there, in an answer's shape, and clears its question's `minConfidence`; where its
+ * output holds a {@link HeldDecisionAnswer} instead, the reason given there is the reason.
  *
  * @param run       the step's name, status and error
  * @param questions the questions it asks, with their `minConfidence`
@@ -111,8 +121,10 @@ export function ResolveDecisionStepAnswers(
     const resolved: DecisionStepAnswers = { Answers: {}, Unresolved: {} };
     for (const [key, question] of Object.entries(questions)) {
         const answer = given[key];
+        // A held entry already says why; the threshold is still applied to whatever answer is there,
+        // so an output written any other way cannot bypass it.
         const reason = run.Status === 'Complete'
-            ? unusableAnswerReason(run.Name, key, answer, question)
+            ? heldReason(answer) ?? unusableAnswerReason(run.Name, key, answer, question)
             : notAnsweredReason(run);
         if (reason) {
             resolved.Unresolved[key] = reason;
@@ -162,6 +174,11 @@ function unusableAnswerReason(
     return confidence < min
         ? `the decision "${stepName}" answered "${key}" with confidence ${Number(confidence.toFixed(3))}, below its minConfidence of ${min}`
         : null;
+}
+
+/** The reason a step's output gives for holding an answer, or `null` when it holds none there. */
+function heldReason(entry: unknown): string | null {
+    return isRecord(entry) && typeof entry.held === 'string' && entry.held ? entry.held : null;
 }
 
 /** Why a step that is not Complete has no usable answers. */
