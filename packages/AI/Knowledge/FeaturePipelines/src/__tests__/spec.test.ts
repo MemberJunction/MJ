@@ -5,6 +5,8 @@ import {
   ResolveConstraint,
   RenderConstraintBlock,
   EntityMetadataStub,
+  IsLLMPipelineType,
+  IsDecisionPipelineType,
 } from '../spec/data-feature-spec.js';
 import { ValidateOutputValue } from '../validation/constraint-validator.js';
 
@@ -724,3 +726,102 @@ describe('DataFeatureSpec — decision-derived extensions', () => {
   });
 });
 
+
+describe('DataFeatureSpec — Escalation validation', () => {
+  const decisionSpec = (escalation?: DataFeatureSpec['Escalation']): DataFeatureSpec => ({
+    Name: 'Seniority',
+    Description: 'Classifies seniority',
+    Context: { Fields: ['CurrentJobTitle'] },
+    PromptID: 'prompt-1',
+    PipelineType: 'Decision',
+    Outputs: [
+      {
+        Ref: '$.isExecutive',
+        Name: 'IsExecutive',
+        Target: { Mode: 'field', EntityFieldName: 'IsVIP' },
+        Constraint: { Type: 'boolean', OnViolation: 'fail' },
+      },
+    ],
+    Caching: { Cacheable: false },
+    ...(escalation ? { Escalation: escalation } : {}),
+  });
+  const escalationIssues = (spec: DataFeatureSpec) => ValidateSpec(spec).filter(i => i.Path.startsWith('Escalation'));
+
+  it('accepts a valid escalation on a Decision pipeline, in any case of the type name', () => {
+    expect(escalationIssues(decisionSpec({ PipelineID: 'llm-pipeline-1', BelowConfidence: 0.7 }))).toHaveLength(0);
+    const lowerCase = { ...decisionSpec({ PipelineID: 'llm-pipeline-1', BelowConfidence: 0.5 }), PipelineType: ' decision ' };
+    expect(escalationIssues(lowerCase)).toHaveLength(0);
+  });
+
+  it('accepts a spec without Escalation, and treats a JSON null as absent', () => {
+    expect(escalationIssues(decisionSpec())).toHaveLength(0);
+    const spec = JSON.parse(JSON.stringify({ ...decisionSpec(), Escalation: null })) as DataFeatureSpec;
+    expect(escalationIssues(spec)).toHaveLength(0);
+  });
+
+  it('rejects an escalation on an LLM pipeline, whether PipelineType names LLM or is absent', () => {
+    const escalation = { PipelineID: 'llm-pipeline-1', BelowConfidence: 0.7 };
+    const named = { ...decisionSpec(escalation), PipelineType: 'LLM' };
+    const { PipelineType: _omitted, ...absent } = decisionSpec(escalation);
+    for (const spec of [named, absent]) {
+      const issues = escalationIssues(spec);
+      expect(issues).toHaveLength(1);
+      expect(issues[0]).toMatchObject({ Path: 'Escalation', Severity: 'error' });
+      expect(issues[0].Message).toBe("DataFeatureSpec Escalation is only valid on a Decision pipeline, but this pipeline's type is 'LLM'.");
+      expect(issues[0].FixRecommendation).toContain("set PipelineType to 'Decision'");
+    }
+  });
+
+  it('rejects an empty, whitespace or missing PipelineID', () => {
+    const missing = JSON.parse(JSON.stringify({ ...decisionSpec(), Escalation: { BelowConfidence: 0.7 } })) as DataFeatureSpec;
+    for (const spec of [decisionSpec({ PipelineID: '', BelowConfidence: 0.7 }), decisionSpec({ PipelineID: '   ', BelowConfidence: 0.7 }), missing]) {
+      const issues = escalationIssues(spec);
+      expect(issues).toHaveLength(1);
+      expect(issues[0]).toMatchObject({ Path: 'Escalation.PipelineID', Severity: 'error' });
+      expect(issues[0].FixRecommendation).toContain('LLM Feature Pipeline');
+    }
+  });
+
+  it('rejects a BelowConfidence outside (0, 1), naming the value', () => {
+    for (const floor of [0, 1, -0.2, 1.5, Number.NaN]) {
+      const issues = escalationIssues(decisionSpec({ PipelineID: 'llm-pipeline-1', BelowConfidence: floor }));
+      expect(issues).toHaveLength(1);
+      expect(issues[0]).toMatchObject({ Path: 'Escalation.BelowConfidence', Severity: 'error' });
+      expect(issues[0].Message).toContain(`but is ${String(floor)}`);
+    }
+  });
+
+  it('rejects a BelowConfidence that is not a number, or is missing', () => {
+    const asString = JSON.parse(JSON.stringify({ ...decisionSpec(), Escalation: { PipelineID: 'p', BelowConfidence: '0.7' } })) as DataFeatureSpec;
+    const missing = JSON.parse(JSON.stringify({ ...decisionSpec(), Escalation: { PipelineID: 'p' } })) as DataFeatureSpec;
+    expect(escalationIssues(asString)[0].Message).toContain('but is "0.7"');
+    expect(escalationIssues(missing)[0].Message).toContain('but is missing');
+  });
+
+  it('rejects an Escalation that is not an object', () => {
+    const spec = JSON.parse(JSON.stringify({ ...decisionSpec(), Escalation: 'llm-pipeline-1' })) as DataFeatureSpec;
+    const issues = escalationIssues(spec);
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatchObject({ Path: 'Escalation', Severity: 'error' });
+  });
+
+  it('reports every problem at once', () => {
+    const spec = { ...decisionSpec({ PipelineID: '', BelowConfidence: 2 }), PipelineType: 'LLM' };
+    expect(escalationIssues(spec).map(i => i.Path)).toEqual(['Escalation', 'Escalation.PipelineID', 'Escalation.BelowConfidence']);
+  });
+});
+
+describe('Pipeline type names', () => {
+  it('IsLLMPipelineType: absent or null means LLM; names match case-insensitively, trimmed', () => {
+    expect(IsLLMPipelineType(undefined)).toBe(true);
+    expect(IsLLMPipelineType(null)).toBe(true);
+    expect(IsLLMPipelineType(' llm ')).toBe(true);
+    expect(IsLLMPipelineType('Decision')).toBe(false);
+  });
+
+  it('IsDecisionPipelineType: only a name matching Decision, case-insensitively, trimmed', () => {
+    expect(IsDecisionPipelineType(' DECISION ')).toBe(true);
+    expect(IsDecisionPipelineType(undefined)).toBe(false);
+    expect(IsDecisionPipelineType('LLM')).toBe(false);
+  });
+});
