@@ -5,7 +5,11 @@ import { capture } from '@memberjunction/ng-test-utils';
 import { BaseEntity, BaseEntityResult, EntityInfo, UserInfo, UserRoleInfo } from '@memberjunction/core';
 import type { DuplicateEntryCandidate, DuplicateEntryCheckResult } from '@memberjunction/graphql-dataprovider';
 import { BaseFormComponent } from './base-form-component';
-import { DUPLICATE_ENTRY_CHECK_DEBOUNCE_MS, type DuplicateEntryCheckFunction } from './duplicate-entry-check/duplicate-entry-check';
+import {
+  DUPLICATE_ENTRY_CHECK_DEBOUNCE_MS,
+  type DuplicateEntryCheckFunction,
+  type DuplicateEntryCheckValue,
+} from './duplicate-entry-check/duplicate-entry-check';
 
 /**
  * How `BaseFormComponent` drives the entry-time duplicate check: an edit to a NEW record starts it,
@@ -24,7 +28,7 @@ class TestForm extends BaseFormComponent {
   public record!: BaseEntity;
   public readonly Check = vi.fn<DuplicateEntryCheckFunction>();
 
-  protected override CheckDuplicateEntry(entityName: string, values: Record<string, unknown>): Promise<DuplicateEntryCheckResult> {
+  protected override CheckDuplicateEntry(entityName: string, values: Record<string, DuplicateEntryCheckValue>): Promise<DuplicateEntryCheckResult> {
     return this.Check(entityName, values);
   }
 }
@@ -52,7 +56,7 @@ const CREATOR_ROLE_ID = 'A0000000-0000-0000-0000-000000000012';
 
 function userWithRole(roleID: string): UserInfo {
   const userID = 'C0000000-0000-0000-0000-000000000001';
-  return new UserInfo(null, {
+  return new UserInfo(undefined, {
     ID: userID,
     Name: 'Entry Person',
     Email: 'person@example.com',
