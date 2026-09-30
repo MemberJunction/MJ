@@ -12,7 +12,9 @@ import {
     GetValueFromPath,
     ResolveDecisionStepAnswers,
     type GraphDecisions,
+    type HeldDecisionAnswer,
     type TaskGraphDecisionAnswer,
+    type TaskGraphDecisionQuestion,
     type TaskGraphNodeConfigMap,
 } from '@memberjunction/ai-core-plus';
 import type { MJTaskEntity_ITaskStepConfiguration } from '@memberjunction/core-entities';
@@ -104,18 +106,65 @@ export function ResolveDecisionState(
     return { State: JSON.stringify(value) };
 }
 
+/** One question's entry in a Decision step's output: the answer, or why it is held. */
+export type DecisionStepOutputAnswer = TaskGraphDecisionAnswer | HeldDecisionAnswer;
+
+/**
+ * A Decision step's answers as its output carries them: each usable answer as given, and for every
+ * other question the reason it is held.
+ *
+ * **An answer below its question's `minConfidence` never leaves the step.** The output is what later
+ * steps read, and a condition can reach it too (`payload.decisions…`) — the validator refuses that,
+ * but a below-threshold answer that is simply not there cannot be acted on by anything that slips
+ * past it, or by a later step's prompt. The edges that route on the decision read the graph's own
+ * answers through `ResolveGraphDecisions`, which reads the reasons back from here and holds.
+ */
+export function DecisionStepOutputAnswers(
+    stepName: string,
+    questions: Readonly<Record<string, TaskGraphDecisionQuestion>>,
+    answers: Readonly<Record<string, TaskGraphDecisionAnswer>>,
+): Record<string, DecisionStepOutputAnswer> {
+    // The shared answer rules decide which are usable, so this copy and every hold agree.
+    const resolved = ResolveDecisionStepAnswers({ Name: stepName, Status: 'Complete', ErrorMessage: null }, questions, answers);
+    const output: Record<string, DecisionStepOutputAnswer> = {};
+    for (const key of Object.keys(questions)) {
+        output[key] = Object.prototype.hasOwnProperty.call(resolved.Answers, key)
+            ? resolved.Answers[key]
+            // Every question the rules do not use has a reason; the fallback is for the compiler.
+            : { held: resolved.Unresolved[key] ?? `the decision "${stepName}" completed without an answer to "${key}"` };
+    }
+    return output;
+}
+
+/**
+ * Why a Decision step cannot add its answers to this payload, or `null` when it can.
+ *
+ * The answers go under `decisions`, merged into whatever object is already there. Anything else
+ * there — a list, a string — is business data the merge would destroy, so the step is failed before
+ * its call rather than overwrite it.
+ */
+export function DecisionsPayloadConflict(payload: Readonly<Record<string, unknown>>): string | null {
+    const existing = payload[DECISIONS_PAYLOAD_KEY];
+    if (existing === undefined || existing === null || isRecord(existing)) return null;
+    const kind = Array.isArray(existing) ? 'a list' : `a ${typeof existing}`;
+    return `its payload already has a "${DECISIONS_PAYLOAD_KEY}" field holding ${kind}, which its answers would replace; `
+        + `rename that field, since a Decision step writes its answers under "${DECISIONS_PAYLOAD_KEY}"`;
+}
+
 /**
  * The payload a Decision step hands downstream: its input, with its answers added under
  * `decisions.<step>`.
  *
  * Earlier steps' answers are kept, so a later step's prompt sees every decision made on its way.
  * Conditions do not read this copy — they read the graph's own, from `ResolveGraphDecisions` — so a
- * downstream step that rewrites the payload cannot change what an edge decides.
+ * downstream step that rewrites the payload cannot change what an edge decides. Pass the answers
+ * through {@link DecisionStepOutputAnswers}, so that one below its threshold is not among them, and
+ * check {@link DecisionsPayloadConflict} first: a `decisions` field that is not an object is replaced.
  */
 export function BuildDecisionStepOutput(
     payload: Record<string, unknown>,
     nodeId: string,
-    answers: Readonly<Record<string, TaskGraphDecisionAnswer>>,
+    answers: Readonly<Record<string, DecisionStepOutputAnswer>>,
 ): Record<string, unknown> {
     const existing = payload[DECISIONS_PAYLOAD_KEY];
     const earlier = isRecord(existing) ? existing : {};
@@ -145,6 +194,20 @@ export function ResolveGraphDecisions(rows: readonly DecisionTaskRow[]): GraphDe
         if (Object.keys(resolved.Unresolved).length > 0) Object.assign(unresolved[config.nodeId] ??= {}, resolved.Unresolved);
     }
     return { Answers: answers, Unresolved: unresolved };
+}
+
+/**
+ * The questions a completed Decision step is holding, with why: each answer below its question's
+ * `minConfidence`, and each question it gave no answer to.
+ *
+ * Empty for any other step, and for a Decision whose answers are all usable. This is what makes such
+ * a step retryable — the edges that read these answers hold until it is asked again.
+ */
+export function HeldDecisionAnswers(row: DecisionTaskRow): Record<string, string> {
+    if (row.StepType !== 'Decision' || row.Status !== 'Complete') return {};
+    const config = ReadDecisionStepConfiguration(row.Configuration);
+    if (!config) return {};
+    return { ...ResolveGraphDecisions([row]).Unresolved[config.nodeId] };
 }
 
 /** A completed step's answers, as it wrote them into its output. */

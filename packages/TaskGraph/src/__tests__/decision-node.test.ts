@@ -12,7 +12,7 @@
  *    otherwise do: `undefined === 'billing'` is a confident, wrong no.
  */
 import { describe, it, expect, vi } from 'vitest';
-import type { IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
+import { UserInfo, type RunViewParams } from '@memberjunction/core';
 import type { MJTaskDependencyEntity, MJTaskEntity } from '@memberjunction/core-entities';
 import {
     CONDITION_ROOTS,
@@ -39,12 +39,22 @@ import {
 } from '../condition-gate';
 import {
     BuildDecisionStepOutput,
+    DecisionStepOutputAnswers,
+    DecisionsPayloadConflict,
+    HeldDecisionAnswers,
     ReadDecisionStepConfiguration,
     ResolveDecisionState,
     ResolveGraphDecisions,
     type DecisionTaskRow,
 } from '../decision-node';
-import { BuildStepConfiguration, DecisionPromptNameOf, FindUnrunnableKinds } from '../TaskGraphService';
+import {
+    BuildStepConfiguration,
+    DecisionPromptNameOf,
+    FindUnrunnableKinds,
+    PrepareTaskForRetry,
+    RetryRefusal,
+    type RetryableTask,
+} from '../TaskGraphService';
 import type { TaskDecisionRunner, TaskDecisionRunParams, TaskDecisionRunResult, TaskPromptRunner } from '../types';
 
 // ── fixtures ────────────────────────────────────────────────────────────────────────────────────
@@ -80,8 +90,14 @@ const BILLING_CONFIDENT: Record<string, TaskGraphDecisionAnswer> = {
     urgent: { probability: 0.1 },
 };
 
+/** The Task columns the dispatcher reads from a Decision step. */
+type DecisionTaskFields = Pick<
+    MJTaskEntity,
+    'ID' | 'Name' | 'StepType' | 'PromptID' | 'ActionID' | 'AgentID' | 'ParentID' | 'Configuration' | 'ConfigurationObject'
+>;
+
 /** A Decision task row, the shape the dispatcher reads. */
-function decisionTask(over: Partial<Pick<MJTaskEntity, 'Configuration' | 'PromptID' | 'ParentID'>> = {}): MJTaskEntity {
+function decisionTask(over: Partial<Pick<DecisionTaskFields, 'ID' | 'Name' | 'Configuration' | 'PromptID' | 'ParentID'>> = {}): DecisionTaskFields {
     return {
         ID: 'task-triage',
         Name: 'Triage the ticket',
@@ -93,7 +109,7 @@ function decisionTask(over: Partial<Pick<MJTaskEntity, 'Configuration' | 'Prompt
         Configuration: TRIAGE_CONFIGURATION,
         ConfigurationObject: null,
         ...over,
-    } satisfies Partial<MJTaskEntity> as unknown as MJTaskEntity;
+    };
 }
 
 /** The row a Decision step leaves behind once it has run. */
@@ -108,9 +124,13 @@ function decisionRow(status: string, output: unknown, errorMessage: string | nul
     };
 }
 
+/** The output `triage` writes when it answers with these, as the dispatcher builds it. */
+const triageOutput = (answers: Record<string, TaskGraphDecisionAnswer>, payload: Record<string, unknown> = {}) =>
+    BuildDecisionStepOutput(payload, 'triage', DecisionStepOutputAnswers('Triage the ticket', TRIAGE.questions, answers));
+
 /** The graph's decisions after `triage` completed with these answers. */
 const decided = (answers: Record<string, TaskGraphDecisionAnswer>): GraphDecisions =>
-    ResolveGraphDecisions([decisionRow('Complete', BuildDecisionStepOutput({}, 'triage', answers))]);
+    ResolveGraphDecisions([decisionRow('Complete', triageOutput(answers))]);
 
 /** A decision runner that records every call and answers with `result`. */
 function decisionRunner(result: TaskDecisionRunResult): TaskDecisionRunner & { Calls: TaskDecisionRunParams[] } {
@@ -142,11 +162,23 @@ class FakeRunStep {
     public async Save(): Promise<boolean> { this.saved.push(this); return true; }
 }
 
-/** A provider that knows the graph's parent, the run that submitted it, and that run's steps. */
+/** The graph's parent row as the fake provider hands it out: who submitted the graph. */
+type FakeParentTask = { InputPayload: string | null; AgentRunID: string | null; Load: () => Promise<boolean> };
+
+/** The provider calls a Decision step makes: the graph's parent, a new run step, and the run's highest step. */
+type FakeProvider = {
+    GetEntityObject(entityName: string): Promise<FakeParentTask | FakeRunStep>;
+    RunView(params: RunViewParams): Promise<{ Success: boolean; Results: Array<{ StepNumber: number }> }>;
+};
+
+/**
+ * A provider that knows the graph's parent, the run that submitted it, and that run's steps. The
+ * highest step number includes every step saved through it, as a database would.
+ */
 function fakeProvider(submittingRunID: string | null, highestStepNumber = 0) {
     const saved: FakeRunStep[] = [];
     const runViews: RunViewParams[] = [];
-    const provider = {
+    const provider: FakeProvider = {
         GetEntityObject: async (entityName: string) => {
             if (entityName === 'MJ: Tasks') {
                 return { InputPayload: null, AgentRunID: submittingRunID, Load: async () => true };
@@ -155,72 +187,86 @@ function fakeProvider(submittingRunID: string | null, highestStepNumber = 0) {
         },
         RunView: async (params: RunViewParams) => {
             runViews.push(params);
-            return { Success: true, Results: highestStepNumber ? [{ StepNumber: highestStepNumber }] : [] };
+            const highest = Math.max(highestStepNumber, ...saved.map((step) => step.StepNumber));
+            return { Success: true, Results: highest ? [{ StepNumber: highest }] : [] };
         },
     };
-    return { Provider: provider as unknown as IMetadataProvider, Saved: saved, RunViews: runViews };
+    return { Provider: provider, Saved: saved, RunViews: runViews };
 }
 
-/** The private surface of the dispatcher these tests drive. */
+/** The origin columns a condition reads. */
+type OriginFields = Pick<MJTaskEntity, 'ID' | 'Name' | 'Status' | 'ErrorMessage' | 'OutputPayload'>;
+
+/** The dependency columns the gate reads. */
+type EdgeFields = Pick<MJTaskDependencyEntity, 'ID' | 'TaskID' | 'DependsOnTaskID' | 'Condition' | 'ExclusiveGroup' | 'Priority' | 'Sequence'>;
+
+/**
+ * The private surface of the dispatcher these tests drive, typed by the columns and provider calls
+ * those paths actually use.
+ */
 type DispatcherInternals = {
     runTaskBody(
-        task: MJTaskEntity,
-        provider: IMetadataProvider,
+        task: DecisionTaskFields,
+        provider: FakeProvider,
         inputPayload: unknown,
         dependencyOutputs: Map<string, unknown>,
     ): Promise<{ Success: boolean; Output?: unknown; ErrorMessage?: string; PromptRunID?: string }>;
-    canActOn(entity: MJTaskEntity): boolean;
+    canActOn(entity: DecisionTaskFields): boolean;
     evaluateEdgeCondition(
-        dep: MJTaskDependencyEntity,
-        entityById: Map<string, MJTaskEntity>,
+        dep: EdgeFields,
+        entityById: Map<string, OriginFields>,
         failureSemantics: 'block' | 'edges',
         invocation: ConditionInvocation,
         decisions: GraphDecisions,
     ): { outcome: 'keep' | 'drop' | 'hold'; reason?: string };
     evaluateExclusiveCondition(
-        dep: MJTaskDependencyEntity,
-        entityById: Map<string, MJTaskEntity>,
+        dep: EdgeFields,
+        entityById: Map<string, OriginFields>,
         invocation: ConditionInvocation,
         decisions: GraphDecisions,
     ): EdgeConditionOutcome;
 };
+
+const DRIVEN_METHODS: ReadonlyArray<keyof DispatcherInternals> = ['runTaskBody', 'canActOn', 'evaluateEdgeCondition', 'evaluateExclusiveCondition'];
+
+/** True when `value` has every method these tests drive — checked, so a renamed method fails loudly here. */
+function drivesDispatcher(value: object): value is DispatcherInternals {
+    return DRIVEN_METHODS.every((name) => typeof Reflect.get(value, name) === 'function');
+}
 
 /**
  * A dispatcher with only what these paths read. The real constructor stands up a claim store, timers
  * and a provider factory none of this touches; the methods under test come from the prototype.
  */
 function dispatcherWith(runner: TaskDecisionRunner, promptRunner?: TaskPromptRunner): DispatcherInternals {
-    const instance = Object.create(TaskGraphDispatcher.prototype) as {
-        decisionRunner: TaskDecisionRunner;
-        promptRunner?: TaskPromptRunner;
-        contextUser: UserInfo;
-        conditionEvaluator: DispatcherConditionEvaluator;
-        reportedUnevaluableConditions: Set<string>;
-        inFlight: Set<string>;
+    const instance = {
+        decisionRunner: runner,
+        promptRunner,
+        contextUser: new UserInfo(),
+        conditionEvaluator: new DispatcherConditionEvaluator(),
+        reportedUnevaluableConditions: new Set<string>(),
+        inFlight: new Set<string>(),
+        runStepLogs: new Map<string, Promise<void>>(),
     };
-    instance.decisionRunner = runner;
-    instance.promptRunner = promptRunner;
-    instance.contextUser = {} as UserInfo;
-    instance.conditionEvaluator = new DispatcherConditionEvaluator();
-    instance.reportedUnevaluableConditions = new Set<string>();
-    instance.inFlight = new Set<string>();
-    return instance as unknown as DispatcherInternals;
+    Object.setPrototypeOf(instance, TaskGraphDispatcher.prototype);
+    if (!drivesDispatcher(instance)) throw new Error('TaskGraphDispatcher no longer has the methods these tests drive.');
+    return instance;
 }
 
 /** The origin a condition is evaluated against — the Decision step itself, with its status and output. */
-function origin(status: MJTaskEntity['Status'], output: unknown): MJTaskEntity {
+function origin(status: MJTaskEntity['Status'], output: unknown): OriginFields {
     return {
         ID: 'task-triage', Name: 'Triage the ticket', Status: status, ErrorMessage: null,
         OutputPayload: output === undefined ? null : JSON.stringify(output),
-    } satisfies Partial<MJTaskEntity> as unknown as MJTaskEntity;
+    };
 }
 
 /** An edge out of `task-triage`. */
-function edge(id: string, condition: string, exclusiveGroup: string | null = null): MJTaskDependencyEntity {
+function edge(id: string, condition: string, exclusiveGroup: string | null = null): EdgeFields {
     return {
         ID: id, TaskID: `target-${id}`, DependsOnTaskID: 'task-triage', Condition: condition,
         ExclusiveGroup: exclusiveGroup, Priority: 0, Sequence: 0,
-    } satisfies Partial<MJTaskDependencyEntity> as unknown as MJTaskDependencyEntity;
+    };
 }
 
 const INTENT_FORK = [
@@ -354,6 +400,80 @@ describe('a Decision node on the dispatcher', () => {
 
     it('is claimable on a host with no prompt runner', () => {
         expect(dispatcherWith(decisionRunner({ Success: true })).canActOn(decisionTask())).toBe(true);
+    });
+
+    it('leaves an answer below its minConfidence out of its output, and says why in its place', async () => {
+        const runner = decisionRunner({ Success: true, Answers: { ...BILLING_CONFIDENT, intent: { value: 'billing', confidence: 0.55 } } });
+
+        const outcome = await dispatcherWith(runner).runTaskBody(decisionTask(), fakeProvider(null).Provider, input, new Map());
+
+        expect(outcome.Success).toBe(true);
+        expect(outcome.Output).toEqual({
+            ticket: input.ticket,
+            decisions: {
+                triage: {
+                    intent: { held: 'the decision "Triage the ticket" answered "intent" with confidence 0.55, below its minConfidence of 0.7' },
+                    urgent: BILLING_CONFIDENT.urgent,
+                },
+            },
+        });
+        // The answer itself is nowhere in what later steps, or a condition, can read.
+        expect(JSON.stringify(outcome.Output)).not.toContain('billing');
+    });
+
+    it('gives a condition reading its output nothing to route on below minConfidence, while the root holds', async () => {
+        const runner = decisionRunner({ Success: true, Answers: { ...BILLING_CONFIDENT, intent: { value: 'billing', confidence: 0.55 } } });
+        const outcome = await dispatcherWith(runner).runTaskBody(decisionTask(), fakeProvider(null).Provider, input, new Map());
+        const decisions = ResolveGraphDecisions([decisionRow('Complete', outcome.Output)]);
+        const context = BuildConditionContext(origin('Complete', outcome.Output), outcome.Output, {}, decisions.Answers);
+        const evaluator = new DispatcherConditionEvaluator();
+
+        // The door refuses `payload.decisions…`; this is what one that slipped past would see: no answer.
+        expect(evaluator.Evaluate("payload.decisions.triage.intent.value === 'billing'", context)).toEqual({ Success: true, Value: false });
+        const verdict = EvaluateCondition(
+            "decisions.triage.intent.value === 'billing'", context, decisions, (c, ctx) => evaluator.Evaluate(c, ctx),
+        );
+        expect(verdict.Unevaluable).toBe(true);
+        expect(verdict.ErrorMessage).toMatch(/confidence 0.55, below its minConfidence of 0.7/);
+    });
+
+    it('fails before its call rather than overwrite a payload "decisions" field that is not an object', async () => {
+        const runner = decisionRunner({ Success: true, Answers: BILLING_CONFIDENT });
+
+        const outcome = await dispatcherWith(runner).runTaskBody(
+            decisionTask(), fakeProvider(null).Provider, { ...input, decisions: ['approved by finance'] }, new Map(),
+        );
+
+        expect(outcome.Success).toBe(false);
+        expect(outcome.ErrorMessage).toMatch(/already has a "decisions" field holding a list/);
+        expect(runner.Calls).toHaveLength(0);
+    });
+
+    it('numbers two Decision steps logging on one run at once in turn, never the same', async () => {
+        const runner = decisionRunner({ Success: true, Answers: BILLING_CONFIDENT, PromptRunID: PROMPT_RUN_ID });
+        const { Provider, Saved } = fakeProvider(SUBMITTING_RUN_ID, 7);
+        const dispatcher = dispatcherWith(runner);
+
+        await Promise.all([
+            dispatcher.runTaskBody(decisionTask(), Provider, input, new Map()),
+            dispatcher.runTaskBody(decisionTask({ ID: 'task-triage-2', Name: 'Triage again' }), Provider, input, new Map()),
+        ]);
+
+        expect(Saved.map((step) => step.StepNumber).sort()).toEqual([8, 9]);
+    });
+});
+
+describe('DecisionsPayloadConflict', () => {
+    it.each([{}, { decisions: null }, { decisions: { earlier: {} } }])('lets the answers merge into %j', (payload) => {
+        expect(DecisionsPayloadConflict(payload)).toBeNull();
+    });
+
+    it.each([
+        [{ decisions: ['a'] }, 'a list'],
+        [{ decisions: 'none yet' }, 'a string'],
+        [{ decisions: 3 }, 'a number'],
+    ])('refuses to replace %j', (payload, kind) => {
+        expect(DecisionsPayloadConflict(payload)).toContain(`holding ${kind}`);
     });
 });
 
@@ -499,6 +619,76 @@ describe('a failed decision holds; it never reads as false', () => {
         const evaluate = vi.fn((): ConditionVerdict => ({ Success: true, Value: true }));
         expect(EvaluateCondition("decisions.triage.intent.value === 'other'", {}, FAILED, evaluate).Unevaluable).toBe(true);
         expect(evaluate).not.toHaveBeenCalled();
+    });
+});
+
+// ── releasing a hold ────────────────────────────────────────────────────────────────────────────
+
+describe('retrying a Decision step that is holding an answer', () => {
+    const LOW_INTENT = { ...BILLING_CONFIDENT, intent: { value: 'billing', confidence: 0.55 } };
+    const held = decisionRow('Complete', triageOutput(LOW_INTENT));
+    const usable = decisionRow('Complete', triageOutput(BILLING_CONFIDENT));
+
+    /** A step the graph holds on, with the columns a retry resets. */
+    const heldStep = (): RetryableTask & DecisionTaskRow => ({
+        ...held,
+        Status: 'Complete',
+        StepType: 'Decision',
+        StartedAt: new Date('2026-09-30T10:00:00Z'),
+        CompletedAt: new Date('2026-09-30T10:00:02Z'),
+        PercentComplete: 100,
+        ClaimedBy: null,
+        ClaimExpiresAt: null,
+    });
+
+    it('knows which answers it is holding, and why', () => {
+        expect(HeldDecisionAnswers(held)).toEqual({
+            intent: 'the decision "Triage the ticket" answered "intent" with confidence 0.55, below its minConfidence of 0.7',
+        });
+        expect(HeldDecisionAnswers(usable)).toEqual({});
+        expect(HeldDecisionAnswers(decisionRow('Failed', {}, 'timed out'))).toEqual({});
+    });
+
+    it('may be retried from Complete, as a failed step may', () => {
+        expect(RetryRefusal(held)).toBeNull();
+        expect(RetryRefusal(decisionRow('Failed', {}, 'timed out'))).toBeNull();
+    });
+
+    it('is refused when every answer is usable, and for anything else that has not failed', () => {
+        expect(RetryRefusal(usable)).toMatch(/answers are all usable/);
+        expect(RetryRefusal({ ...held, StepType: 'Agent' })).toMatch(/status is Complete, expected Failed/);
+        expect(RetryRefusal(decisionRow('In Progress', undefined))).toMatch(/status is In Progress/);
+    });
+
+    it('goes back to Pending with its answers cleared; edges reading it hold until it answers again, then route', () => {
+        const step = heldStep();
+        PrepareTaskForRetry(step);
+        expect(step).toMatchObject({
+            Status: 'Pending', OutputPayload: null, ErrorMessage: null, StartedAt: null, CompletedAt: null, PercentComplete: 0,
+        });
+
+        // An edge from a later step that reads the decision holds while it is asked again...
+        const dispatcher = dispatcherWith(decisionRunner({ Success: true }));
+        const gather: OriginFields = { ...origin('Complete', {}), ID: 'task-gather', Name: 'Gather' };
+        const reading = { ...edge('e-later', "decisions.triage.intent.value === 'billing'"), DependsOnTaskID: 'task-gather' };
+        const waiting = ResolveGraphDecisions([step]);
+        expect(dispatcher.evaluateEdgeCondition(reading, new Map([['task-gather', gather]]), 'block', {}, waiting)).toMatchObject({
+            outcome: 'hold', reason: expect.stringMatching(/has not answered \(it is Pending\)/),
+        });
+
+        // ...and routes once it answers confidently.
+        const answered = ResolveGraphDecisions([{ ...step, Status: 'Complete', OutputPayload: JSON.stringify(triageOutput(BILLING_CONFIDENT)) }]);
+        expect(dispatcher.evaluateEdgeCondition(reading, new Map([['task-gather', gather]]), 'block', {}, answered).outcome).toBe('keep');
+        expect(resolveIntentFork('Complete', answered).keptEdgeIDs).toEqual(['e-billing']);
+    });
+
+    it('keeps a failed step\'s output when it is not a Decision', () => {
+        const step: RetryableTask = {
+            Status: 'Failed', StepType: 'Agent', ErrorMessage: 'boom', StartedAt: null, CompletedAt: null,
+            PercentComplete: 40, ClaimedBy: null, ClaimExpiresAt: null, OutputPayload: '{"partial":true}',
+        };
+        PrepareTaskForRetry(step);
+        expect(step).toMatchObject({ Status: 'Pending', ErrorMessage: null, OutputPayload: '{"partial":true}' });
     });
 });
 
