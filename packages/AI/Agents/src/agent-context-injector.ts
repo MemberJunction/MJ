@@ -5,9 +5,11 @@ import { AIEngine, NoteEmbeddingMetadata, ExampleEmbeddingMetadata, ExampleMatch
 import { SecondaryScopeConfig, SecondaryDimension, SecondaryScopeValue } from "@memberjunction/ai-core-plus";
 import type { MJAIAgentRunStepEntityExtended } from "@memberjunction/ai-core-plus";
 import { RerankerConfiguration, RerankerService } from "@memberjunction/ai-reranker";
+import type { RerankObservabilityOptions } from "@memberjunction/ai-reranker";
 
 /**
- * Options for observability integration when retrieving notes.
+ * Options for observability integration when retrieving notes or examples: the rerank step's run,
+ * parent and number.
  */
 export interface NotesObservabilityOptions {
     /**
@@ -89,6 +91,11 @@ export interface GetExamplesParams {
      */
     // case-violation-ok-legacy-back-compat: matches GetNotesParams.rerankerConfig and this interface's other camelCase members
     rerankerConfig?: RerankerConfiguration | null;
+    /**
+     * Optional observability context for tracing the examples rerank, as for notes.
+     */
+    // case-violation-ok-legacy-back-compat: matches GetNotesParams.observability and this interface's other camelCase members
+    observability?: NotesObservabilityOptions;
 }
 
 /**
@@ -177,12 +184,7 @@ export class AgentContextInjector {
                 params.currentInput!,
                 config,
                 params.contextUser,
-                params.observability ? {
-                    agentRunID: params.observability.agentRunID,
-                    parentStepID: params.observability.parentStepID,
-                    stepNumber: params.observability.stepNumber,
-                    OnStepCreated: params.observability.OnStepCreated
-                } : undefined
+                this.rerankObservability(params.observability)
             );
 
             // Return top N reranked notes
@@ -243,6 +245,16 @@ export class AgentContextInjector {
         return this.rerankExamples(matches, params, config);
     }
 
+    /** The observability options a rerank runs under, from the caller's, or none. */
+    private rerankObservability(observability: NotesObservabilityOptions | undefined): RerankObservabilityOptions | undefined {
+        return observability ? {
+            agentRunID: observability.agentRunID,
+            parentStepID: observability.parentStepID,
+            stepNumber: observability.stepNumber,
+            OnStepCreated: observability.OnStepCreated
+        } : undefined;
+    }
+
     /**
      * The reranker configuration for examples: the agent's configuration when it is enabled and sets
      * `rerankExamples` to true, otherwise null.
@@ -263,7 +275,13 @@ export class AgentContextInjector {
     ): Promise<MJAIAgentExampleEntity[]> {
         LogStatus(`AgentContextInjector: Reranking ${matches.length} example candidates to top ${params.maxExamples}`);
         try {
-            const reranked = await RerankerService.Instance.RerankExamples(matches, params.currentInput!, config, params.contextUser);
+            const reranked = await RerankerService.Instance.RerankExamples(
+                matches,
+                params.currentInput!,
+                config,
+                params.contextUser,
+                this.rerankObservability(params.observability)
+            );
             return reranked.slice(0, params.maxExamples).map(m => m.example);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);

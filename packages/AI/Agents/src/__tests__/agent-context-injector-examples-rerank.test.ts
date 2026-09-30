@@ -13,6 +13,7 @@ import { UserInfo } from '@memberjunction/core';
 import type { MJAIAgentExampleEntity, MJAIAgentNoteEntity } from '@memberjunction/core-entities';
 import type { ExampleMatchResult, NoteMatchResult } from '@memberjunction/aiengine';
 import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import type { NotesObservabilityOptions } from '../agent-context-injector';
 import { RerankerService } from '@memberjunction/ai-reranker';
 import type { RerankerConfiguration, RerankServiceResult } from '@memberjunction/ai-reranker';
 import { AgentContextInjector } from '../agent-context-injector';
@@ -98,7 +99,7 @@ function rerankerConfig(overrides: Partial<RerankerConfiguration> = {}): Reranke
     };
 }
 
-function getExamples(config: RerankerConfiguration | null | undefined): Promise<MJAIAgentExampleEntity[]> {
+function getExamples(config: RerankerConfiguration | null | undefined, observability?: NotesObservabilityOptions): Promise<MJAIAgentExampleEntity[]> {
     return new AgentContextInjector().GetExamplesForContext({
         agentId: 'agent-1',
         currentInput: INPUT,
@@ -106,6 +107,7 @@ function getExamples(config: RerankerConfiguration | null | undefined): Promise<
         maxExamples: 2,
         contextUser,
         rerankerConfig: config,
+        observability,
     });
 }
 
@@ -200,8 +202,17 @@ describe('AgentContextInjector examples reranking stage', () => {
 
         expect(h.fetchCounts).toEqual([6]);
         expect(rerank).toHaveBeenCalledTimes(1);
-        expect(rerank).toHaveBeenCalledWith(h.candidates, INPUT, config, contextUser);
+        expect(rerank).toHaveBeenCalledWith(h.candidates, INPUT, config, contextUser, undefined);
         expect(ids(examples)).toEqual(['e4', 'e1']);
+    });
+
+    it('links the examples rerank to the agent run, as the notes rerank is linked', async () => {
+        const rerank = spyOnRerankExamples([h.candidates[1]]);
+        const onStepCreated = vi.fn();
+
+        await getExamples(rerankerConfig({ rerankExamples: true }), { agentRunID: 'run-7', parentStepID: 'step-2', stepNumber: 4, OnStepCreated: onStepCreated });
+
+        expect(rerank.mock.calls[0][4]).toEqual({ agentRunID: 'run-7', parentStepID: 'step-2', stepNumber: 4, OnStepCreated: onStepCreated });
     });
 
     it('falls back to the vector search results when reranking fails and fallbackOnError is true', async () => {
@@ -230,6 +241,23 @@ describe('AgentContextInjector notes reranking stage', () => {
 
         expect(h.fetchCounts).toEqual([6]);
         expect(ids(notes)).toEqual(['n3', 'n1']);
+    });
+
+    it('links the notes rerank to the agent run', async () => {
+        const rerank = spyOnRerankNotes([h.noteCandidates[0]]);
+        const onStepCreated = vi.fn();
+
+        await new AgentContextInjector().GetNotesForContext({
+            agentId: 'agent-1',
+            currentInput: INPUT,
+            strategy: 'Relevant',
+            maxNotes: 2,
+            contextUser,
+            rerankerConfig: rerankerConfig(),
+            observability: { agentRunID: 'run-7', stepNumber: 3, OnStepCreated: onStepCreated },
+        });
+
+        expect(rerank.mock.calls[0][4]).toEqual({ agentRunID: 'run-7', parentStepID: undefined, stepNumber: 3, OnStepCreated: onStepCreated });
     });
 
     it('falls back to the vector search results when the rerank runs out of time and fallbackOnError is true', async () => {
@@ -276,7 +304,8 @@ describe('AgentMemoryContextBuilder examples reranking', () => {
             h.candidates,
             INPUT,
             expect.objectContaining({ rerankerModelId: 'decision-reranker-model', rerankExamples: true }),
-            contextUser
+            contextUser,
+            undefined
         );
         expect(ids(result.examples)).toEqual(['e3', 'e2']);
     });

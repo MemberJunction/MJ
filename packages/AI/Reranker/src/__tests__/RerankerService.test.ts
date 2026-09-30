@@ -61,6 +61,7 @@ import { RerankerConfiguration } from '../config.types';
 import { GetGlobalObjectStore } from '@memberjunction/global';
 import type { MJAIAgentExampleEntity, MJAIAgentNoteEntity } from '@memberjunction/core-entities';
 import type { ExampleMatchResult, NoteMatchResult } from '@memberjunction/aiengine';
+import type { MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
 
 const mockUser = { ID: 'user-1', Name: 'Test' } as never;
 
@@ -399,6 +400,85 @@ describe('RerankerService', () => {
             await RerankerService.Instance.RerankExamples([reset], 'query', makeConfig({ decisionTimeoutMS: 5000 }), mockUser);
 
             expect(mockRunRerank).toHaveBeenCalledWith(expect.objectContaining({ options: { TimeoutMS: 5000 } }));
+        });
+
+        it("records a Rerank Examples step for the agent run, linked to the rerank's run, as notes are", async () => {
+            const rerankRun = { ID: 'pr-rerank-3', TotalCost: 0.002 };
+            mockRunRerank.mockResolvedValue({
+                Success: true,
+                ExecutionTimeMS: 1,
+                PromptRunID: rerankRun.ID,
+                PromptRun: rerankRun,
+                Response: {
+                    success: true,
+                    durationMs: 1,
+                    results: [
+                        { id: 'e2', relevanceScore: 0.9, document: { id: 'e2', text: 'invoice' }, rank: 0 },
+                        { id: 'e1', relevanceScore: 0.3, document: { id: 'e1', text: 'reset' }, rank: 1 }
+                    ]
+                }
+            });
+            const steps: MJAIAgentRunStepEntityExtended[] = [];
+
+            await RerankerService.Instance.RerankExamples(
+                [reset, invoice], 'Where can I find my invoice?', makeConfig(), mockUser,
+                { agentRunID: 'run-1', parentStepID: 'parent-1', stepNumber: 4, OnStepCreated: step => steps.push(step) }
+            );
+
+            expect(mockRunRerank).toHaveBeenCalledWith(expect.objectContaining({ AgentRunID: 'run-1' }));
+            expect(steps).toHaveLength(1);
+            const step = steps[0];
+            expect(step).toMatchObject({
+                AgentRunID: 'run-1',
+                StepNumber: 4,
+                StepType: 'Decision',
+                StepName: 'Rerank Examples',
+                ParentID: 'parent-1',
+                Status: 'Completed',
+                Success: true,
+                TargetLogID: rerankRun.ID,
+                PromptRun: rerankRun
+            });
+            expect(JSON.parse(step.InputData ?? '')).toEqual({
+                query: 'Where can I find my invoice?', rerankerModelId: 'model-1', minRelevanceThreshold: 0.5, exampleCount: 2
+            });
+            expect(JSON.parse(step.PayloadAtStart ?? '')).toEqual({
+                candidateExamples: [
+                    { index: 0, id: 'e1', vectorScore: 0.8, preview: 'How do I reset my password?' },
+                    { index: 1, id: 'e2', vectorScore: 0.7, preview: 'Where is my invoice?' }
+                ]
+            });
+            expect(JSON.parse(step.PayloadAtEnd ?? '')).toEqual({
+                rerankedExamples: [{ rank: 1, id: 'e2', rerankScore: 0.9, preview: 'Where is my invoice?' }]
+            });
+        });
+
+        it('finalizes the Rerank Examples step as failed, with the run, when the rerank fails', async () => {
+            const rerankRun = { ID: 'pr-rerank-4', TotalCost: 0.002 };
+            mockRunRerank.mockResolvedValue({ Success: false, ErrorMessage: 'Decision model is down', ExecutionTimeMS: 1, PromptRunID: rerankRun.ID, PromptRun: rerankRun });
+            const steps: MJAIAgentRunStepEntityExtended[] = [];
+
+            await expect(RerankerService.Instance.RerankExamples(
+                [reset], 'query', makeConfig(), mockUser, { agentRunID: 'run-1', OnStepCreated: step => steps.push(step) }
+            )).rejects.toThrow('Decision model is down');
+
+            expect(steps[0]).toMatchObject({
+                StepName: 'Rerank Examples',
+                Status: 'Failed',
+                Success: false,
+                ErrorMessage: 'Decision model is down',
+                TargetLogID: rerankRun.ID,
+                PromptRun: rerankRun
+            });
+        });
+
+        it('records no step without an agent run', async () => {
+            mockRunRerank.mockResolvedValue({ Success: true, ExecutionTimeMS: 1, Response: { success: true, durationMs: 1, results: [] } });
+            const onStepCreated = vi.fn();
+
+            await RerankerService.Instance.RerankExamples([reset], 'query', makeConfig(), mockUser, { OnStepCreated: onStepCreated });
+
+            expect(onStepCreated).not.toHaveBeenCalled();
         });
 
         it('throws when reranking fails, so the caller decides whether to fall back', async () => {

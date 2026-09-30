@@ -21,6 +21,7 @@ import { SecondaryScopeConfig, SecondaryScopeValue } from '@memberjunction/ai-co
 import type { MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
 
 import { AgentContextInjector } from './agent-context-injector';
+import type { NotesObservabilityOptions } from './agent-context-injector';
 import { AgentPreExecutionRAG, AgentPreExecutionRAGResult } from './agent-pre-execution-rag';
 import { RerankerService } from '@memberjunction/ai-reranker';
 
@@ -103,6 +104,7 @@ export class AgentMemoryContextBuilder {
         // Parse reranker configuration if present
         const rerankerConfigJson = agent.RerankerConfiguration;
         const rerankerConfig = RerankerService.Instance.parseConfiguration(rerankerConfigJson);
+        const rerankObservability = this.rerankObservability(observability);
 
         // Get notes if injection enabled
         const notes = agent.InjectNotes
@@ -120,11 +122,7 @@ export class AgentMemoryContextBuilder {
                 secondaryScopes,
                 secondaryScopeConfig,
                 // Pass observability context for run step tracking
-                observability: observability ? {
-                    agentRunID: observability.agentRunID,
-                    stepNumber: observability.stepNumber,
-                    OnStepCreated: observability.OnStepCreated
-                } : undefined
+                observability: rerankObservability()
             })
             : [];
         logStatus?.(`BaseAgent: Got ${notes.length} notes from injector`, true);
@@ -144,7 +142,9 @@ export class AgentMemoryContextBuilder {
                 primaryScopeEntityId,
                 primaryScopeRecordId,
                 secondaryScopes,
-                secondaryScopeConfig
+                secondaryScopeConfig,
+                // Numbered after the notes rerank's step, when there was one
+                observability: rerankObservability()
             })
             : [];
 
@@ -170,6 +170,24 @@ export class AgentMemoryContextBuilder {
         }
 
         return { notes, examples };
+    }
+
+    /**
+     * The observability context for each rerank, as a function the caller calls just before each one.
+     * Every rerank step is handed on to the caller's `OnStepCreated` and counted, so a later rerank's
+     * step is numbered after the earlier ones'. Returns a function that gives undefined when there is
+     * no observability.
+     */
+    private rerankObservability(observability: AgentMemoryObservability | undefined): () => NotesObservabilityOptions | undefined {
+        let stepsCreated = 0;
+        return () => observability ? {
+            agentRunID: observability.agentRunID,
+            stepNumber: observability.stepNumber + stepsCreated,
+            OnStepCreated: step => {
+                stepsCreated++;
+                observability.OnStepCreated?.(step);
+            }
+        } : undefined;
     }
 
     /**
