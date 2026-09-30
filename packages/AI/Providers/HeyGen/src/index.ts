@@ -1,6 +1,6 @@
 import { RegisterClass } from "@memberjunction/global";
-import { AvatarInfo, AvatarVideoParams, BaseVideoGenerator, VideoResult, ErrorAnalyzer } from "@memberjunction/ai";
-import { HttpGet, HttpPost } from "@memberjunction/network-utils";
+import { AIErrorInfo, AvatarInfo, AvatarVideoParams, BaseVideoGenerator, VideoResult, ErrorAnalyzer } from "@memberjunction/ai";
+import { HttpGet, HttpPost, IsHttpError } from "@memberjunction/network-utils";
 
 
 /** Response from HeyGen's `POST /v2/video/generate`. */
@@ -67,12 +67,29 @@ export class HeyGenVideoGenerator extends BaseVideoGenerator {
             videoResult.videoId = response.Data.data.video_id;
             videoResult.success = true;
         } catch (error) {
-            const errorInfo = ErrorAnalyzer.analyzeError(error, 'HeyGen');
+            const errorInfo = this.classifyError(error);
             videoResult.success = false;
             videoResult.errorMessage = error?.message || 'Unknown error occurred';
+            // Kept so a caller can tell a rejected request (a 400) from an outage: the message,
+            // "Request failed with status code 400", does not say which it was.
+            videoResult.errorInfo = errorInfo;
             console.error('HeyGen CreateAvatarVideo error:', error, errorInfo);
         }
         return videoResult;
+    }
+
+    /**
+     * Classifies a failed request. `HttpError` carries the response's status as `Status`, which
+     * `ErrorAnalyzer` does not read, so the analyzer is given the status, and the `retry-after`
+     * header, under the names it reads. The original error stays on the result. A request that got
+     * no response (status 0: a timeout or a network failure) is classified from its message.
+     */
+    private classifyError(error: unknown): AIErrorInfo {
+        if (IsHttpError(error) && error.Status > 0) {
+            const withStatus = { name: error.name, message: error.message, status: error.Status, headers: error.Headers };
+            return { ...ErrorAnalyzer.AnalyzeError(withStatus, 'HeyGen'), error };
+        }
+        return ErrorAnalyzer.AnalyzeError(error, 'HeyGen');
     }
 
     public async CreateVideoTranslation(params: any): Promise<VideoResult> {

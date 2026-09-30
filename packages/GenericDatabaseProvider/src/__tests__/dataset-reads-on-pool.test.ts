@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { GenericDatabaseProviderTestBase } from './helpers/GenericDatabaseProviderTestBase';
-import { SaveSQLResult, DeleteSQLResult, UserInfo, LocalCacheManager, ExecuteSQLOptions } from '@memberjunction/core';
+import { SaveSQLResult, DeleteSQLResult, UserInfo, LocalCacheManager, ExecuteSQLOptions, ProviderConfigDataBase, IMetadataProvider } from '@memberjunction/core';
 import type { ExecuteSQLBatchOptions } from '../GenericDatabaseProvider';
 
 vi.mock('sql-formatter', () => ({ format: (sql: string) => sql }));
@@ -14,6 +14,8 @@ vi.mock('sql-formatter', () => ({ format: (sql: string) => sql }));
  * dataset now carry `ignoreAmbientTransaction`; other datasets do not, because a caller that writes
  * and then loads inside one transaction expects to see its own rows.
  */
+const user: UserInfo = { ID: 'u', Name: 'U', Email: 'u@test' } as UserInfo;
+
 class TestProvider extends GenericDatabaseProviderTestBase {
     private static readonly _uuidPattern = /^\s*(gen_random_uuid|uuid_generate_v4)\s*\(\s*\)\s*$/i;
     private static readonly _defaultPattern = /^\s*(now|current_timestamp)\s*\(\s*\)\s*$/i;
@@ -33,6 +35,16 @@ class TestProvider extends GenericDatabaseProviderTestBase {
     public datasetItems: Record<string, unknown>[] = [];
     public sqlOptions: Array<ExecuteSQLOptions | undefined> = [];
     public batchOptions: Array<ExecuteSQLBatchOptions | undefined> = [];
+    public configCalls = 0;
+    protected override get AllowRefresh(): boolean { return true; }
+
+    /** The hard reload's dataset reads, without a full metadata build. RefreshWithinTransaction wraps this. */
+    public override async Config(_data: ProviderConfigDataBase, _providerToUse?: IMetadataProvider): Promise<boolean> {
+        this.configCalls++;
+        await this.GetDatasetByName('MJ_Metadata', undefined, user);
+        await this.GetDatasetStatusByName('MJ_Metadata', undefined, user);
+        return true;
+    }
     override async ExecuteSQL<T>(_sql?: string, _params?: unknown[], options?: ExecuteSQLOptions): Promise<Array<T>> {
         this.sqlOptions.push(options);
         return this.datasetItems as unknown as Array<T>;
@@ -44,7 +56,6 @@ class TestProvider extends GenericDatabaseProviderTestBase {
     override get TrustLocalCacheCompletely(): boolean { return false; }
 }
 
-const user: UserInfo = { ID: 'u', Name: 'U', Email: 'u@test' } as UserInfo;
 const item = (code: string): Record<string, unknown> => ({
     DatasetID: 'ds', Code: code, Entity: `MJ: ${code}`, EntityID: `e-${code}`, EntitySchemaName: '__mj', EntityBaseView: `vw${code}`,
     WhereClause: null, DateFieldToCheck: '__mj_UpdatedAt', DatasetItemUpdatedAt: '2026-01-01T00:00:00.000Z', DatasetUpdatedAt: '2026-01-01T00:00:00.000Z', Columns: null,
@@ -69,6 +80,7 @@ describe('dataset reads and the ambient transaction (MJ#4514)', () => {
     it('MJ_Metadata: the status read runs on the pool too', async () => {
         await provider.GetDatasetStatusByName('MJ_Metadata', undefined, user);
         expect(provider.sqlOptions.map(o => o?.ignoreAmbientTransaction)).toEqual([true]);
+        expect(provider.batchOptions.map(o => o?.ignoreAmbientTransaction)).toEqual([true]);
     });
 
     it('any other dataset keeps joining the ambient transaction', async () => {
@@ -76,5 +88,21 @@ describe('dataset reads and the ambient transaction (MJ#4514)', () => {
         await provider.GetDatasetStatusByName('AI_Metadata', undefined, user);
         expect(provider.sqlOptions.every(o => !o?.ignoreAmbientTransaction)).toBe(true);
         expect(provider.batchOptions.every(o => !o?.ignoreAmbientTransaction)).toBe(true);
+    });
+
+    it('RefreshWithinTransaction reads MJ_Metadata inside the transaction (MJ#4836)', async () => {
+        await provider.RefreshWithinTransaction();
+        expect(provider.configCalls).toBe(1);
+        expect(provider.sqlOptions.length).toBeGreaterThan(0);
+        expect(provider.batchOptions.length).toBeGreaterThan(0);
+        expect(provider.sqlOptions.every(o => o?.ignoreAmbientTransaction === false)).toBe(true);
+        expect(provider.batchOptions.every(o => o?.ignoreAmbientTransaction === false)).toBe(true);
+
+        provider.sqlOptions = [];
+        provider.batchOptions = [];
+        await provider.GetDatasetByName('MJ_Metadata', undefined, user);
+        await provider.GetDatasetStatusByName('MJ_Metadata', undefined, user);
+        expect(provider.sqlOptions.every(o => o?.ignoreAmbientTransaction === true)).toBe(true);
+        expect(provider.batchOptions.every(o => o?.ignoreAmbientTransaction === true)).toBe(true);
     });
 });

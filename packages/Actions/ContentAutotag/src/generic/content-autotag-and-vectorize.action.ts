@@ -605,7 +605,7 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
 
             if (entitySources.length === 0) return;
 
-            const syncer = new EntityVectorSyncer();
+            const syncer = new EntityVectorSyncer(params.Provider);
             await syncer.Config(false, params.ContextUser);
 
             for (const source of entitySources) {
