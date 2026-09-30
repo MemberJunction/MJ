@@ -213,12 +213,19 @@ describe('DecisionJudgeOracle', () => {
             expect(result.passed).toBe(false);
         });
 
-        it('is 0 when every weight is 0', async () => {
-            executeDecision.mockResolvedValue(answered(0.9));
+        it('fails without asking when every weight is 0, since the score would have nothing to weigh', async () => {
+            const result = await new DecisionJudgeOracle().evaluate(
+                oracleInput(expecting({ criterion: 'A', weight: 0 }, { criterion: 'B', weight: 0 })),
+                {},
+            );
 
-            const result = await new DecisionJudgeOracle().evaluate(oracleInput(expecting({ criterion: 'A', weight: 0 })), {});
-
-            expect(result.score).toBe(0);
+            expect(executeDecision).not.toHaveBeenCalled();
+            expect(result).toEqual({
+                oracleType: 'decision-judge',
+                passed: false,
+                score: 0,
+                message: 'Every criterion has weight 0, so none counts toward the score: give at least one a weight above 0',
+            });
         });
 
         it.each([

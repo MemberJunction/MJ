@@ -57,11 +57,12 @@ export function BuildJudgeTrace(input: OracleInput): JudgeTrace {
  * Reads the criteria a judge scores against: the expected output's `judgeValidationCriteria` when it
  * is set, otherwise the oracle config's `criteria`. Each entry is a non-empty string (weight 1), or
  * an object with a non-empty `criterion` and an optional `weight` that is a finite number of 0 or more.
+ * At least one criterion must weigh more than 0.
  *
  * @param input - The oracle input
  * @param config - The oracle config
  * @returns The criteria, in the order the test lists them, or the reason they cannot be read: there
- *   are none, the value is not an array, or an entry is malformed
+ *   are none, the value is not an array, an entry is malformed, or every weight is 0
  */
 export function ReadJudgeCriteria(input: OracleInput, config: OracleConfig): JudgeReadResult<JudgeCriterion[]> {
     const raw = readExpectedCriteria(input.expectedOutput) || config.criteria;
@@ -91,7 +92,10 @@ function readExpectedCriteria(expectedOutput: unknown): unknown {
     return expectedOutput.judgeValidationCriteria;
 }
 
-/** Every entry as a criterion, or the reason the first malformed one cannot be read. */
+/**
+ * Every entry as a criterion, or the reason they cannot be read: the first malformed entry, or every
+ * weight being 0, which leaves a weighted score with nothing to weigh.
+ */
 function readCriteriaEntries(entries: unknown[]): JudgeReadResult<JudgeCriterion[]> {
     const criteria: JudgeCriterion[] = [];
     for (const [index, entry] of entries.entries()) {
@@ -104,6 +108,12 @@ function readCriteriaEntries(entries: unknown[]): JudgeReadResult<JudgeCriterion
             };
         }
         criteria.push(criterion);
+    }
+    if (criteria.every(c => c.Weight === 0)) {
+        return {
+            Success: false,
+            ErrorMessage: 'Every criterion has weight 0, so none counts toward the score: give at least one a weight above 0',
+        };
     }
     return { Success: true, Value: criteria };
 }

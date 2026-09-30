@@ -41,7 +41,8 @@ interface DecisionRunDetails {
  * `AIDecisionRunner` call. The pass rule and the weighting live here, in code, not in the prompt.
  *
  * Criteria come from `expectedOutput.judgeValidationCriteria`, or else from `config.criteria`, as for
- * the LLM judge. Each is either a string or `{ "criterion": "...", "weight": 2 }`.
+ * the LLM judge. Each is either a string or `{ "criterion": "...", "weight": 2 }`. A weight of 0 keeps a
+ * criterion out of the score but not out of the pass rule; at least one weight must be above 0.
  *
  * Configuration:
  * - criteria: Array of criteria, used when the expected output has none
@@ -213,12 +214,9 @@ export class DecisionJudgeOracle implements IOracle {
         return outcomes;
     }
 
-    /** The weighted mean of the probabilities; 0 when every weight is 0. */
+    /** The weighted mean of the probabilities. `ReadJudgeCriteria` guarantees a total weight above 0. */
     private weightedMean(outcomes: CriterionProbability[]): number {
         const totalWeight = outcomes.reduce((sum, o) => sum + o.weight, 0);
-        if (totalWeight === 0) {
-            return 0;
-        }
         return outcomes.reduce((sum, o) => sum + o.probability * o.weight, 0) / totalWeight;
     }
 

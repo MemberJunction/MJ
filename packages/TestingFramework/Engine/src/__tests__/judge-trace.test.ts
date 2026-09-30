@@ -111,6 +111,18 @@ describe('ReadJudgeCriteria', () => {
         expect(readError({}, {})).toBe('No validation criteria provided');
     });
 
+    it('rejects criteria whose weights are all 0', () => {
+        expect(readError({ judgeValidationCriteria: [{ criterion: 'A', weight: 0 }, { criterion: 'B', weight: 0 }] }, {}))
+            .toBe('Every criterion has weight 0, so none counts toward the score: give at least one a weight above 0');
+    });
+
+    it('accepts a weight of 0 when another criterion weighs more', () => {
+        expect(readCriteria({ judgeValidationCriteria: [{ criterion: 'A', weight: 0 }, 'B'] }, {})).toEqual([
+            { Criterion: 'A', Weight: 0 },
+            { Criterion: 'B', Weight: 1 },
+        ]);
+    });
+
     it('rejects criteria that are not an array', () => {
         expect(readError({ judgeValidationCriteria: 'Is polite' }, {})).toBe('Validation criteria must be an array of criteria, not a string');
     });
