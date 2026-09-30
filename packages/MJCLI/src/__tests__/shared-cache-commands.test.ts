@@ -39,6 +39,7 @@ function fakePluginBase() {
 vi.mock('@memberjunction/metadata-sync/plugins', () => ({ SyncPushPlugin: fakePluginBase() }));
 vi.mock('@memberjunction/codegen-lib/plugins', () => ({ CodeGenPlugin: fakePluginBase() }));
 
+import { PushAbortedError } from '@memberjunction/metadata-sync';
 import SyncPush from '../commands/sync/push';
 import CodeGen from '../commands/codegen/index';
 
@@ -73,18 +74,56 @@ describe('shared cache clear in CLI commands', () => {
     expect(state.logged).toEqual([['cleared 3', 'info']]);
   });
 
-  it('sync push clears after a push that failed (it may have committed part of its work)', async () => {
-    state.result = { success: false, command: 'x', durationSeconds: 0 };
+  it('sync push clears after a failed push that left rows behind', async () => {
+    // Non-atomic mode: the push reports exactly what stayed committed (#4550).
+    state.result = { success: false, command: 'x', durationSeconds: 0, data: { rolledBack: false, committedOutsideTransaction: 3 } };
     const out = await run(SyncPush);
     expect(clearAfterWrite).toHaveBeenCalledWith('mj sync push (failed)', undefined);
     expect(out.success).toBe(false);
   });
 
-  it('sync push clears after a push that threw, logs it, and rethrows', async () => {
-    state.throws = new Error('Name cannot be null');
+  it('sync push does NOT clear after a push that rolled back cleanly', async () => {
+    // An atomic push (the default since #4550) undoes its own writes, so the fleet's cache is
+    // still correct — dropping it would cost every server a full reload for a run that changed
+    // nothing.
+    state.result = { success: false, command: 'x', durationSeconds: 0, data: { rolledBack: true, committedOutsideTransaction: 0 } };
+    const out = await run(SyncPush);
+    expect(clearAfterWrite).not.toHaveBeenCalled();
+    expect(out.success).toBe(false);
+  });
+
+  it('sync push clears when a failed push does not say what it committed', async () => {
+    state.result = { success: false, command: 'x', durationSeconds: 0, data: {} };
+    await run(SyncPush);
+    expect(clearAfterWrite).toHaveBeenCalledWith('mj sync push (failed)', undefined);
+  });
+
+  it('sync push clears after a throw that left rows behind, logs it, and rethrows', async () => {
+    state.throws = new PushAbortedError({
+      modes: ['isolated'], rolledBack: false,
+      committedWrites: [{ recordPath: 'Entity a[0]', entityName: 'MJ: AI Models', status: 'updated' }],
+      totals: { created: 0, updated: 1, unchanged: 0, deleted: 0, skipped: 0, deferred: 0, errors: 1 },
+      cause: new Error('Name cannot be null'),
+    });
     await expect(run(SyncPush)).rejects.toThrow('Name cannot be null');
     expect(clearAfterWrite).toHaveBeenCalledWith('mj sync push (failed)', undefined);
     expect(state.logged).toEqual([['cleared 3', 'info']]);
+  });
+
+  it('sync push does NOT clear after a throw the push rolled back cleanly', async () => {
+    state.throws = new PushAbortedError({
+      modes: ['shared'], rolledBack: true, committedWrites: [],
+      totals: { created: 0, updated: 0, unchanged: 0, deleted: 0, skipped: 0, deferred: 0, errors: 1 },
+      cause: new Error('Name cannot be null'),
+    });
+    await expect(run(SyncPush)).rejects.toThrow('Name cannot be null');
+    expect(clearAfterWrite).not.toHaveBeenCalled();
+  });
+
+  it('sync push clears after a throw that is not a push outcome at all', async () => {
+    state.throws = new Error('config file is unreadable');
+    await expect(run(SyncPush)).rejects.toThrow('config file is unreadable');
+    expect(clearAfterWrite).toHaveBeenCalledWith('mj sync push (failed)', undefined);
   });
 
   it('sync push does not clear after a dry run, even one that failed', async () => {

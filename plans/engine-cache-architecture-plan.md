@@ -2595,7 +2595,12 @@ also broke this branch quietly and are fixed: `DomainProfile.summary` → `Summa
 `rolledBack` and the rows a non-atomic push committed anyway. So the shim now clears after a failure
 only when something stayed behind, and skips the clear after a clean rollback — which used to cost
 every server a full reload for a run that changed nothing. An unreadable outcome still clears.
-Six tests cover it, including the clean-rollback case, and they fail without the check.
+Six tests cover it, and it is worth being precise about which of them are evidence: **two** —
+the clean rollback reported through the result, and the clean rollback thrown as
+`PushAbortedError` — fail against the old always-clear policy (verified by reinstating it). The
+other four (rows left behind, an outcome that does not say, a non-push error, a dry run) pass
+under both policies, so they are invariant tests that pin the behaviour that must NOT change,
+not regression pins for this fix.
 
 **Database.** `mj_test_2` was upgraded in the documented order: 16 migrations, `codegen --skipfiles`
 (391 entities), `sync push` (14,359 records, all unchanged — upstream's consolidated sync migration

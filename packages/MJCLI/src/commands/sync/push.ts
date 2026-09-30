@@ -4,13 +4,17 @@
  * subclass only adds the shared-cache clear that must follow a database write (#4083), before the
  * plugin's Cleanup() ends the process.
  *
- * The cache is cleared after every push that is not a dry run, including one that failed or threw:
- * a push is not all-or-nothing (record graphs commit on their own connections before a later
- * failure rolls back the rest), so a failed push can still have changed the database.
+ * A push that succeeded always clears. A push that FAILED clears only when it left something
+ * behind: since #4550 an atomic push (the default) rolls its writes back, and `PushAbortedError`
+ * says so — `rolledBack`, plus the rows a non-atomic push committed anyway. Clearing after a clean
+ * rollback would drop every server's cache for a run that changed nothing. When the outcome cannot
+ * be read, the clear still runs: a needless reload is cheaper than a fleet serving rows that are
+ * no longer in the database.
  */
 import { Flags } from '@oclif/core';
 import type { MJCLIResult, PluginUsage } from '@memberjunction/cli-core';
 import { SyncPushPlugin } from '@memberjunction/metadata-sync/plugins';
+import { PushAbortedError } from '@memberjunction/metadata-sync';
 import { AppendSharedCacheClear, ClearSharedCacheAfterWrite, SKIP_CACHE_CLEAR_ENV } from '../../lib/shared-cache.js';
 import type { SharedCacheClearReport } from '../../lib/shared-cache.js';
 
@@ -38,14 +42,37 @@ export default class SyncPush extends SyncPushPlugin {
       result = await super.Execute();
     } catch (error) {
       // Runs after the plugin's rollback, so servers reload whatever the push did commit.
-      const report = await this.clearSharedCache('mj sync push (failed)');
-      if (report) {
-        this.Host.Log(report.Message, report.Ok ? 'info' : 'warn');
+      if (this.failedPushLeftWrites(undefined, error)) {
+        const report = await this.clearSharedCache('mj sync push (failed)');
+        if (report) {
+          this.Host.Log(report.Message, report.Ok ? 'info' : 'warn');
+        }
       }
       throw error;
     }
+    if (!result.success && !this.failedPushLeftWrites(result, undefined)) {
+      return result; // rolled back cleanly: nothing in the database changed, so nothing is stale
+    }
     const report = await this.clearSharedCache(result.success ? 'mj sync push' : 'mj sync push (failed)');
     return AppendSharedCacheClear(result, report, this.Host);
+  }
+
+  /**
+   * Whether a failed push left rows in the database. False only when the outcome positively says
+   * the push rolled back and committed nothing; anything unreadable counts as "it may have".
+   */
+  private failedPushLeftWrites(result: MJCLIResult | undefined, error: unknown): boolean {
+    if (error instanceof PushAbortedError) {
+      return !error.rolledBack || error.committedWrites.length > 0;
+    }
+    if (error) {
+      return true; // an error the push did not describe
+    }
+    const data = result?.data as { rolledBack?: boolean; committedOutsideTransaction?: number } | undefined;
+    if (typeof data?.rolledBack !== 'boolean') {
+      return true;
+    }
+    return !data.rolledBack || (data.committedOutsideTransaction ?? 0) > 0;
   }
 
   /** Clears the shared cache unless this was a dry run (which writes nothing). */
