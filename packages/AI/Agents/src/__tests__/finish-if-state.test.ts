@@ -1,8 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { UserInfo } from '@memberjunction/core';
+import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { ActionResult, type ActionParam } from '@memberjunction/actions-base';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
-import type { AgentFinishIf, BaseAgentNextStep, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
+import type {
+    AgentFinishIf,
+    BaseAgentNextStep,
+    ExecuteAgentParams,
+    MJAIAgentEntityExtended,
+    MJAIAgentRunEntityExtended,
+    MJAIAgentRunStepEntityExtended,
+} from '@memberjunction/ai-core-plus';
 import { AgentDecisionService, type AgentDecisionAskParams } from '../AgentDecisionService';
 import { BaseAgent } from '../base-agent';
 import {
@@ -131,52 +138,52 @@ function likelihoods(...probabilities: number[]): AIDecisionRunResult {
 // ─── The BaseAgent seam ─────────────────────────────────────────────────────────────────────────
 
 /** A step entity that records what the agent writes to it. */
-class MockStepEntity {
+class MockStepEntity implements Partial<MJAIAgentRunStepEntityExtended> {
     public ID = 'step-1';
     public StartedAt = new Date();
     public TargetLogID?: string | null;
-    public NewRecord(): void {}
+    public NewRecord(): boolean {
+        return true;
+    }
     public async Save(): Promise<boolean> {
         return true;
     }
 }
 
-/** What the gate reads of the run's parameters. */
-interface GateParams {
-    contextUser: UserInfo;
-    conversationMessages: [];
-    agent: { ID: string; Name: string };
+class MockAgentRun implements Partial<MJAIAgentRunEntityExtended> {
+    public ID = 'run-1';
+    public AgentID = 'agent-1';
+    public Steps: MJAIAgentRunStepEntityExtended[] = [];
+}
+
+class MockMetadataProvider implements Partial<IMetadataProvider> {
+    constructor(public readonly GetEntityObject: (entityName: string) => Promise<MJAIAgentRunStepEntityExtended>) {}
 }
 
 /** A sub-agent step's result, with the child's run and payload spread in. */
-type PinnedSubAgentResult = BaseAgentNextStep & { agentRun?: { Message?: string }; payload?: unknown };
-
-/** The BaseAgent members these tests reach. */
-interface AgentInternals {
-    _agentRun: { ID: string; AgentID: string; Steps: MockStepEntity[] };
-    _agentTypePromptParams?: Record<string, unknown>;
-    _activeProvider: { GetEntityObject: () => Promise<MockStepEntity> };
-    finalizeStepEntity: (step: MockStepEntity, success: boolean, error?: string, output?: Record<string, unknown>) => Promise<void>;
-    finishAfterActions: (
-        params: GateParams,
-        decision: BaseAgentNextStep,
-        actionResults: Array<{ success: boolean; result?: ActionResult }>,
-        actionSummaries: PinnedSummary[],
-        payload: Record<string, unknown>,
-        parentStepId: string | undefined,
-        addConversationMessage: boolean
-    ) => Promise<BaseAgentNextStep | undefined>;
-    finishAfterSubAgent: (params: GateParams, decision: BaseAgentNextStep, result: PinnedSubAgentResult) => Promise<BaseAgentNextStep | undefined>;
-}
+type PinnedSubAgentResult = BaseAgentNextStep & { agentRun?: MJAIAgentRunEntityExtended; payload?: unknown };
 
 class TestAgent extends BaseAgent {
     public SetDecisionService(service: AgentDecisionService): void {
         this._agentDecisionService = service;
     }
+
+    public override finalizeStepEntity(
+        stepEntity: MJAIAgentRunStepEntityExtended,
+        success: boolean,
+        errorMessage?: string,
+        outputData?: Record<string, unknown>
+    ): Promise<void> {
+        return super.finalizeStepEntity(stepEntity, success, errorMessage, outputData);
+    }
 }
 
-function makeParams(): GateParams {
-    return { contextUser: { ID: 'user-1' } as UserInfo, conversationMessages: [], agent: { ID: 'agent-1', Name: 'TestAgent' } };
+function makeParams(): ExecuteAgentParams {
+    return {
+        contextUser: { ID: 'user-1' } as UserInfo,
+        conversationMessages: [],
+        agent: { ID: 'agent-1', Name: 'TestAgent' } as MJAIAgentEntityExtended,
+    };
 }
 
 function succeeded(count: number): Array<{ success: boolean; result?: ActionResult }> {
@@ -184,23 +191,22 @@ function succeeded(count: number): Array<{ success: boolean; result?: ActionResu
 }
 
 describe('finishIf state and verdict, as BaseAgent produces them', () => {
-    let internals: AgentInternals;
+    let agent: TestAgent;
     let decisions: AgentDecisionService;
     let finishChecks: Array<Record<string, unknown>>;
 
     beforeEach(() => {
         vi.restoreAllMocks();
-        const agent = new TestAgent();
-        internals = agent as unknown as AgentInternals;
-        internals._activeProvider = { GetEntityObject: vi.fn(async () => new MockStepEntity()) };
-        internals._agentRun = { ID: 'run-1', AgentID: 'agent-1', Steps: [] };
+        agent = new TestAgent();
+        agent['_activeProvider'] = new MockMetadataProvider(async () => new MockStepEntity() as MJAIAgentRunStepEntityExtended) as IMetadataProvider;
+        agent['_agentRun'] = new MockAgentRun() as MJAIAgentRunEntityExtended;
         // The gate is evaluated only when finishIfMode is shadow or on (it defaults to off).
-        internals._agentTypePromptParams = { finishIfMode: 'on' };
+        agent['_agentTypePromptParams'] = { finishIfMode: 'on' };
         decisions = new AgentDecisionService();
         agent.SetDecisionService(decisions);
         finishChecks = [];
-        const finalize = internals.finalizeStepEntity.bind(agent);
-        vi.spyOn(internals, 'finalizeStepEntity').mockImplementation(async (step, success, error, outputData) => {
+        const finalize = agent.finalizeStepEntity.bind(agent);
+        vi.spyOn(agent, 'finalizeStepEntity').mockImplementation(async (step, success, error, outputData) => {
             if (outputData && 'passed' in outputData) {
                 finishChecks.push(outputData);
             }
@@ -212,7 +218,7 @@ describe('finishIf state and verdict, as BaseAgent produces them', () => {
     async function askAfterActions(summaries: PinnedSummary[], answer: AIDecisionRunResult): Promise<AgentDecisionAskParams> {
         const ask = vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(answer);
         const decision: BaseAgentNextStep = { step: 'Actions', terminate: false, actions: [{ name: 'Create Record', params: {} }], finishIf: FINISH_IF };
-        await internals.finishAfterActions(makeParams(), decision, succeeded(summaries.length), summaries, {}, undefined, true);
+        await agent['finishAfterActions'](makeParams(), decision, succeeded(summaries.length), summaries, {}, undefined, true);
         expect(ask).toHaveBeenCalledTimes(1);
         return ask.mock.calls[0][0];
     }
@@ -271,10 +277,10 @@ describe('finishIf state and verdict, as BaseAgent produces them', () => {
             terminate: false,
             message: 'ignored while the run has a message',
             newPayload: { ignored: true },
-            agentRun: { Message: SUB_AGENT_REPLY },
+            agentRun: { Message: SUB_AGENT_REPLY } as MJAIAgentRunEntityExtended,
             payload: SUB_AGENT_PAYLOAD,
         };
-        await internals.finishAfterSubAgent(makeParams(), decision, result);
+        await agent['finishAfterSubAgent'](makeParams(), decision, result);
         expect(ask.mock.calls[0][0].State).toBe(
             `Final message: ${'a'.repeat(4000)}\n\nPayload: ${JSON.stringify(SUB_AGENT_PAYLOAD).slice(0, 4000)}`
         );
@@ -283,8 +289,8 @@ describe('finishIf state and verdict, as BaseAgent produces them', () => {
     it("falls back to the step's message and new payload, and omits an absent payload", async () => {
         const ask = vi.spyOn(decisions, 'Ask').mockResolvedValue(likelihoods(0.1, 0.1, 0.1));
         const decision: BaseAgentNextStep = { step: 'Sub-Agent', terminate: false, finishIf: FINISH_IF };
-        await internals.finishAfterSubAgent(makeParams(), decision, { step: 'Success', terminate: false, message: 'Fallback', newPayload: { x: 1 } });
-        await internals.finishAfterSubAgent(makeParams(), decision, { step: 'Success', terminate: false, message: 'Bare' });
+        await agent['finishAfterSubAgent'](makeParams(), decision, { step: 'Success', terminate: false, message: 'Fallback', newPayload: { x: 1 } });
+        await agent['finishAfterSubAgent'](makeParams(), decision, { step: 'Success', terminate: false, message: 'Bare' });
         expect(ask.mock.calls[0][0].State).toBe('Final message: Fallback\n\nPayload: {"x":1}');
         expect(ask.mock.calls[1][0].State).toBe('Final message: Bare');
     });
