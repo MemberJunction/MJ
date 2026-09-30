@@ -19,7 +19,7 @@ import {
     ROUTING_CONTINUES_QUESTION,
     ROUTING_ROUTE_QUESTION,
     type MJAIPromptEntityExtended,
-    type RoutingAgent,
+    type RoutingCatalogAgent,
     type RoutingDecisionInput
 } from '@memberjunction/ai-core-plus';
 import { BaseTestDriver } from './BaseTestDriver';
@@ -147,7 +147,7 @@ export class DecisionEvalDriver extends BaseTestDriver {
         return {
             Prompt: prompt,
             Catalog: {
-                FindAgent: (agentId: string): RoutingAgent | undefined => agents.find(a => UUIDsEqual(a.ID, agentId)),
+                FindAgent: (agentId: string): RoutingCatalogAgent | undefined => agents.find(a => UUIDsEqual(a.ID, agentId)),
                 ConversationManager: manager ?? null
             }
         };
