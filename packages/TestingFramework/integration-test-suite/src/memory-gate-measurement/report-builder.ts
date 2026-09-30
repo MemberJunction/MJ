@@ -73,7 +73,7 @@ export function RenderMeasurementReportMarkdown(report: MeasurementReportJson): 
 | :--- | :--- | :--- | :--- |
 | **Self-Confidence (Baseline)** | ${fmt(report.SelfConfidenceArm.Auc)} | - | 0-100 score normalized |
 | **Decision Gate (Raw)** | ${fmt(report.DecisionRawArm.Auc)} | ${ciRaw.trim() || '-'} | Direct Likelihood output |
-| **Decision Gate (Calibrated)** | ${fmt(report.DecisionCalibratedArm.Auc)} | ${ciCal.trim() || '-'} | 5-fold Out-of-fold Platt |
+| **Decision Gate (Calibrated)** | ${fmt(report.DecisionCalibratedArm.Auc)} | ${ciCal.trim() || '-'} | 5-fold out-of-fold Platt, whole scenarios per fold |
 
 ## 2. Model Calibration (Fitted Platt Parameters)
 
@@ -83,25 +83,36 @@ ${plattLines.length > 0 ? plattLines : '_No model calibrations fitted._'}
 
 - **Latency:** p50 = ${fmt(report.Latency.P50Ms, 1)} ms, p95 = ${fmt(report.Latency.P95Ms, 1)} ms
 - **Estimated Cost:** $${fmt(report.CostPerThousandNotesUsd, 4)} per 1,000 notes
-- **Repeatability Agreement:** ${fmtPct(report.RepeatabilityAgreement)}
+- **Repeatability Agreement:** ${fmtPct(report.RepeatabilityAgreement)} (the shipped verdict: each model's Platt fit on all points, kept at a calibrated ${report.RepeatabilityThreshold})
+
+## 4. Not Scored
+
+None of these enters a fit, a sweep or an AUC; a failed or missing answer is not a low one.
+
+- **Failed decision calls:** ${report.Exclusions.FailedCalls} (one per scenario and rep)
+- **Notes without a usable answer, per rep:** ${report.Exclusions.NoAnswer}
+- **Notes left out, no usable answer in any rep:** ${report.Exclusions.UnscoredNotes}
+- **Notes left out, no label:** ${report.Exclusions.UnlabelledNotes}
 
 ---
 
-## 4. Operating Points: Self-Reported Confidence (Today's Rule: >= 80)
+## 5. Operating Points: Self-Reported Confidence (Today's Rule: >= 80)
 
 ${renderOperatingTable(report.SelfConfidenceArm.OperatingPoints)}
 
 ---
 
-## 5. Operating Points: Decision Gate (Raw Likelihood)
+## 6. Operating Points: Decision Gate (Raw Likelihood)
 
 ${renderOperatingTable(report.DecisionRawArm.OperatingPoints)}
 
 ---
 
-## 6. Operating Points: Decision Gate (Platt Calibrated)
+## 7. Operating Points: Decision Gate (Platt Calibrated)
 
-${renderOperatingTable(report.DecisionCalibratedArm.OperatingPoints)}
+${report.DecisionCalibratedArm.OperatingPoints.length > 0
+        ? renderOperatingTable(report.DecisionCalibratedArm.OperatingPoints)
+        : '_Too few scenarios to calibrate out of fold._'}
 `;
 }
 

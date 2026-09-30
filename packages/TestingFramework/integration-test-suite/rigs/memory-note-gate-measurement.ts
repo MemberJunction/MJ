@@ -2,14 +2,21 @@
  * @fileoverview CLI measurement rig comparing the memory note typed decision gate
  * against self-reported confidence.
  *
+ * Each decision's per-note outcome is written to `<out>/observations.jsonl` (IDs and numbers only).
+ * A failed call, and a note without a usable Likelihood, are recorded and counted as such, never
+ * scored; a note without a label is left out and counted, never taken for a wrong one.
+ * `--rescore <observations.jsonl>` rebuilds the report from an earlier run's observations, with no
+ * model call.
+ *
  * USAGE:
  *   npx tsx packages/TestingFramework/integration-test-suite/rigs/memory-note-gate-measurement.ts \
- *     --corpus <dir> --out <dir> [--reps 2] [--decision-prompt "Default Decision"] [--decision-model "<name>"] [--dry-run]
+ *     --corpus <dir> --out <dir> [--reps 2] [--decision-prompt "Default Decision"] [--decision-model "<name>"]
+ *     [--rescore <observations.jsonl>] [--dry-run]
  *
  * @module @memberjunction/integration-test-suite
  */
 
-import { readFileSync, existsSync } from 'node:fs';
+import { appendFileSync, readFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AssertOutputOutsideRepo, FindRepoRoot, PinnedDecisionRunner } from '@memberjunction/testing-engine';
@@ -22,10 +29,14 @@ import type {
     CorpusScenario,
     DecisionObservation
 } from '../src/memory-gate-measurement/corpus-types';
+import { EvaluateMemoryGateMeasurement } from '../src/memory-gate-measurement/evaluator';
 import {
-    EvaluateMemoryGateMeasurement,
-    type EvaluatedNote
-} from '../src/memory-gate-measurement/evaluator';
+    BuildEvaluatedNotes,
+    ObservationsForDecision,
+    OBSERVATIONS_FILE,
+    ParseDecisionObservations,
+    SerializeObservation
+} from '../src/memory-gate-measurement/observations';
 import { WriteMeasurementReportFiles } from '../src/memory-gate-measurement/report-builder';
 import { BootstrapAI } from './lib/ai-bootstrap';
 
@@ -35,7 +46,7 @@ const REPO_ROOT = FindRepoRoot(RIG_DIR) ?? resolve(RIG_DIR, '../../../..');
 const DEFAULT_REPS = 2;
 const DEFAULT_DECISION_PROMPT = 'Default Decision';
 
-const USAGE = 'usage: memory-note-gate-measurement.ts --corpus <dir> --out <dir> [--reps 2] [--decision-prompt "Default Decision"] [--decision-model "<name>"] [--dry-run]';
+const USAGE = 'usage: memory-note-gate-measurement.ts --corpus <dir> --out <dir> [--reps 2] [--decision-prompt "Default Decision"] [--decision-model "<name>"] [--rescore <observations.jsonl>] [--dry-run]';
 
 export interface MeasurementArgs {
     CorpusDir: string;
@@ -43,6 +54,8 @@ export interface MeasurementArgs {
     Reps: number;
     DecisionPrompt: string;
     DecisionModel: string | undefined;
+    /** An earlier run's observations.jsonl to rebuild the report from, with no model call. */
+    Rescore: string | undefined;
     DryRun: boolean;
 }
 
@@ -73,6 +86,7 @@ export function ParseArgs(argv: readonly string[]): MeasurementArgs {
         Reps: readInt(argv, 'reps', DEFAULT_REPS),
         DecisionPrompt: readFlag(argv, 'decision-prompt') ?? DEFAULT_DECISION_PROMPT,
         DecisionModel: readFlag(argv, 'decision-model'),
+        Rescore: readFlag(argv, 'rescore'),
         DryRun: isDryRun
     };
 }
@@ -108,11 +122,34 @@ export function LoadCorpusData(corpusDir: string): {
     return { scenarios, labels };
 }
 
+/** Rebuilds the report from the corpus, its labels and the observations, and writes it. */
+function writeReport(args: MeasurementArgs, outDir: string, observations: readonly DecisionObservation[]): void {
+    const { scenarios, labels } = LoadCorpusData(args.CorpusDir);
+    const evaluated = BuildEvaluatedNotes(scenarios, labels, observations);
+    const report = EvaluateMemoryGateMeasurement(evaluated.Notes, observations, args.Reps, evaluated);
+    const { jsonPath, mdPath } = WriteMeasurementReportFiles(outDir, report, [REPO_ROOT]);
+    const e = report.Exclusions;
+    console.log(`not scored: ${e.FailedCalls} failed calls, ${e.NoAnswer} missing answers, ${e.UnscoredNotes} notes never answered, ${e.UnlabelledNotes} notes unlabelled`);
+    console.log(`\nMeasurement completed successfully:\n   - ${jsonPath}\n   - ${mdPath}`);
+}
+
+/** The pinned model's ID, or undefined when no model is pinned. */
+function resolvePinnedModelId(modelName: string | undefined): string | undefined {
+    if (!modelName) {
+        return undefined;
+    }
+    const model = AIEngine.Instance.Models.find(m => m.Name.trim().toLowerCase() === modelName.trim().toLowerCase());
+    if (!model) {
+        throw new Error(`Decision model '${modelName}' not found in AIEngine metadata`);
+    }
+    return model.ID;
+}
+
 async function runLiveMeasurement(
     args: MeasurementArgs,
     outDir: string
 ): Promise<void> {
-    const { scenarios, labels } = LoadCorpusData(args.CorpusDir);
+    const { scenarios } = LoadCorpusData(args.CorpusDir);
     const ctx = await BootstrapAI();
     try {
         const prompt = AIEngine.Instance.Prompts.find(
@@ -121,35 +158,23 @@ async function runLiveMeasurement(
         if (!prompt) {
             throw new Error(`Decision prompt '${args.DecisionPrompt}' not found in AIEngine metadata`);
         }
-
-        let pinnedModelId: string | undefined;
-        if (args.DecisionModel) {
-            const model = AIEngine.Instance.Models.find(
-                m => m.Name.trim().toLowerCase() === args.DecisionModel!.trim().toLowerCase()
-            );
-            if (!model) {
-                throw new Error(`Decision model '${args.DecisionModel}' not found in AIEngine metadata`);
-            }
-            pinnedModelId = model.ID;
-        }
-
+        const pinnedModelId = resolvePinnedModelId(args.DecisionModel);
         const runner = pinnedModelId ? new PinnedDecisionRunner() : new AIDecisionRunner();
         const observations: DecisionObservation[] = [];
-        const evaluatedNotesMap = new Map<string, EvaluatedNote>();
+        const observationsPath = join(outDir, OBSERVATIONS_FILE);
+        mkdirSync(outDir, { recursive: true });
+        writeFileSync(observationsPath, '');
 
         console.log(`── Running Memory Gate Measurement: ${scenarios.length} scenarios, ${args.Reps} reps ──`);
         for (let rep = 1; rep <= args.Reps; rep++) {
             console.log(`   Starting Repetition ${rep}/${args.Reps}...`);
             for (let sIdx = 0; sIdx < scenarios.length; sIdx++) {
                 const scenario = scenarios[sIdx];
-                const questions = BuildMemoryNoteQuestions(scenario.Notes);
-                const state = BuildMemoryNoteState(scenario.Notes, scenario.Excerpt);
-
                 const params = new AIDecisionParams();
                 params.prompt = prompt;
                 params.contextUser = ctx.user;
-                params.State = state;
-                params.Questions = questions;
+                params.State = BuildMemoryNoteState(scenario.Notes, scenario.Excerpt);
+                params.Questions = BuildMemoryNoteQuestions(scenario.Notes);
                 if (pinnedModelId) {
                     params.override = { modelId: pinnedModelId };
                 }
@@ -157,42 +182,19 @@ async function runLiveMeasurement(
                 const start = Date.now();
                 const result = await runner.ExecuteDecision(params);
                 await runner.WaitForPendingPromptRunSaves();
-                const latencyMs = Date.now() - start;
-                const costUsd = result.promptRun?.TotalCost ?? result.promptRun?.Cost ?? 0;
-                const modelName = result.modelInfo?.modelName ?? args.DecisionModel ?? 'unknown';
-
-                scenario.Notes.forEach((note, nIdx) => {
-                    const key = `n${nIdx + 1}`;
-                    const ans = result.Answers[key];
-                    const rawProb = (ans && ans.Kind === 'Likelihood' && typeof ans.Probability === 'number')
-                        ? ans.Probability
-                        : 0.5;
-
-                    observations.push({
-                        ScenarioId: scenario.Id,
-                        NoteId: note.NoteId,
-                        Rep: rep,
-                        RawProbability: rawProb,
-                        ModelName: modelName,
-                        LatencyMs: latencyMs,
-                        CostUsd: costUsd / scenario.Notes.length,
-                        PromptRunId: result.promptRun?.ID
-                    });
-
-                    // Build evaluated note baseline on rep 1
-                    if (rep === 1) {
-                        const label = labels.get(note.NoteId) ?? 'wrong';
-                        evaluatedNotesMap.set(note.NoteId, {
-                            ScenarioId: scenario.Id,
-                            NoteId: note.NoteId,
-                            Label: label,
-                            IsDurable: label === 'durable',
-                            SelfConfidence: note.SelfConfidence,
-                            DecisionRawProbability: rawProb,
-                            ModelName: modelName
-                        });
-                    }
+                const scenarioObservations = ObservationsForDecision(scenario, rep, {
+                    Success: result.success,
+                    Answers: result.Answers,
+                    ModelName: result.modelInfo?.modelName ?? args.DecisionModel ?? 'unknown',
+                    LatencyMs: Date.now() - start,
+                    CostUsd: result.promptRun?.TotalCost ?? result.promptRun?.Cost ?? 0,
+                    PromptRunId: result.promptRun?.ID
                 });
+                if (!result.success) {
+                    console.log(`      [Rep ${rep}] decision failed for ${scenario.Id}: ${result.errorMessage ?? 'no message'}`);
+                }
+                observations.push(...scenarioObservations);
+                appendFileSync(observationsPath, scenarioObservations.map(o => `${SerializeObservation(o)}\n`).join(''));
 
                 if ((sIdx + 1) % 10 === 0 || sIdx + 1 === scenarios.length) {
                     console.log(`      [Rep ${rep}] Evaluated ${sIdx + 1}/${scenarios.length} scenarios`);
@@ -200,14 +202,17 @@ async function runLiveMeasurement(
             }
         }
 
-        const evaluatedNotes = Array.from(evaluatedNotesMap.values());
-        const report = EvaluateMemoryGateMeasurement(evaluatedNotes, observations, args.Reps);
-        const { jsonPath, mdPath } = WriteMeasurementReportFiles(outDir, report, [REPO_ROOT]);
-
-        console.log(`\nMeasurement completed successfully:\n   - ${jsonPath}\n   - ${mdPath}`);
+        writeReport(args, outDir, observations);
     } finally {
         await ctx.pool.close();
     }
+}
+
+/** Rebuilds the report from an earlier run's observations: no model call, no database. */
+function rescore(args: MeasurementArgs, outDir: string, observationsFile: string): void {
+    const { Observations, Skipped } = ParseDecisionObservations(readFileSync(observationsFile, 'utf-8'));
+    console.log(`── Rescoring ${Observations.length} observations from ${observationsFile} (${Skipped} unreadable lines skipped) ──`);
+    writeReport(args, outDir, Observations);
 }
 
 async function main(): Promise<void> {
@@ -221,10 +226,15 @@ async function main(): Promise<void> {
         console.log(`   reps           : ${args.Reps}`);
         console.log(`   decision prompt: ${args.DecisionPrompt}`);
         console.log(`   decision model : ${args.DecisionModel ?? '(default prompt model)'}`);
+        console.log(`   rescore from   : ${args.Rescore ?? '(none: live decision calls)'}`);
         return;
     }
 
     const outDir = AssertOutputOutsideRepo(args.OutDir, [REPO_ROOT]);
+    if (args.Rescore) {
+        rescore(args, outDir, args.Rescore);
+        return;
+    }
     await runLiveMeasurement(args, outDir);
 }
 

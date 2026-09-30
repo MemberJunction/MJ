@@ -48,17 +48,39 @@ export interface CorpusLabelRecord {
     Label: CorpusLabel;
 }
 
+/**
+ * What one decision call gave for one note: a usable Likelihood, a failed call, or a call that
+ * succeeded with no usable Likelihood for the note (missing, of another kind, or not a number).
+ */
+export type DecisionOutcome = 'answered' | 'call-failed' | 'no-answer';
+
 /** One observation from running the decision gate on a candidate note. */
 export interface DecisionObservation {
     ScenarioId: string;
     NoteId: string;
     Rep: number;
-    RawProbability: number;
-    CalibratedProbability?: number;
+    Outcome: DecisionOutcome;
+    /** The Likelihood's probability; null unless `Outcome` is `answered`, and never scored then. */
+    RawProbability: number | null;
     ModelName: string;
     LatencyMs: number;
     CostUsd: number;
     PromptRunId?: string;
+}
+
+/**
+ * What the measurement could not score. None of it enters a fit, a sweep or an AUC: a failed or
+ * missing answer is not a low one, and a note without a label is not a wrong one.
+ */
+export interface MeasurementExclusions {
+    /** Decision calls that failed: one per scenario and rep. */
+    FailedCalls: number;
+    /** Notes a successful call gave no usable Likelihood for, counted per rep. */
+    NoAnswer: number;
+    /** Notes with no usable answer in any rep: left out of every arm. */
+    UnscoredNotes: number;
+    /** Notes with no label in labels.jsonl: left out of every arm. */
+    UnlabelledNotes: number;
 }
 
 /** Metrics for an operating point threshold. */
@@ -95,5 +117,11 @@ export interface MeasurementReportJson {
         P95Ms: number | null;
     };
     CostPerThousandNotesUsd: number | null;
+    /**
+     * Per note, the share of its reps whose verdict at the shipped operating point (the model's Platt
+     * fit on all points, kept at a calibrated {@link RepeatabilityThreshold}) agrees with the majority.
+     */
     RepeatabilityAgreement: number | null;
+    RepeatabilityThreshold: number;
+    Exclusions: MeasurementExclusions;
 }

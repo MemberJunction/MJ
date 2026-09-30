@@ -5,7 +5,9 @@
  * @module @memberjunction/integration-test-suite
  */
 
+import { MEMORY_NOTE_MIN_PROBABILITY } from '@memberjunction/ai-agents';
 import {
+    ApplyPlatt,
     CreateSeededRandom,
     FitPlatt,
     Quantile,
@@ -16,6 +18,7 @@ import type {
     ArmEvaluationResult,
     CorpusLabel,
     DecisionObservation,
+    MeasurementExclusions,
     MeasurementReportJson,
     OperatingThresholdMetrics
 } from './corpus-types';
@@ -37,10 +40,10 @@ export interface EvaluatedNote {
 /**
  * Computes operating point threshold metrics for an arm.
  */
-export function ComputeOperatingThresholdMetrics(
-    notes: readonly EvaluatedNote[],
+export function ComputeOperatingThresholdMetrics<T extends EvaluatedNote>(
+    notes: readonly T[],
     threshold: number,
-    getScore: (note: EvaluatedNote) => number
+    getScore: (note: T) => number
 ): OperatingThresholdMetrics {
     const totalByLabel: Record<CorpusLabel, number> = {
         durable: 0,
@@ -128,90 +131,101 @@ export function ScenarioBootstrapAuc(
     return (low !== null && high !== null) ? { Low: low, High: high } : null;
 }
 
-/**
- * 5-fold stratified cross-validation fitting Platt scaling to get out-of-fold calibrated probabilities.
- */
-export function OutOfFoldPlatt(
-    points: readonly LabelledProbability[],
-    folds: number = 5,
-    seed: number = 20260929
-): number[] | null {
-    if (points.length < folds * 2) return null;
-    const positives = points.map((p, i) => ({ ...p, i })).filter(p => p.Positive);
-    const negatives = points.map((p, i) => ({ ...p, i })).filter(p => !p.Positive);
-    if (positives.length < folds || negatives.length < folds) return null;
-
-    const rand = CreateSeededRandom(seed);
-    const shuffle = <T>(arr: T[]) => {
-        const copy = [...arr];
-        for (let i = copy.length - 1; i > 0; i--) {
-            const j = Math.floor(rand() * (i + 1));
-            [copy[i], copy[j]] = [copy[j], copy[i]];
-        }
-        return copy;
-    };
-
-    const shuffPos = shuffle(positives);
-    const shuffNeg = shuffle(negatives);
-
-    const foldAssignments = new Array<number>(points.length);
-    shuffPos.forEach((p, idx) => { foldAssignments[p.i] = idx % folds; });
-    shuffNeg.forEach((p, idx) => { foldAssignments[p.i] = idx % folds; });
-
-    const oof = new Array<number>(points.length);
-
-    for (let f = 0; f < folds; f++) {
-        const trainPoints = points.filter((_, idx) => foldAssignments[idx] !== f);
-        const testIndices = points.map((_, idx) => idx).filter(idx => foldAssignments[idx] === f);
-
-        const params = FitPlatt(trainPoints);
-        for (const idx of testIndices) {
-            const raw = points[idx].Probability;
-            const logit = Math.log(Math.max(1e-12, Math.min(1 - 1e-12, raw)) / (1 - Math.max(1e-12, Math.min(1 - 1e-12, raw))));
-            oof[idx] = 1 / (1 + Math.exp(-(params.A * logit + params.B)));
-        }
-    }
-
-    return oof;
+/** A labelled probability and the scenario (conversation) it came from. */
+export interface ScenarioPoint {
+    ScenarioId: string;
+    Point: LabelledProbability;
 }
 
 /**
- * Computes repeatability agreement across repetitions: share of decisions that agree across reps.
+ * Out-of-fold Platt calibration with whole scenarios dealt into folds, so no fold is calibrated on
+ * notes from its own conversations. The scenarios are shuffled with a seeded generator and dealt in
+ * turn; each fold is calibrated by the shared `FitPlatt` on the others, through the shared
+ * `ApplyPlatt`. Returns the calibrated probabilities in the input's order, or null with fewer than
+ * two scenarios, when nothing can be held out.
+ *
+ * @param points The points, each with its scenario.
+ * @param folds The fold count.
+ * @param seed The generator's seed.
+ */
+export function OutOfFoldPlattByScenario(points: readonly ScenarioPoint[], folds: number = 5, seed: number = 20260929): number[] | null {
+    const scenarios = [...new Set(points.map(p => p.ScenarioId))];
+    if (scenarios.length < 2) {
+        return null;
+    }
+    const rand = CreateSeededRandom(seed);
+    for (let i = scenarios.length - 1; i > 0; i--) {
+        const j = Math.floor(rand() * (i + 1));
+        [scenarios[i], scenarios[j]] = [scenarios[j], scenarios[i]];
+    }
+    const foldCount = Math.max(2, Math.min(folds, scenarios.length));
+    const foldOf = new Map(scenarios.map((id, i) => [id, i % foldCount] as const));
+    const calibrated = new Array<number>(points.length);
+    for (let fold = 0; fold < foldCount; fold++) {
+        const fit = FitPlatt(points.filter(p => foldOf.get(p.ScenarioId) !== fold).map(p => p.Point));
+        points.forEach((p, i) => {
+            if (foldOf.get(p.ScenarioId) === fold) {
+                calibrated[i] = ApplyPlatt(p.Point.Probability, fit);
+            }
+        });
+    }
+    return calibrated;
+}
+
+/**
+ * Per note, the share of its reps whose verdict agrees with the majority, averaged over the notes
+ * with at least two answered reps. Only answered reps count: a failed or missing answer has no verdict.
+ *
+ * @param observations Every rep's observations.
+ * @param keeps The verdict: whether a model's raw probability keeps the note.
  */
 export function ComputeRepeatabilityAgreement(
     observations: readonly DecisionObservation[],
-    threshold: number = 0.5
+    keeps: (rawProbability: number, modelName: string) => boolean
 ): number | null {
-    if (observations.length === 0) return null;
-    const byNote = new Map<string, number[]>();
+    const byNote = new Map<string, boolean[]>();
     for (const obs of observations) {
-        const list = byNote.get(obs.NoteId) || [];
-        list.push(obs.RawProbability);
-        byNote.set(obs.NoteId, list);
+        if (obs.Outcome === 'answered' && obs.RawProbability !== null) {
+            byNote.set(obs.NoteId, [...(byNote.get(obs.NoteId) ?? []), keeps(obs.RawProbability, obs.ModelName)]);
+        }
     }
+    const agreements = [...byNote.values()]
+        .filter(verdicts => verdicts.length > 1)
+        .map(verdicts => {
+            const kept = verdicts.filter(Boolean).length;
+            return Math.max(kept, verdicts.length - kept) / verdicts.length;
+        });
+    return agreements.length > 0 ? agreements.reduce((sum, a) => sum + a, 0) / agreements.length : null;
+}
 
-    let noteCount = 0;
-    let agreementSum = 0;
+/**
+ * The shipped verdict: the answering model's Platt fit on all points, kept at a calibrated
+ * {@link MEMORY_NOTE_MIN_PROBABILITY}. A model with no fit has no shipped verdict, so it never keeps.
+ *
+ * @param fits Each model's fit on all points.
+ * @param threshold The calibrated probability at which a note is kept.
+ */
+export function ShippedVerdict(
+    fits: Readonly<Record<string, { A: number; B: number }>>,
+    threshold: number = MEMORY_NOTE_MIN_PROBABILITY
+): (rawProbability: number, modelName: string) => boolean {
+    return (rawProbability, modelName) => {
+        const fit = fits[modelName];
+        return !!fit && ApplyPlatt(rawProbability, fit) >= threshold;
+    };
+}
 
-    for (const probs of byNote.values()) {
-        if (probs.length <= 1) continue;
-        const decisions = probs.map(p => p >= threshold);
-        const countTrue = decisions.filter(Boolean).length;
-        const countFalse = decisions.length - countTrue;
-        // Agreement is max majority share
-        const agreement = Math.max(countTrue, countFalse) / decisions.length;
-        agreementSum += agreement;
-        noteCount++;
-    }
-
-    return noteCount > 0 ? agreementSum / noteCount : 1.0;
+/** How many calls failed and how many answers were missing, from every rep's observations. */
+export function CountDecisionFailures(observations: readonly DecisionObservation[]): Pick<MeasurementExclusions, 'FailedCalls' | 'NoAnswer'> {
+    const failedCalls = new Set(observations.filter(o => o.Outcome === 'call-failed').map(o => `${o.ScenarioId}|${o.Rep}`));
+    return { FailedCalls: failedCalls.size, NoAnswer: observations.filter(o => o.Outcome === 'no-answer').length };
 }
 
 /**
  * Summarizes latency quantiles and cost per 1,000 notes.
  */
 export function SummarizeTelemetry(
-    observations: readonly DecisionObservation[]
+    observations: ReadonlyArray<Pick<DecisionObservation, 'LatencyMs' | 'CostUsd'>>
 ): {
     latencyP50Ms: number | null;
     latencyP95Ms: number | null;
@@ -241,7 +255,8 @@ export function SummarizeTelemetry(
 export function EvaluateMemoryGateMeasurement(
     evaluatedNotes: readonly EvaluatedNote[],
     observations: readonly DecisionObservation[],
-    reps: number
+    reps: number,
+    excluded: Pick<MeasurementExclusions, 'UnscoredNotes' | 'UnlabelledNotes'> = { UnscoredNotes: 0, UnlabelledNotes: 0 }
 ): MeasurementReportJson {
     const labelDistribution: Record<CorpusLabel, number> = {
         durable: 0,
@@ -295,32 +310,17 @@ export function EvaluateMemoryGateMeasurement(
         }
     }
 
-    // 4. Out-of-fold calibration
-    const oofProbabilities = OutOfFoldPlatt(rawPoints, 5, 20260929);
-    const calibratedNotes: EvaluatedNote[] = evaluatedNotes.map((n, idx) => ({
-        ...n,
-        DecisionCalibratedProbability: oofProbabilities ? oofProbabilities[idx] : n.DecisionRawProbability
-    }));
-
-    const calPoints: LabelledProbability[] = calibratedNotes.map(n => ({
-        Probability: n.DecisionCalibratedProbability ?? n.DecisionRawProbability,
-        Positive: n.IsDurable
-    }));
-    const calAuc = RocAuc(calPoints);
-    const calBootstrapCi = ScenarioBootstrapAuc(
-        Array.from(byScenarioMap.entries()).map(([scenarioId, _]) => ({
-            ScenarioId: scenarioId,
-            Notes: calibratedNotes
-                .filter(cn => cn.ScenarioId === scenarioId)
-                .map(cn => ({ Probability: cn.DecisionCalibratedProbability ?? cn.DecisionRawProbability, Positive: cn.IsDurable }))
-        }))
+    // 4. Out-of-fold calibration, whole scenarios per fold; with too few scenarios there is no
+    //    calibrated arm, rather than raw probabilities reported as calibrated.
+    const oofProbabilities = OutOfFoldPlattByScenario(
+        evaluatedNotes.map((n, idx) => ({ ScenarioId: n.ScenarioId, Point: rawPoints[idx] }))
     );
-    const calOperatingPoints = DECISION_SWEEP_THRESHOLDS.map(th =>
-        ComputeOperatingThresholdMetrics(calibratedNotes, th, n => n.DecisionCalibratedProbability ?? n.DecisionRawProbability)
-    );
+    const calibratedArm = oofProbabilities
+        ? calibratedArmOf(evaluatedNotes.map((n, idx) => ({ ...n, DecisionCalibratedProbability: oofProbabilities[idx] })))
+        : { Name: 'decision-calibrated' as const, Auc: null, AucBootstrapCi: null, OperatingPoints: [] };
 
     const telemetry = SummarizeTelemetry(observations);
-    const repeatability = ComputeRepeatabilityAgreement(observations);
+    const repeatability = ComputeRepeatabilityAgreement(observations, ShippedVerdict(fittedPlattByModel));
 
     return {
         GeneratedAt: new Date().toISOString(),
@@ -341,17 +341,28 @@ export function EvaluateMemoryGateMeasurement(
             AucBootstrapCi: rawBootstrapCi,
             OperatingPoints: rawOperatingPoints
         },
-        DecisionCalibratedArm: {
-            Name: 'decision-calibrated',
-            Auc: calAuc,
-            AucBootstrapCi: calBootstrapCi,
-            OperatingPoints: calOperatingPoints
-        },
+        DecisionCalibratedArm: calibratedArm,
         Latency: {
             P50Ms: telemetry.latencyP50Ms,
             P95Ms: telemetry.latencyP95Ms
         },
         CostPerThousandNotesUsd: telemetry.costPerThousandUsd,
-        RepeatabilityAgreement: repeatability
+        RepeatabilityAgreement: repeatability,
+        RepeatabilityThreshold: MEMORY_NOTE_MIN_PROBABILITY,
+        Exclusions: { ...CountDecisionFailures(observations), UnscoredNotes: excluded.UnscoredNotes, UnlabelledNotes: excluded.UnlabelledNotes }
+    };
+}
+
+/** The calibrated arm, from notes carrying their out-of-fold calibrated probability. */
+function calibratedArmOf(calibratedNotes: ReadonlyArray<EvaluatedNote & { DecisionCalibratedProbability: number }>): ArmEvaluationResult {
+    const byScenario = new Map<string, LabelledProbability[]>();
+    for (const n of calibratedNotes) {
+        byScenario.set(n.ScenarioId, [...(byScenario.get(n.ScenarioId) ?? []), { Probability: n.DecisionCalibratedProbability, Positive: n.IsDurable }]);
+    }
+    return {
+        Name: 'decision-calibrated',
+        Auc: RocAuc(calibratedNotes.map(n => ({ Probability: n.DecisionCalibratedProbability, Positive: n.IsDurable }))),
+        AucBootstrapCi: ScenarioBootstrapAuc([...byScenario].map(([scenarioId, notes]) => ({ ScenarioId: scenarioId, Notes: notes }))),
+        OperatingPoints: DECISION_SWEEP_THRESHOLDS.map(th => ComputeOperatingThresholdMetrics(calibratedNotes, th, n => n.DecisionCalibratedProbability))
     };
 }
