@@ -17,7 +17,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { ProviderConfigDataBase } from '../generic/interfaces';
 import { TestMetadataProvider } from './mocks/TestMetadataProvider';
 import { MockCacheStorageProvider } from './mocks/MockCacheStorageProvider';
-import type { ILocalStorageProvider, IMetadataProvider, DatasetItemFilterType, DatasetStatusResultType } from '../generic/interfaces';
+import type { ILocalStorageProvider, IMetadataProvider, DatasetItemFilterType, DatasetStatusResultType, DatasetStatusEntityUpdateDateType } from '../generic/interfaces';
 import type { UserInfo } from '../generic/securityInfo';
 
 const DATA_KEY = '___MJCore_Metadata_AllMetadata';
@@ -35,8 +35,11 @@ class StoredMetadataProvider extends TestMetadataProvider {
 
     public DatabaseUpdatedAt = DB_UPDATED_AT;
 
+    /** What the server reports per entity; the row counts are what the blob is needed to compare against. */
+    public DatabaseEntityUpdateDates: DatasetStatusEntityUpdateDateType[] = [];
+
     public override async GetDatasetStatusByName(datasetName: string, _filters?: DatasetItemFilterType[], _user?: UserInfo, _provider?: IMetadataProvider): Promise<DatasetStatusResultType> {
-        return { DatasetID: 'mock-dataset-id', DatasetName: datasetName, Success: true, Status: 'Ready', LatestUpdateDate: this.DatabaseUpdatedAt, EntityUpdateDates: [] };
+        return { DatasetID: 'mock-dataset-id', DatasetName: datasetName, Success: true, Status: 'Ready', LatestUpdateDate: this.DatabaseUpdatedAt, EntityUpdateDates: this.DatabaseEntityUpdateDates };
     }
 
     /** Re-reads the store the way a booting process does. */
@@ -100,23 +103,51 @@ describe('a stored freshness claim with no payload behind it', () => {
 });
 
 describe('a dataset date key that outlived its blob', () => {
-    it('reports the cache out of date instead of throwing', async () => {
-        const store = new MockCacheStorageProvider();
-        const provider = new StoredMetadataProvider(store);
-        provider.setMockDelay(0);
-        await provider.Config(new ProviderConfigDataBase({}, '__mj', [], [], true));
-
+    /** Caches a dataset and returns the key of the blob (not the `_date` key that vouches for it). */
+    async function cacheProbe(provider: StoredMetadataProvider, store: MockCacheStorageProvider): Promise<string> {
         const dataset = {
             DatasetID: 'd1', DatasetName: 'Probe', Success: true, Status: 'Ready',
-            LatestUpdateDate: new Date('2026-09-02T00:00:00.000Z'), Results: [],
+            LatestUpdateDate: new Date('2026-09-02T00:00:00.000Z'),
+            Results: [{ EntityID: 'E1', EntityName: 'Probes', Results: [{ ID: '1' }] }],
         };
         await provider.CacheDataset('Probe', null as unknown as DatasetItemFilterType[], dataset as never);
         const dataKey = (await store.GetCategoryKeys('default')).find(k => k.includes('Probe') && !k.endsWith('_date'));
         expect(dataKey).toBeDefined();
+        return dataKey as string;
+    }
+
+    async function newProvider(store: MockCacheStorageProvider): Promise<StoredMetadataProvider> {
+        const provider = new StoredMetadataProvider(store);
+        provider.setMockDelay(0);
+        await provider.Config(new ProviderConfigDataBase({}, '__mj', [], [], true));
+        return provider;
+    }
+
+    it('reports the cache out of date instead of throwing, when there are row counts to compare', async () => {
+        const store = new MockCacheStorageProvider();
+        const provider = await newProvider(store);
+        provider.DatabaseEntityUpdateDates = [{ EntityName: 'Probes', EntityID: 'E1', UpdateDate: new Date('2026-09-02T00:00:00.000Z'), RowCount: 1 }];
+        const dataKey = await cacheProbe(provider, store);
+
+        expect(await provider.IsDatasetCacheUpToDate('Probe')).toBe(true);
 
         // The blob's TTL elapsed; its `_date` key, written after it, is still there.
-        await store.Remove(dataKey as string);
+        await store.Remove(dataKey);
 
         await expect(provider.IsDatasetCacheUpToDate('Probe')).resolves.toBe(false);
+    });
+
+    it('still answers on the server timestamp alone when the server reports no entity row counts', async () => {
+        // The row-count comparison is an EXTRA check layered on the timestamp comparison, not a
+        // requirement that the blob be readable. A dataset whose status carries no per-entity counts
+        // (including the integration tier's) has always been judged by its timestamp, and a guard
+        // that demanded the blob made such a dataset permanently stale — an infinite reload loop.
+        const store = new MockCacheStorageProvider();
+        const provider = await newProvider(store);
+        provider.DatabaseEntityUpdateDates = [];
+        const dataKey = await cacheProbe(provider, store);
+        await store.Remove(dataKey);
+
+        await expect(provider.IsDatasetCacheUpToDate('Probe')).resolves.toBe(true);
     });
 });
