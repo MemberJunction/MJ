@@ -2765,6 +2765,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         const message = this.messages.find(m => UUIDsEqual(m.ID, event.conversationDetailId));
         if (message && conversationId) {
           await this.handleMessageCompletion(message, event.agentRunId, conversationId);
+        } else if (conversationId && event.conversationId && UUIDsEqual(event.conversationId, conversationId)) {
+          // A completion for a message this view has never loaded, in the conversation it is
+          // showing: a turn the server started on its own — a durable workflow's follow-up. The
+          // message is in the database and not on screen, so pull it in.
+          await this.reloadMessagesForActiveConversation();
         }
       });
 

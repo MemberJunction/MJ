@@ -72,7 +72,8 @@ export class WebSearchAction extends BaseAction {
      *   - Country: Two-letter country code, e.g. 'US'
      *   - Language: Language code, e.g. 'en'
      *   - SafeSearch: 'off' | 'moderate' | 'strict' (default 'moderate')
-     *   - IncludeAnswer: Also return a synthesized answer, restricting provider selection
+     *   - IncludeAnswer: Prefer a provider that can also return a synthesized answer. When none is
+     *     available the search still runs and returns plain results, with a `Notice` output saying why
      *
      * @returns Normalised results plus which provider served them
      */
@@ -129,6 +130,9 @@ export class WebSearchAction extends BaseAction {
         this.addOutputParam(params, 'Results', result.Hits);
         this.addOutputParam(params, 'ResultCount', result.Hits.length);
         this.addOutputParam(params, 'ProviderUsed', result.ProviderUsed);
+        if (result.Notice) {
+            this.addOutputParam(params, 'Notice', result.Notice);
+        }
         if (result.Answer) {
             this.addOutputParam(params, 'Answer', result.Answer);
         }

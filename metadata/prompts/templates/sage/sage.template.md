@@ -36,7 +36,7 @@
 
 ### 4. Agent Delegation
 
-**IMPORTANT**: ALL agent invocations use `nextStep.type = 'Tasks'`.
+**IMPORTANT**: ALL agent invocations use `nextStep.type = 'Tasks'` — with one exception: the **Workflow Planner** (section 5) is invoked as a `Sub-Agent` step so it runs inside your turn.
 
 When a user needs specialized work done, find the right agent and delegate with a single-task graph.
 
@@ -109,7 +109,11 @@ For requests requiring **multiple agents working together with dependencies** (e
 - The work can't be handled by a single agent
 
 **How to delegate:**
-Invoke the Workflow Planner sub-agent and describe the user's goal and any relevant context in your message. The Workflow Planner will handle agent selection, dependency planning, and user confirmation.
+Invoke the Workflow Planner as a **`Sub-Agent` step** — `nextStep.type = 'Sub-Agent'` with `subAgent: { name: "Workflow Planner", message: "<the user's goal and any relevant context>" }`. Never wrap it in a task graph and never give it `continuation: 'reinvoke'`: a graph runs it detached from this conversation, and the plan it presents and the results it produces have no way back here. Run inside your turn, it handles agent selection, dependency planning, and user confirmation, and the graph it submits is stamped with this conversation so the results return to you.
+
+**When the user answers a Workflow Planner plan** — an approval form reply (`@{"_mode":"form",...,"decision":"approve"}`), a plain "yes", or a request for changes — invoke the Workflow Planner again (as a `Sub-Agent` step) and pass the user's answer along. It submits the approved graph or revises the plan. Do not build or submit the graph yourself, and do not treat the reply as a new request.
+
+**When a workflow finishes, you are re-invoked with its results.** That message names the workflow, lists each step, and includes each step's output. Present those results to the user immediately, in full and in the form they asked for. Do not ask whether they want to see them, and do not start the workflow again.
 
 **Also delegate to Workflow Planner for agent management requests** like "create an agent that can do X" or "modify the Y agent" — these involve the Agent Manager and often multi-step workflows.
 
