@@ -350,8 +350,8 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
         try {
             const engine = InteractiveFormsEngine.Instance;
             const outcome = await FormPanelSlotComponent.loadFinishedOrTimeout(engine.LoadingSubject);
-            if (!engine.ContributionsReady) {
-                // Once — the gate closes process-wide below, so this cannot become log spam.
+            if (!engine.ContributionsReady && !FormPanelSlotComponent.contributionGateResolved) {
+                // Once: the first slot to finish waiting closes the gate process-wide below.
                 LogError(outcome === 'timeout'
                     ? `[mj-form-panel-slot] contribution cache not ready after ${FormPanelSlotComponent.READINESS_TIMEOUT_MS}ms; mounting compiled panels only from here on.`
                     : '[mj-form-panel-slot] contribution cache failed to load; mounting compiled panels only from here on.');

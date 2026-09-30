@@ -77,6 +77,22 @@ const FORM = {
     UnregisterFormPanel: (panel: { Registration: unknown }) => hoisted.live.delete(panel),
 } as unknown as BaseFormComponent;
 
+/** Two slots on one form, both waiting on the same load. */
+@Component({
+    standalone: false,
+    selector: 'test-two-slots',
+    template: `
+        <mj-form-panel-slot [Entity]="Entity" Slot="before-fields" [Record]="Record" [FormComponent]="Form" [FormContext]="Context"></mj-form-panel-slot>
+        <mj-form-panel-slot [Entity]="Entity" Slot="after-fields" [Record]="Record" [FormComponent]="Form" [FormContext]="Context"></mj-form-panel-slot>
+    `,
+})
+class TwoSlotsHost {
+    public Entity = ENTITY;
+    public Record = RECORD;
+    public Form = FORM;
+    public Context = {};
+}
+
 function row(over: Record<string, unknown>) {
     return {
         ID: 'row-header', Entity: ENTITY, ComponentID: 'comp-1', Name: 'My header', Title: null, Icon: null,
@@ -160,6 +176,15 @@ describe('FormPanelSlotComponent (DOM) — the first mount waits for contributio
         await flush();
         await vi.advanceTimersByTimeAsync(5000);
         expect(logError).not.toHaveBeenCalled();
+    });
+
+    it('reports a load that outlasts the wait once, however many slots were waiting', async () => {
+        vi.useFakeTimers();
+        engine.Loaded = false;
+        engine.LoadingSubject.next(true);
+        renderComponentFixture(TwoSlotsHost, { declarations: [TwoSlotsHost, FormPanelSlotComponent] });
+        await vi.advanceTimersByTimeAsync(2000);
+        expect(logError).toHaveBeenCalledTimes(1);
     });
 
     it('mounts compiled panels and reports it when the load outlasts the wait', async () => {
