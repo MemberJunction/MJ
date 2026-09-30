@@ -45,6 +45,36 @@ function overconfidentSet(count: number, seed: number): LabelledProbability[] {
     });
 }
 
+/**
+ * A decision model's coarse probabilities (a few levels, as a model states them) over `count` cases,
+ * with labels drawn from a known Platt map (A 0.7, B 0.9).
+ */
+function coarseSet(count: number, seed: number): LabelledProbability[] {
+    const levels = [0.05, 0.1, 0.2, 0.3, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95];
+    const random = CreateSeededRandom(seed);
+    return Array.from({ length: count }, () => {
+        const p = levels[Math.floor(random() * levels.length)];
+        const truth = 1 / (1 + Math.exp(-(0.7 * Math.log(p / (1 - p)) + 0.9)));
+        return point(p, random() < truth);
+    });
+}
+
+/** The gradient of Platt's loss at a fit, per case: zero at the maximum-likelihood fit. */
+function plattGradientPerCase(points: readonly LabelledProbability[], a: number, b: number): [number, number] {
+    const positives = points.filter(p => p.Positive).length;
+    const high = (positives + 1) / (positives + 2);
+    const low = 1 / (points.length - positives + 2);
+    let gA = 0;
+    let gB = 0;
+    for (const p of points) {
+        const x = ClampedLogit(p.Probability);
+        const residual = 1 / (1 + Math.exp(-(a * x + b))) - (p.Positive ? high : low);
+        gA += residual * x;
+        gB += residual;
+    }
+    return [gA / points.length, gB / points.length];
+}
+
 describe('Decision Eval metrics', () => {
     describe('basic statistics', () => {
         it('Quantile interpolates linearly between order statistics', () => {
@@ -238,6 +268,19 @@ describe('Decision Eval metrics', () => {
             for (let i = 1; i < calibrated.length; i++) {
                 expect(calibrated[i]).toBeGreaterThan(calibrated[i - 1]);
             }
+        });
+
+        it('converges on a large set of coarse probabilities, where float rounding stalls the gradient', () => {
+            // On this set the gradient stalls around 1e-6, above the 1e-9 tolerance, because the line
+            // search can no longer see the loss fall; before the fix it ran to the 100-iteration cap.
+            const set = coarseSet(300, 3);
+            const fit = FitPlatt(set);
+            expect(fit.Converged).toBe(true);
+            expect(fit.Iterations).toBeLessThan(20);
+            // And it is the maximum-likelihood fit: the gradient there is zero to float precision.
+            const [gA, gB] = plattGradientPerCase(set, fit.A, fit.B);
+            expect(Math.abs(gA)).toBeLessThan(1e-8);
+            expect(Math.abs(gB)).toBeLessThan(1e-8);
         });
 
         it('stays finite on a perfectly separable set', () => {
