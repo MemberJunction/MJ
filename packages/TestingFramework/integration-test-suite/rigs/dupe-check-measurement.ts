@@ -315,7 +315,7 @@ async function setupMeasurementEnvironment(
     }
     const configuredThreshold = entityDocument.PotentialMatchThreshold;
 
-    const metadata = new Metadata();
+    const metadata = new Metadata(); // global-provider-ok: a standalone measurement rig; its process has one provider
     const entityInfo = metadata.EntityByID(entityDocument.EntityID);
     if (!entityInfo) {
         throw new Error(`Entity metadata not found for EntityID ${entityDocument.EntityID}`);
