@@ -3897,27 +3897,28 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
   }
 
+  /** Detail ids whose completion this instance has already applied. A live callback and the replay window can both deliver one finish. */
+  private handledCompletionIds?: Set<string>;
+
   /**
    * Handle message completion triggered by PubSub completion event
    * Reloads message, agent run, and artifacts, then updates UI
    * @param message The message that completed
    * @param agentRunId The ID of the agent run that completed
    */
-  /** Detail ids whose completion this instance has already applied. A live callback and the replay window can both deliver one finish. */
-  private handledCompletionIds?: Set<string>;
-
   private async handleMessageCompletion(
     message: MJConversationDetailEntity,
     _agentRunId: string,
     expectedConversationId: string | null | undefined = message.ConversationID,
     loadToken?: number
   ): Promise<void> {
-    if (message.ID) {
+    const completionId = message.ID ? NormalizeUUID(message.ID) : '';
+    if (completionId) {
       this.handledCompletionIds ??= new Set();
-      if (this.handledCompletionIds.has(message.ID)) {
+      if (this.handledCompletionIds.has(completionId)) {
         return;
       }
-      this.handledCompletionIds.add(message.ID);
+      this.handledCompletionIds.add(completionId);
     }
     let finished = false;
     try {
@@ -3997,8 +3998,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.cdr.detectChanges();
     } finally {
       // A switch away mid-reload must not consume the completion. The next load still has the replay entry.
-      if (!finished && message.ID) {
-        this.handledCompletionIds?.delete(message.ID);
+      if (!finished && completionId) {
+        this.handledCompletionIds?.delete(completionId);
       }
     }
   }

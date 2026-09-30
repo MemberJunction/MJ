@@ -135,4 +135,48 @@ describe('OnMessageSent applies a completion that landed first (MJ#4885)', () =>
     expect(message.Message).toBe('The final reply');
     expect(streaming(component).ClearRecentCompletion).toHaveBeenCalledTimes(1);
   });
+
+  it('forgets a completion that stopped because the conversation changed, so the next load applies it', async () => {
+    const message = hostRow();
+    const component = createComponent(undefined);
+    const open = component as unknown as Open & {
+      handleMessageCompletion(row: unknown, agentRunId: string, conversationId: string): Promise<void>;
+      _conversationId: string;
+    };
+    let loads = 0;
+    message.Load = vi.fn(async function (this: typeof message) {
+      loads += 1;
+      if (loads === 1) {
+        open._conversationId = 'other-conv';
+      }
+      this.Status = 'Complete';
+      this.Message = 'The final reply';
+    });
+
+    await open.handleMessageCompletion(message, 'run-1', CONV);
+
+    expect(loads).toBe(1);
+    expect((component as unknown as Open)['reloadArtifactsForMessage']).not.toHaveBeenCalled();
+
+    open._conversationId = CONV;
+    await open.handleMessageCompletion(message, 'run-1', CONV);
+
+    expect(message.Load).toHaveBeenCalledTimes(2);
+    expect((component as unknown as Open)['reloadArtifactsForMessage']).toHaveBeenCalledWith(message.ID, CONV, undefined);
+  });
+
+  it('treats a differently cased detail id as the same completion', async () => {
+    const message = hostRow();
+    const component = createComponent(undefined);
+    const open = component as unknown as {
+      handleMessageCompletion(row: unknown, agentRunId: string, conversationId: string): Promise<void>;
+    };
+
+    await open.handleMessageCompletion(message, 'run-1', CONV);
+    message.ID = 'REPLY-1';
+    message.Load = vi.fn();
+    await open.handleMessageCompletion(message, 'run-1', CONV);
+
+    expect(message.Load).not.toHaveBeenCalled();
+  });
 });
