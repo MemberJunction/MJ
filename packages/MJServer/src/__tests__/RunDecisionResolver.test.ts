@@ -190,6 +190,19 @@ const runDecision = (args: RunArgs = {}) =>
 /** The scope-check calls, without the `full_access` fast-path probe that precedes each one. */
 const scopeCalls = () => mockAuthorize.mock.calls.filter(call => call[2] !== 'full_access');
 
+/** The resources the scope checks were made against, in order. */
+const checkedResources = () => scopeCalls().map(call => call[3]);
+
+/**
+ * An API key allowed `prompt:execute` on every prompt except the resources given, as a broad allow
+ * plus a Deny rule on each would have it. It has no `full_access`.
+ */
+const allowPromptsExcept = (...denied: string[]) =>
+  mockAuthorize.mockImplementation(async (_hash, _app, scope, resource) => {
+    const allowed = scope === 'prompt:execute' && !denied.includes(resource);
+    return { Allowed: allowed, Reason: allowed ? 'Allowed' : 'Denied by a rule' };
+  });
+
 let executeDecision: MockInstance<AIDecisionRunner['ExecuteDecision']>;
 const sentParams = (): AIDecisionParams => executeDecision.mock.calls[0][0];
 
@@ -428,13 +441,87 @@ describe('RunDecision: authorization mirrors RunAIPrompt', () => {
     expect(scopeCalls()[0].slice(0, 5)).toEqual(['hash-1', 'MJAPI', 'prompt:execute', 'prompt-routing', SYSTEM_USER]);
   });
 
-  it('checks a request by name against that name, and a request naming nothing against the default name', async () => {
-    mockAuthorize.mockImplementation(async (_hash, _app, scope) => ({ Allowed: scope === 'prompt:execute', Reason: '' }));
+  it('checks the ID of the prompt that runs, however the caller named it', async () => {
+    allowPromptsExcept();
 
-    await runDecision({ PromptName: 'Route Message', Payload: apiKeyPayload() });
+    await runDecision({ PromptName: 'route MESSAGE', Payload: apiKeyPayload() });
+    await runDecision({ PromptID: 'PROMPT-ROUTING', Payload: apiKeyPayload() });
     await runDecision({ Payload: apiKeyPayload() });
 
-    expect(scopeCalls().map(call => call[3])).toEqual(['Route Message', 'Default Decision']);
+    expect(checkedResources()).toEqual(['prompt-routing', 'prompt-routing', 'prompt-default']);
+    expect(executeDecision).toHaveBeenCalledTimes(3);
+  });
+
+  it('refuses a caller denied a prompt by its ID when it names that prompt by name', async () => {
+    allowPromptsExcept(ROUTING_PROMPT.ID);
+
+    const byName = await runDecision({ PromptName: 'Route Message', Payload: apiKeyPayload() });
+    const byId = await runDecision({ PromptID: ROUTING_PROMPT.ID, Payload: apiKeyPayload() });
+    const another = await runDecision({ PromptName: 'Default Decision', Payload: apiKeyPayload() });
+
+    expect(byName.success).toBe(false);
+    expect(byName.errorMessage).toContain("Access denied. This API key requires the 'prompt:execute' scope for resource 'prompt-routing'");
+    expect(byId).toMatchObject({ success: false, errorMessage: byName.errorMessage });
+    // The rule is on the one prompt: another still runs, and it is the only one that did.
+    expect(another.success).toBe(true);
+    expect(executeDecision).toHaveBeenCalledTimes(1);
+    expect(sentParams().prompt).toBe(DEFAULT_PROMPT);
+  });
+
+  it('checks a prompt that is not found against the value the caller sent, and says it is missing only once allowed', async () => {
+    mockAuthorize.mockResolvedValue({ Allowed: false, Reason: 'Denied' });
+
+    const deniedByName = await runDecision({ PromptName: 'No Such Prompt', Payload: apiKeyPayload() });
+    const deniedById = await runDecision({ PromptID: 'prompt-missing', Payload: apiKeyPayload() });
+
+    expect(checkedResources()).toEqual(['No Such Prompt', 'prompt-missing']);
+    for (const denied of [deniedByName, deniedById]) {
+      expect(denied.success).toBe(false);
+      expect(denied.errorMessage).toContain('Access denied');
+      expect(denied.errorMessage).not.toContain('not found');
+    }
+
+    mockAuthorize.mockClear();
+    allowPromptsExcept();
+    const allowed = await runDecision({ PromptName: 'No Such Prompt', Payload: apiKeyPayload() });
+
+    expect(checkedResources()).toEqual(['No Such Prompt']);
+    expect(allowed).toMatchObject({ success: false, errorMessage: "AI Prompt 'No Such Prompt' not found" });
+    expect(executeDecision).not.toHaveBeenCalled();
+  });
+
+  it('checks a prompt that appears only once the engine loads by its ID too, so a cold cache cannot be passed by name', async () => {
+    let loaded = false;
+    vi.spyOn(AIEngine.prototype, 'Config').mockImplementation(async () => {
+      loaded = true;
+    });
+    vi.spyOn(AIEngine.prototype, 'Prompts', 'get').mockImplementation(() => (loaded ? [DEFAULT_PROMPT, ROUTING_PROMPT] : []));
+    allowPromptsExcept(ROUTING_PROMPT.ID);
+
+    const denied = await runDecision({ PromptName: 'Route Message', Payload: apiKeyPayload() });
+
+    expect(checkedResources()).toEqual(['Route Message', 'prompt-routing']);
+    expect(denied.success).toBe(false);
+    expect(denied.errorMessage).toContain("scope for resource 'prompt-routing'");
+    expect(executeDecision).not.toHaveBeenCalled();
+  });
+
+  it('treats a prompt cache that cannot be read as not found until the caller is authorized', async () => {
+    vi.spyOn(AIEngine.prototype, 'Prompts', 'get').mockImplementation(() => {
+      throw new Error('AIEngine cannot read MJ: AI Prompts');
+    });
+    mockAuthorize.mockResolvedValue({ Allowed: false, Reason: 'Denied' });
+
+    const denied = await runDecision({ PromptName: 'Route Message', Payload: apiKeyPayload() });
+    mockAuthorize.mockClear();
+    allowPromptsExcept();
+    const allowed = await runDecision({ PromptName: 'Route Message', Payload: apiKeyPayload() });
+
+    // Denied, the caller hears only the denial; allowed, it hears why the prompt cannot be read.
+    expect(denied.errorMessage).toContain('Access denied');
+    expect(denied.errorMessage).not.toContain('cannot read');
+    expect(allowed).toMatchObject({ success: false, errorMessage: 'AIEngine cannot read MJ: AI Prompts' });
+    expect(executeDecision).not.toHaveBeenCalled();
   });
 
   it('checks before anything else, so a denied caller learns nothing about the prompt or the input', async () => {

@@ -71,9 +71,10 @@ export class RunDecisionResolver extends ResolverBase {
     /**
      * Answers typed questions about a state with a Decision-typed prompt.
      *
-     * Authorization is `RunAIPrompt`'s: the API-key `prompt:execute` scope check for the prompt the
-     * caller names, before any other work (a session without an API key skips it). A denial is
-     * returned as `success: false`, not thrown.
+     * Authorization is `RunAIPrompt`'s: the API-key `prompt:execute` scope check, before any other
+     * work (a session without an API key skips it). As `RunAIPrompt` and `RunAIAgent` do, it checks
+     * the ID of the prompt that will run, whether the caller named it by ID or by name, so a rule on
+     * a prompt's ID holds on both. A denial is returned as `success: false`, not thrown.
      *
      * @param state The state the questions are about: text, or the JSON text of an object.
      * @param questions The `DecisionQuestion` map by question key, as JSON: the shape `Run Decision` accepts.
@@ -104,7 +105,7 @@ export class RunDecisionResolver extends ResolverBase {
     /** Authorizes, validates, resolves the prompt, and runs the decision. Throws only on unexpected errors. */
     private async runDecision(request: DecisionRequest, userPayload: UserPayload, startTime: number): Promise<DecisionRunResult> {
         const reference = this.promptReference(request);
-        await this.CheckAPIKeyScopeAuthorization('prompt:execute', reference.Value, userPayload);
+        const authorized = await this.authorizePrompt(reference, userPayload);
 
         const currentUser = this.GetUserFromPayload(userPayload);
         if (!currentUser) {
@@ -115,7 +116,7 @@ export class RunDecisionResolver extends ResolverBase {
             return this.failure(inputs.Error, startTime);
         }
         const runner = new AIDecisionRunner();
-        const prompt = await this.resolvePrompt(reference, runner, currentUser);
+        const prompt = await this.resolvePrompt(authorized, reference, runner, currentUser, userPayload);
         if (typeof prompt === 'string') {
             return this.failure(prompt, startTime);
         }
@@ -131,6 +132,36 @@ export class RunDecisionResolver extends ResolverBase {
         }
         const name = request.PromptName?.trim();
         return { By: 'Name', Value: name || RunDecisionResolver.DEFAULT_PROMPT_NAME };
+    }
+
+    /**
+     * The API-key `prompt:execute` scope check, made before any other work. The prompt is looked up
+     * in `AIEngine`'s cache as it stands, with nothing loaded or logged, and the check is made against
+     * its ID. A prompt that is not there is checked against the value the caller sent, so a denied
+     * caller learns nothing about which prompts exist: that it was not found is reported only after
+     * the check passes.
+     *
+     * @returns The prompt found, which was authorized by its ID, or undefined when none was found.
+     */
+    private async authorizePrompt(
+        reference: DecisionPromptReference,
+        userPayload: UserPayload
+    ): Promise<MJAIPromptEntityExtended | undefined> {
+        const cached = this.findCachedPrompt(reference);
+        await this.CheckAPIKeyScopeAuthorization('prompt:execute', cached?.ID ?? reference.Value, userPayload);
+        return cached;
+    }
+
+    /**
+     * Looks the prompt up in the cache without loading it. A cache that cannot be read counts as not
+     * found here, so the error surfaces only after authorization, when the lookup is made again.
+     */
+    private findCachedPrompt(reference: DecisionPromptReference): MJAIPromptEntityExtended | undefined {
+        try {
+            return this.findPrompt(reference);
+        } catch {
+            return undefined;
+        }
     }
 
     /** Validates the state and the questions, or returns the first problem found. */
@@ -180,16 +211,22 @@ export class RunDecisionResolver extends ResolverBase {
     }
 
     /**
-     * Finds the prompt in `AIEngine`'s cache and checks that it can run a decision: that it is
-     * Decision-typed and Active. Returns the reason when it cannot.
+     * The prompt to run, checked that it can run a decision: that it is Decision-typed and Active.
+     * Returns the reason when it cannot.
+     *
+     * The prompt authorized before is the one used. When there was none, the engine is loaded (a
+     * no-op once it is) and the prompt looked up again: one that appears only then is authorized by
+     * its ID too, so a request that reaches a cold cache cannot get past a rule on that ID by name.
      */
     private async resolvePrompt(
+        authorized: MJAIPromptEntityExtended | undefined,
         reference: DecisionPromptReference,
         runner: AIDecisionRunner,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        userPayload: UserPayload
     ): Promise<MJAIPromptEntityExtended | string> {
         await AIEngine.Instance.Config(false, contextUser);
-        const prompt = this.findPrompt(reference);
+        const prompt = authorized ?? (await this.findAndAuthorizeLoadedPrompt(reference, userPayload));
         if (!prompt) {
             return reference.By === 'ID'
                 ? `AI Prompt with ID ${reference.Value} not found`
@@ -200,6 +237,18 @@ export class RunDecisionResolver extends ResolverBase {
         }
         if (prompt.Status !== 'Active') {
             return `AI Prompt '${prompt.Name}' is not active (Status: ${prompt.Status})`;
+        }
+        return prompt;
+    }
+
+    /** Looks the prompt up in the loaded cache, and authorizes it by its ID when it is found. */
+    private async findAndAuthorizeLoadedPrompt(
+        reference: DecisionPromptReference,
+        userPayload: UserPayload
+    ): Promise<MJAIPromptEntityExtended | undefined> {
+        const prompt = this.findPrompt(reference);
+        if (prompt) {
+            await this.CheckAPIKeyScopeAuthorization('prompt:execute', prompt.ID, userPayload);
         }
         return prompt;
     }
