@@ -45,10 +45,11 @@ vi.mock('@memberjunction/api-keys', async (importOriginal) => {
   return { ...actual, GetAPIKeyEngine: () => ({ Authorize: mockAuthorize }) };
 });
 
-import type { UserInfo } from '@memberjunction/core';
+import { EntityInfo, UserInfo } from '@memberjunction/core';
+import { MJAIModelTypeEntity, MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { AIEngine } from '@memberjunction/aiengine';
-import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIDecisionRunner, type AIDecisionParams, type AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import type { DecisionAnswer, DecisionQuestion } from '@memberjunction/ai';
 import { RunDecisionResolver } from '../resolvers/RunDecisionResolver.js';
@@ -57,21 +58,46 @@ import type { AppContext, UserPayload } from '../types.js';
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
+/**
+ * A minimal entity definition with the named fields, so the fixtures below are real entity objects
+ * rather than casts: the ID is the primary key, and every field reads back what was hydrated.
+ */
+function entityInfo(name: string, fieldNames: string[]): EntityInfo {
+  const entityId = `entity-${name}`;
+  return new EntityInfo({
+    ID: entityId, Name: name, SchemaName: '__mj', BaseTable: name, BaseView: `vw${name}`,
+    Fields: fieldNames.map((field, index) => ({
+      ID: `${entityId}-${field}`, EntityID: entityId, Sequence: index + 1, Name: field, Entity: name,
+      Type: field === 'ID' ? 'uniqueidentifier' : 'nvarchar', IsPrimaryKey: field === 'ID',
+    })),
+  });
+}
+
+const PROMPT_ENTITY = entityInfo('MJ: AI Prompts', ['ID', 'Name', 'Status', 'AIModelTypeID']);
+const MODEL_TYPE_ENTITY = entityInfo('MJ: AI Model Types', ['ID', 'Name']);
+const PROMPT_RUN_ENTITY = entityInfo('MJ: AI Prompt Runs', ['ID']);
+
 const DECISION_TYPE_ID = 'type-decision';
 const LLM_TYPE_ID = 'type-llm';
 
-interface FakePrompt {
-  ID: string;
-  Name: string;
-  Status: string;
-  AIModelTypeID: string | null;
-}
+/** The prompt fields the resolver reads. */
+type PromptFields = Pick<MJAIPromptEntityExtended, 'ID' | 'Name' | 'Status' | 'AIModelTypeID'>;
 
-const makePrompt = (over: Partial<FakePrompt>): MJAIPromptEntityExtended =>
-  ({
+const makePrompt = (over: Partial<PromptFields>): MJAIPromptEntityExtended => {
+  const fields: PromptFields = {
     ID: 'prompt-default', Name: 'Default Decision', Status: 'Active', AIModelTypeID: DECISION_TYPE_ID,
     ...over,
-  }) as unknown as MJAIPromptEntityExtended;
+  };
+  const prompt = new MJAIPromptEntityExtended(PROMPT_ENTITY);
+  prompt.Hydrate(fields);
+  return prompt;
+};
+
+const makeModelType = (fields: Pick<MJAIModelTypeEntity, 'ID' | 'Name'>): MJAIModelTypeEntity => {
+  const modelType = new MJAIModelTypeEntity(MODEL_TYPE_ENTITY);
+  modelType.Hydrate(fields);
+  return modelType;
+};
 
 const DEFAULT_PROMPT = makePrompt({});
 const ROUTING_PROMPT = makePrompt({ ID: 'prompt-routing', Name: 'Route Message' });
@@ -79,17 +105,16 @@ const CHAT_PROMPT = makePrompt({ ID: 'prompt-chat', Name: 'Summarize Text', AIMo
 const UNTYPED_PROMPT = makePrompt({ ID: 'prompt-untyped', Name: 'Untyped Prompt', AIModelTypeID: null });
 const INACTIVE_PROMPT = makePrompt({ ID: 'prompt-inactive', Name: 'Retired Decision', Status: 'Disabled' });
 
-/** Points AIEngine.Instance at a fixed prompt set and the two model types the tests use. */
+const MODEL_TYPES = [
+  makeModelType({ ID: DECISION_TYPE_ID, Name: 'Decision' }),
+  makeModelType({ ID: LLM_TYPE_ID, Name: 'LLM' }),
+];
+
+/** Gives AIEngine a fixed prompt set and the two model types the tests use; its load does nothing. */
 function stubEngine(prompts: MJAIPromptEntityExtended[]): void {
-  const fake = {
-    Config: vi.fn(async () => undefined),
-    Prompts: prompts,
-    ModelTypes: [
-      { ID: DECISION_TYPE_ID, Name: 'Decision' },
-      { ID: LLM_TYPE_ID, Name: 'LLM' },
-    ],
-  };
-  vi.spyOn(AIEngine, 'Instance', 'get').mockReturnValue(fake as unknown as AIEngine);
+  vi.spyOn(AIEngine.prototype, 'Config').mockResolvedValue(undefined);
+  vi.spyOn(AIEngine.prototype, 'Prompts', 'get').mockReturnValue(prompts);
+  vi.spyOn(AIEngine.prototype, 'ModelTypes', 'get').mockReturnValue(MODEL_TYPES);
 }
 
 const QUESTIONS: Record<string, DecisionQuestion> = {
@@ -109,7 +134,8 @@ const ANSWERS: Record<string, DecisionAnswer> = {
   duplicate: { Kind: 'Likelihood', Probability: 0.2 },
 };
 
-const PROMPT_RUN = { ID: 'run-1' } as unknown as NonNullable<AIDecisionRunResult['promptRun']>;
+const PROMPT_RUN = new MJAIPromptRunEntity(PROMPT_RUN_ENTITY);
+PROMPT_RUN.Hydrate({ ID: 'run-1' });
 
 const successResult = (): AIDecisionRunResult => ({
   success: true,
@@ -126,8 +152,10 @@ const failedResult = (): AIDecisionRunResult => ({
   modelInfo: { modelId: 'model-jev', modelName: 'Jev' },
 });
 
-const USER = { ID: 'user-1', Name: 'Test User', Email: 'test@example.com' } as unknown as UserInfo;
-const SYSTEM_USER = { ID: 'user-system', Name: 'System', Email: 'system@example.com' } as unknown as UserInfo;
+const makeUser = (fields: Pick<UserInfo, 'ID' | 'Name' | 'Email'>): UserInfo => Object.assign(new UserInfo(), fields);
+
+const USER = makeUser({ ID: 'user-1', Name: 'Test User', Email: 'test@example.com' });
+const SYSTEM_USER = makeUser({ ID: 'user-system', Name: 'System', Email: 'system@example.com' });
 
 /** A session authenticated by JWT: no API key, so no scope check. */
 const sessionPayload = (): UserPayload => ({ email: USER.Email, userRecord: USER, sessionId: 'session-1' });
