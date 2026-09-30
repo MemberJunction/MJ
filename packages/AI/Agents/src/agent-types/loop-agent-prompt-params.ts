@@ -142,61 +142,6 @@ export const DEFAULT_RESPONSE_TYPE_INCLUSION_RULES: Required<ResponseTypeInclusi
 };
 
 /**
- * Configuration parameters for Loop Agent Type.
- *
- * Controls prompt content (which sections are included), client tool availability,
- * and content limits. Stored in `AIAgent.AgentTypePromptParams` as JSON.
- *
- * All boolean prompt-inclusion properties default to true (include section).
- * Set to false to exclude a section from the prompt and save tokens.
- *
- * These parameters are configured at three levels with merge precedence:
- * 1. Schema defaults (from AIAgentType.PromptParamsSchema) - lowest priority
- * 2. Agent config (from AIAgent.AgentTypePromptParams) - medium priority
- * 3. Runtime override (from ExecuteAgentParams.data.__agentTypePromptParams) - highest priority
- *
- * @example
- * ```typescript
- * // Agent configuration to disable unused features
- * const agentConfig: LoopAgentTypePromptParams = {
- *     includeForEachDocs: false,      // Agent never iterates collections
- *     includeWhileDocs: false,        // Agent never polls/retries
- *     includeResponseFormDocs: false, // Agent never collects user input
- *     includeCommandDocs: false       // Agent doesn't trigger UI actions
- * };
- * ```
- *
- * @example
- * ```typescript
- * // Runtime override to enable a feature for a specific execution
- * const result = await agent.Execute({
- *     agent: myAgent,
- *     conversationMessages: messages,
- *     data: {
- *         __agentTypePromptParams: {
- *             includeForEachDocs: true  // Enable for this run only
- *         }
- *     }
- * });
- * ```
- *
- * @example
- * ```typescript
- * // Minimal response type with granular control
- * const minimalConfig: LoopAgentTypePromptParams = {
- *     includeResponseTypeDefinition: {
- *         payload: true,        // Keep payload in type
- *         responseForms: false, // Exclude responseForm from type
- *         commands: false,      // Exclude commands from type
- *         forEach: false,       // Exclude ForEach from nextStep.type
- *         while: false          // Exclude While from nextStep.type
- *     },
- *     includeForEachDocs: false,
- *     includeWhileDocs: false
- * };
- * ```
- */
-/**
  * Where the agent's specialization (its child prompt) is placed.
  *
  * Background: the loop agent's per-iteration ("volatile") state — current date/time, Scratchpad
@@ -268,6 +213,61 @@ export type TrailingStateMode = 'auto' | 'appendOnly' | 'replace';
  */
 export type FinishIfMode = 'off' | 'shadow' | 'on';
 
+/**
+ * Configuration parameters for Loop Agent Type.
+ *
+ * Controls prompt content (which sections are included), client tool availability,
+ * and content limits. Stored in `AIAgent.AgentTypePromptParams` as JSON.
+ *
+ * All boolean prompt-inclusion properties default to true (include section).
+ * Set to false to exclude a section from the prompt and save tokens.
+ *
+ * These parameters are configured at three levels with merge precedence:
+ * 1. Schema defaults (from AIAgentType.PromptParamsSchema) - lowest priority
+ * 2. Agent config (from AIAgent.AgentTypePromptParams) - medium priority
+ * 3. Runtime override (from ExecuteAgentParams.data.__agentTypePromptParams) - highest priority
+ *
+ * @example
+ * ```typescript
+ * // Agent configuration to disable unused features
+ * const agentConfig: LoopAgentTypePromptParams = {
+ *     includeForEachDocs: false,      // Agent never iterates collections
+ *     includeWhileDocs: false,        // Agent never polls/retries
+ *     includeResponseFormDocs: false, // Agent never collects user input
+ *     includeCommandDocs: false       // Agent doesn't trigger UI actions
+ * };
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Runtime override to enable a feature for a specific execution
+ * const result = await agent.Execute({
+ *     agent: myAgent,
+ *     conversationMessages: messages,
+ *     data: {
+ *         __agentTypePromptParams: {
+ *             includeForEachDocs: true  // Enable for this run only
+ *         }
+ *     }
+ * });
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Minimal response type with granular control
+ * const minimalConfig: LoopAgentTypePromptParams = {
+ *     includeResponseTypeDefinition: {
+ *         payload: true,        // Keep payload in type
+ *         responseForms: false, // Exclude responseForm from type
+ *         commands: false,      // Exclude commands from type
+ *         forEach: false,       // Exclude ForEach from nextStep.type
+ *         while: false          // Exclude While from nextStep.type
+ *     },
+ *     includeForEachDocs: false,
+ *     includeWhileDocs: false
+ * };
+ * ```
+ */
 export interface LoopAgentTypePromptParams {
     // === Section Inclusion Flags ===
 
@@ -514,18 +514,30 @@ export interface LoopAgentTypePromptParams {
  */
 export const MAX_DECISION_REQUESTS_PER_TURN = 8;
 
-/**
- * Default values for LoopAgentTypePromptParams.
- * All section flags default to true (include), limits default to -1 (include all).
- */
-/** Every {@link FinishIfMode}, for validation. */
+/** Every {@link FinishIfMode}, for validation. Mode names are case-sensitive. */
 export const FINISH_IF_MODES: readonly FinishIfMode[] = ['off', 'shadow', 'on'];
 
-/** The mode a prompt-param value names; anything else, an absent value included, is `'off'`. */
-export function ResolveFinishIfMode(value: unknown): FinishIfMode {
-    return value === 'shadow' || value === 'on' ? value : 'off';
+/**
+ * Whether a prompt-param value is one of the {@link FINISH_IF_MODES}. The check is exact, so `'On'`
+ * and `'true'` are not modes.
+ */
+export function IsFinishIfMode(value: unknown): value is FinishIfMode {
+    return FINISH_IF_MODES.some(mode => mode === value);
 }
 
+/**
+ * The mode a prompt-param value names. Anything else, an absent value included, is `'off'`.
+ * `BaseAgent` warns once per agent and value when a value is set but is not a mode.
+ */
+export function ResolveFinishIfMode(value: unknown): FinishIfMode {
+    return IsFinishIfMode(value) ? value : 'off';
+}
+
+/**
+ * Default values for LoopAgentTypePromptParams.
+ * Section flags default to true (include) and the prompt-content limits to -1 (include all); the
+ * TSDoc on each property gives its own default.
+ */
 export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParams> = {
     includeResponseTypeDefinition: { ...DEFAULT_RESPONSE_TYPE_INCLUSION_RULES },
     includeForEachDocs: true,

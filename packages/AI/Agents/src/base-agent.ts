@@ -137,7 +137,7 @@ import { ScratchpadManager } from './ScratchpadManager';
 import { ArtifactToolManager, ArtifactToolCall, StoredToolResult } from './ArtifactToolManager';
 import { MemoryWriteManager, MemoryWriteRequest, MemoryWriteResult } from './MemoryWriteManager';
 import { AgentDecisionService, DecisionQuestionMapping } from './AgentDecisionService';
-import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS, MAX_DECISION_REQUESTS_PER_TURN, ResolveFinishIfMode, type FinishIfMode } from './agent-types/loop-agent-prompt-params';
+import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS, FINISH_IF_MODES, IsFinishIfMode, MAX_DECISION_REQUESTS_PER_TURN, ResolveFinishIfMode, type FinishIfMode } from './agent-types/loop-agent-prompt-params';
 import {
     PipelineExecutor,
     PipelineToolRegistry,
@@ -8615,9 +8615,41 @@ The context is now within limits. Please retry your request with the recovered c
         // to distinguish between explicit user settings and schema defaults
         const explicitResponseType = (runtimeOverrides?.includeResponseTypeDefinition as Record<string, unknown> | undefined) ||
                                      (agentParams.includeResponseTypeDefinition as Record<string, unknown> | undefined);
+        this.warnOnceOnUnknownFinishIfMode(merged.finishIfMode, agent);
         this.applyResponseTypeAutoAlignment(merged, explicitResponseType);
 
         return merged;
+    }
+
+    /**
+     * The agent and value pairs {@link warnOnceOnUnknownFinishIfMode} has already reported. It is
+     * process-wide because the prompt params are merged again for every run of an agent, and on every
+     * turn that carries runtime overrides. One warning per agent and value is enough.
+     */
+    private static readonly warnedFinishIfModes = new Set<string>();
+
+    /**
+     * Warns, once per agent and value, when the merged `finishIfMode` is set but is not a
+     * {@link FinishIfMode}. {@link ResolveFinishIfMode} treats such a value as `'off'`, so without
+     * this a typo such as `"On"` or `"true"` would turn the agent's gates off without a word. An
+     * absent value is the default, so it is not reported.
+     */
+    private warnOnceOnUnknownFinishIfMode(value: unknown, agent: MJAIAgentEntityExtended): void {
+        if (value === undefined || value === null || IsFinishIfMode(value)) {
+            return;
+        }
+        // A string keeps its quotes, so "true" and true read differently.
+        const shown = typeof value === 'string' ? JSON.stringify(value) : jsonExcerpt(value, 200);
+        const key = `${agent.ID}\u0000${shown}`;
+        if (BaseAgent.warnedFinishIfModes.has(key)) {
+            return;
+        }
+        BaseAgent.warnedFinishIfModes.add(key);
+        const modes = FINISH_IF_MODES.map(mode => `'${mode}'`).join(', ');
+        this.logError(
+            `Agent '${agent.Name}' has finishIfMode ${shown}, which is not one of ${modes}, so its finishIf gates are off. Mode names are case-sensitive.`,
+            { agent, category: 'AgentConfiguration', severity: 'warning' }
+        );
     }
 
     /**

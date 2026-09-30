@@ -50,7 +50,7 @@ import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEn
 import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { RecordToolCallingDecision } from '@memberjunction/ai-prompts';
 import { SanitizeToolName } from '../native-tools/action-tool-builder';
-import { LogStatus } from '@memberjunction/core';
+import { LogErrorEx, LogStatus } from '@memberjunction/core';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
 // ============================================================================
@@ -286,11 +286,11 @@ class LoopHarness {
     private stepSeq = 0;
     private readonly catalog = new Map<string, unknown>();
 
-    /** The row set the mocked AIEngine.Instance serves. */
+    /** The row set the mocked AIEngine.Instance serves. The junction rows follow `agent`, so a test can run a second agent. */
     public get engineInstance(): Record<string, unknown> {
         const agentActionRow = {
             ID: AGENT_ACTION_ID,
-            AgentID: AGENT_ID,
+            AgentID: this.agent.ID,
             ActionID: ACTION_ID,
             Action: ACTION_NAME,
             Status: 'Active',
@@ -325,7 +325,7 @@ class LoopHarness {
                 { ID: CHILD_PROMPT_ID, Name: 'Agent Child Prompt', EffortLevel: null },
             ],
             AgentPrompts: [
-                { ID: 'aaaaaaaa-3333-4000-8000-000000000001', AgentID: AGENT_ID, PromptID: CHILD_PROMPT_ID, Status: 'Active', ExecutionOrder: 1 },
+                { ID: 'aaaaaaaa-3333-4000-8000-000000000001', AgentID: this.agent.ID, PromptID: CHILD_PROMPT_ID, Status: 'Active', ExecutionOrder: 1 },
             ],
             AgentActions: [agentActionRow],
             GetSubAgents: (): unknown[] => [],
@@ -1356,5 +1356,69 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
         expect(ask).toHaveBeenCalledOnce();
         expect(harness.steps.map((s) => s.StepType)).toEqual(['Validation', 'Prompt', 'Decision', 'Prompt']);
         expect(runner.Calls[1].conversationMessages?.map(textOf).some((c) => c.startsWith('Decision results:'))).toBe(true);
+    });
+});
+
+describe('BaseAgent.Execute — a finishIfMode that is not a mode', () => {
+    const SECOND_AGENT_ID = 'aaaaaaaa-0000-4000-8000-00000000000a';
+
+    /** The warnings about finishIfMode, in the order they were logged. */
+    const finishIfModeWarnings = (): string[] => vi.mocked(LogErrorEx).mock.calls
+        .map(([options]) => (typeof options === 'string' ? options : options.message))
+        .filter((message) => message.includes('finishIfMode'));
+
+    /**
+     * Runs the agent for two prompt turns with `finishIfMode` as a runtime override, which merges the
+     * prompt params again on every turn, the path that would warn on every turn without the dedupe.
+     */
+    async function runWithMode(finishIfMode: string): Promise<void> {
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const result = await agent.Execute(makeParams({ data: { __agentTypePromptParams: { finishIfMode } } }));
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(2);
+    }
+
+    beforeEach(() => {
+        vi.mocked(LogErrorEx).mockClear();
+    });
+
+    // The warned-about set is process-wide, so each test below uses values no other test uses.
+
+    it('warns once, naming the agent and the value, however many turns and runs read it', async () => {
+        await runWithMode('On');
+        await runWithMode('On');
+
+        expect(finishIfModeWarnings()).toHaveLength(1);
+        const [warning] = finishIfModeWarnings();
+        expect(warning).toContain("Agent 'Loop Test Agent'");
+        expect(warning).toContain('finishIfMode "On"');
+        expect(warning).toContain("not one of 'off', 'shadow', 'on'");
+        expect(warning).toContain('gates are off');
+    });
+
+    it('warns again for a different value, and for a different agent with the same value', async () => {
+        await runWithMode('true');
+        await runWithMode('Shadow');
+        await runWithMode('true');
+        harness.agent = makeAgentRow({ ID: SECOND_AGENT_ID, Name: 'Second Loop Agent' });
+        await runWithMode('true');
+
+        expect(finishIfModeWarnings()).toEqual([
+            expect.stringContaining(`Agent 'Loop Test Agent' has finishIfMode "true"`),
+            expect.stringContaining(`Agent 'Loop Test Agent' has finishIfMode "Shadow"`),
+            expect.stringContaining(`Agent 'Second Loop Agent' has finishIfMode "true"`),
+        ]);
+    });
+
+    it('does not warn for a valid mode or an absent one', async () => {
+        await runWithMode('shadow');
+        await runWithMode('off');
+        const { agent } = makeAgent([() => llmEnvelope(successEnvelope())]);
+        await agent.Execute(makeParams());
+
+        expect(finishIfModeWarnings()).toEqual([]);
     });
 });
