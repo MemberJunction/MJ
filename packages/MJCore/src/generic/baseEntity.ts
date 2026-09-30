@@ -1053,14 +1053,15 @@ function sameEntityName(a: string, b: string): boolean {
 }
 
 /**
- * One record as it was before a unit of work: whether it was saved and loaded, and each field with
- * its value and dirty-tracking state. Captured so a unit of work that rolls back can put the record
- * back.
+ * One record as it was before a unit of work: whether it was saved and loaded, its result history,
+ * and each field with its value and dirty-tracking state. Captured so a unit of work that rolls back
+ * can put the record back.
  */
 type RecordSnapshot = {
     entity: BaseEntity;
     wasSaved: boolean;
     wasLoaded: boolean;
+    resultHistory: BaseEntityResult[];
     fields: { field: EntityField; state: EntityFieldState }[];
 };
 
@@ -3286,6 +3287,7 @@ export abstract class BaseEntity<T = unknown> {
                     entity: level,
                     wasSaved: level._everSaved,
                     wasLoaded: level._recordLoaded,
+                    resultHistory: [...level._resultHistory],
                     fields: level.Fields.map(field => ({ field, state: field.GetState() })),
                 });
             }
@@ -3307,10 +3309,14 @@ export abstract class BaseEntity<T = unknown> {
      * rolled back.
      *
      * A save's `finalizeSave()` rebuilds the record's fields from what its write returned and marks
-     * it saved; a delete's `NewRecord()` rebuilds them empty and marks it unsaved. The database undid
-     * the write, so the record gets back its saved and loaded flags and each field's value and
-     * tracking state. A field edited since then keeps the edit, and is compared with its captured
-     * baseline again, since that is what the database holds after the rollback.
+     * it saved; a delete's `NewRecord()` rebuilds them empty and marks it unsaved. Both also empty
+     * its result history. The database undid the write, so the record gets back its saved and loaded
+     * flags, its result history, and each field's value and tracking state. A field edited since
+     * then keeps the edit, and is compared with its captured baseline again, since that is what the
+     * database holds after the rollback.
+     *
+     * The history matters to the caller: a save records its failure only when nothing else did,
+     * judged by the history's length when it started, which an emptied history would make wrong.
      *
      * A record still holding the captured field objects was never finalized, so nothing about it
      * changed and it is left alone.
@@ -3322,6 +3328,7 @@ export abstract class BaseEntity<T = unknown> {
         }
         this._everSaved = snapshot.wasSaved;
         this._recordLoaded = snapshot.wasLoaded;
+        this._resultHistory = snapshot.resultHistory;
         this._compositeKey = null; // cached from the finalized key; rebuilt on the next read
         for (const { field: capturedField, state } of snapshot.fields) {
             const field = this.GetFieldByName(capturedField.Name);
@@ -3396,13 +3403,8 @@ export abstract class BaseEntity<T = unknown> {
 
     /**
      * The failure path of a save: rolls back the transaction scope this entity holds, if any, then
-     * puts the IS-A chain back as `chain` captured it. `chain` is null when this save didn't start
-     * a chain save, and then only the scope is rolled back.
-     *
-     * The chain is put back whether or not there was a scope. A provider with no local transactions
-     * is the client tier, where `GraphQLDataProvider` records each parent's save in memory and sends
-     * the whole chain in the leaf's one mutation, which the server runs in one transaction. When
-     * that fails, no level was saved.
+     * puts the IS-A chain back as `chain` captured it. `chain` is null when this save captured none
+     * (see `_innerSave`), and then only the scope is rolled back.
      */
     private async rollbackChainSave(chain: RecordSnapshot[] | null): Promise<void> {
         await this.rollbackEntityTransactionScope();
@@ -4807,21 +4809,25 @@ export abstract class BaseEntity<T = unknown> {
             // IS-A orchestration: determine if this is the initiating save in a parent chain
             const isISAInitiator = (!!this._parentEntity) && !_options.IsParentEntitySave;
 
-            // Each level of the chain is finalized as saved and clean when its own write returns,
-            // before the chain commits. Capture the chain first, so a failure after any of those
-            // writes can put it back. Not in a TransactionGroup: no scope is opened there, so a
-            // level outside the group has really written, and one inside it finalizes only when
-            // the group succeeds.
-            if (isISAInitiator && !this.TransactionGroup) {
-                chain = BaseEntity.captureChains([this]);
-            }
-
             // Open (or join) a transaction scope for the parent chain. The provider arbitrates:
             // if a transaction is already in flight — an application cascade, an enclosing graph
             // save — this joins it as a savepoint rather than starting a second physical
             // transaction. Before 6.2 this path called BeginISATransaction(), which was blind to
             // any existing transaction and produced torn writes; see EntityTransactionScope.
-            await this.beginEntityTransactionScope(isISAInitiator);
+            const scopeOpened = await this.beginEntityTransactionScope(isISAInitiator);
+
+            // Each level of the chain is finalized as saved and clean when its own write returns,
+            // before the chain commits. A failure that undoes those writes has to put the chain
+            // back in memory too, so capture it before the parents save. The writes are undone
+            // when this save holds a scope, and on a provider without entity transactions, which
+            // doesn't talk to a database directly: there each parent's save is recorded in memory
+            // and the leaf's one write carries the chain (GraphQLDataProvider). Anywhere else a
+            // level may really have written (in a TransactionGroup, a level outside the group
+            // does), and marking it unsaved would make the retry insert it twice.
+            if (isISAInitiator && !this.TransactionGroup &&
+                (scopeOpened || this.ProviderToUse?.SupportsEntityTransactions !== true)) {
+                chain = BaseEntity.captureChains([this]);
+            }
 
             // Save parent chain first (root → branch → immediate parent)
             // Parent calls Save() recursively which handles its own parents, permissions, validation

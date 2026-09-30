@@ -82,42 +82,47 @@ class ChainEntity extends BaseEntity {
     }
 }
 
+/** Opens a depth-counted scope, the way `DatabaseProviderBase` does. */
+async function beginEntityTransaction() {
+    depth++;
+    txnLog.push('begin');
+    let settled = false;
+    return {
+        IsNested: depth > 1,
+        async Commit() {
+            if (settled) return;
+            settled = true;
+            depth--;
+            if (commitFails) {
+                txnLog.push('commit failed');
+                throw new Error('the transaction could not be committed');
+            }
+            txnLog.push('commit');
+        },
+        async Rollback() {
+            if (settled) return;
+            settled = true;
+            depth--;
+            txnLog.push('rollback');
+        },
+    };
+}
+
 /**
  * A provider that records each save, fails the entities named in `failures`, and — when
  * `transactional` — opens depth-counted scopes the way `DatabaseProviderBase` does. Without it,
- * parent saves are answered in memory, as `GraphQLDataProvider` answers them.
+ * parent saves are answered in memory, as `GraphQLDataProvider` answers them. `opensScopes: false`
+ * with `transactional` is a provider that says it has transactions but opens no scope, so each
+ * parent's write stands.
  */
-function makeProvider(transactional: boolean) {
+function makeProvider(transactional: boolean, opensScopes: boolean = transactional) {
     depth = 0;
     const provider = {
         CurrentUser: MOCK_USER,
         get SupportsEntityTransactions() {
             return transactional;
         },
-        async BeginEntityTransaction() {
-            depth++;
-            txnLog.push('begin');
-            let settled = false;
-            return {
-                IsNested: depth > 1,
-                async Commit() {
-                    if (settled) return;
-                    settled = true;
-                    depth--;
-                    if (commitFails) {
-                        txnLog.push('commit failed');
-                        throw new Error('the transaction could not be committed');
-                    }
-                    txnLog.push('commit');
-                },
-                async Rollback() {
-                    if (settled) return;
-                    settled = true;
-                    depth--;
-                    txnLog.push('rollback');
-                },
-            };
-        },
+        BeginEntityTransaction: opensScopes ? beginEntityTransaction : undefined,
         async Save(entity: BaseEntity, _user: UserInfo, options: EntitySaveOptions): Promise<Record<string, unknown> | null> {
             const name = entity.EntityInfo.Name;
             saveCalls.push({
@@ -282,6 +287,26 @@ describe('an existing IS-A chain whose leaf write fails', () => {
     });
 });
 
+describe('a chain where only the parent was edited', () => {
+    it("keeps the parent's edit pending when the leaf's write is refused, so the retry writes it", async () => {
+        // The leaf has nothing of its own to save. It saves because its parent is dirty, and a
+        // validate-type action refusing the leaf's write returns a falsy result rather than throwing.
+        const { product, meeting } = editedMeetingChain();
+        meeting.Set('MaxAttendees', 100);
+        failures.set(meetingInfo.Name, 'returns-null');
+
+        expect(await meeting.Save()).toBe(false);
+
+        expect(product.GetFieldByName('Name')!.Dirty).toBe(true);
+        expect(meeting.Dirty, 'the chain still has something to save').toBe(true);
+
+        failures.clear();
+        saveCalls = [];
+        expect(await meeting.Save()).toBe(true);
+        expect(saveCalls.find(c => c.Entity === productInfo.Name)!.Values.Name).toBe('Annual Conference 2027');
+    });
+});
+
 describe('what the rolled-back writes changed in memory', () => {
     it('puts back a value the database changed on the way back', async () => {
         // A trigger, a column default or a view join can change what the write returns. The
@@ -358,6 +383,27 @@ describe('a chain whose commit fails', () => {
     });
 });
 
+describe('a chain whose commit fails after an earlier failed attempt', () => {
+    it('records the commit failure on the leaf', async () => {
+        // finalizeSave() empties the leaf's result history, and a save records its failure only when
+        // the history is as long as it was when the save started. Without the leaf's history put
+        // back, the second attempt's failure went unrecorded.
+        const { meeting } = newMeetingChain();
+        failures.set(meetingInfo.Name, 'throws');
+        expect(await meeting.Save()).toBe(false);
+        expect(meeting.ResultHistory).toHaveLength(1);
+
+        failures.clear();
+        commitFails = true;
+        expect(await meeting.Save()).toBe(false);
+
+        expect(meeting.ResultHistory).toHaveLength(2);
+        expect(meeting.LatestResult?.Success).toBe(false);
+        expect(meeting.LatestResult?.Message).toContain('could not be committed');
+        expect(meeting.LatestResult?.Type).toBe('create');
+    });
+});
+
 describe('a three-level chain whose middle write fails', () => {
     it('leaves the root unsaved', async () => {
         const provider = makeProvider(true) as unknown as IEntityDataProvider;
@@ -401,6 +447,26 @@ describe('a chain saved through a provider with no transactions of its own', () 
         ]);
         expect(product.IsSaved).toBe(false);
         expect(meeting.IsSaved).toBe(false);
+    });
+});
+
+describe('a provider whose parent writes are not undone', () => {
+    it('leaves a parent that really wrote as saved, so the retry updates it rather than inserting it twice', async () => {
+        // A provider that reports entity transactions but opens no scope: nothing rolls the
+        // product's write back, so it still exists and must still say so.
+        const provider = makeProvider(true, false) as unknown as IEntityDataProvider;
+        const product = new ChainEntity(productInfo, provider);
+        const meeting = new ChainEntity(meetingInfo, provider);
+        meeting.WireParent(product);
+        meeting.NewRecord();
+        meeting.Set('Name', 'Annual Conference');
+        meeting.Set('MaxAttendees', 100);
+        failures.set(meetingInfo.Name, 'throws');
+
+        expect(await meeting.Save()).toBe(false);
+
+        expect(txnLog).toEqual([]);
+        expect(product.IsSaved).toBe(true);
     });
 });
 
