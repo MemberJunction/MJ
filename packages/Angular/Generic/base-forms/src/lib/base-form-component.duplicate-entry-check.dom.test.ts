@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ChangeDetectorRef, Component, ElementRef } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { capture } from '@memberjunction/ng-test-utils';
-import { BaseEntity, BaseEntityResult, EntityInfo } from '@memberjunction/core';
+import { BaseEntity, BaseEntityResult, EntityInfo, UserInfo, UserRoleInfo } from '@memberjunction/core';
 import type { DuplicateEntryCandidate, DuplicateEntryCheckResult } from '@memberjunction/graphql-dataprovider';
 import { BaseFormComponent } from './base-form-component';
 import { DUPLICATE_ENTRY_CHECK_DEBOUNCE_MS, type DuplicateEntryCheckFunction } from './duplicate-entry-check/duplicate-entry-check';
@@ -15,7 +15,8 @@ import { DUPLICATE_ENTRY_CHECK_DEBOUNCE_MS, type DuplicateEntryCheckFunction } f
  *
  * As in `base-form-component.validation.dom.test.ts`, the form is constructed in an injection
  * context with no template, and the record is a REAL `BaseEntity` whose `Save()` alone is doubled.
- * The server call is the form's own `CheckDuplicateEntry` extension point, overridden.
+ * The server call is the form's own `CheckDuplicateEntry` extension point, overridden. The record's
+ * context user decides what the form may do, through the entity's real role permissions.
  */
 
 @Component({ standalone: true, template: '' })
@@ -44,6 +45,22 @@ class AcceptingEntity extends BaseEntity {
 /** A unique entity name per test: NotConfigured answers are remembered for the session by name. */
 let entityName = '';
 
+/** A role that may read and create the entity's records. */
+const READER_ROLE_ID = 'A0000000-0000-0000-0000-000000000011';
+/** A role that may create the entity's records but not read them. */
+const CREATOR_ROLE_ID = 'A0000000-0000-0000-0000-000000000012';
+
+function userWithRole(roleID: string): UserInfo {
+  const userID = 'C0000000-0000-0000-0000-000000000001';
+  return new UserInfo(null, {
+    ID: userID,
+    Name: 'Entry Person',
+    Email: 'person@example.com',
+    IsActive: true,
+    UserRoles: [new UserRoleInfo({ UserID: userID, RoleID: roleID })],
+  });
+}
+
 function makeEntityInfo(): EntityInfo {
   return new EntityInfo({
     ID: 'E0000001-0000-0000-0000-000000000003',
@@ -51,6 +68,13 @@ function makeEntityInfo(): EntityInfo {
     Status: 'Active',
     BaseTable: 'TestAccount',
     BaseView: 'vwTestAccounts',
+    IncludeInAPI: true,
+    AllowCreateAPI: true,
+    AllowUpdateAPI: true,
+    Permissions: [
+      { RoleID: READER_ROLE_ID, CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: false },
+      { RoleID: CREATOR_ROLE_ID, CanRead: false, CanCreate: true, CanUpdate: false, CanDelete: false },
+    ],
     Fields: [
       { ID: 'F1', Name: 'ID', Type: 'uniqueidentifier', AllowsNull: false, IsPrimaryKey: true, AllowUpdateAPI: false },
       { ID: 'F2', Name: 'Name', Type: 'nvarchar', Length: 200, AllowsNull: true, AllowUpdateAPI: true },
@@ -59,9 +83,10 @@ function makeEntityInfo(): EntityInfo {
   });
 }
 
-/** A record being entered: NewRecord() leaves it unsaved. */
-function newRecord(values: Record<string, unknown>): AcceptingEntity {
+/** A record being entered, by a user who may read the entity unless told otherwise: NewRecord() leaves it unsaved. */
+function newRecord(values: Record<string, unknown>, user: UserInfo = userWithRole(READER_ROLE_ID)): AcceptingEntity {
   const entity = new AcceptingEntity(makeEntityInfo());
+  entity.ContextCurrentUser = user;
   entity.NewRecord();
   entity.SetMany(values);
   return entity;
@@ -70,6 +95,7 @@ function newRecord(values: Record<string, unknown>): AcceptingEntity {
 /** A record loaded from the database: SetMany with replaceOldValues marks it saved. */
 function savedRecord(values: Record<string, unknown>): AcceptingEntity {
   const entity = new AcceptingEntity(makeEntityInfo());
+  entity.ContextCurrentUser = userWithRole(READER_ROLE_ID);
   entity.SetMany({ ID: '11111111-2222-3333-4444-555555555555', ...values }, true, true);
   return entity;
 }
@@ -119,6 +145,23 @@ describe('BaseFormComponent: the entry-time duplicate check', () => {
     expect(form.Check).toHaveBeenCalledWith(entityName, { Name: 'Acme', City: 'Boston' });
     expect(form.ShowDuplicateEntryNotice).toBe(true);
     expect(form.DuplicateEntryCheck.Candidates).toEqual([FLAGGED]);
+  });
+
+  it('makes no call, and logs no error, for a user who may create records but not read them', async () => {
+    const consoleError = vi.spyOn(console, 'error');
+    const form = formFor(newRecord({ Name: 'Acme', City: 'Boston' }, userWithRole(CREATOR_ROLE_ID)));
+
+    for (let pause = 0; pause < 3; pause++) {
+      form.OnFieldEdited();
+      await vi.advanceTimersByTimeAsync(DUPLICATE_ENTRY_CHECK_DEBOUNCE_MS);
+    }
+
+    expect(form.UserCanCreate).toBe(true);
+    expect(form.UserCanRead).toBe(false);
+    expect(form.Check).not.toHaveBeenCalled();
+    expect(form.ShowDuplicateEntryNotice).toBe(false);
+    expect(consoleError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 
   it('makes no call for a saved record', async () => {

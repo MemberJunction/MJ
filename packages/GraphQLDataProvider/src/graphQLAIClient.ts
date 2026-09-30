@@ -329,6 +329,7 @@ export class GraphQLAIClient {
                         answersJSON
                         promptRunId
                         modelName
+                        resolvedModel
                         executionTimeMs
                     }
                 }
@@ -369,6 +370,7 @@ export class GraphQLAIClient {
         const details = {
             PromptRunID: decision.promptRunId ?? undefined,
             ModelName: decision.modelName ?? undefined,
+            ResolvedModel: decision.resolvedModel ?? undefined,
             ExecutionTimeMs: decision.executionTimeMs ?? undefined
         };
         if (!decision.success) {
@@ -1610,11 +1612,12 @@ export class GraphQLAIClient {
      * This calls the `CheckDuplicateEntry` mutation. The server finds vector candidates for the
      * values, keeps those the current user can read, and asks a typed decision about them. It only
      * flags: nothing is saved, merged or blocked. An entity whose documents do not turn the check on
-     * answers `NotConfigured`.
+     * answers `NotConfigured`; a caller who may not run the check answers `NotAuthorized`.
      *
      * The method never throws. A failure on the server or in transport is `Status: 'Failed'` with an
      * `ErrorMessage` and no candidates. It sets no timeout of its own: a caller with a latency budget
-     * abandons the promise when the budget runs out.
+     * abandons the promise when the budget runs out. The server bounds each check with its own
+     * budget, a little above the form's, so it stops working on an abandoned check soon after.
      *
      * @param params The entity and the values entered so far
      * @returns The flagged candidates, most probable first, or why there are none
@@ -1692,7 +1695,7 @@ export class GraphQLAIClient {
     }
 
     private isDuplicateEntryCheckStatus(status: string): status is DuplicateEntryCheckStatus {
-        return status === 'Checked' || status === 'NotConfigured' || status === 'Failed';
+        return status === 'Checked' || status === 'NotConfigured' || status === 'NotAuthorized' || status === 'Failed';
     }
 
     /** Maps a transport or parsing error to a failed entry-check result. */
@@ -1808,9 +1811,11 @@ export interface DuplicateEntryCheckParams {
  * How an entry-time duplicate check ended.
  * - `Checked`: the check ran; `Candidates` holds the flagged records, and may be empty.
  * - `NotConfigured`: the entity's documents do not turn the check on. Nothing else ran.
+ * - `NotAuthorized`: the caller may not run the check (an API key without the scopes, or a user who
+ *   cannot read the entity). Nothing else ran; `ErrorMessage` says why.
  * - `Failed`: the check could not finish; `ErrorMessage` says why, and nothing is flagged.
  */
-export type DuplicateEntryCheckStatus = 'Checked' | 'NotConfigured' | 'Failed';
+export type DuplicateEntryCheckStatus = 'Checked' | 'NotConfigured' | 'NotAuthorized' | 'Failed';
 
 /**
  * An existing record flagged as a possible duplicate of the values being entered
@@ -2219,6 +2224,14 @@ export interface RunDecisionResult {
     ModelName?: string;
 
     /**
+     * The exact model behind `ModelName`, as its driver reports it: the vendor's dated model for a
+     * vendor decision model (`typesafe/jev-1.13-20260917`), the chat model for LLM Decision
+     * (`GPT-OSS-120B`). A calibration fitted on one model applies only to that model's answers, so a
+     * consumer that calibrates needs both names. Absent when the driver reports none.
+     */
+    ResolvedModel?: string;
+
+    /**
      * Server-side execution time in milliseconds
      */
     ExecutionTimeMs?: number;
@@ -2240,6 +2253,7 @@ interface RunDecisionWireResult {
     answersJSON?: string | null;
     promptRunId?: string | null;
     modelName?: string | null;
+    resolvedModel?: string | null;
     executionTimeMs?: number | null;
 }
 

@@ -1,10 +1,27 @@
 import { Resolver, Mutation, Arg, Ctx, ObjectType, Field, Float, Int } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
-import { EntityInfo, IMetadataProvider, LogError, Metadata } from '@memberjunction/core';
+import { EntityFieldInfo, EntityInfo, IMetadataProvider, LogError, Metadata } from '@memberjunction/core';
 import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
 import type { DuplicateEntryCheckResult, DuplicateEntryCheckStatus } from '@memberjunction/ai-vector-dupe';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadOnlyProvider } from '../util.js';
+
+/**
+ * The most characters `valuesJSON` may hold. A larger request is refused before it is parsed. The
+ * form sends each field's text cut to 500 characters, so a real entry stays well under it; the
+ * detector then cuts what reaches the template and the decision model on its own.
+ */
+export const DUPLICATE_ENTRY_CHECK_MAX_VALUES_JSON_LENGTH = 16 * 1024;
+
+/**
+ * How a `CheckDuplicateEntry` call ended: a detector status, or `NotAuthorized` when the caller may
+ * not run the check (an API key without the scopes, or a user who cannot read the entity). Nothing
+ * ran, and a form stops asking about the entity for the session, as it does on `NotConfigured`.
+ */
+export type DuplicateEntryCheckOutputStatus = DuplicateEntryCheckStatus | 'NotAuthorized';
+
+/** One entered value, as `valuesJSON` may carry it. */
+type EntryValue = string | number | boolean | null;
 
 /** One existing record the entry-time check flags as a possible duplicate. */
 @ObjectType()
@@ -27,14 +44,15 @@ export class DuplicateEntryCandidateOutput {
 }
 
 /**
- * The result of the `CheckDuplicateEntry` mutation. Every failure, an authorization denial included,
- * comes back as `Status: 'Failed'` with an `ErrorMessage`: the mutation never throws to the client.
+ * The result of the `CheckDuplicateEntry` mutation. The mutation never throws to the client: an
+ * authorization denial is `Status: 'NotAuthorized'` and any other failure is `Status: 'Failed'`,
+ * each with an `ErrorMessage`.
  */
 @ObjectType()
 export class DuplicateEntryCheckOutput {
-    /** `Checked`, `NotConfigured` or `Failed`. */
+    /** `Checked`, `NotConfigured`, `NotAuthorized` or `Failed`. */
     @Field(() => String)
-    Status: DuplicateEntryCheckStatus;
+    Status: DuplicateEntryCheckOutputStatus;
 
     @Field({ nullable: true })
     ErrorMessage?: string;
@@ -61,13 +79,21 @@ export class DuplicateEntryCheckResolver extends ResolverBase {
     /**
      * Flags existing records that may duplicate a new record being entered.
      *
-     * Authorization is a read of the entity: the API-key `view:run` scope check that `RunDynamicView`
-     * makes (a session without an API key skips it), then the user's entity read permission, both
-     * before any other work. The detector then narrows the candidates to the rows the user can read.
+     * Authorization comes before any other work. An API key needs two scopes: `view:run` on the
+     * entity, the scope `RunDynamicView` checks, since the check reads the entity's records; and
+     * `prompt:execute`, the scope `ExecuteSimplePrompt` checks, since each check pays for an embedding
+     * and a decision-model call. A session without an API key skips both. Then the user needs read
+     * permission on the entity. A denial is `NotAuthorized`, and is not logged. The detector then
+     * narrows the candidates to the rows the user can read.
+     *
+     * The detector bounds the check's time on the server (`DUPLICATE_ENTRY_CHECK_SERVER_BUDGET_MS` in
+     * `@memberjunction/ai-vector-dupe`), a little above the form's own budget.
      *
      * @param entityName The entity the new record belongs to.
-     * @param valuesJSON The entered values as the JSON of an object, by field name. Fields the entity
-     *   does not have are ignored.
+     * @param valuesJSON The entered values as the JSON of an object, by field name, at most
+     *   {@link DUPLICATE_ENTRY_CHECK_MAX_VALUES_JSON_LENGTH} characters. Each value is a string,
+     *   number, boolean or null. Fields the entity does not have, primary keys, read-only fields and
+     *   MJ system fields are ignored.
      */
     @Mutation(() => DuplicateEntryCheckOutput)
     async CheckDuplicateEntry(
@@ -92,24 +118,29 @@ export class DuplicateEntryCheckResolver extends ResolverBase {
         provider: IMetadataProvider | null
     ): Promise<DuplicateEntryCheckOutput> {
         const startTime = Date.now();
+        const entity = (provider ?? new Metadata()).EntityByName(entityName);
+        if (!entity) {
+            return this.failure('Failed', 'Entity not found in metadata', startTime);
+        }
+        const denial = await this.authorizeEntryCheck(entity, userPayload, provider);
+        if (denial) {
+            return this.failure('NotAuthorized', denial, startTime);
+        }
         try {
-            await this.CheckAPIKeyScopeAuthorization('view:run', entityName, userPayload);
-            this.CheckUserReadPermissions(entityName, userPayload, provider ?? undefined);
             const user = this.GetUserFromPayload(userPayload);
             if (!user) {
-                return this.failure('Unable to determine current user', startTime);
+                return this.failure('Failed', 'Unable to determine current user', startTime);
             }
-            const entity = (provider ?? new Metadata()).EntityByName(entityName);
             const values = this.parseValues(valuesJSON, entity);
             if ('Error' in values) {
-                return this.failure(values.Error, startTime);
+                return this.failure('Failed', values.Error, startTime);
             }
-            const result = await this.CreateEntryChecker(provider).CheckRecordValues(entity.Name, values.Values, undefined, user);
+            const result = await this.CreateEntryChecker(provider).CheckRecordValues(entity.Name, values.Values, user);
             return this.mapResult(result);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             LogError(`CheckDuplicateEntry failed for ${entityName}: ${message}`);
-            return this.failure(message || 'Unknown error occurred', startTime);
+            return this.failure('Failed', message || 'Unknown error occurred', startTime);
         }
     }
 
@@ -119,10 +150,33 @@ export class DuplicateEntryCheckResolver extends ResolverBase {
     }
 
     /**
-     * Reads the entered values: the JSON of an object, kept to the entity's own fields (matched by
-     * name, case-insensitively, and keyed by the field's real name).
+     * Why the caller may not run the check, or null when they may: the API-key scopes, then the
+     * user's read permission on the entity. A denial is an answer, not a fault, so nothing is logged.
      */
-    private parseValues(valuesJSON: string, entity: EntityInfo): { Values: Record<string, unknown> } | { Error: string } {
+    private async authorizeEntryCheck(
+        entity: EntityInfo,
+        userPayload: UserPayload,
+        provider: IMetadataProvider | null
+    ): Promise<string | null> {
+        try {
+            await this.CheckAPIKeyScopeAuthorization('view:run', entity.Name, userPayload);
+            await this.CheckAPIKeyScopeAuthorization('prompt:execute', '*', userPayload);
+            this.CheckUserReadPermissions(entity.Name, userPayload, provider ?? undefined);
+            return null;
+        } catch (error) {
+            return error instanceof Error ? error.message : String(error);
+        }
+    }
+
+    /**
+     * Reads the entered values: the JSON of an object of scalar values, at most
+     * {@link DUPLICATE_ENTRY_CHECK_MAX_VALUES_JSON_LENGTH} characters, kept to the fields a person
+     * can enter (matched by name, case-insensitively, and keyed by the field's real name).
+     */
+    private parseValues(valuesJSON: string, entity: EntityInfo): { Values: Record<string, EntryValue> } | { Error: string } {
+        if (valuesJSON.length > DUPLICATE_ENTRY_CHECK_MAX_VALUES_JSON_LENGTH) {
+            return { Error: `valuesJSON is ${valuesJSON.length} characters; the limit is ${DUPLICATE_ENTRY_CHECK_MAX_VALUES_JSON_LENGTH}` };
+        }
         let parsed: unknown;
         try {
             parsed = JSON.parse(valuesJSON);
@@ -132,14 +186,26 @@ export class DuplicateEntryCheckResolver extends ResolverBase {
         if (!this.isPlainObject(parsed)) {
             return { Error: 'valuesJSON must be the JSON of an object of field values' };
         }
-        const values: Record<string, unknown> = {};
+        const values: Record<string, EntryValue> = {};
         for (const [name, value] of Object.entries(parsed)) {
+            if (!this.isEntryValue(value)) {
+                return { Error: `valuesJSON field '${name}' must be a string, number, boolean or null` };
+            }
             const field = entity.FieldByName(name);
-            if (field) {
+            if (field && this.isEnterable(field)) {
                 values[field.Name] = value;
             }
         }
         return { Values: values };
+    }
+
+    /** Whether a person can enter the field: not a primary key, not read-only, not an MJ system field. */
+    private isEnterable(field: EntityFieldInfo): boolean {
+        return !field.IsPrimaryKey && !field.ReadOnly && !field.Name.startsWith('__mj_');
+    }
+
+    private isEntryValue(value: unknown): value is EntryValue {
+        return value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
     }
 
     private isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -160,7 +226,7 @@ export class DuplicateEntryCheckResolver extends ResolverBase {
         };
     }
 
-    private failure(errorMessage: string, startTime: number): DuplicateEntryCheckOutput {
-        return { Status: 'Failed', ErrorMessage: errorMessage, Candidates: [], ElapsedMs: Date.now() - startTime };
+    private failure(status: DuplicateEntryCheckOutputStatus, errorMessage: string, startTime: number): DuplicateEntryCheckOutput {
+        return { Status: status, ErrorMessage: errorMessage, Candidates: [], ElapsedMs: Date.now() - startTime };
     }
 }

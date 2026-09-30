@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { RunViewParams } from '@memberjunction/core';
 import type { AIDecisionParams, AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import type { AIPromptParams, AIPromptRunResult, ModelInfo } from '@memberjunction/ai-core-plus';
@@ -186,6 +186,13 @@ import { MJGlobal } from '@memberjunction/global';
 import { BaseEmbeddings } from '@memberjunction/ai';
 import { VectorDBBase } from '@memberjunction/ai-vectordb';
 import { DuplicateRecordDetector } from '../duplicateRecordDetector';
+import {
+    DUPLICATE_ENTRY_CHECK_MAX_DECISION_FIELDS,
+    DUPLICATE_ENTRY_CHECK_MAX_FIELD_TEXT_LENGTH,
+    DUPLICATE_ENTRY_CHECK_SERVER_BUDGET_MS,
+    type DuplicateEntryCheckOptions,
+    type DuplicateEntryCheckResult,
+} from '../duplicateEntryCheckTypes';
 import '../reasoning/PromptReasoningProvider';
 import '../reasoning/DecisionReasoningProvider';
 import '../reasoning/DecisionThenPromptReasoningProvider';
@@ -310,6 +317,57 @@ function decisionParams(): AIDecisionParams {
     return mocks.ExecuteDecision.mock.calls[0][0];
 }
 
+/** One field of the decision state, as the decision model reads it. */
+interface DecisionStateField {
+    fieldName: string;
+    values: { recordId: string; value: string }[];
+}
+
+/** The decision state's field deltas. */
+function decisionStateFields(): DecisionStateField[] {
+    return JSON.parse(String(decisionParams().State)).fieldDeltas;
+}
+
+/** A promise that never settles: a step the check has to stop waiting for. */
+function never<T>(): Promise<T> {
+    return new Promise<T>(() => undefined);
+}
+
+/** A decision call that answers only when its cancellation token aborts, as the runner does. */
+function decisionThatWaitsForAbort(): void {
+    mocks.ExecuteDecision.mockImplementation((params: AIDecisionParams) => new Promise<AIDecisionRunResult>(resolve => {
+        params.cancellationToken?.addEventListener('abort', () => resolve({ success: false, errorMessage: 'cancelled', Answers: {} }));
+    }));
+}
+
+/** More differing fields than the decision state may carry. */
+const WIDE_FIELD_NAMES = Array.from(
+    { length: DUPLICATE_ENTRY_CHECK_MAX_DECISION_FIELDS + 5 },
+    (_, i) => `Extra${String(i + 1).padStart(2, '0')}`
+);
+
+/** The Accounts entity with those fields between Name and City, so City sorts last. */
+const WIDE_ENTITY_INFO = new EntityInfo({
+    ID: 'entity-accounts',
+    Name: 'Accounts',
+    Status: 'Active',
+    Fields: [
+        { Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, Sequence: 1, AutoIncrement: false },
+        { Name: 'Name', Type: 'nvarchar', IsNameField: true, DefaultInView: true, Sequence: 2 },
+        ...WIDE_FIELD_NAMES.map((Name, i) => ({ Name, Type: 'nvarchar', Sequence: 10 + i })),
+        { Name: 'City', Type: 'nvarchar', Sequence: 999 },
+    ],
+});
+
+/** A stored row of the wide entity: every extra field holds a value the entry lacks. */
+function wideRow(id: string): Record<string, string> {
+    const row: Record<string, string> = { ID: id, Name: ROWS[id].Name ?? '', City: 'Denver' };
+    for (const name of WIDE_FIELD_NAMES) {
+        row[name] = `stored ${name}`;
+    }
+    return row;
+}
+
 // ─────────────────────────────────────────────
 // Specs
 // ─────────────────────────────────────────────
@@ -338,11 +396,21 @@ describe('DuplicateRecordDetector.CheckRecordValues', () => {
                 entityDocument({ ID: 'doc-inactive', Status: 'Inactive' }),
             ]);
 
-            const result = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, undefined, USER);
+            const result = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, USER);
 
             expect(result.Status).toBe('NotConfigured');
             expect(result.Candidates).toEqual([]);
             expect(mocks.GetEntityObject).not.toHaveBeenCalled();
+            expect(mocks.EmbedTexts).not.toHaveBeenCalled();
+            expect(mocks.ExecuteDecision).not.toHaveBeenCalled();
+        });
+
+        it('is NotConfigured when the Decision-mode document has reasoning switched off', async () => {
+            mocks.GetEntityDocumentsForEntity.mockReturnValue([entityDocument({ EnableLLMReasoning: false })]);
+
+            const result = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, USER);
+
+            expect(result.Status).toBe('NotConfigured');
             expect(mocks.EmbedTexts).not.toHaveBeenCalled();
             expect(mocks.ExecuteDecision).not.toHaveBeenCalled();
         });
@@ -353,7 +421,7 @@ describe('DuplicateRecordDetector.CheckRecordValues', () => {
                 entityDocument({ ID: 'doc-old', VectorIndexID: 'vi-old', ReasoningMode: 'DecisionThenPrompt', __mj_CreatedAt: new Date('2025-06-01T00:00:00Z') }),
             ]);
 
-            await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, undefined, USER);
+            await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, USER);
 
             expect(mocks.QueryIndex.mock.calls[0][0].id).toBe('index-vi-old');
         });
@@ -363,7 +431,7 @@ describe('DuplicateRecordDetector.CheckRecordValues', () => {
         it('is built from the values, rendered by the template, embedded and queried', async () => {
             const detector = new DuplicateRecordDetector();
 
-            await detector.CheckRecordValues('Accounts', { ...ENTERED, NotAField: 'ignored' }, undefined, USER);
+            await detector.CheckRecordValues('Accounts', { ...ENTERED, NotAField: 'ignored' }, USER);
 
             expect(mocks.GetEntityObject).toHaveBeenCalledWith('Accounts', USER);
             const rendered = mocks.RenderTemplate.mock.calls[0][2];
@@ -379,7 +447,7 @@ describe('DuplicateRecordDetector.CheckRecordValues', () => {
         });
 
         it('is the source the decision compares the candidates against', async () => {
-            await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, undefined, USER);
+            await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, USER);
 
             const decisionState = JSON.parse(String(decisionParams().State));
             expect(decisionState.sourceRecord.label).toBe('Acme');
@@ -390,7 +458,7 @@ describe('DuplicateRecordDetector.CheckRecordValues', () => {
 
         it('applies the TopK and threshold overrides as CheckSingleRecord does', async () => {
             const result = await new DuplicateRecordDetector().CheckRecordValues(
-                'Accounts', ENTERED, { TopK: 2, PotentialMatchThreshold: 0.92 }, USER
+                'Accounts', ENTERED, USER, { TopK: 2, PotentialMatchThreshold: 0.92 }
             );
 
             expect(mocks.QueryIndex.mock.calls[0][0].topK).toBe(2);
@@ -400,7 +468,7 @@ describe('DuplicateRecordDetector.CheckRecordValues', () => {
 
     describe('the decision', () => {
         it('flags only the candidates the provider bands Uncertain, most probable first', async () => {
-            const result = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, undefined, USER);
+            const result = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, USER);
 
             expect(result.Status).toBe('Checked');
             expect(result.Candidates).toEqual([
@@ -413,7 +481,7 @@ describe('DuplicateRecordDetector.CheckRecordValues', () => {
         it('flags a candidate the decision gave no answer for, after the answered ones', async () => {
             answerByRecord({ 'cand-a': 0.8, 'cand-b': 0.1 });
 
-            const result = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, undefined, USER);
+            const result = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, USER);
 
             expect(result.Candidates.map(c => [c.RecordID, c.Probability])).toEqual([['cand-a', expect.closeTo(0.8, 10)], ['cand-c', null]]);
         });
@@ -421,7 +489,7 @@ describe('DuplicateRecordDetector.CheckRecordValues', () => {
         it('asks only the decision in DecisionThenPrompt mode', async () => {
             mocks.GetEntityDocumentsForEntity.mockReturnValue([entityDocument({ ReasoningMode: 'DecisionThenPrompt' })]);
 
-            const result = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, undefined, USER);
+            const result = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, USER);
 
             expect(mocks.ExecuteDecision).toHaveBeenCalledTimes(1);
             expect(mocks.ExecutePrompt).not.toHaveBeenCalled();
@@ -432,7 +500,7 @@ describe('DuplicateRecordDetector.CheckRecordValues', () => {
             // Literal raw answers: a change to the 0.7 band or to Jev's fit changes what is flagged.
             answerRawByRecord({ 'cand-a': 0.9, 'cand-b': 0.85, 'cand-c': 0.7 });
 
-            const result = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, undefined, USER);
+            const result = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, USER);
 
             // Calibrated 0.774, 0.509 and 0.095: only cand-a reaches 0.7.
             expect(result.Candidates.map(c => [c.RecordID, c.Probability])).toEqual([['cand-a', expect.closeTo(0.77424, 4)]]);
@@ -446,8 +514,8 @@ describe('DuplicateRecordDetector.CheckRecordValues', () => {
                 { modelId: 'model-new', modelName: 'Some New Decision Model' }
             );
 
-            const first = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, undefined, USER);
-            const second = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, undefined, USER);
+            const first = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, USER);
+            const second = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, USER);
 
             for (const result of [first, second]) {
                 expect(result.Status).toBe('Failed');
@@ -462,7 +530,7 @@ describe('DuplicateRecordDetector.CheckRecordValues', () => {
         it('flags nothing, and says why, when the decision fails', async () => {
             mocks.ExecuteDecision.mockResolvedValue({ success: false, errorMessage: 'the decision model is overloaded', Answers: {} });
 
-            const result = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, undefined, USER);
+            const result = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, USER);
 
             expect(result.Status).toBe('Failed');
             expect(result.ErrorMessage).toContain('the decision model is overloaded');
@@ -474,14 +542,14 @@ describe('DuplicateRecordDetector.CheckRecordValues', () => {
         it('drops the candidates the person cannot read, before the decision sees them', async () => {
             state.Readable = new Set(['cand-a']);
 
-            const result = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, undefined, USER);
+            const result = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, USER);
 
             expect(Object.keys(decisionParams().Questions)).toHaveLength(1);
             expect(result.Candidates.map(c => c.RecordID)).toEqual(['cand-a']);
         });
 
         it('checks readability as the person, in one RunView over the candidate keys', async () => {
-            await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, undefined, USER);
+            await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, USER);
 
             const permissionCall = mocks.RunView.mock.calls.find(([params]) => params.Fields?.length === 2);
             expect(permissionCall?.[0]).toMatchObject({ EntityName: 'Accounts', Fields: ['ID', 'Name'], ResultType: 'simple' });
@@ -492,7 +560,7 @@ describe('DuplicateRecordDetector.CheckRecordValues', () => {
         it('flags nothing when readability cannot be confirmed', async () => {
             state.PermissionQueryFails = true;
 
-            const result = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, undefined, USER);
+            const result = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, USER);
 
             expect(result).toMatchObject({ Status: 'Checked', Candidates: [] });
             expect(mocks.ExecuteDecision).not.toHaveBeenCalled();
@@ -501,7 +569,7 @@ describe('DuplicateRecordDetector.CheckRecordValues', () => {
         it('shows the record key, not an indexed name, when the name is not readable', async () => {
             state.NameDenied = true;
 
-            const result = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, undefined, USER);
+            const result = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, USER);
 
             expect(result.Candidates.map(c => c.DisplayName)).toEqual(['cand-b', 'cand-a']);
         });
@@ -511,11 +579,185 @@ describe('DuplicateRecordDetector.CheckRecordValues', () => {
         it('returns Failed with the reason rather than throwing', async () => {
             mocks.GetEntityDocumentsForEntity.mockReturnValue([entityDocument({ VectorIndexID: null })]);
 
-            const result = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, undefined, USER);
+            const result = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, USER);
 
             expect(result.Status).toBe('Failed');
             expect(result.ErrorMessage).toContain('No vector index found');
             expect(result.Candidates).toEqual([]);
+        });
+
+        it('fails without a context user, before any work, since it could not narrow the candidates', async () => {
+            const result = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, null);
+
+            expect(result.Status).toBe('Failed');
+            expect(result.ErrorMessage).toContain('A context user is required');
+            expect(mocks.GetEntityDocumentsForEntity).not.toHaveBeenCalled();
+            expect(mocks.RunView).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('the budget', () => {
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        /** Runs a check on a fake clock and lets the budget run out. */
+        async function checkUntilTheBudgetRunsOut(options?: DuplicateEntryCheckOptions): Promise<DuplicateEntryCheckResult> {
+            vi.useFakeTimers();
+            const pending = new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, USER, options);
+            await vi.advanceTimersByTimeAsync(options?.TimeoutMS ?? DUPLICATE_ENTRY_CHECK_SERVER_BUDGET_MS);
+            return pending;
+        }
+
+        const ranOutWhile = (step: string, budgetMS = DUPLICATE_ENTRY_CHECK_SERVER_BUDGET_MS): string =>
+            `The duplicate entry check ran out of its ${budgetMS} ms budget while ${step}`;
+
+        it('is a little above the form\'s 1500 ms budget', () => {
+            expect(DUPLICATE_ENTRY_CHECK_SERVER_BUDGET_MS).toBeGreaterThan(1500);
+            expect(DUPLICATE_ENTRY_CHECK_SERVER_BUDGET_MS).toBeLessThanOrEqual(3000);
+        });
+
+        it('stops a hung embedding at the budget, starts nothing after it, and logs no error', async () => {
+            mocks.EmbedTexts.mockReturnValue(never());
+
+            const result = await checkUntilTheBudgetRunsOut();
+
+            expect(result).toMatchObject({ Status: 'Failed', ErrorMessage: ranOutWhile('embedding the record'), Candidates: [] });
+            expect(mocks.QueryIndex).not.toHaveBeenCalled();
+            expect(mocks.RunView).not.toHaveBeenCalled();
+            expect(mocks.ExecuteDecision).not.toHaveBeenCalled();
+            expect(LogError).not.toHaveBeenCalled();
+        });
+
+        it('stops a hung vector query', async () => {
+            mocks.QueryIndex.mockReturnValue(never());
+
+            const result = await checkUntilTheBudgetRunsOut();
+
+            expect(result.ErrorMessage).toBe(ranOutWhile('querying the vector index'));
+            expect(mocks.RunView).not.toHaveBeenCalled();
+            expect(mocks.ExecuteDecision).not.toHaveBeenCalled();
+        });
+
+        it('stops a hung readability RunView', async () => {
+            mocks.RunView.mockReturnValue(never());
+
+            const result = await checkUntilTheBudgetRunsOut();
+
+            expect(result.ErrorMessage).toBe(ranOutWhile('checking which candidates the user can read'));
+            expect(mocks.RunView).toHaveBeenCalledTimes(1);
+            expect(mocks.ExecuteDecision).not.toHaveBeenCalled();
+        });
+
+        it('stops a hung field-value RunView', async () => {
+            mocks.RunView.mockImplementation(params => (params.Fields?.length === 2 ? runView(params) : never()));
+
+            const result = await checkUntilTheBudgetRunsOut();
+
+            expect(result.ErrorMessage).toBe(ranOutWhile('loading the candidates\' field values'));
+            expect(mocks.RunView).toHaveBeenCalledTimes(2);
+            expect(mocks.ExecuteDecision).not.toHaveBeenCalled();
+        });
+
+        it('aborts the decision call itself when the budget runs out', async () => {
+            decisionThatWaitsForAbort();
+
+            const result = await checkUntilTheBudgetRunsOut();
+
+            expect(result.ErrorMessage).toBe(ranOutWhile('asking the decision model'));
+            expect(decisionParams().cancellationToken?.aborted).toBe(true);
+        });
+
+        it('applies a TimeoutMS option in place of the default budget', async () => {
+            mocks.EmbedTexts.mockReturnValue(never());
+
+            const result = await checkUntilTheBudgetRunsOut({ TimeoutMS: 250 });
+
+            expect(result.ErrorMessage).toBe(ranOutWhile('embedding the record', 250));
+        });
+
+        it('gives the decision call the check\'s signal and what is left of the budget as its timeout', async () => {
+            const result = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, USER);
+
+            expect(result.Status).toBe('Checked');
+            const params = decisionParams();
+            expect(params.cancellationToken).toBeInstanceOf(AbortSignal);
+            expect(params.cancellationToken?.aborted).toBe(false);
+            expect(params.timeoutMS).toBeGreaterThan(0);
+            expect(params.timeoutMS).toBeLessThanOrEqual(DUPLICATE_ENTRY_CHECK_SERVER_BUDGET_MS);
+        });
+
+        it('stops when the caller cancels, and aborts the decision call', async () => {
+            decisionThatWaitsForAbort();
+            const caller = new AbortController();
+
+            const pending = new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, USER, { CancellationToken: caller.signal });
+            await vi.waitFor(() => expect(mocks.ExecuteDecision).toHaveBeenCalled());
+            caller.abort();
+            const result = await pending;
+
+            expect(result).toMatchObject({ Status: 'Failed', ErrorMessage: 'The duplicate entry check was cancelled while asking the decision model' });
+            expect(decisionParams().cancellationToken?.aborted).toBe(true);
+            expect(LogError).not.toHaveBeenCalled();
+        });
+
+        it('does nothing when the caller has already cancelled', async () => {
+            const caller = new AbortController();
+            caller.abort();
+
+            const result = await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, USER, { CancellationToken: caller.signal });
+
+            expect(result).toMatchObject({ Status: 'Failed', ErrorMessage: 'The duplicate entry check was cancelled while finding the entity document' });
+            expect(mocks.GetEntityDocumentsForEntity).not.toHaveBeenCalled();
+            expect(mocks.EmbedTexts).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('the bounds on what reaches the model', () => {
+        const LONG_TEXT = 'A very long note. '.repeat(400);
+
+        it('cuts long entered text before the template renders it', async () => {
+            await new DuplicateRecordDetector().CheckRecordValues('Accounts', { Name: LONG_TEXT, City: 'Boston' }, USER);
+
+            const renderedName = String(mocks.RenderTemplate.mock.calls[0][2]['Name']);
+            expect(renderedName).toHaveLength(DUPLICATE_ENTRY_CHECK_MAX_FIELD_TEXT_LENGTH);
+            expect(renderedName.endsWith('\u2026')).toBe(true);
+            expect(LONG_TEXT.startsWith(renderedName.slice(0, -1))).toBe(true);
+        });
+
+        it('cuts every value in the decision state, the candidates\' stored values included', async () => {
+            mocks.RunView.mockImplementation(async params => {
+                const result = await runView(params);
+                return params.Fields?.length === 2
+                    ? result
+                    : { ...result, Results: result.Results.map(row => ({ ...row, City: LONG_TEXT })) };
+            });
+
+            await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, USER);
+
+            const values = decisionStateFields().flatMap(f => f.values.map(v => v.value));
+            expect(values.length).toBeGreaterThan(0);
+            expect(values.every(v => v.length <= DUPLICATE_ENTRY_CHECK_MAX_FIELD_TEXT_LENGTH)).toBe(true);
+            const city = decisionStateFields().find(f => f.fieldName === 'City');
+            expect(city?.values.filter(v => v.value.endsWith('\u2026'))).toHaveLength(3);
+        });
+
+        it('carries at most DUPLICATE_ENTRY_CHECK_MAX_DECISION_FIELDS fields, the entered ones first', async () => {
+            mocks.EntityByID.mockReturnValue(WIDE_ENTITY_INFO);
+            mocks.GetEntityObject.mockImplementation(async () => new AccountRecord(WIDE_ENTITY_INFO));
+            mocks.RunView.mockImplementation(async params => {
+                const rows = idsInFilter(params.ExtraFilter)
+                    .filter(id => ROWS[id])
+                    .map(id => (params.Fields?.length === 2 ? { ID: id, Name: ROWS[id].Name } : wideRow(id)));
+                return { Success: true, Results: rows, RowCount: rows.length };
+            });
+
+            await new DuplicateRecordDetector().CheckRecordValues('Accounts', ENTERED, USER);
+
+            const fieldNames = decisionStateFields().map(f => f.fieldName);
+            expect(fieldNames).toHaveLength(DUPLICATE_ENTRY_CHECK_MAX_DECISION_FIELDS);
+            expect(fieldNames.slice(0, 2)).toEqual(['Name', 'City']);
+            expect(fieldNames).not.toContain(WIDE_FIELD_NAMES[WIDE_FIELD_NAMES.length - 1]);
         });
     });
 });
