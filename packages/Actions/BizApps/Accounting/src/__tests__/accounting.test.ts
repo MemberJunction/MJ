@@ -518,6 +518,22 @@ describe('BaseAccountingAction.getCompanyIntegration', () => {
         expect(record.ID).toBe(CI_UAT);
     });
 
+    it('should search through the provider the request was run with', async () => {
+        const runViewFn = vi.fn().mockResolvedValue({ Success: true, Results: [bcRow(CI_UAT, 'BC UAT', 'business-central')] });
+        const provider = { GetEntityObject: vi.fn() };
+        const fromProvider = vi.fn(() => ({ RunView: runViewFn }));
+        Object.assign(RunView, { FromMetadataProvider: fromProvider });
+        vi.mocked(RunView).mockClear();
+
+        await action.Run({ Params: [], ContextUser: {}, Provider: provider } as never);
+        const record = await action['getCompanyIntegration'](COMPANY_ID, {} as never);
+
+        expect(fromProvider).toHaveBeenCalledWith(provider);
+        expect(RunView).not.toHaveBeenCalled();
+        expect(runViewFn).toHaveBeenCalledTimes(1);
+        expect(record.ID).toBe(CI_UAT);
+    });
+
     it('should refuse a CompanyIntegrationID that belongs to another company', async () => {
         mockCompanyIntegrationLoad(bcRow(CI_UAT, 'BC UAT', 'business-central', { CompanyID: OTHER_COMPANY_ID }));
 
