@@ -88,11 +88,11 @@ Define virtual entities in your `database-metadata-config.json` file (referenced
 **What happens at CodeGen time (one run):**
 1. `processVirtualEntityConfig()` reads the `VirtualEntities` array
 2. For each entry, checks if an entity already exists for that view (by `SchemaName` + `BaseView`; `SchemaName` defaults to `dbo`)
-3. If not, inserts the `Entity` row (fixed CodeGen-generated ID, `VirtualEntity=1`, read-only flags, `Description` kept) and seeds the first `PrimaryKey` column; both statements are written to the CodeGen_Run capture so a migration replays them with the same ID
+3. If not, inserts the `Entity` row (fixed CodeGen-generated ID, `VirtualEntity=1`, read-only flags, `Description` kept) and seeds the first `PrimaryKey` column; both statements are written to the CodeGen_Run capture so a migration replays them with the same ID. If another entity already uses the `EntityName` (compared without case), the entry is skipped with an error and nothing is written; a name derived from `ViewName` gets a `__<schema>` suffix instead
 4. Adds the entity to its schema's application and grants the configured default permissions
 5. `manageVirtualEntities()` syncs the fields from `sys.columns`
-6. `applySoftPKFKConfig()` applies every `PrimaryKey` column (`IsPrimaryKey=1`, `IsSoftPrimaryKey=1`) and every `ForeignKeys` entry (`RelatedEntityID`, `RelatedEntityFieldName`, `IsSoftForeignKey=1`)
-7. Relationships are built from the soft foreign keys, then the entity class, GraphQL type and form are generated
+6. `applyVirtualEntitySoftKeys()` applies every `PrimaryKey` column (`IsPrimaryKey=1`, `IsSoftPrimaryKey=1`) and every `ForeignKeys` entry (`RelatedEntityID`, `RelatedEntityFieldName`, `IsSoftForeignKey=1`). It runs on every CodeGen run, right after step 5, so a column added to the view and named as a key in the same change gets its key in one run. A configured column that is not in the view is skipped with a warning. On a composite key, `IsUnique` is cleared on the key columns
+7. When step 6 changed a key, relationships are rebuilt from the soft foreign keys; then the entity class, GraphQL type and form are generated
 
 ### Method 2: Direct Database Creation
 
@@ -226,9 +226,9 @@ Similarly, relationships are defined as "soft" FKs:
 
 During CodeGen, `manageSingleVirtualEntity()` queries `sys.columns` for the view and:
 
-1. **Removes** EntityField records for columns no longer in the view
+1. **Removes** EntityField records for columns no longer in the view (names are compared without case)
 2. **Creates** EntityField records for new columns
-3. **Updates** existing fields if type/length/nullability changed
+3. **Updates** existing fields if type/length/nullability changed, and sets the field name to the view column's casing when only the case differs
 4. If no field has `IsPrimaryKey=1` after step 1, defaults the first view column as PK and logs a warning — set `PrimaryKey` in the config to choose the key
 
 ## UI Representation

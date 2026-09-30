@@ -1266,6 +1266,8 @@ VALUES (..., (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM ...), 'SummaryID', 1,
 
 Both statements go to the CodeGen_Run capture, so a migration replays them with the same entity ID. The entity is then added to its schema's application, gets the default permissions, and joins the new-entity list so its class, GraphQL type and form are generated in the same run.
 
+If another entity already uses the `EntityName` (compared without case, like `UQ_Entity_Name`), the entry is skipped with an error before anything is written, so the capture never holds an INSERT that fails. A name derived from `ViewName` gets a `__<schema>` suffix instead, like a table-backed entity.
+
 #### 2. `manageVirtualEntities()` - Field Synchronization
 Scans `sys.columns` on the virtual entity's view and creates `EntityField` metadata for each column:
 
@@ -1289,8 +1291,8 @@ WHERE
     object_id = OBJECT_ID('__mj.vwSalesSummary')
 ```
 
-#### 3. `applySoftPKFKConfig()` - Explicit Keys
-Applies every `PrimaryKey` column and every `ForeignKeys` entry from the config, right after the field sync:
+#### 3. `applyVirtualEntitySoftKeys()` - Explicit Keys
+Applies every `PrimaryKey` column and every `ForeignKeys` entry from the config. It runs on every CodeGen run, right after the field sync, so a column added to the view and named as a key in the same change gets its key in one run. A configured column that is not in the view is skipped with a warning. On a composite key, `IsUnique` is cleared on the key columns:
 
 ```sql
 -- Each PrimaryKey column (composite keys supported)
@@ -1302,7 +1304,7 @@ UPDATE EntityField SET RelatedEntityID = @RegionEntityID, RelatedEntityFieldName
 WHERE EntityID = @VirtualEntityID AND Name = 'RegionID'
 ```
 
-`EntityRelationship` rows are then built from these soft foreign keys in the same run.
+When a key changed, `EntityRelationship` rows are then built from these soft foreign keys in the same run.
 
 **Why explicit FK definitions?** Views don't have database-level foreign keys, so CodeGen can't detect relationships automatically. The config provides this metadata.
 

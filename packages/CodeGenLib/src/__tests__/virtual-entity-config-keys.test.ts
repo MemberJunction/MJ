@@ -1,7 +1,7 @@
 /**
  * Unit tests for the config-driven virtual entity path in manage-metadata.ts.
- *   - softKeyTableConfigs / virtualEntityConfigsAsTableConfigs: VirtualEntities entries become
- *     soft PK/FK table configs, so applySoftPKFKConfig applies them with no duplicate table entry
+ *   - virtualEntityConfigsAsTableConfigs: VirtualEntities entries become soft PK/FK table configs,
+ *     so the soft key writer applies them with no duplicate table entry
  *   - resolveVirtualEntitySchema: a missing SchemaName means dbo, as the docs promise
  *   - buildVirtualEntityInsertSQL / buildVirtualEntityPlaceholderPKSQL: the logged, replayable
  *     creation statements that replace the unlogged spCreateVirtualEntity call
@@ -61,7 +61,7 @@ class TestableVirtualEntities extends ManageMetadataBase {
    protected qsql(sql: string): string { return sql; }
 
    public testSchema(ve: VirtualEntityConfig): string { return this.resolveVirtualEntitySchema(ve); }
-   public testSoftKeyTableConfigs(config: Record<string, unknown>): SoftPKFKTableConfig[] { return this.softKeyTableConfigs(config); }
+   public testKeyConfigs(config: Record<string, unknown>): SoftPKFKTableConfig[] { return this.virtualEntityConfigsAsTableConfigs(config); }
    public testInsertSQL(id: string, name: string, schema: string, view: string, description: string | null): string {
       return this.buildVirtualEntityInsertSQL(id, name, schema, view, description);
    }
@@ -107,30 +107,24 @@ describe('virtual entity config keys (manage-metadata)', () => {
       });
    });
 
-   describe('softKeyTableConfigs', () => {
-      it('lists table entries first, then VirtualEntities entries that declare keys', () => {
-         const result = new TestableVirtualEntities().testSoftKeyTableConfigs(configWithBoth);
+   describe('virtualEntityConfigsAsTableConfigs', () => {
+      it('lists only the VirtualEntities entries that declare keys, with the view as TableName', () => {
+         const result = new TestableVirtualEntities().testKeyConfigs(configWithBoth);
          expect(result.map(t => `${t.SchemaName}.${t.TableName}`)).toEqual([
-            'sales.Region',
             'sales.vwMonthlyRegionSales',
             'dbo.vwDefaultSchema',
          ]);
       });
       it('turns PrimaryKey strings into { FieldName } objects and keeps every column', () => {
-         const ve = new TestableVirtualEntities().testSoftKeyTableConfigs(configWithBoth)[1];
+         const ve = new TestableVirtualEntities().testKeyConfigs(configWithBoth)[0];
          expect(ve.PrimaryKey).toEqual([{ FieldName: 'RegionID' }, { FieldName: 'SaleYear' }, { FieldName: 'SaleMonth' }]);
       });
       it('passes ForeignKeys through unchanged', () => {
-         const ve = new TestableVirtualEntities().testSoftKeyTableConfigs(configWithBoth)[1];
+         const ve = new TestableVirtualEntities().testKeyConfigs(configWithBoth)[0];
          expect(ve.ForeignKeys).toEqual([{ FieldName: 'RegionID', SchemaName: 'sales', RelatedTable: 'Region', RelatedField: 'ID' }]);
       });
-      it('skips a VirtualEntities entry with neither PrimaryKey nor ForeignKeys', () => {
-         const names = new TestableVirtualEntities().testSoftKeyTableConfigs(configWithBoth).map(t => t.TableName);
-         expect(names).not.toContain('vwNoKeys');
-      });
-      it('returns only table entries when there is no VirtualEntities section', () => {
-         const result = new TestableVirtualEntities().testSoftKeyTableConfigs({ sales: configWithBoth.sales });
-         expect(result.map(t => t.TableName)).toEqual(['Region']);
+      it('returns nothing when there is no VirtualEntities section', () => {
+         expect(new TestableVirtualEntities().testKeyConfigs({ sales: configWithBoth.sales })).toEqual([]);
       });
    });
 
