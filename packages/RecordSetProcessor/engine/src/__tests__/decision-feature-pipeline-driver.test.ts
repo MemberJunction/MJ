@@ -671,6 +671,17 @@ describe('DecisionFeaturePipelineDriver', () => {
             expect(status.confidence).toBeUndefined();
         });
 
+        it('writes an answer along a nested Ref, so its Feature Values row carries the value with its confidence', async () => {
+            const nested: DataFeatureOutput = { ...booleanOutput('IsUrgent'), Ref: '$.flags.urgent' };
+
+            const { result, featureValues } = await processTicket([nested], { IsUrgent: likelihood(0.93) });
+
+            expect(result.Status).toBe('Succeeded');
+            expect(result.ResultPayload).toEqual({ IsUrgent: true, flags: { urgent: true } });
+            expect(result.ResultPayload).not.toHaveProperty(['flags.urgent']);
+            expect(featureValues).toEqual([[expect.objectContaining({ featureName: 'IsUrgent', value: true, confidence: 0.93 })]]);
+        });
+
         it("writes 'Other' with no confidence when OnViolation is coerce-to-other", async () => {
             const { result, featureValues } = await processTicket([statusOutput({ OnViolation: 'coerce-to-other' })], { Status: offTheList });
 

@@ -44,6 +44,7 @@ import {
     type FeaturePipelineComputeRequest,
     type FeaturePipelineComputeResult,
 } from './BaseFeaturePipelineDriver';
+import { SetNestedValue } from '../processors/InferProcessor';
 
 /** The model type `AIDecisionRunner` requires, by name. */
 const DECISION_MODEL_TYPE = 'Decision';
@@ -371,7 +372,8 @@ export class DecisionFeaturePipelineDriver extends BaseFeaturePipelineDriver {
 
             rawResult[output.Name] = val;
             if (output.Ref?.startsWith('$.')) {
-                rawResult[output.Ref.substring(2)] = val;
+                // Along the path, so a nested Ref ('$.flags.hot') resolves where the processor reads it
+                SetNestedValue(rawResult, output.Ref.substring(2), val);
             }
             if (conf !== undefined) {
                 confidence[output.Name] = conf;
