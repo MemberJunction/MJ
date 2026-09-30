@@ -133,7 +133,7 @@ describe('Agent Decisions', () => {
         });
 
         it('has expected decision defaults in DEFAULT_LOOP_AGENT_PROMPT_PARAMS', () => {
-            expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.includeDecisionsDocs).toBe(true);
+            expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.includeDecisionsDocs).toBe(false);
             expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.decisionsMaxItems).toBe(100);
             expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.decisionPromptName).toBe('Default Decision');
             expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.includeResponseTypeDefinition?.decisions).toBe(true);
@@ -145,6 +145,37 @@ describe('Agent Decisions', () => {
 
         beforeEach(() => {
             agent = new TestAgent();
+        });
+
+        it('leaves decisions out when includeDecisionsDocs is unset, since decisions are opt-in', () => {
+            const params: Record<string, unknown> = {};
+            agent.testApplyResponseTypeAutoAlignment(params);
+            const rules = params.includeResponseTypeDefinition as Record<string, unknown>;
+            expect(params.includeDecisionsDocs).toBe(false);
+            expect(rules.decisions).toBe(false);
+        });
+
+        it.each([
+            ['a string', 'true'],
+            ['a number', 1],
+        ])('treats includeDecisionsDocs set to %s as off, since only true opts in', (_label, value) => {
+            const params: Record<string, unknown> = { includeDecisionsDocs: value };
+            agent.testApplyResponseTypeAutoAlignment(params);
+            const rules = params.includeResponseTypeDefinition as Record<string, unknown>;
+            expect(params.includeDecisionsDocs).toBe(false);
+            expect(rules.decisions).toBe(false);
+        });
+
+        it('keeps an explicit includeResponseTypeDefinition.decisions = true when includeDecisionsDocs is unset', () => {
+            const params: Record<string, unknown> = {
+                includeResponseTypeDefinition: {
+                    decisions: true,
+                },
+            };
+            agent.testApplyResponseTypeAutoAlignment(params, { decisions: true });
+            const rules = params.includeResponseTypeDefinition as Record<string, unknown>;
+            expect(params.includeDecisionsDocs).toBe(false);
+            expect(rules.decisions).toBe(true);
         });
 
         it('flips includeResponseTypeDefinition.decisions to false when includeDecisionsDocs is false', () => {
@@ -168,12 +199,13 @@ describe('Agent Decisions', () => {
             expect(rules.decisions).toBe(true);
         });
 
-        it('keeps includeResponseTypeDefinition.decisions = true when includeDecisionsDocs is true', () => {
+        it('includes decisions when the agent opts in with includeDecisionsDocs = true', () => {
             const params: Record<string, unknown> = {
                 includeDecisionsDocs: true,
             };
             agent.testApplyResponseTypeAutoAlignment(params);
             const rules = params.includeResponseTypeDefinition as Record<string, unknown>;
+            expect(params.includeDecisionsDocs).toBe(true);
             expect(rules.decisions).toBe(true);
         });
     });

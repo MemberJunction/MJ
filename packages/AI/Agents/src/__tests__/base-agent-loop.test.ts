@@ -1115,6 +1115,9 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
     /** Asked only the decision requests, never the gate. */
     const decisionCalls = (ask: ReturnType<typeof answerDecisions>) => ask.mock.calls.filter(([args]) => !('q1' in args.Questions));
 
+    /** The agent's own prompt params: decisions are opt-in, so every agent here opts in. */
+    const DECISIONS_ON = JSON.stringify({ includeDecisionsDocs: true });
+
     /** Run params for an agent whose finishIf gates are `mode` (gates are opt-in; the default is off). */
     function gateParams(mode: 'on' | 'shadow'): ExecuteAgentParams {
         return makeParams({ data: { __agentTypePromptParams: { finishIfMode: mode } } });
@@ -1147,6 +1150,7 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
 
     beforeEach(() => {
         vi.mocked(LogStatus).mockClear();
+        harness.agent = makeAgentRow({ AgentTypePromptParams: DECISIONS_ON });
     });
 
     afterEach(() => {
@@ -1176,6 +1180,25 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
         // The next prompt reads them. It gets a copy with the trailing runtime state appended, not
         // the same array, so check the content it received.
         expect(runner.Calls[1].conversationMessages?.map(textOf).some((c) => c.startsWith('Decision results:'))).toBe(true);
+    });
+
+    it('skips the decisions of an agent that has not opted in, and still runs the rest of the turn', async () => {
+        harness.agent = makeAgentRow();
+        const ask = answerDecisions();
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(actionsEnvelope({ decisions: [TRIAGE] })),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        expect(ask).not.toHaveBeenCalled();
+        expect(harness.steps.map((s) => s.StepType)).toEqual(['Validation', 'Prompt', 'Actions', 'Prompt']);
+        // The prompt the model saw left the decisions docs and field out.
+        expect(runner.Calls[0].data).toMatchObject({
+            __agentTypePromptParams: { includeDecisionsDocs: false, includeResponseTypeDefinition: { decisions: false } },
+        });
     });
 
     it('answers a decisions field that is not an array with one failed result, and keeps the rest of the turn', async () => {
@@ -1217,7 +1240,7 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
     });
 
     it('stops the run at MaxCostPerRun when the decision calls alone exceed it', async () => {
-        harness.agent = makeAgentRow({ MaxCostPerRun: 0.001 });
+        harness.agent = makeAgentRow({ MaxCostPerRun: 0.001, AgentTypePromptParams: DECISIONS_ON });
         answerDecisions();
         const { agent } = makeAgent([
             () => llmEnvelope(actionsEnvelope({ decisions: [TRIAGE] })),

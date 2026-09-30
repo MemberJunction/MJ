@@ -98,7 +98,8 @@ export interface ResponseTypeInclusionRules {
 
     /**
      * Include decisions field in the response interface.
-     * Auto-aligns with includeDecisionsDocs unless explicitly set.
+     * Auto-aligns with includeDecisionsDocs unless explicitly set, and so is off unless the agent
+     * opts in with `includeDecisionsDocs: true`.
      * @default true
      */
     decisions?: boolean;
@@ -413,9 +414,10 @@ export interface LoopAgentTypePromptParams {
     includePipelineDocs?: boolean;
 
     /**
-     * Include decision-making documentation in the prompt.
-     * Disable for agents that should never request inline decisions.
-     * @default true
+     * Teach the model to request inline decisions: the `decisions` docs, and the field in the
+     * response type. Opt-in: anything but `true` leaves both out. They add about 1,200 tokens to every
+     * turn, and on the Prompt Eval corpus no model used them (typed-decision plan, Task 4.7).
+     * @default false
      */
     includeDecisionsDocs?: boolean;
 
@@ -574,7 +576,7 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     includeArtifactToolsDocs: true,
     includeConversationToolsDocs: true,
     includePipelineDocs: true,
-    includeDecisionsDocs: true,
+    includeDecisionsDocs: false,
     decisionsMaxItems: 100,
     decisionsMaxRequests: MAX_DECISION_REQUESTS_PER_TURN,
     decisionsMaxCallsPerTurn: MAX_DECISION_CALLS_PER_TURN,

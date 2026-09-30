@@ -8820,6 +8820,13 @@ The context is now within limits. Please retry your request with the recovered c
             params.includeFinishIfDocs = false;
         }
 
+        // `decisions` is opt-in too (`includeDecisionsDocs: true`). Its docs and types add about 1,200
+        // tokens to every turn, and on the Prompt Eval corpus no model used it (typed-decision plan,
+        // Task 4.7). Unset means off, so the response field below follows it off too.
+        if (params.includeDecisionsDocs !== true) {
+            params.includeDecisionsDocs = false;
+        }
+
         // Auto-alignment mappings: docs flag → response type property
         const alignmentMappings: Array<{ docsFlag: string; responseTypeKey: string }> = [
             { docsFlag: 'includePayloadInPrompt', responseTypeKey: 'payload' },

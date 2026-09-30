@@ -124,6 +124,11 @@
             "default": 100,
             "description": "Maximum number of decision calls one turn's decision requests make in total, counting every forEachItemIn item. Up to 8 requests (decisionsMaxRequests) of up to 100 items each (decisionsMaxItems) could otherwise send 800 calls in one turn, each with its own Decision step and prompt run, before the run's MaxCostPerRun / MaxTokensPerRun checks (made between steps) could stop them. The budget is handed out in request order before any call is made: a forEachItemIn request it cuts short asks its first items and reports the rest in skippedCount, and a request it leaves no calls for is not run and gets a failed result saying why. 0 turns decision calls off: every request gets a failed result that says so, without inviting the agent to ask again."
           },
+          "includeDecisionsDocs": {
+            "type": "boolean",
+            "default": false,
+            "description": "Teach the model to request inline decisions (typed questions answered on the same turn by a decision model): the Decisions docs and the decisions field in the response type. Off by default: they add about 1,200 tokens to every turn, and on the Prompt Eval corpus no model used them (typed-decision plan, Task 4.7). Turn on for agents that classify, filter or route many items."
+          },
           "finishIfMode": {
             "type": "string",
             "enum": [
