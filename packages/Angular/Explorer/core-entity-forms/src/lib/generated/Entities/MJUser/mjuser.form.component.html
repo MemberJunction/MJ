@@ -2862,25 +2862,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Rubric Evaluations Section -->
+    <!-- Rubric Versions Section -->
     <mj-collapsible-panel
-        SectionKey="mJRubricEvaluations"
-        SectionName="Rubric Evaluations"
+        SectionKey="mJRubricVersions"
+        SectionName="Rubric Versions"
         Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJRubricEvaluations')"
+        [BadgeCount]="GetSectionRowCount('mJRubricVersions')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Rubric Evaluations','EvaluatorUserID')"
-                [NewRecordValues]="NewRecordValues('MJ: Rubric Evaluations','EvaluatorUserID')"
-                [AllowLoad]="IsSectionExpanded('mJRubricEvaluations')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Rubric Versions','PublishedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Rubric Versions','PublishedByUserID')"
+                [AllowLoad]="IsSectionExpanded('mJRubricVersions')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJRubricEvaluations', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJRubricVersions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -2912,25 +2912,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Rubric Versions Section -->
+    <!-- Rubric Evaluations Section -->
     <mj-collapsible-panel
-        SectionKey="mJRubricVersions"
-        SectionName="Rubric Versions"
+        SectionKey="mJRubricEvaluations"
+        SectionName="Rubric Evaluations"
         Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJRubricVersions')"
+        [BadgeCount]="GetSectionRowCount('mJRubricEvaluations')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Rubric Versions','PublishedByUserID')"
-                [NewRecordValues]="NewRecordValues('MJ: Rubric Versions','PublishedByUserID')"
-                [AllowLoad]="IsSectionExpanded('mJRubricVersions')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Rubric Evaluations','EvaluatorUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Rubric Evaluations','EvaluatorUserID')"
+                [AllowLoad]="IsSectionExpanded('mJRubricEvaluations')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJRubricVersions', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJRubricEvaluations', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

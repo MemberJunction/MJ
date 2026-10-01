@@ -18,8 +18,8 @@ export class MJRubricCriterionFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'mJRubricCriteria', sectionName: 'Rubric Criteria', isExpanded: false },
-            { sectionKey: 'mJRubricEvaluationScores', sectionName: 'Rubric Evaluation Scores', isExpanded: false },
-            { sectionKey: 'mJRubricCriterionLevels', sectionName: 'Rubric Criterion Levels', isExpanded: false }
+            { sectionKey: 'mJRubricCriterionLevels', sectionName: 'Rubric Criterion Levels', isExpanded: false },
+            { sectionKey: 'mJRubricEvaluationScores', sectionName: 'Rubric Evaluation Scores', isExpanded: false }
         ]);
     }
 }

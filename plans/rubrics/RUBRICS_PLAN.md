@@ -510,24 +510,28 @@ name while CodeGen still owns the public view.
 
 ### 9.2 Procedure (task R0) — on a private database at the last released version
 
+The three files in §9.1 are the capture targets. Inner views go in **2205**, not in 2204.
+2204's CodeGen section is entity registration only.
+
 ```bash
 # Private DB only: one database per agent (migrations/CLAUDE.md).
-# Park 2206 outside migrations/ until the inner views exist, or migrate stops on it.
-mj migrate                                   # 2204 hand DDL. Entities do not exist yet.
-mj codegen --skipfiles --no-ai               # PASS 1 — creates Entity rows. Keep this SQL.
-mj sync push --dir=metadata --include=entities --ci
+# Park 2205 and 2206 until the rows they update or the views they wrap exist.
+mj migrate                                   # 2204 hand DDL only.
+mj codegen --skipfiles --no-ai               # PASS 1 — entity rows, public views, procs.
+#   → append to 2204, below 50 blank lines and the banner.
+# Apply 2205's hand UPDATEs (layering flags and Label name fields). Do not sync metadata
+# as a substitute: an install never runs mj sync push.
 # PASS 2 — flipping the flags is not an entity modification, so a plain run CREATEs the
 # inner views in the database but OMITS them from the SQL log. Temporarily, in mj.config.cjs:
 #   forceRegeneration: { enabled: true, baseViews: true,
 #     entityWhereClause: "Name IN ('MJ: Rubric Evaluations','MJ: Rubric Evaluation Scores')" }
 mj codegen --skipfiles --no-ai
 #   → confirm vwRubricEvaluationsGenerated and vwRubricEvaluationScoresGenerated are both
-#     in this capture. Revert mj.config.cjs.
-# Append pass 1, then pass 2, to 2204: 50 blank lines, banner, then the SQL. Delete the
-# standalone CodeGen_Run_*.sql files.
-mj migrate                                   # 2206 wrapper views
+#     in this capture, and the score view LEFT OUTER JOINs RubricScaleLevel. Append to 2205.
+#     Revert mj.config.cjs.
+# Apply 2206's hand wrapper views.
 mj codegen --skipfiles --no-ai               # PASS 3 — virtual fields on the wrappers
-#   → append to 2206 the same way. The capture must not DROP or CREATE the public views.
+#   → append to 2206. The capture must not DROP or CREATE the public views.
 mj codegen --skipdb --no-ai                  # entity classes, resolvers, forms
 # revert sync write-back (lastModified/checksum) before committing
 ```
@@ -537,9 +541,9 @@ Checks before committing:
 - `npm run check:codegen-tail` — every new table has its generated entity.
 - In pass 3's capture, confirm **no DDL targets `vwRubricEvaluations` / `vwRubricEvaluationScores`**
   (CodeGen must only refresh/grant them, guarded by existence) — the pilot's banner explains why.
-- **From zero:** build a clean database with `bootstrap-clean-db` and run both migrations; the
-  wrapper views must compile and every virtual field must exist. This is the only check that catches
-  a capture that was complete on your dev database and incomplete on a fresh one.
+- **From zero:** build a clean database and run all three migrations, then `mj codegen --skipfiles`
+  with no metadata sync. `vwRubricEvaluations` must still select `CohortMeanScore`. This is the
+  check that catches a capture that was complete on the capture database and incomplete on a fresh one.
 
 ### 9.3 What the wrapper columns are
 
@@ -863,6 +867,14 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 
 ## 16. Progress log
 
+- **2026-10-01** — Review of `552e976a`. Draft delete is `INSTEAD OF DELETE`: a second
+  cascade on `FK_RubricCriterion_Parent` is illegal (multiple cascade paths), so the trigger
+  clears anchors, then parent links, then criteria, then bands. `GeneratePluralName` pluralizes
+  the last PascalCase segment, so the base view is `vwRubricCriteria`. IT96 is sequence 50,
+  before the client-transport block. On `MJ_6_2_CLEAN_pr4937_proof2` (105 migrations, then
+  `mj codegen --skipfiles` with no sync) `BaseView` is `vwRubricCriteria`, `vwRubricCriterions`
+  does not exist, and `vwRubricEvaluations` still selects `CohortMeanScore`. IT96 with
+  `RUN_MUTATION_TESTS=1`: 5 passed, 0 failed, 0 skipped.
 - **2026-09-30** — Review of `9c8a8611`. Restored `V202609302205`: migrate does not sync metadata,
   so the layering flags have to be in the migration or the next CodeGen replaces the wrappers.
   The metadata file stays. `GeneratePluralName` pluralizes the last word (`Rubric Criterion` →

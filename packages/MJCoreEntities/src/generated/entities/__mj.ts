@@ -28866,7 +28866,7 @@ export const MJRubricCriterionSchema = z.object({
         * * Field Name: ParentID
         * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriterions.ID)
+        * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriteria.ID)
         * * Description: Parent group node. NULL = a top-level node of the rubric.`),
     Key: z.string().describe(`
         * * Field Name: Key
@@ -29005,7 +29005,7 @@ export const MJRubricCriterionLevelSchema = z.object({
         * * Field Name: CriterionID
         * * Display Name: Criterion ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriterions.ID)`),
+        * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriteria.ID)`),
     ScaleLevelID: z.string().nullable().describe(`
         * * Field Name: ScaleLevelID
         * * Display Name: Scale Level ID
@@ -29062,7 +29062,7 @@ export const MJRubricEvaluationScoreSchema = z.object({
         * * Field Name: CriterionID
         * * Display Name: Criterion ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriterions.ID)`),
+        * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriteria.ID)`),
     ScaleLevelID: z.string().nullable().describe(`
         * * Field Name: ScaleLevelID
         * * Display Name: Scale Level ID
@@ -114736,7 +114736,7 @@ export class MJRubricCategoryEntity extends BaseEntity<MJRubricCategoryEntityTyp
  * MJ: Rubric Criteria - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: RubricCriterion
- * * Base View: vwRubricCriterions
+ * * Base View: vwRubricCriteria
  * * @description A node in a rubric version's weighted tree. Groups roll up their children; criteria (leaves) are answered on a scale. Weights are relative among siblings, so a node's share of the total is the product of its and its ancestors' normalized weights.
  * * Primary Key: ID
  * @extends {BaseEntity}
@@ -114792,7 +114792,7 @@ export class MJRubricCriterionEntity extends BaseEntity<MJRubricCriterionEntityT
     * * Field Name: ParentID
     * * Display Name: Parent ID
     * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriterions.ID)
+    * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriteria.ID)
     * * Description: Parent group node. NULL = a top-level node of the rubric.
     */
     get ParentID(): string | null {
@@ -115119,7 +115119,7 @@ export class MJRubricCriterionLevelEntity extends BaseEntity<MJRubricCriterionLe
     * * Field Name: CriterionID
     * * Display Name: Criterion ID
     * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriterions.ID)
+    * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriteria.ID)
     */
     get CriterionID(): string {
         return this.Get('CriterionID');
@@ -115268,7 +115268,7 @@ export class MJRubricEvaluationScoreEntity extends BaseEntity<MJRubricEvaluation
     * * Field Name: CriterionID
     * * Display Name: Criterion ID
     * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriterions.ID)
+    * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriteria.ID)
     */
     get CriterionID(): string {
         return this.Get('CriterionID');

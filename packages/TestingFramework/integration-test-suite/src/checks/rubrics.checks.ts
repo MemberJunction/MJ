@@ -11,7 +11,9 @@
  *   R2 — moving that version from Published to Retired does not throw.
  *   R3 — inserting a criterion on a published version throws 51103.
  *   R4 — updating a score row after the evaluation is submitted throws 51110.
- *   R5 — deleting a draft version deletes its criteria (ON DELETE CASCADE).
+ *   R5 — deleting a draft version deletes its tree: a parent group, a child criterion,
+ *        one criterion-level anchor, and one band. A published version of that same
+ *        shape throws 51101 and is not deleted.
  */
 import type { ConnectionPool, Transaction } from 'mssql';
 import { Assert } from '@memberjunction/testing-integration';
@@ -174,27 +176,63 @@ export const RubricsChecks: NamedCheck[] = [
     },
     {
         Id: 'rubrics.R5',
-        Name: 'R5: deleting a draft version deletes its criteria',
+        Name: 'R5: deleting a draft version deletes its tree; a published tree throws 51101',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
             const pool = poolOf(ctx);
             const s = schemaOf(ctx);
+            const treeSql = (tag: string, publish: boolean) => `
+                DECLARE @rubric uniqueidentifier = NEWID(),
+                        @version uniqueidentifier = NEWID(),
+                        @scale uniqueidentifier = NEWID(),
+                        @level uniqueidentifier = NEWID(),
+                        @parent uniqueidentifier = NEWID(),
+                        @child uniqueidentifier = NEWID();
+                INSERT INTO [${s}].[RubricScale] ([ID], [Name], [ScaleType]) VALUES (@scale, N'${tag}-scale', N'Levels');
+                INSERT INTO [${s}].[RubricScaleLevel] ([ID], [ScaleID], [Label], [Value], [NormalizedValue], [Sequence])
+                    VALUES (@level, @scale, N'Proficient', 3, 0.750000, 1);
+                INSERT INTO [${s}].[Rubric] ([ID], [Name]) VALUES (@rubric, N'${tag}');
+                INSERT INTO [${s}].[RubricVersion] ([ID], [RubricID], [Status]) VALUES (@version, @rubric, N'Draft');
+                INSERT INTO [${s}].[RubricCriterion] ([ID], [RubricVersionID], [Key], [Name], [NodeType])
+                    VALUES (@parent, @version, N'group', N'Group', N'Group');
+                INSERT INTO [${s}].[RubricCriterion] ([ID], [RubricVersionID], [ParentID], [Key], [Name], [NodeType], [ScaleID])
+                    VALUES (@child, @version, @parent, N'clarity', N'Clarity', N'Criterion', @scale);
+                INSERT INTO [${s}].[RubricCriterionLevel] ([CriterionID], [ScaleLevelID], [Descriptor])
+                    VALUES (@child, @level, N'Clear enough to act on');
+                INSERT INTO [${s}].[RubricBand] ([RubricVersionID], [Label], [MinScore], [MaxScore])
+                    VALUES (@version, N'Proficient', 0.500000, 1.000000);
+                ${publish ? `
+                UPDATE [${s}].[RubricVersion]
+                   SET [Status] = N'Published', [MajorVersion] = 1, [MinorVersion] = 0, [PatchVersion] = 0,
+                       [ContentHash] = N'${tag}-content', [ScoringHash] = N'${tag}-scoring',
+                       [PublishedAt] = SYSDATETIMEOFFSET(), [AppliedBump] = N'Initial'
+                 WHERE [ID] = @version;` : ''}
+                SELECT CONVERT(nvarchar(36), @version) AS VersionID;
+            `;
             const tag = `it-rubrics-r5-${Date.now().toString(36)}`;
             await withRollback(pool, async (tx) => {
-                const setup = await tx.request().query(`
-                    DECLARE @rubric uniqueidentifier = NEWID(), @version uniqueidentifier = NEWID();
-                    INSERT INTO [${s}].[Rubric] ([ID], [Name]) VALUES (@rubric, N'${tag}');
-                    INSERT INTO [${s}].[RubricVersion] ([ID], [RubricID], [Status]) VALUES (@version, @rubric, N'Draft');
-                    INSERT INTO [${s}].[RubricCriterion] ([RubricVersionID], [Key], [Name], [NodeType])
-                        VALUES (@version, N'clarity', N'Clarity', N'Group');
-                    SELECT CONVERT(nvarchar(36), @version) AS VersionID;
-                `);
+                const setup = await tx.request().query(treeSql(`${tag}-draft`, false));
                 const versionId = setup.recordset[0].VersionID as string;
                 await tx.request().query(`DELETE FROM [${s}].[RubricVersion] WHERE [ID] = '${versionId}'`);
-                const left = await tx.request().query(
-                    `SELECT COUNT(*) AS N FROM [${s}].[RubricCriterion] WHERE [RubricVersionID] = '${versionId}'`
+                const left = await tx.request().query(`
+                    SELECT
+                        (SELECT COUNT(*) FROM [${s}].[RubricVersion] WHERE [ID] = '${versionId}')
+                      + (SELECT COUNT(*) FROM [${s}].[RubricCriterion] WHERE [RubricVersionID] = '${versionId}')
+                      + (SELECT COUNT(*) FROM [${s}].[RubricCriterionLevel] cl
+                            INNER JOIN [${s}].[RubricCriterion] c ON c.[ID] = cl.[CriterionID]
+                          WHERE c.[RubricVersionID] = '${versionId}')
+                      + (SELECT COUNT(*) FROM [${s}].[RubricBand] WHERE [RubricVersionID] = '${versionId}') AS N
+                `);
+                Assert(Number(left.recordset[0].N) === 0, `draft delete left ${left.recordset[0].N} tree rows`);
+            });
+            await withRollback(pool, async (tx) => {
+                const setup = await tx.request().query(treeSql(`${tag}-published`, true));
+                const versionId = setup.recordset[0].VersionID as string;
+                await expectThrow(
+                    tx,
+                    `DELETE FROM [${s}].[RubricVersion] WHERE [ID] = '${versionId}'`,
+                    51101
                 );
-                Assert(Number(left.recordset[0].N) === 0, `draft delete left ${left.recordset[0].N} criteria`);
             });
         },
     },

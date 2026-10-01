@@ -1293,6 +1293,16 @@ export function GeneratePluralName(singularName: string, options? : { capitalize
         }
         return `${head} ${pluralLast}`;
     }
+    // A table name has no spaces. Pluralize its last PascalCase segment in place so
+    // RubricCriterion becomes RubricCriteria, not RubricCriterions. The irregular map
+    // is a single word; matching the whole identifier misses it.
+    const segments = singularName.match(/[A-Z]+(?![a-z])|[A-Z]?[a-z]+|\d+/g);
+    if (segments && segments.length > 1) {
+        const head = segments.slice(0, -1).join('');
+        const pluralLast = pluralizeOneWord(segments[segments.length - 1], options);
+        const joined = head + pluralLast;
+        return options?.capitalizeEntireWord ? joined.toUpperCase() : joined;
+    }
     return pluralizeOneWord(singularName, options);
 }
 

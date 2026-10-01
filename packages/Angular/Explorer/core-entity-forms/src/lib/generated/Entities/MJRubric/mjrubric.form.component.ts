@@ -18,9 +18,9 @@ export class MJRubricFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'mJTests', sectionName: 'Tests', isExpanded: false },
-            { sectionKey: 'mJAIAgentRubrics', sectionName: 'AI Agent Rubrics', isExpanded: false },
+            { sectionKey: 'mJRubricVersions', sectionName: 'Rubric Versions', isExpanded: false },
             { sectionKey: 'mJTestSuites', sectionName: 'Test Suites', isExpanded: false },
-            { sectionKey: 'mJRubricVersions', sectionName: 'Rubric Versions', isExpanded: false }
+            { sectionKey: 'mJAIAgentRubrics', sectionName: 'AI Agent Rubrics', isExpanded: false }
         ]);
     }
 }

@@ -501,6 +501,9 @@ describe('generatePluralName', () => {
     expect(GeneratePluralName('Rubric Criterion', { capitalizeFirstLetterOnly: true })).toBe('Rubric Criteria');
     expect(GeneratePluralName('Rubric Category', { capitalizeFirstLetterOnly: true })).toBe('Rubric Categories');
     expect(GeneratePluralName('criterion')).toBe('criteria');
+    // Table names have no space. The last PascalCase segment pluralizes in place.
+    expect(GeneratePluralName('RubricCriterion', { capitalizeFirstLetterOnly: true })).toBe('RubricCriteria');
+    expect(GeneratePluralName('RubricCategory', { capitalizeFirstLetterOnly: true })).toBe('RubricCategories');
   });
 });
 
