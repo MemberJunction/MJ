@@ -1,5 +1,8 @@
 ---
 "@memberjunction/notifications": minor
+"@memberjunction/core-entities": minor
+"@memberjunction/server": minor
+"@memberjunction/ng-core-entity-forms": minor
 ---
 
 Notifications gain a scoped level between a type's defaults and a recipient's preference (MJ#4946).
