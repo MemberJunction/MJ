@@ -173,7 +173,7 @@ export const DECISION_DISCOVERY_APPLIES_QUESTION = 'anyApplies';
  * **Why the wording stays.** The discovery eval (#4892) measured, and the calibration (#4893)
  * calibrated, exactly this question: its per-model Platt parameters and threshold hold only for this
  * wording. Rewording it invalidates both, so the fix (quoting the options, or one Likelihood per
- * option) waits for a re-measurement. Meanwhile {@link DECISION_DISCOVERY_MIN_OPTIONS} closes the
+ * option) waits for a re-measurement, tracked in #4938. Meanwhile {@link DECISION_DISCOVERY_MIN_OPTIONS} closes the
  * worst case, two options, and leaves the measured case unchanged.
  */
 export const DECISION_DISCOVERY_APPLIES_INSTRUCTIONS =

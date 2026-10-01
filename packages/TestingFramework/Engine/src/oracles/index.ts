@@ -10,5 +10,6 @@ export * from './AgentDecisionOracle';
 export * from './DecisionLabelMatchOracle';
 export * from './DiscoveryLabelMatchOracle';
 export * from './LLMJudgeOracle';
+export * from './DecisionJudgeOracle';
 export * from './ExactMatchOracle';
 export * from './SQLValidatorOracle';

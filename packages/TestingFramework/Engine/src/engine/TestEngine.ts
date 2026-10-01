@@ -32,6 +32,7 @@ import { AgentDecisionOracle, ResponseWellFormedOracle } from '../oracles/AgentD
 import { DecisionLabelMatchOracle } from '../oracles/DecisionLabelMatchOracle';
 import { DiscoveryLabelMatchOracle } from '../oracles/DiscoveryLabelMatchOracle';
 import { LLMJudgeOracle } from '../oracles/LLMJudgeOracle';
+import { DecisionJudgeOracle } from '../oracles/DecisionJudgeOracle';
 import { ExactMatchOracle } from '../oracles/ExactMatchOracle';
 import { SQLValidatorOracle } from '../oracles/SQLValidatorOracle';
 import {
@@ -661,6 +662,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         this.RegisterOracle(new DecisionLabelMatchOracle());
         this.RegisterOracle(new DiscoveryLabelMatchOracle());
         this.RegisterOracle(new LLMJudgeOracle());
+        this.RegisterOracle(new DecisionJudgeOracle());
         this.RegisterOracle(new ExactMatchOracle());
         this.RegisterOracle(new SQLValidatorOracle());
     }

@@ -15,7 +15,8 @@
  * @module @memberjunction/ai-vector-dupe
  */
 
-import { BaseEmbeddings, GetAIAPIKey } from "@memberjunction/ai";
+import { GetAIAPIKey } from "@memberjunction/ai";
+import { AIEmbeddingRunner } from "@memberjunction/ai-prompts";
 import {
     PotentialDuplicateRequest,
     PotentialDuplicateResponse,
@@ -50,6 +51,7 @@ import { DuplicateReasoningProvider } from "./reasoning/DuplicateReasoningProvid
 import {
     DuplicateReasoningInput,
     DuplicateReasoningOutput,
+    DuplicateReasoningCandidateVerdict,
     ReasoningCandidate,
     ReasoningFieldDelta,
 } from "./reasoning/DuplicateReasoningTypes";
@@ -126,11 +128,23 @@ interface SetReasoning {
  */
 export class DuplicateRecordDetector extends VectorBase {
     private vectorDB: VectorDBBase;
-    private embedding: BaseEmbeddings;
+    private _embeddingRunner: AIEmbeddingRunner | null = null;
+    private embeddingModelID: string | null = null;
+    /**
+     * Protected getter/setter for the AIEmbeddingRunner instance used by duplicate detection.
+     */
+    protected get EmbeddingRunner(): AIEmbeddingRunner {
+        if (!this._embeddingRunner) {
+            this._embeddingRunner = new AIEmbeddingRunner();
+        }
+        return this._embeddingRunner;
+    }
+    protected set EmbeddingRunner(value: AIEmbeddingRunner) {
+        this._embeddingRunner = value;
+    }
     /**
      * The embedding model's API identifier (e.g. 'Xenova/gte-small', 'text-embedding-3-small'),
-     * resolved from the entity document's AIModel. Passed to `EmbedTexts` — required by local
-     * providers (which load the named ONNX pipeline) and honored by cloud providers.
+     * resolved from the entity document's AIModel.
      */
     private embeddingModelAPIName: string | null = null;
     /** The Pinecone/pgvector/Qdrant index name resolved from the entity document's VectorIndex */
@@ -318,11 +332,19 @@ export class DuplicateRecordDetector extends VectorBase {
         const record = records.Results[0];
         const templateParser = EntityDocumentTemplateParser.CreateInstance();
         const templateTexts = await this.GenerateTemplateTexts(templateParser, entityDocument, [record], ContextUser);
-        const embedResult = await this.embedding.EmbedTexts({ texts: templateTexts, model: this.embeddingModelAPIName });
+        const embedResult = await this.EmbeddingRunner.RunEmbedding({
+            Texts: templateTexts,
+            ModelID: this.embeddingModelID ?? undefined,
+            ContextUser: ContextUser,
+            Description: `Duplicate detection single record (${entityDocument.Name})`
+        });
+        if (!embedResult.Success || !embedResult.Vectors || embedResult.Vectors.length === 0) {
+            throw new Error(`Embedding failed for duplicate detection: ${embedResult.ErrorMessage ?? 'Unknown error'}`);
+        }
 
         const topK = options.TopK ?? DEFAULT_TOP_K;
         const queryResults = await this.QueryDuplicatesForRecords(
-            [record], embedResult.vectors, templateTexts, entityDocument, topK, options,
+            [record], embedResult.Vectors, templateTexts, entityDocument, topK, options,
             this.GetQueryConcurrency(entityDocument)
         );
 
@@ -413,12 +435,20 @@ export class DuplicateRecordDetector extends VectorBase {
             // Embed this sub-batch
             this.reportProgress(options, 'Embedding', totalRecords, processedSoFar, matchesSoFar, startTime);
             const subTemplateTexts = await this.GenerateTemplateTexts(templateParser, entityDocument, subRecords, contextUser);
-            const subEmbedResult = await this.embedding.EmbedTexts({ texts: subTemplateTexts, model: this.embeddingModelAPIName });
+            const subEmbedResult = await this.EmbeddingRunner.RunEmbedding({
+                Texts: subTemplateTexts,
+                ModelID: this.embeddingModelID ?? undefined,
+                ContextUser: contextUser,
+                Description: `Duplicate detection batch (${entityDocument.Name})`
+            });
+            if (!subEmbedResult.Success || !subEmbedResult.Vectors || subEmbedResult.Vectors.length === 0) {
+                throw new Error(`Embedding failed for duplicate detection batch: ${subEmbedResult.ErrorMessage ?? 'Unknown error'}`);
+            }
 
             // Query vector DB for each record in the sub-batch with concurrency control
             this.reportProgress(options, 'Querying', totalRecords, processedSoFar, matchesSoFar, startTime);
             const subQueryResults = await this.QueryDuplicatesForRecords(
-                subRecords, subEmbedResult.vectors, subTemplateTexts, entityDocument, topK, options, concurrency
+                subRecords, subEmbedResult.Vectors, subTemplateTexts, entityDocument, topK, options, concurrency
             );
             allQueryResults.push(...subQueryResults);
         }
@@ -551,7 +581,7 @@ export class DuplicateRecordDetector extends VectorBase {
      */
     protected async InitializeProviders(entityDocument: MJEntityDocumentEntity): Promise<void> {
         // Skip re-initialization if providers are already set for this entity document
-        if (this.embedding && this.vectorDB && this.indexName) {
+        if (this._embeddingRunner && this.vectorDB && this.indexName) {
             return;
         }
 
@@ -563,34 +593,26 @@ export class DuplicateRecordDetector extends VectorBase {
         }
 
         const aiModel = this.GetAIModel(entityDocument.AIModelID);
-        // The embedding model's API name (e.g. 'Xenova/gte-small') — local providers REQUIRE it
-        // to load the right ONNX pipeline; cloud providers fall back to their own default if absent.
+        this.embeddingModelID = entityDocument.AIModelID;
         this.embeddingModelAPIName = aiModel.APIName;
         // Captured for the vector query id when the provider keys by EntityDocumentID (SVS).
         this.entityDocumentID = entityDocument.ID;
         const vectorDB = this.GetVectorDatabase(entityDocument.VectorDatabaseID);
 
-        // Resolve API keys. Empty/null is legitimate for local providers — local
-        // embeddings (ONNX runtime) and the in-process SimpleVectorServiceProvider need
-        // no remote credential — so we don't pre-throw on a missing key. Whether the vector
-        // DB genuinely needs one is decided AFTER instantiation via VectorDBBase.RequiresAPIKey;
-        // a cloud provider that truly needs a key will otherwise fail at the inference call
-        // with a more actionable provider-level error. Mirrors EntityVectorSyncer.
-        const embeddingAPIKey = GetAIAPIKey(aiModel.DriverClass) || '';
+        // Only the vector DB key is resolved here. AIEmbeddingRunner resolves embedding
+        // credentials on each call and runs a keyless driver (LocalEmbedding) without one.
+        // An empty vector-DB key is legitimate for in-process and colocated providers, so we
+        // don't pre-throw; whether the DB genuinely needs one is decided AFTER instantiation
+        // via VectorDBBase.RequiresAPIKey. Mirrors EntityVectorSyncer.
         const vectorDBAPIKey = GetAIAPIKey(vectorDB.ClassKey) || '';
 
-        this.embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
-            BaseEmbeddings, aiModel.DriverClass, embeddingAPIKey
-        );
+        this._embeddingRunner = new AIEmbeddingRunner();
         // Sentinel when keyless so the base ctor's non-empty requirement is satisfied for
         // local providers (which authenticate via the host process, not a key).
         this.vectorDB = MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(
             VectorDBBase, vectorDB.ClassKey, vectorDBAPIKey || 'colocated'
         );
 
-        if (!this.embedding) {
-            throw new Error(`Failed to create Embeddings instance for ${aiModel.DriverClass}`);
-        }
         if (!this.vectorDB) {
             throw new Error(`Failed to create VectorDB instance for ${vectorDB.ClassKey}`);
         }
@@ -1376,7 +1398,8 @@ export class DuplicateRecordDetector extends VectorBase {
      * independently), so a false-positive candidate reads NotDuplicate even when another candidate
      * in the same set is a confident Merge. Falls back to the set-level summary only when the
      * reasoner returned no per-candidate verdict for this record. The proposed survivor + field
-     * map stay set-level (they describe the merge of the set's true duplicates).
+     * map stay set-level (they describe the merge of the set's true duplicates). The run id is
+     * the set's, unless this candidate's verdict came from a run of its own.
      *
      * @param candidateRecordID this candidate's record id (matches the input candidate RecordID)
      */
@@ -1385,7 +1408,7 @@ export class DuplicateRecordDetector extends VectorBase {
         reasoning: DuplicateReasoningOutput,
         candidateRecordID: string
     ): void {
-        const verdict = reasoning.CandidateVerdicts.find(v => this.recordIdMatches(v.RecordID, candidateRecordID));
+        const verdict = this.findCandidateVerdict(reasoning, candidateRecordID);
         match.LLMRecommendation = verdict ? verdict.Recommendation : reasoning.Recommendation;
         match.LLMConfidence = verdict ? verdict.Confidence : reasoning.Confidence;
         match.LLMReasoning = (verdict?.Reasoning || reasoning.Reasoning) || null;
@@ -1393,8 +1416,33 @@ export class DuplicateRecordDetector extends VectorBase {
         match.LLMProposedFieldMap = reasoning.FieldChoices.length > 0
             ? JSON.stringify(reasoning.FieldChoices)
             : null;
+        this.applyRunIDsToMatch(match, reasoning, verdict);
+    }
+
+    /**
+     * Point the match row at the run that produced its verdict: the verdict's own prompt run when
+     * it carries one (a candidate `DecisionThenPrompt`'s decision dropped), else the set's run.
+     */
+    private applyRunIDsToMatch(
+        match: MJDuplicateRunDetailMatchEntity,
+        reasoning: DuplicateReasoningOutput,
+        verdict: DuplicateReasoningCandidateVerdict | undefined
+    ): void {
+        if (verdict?.AIPromptRunID) {
+            match.AIPromptRunID = verdict.AIPromptRunID;
+            match.AIAgentRunID = null;
+            return;
+        }
         match.AIPromptRunID = reasoning.AIPromptRunID ?? null;
         match.AIAgentRunID = reasoning.AIAgentRunID ?? null;
+    }
+
+    /** This candidate's own verdict, matched by record id, or undefined when the reasoner returned none for it. */
+    private findCandidateVerdict(
+        reasoning: DuplicateReasoningOutput,
+        candidateRecordID: string
+    ): DuplicateReasoningCandidateVerdict | undefined {
+        return reasoning.CandidateVerdicts.find(v => this.recordIdMatches(v.RecordID, candidateRecordID));
     }
 
     // ─────────────────────────────────────────────
@@ -1597,11 +1645,12 @@ export class DuplicateRecordDetector extends VectorBase {
     }
 
     /**
-     * Carry the set-level verdict + resolved survivor field map onto the result so the
-     * auto-merge step (AutoMergeAboveAbsolute) can consult the recommendation and apply the
-     * literal {FieldName, Value} overrides via {@link RecordMergeRequest.FieldMap}. The UI
-     * still reads the persisted per-row {@link MJDuplicateRunDetailMatchEntity.LLMProposedFieldMap}
-     * (the raw choices) and lets the reviewer override before a manual merge.
+     * Carry the set-level verdict + resolved survivor field map onto the result, and each
+     * candidate's own verdict onto its {@link PotentialDuplicate}, so the auto-merge step
+     * (AutoMergeAboveAbsolute) can consult both recommendations and apply the literal
+     * {FieldName, Value} overrides via {@link RecordMergeRequest.FieldMap}. The UI still reads
+     * the persisted per-row {@link MJDuplicateRunDetailMatchEntity.LLMProposedFieldMap} (the raw
+     * choices) and lets the reviewer override before a manual merge.
      */
     protected applyReasoningToResult(
         result: PotentialDuplicateResult,
@@ -1614,6 +1663,9 @@ export class DuplicateRecordDetector extends VectorBase {
         result.ReasoningRecommendation = output.Recommendation;
         result.ReasoningFieldMap = fieldMap.length > 0 ? fieldMap : undefined;
         result.ReasoningText = output.Reasoning?.trim() ? output.Reasoning : undefined;
+        for (const dupe of result.Duplicates) {
+            dupe.ReasoningRecommendation = this.findCandidateVerdict(output, dupe.Values())?.Recommendation;
+        }
     }
 
     // ─────────────────────────────────────────────
@@ -1658,7 +1710,9 @@ export class DuplicateRecordDetector extends VectorBase {
      * Reasoning path (EnableLLMReasoning = true): `AutomationLevel` governs.
      *   - ReviewAll / LLMGated → never auto-merge (everything goes to human review).
      *   - AutoMergeAboveAbsolute → at/above the absolute threshold AND the set's LLM
-     *     recommendation is 'Merge'.
+     *     recommendation is 'Merge' AND this candidate's own verdict is 'Merge'. A set-level
+     *     'Merge' only says that SOME candidate is a duplicate, so it never merges a candidate
+     *     the reasoner judged otherwise, or returned no verdict for.
      */
     protected IsAutoMergeEligible(
         dupe: PotentialDuplicate,
@@ -1673,7 +1727,9 @@ export class DuplicateRecordDetector extends VectorBase {
         if (entityDocument.AutomationLevel !== 'AutoMergeAboveAbsolute') {
             return false;
         }
-        return aboveAbsolute && dupeResult.ReasoningRecommendation === 'Merge';
+        return aboveAbsolute
+            && dupeResult.ReasoningRecommendation === 'Merge'
+            && dupe.ReasoningRecommendation === 'Merge';
     }
 
     /**

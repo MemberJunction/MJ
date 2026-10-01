@@ -19,7 +19,7 @@ export type AgentDecisionQuestion =
 export interface AgentDecisionRequest {
   /** Names this request. The answers come back under it. */
   id: string;
-  /** What the questions are about. Either literal text, or a path into the payload starting "payload." (for example "payload.ticket"). */
+  /** What the questions are about. Either literal text, "payload" for the whole payload, or a path into the payload starting "payload." (for example "payload.ticket"). */
   state?: string;
   /** Ask the same questions of each item of a payload array, one decision per item (for example "payload.tickets"). Use instead of `state`. */
   forEachItemIn?: string;
