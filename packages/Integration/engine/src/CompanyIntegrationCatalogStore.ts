@@ -191,15 +191,33 @@ export class CompanyIntegrationCatalogStore {
     }
 
     /**
-     * Read straight from the database rather than the engine cache.
+     * Read straight from the database rather than the engine cache — and around the query-result
+     * cache too.
      *
      * Used by the write path, which must see rows another pass of the same run just persisted. The
      * engine cache is refreshed between passes, not within one.
+     *
+     * `BypassCache` is load-bearing, not a tuning knob. The query-result cache is keyed by the exact
+     * query text and filled by whoever asks first. Within one discovery that is Introspect, which
+     * asks for an object's fields BEFORE Persist has written any, so the cached answer is the empty
+     * set; Persist writes the rows; the reads after it issue the byte-identical query and are handed
+     * that empty answer. These entities are registered by a migration rather than CodeGen, so
+     * nothing invalidates the entry when the rows are saved, and where the cache is shared and
+     * external to the process a restart does not clear it either. Observed 2026-09-27: a discovery
+     * skipped all 34 objects for having no primary key although the 30 declared ones each had one;
+     * on another tenant, fetches aborted reporting "no columns persisted" for objects holding 41,
+     * 81, 31 and 704 persisted fields.
      */
     private async runView(entityName: CatalogEntityName, filter: string): Promise<BaseEntity[]> {
         const rv = new RunView();
         const result = await rv.RunView<BaseEntity>(
-            { EntityName: entityName, ExtraFilter: filter, ResultType: 'entity_object' },
+            {
+                EntityName: entityName,
+                ExtraFilter: filter,
+                ResultType: 'entity_object',
+                BypassCache: true,
+                Telemetry: { Exempt: true, Reason: 'Per-connection catalog read inside a run; a cached answer predates the write it must observe' },
+            },
             this.contextUser
         );
         return result?.Success ? (result.Results ?? []) : [];
@@ -237,6 +255,10 @@ export class CompanyIntegrationCatalogStore {
                 EntityName: ENTITY_COMPANY_INTEGRATION_OBJECTS,
                 ExtraFilter: `CompanyIntegrationID = '${companyIntegrationID}'`,
                 ResultType: 'count_only',
+                // Same reason as runView: a cached zero taken before the first persist would route
+                // the run down the no-catalog path for the rest of its life.
+                BypassCache: true,
+                Telemetry: { Exempt: true, Reason: 'Existence check for a catalog being written in this same run; a cached count predates the write' },
             },
             this.contextUser
         );
