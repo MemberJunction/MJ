@@ -42,9 +42,9 @@ export function AudienceColumns(
 /**
  * The panel live for this audience under the same contribution key — the one publishing replaces.
  *
- * Only the same key, compared exactly as the form compares keys: two different panels can both be
- * live for everyone, and publishing one must not switch off the other. The rule is the one that
- * decides which panel turning one on retires ({@link ActiveContributionSiblings}).
+ * Only the same key: two different panels can both be live for everyone, and publishing one must
+ * not switch off the other. The rule is the one that decides which panel turning one on retires
+ * ({@link ActiveContributionSiblings}), so keys compare the way the unique index compares them.
  */
 export function LiveContributionAt(
     rows: readonly ScopedRow[],

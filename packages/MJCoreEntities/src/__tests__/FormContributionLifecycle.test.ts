@@ -67,10 +67,10 @@ describe('ActiveContributionSiblings', () => {
         expect(ActiveContributionSiblings(rows, target)).toEqual([]);
     });
 
-    it('compares keys exactly after trimming, as the form does', () => {
+    it('retires a live row whose key differs only by case or padding, as the unique index would see it', () => {
         const padded = row({ ID: 'padded', ContributionKey: ' panel:Cohort ' });
         const recased = row({ ID: 'recased', ContributionKey: 'PANEL:COHORT' });
-        expect(ActiveContributionSiblings([padded, recased], target).map((r) => r.ID)).toEqual(['padded']);
+        expect(ActiveContributionSiblings([padded, recased], target).map((r) => r.ID)).toEqual(['padded', 'recased']);
     });
 
     it('never names the target itself', () => {

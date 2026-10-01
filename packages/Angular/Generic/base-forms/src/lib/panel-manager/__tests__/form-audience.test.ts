@@ -71,9 +71,9 @@ describe('LiveContributionAt', () => {
         expect(found?.ID).toBe('sales');
     });
 
-    it('compares keys exactly after trimming, as the form does, and ids without regard to case', () => {
+    it('compares keys as the unique index does, trimmed and without regard to case, and ids without regard to case', () => {
         const recased = row({ ID: 'recased', ContributionKey: 'PANEL:COHORT' });
-        expect(LiveContributionAt([target, recased], target, { Scope: 'Global', RoleID: null }, ME)).toBeNull();
+        expect(LiveContributionAt([target, recased], target, { Scope: 'Global', RoleID: null }, ME)?.ID).toBe('recased');
         const live = row({ ID: 'old', ContributionKey: ' panel:Cohort ', EntityID: 'ENT-1' });
         expect(LiveContributionAt([target, live], target, { Scope: 'Global', RoleID: null }, ME)?.ID).toBe('old');
     });

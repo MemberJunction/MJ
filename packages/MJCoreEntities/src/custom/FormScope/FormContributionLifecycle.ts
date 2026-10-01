@@ -55,19 +55,20 @@ export function SameFormAudience(
 
 /**
  * The Active panels that activating `target` must retire first: the same entity, the same
- * audience and the same key, other than the target itself. Keys are trimmed and compared exactly,
- * as the form compares them. A panel with no key has none: two keyless panels are two panels.
+ * audience and the same key, other than the target itself. A panel with no key has none: two
+ * keyless panels are two panels.
  *
  * `UQ_EntityFormContribution_Key` allows one Active row per entity, key and audience, so these are
- * demoted before the target is promoted, in the same transaction.
+ * demoted before the target is promoted, in the same transaction. Keys are trimmed and compared
+ * without regard to case, which mirrors the index's case-insensitive collation.
  */
 export function ActiveContributionSiblings<T extends FormScopedRow>(rows: readonly T[], target: FormScopedRow): T[] {
-    const key = (target.ContributionKey ?? '').trim();
+    const key = (target.ContributionKey ?? '').trim().toLowerCase();
     if (!key) return [];
     return rows.filter((row) =>
         row.Status === 'Active'
         && !UUIDsEqual(row.ID, target.ID)
         && UUIDsEqual(row.EntityID, target.EntityID)
-        && (row.ContributionKey ?? '').trim() === key
+        && (row.ContributionKey ?? '').trim().toLowerCase() === key
         && SameFormAudience(row, target));
 }
