@@ -1,6 +1,6 @@
 <section class="rubric-panel" aria-label="Publish rubric">
   @if (Preview) {
-    <p>Computed {{ Preview.computedBump ?? 'none' }}</p>
+    <p>Computed {{ Preview.computedBump ?? Preview.appliedBump ?? 'none' }}</p>
     <p>Applied {{ Preview.appliedBump ?? 'cannot publish' }}</p>
     @if (Preview.nextVersion) {
       <p>Next {{ Preview.nextVersion }}</p>

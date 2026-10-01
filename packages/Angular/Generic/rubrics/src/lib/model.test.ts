@@ -136,6 +136,18 @@ describe('publish, diff, and comparison', () => {
         const rows = versionRows(base, { ...draft, nodes: [...draft.nodes, leaf('sourcing', 1)] });
         expect(rows.find(row => row.key === 'sourcing')?.left).toBeNull();
         expect(rows.find(row => row.key === 'clarity')?.right).toBe('clarity');
+        const wording = versionRows(base, draft).find(row => row.key === 'version');
+        expect(wording?.marks.join(' ')).toMatch(/Instructions/);
+        const widened = versionRows(base, { ...draft, bands: [{ id: 'band', label: 'High', minScore: 0.5, maxScore: 1, displayTone: 'Success', sequence: 0 }] });
+        expect(widened.find(row => row.key === 'High')?.marks.join(' ')).toMatch(/added|MinScore|range/i);
+    });
+
+    it('shows Initial for a first publish', () => {
+        const preview = publishPreview(null, snap(1, null));
+        expect(preview.computedBump).toBeNull();
+        expect(preview.appliedBump).toBe('Initial');
+        expect(preview.nextVersion).toBe('1.0.0');
+        expect(preview.identical).toBe(false);
     });
 
     it('marks disagreement and keeps self and withdrawn out of the human and AI means', () => {

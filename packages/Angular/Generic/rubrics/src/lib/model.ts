@@ -254,16 +254,44 @@ export interface DiffRow {
     marks: string[];
 }
 
-/** One row per key, base on the left and draft on the right, with the diff's reasons. */
+/** Criterion keys, plus one row for each change that is not a criterion (version, band, or scale). */
 export function versionRows(base: RubricVersionSnapshot, draft: RubricVersionSnapshot): DiffRow[] {
     const diff = RubricVersionDiff.diff(base, draft);
     const keys = [...new Set([...base.nodes.map(node => node.key), ...draft.nodes.map(node => node.key)])];
-    return keys.map(key => ({
+    const rows: DiffRow[] = keys.map(key => ({
         key,
         left: base.nodes.find(node => node.key === key)?.name ?? null,
         right: draft.nodes.find(node => node.key === key)?.name ?? null,
-        marks: diff.changes.filter(change => change.subject === key).map(change => `${change.property} (${change.bump})`),
+        marks: diff.changes.filter(change => change.subject === key).map(mark),
     }));
+    const extras = new Map<string, VersionChange[]>();
+    for (const change of diff.changes) {
+        if (keys.includes(change.subject)) continue;
+        const list = extras.get(change.subject) ?? [];
+        list.push(change);
+        extras.set(change.subject, list);
+    }
+    for (const [subject, changes] of extras) {
+        rows.push({
+            key: subject,
+            left: sideText(base, subject),
+            right: sideText(draft, subject),
+            marks: changes.map(mark),
+        });
+    }
+    return rows;
+}
+
+function mark(change: VersionChange): string {
+    return `${change.property} (${change.bump})`;
+}
+
+function sideText(version: RubricVersionSnapshot, subject: string): string | null {
+    if (subject === 'version') return version.instructions ?? null;
+    const band = version.bands.find(item => item.label === subject || item.id === subject);
+    if (band) return `${band.minScore}–${band.maxScore}`;
+    const scale = version.scales.find(item => item.id === subject);
+    return scale ? scale.scaleType : null;
 }
 
 export interface MatrixColumn {
