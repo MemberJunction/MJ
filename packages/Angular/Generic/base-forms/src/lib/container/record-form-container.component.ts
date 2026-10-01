@@ -35,7 +35,7 @@ import { RestoreVersionEvent, RecordChangesComponent } from '@memberjunction/ng-
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ListManagementResult } from '@memberjunction/ng-list-management';
 import { FormSlotCoordinator } from '../panel-slot/form-slot-coordinator.service';
-import { BuildFormCompositionSnapshot, FormCompositionSnapshotsEqual, type FormCompositionSnapshot } from '../chrome/form-composition-snapshot';
+import { BuildFormCompositionSnapshot } from '../chrome/form-composition-snapshot';
 import { FormCompositionRegistry } from '../chrome/form-composition-registry';
 import { FormPanelAdminService } from '../panel-manager/form-panel-admin.service';
 import type { FormChromeSpec } from '../chrome/form-chrome';
@@ -167,8 +167,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   /** The placement dialog's unsaved panel, when this form is the dialog's preview. */
   private placementPreview = inject(FORM_PLACEMENT_PREVIEW, { optional: true });
   private compositionRegistry = inject(FormCompositionRegistry);
-  /** The last snapshot published, and the form it was published on. */
-  private lastComposition: { Form: BaseFormComponent; Snapshot: FormCompositionSnapshot } | null = null;
+  /** The last snapshot published, as JSON, and the form it was published on. */
+  private lastComposition: { Form: BaseFormComponent; Json: string } | null = null;
   /** Set in ngOnDestroy, so a late async result schedules nothing and draws nothing. */
   private destroyed = false;
   private destroy$ = new Subject<void>();
@@ -1320,9 +1320,11 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       SlotsPresent: this.Fc?.OwnsEntireFormBody ? [] : this.slots.PresentSlots,
       ChromeRuleCount: this.chromeRules.length,
     });
+    // The builder emits a fixed key order, so equal snapshots have equal JSON.
+    const json = JSON.stringify(snapshot);
     const last = this.lastComposition;
-    if (last && last.Form === form && FormCompositionSnapshotsEqual(last.Snapshot, snapshot)) return;
-    this.lastComposition = { Form: form, Snapshot: snapshot };
+    if (last && last.Form === form && last.Json === json) return;
+    this.lastComposition = { Form: form, Json: json };
     form.CompositionSnapshot = snapshot;
     if (!this.placementPreview) this.compositionRegistry.Publish(this, snapshot);
     form.CompositionChanged.emit(snapshot);

@@ -227,16 +227,6 @@ export function BuildFormCompositionSnapshot(input: BuildFormCompositionSnapshot
     };
 }
 
-/**
- * Whether two snapshots describe the same form. Snapshots are plain data built by
- * {@link BuildFormCompositionSnapshot} in a fixed key order, so their JSON text compares them.
- */
-export function FormCompositionSnapshotsEqual(a: FormCompositionSnapshot | null, b: FormCompositionSnapshot | null): boolean {
-    if (a === b) return true;
-    if (!a || !b) return false;
-    return JSON.stringify(a) === JSON.stringify(b);
-}
-
 /** One section of {@link FormAgentContext}. */
 export interface FormAgentContextSection {
     Key: string;
@@ -265,9 +255,14 @@ export interface FormAgentContext {
     Sections: FormAgentContextSection[];
 }
 
-/** The compact {@link FormAgentContext} of a snapshot. */
+/**
+ * The compact {@link FormAgentContext} of a snapshot. Only contributions the form draws hold a
+ * section: one that is hidden (by the user, or by inclusion `None`) holds none, so the section is
+ * reported as the form draws it.
+ */
 export function BuildFormAgentContext(snapshot: FormCompositionSnapshot): FormAgentContext {
-    const contributionKeys = new Set(snapshot.Contributions.map((c) => c.Key));
+    const drawn = snapshot.Contributions.filter((c) => !c.Hidden);
+    const contributionKeys = new Set(drawn.map((c) => c.Key));
     const holderBySection = new Map<string, string>();
     // Weakest claim first, so a stronger one overwrites it: a grid claim, then a block a
     // contribution stands in for, then the contribution's own section.
@@ -275,7 +270,7 @@ export function BuildFormAgentContext(snapshot: FormCompositionSnapshot): FormAg
         const key = RelatedContributionKey(rel.Entity, rel.JoinField);
         if (rel.Source === 'claimed' && contributionKeys.has(key)) holderBySection.set(rel.SectionKey, key);
     }
-    for (const c of snapshot.Contributions) {
+    for (const c of drawn) {
         for (const sectionKey of c.SectionKeys ?? []) holderBySection.set(sectionKey, c.Key);
     }
     for (const key of contributionKeys) holderBySection.set(key, key);

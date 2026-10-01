@@ -1,6 +1,6 @@
 // packages/Angular/Generic/base-forms/src/lib/chrome/__tests__/form-composition-snapshot.test.ts
 import { describe, it, expect } from 'vitest';
-import { BuildFormAgentContext, BuildFormCompositionSnapshot, FormCompositionSnapshotsEqual, type FormCompositionChoice } from '../form-composition-snapshot';
+import { BuildFormAgentContext, BuildFormCompositionSnapshot, type FormCompositionChoice } from '../form-composition-snapshot';
 import type { FormContributionRegistration, FormContributionRelationship } from '../../panel-slot/form-contribution';
 
 const PEOPLE = 'MJ_BizApps_Common: People';
@@ -86,7 +86,7 @@ describe('BuildFormCompositionSnapshot', () => {
         ]);
     });
 
-    it('equals a snapshot built from the same input, and differs once a section is hidden', () => {
+    it('gives the same JSON for the same input, which the container compares, and other JSON once a section is hidden', () => {
         const again = BuildFormCompositionSnapshot({
             EntityName: PEOPLE, RecordPrimaryKey: 'ID|person-1', FormChoice: STANDARD_FORM, Layout: 'left-nav',
             Groups: [{ Key: 'details', Title: 'Details', Icon: '', SectionKeys: ['details', 'personalIdentity'], IsMore: false }],
@@ -100,10 +100,9 @@ describe('BuildFormCompositionSnapshot', () => {
             RelatedRoles: new Map([['mJBizAppsCommonAddresses', 'Primary']]), HiddenContributionKeys: new Set(),
             SlotsPresent: ['before-fields', 'after-fields', 'after-everything'], ChromeRuleCount: 2,
         });
-        expect(FormCompositionSnapshotsEqual(snapshot, again)).toBe(true);
+        expect(JSON.stringify(again)).toBe(JSON.stringify(snapshot));
         const changed = { ...again, Sections: again.Sections.map((s) => ({ ...s, Hidden: true })) };
-        expect(FormCompositionSnapshotsEqual(snapshot, changed)).toBe(false);
-        expect(FormCompositionSnapshotsEqual(snapshot, null)).toBe(false);
+        expect(JSON.stringify(changed)).not.toBe(JSON.stringify(snapshot));
     });
 });
 
@@ -158,6 +157,25 @@ describe('BuildFormAgentContext', () => {
     it('leaves out the fields, the rail and the contribution details', () => {
         expect(Object.keys(context).sort()).toEqual(['Entity', 'FormChoice', 'RecordPrimaryKey', 'Sections']);
         expect(JSON.stringify(context)).not.toContain('Email');
+    });
+
+    it('names no holder for a section whose replacing panel the user hid, and reports the section as drawn', () => {
+        const hiddenReplacer = BuildFormCompositionSnapshot({
+            EntityName: PEOPLE, RecordPrimaryKey: 'ID|person-1', FormChoice: STANDARD_FORM, Layout: 'accordion', Groups: [],
+            Panels: [{ SectionKey: 'notes', SectionName: 'Notes', Variant: 'default' }],
+            HiddenSectionKeys: new Set(),
+            RelatedEntities: [], IsaChildEntityIDs: [], BakedSectionKeys: [],
+            Registrations: [
+                { Priority: 0, Source: 'metadata', ComponentID: 'c2', Scope: 'Global', Title: 'Notes card', Presentation: 'panel',
+                  Metadata: { entity: PEOPLE, slot: 'after-fields', contributionKey: 'notes-card', replacesSectionKey: 'notes' } },
+            ],
+            HiddenPanelKeys: ['notes-card'],
+            RelatedRoles: new Map(), HiddenContributionKeys: new Set(), SlotsPresent: ['before-fields'], ChromeRuleCount: 0,
+        });
+        expect(hiddenReplacer.Contributions).toEqual([expect.objectContaining({ Key: 'notes-card', Hidden: true })]);
+        expect(BuildFormAgentContext(hiddenReplacer).Sections).toEqual([
+            { Key: 'notes', Title: 'Notes', Variant: 'default', Hidden: false, ContributionKey: null },
+        ]);
     });
 });
 
