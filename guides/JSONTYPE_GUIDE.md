@@ -236,5 +236,5 @@ rows are left in place when a rule's text changes.
 
 * Core behavior: `packages/MJCore/src/__tests__/baseEntity.jsonField*.test.ts`.
 * Generated code: `packages/CodeGenLib/src/__tests__/entity-subclass-jsontype*.test.ts`.
-* Live database: the `jsontype-live-sync` integration bundles (IT95 server, IT96 client wire), which
+* Live database: the `jsontype-live-sync` integration bundles (IT97 server, IT96 client wire), which
   prove edit → `Save()` → fresh load through a real provider.

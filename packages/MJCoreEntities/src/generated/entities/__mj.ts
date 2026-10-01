@@ -59037,25 +59037,19 @@ export class MJAIVendorEntity extends BaseEntity<MJAIVendorEntityType> {
         this.Set('Configuration', value);
     }
 
-    private _ConfigurationObject_cached: MJAIVendorEntity_IAIVendorConfiguration | null | undefined = undefined;
-    private _ConfigurationObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for Configuration — returns parsed JSON as MJAIVendorEntity_IAIVendorConfiguration.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for Configuration — a live view of the parsed JSON as MJAIVendorEntity_IAIVendorConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get ConfigurationObject(): MJAIVendorEntity_IAIVendorConfiguration | null {
-        const raw = this.Configuration;
-        if (raw !== this._ConfigurationObject_lastRaw) {
-            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
-            this._ConfigurationObject_lastRaw = raw;
-        }
-        return this._ConfigurationObject_cached!;
+        return this.GetJSONFieldObject<MJAIVendorEntity_IAIVendorConfiguration>('Configuration');
     }
     set ConfigurationObject(value: MJAIVendorEntity_IAIVendorConfiguration | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.Configuration = raw;
-        this._ConfigurationObject_cached = value;
-        this._ConfigurationObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJAIVendorEntity_IAIVendorConfiguration>('Configuration', value);
     }
 
     /**
