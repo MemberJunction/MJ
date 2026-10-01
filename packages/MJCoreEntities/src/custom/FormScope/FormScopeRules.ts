@@ -135,6 +135,9 @@ function tieRank(contribution: RankedFormContribution): number {
  * A shared form set to `Inactive` was retracted by whoever manages it, so it is neither offered nor
  * rendered. A `Pending` row is a draft and is never either. The browser's form resolver and the
  * server's composition action both decide with this.
+ *
+ * It checks `Status` and `Scope` only, not whose row it is or which role it is for. Callers pass
+ * rows that already apply to the user: their own `User` rows, their roles' rows and `Global` rows.
  */
 export function IsSelectableFormOverride(row: { Status: string | null | undefined; Scope: string | null | undefined }): boolean {
     return row.Status === 'Active' || (row.Status === 'Inactive' && row.Scope === 'User');

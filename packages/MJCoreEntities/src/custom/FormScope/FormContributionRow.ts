@@ -9,8 +9,9 @@ import type { MJEntityFormContributionEntity } from '../../generated/entities/__
 /**
  * The spec-to-row mapping for `MJ: Entity Form Contributions`.
  *
- * The Create and Modify Form Contribution actions write rows through
- * {@link ApplyContributionSpecToRow}, so the same spec produces the same row on either path.
+ * The Create and Modify Form Contribution actions, and the Manage drawer's
+ * `FormPanelAdminService.SetPlacement` (`@memberjunction/ng-base-forms`), write rows through
+ * {@link ApplyContributionSpecToRow}, so the same spec produces the same row on every path.
  * Lives here because both the server and the browser depend on this package.
  */
 

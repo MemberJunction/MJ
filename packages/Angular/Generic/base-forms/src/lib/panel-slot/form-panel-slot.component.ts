@@ -198,9 +198,9 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
             this.unmountAll();
             return;
         }
-        // Design decision 9: render both sources together or not at all. Mounting compiled
-        // panels first and adding rows a tick later is visible — and for a `bare` hero that
-        // replaces a baked section, the user watches that section render and then vanish.
+        // Compiled panels and rows mount together or not at all. Mounting compiled panels
+        // first and adding rows a tick later is visible — and for a `bare` hero that replaces
+        // a baked section, the user watches that section render and then vanish.
         if (!this.contributionsReady()) {
             void this.awaitContributionsThenRemount();
             return;
