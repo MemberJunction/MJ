@@ -112,7 +112,7 @@
           @case ('docx') {
             @if (MediaUrl) {
               <div class="mj-file-media-office-box" [class.mj-file-media--hidden]="!IsMediaLoaded">
-                <mj-docx-preview [url]="MediaUrl" (loaded)="OnMediaElementLoaded()" (failed)="OnMediaElementLoaded()"></mj-docx-preview>
+                <mj-docx-preview [Url]="MediaUrl" (Loaded)="OnMediaElementLoaded()" (Failed)="OnMediaElementLoaded()"></mj-docx-preview>
               </div>
             } @else {
               <div class="mj-file-viewer-fallback">
@@ -125,7 +125,7 @@
           @case ('xlsx') {
             @if (MediaUrl) {
               <div class="mj-file-media-office-box" [class.mj-file-media--hidden]="!IsMediaLoaded">
-                <mj-xlsx-preview [url]="MediaUrl" (loaded)="OnMediaElementLoaded()" (failed)="OnMediaElementLoaded()"></mj-xlsx-preview>
+                <mj-xlsx-preview [Url]="MediaUrl" (Loaded)="OnMediaElementLoaded()" (Failed)="OnMediaElementLoaded()"></mj-xlsx-preview>
               </div>
             } @else {
               <div class="mj-file-viewer-fallback">

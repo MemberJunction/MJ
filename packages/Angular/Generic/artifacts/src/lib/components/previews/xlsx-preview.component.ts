@@ -3,12 +3,12 @@ import { ColDef, GridApi, GridReadyEvent } from 'ag-grid-community';
 import { FetchArrayBuffer, ParseWorkbook, type SheetData, type XlsxModuleShim } from './office-preview.logic';
 
 /**
- * Renders a workbook (.xlsx, .xls) inline: fetches the bytes from `url` (or takes them from `arrayBuffer`), parses every
+ * Renders a workbook (.xlsx, .xls) inline: fetches the bytes from `Url` (or takes them from `ArrayBuffer`), parses every
  * sheet with SheetJS and shows the active one in an AG Grid, with tabs when there is more than one sheet. Explorer's one
  * spreadsheet renderer: the artifact viewer wraps it with its toolbar, and the Files form shows it in its preview pane.
  *
- * `loaded` fires with the parsed sheets once the workbook is shown; `failed` fires with the reason when it cannot be;
- * `sheetChange` fires with the index when the viewer picks another sheet.
+ * `Loaded` fires with the parsed sheets once the workbook is shown; `Failed` fires with the reason when it cannot be;
+ * `SheetChange` fires with the index when the viewer picks another sheet.
  */
 @Component({
   standalone: false,
@@ -135,17 +135,17 @@ import { FetchArrayBuffer, ParseWorkbook, type SheetData, type XlsxModuleShim } 
   ],
 })
 export class XlsxPreviewComponent implements OnChanges {
-  /** Where to fetch the workbook's bytes. Ignored when `arrayBuffer` is set. */
-  @Input() url: string | null = null;
+  /** Where to fetch the workbook's bytes. Ignored when `ArrayBuffer` is set. */
+  @Input() Url: string | null = null;
   /** The workbook's bytes, when the caller already has them. */
-  @Input() arrayBuffer: ArrayBuffer | null = null;
+  @Input() ArrayBuffer: ArrayBuffer | null = null;
 
   /** The parsed sheets, once the workbook is shown. */
-  @Output() loaded = new EventEmitter<SheetData[]>();
+  @Output() Loaded = new EventEmitter<SheetData[]>();
   /** Why the workbook could not be shown. */
-  @Output() failed = new EventEmitter<string>();
+  @Output() Failed = new EventEmitter<string>();
   /** The index of the sheet the viewer switched to. */
-  @Output() sheetChange = new EventEmitter<number>();
+  @Output() SheetChange = new EventEmitter<number>();
 
   public IsLoading = true;
   public ErrorMessage = '';
@@ -163,7 +163,7 @@ export class XlsxPreviewComponent implements OnChanges {
   }
 
   public ngOnChanges(changes: SimpleChanges): void {
-    if (changes['url'] || changes['arrayBuffer']) {
+    if (changes['Url'] || changes['ArrayBuffer']) {
       void this.load();
     }
   }
@@ -177,7 +177,7 @@ export class XlsxPreviewComponent implements OnChanges {
     if (index === this.ActiveSheetIndex || !this.Sheets[index]) return;
     this.ActiveSheetIndex = index;
     this.cdr.markForCheck();
-    this.sheetChange.emit(index);
+    this.SheetChange.emit(index);
     // Let Angular render the new rowData/columnDefs before re-sizing
     setTimeout(() => this.gridApi?.sizeColumnsToFit(), 0);
   }
@@ -188,7 +188,7 @@ export class XlsxPreviewComponent implements OnChanges {
     this.ErrorMessage = '';
     this.cdr.markForCheck();
     try {
-      const bytes = this.arrayBuffer ?? (this.url ? await FetchArrayBuffer(this.url) : null);
+      const bytes = this.ArrayBuffer ?? (this.Url ? await FetchArrayBuffer(this.Url) : null);
       if (!bytes) {
         this.showError('No workbook to show.');
         return;
@@ -200,7 +200,7 @@ export class XlsxPreviewComponent implements OnChanges {
       this.ActiveSheetIndex = 0;
       this.IsLoading = false;
       this.cdr.markForCheck();
-      this.loaded.emit(sheets);
+      this.Loaded.emit(sheets);
     } catch (err) {
       if (token !== this.loadToken) return;
       this.showError(`Could not load workbook: ${err instanceof Error ? err.message : String(err)}`);
@@ -211,6 +211,6 @@ export class XlsxPreviewComponent implements OnChanges {
     this.IsLoading = false;
     this.ErrorMessage = message;
     this.cdr.markForCheck();
-    this.failed.emit(message);
+    this.Failed.emit(message);
   }
 }

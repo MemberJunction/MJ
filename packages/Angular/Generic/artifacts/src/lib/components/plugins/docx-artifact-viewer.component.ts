@@ -29,7 +29,7 @@ import { ArtifactFileService } from '../../services/artifact-file.service';
       </mj-file-artifact-toolbar>
 
       <div class="docx-viewer__body">
-        @if (!arrayBuffer && !errorMessage) {
+        @if (!ArrayBuffer && !errorMessage) {
           <div class="docx-viewer__state">
             <i class="fas fa-spinner fa-spin"></i>
             <span>Loading document…</span>
@@ -40,7 +40,7 @@ import { ArtifactFileService } from '../../services/artifact-file.service';
             <span>{{ errorMessage }}</span>
           </div>
         } @else {
-          <mj-docx-preview [arrayBuffer]="arrayBuffer" (loaded)="OnPreviewLoaded($event)" (failed)="showError($event)"></mj-docx-preview>
+          <mj-docx-preview [ArrayBuffer]="ArrayBuffer" (Loaded)="OnPreviewLoaded($event)" (Failed)="ShowError($event)"></mj-docx-preview>
         }
       </div>
     </div>
@@ -106,7 +106,7 @@ export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   private rawHtml = '';
   private downloadUrl = '';
   /** The document's bytes, handed to the shared preview once downloaded. */
-  public arrayBuffer: ArrayBuffer | null = null;
+  public ArrayBuffer: ArrayBuffer | null = null;
 
   constructor(
     private fileService: ArtifactFileService,
@@ -158,7 +158,7 @@ export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
   private async loadDocument(): Promise<void> {
     if (!this.artifactVersion?.ID) {
-      this.showError('No artifact version provided.');
+      this.ShowError('No artifact version provided.');
       return;
     }
 
@@ -173,7 +173,7 @@ export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         // Inline: content is a base64 data URL stored in the artifact version
         const content = this.artifactVersion.Content;
         if (!content) {
-          this.showError('Artifact has no content.');
+          this.ShowError('Artifact has no content.');
           return;
         }
         arrayBuffer = this.fileService.dataUrlToArrayBuffer(content);
@@ -184,10 +184,10 @@ export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         );
       }
 
-      this.arrayBuffer = arrayBuffer;
+      this.ArrayBuffer = arrayBuffer;
       this.cdr.markForCheck();
     } catch (err) {
-      this.showError(`Could not load document: ${err instanceof Error ? err.message : String(err)}`);
+      this.ShowError(`Could not load document: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -237,7 +237,7 @@ export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     printWindow.close();
   }
 
-  public showError(message: string): void {
+  public ShowError(message: string): void {
     this.isLoading = false;
     this.errorMessage = message;
     this.cdr.markForCheck();

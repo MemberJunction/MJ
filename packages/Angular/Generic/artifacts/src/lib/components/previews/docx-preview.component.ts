@@ -3,11 +3,11 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { ConvertDocxToHtml, FetchArrayBuffer, type MammothModuleShim } from './office-preview.logic';
 
 /**
- * Renders a Word document (.docx) inline: fetches the bytes from `url` (or takes them from `arrayBuffer`), converts
+ * Renders a Word document (.docx) inline: fetches the bytes from `Url` (or takes them from `ArrayBuffer`), converts
  * them to HTML with mammoth and shows the sanitized result. Explorer's one Word renderer: the artifact viewer wraps it
  * with its toolbar, and the Files form shows it in its preview pane.
  *
- * `loaded` fires with the raw HTML once the document is shown; `failed` fires with the reason when it cannot be.
+ * `Loaded` fires with the raw HTML once the document is shown; `Failed` fires with the reason when it cannot be.
  */
 @Component({
   standalone: false,
@@ -98,15 +98,15 @@ import { ConvertDocxToHtml, FetchArrayBuffer, type MammothModuleShim } from './o
   ],
 })
 export class DocxPreviewComponent implements OnChanges {
-  /** Where to fetch the document's bytes. Ignored when `arrayBuffer` is set. */
-  @Input() url: string | null = null;
+  /** Where to fetch the document's bytes. Ignored when `ArrayBuffer` is set. */
+  @Input() Url: string | null = null;
   /** The document's bytes, when the caller already has them. */
-  @Input() arrayBuffer: ArrayBuffer | null = null;
+  @Input() ArrayBuffer: ArrayBuffer | null = null;
 
   /** The raw HTML mammoth produced, once the document is shown. */
-  @Output() loaded = new EventEmitter<string>();
+  @Output() Loaded = new EventEmitter<string>();
   /** Why the document could not be shown. */
-  @Output() failed = new EventEmitter<string>();
+  @Output() Failed = new EventEmitter<string>();
 
   public IsLoading = true;
   public ErrorMessage = '';
@@ -122,7 +122,7 @@ export class DocxPreviewComponent implements OnChanges {
   ) {}
 
   public ngOnChanges(changes: SimpleChanges): void {
-    if (changes['url'] || changes['arrayBuffer']) {
+    if (changes['Url'] || changes['ArrayBuffer']) {
       void this.load();
     }
   }
@@ -133,7 +133,7 @@ export class DocxPreviewComponent implements OnChanges {
     this.ErrorMessage = '';
     this.cdr.markForCheck();
     try {
-      const bytes = this.arrayBuffer ?? (this.url ? await FetchArrayBuffer(this.url) : null);
+      const bytes = this.ArrayBuffer ?? (this.Url ? await FetchArrayBuffer(this.Url) : null);
       if (!bytes) {
         this.showError('No document to show.');
         return;
@@ -145,7 +145,7 @@ export class DocxPreviewComponent implements OnChanges {
       this.SafeHtml = this.sanitizer.sanitize(SecurityContext.HTML, html) ?? '';
       this.IsLoading = false;
       this.cdr.markForCheck();
-      this.loaded.emit(html);
+      this.Loaded.emit(html);
     } catch (err) {
       if (token !== this.loadToken) return;
       this.showError(`Could not load document: ${err instanceof Error ? err.message : String(err)}`);
@@ -156,6 +156,6 @@ export class DocxPreviewComponent implements OnChanges {
     this.IsLoading = false;
     this.ErrorMessage = message;
     this.cdr.markForCheck();
-    this.failed.emit(message);
+    this.Failed.emit(message);
   }
 }

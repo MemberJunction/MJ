@@ -26,7 +26,7 @@ import { type SheetData } from '../previews/office-preview.logic';
       >
       </mj-file-artifact-toolbar>
 
-      @if (!arrayBuffer && !errorMessage) {
+      @if (!ArrayBuffer && !errorMessage) {
         <div class="xlsx-viewer__state">
           <i class="fas fa-spinner fa-spin"></i>
           <span>Loading workbook…</span>
@@ -38,7 +38,7 @@ import { type SheetData } from '../previews/office-preview.logic';
         </div>
       } @else {
         <div class="xlsx-viewer__body">
-          <mj-xlsx-preview [arrayBuffer]="arrayBuffer" (loaded)="OnPreviewLoaded($event)" (failed)="showError($event)" (sheetChange)="ActiveSheetIndex = $event"></mj-xlsx-preview>
+          <mj-xlsx-preview [ArrayBuffer]="ArrayBuffer" (Loaded)="OnPreviewLoaded($event)" (Failed)="ShowError($event)" (SheetChange)="ActiveSheetIndex = $event"></mj-xlsx-preview>
         </div>
       }
     </div>
@@ -122,7 +122,7 @@ export class XlsxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
   private downloadUrl = '';
   /** The workbook's bytes, handed to the shared preview once downloaded. */
-  public arrayBuffer: ArrayBuffer | null = null;
+  public ArrayBuffer: ArrayBuffer | null = null;
 
   constructor(
     private fileService: ArtifactFileService,
@@ -171,7 +171,7 @@ export class XlsxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
   private async loadWorkbook(): Promise<void> {
     if (!this.artifactVersion?.ID) {
-      this.showError('No artifact version provided.');
+      this.ShowError('No artifact version provided.');
       return;
     }
 
@@ -186,7 +186,7 @@ export class XlsxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         // Inline: content is a base64 data URL stored in the artifact version
         const content = this.artifactVersion.Content;
         if (!content) {
-          this.showError('Artifact has no content.');
+          this.ShowError('Artifact has no content.');
           return;
         }
         arrayBuffer = this.fileService.dataUrlToArrayBuffer(content);
@@ -197,10 +197,10 @@ export class XlsxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         );
       }
 
-      this.arrayBuffer = arrayBuffer;
+      this.ArrayBuffer = arrayBuffer;
       this.cdr.markForCheck();
     } catch (err) {
-      this.showError(`Could not load workbook: ${err instanceof Error ? err.message : String(err)}`);
+      this.ShowError(`Could not load workbook: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -220,7 +220,7 @@ export class XlsxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     return response.arrayBuffer();
   }
 
-  public showError(message: string): void {
+  public ShowError(message: string): void {
     this.isLoading = false;
     this.errorMessage = message;
     this.cdr.markForCheck();
