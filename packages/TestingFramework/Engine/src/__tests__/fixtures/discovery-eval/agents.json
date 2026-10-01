@@ -1,9 +1,0 @@
-{
-  "created_at": "2026-09-29T09:59:00.000Z",
-  "conversation_manager_id": "E1000000-0000-4000-8000-0000000000FF",
-  "agents": [
-    { "ID": "E1000000-0000-4000-8000-000000000001", "Name": "Research Agent", "Description": "Researches topics on the web and summarizes what it finds." },
-    { "ID": "E1000000-0000-4000-8000-000000000002", "Name": "Billing Agent", "Description": "Creates invoices, records payments and answers questions about spending." },
-    { "ID": "E1000000-0000-4000-8000-000000000003", "Name": "Marketing Agent", "Description": "Writes marketing copy, posts and announcements." }
-  ]
-}

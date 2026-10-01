@@ -1,8 +1,0 @@
-{"id": "F1000000-0000-4000-8000-000000000001", "label": "agent", "agentId": "E1000000-0000-4000-8000-000000000002", "source": "construction"}
-{"id": "F1000000-0000-4000-8000-000000000002", "label": "agent", "agentId": "E1000000-0000-4000-8000-000000000002", "source": "construction"}
-{"id": "f1000000-0000-4000-8000-000000000003", "label": "agent", "agentId": "E1000000-0000-4000-8000-000000000003", "source": "construction"}
-{"id": "F1000000-0000-4000-8000-000000000004", "label": "none", "kind": "chat", "source": "construction"}
-{"id": "F1000000-0000-4000-8000-000000000005", "label": "none", "kind": "direct", "source": "construction"}
-{"id": "F1000000-0000-4000-8000-000000000006", "label": "none", "kind": "workflow", "source": "construction"}
-{"id": "F1000000-0000-4000-8000-000000000002", "label": "agent", "agentId": "E1000000-0000-4000-8000-000000000001", "source": "hand"}
-{"id": "F1000000-0000-4000-8000-000000000099", "label": "none", "kind": "chat", "source": "hand"}
