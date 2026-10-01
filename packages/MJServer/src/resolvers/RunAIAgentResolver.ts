@@ -514,7 +514,10 @@ export class RunAIAgentResolver extends ResolverBase {
                     detail.Message = errorMessage;
                     detail.Error = errorMessage;
                     if (!(await detail.Save())) {
-                        LogError(`Failed to persist Error on conversation detail ${conversationDetailId}`);
+                        LogError(
+                            `Failed to persist Error on conversation detail ${conversationDetailId}: ` +
+                                `${detail.LatestResult?.CompleteMessage?.trim() || 'no failure detail recorded'}`,
+                        );
                     }
                 }
             }

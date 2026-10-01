@@ -33,7 +33,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (420 classes)
+// @memberjunction/core-entities (421 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -273,6 +273,7 @@ import {
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
+    MJFeaturePipelineTypeEntity,
     MJFeatureValueCacheEntity,
     MJFeatureValueEntity,
     MJFileCategoryEntity,
@@ -899,6 +900,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
+    MJFeaturePipelineTypeEntity,
     MJFeatureValueCacheEntity,
     MJFeatureValueEntity,
     MJFileCategoryEntity,
@@ -1050,11 +1052,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJTestSuiteRunEntity,
     MJTestSuiteTestEntity,
     MJTestTypeEntity,
-    MJThemeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJThemeEntity,
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
@@ -1223,7 +1225,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 555;
+export const CLASS_REGISTRATIONS_COUNT = 556;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -205,7 +205,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (420 classes)
+// @memberjunction/core-entities (421 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -445,6 +445,7 @@ import {
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
+    MJFeaturePipelineTypeEntity,
     MJFeatureValueCacheEntity,
     MJFeatureValueEntity,
     MJFileCategoryEntity,
@@ -897,25 +898,6 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/search-engine (15 classes)
-import {
-    AzureAISearchProvider,
-    BGEReRanker,
-    CohereReRanker,
-    ElasticsearchSearchProvider,
-    EntitySearchProvider,
-    FullTextSearchProvider,
-    NoopReRanker,
-    OpenAIReRanker,
-    OpenSearchSearchProvider,
-    SearchScopePermissionResolver,
-    StorageSearchProvider,
-    TagSearchProvider,
-    TypesenseSearchProvider,
-    VectorSearchProvider,
-    VoyageReRanker,
-} from '@memberjunction/search-engine';
-
 // @memberjunction/templates (3 classes)
 import {
     AIPromptExtension,
@@ -938,6 +920,25 @@ import {
 import {
     PromptReasoningProvider,
 } from '@memberjunction/ai-vector-dupe';
+
+// @memberjunction/search-engine (15 classes)
+import {
+    AzureAISearchProvider,
+    BGEReRanker,
+    CohereReRanker,
+    ElasticsearchSearchProvider,
+    EntitySearchProvider,
+    FullTextSearchProvider,
+    NoopReRanker,
+    OpenAIReRanker,
+    OpenSearchSearchProvider,
+    SearchScopePermissionResolver,
+    StorageSearchProvider,
+    TagSearchProvider,
+    TypesenseSearchProvider,
+    VectorSearchProvider,
+    VoyageReRanker,
+} from '@memberjunction/search-engine';
 
 // @memberjunction/ai-agents (22 classes)
 import {
@@ -992,8 +993,9 @@ import {
     FormBuilderDesignerAgent,
 } from '@memberjunction/ai-form-builder';
 
-// @memberjunction/record-set-processor (5 classes)
+// @memberjunction/record-set-processor (6 classes)
 import {
+    LLMFeaturePipelineDriver,
     RecordProcessCancelRunServerOperation,
     RecordProcessGetRunStatusServerOperation,
     RecordProcessPauseRunServerOperation,
@@ -1582,6 +1584,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
+    MJFeaturePipelineTypeEntity,
     MJFeatureValueCacheEntity,
     MJFeatureValueEntity,
     MJFileCategoryEntity,
@@ -1689,11 +1692,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
     MJScopedPromptConfigEntity,
-    MJScopedPromptPartEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
     MJSearchProviderEntity,
     MJSearchScopeEntity,
@@ -1893,11 +1896,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     FacebookSchedulePostAction,
     FacebookSearchPostsAction,
     GetAccountAnalyticsAction,
-    GetCommentsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetCommentsAction,
     GetTrendingHashtagsAction,
     GetUserVideosAction,
     GetVideoAnalyticsAction,
@@ -1960,6 +1963,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     RecordComparisonCompareServerOperation,
     MJScheduledJobEntityExtended,
     TagEngineBase,
+    AIPromptExtension,
+    TemplateEmbedExtension,
+    TemplateRunServerOperation,
+    LLMDecision,
+    ParallelExecutionCoordinator,
+    LLMReranker,
+    PromptReasoningProvider,
     AzureAISearchProvider,
     BGEReRanker,
     CohereReRanker,
@@ -1975,13 +1985,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     TypesenseSearchProvider,
     VectorSearchProvider,
     VoyageReRanker,
-    AIPromptExtension,
-    TemplateEmbedExtension,
-    TemplateRunServerOperation,
-    LLMDecision,
-    ParallelExecutionCoordinator,
-    LLMReranker,
-    PromptReasoningProvider,
     AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
     CSVToolLibrary,
@@ -2019,6 +2022,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     FormBuilderAgent,
     FormBuilderBuilderAgent,
     FormBuilderDesignerAgent,
+    LLMFeaturePipelineDriver,
     RecordProcessCancelRunServerOperation,
     RecordProcessGetRunStatusServerOperation,
     RecordProcessPauseRunServerOperation,
@@ -2096,12 +2100,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
     MJMaterializedResultEntityServer,
-    MJQueryEntityServer,
-    MJQuerySQLEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    MJQueryEntityServer,
+    MJQuerySQLEntityServer,
     MJRecordChangeEntityServer,
     MJRecordProcessEntityServer,
     MJRemoteOperationEntityServer,
@@ -2291,7 +2295,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 974;
+export const CLASS_REGISTRATIONS_COUNT = 976;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
@@ -2351,11 +2355,11 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/record-comparison',
     '@memberjunction/scheduling-engine-base',
     '@memberjunction/tag-engine-base',
-    '@memberjunction/search-engine',
     '@memberjunction/templates',
     '@memberjunction/ai-prompts',
     '@memberjunction/ai-reranker',
     '@memberjunction/ai-vector-dupe',
+    '@memberjunction/search-engine',
     '@memberjunction/ai-agents',
     '@memberjunction/ai-agent-harness',
     '@memberjunction/ai-agent-manager',

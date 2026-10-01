@@ -133,7 +133,9 @@
     "check:standards": "node packages/MJCLI/bin/run.js standards check",
     "check:naming": "node packages/MJCLI/bin/run.js standards check --check naming-conventions",
     "check:changeset": "node .github/scripts/check-changeset-bump.mjs",
-    "check:changeset:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-changeset-bump"
+    "check:changeset:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-changeset-bump",
+    "check:ai-model-ranks": "node .github/scripts/check-ai-model-ranks.mjs",
+    "check:ai-model-ranks:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-ai-model-ranks"
   },
   "repository": {
     "type": "git",
