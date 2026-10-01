@@ -1,4 +1,5 @@
 import type { UserInfo } from '@memberjunction/core';
+import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 
 /** `name`, `id`, `name@1.2.0`, or `id@version-id`. */
 export function parseRubricRef(value: string): { rubric: string; version?: string } {
@@ -49,7 +50,7 @@ export function formatVersionDiff(result: { computedBump: string | null; changes
     return lines.join('\n');
 }
 
-export function validateSnapshot(version: { nodes?: { key?: string; weight?: number; isGate?: boolean; gateMinimumScore?: number | null; scaleId?: string | null; nodeType?: string }[]; scales?: { id: string }[] }): string[] {
+export function validateSnapshot(version: { nodes?: { id?: string; key?: string; parentId?: string | null; weight?: number; isGate?: boolean; gateMinimumScore?: number | null; scaleId?: string | null; nodeType?: string }[]; scales?: { id: string }[] }): string[] {
     const errors: string[] = [];
     const nodes = version.nodes ?? [];
     if (nodes.length === 0) errors.push('The rubric has no criteria.');
@@ -60,12 +61,88 @@ export function validateSnapshot(version: { nodes?: { key?: string; weight?: num
         if (!node.key) errors.push('A criterion has no key.');
         else if (keys.has(node.key)) errors.push(`Duplicate key ${node.key}.`);
         else keys.add(node.key);
-        if (node.nodeType === 'Group') continue;
-        if (typeof node.weight !== 'number' || !Number.isFinite(node.weight) || node.weight < 0) errors.push(`${key}: weight must be a number that is at least 0.`);
-        if (node.isGate && (typeof node.gateMinimumScore !== 'number' || node.gateMinimumScore < 0 || node.gateMinimumScore > 1)) errors.push(`${key}: a gate needs a minimum from 0 to 1.`);
-        if (node.scaleId && !scaleIds.has(node.scaleId)) errors.push(`${key}: scale ${node.scaleId} is not on this version.`);
+        if (node.nodeType === 'Group') {
+            if (node.scaleId) errors.push(`${key}: a group must not have a scale.`);
+        } else {
+            if (!node.scaleId) errors.push(`${key}: a criterion needs a scale.`);
+            else if (!scaleIds.has(node.scaleId)) errors.push(`${key}: scale ${node.scaleId} is not on this version.`);
+            if (typeof node.weight !== 'number' || !Number.isFinite(node.weight) || node.weight < 0) errors.push(`${key}: weight must be a number that is at least 0.`);
+            if (node.isGate && (typeof node.gateMinimumScore !== 'number' || node.gateMinimumScore < 0 || node.gateMinimumScore > 1)) errors.push(`${key}: a gate needs a minimum from 0 to 1.`);
+        }
+        if (node.parentId && !nodes.some(other => other.id === node.parentId)) errors.push(`${key}: parent is not in the file.`);
+        else if (node.parentId && parentIsDescendant(nodes, node)) errors.push(`${key}: parent is its own descendant.`);
     }
     return errors;
+}
+
+function parentIsDescendant(nodes: { id?: string; parentId?: string | null }[], node: { id?: string; parentId?: string | null }): boolean {
+    const byId = new Map(nodes.filter(item => item.id).map(item => [item.id as string, item]));
+    const seen = new Set<string>();
+    let current = node.parentId ?? null;
+    while (current) {
+        if (current === node.id || seen.has(current)) return true;
+        seen.add(current);
+        current = byId.get(current)?.parentId ?? null;
+    }
+    return false;
+}
+
+/** A version snapshot for RubricVersionDiff, including parents, scales, levels, and bands. */
+export function snapshotFromRows(
+    version: Record<string, unknown>,
+    criteria: Record<string, unknown>[],
+    scales: Record<string, unknown>[],
+    levels: Record<string, unknown>[],
+    bands: Record<string, unknown>[],
+): RubricVersionSnapshot {
+    return {
+        id: String(version.ID),
+        rubricId: String(version.RubricID),
+        notApplicablePolicy: (version.NotApplicablePolicy as RubricVersionSnapshot['notApplicablePolicy']) ?? 'ExcludeAndRedistribute',
+        passThreshold: version.PassThreshold == null ? null : Number(version.PassThreshold),
+        scoreDisplayMin: version.ScoreDisplayMin == null ? 0 : Number(version.ScoreDisplayMin),
+        scoreDisplayMax: version.ScoreDisplayMax == null ? 100 : Number(version.ScoreDisplayMax),
+        nodes: criteria.map(row => ({
+            id: String(row.ID),
+            key: String(row.Key),
+            parentId: row.ParentID == null || row.ParentID === '' ? null : String(row.ParentID),
+            name: String(row.Name ?? row.Key),
+            nodeType: row.NodeType === 'Group' ? 'Group' as const : 'Criterion' as const,
+            scaleId: row.ScaleID == null || row.ScaleID === '' ? null : String(row.ScaleID),
+            weight: Number(row.Weight ?? 1),
+            isAdvisory: row.IsAdvisory === true || row.IsAdvisory === 1,
+            isGate: row.IsGate === true || row.IsGate === 1,
+            gateMinimumScore: row.GateMinimumScore == null ? null : Number(row.GateMinimumScore),
+            evidenceRequired: row.EvidenceRequired === true || row.EvidenceRequired === 1,
+            rationaleRequired: row.RationaleRequired === true || row.RationaleRequired === 1,
+            sequence: Number(row.Sequence ?? 0),
+        })),
+        scales: scales.map(scale => ({
+            id: String(scale.ID),
+            scaleType: scale.ScaleType === 'Numeric' ? 'Numeric' as const : 'Levels' as const,
+            minValue: scale.MinValue == null ? null : Number(scale.MinValue),
+            maxValue: scale.MaxValue == null ? null : Number(scale.MaxValue),
+            step: scale.Step == null ? null : Number(scale.Step),
+            higherIsBetter: scale.HigherIsBetter !== false && scale.HigherIsBetter !== 0,
+            levels: levels.filter(level => String(level.ScaleID) === String(scale.ID)).map(level => ({
+                id: String(level.ID),
+                label: String(level.Label ?? ''),
+                value: Number(level.Value ?? 0),
+                normalizedValue: Number(level.NormalizedValue ?? 0),
+                description: level.Description == null ? null : String(level.Description),
+                sequence: Number(level.Sequence ?? 0),
+            })),
+        })),
+        bands: bands.map(band => ({
+            id: String(band.ID),
+            label: String(band.Label ?? ''),
+            description: band.Description == null ? null : String(band.Description),
+            minScore: Number(band.MinScore ?? 0),
+            maxScore: Number(band.MaxScore ?? 1),
+            displayTone: String(band.DisplayTone ?? 'Neutral'),
+            sequence: Number(band.Sequence ?? 0),
+        })),
+    };
 }
 
 /** Loads the rubric and, when a version was named, that version's id. */

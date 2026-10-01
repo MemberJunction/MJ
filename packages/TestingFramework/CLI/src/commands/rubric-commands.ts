@@ -2,7 +2,7 @@ import { readFileSync } from 'fs';
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { RubricVersionDiff, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { providerRubricEngine } from '@memberjunction/rubrics';
-import { formatVersionDiff, parseRubricRef, validateSnapshot } from './rubric-cli';
+import { formatVersionDiff, parseRubricRef, snapshotFromRows, validateSnapshot } from './rubric-cli';
 
 /** Thin database operations behind `mj rubric`. */
 export class RubricCommands {
@@ -74,30 +74,13 @@ export class RubricCommands {
 
     private async snapshot(rubricRef: string, versionRef: string, user: UserInfo): Promise<RubricVersionSnapshot> {
         const { version } = await this.version(`${rubricRef}@${versionRef}`, user);
-        const criteria = await this.rows('MJ: Rubric Criteria', `RubricVersionID='${String(version.ID).replace(/'/g, "''")}'`, user);
-        return {
-            id: String(version.ID),
-            rubricId: String(version.RubricID),
-            notApplicablePolicy: (version.NotApplicablePolicy as RubricVersionSnapshot['notApplicablePolicy']) ?? 'ExcludeAndRedistribute',
-            passThreshold: version.PassThreshold == null ? null : Number(version.PassThreshold),
-            scoreDisplayMin: version.ScoreDisplayMin == null ? 0 : Number(version.ScoreDisplayMin),
-            scoreDisplayMax: version.ScoreDisplayMax == null ? 100 : Number(version.ScoreDisplayMax),
-            nodes: criteria.map(row => ({
-                id: String(row.ID),
-                key: String(row.Key),
-                name: String(row.Name ?? row.Key),
-                nodeType: row.NodeType === 'Group' ? 'Group' : 'Criterion',
-                weight: Number(row.Weight ?? 1),
-                isAdvisory: row.IsAdvisory === true || row.IsAdvisory === 1,
-                isGate: row.IsGate === true || row.IsGate === 1,
-                gateMinimumScore: row.GateMinimumScore == null ? null : Number(row.GateMinimumScore),
-                evidenceRequired: row.EvidenceRequired === true || row.EvidenceRequired === 1,
-                rationaleRequired: row.RationaleRequired === true || row.RationaleRequired === 1,
-                sequence: Number(row.Sequence ?? 0),
-            })),
-            scales: [],
-            bands: [],
-        };
+        const versionId = String(version.ID).replace(/'/g, "''");
+        const criteria = await this.rows('MJ: Rubric Criteria', `RubricVersionID='${versionId}'`, user);
+        const scaleIds = [...new Set(criteria.map(row => row.ScaleID).filter(id => id != null && id !== '').map(id => `'${String(id).replace(/'/g, "''")}'`))];
+        const scales = scaleIds.length === 0 ? [] : await this.rows('MJ: Rubric Scales', `ID IN (${scaleIds.join(', ')})`, user);
+        const levels = scaleIds.length === 0 ? [] : await this.rows('MJ: Rubric Scale Levels', `ScaleID IN (${scaleIds.join(', ')})`, user);
+        const bands = await this.rows('MJ: Rubric Bands', `RubricVersionID='${versionId}'`, user);
+        return snapshotFromRows(version, criteria, scales, levels, bands);
     }
 
     private async context(): Promise<UserInfo> {
