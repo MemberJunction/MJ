@@ -33,7 +33,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (419 classes)
+// @memberjunction/core-entities (430 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -68,6 +68,7 @@ import {
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
     MJAIAgentRequestTypeEntity,
+    MJAIAgentRubricEntity,
     MJAIAgentRunEntity,
     MJAIAgentRunMediaEntity,
     MJAIAgentRunStepEntity,
@@ -373,6 +374,16 @@ import {
     MJResourceTypeEntity,
     MJRoleEntity,
     MJRowLevelSecurityFilterEntity,
+    MJRubricBandEntity,
+    MJRubricCategoryEntity,
+    MJRubricCriterionEntity,
+    MJRubricCriterionLevelEntity,
+    MJRubricEntity,
+    MJRubricEvaluationEntity,
+    MJRubricEvaluationScoreEntity,
+    MJRubricScaleEntity,
+    MJRubricScaleLevelEntity,
+    MJRubricVersionEntity,
     MJSQLDialectEntity,
     MJScheduledJobEntity,
     MJScheduledJobRunEntity,
@@ -819,6 +830,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
     MJAIAgentRequestTypeEntity,
+    MJAIAgentRubricEntity,
     MJAIAgentRunEntity,
     MJAIAgentRunMediaEntity,
     MJAIAgentRunStepEntity,
@@ -975,11 +987,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJDashboardPermissionEntityExtended,
     MJDashboardUserPreferenceEntity,
     MJDashboardUserStateEntity,
-    MJDataContextEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJDataContextEntity,
     MJDataContextItemEntity,
     MJDatasetEntity,
     MJDatasetItemEntity,
@@ -1128,6 +1140,16 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJResourceTypeEntity,
     MJRoleEntity,
     MJRowLevelSecurityFilterEntity,
+    MJRubricBandEntity,
+    MJRubricCategoryEntity,
+    MJRubricCriterionEntity,
+    MJRubricCriterionLevelEntity,
+    MJRubricEntity,
+    MJRubricEvaluationEntity,
+    MJRubricEvaluationScoreEntity,
+    MJRubricScaleEntity,
+    MJRubricScaleLevelEntity,
+    MJRubricVersionEntity,
     MJSQLDialectEntity,
     MJScheduledJobEntity,
     MJScheduledJobRunEntity,
@@ -1169,6 +1191,10 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJTemplateEntityExtended,
     MJTemplateParamEntity,
     MJTestEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJTestRubricEntity,
     MJTestRunEntity,
     MJTestRunFeedbackEntity,
@@ -1180,10 +1206,6 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJTestTypeEntity,
     MJThemeEntity,
     MJUserApplicationEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJUserApplicationEntityEntity,
     MJUserEntity,
     MJUserFavoriteEntity,
@@ -1373,6 +1395,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     CredentialsTypesResourceComponent,
     DashboardBrowserResourceComponent,
     DataExplorerDashboardComponent,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     DataExplorerResourceComponent,
     DatabaseDesignerDashboardComponent,
     DuplicateDetectionResourceComponent,
@@ -1384,10 +1410,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GraphQLConsoleComponent,
     GridWidthLabComponent,
     HomeApplication,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     HomeDashboardComponent,
     KnowledgeConfigResourceComponent,
     LayoutInspectorComponent,
@@ -1470,7 +1492,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 668;
+export const CLASS_REGISTRATIONS_COUNT = 679;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

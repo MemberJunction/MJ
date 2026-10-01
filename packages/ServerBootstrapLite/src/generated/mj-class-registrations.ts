@@ -1057,7 +1057,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (47 classes)
+// @memberjunction/core-entities-server (53 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1096,6 +1096,12 @@ import {
     MJRemoteOperationEntityServer,
     MJRoleEntityServer,
     MJRowLevelSecurityFilterEntityServer,
+    MJRubricCriterionEntityServer,
+    MJRubricEvaluationEntityServer,
+    MJRubricEvaluationScoreEntityServer,
+    MJRubricScaleEntityServer,
+    MJRubricScaleLevelEntityServer,
+    MJRubricVersionEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTagScopeEntityServer,
@@ -1690,11 +1696,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRubricEntity,
     MJRubricEvaluationEntity,
     MJRubricEvaluationScoreEntity,
-    MJRubricScaleEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRubricScaleEntity,
     MJRubricScaleLevelEntity,
     MJRubricVersionEntity,
     MJSQLDialectEntity,
@@ -1894,11 +1900,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     BufferSearchPostsAction,
     CreateVideoPostAction,
     FacebookBoostPostAction,
-    FacebookCreateAlbumAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    FacebookCreateAlbumAction,
     FacebookCreatePostAction,
     FacebookGetPageInsightsAction,
     FacebookGetPagePostsAction,
@@ -2098,12 +2104,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJDuplicateRunEntityServer,
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
-    MJEntityFieldPermissionEntityServer,
-    MJListDetailEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    MJEntityFieldPermissionEntityServer,
+    MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
     MJMaterializedResultEntityServer,
@@ -2113,6 +2119,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJRemoteOperationEntityServer,
     MJRoleEntityServer,
     MJRowLevelSecurityFilterEntityServer,
+    MJRubricCriterionEntityServer,
+    MJRubricEvaluationEntityServer,
+    MJRubricEvaluationScoreEntityServer,
+    MJRubricScaleEntityServer,
+    MJRubricScaleLevelEntityServer,
+    MJRubricVersionEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTagScopeEntityServer,
@@ -2295,7 +2307,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 976;
+export const CLASS_REGISTRATIONS_COUNT = 984;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
