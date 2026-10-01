@@ -316,6 +316,8 @@ import { MJRecommendationProviderFormComponent } from "./Entities/MJRecommendati
 import { MJRecommendationRunFormComponent } from "./Entities/MJRecommendationRun/mjrecommendationrun.form.component";
 import { MJRecordChangeFormComponent } from "./Entities/MJRecordChange/mjrecordchange.form.component";
 import { MJRecordChangeReplayRunFormComponent } from "./Entities/MJRecordChangeReplayRun/mjrecordchangereplayrun.form.component";
+import { MJRecordCloneLogFormComponent } from "./Entities/MJRecordCloneLog/mjrecordclonelog.form.component";
+import { MJRecordCloneLogItemFormComponent } from "./Entities/MJRecordCloneLogItem/mjrecordclonelogitem.form.component";
 import { MJRecordGeoCodeFormComponent } from "./Entities/MJRecordGeoCode/mjrecordgeocode.form.component";
 import { MJRecordLinkFormComponent } from "./Entities/MJRecordLink/mjrecordlink.form.component";
 import { MJRecordMergeDeletionLogFormComponent } from "./Entities/MJRecordMergeDeletionLog/mjrecordmergedeletionlog.form.component";
@@ -731,6 +733,7 @@ declarations: [
     MJExperimentSessionIterationFormComponent,
     MJListCategoryFormComponent,
     MJQueryFormComponent,
+    MJRecordCloneLogFormComponent,
     MJTestRunOutputFormComponent,
     MJTestRunOutputTypeFormComponent
 ],
@@ -1066,6 +1069,7 @@ declarations: [
     MJIntegrationObjectFieldFormComponent,
     MJListInvitationFormComponent,
     MJQueueFormComponent,
+    MJRecordCloneLogItemFormComponent,
     MJSearchScopeEntityFormComponent,
     MJSignatureRequestLogFormComponent,
     MJUserApplicationFormComponent,
