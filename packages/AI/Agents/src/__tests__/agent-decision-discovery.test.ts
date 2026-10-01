@@ -188,7 +188,8 @@ const BLANK = agentRow('eeeeeeee-1000-4000-8000-000000000006', 'Blank Agent', nu
 /** Added to the engine between two runs. */
 const LATECOMER = agentRow('eeeeeeee-1000-4000-8000-000000000007', 'Latecomer Agent', 'Joined the catalog after the first run');
 
-const ON = { decisionDiscovery: true };
+/** Discovery on: it needs the master switch for decision-model use as well as its own setting. */
+const ON = { decisionsEnabled: true, decisionDiscovery: true };
 
 // ============================================================================
 // Harness
@@ -596,9 +597,11 @@ describe('decision discovery — off by default', () => {
         expect(runner.Calls).toHaveLength(3);
     });
 
-    it.each([
-        ['false', { decisionDiscovery: false }],
-        ['the string "true"', { decisionDiscovery: 'true' }],
+    it.each<[string, Record<string, unknown>]>([
+        ['false', { decisionsEnabled: true, decisionDiscovery: false }],
+        ['the string "true"', { decisionsEnabled: true, decisionDiscovery: 'true' }],
+        ['true, without the master switch (decisionsEnabled)', { decisionDiscovery: true }],
+        ['true, with the master switch set to false', { decisionsEnabled: false, decisionDiscovery: true }],
     ])('stays off when decisionDiscovery is %s', async (_label, promptParams) => {
         harness.self = makeSelf(promptParams);
         const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask');
@@ -685,6 +688,26 @@ describe('decision discovery — the options', () => {
         await agent.Execute(makeParams({ data: { __agentTypePromptParams: ON } }));
 
         expect(ask).toHaveBeenCalledTimes(1);
+    });
+
+    it('is turned on by a per-run override of the master switch alone, for an agent that sets decisionDiscovery', async () => {
+        harness.self = makeSelf({ decisionDiscovery: true });
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.9, 0.95));
+        const { agent } = makeAgent();
+
+        await agent.Execute(makeParams({ data: { __agentTypePromptParams: { decisionsEnabled: true } } }));
+
+        expect(ask).toHaveBeenCalledTimes(1);
+    });
+
+    it('is turned off by a per-run override of the master switch alone, for an agent that turns discovery on', async () => {
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.9, 0.95));
+        const { agent } = makeAgent();
+
+        await agent.Execute(makeParams({ data: { __agentTypePromptParams: { decisionsEnabled: false } } }));
+
+        expect(ask).not.toHaveBeenCalled();
+        expect(discoverySteps()).toHaveLength(0);
     });
 
     it('reads the decision prompt name from the prompt params', async () => {
