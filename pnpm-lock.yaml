@@ -4779,6 +4779,9 @@ importers:
       '@memberjunction/ng-resource-permissions':
         specifier: 6.2.0-edge.1
         version: link:../../Generic/resource-permissions
+      '@memberjunction/ng-rubrics':
+        specifier: 6.2.0-edge.1
+        version: link:../../Generic/rubrics
       '@memberjunction/ng-scheduling':
         specifier: 6.2.0-edge.1
         version: link:../../Generic/scheduling

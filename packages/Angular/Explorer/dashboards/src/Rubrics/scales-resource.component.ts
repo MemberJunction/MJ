@@ -3,24 +3,24 @@ import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 
-/** Thin nav shim. The catalog dashboard owns the page. */
-@RegisterClass(BaseResourceComponent, 'RubricsResource')
+/** Thin nav shim for the scales list. */
+@RegisterClass(BaseResourceComponent, 'RubricScalesResource')
 @Component({
     standalone: false,
-    selector: 'mj-rubrics-resource',
-    template: `<mj-rubrics-dashboard></mj-rubrics-dashboard>`,
+    selector: 'mj-rubric-scales-resource',
+    template: `<mj-rubric-scales-dashboard></mj-rubric-scales-dashboard>`,
 })
-export class RubricsResourceComponent extends BaseResourceComponent implements OnInit {
+export class RubricScalesResourceComponent extends BaseResourceComponent implements OnInit {
     public override ngOnInit(): void {
         super.ngOnInit();
         this.NotifyLoadComplete();
     }
 
     public override async GetResourceDisplayName(_data: ResourceData): Promise<string> {
-        return 'Catalog';
+        return 'Scales';
     }
 
     public override async GetResourceIconClass(_data: ResourceData): Promise<string> {
-        return 'fa-solid fa-scale-balanced';
+        return 'fa-solid fa-sliders';
     }
 }

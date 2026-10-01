@@ -23,7 +23,7 @@ const loadNgDashboardsActionsDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/actions-dashboards.module').then(() => {})
 };
 
-// --- @memberjunction/ng-dashboards → ./ai-dashboards.module (18 entries) ---
+// --- @memberjunction/ng-dashboards → ./ai-dashboards.module (17 entries) ---
 const loadNgDashboardsAiDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/ai-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/ai-dashboards.module').then(() => {})
@@ -101,6 +101,12 @@ const loadNgDashboardsRoutinesDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/routines-dashboards.module').then(() => {})
 };
 
+// --- @memberjunction/ng-dashboards → ./rubrics-dashboards.module (5 entries) ---
+const loadNgDashboardsRubricsDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/rubrics-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/rubrics-dashboards.module').then(() => {})
+};
+
 // --- @memberjunction/ng-dashboards → ./scheduling-dashboards.module (4 entries) ---
 const loadNgDashboardsSchedulingDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/scheduling-dashboards.module',
@@ -158,11 +164,17 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::DuplicateDetectionResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::FeaturePipelinesResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::KnowledgeConfigResource': loadNgDashboardsAiDashboardsModule,
-  'BaseResourceComponent::RubricsResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::SchedulingResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::Tags': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::VectorManagementResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::VisualizationResource': loadNgDashboardsAiDashboardsModule,
+
+  // @memberjunction/ng-dashboards → ./rubrics-dashboards.module
+  'BaseDashboard::RubricScalesDashboard': loadNgDashboardsRubricsDashboardsModule,
+  'BaseDashboard::RubricsDashboard': loadNgDashboardsRubricsDashboardsModule,
+  'BaseResourceComponent::RubricDriftResource': loadNgDashboardsRubricsDashboardsModule,
+  'BaseResourceComponent::RubricScalesResource': loadNgDashboardsRubricsDashboardsModule,
+  'BaseResourceComponent::RubricsResource': loadNgDashboardsRubricsDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./archiving-dashboards.module
   'BaseResourceComponent::ArchiveConfigResource': loadNgDashboardsArchivingDashboardsModule,

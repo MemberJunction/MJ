@@ -29,13 +29,6 @@
         "isDefault": false
       },
       {
-        "Label": "Rubrics",
-        "Icon": "fa-solid fa-scale-balanced",
-        "ResourceType": "Custom",
-        "DriverClass": "RubricsResource",
-        "isDefault": false
-      },
-      {
         "Label": "Prompts",
         "Icon": "fa-solid fa-comment-dots",
         "ResourceType": "Custom",
@@ -61,13 +54,6 @@
         "Icon": "fa-solid fa-chart-line",
         "ResourceType": "Custom",
         "DriverClass": "AIAnalyticsResource",
-        "isDefault": false
-      },
-      {
-        "Label": "Rubric drift",
-        "Icon": "fa-solid fa-scale-balanced",
-        "ResourceType": "Custom",
-        "DriverClass": "RubricDriftResource",
         "isDefault": false
       },
       {

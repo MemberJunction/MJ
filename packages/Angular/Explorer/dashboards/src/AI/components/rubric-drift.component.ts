@@ -2,16 +2,29 @@ import { Component, Input, OnInit } from '@angular/core';
 import { RunView } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { driftDeltas, driftSeries, periodMeans } from '@memberjunction/rubrics';
+import { MJEmptyStateComponent, MJPageBodyComponent, MJPageHeaderComponent, MJPageLayoutComponent, MJRefreshButtonComponent } from '@memberjunction/ng-ui-components';
+import { driftDeltas, driftSeries, periodMeans } from '@memberjunction/rubrics/dist/sampling.js';
 
-/** Rolling mean against the previous period. Alerting is not part of this view. */
+/** Rolling mean against the previous period. This is not an alert product. */
 @Component({
     standalone: true,
     selector: 'mj-rubric-drift',
+    imports: [MJEmptyStateComponent],
+    styles: [`
+      ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--mj-space-3, 0.75rem); }
+      li { display: flex; flex-direction: column; gap: 0.25rem; border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-md, 6px); padding: var(--mj-space-3, 0.75rem); color: var(--mj-text-primary); }
+    `],
     template: `
-      <h2>Rubric drift</h2>
-      @for (row of Rows; track row.key) {
-        <p>{{ row.key }} drop {{ row.drop }}{{ row.alert ? ' alert' : '' }}</p>
+      @if (current.length === 0 || previous.length === 0) {
+        <mj-empty-state Icon="fa-solid fa-chart-line" Title="No scores in this period" Message="Drift compares the last 30 days with the 30 days before that. One of those periods has no scores."></mj-empty-state>
+      } @else if (Rows.length === 0) {
+        <mj-empty-state Icon="fa-solid fa-chart-line" Title="No movement" Message="The period means did not drop past the threshold."></mj-empty-state>
+      } @else {
+        <ul>
+          @for (row of Rows; track row.key) {
+            <li><strong>{{ row.key }}</strong><span>Drop {{ row.drop }}</span></li>
+          }
+        </ul>
       }
     `,
 })
@@ -28,16 +41,40 @@ export class RubricDriftComponent {
 @Component({
     standalone: true,
     selector: 'app-rubric-drift-resource',
-    imports: [RubricDriftComponent],
-    template: `<mj-rubric-drift [current]="current" [previous]="previous" [threshold]="threshold"></mj-rubric-drift>`,
+    imports: [RubricDriftComponent, MJPageLayoutComponent, MJPageHeaderComponent, MJPageBodyComponent, MJRefreshButtonComponent],
+    template: `
+      <mj-page-layout>
+        <mj-page-header Title="Drift" Icon="fa-solid fa-chart-line" Subtitle="How criterion means moved between the last two 30-day periods.">
+          <div actions>
+            <mj-refresh-button (Clicked)="Reload()"></mj-refresh-button>
+          </div>
+        </mj-page-header>
+        <mj-page-body>
+          <mj-rubric-drift [current]="current" [previous]="previous" [threshold]="threshold"></mj-rubric-drift>
+        </mj-page-body>
+      </mj-page-layout>
+    `,
 })
 export class RubricDriftResourceComponent extends BaseResourceComponent implements OnInit {
+    public override async GetResourceDisplayName(): Promise<string> {
+        return 'Drift';
+    }
+
+    public override async GetResourceIconClass(): Promise<string> {
+        return 'fa-solid fa-chart-line';
+    }
+
     public current: { key: string; mean: number }[] = [];
     public previous: { key: string; mean: number }[] = [];
     public threshold = 0.2;
 
     public override async ngOnInit(): Promise<void> {
         await super.ngOnInit();
+        await this.Reload();
+        this.NotifyLoadComplete();
+    }
+
+    public async Reload(): Promise<void> {
         try {
             const loaded = await this.loadPeriods();
             this.current = loaded.current;
@@ -45,8 +82,6 @@ export class RubricDriftResourceComponent extends BaseResourceComponent implemen
         } catch {
             this.current = [];
             this.previous = [];
-        } finally {
-            this.NotifyLoadComplete();
         }
     }
 

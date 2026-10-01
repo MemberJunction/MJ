@@ -1,0 +1,44 @@
+<mj-page-layout>
+  <mj-page-header Title="Scales" Icon="fa-solid fa-sliders" Subtitle="Level and numeric scales used by criteria.">
+    <div actions>
+      <mj-refresh-button (Clicked)="Refresh()"></mj-refresh-button>
+      <button mjButton variant="primary" type="button" (click)="NewScale()">New scale</button>
+    </div>
+    <div toolbar>
+      <mj-page-search Placeholder="Search scales" [Value]="Search" (ValueChange)="OnSearch($event)"></mj-page-search>
+    </div>
+  </mj-page-header>
+  <mj-page-body>
+    @if (Loading) {
+      <p>Loading scales...</p>
+    } @else if (Visible.length === 0) {
+      <mj-empty-state Icon="fa-solid fa-sliders" Title="No scales" Message="Create a scale before a criterion can use it."></mj-empty-state>
+    } @else {
+      <table class="catalog-table">
+        <thead>
+          <tr><th>Name</th><th>Type</th><th>Published use</th><th></th></tr>
+        </thead>
+        <tbody>
+          @for (row of Visible; track row.id) {
+            <tr>
+              <td><strong>{{ row.name }}</strong></td>
+              <td>{{ row.type }}</td>
+              <td>{{ row.frozen ? 'Locked by a published rubric' : 'Editable' }}</td>
+              <td><button mjButton variant="outline" size="sm" type="button" (click)="Open(row.id)">Open</button></td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      <div class="catalog-cards">
+        @for (row of Visible; track row.id) {
+          <article class="catalog-card">
+            <strong>{{ row.name }}</strong>
+            <span>{{ row.type }}</span>
+            <span>{{ row.frozen ? 'Locked by a published rubric' : 'Editable' }}</span>
+            <button mjButton variant="outline" size="sm" type="button" (click)="Open(row.id)">Open</button>
+          </article>
+        }
+      </div>
+    }
+  </mj-page-body>
+</mj-page-layout>

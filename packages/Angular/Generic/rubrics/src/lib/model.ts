@@ -472,3 +472,101 @@ function uniqueKey(nodes: RubricNodeSnapshot[], base: string): string {
     while (taken.has(`${base}-${n}`)) n += 1;
     return `${base}-${n}`;
 }
+
+export interface CatalogCriterionInput {
+    id: string;
+    key: string;
+    name: string;
+    nodeType: string;
+    weight: number;
+    scaleId: string | null;
+    isGate: boolean;
+}
+
+export interface CatalogVersionInput {
+    id: string;
+    rubricId: string;
+    status: string;
+    majorVersion: number | null;
+    minorVersion: number | null;
+    patchVersion: number | null;
+    criteria: CatalogCriterionInput[];
+}
+
+export interface CatalogRubricInput {
+    id: string;
+    name: string;
+    description: string | null;
+    categoryName: string | null;
+    versions: CatalogVersionInput[];
+    scaleNames: Record<string, string>;
+}
+
+export interface CatalogRowView {
+    id: string;
+    name: string;
+    description: string | null;
+    categoryName: string;
+    publishedLabel: string;
+    draftLabel: string;
+    criteriaCount: number;
+    scaleName: string | null;
+}
+
+function catalogSnapshot(version: CatalogVersionInput): RubricVersionSnapshot {
+    return {
+        id: version.id,
+        rubricId: version.rubricId,
+        majorVersion: version.majorVersion,
+        minorVersion: version.minorVersion,
+        patchVersion: version.patchVersion,
+        notApplicablePolicy: 'NotAllowed',
+        scoreDisplayMin: 0,
+        scoreDisplayMax: 1,
+        nodes: version.criteria.map((criterion, sequence) => ({
+            id: criterion.id,
+            key: criterion.key,
+            name: criterion.name,
+            nodeType: criterion.nodeType === 'Group' ? 'Group' : 'Criterion',
+            scaleId: criterion.scaleId,
+            weight: criterion.weight,
+            isAdvisory: false,
+            isGate: criterion.isGate,
+            gateMinimumScore: criterion.isGate ? 1 : null,
+            evidenceRequired: false,
+            rationaleRequired: false,
+            sequence,
+        })),
+        scales: [],
+        bands: [],
+    };
+}
+
+function versionLabel(version: CatalogVersionInput | null): string | null {
+    if (!version || version.majorVersion == null || version.minorVersion == null || version.patchVersion == null) return null;
+    return `${version.majorVersion}.${version.minorVersion}.${version.patchVersion}`;
+}
+
+/** One catalog row. Draft text comes from publishPreview, so null version numbers are never printed. */
+export function catalogRow(input: CatalogRubricInput): CatalogRowView {
+    const published = input.versions.find(version => version.status === 'Published') ?? null;
+    const draft = input.versions.find(version => version.status === 'Draft') ?? null;
+    const shown = draft ?? published;
+    const leaves = (shown?.criteria ?? []).filter(criterion => criterion.nodeType !== 'Group');
+    const scaleName = leaves.map(leaf => leaf.scaleId).filter((id): id is string => !!id).map(id => input.scaleNames[id.toLowerCase()]).find(name => !!name) ?? null;
+    let draftLabel = 'none';
+    if (draft) {
+        const preview = publishPreview(published ? catalogSnapshot(published) : null, catalogSnapshot(draft));
+        draftLabel = preview.nextVersion && preview.computedBump ? `${preview.nextVersion} draft, ${preview.computedBump}` : 'draft';
+    }
+    return {
+        id: input.id,
+        name: input.name,
+        description: input.description,
+        categoryName: input.categoryName && input.categoryName.trim() ? input.categoryName : 'No category',
+        publishedLabel: versionLabel(published) ?? 'No published version',
+        draftLabel,
+        criteriaCount: leaves.length,
+        scaleName,
+    };
+}

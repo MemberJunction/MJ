@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { addCriterion, addNode, anchorsForLevel, answerLevel, bandFor, canSubmit, comparisonMatrix, displayScore, draftProblems, incompleteAnswers, moveNode, moveProblem, nodeFields, nodeFromRow, planBandSave, planNodeSave, previewScore, publishPreview, sampleMatchesTree, scaleFromRow, setAnchor, setGate, setScale, setWeight, versionRows, weightShares } from './model.js';
+import { addCriterion, addNode, anchorsForLevel, answerLevel, bandFor, canSubmit, catalogRow, comparisonMatrix, displayScore, draftProblems, incompleteAnswers, moveNode, moveProblem, nodeFields, nodeFromRow, planBandSave, planNodeSave, previewScore, publishPreview, sampleMatchesTree, scaleFromRow, setAnchor, setGate, setScale, setWeight, versionRows, weightShares } from './model.js';
 
 const scale: RubricScaleSnapshot = {
     id: 'scale',
@@ -23,6 +23,34 @@ function version(nodes: RubricNodeSnapshot[]): RubricVersionSnapshot {
         scoreDisplayMin: 0, scoreDisplayMax: 100, nodes, scales: [scale], bands: [{ id: 'band', label: 'High', minScore: 0.5, maxScore: 1, displayTone: 'Success', sequence: 0 }],
     };
 }
+
+describe('catalog row', () => {
+    it('names the published version, the previewed draft, and the category', () => {
+        const row = catalogRow({
+            id: 'rubric',
+            name: 'Screenshot rubric',
+            description: 'A shot',
+            categoryName: 'Agent evaluation',
+            scaleNames: { scale: 'Screenshot Likert' },
+            versions: [
+                {
+                    id: 'published', rubricId: 'rubric', status: 'Published', majorVersion: 1, minorVersion: 0, patchVersion: 0,
+                    criteria: [{ id: 'p', key: 'accuracy', name: 'Accuracy', nodeType: 'Criterion', weight: 1, scaleId: 'scale', isGate: true }],
+                },
+                {
+                    id: 'draft', rubricId: 'rubric', status: 'Draft', majorVersion: null, minorVersion: null, patchVersion: null,
+                    criteria: [{ id: 'd', key: 'accuracy', name: 'Accuracy', nodeType: 'Criterion', weight: 2, scaleId: 'scale', isGate: true }],
+                },
+            ],
+        });
+        expect(row.publishedLabel).toBe('1.0.0');
+        expect(row.draftLabel).toBe('2.0.0 draft, Major');
+        expect(row.categoryName).toBe('Agent evaluation');
+        expect(row.criteriaCount).toBe(1);
+        expect(row.scaleName).toBe('Screenshot Likert');
+        expect(JSON.stringify(row)).not.toContain('null');
+    });
+});
 
 describe('rubric author', () => {
     it('shows live shares and ignores an advisory sibling', () => {
