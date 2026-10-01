@@ -82,6 +82,8 @@ vi.mock('@memberjunction/core-entities', () => ({
         Instance: {
             Config: mockKHConfig,
             get EntityDocuments() { return mockEntityDocumentsRef.value; },
+            // Mirrors the real engine: the provider-side name is ExternalID, falling back to Name.
+            GetProviderIndexName: (v: { Name: string; ExternalID?: string | null }) => v.ExternalID?.trim() || v.Name,
             // Mirrors the engine's O(1) cached ByID helper.
             GetContentSourceByID: (id: string) =>
                 mockContentSourcesRef.value.find(c => c.ID.trim().toLowerCase() === id.trim().toLowerCase()),

@@ -63,8 +63,7 @@ vi.mock('@memberjunction/ai', () => ({
     GetAIAPIKey: vi.fn().mockReturnValue('mock-api-key'),
 }));
 
-vi.mock('@memberjunction/ai-vectordb', async () => ({
-    ProviderIndexName: (await vi.importActual<typeof import('@memberjunction/ai-vectordb')>('@memberjunction/ai-vectordb')).ProviderIndexName,
+vi.mock('@memberjunction/ai-vectordb', () => ({
     VectorDBBase: vi.fn(),
     BaseResponse: vi.fn(),
 }));
@@ -84,6 +83,8 @@ vi.mock('@memberjunction/core-entities', () => ({
             VectorIndexes: [],
             GetEntityDocumentByID: vi.fn().mockReturnValue(undefined),
             GetVectorIndexByID: vi.fn().mockReturnValue(undefined),
+            // Mirrors the real engine: the provider-side name is ExternalID, falling back to Name.
+            GetProviderIndexName: (v: { Name: string; ExternalID?: string | null }) => v.ExternalID?.trim() || v.Name,
         },
     },
 }));

@@ -33,7 +33,7 @@ import {
     DuplicateDetectionOptions,
     DuplicateDetectionProgress,
 } from "@memberjunction/core";
-import { BaseResponse, ProviderIndexName, VectorDBBase, VectorDatabaseConfiguration } from "@memberjunction/ai-vectordb";
+import { BaseResponse, VectorDBBase, VectorDatabaseConfiguration } from "@memberjunction/ai-vectordb";
 import { MJGlobal, UUIDsEqual, NormalizeUUID } from "@memberjunction/global";
 import {
     MJDuplicateRunDetailEntity,
@@ -1024,7 +1024,7 @@ export class DuplicateRecordDetector extends VectorBase {
         if (entityDocument.VectorIndexID) {
             const vectorIndex = KnowledgeHubMetadataEngine.Instance.GetVectorIndexByID(entityDocument.VectorIndexID);
             if (vectorIndex) {
-                this.indexName = ProviderIndexName(vectorIndex); // provider-side name, not the MJ display Name
+                this.indexName = KnowledgeHubMetadataEngine.Instance.GetProviderIndexName(vectorIndex);
             }
         }
         if (!this.indexName) {

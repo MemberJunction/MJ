@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai';
 import { AIEmbeddingRunner, EmbeddingRunResult } from '@memberjunction/ai-prompts';
 import { CredentialEngine } from '@memberjunction/credentials';
-import { BaseResponse, ProviderIndexName, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
+import { BaseResponse, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 import { PageRecordsParams, VectorBase } from '@memberjunction/ai-vectors';
 import { BaseEntity, CompositeKey, EntityField, EntityFieldInfo, EntityInfo, IMetadataProvider, LogError, LogStatus, LogStatusEx, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
 import { MJAIModelEntity, MJEntityDocumentEntity, MJEntityDocumentTypeEntity, MJEntityRecordDocumentEntity, MJTemplateContentEntity,
@@ -157,8 +157,7 @@ export class EntityVectorSyncer extends VectorBase {
     const vectorIndexProviderConfig = this.parseProviderConfig(vectorIndexEntity.ProviderConfig);
 
     const vectorUpserter = this.createVectorUpserter(
-      // Address the index by its provider-side name (ExternalID), not the MJ display Name.
-      entityDocument, templateContent, obj.vectorDB, ProviderIndexName(vectorIndexEntity), delayTimeMS,
+      entityDocument, templateContent, obj.vectorDB, KnowledgeHubMetadataEngine.Instance.GetProviderIndexName(vectorIndexEntity), delayTimeMS,
       params.UpsertBatchCount || pipelineConfig?.upsertBatchSize,
       vectorIndexProviderConfig
     );

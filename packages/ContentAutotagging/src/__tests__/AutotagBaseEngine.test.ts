@@ -256,6 +256,8 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
     GetVectorIndexByID: vi.fn().mockImplementation((id: string) =>
       mockVectorIndexes.find(v => v.ID === id)
     ),
+    // Mirrors the real engine: the provider-side name is ExternalID, falling back to Name.
+    GetProviderIndexName: (v: { Name: string; ExternalID?: string | null }) => v.ExternalID?.trim() || v.Name,
     // Mirror the real KnowledgeHubMetadataEngine O(1) by-id helpers (which the engine now calls
     // instead of `.find` at the call sites). Read the live arrays so tests that push after setup work.
     GetContentSourceByID: vi.fn().mockImplementation((id: string) =>

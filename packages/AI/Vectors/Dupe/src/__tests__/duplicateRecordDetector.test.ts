@@ -199,8 +199,7 @@ vi.mock('@memberjunction/ai', () => ({
     GetAIAPIKey: vi.fn().mockReturnValue('mock-api-key'),
 }));
 
-vi.mock('@memberjunction/ai-vectordb', async () => ({
-    ProviderIndexName: (await vi.importActual<typeof import('@memberjunction/ai-vectordb')>('@memberjunction/ai-vectordb')).ProviderIndexName,
+vi.mock('@memberjunction/ai-vectordb', () => ({
     VectorDBBase: vi.fn(),
     BaseResponse: vi.fn(),
 }));
@@ -251,6 +250,8 @@ vi.mock('@memberjunction/core-entities', () => ({
                 VectorDatabaseID: 'vdb-1',
                 EmbeddingModelID: 'model-1',
             }),
+            // Mirrors the real engine: the provider-side name is ExternalID, falling back to Name.
+            GetProviderIndexName: vi.fn((v: { Name: string; ExternalID?: string | null }) => v.ExternalID?.trim() || v.Name),
         },
     },
 }));
@@ -550,15 +551,16 @@ describe('DuplicateRecordDetector', () => {
             );
         });
 
-        it('queries the vector index by its ExternalID, not its MJ display Name', async () => {
+        it('queries the vector index by the engine-resolved provider name, not its MJ display Name', async () => {
             const { KnowledgeHubMetadataEngine } = await import('@memberjunction/core-entities');
-            vi.mocked(KnowledgeHubMetadataEngine.Instance.GetVectorIndexByID).mockReturnValueOnce({
+            const vectorIndex = {
                 ID: 'vi-1',
                 Name: 'Contacts Index (Pinecone)',
                 ExternalID: 'contacts-index',
                 VectorDatabaseID: 'vdb-1',
                 EmbeddingModelID: 'model-1',
-            } as never);
+            };
+            vi.mocked(KnowledgeHubMetadataEngine.Instance.GetVectorIndexByID).mockReturnValueOnce(vectorIndex as never);
             testState.entityDocument = {
                 ID: 'doc-1',
                 Name: 'Contacts Doc',
@@ -571,6 +573,7 @@ describe('DuplicateRecordDetector', () => {
             };
             await detector.CheckSingleRecord('doc-1', new CompositeKey(), {}, new UserInfo());
 
+            expect(KnowledgeHubMetadataEngine.Instance.GetProviderIndexName).toHaveBeenCalledWith(vectorIndex);
             expect((detector as unknown as { indexName: string }).indexName).toBe('contacts-index');
         });
     });

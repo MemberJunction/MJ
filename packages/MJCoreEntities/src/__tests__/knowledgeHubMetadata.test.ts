@@ -50,6 +50,7 @@ vi.mock('@memberjunction/core', () => {
 // ---------------------------------------------------------------------------
 
 import { KnowledgeHubMetadataEngine } from '../engines/knowledgeHubMetadata';
+import type { MJVectorIndexEntity } from '../generated/entity_subclasses';
 
 // ---------------------------------------------------------------------------
 // Test data factories
@@ -289,6 +290,29 @@ describe('KnowledgeHubMetadataEngine', () => {
         it('should return undefined for empty string', () => {
             const result = engine.GetVectorIndexByID('');
             expect(result).toBeUndefined();
+        });
+    });
+
+    // ================================================================
+    // GetProviderIndexName
+    // ================================================================
+
+    describe('GetProviderIndexName', () => {
+        type IndexNaming = Pick<MJVectorIndexEntity, 'Name' | 'ExternalID'>;
+        const providerName = (index: IndexNaming): string =>
+            engine.GetProviderIndexName(index as MJVectorIndexEntity);
+
+        it('uses ExternalID, the provider-side name, when the display Name differs', () => {
+            expect(providerName({ Name: 'More Cheese Content (Pinecone)', ExternalID: 'morecheese-content' }))
+                .toBe('morecheese-content');
+        });
+
+        it('trims surrounding whitespace from ExternalID', () => {
+            expect(providerName({ Name: 'Label', ExternalID: '  my-index \n' })).toBe('my-index');
+        });
+
+        it.each([null, '', '   '])('falls back to Name when ExternalID is %j', (externalID) => {
+            expect(providerName({ Name: 'legacy-index', ExternalID: externalID })).toBe('legacy-index');
         });
     });
 

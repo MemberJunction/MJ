@@ -91,8 +91,7 @@ vi.mock('@memberjunction/ai', async (importOriginal) => {
     };
 });
 
-vi.mock('@memberjunction/ai-vectordb', async () => ({
-    ProviderIndexName: (await vi.importActual<typeof import('@memberjunction/ai-vectordb')>('@memberjunction/ai-vectordb')).ProviderIndexName,
+vi.mock('@memberjunction/ai-vectordb', () => ({
     VectorDBBase: class {
         SupportsHybridSearch = false;
         SupportsColocatedQuery = false;
@@ -117,6 +116,8 @@ vi.mock('@memberjunction/core-entities', () => ({
             GetEntityDocumentsForEntity: mocks.GetEntityDocumentsForEntity,
             GetEntityDocumentByID: mocks.GetEntityDocumentByID,
             GetVectorIndexByID: mocks.GetVectorIndexByID,
+            // Mirrors the real engine: the provider-side name is ExternalID, falling back to Name.
+            GetProviderIndexName: (v: { Name: string; ExternalID?: string | null }) => v.ExternalID?.trim() || v.Name,
         },
     },
 }));

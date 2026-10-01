@@ -1,10 +1,10 @@
 import { Resolver, Query, Arg, Ctx, ObjectType, Field, Float, Int } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { MJEntityDocumentEntity, MJVectorIndexEntity, MJVectorDatabaseEntity } from '@memberjunction/core-entities';
+import { KnowledgeHubMetadataEngine, MJEntityDocumentEntity, MJVectorIndexEntity, MJVectorDatabaseEntity } from '@memberjunction/core-entities';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetAIAPIKey } from '@memberjunction/ai';
-import { ProviderIndexName, VectorDBBase } from '@memberjunction/ai-vectordb';
+import { VectorDBBase } from '@memberjunction/ai-vectordb';
 import { EscapeSQLString, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 
 /* ───── GraphQL types ───── */
@@ -99,7 +99,7 @@ export class FetchEntityVectorsResolver extends ResolverBase {
             const metadataFilter: Record<string, unknown> = { Entity: { $eq: entityName } };
 
             const queryResponse = await vectorDBInstance.QueryIndex({
-                id: ProviderIndexName(vectorIndex),  // provider-side index name, not the MJ display Name
+                id: KnowledgeHubMetadataEngine.Instance.GetProviderIndexName(vectorIndex),
                 vector: uniformVector,
                 topK: limit,
                 includeMetadata: true,

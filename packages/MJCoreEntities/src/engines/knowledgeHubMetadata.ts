@@ -213,6 +213,18 @@ export class KnowledgeHubMetadataEngine extends BaseEngine<KnowledgeHubMetadataE
     }
 
     /**
+     * Returns the name the vector database itself knows this index by.
+     *
+     * A Vector Index row carries two names: `Name` is the MJ display label and `ExternalID` is the
+     * index's name on the provider. They often differ (Pinecone index names cannot contain spaces or
+     * parentheses), so every call that reaches the provider must use this rather than `Name`.
+     * Falls back to `Name` for older rows created before `ExternalID` was populated.
+     */
+    public GetProviderIndexName(vectorIndex: MJVectorIndexEntity): string {
+        return vectorIndex.ExternalID?.trim() || vectorIndex.Name;
+    }
+
+    /**
      * Returns distinct entity names that have active entity documents (for dropdowns).
      * Sorted alphabetically.
      */

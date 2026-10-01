@@ -92,8 +92,7 @@ vi.mock('@memberjunction/ai', () => ({
     GetAIAPIKey: vi.fn().mockReturnValue('mock-api-key'),
 }));
 
-vi.mock('@memberjunction/ai-vectordb', async () => ({
-    ProviderIndexName: (await vi.importActual<typeof import('@memberjunction/ai-vectordb')>('@memberjunction/ai-vectordb')).ProviderIndexName,
+vi.mock('@memberjunction/ai-vectordb', () => ({
     VectorDBBase: vi.fn(),
     BaseResponse: vi.fn(),
 }));

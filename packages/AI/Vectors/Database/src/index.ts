@@ -4,4 +4,3 @@ export * from './generic/query.types';
 export * from './generic/colocated.types';
 export * from './generic/MetadataFilter';
 export * from './generic/configuration.types';
-export * from './generic/providerIndexName';

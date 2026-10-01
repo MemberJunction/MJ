@@ -2939,8 +2939,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const driverClass = aiModel.DriverClass;
         const embeddingModelName = aiModel.APIName ?? aiModel.Name;
 
-        // The 3rd-party index is addressed by ExternalID (the provider-side name); Name is the MJ display label.
-        const externalIndexName = vectorIndex.ExternalID?.trim() || vectorIndex.Name;
+        const externalIndexName = this.khEngine.GetProviderIndexName(vectorIndex);
         LogStatus(`VectorizeContentItems: USING embedding model "${aiModel.Name}" (${driverClass}), vector DB "${vectorDBClassKey}", index "${externalIndexName}" (Vector Index "${vectorIndex.Name}")`);
 
         const vectorDB = this.createVectorDBInstance(vectorDBClassKey);
