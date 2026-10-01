@@ -4,6 +4,7 @@ import { RegisterClass } from '@memberjunction/global';
 import type { RubricNodeSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { RubricEngine, type EvaluateRecordInput, type EvaluateRecordResult } from './RubricEngine.js';
 import { nodesFromDescription, nodesFromMatrix } from './architect.js';
+import type { RubricSubjectContent } from './content.js';
 import { providerRubricEngine } from './providerRecords.js';
 import type { ConsensusResult } from './statistics.js';
 
@@ -123,6 +124,27 @@ export class GetRubricConsensusAction extends BaseAction {
             output(params, 'StdDev', result.stdDev);
             output(params, 'Range', result.range);
             output(params, 'SampleSize', result.sampleSize);
+            return { Success: true, ResultCode: 'SUCCESS' };
+        } catch (error) {
+            return failed(error);
+        }
+    }
+}
+
+/** Get Rubric Subject. Loads the subject content. It does not score and it does not publish. */
+@RegisterClass(BaseAction, 'Get Rubric Subject')
+export class GetRubricSubjectAction extends BaseAction {
+    public async Invoke(engine: RubricEngine, input: { subjectEntityName: string; subjectRecordId: string }): Promise<RubricSubjectContent> {
+        return engine.subjectContent(input);
+    }
+
+    protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        try {
+            const content = await this.Invoke(engineForAction(params), {
+                subjectEntityName: textValue(params, 'SubjectEntityName') ?? '',
+                subjectRecordId: textValue(params, 'SubjectRecordID') ?? '',
+            });
+            output(params, 'Content', content);
             return { Success: true, ResultCode: 'SUCCESS' };
         } catch (error) {
             return failed(error);

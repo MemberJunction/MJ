@@ -2,7 +2,7 @@
   "fields": {
     "Name": "Rubric Evaluation Agent",
     "CategoryID": "@lookup:MJ: AI Agent Categories.Name=System",
-    "Description": "Default agent for AIRubricEvaluator. Scores one criterion at a time with read-only rubric tools. It does not publish and it does not create drafts.",
+    "Description": "Default agent for AgentRubricEvaluator. Scores one criterion at a time. It reads the rubric and the subject record. It does not publish and it does not create drafts.",
     "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
     "Status": "Active",
     "InvocationMode": "Sub-Agent",
@@ -44,6 +44,16 @@
         },
         "primaryKey": {
           "ID": "F2BE0462-B8C6-44ED-B041-0C6512F60DCD"
+        }
+      },
+      {
+        "fields": {
+          "AgentID": "@parent:ID",
+          "ActionID": "@lookup:MJ: Actions.Name=Get Rubric Subject",
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "F9358EB8-F631-4C8F-B86D-CEFBE814CC6B"
         }
       }
     ]

@@ -1,5 +1,5 @@
 import type { RubricAnswer, RubricNodeSnapshot, RubricScoreResult, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { AIRubricEvaluator, type RubricAgent } from './AIRubricEvaluator.js';
+import { AgentRubricEvaluator, type EvaluationAgentRunner } from './AgentRubricEvaluator.js';
 import { LLMRubricEvaluator, type RubricPromptMode, type RubricPromptRunner } from './LLMRubricEvaluator.js';
 import { shapeContent, type RubricSubjectContent } from './content.js';
 import { DeterministicRubricEvaluator } from './DeterministicRubricEvaluator.js';
@@ -57,7 +57,7 @@ export interface EvaluateParams {
     /** Stored on the draft as PassThresholdApplied. Null uses the version threshold. */
     passThreshold?: number | null;
     evaluator: 'AI' | 'Deterministic' | 'LLM';
-    agent?: RubricAgent;
+    agent?: EvaluationAgentRunner;
     promptRunner?: RubricPromptRunner;
     promptMode?: RubricPromptMode;
 }
@@ -150,7 +150,8 @@ export class RubricEngine {
     private async runEvaluator(params: EvaluateParams, content: RubricSubjectContent): Promise<RubricEvaluatorOutput> {
         const subject = { entityName: params.subject.entityName, recordId: params.subject.recordId };
         if (params.evaluator === 'AI') {
-            return new AIRubricEvaluator(requiredAgent(params.agent)).evaluateVersion({ version: params.version, subject, content });
+            if (!params.agent) throw new Error('An AI evaluation requires an agent.');
+            return new AgentRubricEvaluator(params.agent).evaluateContent(params.version, content, subject);
         }
         if (params.evaluator === 'LLM') {
             if (!params.promptRunner) throw new Error('An LLM evaluation requires a prompt runner.');
@@ -397,6 +398,15 @@ export class RubricEngine {
             })),
         };
     }
+
+    /**
+     * The content an evaluator may read for one subject record. Read-only.
+     * Does not score and does not publish.
+     */
+    public async subjectContent(input: { subjectEntityName: string; subjectRecordId: string }): Promise<RubricSubjectContent> {
+        const rows = await this.records.rows(input.subjectEntityName, `ID=${sqlLiteral(input.subjectRecordId)}`);
+        return shapeContent(input.subjectEntityName, rows[0] ?? {});
+    }
 }
 
 function latestPublishedMajor(versions: Record<string, unknown>[]): number | null {
@@ -437,11 +447,6 @@ function bit(value: unknown): boolean {
 function parseConfig(value: unknown): unknown {
     if (typeof value !== 'string' || value.trim() === '') return value ?? undefined;
     try { return JSON.parse(value); } catch { return value; }
-}
-
-function requiredAgent(agent: RubricAgent | undefined): RubricAgent {
-    if (!agent) throw new Error('An AI evaluation requires an agent.');
-    return agent;
 }
 
 export { RubricEvaluator };

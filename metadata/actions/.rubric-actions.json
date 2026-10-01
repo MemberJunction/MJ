@@ -639,5 +639,89 @@
         }
       ]
     }
+  },
+  {
+    "fields": {
+      "Name": "Get Rubric Subject",
+      "Description": "Loads the subject record for a rubric evaluation and returns the content the evaluator may read. Read-only. It does not score and it does not publish.",
+      "Type": "Custom",
+      "DriverClass": "Get Rubric Subject",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=AI",
+      "Status": "Active",
+      "CodeApprovalStatus": "Approved"
+    },
+    "primaryKey": {
+      "ID": "5D8830C5-AD31-48FD-B5EF-AA5E16CE7F21"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SubjectEntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Entity name of the subject, such as MJ: AI Agent Runs.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "D8EA4D73-F2AE-40C5-B748-B4C20FD0714F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SubjectRecordID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Primary key of the subject record.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "109512E9-2E4C-4C73-94B3-8CD6F3EE5926"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Content",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Text and data the evaluator may read.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E483AB81-6BEE-4678-9D65-A24212D59657"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The subject content was loaded."
+          },
+          "primaryKey": {
+            "ID": "8B815B28-6A01-456F-AB66-8830B0A3E097"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FAILED",
+            "IsSuccess": false,
+            "Description": "The subject could not be read."
+          },
+          "primaryKey": {
+            "ID": "1010E1F8-E0E8-42ED-B407-DF46E693E6A1"
+          }
+        }
+      ]
+    }
   }
 ]

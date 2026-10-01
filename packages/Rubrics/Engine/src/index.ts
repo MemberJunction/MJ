@@ -1,11 +1,12 @@
-export { CreateRubricDraftAction, EvaluateRecordAgainstRubricAction, GetRubricAction, GetRubricConsensusAction } from './actions.js';
+export { CreateRubricDraftAction, EvaluateRecordAgainstRubricAction, GetRubricAction, GetRubricConsensusAction, GetRubricSubjectAction } from './actions.js';
 export { agentRunContent, conversationContent, fallbackContent, promptRunContent, testRunContent, type RubricSubjectContent } from './content.js';
 export { DeterministicRubricEvaluator, type DeterministicRule } from './DeterministicRubricEvaluator.js';
 export { RubricEngine, type EvaluateParams, type EvaluateRecordInput, type EvaluateRecordResult, type RubricEvaluationRecord, type RubricEvaluationStore, type RubricRecords } from './RubricEngine.js';
 export { providerRubricEngine } from './providerRecords.js';
 export { getAgreement, getConsensus, getDiagnostics, krippendorffAlpha, quadraticKappa } from './statistics.js';
 export { LLMRubricEvaluator, renderRubricEvaluatorPrompt, type LLMDecision, type LLMRubricResult, type RubricPromptMode, type RubricPromptRunner } from './LLMRubricEvaluator.js';
-export { AIRubricEvaluator, AIRubricEvaluator as AgentRubricEvaluator, type AgentCriterionResult, type AgentScaleView, type RubricAgent, type RubricEvaluatorConfig } from './AIRubricEvaluator.js';
+export { AIRubricEvaluator, type AgentCriterionResult, type AgentScaleView, type RubricAgent, type RubricEvaluatorConfig } from './AIRubricEvaluator.js';
+export { AgentRubricEvaluator, type EvaluationAgentDecision, type EvaluationAgentRunner } from './AgentRubricEvaluator.js';
 export { critiqueRubric, importMatrix, type ImportedCriterion } from './architect.js';
 export { AGENT_RUN_SUBJECT, EvaluateSampledAgentRuns, driftDeltas, driftSeries, evaluatedRubricRuns, keepSample, productionSamplingJob, productionSamplingLinks, productionSamplingLoader, rubricIdFromVersion, sampleBucket, selectSampledRuns, type AgentRubricLinkRow, type AgentRunRow, type DriftEvaluationRow, type DriftRunRow, type DriftScoreRow, type ProductionSamplingCatalog, type SamplingLink } from './sampling.js';
 export { draftFromDescription, draftFromImport, improveFromData, publishImportedDraft, saveImportedDraft } from './architect.js';
