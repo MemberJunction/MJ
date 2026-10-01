@@ -5,7 +5,7 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
 import { AnalyzeArtifactService, InteractiveFormApplyService } from '@memberjunction/ng-artifacts';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
-import type { FormCompositionSnapshot } from '@memberjunction/ng-base-forms';
+import type { FormAgentContext } from '@memberjunction/ng-base-forms';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 /**
@@ -51,13 +51,14 @@ export class ArtifactResource extends BaseResourceComponent {
    * Apply-to-my-form handler — see InteractiveFormApplyService. Routes a whole form to
    * the override actions and a form panel to the contribution actions.
    *
-   * The live composition snapshot, when the shell has published one, lets the service
-   * validate a panel's `replacesSectionKey` and spot an installed contribution with the
-   * same key before writing anything.
+   * When the agent context names an open record form (`AdditionalContext.Form`), the service
+   * reads that form's full composition from the `FormCompositionRegistry`, to validate a
+   * panel's placement and spot an installed contribution with the same key before writing
+   * anything.
    */
   async OnApplyFormRequested(event: { spec: unknown; entityName: string }): Promise<void> {
     const additional = (this.navigationService.AppContextSnapshot$.value?.AdditionalContext ?? null) as
-      { Form?: FormCompositionSnapshot } | null;
+      { Form?: FormAgentContext } | null;
     await this.applyService.ConfirmAndApply(
       event.spec as ComponentSpec,
       event.entityName,

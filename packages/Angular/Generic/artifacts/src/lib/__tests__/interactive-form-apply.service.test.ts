@@ -16,7 +16,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { CompositeKey } from '@memberjunction/core';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import type {
-    FieldGroupsInDetails, HumanizeEntityTitle, ResolveContributionKey, ResolveFormContributionWinners,
+    FieldGroupsInDetails, FormCompositionRegistry, FormCompositionSnapshot, HumanizeEntityTitle, ResolveContributionKey,
+    ResolveFormContributionWinners,
 } from '@memberjunction/ng-base-forms';
 
 // ─── Hoisted state buckets the mocks read/write ──────────────────────────
@@ -77,12 +78,16 @@ function resolveRunView(params: { ExtraFilter?: string }): { Success: boolean; R
 
 vi.mock('@angular/core', () => ({
     Injectable: () => (target: Function) => target,
+    // What the compiled FormCompositionRegistry calls when its module loads.
+    ɵɵdefineInjectable: () => undefined,
+    ɵsetClassMetadata: () => undefined,
     inject: (token: { Instance?: unknown } | typeof Object) => {
         // Return the mock singletons by class identity.
         const name = (token as { name?: string }).name ?? '';
         if (name === 'MJDialogService') return mockDialog;
         if (name === 'MJNotificationService') return mockNotifications;
         if (name === 'FormSlotProbeService') return mockProbe;
+        if (name === 'FormCompositionRegistry') return registry.current;
         return {};
     },
 }));
@@ -149,7 +154,10 @@ vi.mock('@memberjunction/ng-base-forms', async () => {
         ResolveContributionKey: typeof ResolveContributionKey;
         ResolveFormContributionWinners: typeof ResolveFormContributionWinners;
     }>('@memberjunction/ng-base-forms/dist/lib/panel-slot/form-contribution.js');
+    const compositions = await vi.importActual<{ FormCompositionRegistry: typeof FormCompositionRegistry }>(
+        '@memberjunction/ng-base-forms/dist/lib/chrome/form-composition-registry.js');
     return {
+        FormCompositionRegistry: compositions.FormCompositionRegistry,
         MjFormPlacementDialogComponent: class MjFormPlacementDialogComponent {},
         ApplyDecisionToSpec: (spec: Record<string, unknown>, decision: { Contribution: unknown }) =>
             ({ ...spec, formContribution: decision.Contribution }),
@@ -173,6 +181,12 @@ vi.mock('@memberjunction/core-entities', () => ({
         },
     },
 }));
+
+/**
+ * The open forms' snapshots, as the record form containers publish them. A test opens a form by
+ * publishing its snapshot here; the service reads it by the entity and record a reference names.
+ */
+const registry = vi.hoisted(() => ({ current: null as FormCompositionRegistry | null }));
 
 /** Records which entities' probed form shapes the service dropped. */
 const mockProbe = {
@@ -222,6 +236,7 @@ vi.mock('@memberjunction/core', async () => {
 // ─── Test setup ──────────────────────────────────────────────────────────
 
 import { InteractiveFormApplyService } from '../services/interactive-form-apply.service';
+import { FormCompositionRegistry as RealFormCompositionRegistry } from '@memberjunction/ng-base-forms';
 
 function mockProvider(overrides: Partial<{ EntityByName: (name: string) => unknown; CurrentUser: unknown }> = {}) {
     return {
@@ -237,6 +252,7 @@ function spec(over: Partial<ComponentSpec> = {}): ComponentSpec {
 }
 
 beforeEach(() => {
+    registry.current = new RealFormCompositionRegistry();
     hoisted.dialogResult = 'apply';
     hoisted.confirmResult = null;
     hoisted.resolveActionIdsByName = false;
@@ -516,13 +532,16 @@ describe('InteractiveFormApplyService — form-panel specs', () => {
         } as unknown as ComponentSpec;
     }
 
+    /** Opens a form: its snapshot goes into the registry, and the snapshot names it. */
     function snapshot(over: Record<string, unknown> = {}) {
-        return {
+        const opened = {
             Entity: ENTITY, Layout: 'accordion',
             Sections: [{ Key: 'details', Title: 'Details', Variant: 'default', Group: null, Hidden: false }],
             Related: [], Contributions: [], SlotsPresent: ['before-fields'], ChromeRuleCount: 0,
             ...over,
-        } as never;
+        } as unknown as FormCompositionSnapshot;
+        registry.current!.Publish({}, opened);
+        return opened as never;
     }
 
     /** Resolves the form's entity and any related entity a claim names, in registered casing. */
@@ -628,6 +647,21 @@ describe('InteractiveFormApplyService — form-panel specs', () => {
             Sections: [{ Key: 'details', Title: 'Details' }],
         });
         expect(hoisted.actionCalls.map(c => c.id)).not.toContain('Get Form Composition For Entity');
+    });
+
+    it('reads the open form\'s snapshot by the entity and record the agent context names', async () => {
+        snapshot({ RecordPrimaryKey: 'ID|person-7', Sections: [{ Key: 'notes', Title: 'Notes', Variant: 'default', Group: null, Hidden: false, Fields: [] }] });
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), { Entity: ENTITY, RecordPrimaryKey: 'ID|person-7' });
+        expect(hoisted.actionCalls.some(c => c.id === 'Get Form Composition For Entity')).toBe(false);
+        expect((hoisted.placementContext?.Sections as Array<{ Key: string }>).map(s => s.Key)).toEqual(['notes']);
+    });
+
+    it('asks the server when no open form matches the record the agent context names', async () => {
+        snapshot({ RecordPrimaryKey: 'ID|person-7' });
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), { Entity: ENTITY, RecordPrimaryKey: 'ID|someone-else' });
+        expect(hoisted.actionCalls.some(c => c.id === 'Get Form Composition For Entity')).toBe(true);
     });
 
     it('asks the server for the composition when there is no snapshot', async () => {
@@ -1089,6 +1123,7 @@ describe('InteractiveFormApplyService — slot availability reaches the dialog',
             Entity: ENTITY, Layout: 'accordion', Sections: [], Related: [], Contributions: [],
             SlotsPresent: ['before-fields', 'after-fields', 'after-related'], ChromeRuleCount: 0,
         } as never;
+        registry.current!.Publish({}, snapshot);
         const svc = new InteractiveFormApplyService();
         await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot);
         expect(hoisted.placementContext).toMatchObject({

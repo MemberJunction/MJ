@@ -32,9 +32,9 @@ import {
 } from '@memberjunction/interactive-component-types/forms';
 import {
     ApplyDecisionToSpec, CollectFormContributionRegistrations,
-    FieldGroupsInDetails, FormSlotProbeService, HumanizeEntityTitle, MjFormPlacementDialogComponent,
+    FieldGroupsInDetails, FormCompositionRegistry, FormSlotProbeService, HumanizeEntityTitle, MjFormPlacementDialogComponent,
     ResolveContributionKey, ResolveFormContributionWinners,
-    type FormCompositionSnapshot, type FormPlacementContext, type FormPlacementDecision,
+    type FormCompositionSnapshot, type FormPlacementContext, type FormPlacementDecision, type FormRecordRef,
 } from '@memberjunction/ng-base-forms';
 
 /** Result of an apply attempt — surfaced to the caller for any post-apply UI. */
@@ -80,17 +80,24 @@ export class InteractiveFormApplyService {
     private readonly dialog = inject(MJDialogService);
     private readonly notifications = inject(MJNotificationService);
     private readonly probe = inject(FormSlotProbeService);
+    private readonly compositions = inject(FormCompositionRegistry);
 
     /**
      * Confirm with the user and apply the spec. Routes to Create / Modify
      * automatically based on whether an Active override already exists.
+     *
+     * @param form The form the user has open, as the agent context names it
+     *   (`AdditionalContext.Form`). Its full composition snapshot is read from the
+     *   {@link FormCompositionRegistry}; with no reference, or no such form open, a panel's
+     *   placement is worked out from the server's composition instead.
      */
     public async ConfirmAndApply(
         spec: ComponentSpec,
         entityName: string,
         provider?: IMetadataProvider,
-        snapshot: FormCompositionSnapshot | null = null,
+        form: FormRecordRef | null = null,
     ): Promise<InteractiveFormApplyResult> {
+        const snapshot = this.compositions.Find(form);
         const p = provider ?? Metadata.Provider;
         if (!p) {
             return this.fail('No metadata provider configured.');
@@ -212,7 +219,7 @@ export class InteractiveFormApplyService {
      * row for the calling user.
      *
      * Two confirmations happen before anything is written, both driven by the live
-     * composition snapshot when the caller supplies one for this entity:
+     * composition snapshot when the open form for this entity has one in the registry:
      *
      *  - **A `replacesSectionKey` that names no section on the current form.** Left
      *    alone the panel would replace nothing and mount silently at its slot, which

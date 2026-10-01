@@ -41,6 +41,7 @@ function snapshot(entity: string): FormCompositionSnapshot {
   return {
     Entity: entity,
     RecordPrimaryKey: 'ID|1',
+    FormChoice: { FullCustomForm: false, OverrideID: null, Label: 'Default form' },
     Layout: 'accordion',
     Sections: [],
     Related: [],

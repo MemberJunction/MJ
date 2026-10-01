@@ -205,6 +205,16 @@ export class NavigationService implements OnDestroy {
    */
   private readonly agentToolsByDetachedResource = new Map<BaseResourceComponent, NonNullable<AgentContextUpdate['AgentClientTools']>>();
 
+  /** Cached resource components the shell has detached and not reattached since. */
+  private readonly detachedResources = new Set<BaseResourceComponent>();
+
+  /**
+   * Emits each cached resource component as the shell reattaches it to a tab. A cached component
+   * keeps its instance and runs no init on reattach, so one that publishes agent context listens
+   * here to publish it again.
+   */
+  public readonly ResourceReattached$ = new Subject<BaseResourceComponent>();
+
   /**
    * Latest `AppContextSnapshot` published by the Explorer app shell.
    *
@@ -277,16 +287,26 @@ export class NavigationService implements OnDestroy {
    * Re-publish a cached resource component's tools when its tab is re-focused. Cached components keep
    * their Angular instance but do NOT re-run `ngAfterViewInit`, so they never re-register on reattach
    * — the shell calls this so the just-reactivated surface's tools become the agent's active set
-   * again. Replays the set captured for this component at its last detach; no-op (lets a fresh
-   * component register itself) when none was captured (e.g. a component's very first attach).
+   * again. Replays the set captured for this component at its last detach; replays nothing (lets a
+   * fresh component register itself) when none was captured (e.g. a component's very first attach).
+   * Either way the component stops counting as detached and {@link ResourceReattached$} emits it.
    */
   public NotifyResourceReattached(caller: BaseResourceComponent): void {
+    this.detachedResources.delete(caller);
     const tools = this.agentToolsByDetachedResource.get(caller);
-    if (tools === undefined) {
-      return;
+    if (tools !== undefined) {
+      this.currentAgentTools = tools;
+      this.AgentContextUpdated$.next({ Caller: caller, AgentClientTools: tools });
     }
-    this.currentAgentTools = tools;
-    this.AgentContextUpdated$.next({ Caller: caller, AgentClientTools: tools });
+    this.ResourceReattached$.next(caller);
+  }
+
+  /**
+   * True between {@link NotifyResourceDetached} and {@link NotifyResourceReattached} for this
+   * component: its tab is not on screen, so it must not replace the agent context of the one that is.
+   */
+  public IsResourceDetached(caller: BaseResourceComponent): boolean {
+    return this.detachedResources.has(caller);
   }
 
   /**
@@ -295,19 +315,22 @@ export class NavigationService implements OnDestroy {
    * snapshot whatever tools are CURRENTLY active and key them by the detaching component, so
    * {@link NotifyResourceReattached} can replay them — robust to a wrapper component being the one
    * cached/reattached while an inner child actually registered the tools (e.g. Data Explorer).
+   * The component counts as detached ({@link IsResourceDetached}) until it is reattached.
    */
   public NotifyResourceDetached(caller: BaseResourceComponent): void {
+    this.detachedResources.add(caller);
     this.agentToolsByDetachedResource.set(caller, this.currentAgentTools);
     this.currentAgentTools = [];
     this.AgentContextUpdated$.next({ Caller: caller, AgentClientTools: [] });
   }
 
   /**
-   * Drop a destroyed component's captured tools (e.g. on LRU eviction), so the map doesn't retain
-   * references to dead component instances.
+   * Drop a destroyed component's captured tools and detached mark (e.g. on LRU eviction), so
+   * nothing here retains references to dead component instances.
    */
   public ForgetResource(caller: BaseResourceComponent): void {
     this.agentToolsByDetachedResource.delete(caller);
+    this.detachedResources.delete(caller);
   }
 
   ngOnDestroy(): void {
