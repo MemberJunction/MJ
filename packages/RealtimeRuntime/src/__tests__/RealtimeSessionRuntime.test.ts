@@ -339,16 +339,44 @@ describe('channel registry on a connect-only provider (#4887)', () => {
     // Bracket access reaches the private method with its real return type, no cast needed.
     const fetchChannelDefinitions = (runtime: RealtimeSessionRuntime) => runtime['fetchChannelDefinitions']();
 
-    it('returns no channels without touching AIEngineBase when the provider has no entity metadata', async () => {
+    // A connect-only provider has no entity metadata, so AIEngineBase cannot load — but the embed
+    // still needs its channels: without them Whiteboard/Media tools never reach the mint and the
+    // agent loses them (seen live on Caliber's widget). The registry is read over GraphQL instead.
+    const registryRow = (Name: string, IsActive: boolean) => ({
+        Data: JSON.stringify({ ID: `id-${Name}`, Name, ClientPluginClass: `${Name}Channel`, IsActive }),
+    });
+
+    it('reads the ACTIVE registry rows over GraphQL, without touching AIEngineBase, when the provider has no entity metadata', async () => {
         const spy = vi.spyOn(AIEngineBase, 'GetProviderInstance');
+        const ExecuteGQL = vi.fn().mockResolvedValue({
+            RunDynamicView: { Success: true, Results: [registryRow('Whiteboard', true), registryRow('Retired', false)] },
+        });
         try {
             const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
-            runtime.Provider = { Entities: [] } as never; // only Entities is read
+            runtime.Provider = { Entities: [], ExecuteGQL } as never; // Entities + ExecuteGQL are all it reads
 
-            await expect(fetchChannelDefinitions(runtime)).resolves.toEqual([]);
+            await expect(fetchChannelDefinitions(runtime)).resolves.toEqual([
+                { ID: 'id-Whiteboard', Name: 'Whiteboard', ClientPluginClass: 'WhiteboardChannel' },
+            ]);
+            expect(ExecuteGQL).toHaveBeenCalledTimes(1);
+            expect(ExecuteGQL.mock.calls[0][1]).toMatchObject({ input: { EntityName: 'MJ: AI Agent Channels' } });
             expect(spy).not.toHaveBeenCalled();
         } finally {
             spy.mockRestore();
+        }
+    });
+
+    it('degrades to no channels, with a warning, when the GraphQL registry read fails', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const ExecuteGQL = vi.fn().mockResolvedValue({ RunDynamicView: { Success: false, ErrorMessage: 'denied', Results: [] } });
+        try {
+            const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
+            runtime.Provider = { Entities: [], ExecuteGQL } as never;
+
+            await expect(fetchChannelDefinitions(runtime)).resolves.toEqual([]);
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('Channel registry unavailable'), expect.stringContaining('denied'));
+        } finally {
+            warn.mockRestore();
         }
     });
 

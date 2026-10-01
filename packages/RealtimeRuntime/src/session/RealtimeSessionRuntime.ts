@@ -1533,9 +1533,10 @@ export class RealtimeSessionRuntime {
   private async fetchChannelDefinitions(): Promise<RealtimeChannelDefinitionRow[]> {
     // A connect-only provider (ConnectGraphQLClient — anonymous embeds) has no entity metadata,
     // so AIEngineBase cannot load; asking it would only fail with "Entity … not found in
-    // metadata". An embed brings its own channels, so "no registry channels" is the right answer.
+    // metadata". The registry is still the authority, so read it over GraphQL instead — answering
+    // "no channels" here cost an embed every channel tool (Whiteboard, Media) at mint.
     if ((this.Provider?.Entities?.length ?? 0) === 0) {
-      return [];
+      return this.fetchChannelDefinitionsOverGraphQL();
     }
     try {
       const engine = AIEngineBase.GetProviderInstance<AIEngineBase>(this.Provider, AIEngineBase) as AIEngineBase;
@@ -1545,6 +1546,35 @@ export class RealtimeSessionRuntime {
         .map<RealtimeChannelDefinitionRow>(c => ({ ID: c.ID, Name: c.Name, ClientPluginClass: c.ClientPluginClass }));
     } catch (error) {
       console.warn('[RealtimeSession] Channel registry unavailable — starting with no channels:', error);
+      return [];
+    }
+  }
+
+  /**
+   * The connect-only path of {@link fetchChannelDefinitions}: the same ACTIVE `MJ: AI Agent Channels`
+   * rows, read with a dynamic view because a connect-only client has no entity metadata to build a
+   * typed RunView from. Same tolerance as the engine path — a failure is logged and means "no
+   * channels", never a blocked session.
+   */
+  private async fetchChannelDefinitionsOverGraphQL(): Promise<RealtimeChannelDefinitionRow[]> {
+    const query = `query RealtimeChannelRegistry($input: RunDynamicViewInput!) {
+      RunDynamicView(input: $input) { Success ErrorMessage Results { Data } }
+    }`;
+    try {
+      const result = (await this.gql().ExecuteGQL(query, {
+        input: { EntityName: 'MJ: AI Agent Channels', ExtraFilter: 'IsActive = 1', Fields: ['ID', 'Name', 'ClientPluginClass', 'IsActive'] },
+      })) as { RunDynamicView?: { Success: boolean; ErrorMessage?: string; Results?: { Data: string }[] } } | null;
+      const view = result?.RunDynamicView;
+      if (!view?.Success) {
+        console.warn('[RealtimeSession] Channel registry unavailable — starting with no channels:', view?.ErrorMessage ?? 'no result');
+        return [];
+      }
+      return (view.Results ?? [])
+        .map((r) => JSON.parse(r.Data) as RealtimeChannelDefinitionRow & { IsActive?: boolean })
+        .filter((row) => row.IsActive === true)
+        .map<RealtimeChannelDefinitionRow>((row) => ({ ID: row.ID, Name: row.Name, ClientPluginClass: row.ClientPluginClass }));
+    } catch (error) {
+      console.warn('[RealtimeSession] Channel registry unavailable — starting with no channels:', error instanceof Error ? error.message : String(error));
       return [];
     }
   }
