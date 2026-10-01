@@ -37,6 +37,7 @@ import { openSync, writeFileSync, mkdirSync, readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import Redis from 'ioredis';
+import { UUIDsEqual } from '@memberjunction/global';
 
 // ────────────────────────────────────────────────────────────────────────────────────────────
 // Args
@@ -676,7 +677,8 @@ function writeSyncFolder(dir: string, entity: string, row: { id: string; name: s
     let record: Record<string, unknown> = {};
     try {
         const existing = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
-        if ((existing.primaryKey as { ID?: string } | undefined)?.ID === row.id) record = existing;
+        const existingKey = existing.primaryKey as { ID?: string } | undefined;
+        if (UUIDsEqual(existingKey?.ID, row.id)) record = existing;
     } catch { /* first write */ }
     record.fields = { Name: row.name, Description: description };
     record.primaryKey = { ID: row.id };
