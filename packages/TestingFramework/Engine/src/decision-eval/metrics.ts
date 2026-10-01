@@ -58,6 +58,14 @@ const PLATT_MAX_ITERATIONS = 100;
 /** A Platt fit stops when its gradient is this small. */
 const PLATT_GRADIENT_TOLERANCE = 1e-9;
 
+/**
+ * The smallest fall in a Platt fit's summed loss, relative to the loss, that its line search can
+ * see through float rounding. A Newton step predicted to lower the loss by less is taken whole.
+ * Without this, a fit on hundreds of points stalls a hair from its optimum, with the gradient around
+ * 1e-6 and every step refused, and reports that it did not converge.
+ */
+const PLATT_LOSS_RESOLUTION = 1e-12;
+
 /** Ridge added to the Platt Hessian, so a flat input cannot make it singular. */
 const PLATT_HESSIAN_RIDGE = 1e-12;
 
@@ -416,7 +424,7 @@ export function ClampedLogit(probability: number): number {
  * Fits Platt scaling: a logistic regression of the class on logit(p), by Newton's method with a
  * backtracking line search, at most 100 iterations. The targets are Platt's smoothed ones,
  * (N₊ + 1) / (N₊ + 2) for a positive case and 1 / (N₋ + 2) for a negative one, so a separable set
- * still has a finite fit.
+ * still has a finite fit. It has converged when the gradient is below 1e-9.
  *
  * @param points The cases to fit on.
  */
@@ -427,11 +435,11 @@ export function FitPlatt(points: readonly LabelledProbability[]): PlattParameter
     let a = 0;
     let b = Math.log((positives + 1) / (points.length - positives + 1));
     for (let iteration = 1; iteration <= PLATT_MAX_ITERATIONS; iteration++) {
-        const step = newtonStep(x, targets, a, b);
-        if (step === null) {
+        const newton = newtonStep(x, targets, a, b);
+        if (newton === null) {
             return { A: a, B: b, Iterations: iteration - 1, Converged: true };
         }
-        [a, b] = lineSearch(x, targets, a, b, step);
+        [a, b] = lineSearch(x, targets, a, b, newton);
     }
     return { A: a, B: b, Iterations: PLATT_MAX_ITERATIONS, Converged: newtonStep(x, targets, a, b) === null };
 }
@@ -743,8 +751,14 @@ function plattLoss(x: readonly number[], targets: readonly number[], a: number, 
     }, 0);
 }
 
-/** The Newton direction at (a, b), or null when the gradient is already below tolerance. */
-function newtonStep(x: readonly number[], targets: readonly number[], a: number, b: number): [number, number] | null {
+/** One Newton step: its direction, and the Newton decrement gᵀH⁻¹g, twice the loss fall it predicts. */
+interface NewtonStep {
+    Step: [number, number];
+    Decrement: number;
+}
+
+/** The Newton step at (a, b), or null when the gradient is already below tolerance. */
+function newtonStep(x: readonly number[], targets: readonly number[], a: number, b: number): NewtonStep | null {
     let gA = 0, gB = 0, hAA = PLATT_HESSIAN_RIDGE, hAB = 0, hBB = PLATT_HESSIAN_RIDGE;
     x.forEach((xi, i) => {
         const q = sigmoid(a * xi + b);
@@ -760,18 +774,27 @@ function newtonStep(x: readonly number[], targets: readonly number[], a: number,
         return null;
     }
     const determinant = hAA * hBB - hAB * hAB;
-    return [(hBB * gA - hAB * gB) / determinant, (hAA * gB - hAB * gA) / determinant];
+    const step: [number, number] = [(hBB * gA - hAB * gB) / determinant, (hAA * gB - hAB * gA) / determinant];
+    return { Step: step, Decrement: gA * step[0] + gB * step[1] };
 }
 
-/** Takes the Newton step, halving it until the loss does not rise. */
+/**
+ * Takes the Newton step, halving it until the loss does not rise. A step predicted to lower the loss
+ * by less than float rounding can show ({@link PLATT_LOSS_RESOLUTION}) is taken whole: that close to
+ * the optimum Newton's step is exact to rounding, and comparing losses would only refuse it.
+ */
 function lineSearch(
     x: readonly number[],
     targets: readonly number[],
     a: number,
     b: number,
-    step: [number, number]
+    newton: NewtonStep
 ): [number, number] {
+    const { Step: step, Decrement: decrement } = newton;
     const current = plattLoss(x, targets, a, b);
+    if (decrement / 2 <= PLATT_LOSS_RESOLUTION * Math.max(1, Math.abs(current))) {
+        return [a - step[0], b - step[1]];
+    }
     for (let size = 1; size > 1e-10; size /= 2) {
         const nextA = a - size * step[0];
         const nextB = b - size * step[1];

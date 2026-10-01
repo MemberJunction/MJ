@@ -122,6 +122,10 @@ export interface FormToolbarItemConfig {
    * - tags: 60
    * - attachments: 70
    * Custom action items default to 100 unless specified (e.g. 5 to appear before Edit).
+   *
+   * In read mode the toolbar renders inline items (Edit and non-pinnable custom items) first, in
+   * `Order`, then the user's pinned items in the order they were pinned; `Order` also sorts the
+   * More menu. So a custom inline item with the default 100 sits after Edit and before the pins.
    */
   Order?: number;
 
@@ -157,6 +161,19 @@ export interface FormToolbarItemConfig {
   CssClass?: string;
 
   /**
+   * Label for the item in the toolbar's More menu. Defaults to `Text`, then `Description`.
+   */
+  MenuLabel?: string;
+
+  /**
+   * Whether the item takes part in per-user pinning: shown as a button only when the user pins
+   * it, otherwise listed in the More menu. Built-in items (except Edit) are pinnable. Custom
+   * items default to false and always render inline, so app-specific actions stay in view.
+   * Inline items render before pinned ones regardless of `Order` (see {@link Order}).
+   */
+  Pinnable?: boolean;
+
+  /**
    * Handler function invoked when the button is clicked.
    */
   OnClick?: (event: FormToolbarItemClickEventArgs) => Promise<void> | void;
@@ -181,5 +198,9 @@ export interface ResolvedToolbarItem {
   IsLoading: boolean;
   CssClass: string;
   IsStandard: boolean;
+  /** Label used in the More menu. */
+  MenuLabel: string;
+  /** Whether the item is pinned or listed in the More menu rather than always inline. */
+  Pinnable: boolean;
   Config: FormToolbarItemConfig;
 }

@@ -20,7 +20,7 @@ import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptE
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
-import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
+import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
 import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString, IsPlainObject, CleanAndParseJSON } from '@memberjunction/global';
@@ -140,7 +140,8 @@ import { MemoryWriteManager, MemoryWriteRequest, MemoryWriteResult } from './Mem
 import { AgentDecisionService, DecisionQuestionMapping } from './AgentDecisionService';
 import { PayloadFeedbackManager, PayloadFeedbackContext, PayloadFeedbackQuestion, PayloadFeedbackResponse } from './PayloadFeedbackManager';
 import { PayloadAnalysisResult } from './PayloadChangeAnalyzer';
-import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS, MAX_DECISION_REQUESTS_PER_TURN, ResolveFinishIfMode, type FinishIfMode } from './agent-types/loop-agent-prompt-params';
+import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS, MAX_DECISION_CALLS_PER_TURN, MAX_DECISION_REQUESTS_PER_TURN, ResolveFinishIfMode, type FinishIfMode } from './agent-types/loop-agent-prompt-params';
+import { FinishIfModeWarnings } from './finish-if-mode-warnings';
 import {
     ApplyCatalogNarrowing,
     BuildCatalogNarrowingQuestions,
@@ -160,27 +161,24 @@ import {
     SelectCatalogNarrowing,
 } from './catalog-narrowing';
 import {
-    AgentsWithoutDescription,
+    BuildDecisionDiscoveryOptionSet,
     BuildDecisionDiscoveryQuestions,
     CanSearchEntities,
     DECISION_DISCOVERY_MAX_RECORDED_IDS,
     DECISION_DISCOVERY_MIN_CONFIDENCE,
     DECISION_DISCOVERY_MIN_OPTIONS,
-    DECISION_DISCOVERY_SEARCH_ENTITY,
     DECISION_DISCOVERY_TIMEOUT_MS,
+    DecisionDiscoveryAgentSearch,
     DecisionDiscoveryFromResult,
-    DecisionDiscoveryOptions,
     DecisionDiscoveryOptionSet,
     DecisionDiscoveryOutcome,
-    DecisionOptionLimit,
+    DecisionDiscoveryRunnableAgents,
+    DecisionPromptOptionCap,
     FailedDecisionDiscovery,
     HostAllowedAgentIDs,
     IsDecisionDiscoveryOn,
     IsOpeningTurn,
-    KeepHostAllowedAgents,
     MentionsAgent,
-    RankOptionsBySearch,
-    SmallestOptionCap,
 } from './decision-discovery';
 import {
     PipelineExecutor,
@@ -573,6 +571,17 @@ interface HeldDecisionRequests {
     /** Why they were held, for the log line when they are skipped. */
     Reason: string;
 }
+
+/** How many decision calls one request of a turn may make, from the turn's `decisionsMaxCallsPerTurn` budget. */
+interface DecisionCallAllowance {
+    /** The calls the request makes with no budget: one, or one per `forEachItemIn` item up to `decisionsMaxItems`. */
+    Wanted: number;
+    /** The calls the budget leaves it, handed out in request order: `Wanted`, or fewer once the budget runs out. */
+    Allowed: number;
+}
+
+/** The prompt params that limit one turn's decisions. */
+type DecisionLimitParam = 'decisionsMaxRequests' | 'decisionsMaxItems' | 'decisionsMaxCallsPerTurn';
 
 export class BaseAgent {
     /**
@@ -2411,6 +2420,9 @@ export class BaseAgent {
             // consumers that re-read `params` after the call see what they
             // passed in, not our chained signal.
             params.cancellationToken = upstreamToken;
+            // A cancellation, or an error thrown out of the step loop, leaves any held decision
+            // requests unasked. The terminate path has already logged and cleared its own.
+            this.skipHeldDecisions(params, this.runEndForHeldDecisions());
             this.releasePerRunDataCache();
             await this.finalizeRun(this.deriveRunOutcome());
         }
@@ -2654,6 +2666,11 @@ export class BaseAgent {
         return {
             CoAgent: params.agent,
             TargetAgentID: targetID,
+            // The run's runtime API keys, so the bridged voice session mints on the caller's key when
+            // the run carries one for the realtime driver (the same run-key → platform order as
+            // GetAIAPIKey; realtime does not consult MJ Credentials). Absent ⇒ platform keys, as before.
+            // CreateBridgeRealtimeSession (the LiveKit / telephony factory) passes no apiKeys today.
+            APIKeys: params.apiKeys,
             AgentSessionID: (params.data?.agentSessionId as string | undefined) ?? '',
             PreferredModelID: modelID,
             ConfigOverridesJson: BuildRealtimeOverridesJson(modelID, voice) ?? undefined,
@@ -2695,13 +2712,22 @@ export class BaseAgent {
         // would dead-end whenever the top model lacked a key — e.g. a power-11 model with no env key
         // (Inworld/AssemblyAI) outranking GPT Realtime — and surface "No usable Realtime model" even though
         // a usable model exists. This mirrors the same fix in RealtimeClientSessionService.
+        // The run's runtime API keys, in GetAIAPIKey's order: the run's key for a driver class, else
+        // the platform's. That is the legacy tier of prompt key resolution — a prompt consults MJ
+        // Credentials / AICredentialBindings first, and realtime does not consult them at all.
+        //
+        // This also affects WHICH vendor runs the session, deliberately. Vendor selection walks
+        // candidates by priority and takes the first whose key resolves, so an organization that
+        // brings its own credential for a vendor we hold no platform key for now reaches that
+        // vendor — which is the point of bringing your own key, not a side effect of it.
+        const resolveAPIKey = MakeAIAPIKeyResolver(params.apiKeys);
         const candidates = this.selectRealtimeModelCandidates(params.agent, overrideModelID);
         for (const model of candidates) {
-            const vendor = SelectRealtimeVendorForModel(model.ID);
+            const vendor = SelectRealtimeVendorForModel(model.ID, resolveAPIKey);
             if (!vendor) {
                 continue;
             }
-            const apiKey = GetAIAPIKey(vendor.DriverClass);
+            const apiKey = resolveAPIKey(vendor.DriverClass);
             if (!apiKey) {
                 continue;
             }
@@ -3677,7 +3703,7 @@ export class BaseAgent {
             // Check if we should continue or terminate
             if (nextStep.terminate) {
                 continueExecution = false;
-                this.skipHeldDecisions(params);
+                this.skipHeldDecisions(params, 'the run ended after the step that carried them');
                 this.logStatus(`🏁 Agent '${params.agent.Name}' terminating after ${stepCount} steps with result: ${nextStep.step}`, true, params);
             } else {
                 currentNextStep = nextStep;
@@ -4038,7 +4064,9 @@ export class BaseAgent {
 
     /**
      * Records one `Agent discovery` step around a bounded discovery, and returns what it found. A
-     * failed discovery is logged as a warning; an unsure one only in verbose logs.
+     * failed discovery is logged as a warning; an unsure one only in verbose logs, except that an
+     * answer from a model with no discovery calibration is warned about once per model, because
+     * then discovery can never suggest anything.
      */
     private async runDecisionDiscovery(
         agent: MJAIAgentEntityExtended,
@@ -4055,9 +4083,36 @@ export class BaseAgent {
         if (!outcome.Succeeded) {
             this.warnDecisionDiscovery(agent, outcome.Reason ?? 'unknown error');
         } else if (!outcome.Injected) {
+            if (outcome.UncalibratedModel) {
+                BaseAgent.warnUncalibratedDiscoveryModel(outcome.UncalibratedModel);
+            }
             this.logStatus(`Decision discovery for '${agent.Name}' suggested no agent: ${outcome.Reason}`, true);
         }
         return outcome;
+    }
+
+    /** The answering models already warned about as having no discovery calibration, so each is warned about once per process. */
+    private static readonly _uncalibratedDiscoveryModelsWarned = new Set<string>();
+
+    /**
+     * Warns, once per model, that discovery answered by a model with no discovery calibration
+     * suggests nothing. That happens when a decision model is added or renamed, when a vendor model
+     * moves to another version (Jev's `APIName`), or when LLM Decision answers through a chat model
+     * other than the one its calibration was fitted on; without the warning the only trace is each
+     * `Agent discovery` step's reason.
+     */
+    private static warnUncalibratedDiscoveryModel(model: string): void {
+        if (BaseAgent._uncalibratedDiscoveryModelsWarned.has(model)) {
+            return;
+        }
+        BaseAgent._uncalibratedDiscoveryModelsWarned.add(model);
+        LogErrorEx({
+            message: `Decision discovery answered by ${model} suggests nothing: the model has no discovery calibration `
+                + '(DECISION_DISCOVERY_CALIBRATION), so its answers are treated as unsure. Fit one with the agent-discovery '
+                + 'Decision Eval, or check that the model was not renamed or moved to another version.',
+            severity: 'warning',
+            category: 'DecisionDiscovery',
+        });
     }
 
     /**
@@ -4139,10 +4194,9 @@ export class BaseAgent {
     }
 
     /**
-     * The Choice's options, rebuilt on every call and never cached: the agents in the permitted
-     * catalog that the host allows and that have a description. There are never more than
-     * {@link DecisionOptionLimit}: when there are, the semantic search narrows them first; if it
-     * cannot, `Error` says why.
+     * The Choice's options, rebuilt on every call and never cached ({@link BuildDecisionDiscoveryOptionSet}):
+     * from AIEngine's current catalog, the agents the user may run, the decision prompt's option cap,
+     * and the semantic search over the opening request when the provider can run it.
      */
     private async decisionDiscoveryOptionSet(
         agent: MJAIAgentEntityExtended,
@@ -4150,67 +4204,14 @@ export class BaseAgent {
         promptName: string,
         hostAllowedIDs: string[] | undefined
     ): Promise<DecisionDiscoveryOptionSet> {
-        const catalog = KeepHostAllowedAgents(await this.decisionDiscoveryCatalog(agent, contextUser), hostAllowedIDs);
-        const options = DecisionDiscoveryOptions(catalog);
-        const declaredCap = this.decisionOptionCap(promptName);
-        const limit = DecisionOptionLimit(declaredCap);
-        const set: DecisionDiscoveryOptionSet = {
-            Options: options,
-            CatalogSize: catalog.length,
-            HostAllowListSize: hostAllowedIDs?.length,
-            WithoutDescription: AgentsWithoutDescription(catalog),
-            OptionLimit: limit,
-            DeclaredOptionCap: declaredCap,
-        };
-        if (options.length <= limit) {
-            return set;
-        }
         const provider = this.ProviderToUse;
-        if (!CanSearchEntities(provider)) {
-            return { ...set, Options: [], NarrowedFrom: options.length,
-                Error: `${options.length} agents exceed the limit of ${limit} options, and the provider cannot run the semantic search that narrows them` };
-        }
-        // The search Find Candidate Agents runs: hybrid over MJ: AI Agents, over-fetching threefold for
-        // the permission filter. Its similarity floor is not applied: the decision judges fit.
-        const results = await provider.SearchEntity({
-            entityName: DECISION_DISCOVERY_SEARCH_ENTITY,
-            searchText: this._openingRequest,
-            options: { mode: 'hybrid', topK: limit * 3, minScore: 0, contextUser },
+        return BuildDecisionDiscoveryOptionSet({
+            Agents: await DecisionDiscoveryRunnableAgents(AIEngine.Instance.Agents, contextUser),
+            RunningAgentID: agent.ID,
+            HostAllowedIDs: hostAllowedIDs,
+            DeclaredCap: DecisionPromptOptionCap(AIEngine.Instance, promptName),
+            Search: CanSearchEntities(provider) ? DecisionDiscoveryAgentSearch(provider, this._openingRequest, contextUser) : undefined,
         });
-        return { ...set, Options: RankOptionsBySearch(options, results.map(r => r.recordId), limit), NarrowedFrom: options.length };
-    }
-
-    /**
-     * The agents this run may suggest, from AIEngine's current catalog: the ones the user may run and
-     * that can be discovered directly (the set Find Candidate Agents offers, through the same
-     * {@link AIAgentPermissionHelper} filter), minus the running agent itself.
-     */
-    private async decisionDiscoveryCatalog(agent: MJAIAgentEntityExtended, contextUser: UserInfo): Promise<MJAIAgentEntityExtended[]> {
-        const runnable = await AIAgentPermissionHelper.FilterRunnableAgents(AIEngine.Instance.Agents, contextUser);
-        return runnable.filter(a => AIAgentPermissionHelper.IsDirectlyDiscoverable(a) && !UUIDsEqual(a.ID, agent.ID));
-    }
-
-    /**
-     * The decision model's option cap: the smallest `Decision.MaxChoiceOptions` in the effective model
-     * configuration of the models the decision prompt is bound to, the setting `AIDecisionRunner`
-     * checks before its call. `undefined` when none declares one, or the prompt is not found.
-     */
-    private decisionOptionCap(promptName: string): number | undefined {
-        const engine = AIEngine.Instance;
-        const target = promptName.trim().toLowerCase();
-        const prompt = engine.Prompts.find(p => (p.Name ?? '').trim().toLowerCase() === target);
-        if (!prompt) {
-            return undefined;
-        }
-        const caps = engine.PromptModels
-            .filter(pm => UUIDsEqual(pm.PromptID, prompt.ID) && (pm.Status === 'Active' || pm.Status === 'Preview'))
-            .map(pm => {
-                const modelVendor = pm.VendorID
-                    ? engine.ModelVendors.find(mv => UUIDsEqual(mv.ModelID, pm.ModelID) && UUIDsEqual(mv.VendorID, pm.VendorID))
-                    : undefined;
-                return engine.GetEffectiveModelConfiguration(pm.ModelID, modelVendor?.ID)?.Decision?.MaxChoiceOptions;
-            });
-        return SmallestOptionCap(caps);
     }
 
     /** Opens the `Agent discovery` Decision step. Without a run there is no step. */
@@ -8386,8 +8387,14 @@ The context is now within limits. Please retry your request with the recovered c
      * (StepType 'Decision'), with bounded concurrency. A failed request never fails the run: it
      * becomes that request's `success: false`, which the agent reads on its next turn.
      *
-     * At most `decisionsMaxRequests` requests run (default {@link MAX_DECISION_REQUESTS_PER_TURN}).
-     * Each request over the cap is not run and records no step; its result says why.
+     * Two limits bound the turn. At most `decisionsMaxRequests` requests run (default
+     * {@link MAX_DECISION_REQUESTS_PER_TURN}); each request over that cap is not run and records no
+     * step, and its result says why. And the requests make at most `decisionsMaxCallsPerTurn`
+     * decision calls in total, counting every `forEachItemIn` item (default
+     * {@link MAX_DECISION_CALLS_PER_TURN}). That budget is handed out in request order before any
+     * call is made, so which calls run never depends on timing. A `forEachItemIn` request it cuts
+     * short asks its first items and reports the rest in `skippedCount`. A request it leaves no calls
+     * for is not run, records no step, and its result says why.
      *
      * @since 2.132.0
      */
@@ -8398,12 +8405,17 @@ The context is now within limits. Please retry your request with the recovered c
         params: ExecuteAgentParams,
     ): Promise<AgentDecisionResult[]> {
         const cap = this.decisionRequestCap(agentTypePromptParams);
+        const toRun = requests.slice(0, cap);
         const overCap = requests.slice(cap);
         if (overCap.length > 0) {
             this.logStatus(`[Decisions] ${requests.length} decision requests on one turn — answering the first ${cap}, skipping ${overCap.length} (per-turn cap)`, true, params);
         }
-        const results = await this.runWithConcurrencyLimit(requests.slice(0, cap), BaseAgent.DECISION_CONCURRENCY,
-            req => this.executeSingleDecisionRequestAsStep(req, finalPayload, agentTypePromptParams, params),
+        const budget = this.decisionCallBudget(agentTypePromptParams);
+        const allowances = this.allotDecisionCalls(toRun, finalPayload, agentTypePromptParams, budget, params);
+        const results = await this.runWithConcurrencyLimit(toRun, BaseAgent.DECISION_CONCURRENCY,
+            async (req, index) => allowances[index].Wanted > 0 && allowances[index].Allowed === 0
+                ? this.overBudgetDecisionResult(req, index, budget)
+                : this.executeSingleDecisionRequestAsStep(req, finalPayload, agentTypePromptParams, params, allowances[index].Allowed),
             (error, req, index): AgentDecisionResult => ({
                 id: this.decisionRequestId(req, index),
                 success: false,
@@ -8419,10 +8431,86 @@ The context is now within limits. Please retry your request with the recovered c
 
     /** The most decision requests one turn may run: `decisionsMaxRequests`, or {@link MAX_DECISION_REQUESTS_PER_TURN}. */
     private decisionRequestCap(agentTypePromptParams: Record<string, unknown> | undefined): number {
-        const configured = agentTypePromptParams?.decisionsMaxRequests;
-        return typeof configured === 'number' && Number.isInteger(configured) && configured >= 0
-            ? configured
-            : MAX_DECISION_REQUESTS_PER_TURN;
+        return this.decisionLimit(agentTypePromptParams, 'decisionsMaxRequests', MAX_DECISION_REQUESTS_PER_TURN);
+    }
+
+    /**
+     * The most decision calls one turn's requests make in total, `forEachItemIn` items included:
+     * `decisionsMaxCallsPerTurn`, or {@link MAX_DECISION_CALLS_PER_TURN}.
+     */
+    private decisionCallBudget(agentTypePromptParams: Record<string, unknown> | undefined): number {
+        return this.decisionLimit(agentTypePromptParams, 'decisionsMaxCallsPerTurn', MAX_DECISION_CALLS_PER_TURN);
+    }
+
+    /** The most items one `forEachItemIn` request asks about: `decisionsMaxItems`, or its default. */
+    private decisionMaxItems(agentTypePromptParams: Record<string, unknown> | undefined): number {
+        return this.decisionLimit(agentTypePromptParams, 'decisionsMaxItems', DEFAULT_LOOP_AGENT_PROMPT_PARAMS.decisionsMaxItems);
+    }
+
+    /** A decision limit from the prompt params when it is a non-negative integer, or `fallback` when it is absent or anything else. */
+    private decisionLimit(agentTypePromptParams: Record<string, unknown> | undefined, name: DecisionLimitParam, fallback: number): number {
+        const configured = agentTypePromptParams?.[name];
+        return typeof configured === 'number' && Number.isInteger(configured) && configured >= 0 ? configured : fallback;
+    }
+
+    /**
+     * Hands out the turn's decision-call budget to its requests in order, before any of them runs.
+     * Each request gets the calls it wants while the budget lasts. The first one the budget cannot
+     * cover gets what is left, and the ones after it get none.
+     */
+    private allotDecisionCalls(
+        requests: AgentDecisionRequest[],
+        finalPayload: unknown,
+        agentTypePromptParams: Record<string, unknown> | undefined,
+        budget: number,
+        params: ExecuteAgentParams
+    ): DecisionCallAllowance[] {
+        let remaining = budget;
+        const allowances = requests.map((request): DecisionCallAllowance => {
+            const wanted = this.decisionCallsWanted(request, finalPayload, agentTypePromptParams);
+            const allowed = Math.min(wanted, remaining);
+            remaining -= allowed;
+            return { Wanted: wanted, Allowed: allowed };
+        });
+        const cut = allowances.reduce((sum, allowance) => sum + allowance.Wanted - allowance.Allowed, 0);
+        if (cut > 0) {
+            this.logStatus(`[Decisions] The turn's decision requests want ${budget + cut} decision calls — making ${budget}, skipping ${cut} (per-turn call budget)`, true, params);
+        }
+        return allowances;
+    }
+
+    /**
+     * The decision calls a request makes with no budget: one, or one per `forEachItemIn` item up to
+     * `decisionsMaxItems`. A request that cannot make any, because it is not an object or its
+     * `forEachItemIn` is not an array, wants none. A request that fails before it asks, such as one
+     * with no valid question, still holds what its shape wants: the budget can then go unused, but
+     * it is never exceeded.
+     */
+    private decisionCallsWanted(
+        request: AgentDecisionRequest,
+        finalPayload: unknown,
+        agentTypePromptParams: Record<string, unknown> | undefined
+    ): number {
+        if (!request || typeof request !== 'object') {
+            return 0;
+        }
+        if (!request.forEachItemIn) {
+            return 1;
+        }
+        const target = typeof request.forEachItemIn === 'string' ? this.resolvePayloadPath(request.forEachItemIn, finalPayload) : undefined;
+        return Array.isArray(target) ? Math.min(target.length, this.decisionMaxItems(agentTypePromptParams)) : 0;
+    }
+
+    /**
+     * The result of a request the turn's decision-call budget left no calls for. It was not run.
+     * A budget of 0 turns decision calls off for the agent, so then asking again on a later turn
+     * cannot help, and the result does not invite it.
+     */
+    private overBudgetDecisionResult(request: AgentDecisionRequest, index: number, budget: number): AgentDecisionResult {
+        const error = budget === 0
+            ? 'Not run: this agent\'s decision-call budget is 0 (decisionsMaxCallsPerTurn), so it makes no decision calls on any turn. Asking again will not help: carry on without the answer.'
+            : `Not run: one turn's decisions make at most ${budget} decision calls in total, counting each forEachItemIn item, and the requests before this one used them all. Ask again next turn if you still need it.`;
+        return { id: this.decisionRequestId(request, index), success: false, error };
     }
 
     /** A request's id for its result, or its position when the model sent no usable id. */
@@ -8451,7 +8539,7 @@ The context is now within limits. Please retry your request with the recovered c
         const payload = decision.newPayload ?? decision.previousPayload;
         const promptParams = decision.decisionPromptName ? { decisionPromptName: decision.decisionPromptName } : undefined;
         const results = await this.runWithConcurrencyLimit(decision.decisions ?? [], BaseAgent.DECISION_CONCURRENCY,
-            request => this.executeSingleDecisionRequestAsStep(request, payload, promptParams, params, SummarizeDecisionAnswers),
+            request => this.executeSingleDecisionRequestAsStep(request, payload, promptParams, params, Number.POSITIVE_INFINITY, SummarizeDecisionAnswers),
             (error, request, index): AgentDecisionResult => ({
                 id: this.decisionRequestId(request, index),
                 success: false,
@@ -8466,6 +8554,11 @@ The context is now within limits. Please retry your request with the recovered c
      * output, so any error finishes the step as failed rather than escaping: this never throws
      * once the step exists.
      *
+     * @param callAllowance The most decision calls the request may make, from the turn's
+     * `decisionsMaxCallsPerTurn` budget. It caps a `forEachItemIn` request's items below
+     * `decisionsMaxItems`. A single-state request makes one call, and
+     * {@link executeDecisionRequestsAsSteps} never starts one the budget left without it.
+     * Unbounded by default.
      * @param summarize how the typed answers are summarised for whoever reads them next; defaults
      *                  to the loop turn's model-facing summary
      * @since 2.132.0
@@ -8475,6 +8568,7 @@ The context is now within limits. Please retry your request with the recovered c
         finalPayload: unknown,
         agentTypePromptParams: Record<string, unknown> | undefined,
         params: ExecuteAgentParams,
+        callAllowance: number = Number.POSITIVE_INFINITY,
         summarize: DecisionAnswerSummarizer = AgentDecisionService.SummarizeAnswers,
     ): Promise<AgentDecisionResult> {
         const step = await this.createStepEntity({
@@ -8498,7 +8592,7 @@ The context is now within limits. Please retry your request with the recovered c
             }
             const ask = this.decisionAsker(mapping.Questions, agentTypePromptParams, params);
             const outcome = request.forEachItemIn
-                ? await this.askForEachItem(request, finalPayload, agentTypePromptParams, params, step, ask, summarize)
+                ? await this.askForEachItem(request, finalPayload, agentTypePromptParams, callAllowance, params, step, ask, summarize)
                 : await this.askOnce(request, finalPayload, step, ask, summarize);
             return await this.finishDecisionStep(step, request, outcome, mapping.Invalid);
         } catch (error) {
@@ -8547,14 +8641,16 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Asks the same questions of each item of a payload array, up to `decisionsMaxItems`. Each item's
-     * call is its own child Decision step of the request's step, carrying that call's prompt run, as
-     * each iteration of a ForEach is a child step of its loop step.
+     * Asks the same questions of each item of a payload array, up to `decisionsMaxItems` and the
+     * request's share of the turn's call budget. Each item's call is its own child Decision step of
+     * the request's step, carrying that call's prompt run, as each iteration of a ForEach is a child
+     * step of its loop step.
      */
     private async askForEachItem(
         request: AgentDecisionRequest,
         finalPayload: unknown,
         agentTypePromptParams: Record<string, unknown> | undefined,
+        callAllowance: number,
         params: ExecuteAgentParams,
         step: MJAIAgentRunStepEntityExtended,
         ask: (state: string) => Promise<AIDecisionRunResult>,
@@ -8564,11 +8660,13 @@ The context is now within limits. Please retry your request with the recovered c
         if (!Array.isArray(target)) {
             return { Error: `forEachItemIn target "${request.forEachItemIn}" is not an array` };
         }
-        const maxItems = typeof agentTypePromptParams?.decisionsMaxItems === 'number' ? agentTypePromptParams.decisionsMaxItems : 100;
-        const items = target.slice(0, maxItems);
-        const skippedCount = target.length > maxItems ? target.length - maxItems : undefined;
+        const maxItems = this.decisionMaxItems(agentTypePromptParams);
+        const limit = Math.min(maxItems, callAllowance);
+        const items = target.slice(0, limit);
+        const skippedCount = target.length > limit ? target.length - limit : undefined;
         if (skippedCount) {
-            this.logStatus(`[Decisions] "${request.forEachItemIn}" has ${target.length} items; asking the first ${maxItems} (${skippedCount} skipped)`, true, params);
+            const why = limit < maxItems ? "the turn's decision-call budget" : 'decisionsMaxItems';
+            this.logStatus(`[Decisions] "${request.forEachItemIn}" has ${target.length} items; asking the first ${limit} (${skippedCount} skipped: ${why})`, true, params);
         }
         const results = await this.runWithConcurrencyLimit(items, BaseAgent.DECISION_CONCURRENCY,
             (item, index) => this.askItemAsStep(request, item, index, step, ask, params),
@@ -8612,7 +8710,7 @@ The context is now within limits. Please retry your request with the recovered c
      * Links a decision call's prompt run to its step, as the Prompt step links its own, so the run's
      * cost and token totals and its `MaxCostPerRun` / `MaxTokensPerRun` checks count the call.
      */
-    private attachDecisionPromptRun(step: MJAIAgentRunStepEntityExtended, result: AIDecisionRunResult): void {
+    protected attachDecisionPromptRun(step: MJAIAgentRunStepEntityExtended, result: AIDecisionRunResult): void {
         if (result.promptRun?.ID) {
             step.TargetLogID = result.promptRun.ID;
             step.PromptRun = result.promptRun; // transient related object (not a persisted field)
@@ -8770,15 +8868,35 @@ The context is now within limits. Please retry your request with the recovered c
         this.injectDecisionResultsMessage(params, results);
     }
 
-    /** Skips the decision requests a prompt held back, because the step that carried them ended the run. */
-    private skipHeldDecisions(params: ExecuteAgentParams): void {
+    /**
+     * Skips the decision requests a prompt held back, because the run ended before they could be
+     * asked: the step that carried them ended it, or it was cancelled, or an error was thrown out of
+     * the step loop. Called from the loop's terminate branch and from `Execute()`'s `finally`, so
+     * every way out logs them. The held state is cleared before the log line, so the second call on
+     * the terminate path logs nothing and each held request is logged exactly once.
+     *
+     * @param runEnd How the run ended, as a clause for the log line.
+     */
+    private skipHeldDecisions(params: ExecuteAgentParams, runEnd: string): void {
         const held = this._heldDecisions;
         if (!held) {
             return;
         }
         this._heldDecisions = undefined;
         const ids = held.Requests.map((d, i) => this.decisionRequestId(d, i)).join(', ');
-        this.logStatus(`[Decisions] Skipped ${held.Requests.length} held decision request(s) (${ids}) without asking them: the run ended after the step that carried them (${held.Reason}), so no turn would read the answers`, false, params);
+        this.logStatus(`[Decisions] Skipped ${held.Requests.length} held decision request(s) (${ids}) without asking them: ${runEnd}, so no turn would read the answers (they were held because ${held.Reason})`, false, params);
+    }
+
+    /** How the run ended, as a clause for held decision requests that a cancellation or an error left unasked. */
+    private runEndForHeldDecisions(): string {
+        switch (this.deriveRunOutcome()) {
+            case 'cancelled':
+                return 'the run was cancelled before they were asked';
+            case 'failure':
+                return 'the run failed before they were asked';
+            default:
+                return 'the run ended before they were asked';
+        }
     }
 
     /**
@@ -9420,9 +9538,31 @@ The context is now within limits. Please retry your request with the recovered c
         // to distinguish between explicit user settings and schema defaults
         const explicitResponseType = (runtimeOverrides?.includeResponseTypeDefinition as Record<string, unknown> | undefined) ||
                                      (agentParams.includeResponseTypeDefinition as Record<string, unknown> | undefined);
+        this.warnOnceOnUnknownFinishIfMode(merged.finishIfMode, agent);
         this.applyResponseTypeAutoAlignment(merged, explicitResponseType);
 
         return merged;
+    }
+
+    /**
+     * The agent and value pairs {@link warnOnceOnUnknownFinishIfMode} has already reported. It is
+     * process-wide because the prompt params are merged again for every run of an agent, and on every
+     * turn that carries runtime overrides. One warning per agent and value is enough. A run request
+     * can set the value, so what this keeps is bounded: see {@link FinishIfModeWarnings}.
+     */
+    private static readonly finishIfModeWarnings = new FinishIfModeWarnings();
+
+    /**
+     * Warns, once per agent and value, when the merged `finishIfMode` is set but is not a
+     * {@link FinishIfMode}. {@link ResolveFinishIfMode} treats such a value as `'off'`, so without
+     * this a typo such as `"On"` or `"true"` would turn the agent's gates off without a word. An
+     * absent value is the default, so it is not reported.
+     */
+    private warnOnceOnUnknownFinishIfMode(value: unknown, agent: MJAIAgentEntityExtended): void {
+        const warning = BaseAgent.finishIfModeWarnings.WarningFor(agent.ID, agent.Name, value);
+        if (warning) {
+            this.logError(warning, { agent, category: 'AgentConfiguration', severity: 'warning' });
+        }
     }
 
     /**
@@ -9469,6 +9609,13 @@ The context is now within limits. Please retry your request with the recovered c
         // whatever includeFinishIfDocs says, so the response field below follows it off too.
         if (ResolveFinishIfMode(params.finishIfMode) === 'off') {
             params.includeFinishIfDocs = false;
+        }
+
+        // `decisions` is opt-in too (`includeDecisionsDocs: true`). Its docs and types add about 1,200
+        // tokens to every turn, and on the Prompt Eval corpus no model used it (typed-decision plan,
+        // Task 4.7). Unset means off, so the response field below follows it off too.
+        if (params.includeDecisionsDocs !== true) {
+            params.includeDecisionsDocs = false;
         }
 
         // Auto-alignment mappings: docs flag → response type property
