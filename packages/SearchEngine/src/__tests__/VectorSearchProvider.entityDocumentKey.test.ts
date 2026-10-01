@@ -10,6 +10,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { LogError, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import type { EmbeddingRunParams, EmbeddingRunResult } from '@memberjunction/ai-prompts';
 
 const INDEX_ID = 'c4b90e4c-f338-4620-b1b0-6301bc40ef2e';
 const OTHER_INDEX_ID = '0d6c3a57-5d7e-4c42-9c8e-2f3b9d4a1e10';
@@ -32,6 +33,11 @@ const { mockRunView, mockCreateInstance, mockKHConfig, entityDocumentsRef, getAc
     getActiveDocsCalls: { count: 0 },
     modelsRef: { value: [] as Array<{ ID: string; Name: string; APIName: string; DriverClass: string }> },
 }));
+
+/** The query embedding: one fixed vector per text, as AIEmbeddingRunner returns it. */
+async function runEmbedding(params: EmbeddingRunParams): Promise<EmbeddingRunResult> {
+    return { Success: true, Vectors: params.Texts.map(() => [0.1, 0.2, 0.3]), PromptRunID: null, TokensUsed: 0, Cost: 0, ExecutionTimeMs: 0, ErrorMessage: null };
+}
 
 vi.mock('@memberjunction/core', () => ({
     Metadata: class { static Provider = {}; },
@@ -64,8 +70,11 @@ vi.mock('@memberjunction/aiengine', () => ({
 }));
 
 vi.mock('@memberjunction/ai', () => ({
-    BaseEmbeddings: class {},
     GetAIAPIKey: () => 'key',
+}));
+
+vi.mock('@memberjunction/ai-prompts', () => ({
+    AIEmbeddingRunner: class { RunEmbedding = runEmbedding; },
 }));
 
 vi.mock('@memberjunction/ai-vectordb', () => ({
@@ -76,6 +85,7 @@ vi.mock('@memberjunction/global', () => ({
     MJGlobal: { Instance: { ClassFactory: { CreateInstance: mockCreateInstance } } },
     UUIDsEqual: (a: string | null | undefined, b: string | null | undefined) =>
         !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase(),
+    NormalizeUUID: (id: string) => id.trim().toLowerCase(),
     RegisterClass: () => <T>(target: T) => target,
 }));
 
@@ -104,10 +114,9 @@ function fakeVectorDB(keyedByEntityDocument: boolean, pools: Record<string, Fake
     };
 }
 
-/** Routes ClassFactory: the embedding driver, then the vector DB driver. */
+/** Routes ClassFactory to the vector DB driver. The query embedding comes from AIEmbeddingRunner. */
 function wireDrivers(vectorDB: ReturnType<typeof fakeVectorDB>): void {
-    const embedder = { EmbedText: async () => ({ vector: [0.1, 0.2, 0.3] }) };
-    mockCreateInstance.mockImplementation((_base: object, key: string) => (key === 'LocalEmbedding' ? embedder : vectorDB));
+    mockCreateInstance.mockImplementation(() => vectorDB);
 }
 
 function match(id: string, score: number, recordID: string): FakeMatch {
