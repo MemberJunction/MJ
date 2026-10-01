@@ -1,9 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import type { UserInfo } from '@memberjunction/core';
+import { ValidationResult, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { FormScope } from '@memberjunction/core-entities';
 import {
+    ApplyFormScopeValidation,
     DescribeFormScopeWrite,
+    FormScopeDeleteRefusal,
     FormScopeGuardRefusal,
+    FormScopeReplayRefusal,
     type GuardedFormScopeRow,
 } from '../custom/FormScopeGuard';
 
@@ -27,6 +30,8 @@ function row(init: {
     PriorScope?: FormScope;
     PriorUserID?: string | null;
     Caller?: string | null;
+    /** `Owner` makes the caller a grant holder without any authorization metadata. */
+    CallerType?: string;
 }): GuardedFormScopeRow {
     const prior: Record<string, unknown> = {
         Scope: init.PriorScope ?? init.Scope,
@@ -34,7 +39,7 @@ function row(init: {
     };
     return {
         IsSaved: init.IsSaved,
-        ActiveUser: init.Caller === null ? null : ({ ID: init.Caller ?? ME } as UserInfo),
+        ActiveUser: init.Caller === null ? null : ({ ID: init.Caller ?? ME, Type: init.CallerType ?? 'User' } as UserInfo),
         Scope: init.Scope,
         UserID: init.UserID,
         GetFieldByName: (name: string) => ({ OldValue: prior[name] }),
@@ -59,6 +64,13 @@ describe('DescribeFormScopeWrite', () => {
         const r = row({ IsSaved: true, Scope: 'Role', UserID: null });
         const write = DescribeFormScopeWrite(r, 'delete', true);
         expect(write).toMatchObject({ PriorScope: 'Role', NextScope: 'Role', CallerHoldsGrant: true });
+    });
+
+    /** A delete removes the row as stored, so an unsaved edit to its scope cannot change the check. */
+    it('reads both sides of a delete from the loaded values, not unsaved edits', () => {
+        const r = row({ IsSaved: true, Scope: 'User', UserID: ME, PriorScope: 'Global', PriorUserID: null });
+        const write = DescribeFormScopeWrite(r, 'delete', false);
+        expect(write).toMatchObject({ PriorScope: 'Global', PriorUserID: null, NextScope: 'Global', NextUserID: null });
     });
 
     it('carries the caller and whether they hold the grant', () => {
@@ -94,5 +106,93 @@ describe('FormScopeGuardRefusal', () => {
     it('allows anything in a trusted context with no caller', () => {
         const r = row({ IsSaved: false, Scope: 'Global', UserID: null, Caller: null });
         expect(FormScopeGuardRefusal(r, 'create', false)).toBeNull();
+    });
+});
+
+/** No authorization metadata: only an `Owner`-type caller holds the grant. */
+const PROVIDER = { Authorizations: [] } as unknown as IMetadataProvider;
+
+describe('FormScopeDeleteRefusal', () => {
+    it('lets an owner delete their own personal row', () => {
+        expect(FormScopeDeleteRefusal(row({ IsSaved: true, Scope: 'User', UserID: ME }), PROVIDER)).toBeNull();
+    });
+
+    it('refuses a holder deleting someone else\'s personal row', () => {
+        const r = row({ IsSaved: true, Scope: 'User', UserID: 'someone-else', CallerType: 'Owner' });
+        expect(FormScopeDeleteRefusal(r, PROVIDER)).toMatch(/your own/i);
+    });
+
+    it('refuses a non-holder deleting a shared row they edited into their own in memory', () => {
+        const r = row({ IsSaved: true, Scope: 'User', UserID: ME, PriorScope: 'Global', PriorUserID: null });
+        expect(FormScopeDeleteRefusal(r, PROVIDER)).toMatch(/Manage Form Defaults/);
+    });
+
+    it('lets a holder delete a shared row', () => {
+        expect(FormScopeDeleteRefusal(row({ IsSaved: true, Scope: 'Global', UserID: null, CallerType: 'Owner' }), PROVIDER)).toBeNull();
+    });
+});
+
+/** `ReplayOnly` skips `Validate()`, so the replay check is the only scope check on that path. */
+describe('FormScopeReplayRefusal', () => {
+    const replay = { ReplayOnly: true };
+
+    it('ignores an ordinary save, which Validate() checks', () => {
+        expect(FormScopeReplayRefusal(row({ IsSaved: false, Scope: 'Global', UserID: null }), PROVIDER, {})).toBeNull();
+    });
+
+    it('refuses a non-holder, whatever the row', () => {
+        expect(FormScopeReplayRefusal(row({ IsSaved: false, Scope: 'User', UserID: ME }), PROVIDER, replay))
+            .toMatch(/ReplayOnly/);
+    });
+
+    it('refuses a holder writing someone else\'s personal row', () => {
+        const r = row({ IsSaved: true, Scope: 'User', UserID: 'someone-else', CallerType: 'Owner' });
+        expect(FormScopeReplayRefusal(r, PROVIDER, replay)).toMatch(/your own/i);
+    });
+
+    it('lets a holder replay a shared row or their own', () => {
+        expect(FormScopeReplayRefusal(row({ IsSaved: true, Scope: 'Global', UserID: null, CallerType: 'Owner' }), PROVIDER, replay)).toBeNull();
+        expect(FormScopeReplayRefusal(row({ IsSaved: false, Scope: 'User', UserID: ME, CallerType: 'Owner' }), PROVIDER, replay)).toBeNull();
+    });
+
+    it('allows anything in a trusted context with no caller', () => {
+        expect(FormScopeReplayRefusal(row({ IsSaved: false, Scope: 'Global', UserID: null, Caller: null }), PROVIDER, replay)).toBeNull();
+    });
+});
+
+describe('ApplyFormScopeValidation', () => {
+    function validate(r: GuardedFormScopeRow): ValidationResult {
+        const result = new ValidationResult();
+        result.Success = true;
+        ApplyFormScopeValidation(r, PROVIDER, result);
+        return result;
+    }
+
+    it('leaves an owner\'s own personal row valid', () => {
+        expect(validate(row({ IsSaved: true, Scope: 'User', UserID: ME })).Success).toBe(true);
+    });
+
+    it('adds the rule\'s refusal as a Scope error', () => {
+        const result = validate(row({ IsSaved: false, Scope: 'Global', UserID: null }));
+        expect(result.Success).toBe(false);
+        expect(result.Errors[0]).toMatchObject({ Source: 'Scope' });
+        expect(result.Errors[0].Message).toMatch(/Manage Form Defaults/);
+    });
+
+    /**
+     * BaseEntity's value-list check trims and case-folds, and SQL Server ignores trailing spaces
+     * in the CHECK, so a padded or re-cased Scope would otherwise save.
+     */
+    it('refuses a Scope that is not exactly User, Role or Global, even from a holder', () => {
+        for (const scope of ['Global ', 'global', 'USER', '']) {
+            const result = validate(row({ IsSaved: false, Scope: scope as FormScope, UserID: null, CallerType: 'Owner' }));
+            expect(result.Success).toBe(false);
+            expect(result.Errors[0]).toMatchObject({ Source: 'Scope' });
+            expect(result.Errors[0].Message).toMatch(/exactly/);
+        }
+    });
+
+    it('refuses a Scope that is not exactly one of the three in a trusted context too', () => {
+        expect(validate(row({ IsSaved: false, Scope: 'Global ' as FormScope, UserID: null, Caller: null })).Success).toBe(false);
     });
 });

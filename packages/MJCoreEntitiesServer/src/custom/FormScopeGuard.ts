@@ -9,6 +9,7 @@ import {
 } from '@memberjunction/core';
 import {
     FormScopeWriteRefusal,
+    IsCanonicalFormScope,
     UserCanManageFormDefaults,
     type FormScope,
     type FormScopeOperation,
@@ -36,7 +37,8 @@ export interface GuardedFormScopeRow {
  * gives it: there is nobody to check the write against.
  *
  * On an update the prior values come from each field's `OldValue`, the value as last loaded.
- * On a delete the row is unchanged, so its current values are both sides.
+ * A delete removes the row as stored, so both sides are the loaded values and an unsaved edit
+ * to the scope or owner cannot change the check.
  */
 export function DescribeFormScopeWrite(
     row: GuardedFormScopeRow,
@@ -45,16 +47,23 @@ export function DescribeFormScopeWrite(
 ): FormScopeWrite | null {
     const caller = row.ActiveUser;
     if (!caller) return null;
-    const isCreate = operation === 'create';
+    const who = { CallerID: caller.ID, CallerHoldsGrant: callerHoldsGrant };
+    if (operation === 'create') {
+        return {
+            Operation: operation, PriorScope: null, PriorUserID: null,
+            NextScope: row.Scope, NextUserID: row.UserID, ...who,
+        };
+    }
+    const priorScope = priorValue<FormScope>(row, 'Scope');
+    const priorUserID = priorValue<string | null>(row, 'UserID');
     const isDelete = operation === 'delete';
     return {
         Operation: operation,
-        PriorScope: isCreate ? null : isDelete ? row.Scope : priorValue<FormScope>(row, 'Scope'),
-        PriorUserID: isCreate ? null : isDelete ? row.UserID : priorValue<string | null>(row, 'UserID'),
-        NextScope: row.Scope,
-        NextUserID: row.UserID,
-        CallerID: caller.ID,
-        CallerHoldsGrant: callerHoldsGrant,
+        PriorScope: priorScope,
+        PriorUserID: priorUserID,
+        NextScope: isDelete ? priorScope : row.Scope,
+        NextUserID: isDelete ? priorUserID : row.UserID,
+        ...who,
     };
 }
 
@@ -78,16 +87,23 @@ export function CallerHoldsFormDefaultsGrant(row: GuardedFormScopeRow, provider:
     return UserCanManageFormDefaults(row.ActiveUser, provider);
 }
 
-/** Adds the scope rule's refusal, if any, to a `Validate()` result. Runs on create and update. */
+/**
+ * Adds a scope problem, if any, to a `Validate()` result. Runs on create and update.
+ *
+ * A Scope that is not exactly `User`, `Role` or `Global` is refused for every caller, a trusted
+ * one included: the value-list check trims and case-folds, and SQL Server ignores trailing spaces
+ * in the CHECK, so a padded or re-cased value would otherwise be stored. Then the scope rule runs.
+ */
 export function ApplyFormScopeValidation(
     row: GuardedFormScopeRow,
     provider: IMetadataProvider,
     result: ValidationResult,
 ): void {
-    const operation: FormScopeOperation = row.IsSaved ? 'update' : 'create';
-    const refusal = FormScopeGuardRefusal(row, operation, CallerHoldsFormDefaultsGrant(row, provider));
-    if (!refusal) return;
-    result.Errors.push(new ValidationErrorInfo('Scope', refusal, row.Scope, ValidationErrorType.Failure));
+    const problem = IsCanonicalFormScope(row.Scope)
+        ? FormScopeGuardRefusal(row, row.IsSaved ? 'update' : 'create', CallerHoldsFormDefaultsGrant(row, provider))
+        : `Scope must be exactly 'User', 'Role' or 'Global'; '${row.Scope ?? ''}' is not.`;
+    if (!problem) return;
+    result.Errors.push(new ValidationErrorInfo('Scope', problem, row.Scope, ValidationErrorType.Failure));
     result.Success = false;
 }
 
@@ -95,8 +111,9 @@ export function ApplyFormScopeValidation(
  * Why a `ReplayOnly` save is refused, or null.
  *
  * `ReplayOnly` performs the write without calling `Validate()`, so it would skip the scope rule
- * entirely. It is a replication facility for trusted sync paths; only a caller who could make any
- * scope write anyway may use it.
+ * entirely. It is a replication facility for trusted sync paths: only a caller who holds the grant
+ * may use it, and the ownership half of the rule still applies, so a holder cannot replay a write
+ * to someone else's personal item.
  */
 export function FormScopeReplayRefusal(
     row: GuardedFormScopeRow,
@@ -104,9 +121,11 @@ export function FormScopeReplayRefusal(
     options: EntitySaveOptions | undefined,
 ): string | null {
     if (!options?.ReplayOnly || !row.ActiveUser) return null;
-    if (CallerHoldsFormDefaultsGrant(row, provider)) return null;
-    return 'A ReplayOnly save skips validation, which is where form scope is checked, so it needs the ' +
-        'Manage Form Defaults authorization.';
+    if (!CallerHoldsFormDefaultsGrant(row, provider)) {
+        return 'A ReplayOnly save skips validation, which is where form scope is checked, so it needs the ' +
+            'Manage Form Defaults authorization.';
+    }
+    return FormScopeGuardRefusal(row, row.IsSaved ? 'update' : 'create', true);
 }
 
 /** Why a delete is refused, or null. `Delete()` never calls `Validate()`, so it is checked here. */
