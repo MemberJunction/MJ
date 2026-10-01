@@ -69,7 +69,7 @@ export class AgentRubricsComponent extends BaseAngularComponent {
         this.IsLoading = true;
         this.Error = '';
         try {
-            const view = new RunView();
+            const view = this.ProviderToUse ? RunView.FromMetadataProvider(this.ProviderToUse) : new RunView();
             const escaped = this.agentID.replace(/'/g, "''");
             const links = await view.RunView({
                 EntityName: 'MJ: AI Agent Rubrics',
