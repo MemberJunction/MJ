@@ -1922,7 +1922,10 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       // re-emits them as actionableCommandExecuted. Skip the raw command to avoid a double open.
       return;
     }
-    console.log('📤 Bubbling up actionable command:', command);
+    // compose:email is logged by TYPE ONLY, as UICommandHandlerService does: its body and
+    // recipients are the user's correspondence and must not land in the console or in any
+    // console-forwarding telemetry.
+    console.log('📤 Bubbling up actionable command:', command.type === 'compose:email' ? command.type : command);
     this.ActionableCommandExecuted.emit(command);
   }
 
