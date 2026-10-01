@@ -2,6 +2,8 @@ import { Component, OnInit, Input, Output, EventEmitter, ChangeDetectorRef } fro
 import { UserInfo, RunView } from '@memberjunction/core';
 import { MJTestRunFeedbackEntity } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import type { RubricFormAnswer, RubricVersionSnapshot } from '@memberjunction/ng-rubrics';
+import { humanEvaluationFields, humanScoreFields, judgedRubric, versionSnapshot, type JudgedRubric } from '../models/human-review';
 
 export interface TestFeedbackDialogData {
   testRunId: string;
@@ -89,6 +91,22 @@ export interface TestFeedbackDialogResult {
                     placeholder="Provide detailed feedback, corrections, or comments about this test execution..."
                   rows="6"></textarea>
                 </div>
+                @if (Judged) {
+                  <div class="feedback-section">
+                    <button type="button" class="btn btn-secondary" (click)="openRubric()" [disabled]="isSaving || ShowRubric">Score against rubric</button>
+                    @if (ShowRubric && RubricVersion) {
+                      <mj-rubric-scoring-form
+                        [Version]="RubricVersion"
+                        [Answers]="RubricAnswers"
+                        (AnswersChange)="RubricAnswers = $event"
+                        (Submit)="onRubricSubmit($event)">
+                      </mj-rubric-scoring-form>
+                    }
+                    @if (RubricMessage) {
+                      <div class="feedback-info">{{ RubricMessage }}</div>
+                    }
+                  </div>
+                }
                 @if (isSaving) {
                   <div class="feedback-info">
                     <i class="fas fa-spinner fa-spin"></i>
@@ -611,12 +629,18 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
     this.isLoading = false;
     this.errorMessage = '';
     this.ExistingFeedback = null;
+    this.Judged = null;
+    this.ShowRubric = false;
+    this.RubricVersion = null;
+    this.RubricAnswers = [];
+    this.RubricMessage = '';
   }
 
   private async initializeWithData(): Promise<void> {
     if (this.dataLoaded) return;
     this.dataLoaded = true;
     await this.loadExistingFeedback();
+    await this.loadRubricJudgment();
   }
 
   private async loadExistingFeedback(): Promise<void> {
@@ -644,6 +668,93 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
       this.isLoading = false;
       this.cdr.detectChanges();
     }
+  }
+
+  Judged: JudgedRubric | null = null;
+  ShowRubric = false;
+  RubricVersion: RubricVersionSnapshot | null = null;
+  RubricAnswers: RubricFormAnswer[] = [];
+  RubricMessage = '';
+
+  private async loadRubricJudgment(): Promise<void> {
+    try {
+      const rows = await this.rows('MJ: Rubric Evaluations', `SubjectRecordID='${this.Data.testRunId.replace(/'/g, "''")}'`);
+      this.Judged = judgedRubric(rows);
+    } catch (error) {
+      console.error('Error loading the rubric judgment:', error);
+    } finally {
+      this.cdr.detectChanges();
+    }
+  }
+
+  async openRubric(): Promise<void> {
+    if (!this.Judged || this.ShowRubric) return;
+    this.errorMessage = '';
+    try {
+      const versions = await this.rows('MJ: Rubric Versions', `ID='${this.Judged.versionId}'`);
+      const version = versions[0];
+      if (!version) {
+        this.errorMessage = 'The rubric version for this run was not found.';
+        return;
+      }
+      const criteria = await this.rows('MJ: Rubric Criteria', `RubricVersionID='${this.Judged.versionId}'`);
+      const scaleIds = [...new Set(criteria.map(row => row.ScaleID).filter(id => id != null).map(id => `'${String(id).replace(/'/g, "''")}'`))];
+      const scales = scaleIds.length === 0 ? [] : await this.rows('MJ: Rubric Scales', `ID IN (${scaleIds.join(', ')})`);
+      const levels = scaleIds.length === 0 ? [] : await this.rows('MJ: Rubric Scale Levels', `ScaleID IN (${scaleIds.join(', ')})`);
+      this.RubricVersion = versionSnapshot(version, criteria, scales, levels);
+      this.RubricAnswers = [];
+      this.ShowRubric = true;
+    } catch (error) {
+      this.errorMessage = (error as Error).message || 'Could not open the rubric.';
+    } finally {
+      this.cdr.detectChanges();
+    }
+  }
+
+  async onRubricSubmit(answers: RubricFormAnswer[]): Promise<void> {
+    if (!this.Judged || this.IsSaving) return;
+    this.IsSaving = true;
+    this.errorMessage = '';
+    this.RubricMessage = '';
+    try {
+      const evaluation = await this.metadata.GetEntityObject('MJ: Rubric Evaluations', this.Data.currentUser);
+      evaluation.NewRecord();
+      for (const [field, value] of Object.entries(humanEvaluationFields(this.Judged, this.Data.currentUser.ID))) {
+        evaluation.Set(field, value);
+      }
+      if (!await evaluation.Save()) {
+        this.errorMessage = evaluation.LatestResult?.Message || 'Could not start the human score.';
+        return;
+      }
+      const evaluationId = String(evaluation.Get('ID'));
+      for (const fields of humanScoreFields(evaluationId, answers)) {
+        const score = await this.metadata.GetEntityObject('MJ: Rubric Evaluation Scores', this.Data.currentUser);
+        score.NewRecord();
+        for (const [field, value] of Object.entries(fields)) score.Set(field, value);
+        if (!await score.Save()) {
+          this.errorMessage = score.LatestResult?.Message || 'Could not save a criterion answer.';
+          return;
+        }
+      }
+      evaluation.Set('Status', 'Submitted');
+      if (!await evaluation.Save()) {
+        this.errorMessage = evaluation.LatestResult?.Message || 'Could not submit the human score.';
+        return;
+      }
+      this.RubricMessage = 'Human rubric score saved. The overall rating is unchanged.';
+      this.ShowRubric = false;
+    } catch (error) {
+      this.errorMessage = (error as Error).message || 'Could not save the human score.';
+    } finally {
+      this.IsSaving = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  private async rows(entityName: string, filter: string): Promise<Record<string, unknown>[]> {
+    const view = RunView.FromMetadataProvider(this.ProviderToUse);
+    const result = await view.RunView({ EntityName: entityName, ExtraFilter: filter, ResultType: 'simple', MaxRows: 500 }, this.Data.currentUser);
+    return (result.Results ?? []) as Record<string, unknown>[];
   }
 
   SetRating(value: number): void {

@@ -847,7 +847,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 - [x] **T4** Inline rubric path, rebuilt `LLMJudgeOracle`, and Computer Use verdicts
       report through the same details. `mj test promote-criteria` writes a Draft rubric (§10.4).
 - [x] **T5** Persist `TestSuiteRun.Score` (§10.5). The mean of executed test-run scores.
-- [ ] **T6** Human per-criterion review in the feedback dialog (§10.6).
+- [x] **T6** Human per-criterion review in the feedback dialog (§10.6).
 - [ ] **T7** Testing UI: run detail, Review disagreement queue, analytics, rubric pickers (§10.7).
 - [ ] **T8** Judge calibration test type + driver (§10.8).
 - [ ] **T9** Repeats/flaky per-criterion spread (§10.9); CLI (§10.10).

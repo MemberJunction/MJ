@@ -7,6 +7,7 @@ import { MJButtonDirective, MJEmptyStateComponent, MJAlertComponent, MJAccordion
 
 // MemberJunction Modules
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
+import { RubricScoringFormComponent } from '@memberjunction/ng-rubrics';
 
 // Components
 import { TestFeedbackDialogComponent } from './components/test-feedback-dialog.component';
@@ -41,7 +42,8 @@ import { ExecutionContextComponent } from './components/widgets/execution-contex
     MJEmptyStateComponent,
     MJAlertComponent,
     MJAccordionModule,
-    ContainerDirectivesModule
+    ContainerDirectivesModule,
+    RubricScoringFormComponent
   ],
   exports: [
     TestFeedbackDialogComponent,
