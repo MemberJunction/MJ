@@ -17,6 +17,7 @@ export * from './processors/InferProcessor';
 export * from './processors/FieldRulesProcessor';
 export * from './feature-pipeline-drivers/BaseFeaturePipelineDriver';
 export * from './feature-pipeline-drivers/LLMFeaturePipelineDriver';
+export * from './feature-pipeline-drivers/DecisionFeaturePipelineDriver';
 export * from './trackers/NoOpTracker';
 export * from './trackers/GenericProcessRunTracker';
 export * from './operations/RecordProcessGetRunStatusOperation';

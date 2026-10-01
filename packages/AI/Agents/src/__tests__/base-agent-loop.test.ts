@@ -38,6 +38,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BaseAgent } from '../base-agent';
 import { AgentDecisionService } from '../AgentDecisionService';
+import { AgentContextInjector } from '../agent-context-injector';
 import { ClientToolRequestManager } from '../ClientToolRequestManager';
 import { BaseAgentType } from '../agent-types/base-agent-type';
 // Bare side-effect import: the REAL LoopAgentType must register itself with the ClassFactory
@@ -46,7 +47,7 @@ import { BaseAgentType } from '../agent-types/base-agent-type';
 import '../agent-types/loop-agent-type';
 import type { LoopAgentResponse } from '../agent-types/loop-agent-response-type';
 import type { AgentPreExecutionRAGResult } from '../agent-pre-execution-rag';
-import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended, AgentDecisionRequest, AgentFinishIf, BaseAgentNextStep, AgentChatMessage } from '@memberjunction/ai-core-plus';
+import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended, MJAIAgentRunStepEntityExtended, AgentDecisionRequest, AgentFinishIf, BaseAgentNextStep, AgentChatMessage } from '@memberjunction/ai-core-plus';
 import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { RecordToolCallingDecision } from '@memberjunction/ai-prompts';
 import { SanitizeToolName } from '../native-tools/action-tool-builder';
@@ -1882,5 +1883,92 @@ describe('BaseAgent.Execute — a finishIfMode that is not a mode', () => {
         expect(warnings).toHaveLength(FINISH_IF_MODE_WARNINGS_REMEMBERED + 2);
         expect(warnings.filter((w) => w.includes(`"${newest}"`))).toHaveLength(1);
         expect(warnings.filter((w) => w.includes('"flood-first"'))).toHaveLength(2);
+    });
+});
+
+describe("BaseAgent.Execute — a memory rerank's cost", () => {
+    /** The rerank's own prompt run, whose rollups hold its decision calls' tokens and cost once it is finalized. */
+    const RERANK_RUN = {
+        ID: 'aaaaaaaa-7777-4000-8000-000000000001',
+        TokensUsedRollup: 420,
+        TokensPromptRollup: 400,
+        TokensCompletionRollup: 20,
+        TokensCacheReadRollup: 0,
+        TokensCacheWriteRollup: 0,
+        TotalCost: 0.004,
+    } satisfies Pick<MJAIPromptRunEntity, 'ID' | 'TokensUsedRollup' | 'TokensPromptRollup' | 'TokensCompletionRollup' | 'TokensCacheReadRollup' | 'TokensCacheWriteRollup' | 'TotalCost'>;
+
+    /** The rerank step fields the run's totals read. */
+    type RerankStepFields = Pick<MJAIAgentRunStepEntityExtended, 'ID' | 'StepType' | 'StepName' | 'Status' | 'PromptRun'>;
+
+    /** The rerank step RerankerService creates, through the seam onto the full step entity. */
+    function rerankStep(): MJAIAgentRunStepEntityExtended {
+        const fields: RerankStepFields = {
+            ID: 'aaaaaaaa-7777-4000-8000-000000000002',
+            StepType: 'Decision',
+            StepName: 'Rerank Notes',
+            Status: 'Completed',
+            PromptRun: RERANK_RUN as MJAIPromptRunEntity,
+        };
+        return fields as MJAIAgentRunStepEntityExtended;
+    }
+
+    /** Stands in for the notes rerank: it reports its step the way RerankerService does, and returns no notes. */
+    function rerankNotesWithCost() {
+        return vi.spyOn(AgentContextInjector.prototype, 'GetNotesForContext').mockImplementation(async params => {
+            params.observability?.OnStepCreated?.(rerankStep());
+            return [];
+        });
+    }
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it("adds the rerank step to the run's steps and counts its prompt run toward the run's tokens and cost", async () => {
+        harness.agent = makeAgentRow({ InjectNotes: true });
+        const getNotes = rerankNotesWithCost();
+        const { agent } = makeAgent([() => llmEnvelope(successEnvelope())]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        expect(getNotes).toHaveBeenCalledOnce();
+        expect(getNotes.mock.calls[0][0].observability?.agentRunID).toBe(harness.run.ID);
+        expect(harness.run.Steps.map(s => s.ID)).toContain(rerankStep().ID);
+        // The scripted prompt carries no prompt run, so the rerank is the run's whole spend.
+        expect(harness.run.TotalCost).toBe(RERANK_RUN.TotalCost);
+        expect(harness.run.TotalTokensUsed).toBe(RERANK_RUN.TokensUsedRollup);
+        expect(harness.run.TotalPromptTokensUsed).toBe(RERANK_RUN.TokensPromptRollup);
+    });
+
+    it('stops the run at MaxCostPerRun when the rerank alone exceeds it', async () => {
+        harness.agent = makeAgentRow({ InjectNotes: true, MaxCostPerRun: 0.001 });
+        rerankNotesWithCost();
+        const { agent } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(false);
+        expect(harness.run.ErrorMessage).toContain('Maximum cost limit of $0.001 exceeded');
+        expect(harness.runActionCalls).toHaveLength(0);
+    });
+
+    it('stops the run at MaxTokensPerRun when the rerank alone exceeds it', async () => {
+        harness.agent = makeAgentRow({ InjectNotes: true, MaxTokensPerRun: 100 });
+        rerankNotesWithCost();
+        const { agent } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(false);
+        expect(harness.run.ErrorMessage).toContain('Maximum token limit of 100 exceeded');
+        expect(harness.runActionCalls).toHaveLength(0);
     });
 });

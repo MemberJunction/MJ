@@ -26,6 +26,7 @@ import { MJSafeRichHtmlPipe, SharedGenericModule } from '@memberjunction/ng-shar
 import { MJEmptyStateComponent, MJAlertComponent } from '@memberjunction/ng-ui-components';
 import { InteractiveFormComponent } from './lib/interactive-form/interactive-form.component';
 import { MjEntityFormHostComponent } from './lib/host/entity-form-host.component';
+import { RecordCloneSlideInComponent } from '@memberjunction/ng-record-clone';
 
 /**
  * BaseFormsModule - Form components and base classes for rendering and editing MemberJunction entity records.
@@ -77,7 +78,8 @@ import { MjEntityFormHostComponent } from './lib/host/entity-form-host.component
     MarkdownModule,
     CodeEditorModule,
     MJSafeRichHtmlPipe,
-    SharedGenericModule
+    SharedGenericModule,
+    RecordCloneSlideInComponent
   ],
   exports: [
     MjFormToolbarComponent,

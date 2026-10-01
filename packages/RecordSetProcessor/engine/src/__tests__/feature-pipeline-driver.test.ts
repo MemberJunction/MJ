@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { UserInfo } from '@memberjunction/core';
+import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { KnowledgeHubMetadataEngine, type MJFeaturePipelineTypeEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -11,6 +11,7 @@ import {
     LLM_FEATURE_PIPELINE_CAPABILITIES,
     type DataFeatureSpec,
     type FeaturePipelineDriverCapabilities,
+    type FeaturePipelineFieldValueLookup,
 } from '@memberjunction/feature-pipelines';
 import { InferProcessor } from '../processors/InferProcessor';
 import {
@@ -45,6 +46,22 @@ class BooleanFieldOnlyDriver extends BaseFeaturePipelineDriver {
     }
 }
 RegisterClass(BaseFeaturePipelineDriver, 'FeaturePipelineDriverTest_BooleanFieldOnly')(BooleanFieldOnlyDriver);
+
+/** Captures the fieldValues lookup passed to ValidateOutputs. */
+class LookupCapturingDriver extends BaseFeaturePipelineDriver {
+    public static LastLookup: FeaturePipelineFieldValueLookup | undefined;
+    public get Capabilities(): FeaturePipelineDriverCapabilities {
+        return LLM_FEATURE_PIPELINE_CAPABILITIES;
+    }
+    public override ValidateOutputs(spec: DataFeatureSpec, fieldValues?: FeaturePipelineFieldValueLookup): string[] {
+        LookupCapturingDriver.LastLookup = fieldValues;
+        return super.ValidateOutputs(spec, fieldValues);
+    }
+    public async ComputeOutputs(): Promise<FeaturePipelineComputeResult> {
+        return { Success: true, RawResult: {} };
+    }
+}
+RegisterClass(BaseFeaturePipelineDriver, 'FeaturePipelineDriverTest_LookupCapturing')(LookupCapturingDriver);
 
 // ---------------------------------------------------------------------------
 // Probes exposing InferProcessor's protected surface
@@ -427,6 +444,7 @@ describe('Feature Pipeline driver seam', () => {
             const result = await processor.ProcessRecord(makeRecord(), context);
 
             expect(result.Status).toBe('Succeeded');
+            expect(result.Confidence).toEqual({ Seniority: 0.87 });
             expect(processor.HistoryParams[0].outputConfidence).toEqual({ Seniority: 0.87 });
             const outputs = recordFeatureValues.mock.calls[0][0].outputs as Array<{ featureName: string; confidence?: number | null }>;
             expect(outputs).toEqual([expect.objectContaining({ featureName: 'Seniority', confidence: 0.87 })]);
@@ -440,6 +458,82 @@ describe('Feature Pipeline driver seam', () => {
             expect('outputConfidence' in processor.HistoryParams[0]).toBe(false);
             const outputs = recordFeatureValues.mock.calls[0][0].outputs as Array<{ featureName: string; confidence?: number | null }>;
             expect(outputs[0].confidence).toBeUndefined();
+        });
+    });
+
+    // ================================================================
+    // Entity-scoped field values lookup
+    // ================================================================
+
+    describe('FieldValues lookup scoped to pipeline entity', () => {
+        it('constructs lookup from context.entityID and passes it to ValidateOutputs', async () => {
+            const mockProvider = {
+                EntityByID: (id: string) => {
+                    if (id === 'ENT-TARGET') {
+                        return {
+                            ID: 'ENT-TARGET',
+                            Name: 'TargetEntity',
+                            Fields: [
+                                {
+                                    Name: 'Category',
+                                    EntityFieldValues: [{ Value: 'CatA', Description: 'Category A' }],
+                                },
+                            ],
+                        };
+                    }
+                    if (id === 'ENT-OTHER') {
+                        return {
+                            ID: 'ENT-OTHER',
+                            Name: 'OtherEntity',
+                            Fields: [
+                                {
+                                    Name: 'Category',
+                                    EntityFieldValues: [{ Value: 'WrongCat', Description: 'Wrong' }],
+                                },
+                            ],
+                        };
+                    }
+                    return undefined;
+                },
+            };
+
+            catalogRows = [
+                LLM_ROW,
+                pipelineTypeRow({ Name: 'CustomType', DriverClass: 'FeaturePipelineDriverTest_LookupCapturing', Status: 'Active' }),
+            ];
+
+            const ctxWithEntity: RecordProcessorContext = {
+                ...context,
+                entityID: 'ENT-TARGET',
+                provider: mockProvider as unknown as IMetadataProvider,
+            };
+
+            const processor = new ProbeProcessor(PROMPT_ID, undefined, buildSpec({ PipelineType: 'CustomType' }));
+            await processor.Resolve(ctxWithEntity);
+
+            expect(LookupCapturingDriver.LastLookup).toBeDefined();
+            const values = LookupCapturingDriver.LastLookup!('Category');
+            expect(values).toEqual([{ Value: 'CatA', Description: 'Category A' }]);
+
+            // Field not on entity returns undefined
+            expect(LookupCapturingDriver.LastLookup!('NonExistentField')).toBeUndefined();
+        });
+
+        it('passes undefined lookup when context has no entityID', async () => {
+            catalogRows = [
+                LLM_ROW,
+                pipelineTypeRow({ Name: 'CustomType', DriverClass: 'FeaturePipelineDriverTest_LookupCapturing', Status: 'Active' }),
+            ];
+
+            const ctxNoEntity: RecordProcessorContext = {
+                ...context,
+                entityID: undefined,
+            };
+
+            const processor = new ProbeProcessor(PROMPT_ID, undefined, buildSpec({ PipelineType: 'CustomType' }));
+            await processor.Resolve(ctxNoEntity);
+
+            expect(LookupCapturingDriver.LastLookup).toBeUndefined();
         });
     });
 });

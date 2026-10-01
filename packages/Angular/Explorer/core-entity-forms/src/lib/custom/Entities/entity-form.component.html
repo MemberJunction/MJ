@@ -1303,6 +1303,39 @@
                   (FormConfigChange)="OnFormChromeConfigChange($event)">
                 </mj-entity-form-chrome-editor>
               </div>
+              <div class="settings-panel">
+                <div class="panel-title-row">
+                  <h3 class="panel-title">
+                    <i class="fa-solid fa-clone"></i>
+                    Record cloning
+                  </h3>
+                  <!-- This form has no toolbar, so the panel carries its own edit controls. -->
+                  @if (UserCanEdit) {
+                    <div class="panel-title-actions">
+                      @if (!EditMode) {
+                        <button type="button" mjButton Variant="outline" Size="sm" (click)="StartEditMode()">
+                          <i class="fa-solid fa-pen-to-square"></i> Edit
+                        </button>
+                      } @else {
+                        <button type="button" mjButton Variant="primary" Size="sm" [disabled]="IsSavingCloneConfig" (click)="SaveCloneConfig()">
+                          <i class="fa-solid fa-floppy-disk"></i> Save
+                        </button>
+                        <button type="button" mjButton Variant="outline" Size="sm" [disabled]="IsSavingCloneConfig" (click)="CancelEdit()">Cancel</button>
+                      }
+                    </div>
+                  }
+                </div>
+                @if (CloneConfigSaveError) {
+                  <p class="panel-error">{{ CloneConfigSaveError }}</p>
+                }
+                <mj-entity-clone-config-editor
+                  [Provider]="ProviderToUse"
+                  [Entity]="entity"
+                  [CloneConfig]="CloneConfig"
+                  [EditMode]="EditMode"
+                  (CloneConfigChange)="OnCloneConfigChange($event)">
+                </mj-entity-clone-config-editor>
+              </div>
               <!-- Row Packaging -->
               <div class="settings-panel">
                 <h3 class="panel-title">
