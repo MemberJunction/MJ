@@ -515,7 +515,7 @@ A contribution opts in with three optional keys:
 | `form-panel-slot.component.ts`                                                        | `<mj-form-panel-slot>` host — discovery, sorting, dynamic mount, fallback resolution. |
 | `form-slot-coordinator.service.ts`                                                    | `FormSlotCoordinator` — per-container registry of which slots are physically present. `FORM_SLOT_CHAIN` constant. |
 | `record-form-container.component.{ts,html}`                                           | Provides `FormSlotCoordinator` + fill-in contributions + the always-on `after-everything` slot. |
-| `base-contribution-panel.ts`                                                          | `BaseContributionPanel` — the chrome a panel drawing one contribution reads (title, icon, bare strip, variant). |
+| `base-contribution-panel.ts`                                                          | `BaseContributionPanel` (internal) — the chrome a panel drawing one contribution reads (title, icon, bare strip, variant). |
 | `../interactive-form/interactive-form-panel.component.ts`                             | Hosts a metadata row's React panel. |
 | `../apply/form-placement.ts`, `form-placement-text.ts`, `form-placement-order.ts`      | The placement dialog's rules: the state and decision, the sentences that describe it, and the order within one position. |
 | `../panel-manager/`                                                                   | The "Manage this form" drawer, its inventory and the service it writes through. |

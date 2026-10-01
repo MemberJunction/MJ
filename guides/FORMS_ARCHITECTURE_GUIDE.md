@@ -448,8 +448,11 @@ never pulled into files). An agent writes them through `Create Form Contribution
 `Get Form Contributions For Entity` reads back what a user already has. The actions change only the
 caller's own personal (`Scope='User'`) rows — of contributions and of full custom forms alike — and
 return `FORBIDDEN` for a `Role` or `Global` row, whoever the caller is. A spec that makes more than
-one claim returns `INVALID_CLAIM` before anything is written, and the Component and the row are
-written in one transaction. `Modify Form Contribution` takes an optional `Precedence`. Sharing with a
+one claim returns `INVALID_CLAIM` before anything is written. The three contribution actions write
+the Component and the row in one transaction, and so do `Modify Interactive Form` and
+`Activate Interactive Form Version` for a full form's Component and override; `Create Interactive
+Form` and `Revert Interactive Form` do not. `Modify Form Contribution` takes an optional
+`Precedence`. Sharing with a
 role or everyone is a human act in the form's Manage drawer or in Form Builder, and needs the
 `Manage Form Defaults` authorization.
 
