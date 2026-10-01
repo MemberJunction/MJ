@@ -5,10 +5,15 @@
 
 import { IOracle } from './IOracle';
 import { BuildJudgeTrace, ReadJudgeCriteria, ReadJudgeTimeoutMS } from './judge-trace';
+import { inlineOracleResult, inlineVersion, scoreInline } from './inline-rubric';
 import { OracleInput, OracleConfig, OracleResult } from '../types';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
-import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIEngine } from '@memberjunction/aiengine';
+import { AIPromptRunner } from '@memberjunction/ai-prompts';
+import { renderRubricEvaluatorPrompt } from '@memberjunction/rubrics';
+
+/** The prompt whose model selection this judge uses. The rendered rubric text is the user message. */
+const RUBRIC_EVALUATOR_PROMPT = 'Rubric Evaluator';
 
 /**
  * LLM Judge Oracle.
@@ -22,7 +27,7 @@ import { AIEngine } from '@memberjunction/aiengine';
  *
  * Configuration:
  * - criteria: Array of validation criteria (required)
- * - model: Model to use for judging (default: from prompt or default model)
+ * - model: Model name or API name. When set, that model is required. Otherwise the Rubric Evaluator prompt selects one.
  * - temperature: Temperature for LLM (default: 0.1 for consistency)
  * - promptTemplate: Custom prompt template (optional, uses default if not provided)
  * - strictMode: Require all criteria to pass (default: false, uses weighted scoring)
@@ -48,6 +53,18 @@ import { AIEngine } from '@memberjunction/aiengine';
  * });
  * ```
  */
+function answersFromModel(raw: unknown, criteria: string[]): { index: number; met: boolean; rationale?: string }[] {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw as { decisions?: { key?: string; criterion?: string; level?: string; met?: boolean; rationale?: string }[]; criteriaScores?: { criterion?: string; score?: number; explanation?: string }[] };
+    const decisions = parsed?.decisions ?? [];
+    const scores = parsed?.criteriaScores ?? [];
+    return criteria.map((text, index) => {
+        const decision = decisions.find((item: { key?: string; criterion?: string }) => item.key === `c${index}` || item.criterion === text);
+        const scored = scores.find((item: { criterion?: string }) => item.criterion === text);
+        const met = decision?.level === 'Met' || decision?.met === true || (typeof scored?.score === 'number' && scored.score >= 1);
+        return { index, met, rationale: decision?.rationale ?? scored?.explanation };
+    });
+}
+
 export class LLMJudgeOracle implements IOracle {
     readonly type = 'llm-judge';
 
@@ -94,10 +111,6 @@ Respond in JSON format:
      */
     async evaluate(input: OracleInput, config: OracleConfig): Promise<OracleResult> {
         try {
-            // Ensure AIEngine is configured
-            await AIEngine.Instance.Config(false, input.contextUser);
-
-            // Get criteria from expected outcomes or config
             const criteria = ReadJudgeCriteria(input, config);
 
             if (!criteria.Success) {
@@ -109,59 +122,49 @@ Respond in JSON format:
                 return this.failed(timeout.ErrorMessage);
             }
 
-            // Find the LLM Judge prompt from AIEngine
-            const judgePrompt = AIEngine.Instance.Prompts.find(p =>
-                p.Name === 'Test LLM Judge' || p.Name.toLowerCase().includes('llm judge')
-            );
+            const trace = BuildJudgeTrace(input);
+            const texts = criteria.Value.map(item => item.Criterion);
+            const strict = config.strictMode === true;
+            const passThreshold = typeof config.passThreshold === 'number' ? config.passThreshold : 0.7;
+            const version = inlineVersion(texts, strict, passThreshold);
+            const rendered = renderRubricEvaluatorPrompt(version, { text: `${trace.Input}\n${trace.Actual}` }, 'SinglePass');
 
-            if (!judgePrompt) {
-                return this.failed('LLM Judge prompt not found in AIEngine.Instance.Prompts. Please create a prompt named "Test LLM Judge".');
+            await AIEngine.Instance.Config(false, input.contextUser);
+            const prompt = AIEngine.Instance.Prompts.find(item => item.Name === RUBRIC_EVALUATOR_PROMPT);
+            if (!prompt) {
+                return this.failed('The Rubric Evaluator prompt is not configured.');
             }
 
-            // Prepare data for prompt template
-            const trace = BuildJudgeTrace(input);
-
-            const promptData = {
-                input: trace.Input,
-                expected: trace.Expected,
-                actual: trace.Actual,
-                criteria: criteria.Value.map((c, i) => `${i + 1}. ${c.Criterion}`).join('\n')
-            };
-
-            // Execute LLM judgment
             const promptParams = new AIPromptParams();
-            promptParams.prompt = judgePrompt;
-            promptParams.data = promptData;
+            promptParams.prompt = prompt;
+            promptParams.systemPromptOverride = rendered;
+            // The Rubric Evaluator record stores TemplateText and may have no TemplateID. A user
+            // message still reaches the model in that case; an override alone would not.
+            promptParams.templateMessageRole = 'none';
+            promptParams.conversationMessages = [{ role: 'user', content: rendered }];
+            promptParams.data = { criteria: texts, input: trace.Input, expected: trace.Expected, actual: trace.Actual, model: config.model };
             promptParams.contextUser = input.contextUser;
             promptParams.timeoutMS = timeout.Value;
+            const requestedModel = typeof config.model === 'string' ? config.model.trim() : '';
+            if (requestedModel) {
+                const model = AIEngine.Instance.Models.find(item => item.Name === requestedModel || item.APIName === requestedModel);
+                if (!model) {
+                    return this.failed(`Judge model "${requestedModel}" was not found.`);
+                }
+                promptParams.override = { modelId: model.ID };
+            }
 
             const runner = new AIPromptRunner();
             const result = await runner.ExecutePrompt(promptParams);
-
             if (!result.success) {
                 return this.failed(`LLM judgment failed: ${result.errorMessage}`);
             }
 
-            // Parse LLM response
-            const judgment = this.parseJudgment(result.result as string);
-
-            // Determine pass/fail
-            const strictMode = config.strictMode as boolean;
-            const passed = strictMode
-                ? judgment.criteriaScores.every(s => s.score >= 0.8)
-                : judgment.overallScore >= 0.7;
-
-            return {
-                oracleType: this.type,
-                passed,
-                score: judgment.overallScore,
-                message: judgment.overallAssessment,
-                details: {
-                    criteriaScores: judgment.criteriaScores,
-                    llmModel: config.model || 'default',
-                    llmCost: result.cost
-                }
-            };
+            const answers = answersFromModel(result.result, texts);
+            const scored = scoreInline(texts, answers, { strict, passThreshold });
+            const report = inlineOracleResult(texts, scored, answers.map(answer => answer.rationale));
+            report.details = { ...(report.details as object), llmModel: config.model || 'default', llmCost: result.cost };
+            return report;
 
         } catch (error) {
             return this.failed(`LLM judge error: ${(error as Error).message}`);
@@ -200,39 +203,5 @@ Respond in JSON format:
             .replace('{{expected}}', () => expectedStr)
             .replace('{{actual}}', () => actualStr)
             .replace('{{criteria}}', () => criteriaStr);
-    }
-
-    /**
-     * Parse LLM judgment response.
-     * @private
-     */
-    private parseJudgment(response: string): {
-        criteriaScores: Array<{ criterion: string; score: number; explanation: string }>;
-        overallScore: number;
-        overallAssessment: string;
-    } {
-        try {
-            // Try to extract JSON from response
-            const jsonMatch = response.match(/\{[\s\S]*\}/);
-            if (!jsonMatch) {
-                throw new Error('No JSON found in LLM response');
-            }
-
-            const parsed = JSON.parse(jsonMatch[0]);
-
-            return {
-                criteriaScores: parsed.criteriaScores || [],
-                overallScore: parsed.overallScore || 0,
-                overallAssessment: parsed.overallAssessment || 'No assessment provided'
-            };
-
-        } catch (error) {
-            // Fallback to simple parsing
-            return {
-                criteriaScores: [],
-                overallScore: 0,
-                overallAssessment: `Failed to parse LLM response: ${response.substring(0, 200)}`
-            };
-        }
     }
 }

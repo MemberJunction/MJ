@@ -8,7 +8,7 @@
 import { describe, it, expect, vi, beforeEach, type MockInstance } from 'vitest';
 import type { UserInfo } from '@memberjunction/core';
 import type { MJTestEntity } from '@memberjunction/core-entities';
-import type { AIPromptParams, AIPromptRunResult, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import type { AIPromptParams, AIPromptRunResult, MJAIModelEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIEngine } from '@memberjunction/aiengine';
 import { LLMJudgeOracle } from '../oracles/LLMJudgeOracle';
@@ -22,7 +22,8 @@ import {
 import type { OracleConfig, OracleInput } from '../types';
 
 const USER = { ID: 'user-1' } satisfies Pick<UserInfo, 'ID'>;
-const JUDGE_PROMPT = { ID: 'prompt-judge', Name: 'Test LLM Judge' } satisfies Pick<MJAIPromptEntityExtended, 'ID' | 'Name'>;
+const RUBRIC_PROMPT = { ID: 'prompt-rubric', Name: 'Rubric Evaluator', Status: 'Active' } satisfies Pick<MJAIPromptEntityExtended, 'ID' | 'Name' | 'Status'>;
+const JUDGE_MODEL = { ID: 'model-judge', Name: 'judge-model', APIName: 'judge-model' };
 
 /** An oracle input whose test carries only the `InputDefinition` the judges read. */
 function oracleInput(inputDefinition: string | null, expectedOutput: unknown, actualOutput: unknown): OracleInput {
@@ -177,9 +178,10 @@ describe('LLMJudgeOracle.evaluate — the prompt data it sends', () => {
 
     beforeEach(() => {
         vi.spyOn(AIEngine.Instance, 'Config').mockResolvedValue(undefined);
-        vi.spyOn(AIEngine.Instance, 'Prompts', 'get').mockReturnValue([JUDGE_PROMPT as MJAIPromptEntityExtended]);
+        vi.spyOn(AIEngine.Instance, 'Prompts', 'get').mockReturnValue([RUBRIC_PROMPT as MJAIPromptEntityExtended]);
+        vi.spyOn(AIEngine.Instance, 'Models', 'get').mockReturnValue([JUDGE_MODEL as MJAIModelEntityExtended]);
         executePrompt = vi.spyOn(AIPromptRunner.prototype, 'ExecutePrompt')
-            .mockResolvedValue(judgeRun({ criteriaScores: [], overallScore: 0.9, overallAssessment: 'fine' }, 0.02));
+            .mockResolvedValue(judgeRun({ decisions: [{ key: 'c0', level: 'Met', rationale: 'fine' }, { key: 'c1', level: 'Met' }] }, 0.02));
     });
 
     /** The `data` of the one prompt call the oracle made. */
@@ -192,20 +194,19 @@ describe('LLMJudgeOracle.evaluate — the prompt data it sends', () => {
         const expected = { judgeValidationCriteria: ['Is polite', 'Answers the question'], note: 'x' };
         await new LLMJudgeOracle().evaluate(oracleInput('{"q":"ping"}', expected, { reply: 'pong' }), {});
 
-        expect(sentData()).toEqual({
-            input: JSON.stringify({ q: 'ping' }, null, 2),
-            expected: JSON.stringify(expected, null, 2),
-            actual: JSON.stringify({ reply: 'pong' }, null, 2),
-            criteria: '1. Is polite\n2. Answers the question',
-        });
+        expect(sentData()?.criteria).toEqual(['Is polite', 'Answers the question']);
+        expect(sentData()?.input).toBe(JSON.stringify({ q: 'ping' }, null, 2));
+        expect(sentData()?.actual).toBe(JSON.stringify({ reply: 'pong' }, null, 2));
+        expect(executePrompt.mock.calls[0][0].systemPromptOverride).toContain('Is polite');
+        expect(executePrompt.mock.calls[0][0].prompt?.Name).toBe('Rubric Evaluator');
+        expect(executePrompt.mock.calls[0][0].conversationMessages?.[0]?.content).toContain('Is polite');
     });
 
     it('sends the text of each criterion in a mixed list of strings and weighted criteria', async () => {
         const expected = { judgeValidationCriteria: ['Is polite', { criterion: 'Answers the question', weight: 2 }] };
         await new LLMJudgeOracle().evaluate(oracleInput(null, expected, 'out'), {});
 
-        expect(sentData()?.criteria).toBe('1. Is polite\n2. Answers the question');
-        expect(sentData()?.criteria).not.toContain('[object Object]');
+        expect(sentData()?.criteria).toEqual(['Is polite', 'Answers the question']);
     });
 
     it('fails without calling the model when a criterion is malformed', async () => {
@@ -250,14 +251,14 @@ describe('LLMJudgeOracle.evaluate — the prompt data it sends', () => {
         const config: OracleConfig = { criteria: ['From config'] };
         await new LLMJudgeOracle().evaluate(oracleInput(null, { judgeValidationCriteria: ['From expected'] }, 'out'), config);
 
-        expect(sentData()?.criteria).toBe('1. From expected');
+        expect(sentData()?.criteria).toEqual(['From expected']);
     });
 
     it("falls back to the config's criteria when the expected output has none", async () => {
         const config: OracleConfig = { criteria: ['From config'] };
         await new LLMJudgeOracle().evaluate(oracleInput(null, 'plain expected text', 'out'), config);
 
-        expect(sentData()?.criteria).toBe('1. From config');
+        expect(sentData()?.criteria).toEqual(['From config']);
     });
 
     it('does not fall back to the config when the expected output lists an empty set', async () => {
@@ -280,12 +281,23 @@ describe('LLMJudgeOracle.evaluate — the prompt data it sends', () => {
         const config: OracleConfig = { model: 'judge-model' };
         const result = await new LLMJudgeOracle().evaluate(oracleInput(null, { judgeValidationCriteria: ['C'] }, 'out'), config);
 
+        expect(result.oracleType).toBe('llm-judge');
+        expect(result.passed).toBe(true);
+        expect(result.score).toBe(1);
+        expect(result.details).toMatchObject({ inline: true, llmModel: 'judge-model', llmCost: 0.02 });
+        expect(result.details).not.toHaveProperty('RubricEvaluationID');
+        expect(executePrompt.mock.calls[0][0].override).toEqual({ modelId: 'model-judge' });
+    });
+
+    it('fails without calling the model when the named judge model is not in the catalog', async () => {
+        const result = await new LLMJudgeOracle().evaluate(oracleInput(null, { judgeValidationCriteria: ['C'] }, 'out'), { model: 'missing-model' });
+
+        expect(executePrompt).not.toHaveBeenCalled();
         expect(result).toEqual({
             oracleType: 'llm-judge',
-            passed: true,
-            score: 0.9,
-            message: 'fine',
-            details: { criteriaScores: [], llmModel: 'judge-model', llmCost: 0.02 },
+            passed: false,
+            score: 0,
+            message: 'Judge model "missing-model" was not found.',
         });
     });
 });

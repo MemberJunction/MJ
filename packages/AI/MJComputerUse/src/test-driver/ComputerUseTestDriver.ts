@@ -56,6 +56,7 @@ import {
     ValidationWarning,
     TestRunOutputItem,
     ReplayTelemetry,
+    inlineOracleFromVerdicts,
 } from '@memberjunction/testing-engine';
 
 import {
@@ -1201,6 +1202,10 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             output.interactiveElements = lastElements.map(e => ({ role: e.Role, name: e.Name, selector: e.Selector }));
         }
 
+        if (result.FinalJudgeVerdict?.CriteriaVerdicts?.length) {
+            output.criteriaVerdicts = result.FinalJudgeVerdict.CriteriaVerdicts;
+        }
+
         // Include judge verdict if available
         if (result.FinalJudgeVerdict) {
             output.finalJudgeVerdict = {
@@ -1595,7 +1600,8 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         context: DriverExecutionContext
     ): Promise<OracleResult[]> {
         const oracleConfigs = config.oracles ?? [];
-        if (oracleConfigs.length === 0) {
+        const verdicts = actualOutput.criteriaVerdicts as { criterion: string; met: boolean; evidence?: string }[] | undefined;
+        if (oracleConfigs.length === 0 && !(verdicts && verdicts.length > 0)) {
             this.logToTestRun(context, 'info', 'No oracles configured — skipping evaluation');
             return [];
         }
@@ -1605,6 +1611,16 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         for (const oracleConfig of oracleConfigs) {
             const result = await this.runSingleOracle(oracleConfig, expected, actualOutput, context);
             results.push(result);
+        }
+
+        if (verdicts && verdicts.length > 0) {
+            const inline = inlineOracleFromVerdicts(verdicts);
+            results.push(inline);
+            this.logToTestRun(
+                context,
+                inline.passed ? 'info' : 'warn',
+                `Oracle llm-judge (inline): ${inline.passed ? 'PASSED' : 'FAILED'} (Score: ${inline.score.toFixed(2)})`,
+            );
         }
 
         return results;

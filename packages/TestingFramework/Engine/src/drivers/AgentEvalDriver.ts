@@ -1045,7 +1045,7 @@ export class AgentEvalDriver extends BaseTestDriver {
                     targetEntity: turnResults[turnResults.length - 1].agentRun,
                     contextUser: context.contextUser,
                     testRunId: context.testRun.ID,
-                    provider: RunView.Provider as OracleInput['provider'],
+                    provider: RunView.Provider as unknown as OracleInput['provider'],
                 };
 
                 const result = await oracle.evaluate(oracleInput, oracleConfig.config || {});
@@ -1099,7 +1099,7 @@ export class AgentEvalDriver extends BaseTestDriver {
                     targetEntity: turnResult.agentRun,
                     contextUser: context.contextUser,
                     testRunId: context.testRun.ID,
-                    provider: RunView.Provider as OracleInput['provider'],
+                    provider: RunView.Provider as unknown as OracleInput['provider'],
                 };
 
                 const result = await oracle.evaluate(oracleInput, oracleConfig.config || {});

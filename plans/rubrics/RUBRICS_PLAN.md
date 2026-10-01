@@ -844,8 +844,8 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 - [x] **T2** Rubric resolution + suite-run version pinning (§10.2). The implicit rubric
       oracle is added when the test does not name one (§10.3).
 - [ ] **T3** `RubricOracle` + implicit rubric (§10.3).
-- [ ] **T4** Inline rubric path; rebuild `LLMJudgeOracle`; Computer Use driver reporting;
-      `mj test promote-criteria` (§10.4).
+- [~] **T4** Inline rubric path, rebuilt `LLMJudgeOracle`, and Computer Use verdicts
+      report through the same details. Still open: `mj test promote-criteria` (§10.4).
 - [ ] **T5** Persist `TestSuiteRun.Score` (§10.5).
 - [ ] **T6** Human per-criterion review in the feedback dialog (§10.6).
 - [ ] **T7** Testing UI: run detail, Review disagreement queue, analytics, rubric pickers (§10.7).

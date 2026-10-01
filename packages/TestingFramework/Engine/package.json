@@ -33,6 +33,7 @@
     "@memberjunction/core-entities": "6.2.0-edge.1",
     "@memberjunction/global": "6.2.0-edge.1",
     "@memberjunction/rubrics": "6.2.0-edge.1",
+    "@memberjunction/rubrics-base": "6.2.0-edge.1",
     "@memberjunction/testing-engine-base": "6.2.0-edge.1",
     "debug": "^4.4.3",
     "rxjs": "^7.8.2",
