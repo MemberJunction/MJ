@@ -81,4 +81,26 @@ describe('StagePKClassify', () => {
         expect(log.filter(e => e.event === 'entityGenerated').map(e => e.objectName)).toEqual(['Keyed']);
         expect(result.unresolved).toEqual(['Keyless']);
     });
+
+    it('every verdict names the fields it was shown and the object they were read against', async () => {
+        // FieldCount alone says HOW MANY; it cannot tell "the read was empty" from "the right fields
+        // were there and no strategy matched". On 2026-09-27 a connector reported all 34 objects
+        // keyless while 30 carried a primary key in the catalog, and the classifier claimed its
+        // naming strategy found nothing for objects whose field list contains a column literally
+        // named "id". Four theories were argued from that ambiguity; the names settle it.
+        fields['OBJ-KEYLESS'] = Array.from({ length: 15 }, (_, i) => ({ ID: `f${i}`, Name: `col${i}`, IsPrimaryKey: false, Save: async () => true }));
+        const log: Emitted[] = [];
+        const pipeline = new IntegrationConnectorCreationPipeline() as unknown as StageHost;
+        await pipeline.StagePKClassify(emitter(log), opts);
+
+        const verdicts = log.filter(e => e.event === 'pkClassifierResult');
+        expect(verdicts).toHaveLength(1);
+        expect(verdicts[0].objectName).toBe('Keyless');
+        expect(verdicts[0].data).toMatchObject({
+            FieldCount: 15,
+            FieldNames: Array.from({ length: 12 }, (_, i) => `col${i}`),
+            ObjectID: 'OBJ-KEYLESS',
+            Strategy: 'none',
+        });
+    });
 });

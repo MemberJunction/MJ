@@ -20,6 +20,9 @@ import { IntegrationSchemaSync, type PersistSchemaResult } from './IntegrationSc
 import type { IntrospectSchemaOptions, SourceObjectInfo } from './types.js';
 import { MergeDeclaredWithSample } from './DeclaredSampleMerge.js';
 
+/** How many field names a `pk.classifier.result` event carries — enough to read, bounded for a wide object. */
+const PK_VERDICT_FIELD_NAMES = 12;
+
 /** Options for the creation/refresh pipeline run. */
 export interface ConnectorCreationPipelineOptions {
     /** The connector instance to drive (already constructed by caller). */
@@ -898,10 +901,16 @@ export class IntegrationConnectorCreationPipeline {
                 llmInference: opts.LLMInference,
             });
             emitter.pkClassifierResult(obj.Name, {
-                // How many fields the classifier was actually shown. Zero here names a defect (an
-                // empty or failed catalog read); a non-zero count with no nominee is an honest
-                // "no signal". Without it the two are indistinguishable on the run stream.
+                // How many fields the classifier was actually shown, the names of the first few, and
+                // the object id they were read against. Zero names a defect (an empty or failed
+                // catalog read); a non-zero count with no nominee is an honest "no signal". The names
+                // settle what the count cannot: on 2026-09-27 a connector reported all 34 objects
+                // keyless while 30 carried a primary key in the catalog, and the classifier claimed
+                // its naming strategy found nothing for objects whose field list contains a column
+                // literally named "id" — four theories were argued from that one ambiguous verdict.
                 FieldCount: fields.length,
+                FieldNames: fields.slice(0, PK_VERDICT_FIELD_NAMES).map(f => f.Name),
+                ObjectID: String(obj.ID),
                 Confident: verdict.Confident,
                 Nominee: verdict.Nominee,
                 Confidence: verdict.Confidence,
