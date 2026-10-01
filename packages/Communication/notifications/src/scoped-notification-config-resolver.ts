@@ -1,4 +1,4 @@
-import { MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 
 /** A secondary scope dimension's value, as on the AI layer's scoped prompt configs. */
 export type SecondaryScopeValue = string | number | boolean | string[];
@@ -78,11 +78,12 @@ const NO_DECISION: ScopedChannelDecision = { value: null, lockedOff: false };
  * At equal specificity one `Deny` beats any `Allow`, MJ's permission rule. A `Deny` on a row with `IsLocked` is
  * absorbing for everything less specific and for the recipient's own preference.
  *
- * Pluggable through `ClassFactory`: `MJGlobal.Instance.ClassFactory.CreateInstance(ScopedNotificationConfigResolver)`
- * returns this class or a `@RegisterClass(ScopedNotificationConfigResolver)` subclass. `isInScope` and `score` are the
- * override points.
+ * Pluggable through `ClassFactory`: `CreateScopedNotificationConfigResolver()` returns a host's
+ * `@RegisterClass(ScopedNotificationConfigResolver)` subclass when one is registered, else this base. The base itself
+ * carries no decorator, like `ScopedPromptConfigResolver`: a decorated class in this package would pull it into every
+ * host's generated class manifest, and the server bootstrap does not depend on it.
+ * `isInScope` and `score` are the override points.
  */
-@RegisterClass(ScopedNotificationConfigResolver)
 export class ScopedNotificationConfigResolver {
   /** Resolves every channel for one notice. `candidates` are the type's rows, any status. */
   public Resolve(
