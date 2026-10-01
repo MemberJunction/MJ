@@ -22,11 +22,11 @@ MJ Explorer is a single-page web app. The **top bar** is always visible. Left to
 
 In Data Explorer → **Data**, there are ~400+ entities. The demo business data lives in the **`AssociationDemo`** application group (58 entities): **Members**, **Events**, **Courses**, **Products**, **Invoices**, **Certifications**, **Forum Threads**, **Resources**, **Legislative Issues**, etc.
 
-**The reliable way to open an entity: use the `Search entities…` box in the LEFT sidebar.** Type the entity name (e.g. `Members`) into that sidebar search box, then **click the matching entity node** in the filtered tree. This opens the entity's grid directly. **Do NOT rely on clicking a group's expand-chevron/folder to reveal its children — that interaction is finicky and often does not respond.** Using the sidebar `Search entities…` box avoids it entirely.
+**The reliable way to open an entity: use the `Search record types…` box in the LEFT sidebar.** Type the entity name (e.g. `Members`) into that sidebar search box, then **click the matching entity node** in the filtered tree. This opens the entity's grid directly. **Do NOT rely on clicking a group's expand-chevron/folder to reveal its children — that interaction is finicky and often does not respond.** Using the sidebar `Search record types…` box avoids it entirely.
 
 Many entity names are similar — e.g. **`Members`** (individual member people, ~2000 rows) is distinct from `Board Members`, `Campaign Members`, `Member Follows`, `Memberships`, `Membership Types`, `Chapter Memberships`, and `Committee Memberships`. The sidebar search matches substrings, so typing "Members" lists all of those — **click the entry named exactly `Members`** (the bare name with no extra words; it IS in the filtered list — scroll the results if you don't see it immediately).
 
-**Reliable fallback if the sidebar search is not surfacing the exact entity** (e.g. you keep landing on `Board Members`/`Memberships` instead of `Members`): navigate directly to the entity's grid by URL — `http://localhost:4200/app/data-explorer/Data?entity=<EntityName>` (e.g. `…?entity=Members`, `…?entity=Events`, `…?entity=Products`). This opens that entity's grid deterministically. Use this only when the search box is giving you trouble — for normal cases the sidebar `Search entities…` box is fine.
+**Reliable fallback if the sidebar search is not surfacing the exact entity** (e.g. you keep landing on `Board Members`/`Memberships` instead of `Members`): navigate directly to the entity's grid by URL — `http://localhost:4200/app/data-explorer/Data?entity=<EntityName>` (e.g. `…?entity=Members`, `…?entity=Events`, `…?entity=Products`). This opens that entity's grid deterministically. Use this only when the search box is giving you trouble — for normal cases the sidebar `Search record types…` box is fine.
 
 The grid that opens supports a **search box** (matches individual columns — search a single field value like a last name, not a full name), **sortable column headers** (click to sort), and **pagination at the bottom** for large entities. Related records appear as **expandable sections/panels lower on a record's form** (scroll down the form; a "Manage Sections" control may toggle which are shown).
 
@@ -36,7 +36,7 @@ The grid that opens supports a **search box** (matches individual columns — se
 
 ### Opening an entity record (the full form)
 
-Data Explorer → **Data** → find the entity via the sidebar `Search entities…` box → a grid of rows appears → click a row to open its **preview** → click **"Open Full Record"** to load the full editable form. The URL becomes `/app/home/record/{Entity}/ID|{guid}`. To create a new record, click the **New** / **Create** button on the entity's grid.
+Data Explorer → **Data** → find the entity via the sidebar `Search record types…` box → a grid of rows appears → click a row to open its **preview** → click **"Open Full Record"** to load the full editable form. The URL becomes `/app/home/record/{Entity}/ID|{guid}`. To create a new record, click the **New** / **Create** button on the entity's grid.
 
 ### Filling and saving a record form (dropdowns, dates, checkboxes, related sections)
 
