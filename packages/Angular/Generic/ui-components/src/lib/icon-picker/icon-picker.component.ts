@@ -138,6 +138,12 @@ export class MjIconPickerComponent implements ControlValueAccessor {
         return this.MatchCount > ICON_RESULT_LIMIT;
     }
 
+    /** "Showing N of M icons…" while the grid is cut short; empty otherwise. */
+    public get CapNote(): string {
+        if (this.IsLoading || !this.IsCapped) return '';
+        return `Showing ${this.Results.length} of ${this.MatchCount} icons. Type to narrow the list.`;
+    }
+
     private matchMemo: { Icons: readonly FontAwesomeIcon[]; Search: string; Matches: FontAwesomeIcon[] } | null = null;
 
     /** Every icon matching the search, worked out once per catalogue and search. */

@@ -176,14 +176,18 @@ describe('MjIconPickerComponent (DOM) — more matches than the grid draws', () 
     expect(note).toContain('Type to narrow');
   });
 
-  it('says nothing about a limit once the matches fit', () => {
+  it('empties the same status line once the matches fit, rather than removing it', () => {
     catalogue = many(ICON_RESULT_LIMIT + 60);
     const f = render({ Value: '' });
     f.componentInstance.Toggle();
+    f.detectChanges();
+    const status = overlay()?.querySelector('[role="status"]');
+    expect(status?.textContent).toContain('Showing');
     f.componentInstance.Search = 'icon-29';
     f.detectChanges();
     expect(f.componentInstance.IsCapped).toBe(false);
-    expect(overlay()?.querySelector('[role="status"]')).toBeNull();
+    expect(overlay()?.querySelector('[role="status"]')).toBe(status);
+    expect(status?.textContent?.trim()).toBe('');
   });
 });
 

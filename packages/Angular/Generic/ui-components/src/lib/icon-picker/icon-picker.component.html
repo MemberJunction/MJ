@@ -82,12 +82,9 @@
     }
 
     <!-- The grid draws a limited number of icons, so a longer match list says how many
-         there are and that typing narrows it. -->
-    @if (!IsLoading && IsCapped) {
-      <p class="mj-iconpick-note" role="status">
-        Showing {{ Results.length }} of {{ MatchCount }} icons. Type to narrow the list.
-      </p>
-    }
+         there are and that typing narrows it. The live region stays in place and only its
+         text changes, so a screen reader announces each change. -->
+    <p class="mj-iconpick-note mj-iconpick-status" role="status">{{ CapNote }}</p>
 
     <!-- The short fallback list is why a name the user expects can be absent, so it is said. -->
     @if (IsFallbackCatalogue) {

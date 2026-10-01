@@ -133,3 +133,6 @@
   color: var(--mj-text-muted);
   font-size: var(--mj-text-xs);
 }
+
+/* The status line stays in the page for screen readers; empty, it takes no space. */
+.mj-iconpick-status:empty { margin: 0; }
