@@ -17,6 +17,7 @@ import type {
     SourceSchemaInfo,
     SourceObjectInfo,
     SourceRelationshipInfo,
+    IntrospectSchemaOptions,
     CreateRecordContext,
     UpdateRecordContext,
     DeleteRecordContext,
@@ -270,7 +271,8 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      */
     public async IntrospectSchema(
         companyIntegration: MJCompanyIntegrationEntity,
-        _contextUser: UserInfo
+        _contextUser: UserInfo,
+        options?: IntrospectSchemaOptions
     ): Promise<SourceSchemaInfo> {
         const integrationID = companyIntegration.IntegrationID;
         const objects = IntegrationEngineBase.Instance.GetActiveIntegrationObjects(integrationID);
@@ -278,11 +280,21 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         // enumeration): NEVER authoritative for deactivation — it can only return what is already Active.
         // A REST connector doing genuine live full-gamut discovery must override IntrospectSchema +
         // DiscoveryIsAuthoritative itself.
-        const result: SourceSchemaInfo = { Objects: [], IsAuthoritative: false };
+        //
+        // OnObject lets the CALLER take each object as it is built and this method then drop it, so
+        // peak memory is one object instead of the whole catalog. No handler → accumulate and return,
+        // exactly as before. This override used to declare no options parameter at all, so anything a
+        // caller passed was silently ignored.
+        const onObject = options?.OnObject;
+        const result: SourceSchemaInfo = { Objects: [], IsAuthoritative: false, Streamed: !!onObject };
 
         for (const obj of objects) {
             const fields = this.GetCachedFields(obj.ID);
             const sourceObject = this.BuildSourceObjectInfo(obj, fields, objects);
+            if (onObject) {
+                await onObject(sourceObject);
+                continue; // deliberately NOT retained — that is the entire point
+            }
             result.Objects.push(sourceObject);
         }
 
