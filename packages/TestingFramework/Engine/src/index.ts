@@ -14,6 +14,8 @@ export * from './drivers/BaseTestDriver';
 // Concrete drivers
 export * from './drivers/AgentEvalDriver';
 export * from './drivers/PromptEvalDriver';
+export * from './drivers/RubricCalibrationTestDriver';
+export * from './drivers/calibration';
 
 // Oracle interface and implementations
 export * from './oracles/IOracle';

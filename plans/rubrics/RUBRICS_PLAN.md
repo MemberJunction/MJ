@@ -849,7 +849,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 - [x] **T5** Persist `TestSuiteRun.Score` (§10.5). The mean of executed test-run scores.
 - [x] **T6** Human per-criterion review in the feedback dialog (§10.6).
 - [x] **T7** Testing UI: run detail, Review disagreement queue, analytics, rubric pickers (§10.7).
-- [ ] **T8** Judge calibration test type + driver (§10.8).
+- [x] **T8** Judge calibration test type + driver (§10.8).
 - [ ] **T9** Repeats/flaky per-criterion spread (§10.9); CLI (§10.10).
 - [ ] **T10** `TestRubric` deprecation and README corrections (§10.11).
 
