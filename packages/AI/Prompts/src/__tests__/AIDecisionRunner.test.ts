@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, RegisterClass } from '@memberjunction/global';
+import { UserInfo } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
   BaseDecision,
@@ -13,8 +14,11 @@ import type {
   MJAIPromptEntityExtended,
   MJAIModelEntityExtended,
   AIPromptParams,
+  AIPromptRunResult,
 } from '@memberjunction/ai-core-plus';
+import { AIPromptRunner } from '../AIPromptRunner';
 import { AIDecisionRunner } from '../decision/AIDecisionRunner';
+import { LLMDecision } from '../decision/LLMDecision';
 import { AIDecisionParams } from '../decision/decision-runner.types';
 import {
   buildRealisticCatalog,
@@ -248,6 +252,56 @@ class MockDecisionDriver extends BaseDecision {
 }
 
 // ---------------------------------------------------------------------------
+// Registered drivers, for tests that build drivers through the real ClassFactory
+// ---------------------------------------------------------------------------
+const SCRIPTED_LLM_DRIVER = 'ScriptedLLMDecision';
+const SCRIPTED_NATIVE_DRIVER = 'ScriptedNativeDecision';
+
+/**
+ * An `LLMDecision` whose results are scripted, so no chat prompt runs. The runner links it to the
+ * decision's run as it does a real one. It is registered under its own key, not 'LLMDecision'.
+ */
+@RegisterClass(BaseDecision, SCRIPTED_LLM_DRIVER)
+class ScriptedLLMDecision extends LLMDecision {
+  /** One result per call, in call order; the last one repeats. */
+  public static Script: Array<() => DecisionResult> = [];
+  /** The `ParentPromptRunID` each call ran under: the parent its chat run would name. */
+  public static ParentsSeen: Array<string | undefined> = [];
+
+  constructor(apiKey: string) {
+    super(apiKey, 'chat-prompt-001', new UserInfo());
+  }
+
+  protected override async DoDecide(): Promise<DecisionResult> {
+    const call = ScriptedLLMDecision.ParentsSeen.length;
+    ScriptedLLMDecision.ParentsSeen.push(this.ParentPromptRunID);
+    const script = ScriptedLLMDecision.Script;
+    return script[Math.min(call, script.length - 1)]();
+  }
+}
+
+/** A driver that calls its model directly, answering with Usage(120, 45, 0.002, 'USD'). */
+@RegisterClass(BaseDecision, SCRIPTED_NATIVE_DRIVER)
+class ScriptedNativeDecision extends MockDecisionDriver {}
+
+/** A decision that answers its Likelihood question, after a model call that cost `cost`. */
+function answeredWith(cost: number): DecisionResult {
+  const answered = new DecisionResult(true, new Date(), new Date());
+  answered.Answers = { q_likelihood: { Kind: 'Likelihood', Probability: 0.4 } };
+  answered.Usage = new ModelUsage(120, 45, cost, 'USD');
+  return answered;
+}
+
+/** A failed decision that allows failover, after a model call that cost `cost`. */
+function failedOverAfter(cost: number): DecisionResult {
+  const failed = new DecisionResult(false, new Date(), new Date());
+  failed.errorMessage = 'Service unavailable';
+  failed.errorInfo = { errorType: 'ServiceUnavailable', severity: 'Retriable', canFailover: true };
+  failed.Usage = new ModelUsage(80, 10, cost, 'USD');
+  return failed;
+}
+
+// ---------------------------------------------------------------------------
 // Fake Prompt Run & Provider
 // ---------------------------------------------------------------------------
 let prSeq = 0;
@@ -272,6 +326,10 @@ class FakePromptRun {
   public CostCurrency?: string;
   public LatestResult: { CompleteMessage: string } | null = null;
   public saveCount = 0;
+  /** Whether a Save has succeeded, as `BaseEntity.IsSaved` reports it. */
+  public IsSaved = false;
+  /** When set, every Save fails, as an INSERT that fails validation does. */
+  public static FailSaves = false;
   [k: string]: unknown;
 
   NewRecord(): boolean {
@@ -280,6 +338,11 @@ class FakePromptRun {
   }
   async Save(): Promise<boolean> {
     this.saveCount++;
+    if (FakePromptRun.FailSaves) {
+      this.LatestResult = { CompleteMessage: 'Vendor cannot be null' };
+      return false;
+    }
+    this.IsSaved = true;
     return true;
   }
 }
@@ -431,6 +494,7 @@ describe('AIDecisionRunner', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    FakePromptRun.FailSaves = false;
     setupCatalog();
     h.mockTemplatesArray.length = 0;
     h.mockTemplatesArray.push({
@@ -958,4 +1022,292 @@ describe('AIDecisionRunner', () => {
     expect(result.success).toBe(false);
     expect(result.cancelled).toBe(true);
   });
+
+  describe("14. a decision answered through a child run carries that run's cost", () => {
+    /**
+     * Makes LLMDecision the model that answers: the native model loses its credential (LLMDecision
+     * needs none), and the prompt is bound to the LLMDecision model alone.
+     */
+    function bindLLMDecisionOnly(): void {
+      h.state.configuredDrivers.clear();
+      h.state.promptModels = [
+        { ID: 'pm-llm-decision-1', PromptID: 'decision-prompt-001', ModelID: LLM_DECISION_MODEL_ID, VendorID: VENDOR.OpenAI, Priority: 100, Status: 'Active', ConfigurationID: null },
+      ];
+    }
+
+    function likelihoodParams(): AIDecisionParams {
+      const params = new AIDecisionParams();
+      params.prompt = makeDecisionPrompt({ FailoverStrategy: 'None' });
+      params.Questions = { q_likelihood: defaultQuestions.q_likelihood };
+      params.State = 'Test state';
+      params.provider = fakeProvider;
+      return params;
+    }
+
+    /**
+     * Params whose prompt runs only the models {@link bindInOrder} bound, in order, with no
+     * power-matched fallbacks after them, and fails over down that list when `failover` is set.
+     */
+    function scriptedParams(failover = false): AIDecisionParams {
+      const params = likelihoodParams();
+      params.prompt = makeDecisionPrompt({
+        RequireSpecificModels: true,
+        ...(failover ? { FailoverStrategy: 'NextInList', MaxFailoverAttempts: 3 } : { FailoverStrategy: 'None' }),
+      });
+      return params;
+    }
+
+    /** Builds drivers through the real ClassFactory, which knows the registered test drivers. */
+    function useRealClassFactory(): void {
+      vi.mocked(MJGlobal.Instance.ClassFactory.CreateInstance).mockRestore();
+    }
+
+    /**
+     * Binds the decision prompt to one decision model per driver class, in that priority order, each
+     * with a credential, and returns the models' IDs.
+     */
+    function bindInOrder(driverClasses: string[]): string[] {
+      h.state.promptModels = [];
+      return driverClasses.map((driverClass, i) => {
+        const id = `scripted-decision-model-${i + 1}`;
+        const priority = 100 - i * 10;
+        const modelVendor = {
+          ID: `mv-scripted-${i + 1}`, ModelID: id, VendorID: VENDOR.OpenAI, Vendor: 'OpenAI', Priority: priority,
+          Status: 'Active', DriverClass: driverClass, APIName: `scripted-v${i + 1}`, TypeID: h.engine.InferenceProviderTypeID,
+        };
+        h.state.models.push({
+          ID: id, Name: `Scripted Decision Model ${i + 1}`, AIModelTypeID: DECISION_MODEL_TYPE_ID, DriverClass: driverClass,
+          APIName: `scripted-v${i + 1}`, Status: 'Active', IsActive: true, PowerRank: 50, ModelVendors: [modelVendor],
+        });
+        h.state.modelVendors.push(modelVendor);
+        h.state.promptModels.push({
+          ID: `pm-scripted-${i + 1}`, PromptID: 'decision-prompt-001', ModelID: id, VendorID: VENDOR.OpenAI,
+          Priority: priority, Status: 'Active', ConfigurationID: null,
+        });
+        h.state.configuredDrivers.add(driverClass);
+        return id;
+      });
+    }
+
+    beforeEach(() => {
+      ScriptedLLMDecision.Script = [];
+      ScriptedLLMDecision.ParentsSeen = [];
+    });
+
+    it("14a. an LLMDecision built by the runner runs its chat prompt as a child of the decision's run", async () => {
+      bindLLMDecisionOnly();
+      // The real ClassFactory, so the runner builds a real LLMDecision.
+      vi.mocked(MJGlobal.Instance.ClassFactory.CreateInstance).mockRestore();
+      const executePrompt = vi.spyOn(AIPromptRunner.prototype, 'ExecutePrompt').mockResolvedValue(
+        chatRunResult({
+          success: true,
+          result: { q_likelihood: 0.7 },
+          promptTokens: 300,
+          completionTokens: 20,
+          promptRun: asPromptRun({ Cost: 0.0007, DescendantCost: null, TotalCost: 0.0007, CostCurrency: 'USD' }),
+        })
+      );
+
+      const result = await runner.ExecuteDecision(likelihoodParams());
+
+      expect(result.success).toBe(true);
+      expect(result.DriverClass).toBe(LLM_DRIVER);
+      expect(executePrompt).toHaveBeenCalledTimes(1);
+      expect(executePrompt.mock.calls[0][0].parentPromptRunId).toBe(lastPromptRun?.ID);
+      // The chat run's cost is the decision run's descendant cost, not its own.
+      expect(lastPromptRun?.DescendantCost).toBe(0.0007);
+      expect(lastPromptRun?.TotalCost).toBe(0.0007);
+      expect(lastPromptRun?.Cost).toBeUndefined();
+      expect(result.cost).toBe(0.0007);
+    });
+
+    it("14a2. leaves the chat run unlinked when the decision run's INSERT failed, so the chat run can still be saved", async () => {
+      // A chat run naming a decision run that was never inserted as its ParentID would fail its foreign key.
+      FakePromptRun.FailSaves = true;
+      bindLLMDecisionOnly();
+      vi.mocked(MJGlobal.Instance.ClassFactory.CreateInstance).mockRestore();
+      const executePrompt = vi.spyOn(AIPromptRunner.prototype, 'ExecutePrompt').mockResolvedValue(
+        chatRunResult({
+          success: true,
+          result: { q_likelihood: 0.7 },
+          promptRun: asPromptRun({ Cost: 0.0007, DescendantCost: null, TotalCost: 0.0007, CostCurrency: 'USD' }),
+        })
+      );
+
+      const result = await runner.ExecuteDecision(likelihoodParams());
+
+      expect(result.success).toBe(true);
+      expect(executePrompt).toHaveBeenCalledTimes(1);
+      expect(executePrompt.mock.calls[0][0].parentPromptRunId).toBeUndefined();
+      expect(result.cost).toBe(0.0007);
+      // Not linked, so not a descendant: no DescendantCost without a child to carry it. The cost is
+      // the decision run's own, and the chat run is a root run of its own, as before child runs.
+      expect(lastPromptRun?.DescendantCost).toBeUndefined();
+      expect(lastPromptRun?.Cost).toBe(0.0007);
+      expect(lastPromptRun?.TotalCost).toBe(0.0007);
+    });
+
+    it('14b. for an LLMDecision it linked, the runner records DescendantCost and TotalCost, and not Cost', async () => {
+      useRealClassFactory();
+      bindInOrder([SCRIPTED_LLM_DRIVER]);
+      ScriptedLLMDecision.Script = [() => answeredWith(0.002)];
+
+      const result = await runner.ExecuteDecision(scriptedParams());
+
+      // Registered under its own key: linking, and so booking, follows the driver's class.
+      expect(result.DriverClass).toBe(SCRIPTED_LLM_DRIVER);
+      expect(ScriptedLLMDecision.ParentsSeen).toEqual([lastPromptRun?.ID]);
+      expect(lastPromptRun?.DescendantCost).toBe(0.002);
+      expect(lastPromptRun?.TotalCost).toBe(0.002);
+      expect(lastPromptRun?.Cost).toBeUndefined();
+      expect(lastPromptRun?.CostCurrency).toBe('USD');
+      // The decision run keeps its own tokens, as before.
+      expect(lastPromptRun?.TokensPrompt).toBe(120);
+      expect(lastPromptRun?.TokensCompletion).toBe(45);
+      expect(lastPromptRun?.TokensUsedRollup).toBe(165);
+    });
+
+    it("14b2. a driver registered as 'LLMDecision' that is not an LLMDecision links nothing, so its cost is the run's own Cost", async () => {
+      bindLLMDecisionOnly(); // the mock driver answers as LLMDecision, with Usage(120, 45, 0.002, 'USD')
+      const waitForSaves = vi.spyOn(runner, 'WaitForPendingPromptRunSaves');
+
+      const result = await runner.ExecuteDecision(likelihoodParams());
+
+      expect(result.DriverClass).toBe(LLM_DRIVER);
+      expect(waitForSaves).not.toHaveBeenCalled();
+      expect(lastPromptRun?.Cost).toBe(0.002);
+      expect(lastPromptRun?.TotalCost).toBe(0.002);
+      expect(lastPromptRun?.DescendantCost).toBeUndefined();
+    });
+
+    it('14c. for a driver that calls its model directly the runner records Cost, as before', async () => {
+      const result = await runner.ExecuteDecision(likelihoodParams());
+
+      expect(result.DriverClass).toBe(NATIVE_DRIVER);
+      expect(lastPromptRun?.Cost).toBe(0.002);
+      expect(lastPromptRun?.TotalCost).toBe(0.002);
+      expect(lastPromptRun?.DescendantCost).toBeUndefined();
+    });
+
+    it('14d. with no cost the runner records neither Cost nor DescendantCost', async () => {
+      bindLLMDecisionOnly();
+      mockDriver.decideOverride = async () => {
+        const answered = new DecisionResult(true, new Date(), new Date());
+        answered.Answers = { q_likelihood: { Kind: 'Likelihood', Probability: 0.4 } };
+        answered.Usage = new ModelUsage(120, 45);
+        return answered;
+      };
+
+      const result = await runner.ExecuteDecision(likelihoodParams());
+
+      expect(result.success).toBe(true);
+      expect(lastPromptRun?.TokensUsed).toBe(165);
+      expect(lastPromptRun?.Cost).toBeUndefined();
+      expect(lastPromptRun?.DescendantCost).toBeUndefined();
+      expect(lastPromptRun?.TotalCost).toBeUndefined();
+    });
+
+    it("14e. the decision run's INSERT lands before an LLMDecision driver runs, because its chat run names it as parent", async () => {
+      useRealClassFactory();
+      bindInOrder([SCRIPTED_LLM_DRIVER]);
+      const waitForSaves = vi.spyOn(runner, 'WaitForPendingPromptRunSaves');
+      const decide = vi.fn(() => answeredWith(0.002));
+      ScriptedLLMDecision.Script = [decide];
+
+      await runner.ExecuteDecision(scriptedParams());
+
+      expect(waitForSaves).toHaveBeenCalledTimes(1);
+      expect(waitForSaves.mock.invocationCallOrder[0]).toBeLessThan(decide.mock.invocationCallOrder[0]);
+    });
+
+    it('14f. a driver that calls its model directly does not wait for the run to be saved', async () => {
+      const waitForSaves = vi.spyOn(runner, 'WaitForPendingPromptRunSaves');
+
+      const result = await runner.ExecuteDecision(likelihoodParams());
+
+      expect(result.DriverClass).toBe(NATIVE_DRIVER);
+      expect(waitForSaves).not.toHaveBeenCalled();
+    });
+
+    it("14g. books the cost as the run's own, never as a descendant, when the decision run's INSERT failed and nothing was linked", async () => {
+      FakePromptRun.FailSaves = true;
+      useRealClassFactory();
+      bindInOrder([SCRIPTED_LLM_DRIVER]);
+      ScriptedLLMDecision.Script = [() => answeredWith(0.002)];
+
+      const result = await runner.ExecuteDecision(scriptedParams());
+
+      expect(result.success).toBe(true);
+      expect(ScriptedLLMDecision.ParentsSeen).toEqual([undefined]);
+      expect(lastPromptRun?.DescendantCost).toBeUndefined();
+      expect(lastPromptRun?.Cost).toBe(0.002);
+      expect(lastPromptRun?.TotalCost).toBe(0.002);
+    });
+
+    it("14h. records every linked attempt's cost, not only the answering attempt's", async () => {
+      useRealClassFactory();
+      const [, second] = bindInOrder([SCRIPTED_LLM_DRIVER, SCRIPTED_LLM_DRIVER]);
+      ScriptedLLMDecision.Script = [() => failedOverAfter(0.001), () => answeredWith(0.002)];
+
+      const result = await runner.ExecuteDecision(scriptedParams(true));
+
+      expect(result.success).toBe(true);
+      expect(result.modelInfo?.modelId).toBe(second);
+      // Both chat runs are children of the decision's run, and the server's rollup sums them both.
+      expect(ScriptedLLMDecision.ParentsSeen).toEqual([lastPromptRun?.ID, lastPromptRun?.ID]);
+      expect(lastPromptRun?.DescendantCost).toBeCloseTo(0.003, 12);
+      expect(lastPromptRun?.TotalCost).toBeCloseTo(0.003, 12);
+      expect(lastPromptRun?.Cost).toBeUndefined();
+      expect(lastPromptRun?.CostCurrency).toBe('USD');
+      // The tokens are still the answering attempt's.
+      expect(lastPromptRun?.TokensPrompt).toBe(120);
+      expect(lastPromptRun?.TokensCompletion).toBe(45);
+    });
+
+    it("14i. keeps a linked attempt's cost as a descendant when a direct driver answers, whose cost is the run's own", async () => {
+      useRealClassFactory();
+      bindInOrder([SCRIPTED_LLM_DRIVER, SCRIPTED_NATIVE_DRIVER]);
+      ScriptedLLMDecision.Script = [() => failedOverAfter(0.001)];
+
+      const result = await runner.ExecuteDecision(scriptedParams(true));
+
+      expect(result.success).toBe(true);
+      expect(result.DriverClass).toBe(SCRIPTED_NATIVE_DRIVER);
+      expect(lastPromptRun?.Cost).toBe(0.002);
+      expect(lastPromptRun?.DescendantCost).toBe(0.001);
+      expect(lastPromptRun?.TotalCost).toBeCloseTo(0.003, 12);
+    });
+
+    it('14j. keeps what the linked attempts cost when every attempt fails', async () => {
+      useRealClassFactory();
+      bindInOrder([SCRIPTED_LLM_DRIVER, SCRIPTED_LLM_DRIVER]);
+      ScriptedLLMDecision.Script = [() => failedOverAfter(0.001)];
+
+      const result = await runner.ExecuteDecision(scriptedParams(true));
+
+      expect(result.success).toBe(false);
+      expect(ScriptedLLMDecision.ParentsSeen).toHaveLength(2);
+      expect(lastPromptRun?.Success).toBe(false);
+      expect(lastPromptRun?.DescendantCost).toBeCloseTo(0.002, 12);
+      expect(lastPromptRun?.TotalCost).toBeCloseTo(0.002, 12);
+      expect(lastPromptRun?.Cost).toBeUndefined();
+      expect(lastPromptRun?.CostCurrency).toBe('USD');
+    });
+  });
 });
+
+/** The chat prompt's result fields an LLMDecision reads. */
+type ChatRunResultFields = Pick<AIPromptRunResult, 'success' | 'result' | 'promptTokens' | 'completionTokens' | 'promptRun'>;
+
+/** The seam onto the full `AIPromptRunResult` that `AIPromptRunner.ExecutePrompt` returns. */
+function chatRunResult(fields: ChatRunResultFields): AIPromptRunResult {
+  return fields as AIPromptRunResult;
+}
+
+/** The prompt-run entity an `AIPromptRunResult` carries. */
+type ChatPromptRun = NonNullable<AIPromptRunResult['promptRun']>;
+
+/** The seam onto the full prompt-run entity, from the cost columns LLMDecision reads. */
+function asPromptRun(run: Pick<ChatPromptRun, 'Cost' | 'DescendantCost' | 'TotalCost' | 'CostCurrency'>): ChatPromptRun {
+  return run as ChatPromptRun;
+}

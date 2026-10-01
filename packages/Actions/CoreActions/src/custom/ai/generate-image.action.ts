@@ -86,6 +86,9 @@ import {
  * the platform key as it always did. Then the vendor-name fallback that was always here — but
  * actually USED this time: the previous code found a key by vendor name and then handed the empty
  * driver-class result to the generator, so that branch never produced an image.
+ *
+ * @deprecated Kept for compatibility only: `GenerateImageAction` no longer calls it. Use
+ * {@link BuildImageGenerationAPIKeys}, which the action and the runner use.
  */
 export function ResolveImageGenerationAPIKey(driverClass: string, vendorName: string | undefined, resolve?: RuntimeAPIKeyResolver): string {
     const key = findImageGenerationAPIKey(driverClass, vendorName, resolve);

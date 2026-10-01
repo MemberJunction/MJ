@@ -222,7 +222,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (418 classes)
+// @memberjunction/core-entities (419 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -462,6 +462,7 @@ import {
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
+    MJFeaturePipelineTypeEntity,
     MJFeatureValueCacheEntity,
     MJFeatureValueEntity,
     MJFileCategoryEntity,
@@ -1054,25 +1055,6 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/search-engine (15 classes)
-import {
-    AzureAISearchProvider,
-    BGEReRanker,
-    CohereReRanker,
-    ElasticsearchSearchProvider,
-    EntitySearchProvider,
-    FullTextSearchProvider,
-    NoopReRanker,
-    OpenAIReRanker,
-    OpenSearchSearchProvider,
-    SearchScopePermissionResolver,
-    StorageSearchProvider,
-    TagSearchProvider,
-    TypesenseSearchProvider,
-    VectorSearchProvider,
-    VoyageReRanker,
-} from '@memberjunction/search-engine';
-
 // @memberjunction/templates (3 classes)
 import {
     AIPromptExtension,
@@ -1107,6 +1089,35 @@ import {
 import {
     PromptReasoningProvider,
 } from '@memberjunction/ai-vector-dupe';
+
+// @memberjunction/content-autotagging (6 classes)
+import {
+    AutotagBaseEngine,
+    AutotagCloudStorage,
+    AutotagEntity,
+    AutotagLocalFileSystem,
+    AutotagRSSFeed,
+    AutotagWebsite,
+} from '@memberjunction/content-autotagging';
+
+// @memberjunction/search-engine (15 classes)
+import {
+    AzureAISearchProvider,
+    BGEReRanker,
+    CohereReRanker,
+    ElasticsearchSearchProvider,
+    EntitySearchProvider,
+    FullTextSearchProvider,
+    NoopReRanker,
+    OpenAIReRanker,
+    OpenSearchSearchProvider,
+    SearchScopePermissionResolver,
+    StorageSearchProvider,
+    TagSearchProvider,
+    TypesenseSearchProvider,
+    VectorSearchProvider,
+    VoyageReRanker,
+} from '@memberjunction/search-engine';
 
 // @memberjunction/ai-agents (22 classes)
 import {
@@ -1166,16 +1177,6 @@ import {
     FormBuilderDesignerAgent,
 } from '@memberjunction/ai-form-builder';
 
-// @memberjunction/content-autotagging (6 classes)
-import {
-    AutotagBaseEngine,
-    AutotagCloudStorage,
-    AutotagEntity,
-    AutotagLocalFileSystem,
-    AutotagRSSFeed,
-    AutotagWebsite,
-} from '@memberjunction/content-autotagging';
-
 // @memberjunction/database-designer-core (4 classes)
 import {
     DatabaseDesignerAgent,
@@ -1193,8 +1194,9 @@ import {
     ValidateEntitySchemaAction,
 } from '@memberjunction/database-designer-actions';
 
-// @memberjunction/record-set-processor (5 classes)
+// @memberjunction/record-set-processor (6 classes)
 import {
+    LLMFeaturePipelineDriver,
     RecordProcessCancelRunServerOperation,
     RecordProcessGetRunStatusServerOperation,
     RecordProcessPauseRunServerOperation,
@@ -1838,6 +1840,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
+    MJFeaturePipelineTypeEntity,
     MJFeatureValueCacheEntity,
     MJFeatureValueEntity,
     MJFileCategoryEntity,
@@ -1936,11 +1939,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJResourcePermissionEntityExtended,
     MJResourceTypeEntity,
     MJRoleEntity,
-    MJRowLevelSecurityFilterEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRowLevelSecurityFilterEntity,
     MJSQLDialectEntity,
     MJScheduledJobEntity,
     MJScheduledJobRunEntity,
@@ -2140,11 +2143,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     UpdateUserProgressAction,
     BufferCreatePostAction,
     BufferDeletePostAction,
-    BufferGetAnalyticsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    BufferGetAnalyticsAction,
     BufferGetChannelsAction,
     BufferGetPendingPostsAction,
     BufferGetSentPostsAction,
@@ -2248,21 +2251,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     RestoreRecordAction,
     RunAllActiveArchivesAction,
     TagEngineBase,
-    AzureAISearchProvider,
-    BGEReRanker,
-    CohereReRanker,
-    ElasticsearchSearchProvider,
-    EntitySearchProvider,
-    FullTextSearchProvider,
-    NoopReRanker,
-    OpenAIReRanker,
-    OpenSearchSearchProvider,
-    SearchScopePermissionResolver,
-    StorageSearchProvider,
-    TagSearchProvider,
-    TypesenseSearchProvider,
-    VectorSearchProvider,
-    VoyageReRanker,
     AIPromptExtension,
     TemplateEmbedExtension,
     TemplateRunServerOperation,
@@ -2278,6 +2266,27 @@ const CLASS_REGISTRATIONS_3: any[] = [
     StructuralTextSegmenter,
     TranscriptSegmenter,
     PromptReasoningProvider,
+    AutotagBaseEngine,
+    AutotagCloudStorage,
+    AutotagEntity,
+    AutotagLocalFileSystem,
+    AutotagRSSFeed,
+    AutotagWebsite,
+    AzureAISearchProvider,
+    BGEReRanker,
+    CohereReRanker,
+    ElasticsearchSearchProvider,
+    EntitySearchProvider,
+    FullTextSearchProvider,
+    NoopReRanker,
+    OpenAIReRanker,
+    OpenSearchSearchProvider,
+    SearchScopePermissionResolver,
+    StorageSearchProvider,
+    TagSearchProvider,
+    TypesenseSearchProvider,
+    VectorSearchProvider,
+    VoyageReRanker,
     AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
     CSVToolLibrary,
@@ -2316,12 +2325,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     FormBuilderAgent,
     FormBuilderBuilderAgent,
     FormBuilderDesignerAgent,
-    AutotagBaseEngine,
-    AutotagCloudStorage,
-    AutotagEntity,
-    AutotagLocalFileSystem,
-    AutotagRSSFeed,
-    AutotagWebsite,
     DatabaseDesignerAgent,
     DatabaseDesignerSchemaBuilder,
     DatabaseDesignerSchemaDesigner,
@@ -2331,6 +2334,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ListMyEntitiesAction,
     ModifyEntityAction,
     ValidateEntitySchemaAction,
+    LLMFeaturePipelineDriver,
     RecordProcessCancelRunServerOperation,
     RecordProcessGetRunStatusServerOperation,
     RecordProcessPauseRunServerOperation,
@@ -2343,12 +2347,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PredictiveStudioModelDevAgent,
     PredictiveStudioPipelineBuilderAgent,
     PredictiveStudioPromoteModelAction,
-    PredictiveStudioPromoteModelServerOperation,
-    PredictiveStudioRunExperimentAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    PredictiveStudioPromoteModelServerOperation,
+    PredictiveStudioRunExperimentAction,
     PredictiveStudioRunFeaturePipelineServerOperation,
     PredictiveStudioScheduleModelScoringAction,
     PredictiveStudioScoreRecordSetAction,
@@ -2547,12 +2551,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ModifyDocumentSectionAction,
     ModifyInteractiveFormAction,
     MoveListMembersAction,
-    MoveObjectAction,
-    OAuthFlowAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MoveObjectAction,
+    OAuthFlowAction,
     ObjectExistsAction,
     PDFExtractorAction,
     ParallelExecuteAction,
@@ -2626,7 +2630,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1057;
+export const CLASS_REGISTRATIONS_COUNT = 1059;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
@@ -2715,18 +2719,18 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/archiving-engine',
     '@memberjunction/archiving-action',
     '@memberjunction/tag-engine-base',
-    '@memberjunction/search-engine',
     '@memberjunction/templates',
     '@memberjunction/ai-prompts',
     '@memberjunction/ai-reranker',
     '@memberjunction/ai-segmentation',
     '@memberjunction/ai-vector-dupe',
+    '@memberjunction/content-autotagging',
+    '@memberjunction/search-engine',
     '@memberjunction/ai-agents',
     '@memberjunction/action-runtime-host',
     '@memberjunction/ai-agent-harness',
     '@memberjunction/ai-agent-manager',
     '@memberjunction/ai-form-builder',
-    '@memberjunction/content-autotagging',
     '@memberjunction/database-designer-core',
     '@memberjunction/database-designer-actions',
     '@memberjunction/record-set-processor',
