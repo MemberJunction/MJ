@@ -68,10 +68,16 @@ vi.mock('@memberjunction/core', () => {
     };
 });
 
-vi.mock('@memberjunction/ai', () => ({
-    BaseEmbeddings: vi.fn(),
-    GetAIAPIKey: vi.fn().mockReturnValue('mock-api-key'),
-}));
+// The decision provider calibrates with the real Platt scaling.
+vi.mock('@memberjunction/ai', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/ai')>();
+    return {
+        ApplyPlattCalibration: actual.ApplyPlattCalibration,
+        DecisionResult: actual.DecisionResult,
+        BaseEmbeddings: vi.fn(),
+        GetAIAPIKey: vi.fn().mockReturnValue('mock-api-key'),
+    };
+});
 
 vi.mock('@memberjunction/ai-vectordb', () => ({
     VectorDBBase: vi.fn(),
@@ -124,7 +130,12 @@ vi.mock('@memberjunction/ai-prompts', () => ({
     AIPromptRunner: class { ExecutePrompt = mockExecutePrompt; },
 }));
 
-vi.mock('@memberjunction/ai-core-plus', () => ({
+// The real decision-calibration helpers, loaded on their own: the package index extends entity
+// classes these specs mock.
+vi.mock('@memberjunction/ai-core-plus', async () => ({
+    ...(await vi.importActual<typeof import('@memberjunction/ai-core-plus/dist/decision-calibration.js')>(
+        '@memberjunction/ai-core-plus/dist/decision-calibration.js'
+    )),
     AIPromptParams: class {},
 }));
 
@@ -134,6 +145,7 @@ import { DecisionReasoningProvider } from '../reasoning/DecisionReasoningProvide
 import { DecisionThenPromptReasoningProvider } from '../reasoning/DecisionThenPromptReasoningProvider';
 import { DuplicateReasoningProvider } from '../reasoning/DuplicateReasoningProvider';
 import { DuplicateReasoningOutput } from '../reasoning/DuplicateReasoningTypes';
+import { AnsweredBy, RawFor } from './helpers/decisionCalibration';
 
 // ─────────────────────────────────────────────
 // Fixtures. Each is a partial double of the type the detector reads, holding only the members
@@ -231,17 +243,20 @@ function promptVerdicts(verdicts: Record<string, string>): void {
     mockExecutePrompt.mockResolvedValue(promptRunResult({ candidateVerdicts, survivorRecordId: 'src' }, 'prompt-run-1'));
 }
 
-/** Answers each question with the probability of the candidate its instructions name. */
+/**
+ * Answers each question, as the calibrated Jev ({@link AnsweredBy}), so that the candidate its instructions name
+ * gets the **calibrated** probability given here.
+ */
 function answerByRecord(probabilities: Record<string, number>): void {
     mockExecuteDecision.mockImplementation(async (params: AIDecisionParams) => {
         const answers: Record<string, DecisionAnswer> = {};
         for (const [key, question] of Object.entries(params.Questions)) {
             const recordID = Object.keys(probabilities).find(id => question.Instructions.includes(`(recordId ${id})`));
             if (recordID !== undefined) {
-                answers[key] = { Kind: 'Likelihood', Probability: probabilities[recordID] };
+                answers[key] = { Kind: 'Likelihood', Probability: RawFor(probabilities[recordID]) };
             }
         }
-        return { success: true, Answers: answers, promptRun: runRow('decision-run-1') };
+        return { success: true, Answers: answers, promptRun: runRow('decision-run-1'), ...AnsweredBy() };
     });
 }
 
@@ -338,7 +353,8 @@ describe('DuplicateRecordDetector — decision reasoning modes', () => {
         });
 
         it('saves a successful decision\'s rows with each candidate\'s band and the decision run', async () => {
-            answerByRecord({ 'cand-a': 0.8, 'cand-b': 0.3, 'cand-c': 0.5 });
+            const threshold = DecisionReasoningProvider.DEFAULT_UNCERTAIN_ABOVE;
+            answerByRecord({ 'cand-a': 0.8, 'cand-b': 0.3, 'cand-c': threshold + 0.01 });
             const { result, output } = await reasonOverSet('Decision');
 
             const rows = await detector.SaveRows(result, output);
@@ -347,7 +363,8 @@ describe('DuplicateRecordDetector — decision reasoning modes', () => {
         });
 
         it('stamps each candidate with its own band', async () => {
-            answerByRecord({ 'cand-a': 0.8, 'cand-b': 0.3, 'cand-c': 0.5 });
+            const threshold = DecisionReasoningProvider.DEFAULT_UNCERTAIN_ABOVE;
+            answerByRecord({ 'cand-a': 0.8, 'cand-b': 0.3, 'cand-c': threshold + 0.01 });
             const { output } = await reasonOverSet('Decision');
 
             const recommendations = CANDIDATE_IDS.map(id => {
