@@ -66,6 +66,23 @@ function SafeCodeName(field: EntityFieldInfo): string {
 }
 
 /**
+ * Whether a field's value list becomes a literal union in its generated property type and Zod schema.
+ *
+ * A boolean field's value list never does. Its values are STRINGS, and a boolean field is never quoted
+ * (`NeedsQuotes` is false), so a declared list of "False"/"True" came out as the bare identifiers
+ * `False | True` and `z.literal(False)`: TS2304, and a generated package that no longer compiles. DbAutoDoc
+ * declares exactly that for `bit` columns, and on one SQL Server tenant every CodeGen build failed from the
+ * run that picked it up. Such a field keeps `boolean` / `z.boolean()`, and its values are still listed in
+ * its doc comment. Both sites ask this one predicate, so the property type and the schema cannot disagree.
+ */
+function EmitsValueListUnion(field: EntityFieldInfo): boolean {
+    return TypeScriptTypeFromSQLType(field.Type) !== 'boolean'
+        && field.ValueListTypeEnum !== EntityFieldValueListType.None
+        && !!field.EntityFieldValues
+        && field.EntityFieldValues.length > 0;
+}
+
+/**
  * The parsed shape of `EntityRelationship.RelatedRecordCollection` — the policy half of a
  * `DeclareRelatedRecords(...)` declaration.
  *
@@ -417,7 +434,7 @@ ${loadModule}
           jsonTypeAccessorInfo = { prefixedTypeName, fullTypeString: fullTypeString + (e.AllowsNull ? ' | null' : ''), isArray };
           // typeString stays as the standard SQL-mapped type (string | null) for the base getter
         }
-        if (!hasJSONType && e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
+        if (!hasJSONType && EmitsValueListUnion(e)) {
           // construct a typeString that is a union of the possible values
           const quotes = e.NeedsQuotes ? "'" : '';
           // Sort deterministically by Sequence, CreatedAt, then Value to prevent flip-flopping across runs
@@ -1501,7 +1518,7 @@ ${validationFunctions}`
         let typeString: string = `${TypeScriptTypeFromSQLType(e.Type).toLowerCase()}()` + (e.AllowsNull ? '.nullable()' : '');
         if (hasJSONType) {
           typeString = `any()${e.AllowsNull ? '.nullable()' : ''}`;
-        } else if (e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
+        } else if (EmitsValueListUnion(e)) {
           // construct a typeString that is a union of the possible values
           const quotes = e.NeedsQuotes ? "'" : '';
           // Sort deterministically by Sequence, CreatedAt, then Value to prevent flip-flopping across runs
