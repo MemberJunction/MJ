@@ -96,7 +96,8 @@ export class DecisionReasoningProvider extends DuplicateReasoningProvider {
 
     /**
      * Run the decision for a matched set: one `AIDecisionRunner` call, with one Likelihood per
-     * candidate. Never throws. A set with no candidates succeeds without a call.
+     * candidate. The context's `CancellationToken` and `TimeoutMS`, when set, bound the model call.
+     * Never throws. A set with no candidates succeeds without a call.
      */
     public async DecideCandidates(
         input: DuplicateReasoningInput,
@@ -205,6 +206,8 @@ export class DecisionReasoningProvider extends DuplicateReasoningProvider {
         const params = new AIDecisionParams();
         params.prompt = prompt;
         params.contextUser = context.ContextUser;
+        params.cancellationToken = context.CancellationToken;
+        params.timeoutMS = context.TimeoutMS;
         params.State = this.BuildDecisionState(input);
         params.Questions = this.BuildQuestions(input);
         return params;

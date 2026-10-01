@@ -33,10 +33,13 @@ import {
     DECISION_DISCOVERY_MIN_OPTIONS,
     DECISION_DISCOVERY_TIMEOUT_MS,
     SuggestedAgentMessage,
+    DECISION_DISCOVERY_CALIBRATION,
+    type DecisionDiscoveryCalibration,
+    DECISION_DISCOVERY_MIN_CONFIDENCE,
 } from '../decision-discovery';
 import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
-import type { ChatMessage, ChoiceQuestion, DecisionAnswer } from '@memberjunction/ai';
+import { DecisionResult, type ChatMessage, type ChoiceQuestion, type DecisionAnswer, type PlattCalibration } from '@memberjunction/ai';
 import type { MJAIAgentTypeEntity, MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { LogErrorEx } from '@memberjunction/core';
 import type { EntitySearchResult, IMetadataProvider, SearchEntityParams, UserInfo } from '@memberjunction/core';
@@ -427,20 +430,55 @@ function makeParams(overrides: Partial<ExecuteAgentParams> = {}): ExecuteAgentPa
     };
 }
 
-/** An Ask that picks `agent` with `confidence`, and says any agent applies with `applies`. */
+/** The model the scripted answers come from; discovery calibrates its answers per model. */
+const ANSWERING_MODEL = 'Jev';
+
+/** The exact model the scripted answers come from: Jev at the version its calibration was fitted on. */
+const ANSWERING_RESOLVED_MODEL = 'typesafe/jev-1.13-20260917';
+
+/** The answering model's discovery calibration. */
+function answeringCalibration(): DecisionDiscoveryCalibration {
+    const entry = DECISION_DISCOVERY_CALIBRATION.find(c => c.ModelName === ANSWERING_MODEL && c.ResolvedModel === ANSWERING_RESOLVED_MODEL);
+    if (!entry) {
+        throw new Error(`no discovery calibration for ${ANSWERING_MODEL} (${ANSWERING_RESOLVED_MODEL})`);
+    }
+    return entry.Calibration;
+}
+
+/** The raw probability that the answering model's calibration maps to `calibrated` (Platt, inverted). */
+function rawFor(calibrated: number, calibration: PlattCalibration): number {
+    const logit = Math.log(calibrated / (1 - calibrated));
+    return 1 / (1 + Math.exp(-(logit - calibration.B) / calibration.A));
+}
+
+/** The raw Choice confidence whose calibrated value is `calibrated`. */
+function rawConfidence(calibrated: number): number {
+    return rawFor(calibrated, answeringCalibration().Confidence);
+}
+
+/**
+ * An Ask that picks `agent` and says whether any agent applies, answering as {@link ANSWERING_MODEL}.
+ * `confidence` and `applies` are the **calibrated** values discovery will judge; the raw answers are
+ * the ones the model's calibration maps to them.
+ */
 function answering(agent: AgentRow, confidence: number, applies: number): (args: AgentDecisionAskParams) => Promise<AIDecisionRunResult> {
+    const calibration = answeringCalibration();
+    const rawChoice = rawFor(confidence, calibration.Confidence);
+    const rawApplies = rawFor(applies, calibration.AnyApplies);
     return async (args) => {
         const options = choiceOf(args).Options;
-        const others = options.length > 1 ? (1 - confidence) / (options.length - 1) : 0;
+        const others = options.length > 1 ? (1 - rawChoice) / (options.length - 1) : 0;
         const probabilities: Record<string, number> = {};
         for (const option of options) {
-            probabilities[option.Value] = option.Value === agent.ID ? confidence : others;
+            probabilities[option.Value] = option.Value === agent.ID ? rawChoice : others;
         }
         const answers: Record<string, DecisionAnswer> = {
-            agent: { Kind: 'Choice', Value: agent.ID, Confidence: confidence, Probabilities: probabilities },
-            anyApplies: { Kind: 'Likelihood', Probability: applies },
+            agent: { Kind: 'Choice', Value: agent.ID, Confidence: rawChoice, Probabilities: probabilities },
+            anyApplies: { Kind: 'Likelihood', Probability: rawApplies },
         };
-        return { success: true, Answers: answers };
+        const driverResult = new DecisionResult(true, new Date(0), new Date(1));
+        driverResult.ResolvedModel = ANSWERING_RESOLVED_MODEL;
+        return { success: true, Answers: answers, modelInfo: { modelId: 'model-jev', modelName: ANSWERING_MODEL }, DecisionResult: driverResult };
     };
 }
 
@@ -579,7 +617,7 @@ describe('decision discovery — the options', () => {
     });
 
     it('asks one decision about the opening request, with the permitted agents as IDs and descriptions', async () => {
-        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.84, 0.9));
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.9, 0.95));
         const { agent } = makeAgent();
 
         await agent.Execute(makeParams());
@@ -603,7 +641,7 @@ describe('decision discovery — the options', () => {
     });
 
     it('never shows the decision model an agent name', async () => {
-        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.84, 0.9));
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.9, 0.95));
         const { agent } = makeAgent();
 
         await agent.Execute(makeParams());
@@ -615,7 +653,7 @@ describe('decision discovery — the options', () => {
     });
 
     it("filters the engine's whole catalog through the shared permission filter, for the run's user", async () => {
-        vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.84, 0.9));
+        vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.9, 0.95));
         const { agent } = makeAgent();
 
         await agent.Execute(makeParams());
@@ -626,7 +664,7 @@ describe('decision discovery — the options', () => {
     });
 
     it('rebuilds the options on every run, never from a cached list', async () => {
-        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.84, 0.9));
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.9, 0.95));
         const { agent } = makeAgent();
 
         await agent.Execute(makeParams());
@@ -641,7 +679,7 @@ describe('decision discovery — the options', () => {
 
     it('is turned on by a per-run prompt-param override too', async () => {
         harness.self = makeSelf();
-        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.84, 0.9));
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.9, 0.95));
         const { agent } = makeAgent();
 
         await agent.Execute(makeParams({ data: { __agentTypePromptParams: ON } }));
@@ -651,7 +689,7 @@ describe('decision discovery — the options', () => {
 
     it('reads the decision prompt name from the prompt params', async () => {
         harness.self = makeSelf({ ...ON, decisionPromptName: 'Routing Decision' });
-        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.84, 0.9));
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.9, 0.95));
         const { agent } = makeAgent();
 
         await agent.Execute(makeParams());
@@ -680,7 +718,7 @@ describe('decision discovery — the options', () => {
     });
 
     it(`asks once ${DECISION_DISCOVERY_MIN_OPTIONS} agents are left to choose from`, async () => {
-        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.84, 0.9));
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.9, 0.95));
         const { agent } = makeAgent();
 
         await agent.Execute(makeParams());
@@ -712,7 +750,7 @@ describe('decision discovery — @mentions', () => {
     });
 
     it('still asks when the only mention is of the running agent itself', async () => {
-        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.84, 0.9));
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.9, 0.95));
         const { agent } = makeAgent();
 
         await agent.Execute(makeParams({ conversationMessages: [{ role: 'user', content: `${token(harness.self)} ${OPENING_REQUEST}` }] }));
@@ -727,7 +765,7 @@ describe('decision discovery — what reaches the prompt', () => {
     });
 
     it('puts the suggestion first in the first prompt when both answers are confident, and records it', async () => {
-        vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.84, 0.9));
+        vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.9, 0.95));
         const { agent, runner } = makeAgent();
 
         const result = await agent.Execute(makeParams());
@@ -736,7 +774,7 @@ describe('decision discovery — what reaches the prompt', () => {
         const expected = [
             '<suggested_agent>',
             'A typed decision over the agents you may delegate to chose: Billing Agent — Handles invoices and payments',
-            '(confidence 0.84). Delegate to it directly unless the request clearly needs something else.',
+            '(confidence 0.90). Delegate to it directly unless the request clearly needs something else.',
             '</suggested_agent>',
         ].join('\n');
         expect(runner.MessagesAtCall[0]).toEqual([
@@ -750,7 +788,7 @@ describe('decision discovery — what reaches the prompt', () => {
         expect(JSON.parse(steps[0].InputData ?? '{}')).toMatchObject({
             request: OPENING_REQUEST,
             promptName: 'Default Decision',
-            minConfidence: 0.7,
+            minConfidence: DECISION_DISCOVERY_MIN_CONFIDENCE,
             timeoutMS: DECISION_DISCOVERY_TIMEOUT_MS,
         });
         expect(stepOutput(steps[0])).toMatchObject({
@@ -761,9 +799,10 @@ describe('decision discovery — what reaches the prompt', () => {
             options: 3,
             optionLimit: DECISION_DISCOVERY_MAX_OPTIONS,
             narrowed: false,
-            answer: { agentId: BILLING.ID, agent: 'Billing Agent', confidence: 0.84, anyApplies: 0.9 },
+            answer: { agentId: BILLING.ID, agent: 'Billing Agent', confidence: expect.closeTo(0.9, 10), anyApplies: expect.closeTo(0.95, 10) },
         });
-        expect(stepOutput(steps[0]).answer).toMatchObject({ probabilities: { 'Billing Agent': 0.84 } });
+        // The distribution is the model's own, uncalibrated.
+        expect(stepOutput(steps[0]).answer).toMatchObject({ probabilities: { 'Billing Agent': expect.closeTo(rawConfidence(0.9), 10) } });
     });
 
     it('matches the message SuggestedAgentMessage builds', async () => {
@@ -777,7 +816,7 @@ describe('decision discovery — what reaches the prompt', () => {
     });
 
     it.each([
-        ['it injects a suggestion', answering(BILLING, 0.84, 0.9), true],
+        ['it injects a suggestion', answering(BILLING, 0.9, 0.95), true],
         ['it is unsure, and injects nothing', answering(BILLING, 0.55, 0.9), false],
     ])("counts the decision toward the run's tokens and cost when %s: its step links the prompt run", async (_label, answer, injected) => {
         vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(withPromptRun(answer));
@@ -791,8 +830,8 @@ describe('decision discovery — what reaches the prompt', () => {
     });
 
     it.each([
-        ['a low Choice confidence', 0.55, 0.95, 'agent confidence 0.55 is below 0.7'],
-        ['a low Likelihood', 0.9, 0.3, 'any agent applies, 0.30, is below 0.7'],
+        ['a low Choice confidence', 0.55, 0.95, `agent confidence 0.55 is below ${DECISION_DISCOVERY_MIN_CONFIDENCE}`],
+        ['a low Likelihood', 0.9, 0.3, `any agent applies, 0.30, is below ${DECISION_DISCOVERY_MIN_CONFIDENCE}`],
     ])('injects nothing for %s, and records the answer as not injected', async (_label, confidence, applies, reason) => {
         vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, confidence, applies));
         const { agent, runner } = makeAgent();
@@ -804,8 +843,39 @@ describe('decision discovery — what reaches the prompt', () => {
         const steps = discoverySteps();
         expect(steps).toHaveLength(1);
         expect(steps[0].Status).toBe('Completed');
-        expect(stepOutput(steps[0])).toMatchObject({ injected: false, answer: { agent: 'Billing Agent', confidence, anyApplies: applies } });
+        expect(stepOutput(steps[0])).toMatchObject({ injected: false, answer: { agent: 'Billing Agent', confidence: expect.closeTo(confidence, 10), anyApplies: expect.closeTo(applies, 10) } });
         expect(String(stepOutput(steps[0]).reason)).toContain(reason);
+        // An unsure answer from a calibrated model is ordinary: no warning.
+        expect(vi.mocked(LogErrorEx)).not.toHaveBeenCalled();
+    });
+
+    it('injects nothing from a model with no discovery calibration, and warns once per model', async () => {
+        /** LLM Decision answering, very confidently, through `chatModel`, which its calibration was not fitted on. */
+        const throughChatModel = (chatModel: string) => async (args: AgentDecisionAskParams): Promise<AIDecisionRunResult> => {
+            const answer = await answering(BILLING, 0.99, 0.99)(args);
+            const driverResult = new DecisionResult(true, new Date(0), new Date(1));
+            driverResult.ResolvedModel = chatModel;
+            return { ...answer, modelInfo: { modelId: 'model-llm-decision', modelName: 'LLM Decision' }, DecisionResult: driverResult };
+        };
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(throughChatModel('Uncalibrated Chat Model A'));
+        const first = makeAgent();
+        await first.agent.Execute(makeParams());
+        await makeAgent().agent.Execute(makeParams());
+        ask.mockImplementation(throughChatModel('Uncalibrated Chat Model B'));
+        await makeAgent().agent.Execute(makeParams());
+
+        expect(first.runner.MessagesAtCall[0]).toEqual([{ role: 'user', content: OPENING_REQUEST }]);
+        const steps = discoverySteps();
+        expect(steps.map(step => step.Status)).toEqual(['Completed', 'Completed', 'Completed']);
+        expect(String(stepOutput(steps[0]).reason)).toContain('LLM Decision (Uncalibrated Chat Model A) has no discovery calibration');
+        const warnings = vi.mocked(LogErrorEx).mock.calls
+            .map(([entry]) => entry)
+            .filter(entry => typeof entry !== 'string' && entry.category === 'DecisionDiscovery' && entry.severity === 'warning')
+            .map(entry => (typeof entry === 'string' ? entry : entry.message));
+        expect(warnings).toEqual([
+            expect.stringContaining('LLM Decision (Uncalibrated Chat Model A)'),
+            expect.stringContaining('LLM Decision (Uncalibrated Chat Model B)')
+        ]);
     });
 
     it.each([
@@ -951,7 +1021,7 @@ describe('decision discovery — follow-up turns', () => {
     });
 
     it("still asks on the conversation's opening request when a greeting came before it", async () => {
-        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.84, 0.9));
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.9, 0.95));
         const { agent, runner } = makeAgent();
 
         await agent.Execute(makeParams({ conversationMessages: [
@@ -965,7 +1035,7 @@ describe('decision discovery — follow-up turns', () => {
     });
 
     it('asks again on the opening request of the next conversation the same agent instance runs', async () => {
-        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.84, 0.9));
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.9, 0.95));
         const { agent } = makeAgent();
 
         await agent.Execute(makeParams({ conversationMessages: [
@@ -989,7 +1059,7 @@ describe('decision discovery — a catalog over the option cap', () => {
     it('offers the whole catalog when it fits the cap, and runs no search', async () => {
         harness.maxChoiceOptions = 3;
         const searches: SearchEntityParams[] = [];
-        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.84, 0.9));
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.9, 0.95));
         const { agent } = makeAgent();
 
         await agent.Execute(makeParams({ provider: harness.searchingProvider([], searches) as unknown as IMetadataProvider }));
@@ -1001,7 +1071,7 @@ describe('decision discovery — a catalog over the option cap', () => {
 
     it("reads the cap from the model configuration of the decision prompt's bound model", async () => {
         harness.maxChoiceOptions = 3;
-        vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.84, 0.9));
+        vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.9, 0.95));
         const { agent } = makeAgent();
 
         await agent.Execute(makeParams());
@@ -1014,7 +1084,7 @@ describe('decision discovery — a catalog over the option cap', () => {
         harness.catalog = [...harness.catalog, LATECOMER];
         const searches: SearchEntityParams[] = [];
         const ranked = [SECRET.ID, MARKETING.ID, RESEARCH.ID, LATECOMER.ID, BILLING.ID];
-        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(MARKETING, 0.84, 0.9));
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(MARKETING, 0.9, 0.95));
         const { agent, runner } = makeAgent();
 
         await agent.Execute(makeParams({ provider: harness.searchingProvider(ranked, searches) as unknown as IMetadataProvider }));
@@ -1071,7 +1141,7 @@ describe('decision discovery — the option limit always applies', () => {
 
     it(`offers a catalog of up to ${DECISION_DISCOVERY_MAX_OPTIONS} whole when no model declares a cap, and runs no search`, async () => {
         const searches: SearchEntityParams[] = [];
-        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.84, 0.9));
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.9, 0.95));
         const { agent } = makeAgent();
 
         await agent.Execute(makeParams({ provider: harness.searchingProvider([], searches) as unknown as IMetadataProvider }));
@@ -1088,7 +1158,7 @@ describe('decision discovery — the option limit always applies', () => {
         harness.catalog = many;
         const ranked = [...many].reverse().map(a => a.ID);
         const searches: SearchEntityParams[] = [];
-        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(many[29], 0.84, 0.9));
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(many[29], 0.9, 0.95));
         const { agent, runner } = makeAgent();
 
         await agent.Execute(makeParams({ provider: harness.searchingProvider(ranked, searches) as unknown as IMetadataProvider }));
@@ -1135,7 +1205,7 @@ describe("decision discovery — the host's allow-list", () => {
 
     it('offers only the permitted agents the host lists, matching IDs in any case, and records the list', async () => {
         harness.catalog = [...harness.catalog, LATECOMER];
-        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(MARKETING, 0.84, 0.9));
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(MARKETING, 0.9, 0.95));
         const { agent, runner } = makeAgent();
         const upperResearch = { ...RESEARCH, ID: RESEARCH.ID.toUpperCase() };
 
@@ -1172,7 +1242,7 @@ describe("decision discovery — the host's allow-list", () => {
     });
 
     it('offers every permitted agent, and records no allow-list, when the run carries none', async () => {
-        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.84, 0.9));
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.9, 0.95));
         const { agent } = makeAgent();
 
         await agent.Execute(makeParams({ data: { ticketNumber: 42 } }));
@@ -1192,7 +1262,7 @@ describe('decision discovery — agents without a description', () => {
             agentRow(`eeeeeeee-3000-4000-8000-${String(i + 1).padStart(12, '0')}`, `Blank ${i + 1}`, i % 2 === 0 ? null : '   '));
         blanks.forEach(b => harness.runnableIDs.add(b.ID));
         harness.catalog = [RESEARCH, BILLING, MARKETING, ...blanks];
-        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.84, 0.9));
+        const ask = vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(answering(BILLING, 0.9, 0.95));
         const { agent } = makeAgent();
 
         await agent.Execute(makeParams());

@@ -508,6 +508,8 @@ const GOLDEN: Record<string, unknown> = {
     __agentTypePromptParams: {
         // finishIf gates are opt-in (finishIfMode defaults to 'off'), so BaseAgent leaves their docs out.
         includeFinishIfDocs: false,
+        // Decisions are opt-in too (includeDecisionsDocs defaults to false), so their docs and type are out.
+        includeDecisionsDocs: false,
         includeResponseTypeDefinition: {
             payload: true,
             responseForms: true,
@@ -515,7 +517,7 @@ const GOLDEN: Record<string, unknown> = {
             forEach: true,
             while: true,
             scratchpad: true,
-            decisions: true,
+            decisions: false,
             finishIf: false,
             artifactToolCalls: true,
             conversationToolCalls: true,

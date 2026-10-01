@@ -18,8 +18,22 @@ export const DECISION_EVAL_LABELS = ['continue', 'switch', 'ambiguous'] as const
 /** A label: `continue` (the positive class), `switch`, or `ambiguous` (reported apart, never scored). */
 export type DecisionEvalLabel = (typeof DECISION_EVAL_LABELS)[number];
 
-/** The decisions the harness knows how to build. Conversation routing is the only one so far. */
-export const DECISION_EVAL_DECISIONS = ['conversation-routing'] as const;
+/**
+ * The decisions the harness knows how to build: conversation routing, and agent discovery (Sage's
+ * pick of the agent for a request; its shapes are in `discovery-types.ts`).
+ */
+export const DECISION_EVAL_DECISIONS = ['conversation-routing', 'agent-discovery'] as const;
+
+/** A decision the harness knows how to build. */
+export type DecisionEvalDecision = (typeof DECISION_EVAL_DECISIONS)[number];
+
+/**
+ * The one field every Decision Eval `Configuration` has: which decision. The driver reads it first,
+ * to choose the schemas for the rest of the test.
+ */
+export const DecisionEvalKindSchema = z.object({
+    decision: z.enum(DECISION_EVAL_DECISIONS)
+});
 
 /** Which state a cell sends: the production text, or Phase −1's structured object. */
 export const DECISION_EVAL_STATE_LAYOUTS = ['production', 'structured'] as const;
@@ -108,8 +122,8 @@ export const DecisionEvalOracleSpecSchema = z.object({
  * pinning. `null` reads as unset, as mj-sync may write it.
  */
 export const DecisionEvalConfigSchema = z.object({
-    /** Which decision builder. */
-    decision: z.enum(DECISION_EVAL_DECISIONS),
+    /** Which decision builder. A discovery test has its own schema (`DiscoveryEvalConfigSchema`). */
+    decision: z.literal('conversation-routing'),
     /** `production` sends `BuildRoutingState`; `structured` sends `BuildRoutingStateStructured`. */
     stateLayout: z.enum(DECISION_EVAL_STATE_LAYOUTS),
     /** The decision prompt. Defaults to {@link DEFAULT_DECISION_PROMPT_NAME}. */
