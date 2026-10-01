@@ -34,6 +34,17 @@ import { SanitizeGraphQLError, ToSafeGraphQLError } from "./sanitizeGraphQLError
 export type RefreshTokenFunction = () => Promise<string>;
 
 /**
+ * The URL and credentials each GraphQL client was built with (recorded by CreateNewGraphQLClient).
+ * A client's headers are fixed at construction, so a connect bringing different credentials must
+ * build a new client rather than reuse one that would keep sending the old identity (#4887).
+ */
+const clientCredentials = new WeakMap<GraphQLClient, string>();
+
+function credentialsKey(url: string, token: string, mjAPIKey: string, userAPIKey?: string): string {
+    return JSON.stringify([url, token ?? null, mjAPIKey ?? null, userAPIKey ?? null]);
+}
+
+/**
  * State of the provider's graphql-ws WebSocket connection.
  * - 'connected': socket is open and ready
  * - 'disconnected': socket failed after graphql-ws exhausted its retries
@@ -364,7 +375,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * 
      * @param sessionId The session ID to store
      */
-    private async SaveStoredSessionID(sessionId: string): Promise<void> {
+    private async saveStoredSessionID(sessionId: string): Promise<void> {
         try {
             const ls = this.LocalStorageProvider;
             if (ls) {
@@ -396,53 +407,92 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      */
     public async Config(configData: GraphQLProviderConfigData, providerToUse?: IMetadataProvider, separateConnection?: boolean, forceRefreshSessionId?: boolean): Promise<boolean> {
         try {
-            // Enhanced logging to diagnose token issues
-            // const tokenPreview = configData.Token ? `${configData.Token.substring(0, 20)}...${configData.Token.substring(configData.Token.length - 10)}` : 'NO TOKEN';
-            // console.log('[GraphQL] Config called with token:', {
-            //     tokenPreview,
-            //     tokenLength: configData.Token?.length,
-            //     separateConnection,
-            //     hasRefreshFunction: !!configData.Data?.RefreshTokenFunction
-            // });
-
-            // CRITICAL: Always set this instance's _configData first
-            // This ensures BuildDatasetFilterFromConfig() can access ConfigData.IncludeSchemas
-            this._configData = configData;
-
-            if (separateConnection) {
-                // Get UUID after setting the configData, so that it can be used to get any stored session ID
-                this._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
-
-                this._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, this._sessionId, configData.MJAPIKey, configData.UserAPIKey);
-                // Store the session ID for this connection
-                await this.SaveStoredSessionID(this._sessionId);
-            }
-            else {
-                // Update the singleton instance
-                GraphQLDataProvider.Instance._configData = configData;
-
-                if (GraphQLDataProvider.Instance._sessionId === undefined) {
-                    GraphQLDataProvider.Instance._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
-                }
-
-                // now create the new client, if it isn't already created
-                if (!GraphQLDataProvider.Instance._client)
-                    GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId, configData.MJAPIKey, configData.UserAPIKey);
-
-                // Store the session ID for the global instance
-                await GraphQLDataProvider.Instance.SaveStoredSessionID(GraphQLDataProvider.Instance._sessionId);
-
-                // CRITICAL: Sync this instance with the singleton
-                // This ensures ExecuteGQL() can use this._client.request()
-                this._sessionId = GraphQLDataProvider.Instance._sessionId;
-                this._client = GraphQLDataProvider.Instance._client;
-            }
+            await this.connectClient(configData, separateConnection, forceRefreshSessionId);
             return super.Config(configData); // now parent class can do it's config
         }
         catch (e) {
             LogError(e);
             throw (e)
         }
+    }
+
+    /**
+     * The authenticate-only half of {@link Config}, for embedded/anonymous surfaces that only make
+     * their own GraphQL calls. After it resolves, {@link ExecuteGQL} works. No metadata is fetched,
+     * so entity metadata (`Entities`, `EntityByName`, `RunView`, `GetEntityObject`) is NOT available
+     * until the full boot runs (`SetupGraphQLClient`, or {@link Config}) on this same instance.
+     * Uses the shared singleton connection (a secondary instance keeps its own). A later Connect/Config with a different URL,
+     * token or API key rebuilds that connection's client (keeping the session id).
+     */
+    public async Connect(configData: GraphQLProviderConfigData): Promise<void> {
+        await this.connectClient(configData, false, false);
+    }
+
+    /**
+     * The connection half of {@link Config}: stores the config, resolves the session id and creates the
+     * GraphQL client (this instance's own client when separateConnection is true or this is not the
+     * global singleton, otherwise the shared singleton client, which is reused unless the credentials
+     * changed). Loads no metadata.
+     */
+    private async connectClient(configData: GraphQLProviderConfigData, separateConnection?: boolean, forceRefreshSessionId?: boolean): Promise<void> {
+        // Enhanced logging to diagnose token issues
+        // const tokenPreview = configData.Token ? `${configData.Token.substring(0, 20)}...${configData.Token.substring(configData.Token.length - 10)}` : 'NO TOKEN';
+        // console.log('[GraphQL] Config called with token:', {
+        //     tokenPreview,
+        //     tokenLength: configData.Token?.length,
+        //     separateConnection,
+        //     hasRefreshFunction: !!configData.Data?.RefreshTokenFunction
+        // });
+
+        // CRITICAL: Always set this instance's _configData first
+        // This ensures BuildDatasetFilterFromConfig() can access ConfigData.IncludeSchemas
+        this._configData = configData;
+
+        // An instance that is not the global singleton (built while the global-store slot was
+        // parked) owns its own connection, even when a re-entry path omits the flag:
+        // ProviderBase.Refresh() re-runs Config(this._ConfigData) without separateConnection.
+        // Taking the shared branch from such an instance would hand the global provider this
+        // instance's credentials, and every global call would then run as its user (#4887).
+        if (separateConnection || GraphQLDataProvider.Instance !== this) {
+            // Get UUID after setting the configData, so that it can be used to get any stored session ID
+            this._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
+
+            this._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, this._sessionId, configData.MJAPIKey, configData.UserAPIKey);
+            // Store the session ID for this connection
+            await this.saveStoredSessionID(this._sessionId);
+        }
+        else {
+            // Update the singleton instance
+            GraphQLDataProvider.Instance._configData = configData;
+
+            if (GraphQLDataProvider.Instance._sessionId === undefined) {
+                GraphQLDataProvider.Instance._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
+            }
+
+            // Create the client if there is none, or rebuild it (same session id) when this config
+            // brings different credentials — e.g. an anonymous connect upgraded to a login.
+            const existing = GraphQLDataProvider.Instance._client;
+            if (!existing || this.isBuiltWithOtherCredentials(existing, configData))
+                GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId, configData.MJAPIKey, configData.UserAPIKey);
+
+            // Store the session ID for the global instance
+            await GraphQLDataProvider.Instance.saveStoredSessionID(GraphQLDataProvider.Instance._sessionId);
+
+            // CRITICAL: Sync this instance with the singleton
+            // This ensures ExecuteGQL() can use this._client.request()
+            this._sessionId = GraphQLDataProvider.Instance._sessionId;
+            this._client = GraphQLDataProvider.Instance._client;
+        }
+    }
+
+    /**
+     * True when `client` was built with a URL or credentials other than `configData`'s. A client this
+     * class did not record (a subclass's own CreateNewGraphQLClient, a test harness) is kept as-is.
+     */
+    private isBuiltWithOtherCredentials(client: GraphQLClient, configData: GraphQLProviderConfigData): boolean {
+        const builtWith = clientCredentials.get(client);
+        return builtWith !== undefined &&
+            builtWith !== credentialsKey(configData.URL, configData.Token, configData.MJAPIKey, configData.UserAPIKey);
     }
 
     public get sessionId(): string {
@@ -1511,12 +1561,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     EntityName
                     RelatedEntityName
                     FieldName
-                    CompositeKey {
+                    PrimaryKey {
                         KeyValuePairs {
                             FieldName
                             Value
                         }
                     }
+                    IsSoftLink
+                    EntityIDFieldName
                 }
             }`
 
@@ -1527,7 +1579,31 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             };
             const data = await this.ExecuteGQL(query, vars);
 
-            return data?.GetRecordDependencies; // shape of the result should exactly match the RecordDependency type
+            if (data?.GetRecordDependencies && Array.isArray(data.GetRecordDependencies)) {
+                return data.GetRecordDependencies.map((raw: {
+                    EntityName: string;
+                    RelatedEntityName: string;
+                    FieldName: string;
+                    PrimaryKey?: { KeyValuePairs?: KeyValuePair[] };
+                    IsSoftLink?: boolean | null;
+                    EntityIDFieldName?: string | null;
+                }): RecordDependency => {
+                    const dep = new RecordDependency();
+                    dep.EntityName = raw.EntityName;
+                    dep.RelatedEntityName = raw.RelatedEntityName;
+                    dep.FieldName = raw.FieldName;
+                    const kvps = (raw.PrimaryKey?.KeyValuePairs ?? []).map(kv => new KeyValuePair(kv.FieldName, kv.Value));
+                    const pk = new CompositeKey(kvps);
+                    if (pk.KeyValuePairs.length === 0 && kvps.length > 0) {
+                        pk.KeyValuePairs = kvps;
+                    }
+                    dep.PrimaryKey = pk;
+                    dep.IsSoftLink = raw.IsSoftLink ?? undefined;
+                    dep.EntityIDFieldName = raw.EntityIDFieldName ?? undefined;
+                    return dep;
+                });
+            }
+            return [];
         }
         catch (e) {
             LogError(e);
@@ -1718,7 +1794,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         let progressSub: { unsubscribe(): void } | undefined;
         if (options.onProgress) {
             progressChannelId = this.GenerateUUID();
-            progressSub = this.subscribe(REMOTE_OP_PROGRESS_SUBSCRIPTION, { channelId: progressChannelId }).subscribe({
+            progressSub = this.Subscribe(REMOTE_OP_PROGRESS_SUBSCRIPTION, { channelId: progressChannelId }).subscribe({
                 next: (data: { RemoteOperationProgress?: { ProgressJSON?: string } }) => {
                     const json = data?.RemoteOperationProgress?.ProgressJSON;
                     if (json) {
@@ -1835,7 +1911,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * metadata filtering lands (issue #3485). What makes a response correct regardless is the
      * server's own `ReadableFields___`; see {@link ApplyServerFieldAccess}.
      */
-    private GetDeniedReadFieldNamesForCurrentUser(entityInfo: EntityInfo): Set<string> {
+    private getDeniedReadFieldNamesForCurrentUser(entityInfo: EntityInfo): Set<string> {
         if (!entityInfo?.EnableFieldLevelSecurity || !this.CurrentUser) {
             return new Set<string>();
         }
@@ -1857,7 +1933,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * the two must match versions, which is the narrow and acceptable coupling: restricting a
      * non-nullable column is broken on such a server regardless.
      */
-    private FieldSecurityTransportSelection(entityInfo: EntityInfo): string {
+    private fieldSecurityTransportSelection(entityInfo: EntityInfo): string {
         return entityInfo?.EnableFieldLevelSecurity ? ReadableFieldsTransportKey : '';
     }
 
@@ -1901,7 +1977,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return row;
         }
 
-        const denied = this.GetDeniedReadFieldNamesForCurrentUser(entityInfo);
+        const denied = this.getDeniedReadFieldNamesForCurrentUser(entityInfo);
         if (denied.size === 0) return row;
         for (const field of entityInfo.Fields) {
             if (!denied.has(field.Name.trim().toLowerCase())) continue;
@@ -1976,7 +2052,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // dropped server-side (ApplyFieldLevelCreateSuppression). Filtering either verb
             // here would replace a visible refusal with a silent success.
             const isaPromotionCreate = !entity.IsSaved && entity.EntityInfo.IsChildType && entity.ISAParent?.IsSaved === true;
-            const deniedReadFields = this.GetDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
+            const deniedReadFields = this.getDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
             const isDeniedRead = (fieldName: string) => deniedReadFields.has(fieldName.trim().toLowerCase());
             const filteredFields = entity.Fields.filter(f =>
                 (!f.ReadOnly || (f.IsPrimaryKey && (entity.IsSaved || isaPromotionCreate))) &&
@@ -1984,7 +2060,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 const inner = `                ${mutationName}(input: $input) {
                 ${entity.Fields.filter(f => !isDeniedRead(f.Name))
                     .map(f => SharedFieldMapper.MapFieldName(f.CodeName)).join("\n                    ")}
-                    ${this.FieldSecurityTransportSelection(entity.EntityInfo)}
+                    ${this.fieldSecurityTransportSelection(entity.EntityInfo)}
             }`
             const outer = gql`mutation ${type}${graphQLTypeName} ($input: ${mutationName}Input!) {
                 ${inner}
@@ -2197,7 +2273,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // optimization, NOT the correctness mechanism: it is only as good as this client's
             // metadata. `ReadableFields___` (requested just below) is what makes the result
             // correct when that metadata is stale. Empty set for unrestricted users — no change.
-            const deniedReadFields = this.GetDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
+            const deniedReadFields = this.getDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
                 const query = gql`query Single${graphQLTypeName}${rel.length > 0 ? 'Full' : ''} (${pkeyOuterParamString}) {
                 ${graphQLTypeName}(${pkeyInnerParamString}) {
                                     ${entity.Fields.filter((f) => !f.EntityFieldInfo.IsBinaryFieldType && !deniedReadFields.has(f.Name.trim().toLowerCase()))
@@ -2210,7 +2286,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                                         }
                                       })
                                       .join('\n                    ')}
-                    ${this.FieldSecurityTransportSelection(entity.EntityInfo)}
+                    ${this.fieldSecurityTransportSelection(entity.EntityInfo)}
                     ${rel}
                 }
             }
@@ -2265,6 +2341,19 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     public async Delete(entity: BaseEntity, options: EntityDeleteOptions, user: UserInfo) : Promise<boolean> {
+        // IS-A parent delete: the leaf's delete mutation already deleted the whole chain on the
+        // server, so the parent has nothing left to send. Record the success and return, as
+        // Save() does for IsParentEntitySave (MJ#4864).
+        if (options?.IsParentEntityDelete) {
+            const parentResult = new BaseEntityResult();
+            parentResult.StartedAt = new Date();
+            parentResult.EndedAt = new Date();
+            parentResult.Type = 'delete';
+            parentResult.Success = true;
+            entity.RegisterResultHistoryEntry(parentResult);
+            return true;
+        }
+
         const result = new BaseEntityResult();
         try {
             entity.RegisterTransactionPreprocessing();
@@ -3051,7 +3140,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @param preservedKeys localStorage keys to keep across logout (e.g. theme preference).
      *        Defaults to an empty set.
      */
-    public static async clearClientCache(preservedKeys: Set<string> = new Set<string>()): Promise<void> {
+    public static async ClearClientCache(preservedKeys: Set<string> = new Set<string>()): Promise<void> {
         // Clear all localStorage except explicitly preserved keys
         const keysToRemove: string[] = [];
         for (let i = 0; i < localStorage.length; i++) {
@@ -3069,6 +3158,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             req.onerror = () => resolve();
             req.onblocked = () => resolve();
         });
+    }
+
+    /** @deprecated Use {@link ClearClientCache}. */
+    public static async clearClientCache(preservedKeys: Set<string> = new Set<string>()): Promise<void> {
+        return this.ClearClientCache(preservedKeys);
     }
 
     protected CreateNewGraphQLClient(url: string, token: string, sessionId: string, mjAPIKey: string, userAPIKey?: string): GraphQLClient {
@@ -3102,6 +3196,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             client.setHeader(key, value);
         }
 
+        clientCredentials.set(client, credentialsKey(url, token, mjAPIKey, userAPIKey));
         return client;
     }
 
@@ -3407,7 +3502,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @param variables Variables to pass to the subscription
      * @returns Observable that emits subscription data
      */
-    public subscribe(subscription: string, variables?: any): Observable<any> {
+    public Subscribe(subscription: string, variables?: any): Observable<any> {
         return new Observable((observer) => {
             const client = this.getOrCreateWSClient();
             this._activeSubscriptionCount++;
@@ -3459,6 +3554,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 unsubscribe();
             };
         });
+    }
+
+    /** @deprecated Use {@link Subscribe}. */
+    public subscribe(subscription: string, variables?: any): Observable<any> {
+        return this.Subscribe(subscription, variables);
     }
 
     public PushStatusUpdates(sessionId: string = null): Observable<string> {
@@ -3699,7 +3799,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         subscription.add(
             // `subscribe()` already owns the WS client lifecycle, JWT refresh, and reconnect
             // posture — riding it keeps one implementation of that machinery.
-            this.subscribe(SUBSCRIBE_TO_FRAMES, { parentTaskId }).subscribe({
+            this.Subscribe(SUBSCRIBE_TO_FRAMES, { parentTaskId }).subscribe({
                 next: (data: { taskGraphFrames?: TaskGraphFrameEvent }) => {
                     if (data?.taskGraphFrames) {
                         subject.next(data.taskGraphFrames);
@@ -3727,7 +3827,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * Public method to dispose of WebSocket resources
      * Call this when shutting down the provider or on logout
      */
-    public disposeWebSocketResources(): void {
+    public DisposeWebSocketResources(): void {
         // Stop cleanup timer
         if (this._subscriptionCleanupTimer) {
             clearInterval(this._subscriptionCleanupTimer);
@@ -3745,6 +3845,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
         // Dispose WebSocket client
         this.disposeWSClient();
+    }
+
+    /** @deprecated Use {@link DisposeWebSocketResources}. */
+    public disposeWebSocketResources(): void {
+        return this.DisposeWebSocketResources();
     }
 
     /**************************************************************************
@@ -3790,7 +3895,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 }
             }
         `;
-        return this.subscribe(query, { sessionID: sessionId });
+        return this.Subscribe(query, { sessionID: sessionId });
     }
 
     public SubscribeToCacheInvalidation(): void {
@@ -3814,7 +3919,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         }`;
 
-        const observable = this.subscribe(CACHE_INVALIDATION_SUB);
+        const observable = this.Subscribe(CACHE_INVALIDATION_SUB);
 
         this._cacheInvalidationSubscription = observable.subscribe({
             next: (data: Record<string, { EntityName: string; PrimaryKeyValues: string | null; Action: string; SourceServerID: string; Timestamp: string; OriginSessionID?: string; RecordData?: string }>) => {

@@ -30,6 +30,7 @@ import { TraceValidatorOracle } from '../oracles/TraceValidatorOracle';
 import { TraceSubAgentValidatorOracle } from '../oracles/TraceSubAgentValidatorOracle';
 import { AgentDecisionOracle, ResponseWellFormedOracle } from '../oracles/AgentDecisionOracle';
 import { LLMJudgeOracle } from '../oracles/LLMJudgeOracle';
+import { DecisionJudgeOracle } from '../oracles/DecisionJudgeOracle';
 import { ExactMatchOracle } from '../oracles/ExactMatchOracle';
 import { SQLValidatorOracle } from '../oracles/SQLValidatorOracle';
 import {
@@ -44,9 +45,9 @@ import {
     SuiteFixtureContext
 } from '../types';
 import {
-    gatherExecutionContext,
-    getMachineName,
-    getMachineIdentifier
+    GatherExecutionContext,
+    GetMachineName,
+    GetMachineIdentifier
 } from '../utils/execution-context';
 import { VariableResolver, VariableResolutionError } from '../utils/variable-resolver';
 
@@ -657,6 +658,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         this.RegisterOracle(new AgentDecisionOracle());
         this.RegisterOracle(new ResponseWellFormedOracle());
         this.RegisterOracle(new LLMJudgeOracle());
+        this.RegisterOracle(new DecisionJudgeOracle());
         this.RegisterOracle(new ExactMatchOracle());
         this.RegisterOracle(new SQLValidatorOracle());
     }
@@ -853,11 +855,11 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         }
 
         // Set execution context fields for cross-server aggregation
-        testRun.MachineName = getMachineName();
-        testRun.MachineID = getMachineIdentifier() || null;
+        testRun.MachineName = GetMachineName();
+        testRun.MachineID = GetMachineIdentifier() || null;
         testRun.RunByUserName = contextUser.Name;
         testRun.RunByUserEmail = contextUser.Email;
-        testRun.RunContextDetails = JSON.stringify(gatherExecutionContext());
+        testRun.RunContextDetails = JSON.stringify(GatherExecutionContext());
 
         const saved = await testRun.Save();
         if (!saved) {
@@ -895,11 +897,11 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         }
 
         // Set execution context fields for cross-server aggregation
-        suiteRun.MachineName = getMachineName();
-        suiteRun.MachineID = getMachineIdentifier() || null;
+        suiteRun.MachineName = GetMachineName();
+        suiteRun.MachineID = GetMachineIdentifier() || null;
         suiteRun.RunByUserName = contextUser.Name;
         suiteRun.RunByUserEmail = contextUser.Email;
-        suiteRun.RunContextDetails = JSON.stringify(gatherExecutionContext());
+        suiteRun.RunContextDetails = JSON.stringify(GatherExecutionContext());
 
         const saved = await suiteRun.Save();
         if (!saved) {

@@ -21,7 +21,7 @@
  * ```
  */
 
-import { startComponentRegistryServer } from './Server.js';
+import { StartComponentRegistryServer } from './Server.js';
 
 // Export all server components for library use
 export * from './Server.js';
@@ -30,7 +30,7 @@ export * from './types.js';
 
 // Start the server if this file is run directly
 if (import.meta.url === `file://${process.argv[1]}`) {
-  startComponentRegistryServer().catch(error => {
+  StartComponentRegistryServer().catch(error => {
     console.error('Failed to start Component Registry Server:', error);
     process.exit(1);
   });

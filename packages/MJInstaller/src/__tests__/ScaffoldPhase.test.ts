@@ -42,7 +42,8 @@ const mockAssembler = {
 vi.mock('../distribution/DistributionAssembler.js', () => {
   return {
     DistributionAssembler: function DistributionAssembler() { return mockAssembler; },
-    distributionSourcePaths: () => ['packages/MJAPI', 'SQL Scripts'],
+    DistributionSourcePaths: () => ['packages/MJAPI', 'SQL Scripts'],
+    get distributionSourcePaths() { return this.DistributionSourcePaths; },
   };
 });
 

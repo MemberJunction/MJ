@@ -83,29 +83,47 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
   public SelectedType: 'User' | 'Role' = 'Role';
   public SelectedPermissionLevel: 'View' | 'Edit' | 'Owner' = 'View';
 
-  public _Loading: boolean = false;
+  public Loading: boolean = false;
+
+  /** @deprecated Use {@link Loading}. */
+  public get _Loading(): boolean {
+    return this.Loading;
+  }
+  /** @deprecated Use {@link Loading}. */
+  public set _Loading(value: boolean) {
+    this.Loading = value;
+  }
 
   public async UpdateResourceRecordID(ResourceRecordID: string) {
     this.ResourceRecordID = ResourceRecordID;
     // now go through all of our permissions and update the ResourceRecordID
-    for (const permission of this.resourcePermissions) {
+    for (const permission of this.ResourcePermissions) {
       permission.ResourceRecordID = ResourceRecordID
     }
   }
 
-  public resourcePermissions: MJResourcePermissionEntity[] = [];
+  public ResourcePermissions: MJResourcePermissionEntity[] = [];
+
+  /** @deprecated Use {@link ResourcePermissions}. */
+  public get resourcePermissions(): MJResourcePermissionEntity[] {
+    return this.ResourcePermissions;
+  }
+  /** @deprecated Use {@link ResourcePermissions}. */
+  public set resourcePermissions(value: MJResourcePermissionEntity[]) {
+    this.ResourcePermissions = value;
+  }
   async ngAfterViewInit() {
     if (!this.ResourceTypeID || !this.ResourceRecordID) {
       throw new Error('ResourceTypeID and ResourceRecordID must be set');
     }
 
-    this._Loading = true;
+    this.Loading = true;
     // load up the current permissions for the specified ResourceTypeID and ResourceRecordID
     const engine = this.GetEngine();
     await engine.Config(false, this.ProviderToUse.CurrentUser, this.ProviderToUse);
     // now we can get the permissions for the specified resource
     const allResourcePermissions = engine.GetResourcePermissions(this.ResourceTypeID, this.ResourceRecordID);
-    this.resourcePermissions = allResourcePermissions.filter((p) => p.Status === 'Approved'); // only include approved permissions in the UI, we don't show requested, rejected, revoked permissions here, just suppress them.
+    this.ResourcePermissions = allResourcePermissions.filter((p) => p.Status === 'Approved'); // only include approved permissions in the UI, we don't show requested, rejected, revoked permissions here, just suppress them.
     
     const p = this.ProviderToUse;
     const rv = RunView.FromMetadataProvider(p)
@@ -125,17 +143,22 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
     if (this.AllRoles.length > 0)
       this.SelectedRole = this.AllRoles[0];
 
-    this._Loading = false;
+    this.Loading = false;
   }
 
   private _pendingDeletes: MJResourcePermissionEntity[] = [];
-  public deletePermission(permission: MJResourcePermissionEntity) {
+  public DeletePermission(permission: MJResourcePermissionEntity) {
     this._pendingDeletes.push(permission);
-    this.resourcePermissions = this.resourcePermissions.filter((p) => p !== permission);
+    this.ResourcePermissions = this.ResourcePermissions.filter((p) => p !== permission);
+  }
+
+  /** @deprecated Use {@link DeletePermission}. */
+  public deletePermission(permission: MJResourcePermissionEntity) {
+    return this.DeletePermission(permission);
   }
 
   private _pendingAdds: MJResourcePermissionEntity[] = [];
-  public async addPermission() {
+  public async AddPermission() {
     const p = this.ProviderToUse;
     const permission = await p.GetEntityObject<MJResourcePermissionEntity>("MJ: Resource Permissions", p.CurrentUser);
     permission.ResourceTypeID = this.ResourceTypeID;
@@ -155,13 +178,18 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
       LogError('Invalid permission type or missing user/role');
       return;
     }
-    this.resourcePermissions.push(permission);
+    this.ResourcePermissions.push(permission);
   }
 
-  public permissionAlreadyExists(): boolean {
+  /** @deprecated Use {@link AddPermission}. */
+  public async addPermission() {
+    return this.AddPermission();
+  }
+
+  public PermissionAlreadyExists(): boolean {
     // check to see if the selection that the user currently has in place for the combination of TYPE + either USER or ROLE already exists
     // in our list of permissions
-    for (const permission of this.resourcePermissions) {
+    for (const permission of this.ResourcePermissions) {
       if (permission.Type === this.SelectedType) {
         if (this.SelectedType === 'User' && UUIDsEqual(permission.UserID, this.SelectedUser?.ID)) {
           return true;
@@ -176,9 +204,14 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
     return false;
   }
 
+  /** @deprecated Use {@link PermissionAlreadyExists}. */
+  public permissionAlreadyExists(): boolean {
+    return this.PermissionAlreadyExists();
+  }
+
   public async SavePermissions(): Promise<boolean> {
     // first delete any permissions that were marked for deletion
-    this._Loading = true;
+    this.Loading = true;
     const p = this.ProviderToUse;
     const tg = await p.CreateTransactionGroup();
     for (const permission of this._pendingDeletes) {
@@ -213,7 +246,7 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
     }
 
     // now save the existing permissions
-    for (const permission of this.resourcePermissions) {
+    for (const permission of this.ResourcePermissions) {
       // make sure not in the delete array
       if (!this._pendingDeletes.includes(permission)) {
         permission.TransactionGroup = tg;
@@ -230,7 +263,7 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
 
     // now save the changes
     if (await tg.Submit()) {
-      this._Loading = false;
+      this.Loading = false;
       this._pendingDeletes = [];
       this._pendingAdds = [];
       const engine = this.GetEngine();
@@ -239,7 +272,7 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
     }
     else {
       // we had an error, show the user via SharedService
-      this._Loading = false;
+      this.Loading = false;
       if (this.ShowUserErrorMessages)
         MJNotificationService.Instance.CreateSimpleNotification('Error saving permissions', 'error', );
   

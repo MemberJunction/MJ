@@ -548,11 +548,11 @@ export class IntegrationConnectorCreationPipeline {
         };
 
         try {
-            await withDeadline('ConnectionTest', this.StageConnectionTest(emitter, opts));
+            await withDeadline('ConnectionTest', this.stageConnectionTest(emitter, opts));
             // Introspect + Persist as ONE traversal of the source when the connector can stream;
             // the old whole-schema persist when it cannot. See streamIntrospectAndPersist.
             const persistResult = await this.streamIntrospectAndPersist(emitter, opts, withDeadline);
-            const { verdicts, unresolved } = await withDeadline('PKClassify', this.StagePKClassify(emitter, opts));
+            const { verdicts, unresolved } = await withDeadline('PKClassify', this.stagePKClassify(emitter, opts));
 
             emitter.stageComplete('Pipeline', {
                 processed: persistResult.ObjectsCreated + persistResult.ObjectsUpdated,
@@ -587,7 +587,7 @@ export class IntegrationConnectorCreationPipeline {
 
     // ── Stage 1: connection ──────────────────────────────────────────────
 
-    private async StageConnectionTest(
+    private async stageConnectionTest(
         emitter: IntegrationProgressEmitter,
         opts: ConnectorCreationPipelineOptions
     ): Promise<void> {
@@ -604,7 +604,7 @@ export class IntegrationConnectorCreationPipeline {
 
     // ── Stage 2: introspect ──────────────────────────────────────────────
 
-    private async StageIntrospect(
+    private async stageIntrospect(
         emitter: IntegrationProgressEmitter,
         opts: ConnectorCreationPipelineOptions,
         onObject?: (obj: SourceObjectInfo) => Promise<void>,
@@ -726,7 +726,7 @@ export class IntegrationConnectorCreationPipeline {
                         if (outOfTime()) { unsampledForTime++; return; }
                         if (outOfMemory()) { unsampledForMemory++; return; }
                         sampledDeclared.add(key);
-                        await this.SampleDeclaredObjectInPlace(obj, obj.ExternalName, opts, emitter);
+                        await this.sampleDeclaredObjectInPlace(obj, obj.ExternalName, opts, emitter);
                     });
                 }
                 await handOff(obj);
@@ -797,7 +797,7 @@ export class IntegrationConnectorCreationPipeline {
                     // and a fully-declared one gets its true widths and undeclared columns.
                     const existing = schema.Objects.find(o => o.ExternalName.toLowerCase() === key);
                     if (existing) {
-                        await this.SampleDeclaredObjectInPlace(existing, d.Name, opts, emitter);
+                        await this.sampleDeclaredObjectInPlace(existing, d.Name, opts, emitter);
                         sampledDeclared.add(key);
                     }
                     continue;
@@ -811,7 +811,7 @@ export class IntegrationConnectorCreationPipeline {
                     // DB write happens here; the real save is the later ApplyAll → StartSync.
                     fields = await opts.Connector.DiscoverFieldsViaFetch(
                         opts.CompanyIntegration, d.Name, opts.ContextUser,
-                        { OnFallback: (err) => this.ReportSampleFallback(d.Name, err, emitter) }
+                        { OnFallback: (err) => this.reportSampleFallback(d.Name, err, emitter) }
                     );
                 } catch (err) {
                     const msg = err instanceof Error ? err.message : String(err);
@@ -870,7 +870,7 @@ export class IntegrationConnectorCreationPipeline {
                 // Record it here too: two declared entries that differ only by case resolve to the
                 // SAME object, and sampling it twice doubles the most expensive part of discovery.
                 sampledDeclared.add(key);
-                await this.SampleDeclaredObjectInPlace(existing, name, opts, emitter);
+                await this.sampleDeclaredObjectInPlace(existing, name, opts, emitter);
                 declaredOnlySampled++;
             }
 
@@ -946,7 +946,7 @@ export class IntegrationConnectorCreationPipeline {
      * catalog states no observed widths — but from the outside the two are indistinguishable, so
      * without this an object quietly keeps a guessed width and drops every longer value at sync.
      */
-    private ReportSampleFallback(objectName: string, err: unknown, emitter: IntegrationProgressEmitter): void {
+    private reportSampleFallback(objectName: string, err: unknown, emitter: IntegrationProgressEmitter): void {
         const msg = err instanceof Error ? err.message : String(err);
         emitter.stageError(
             'Introspect',
@@ -957,7 +957,7 @@ export class IntegrationConnectorCreationPipeline {
         console.warn(`[IntrospectPipeline] sample fallback for "${objectName}": ${msg}`);
     }
 
-    private async SampleDeclaredObjectInPlace(
+    private async sampleDeclaredObjectInPlace(
         existing: SourceObjectInfo,
         objectName: string,
         opts: ConnectorCreationPipelineOptions,
@@ -966,7 +966,7 @@ export class IntegrationConnectorCreationPipeline {
         try {
             const dfields = await opts.Connector.DiscoverFieldsViaFetch(
                 opts.CompanyIntegration, objectName, opts.ContextUser,
-                { OnFallback: (err) => this.ReportSampleFallback(objectName, err, emitter) }
+                { OnFallback: (err) => this.reportSampleFallback(objectName, err, emitter) }
             );
             const sampled = dfields.map(f => ({
                 Name: f.Name, Label: f.Label, Description: f.Description, SourceType: f.DataType,
@@ -1044,22 +1044,22 @@ export class IntegrationConnectorCreationPipeline {
             // Not authoritative: the source's claim is only known once the stream ends, so the
             // per-object persist cannot retire anything yet. Field retirement is requested here so
             // the intent is in one place, but it stays gated on that claim inside PersistDiscoveredSchema.
-            const r = await this.StagePersist(
+            const r = await this.stagePersist(
                 emitter, opts,
                 { Objects: [obj], IsAuthoritative: false },
                 { DeactivateAbsentObjects: false, DeactivateAbsentFields: opts.DeactivateAbsent ?? false },
             );
             addPersistResult(agg, r);
         };
-        const sourceSchema = await withDeadline('Introspect', this.StageIntrospect(emitter, opts, onObject));
+        const sourceSchema = await withDeadline('Introspect', this.stageIntrospect(emitter, opts, onObject));
         if (!sourceSchema.Streamed) {
             // The connector did not stream — persist the whole schema exactly as before.
-            return withDeadline('Persist', this.StagePersist(emitter, opts, sourceSchema));
+            return withDeadline('Persist', this.stagePersist(emitter, opts, sourceSchema));
         }
         // The final name pass exists only to retire absent OBJECTS; with nothing to retire it would
         // be one no-op upsert per object.
         if (!opts.DeactivateAbsent) return agg;
-        const tail = await this.StagePersist(
+        const tail = await this.stagePersist(
             emitter, opts,
             { Objects: names.map(n => nameStub(n)), IsAuthoritative: sourceSchema.IsAuthoritative },
             { DeactivateAbsentObjects: true, DeactivateAbsentFields: false },
@@ -1068,7 +1068,7 @@ export class IntegrationConnectorCreationPipeline {
         return agg;
     }
 
-    private async StagePersist(
+    private async stagePersist(
         emitter: IntegrationProgressEmitter,
         opts: ConnectorCreationPipelineOptions,
         sourceSchema: SourceSchemaInfo,
@@ -1132,7 +1132,7 @@ export class IntegrationConnectorCreationPipeline {
 
     // ── Stage 4: PK classification ───────────────────────────────────────
 
-    private async StagePKClassify(
+    private async stagePKClassify(
         emitter: IntegrationProgressEmitter,
         opts: ConnectorCreationPipelineOptions
     ): Promise<{

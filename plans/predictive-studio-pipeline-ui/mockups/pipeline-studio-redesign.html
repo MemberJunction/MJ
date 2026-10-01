@@ -1,0 +1,1584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Predictive Studio — Training Pipelines Redesign</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      /* MJ Design Tokens (Light Mode Default) */
+      --mj-bg-page: #f8fafc;
+      --mj-bg-surface: #ffffff;
+      --mj-bg-surface-subtle: #f1f5f9;
+      --mj-bg-surface-hover: #f1f5f9;
+      --mj-border-default: #e2e8f0;
+      --mj-border-subtle: #cbd5e1;
+      --mj-border-focus: #0076b6;
+      
+      --mj-text-primary: #0f172a;
+      --mj-text-secondary: #475569;
+      --mj-text-muted: #64748b;
+      --mj-text-inverse: #ffffff;
+
+      --mj-brand-primary: #0076b6;
+      --mj-brand-primary-hover: #005a8a;
+      --mj-brand-primary-subtle: #e6f3f9;
+      
+      --mj-accent-cyan: #0891b2;
+      --mj-accent-cyan-subtle: #ecfeff;
+      --mj-accent-purple: #7c3aed;
+      --mj-accent-purple-subtle: #f5f3ff;
+
+      --mj-status-success: #16a34a;
+      --mj-status-success-subtle: #f0fdf4;
+      --mj-status-warning: #d97706;
+      --mj-status-warning-subtle: #fffbeb;
+      --mj-status-error: #dc2626;
+      --mj-status-error-subtle: #fef2f2;
+      --mj-status-draft: #64748b;
+      --mj-status-draft-subtle: #f1f5f9;
+
+      --mj-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --mj-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+      --mj-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+      --mj-radius-sm: 6px;
+      --mj-radius-md: 8px;
+      --mj-radius-lg: 12px;
+      --mj-radius-pill: 9999px;
+    }
+
+    [data-theme="dark"] {
+      --mj-bg-page: #0b1120;
+      --mj-bg-surface: #131d31;
+      --mj-bg-surface-subtle: #1e293b;
+      --mj-bg-surface-hover: #243247;
+      --mj-border-default: #253349;
+      --mj-border-subtle: #334155;
+      
+      --mj-text-primary: #f8fafc;
+      --mj-text-secondary: #cbd5e1;
+      --mj-text-muted: #94a3b8;
+
+      --mj-brand-primary: #38bdf8;
+      --mj-brand-primary-hover: #0284c7;
+      --mj-brand-primary-subtle: rgba(56, 189, 248, 0.12);
+
+      --mj-accent-cyan: #22d3ee;
+      --mj-accent-cyan-subtle: rgba(34, 211, 238, 0.12);
+      --mj-accent-purple: #a78bfa;
+      --mj-accent-purple-subtle: rgba(167, 139, 250, 0.12);
+
+      --mj-status-success: #4ade80;
+      --mj-status-success-subtle: rgba(74, 222, 128, 0.12);
+      --mj-status-warning: #fbbf24;
+      --mj-status-warning-subtle: rgba(251, 191, 36, 0.12);
+      --mj-status-error: #f87171;
+      --mj-status-error-subtle: rgba(248, 113, 113, 0.12);
+      --mj-status-draft: #94a3b8;
+      --mj-status-draft-subtle: rgba(148, 163, 184, 0.12);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--mj-bg-page);
+      color: var(--mj-text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    /* Top Comparison Banner */
+    .thesis-banner {
+      background: linear-gradient(90deg, #092340 0%, #004a71 100%);
+      color: #ffffff;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+      border-bottom: 1px solid rgba(255,255,255,0.15);
+      z-index: 100;
+    }
+    .thesis-badge {
+      background: #0076b6;
+      color: #ffffff;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      margin-right: 12px;
+    }
+
+    /* MJ App Header Chrome */
+    .mj-header {
+      background: var(--mj-bg-surface);
+      border-bottom: 1px solid var(--mj-border-default);
+      height: 54px;
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+    .mj-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 16px;
+      color: var(--mj-brand-primary);
+    }
+    .mj-logo-icon {
+      width: 26px;
+      height: 26px;
+      background: var(--mj-brand-primary);
+      color: white;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      font-size: 14px;
+    }
+    .mj-app-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--mj-bg-surface-subtle);
+      border: 1px solid var(--mj-border-default);
+      padding: 4px 10px;
+      border-radius: var(--mj-radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--mj-text-primary);
+      cursor: pointer;
+    }
+    .mj-doors {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-left: 12px;
+    }
+    .mj-door-tab {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: var(--mj-radius-sm);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--mj-text-secondary);
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .mj-door-tab:hover {
+      background: var(--mj-bg-surface-subtle);
+      color: var(--mj-text-primary);
+    }
+    .mj-door-tab.active {
+      background: var(--mj-brand-primary-subtle);
+      color: var(--mj-brand-primary);
+      font-weight: 600;
+    }
+    .header-spacer { flex: 1; }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .theme-toggle-btn {
+      background: transparent;
+      border: 1px solid var(--mj-border-default);
+      color: var(--mj-text-secondary);
+      padding: 6px 10px;
+      border-radius: var(--mj-radius-sm);
+      cursor: pointer;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Main App Layout */
+    .app-layout {
+      display: flex;
+      flex: 1;
+      height: calc(100vh - 54px - 44px); /* header + banner */
+      overflow: hidden;
+    }
+
+    /* Left Sidebar Navigation (Predictive Studio Sections) */
+    .studio-nav {
+      width: 210px;
+      background: var(--mj-bg-surface);
+      border-right: 1px solid var(--mj-border-default);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      padding: 16px 12px;
+      gap: 20px;
+    }
+    .nav-group-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--mj-text-muted);
+      padding-left: 10px;
+      margin-bottom: 6px;
+    }
+    .nav-links {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: var(--mj-radius-sm);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--mj-text-secondary);
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .nav-link:hover {
+      background: var(--mj-bg-surface-subtle);
+      color: var(--mj-text-primary);
+    }
+    .nav-link.active {
+      background: var(--mj-brand-primary);
+      color: #ffffff;
+      font-weight: 600;
+    }
+    .nav-link.active i { color: #ffffff; }
+
+    /* Middle Column: Structured Pipeline Catalog / Master Picker */
+    .pipeline-catalog {
+      width: 340px;
+      background: var(--mj-bg-surface);
+      border-right: 1px solid var(--mj-border-default);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+    .catalog-header {
+      padding: 16px;
+      border-bottom: 1px solid var(--mj-border-default);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .catalog-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .catalog-title-row h2 {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--mj-text-primary);
+    }
+    .btn-new-pipeline {
+      background: var(--mj-brand-primary);
+      color: #ffffff;
+      border: none;
+      padding: 6px 12px;
+      border-radius: var(--mj-radius-sm);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-new-pipeline:hover { background: var(--mj-brand-primary-hover); }
+
+    .catalog-search-box {
+      position: relative;
+    }
+    .catalog-search-box input {
+      width: 100%;
+      background: var(--mj-bg-surface-subtle);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-sm);
+      padding: 7px 10px 7px 32px;
+      font-size: 12px;
+      color: var(--mj-text-primary);
+      outline: none;
+    }
+    .catalog-search-box i {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--mj-text-muted);
+      font-size: 12px;
+    }
+
+    .catalog-filters {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+    }
+    .filter-chip {
+      background: transparent;
+      border: 1px solid var(--mj-border-default);
+      color: var(--mj-text-muted);
+      padding: 3px 8px;
+      border-radius: var(--mj-radius-pill);
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .filter-chip.active {
+      background: var(--mj-bg-surface-subtle);
+      border-color: var(--mj-text-secondary);
+      color: var(--mj-text-primary);
+      font-weight: 600;
+    }
+
+    .catalog-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .catalog-group-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--mj-text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 6px 8px 2px;
+    }
+
+    /* Pipeline Card in Catalog */
+    .pipeline-card {
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-md);
+      padding: 12px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      position: relative;
+    }
+    .pipeline-card:hover {
+      border-color: var(--mj-border-subtle);
+      background: var(--mj-bg-surface-hover);
+      box-shadow: var(--mj-shadow-sm);
+    }
+    .pipeline-card.selected {
+      border-color: var(--mj-brand-primary);
+      background: var(--mj-brand-primary-subtle);
+      box-shadow: 0 0 0 1px var(--mj-brand-primary);
+    }
+    .card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .card-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--mj-text-primary);
+      line-height: 1.3;
+    }
+    .card-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      font-size: 11px;
+      color: var(--mj-text-muted);
+    }
+    .entity-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--mj-brand-primary);
+      background: var(--mj-brand-primary-subtle);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+    .target-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--mj-text-secondary);
+      background: var(--mj-bg-surface-subtle);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: var(--mj-radius-pill);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .badge.published {
+      background: var(--mj-status-success-subtle);
+      color: var(--mj-status-success);
+      border: 1px solid rgba(22, 163, 74, 0.2);
+    }
+    .badge.draft {
+      background: var(--mj-status-draft-subtle);
+      color: var(--mj-status-draft);
+      border: 1px solid var(--mj-border-default);
+    }
+    .badge.validated {
+      background: var(--mj-brand-primary-subtle);
+      color: var(--mj-brand-primary);
+      border: 1px solid rgba(0, 118, 182, 0.2);
+    }
+    .metric-badge {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--mj-text-primary);
+      background: var(--mj-bg-surface-subtle);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    /* Right Detail Workspace: Human-Centric Stage Flow */
+    .pipeline-workspace {
+      flex: 1;
+      overflow-y: auto;
+      background: var(--mj-bg-page);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Workspace Header */
+    .workspace-header {
+      background: var(--mj-bg-surface);
+      border-bottom: 1px solid var(--mj-border-default);
+      padding: 16px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .workspace-title-area {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .workspace-breadcrumbs {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--mj-text-muted);
+    }
+    .workspace-breadcrumbs span { color: var(--mj-text-secondary); font-weight: 500; }
+    .workspace-title-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .workspace-title-row h1 {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--mj-text-primary);
+    }
+    .workspace-desc {
+      font-size: 13px;
+      color: var(--mj-text-secondary);
+      max-width: 800px;
+      line-height: 1.4;
+    }
+    .workspace-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: var(--mj-radius-sm);
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      border: 1px solid transparent;
+    }
+    .btn-primary {
+      background: var(--mj-brand-primary);
+      color: #ffffff;
+    }
+    .btn-primary:hover { background: var(--mj-brand-primary-hover); }
+    .btn-secondary {
+      background: var(--mj-bg-surface);
+      border-color: var(--mj-border-default);
+      color: var(--mj-text-primary);
+    }
+    .btn-secondary:hover {
+      background: var(--mj-bg-surface-subtle);
+    }
+    .btn-agent {
+      background: linear-gradient(135deg, #0076b6 0%, #7c3aed 100%);
+      color: #ffffff;
+      border: none;
+    }
+    .btn-agent:hover { opacity: 0.92; }
+
+    /* Workspace Content Container */
+    .workspace-body {
+      padding: 24px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      max-width: 1400px;
+    }
+
+    /* Human-Centric Stages Container */
+    .stage-section {
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-lg);
+      padding: 20px 24px;
+      box-shadow: var(--mj-shadow-sm);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .stage-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--mj-border-default);
+    }
+    .stage-title-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .stage-num-badge {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--mj-brand-primary-subtle);
+      color: var(--mj-brand-primary);
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .stage-title-left h3 {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--mj-text-primary);
+    }
+    .stage-subtitle {
+      font-size: 12.5px;
+      color: var(--mj-text-muted);
+    }
+
+    /* Stage 1: Target & Cutoff Grid */
+    .target-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+    .metric-card {
+      background: var(--mj-bg-surface-subtle);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-md);
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .metric-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--mj-text-muted);
+    }
+    .metric-val {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--mj-text-primary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .metric-sub {
+      font-size: 11px;
+      color: var(--mj-text-secondary);
+    }
+
+    /* Stage 2: Feature Matrix & Cross-Entity Sources */
+    .feature-groups-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    .feature-group-card {
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-md);
+      background: var(--mj-bg-surface);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .feature-group-header {
+      padding: 10px 14px;
+      background: var(--mj-bg-surface-subtle);
+      border-bottom: 1px solid var(--mj-border-default);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .feature-group-title {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--mj-text-primary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .feature-count-badge {
+      font-size: 11px;
+      color: var(--mj-text-muted);
+      font-weight: 500;
+    }
+    .feature-list {
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .feature-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      padding: 6px 8px;
+      background: var(--mj-bg-surface-subtle);
+      border-radius: var(--mj-radius-sm);
+    }
+    .feature-name-col {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .feature-name {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      color: var(--mj-text-primary);
+    }
+    .feature-transform {
+      font-size: 11px;
+      color: var(--mj-text-muted);
+    }
+    .signal-pill {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .signal-high {
+      background: rgba(34, 197, 94, 0.15);
+      color: #16a34a;
+    }
+    .signal-medium {
+      background: rgba(0, 118, 182, 0.15);
+      color: #0076b6;
+    }
+
+    /* Cross-Entity Highlight Box */
+    .cross-entity-highlight {
+      background: linear-gradient(135deg, rgba(8, 145, 178, 0.08) 0%, rgba(124, 58, 237, 0.08) 100%);
+      border: 1px solid rgba(8, 145, 178, 0.25);
+      border-radius: var(--mj-radius-md);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 12.5px;
+      color: var(--mj-text-primary);
+    }
+    .cross-entity-highlight i {
+      font-size: 20px;
+      color: var(--mj-accent-cyan);
+    }
+
+    /* Leakage Guard Bar */
+    .leakage-guard-box {
+      background: var(--mj-status-warning-subtle);
+      border: 1px solid rgba(217, 119, 6, 0.25);
+      border-radius: var(--mj-radius-md);
+      padding: 12px 16px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    .leakage-guard-box i {
+      color: var(--mj-status-warning);
+      font-size: 18px;
+      margin-top: 2px;
+    }
+    .leakage-text {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .leakage-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--mj-text-primary);
+    }
+    .leakage-desc {
+      font-size: 12px;
+      color: var(--mj-text-secondary);
+      line-height: 1.4;
+    }
+    .deny-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 4px;
+    }
+    .deny-chip {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      background: rgba(217, 119, 6, 0.15);
+      color: #b45309;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-decoration: line-through;
+    }
+
+    /* Stage 3: Tournament & Leaderboard Table */
+    .leaderboard-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .leaderboard-table th {
+      text-align: left;
+      padding: 10px 14px;
+      background: var(--mj-bg-surface-subtle);
+      color: var(--mj-text-muted);
+      font-size: 11.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--mj-border-default);
+    }
+    .leaderboard-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--mj-border-default);
+      color: var(--mj-text-primary);
+    }
+    .leaderboard-table tr:last-child td {
+      border-bottom: none;
+    }
+    .leaderboard-table tr.winner-row {
+      background: var(--mj-brand-primary-subtle);
+      font-weight: 500;
+    }
+    .algo-name-cell {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .winner-trophy {
+      color: #eab308;
+      font-size: 14px;
+    }
+    .winner-tag {
+      font-size: 10px;
+      font-weight: 700;
+      background: var(--mj-brand-primary);
+      color: white;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+
+    /* Stage 4: Serving & Actions */
+    .serving-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 16px;
+    }
+    .serving-card {
+      background: var(--mj-bg-surface-subtle);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-md);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .serving-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12.5px;
+    }
+    .serving-label { color: var(--mj-text-muted); }
+    .serving-val { font-weight: 600; color: var(--mj-text-primary); }
+
+    /* Empty / Help State */
+    .help-callout {
+      padding: 12px 16px;
+      background: var(--mj-bg-surface-subtle);
+      border-left: 3px solid var(--mj-brand-primary);
+      border-radius: 0 var(--mj-radius-sm) var(--mj-radius-sm) 0;
+      font-size: 12px;
+      color: var(--mj-text-secondary);
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body data-theme="light">
+
+  <!-- Design Thesis Banner -->
+  <div class="thesis-banner">
+    <div style="display: flex; align-items: center;">
+      <span class="thesis-badge">Design Mockup</span>
+      <span><strong>Predictive Studio Pipeline Redesign:</strong> Replaces the tangled circuit-board DAG and truncated top pills with a structured Left Domain Catalog and Human-Centric Progressive Stages (Target &rarr; Cross-Entity Feature Store &rarr; Preprocessing &rarr; Tournament Leaderboard &rarr; Production Serving).</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <button class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle Dark/Light Mode">
+        <i class="fa-solid fa-moon"></i> <span id="themeText">Dark Mode</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- MJ Navigation Shell -->
+  <header class="mj-header">
+    <div class="mj-logo">
+      <div class="mj-logo-icon"><i class="fa-solid fa-bolt"></i></div>
+      <span>MemberJunction</span>
+    </div>
+
+    <div class="mj-app-badge">
+      <i class="fa-solid fa-flask-vial" style="color:var(--mj-brand-primary)"></i>
+      <span>Predictive Studio</span>
+      <i class="fa-solid fa-chevron-down" style="font-size: 10px; color: var(--mj-text-muted);"></i>
+    </div>
+
+    <nav class="mj-doors">
+      <a class="mj-door-tab"><i class="fa-solid fa-chart-line"></i> Predictions</a>
+      <a class="mj-door-tab active"><i class="fa-solid fa-flask"></i> Studio</a>
+      <a class="mj-door-tab"><i class="fa-solid fa-cube"></i> Models</a>
+      <a class="mj-door-tab"><i class="fa-solid fa-database"></i> Records</a>
+    </nav>
+
+    <div class="header-spacer"></div>
+
+    <div class="header-actions">
+      <div class="catalog-search-box" style="width: 220px;">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="text" placeholder="Search studio...">
+      </div>
+      <button class="btn btn-secondary" style="padding: 6px 10px;" title="Copilot Drawer">
+        <i class="fa-solid fa-robot"></i>
+      </button>
+      <div style="width: 32px; height: 32px; border-radius: 50%; background: var(--mj-brand-primary); color: white; display: grid; place-items: center; font-weight: 700; font-size: 12px;">
+        AK
+      </div>
+    </div>
+  </header>
+
+  <!-- App Layout -->
+  <div class="app-layout">
+    
+    <!-- Studio Sub-Navigation -->
+    <aside class="studio-nav">
+      <div>
+        <div class="nav-group-title">Studio</div>
+        <div class="nav-links">
+          <a class="nav-link"><i class="fa-solid fa-house"></i> Overview</a>
+          <a class="nav-link active"><i class="fa-solid fa-diagram-project"></i> Pipelines</a>
+          <a class="nav-link"><i class="fa-solid fa-cubes-stacked"></i> Algorithms</a>
+        </div>
+      </div>
+      <div>
+        <div class="nav-group-title">Experimentation</div>
+        <div class="nav-links">
+          <a class="nav-link"><i class="fa-solid fa-flask-vial"></i> Experiments</a>
+          <a class="nav-link"><i class="fa-solid fa-scale-balanced"></i> Compare Runs</a>
+        </div>
+      </div>
+      <div style="margin-top: auto;">
+        <div class="help-callout">
+          <strong>Tip:</strong> Cross-entity features like <code>activity_count</code> from Common provide up to 4x stronger signal than demographic fields alone.
+        </div>
+      </div>
+    </aside>
+
+    <!-- Column 2: Structured Left Pipeline Catalog (Master List) -->
+    <section class="pipeline-catalog">
+      <div class="catalog-header">
+        <div class="catalog-title-row">
+          <h2>Training Pipelines</h2>
+          <button class="btn-new-pipeline" onclick="alert('Opens 4-step Pipeline Wizard')">
+            <i class="fa-solid fa-plus"></i> New
+          </button>
+        </div>
+        <div class="catalog-search-box">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input type="text" id="pipelineSearch" placeholder="Filter pipelines..." oninput="filterPipelines()">
+        </div>
+        <div class="catalog-filters">
+          <button class="filter-chip active" onclick="setFilter('all')">All (4)</button>
+          <button class="filter-chip" onclick="setFilter('morecheese')">More Cheese (3)</button>
+          <button class="filter-chip" onclick="setFilter('mj')">MJ Core (1)</button>
+          <button class="filter-chip" onclick="setFilter('published')">Published (3)</button>
+        </div>
+      </div>
+
+      <div class="catalog-list" id="catalogList">
+        
+        <div class="catalog-group-label">More Cheese Club</div>
+
+        <!-- Pipeline 1: Member Renewal Risk -->
+        <div class="pipeline-card selected" onclick="loadPipeline('renewal', this)">
+          <div class="card-top">
+            <div class="card-name">Member Renewal Risk</div>
+            <span class="badge published">Published</span>
+          </div>
+          <div class="card-meta">
+            <span class="entity-tag">vwMembershipPeriods</span>
+            <span>&bull;</span>
+            <span class="target-tag">Status</span>
+          </div>
+          <div class="card-meta" style="justify-content: space-between; margin-top: 4px;">
+            <span>Binary Classification</span>
+            <span class="metric-badge"><i class="fa-solid fa-trophy" style="color: #eab308;"></i> AUC 0.887</span>
+          </div>
+        </div>
+
+        <!-- Pipeline 2: Event No-Show Propensity -->
+        <div class="pipeline-card" onclick="loadPipeline('noshow', this)">
+          <div class="card-top">
+            <div class="card-name">Event No-Show Propensity</div>
+            <span class="badge published">Published</span>
+          </div>
+          <div class="card-meta">
+            <span class="entity-tag">vwEventRegistrations</span>
+            <span>&bull;</span>
+            <span class="target-tag">Attended</span>
+          </div>
+          <div class="card-meta" style="justify-content: space-between; margin-top: 4px;">
+            <span>Binary Classification</span>
+            <span class="metric-badge"><i class="fa-solid fa-trophy" style="color: #eab308;"></i> AUC 0.841</span>
+          </div>
+        </div>
+
+        <!-- Pipeline 3: Course Completion Risk -->
+        <div class="pipeline-card" onclick="loadPipeline('course', this)">
+          <div class="card-top">
+            <div class="card-name">Course Completion Risk</div>
+            <span class="badge published">Published</span>
+          </div>
+          <div class="card-meta">
+            <span class="entity-tag">vwCourseEnrollments</span>
+            <span>&bull;</span>
+            <span class="target-tag">Status</span>
+          </div>
+          <div class="card-meta" style="justify-content: space-between; margin-top: 4px;">
+            <span>Binary Classification</span>
+            <span class="metric-badge"><i class="fa-solid fa-trophy" style="color: #eab308;"></i> AUC 0.861</span>
+          </div>
+        </div>
+
+        <div class="catalog-group-label" style="margin-top: 8px;">MemberJunction Platform</div>
+
+        <!-- Pipeline 4: AI Prompt Run Latency Forecaster -->
+        <div class="pipeline-card" onclick="loadPipeline('latency', this)">
+          <div class="card-top">
+            <div class="card-name">AI Agent Latency Forecaster</div>
+            <span class="badge published">Published</span>
+          </div>
+          <div class="card-meta">
+            <span class="entity-tag">vwAIPromptRuns</span>
+            <span>&bull;</span>
+            <span class="target-tag">ExecutionTimeMS</span>
+          </div>
+          <div class="card-meta" style="justify-content: space-between; margin-top: 4px;">
+            <span>Continuous Regression</span>
+            <span class="metric-badge"><i class="fa-solid fa-trophy" style="color: #eab308;"></i> R² 0.436</span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Column 3: Human-Centric Pipeline Workspace -->
+    <main class="pipeline-workspace" id="workspaceContainer">
+      
+      <!-- Workspace Header -->
+      <div class="workspace-header">
+        <div class="workspace-title-area">
+          <div class="workspace-breadcrumbs">
+            <span>Pipelines</span> <i class="fa-solid fa-chevron-right" style="font-size: 10px;"></i>
+            <span id="headerDomain">More Cheese Club</span> <i class="fa-solid fa-chevron-right" style="font-size: 10px;"></i>
+            <strong id="headerPipelineName">Member Renewal Risk</strong>
+          </div>
+          <div class="workspace-title-row">
+            <h1 id="pipelineTitle">Member Renewal Risk</h1>
+            <span class="badge published" id="pipelineStatusBadge">Published</span>
+            <span class="metric-badge" id="pipelineMetricBadge"><i class="fa-solid fa-award" style="color: #eab308;"></i> Best: AUC 0.887 (XGBoost)</span>
+          </div>
+          <p class="workspace-desc" id="pipelineDesc">
+            Forecasts whether an active membership period will renew or lapse. Enriched with cross-entity engagement signals from Common Activities and More Cheese event attendance.
+          </p>
+        </div>
+
+        <div class="workspace-actions">
+          <button class="btn btn-secondary" onclick="alert('Clone / Tweak into a new draft pipeline')">
+            <i class="fa-solid fa-copy"></i> Clone
+          </button>
+          <button class="btn btn-secondary" onclick="alert('Open Tournament Experiment Modal')">
+            <i class="fa-solid fa-flask-vial"></i> Run Tournament
+          </button>
+          <button class="btn btn-primary" onclick="alert('Triggering background retrain...')">
+            <i class="fa-solid fa-play"></i> Train Version
+          </button>
+          <button class="btn btn-agent" onclick="alert('Opening Model Dev Agent Copilot with pipeline context')">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> Agent
+          </button>
+        </div>
+      </div>
+
+      <!-- Progressive Stages Body -->
+      <div class="workspace-body">
+        
+        <!-- STAGE 1: Target Definition & Temporal Cutoff -->
+        <div class="stage-section">
+          <div class="stage-header">
+            <div class="stage-title-left">
+              <span class="stage-num-badge">1</span>
+              <div>
+                <h3>Target & Temporal Decision Boundary</h3>
+                <span class="stage-subtitle">Defines the unit of prediction, target outcome, and point-in-time cutoff.</span>
+              </div>
+            </div>
+            <button class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px;">
+              <i class="fa-solid fa-pen"></i> Edit Target
+            </button>
+          </div>
+
+          <div class="target-grid">
+            <div class="metric-card">
+              <span class="metric-label">Target Entity</span>
+              <span class="metric-val" id="s1Entity"><i class="fa-solid fa-table"></i> vwMembershipPeriods</span>
+              <span class="metric-sub">Primary training unit</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Target Variable</span>
+              <span class="metric-val" id="s1Target"><i class="fa-solid fa-bullseye"></i> Status</span>
+              <span class="metric-sub">Lapsed/Cancelled vs. Renewed</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Problem Type & Metric</span>
+              <span class="metric-val" id="s1Problem"><i class="fa-solid fa-chart-pie"></i> Classification (AUC)</span>
+              <span class="metric-sub">ROC-AUC optimization target</span>
+            </div>
+            <div class="metric-card" style="border-left: 3px solid var(--mj-brand-primary);">
+              <span class="metric-label">As-Of Temporal Anchor</span>
+              <span class="metric-val" id="s1AsOf"><i class="fa-solid fa-clock-rotate-left"></i> RenewalDate</span>
+              <span class="metric-sub">Zero future leakage guaranteed</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- STAGE 2: Cross-Entity Feature Architecture & Leakage Guards -->
+        <div class="stage-section">
+          <div class="stage-header">
+            <div class="stage-title-left">
+              <span class="stage-num-badge">2</span>
+              <div>
+                <h3>Feature Architecture & Relational Data Sources</h3>
+                <span class="stage-subtitle">Combines core record attributes with cross-domain behavioral signals from Common and related apps.</span>
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px;">
+                <i class="fa-solid fa-plus"></i> Add Feature Group
+              </button>
+            </div>
+          </div>
+
+          <!-- Cross-Entity Signal Banner -->
+          <div class="cross-entity-highlight" id="crossEntityBanner">
+            <i class="fa-solid fa-network-wired"></i>
+            <div>
+              <strong>Multi-Entity Feature Store Active:</strong> This model incorporates behavioral features joined via <code>PersonID</code> from <strong>Common Activities</strong> (login recency, frequency) and <strong>More Cheese Events</strong> (attendance count), moving beyond simplistic demographic fields like <code>AutoRenew</code>.
+            </div>
+          </div>
+
+          <!-- Feature Groups Grid -->
+          <div class="feature-groups-grid" id="featureGroupsGrid">
+            
+            <!-- Group 1: Core Entity -->
+            <div class="feature-group-card">
+              <div class="feature-group-header">
+                <span class="feature-group-title"><i class="fa-solid fa-table"></i> Core Membership Period</span>
+                <span class="feature-count-badge">3 features</span>
+              </div>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <div class="feature-name-col">
+                    <span class="feature-name">MembershipTier</span>
+                    <span class="feature-transform">(One-Hot)</span>
+                  </div>
+                  <span class="signal-pill signal-medium">Signal: Med</span>
+                </div>
+                <div class="feature-item">
+                  <div class="feature-name-col">
+                    <span class="feature-name">DuesAmount</span>
+                    <span class="feature-transform">(Z-Score)</span>
+                  </div>
+                  <span class="signal-pill signal-medium">Signal: Med</span>
+                </div>
+                <div class="feature-item">
+                  <div class="feature-name-col">
+                    <span class="feature-name">AutoRenew</span>
+                    <span class="feature-transform">(One-Hot)</span>
+                  </div>
+                  <span class="signal-pill signal-high">Signal: High</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Group 2: Common Activities -->
+            <div class="feature-group-card" style="border-color: var(--mj-accent-cyan);">
+              <div class="feature-group-header" style="background: var(--mj-accent-cyan-subtle);">
+                <span class="feature-group-title" style="color: var(--mj-accent-cyan);"><i class="fa-solid fa-bolt"></i> Common: Activities</span>
+                <span class="feature-count-badge" style="color: var(--mj-accent-cyan);">3 features</span>
+              </div>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <div class="feature-name-col">
+                    <span class="feature-name">activity_count_90d</span>
+                    <span class="feature-transform">(Count as-of)</span>
+                  </div>
+                  <span class="signal-pill signal-high">Signal: 34% (Top)</span>
+                </div>
+                <div class="feature-item">
+                  <div class="feature-name-col">
+                    <span class="feature-name">days_since_last_activity</span>
+                    <span class="feature-transform">(Recency)</span>
+                  </div>
+                  <span class="signal-pill signal-high">Signal: 26%</span>
+                </div>
+                <div class="feature-item">
+                  <div class="feature-name-col">
+                    <span class="feature-name">activity_velocity_ratio</span>
+                    <span class="feature-transform">(30d vs 60d)</span>
+                  </div>
+                  <span class="signal-pill signal-high">Signal: 18%</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Group 3: MoreCheese Events -->
+            <div class="feature-group-card" style="border-color: var(--mj-accent-purple);">
+              <div class="feature-group-header" style="background: var(--mj-accent-purple-subtle);">
+                <span class="feature-group-title" style="color: var(--mj-accent-purple);"><i class="fa-solid fa-calendar-check"></i> MoreCheese: Events</span>
+                <span class="feature-count-badge" style="color: var(--mj-accent-purple);">2 features</span>
+              </div>
+              <div class="feature-list">
+                <div class="feature-item">
+                  <div class="feature-name-col">
+                    <span class="feature-name">events_attended_12m</span>
+                    <span class="feature-transform">(Sum as-of)</span>
+                  </div>
+                  <span class="signal-pill signal-medium">Signal: 12%</span>
+                </div>
+                <div class="feature-item">
+                  <div class="feature-name-col">
+                    <span class="feature-name">event_no_show_rate</span>
+                    <span class="feature-transform">(Ratio)</span>
+                  </div>
+                  <span class="signal-pill signal-medium">Signal: 8%</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Leakage Guard Enforcer -->
+          <div class="leakage-guard-box">
+            <i class="fa-solid fa-shield-halved"></i>
+            <div class="leakage-text">
+              <span class="leakage-title">Leakage Guard & Governance Controls Active</span>
+              <span class="leakage-desc">These columns are stripped prior to matrix compilation to eliminate target leakage and future-peeking. Single feature dominance is capped at <strong>0.80</strong>.</span>
+              <div class="deny-chips" id="denyChips">
+                <span class="deny-chip">CancellationDate</span>
+                <span class="deny-chip">CancellationReason</span>
+                <span class="deny-chip">RenewalDate</span>
+                <span class="deny-chip">EndDate</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STAGE 3: Preprocessing & Data Hygiene Recipe -->
+        <div class="stage-section">
+          <div class="stage-header">
+            <div class="stage-title-left">
+              <span class="stage-num-badge">3</span>
+              <div>
+                <h3>Fitted Preprocessing & Anti-Skew Recipe</h3>
+                <span class="stage-subtitle">Parameters fitted once on training folds and frozen with the model artifact for identical inference scoring.</span>
+              </div>
+            </div>
+            <span class="badge validated"><i class="fa-solid fa-lock"></i> Frozen with v1</span>
+          </div>
+
+          <div class="target-grid">
+            <div class="metric-card">
+              <span class="metric-label">Missing Value Imputation</span>
+              <span class="metric-val">Median / Mode</span>
+              <span class="metric-sub">Numeric &rarr; Median, Categorical &rarr; 'Missing'</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Categorical Encoding</span>
+              <span class="metric-val">One-Hot Encoding</span>
+              <span class="metric-sub">Fitted vocabulary preserved in artifact</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Numeric Normalization</span>
+              <span class="metric-val">Standard Z-Score</span>
+              <span class="metric-sub">&mu; = 0, &sigma; = 1 scaling</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Holdout Discipline</span>
+              <span class="metric-val">15% Locked Holdout</span>
+              <span class="metric-sub">Scored strictly once on winning model</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- STAGE 4: Multi-Algorithm Tournament Leaderboard -->
+        <div class="stage-section">
+          <div class="stage-header">
+            <div class="stage-title-left">
+              <span class="stage-num-badge">4</span>
+              <div>
+                <h3>Multi-Algorithm Tournament & Leaderboard</h3>
+                <span class="stage-subtitle">Evaluated on cross-validation folds and verified on locked holdout data.</span>
+              </div>
+            </div>
+            <button class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px;" onclick="alert('View detailed confusion matrix and ROC curves in ML Experiment Results')">
+              <i class="fa-solid fa-chart-area"></i> View Detailed Curves
+            </button>
+          </div>
+
+          <table class="leaderboard-table">
+            <thead>
+              <tr>
+                <th>Algorithm</th>
+                <th>Validation Metric</th>
+                <th>Locked Holdout</th>
+                <th>Training Score</th>
+                <th>Inference Latency</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="leaderboardBody">
+              <tr class="winner-row">
+                <td>
+                  <div class="algo-name-cell">
+                    <i class="fa-solid fa-trophy winner-trophy"></i>
+                    <strong>XGBoost</strong>
+                    <span class="winner-tag">Winner</span>
+                  </div>
+                </td>
+                <td><strong>0.892 AUC</strong></td>
+                <td><strong style="color: var(--mj-status-success);">0.887 AUC</strong></td>
+                <td>0.912 AUC</td>
+                <td>14 ms / row</td>
+                <td><span class="badge published">Published</span></td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="algo-name-cell">
+                    <span>LightGBM</span>
+                  </div>
+                </td>
+                <td>0.881 AUC</td>
+                <td>0.874 AUC</td>
+                <td>0.898 AUC</td>
+                <td>11 ms / row</td>
+                <td><span class="badge validated">Candidate</span></td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="algo-name-cell">
+                    <span>Random Forest</span>
+                  </div>
+                </td>
+                <td>0.869 AUC</td>
+                <td>0.861 AUC</td>
+                <td>0.890 AUC</td>
+                <td>22 ms / row</td>
+                <td><span class="badge validated">Candidate</span></td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="algo-name-cell">
+                    <span>Logistic Regression</span>
+                  </div>
+                </td>
+                <td>0.745 AUC</td>
+                <td>0.742 AUC</td>
+                <td>0.748 AUC</td>
+                <td>3 ms / row</td>
+                <td><span class="badge draft">Baseline</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- STAGE 5: Live Serving & Model Registry Integration -->
+        <div class="stage-section">
+          <div class="stage-header">
+            <div class="stage-title-left">
+              <span class="stage-num-badge">5</span>
+              <div>
+                <h3>Production Serving & Application Integration</h3>
+                <span class="stage-subtitle">Real-time inference wiring and downstream application integration points.</span>
+              </div>
+            </div>
+            <a class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px; text-decoration: none;" href="http://localhost:4200/app/predictive-studio/Models" target="_blank">
+              <i class="fa-solid fa-arrow-up-right-from-square"></i> Open in Model Registry
+            </a>
+          </div>
+
+          <div class="serving-grid">
+            <div class="serving-card">
+              <div class="serving-row">
+                <span class="serving-label">Active Serving Version</span>
+                <span class="serving-val">v1.1 (Model ID: 25E83BF9-C5EE-4BDF-A891-D36D871B73E3)</span>
+              </div>
+              <div class="serving-row">
+                <span class="serving-label">Deployment Door</span>
+                <span class="serving-val">More Cheese &bull; Person Membership Form (AI Renewal Risk KPI)</span>
+              </div>
+              <div class="serving-row">
+                <span class="serving-label">Inference Mode</span>
+                <span class="serving-val">On-Demand Interactive Scoring & Nightly Batch Scoring</span>
+              </div>
+            </div>
+
+            <div class="serving-card" style="background: var(--mj-brand-primary-subtle); border-color: rgba(0, 118, 182, 0.2);">
+              <span style="font-size: 12px; font-weight: 700; color: var(--mj-brand-primary);">
+                <i class="fa-solid fa-circle-check"></i> Model Health: Optimal
+              </span>
+              <span style="font-size: 11.5px; color: var(--mj-text-secondary); line-height: 1.4;">
+                Holdout AUC 0.887 within 2.5% of cross-validation (0.892). No feature drift detected in the last 30 days.
+              </span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+
+  </div>
+
+  <script>
+    // Theme toggle
+    function toggleTheme() {
+      const body = document.body;
+      const isDark = body.getAttribute('data-theme') === 'dark';
+      body.setAttribute('data-theme', isDark ? 'light' : 'dark');
+      document.getElementById('themeText').innerText = isDark ? 'Dark Mode' : 'Light Mode';
+    }
+
+    // Pipeline Data Dictionary
+    const PIPELINES = {
+      renewal: {
+        domain: 'More Cheese Club',
+        name: 'Member Renewal Risk',
+        title: 'MoreCheese: Member Renewal Risk',
+        status: 'Published',
+        metric: 'Best: AUC 0.887 (XGBoost)',
+        desc: 'Forecasts whether an active membership period will renew or lapse. Enriched with cross-entity engagement signals from Common Activities and More Cheese event attendance.',
+        entity: '<i class="fa-solid fa-table"></i> vwMembershipPeriods',
+        target: '<i class="fa-solid fa-bullseye"></i> Status',
+        problem: '<i class="fa-solid fa-chart-pie"></i> Binary Classification (AUC)',
+        asof: '<i class="fa-solid fa-clock-rotate-left"></i> RenewalDate',
+        crossEntityActive: true,
+        denyList: ['CancellationDate', 'CancellationReason', 'RenewalDate', 'EndDate'],
+        leaderboard: [
+          { algo: 'XGBoost', winner: true, val: '0.892 AUC', holdout: '0.887 AUC', train: '0.912 AUC', lat: '14 ms', status: 'Published' },
+          { algo: 'LightGBM', winner: false, val: '0.881 AUC', holdout: '0.874 AUC', train: '0.898 AUC', lat: '11 ms', status: 'Candidate' },
+          { algo: 'Random Forest', winner: false, val: '0.869 AUC', holdout: '0.861 AUC', train: '0.890 AUC', lat: '22 ms', status: 'Candidate' },
+          { algo: 'Logistic Regression', winner: false, val: '0.745 AUC', holdout: '0.742 AUC', train: '0.748 AUC', lat: '3 ms', status: 'Baseline' }
+        ]
+      },
+      noshow: {
+        domain: 'More Cheese Club',
+        name: 'Event No-Show Propensity',
+        title: 'MoreCheese: Event No-Show Propensity',
+        status: 'Published',
+        metric: 'Best: AUC 0.841 (LightGBM)',
+        desc: 'Predicts whether a registered attendee will attend or no-show at an upcoming cheese tasting/event, enabling proactive reminder sequences.',
+        entity: '<i class="fa-solid fa-table"></i> vwEventRegistrations',
+        target: '<i class="fa-solid fa-bullseye"></i> Attended',
+        problem: '<i class="fa-solid fa-chart-pie"></i> Binary Classification (AUC)',
+        asof: '<i class="fa-solid fa-clock-rotate-left"></i> EventDate',
+        crossEntityActive: true,
+        denyList: ['AttendedOn', 'CheckInTime', 'FeedbackScore'],
+        leaderboard: [
+          { algo: 'LightGBM', winner: true, val: '0.849 AUC', holdout: '0.841 AUC', train: '0.865 AUC', lat: '9 ms', status: 'Published' },
+          { algo: 'XGBoost', winner: false, val: '0.842 AUC', holdout: '0.835 AUC', train: '0.861 AUC', lat: '12 ms', status: 'Candidate' },
+          { algo: 'Random Forest', winner: false, val: '0.825 AUC', holdout: '0.819 AUC', train: '0.840 AUC', lat: '18 ms', status: 'Candidate' }
+        ]
+      },
+      course: {
+        domain: 'More Cheese Club',
+        name: 'Course Completion Risk',
+        title: 'MoreCheese: Course Completion Risk',
+        status: 'Published',
+        metric: 'Best: AUC 0.861 (Random Forest)',
+        desc: 'Identifies members falling behind in cheese certification courses so education staff can intervene.',
+        entity: '<i class="fa-solid fa-table"></i> vwCourseEnrollments',
+        target: '<i class="fa-solid fa-bullseye"></i> Status',
+        problem: '<i class="fa-solid fa-chart-pie"></i> Binary Classification (AUC)',
+        asof: '<i class="fa-solid fa-clock-rotate-left"></i> Offset 14d from Start',
+        crossEntityActive: true,
+        denyList: ['CompletedOn', 'FinalExamScore', 'CertificateIssued'],
+        leaderboard: [
+          { algo: 'Random Forest', winner: true, val: '0.868 AUC', holdout: '0.861 AUC', train: '0.884 AUC', lat: '20 ms', status: 'Published' },
+          { algo: 'XGBoost', winner: false, val: '0.855 AUC', holdout: '0.849 AUC', train: '0.875 AUC', lat: '15 ms', status: 'Candidate' }
+        ]
+      },
+      latency: {
+        domain: 'MemberJunction Platform',
+        name: 'AI Agent Latency Forecaster',
+        title: 'MJ: AI Agent Run Latency Forecaster',
+        status: 'Published',
+        metric: 'Best: R² 0.436 (Random Forest)',
+        desc: 'Continuous regression forecasting AI prompt run execution latency and compute budget bottlenecks based on prompt models and effort levels.',
+        entity: '<i class="fa-solid fa-table"></i> vwAIPromptRuns',
+        target: '<i class="fa-solid fa-bullseye"></i> ExecutionTimeMS',
+        problem: '<i class="fa-solid fa-chart-line"></i> Continuous Regression (R²)',
+        asof: '<i class="fa-solid fa-clock-rotate-left"></i> StartedAt',
+        crossEntityActive: false,
+        denyList: ['CompletedAt', 'TokensCompletion', 'Cost', 'ErrorMessage'],
+        leaderboard: [
+          { algo: 'Random Forest', winner: true, val: '0.442 R²', holdout: '0.436 R²', train: '0.389 R²', lat: '16 ms', status: 'Published' },
+          { algo: 'XGBoost', winner: false, val: '0.418 R²', holdout: '0.405 R²', train: '0.482 R²', lat: '13 ms', status: 'Candidate' },
+          { algo: 'Ridge Regression', winner: false, val: '0.385 R²', holdout: '0.372 R²', train: '0.365 R²', lat: '2 ms', status: 'Baseline' }
+        ]
+      }
+    };
+
+    function loadPipeline(key, el) {
+      // update selected card
+      document.querySelectorAll('.pipeline-card').forEach(c => c.classList.remove('selected'));
+      if (el) el.classList.add('selected');
+
+      const data = PIPELINES[key];
+      if (!data) return;
+
+      document.getElementById('headerDomain').innerText = data.domain;
+      document.getElementById('headerPipelineName').innerText = data.name;
+      document.getElementById('pipelineTitle').innerText = data.title;
+      document.getElementById('pipelineMetricBadge').innerHTML = `<i class="fa-solid fa-award" style="color: #eab308;"></i> ${data.metric}`;
+      document.getElementById('pipelineDesc').innerText = data.desc;
+
+      document.getElementById('s1Entity').innerHTML = data.entity;
+      document.getElementById('s1Target').innerHTML = data.target;
+      document.getElementById('s1Problem').innerHTML = data.problem;
+      document.getElementById('s1AsOf').innerHTML = data.asof;
+
+      // Cross-entity banner
+      const banner = document.getElementById('crossEntityBanner');
+      if (data.crossEntityActive) {
+        banner.style.display = 'flex';
+      } else {
+        banner.style.display = 'none';
+      }
+
+      // Deny chips
+      const chipsEl = document.getElementById('denyChips');
+      chipsEl.innerHTML = data.denyList.map(c => `<span class="deny-chip">${c}</span>`).join('');
+
+      // Leaderboard
+      const tb = document.getElementById('leaderboardBody');
+      tb.innerHTML = data.leaderboard.map(row => `
+        <tr class="${row.winner ? 'winner-row' : ''}">
+          <td>
+            <div class="algo-name-cell">
+              ${row.winner ? '<i class="fa-solid fa-trophy winner-trophy"></i>' : ''}
+              <strong>${row.algo}</strong>
+              ${row.winner ? '<span class="winner-tag">Winner</span>' : ''}
+            </div>
+          </td>
+          <td>${row.val}</td>
+          <td><strong style="color: var(--mj-status-success);">${row.holdout}</strong></td>
+          <td>${row.train}</td>
+          <td>${row.lat}</td>
+          <td><span class="badge ${row.status.toLowerCase()}">${row.status}</span></td>
+        </tr>
+      `).join('');
+    }
+
+    function filterPipelines() {
+      const q = document.getElementById('pipelineSearch').value.toLowerCase();
+      document.querySelectorAll('.pipeline-card').forEach(card => {
+        const text = card.innerText.toLowerCase();
+        card.style.display = text.includes(q) ? 'flex' : 'none';
+      });
+    }
+
+    function setFilter(filter) {
+      document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+      event.target.classList.add('active');
+      document.querySelectorAll('.pipeline-card').forEach(card => {
+        if (filter === 'all') {
+          card.style.display = 'flex';
+        } else if (filter === 'morecheese') {
+          card.style.display = card.innerText.includes('vwMembership') || card.innerText.includes('vwEvent') || card.innerText.includes('vwCourse') ? 'flex' : 'none';
+        } else if (filter === 'mj') {
+          card.style.display = card.innerText.includes('vwAIPromptRuns') ? 'flex' : 'none';
+        } else if (filter === 'published') {
+          card.style.display = card.innerText.includes('Published') ? 'flex' : 'none';
+        }
+      });
+    }
+  </script>
+</body>
+</html>

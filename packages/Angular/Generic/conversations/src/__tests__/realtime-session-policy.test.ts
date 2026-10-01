@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { IMetadataProvider } from '@memberjunction/core';
 import { JSONObject } from '@memberjunction/ai';
-import { RealtimeSessionService, RealtimeCaption, RealtimeConnectionState } from '../lib/services/realtime-session.service';
+import { RealtimeCaption, RealtimeConnectionState } from '@memberjunction/realtime-runtime';
+import { RealtimeSessionService } from '../lib/services/realtime-session.service';
 
 /**
  * Provider-agnostic POLICY surfaces of the voice session service that no other suite

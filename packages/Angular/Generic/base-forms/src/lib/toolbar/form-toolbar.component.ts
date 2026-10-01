@@ -2,8 +2,9 @@ import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, Templa
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { BaseEntity, EntityInfo, CompositeKey } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, CompositeKey, LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import { RecordCloneService, type CloneCompletedEvent, type CloneNavigationEvent } from '@memberjunction/ng-record-clone';
 import { FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
 import { FormToolbarItemConfig, FormToolbarItemKey, FormToolbarItemClickEventArgs, ResolvedToolbarItem } from '../types/form-toolbar-item';
 import { IsAccordionFormChrome } from '../chrome/form-chrome';
@@ -18,6 +19,7 @@ import {
   BeforeCancelEventArgs,
   BeforeHistoryViewEventArgs,
   BeforeListManagementEventArgs,
+  BeforeCloneEventArgs,
   CustomToolbarButtonClickEventArgs,
   CustomToolbarButton
 } from '../types/form-events';
@@ -54,6 +56,7 @@ import {
 export class MjFormToolbarComponent extends BaseAngularComponent implements DoCheck, OnInit, OnDestroy {
   private cdr = inject(ChangeDetectorRef);
   private recordRefresh = inject(FormRecordRefreshCoordinator, { optional: true });
+  private cloneService = inject(RecordCloneService);
   private destroy$ = new Subject<void>();
 
   // ---- Deprecated form reference (backward compat) ----
@@ -255,6 +258,12 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   @Output() ResetSectionOrderRequested = new EventEmitter<void>();
   @Output() ManageSectionsRequested = new EventEmitter<void>();
 
+  /** Emitted before the clone slide-in opens. Set `Cancel` to handle cloning yourself. */
+  @Output() BeforeClone = new EventEmitter<BeforeCloneEventArgs>();
+
+  /** Emitted after the clone slide-in commits a clone of this record. */
+  @Output() CloneCompleted = new EventEmitter<CloneCompletedEvent>();
+
   // ---- Internal state ----
   ShowDeleteDialog = false;
   ShowDiscardDialog = false;
@@ -279,16 +288,17 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
   ngDoCheck(): void {
     if (this._formRef) {
-      this.SyncFromFormRef();
+      this.syncFromFormRef();
     }
-    this.CheckDescendantChains();
+    this.checkDescendantChains();
+    this.checkCloneCapability();
   }
 
   /**
    * Sync toolbar state from the legacy form reference.
    * Only active when [Form] is set (backward-compat mode).
    */
-  private SyncFromFormRef(): void {
+  private syncFromFormRef(): void {
     const ref = this._formRef as Record<string, unknown>;
     const rec = ref['record'] as BaseEntity | undefined;
     let changed = false;
@@ -441,7 +451,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
    */
   public InvalidateHierarchy(): void {
     this._lastRecordForChains = null;
-    this.ComputeDescendantChains();
+    this.computeDescendantChains();
     this.cdr.markForCheck();
   }
 
@@ -449,7 +459,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
    * Check if descendant chains need recomputation (called from DoCheck).
    * Only triggers async computation when the record identity changes.
    */
-  private CheckDescendantChains(): void {
+  private checkDescendantChains(): void {
     if (!this.Record) {
       if (this.DescendantTree.length > 0) {
         this.DescendantTree = [];
@@ -459,7 +469,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
       return;
     }
     if (this.Record !== this._lastRecordForChains && !this._chainsLoading) {
-      this.ComputeDescendantChains();
+      this.computeDescendantChains();
     }
   }
 
@@ -467,7 +477,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
    * Asynchronously discover all IS-A descendants and convert to chains
    * for breadcrumb display. Each chain is a root-to-leaf path of entity names.
    */
-  private ComputeDescendantChains(): void {
+  private computeDescendantChains(): void {
     this._lastRecordForChains = this.Record;
 
     if (!this.Record?.EntityInfo?.IsParentType) {
@@ -504,7 +514,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   // ---- Actions ----
 
   OnEdit(): void {
-    if (this.DispatchToFormRef('StartEditMode')) return;
+    if (this.dispatchToFormRef('StartEditMode')) return;
     this.EditModeChange.emit(true);
   }
 
@@ -516,7 +526,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
       this.BeforeSave.emit(beforeEvent);
       if (beforeEvent.Cancel) return;
 
-      if (this.DispatchToFormRef('SaveRecord', true)) return;
+      if (this.dispatchToFormRef('SaveRecord', true)) return;
       this.SaveRequested.emit();
     });
   }
@@ -529,12 +539,12 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
       return;
     }
     // No changes - cancel immediately
-    this.EmitCancel();
+    this.emitCancel();
   }
 
   OnDiscardConfirm(): void {
     this.ShowDiscardDialog = false;
-    this.EmitCancel();
+    this.emitCancel();
     this.cdr.markForCheck();
   }
 
@@ -543,13 +553,13 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     this.cdr.markForCheck();
   }
 
-  private EmitCancel(): void {
+  private emitCancel(): void {
     // Emit Before event - handler can cancel by setting event.Cancel = true
     const beforeEvent = new BeforeCancelEventArgs();
     this.BeforeCancel.emit(beforeEvent);
     if (beforeEvent.Cancel) return;
 
-    if (this.DispatchToFormRef('CancelEdit')) return;
+    if (this.dispatchToFormRef('CancelEdit')) return;
     this.CancelRequested.emit();
   }
 
@@ -569,7 +579,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
       return;
     }
 
-    if (this.DispatchToFormRef('OnDeleteRequested')) {
+    if (this.dispatchToFormRef('OnDeleteRequested')) {
       this.cdr.markForCheck();
       return;
     }
@@ -590,12 +600,12 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     this.BeforeRefresh.emit(beforeEvent);
     if (beforeEvent.Cancel) return;
 
-    if (this.DispatchToFormRef('RefreshRecord')) return;
+    if (this.dispatchToFormRef('RefreshRecord')) return;
     this.RefreshRequested.emit();
   }
 
   OnFavoriteToggle(): void {
-    if (this.DispatchToFormRef('OnFavoriteToggled')) return;
+    if (this.dispatchToFormRef('OnFavoriteToggled')) return;
     this.FavoriteToggled.emit();
   }
 
@@ -605,7 +615,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     this.BeforeHistoryView.emit(beforeEvent);
     if (beforeEvent.Cancel) return;
 
-    if (this.DispatchToFormRef('OnHistoryRequested')) return;
+    if (this.dispatchToFormRef('OnHistoryRequested')) return;
     this.HistoryRequested.emit();
   }
 
@@ -615,17 +625,17 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     this.BeforeListManagement.emit(beforeEvent);
     if (beforeEvent.Cancel) return;
 
-    if (this.DispatchToFormRef('OnListManagementRequested')) return;
+    if (this.dispatchToFormRef('OnListManagementRequested')) return;
     this.ListManagementRequested.emit();
   }
 
   OnTagsPanel(): void {
-    if (this.DispatchToFormRef('HandleTagsPanel')) return;
+    if (this.dispatchToFormRef('HandleTagsPanel')) return;
     this.TagsPanelToggled.emit();
   }
 
   OnAttachmentsPanel(): void {
-    if (this.DispatchToFormRef('HandleAttachmentsPanel')) return;
+    if (this.dispatchToFormRef('HandleAttachmentsPanel')) return;
     this.AttachmentsPanelToggled.emit();
   }
 
@@ -683,6 +693,19 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
         Visible: this.Config.ShowRefreshButton !== false && (this.Record?.IsSaved ?? false),
         Disabled: this.IsSaving || this.IsRefreshing,
         IsLoading: this.IsRefreshing,
+      },
+      {
+        Key: 'clone',
+        Text: '',
+        Description: `Clone this ${this.EntityInfo?.DisplayNameOrName ?? 'record'} and the records it owns`,
+        Icon: 'fa-solid fa-clone',
+        Variant: 'default',
+        Mode: 'read',
+        Placement: 'actions',
+        Order: 15,
+        Visible: this.ShowCloneAction,
+        Disabled: false,
+        CssClass: this.IsClonePanelOpen ? 'active' : '',
       },
       {
         Key: 'favorite',
@@ -786,7 +809,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
     // 4. Resolve states, evaluate predicates, apply overrides
     const resolved: ResolvedToolbarItem[] = [];
-    const standardKeys: Set<string> = new Set(['edit', 'delete', 'refresh', 'favorite', 'history', 'list', 'tags', 'attachments']);
+    const standardKeys: Set<string> = new Set(['edit', 'delete', 'refresh', 'clone', 'favorite', 'history', 'list', 'tags', 'attachments']);
 
     for (const item of rawItems) {
       const overrides = this.ItemOverrides?.get(item.Key);
@@ -938,6 +961,9 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
         case 'attachments':
           this.OnAttachmentsPanel();
           break;
+        case 'clone':
+          this.OnClone();
+          break;
       }
     }
 
@@ -964,8 +990,89 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     }
   }
 
+  // ── Record cloning ──────────────────────────────────────────────
+
+  /** Whether the clone slide-in is open. */
+  public IsClonePanelOpen = false;
+
+  /** Whether the server said this user may clone records of the current entity. */
+  public CanCloneEntity = false;
+
+  /** The entity name the last clone capability check ran for. */
+  private _cloneCheckedEntity: string | null = null;
+  private _cloneRecordKey: string | null = null;
+
+  /** True when the Clone action should render for the current record. */
+  public get ShowCloneAction(): boolean {
+    return !!this.Config.ShowCloneButton && this.CanCloneEntity && !!this.Record?.IsSaved;
+  }
+
+  /** Opens the clone slide-in, unless a `BeforeClone` handler cancels. */
+  OnClone(): void {
+    const beforeEvent = new BeforeCloneEventArgs();
+    this.BeforeClone.emit(beforeEvent);
+    if (beforeEvent.Cancel) return;
+
+    this.IsClonePanelOpen = true;
+    this.cdr.markForCheck();
+  }
+
+  OnClonePanelVisibleChange(visible: boolean): void {
+    this.IsClonePanelOpen = visible;
+    this.cdr.markForCheck();
+  }
+
+  OnCloneCompleted(event: CloneCompletedEvent): void {
+    this.CloneCompleted.emit(event);
+  }
+
+  /** Turns the clone widget's navigation request into the toolbar's own `Navigate` event. */
+  OnCloneNavigate(event: CloneNavigationEvent): void {
+    const entityInfo = this.ProviderToUse?.EntityByName(event.EntityName);
+    this.Navigate.emit({
+      Kind: 'record',
+      EntityName: event.EntityName,
+      PrimaryKey: CompositeKey.FromURLSegment(entityInfo, event.RecordKey),
+      OpenInNewTab: true,
+    });
+  }
+
+  /**
+   * Asks `RecordClone.Describe` (cached per entity per session) once per entity whether the
+   * user may clone it. Entities whose `Configuration.Clone.Enabled` is not true are skipped
+   * without a server call.
+   */
+  private checkCloneCapability(): void {
+    // A panel opened for one record must not stay open over the next one the form loads.
+    const recordKey = this.Record?.PrimaryKey?.ToConcatenatedString() ?? null;
+    if (recordKey !== this._cloneRecordKey) {
+      this._cloneRecordKey = recordKey;
+      this.IsClonePanelOpen = false;
+    }
+
+    const entityName = this.Config.ShowCloneButton ? this.Record?.EntityInfo?.Name ?? null : null;
+    if (entityName === this._cloneCheckedEntity) return;
+    this._cloneCheckedEntity = entityName;
+    this.CanCloneEntity = false;
+    this.IsClonePanelOpen = false; // a panel opened for the previous entity must not reopen itself for this one
+
+    if (!entityName || this.Record?.EntityInfo?.CloneConfig?.Enabled !== true) return;
+
+    this.cloneService
+      .DescribeRecord({ EntityName: entityName }, this.ProviderToUse)
+      .then((describe) => {
+        if (this._cloneCheckedEntity !== entityName) return;
+        this.CanCloneEntity = describe.CanClone;
+        this.cdr.markForCheck();
+      })
+      .catch((err: unknown) => {
+        // A failed capability check hides the action; the server re-checks on every clone.
+        LogError(`Clone capability check failed for ${entityName}: ${err instanceof Error ? err.message : String(err)}`);
+      });
+  }
+
   OnShowChanges(): void {
-    if (this.DispatchToFormRef('ShowChanges')) return;
+    if (this.dispatchToFormRef('ShowChanges')) return;
     this.ShowChangesRequested.emit();
   }
 
@@ -1031,7 +1138,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
    * Try to call a method on the legacy form reference.
    * Returns true if the method was found and called, false otherwise.
    */
-  private DispatchToFormRef(methodName: string, ...args: unknown[]): boolean {
+  private dispatchToFormRef(methodName: string, ...args: unknown[]): boolean {
     if (!this._formRef) return false;
     const ref = this._formRef as Record<string, unknown>;
     const method = ref[methodName];

@@ -119,8 +119,8 @@ const declared = (ExternalName: string): SourceObjectInfo => ({
 });
 
 type StageHost = {
-    StageIntrospect: (emitter: unknown, opts: ConnectorCreationPipelineOptions) => Promise<{ Objects: SourceObjectInfo[] }>;
-    StagePKClassify: (emitter: unknown, opts: ConnectorCreationPipelineOptions) => Promise<{ unresolved: string[] }>;
+    stageIntrospect: (emitter: unknown, opts: ConnectorCreationPipelineOptions) => Promise<{ Objects: SourceObjectInfo[] }>;
+    stagePKClassify: (emitter: unknown, opts: ConnectorCreationPipelineOptions) => Promise<{ unresolved: string[] }>;
 };
 const host = () => Object.create(IntegrationConnectorCreationPipeline.prototype) as unknown as StageHost;
 
@@ -147,7 +147,7 @@ describe('the pipeline gates use the floor', () => {
         } as unknown as ConnectorCreationPipelineOptions;
         const emitter = makeEmitter();
 
-        await host().StageIntrospect(emitter, opts);
+        await host().stageIntrospect(emitter, opts);
 
         expect(fetchFields).not.toHaveBeenCalled();
         expect(emitter.checkpoints.find(c => c.stage === 'Introspect')?.data.unsampledForMemory).toBe(2);
@@ -170,7 +170,7 @@ describe('the pipeline gates use the floor', () => {
         } as unknown as ConnectorCreationPipelineOptions;
         const emitter = makeEmitter();
 
-        const { unresolved } = await host().StagePKClassify(emitter, opts);
+        const { unresolved } = await host().stagePKClassify(emitter, opts);
 
         expect(unresolved).toEqual(['Obj25', 'Obj26', 'Obj27', 'Obj28', 'Obj29']);
         expect(emitter.warnings.some(w => w.stage === 'PKClassify' && w.code === 'HOST_MEMORY_PRESSURE')).toBe(true);
@@ -192,7 +192,7 @@ describe('the pipeline gates use the floor', () => {
         } as unknown as ConnectorCreationPipelineOptions;
         const emitter = makeEmitter();
 
-        await host().StageIntrospect(emitter, opts);
+        await host().stageIntrospect(emitter, opts);
 
         expect(fetchFields).toHaveBeenCalledTimes(1);
         expect(emitter.checkpoints.find(c => c.stage === 'Introspect')?.data.unsampledForMemory).toBe(0);

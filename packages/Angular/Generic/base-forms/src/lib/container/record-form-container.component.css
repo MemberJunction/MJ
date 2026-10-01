@@ -641,6 +641,36 @@ mj-collapsible-panel.mj-form-role-more {
   font-size: var(--mj-space-2-5);
 }
 
+/* Failures no rail item owns: same row shape as an item, not interactive, error-tinted. */
+.mj-forms-chrome-rail-unrouted {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--mj-radius-sm);
+  color: var(--mj-status-error);
+  font-size: var(--mj-text-sm);
+  text-align: left;
+  cursor: default;
+}
+
+.mj-forms-chrome-rail-unrouted > i {
+  width: 1.15em;
+  flex-shrink: 0;
+  text-align: center;
+  color: inherit;
+}
+
+.mj-forms-chrome-rail-unrouted > .mj-forms-chrome-rail-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* The section's icon takes the error colour too, so the item reads as failing
    even before the badge is noticed — but never the active item's brand tint. */
 .mj-forms-chrome-rail-item.has-errors:not(.is-active) > i {

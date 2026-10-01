@@ -255,7 +255,7 @@ function parseBooleanEnv(value: string): boolean {
  * // { DatabaseHost: 'prod-sql.example.com', DatabaseName: 'MemberJunction', CodeGenPassword: 'secret123' }
  * ```
  */
-export function resolveFromEnvironment(): PartialInstallConfig {
+export function ResolveFromEnvironment(): PartialInstallConfig {
   const config: PartialInstallConfig = {};
 
   for (const mapping of ENV_VAR_MAP) {
@@ -281,6 +281,11 @@ export function resolveFromEnvironment(): PartialInstallConfig {
   }
 
   return config;
+}
+
+/** @deprecated Use {@link ResolveFromEnvironment}. */
+export function resolveFromEnvironment(): PartialInstallConfig {
+  return ResolveFromEnvironment();
 }
 
 /** Canonical PascalCase keys accepted in `install.config.json`. */
@@ -354,7 +359,7 @@ const LEGACY_USER_KEYS: ReadonlySet<string> = new Set([
  * const fileConfig = await loadConfigFile('./install.config.json');
  * ```
  */
-export async function loadConfigFile(filePath: string): Promise<PartialInstallConfig> {
+export async function LoadConfigFile(filePath: string): Promise<PartialInstallConfig> {
   const raw = await fs.readFile(filePath, 'utf-8');
   const parsed: unknown = JSON.parse(raw);
 
@@ -443,6 +448,11 @@ export async function loadConfigFile(filePath: string): Promise<PartialInstallCo
   return config;
 }
 
+/** @deprecated Use {@link LoadConfigFile}. */
+export async function loadConfigFile(filePath: string): Promise<PartialInstallConfig> {
+  return LoadConfigFile(filePath);
+}
+
 /**
  * Some legacy keys carry string-encoded values ("Y"/"N") where the canonical
  * field is a boolean. Translate them in-place when we map.
@@ -525,7 +535,7 @@ function stringIsYes(value: unknown): boolean {
  * );
  * ```
  */
-export function mergeConfigs(...sources: PartialInstallConfig[]): PartialInstallConfig {
+export function MergeConfigs(...sources: PartialInstallConfig[]): PartialInstallConfig {
   const result: PartialInstallConfig = {};
 
   for (const source of sources) {
@@ -546,4 +556,9 @@ export function mergeConfigs(...sources: PartialInstallConfig[]): PartialInstall
   }
 
   return result;
+}
+
+/** @deprecated Use {@link MergeConfigs}. */
+export function mergeConfigs(...sources: PartialInstallConfig[]): PartialInstallConfig {
+  return MergeConfigs(...sources);
 }

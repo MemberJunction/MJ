@@ -18,7 +18,7 @@ import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { ExecuteAgentParams, InputArtifact } from '@memberjunction/ai-core-plus';
 
 /** Recorded RunView calls, newest last — asserted on to prove the no-double-scan guarantee. */
-const runViewCalls: Array<{ EntityName?: string }> = [];
+const runViewCalls: Array<{ EntityName?: string; ExtraFilter?: string }> = [];
 let junctionVersionIds: string[] = [];
 const runQueryCalls: Array<{ QueryName?: string }> = [];
 
@@ -27,7 +27,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     return {
         ...actual,
         RunView: class {
-            async RunView(params: { EntityName?: string }) {
+            async RunView(params: { EntityName?: string; ExtraFilter?: string }) {
                 runViewCalls.push(params);
                 if (params.EntityName === 'MJ: Conversation Details') {
                     return { Success: true, Results: [{ ID: 'detail-1' }] };
@@ -163,5 +163,22 @@ describe('AgentRunner — conversation artifact hydration on the direct RunAgent
 
         expect(result).toBe(params);
         expect(runViewCalls).toEqual([]);
+    });
+
+    it('under a history floor, gathers only the artifacts of messages written at or after it', async () => {
+        const { provider } = makeProvider();
+        const floor = new Date('2026-09-01T12:00:00.000Z');
+        await bridge(provider).hydrateConversationArtifacts(makeParams({ conversationId: 'conv-99', ConversationHistoryFrom: floor }));
+
+        const detailScan = runViewCalls.find((c) => c.EntityName === 'MJ: Conversation Details');
+        expect(detailScan?.ExtraFilter).toBe(`ConversationID='conv-99' AND __mj_CreatedAt >= '${floor.toISOString()}'`);
+    });
+
+    it('without a floor, scans the whole conversation as before', async () => {
+        const { provider } = makeProvider();
+        await bridge(provider).hydrateConversationArtifacts(makeParams({ conversationId: 'conv-99' }));
+
+        const detailScan = runViewCalls.find((c) => c.EntityName === 'MJ: Conversation Details');
+        expect(detailScan?.ExtraFilter).toBe(`ConversationID='conv-99'`);
     });
 });

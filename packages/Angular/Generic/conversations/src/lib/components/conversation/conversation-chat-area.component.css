@@ -519,6 +519,11 @@
   overflow: visible;
 }
 
+/* composerExtra slot: host UI directly above the composer. Spacing only; the host styles its content. */
+.chat-composer-extra {
+  margin-bottom: 0.5rem;
+}
+
 .read-only-banner {
   display: flex;
   align-items: center;

@@ -31,7 +31,7 @@ import { IntegrationConnectorCreationPipeline } from '../IntegrationConnectorCre
 import type { ConnectorCreationPipelineOptions } from '../IntegrationConnectorCreationPipeline.js';
 import {
     IntegrationSchemaSync,
-    decideSemanticOverlay,
+    DecideSemanticOverlay,
     type PersistSchemaOptions,
     type PersistSchemaResult,
 } from '../IntegrationSchemaSync.js';
@@ -201,8 +201,8 @@ describe('a streamed discovery keeps what an accumulated one keeps', () => {
         const stub = tailCall()?.Objects.find(o => o.ExternalName === 'Invoice');
         expect(stub).toBeDefined();
         // The overlay treats any non-empty label as the source's opinion. A stub carries no opinion.
-        expect(decideSemanticOverlay('Invoices (curated)', stub?.ExternalLabel).changed).toBe(false);
-        expect(decideSemanticOverlay('Curated description', stub?.Description).changed).toBe(false);
+        expect(DecideSemanticOverlay('Invoices (curated)', stub?.ExternalLabel).changed).toBe(false);
+        expect(DecideSemanticOverlay('Curated description', stub?.Description).changed).toBe(false);
     });
 
     it('runs no final name pass when nothing may be retired', async () => {

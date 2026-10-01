@@ -48,7 +48,7 @@ export class ArtifactPreviewResolverService {
      * @param artifactTypeName The artifact's type name (e.g. from `artifact.Type`).
      * @param contentType      The version MIME type (e.g. from `artifactVersion.MimeType`).
      */
-    public resolvePreviewComponent(
+    public ResolvePreviewComponent(
         artifactTypeName: string | null | undefined,
         contentType: string | null | undefined,
     ): Type<IArtifactPreviewComponent> | null {
@@ -91,5 +91,13 @@ export class ArtifactPreviewResolverService {
         }
 
         return best?.preview ?? null;
+    }
+
+    /** @deprecated Use {@link ResolvePreviewComponent}. */
+    public resolvePreviewComponent(
+        artifactTypeName: string | null | undefined,
+        contentType: string | null | undefined,
+    ): Type<IArtifactPreviewComponent> | null {
+        return this.ResolvePreviewComponent(artifactTypeName, contentType);
     }
 }

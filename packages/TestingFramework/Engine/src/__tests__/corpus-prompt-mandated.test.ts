@@ -54,8 +54,11 @@ describe('corpus cases realigned to their agent prompts', () => {
 
     it('Web Research may keep searching, including two searches in one turn', () => {
         const c = load('webresearch-payload-write-findings-01');
-        expect(evaluateCorpusExpectation(c.id, c.expect, nativeAction(['Perplexity Search', 'Perplexity Search'])).passed).toBe(true);
-        expect(evaluateCorpusExpectation(c.id, c.expect, nativeAction(['Perplexity Search', 'Google Custom Search'])).passed).toBe(true);
+        // Agents bind the provider-neutral `Web Search` now, so "the same vendor twice" and "two
+        // different vendors" — which these two lines used to separate — are one assertion. The
+        // second therefore covers `allowAdditionalActions` instead, which nothing else exercises.
+        expect(evaluateCorpusExpectation(c.id, c.expect, nativeAction(['Web Search', 'Web Search'])).passed).toBe(true);
+        expect(evaluateCorpusExpectation(c.id, c.expect, nativeAction(['Web Search', 'Web Page Content'])).passed).toBe(true);
         expect(evaluateCorpusExpectation(c.id, c.expect, normalizeDecision({ text: '{"taskComplete":true}' })).passed).toBe(true);
     });
 

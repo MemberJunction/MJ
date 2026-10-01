@@ -6,13 +6,17 @@ import { CodeEditorComponent } from './ng-code-editor.component';
  * Spec for CodeEditorComponent's language lookup.
  *
  * Called on the prototype against a stub `this`, because `_findLanguage` is pure over
- * `this.languages` — no CodeMirror EditorView is constructed, which is what the toolbar spec next
+ * `this.Languages` — no CodeMirror EditorView is constructed, which is what the toolbar spec next
  * to this file has to mock ngOnInit to avoid. Lives under the DOM preset rather than __tests__
  * because importing the component class needs the Angular compile (see vitest.config.ts).
+ *
+ * The stub must spell the property the way the method reads it: the `languages` @Input was renamed
+ * to `Languages`, and the deprecated accessor pair left behind lives on the PROTOTYPE, so a plain
+ * object literal carrying `languages` does not get it. Shorthand made the mismatch invisible.
  */
 const find = (name: string) =>
   (CodeEditorComponent.prototype as unknown as { _findLanguage(n: string): { name: string } | null })
-    ._findLanguage.call({ languages }, name);
+    ._findLanguage.call({ Languages: languages }, name);
 
 describe('CodeEditorComponent._findLanguage', () => {
   it('resolves a name that CodeMirror registers only as a file extension', () => {

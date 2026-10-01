@@ -110,23 +110,23 @@ export interface ILiveKitRoomSdk {
      * @param args Connect parameters (room URL, signed access token, bot name).
      * @returns The bot identity + room handles.
      */
-    connect(args: LiveKitConnectArgs): Promise<LiveKitConnectResult>;
+    connect(args: LiveKitConnectArgs): Promise<LiveKitConnectResult>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /** Disconnects from the room and releases SDK resources. */
-    disconnect(): Promise<void>;
+    disconnect(): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Publishes one raw PCM audio frame on the bot's audio track (the agent's voice into the room).
      *
      * @param pcm The PCM audio bytes to publish.
      */
-    publishAudioFrame(pcm: ArrayBuffer): void;
+    publishAudioFrame(pcm: ArrayBuffer): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Flushes all pending/queued outbound audio (the agent's voice). Called on barge-in so the agent
      * stops talking immediately instead of draining already-buffered audio after the model is cut off.
      */
-    flushOutboundAudio(): void;
+    flushOutboundAudio(): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Subscribes inbound per-participant audio frames (what the agent hears, carrying the speaker
@@ -135,7 +135,7 @@ export interface ILiveKitRoomSdk {
      *
      * @param cb Invoked with each inbound, per-participant audio frame.
      */
-    onAudioTrack(cb: (frame: LiveKitAudioFrame) => void): void;
+    onAudioTrack(cb: (frame: LiveKitAudioFrame) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Publishes one raw video frame on the bot's camera track. LiveKit does full video; the realtime
@@ -143,7 +143,7 @@ export interface ILiveKitRoomSdk {
      *
      * @param frame The encoded/raw video frame bytes to publish.
      */
-    publishVideoFrame(frame: ArrayBuffer): void;
+    publishVideoFrame(frame: ArrayBuffer): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Publishes one raw screen-share frame on the bot's screen track (e.g. a Remote Browser channel's
@@ -151,28 +151,28 @@ export interface ILiveKitRoomSdk {
      *
      * @param frame The encoded/raw screen frame bytes to publish.
      */
-    publishScreenFrame(frame: ArrayBuffer): void;
+    publishScreenFrame(frame: ArrayBuffer): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback fired when a participant connects. "Latest handler wins."
      *
      * @param cb Invoked with the participant who joined.
      */
-    onParticipantJoin(cb: (participant: LiveKitParticipant) => void): void;
+    onParticipantJoin(cb: (participant: LiveKitParticipant) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback fired when a participant disconnects. "Latest handler wins."
      *
      * @param cb Invoked with the participant identity that left.
      */
-    onParticipantLeave(cb: (participantIdentity: string) => void): void;
+    onParticipantLeave(cb: (participantIdentity: string) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Returns the current participant list (including the bot).
      *
      * @returns The current participants.
      */
-    getParticipants(): Promise<LiveKitParticipant[]>;
+    getParticipants(): Promise<LiveKitParticipant[]>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Sends a text message on the LiveKit data channel (reliable publish to all participants) — the
@@ -180,7 +180,7 @@ export interface ILiveKitRoomSdk {
      *
      * @param text The chat/data message text.
      */
-    sendDataMessage(text: string): Promise<void>;
+    sendDataMessage(text: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback fired when the room disconnects the bot (SFU closed / bot removed). "Latest
@@ -188,7 +188,7 @@ export interface ILiveKitRoomSdk {
      *
      * @param cb Invoked when the room has disconnected.
      */
-    onDisconnected(cb: () => void): void;
+    onDisconnected(cb: () => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

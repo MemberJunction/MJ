@@ -120,7 +120,16 @@ export interface FilterPill {
 export class RecordChangesComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   public IsLoading = false;
   public IsVisible = false;
-  @Output() dialogClosed = new EventEmitter();
+  @Output() DialogClosed = new EventEmitter();
+
+  /**
+   * @deprecated Use {@link DialogClosed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (dialogClosed) keeps working. Must stay AFTER DialogClosed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() dialogClosed = this.DialogClosed;
   @Input() record!: BaseEntity;
 
   /** Whether to show a "Restore" button on each historical version row. Default false. */
@@ -133,8 +142,26 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
    */
   @Output() RestoreRequested = new EventEmitter<RestoreVersionEvent>();
 
-  viewData: MJRecordChangeEntity[] = [];
-  filteredData: MJRecordChangeEntity[] = [];
+  ViewData: MJRecordChangeEntity[] = [];
+
+  /** @deprecated Use {@link ViewData}. */
+  get viewData(): MJRecordChangeEntity[] {
+    return this.ViewData;
+  }
+  /** @deprecated Use {@link ViewData}. */
+  set viewData(value: MJRecordChangeEntity[]) {
+    this.ViewData = value;
+  }
+  FilteredData: MJRecordChangeEntity[] = [];
+
+  /** @deprecated Use {@link FilteredData}. */
+  get filteredData(): MJRecordChangeEntity[] {
+    return this.FilteredData;
+  }
+  /** @deprecated Use {@link FilteredData}. */
+  set filteredData(value: MJRecordChangeEntity[]) {
+    this.FilteredData = value;
+  }
 
   /**
    * Change lookup keyed by NormalizeUUID(ID), rebuilt whenever {@link viewData}
@@ -144,8 +171,26 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
    * template `@if` and once inside `getChangeSummary`), giving O(rows^2)/CD.
    */
   private viewDataById = new Map<string, MJRecordChangeEntity>();
-  dateGroups: DateGroup[] = [];
-  expandedItems: Set<string> = new Set();
+  DateGroups: DateGroup[] = [];
+
+  /** @deprecated Use {@link DateGroups}. */
+  get dateGroups(): DateGroup[] {
+    return this.DateGroups;
+  }
+  /** @deprecated Use {@link DateGroups}. */
+  set dateGroups(value: DateGroup[]) {
+    this.DateGroups = value;
+  }
+  ExpandedItems: Set<string> = new Set();
+
+  /** @deprecated Use {@link ExpandedItems}. */
+  get expandedItems(): Set<string> {
+    return this.ExpandedItems;
+  }
+  /** @deprecated Use {@link ExpandedItems}. */
+  set expandedItems(value: Set<string>) {
+    this.ExpandedItems = value;
+  }
 
   /** The change record currently selected for restore preview, or null. */
   RestorePreviewChange: MJRecordChangeEntity | null = null;
@@ -160,10 +205,37 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
   ShowCreateWizard = false;
 
   // Filter properties
-  searchTerm = '';
+  SearchTerm = '';
+
+  /** @deprecated Use {@link SearchTerm}. */
+  get searchTerm() {
+    return this.SearchTerm;
+  }
+  /** @deprecated Use {@link SearchTerm}. */
+  set searchTerm(value) {
+    this.SearchTerm = value;
+  }
   /** Single selected type filter (legacy, kept for backwards compat). */
-  selectedType = '';
-  selectedSource = '';
+  SelectedType = '';
+
+  /** @deprecated Use {@link SelectedType}. */
+  get selectedType() {
+    return this.SelectedType;
+  }
+  /** @deprecated Use {@link SelectedType}. */
+  set selectedType(value) {
+    this.SelectedType = value;
+  }
+  SelectedSource = '';
+
+  /** @deprecated Use {@link SelectedSource}. */
+  get selectedSource() {
+    return this.SelectedSource;
+  }
+  /** @deprecated Use {@link SelectedSource}. */
+  set selectedSource(value) {
+    this.SelectedSource = value;
+  }
   /** Map of Key → selected, used by the conditional chip system. */
   ChipSelections: Record<string, boolean> = {};
   /** Whether the overflow popover is open. */
@@ -245,7 +317,7 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
     this.IsVisible = false;
     this.cdr.markForCheck();
     // Allow the slide-out animation to complete before emitting
-    setTimeout(() => this.dialogClosed.emit(), 300);
+    setTimeout(() => this.DialogClosed.emit(), 300);
   }
 
   public async LoadRecordChanges(pkey: CompositeKey, appName: string, entityName: string): Promise<void> {
@@ -264,7 +336,7 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
       }
       this.ngZone.run(() => {
         if (changes) {
-          this.viewData = changes.sort(
+          this.ViewData = changes.sort(
             (a: MJRecordChangeEntity, b: MJRecordChangeEntity) => new Date(b.ChangedAt).getTime() - new Date(a.ChangedAt).getTime(),
           );
           this.rebuildViewDataIndex();
@@ -285,8 +357,13 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
 
   // ─── Filter & Search ────────────────────────────────────────────
 
-  onSearchChange(): void {
+  OnSearchChange(): void {
     this.applyFilters();
+  }
+
+  /** @deprecated Use {@link OnSearchChange}. */
+  onSearchChange(): void {
+    return this.OnSearchChange();
   }
 
   onFilterChange(): void {
@@ -347,7 +424,7 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
   }
 
   public ClearFilters(): void {
-    this.searchTerm = '';
+    this.SearchTerm = '';
     for (const k of Object.keys(this.ChipSelections)) this.ChipSelections[k] = false;
     this.applyFilters();
   }
@@ -360,7 +437,7 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
     const counts: Record<string, number> = {};
     let restoreCount = 0;
 
-    for (const c of this.viewData) {
+    for (const c of this.ViewData) {
       const type = c.Type ?? 'Update';
       counts[type] = (counts[type] ?? 0) + 1;
       if (this.isRestoreChange(c)) restoreCount++;
@@ -400,10 +477,10 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
   }
 
   private applyFilters(): void {
-    let filtered = [...this.viewData];
+    let filtered = [...this.ViewData];
 
-    if (this.searchTerm.trim()) {
-      const search = this.searchTerm.toLowerCase();
+    if (this.SearchTerm.trim()) {
+      const search = this.SearchTerm.toLowerCase();
       filtered = filtered.filter(
         change =>
           change.ChangesDescription?.toLowerCase().includes(search) ||
@@ -427,8 +504,8 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
       });
     }
 
-    this.filteredData = filtered;
-    this.dateGroups = this.buildDateGroups(this.filteredData);
+    this.FilteredData = filtered;
+    this.DateGroups = this.buildDateGroups(this.FilteredData);
     this.cdr.markForCheck();
   }
 
@@ -523,7 +600,7 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
     this.cdr.markForCheck();
   }
 
-  public getLabelStatusClass(status: string): string {
+  public GetLabelStatusClass(status: string): string {
     switch (status) {
       case 'Active': return 'label-status-active';
       case 'Archived': return 'label-status-archived';
@@ -532,22 +609,37 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
     }
   }
 
+  /** @deprecated Use {@link GetLabelStatusClass}. */
+  public getLabelStatusClass(status: string): string {
+    return this.GetLabelStatusClass(status);
+  }
+
   // ─── Timeline Interaction ───────────────────────────────────────
 
-  toggleExpansion(changeId: string): void {
-    if (this.expandedItems.has(changeId)) {
-      this.expandedItems.delete(changeId);
+  ToggleExpansion(changeId: string): void {
+    if (this.ExpandedItems.has(changeId)) {
+      this.ExpandedItems.delete(changeId);
     } else {
-      this.expandedItems.add(changeId);
+      this.ExpandedItems.add(changeId);
     }
     this.cdr.markForCheck();
   }
 
-  onTimelineItemKeydown(event: KeyboardEvent, changeId: string): void {
+  /** @deprecated Use {@link ToggleExpansion}. */
+  toggleExpansion(changeId: string): void {
+    return this.ToggleExpansion(changeId);
+  }
+
+  OnTimelineItemKeydown(event: KeyboardEvent, changeId: string): void {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      this.toggleExpansion(changeId);
+      this.ToggleExpansion(changeId);
     }
+  }
+
+  /** @deprecated Use {@link OnTimelineItemKeydown}. */
+  onTimelineItemKeydown(event: KeyboardEvent, changeId: string): void {
+    return this.OnTimelineItemKeydown(event, changeId);
   }
 
   /**
@@ -609,10 +701,15 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
    * currently loaded changes. Returns null when the source isn't loaded
    * (e.g., it's been pruned from history) or when this row isn't a restore.
    */
-  public getRestoredFromSourceChange(change: MJRecordChangeEntity): MJRecordChangeEntity | null {
+  public GetRestoredFromSourceChange(change: MJRecordChangeEntity): MJRecordChangeEntity | null {
     const sourceId = (change as any).RestoredFromID;
     if (!sourceId) return null;
     return this.viewDataById.get(NormalizeUUID(sourceId)) ?? null;
+  }
+
+  /** @deprecated Use {@link GetRestoredFromSourceChange}. */
+  public getRestoredFromSourceChange(change: MJRecordChangeEntity): MJRecordChangeEntity | null {
+    return this.GetRestoredFromSourceChange(change);
   }
 
   /**
@@ -621,7 +718,7 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
    */
   private rebuildViewDataIndex(): void {
     this.viewDataById.clear();
-    for (const c of this.viewData) {
+    for (const c of this.ViewData) {
       this.viewDataById.set(NormalizeUUID(c.ID), c);
     }
   }
@@ -630,8 +727,13 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
    * True when the row was produced by a restore operation (either the
    * `Source` is `'Restore'` OR `RestoredFromID` is populated).
    */
-  public isRestoreRow(change: MJRecordChangeEntity): boolean {
+  public IsRestoreRow(change: MJRecordChangeEntity): boolean {
     return this.isRestoreChange(change);
+  }
+
+  /** @deprecated Use {@link IsRestoreRow}. */
+  public isRestoreRow(change: MJRecordChangeEntity): boolean {
+    return this.IsRestoreRow(change);
   }
 
   /**
@@ -640,8 +742,13 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
    * Restoring to the most recent version is a no-op, so the timeline hides
    * the Restore button on this row.
    */
+  public IsMostRecentChange(change: MJRecordChangeEntity): boolean {
+    return this.ViewData.length > 0 && this.ViewData[0] === change;
+  }
+
+  /** @deprecated Use {@link IsMostRecentChange}. */
   public isMostRecentChange(change: MJRecordChangeEntity): boolean {
-    return this.viewData.length > 0 && this.viewData[0] === change;
+    return this.IsMostRecentChange(change);
   }
 
   /**
@@ -651,7 +758,7 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
   public JumpToSourceChange(sourceChange: MJRecordChangeEntity, event: MouseEvent): void {
     event.stopPropagation();
     this.HighlightedChangeID = sourceChange.ID;
-    this.expandedItems.add(sourceChange.ID);
+    this.ExpandedItems.add(sourceChange.ID);
     this.cdr.markForCheck();
 
     // Auto-clear the highlight after 3s
@@ -700,7 +807,7 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
 
   // ─── Display Helpers ────────────────────────────────────────────
 
-  getChangeTypeCardClass(type: string): string {
+  GetChangeTypeCardClass(type: string): string {
     switch (type) {
       case 'Create': return 'type-create';
       case 'Update': return 'type-update';
@@ -710,7 +817,12 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
     }
   }
 
-  getChangeTypeBadgeText(type: string): string {
+  /** @deprecated Use {@link GetChangeTypeCardClass}. */
+  getChangeTypeCardClass(type: string): string {
+    return this.GetChangeTypeCardClass(type);
+  }
+
+  GetChangeTypeBadgeText(type: string): string {
     switch (type) {
       case 'Create': return 'Created';
       case 'Delete': return 'Deleted';
@@ -719,15 +831,25 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
     }
   }
 
+  /** @deprecated Use {@link GetChangeTypeBadgeText}. */
+  getChangeTypeBadgeText(type: string): string {
+    return this.GetChangeTypeBadgeText(type);
+  }
+
   /**
    * Badge text for the row's primary type tag. For restore rows we override
    * the underlying `Type='Update'` and show "Restore" instead — matches the
    * mockup's intent of treating restore as a first-class operation in the
    * timeline rather than a flavor of update.
    */
+  GetEffectiveBadgeText(change: MJRecordChangeEntity): string {
+    if (this.IsRestoreRow(change)) return 'Restore';
+    return this.GetChangeTypeBadgeText(change.Type);
+  }
+
+  /** @deprecated Use {@link GetEffectiveBadgeText}. */
   getEffectiveBadgeText(change: MJRecordChangeEntity): string {
-    if (this.isRestoreRow(change)) return 'Restore';
-    return this.getChangeTypeBadgeText(change.Type);
+    return this.GetEffectiveBadgeText(change);
   }
 
   /**
@@ -735,19 +857,29 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
    * column added by the lineage migration. Returns null when not present
    * or not a restore row.
    */
-  getRestoreReason(change: MJRecordChangeEntity): string | null {
-    if (!this.isRestoreRow(change)) return null;
+  GetRestoreReason(change: MJRecordChangeEntity): string | null {
+    if (!this.IsRestoreRow(change)) return null;
     const reason = (change as unknown as { RestoreReason?: string | null }).RestoreReason;
     return reason && reason.trim().length > 0 ? reason : null;
   }
 
-  getSourceClass(source: string): string {
+  /** @deprecated Use {@link GetRestoreReason}. */
+  getRestoreReason(change: MJRecordChangeEntity): string | null {
+    return this.GetRestoreReason(change);
+  }
+
+  GetSourceClass(source: string): string {
     if (source === 'Restore') return 'source-restore';
     if (source === 'Internal') return 'source-internal';
     return 'source-external';
   }
 
-  getStatusClass(status: string): string {
+  /** @deprecated Use {@link GetSourceClass}. */
+  getSourceClass(source: string): string {
+    return this.GetSourceClass(source);
+  }
+
+  GetStatusClass(status: string): string {
     switch (status) {
       case 'Complete': return 'status-complete';
       case 'Pending': return 'status-pending';
@@ -756,11 +888,21 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
     }
   }
 
-  getTimelineItemLabel(change: MJRecordChangeEntity): string {
-    return `${change.Type} by ${change.User || 'Unknown User'} on ${this.formatFullDateTime(change.ChangedAt)}`;
+  /** @deprecated Use {@link GetStatusClass}. */
+  getStatusClass(status: string): string {
+    return this.GetStatusClass(status);
   }
 
-  getUserInitials(user: string | null): string {
+  GetTimelineItemLabel(change: MJRecordChangeEntity): string {
+    return `${change.Type} by ${change.User || 'Unknown User'} on ${this.FormatFullDateTime(change.ChangedAt)}`;
+  }
+
+  /** @deprecated Use {@link GetTimelineItemLabel}. */
+  getTimelineItemLabel(change: MJRecordChangeEntity): string {
+    return this.GetTimelineItemLabel(change);
+  }
+
+  GetUserInitials(user: string | null): string {
     if (!user) return '?';
     if (user.includes('@')) {
       const local = user.split('@')[0];
@@ -773,18 +915,33 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
     return user.substring(0, 2).toUpperCase();
   }
 
-  getUserDisplayName(user: string | null): string {
+  /** @deprecated Use {@link GetUserInitials}. */
+  getUserInitials(user: string | null): string {
+    return this.GetUserInitials(user);
+  }
+
+  GetUserDisplayName(user: string | null): string {
     if (!user) return 'Unknown';
     if (user.includes('@')) return user.split('@')[0];
     return user;
   }
 
-  getUniqueContributorCount(): number {
-    const users = new Set(this.viewData.map(c => c.User).filter(Boolean));
+  /** @deprecated Use {@link GetUserDisplayName}. */
+  getUserDisplayName(user: string | null): string {
+    return this.GetUserDisplayName(user);
+  }
+
+  GetUniqueContributorCount(): number {
+    const users = new Set(this.ViewData.map(c => c.User).filter(Boolean));
     return users.size;
   }
 
-  formatTime(date: Date): string {
+  /** @deprecated Use {@link GetUniqueContributorCount}. */
+  getUniqueContributorCount(): number {
+    return this.GetUniqueContributorCount();
+  }
+
+  FormatTime(date: Date): string {
     return new Intl.DateTimeFormat('en-US', {
       hour: 'numeric',
       minute: '2-digit',
@@ -792,7 +949,12 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
     }).format(new Date(date));
   }
 
-  formatRelativeTime(date: Date): string {
+  /** @deprecated Use {@link FormatTime}. */
+  formatTime(date: Date): string {
+    return this.FormatTime(date);
+  }
+
+  FormatRelativeTime(date: Date): string {
     const now = new Date();
     const diffMs = now.getTime() - new Date(date).getTime();
     const diffMins = Math.floor(diffMs / 60000);
@@ -811,7 +973,12 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
     }).format(new Date(date));
   }
 
-  formatFullDateTime(date: Date): string {
+  /** @deprecated Use {@link FormatRelativeTime}. */
+  formatRelativeTime(date: Date): string {
+    return this.FormatRelativeTime(date);
+  }
+
+  FormatFullDateTime(date: Date): string {
     return new Intl.DateTimeFormat('en-US', {
       year: 'numeric',
       month: 'long',
@@ -823,16 +990,21 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
     }).format(new Date(date));
   }
 
+  /** @deprecated Use {@link FormatFullDateTime}. */
+  formatFullDateTime(date: Date): string {
+    return this.FormatFullDateTime(date);
+  }
+
   // ─── Change Summary ─────────────────────────────────────────────
 
-  getChangeSummary(change: MJRecordChangeEntity): string {
+  GetChangeSummary(change: MJRecordChangeEntity): string {
     // Restore rows get a distinctive summary so the timeline reads like a
     // sentence — "Restored to 5:56 PM version" rather than yet another
     // "Name and Description changed". The lineage chip carries the full
     // source-version detail.
-    if (this.isRestoreRow(change)) {
-      const src = this.getRestoredFromSourceChange(change);
-      if (src) return `Restored to ${this.formatTime(src.ChangedAt)} version`;
+    if (this.IsRestoreRow(change)) {
+      const src = this.GetRestoredFromSourceChange(change);
+      if (src) return `Restored to ${this.FormatTime(src.ChangedAt)} version`;
       return 'Restored from earlier version';
     }
     if (change.Type === 'Create') return 'Record created';
@@ -850,7 +1022,12 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
     }
   }
 
-  getCreatedFieldCount(change: MJRecordChangeEntity): number {
+  /** @deprecated Use {@link GetChangeSummary}. */
+  getChangeSummary(change: MJRecordChangeEntity): string {
+    return this.GetChangeSummary(change);
+  }
+
+  GetCreatedFieldCount(change: MJRecordChangeEntity): number {
     try {
       if (!change.FullRecordJSON) return 0;
       const record = JSON.parse(change.FullRecordJSON);
@@ -860,6 +1037,11 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
     } catch {
       return 0;
     }
+  }
+
+  /** @deprecated Use {@link GetCreatedFieldCount}. */
+  getCreatedFieldCount(change: MJRecordChangeEntity): number {
+    return this.GetCreatedFieldCount(change);
   }
 
   private extractFieldDisplayNames(changesJson: Record<string, { field?: string }>): string[] {
@@ -885,13 +1067,18 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
 
   // ─── Field Changes (type-aware) ────────────────────────────────
 
-  getFieldChanges(change: MJRecordChangeEntity): FieldChangeInfo[] {
+  GetFieldChanges(change: MJRecordChangeEntity): FieldChangeInfo[] {
     try {
       const changesJson = JSON.parse(change.ChangesJSON || '{}');
       return Object.keys(changesJson).map(fieldKey => this.buildFieldChangeInfo(changesJson[fieldKey]));
     } catch {
       return [];
     }
+  }
+
+  /** @deprecated Use {@link GetFieldChanges}. */
+  getFieldChanges(change: MJRecordChangeEntity): FieldChangeInfo[] {
+    return this.GetFieldChanges(change);
   }
 
   private buildFieldChangeInfo(changeInfo: { field?: string; oldValue?: unknown; newValue?: unknown }): FieldChangeInfo {
@@ -927,7 +1114,7 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
     return 'text';
   }
 
-  getCreatedFields(change: MJRecordChangeEntity): Array<{ name: string; displayName: string; value: string }> {
+  GetCreatedFields(change: MJRecordChangeEntity): Array<{ name: string; displayName: string; value: string }> {
     try {
       if (!change.FullRecordJSON) return [];
 
@@ -944,6 +1131,11 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
     } catch {
       return [];
     }
+  }
+
+  /** @deprecated Use {@link GetCreatedFields}. */
+  getCreatedFields(change: MJRecordChangeEntity): Array<{ name: string; displayName: string; value: string }> {
+    return this.GetCreatedFields(change);
   }
 
   // ─── Value Formatting ───────────────────────────────────────────

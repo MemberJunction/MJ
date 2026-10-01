@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { Component, EventEmitter, Input, Output, Pipe, PipeTransform } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ComponentFixture } from '@angular/core/testing';
@@ -6,6 +6,7 @@ import { renderComponentFixture, query, queryAll, text, click, typeInto, capture
 import { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
 import { ValidationErrorInfo } from '@memberjunction/global';
 import { MjFormFieldComponent } from './form-field.component';
+import { FORM_SECTION_FIELD_HOST, type FormSectionFieldHost } from '../section-indicators/form-section-field-host';
 
 /**
  * DOM-level spec for <mj-form-field> — the single most-used component in MJ forms.
@@ -390,9 +391,17 @@ describe('MjFormFieldComponent (DOM)', () => {
       expect(text(f, '.mj-forms-field-value')).toBe(WIDGET_ID);
     });
 
-    it('flags a required (non-nullable) field with the required-empty modifier when empty', () => {
-      const f = render({ Record: makeWidget({ Name: '' }), FieldName: 'Name', Type: 'textbox', EditMode: true });
+    it('flags a required (non-nullable) field with the required-empty modifier when it has no value', () => {
+      const f = render({ Record: makeWidget({ Name: null }), FieldName: 'Name', Type: 'textbox', EditMode: true });
       expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--required-empty')).toBe(true);
+    });
+
+    it('does NOT flag a required field holding an empty string — that is a value, not absence (#4359)', () => {
+      // A NOT NULL string column accepts '' in SQL Server and in EntityField.Validate(), so the
+      // form must not paint red a value the save will happily accept. Requiring text is a separate
+      // constraint, not an inference from nullability.
+      const f = render({ Record: makeWidget({ Name: '' }), FieldName: 'Name', Type: 'textbox', EditMode: true });
+      expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--required-empty')).toBe(false);
     });
 
     it('does not flag a required field as required-empty when it has a value', () => {
@@ -893,5 +902,84 @@ describe('a server-reported validation error paints the field the way a local on
     typeInto(f, 'input.mj-forms-field-input', 'Gadget Mk II');
     f.detectChanges();
     expect(hasClass(f, '.mj-forms-field', ERROR_CLASS)).toBe(false);
+  });
+});
+
+/**
+ * golive #255 — a field tells the section it renders inside about itself through the injector,
+ * because the section's content query cannot see a field declared in a child component's view.
+ * The panel's half (counting and owning such a field) is in collapsible-panel.component.dom.test.ts;
+ * this pins the field's half: register on construction, withdraw on destroy, and do neither when
+ * no section is in scope.
+ */
+describe('MjFormFieldComponent — declaring itself to its section', () => {
+  function spyHost(): FormSectionFieldHost {
+    return { RegisterField: vi.fn(), UnregisterField: vi.fn(), NotifyFieldChanged: vi.fn() };
+  }
+
+  it('registers with the enclosing FORM_SECTION_FIELD_HOST as soon as it is constructed', () => {
+    const host = spyHost();
+    const f = renderComponentFixture(MjFormFieldComponent, {
+      declarations: [MjFormFieldComponent],
+      imports: [CommonModule, StubMarkdownComponent, StubCodeEditorComponent, StubSafeRichHtmlPipe],
+      providers: [{ provide: FORM_SECTION_FIELD_HOST, useValue: host }],
+      inputs: { Record: makeWidget(), FieldName: 'Name', Type: 'textbox' },
+    });
+    expect(host.RegisterField).toHaveBeenCalledTimes(1);
+    expect(host.RegisterField).toHaveBeenCalledWith(f.componentInstance);
+    expect(f.componentInstance.HostElement).toBe(f.nativeElement);
+    expect(host.UnregisterField).not.toHaveBeenCalled();
+  });
+
+  it('tells the section when its inputs change, since the section may already have been checked', () => {
+    const host = spyHost();
+    const f = renderComponentFixture(MjFormFieldComponent, {
+      declarations: [MjFormFieldComponent],
+      imports: [CommonModule, StubMarkdownComponent, StubCodeEditorComponent, StubSafeRichHtmlPipe],
+      providers: [{ provide: FORM_SECTION_FIELD_HOST, useValue: host }],
+      inputs: { Record: makeWidget(), FieldName: 'Name', Type: 'textbox' },
+    });
+    const afterRender = vi.mocked(host.NotifyFieldChanged).mock.calls.length;
+    expect(afterRender).toBeGreaterThan(0);
+    f.componentRef.setInput('EditMode', true);
+    f.detectChanges();
+    expect(vi.mocked(host.NotifyFieldChanged).mock.calls.length).toBe(afterRender + 1);
+    expect(host.NotifyFieldChanged).toHaveBeenLastCalledWith(f.componentInstance);
+  });
+
+  it('stays quiet when only the FormContext object identity changes, since the form rebuilds it every pass', () => {
+    const host = spyHost();
+    const f = renderComponentFixture(MjFormFieldComponent, {
+      declarations: [MjFormFieldComponent],
+      imports: [CommonModule, StubMarkdownComponent, StubCodeEditorComponent, StubSafeRichHtmlPipe],
+      providers: [{ provide: FORM_SECTION_FIELD_HOST, useValue: host }],
+      inputs: { Record: makeWidget(), FieldName: 'Name', Type: 'textbox', FormContext: { showValidation: false, validationRevision: 0 } },
+    });
+    const afterRender = vi.mocked(host.NotifyFieldChanged).mock.calls.length;
+
+    f.componentRef.setInput('FormContext', { showValidation: false, validationRevision: 0 });
+    f.detectChanges();
+    expect(vi.mocked(host.NotifyFieldChanged).mock.calls.length, 'same content, new object').toBe(afterRender);
+
+    f.componentRef.setInput('FormContext', { showValidation: true, validationRevision: 1 });
+    f.detectChanges();
+    expect(vi.mocked(host.NotifyFieldChanged).mock.calls.length, 'a failed save publishes').toBe(afterRender + 1);
+  });
+
+  it('withdraws on destroy', () => {
+    const host = spyHost();
+    const f = renderComponentFixture(MjFormFieldComponent, {
+      declarations: [MjFormFieldComponent],
+      imports: [CommonModule, StubMarkdownComponent, StubCodeEditorComponent, StubSafeRichHtmlPipe],
+      providers: [{ provide: FORM_SECTION_FIELD_HOST, useValue: host }],
+      inputs: { Record: makeWidget(), FieldName: 'Name', Type: 'textbox' },
+    });
+    f.destroy();
+    expect(host.UnregisterField).toHaveBeenCalledWith(f.componentInstance);
+  });
+
+  it('renders normally with no section in scope — the token is optional', () => {
+    const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox' });
+    expect(text(f, '.mj-forms-field-value')).toBe('Gadget');
   });
 });

@@ -45,8 +45,13 @@ export const DEV_TOOLS_NAME_LIST_CAP = 25;
  * Pure + deterministic so the published context shape stays unit-testable.
  * Never mutates the input. The caller owns de-duplication / ordering.
  */
-export function boundDevToolsNames(names: readonly string[]): string[] {
+export function BoundDevToolsNames(names: readonly string[]): string[] {
     return names.slice(0, DEV_TOOLS_NAME_LIST_CAP);
+}
+
+/** @deprecated Use {@link BoundDevToolsNames}. */
+export function boundDevToolsNames(names: readonly string[]): string[] {
+    return BoundDevToolsNames(names);
 }
 
 // ============================================================================
@@ -102,7 +107,7 @@ export interface EventMonitorAgentContextInput {
 }
 
 /** Build the agent-visible context for the Event Monitor inspector. */
-export function buildEventMonitorAgentContext(input: EventMonitorAgentContextInput): Record<string, unknown> {
+export function BuildEventMonitorAgentContext(input: EventMonitorAgentContextInput): Record<string, unknown> {
     const hasActiveFilters =
         input.TextFilter.length > 0 ||
         input.TypeFilter.length > 0 ||
@@ -133,6 +138,11 @@ export function buildEventMonitorAgentContext(input: EventMonitorAgentContextInp
     }
 
     return context;
+}
+
+/** @deprecated Use {@link BuildEventMonitorAgentContext}. */
+export function buildEventMonitorAgentContext(input: EventMonitorAgentContextInput): Record<string, unknown> {
+    return BuildEventMonitorAgentContext(input);
 }
 
 // ============================================================================
@@ -167,7 +177,7 @@ export interface ClassRegistryAgentContextInput {
 }
 
 /** Build the agent-visible context for the Class Registry inspector. */
-export function buildClassRegistryAgentContext(input: ClassRegistryAgentContextInput): Record<string, unknown> {
+export function BuildClassRegistryAgentContext(input: ClassRegistryAgentContextInput): Record<string, unknown> {
     const context: Record<string, unknown> = {
         TotalClassCount: input.TotalClassCount,
         BaseClassCount: input.BaseClassCount,
@@ -179,6 +189,11 @@ export function buildClassRegistryAgentContext(input: ClassRegistryAgentContextI
     };
     addBoundedNameField(context, 'VisibleBaseClasses', 'VisibleBaseClassCount', input.VisibleBaseClassNames);
     return context;
+}
+
+/** @deprecated Use {@link BuildClassRegistryAgentContext}. */
+export function buildClassRegistryAgentContext(input: ClassRegistryAgentContextInput): Record<string, unknown> {
+    return BuildClassRegistryAgentContext(input);
 }
 
 // ============================================================================
@@ -204,7 +219,7 @@ export interface LazyModuleStatusAgentContextInput {
 }
 
 /** Build the agent-visible context for the Lazy Module Status inspector. */
-export function buildLazyModuleStatusAgentContext(input: LazyModuleStatusAgentContextInput): Record<string, unknown> {
+export function BuildLazyModuleStatusAgentContext(input: LazyModuleStatusAgentContextInput): Record<string, unknown> {
     const pendingModules = Math.max(0, input.TotalModules - input.LoadedModules);
     const context: Record<string, unknown> = {
         Available: input.Available,
@@ -218,6 +233,11 @@ export function buildLazyModuleStatusAgentContext(input: LazyModuleStatusAgentCo
     };
     addBoundedNameField(context, 'VisibleModules', 'VisibleModulesTotal', input.VisibleModuleNames);
     return context;
+}
+
+/** @deprecated Use {@link BuildLazyModuleStatusAgentContext}. */
+export function buildLazyModuleStatusAgentContext(input: LazyModuleStatusAgentContextInput): Record<string, unknown> {
+    return BuildLazyModuleStatusAgentContext(input);
 }
 
 // ============================================================================
@@ -239,14 +259,19 @@ export interface LayoutInspectorAgentContextInput {
 }
 
 /** Build the agent-visible context for the Layout Inspector. */
-export function buildLayoutInspectorAgentContext(input: LayoutInspectorAgentContextInput): Record<string, unknown> {
+export function BuildLayoutInspectorAgentContext(input: LayoutInspectorAgentContextInput): Record<string, unknown> {
     return {
         SelectedElement: input.SelectedSection,
         SelectedSectionLabel: input.SelectedSectionLabel,
         ElementCount: input.SectionCount,
-        AvailableSections: boundDevToolsNames(input.SectionIds),
+        AvailableSections: BoundDevToolsNames(input.SectionIds),
         SnapshotSize: input.SnapshotSize,
     };
+}
+
+/** @deprecated Use {@link BuildLayoutInspectorAgentContext}. */
+export function buildLayoutInspectorAgentContext(input: LayoutInspectorAgentContextInput): Record<string, unknown> {
+    return BuildLayoutInspectorAgentContext(input);
 }
 
 // ============================================================================
@@ -284,16 +309,21 @@ export interface AppStateInspectorAgentContextInput {
  * 🔒 METADATA-ONLY: emits StateSize + KeyCount + section label/ids + top-level
  * KEY NAMES. NEVER the state values themselves.
  */
-export function buildAppStateInspectorAgentContext(input: AppStateInspectorAgentContextInput): Record<string, unknown> {
+export function BuildAppStateInspectorAgentContext(input: AppStateInspectorAgentContextInput): Record<string, unknown> {
     const context: Record<string, unknown> = {
         StateSize: input.StateSize,
         KeyCount: input.KeyCount,
         ActiveSection: input.ActiveSection,
         ActiveSectionLabel: input.ActiveSectionLabel,
-        AvailableSections: boundDevToolsNames(input.SectionIds),
+        AvailableSections: BoundDevToolsNames(input.SectionIds),
     };
     addBoundedNameField(context, 'TopLevelKeys', 'TopLevelKeyTotal', input.TopLevelKeys);
     return context;
+}
+
+/** @deprecated Use {@link BuildAppStateInspectorAgentContext}. */
+export function buildAppStateInspectorAgentContext(input: AppStateInspectorAgentContextInput): Record<string, unknown> {
+    return BuildAppStateInspectorAgentContext(input);
 }
 
 // ============================================================================
@@ -332,7 +362,7 @@ export interface SettingsExplorerAgentContextInput {
  * 🔒 METADATA-ONLY: emits counts + scope + the search term + setting KEY NAMES.
  * NEVER setting values.
  */
-export function buildSettingsExplorerAgentContext(input: SettingsExplorerAgentContextInput): Record<string, unknown> {
+export function BuildSettingsExplorerAgentContext(input: SettingsExplorerAgentContextInput): Record<string, unknown> {
     const context: Record<string, unknown> = {
         SettingCount: input.SettingCount,
         UserSettingCount: input.UserSettingCount,
@@ -344,6 +374,11 @@ export function buildSettingsExplorerAgentContext(input: SettingsExplorerAgentCo
     };
     addBoundedNameField(context, 'SettingKeys', 'SettingKeyTotal', input.SettingKeys);
     return context;
+}
+
+/** @deprecated Use {@link BuildSettingsExplorerAgentContext}. */
+export function buildSettingsExplorerAgentContext(input: SettingsExplorerAgentContextInput): Record<string, unknown> {
+    return BuildSettingsExplorerAgentContext(input);
 }
 
 // ============================================================================
@@ -364,7 +399,7 @@ function addBoundedNameField(
     if (names.length === 0) {
         return;
     }
-    context[listKey] = boundDevToolsNames(names);
+    context[listKey] = BoundDevToolsNames(names);
     if (names.length > DEV_TOOLS_NAME_LIST_CAP) {
         context[countKey] = names.length;
     }

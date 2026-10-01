@@ -4,7 +4,7 @@
  * convert_charindex, convert_stuff, convert_string_concat, convert_iif,
  * convert_top_to_limit, etc.
  */
-import { resolveInlineType } from './TypeResolver.js';
+import { ResolveInlineType } from './TypeResolver.js';
 
 /**
  * Split SQL into segments of code, string literals, and comments.
@@ -83,11 +83,16 @@ function segmentSQL(sql: string): Array<{ text: string; type: 'code' | 'string' 
  * Apply a transformation function only to SQL code segments,
  * preserving string literals and comments unchanged.
  */
-export function transformCodeOnly(sql: string, transform: (code: string) => string): string {
+export function TransformCodeOnly(sql: string, transform: (code: string) => string): string {
   return segmentSQL(sql).map(seg => {
     if (seg.type !== 'code') return seg.text;
     return transform(seg.text);
   }).join('');
+}
+
+/** @deprecated Use {@link TransformCodeOnly}. */
+export function transformCodeOnly(sql: string, transform: (code: string) => string): string {
+  return TransformCodeOnly(sql, transform);
 }
 
 /**
@@ -99,8 +104,13 @@ export function transformCodeOnly(sql: string, transform: (code: string) => stri
  * pattern means — a `$` becomes an end-anchor, so the pattern matches nothing and
  * the conversion quietly emits nothing. See issue #3171.
  */
-export function escapeRegExp(literal: string): string {
+export function EscapeRegExp(literal: string): string {
   return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** @deprecated Use {@link EscapeRegExp}. */
+export function escapeRegExp(literal: string): string {
+  return EscapeRegExp(literal);
 }
 
 /**
@@ -141,7 +151,7 @@ export function StripComments(sql: string): string {
  * through one module.
  */
 export function QuoteConstraintNames(sql: string): string {
-  return transformCodeOnly(sql, (code) =>
+  return TransformCodeOnly(sql, (code) =>
     code.replace(/\bCONSTRAINT\s+(?!IF\s+EXISTS\b)([A-Za-z_]\w*)\b/gi, (match, name: string) =>
       (/[A-Z]/.test(name) ? `CONSTRAINT "${name}"` : match)));
 }
@@ -165,7 +175,7 @@ export function QuoteConstraintNames(sql: string): string {
  * identical across both so reviewers reading converter output recognize
  * the pattern at a glance.
  */
-export function emitDropOverloadsBlock(funcName: string, schema: string = '__mj'): string {
+export function EmitDropOverloadsBlock(funcName: string, schema: string = '__mj'): string {
   return (
     `DO $$ DECLARE r record;\n` +
     `BEGIN\n` +
@@ -178,11 +188,16 @@ export function emitDropOverloadsBlock(funcName: string, schema: string = '__mj'
   );
 }
 
+/** @deprecated Use {@link EmitDropOverloadsBlock}. */
+export function emitDropOverloadsBlock(funcName: string, schema: string = '__mj'): string {
+  return EmitDropOverloadsBlock(funcName, schema);
+}
+
 /** Convert [schema].[name] bracket identifiers to schema."name" double-quote format.
  *  Also converts T-SQL temp table #name references to PostgreSQL equivalents.
  *  Skips content inside SQL string literals and comments. */
-export function convertIdentifiers(sql: string): string {
-  return transformCodeOnly(sql, (code) => {
+export function ConvertIdentifiers(sql: string): string {
+  return TransformCodeOnly(sql, (code) => {
     // Temp table: CREATE TABLE #name → CREATE TEMP TABLE "name"
     code = code.replace(/\bCREATE\s+TABLE\s+#(\w+)/gi, 'CREATE TEMP TABLE "$1"');
     // Strip # from remaining temp object references: #name → "name"
@@ -206,17 +221,27 @@ export function convertIdentifiers(sql: string): string {
   });
 }
 
+/** @deprecated Use {@link ConvertIdentifiers}. */
+export function convertIdentifiers(sql: string): string {
+  return ConvertIdentifiers(sql);
+}
+
 /**
  * Convert DATEADD(unit, num, date) → (date + num * INTERVAL '1 unit')
  * Convert DATEDIFF(unit, start, end) → EXTRACT/age patterns
  * Convert DATEPART(unit, date) → EXTRACT(field FROM date)
  */
-export function convertDateFunctions(sql: string): string {
+export function ConvertDateFunctions(sql: string): string {
   sql = convertDateAdd(sql);
   sql = convertDateDiff(sql);
   sql = convertDatePart(sql);
   sql = convertSimpleDateFunctions(sql);
   return sql;
+}
+
+/** @deprecated Use {@link ConvertDateFunctions}. */
+export function convertDateFunctions(sql: string): string {
+  return ConvertDateFunctions(sql);
 }
 
 /**
@@ -378,7 +403,7 @@ function convertDatePart(sql: string): string {
  * Convert CHARINDEX(substr, str[, start]) → POSITION(substr IN str)
  * 3-arg form: → (POSITION(substr IN SUBSTRING(str FROM start)) + start - 1)
  */
-export function convertCharIndex(sql: string): string {
+export function ConvertCharIndex(sql: string): string {
   return sql.replace(
     /\bCHARINDEX\s*\(\s*([^,]+)\s*,\s*([^,)]+)(?:\s*,\s*([^)]+))?\s*\)/gi,
     (_match, substr: string, str: string, start?: string) => {
@@ -393,17 +418,27 @@ export function convertCharIndex(sql: string): string {
   );
 }
 
+/** @deprecated Use {@link ConvertCharIndex}. */
+export function convertCharIndex(sql: string): string {
+  return ConvertCharIndex(sql);
+}
+
 /**
  * Convert STUFF(string, start, length, replacement) →
  * OVERLAY(string PLACING replacement FROM start FOR length)
  */
-export function convertStuff(sql: string): string {
+export function ConvertStuff(sql: string): string {
   return sql.replace(
     /\bSTUFF\s*\(\s*([^,]+)\s*,\s*([^,]+)\s*,\s*([^,]+)\s*,\s*([^)]+)\s*\)/gi,
     (_match, str: string, start: string, length: string, replacement: string) => {
       return `OVERLAY(${str.trim()} PLACING ${replacement.trim()} FROM ${start.trim()} FOR ${length.trim()})`;
     }
   );
+}
+
+/** @deprecated Use {@link ConvertStuff}. */
+export function convertStuff(sql: string): string {
+  return ConvertStuff(sql);
 }
 
 /** PG type strings that represent textual/string data */
@@ -450,7 +485,7 @@ function isStringColumn(
  * uses column type information to disambiguate "ColA" + "ColB" —
  * converting to || only when at least one side is a known string type.
  */
-export function convertStringConcat(
+export function ConvertStringConcat(
   sql: string,
   tableColumns?: Map<string, Map<string, string>>
 ): string {
@@ -528,11 +563,19 @@ export function convertStringConcat(
   return segments.map(s => s.text).join('');
 }
 
+/** @deprecated Use {@link ConvertStringConcat}. */
+export function convertStringConcat(
+  sql: string,
+  tableColumns?: Map<string, Map<string, string>>
+): string {
+  return ConvertStringConcat(sql, tableColumns);
+}
+
 /**
  * Convert IIF(condition, true_val, false_val) → CASE WHEN condition THEN true_val ELSE false_val END
  * Uses paren-aware argument splitting to handle nested function calls.
  */
-export function convertIIF(sql: string): string {
+export function ConvertIIF(sql: string): string {
   let iterations = 0;
   const maxIterations = 50;
 
@@ -564,6 +607,11 @@ export function convertIIF(sql: string): string {
     iterations++;
   }
   return sql;
+}
+
+/** @deprecated Use {@link ConvertIIF}. */
+export function convertIIF(sql: string): string {
+  return ConvertIIF(sql);
 }
 
 /** Find the position of the matching closing parenthesis, respecting nesting and string literals */
@@ -642,7 +690,7 @@ function splitTopLevelCommas(str: string): string[] {
  * Moves TOP N from after SELECT to LIMIT N at end of statement.
  * Skips matches inside string literals and comments.
  */
-export function convertTopToLimit(sql: string): string {
+export function ConvertTopToLimit(sql: string): string {
   // Build protected ranges from string literals and comments
   const segments = segmentSQL(sql);
   const protectedRanges: Array<{ start: number; end: number }> = [];
@@ -697,6 +745,11 @@ export function convertTopToLimit(sql: string): string {
   return sql;
 }
 
+/** @deprecated Use {@link ConvertTopToLimit}. */
+export function convertTopToLimit(sql: string): string {
+  return ConvertTopToLimit(sql);
+}
+
 /**
  * Convert common T-SQL CAST patterns to PostgreSQL types.
  * Used in views, procedures, and expressions.
@@ -708,7 +761,7 @@ export function convertTopToLimit(sql: string): string {
  * exist`. We strip quotes from known T-SQL type names first so the
  * existing patterns below match.
  */
-export function convertCastTypes(sql: string): string {
+export function ConvertCastTypes(sql: string): string {
   // Strip quotes from quoted T-SQL type tokens produced by convertIdentifiers
   // when the source SQL had bracket-wrapped types (e.g. CAST(x AS [INT])).
   const quotedTypes = [
@@ -736,11 +789,16 @@ export function convertCastTypes(sql: string): string {
   return sql;
 }
 
+/** @deprecated Use {@link ConvertCastTypes}. */
+export function convertCastTypes(sql: string): string {
+  return ConvertCastTypes(sql);
+}
+
 /**
  * Convert T-SQL CONVERT(type, expr[, style]) → CAST(expr AS mapped_type).
  * Drops the optional style parameter.
  */
-export function convertConvertFunction(sql: string): string {
+export function ConvertConvertFunction(sql: string): string {
   // 3-arg: CONVERT(type, expr, style)
   sql = sql.replace(
     /\bCONVERT\s*\(\s*(\w+(?:\s*\([^)]*\))?)\s*,\s*([^,)]+)\s*,\s*[^)]+\)/gi,
@@ -758,12 +816,17 @@ export function convertConvertFunction(sql: string): string {
   return sql;
 }
 
+/** @deprecated Use {@link ConvertConvertFunction}. */
+export function convertConvertFunction(sql: string): string {
+  return ConvertConvertFunction(sql);
+}
+
 /**
  * Map a T-SQL type name to PostgreSQL for inline CAST/CONVERT usage.
  * Delegates to the centralized TypeResolver for consistent mapping.
  */
 function mapInlineType(tsqlType: string): string {
-  return resolveInlineType(tsqlType);
+  return ResolveInlineType(tsqlType);
 }
 
 /**
@@ -783,16 +846,26 @@ function mapInlineType(tsqlType: string): string {
  * operator, comma, equals, start of line). This leaves N' inside a
  * string alone.
  */
-export function removeNPrefix(sql: string): string {
+export function RemoveNPrefix(sql: string): string {
   // Anchors: start of string, or after one of the "string-start" context chars.
   // Whitespace, comma, paren, comparison operators, brackets, semicolon.
   return sql.replace(/(^|[\s(,=<>!+\-*\/[;])N'/g, "$1'");
 }
 
+/** @deprecated Use {@link RemoveNPrefix}. */
+export function removeNPrefix(sql: string): string {
+  return RemoveNPrefix(sql);
+}
+
 /** Remove COLLATE clauses */
-export function removeCollate(sql: string): string {
+export function RemoveCollate(sql: string): string {
   return sql.replace(/\s+COLLATE\s+SQL_Latin1_General_CP1_CI_AS/gi, '')
     .replace(/\s+COLLATE\s+\S+/gi, '');
+}
+
+/** @deprecated Use {@link RemoveCollate}. */
+export function removeCollate(sql: string): string {
+  return RemoveCollate(sql);
 }
 
 /** SQL keywords that should NOT be quoted by quotePascalCaseIdentifiers */
@@ -840,8 +913,8 @@ const PASCAL_QUOTE_KEYWORDS = new Set([
  * and only quotes identifiers in code segments.
  * Used by InsertRule to quote column names in INSERT/UPDATE/DELETE statements.
  */
-export function quotePascalCaseIdentifiers(sql: string): string {
-  return transformCodeOnly(sql, (code) => {
+export function QuotePascalCaseIdentifiers(sql: string): string {
+  return TransformCodeOnly(sql, (code) => {
     return code.replace(/(?<!")(?<!\w)([A-Z]\w*)(?!")(?!\w)/g, (match, word: string) => {
       if (PASCAL_QUOTE_KEYWORDS.has(word.toUpperCase())) return match;
       return `"${word}"`;
@@ -849,8 +922,13 @@ export function quotePascalCaseIdentifiers(sql: string): string {
   });
 }
 
+/** @deprecated Use {@link QuotePascalCaseIdentifiers}. */
+export function quotePascalCaseIdentifiers(sql: string): string {
+  return QuotePascalCaseIdentifiers(sql);
+}
+
 /** Common function replacements */
-export function convertCommonFunctions(sql: string): string {
+export function ConvertCommonFunctions(sql: string): string {
   sql = sql.replace(/\bISNULL\s*\(/gi, 'COALESCE(');
   sql = sql.replace(/\bGETUTCDATE\s*\(\s*\)/gi, 'NOW()');
   sql = sql.replace(/\bGETDATE\s*\(\s*\)/gi, 'NOW()');
@@ -874,6 +952,11 @@ export function convertCommonFunctions(sql: string): string {
   return sql;
 }
 
+/** @deprecated Use {@link ConvertCommonFunctions}. */
+export function convertCommonFunctions(sql: string): string {
+  return ConvertCommonFunctions(sql);
+}
+
 /**
  * Convert SQL Server BIT comparisons (`"Col" = 1` / `= 0`) to PostgreSQL boolean
  * literals (`"Col" = TRUE` / `= FALSE`) for columns known to be BOOLEAN.
@@ -887,7 +970,7 @@ export function convertCommonFunctions(sql: string): string {
  * AND never a non-boolean type in any other table, so an integer column that
  * merely shares a name with a boolean column elsewhere is left untouched.
  */
-export function collectBooleanColumnNames(
+export function CollectBooleanColumnNames(
   tableColumns: Map<string, Map<string, string>>,
 ): Set<string> {
   const boolNames = new Set<string>();
@@ -903,11 +986,18 @@ export function collectBooleanColumnNames(
   return boolNames;
 }
 
-export function convertBooleanLiteralComparisons(
+/** @deprecated Use {@link CollectBooleanColumnNames}. */
+export function collectBooleanColumnNames(
+  tableColumns: Map<string, Map<string, string>>,
+): Set<string> {
+  return CollectBooleanColumnNames(tableColumns);
+}
+
+export function ConvertBooleanLiteralComparisons(
   sql: string,
   tableColumns: Map<string, Map<string, string>>,
 ): string {
-  const boolNames = collectBooleanColumnNames(tableColumns);
+  const boolNames = CollectBooleanColumnNames(tableColumns);
   if (boolNames.size === 0) return sql;
 
   // `(?![\w.])` guards against matching inside a larger number/identifier
@@ -919,6 +1009,14 @@ export function convertBooleanLiteralComparisons(
         ? `"${col}" ${op} ${val === '1' ? 'TRUE' : 'FALSE'}`
         : match,
   );
+}
+
+/** @deprecated Use {@link ConvertBooleanLiteralComparisons}. */
+export function convertBooleanLiteralComparisons(
+  sql: string,
+  tableColumns: Map<string, Map<string, string>>,
+): string {
+  return ConvertBooleanLiteralComparisons(sql, tableColumns);
 }
 
 /**
@@ -965,7 +1063,7 @@ function splitArgs(body: string): string[] {
  * so it is order-independent relative to identifier quoting. PG 16+ provides the IS JSON
  * predicate; JSON_VALUE's `$.`-rooted path is rewritten to jsonb path-extraction operators.
  */
-export function convertJsonFunctions(sql: string): string {
+export function ConvertJsonFunctions(sql: string): string {
   sql = convertNamedJsonCall(sql, 'JSON_VALUE', (args, after) => {
     if (args.length < 2) return null;
     const expr = args[0];
@@ -994,6 +1092,11 @@ export function convertJsonFunctions(sql: string): string {
   });
 
   return sql;
+}
+
+/** @deprecated Use {@link ConvertJsonFunctions}. */
+export function convertJsonFunctions(sql: string): string {
+  return ConvertJsonFunctions(sql);
 }
 
 /**
@@ -1041,7 +1144,7 @@ function convertNamedJsonCall(
  * Each statement's VALUES region is bounded by its own top-level `;`, so an
  * intervening statement can never be rewritten with the wrong table's positions.
  */
-export function castBooleanInsertValues(
+export function CastBooleanInsertValues(
   sql: string,
   tableColumns: Map<string, Map<string, string>>,
 ): string {
@@ -1064,6 +1167,14 @@ export function castBooleanInsertValues(
   }
 
   return cursor === 0 ? sql : out + sql.slice(cursor);
+}
+
+/** @deprecated Use {@link CastBooleanInsertValues}. */
+export function castBooleanInsertValues(
+  sql: string,
+  tableColumns: Map<string, Map<string, string>>,
+): string {
+  return CastBooleanInsertValues(sql, tableColumns);
 }
 
 /** Ordinal positions in an INSERT column list whose column is BOOLEAN on PG. */

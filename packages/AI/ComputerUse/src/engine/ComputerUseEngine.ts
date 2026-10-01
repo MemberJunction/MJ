@@ -33,7 +33,7 @@ import { HybridJudge } from '../judge/HybridJudge.js';
 import { ToolProvider } from '../tools/ToolProvider.js';
 import { ResponseParser } from './ResponseParser.js';
 import { RunContext } from './RunContext.js';
-import { computePerceptualHash, hashesSimilar } from '../utils/perceptual-hash.js';
+import { ComputePerceptualHash, HashesSimilar } from '../utils/perceptual-hash.js';
 import type { ReplayFrame } from './verdict.js';
 
 import { RunComputerUseParams, ModelConfig, RunCheckpoint, ReplayHealPolicy } from '../types/params.js';
@@ -55,50 +55,50 @@ import { ComputerUseAuthConfig } from '../types/auth.js';
 import { SettleConfig, DEFAULT_BUSY_MARKERS, LoopConfig } from '../types/app-profile.js';
 import type { SettleReason } from '../types/app-profile.js';
 import {
-    resolveSettleExit,
-    computeStateSignature,
-    detectLoop,
-    stateRepeatThresholdFor,
-    evaluateAuthDetour,
+    ResolveSettleExit,
+    ComputeStateSignature,
+    DetectLoop,
+    StateRepeatThresholdFor,
+    EvaluateAuthDetour,
     CancellationError,
     StepDeadlineError,
-    raceStepAgainstDeadline,
-    wallClockCeilingMs,
-    abortableDelay,
-    timeBudgetExpiryReason,
-    evaluateBatchStop,
+    RaceStepAgainstDeadline,
+    WallClockCeilingMs,
+    AbortableDelay,
+    TimeBudgetExpiryReason,
+    EvaluateBatchStop,
     DEFAULT_MAX_ACTIONS_PER_BATCH,
 } from './step-control.js';
-import { serializeInteractiveElements, formatDiagnosticsDigest } from './perception.js';
-import { traceUrlMatches, hashGoal } from './trace.js';
+import { SerializeInteractiveElements, FormatDiagnosticsDigest } from './perception.js';
+import { TraceUrlMatches, HashGoal } from './trace.js';
 import {
-    planReplayActions,
-    evaluatePrecondition,
-    evaluatePostcondition,
-    targetSelector,
-    reresolveTarget,
-    shouldAcceptHeal,
-    isSelectorHealable,
+    PlanReplayActions,
+    EvaluatePrecondition,
+    EvaluatePostcondition,
+    TargetSelector,
+    ReresolveTarget,
+    ShouldAcceptHeal,
+    IsSelectorHealable,
 } from './replay.js';
 import type { GuardResult } from './replay.js';
 import {
-    gateImpossibleVerdict,
+    GateImpossibleVerdict,
     DEFAULT_IMPOSSIBLE_QUORUM,
-    executeGoalPostconditions,
-    evaluatePreludeLanding,
-    makeJudgeCacheKey,
+    ExecuteGoalPostconditions,
+    EvaluatePreludeLanding,
+    MakeJudgeCacheKey,
     JudgeVerdictCache,
-    isCheckpointRun,
-    latchDeterministic,
-    latchVisualFromVerdict,
-    unlatchedVisualCriteria,
-    allCheckpointsMet,
-    countMetCheckpoints,
-    synthesizeCheckpointVerdict,
-    findCheckpoint,
-    checkpointVisualCriteria,
-    selectCheckpointFrame,
-    buildFailureMemo,
+    IsCheckpointRun,
+    LatchDeterministic,
+    LatchVisualFromVerdict,
+    UnlatchedVisualCriteria,
+    AllCheckpointsMet,
+    CountMetCheckpoints,
+    SynthesizeCheckpointVerdict,
+    FindCheckpoint,
+    CheckpointVisualCriteria,
+    SelectCheckpointFrame,
+    BuildFailureMemo,
 } from './verdict.js';
 import type { ComputerUseFailureReason } from '../types/results.js';
 import { ComputerUseTrace, ReplayInfo, ReplayStepResult, TraceStep, TraceAction, TraceTarget } from '../types/trace.js';
@@ -685,9 +685,9 @@ export class ComputerUseEngine {
             ? await this.waitForTargetVisible(prelude.ExpectSelector!, ComputerUseEngine.REPLAY_PRECONDITION_TIMEOUT_MS)
             : false;
         const urlMatched = hasUrl
-            ? traceUrlMatches(prelude.ExpectUrlPattern!, this.browserAdapter.CurrentUrl, volatile)
+            ? TraceUrlMatches(prelude.ExpectUrlPattern!, this.browserAdapter.CurrentUrl, volatile)
             : false;
-        const landing = evaluatePreludeLanding({ hasSelector, selectorVisible, hasUrl, urlMatched });
+        const landing = EvaluatePreludeLanding({ hasSelector, selectorVisible, hasUrl, urlMatched });
         if (!landing.landed) {
             this.logError(`Prelude landing check failed — ${landing.reason} (agent will start from the current page)`);
         } else {
@@ -800,11 +800,11 @@ export class ComputerUseEngine {
             // assertions (free, every step) or this step's visual-criteria judge
             // verdict now hold. When every checkpoint is met, the tour is complete
             // — scored on the synthesized latch verdict, not a single end-state judge.
-            if (isCheckpointRun(context.Params.Checkpoints)) {
-                const metBefore = countMetCheckpoints(context.Params.Checkpoints, context.CheckpointState);
+            if (IsCheckpointRun(context.Params.Checkpoints)) {
+                const metBefore = CountMetCheckpoints(context.Params.Checkpoints, context.CheckpointState);
                 this.updateCheckpointLatches(context, step);
                 if (step.JudgeVerdict) {
-                    latchVisualFromVerdict(context.Params.Checkpoints, context.CheckpointState, step.JudgeVerdict, stepNumber);
+                    LatchVisualFromVerdict(context.Params.Checkpoints, context.CheckpointState, step.JudgeVerdict, stepNumber);
                 }
                 // A newly-latched checkpoint IS progress, so the loop detectors
  // must start over. Without this, a tour dies on
@@ -814,15 +814,15 @@ export class ComputerUseEngine {
                 // "click History then click Review Queue to switch back"). Tests
                 // were being killed as LoopDetected several steps AFTER the judge
                 // had confirmed a section complete.
-                const metAfter = countMetCheckpoints(context.Params.Checkpoints, context.CheckpointState);
+                const metAfter = CountMetCheckpoints(context.Params.Checkpoints, context.CheckpointState);
                 if (metAfter > metBefore) {
                     stateSignatures.length = 0;
                     loopTrips = 0;
                     context.LoopEvidence = undefined;
                     this.log(`Step ${stepNumber} — checkpoint progress (${metBefore} → ${metAfter}); loop detection reset`);
                 }
-                if (allCheckpointsMet(context.Params.Checkpoints, context.CheckpointState)) {
-                    const verdict = synthesizeCheckpointVerdict(context.Params.Checkpoints, context.CheckpointState);
+                if (AllCheckpointsMet(context.Params.Checkpoints, context.CheckpointState)) {
+                    const verdict = SynthesizeCheckpointVerdict(context.Params.Checkpoints, context.CheckpointState);
                     this.log(`Step ${stepNumber} — all ${context.Params.Checkpoints.length} checkpoints reached; completing`);
                     const result = this.buildResult(context, 'Completed', true, verdict);
                     this.onRunComplete(result);
@@ -853,7 +853,7 @@ export class ComputerUseEngine {
                 // checkpoint block above), so its Done/Impossible describe those
                 // criteria, NOT the whole tour — completion is decided by the latch
                 // check above.
-                if (!isCheckpointRun(context.Params.Checkpoints)) {
+                if (!IsCheckpointRun(context.Params.Checkpoints)) {
                     // If the judge says done, we're done
                     if (step.JudgeVerdict.Done) {
                         const result = this.buildResult(context, 'Completed', true, lastVerdict);
@@ -865,7 +865,7 @@ export class ComputerUseEngine {
                     // quorum of concurring Impossible verdicts across ≥2 steps, and never
                     // accept Impossible while the page is still loading (settle gave up as
                     // 'budget') — a boot screen is not evidence the goal is impossible.
-                    const impossibleGate = gateImpossibleVerdict({
+                    const impossibleGate = GateImpossibleVerdict({
                         impossible: step.JudgeVerdict.Impossible,
                         pageLoading: step.SettleReason === 'budget',
                         priorCount: impossibleCount,
@@ -889,7 +889,7 @@ export class ComputerUseEngine {
             // actions, requested judgement) but the judge keeps disagreeing, that
             // is a genuine, truthful Failed outcome — not an infrastructure Error
             // and not worth burning the rest of the step budget.
-            if (!isCheckpointRun(context.Params.Checkpoints) &&
+            if (!IsCheckpointRun(context.Params.Checkpoints) &&
                 producedNothing && step.RequestedJudgement && step.JudgeVerdict &&
                 !step.JudgeVerdict.Done && !step.JudgeVerdict.Impossible) {
                 consecutiveJudgeDisagreements++;
@@ -907,9 +907,9 @@ export class ComputerUseEngine {
             // is still booting (settle gave up as 'budget') — waiting on a boot
  // screen is correct recovery, not a loop (contradiction fix).
             if (step.SettleReason !== 'budget') {
-                const signature = computeStateSignature(step.UrlAfter, step.ScreenshotHash, loopCfg.VolatileParams);
+                const signature = ComputeStateSignature(step.UrlAfter, step.ScreenshotHash, loopCfg.VolatileParams);
                 stateSignatures.push(signature);
-                const loop = detectLoop(stateSignatures, stateRepeatThreshold, cycleRepeatThreshold);
+                const loop = DetectLoop(stateSignatures, stateRepeatThreshold, cycleRepeatThreshold);
                 if (loop) {
                     loopTrips++;
                     if (loopTrips >= loopCfg.TerminateAfterTrips) {
@@ -954,12 +954,12 @@ export class ComputerUseEngine {
      * left alone so a genuinely wedged run still ends early.
      */
     private effectiveStateRepeatThreshold(context: RunContext, loopCfg: LoopConfig): number {
-        const checkpointCount = isCheckpointRun(context.Params.Checkpoints)
+        const checkpointCount = IsCheckpointRun(context.Params.Checkpoints)
             ? context.Params.Checkpoints.length
             : 0;
         const criteriaCount = context.Params.ValidationCriteria?.length ?? 0;
         const requestedParts = Math.max(checkpointCount, criteriaCount);
-        const allowance = stateRepeatThresholdFor(loopCfg.StateRepeatThreshold, requestedParts);
+        const allowance = StateRepeatThresholdFor(loopCfg.StateRepeatThreshold, requestedParts);
         if (allowance !== loopCfg.StateRepeatThreshold) {
             this.log(
                 `Goal has ${requestedParts} requested part(s) (${checkpointCount ? 'checkpoints' : 'criteria'}): ` +
@@ -1001,10 +1001,10 @@ export class ComputerUseEngine {
         const maxMs = context.Params.MaxExecutionTimeMs;
         // No budget configured: still race the abort, so Stop() can unwind.
         if (!maxMs || maxMs <= 0) {
-            return raceStepAgainstDeadline(step, null, 'no budget', this.abortController.signal);
+            return RaceStepAgainstDeadline(step, null, 'no budget', this.abortController.signal);
         }
-        const ceiling = wallClockCeilingMs(maxMs);
-        return raceStepAgainstDeadline(
+        const ceiling = WallClockCeilingMs(maxMs);
+        return RaceStepAgainstDeadline(
             step,
             Math.max(0, ceiling - context.ElapsedMs),
             `wall-clock ceiling (${ceiling}ms, settle included)`,
@@ -1013,7 +1013,7 @@ export class ComputerUseEngine {
     }
 
     private timeBudgetExpiry(context: RunContext, cumulativeSettleMs: number): string | null {
-        return timeBudgetExpiryReason(context.ElapsedMs, cumulativeSettleMs, context.Params.MaxExecutionTimeMs);
+        return TimeBudgetExpiryReason(context.ElapsedMs, cumulativeSettleMs, context.Params.MaxExecutionTimeMs);
     }
 
     // ─── Checkpoint Tour ───────────────────────────────────
@@ -1025,7 +1025,7 @@ export class ComputerUseEngine {
      * checks at all latches vacuously.
      */
     private warnOnCheckpointMisconfig(context: RunContext): void {
-        if (!isCheckpointRun(context.Params.Checkpoints)) {
+        if (!IsCheckpointRun(context.Params.Checkpoints)) {
             return;
         }
         const grounding = context.Params.ElementGrounding === true;
@@ -1061,7 +1061,7 @@ export class ComputerUseEngine {
             urls.push(context.CurrentUrl);
         }
         for (const url of new Set(urls)) {
-            latchDeterministic(checkpoints, context.CheckpointState, { url, elements, volatileParams }, step.StepNumber);
+            LatchDeterministic(checkpoints, context.CheckpointState, { url, elements, volatileParams }, step.StepNumber);
         }
     }
 
@@ -1077,10 +1077,10 @@ export class ComputerUseEngine {
      * calls. Non-tour runs use the authored {@link RunComputerUseParams.ValidationCriteria}.
      */
     private activeJudgeCriteria(context: RunContext, signaledCheckpoint?: string): string[] | undefined {
-        if (isCheckpointRun(context.Params.Checkpoints)) {
+        if (IsCheckpointRun(context.Params.Checkpoints)) {
             const scoped = signaledCheckpoint
-                ? checkpointVisualCriteria(context.Params.Checkpoints, context.CheckpointState, signaledCheckpoint)
-                : unlatchedVisualCriteria(context.Params.Checkpoints, context.CheckpointState);
+                ? CheckpointVisualCriteria(context.Params.Checkpoints, context.CheckpointState, signaledCheckpoint)
+                : UnlatchedVisualCriteria(context.Params.Checkpoints, context.CheckpointState);
             return scoped.length > 0 ? scoped : undefined;
         }
         return context.Params.ValidationCriteria;
@@ -1097,8 +1097,8 @@ export class ComputerUseEngine {
         stepNumber: number,
         lastVerdict?: JudgeVerdict
     ): Promise<JudgeVerdict | undefined> {
-        if (isCheckpointRun(context.Params.Checkpoints)) {
-            return synthesizeCheckpointVerdict(context.Params.Checkpoints, context.CheckpointState);
+        if (IsCheckpointRun(context.Params.Checkpoints)) {
+            return SynthesizeCheckpointVerdict(context.Params.Checkpoints, context.CheckpointState);
         }
         return this.forceFinalJudge(context, stepNumber, lastVerdict);
     }
@@ -1109,8 +1109,8 @@ export class ComputerUseEngine {
      * otherwise pass the given verdict through unchanged.
      */
     private terminalVerdict(context: RunContext, fallback?: JudgeVerdict): JudgeVerdict | undefined {
-        if (isCheckpointRun(context.Params.Checkpoints)) {
-            return synthesizeCheckpointVerdict(context.Params.Checkpoints, context.CheckpointState);
+        if (IsCheckpointRun(context.Params.Checkpoints)) {
+            return SynthesizeCheckpointVerdict(context.Params.Checkpoints, context.CheckpointState);
         }
         return fallback;
     }
@@ -1171,7 +1171,7 @@ export class ComputerUseEngine {
         const agentLogsInHere = !!this.authHandler?.GetFormLoginCredentials(
             NavigationGuard.ExtractDomain(currentUrl)
         );
-        const decision = evaluateAuthDetour(
+        const decision = EvaluateAuthDetour(
             currentUrl,
             authCfg.IdentityProviderPatterns,
             context.AuthDetourCount,
@@ -1289,7 +1289,7 @@ export class ComputerUseEngine {
             // replayed trajectory passes through them. Free, and REQUIRED here —
             // a tour's earlier sections are only on screen mid-trajectory, so
             // latching solely at the end-state would never satisfy them.
-            if (isCheckpointRun(context.Params.Checkpoints)) {
+            if (IsCheckpointRun(context.Params.Checkpoints)) {
                 this.updateCheckpointLatches(context, step);
             }
 
@@ -1310,7 +1310,7 @@ export class ComputerUseEngine {
         // effect — a rendered comparison, an opened drawer — is otherwise seen by
         // nothing, and a tour whose closing section IS the point of the test scores
         // permanently short of its own checkpoints.
-        if (isCheckpointRun(context.Params.Checkpoints)) {
+        if (IsCheckpointRun(context.Params.Checkpoints)) {
             await this.latchTerminalState(context, trace.Steps.length);
         }
 
@@ -1332,7 +1332,7 @@ export class ComputerUseEngine {
         // supplying no rubric keep the deterministic steps-hit result and pay no
         // judge cost. A not-Done or absent verdict returns Failed so the driver
         // falls back to the LLM tier. Tours are scored on latch state instead.
-        if (isCheckpointRun(context.Params.Checkpoints)) {
+        if (IsCheckpointRun(context.Params.Checkpoints)) {
             return await this.buildReplayCheckpointResult(context, replay, trace.Steps.length);
         }
 
@@ -1381,7 +1381,7 @@ export class ComputerUseEngine {
         } catch {
             /* empty list → presence postconditions fail honestly */
         }
-        const { passed, results } = executeGoalPostconditions(trace.GoalPostconditions, {
+        const { passed, results } = ExecuteGoalPostconditions(trace.GoalPostconditions, {
             url: this.browserAdapter.CurrentUrl,
             elements,
             volatileParams: volatile,
@@ -1409,18 +1409,18 @@ export class ComputerUseEngine {
         const checkpoints = context.Params.Checkpoints ?? [];
         await this.judgeCheckpointsAgainstOwnFrames(context, checkpoints);
 
-        const pendingVisual = unlatchedVisualCriteria(checkpoints, context.CheckpointState);
+        const pendingVisual = UnlatchedVisualCriteria(checkpoints, context.CheckpointState);
         if (pendingVisual.length > 0) {
             const verdict = await this.judgeReplayEndState(context, stepNumber);
             if (verdict) {
-                latchVisualFromVerdict(checkpoints, context.CheckpointState, verdict, stepNumber);
+                LatchVisualFromVerdict(checkpoints, context.CheckpointState, verdict, stepNumber);
             }
         } else {
             this.log(`Replay — all checkpoint sections latched deterministically; no judge call needed`);
         }
 
-        const verdict = synthesizeCheckpointVerdict(checkpoints, context.CheckpointState);
-        const allMet = allCheckpointsMet(checkpoints, context.CheckpointState);
+        const verdict = SynthesizeCheckpointVerdict(checkpoints, context.CheckpointState);
+        const allMet = AllCheckpointsMet(checkpoints, context.CheckpointState);
         return this.buildReplayResult(
             context,
             replay,
@@ -1463,16 +1463,16 @@ export class ComputerUseEngine {
         }
         const volatile = context.Params.AppProfile?.Loop?.VolatileParams ?? [];
         for (const cp of checkpoints) {
-            if (checkpointVisualCriteria(checkpoints, context.CheckpointState, cp.Name).length === 0) {
+            if (CheckpointVisualCriteria(checkpoints, context.CheckpointState, cp.Name).length === 0) {
                 continue;   // nothing visual pending for this section
             }
-            const frame = selectCheckpointFrame(cp, frames, volatile);
+            const frame = SelectCheckpointFrame(cp, frames, volatile);
             if (!frame) {
                 continue;   // no URL anchor, or never reached — the end-state pass covers it
             }
             const verdict = await this.judgeReplayFrame(context, frame, cp.Name);
             if (verdict) {
-                latchVisualFromVerdict(checkpoints, context.CheckpointState, verdict, frame.stepNumber, cp.Name);
+                LatchVisualFromVerdict(checkpoints, context.CheckpointState, verdict, frame.stepNumber, cp.Name);
                 this.log(`Replay — checkpoint "${cp.Name}" judged at its own frame (step ${frame.stepNumber}, ${frame.url})`);
             }
         }
@@ -1521,7 +1521,7 @@ export class ComputerUseEngine {
             const screenshot = await this.captureScreenshot(context);
             context.AddScreenshot(screenshot);
             context.CurrentUrl = this.browserAdapter.CurrentUrl;
-            return await this.evaluateJudge(context, stepNumber, true, computePerceptualHash(screenshot), '');
+            return await this.evaluateJudge(context, stepNumber, true, ComputePerceptualHash(screenshot), '');
         } catch (error) {
             this.logError('Replay end-state judge evaluation failed', error);
             return undefined;
@@ -1557,7 +1557,7 @@ export class ComputerUseEngine {
 
         const screenshot = await this.captureScreenshot(context);
         step.Screenshot = screenshot;
-        step.ScreenshotHash = computePerceptualHash(screenshot);
+        step.ScreenshotHash = ComputePerceptualHash(screenshot);
         step.UrlBefore = this.browserAdapter.CurrentUrl;
         step.Url = step.UrlBefore;
         step.UrlAfter = step.UrlBefore;
@@ -1577,7 +1577,7 @@ export class ComputerUseEngine {
         // to record a UrlPattern; without this the rewritten selector is what the
         // rest of the step acts on.
         const onRecordedPage = !traceStep.Precondition?.UrlPattern
-            || traceUrlMatches(traceStep.Precondition.UrlPattern, this.browserAdapter.CurrentUrl, volatile);
+            || TraceUrlMatches(traceStep.Precondition.UrlPattern, this.browserAdapter.CurrentUrl, volatile);
         const repointed = onRecordedPage
             && this.repointDriftedSelector(traceStep, step.InteractiveElements, step.StepNumber, context.Params.ReplayHeal ?? 'llm');
 
@@ -1586,7 +1586,7 @@ export class ComputerUseEngine {
             return this.divergeOrHeal(trace, index, context, step, result, `precondition — ${pre.reason}`);
         }
 
-        const actions = planReplayActions(traceStep, values);
+        const actions = PlanReplayActions(traceStep, values);
         if (actions.length === 0) {
             return this.divergeOrHeal(trace, index, context, step, result, 'no replayable action (missing recorded selector)');
         }
@@ -1675,7 +1675,7 @@ export class ComputerUseEngine {
         }
         const traceStep = trace.Steps[stepIndex];
         const recorded = traceStep.Action.Target;
-        if (!recorded || !isSelectorHealable(reason)) {
+        if (!recorded || !IsSelectorHealable(reason)) {
             return false;   // navigate/keypress (no target) or flow drift → re-derive territory
         }
 
@@ -1690,7 +1690,7 @@ export class ComputerUseEngine {
         }
 
         const resolution = await this.resolveHealSelector(traceStep, context, recorded, elements);
-        if (!resolution || !shouldAcceptHeal(resolution.confidence) || !resolution.selector) {
+        if (!resolution || !ShouldAcceptHeal(resolution.confidence) || !resolution.selector) {
             this.log(`Replay step ${stepIndex + 1} heal declined — ${resolution?.reason ?? 'no candidate'} (a wrong cached click is worse than a slow one)`);
             return false;
         }
@@ -1724,8 +1724,8 @@ export class ComputerUseEngine {
         recorded: TraceTarget,
         elements: InteractiveElement[]
     ): Promise<{ selector?: string; confidence: number; reason: string } | undefined> {
-        const deterministic = reresolveTarget(recorded, elements);
-        if (shouldAcceptHeal(deterministic.confidence)) {
+        const deterministic = ReresolveTarget(recorded, elements);
+        if (ShouldAcceptHeal(deterministic.confidence)) {
             return deterministic;
         }
         if ((context.Params.ReplayHeal ?? 'llm') !== 'llm') {
@@ -1737,7 +1737,7 @@ export class ComputerUseEngine {
             elements,
             recorded,
         });
-        if (llm.index !== undefined && shouldAcceptHeal(llm.confidence)) {
+        if (llm.index !== undefined && ShouldAcceptHeal(llm.confidence)) {
             const el = elements.find(e => e.Index === llm.index);
             if (el) {
                 return { selector: el.Selector, confidence: llm.confidence, reason: 'LLM disambiguation' };
@@ -1757,7 +1757,7 @@ export class ComputerUseEngine {
         healedAction.Target = Object.assign(new TraceTarget(), traceStep.Action.Target ?? {}, { Selector: selector });
         const healedStep = Object.assign(new TraceStep(), traceStep, { Action: healedAction });
 
-        const actions = planReplayActions(healedStep, context.Params.VariableValues ?? {});
+        const actions = PlanReplayActions(healedStep, context.Params.VariableValues ?? {});
         if (actions.length === 0) {
             return false;
         }
@@ -1778,15 +1778,15 @@ export class ComputerUseEngine {
     private async replayPrecondition(traceStep: TraceStep, volatile: string[]): Promise<GuardResult> {
         const pre = traceStep.Precondition;
         const urlMatched = pre.UrlPattern
-            ? traceUrlMatches(pre.UrlPattern, this.browserAdapter.CurrentUrl, volatile)
+            ? TraceUrlMatches(pre.UrlPattern, this.browserAdapter.CurrentUrl, volatile)
             : true;
-        const sel = targetSelector(traceStep);
+        const sel = TargetSelector(traceStep);
         const targetChecked = pre.WaitForTarget && sel !== undefined;
         let targetVisible = false;
         if (targetChecked && sel) {
             targetVisible = await this.waitForTargetVisible(sel, this.replayGuardTimeoutMs());
         }
-        return evaluatePrecondition(pre, { urlMatched, targetVisible, targetChecked, url: this.browserAdapter.CurrentUrl });
+        return EvaluatePrecondition(pre, { urlMatched, targetVisible, targetChecked, url: this.browserAdapter.CurrentUrl });
     }
 
     /** Evaluate a replay step's postcondition against the live page. */
@@ -1805,7 +1805,7 @@ export class ComputerUseEngine {
             const info = await this.safeQuery(sel);
             expectVisibleOk = info.Exists && info.Visible;
         }
-        return evaluatePostcondition(post, { urlMatched, expectVisibleOk, expectChecked, url: this.browserAdapter.CurrentUrl });
+        return EvaluatePostcondition(post, { urlMatched, expectVisibleOk, expectChecked, url: this.browserAdapter.CurrentUrl });
     }
 
     /**
@@ -1836,7 +1836,7 @@ export class ComputerUseEngine {
         const start = performance.now();
         for (;;) {
             this.ensureNotCancelled();
-            if (traceUrlMatches(pattern, this.browserAdapter.CurrentUrl, volatile)) {
+            if (TraceUrlMatches(pattern, this.browserAdapter.CurrentUrl, volatile)) {
                 return true;
             }
             if (performance.now() - start >= timeoutMs) {
@@ -1921,8 +1921,8 @@ export class ComputerUseEngine {
         if (identityHolds) {
             return false;
         }
-        const resolution = reresolveTarget(recorded, elements);
-        if (!shouldAcceptHeal(resolution.confidence) || !resolution.selector || resolution.selector === recorded.Selector) {
+        const resolution = ReresolveTarget(recorded, elements);
+        if (!ShouldAcceptHeal(resolution.confidence) || !resolution.selector || resolution.selector === recorded.Selector) {
             // Say why. A decline means the recorded selector is about to be used
             // even though it no longer names the recorded element — the click then
             // lands somewhere arbitrary and only a postcondition catches it, one
@@ -2019,7 +2019,7 @@ export class ComputerUseEngine {
             const screenshotStart = performance.now();
             const screenshot = await this.captureScreenshot(context);
             step.Screenshot = screenshot;
-            step.ScreenshotHash = computePerceptualHash(screenshot);
+            step.ScreenshotHash = ComputePerceptualHash(screenshot);
             step.ScreenshotMs = performance.now() - screenshotStart;
             this.log(`Step ${stepNumber} — screenshot captured (${Math.round(screenshot.length / 1024)}KB base64)`);
 
@@ -2062,11 +2062,11 @@ export class ComputerUseEngine {
             // signaled on (the step-start frame the judge also evaluates).
             step.CheckpointReached = response.CheckpointReached;
             let signaledCheckpoint: string | undefined;
-            if (isCheckpointRun(context.Params.Checkpoints) && response.CheckpointReached) {
+            if (IsCheckpointRun(context.Params.Checkpoints) && response.CheckpointReached) {
                 const name = response.CheckpointReached;
-                if (!findCheckpoint(context.Params.Checkpoints, name)) {
+                if (!FindCheckpoint(context.Params.Checkpoints, name)) {
                     this.log(`Step ${stepNumber} — controller signaled unknown checkpoint "${name}" (ignored)`);
-                } else if (checkpointVisualCriteria(context.Params.Checkpoints, context.CheckpointState, name).length > 0) {
+                } else if (CheckpointVisualCriteria(context.Params.Checkpoints, context.CheckpointState, name).length > 0) {
                     signaledCheckpoint = name;
                     this.log(`Step ${stepNumber} — controller reached checkpoint "${name}"; forcing scoped judge`);
                 }
@@ -2090,7 +2090,7 @@ export class ComputerUseEngine {
             //     controller prompt so a blank/broken page becomes explainable
             //     (ChunkLoadError, POST /graphql 500) instead of guessed at.
             step.Diagnostics = this.browserAdapter.GetDiagnostics();
-            const diagnosticsDigest = formatDiagnosticsDigest(step.Diagnostics);
+            const diagnosticsDigest = FormatDiagnosticsDigest(step.Diagnostics);
             context.LastDiagnosticsDigest = diagnosticsDigest || undefined;
             if (diagnosticsDigest) {
                 this.log(`Step ${stepNumber} — browser diagnostics: ${diagnosticsDigest.replace(/\n/g, ' | ')}`);
@@ -2106,7 +2106,7 @@ export class ComputerUseEngine {
             const stateUnchanged =
                 context.LastJudgedHash !== undefined &&
                 step.ScreenshotHash !== '' &&
-                hashesSimilar(context.LastJudgedHash, step.ScreenshotHash) &&
+                HashesSimilar(context.LastJudgedHash, step.ScreenshotHash) &&
                 context.LastJudgeVerdict !== undefined &&
                 !context.LastJudgeVerdict.Done &&
                 !context.LastJudgeVerdict.Impossible;
@@ -2115,7 +2115,7 @@ export class ComputerUseEngine {
             // activeJudgeCriteria is undefined → skip the judge entirely (a
             // pure-URL tour costs zero judge calls).
             const checkpointJudgeGate =
-                !isCheckpointRun(context.Params.Checkpoints) || this.activeJudgeCriteria(context, signaledCheckpoint) !== undefined;
+                !IsCheckpointRun(context.Params.Checkpoints) || this.activeJudgeCriteria(context, signaledCheckpoint) !== undefined;
             // A controller checkpoint signal forces a judge this step (like an
             // explicit judgement request), bypassing the unchanged-state skip.
             const runJudge = checkpointJudgeGate &&
@@ -2260,7 +2260,7 @@ export class ComputerUseEngine {
         try {
             const elements = await this.browserAdapter.ExtractInteractiveElements();
             step.InteractiveElements = elements;
-            const serialized = serializeInteractiveElements(elements, context.LastInteractiveElements);
+            const serialized = SerializeInteractiveElements(elements, context.LastInteractiveElements);
             context.LastInteractiveElements = elements;
             if (elements.length > 0) {
                 this.log(`Step ${step.StepNumber} — element grounding: ${elements.length} interactive elements`);
@@ -2324,11 +2324,11 @@ export class ComputerUseEngine {
                 sawBusy = true;
             }
             // 3. Perceptual-hash stability — two consecutive similar frames.
-            const hash = computePerceptualHash(await this.browserAdapter.CaptureScreenshot());
-            const hashStable = lastHash !== '' && hash !== '' && hashesSimilar(lastHash, hash);
+            const hash = ComputePerceptualHash(await this.browserAdapter.CaptureScreenshot());
+            const hashStable = lastHash !== '' && hash !== '' && HashesSimilar(lastHash, hash);
             lastHash = hash;
 
-            const reason = resolveSettleExit({
+            const reason = ResolveSettleExit({
                 beaconDeclared: beacon !== undefined,
                 beaconPresent,
                 busy,
@@ -2384,7 +2384,7 @@ export class ComputerUseEngine {
         // Abortable: a cancelled run's pending settle poll / retry
         // backoff resolves early instead of holding the worker slot; the caller's
         // next ensureNotCancelled() checkpoint turns that into a clean Cancelled.
-        return abortableDelay(ms, this.abortController.signal);
+        return AbortableDelay(ms, this.abortController.signal);
     }
 
     // ─── Coordinate Scaling ────────────────────────────────
@@ -2525,7 +2525,7 @@ export class ComputerUseEngine {
 
  // Tour checkpoints (Phase B): expose name + instruction so the
         // controller can signal `checkpointReached` as it passes each section.
-        if (isCheckpointRun(context.Params.Checkpoints)) {
+        if (IsCheckpointRun(context.Params.Checkpoints)) {
             request.Checkpoints = context.Params.Checkpoints.map(cp => {
                 const info = new ControllerCheckpointInfo();
                 info.Name = cp.Name;
@@ -2677,7 +2677,7 @@ export class ComputerUseEngine {
             // page-changing action, or the per-step cap. Partial results are kept
             // and the reason is surfaced to the next step's summary.
             const urlChanged = this.browserAdapter.CurrentUrl !== urlBefore;
-            const stop = evaluateBatchStop({
+            const stop = EvaluateBatchStop({
                 actionType: action.Type,
                 success: result.Success,
                 urlChanged,
@@ -2802,8 +2802,8 @@ export class ComputerUseEngine {
         // short-circuits a retry. Only when a shared cache is injected and the
         // frame hashed (an unstable key would poison the cache).
         const cacheKey = this.judgeCache && currentScreenshotHash
-            ? makeJudgeCacheKey(
-                hashGoal(context.Params.Goal),
+            ? MakeJudgeCacheKey(
+                HashGoal(context.Params.Goal),
                 context.CurrentUrl,
                 currentScreenshotHash,
                 context.Params.AppProfile?.Loop?.VolatileParams ?? []
@@ -2830,7 +2830,7 @@ export class ComputerUseEngine {
         judgeContext.CurrentDiagnosticsDigest = currentDiagnosticsDigest;
         judgeContext.ValidationCriteria = this.activeJudgeCriteria(context, signaledCheckpoint);   // rubric judging; tour visual criteria
         judgeContext.ApplicationContext = context.Params.ApplicationContext;   // app facts belong in metadata, not the shared prompt
-        judgeContext.IsCheckpointTour = isCheckpointRun(context.Params.Checkpoints);   // suppress navigation-shape heuristics on a tour
+        judgeContext.IsCheckpointTour = IsCheckpointRun(context.Params.Checkpoints);   // suppress navigation-shape heuristics on a tour
         judgeContext.Signal = this.abortController.signal;   // abort in-flight judge call on Stop()
 
         const verdict = await this.judge.Evaluate(judgeContext);
@@ -3254,7 +3254,7 @@ export class ComputerUseEngine {
         // compact "why it failed / what to avoid" the driver's retry policy can
         // feed back as PreviousAttemptSummary.
         if (!success) {
-            const memo = buildFailureMemo({
+            const memo = BuildFailureMemo({
                 status,
                 failureReason,
                 finalUrl: result.FinalUrl,

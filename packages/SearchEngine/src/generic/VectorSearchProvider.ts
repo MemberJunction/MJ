@@ -12,9 +12,10 @@
 import { EntityInfo, LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey } from '@memberjunction/core';
 import { MJVectorIndexEntity, MJVectorDatabaseEntity, MJContentSourceEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
-import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai';
+import { GetAIAPIKey } from '@memberjunction/ai';
+import { AIEmbeddingRunner } from '@memberjunction/ai-prompts';
 import { VectorDBBase, BaseResponse } from '@memberjunction/ai-vectordb';
-import { MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseSearchProvider } from './ISearchProvider';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints, ScopeExternalIndexConstraint } from './search.types';
 import { CheckScopeJsonFilter, ScopeFilterCheck } from './ScopeFilterGuard';
@@ -35,8 +36,11 @@ export class VectorSearchProvider extends BaseSearchProvider {
 
     private available = false;
 
-    /** LRU cache for query embeddings. Key = `${modelDriverClass}::${query}`, Value = embedding vector */
-    private static EmbeddingCache = new Map<string, EmbeddingCacheEntry>();
+    /**
+     * LRU cache for query embeddings. Key = `${modelID}::${dimensions}::${query}` (see
+     * {@link queryEmbeddingCacheKey}), Value = embedding vector.
+     */
+    private static embeddingCache = new Map<string, EmbeddingCacheEntry>();
     private static readonly CACHE_MAX_SIZE = 200;
     private static readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -143,26 +147,35 @@ export class VectorSearchProvider extends BaseSearchProvider {
 
     /** Retrieve a cached embedding if present and not expired, promoting it for LRU */
     private getCachedEmbedding(key: string): number[] | null {
-        const entry = VectorSearchProvider.EmbeddingCache.get(key);
+        const entry = VectorSearchProvider.embeddingCache.get(key);
         if (entry && (Date.now() - entry.timestamp) < VectorSearchProvider.CACHE_TTL_MS) {
             // Promote to most-recently-used by re-inserting
-            VectorSearchProvider.EmbeddingCache.delete(key);
-            VectorSearchProvider.EmbeddingCache.set(key, entry);
+            VectorSearchProvider.embeddingCache.delete(key);
+            VectorSearchProvider.embeddingCache.set(key, entry);
             return entry.vector;
         }
         // Expired or not found — clean up stale entry if present
-        if (entry) VectorSearchProvider.EmbeddingCache.delete(key);
+        if (entry) VectorSearchProvider.embeddingCache.delete(key);
         return null;
+    }
+
+    /**
+     * Cache key for a query embedding. It names the model and the dimension, not the driver: two
+     * models on one driver (two local Xenova models, or two OpenAI embedding models) produce vectors
+     * that are not interchangeable, and neither are one model's vectors at two dimensions.
+     */
+    private queryEmbeddingCacheKey(modelID: string, dimensions: number | undefined, query: string): string {
+        return `${NormalizeUUID(modelID)}::${dimensions ?? 'native'}::${query}`;
     }
 
     /** Store an embedding in the cache, evicting the oldest entry if at capacity */
     private setCachedEmbedding(key: string, vector: number[]): void {
         // Evict least-recently-used (first key in insertion order) if at capacity
-        if (VectorSearchProvider.EmbeddingCache.size >= VectorSearchProvider.CACHE_MAX_SIZE) {
-            const oldestKey = VectorSearchProvider.EmbeddingCache.keys().next().value;
-            if (oldestKey !== undefined) VectorSearchProvider.EmbeddingCache.delete(oldestKey);
+        if (VectorSearchProvider.embeddingCache.size >= VectorSearchProvider.CACHE_MAX_SIZE) {
+            const oldestKey = VectorSearchProvider.embeddingCache.keys().next().value;
+            if (oldestKey !== undefined) VectorSearchProvider.embeddingCache.delete(oldestKey);
         }
-        VectorSearchProvider.EmbeddingCache.set(key, { vector, timestamp: Date.now() });
+        VectorSearchProvider.embeddingCache.set(key, { vector, timestamp: Date.now() });
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -203,39 +216,31 @@ export class VectorSearchProvider extends BaseSearchProvider {
                 return [];
             }
 
-            const apiKey = GetAIAPIKey(model.DriverClass);
             // All indexes in this model group share the same embedding model; they should also
             // share the same dimension config. Take the first non-null Dimensions value —
             // undefined means "use the model's native default".
             const dimensions = indexes.find(idx => idx.Dimensions != null)?.Dimensions ?? undefined;
             // Check embedding cache before calling the model
-            const cacheKey = `${model.DriverClass}::${query}`;
+            const cacheKey = this.queryEmbeddingCacheKey(model.ID, dimensions, query);
             let queryVector = this.getCachedEmbedding(cacheKey);
 
             if (queryVector) {
                 LogStatus(`VectorSearchProvider: Embedding cache hit for model ${model.Name}`);
             } else {
-                const embeddingInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
-                    BaseEmbeddings, model.DriverClass, apiKey
-                );
-                if (!embeddingInstance) {
-                    LogError(`VectorSearchProvider: Failed to create embedding for ${model.DriverClass}`);
+                const embeddingRunner = new AIEmbeddingRunner();
+                const embedResult = await embeddingRunner.RunEmbedding({
+                    Texts: [query],
+                    ModelID: model.ID,
+                    Dimensions: dimensions,
+                    ContextUser: contextUser,
+                    Description: `Vector search query embedding for model ${model.Name}`,
+                });
+                if (!embedResult?.Success || !embedResult?.Vectors || !embedResult.Vectors[0]?.length) {
+                    LogError(`VectorSearchProvider: Failed to embed with ${model.Name}: ${embedResult?.ErrorMessage ?? 'No vector returned'}`);
                     return [];
                 }
 
-                // Some embedding drivers (e.g. LocalEmbedding via Xenova/transformers)
-                // require the model identifier to load the correct pipeline.
-                // Prefer APIName (the canonical identifier the driver expects)
-                // and fall back to Name when APIName isn't set or is empty.
-                // `||` (not `??`) so an empty-string `APIName` also falls back.
-                const modelName = model.APIName || model.Name;
-                const embedResult = await embeddingInstance.EmbedText({ text: query, model: modelName, dimensions });
-                if (!embedResult?.vector?.length) {
-                    LogError(`VectorSearchProvider: Failed to embed with ${model.Name}`);
-                    return [];
-                }
-
-                queryVector = embedResult.vector;
+                queryVector = embedResult.Vectors[0];
                 this.setCachedEmbedding(cacheKey, queryVector);
             }
 
@@ -508,7 +513,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
      * Entities a content source is allowed to declare its vectors to be: the content-item entities
      * themselves, or anything that IS-A one of them.
      */
-    private static readonly AttributionRoots: readonly string[] = ['MJ: Content Items', 'MJ: Content Item Chunks'];
+    private static readonly attributionRoots: readonly string[] = ['MJ: Content Items', 'MJ: Content Item Chunks'];
 
     /**
      * Validate a declared attribution before it is trusted, and return the entity's CANONICAL name.
@@ -542,7 +547,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
             LogError(
                 `VectorSearchProvider: content source ${contentSourceID} declares vector entity ` +
                 `"${entity.Name}", which is not a content-item entity — ignoring it. A source may only ` +
-                `declare ${VectorSearchProvider.AttributionRoots.join(' / ')} or a subtype of one.`
+                `declare ${VectorSearchProvider.attributionRoots.join(' / ')} or a subtype of one.`
             );
             return null;
         }
@@ -560,7 +565,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
      * refused. Fail-closed, but wrong, and invisible until someone runs multi-provider.
      */
     private isContentItemEntity(entity: EntityInfo): boolean {
-        const roots = VectorSearchProvider.AttributionRoots;
+        const roots = VectorSearchProvider.attributionRoots;
         const provider = this.Provider;
         const visited = new Set<string>();
         let current: EntityInfo | undefined = entity;
@@ -683,7 +688,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
     }
 
     /** How many vector ids to name in the unattributed-match warning. */
-    private static readonly UnattributedSampleSize = 3;
+    private static readonly unattributedSampleSize = 3;
 
     /**
      * Report matches that no attribution step could name, because they are about to disappear.
@@ -701,7 +706,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
         if (vectorIDs.length === 0) {
             return;
         }
-        const sample = vectorIDs.slice(0, VectorSearchProvider.UnattributedSampleSize).join(', ');
+        const sample = vectorIDs.slice(0, VectorSearchProvider.unattributedSampleSize).join(', ');
         LogError(
             `VectorSearchProvider: ${vectorIDs.length} match(es) from index "${indexName}" carry no ` +
             `resolvable entity and will be dropped by the permission filter rather than returned. Give ` +

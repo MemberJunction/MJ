@@ -48,11 +48,11 @@ export interface PushAbortedDetails {
  */
 export class PushAbortedError extends Error {
   /** The write modes in play when the push failed, e.g. `['shared']` or `['shared','isolated']`. */
-  readonly modes: PushWriteMode[];
-  readonly rolledBack: boolean;
-  readonly committedWrites: CommittedWrite[];
-  readonly totals: PushPartialTotals;
-  readonly sqlLogPath?: string;
+  readonly modes: PushWriteMode[];  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  readonly rolledBack: boolean;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  readonly committedWrites: CommittedWrite[];  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  readonly totals: PushPartialTotals;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  readonly sqlLogPath?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
   constructor(details: PushAbortedDetails) {
     super(messageOf(details.cause), { cause: details.cause });
@@ -78,12 +78,12 @@ function messageOf(cause: unknown): string {
  * The lines that tell the user how a failed push ended. The first line is the summary;
  * any further lines list the committed records, grouped by file.
  */
-export function describeRollbackOutcome(rolledBack: boolean, committedWrites: CommittedWrite[], cwd: string): string[] {
+export function DescribeRollbackOutcome(rolledBack: boolean, committedWrites: CommittedWrite[], cwd: string): string[] {
   if (!rolledBack) {
     return [
       '❌ Database transaction rollback failed. Check the database before pushing again: ' +
         'rows written by this push may still be locked or present.',
-      ...describeCommittedWrites(committedWrites, cwd),
+      ...DescribeCommittedWrites(committedWrites, cwd),
     ];
   }
   if (committedWrites.length === 0) {
@@ -94,12 +94,17 @@ export function describeRollbackOutcome(rolledBack: boolean, committedWrites: Co
       `record${committedWrites.length === 1 ? '' : 's'} in directories using isolated transactions ` +
       `${committedWrites.length === 1 ? 'was' : 'were'} already committed and ` +
       `${committedWrites.length === 1 ? 'is' : 'are'} still in the database. Their files keep the pushed contents.`,
-    ...describeCommittedWrites(committedWrites, cwd),
+    ...DescribeCommittedWrites(committedWrites, cwd),
   ];
 }
 
+/** @deprecated Use {@link DescribeRollbackOutcome}. */
+export function describeRollbackOutcome(rolledBack: boolean, committedWrites: CommittedWrite[], cwd: string): string[] {
+  return DescribeRollbackOutcome(rolledBack, committedWrites, cwd);
+}
+
 /** One line per file, then one indented line per committed record. */
-export function describeCommittedWrites(committedWrites: CommittedWrite[], cwd: string): string[] {
+export function DescribeCommittedWrites(committedWrites: CommittedWrite[], cwd: string): string[] {
   const byFile = new Map<string, CommittedWrite[]>();
   for (const write of committedWrites) {
     const list = byFile.get(write.filePath) ?? [];
@@ -116,11 +121,16 @@ export function describeCommittedWrites(committedWrites: CommittedWrite[], cwd: 
   return lines;
 }
 
+/** @deprecated Use {@link DescribeCommittedWrites}. */
+export function describeCommittedWrites(committedWrites: CommittedWrite[], cwd: string): string[] {
+  return DescribeCommittedWrites(committedWrites, cwd);
+}
+
 /**
  * Message for a failed COMMIT. On PostgreSQL, deferred foreign keys are checked at commit, so
  * the failure is about the transaction as a whole and cannot be tied to one record.
  */
-export function describeCommitFailure(cause: unknown, platform: string | undefined): string {
+export function DescribeCommitFailure(cause: unknown, platform: string | undefined): string {
   const base = `The database rejected the commit of the push transaction, so the transaction was not saved: ${messageOf(cause)}`;
   if (platform === 'postgresql') {
     return (
@@ -129,4 +139,9 @@ export function describeCommitFailure(cause: unknown, platform: string | undefin
     );
   }
   return base;
+}
+
+/** @deprecated Use {@link DescribeCommitFailure}. */
+export function describeCommitFailure(cause: unknown, platform: string | undefined): string {
+  return DescribeCommitFailure(cause, platform);
 }
