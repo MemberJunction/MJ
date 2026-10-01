@@ -25,6 +25,7 @@ export class RubricBuilderComponent implements OnChanges {
     @Input() SampleAnswers: RubricFormAnswer[] = [];
     @Input() BaseBands: RubricBandSnapshot[] = [];
     @Input() ReadOnly = false;
+    @Input() Name = '';
     @Input() PublishedLabel = '';
     @Input() NextVersion = '';
     @Input() ComputedBump: string | null = null;
