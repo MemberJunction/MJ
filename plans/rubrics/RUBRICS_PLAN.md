@@ -858,7 +858,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 - [x] **A2** Default Evaluation rubric in resolution (§11.2) — the last source in T2.
 - [x] **A3** Self-check in `BaseAgent` (§11.3). `decideSelfCheck` covers pass, retry, exhausted attempts, and a flow-agent failure.
 - [x] **A4** Production sampling selection and drift deltas (§11.4). Evaluate Sampled Agent Runs is the scheduled job. Drift joins the score to the version and the agent run.
-- [~] **A5** `AIRubricEvaluator` is the agent evaluator (§8.3). The shipped agent metadata is not in this commit.
+- [x] **A5** `AIRubricEvaluator` is the agent evaluator (§8.3). The Rubric Evaluation Agent is a Loop agent with Get Rubric and Get Rubric Consensus. It does not publish.
 - [x] **A6** Import a numbered matrix, critique a draft, and the Rubric Architect agent (§11.5). The agent writes Drafts and does not publish.
 
 **U — UI and docs**
@@ -867,7 +867,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 - [x] **U2** Explorer forms and nav (§12). The rubric form loads the draft and saves the
       author and publish. The evaluation form loads the result and the cohort matrix. The scale
       form loads levels and saves a label. Rubrics is a nav item in the AI application.
-- [~] **U3** `guides/RUBRICS_GUIDE.md` with the six worked examples; the ng-rubrics README.
+- [x] **U3** `guides/RUBRICS_GUIDE.md` has the six worked examples. The ng-rubrics README lists the presentational widgets.
       The TestingFramework and Engine README updates are not in this pass.
 - [x] **U4** Shipped scales and the six guide-example rubrics under `metadata/`. Versions are Draft. Percentage is numeric 0–100 with `Step` 1 and no level rows.
 

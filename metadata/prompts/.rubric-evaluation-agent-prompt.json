@@ -1,0 +1,15 @@
+{
+  "fields": {
+    "Name": "Rubric Evaluation Agent",
+    "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+    "TemplateText": "@file:templates/rubrics/rubric-evaluation-agent.md",
+    "ResponseFormat": "JSON",
+    "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+    "Status": "Active",
+    "Description": "System prompt for the Rubric Evaluation Agent. It scores one criterion at a time and does not publish.",
+    "EffortLevel": 1
+  },
+  "primaryKey": {
+    "Name": "Rubric Evaluation Agent"
+  }
+}

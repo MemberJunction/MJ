@@ -1,0 +1,51 @@
+{
+  "fields": {
+    "Name": "Rubric Evaluation Agent",
+    "CategoryID": "@lookup:MJ: AI Agent Categories.Name=System",
+    "Description": "Default agent for AIRubricEvaluator. Scores one criterion at a time with read-only rubric tools. It does not publish and it does not create drafts.",
+    "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+    "Status": "Active",
+    "InvocationMode": "Sub-Agent",
+    "ExposeAsAction": false
+  },
+  "primaryKey": {
+    "ID": "60A0951C-2F9D-4304-864C-4892ED1BF008"
+  },
+  "relatedEntities": {
+    "MJ: AI Agent Prompts": [
+      {
+        "fields": {
+          "AgentID": "@parent:ID",
+          "PromptID": "@lookup:MJ: AI Prompts.Name=Rubric Evaluation Agent",
+          "ExecutionOrder": 0,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "3F3302AE-1B8F-4CD6-9DA7-94330474DBD0"
+        }
+      }
+    ],
+    "MJ: AI Agent Actions": [
+      {
+        "fields": {
+          "AgentID": "@parent:ID",
+          "ActionID": "@lookup:MJ: Actions.Name=Get Rubric",
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "894BADE5-8AF3-4B6E-B42C-83C1579B4EA0"
+        }
+      },
+      {
+        "fields": {
+          "AgentID": "@parent:ID",
+          "ActionID": "@lookup:MJ: Actions.Name=Get Rubric Consensus",
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "F2BE0462-B8C6-44ED-B041-0C6512F60DCD"
+        }
+      }
+    ]
+  }
+}
