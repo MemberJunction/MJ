@@ -138,6 +138,7 @@
     "@memberjunction/record-set-processor": "6.2.0-edge.1",
     "@memberjunction/remote-browser-selfhost": "6.2.0-edge.1",
     "@memberjunction/remote-browser-server": "6.2.0-edge.1",
+    "@memberjunction/rubrics": "6.2.0-edge.1",
     "@memberjunction/scheduling-actions": "6.2.0-edge.1",
     "@memberjunction/scheduling-engine": "6.2.0-edge.1",
     "@memberjunction/scheduling-engine-base": "6.2.0-edge.1",

@@ -1,5 +1,4 @@
-import type { RubricScoreResult, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import type { RubricAnswer } from '@memberjunction/rubrics-base';
+import type { RubricAnswer, RubricNodeSnapshot, RubricScoreResult, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { AIRubricEvaluator, type RubricAgent } from './AIRubricEvaluator.js';
 import { LLMRubricEvaluator, type RubricPromptMode, type RubricPromptRunner } from './LLMRubricEvaluator.js';
 import { shapeContent, type RubricSubjectContent } from './content.js';
@@ -19,9 +18,24 @@ export interface RubricEvaluationRecord {
  * submit must call the entity server's submit, which calls RubricScoring.
  */
 export interface RubricEvaluationStore {
-    createDraft(input: { versionId: string; rubricId: string; subjectEntityId: string; subjectRecordId: string }): Promise<RubricEvaluationRecord>;
+    createDraft(input: {
+        versionId: string;
+        rubricId: string;
+        subjectEntityId: string;
+        subjectRecordId: string;
+        contextEntityId?: string | null;
+        contextRecordId?: string | null;
+        passThreshold?: number | null;
+        evaluator?: EvaluateParams['evaluator'];
+    }): Promise<RubricEvaluationRecord>;
     submit(evaluationId: string, answers: RubricAnswer[]): Promise<RubricScoreResult>;
     fail(evaluationId: string, errorMessage: string): Promise<RubricEvaluationRecord>;
+}
+
+/** Rows the engine reads, and the one write that creates a Draft version. Tests pass a fake. */
+export interface RubricRecords {
+    rows(entityName: string, filter: string): Promise<Record<string, unknown>[]>;
+    createDraft(input: { rubricId: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: string }>;
 }
 
 export interface EvaluateParams {
@@ -31,10 +45,32 @@ export interface EvaluateParams {
     /** Used when content is omitted. Loads the subject record so the engine can shape it. */
     loadRecord?: (entityName: string, recordId: string) => Promise<Record<string, unknown>>;
     canRead?: (fieldName: string) => boolean;
+    /** Optional context record. Stored with the evaluation when both halves are set. */
+    context?: { entityName?: string; entityId: string; recordId: string };
+    /** Stored on the draft as PassThresholdApplied. Null uses the version threshold. */
+    passThreshold?: number | null;
     evaluator: 'AI' | 'Deterministic' | 'LLM';
     agent?: RubricAgent;
     promptRunner?: RubricPromptRunner;
     promptMode?: RubricPromptMode;
+}
+
+export interface EvaluateRecordInput {
+    rubricId?: string;
+    rubricName?: string;
+    subjectEntityName: string;
+    subjectRecordId: string;
+    contextEntityName?: string;
+    contextRecordId?: string;
+    evaluator?: EvaluateParams['evaluator'];
+    passThreshold?: number | null;
+}
+
+export interface EvaluateRecordResult {
+    evaluationId: string;
+    score: number | null;
+    outcome: RubricScoreResult['outcome'] | null;
+    criteria: { key: string; normalizedScore: number | null }[];
 }
 
 /**
@@ -43,8 +79,16 @@ export interface EvaluateParams {
  * evaluator becomes a Failed evaluation with ErrorMessage. It does not score
  * on its own: AI and deterministic evaluators call RubricScoring.
  */
+const emptyRecords: RubricRecords = {
+    async rows() { return []; },
+    async createDraft() { throw new Error('This engine has no rubric catalog.'); },
+};
+
 export class RubricEngine {
-    public constructor(private readonly evaluations: RubricEvaluationStore) {}
+    public constructor(
+        private readonly evaluations: RubricEvaluationStore,
+        private readonly records: RubricRecords = emptyRecords,
+    ) {}
 
     /**
      * Runs the evaluator, saves the draft, and submits it. On failure the
@@ -55,24 +99,14 @@ export class RubricEngine {
         try {
             const content = params.content ?? await this.resolveContent(params);
             const output = await this.runEvaluator(params, content);
-            draft = await this.evaluations.createDraft({
-                versionId: params.version.id,
-                rubricId: params.version.rubricId,
-                subjectEntityId: params.subject.entityId,
-                subjectRecordId: params.subject.recordId,
-            });
+            draft = await this.evaluations.createDraft(this.draftInput(params));
             const result = await this.evaluations.submit(draft.id, output.answers);
             return { evaluation: { ...draft, status: 'Submitted' }, output: { ...output, result } };
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             const failed = draft
                 ? await this.evaluations.fail(draft.id, message)
-                : await this.evaluations.createDraft({
-                    versionId: params.version.id,
-                    rubricId: params.version.rubricId,
-                    subjectEntityId: params.subject.entityId,
-                    subjectRecordId: params.subject.recordId,
-                }).then(created => this.evaluations.fail(created.id, message));
+                : await this.evaluations.createDraft(this.draftInput(params)).then(created => this.evaluations.fail(created.id, message));
             return { evaluation: { ...failed, status: 'Failed', errorMessage: message } };
         }
     }
@@ -119,6 +153,85 @@ export class RubricEngine {
         return shapeContent(params.subject.entityName, record, params.canRead);
     }
 
+    /**
+     * Resolves the rubric name or id to its latest Published version, then calls
+     * {@link evaluate}. This is not the Get Rubric action.
+     */
+    public async evaluateRecord(input: EvaluateRecordInput): Promise<EvaluateRecordResult> {
+        const version = await this.latestPublished(input);
+        if (!version) throw new Error('No published version of that rubric.');
+        const scored = input.passThreshold === undefined || input.passThreshold === null
+            ? version
+            : { ...version, passThreshold: input.passThreshold };
+        const subjectEntityId = await this.entityId(input.subjectEntityName);
+        const context = input.contextEntityName && input.contextRecordId
+            ? { entityId: await this.entityId(input.contextEntityName), recordId: input.contextRecordId, entityName: input.contextEntityName }
+            : undefined;
+        const done = await this.evaluate({
+            version: scored,
+            subject: { entityName: input.subjectEntityName, recordId: input.subjectRecordId, entityId: subjectEntityId },
+            context,
+            passThreshold: input.passThreshold ?? null,
+            evaluator: input.evaluator ?? 'Deterministic',
+            loadRecord: async (entityName, recordId) => {
+                const rows = await this.records.rows(entityName, `ID=${sqlLiteral(recordId)}`);
+                return rows[0] ?? {};
+            },
+        });
+        const result = done.output?.result;
+        return {
+            evaluationId: done.evaluation.id,
+            score: result?.normalizedScore ?? null,
+            outcome: result?.outcome ?? null,
+            criteria: (result?.nodes ?? []).map(node => ({ key: node.key, normalizedScore: node.normalizedScore })),
+        };
+    }
+
+    /**
+     * The version tree for a name, id, or a specific version. Does not score.
+     * A version id returns that version. Otherwise this is the latest Published version.
+     */
+    public async getRubric(input: { rubricId?: string; rubricName?: string; versionId?: string }): Promise<RubricVersionSnapshot | null> {
+        if (input.versionId) {
+            const rows = await this.records.rows('MJ: Rubric Versions', `ID=${sqlLiteral(input.versionId)}`);
+            const row = rows[0];
+            return row ? this.snapshot(row) : null;
+        }
+        return this.latestPublished(input);
+    }
+
+    /**
+     * Loads the subject's Submitted scores and returns the consensus.
+     * The caller does not pass the scores.
+     */
+    public async consensusForSubject(input: {
+        rubricId?: string;
+        rubricName?: string;
+        subjectRecordId: string;
+        contextRecordId?: string;
+        method?: ConsensusResult['method'];
+    }): Promise<ConsensusResult> {
+        const rubric = await this.rubricRow(input);
+        const versions = await this.records.rows('MJ: Rubric Versions', `RubricID=${sqlLiteral(text(rubric.ID))}`);
+        const ids = versions.map(row => text(row.ID)).filter(id => id.length > 0);
+        if (ids.length === 0) return this.consensus([], input.method);
+        let filter = `Status='Submitted' AND SubjectRecordID=${sqlLiteral(input.subjectRecordId)} AND RubricVersionID IN (${ids.map(sqlLiteral).join(', ')})`;
+        if (input.contextRecordId !== undefined) filter += ` AND ContextRecordID=${sqlLiteral(input.contextRecordId)}`;
+        const scores = await this.records.rows('MJ: Rubric Evaluations', filter);
+        const values = scores.map(row => numberOrNull(row.NormalizedScore)).filter((value): value is number => value !== null);
+        return this.consensus(values, input.method);
+    }
+
+    /**
+     * Stores the payload as a Draft version. Throws when the stored status is
+     * anything else. Publishing stays a human action.
+     */
+    public async createDraft(input: { rubricId: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: 'Draft' }> {
+        const draft = await this.records.createDraft(input);
+        if (draft.status !== 'Draft') throw new Error('Create Rubric Draft never publishes.');
+        return { id: draft.id, status: 'Draft' };
+    }
+
     /** Mean, median, or trimmed mean of normalized scores, with spread. */
     public consensus(scores: number[], method?: ConsensusResult['method'], trim?: number): ConsensusResult {
         return getConsensus(scores, method, trim);
@@ -133,6 +246,149 @@ export class RubricEngine {
     public diagnostics(criteria: { key: string; scores: (number | null)[]; notApplicable: number }[]): DiagnosticFlag[] {
         return getDiagnostics(criteria);
     }
+
+    private draftInput(params: EvaluateParams) {
+        return {
+            versionId: params.version.id,
+            rubricId: params.version.rubricId,
+            subjectEntityId: params.subject.entityId,
+            subjectRecordId: params.subject.recordId,
+            contextEntityId: params.context?.entityId ?? null,
+            contextRecordId: params.context?.recordId ?? null,
+            passThreshold: params.passThreshold ?? null,
+            evaluator: params.evaluator,
+        };
+    }
+
+    /** Highest Major.Minor.Patch among Published versions. Not a call to Get Rubric. */
+    private async latestPublished(input: { rubricId?: string; rubricName?: string }): Promise<RubricVersionSnapshot | null> {
+        const rubric = await this.rubricRow(input);
+        const versions = await this.records.rows('MJ: Rubric Versions', `RubricID=${sqlLiteral(text(rubric.ID))} AND Status='Published'`);
+        const latest = [...versions].sort((a, b) => versionRank(b) - versionRank(a))[0];
+        return latest ? this.snapshot(latest) : null;
+    }
+
+    private async rubricRow(input: { rubricId?: string; rubricName?: string }): Promise<Record<string, unknown>> {
+        if (!input.rubricId && !input.rubricName) throw new Error('A rubric id or name is required.');
+        const filter = input.rubricId ? `ID=${sqlLiteral(input.rubricId)}` : `Name=${sqlLiteral(input.rubricName ?? '')}`;
+        const rows = await this.records.rows('MJ: Rubrics', filter);
+        const row = rows[0];
+        if (!row) throw new Error('That rubric was not found.');
+        return row;
+    }
+
+    private async entityId(entityName: string): Promise<string> {
+        const rows = await this.records.rows('MJ: Entities', `Name=${sqlLiteral(entityName)}`);
+        const id = text(rows[0]?.ID);
+        if (!id) throw new Error(`No entity named ${entityName}.`);
+        return id;
+    }
+
+    private async snapshot(version: Record<string, unknown>): Promise<RubricVersionSnapshot> {
+        const versionId = text(version.ID);
+        const criteria = await this.records.rows('MJ: Rubric Criteria', `RubricVersionID=${sqlLiteral(versionId)}`);
+        const bands = await this.records.rows('MJ: Rubric Bands', `RubricVersionID=${sqlLiteral(versionId)}`);
+        const scaleIds = [...new Set(criteria.map(row => text(row.ScaleID)).filter(id => id.length > 0))];
+        const scales = scaleIds.length === 0 ? [] : await this.records.rows('MJ: Rubric Scales', `ID IN (${scaleIds.map(sqlLiteral).join(', ')})`);
+        const levels = scaleIds.length === 0 ? [] : await this.records.rows('MJ: Rubric Scale Levels', `ScaleID IN (${scaleIds.map(sqlLiteral).join(', ')})`);
+        const criterionIds = criteria.map(row => text(row.ID)).filter(id => id.length > 0);
+        const anchors = criterionIds.length === 0 ? [] : await this.records.rows('MJ: Rubric Criterion Levels', `CriterionID IN (${criterionIds.map(sqlLiteral).join(', ')})`);
+        return {
+            id: versionId,
+            rubricId: text(version.RubricID),
+            majorVersion: numberOrNull(version.MajorVersion),
+            minorVersion: numberOrNull(version.MinorVersion),
+            patchVersion: numberOrNull(version.PatchVersion),
+            instructions: textOrNull(version.Instructions),
+            passThreshold: numberOrNull(version.PassThreshold),
+            minimumCompleteness: numberOrNull(version.MinimumCompleteness),
+            notApplicablePolicy: (text(version.NotApplicablePolicy) || 'ExcludeAndRedistribute') as RubricVersionSnapshot['notApplicablePolicy'],
+            scoreDisplayMin: numberOrNull(version.ScoreDisplayMin) ?? 0,
+            scoreDisplayMax: numberOrNull(version.ScoreDisplayMax) ?? 100,
+            nodes: criteria.map(row => ({
+                id: text(row.ID),
+                key: text(row.Key),
+                parentId: textOrNull(row.ParentID),
+                name: text(row.Name),
+                description: textOrNull(row.Description),
+                guidance: textOrNull(row.Guidance),
+                nodeType: (text(row.NodeType) || 'Criterion') as RubricNodeSnapshot['nodeType'],
+                scaleId: textOrNull(row.ScaleID),
+                weight: numberOrNull(row.Weight) ?? 1,
+                isAdvisory: bit(row.IsAdvisory),
+                isGate: bit(row.IsGate),
+                gateMinimumScore: numberOrNull(row.GateMinimumScore),
+                notApplicablePolicy: (textOrNull(row.NotApplicablePolicy) as RubricNodeSnapshot['notApplicablePolicy']) ?? null,
+                rollupMethod: (textOrNull(row.RollupMethod) as RubricNodeSnapshot['rollupMethod']) ?? null,
+                evidenceRequired: bit(row.EvidenceRequired),
+                rationaleRequired: bit(row.RationaleRequired),
+                sequence: numberOrNull(row.Sequence) ?? 0,
+                evaluatorConfig: parseConfig(row.EvaluatorConfig),
+                anchors: anchors.filter(anchor => text(anchor.CriterionID) === text(row.ID)).map(anchor => ({
+                    scaleLevelId: textOrNull(anchor.ScaleLevelID),
+                    anchorValue: numberOrNull(anchor.AnchorValue),
+                    descriptor: text(anchor.Descriptor),
+                })),
+            })),
+            scales: scales.map(row => ({
+                id: text(row.ID),
+                scaleType: (text(row.ScaleType) || 'Levels') as 'Levels' | 'Numeric',
+                minValue: numberOrNull(row.MinValue),
+                maxValue: numberOrNull(row.MaxValue),
+                step: numberOrNull(row.Step),
+                higherIsBetter: bit(row.HigherIsBetter),
+                levels: levels.filter(level => text(level.ScaleID) === text(row.ID)).map(level => ({
+                    id: text(level.ID),
+                    label: text(level.Label),
+                    value: numberOrNull(level.Value) ?? 0,
+                    normalizedValue: numberOrNull(level.NormalizedValue) ?? 0,
+                    description: textOrNull(level.Description),
+                    sequence: numberOrNull(level.Sequence) ?? 0,
+                })),
+            })),
+            bands: bands.map(row => ({
+                id: text(row.ID),
+                label: text(row.Label),
+                description: textOrNull(row.Description),
+                minScore: numberOrNull(row.MinScore) ?? 0,
+                maxScore: numberOrNull(row.MaxScore) ?? 0,
+                displayTone: text(row.DisplayTone) || 'Neutral',
+                sequence: numberOrNull(row.Sequence) ?? 0,
+            })),
+        };
+    }
+}
+
+function versionRank(row: Record<string, unknown>): number {
+    return (numberOrNull(row.MajorVersion) ?? 0) * 1_000_000 + (numberOrNull(row.MinorVersion) ?? 0) * 1_000 + (numberOrNull(row.PatchVersion) ?? 0);
+}
+
+function sqlLiteral(value: string): string {
+    return `'${value.replace(/'/g, "''")}'`;
+}
+
+function text(value: unknown): string {
+    return value === null || value === undefined ? '' : String(value);
+}
+
+function textOrNull(value: unknown): string | null {
+    const written = text(value);
+    return written.length === 0 ? null : written;
+}
+
+function numberOrNull(value: unknown): number | null {
+    if (value === null || value === undefined || value === '') return null;
+    const parsed = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function bit(value: unknown): boolean {
+    return value === true || value === 1 || value === '1';
+}
+
+function parseConfig(value: unknown): unknown {
+    if (typeof value !== 'string' || value.trim() === '') return value ?? undefined;
+    try { return JSON.parse(value); } catch { return value; }
 }
 
 function requiredAgent(agent: RubricAgent | undefined): RubricAgent {

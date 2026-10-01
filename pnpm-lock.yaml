@@ -13763,6 +13763,18 @@ importers:
 
   packages/Rubrics/Engine:
     dependencies:
+      '@memberjunction/actions':
+        specifier: 6.2.0-edge.1
+        version: link:../../Actions/Engine
+      '@memberjunction/actions-base':
+        specifier: 6.2.0-edge.1
+        version: link:../../Actions/Base
+      '@memberjunction/core':
+        specifier: 6.2.0-edge.1
+        version: link:../../MJCore
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.1
+        version: link:../../MJGlobal
       '@memberjunction/rubrics-base':
         specifier: 6.2.0-edge.1
         version: link:../Base
@@ -14452,6 +14464,9 @@ importers:
       '@memberjunction/remote-browser-server':
         specifier: 6.2.0-edge.1
         version: link:../AI/RemoteBrowser/Server
+      '@memberjunction/rubrics':
+        specifier: 6.2.0-edge.1
+        version: link:../Rubrics/Engine
       '@memberjunction/scheduling-actions':
         specifier: 6.2.0-edge.1
         version: link:../Scheduling/actions
@@ -14714,6 +14729,9 @@ importers:
       '@memberjunction/record-set-processor':
         specifier: 6.2.0-edge.1
         version: link:../RecordSetProcessor/engine
+      '@memberjunction/rubrics':
+        specifier: 6.2.0-edge.1
+        version: link:../Rubrics/Engine
       '@memberjunction/scheduling-actions':
         specifier: 6.2.0-edge.1
         version: link:../Scheduling/actions

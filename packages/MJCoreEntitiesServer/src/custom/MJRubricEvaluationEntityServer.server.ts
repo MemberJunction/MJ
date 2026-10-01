@@ -62,6 +62,7 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
                 versionStatus: versionRow.Status as SubmitEvaluationInput['versionStatus'],
                 supersedesEvaluationId: this.SupersedesEvaluationID,
                 scores: (scoreRows.Results ?? []).map(row => readScore(row)),
+                passThresholdOverride: this.PassThresholdApplied == null ? null : Number(this.PassThresholdApplied),
             };
             const prior = this.SupersedesEvaluationID ? await loadPrior(run, this.SupersedesEvaluationID) : null;
             if (prior) {

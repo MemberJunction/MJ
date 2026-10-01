@@ -831,7 +831,8 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 - [x] **R5** "Rubric Evaluator" prompt + `LLMRubricEvaluator` (SinglePass, PerCriterion via
       `AIDecisionRunner`, samples, evidence verification).
 - [x] **R6** Actions (§8.6). Evaluate Record Against Rubric, Get Rubric Consensus, Get Rubric,
-      and Create Rubric Draft are thin wrappers. Create Rubric Draft never publishes.
+      and Create Rubric Draft are `@RegisterClass` actions. Each `Invoke` calls `RubricEngine`.
+      Create Rubric Draft never publishes.
 - [ ] **R7** Integration bundle **"Rubrics"** (deterministic tier, client-first): publish +
       classification, immutability triggers (raw SQL attempts must fail with 511xx), submit math
       round-trip, supersede/withdraw, consensus view columns vs engine `Mean`, cascade delete of drafts.
