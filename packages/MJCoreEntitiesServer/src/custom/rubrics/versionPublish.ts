@@ -125,6 +125,10 @@ async function loadSnapshot(run: RowRun, versionId: string, rubricId: string): P
     const version = versions[0];
     if (!version) throw new RubricPublishError([`Version ${versionId} was not found.`]);
     const criteria = await rows(run, 'MJ: Rubric Criteria', `RubricVersionID='${versionId}'`);
+    const criterionIds = criteria.map(row => String(read(row, 'ID'))).filter(id => id.length > 0);
+    const anchorRows = criterionIds.length === 0
+        ? []
+        : await rows(run, 'MJ: Rubric Criterion Levels', `CriterionID IN (${criterionIds.map(id => `'${id}'`).join(',')})`);
     const bands = await rows(run, 'MJ: Rubric Bands', `RubricVersionID='${versionId}'`);
     const scaleIds = [...new Set(criteria.map(row => read(row, 'ScaleID')).filter((id): id is string => typeof id === 'string'))];
     const scales = [];
@@ -153,6 +157,9 @@ async function loadSnapshot(run: RowRun, versionId: string, rubricId: string): P
     return {
         id: versionId,
         rubricId,
+        majorVersion: read(version, 'MajorVersion') as number | null,
+        minorVersion: read(version, 'MinorVersion') as number | null,
+        patchVersion: read(version, 'PatchVersion') as number | null,
         notApplicablePolicy: read(version, 'NotApplicablePolicy') as RubricVersionSnapshot['notApplicablePolicy'],
         passThreshold: read(version, 'PassThreshold') as number | null,
         minimumCompleteness: read(version, 'MinimumCompleteness') as number | null,
@@ -174,6 +181,13 @@ async function loadSnapshot(run: RowRun, versionId: string, rubricId: string): P
             evidenceRequired: Boolean(read(row, 'EvidenceRequired')),
             rationaleRequired: Boolean(read(row, 'RationaleRequired')),
             sequence: Number(read(row, 'Sequence') ?? 0),
+            anchors: anchorRows
+                .filter(anchor => String(read(anchor, 'CriterionID')) === String(read(row, 'ID')))
+                .map(anchor => ({
+                    scaleLevelId: read(anchor, 'ScaleLevelID') as string | null,
+                    anchorValue: read(anchor, 'AnchorValue') as number | null,
+                    descriptor: String(read(anchor, 'Descriptor') ?? ''),
+                })),
         })),
         scales,
         bands: bands.map(row => ({

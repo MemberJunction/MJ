@@ -62,6 +62,7 @@ export * from './custom/MJRubricCriterionEntityServer.server';
 export * from './custom/MJRubricEvaluationEntityServer.server';
 export * from './custom/MJRubricEvaluationScoreEntityServer.server';
 export * from './custom/MJRubricScaleEntityServer.server';
+export * from './custom/MJRubricScaleLevelEntityServer.server';
 export * from './custom/rubrics/versionPublish';
 export * from './custom/rubrics/evaluationSubmit';
 export * from './custom/rubrics/scaleFreeze';

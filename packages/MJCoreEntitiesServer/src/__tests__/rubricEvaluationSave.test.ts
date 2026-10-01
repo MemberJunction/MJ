@@ -129,6 +129,7 @@ describe('MJRubricEvaluationEntityServer.Save', () => {
         await expect(evaluation.Save()).rejects.toThrow(/subject/);
         expect(host.SuperSaveCalled).toBe(false);
         expect(prior.Status).toBe('Submitted');
+        expect(events).toEqual([]);
     });
 
     it('marks the previous evaluation Superseded in the same save', async () => {
@@ -154,6 +155,44 @@ describe('MJRubricEvaluationEntityServer.Save', () => {
         await evaluation.Save();
         expect(prior.Status).toBe('Superseded');
         expect(events).toEqual(['score', 'prior']);
+        expect(host.SuperSaveCalled).toBe(true);
+    });
+
+    it('inserts a computed row for a group that the client did not send', async () => {
+        const created: { IsComputed?: boolean; CriterionID?: string; saved: boolean } = { saved: false };
+        const evaluation = new MJRubricEvaluationEntityServer();
+        const host = evaluation as unknown as { Status: string; ProviderToUse: { RunView: (params: { EntityName: string }) => Promise<{ Success: boolean; Results: unknown[] }>; GetEntityObject: () => Promise<typeof created & { NewRecord: () => void; Save: () => Promise<boolean> }> }; SuperSaveCalled: boolean };
+        host.ProviderToUse = {
+            async RunView(params: { EntityName: string }) {
+                if (params.EntityName === 'MJ: Rubric Versions') {
+                    return { Success: true, Results: [{ ID: 'version-1', Status: 'Published', RubricID: 'rubric-1', NotApplicablePolicy: 'ExcludeAndRedistribute', PassThreshold: 0.5, ScoreDisplayMin: 0, ScoreDisplayMax: 100 }] };
+                }
+                if (params.EntityName === 'MJ: Rubric Criteria') {
+                    return { Success: true, Results: [
+                        { ID: 'g', Key: 'group', Name: 'Group', NodeType: 'Group', Weight: 1, IsAdvisory: false, IsGate: false, EvidenceRequired: false, RationaleRequired: false, Sequence: 0 },
+                        { ID: 'a', Key: 'clarity', Name: 'Clarity', ParentID: 'g', NodeType: 'Criterion', ScaleID: 'scale', Weight: 1, IsAdvisory: false, IsGate: false, EvidenceRequired: false, RationaleRequired: false, Sequence: 1 },
+                    ] };
+                }
+                if (params.EntityName === 'MJ: Rubric Scales') return { Success: true, Results: [{ ID: 'scale', ScaleType: 'Levels', HigherIsBetter: true }] };
+                if (params.EntityName === 'MJ: Rubric Scale Levels') return { Success: true, Results: [{ ID: 'high', Label: 'High', Value: 1, NormalizedValue: 1, Sequence: 0 }] };
+                if (params.EntityName === 'MJ: Rubric Evaluation Scores') {
+                    return { Success: true, Results: [{ CriterionID: 'a', ScaleLevelID: 'high', IsNotApplicable: false, IsComputed: false, async Save() { events.push('leaf'); return true; } }] };
+                }
+                return { Success: true, Results: [] };
+            },
+            async GetEntityObject() {
+                return Object.assign(created, {
+                    NewRecord() { /* the server fills the fields */ },
+                    async Save() { created.saved = true; events.push('group'); return true; },
+                });
+            },
+        };
+        host.Status = 'Submitted';
+        await evaluation.Save();
+        expect(created.saved).toBe(true);
+        expect(created.IsComputed).toBe(true);
+        expect(created.CriterionID).toBe('g');
+        expect(events).toEqual(['leaf', 'group']);
         expect(host.SuperSaveCalled).toBe(true);
     });
 });

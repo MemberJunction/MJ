@@ -63,7 +63,19 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
                 supersedesEvaluationId: this.SupersedesEvaluationID,
                 scores: (scoreRows.Results ?? []).map(row => readScore(row)),
             };
+            const prior = this.SupersedesEvaluationID ? await loadPrior(run, this.SupersedesEvaluationID) : null;
+            if (prior) {
+                assertCanSupersede(prior.target, {
+                    status: 'Submitted',
+                    subjectEntityId: this.SubjectEntityID,
+                    subjectRecordId: this.SubjectRecordID,
+                    contextEntityId: this.ContextEntityID,
+                    contextRecordId: this.ContextRecordID,
+                    rubricId: this.RubricID,
+                });
+            }
             const result = submitEvaluation(input);
+            const writtenIds = new Set<string>();
             for (const row of scoreRows.Results ?? []) {
                 const record = row as Record<string, unknown> & { Save?: () => Promise<boolean>; Get?: (name: string) => unknown };
                 const criterionId = String(record.CriterionID ?? record.Get?.('CriterionID'));
@@ -74,32 +86,28 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
                 record.OverallContribution = computed.overallContribution;
                 record.GateFailed = computed.gateFailed;
                 record.IsComputed = computed.isComputed;
+                if (computed.isComputed) record.allowServerComputedWrite = true;
+                writtenIds.add(criterionId);
                 await record.Save();
             }
-            if (this.SupersedesEvaluationID) {
-                const priorRows = await run('MJ: Rubric Evaluations', `ID='${this.SupersedesEvaluationID}'`);
-                const prior = priorRows.Results?.[0] as { Status?: string; SubjectEntityID?: string; SubjectRecordID?: string; ContextEntityID?: string | null; ContextRecordID?: string | null; RubricID?: string; Save?: () => Promise<boolean> } | undefined;
-                if (!prior?.Save) throw new Error('The evaluation being superseded was not found.');
-                assertCanSupersede(
-                    {
-                        status: String(prior.Status),
-                        subjectEntityId: String(prior.SubjectEntityID),
-                        subjectRecordId: String(prior.SubjectRecordID),
-                        contextEntityId: prior.ContextEntityID ?? null,
-                        contextRecordId: prior.ContextRecordID ?? null,
-                        rubricId: String(prior.RubricID),
-                    },
-                    {
-                        status: 'Submitted',
-                        subjectEntityId: this.SubjectEntityID,
-                        subjectRecordId: this.SubjectRecordID,
-                        contextEntityId: this.ContextEntityID,
-                        contextRecordId: this.ContextRecordID,
-                        rubricId: this.RubricID,
-                    },
-                );
-                prior.Status = 'Superseded';
-                await prior.Save();
+            const providerWithCreate = provider as { GetEntityObject?: (name: string, user?: unknown) => Promise<Record<string, unknown> & { NewRecord?: () => void; Save?: () => Promise<boolean> }> };
+            for (const computed of result.scores) {
+                if (!computed.isComputed || writtenIds.has(computed.criterionId) || !providerWithCreate.GetEntityObject) continue;
+                const created = await providerWithCreate.GetEntityObject('MJ: Rubric Evaluation Scores', this.ContextCurrentUser);
+                created.NewRecord?.();
+                created.EvaluationID = this.ID;
+                created.CriterionID = computed.criterionId;
+                created.NormalizedScore = computed.normalizedScore;
+                created.EffectiveWeight = computed.effectiveWeight;
+                created.OverallContribution = computed.overallContribution;
+                created.GateFailed = computed.gateFailed;
+                created.IsComputed = true;
+                created.allowServerComputedWrite = true;
+                if (created.Save) await created.Save();
+            }
+            if (prior) {
+                prior.row.Status = 'Superseded';
+                await prior.row.Save();
             }
             const written = result.evaluation;
             this.NormalizedScore = written.normalizedScore;
@@ -116,6 +124,23 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
         }
         return super.Save(options);
     }
+}
+
+async function loadPrior(run: (entityName: string, filter: string) => Promise<{ Success: boolean; Results?: unknown[] }>, id: string): Promise<{ target: { status: string; subjectEntityId: string; subjectRecordId: string; contextEntityId: string | null; contextRecordId: string | null; rubricId: string }; row: { Status?: string; Save: () => Promise<boolean> } }> {
+    const priorRows = await run('MJ: Rubric Evaluations', `ID='${id}'`);
+    const prior = priorRows.Results?.[0] as { Status?: string; SubjectEntityID?: string; SubjectRecordID?: string; ContextEntityID?: string | null; ContextRecordID?: string | null; RubricID?: string; Save?: () => Promise<boolean> } | undefined;
+    if (!prior?.Save) throw new Error('The evaluation being superseded was not found.');
+    return {
+        target: {
+            status: String(prior.Status),
+            subjectEntityId: String(prior.SubjectEntityID),
+            subjectRecordId: String(prior.SubjectRecordID),
+            contextEntityId: prior.ContextEntityID ?? null,
+            contextRecordId: prior.ContextRecordID ?? null,
+            rubricId: String(prior.RubricID),
+        },
+        row: prior as { Status?: string; Save: () => Promise<boolean> },
+    };
 }
 
 function readScore(row: unknown): SubmitEvaluationInput['scores'][number] {

@@ -871,6 +871,10 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 
 ## 16. Progress log
 
+- **2026-10-01** — A Save publish of a loaded 3.1.4 base with a major change writes 4.0.0.
+  Supersede is checked before score rows are written. Group scores are inserted
+  and marked computed. A level value on a published scale is refused; a
+  description edit is allowed.
 - **2026-10-01** — Evaluation and version `Save` run the publish and submit path when
   Status changes. SubmittedAt and PublishedAt are set with the status. A supersede
   moves the prior Submitted row to Superseded, or refuses a different subject.
