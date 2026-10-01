@@ -110372,25 +110372,19 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
         this.Set('ChangeContext', value);
     }
 
-    private _ChangeContextObject_cached: MJRecordChangeEntity_IRecordChangeContext | null | undefined = undefined;
-    private _ChangeContextObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for ChangeContext — returns parsed JSON as MJRecordChangeEntity_IRecordChangeContext.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for ChangeContext — a live view of the parsed JSON as MJRecordChangeEntity_IRecordChangeContext.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying ChangeContext field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get ChangeContextObject(): MJRecordChangeEntity_IRecordChangeContext | null {
-        const raw = this.ChangeContext;
-        if (raw !== this._ChangeContextObject_lastRaw) {
-            this._ChangeContextObject_cached = raw ? JSON.parse(raw) : null;
-            this._ChangeContextObject_lastRaw = raw;
-        }
-        return this._ChangeContextObject_cached!;
+        return this.GetJSONFieldObject<MJRecordChangeEntity_IRecordChangeContext>('ChangeContext');
     }
     set ChangeContextObject(value: MJRecordChangeEntity_IRecordChangeContext | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.ChangeContext = raw;
-        this._ChangeContextObject_cached = value;
-        this._ChangeContextObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJRecordChangeEntity_IRecordChangeContext>('ChangeContext', value);
     }
 
     /**
@@ -110941,25 +110935,19 @@ export class MJRecordCloneLogEntity extends BaseEntity<MJRecordCloneLogEntityTyp
         this.Set('PlanJSON', value);
     }
 
-    private _PlanJSONObject_cached: MJRecordCloneLogEntity_IClonePlan | undefined = undefined;
-    private _PlanJSONObject_lastRaw: string | null = null;
     /**
-    * Typed accessor for PlanJSON — returns parsed JSON as MJRecordCloneLogEntity_IClonePlan.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for PlanJSON — a live view of the parsed JSON as MJRecordCloneLogEntity_IClonePlan.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying PlanJSON field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get PlanJSONObject(): MJRecordCloneLogEntity_IClonePlan {
-        const raw = this.PlanJSON;
-        if (raw !== this._PlanJSONObject_lastRaw) {
-            this._PlanJSONObject_cached = raw ? JSON.parse(raw) : null;
-            this._PlanJSONObject_lastRaw = raw;
-        }
-        return this._PlanJSONObject_cached!;
+        return this.GetJSONFieldObject<MJRecordCloneLogEntity_IClonePlan>('PlanJSON')!;
     }
     set PlanJSONObject(value: MJRecordCloneLogEntity_IClonePlan) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.PlanJSON = raw;
-        this._PlanJSONObject_cached = value;
-        this._PlanJSONObject_lastRaw = raw;
+        this.SetJSONFieldObject<MJRecordCloneLogEntity_IClonePlan>('PlanJSON', value);
     }
 
     /**

@@ -1146,7 +1146,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT96 - JSONType Live Sync (client transport)",
+            "TestID": "@lookup:MJ: Tests.Name=IT98 - JSONType Live Sync (client transport)",
             "Sequence": 71,
             "Status": "Active"
           },

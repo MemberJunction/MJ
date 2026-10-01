@@ -1,6 +1,6 @@
 # JSONType: live object↔string sync, structural Zod, and opt-in validation (`@mjValidate` / `@CHECK`)
 
-Status: **implemented in this PR, awaiting review** (integration bundles IT97/IT96 authored but not yet executed against a database). Owner: Amith Nagarajan.
+Status: **implemented in this PR, awaiting review** (integration bundles IT97/IT98 authored but not yet executed against a database). Owner: Amith Nagarajan.
 
 ## Why
 
@@ -192,6 +192,6 @@ the existing `ValidateJSONTypeDefinition` would then silently demote the field t
   optional/nullable members) without an absent/null case. This is self-consistency, not proof of equivalence with
   the SQL; reviewers should still read translated rules.
 - **Inherited property rules** re-key per derived declaration.
-- **Integration bundles** `jsontype-live-sync` (IT97, seq 49) and `jsontype-live-sync-client` (IT96, seq 71) use a
+- **Integration bundles** `jsontype-live-sync` (IT97, seq 49) and `jsontype-live-sync-client` (IT98, seq 71) use a
   test-only `MJ: Tests` subclass with a `LiveConfig` accessor over `Configuration`. Not executed.
 - **MJCore has no `README.md`** (its file is `readme.md`); that file and the CodeGenLib README were updated.
