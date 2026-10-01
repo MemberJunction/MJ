@@ -11,6 +11,9 @@ export function hostSnapshot(
     return {
         id: String(version.ID),
         rubricId: String(version.RubricID),
+        majorVersion: version.MajorVersion == null || version.MajorVersion === '' ? null : Number(version.MajorVersion),
+        minorVersion: version.MinorVersion == null || version.MinorVersion === '' ? null : Number(version.MinorVersion),
+        patchVersion: version.PatchVersion == null || version.PatchVersion === '' ? null : Number(version.PatchVersion),
         notApplicablePolicy: (version.NotApplicablePolicy as RubricVersionSnapshot['notApplicablePolicy']) ?? 'ExcludeAndRedistribute',
         passThreshold: version.PassThreshold == null ? null : Number(version.PassThreshold),
         scoreDisplayMin: version.ScoreDisplayMin == null ? 0 : Number(version.ScoreDisplayMin),
@@ -32,6 +35,7 @@ export function hostSnapshot(
         })),
         scales: scales.map(scale => ({
             id: String(scale.ID),
+            name: String(scale.Name ?? ''),
             scaleType: scale.ScaleType === 'Numeric' ? 'Numeric' as const : 'Levels' as const,
             higherIsBetter: scale.HigherIsBetter !== false && scale.HigherIsBetter !== 0,
             levels: levels.filter(level => String(level.ScaleID) === String(scale.ID)).map(level => ({

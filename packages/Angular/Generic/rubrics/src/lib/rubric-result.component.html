@@ -8,11 +8,11 @@
     </header>
     <ul class="rubric-list">
       @for (node of Result.nodes; track node.id) {
-        <li class="rubric-stack">
-          <strong>{{ node.key }}</strong>
-          <span>Weight {{ Weight(node.id) }}</span>
-          <span>{{ Gate(node.id) }}</span>
-          <span>{{ ScaleName(node.id) }}</span>
+        <li class="rubric-facts">
+          <strong>Name: {{ node.key }}</strong>
+          <span>Weight: {{ Weight(node.id) }}</span>
+          <span>Gate: {{ Gate(node.id) }}</span>
+          <span>Scale: {{ ScaleName(node.id) }}</span>
           <span class="rubric-bar" [style.width.%]="Bar(node.normalizedScore)"></span>
           <span>{{ Bar(node.normalizedScore) }}%</span>
           @if (Note(node.id, 'rationale')) {

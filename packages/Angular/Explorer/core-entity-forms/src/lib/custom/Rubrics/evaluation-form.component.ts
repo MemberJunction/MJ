@@ -3,7 +3,7 @@ import { RunView } from '@memberjunction/core';
 import { MJRubricEvaluationEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { bandFromRow, type MatrixColumn, type RubricFormAnswer, type RubricScoreResult, type RubricVersionSnapshot } from '@memberjunction/ng-rubrics';
+import { bandFromRow, nodeFromRow, scaleFromRow, type MatrixColumn, type RubricFormAnswer, type RubricScoreResult, type RubricVersionSnapshot } from '@memberjunction/ng-rubrics';
 import { MJRubricEvaluationFormComponent } from '../../generated/Entities/MJRubricEvaluation/mjrubricevaluation.form.component';
 
 /** Evaluation form. Loads the stored result and the cohort, and shows the read-only widgets. */
@@ -63,14 +63,17 @@ export class MJRubricEvaluationFormComponentExtended extends MJRubricEvaluationF
             const version = versions[0];
             if (version) {
                 const bands = (await this.rows('MJ: Rubric Bands', `RubricVersionID='${version.ID}'`)).map(bandFromRow);
+                const criteria = (await this.rows('MJ: Rubric Criteria', `RubricVersionID='${version.ID}'`)).map(row => nodeFromRow(row));
+                const scaleIds = [...new Set(criteria.map(node => node.scaleId).filter((id): id is string => !!id))];
+                const scales = scaleIds.length === 0 ? [] : (await this.rows('MJ: Rubric Scales', `ID IN (${scaleIds.map(id => `'${id}'`).join(',')})`)).map(row => scaleFromRow(row, []));
                 this.Version = {
                     id: String(version.ID),
                     rubricId: String(version.RubricID),
                     notApplicablePolicy: (version.NotApplicablePolicy as RubricVersionSnapshot['notApplicablePolicy']) ?? 'ExcludeAndRedistribute',
                     scoreDisplayMin: version.ScoreDisplayMin == null ? 0 : Number(version.ScoreDisplayMin),
                     scoreDisplayMax: version.ScoreDisplayMax == null ? 100 : Number(version.ScoreDisplayMax),
-                    nodes: [],
-                    scales: [],
+                    nodes: criteria,
+                    scales,
                     bands,
                 };
             }
@@ -84,7 +87,7 @@ export class MJRubricEvaluationFormComponentExtended extends MJRubricEvaluationF
                     name: String(row.EvaluatorType ?? 'Evaluation'),
                     evaluatorType: (row.EvaluatorType ?? 'Human') as MatrixColumn['evaluatorType'],
                     status: String(row.Status ?? ''),
-                    scores: cells.map(cell => ({ key: criterionLabel(cell), normalizedScore: cell.NormalizedScore == null ? null : Number(cell.NormalizedScore) })),
+                    scores: cells.map(cell => ({ key: criterionLabel(cell), normalizedScore: cell.NormalizedScore == null ? null : Number(cell.NormalizedScore), rationale: cell.Rationale == null ? '' : String(cell.Rationale) })),
                 };
             }));
         } finally {

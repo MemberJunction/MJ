@@ -2,13 +2,16 @@
   <ol class="rubric-list">
     @for (node of Nodes; track node.id) {
       <li>
-        <span>{{ node.name }} <small>{{ node.key }}</small> {{ node.nodeType }}</span>
-        <span>Weight {{ node.weight }} ({{ Share(node.id) }}%)</span>
-        @if (node.nodeType === 'Criterion') {
-          <span>{{ ScaleLabel(node) }}</span>
-          @if (node.isGate) { <span>Gate ≥ {{ node.gateMinimumScore }}</span> }
-          <span>NA: {{ node.notApplicablePolicy || 'Version default' }}</span>
-        }
+        <div class="rubric-facts">
+          <span>Name: {{ node.name }}</span>
+          <span>Key: {{ node.key }}</span>
+          <span>Weight: {{ node.weight }} ({{ Share(node.id) }}% of its group)</span>
+          @if (node.nodeType === 'Criterion') {
+            <span>Scale: {{ ScaleLabel(node) }}</span>
+            <span>Gate: {{ node.isGate ? '≥ ' + node.gateMinimumScore : 'off' }}</span>
+            <span>Not applicable: {{ node.notApplicablePolicy || 'Version default' }}</span>
+          }
+        </div>
         <label>
           Parent
           <select [value]="node.parentId ?? ''" (change)="OnParent(node, $event)">

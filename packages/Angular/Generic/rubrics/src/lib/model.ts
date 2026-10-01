@@ -304,7 +304,7 @@ export interface MatrixColumn {
     name: string;
     evaluatorType: 'Human' | 'AI' | 'Self' | 'Deterministic';
     status: string;
-    scores: { key: string; normalizedScore: number | null }[];
+    scores: { key: string; normalizedScore: number | null; rationale?: string }[];
 }
 
 export interface MatrixModel {

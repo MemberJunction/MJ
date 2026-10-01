@@ -30,6 +30,7 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
     public RequestedBump: 'Major' | 'Minor' | 'Patch' | null = null;
     public Summary = '';
     public Message = '';
+    public Viewing: 'draft' | 'published' = 'draft';
 
     public get PublishedLabel(): string {
         const row = this.Versions.find(item => item.Status === 'Published');

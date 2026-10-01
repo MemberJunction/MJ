@@ -34,6 +34,9 @@ export class RubricBuilderComponent implements OnChanges {
     ngOnChanges(): void {
         this.Shares = weightShares(this.Nodes);
         this.Problems = draftProblems(this.Nodes, this.Scales);
+        if (this.SampleAnswers.length === 0 && this.Nodes.some(node => node.nodeType === 'Criterion' && node.scaleId)) {
+            this.SampleAnswers = this.sample(true);
+        }
         this.Preview = this.Version ? previewScore({ ...this.Version, nodes: this.Nodes, scales: this.Scales }, this.SampleAnswers) : null;
         this.selectLoadedScales();
     }
@@ -71,12 +74,16 @@ export class RubricBuilderComponent implements OnChanges {
     }
 
     public Simulate(meets: boolean): void {
-        this.SampleAnswers = this.Nodes.filter(node => node.nodeType === 'Criterion').map(node => {
-            const levels = [...(this.Scales.find(scale => scale.id === node.scaleId)?.levels ?? [])].sort((a, b) => a.normalizedValue - b.normalizedValue);
+        this.SampleAnswers = this.sample(meets);
+        this.ngOnChanges();
+    }
+
+    private sample(meets: boolean): RubricFormAnswer[] {
+        return this.Nodes.filter(node => node.nodeType === 'Criterion').map(node => {
+            const levels = [...(this.Scales.find(scale => scale.id.toLowerCase() === (node.scaleId ?? '').toLowerCase())?.levels ?? [])].sort((a, b) => a.normalizedValue - b.normalizedValue);
             const level = meets ? levels[levels.length - 1] : levels[0];
             return { criterionId: node.id, scaleLevelId: level?.id ?? null };
         });
-        this.ngOnChanges();
     }
 
     public Levels(node: RubricNodeSnapshot): { id: string; label: string }[] {

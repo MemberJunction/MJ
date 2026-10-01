@@ -2,6 +2,7 @@ import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core
 import { CompositeKey, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { categoryParentChoices, hostSnapshot, priorPublishedVersion, scaleIsFrozen } from './form-hosts.model';
+import { publishPreview } from './model.js';
 import { RubricCategoryEditorComponent, RubricCriterionEditorComponent, RubricScaleLevelEditorComponent } from './record-editors.component';
 import { RubricVersionDiffComponent } from './version-diff.component';
 
@@ -27,7 +28,10 @@ export class RubricVersionHostComponent implements OnChanges {
     @Input() Provider: IMetadataProvider | null = null;
     public Base: RubricVersionSnapshot | null = null;
     public Draft: RubricVersionSnapshot | null = null;
+    public NextVersion = '';
     public get StatusLine(): string {
+        if (this.Status === 'Draft') return `Draft (next ${this.NextVersion || '…'})`;
+        if (this.MajorVersion == null) return this.Status;
         return `${this.Status} ${this.MajorVersion}.${this.MinorVersion}.${this.PatchVersion}`;
     }
     public ngOnChanges(): void { void this.load(); }
@@ -45,6 +49,7 @@ export class RubricVersionHostComponent implements OnChanges {
         const priorId = priorPublishedVersion(listed, this.VersionId);
         this.Draft = await snapshot(this.Provider, versions.find(row => String(row.ID) === this.VersionId));
         this.Base = priorId ? await snapshot(this.Provider, versions.find(row => String(row.ID) === priorId)) : null;
+        this.NextVersion = this.Draft ? publishPreview(this.Base, this.Draft).nextVersion ?? '' : '';
     }
 }
 

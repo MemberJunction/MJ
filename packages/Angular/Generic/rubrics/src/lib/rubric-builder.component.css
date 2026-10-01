@@ -45,6 +45,28 @@
   gap: var(--mj-space-2, 0.5rem);
 }
 
+.rubric-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.rubric-facts span {
+  display: block;
+}
+
+.rubric-columns {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--mj-space-3, 0.75rem);
+}
+
+@media (max-width: 520px) {
+  .rubric-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 520px) {
   .rubric-split {
     grid-template-columns: 1fr;

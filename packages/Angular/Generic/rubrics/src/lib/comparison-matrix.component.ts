@@ -21,8 +21,18 @@ export class RubricComparisonMatrixComponent {
             name: labels[type],
             evaluatorType: type,
             status: type === 'Self' ? 'Disabled' : 'Empty',
-            scores: [],
+            scores: [] as { key: string; normalizedScore: number | null; rationale?: string }[],
         });
+    }
+
+    public ScoreText(column: MatrixColumn, key: string): string {
+        const score = column.scores.find(item => item.key === key);
+        if (!score || score.normalizedScore == null) return column.status === 'Disabled' ? 'Disabled' : 'No score yet';
+        return String(score.normalizedScore);
+    }
+
+    public RationaleText(column: MatrixColumn, key: string): string {
+        return column.scores.find(item => item.key === key)?.rationale || '';
     }
 
     public get Model(): MatrixModel {

@@ -1,6 +1,6 @@
 <section class="rubric-panel" aria-label="Comparison matrix">
   <h3>Evaluator comparison</h3>
-  <div class="rubric-split">
+  <div class="rubric-columns">
     <div>
       <p>Criterion</p>
       @for (row of Model.rows; track row.key) {
@@ -11,9 +11,8 @@
       <div class="rubric-stack">
         <p>{{ column.name }}</p>
         @for (row of Model.rows; track row.key) {
-          @if (Cell(row, column.id); as cell) {
-            <p>{{ cell.score ?? 'No score yet' }}</p>
-          }
+          <p>{{ ScoreText(column, row.key) }}</p>
+          <p>{{ RationaleText(column, row.key) }}</p>
         }
       </div>
     }
