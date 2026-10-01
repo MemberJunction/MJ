@@ -49,9 +49,9 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
         const status = this.GetFieldByName('Status');
         if (status?.Dirty && status.OldValue === 'Draft' && this.Status === 'Submitted') {
-            const provider = this.ProviderToUse as { RunView?: (params: { EntityName: string; ExtraFilter: string }, user?: unknown) => Promise<{ Success: boolean; Results?: unknown[] }> };
+            const provider = this.ProviderToUse as { RunView?: (params: { EntityName: string; ExtraFilter: string; ResultType?: 'simple' | 'entity_object' }, user?: unknown) => Promise<{ Success: boolean; Results?: unknown[] }> };
             if (!provider?.RunView) throw new Error('Submitting an evaluation requires a provider that can load the version and scores.');
-            const run = (entityName: string, filter: string) => provider.RunView!({ EntityName: entityName, ExtraFilter: filter }, this.ContextCurrentUser);
+            const run = (entityName: string, filter: string) => provider.RunView!({ EntityName: entityName, ExtraFilter: filter, ResultType: 'entity_object' }, this.ContextCurrentUser);
             const versionRows = await run('MJ: Rubric Versions', `ID='${this.RubricVersionID}'`);
             const versionRow = versionRows.Results?.[0] as { Status?: string; RubricID?: string } | undefined;
             if (!versionRow) throw new Error('The pinned rubric version was not found.');

@@ -833,9 +833,10 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 - [x] **R6** Actions (§8.6). Evaluate Record Against Rubric, Get Rubric Consensus, Get Rubric,
       and Create Rubric Draft are `@RegisterClass` actions. Each `Invoke` calls `RubricEngine`.
       Create Rubric Draft never publishes.
-- [ ] **R7** Integration bundle **"Rubrics"** (deterministic tier, client-first): publish +
-      classification, immutability triggers (raw SQL attempts must fail with 511xx), submit math
-      round-trip, supersede/withdraw, consensus view columns vs engine `Mean`, cascade delete of drafts.
+- [x] **R7** Integration bundle **"Rubrics"** (deterministic tier, sequence 50, ahead of the
+      client-transport tests). Publish classifies Initial then Major. Raw SQL throws 51101–51110.
+      Submit stores the `RubricScoring` result. Supersede and withdraw. The cohort mean matches
+      the engine `Mean`. Deleting a draft removes its tree.
 
 **T — testing framework**
 - [ ] **T1** Re-enable Agent Eval oracles (§10.1).
@@ -874,6 +875,10 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 
 ## 16. Progress log
 
+- **2026-10-01** — R7 adds the rest of the deterministic Rubrics bundle at sequence 50.
+  Raw SQL covers 51101–51110. Publish classifies Initial then Major. Submit is compared
+  with `RubricScoring`. Supersede and withdraw, and the cohort mean against the engine Mean,
+  are in the same bundle. Draft delete stays the existing tree check.
 - **2026-10-01** — A Save publish of a loaded 3.1.4 base with a major change writes 4.0.0.
   Supersede is checked before score rows are written. Group scores are inserted
   and marked computed. A level value on a published scale is refused; a

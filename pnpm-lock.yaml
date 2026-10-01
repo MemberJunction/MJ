@@ -15249,6 +15249,12 @@ importers:
       '@memberjunction/redis-provider':
         specifier: 6.2.0-edge.1
         version: link:../../RedisProvider
+      '@memberjunction/rubrics':
+        specifier: 6.2.0-edge.1
+        version: link:../../Rubrics/Engine
+      '@memberjunction/rubrics-base':
+        specifier: 6.2.0-edge.1
+        version: link:../../Rubrics/Base
       '@memberjunction/scheduling-engine':
         specifier: 6.2.0-edge.1
         version: link:../../Scheduling/engine
