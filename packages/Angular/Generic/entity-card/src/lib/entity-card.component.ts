@@ -2,7 +2,7 @@ import {
     Component, Input, Output, EventEmitter,
     OnChanges, SimpleChanges, ChangeDetectionStrategy, ChangeDetectorRef, inject
 } from '@angular/core';
-import { EntityInfo } from '@memberjunction/core';
+import { EntityInfo, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import {
     EntityCardVariant, CardTemplate, CardDisplayField,
@@ -414,7 +414,12 @@ export class MJEntityCardComponent extends BaseAngularComponent implements OnCha
                 try {
                     const d = value instanceof Date ? value : new Date(value as string | number);
                     if (isNaN(d.getTime())) return String(value);
-                    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+                    const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+                    // A `date` column is a calendar day that arrives as UTC midnight; a local-zone
+                    // formatter would land on the previous day for every reader west of Greenwich
+                    // (MJ#4210). A timestamp names an instant and stays in local time.
+                    if (this.isDateOnlyField(field.Name)) return FormatDateOnly(d, options);
+                    return d.toLocaleDateString(undefined, options);
                 } catch {
                     return String(value);
                 }
@@ -424,6 +429,10 @@ export class MJEntityCardComponent extends BaseAngularComponent implements OnCha
                 return s.length > 60 ? s.substring(0, 60) + '...' : s;
             }
         }
+    }
+
+    private isDateOnlyField(fieldName: string): boolean {
+        return IsDateOnlySQLType(this.ResolvedEntity?.Fields?.find(f => f.Name === fieldName)?.Type);
     }
 
     private BuildEventPayload(): CardRecordEvent {
