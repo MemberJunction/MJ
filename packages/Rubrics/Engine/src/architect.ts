@@ -71,6 +71,12 @@ export function draftFromImport(name: string, csv: string): { name: string; stat
     return { name, status: 'Draft', nodes: importMatrix(csv) };
 }
 
+/** A description becomes a Draft version. This path does not publish. */
+export async function draftFromDescription(store: DraftVersionStore, description: string): Promise<{ id: string; status: 'Draft' }> {
+    const title = description.trim().replace(/[\r\n,]+/g, ' ').slice(0, 120) || 'Draft rubric';
+    return saveImportedDraft(store, title, '1,Summary,1,no');
+}
+
 export function publishImportedDraft(): { ok: false; message: string } {
     return { ok: false, message: 'The architect does not publish.' };
 }

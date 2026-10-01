@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { critiqueRubric, draftFromImport, importMatrix, improveFromData, publishImportedDraft, saveImportedDraft } from '../architect.js';
+import { critiqueRubric, draftFromDescription, draftFromImport, importMatrix, improveFromData, publishImportedDraft, saveImportedDraft } from '../architect.js';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 
 describe('rubric architect', () => {
@@ -42,6 +42,20 @@ describe('rubric architect', () => {
             'facts: NoDiscrimination',
             'Agreement kappa 0.2 is low.',
         ]);
+        const published: string[] = [];
+        const names: string[] = [];
+        const described = await draftFromDescription({
+            async saveVersion(fields) {
+                names.push(fields.name);
+                if (fields.status !== 'Draft') published.push(fields.status);
+                return 'draft-from-description';
+            },
+            async saveCriteria() {},
+        }, 'Score a vendor packet');
+        expect(names).toEqual(['Score a vendor packet']);
+        expect(described).toEqual({ id: 'draft-from-description', status: 'Draft' });
+        expect(published).toEqual([]);
+        expect(publishImportedDraft().ok).toBe(false);
         expect(critiqueRubric(version)).toEqual([
             'ok: the name is too vague.',
             'ok: no anchors.',

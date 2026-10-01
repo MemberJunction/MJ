@@ -8,7 +8,7 @@ export { LLMRubricEvaluator, renderRubricEvaluatorPrompt, type LLMDecision, type
 export { AIRubricEvaluator, AIRubricEvaluator as AgentRubricEvaluator, type AgentCriterionResult, type AgentScaleView, type RubricAgent, type RubricEvaluatorConfig } from './AIRubricEvaluator.js';
 export { critiqueRubric, importMatrix, type ImportedCriterion } from './architect.js';
 export { AGENT_RUN_SUBJECT, EvaluateSampledAgentRuns, driftDeltas, driftSeries, evaluatedRubricRuns, keepSample, productionSamplingJob, productionSamplingLinks, productionSamplingLoader, rubricIdFromVersion, sampleBucket, selectSampledRuns, type AgentRubricLinkRow, type AgentRunRow, type DriftEvaluationRow, type DriftRunRow, type DriftScoreRow, type ProductionSamplingCatalog, type SamplingLink } from './sampling.js';
-export { draftFromImport, improveFromData, publishImportedDraft, saveImportedDraft } from './architect.js';
+export { draftFromDescription, draftFromImport, improveFromData, publishImportedDraft, saveImportedDraft } from './architect.js';
 export { periodMeans } from './sampling.js';
 export { providerProductionCatalog } from './productionSamplingCatalog.js';
 export { HumanRubricEvaluator, type DraftEvaluationInput, type EvaluationDraftStore, type RubricTaskStore } from './HumanRubricEvaluator.js';
