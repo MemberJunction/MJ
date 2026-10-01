@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AuthorizationInfo, AuthorizationRoleInfo, Metadata, UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import {
     ContributionScopeRank,
+    FormContributionOutranks,
     FormScopeAllowedOnEntity,
+    IsSelectableFormOverride,
     FormScopeWriteRefusal,
     IsCanonicalFormScope,
     MANAGE_FORM_DEFAULTS_AUTHORIZATION,
@@ -359,5 +361,46 @@ describe('FormScopeAllowedOnEntity', () => {
     it('treats an unknown or blank scope as shared', () => {
         expect(FormScopeAllowedOnEntity('MJ: Users', null)).toBe(false);
         expect(FormScopeAllowedOnEntity('MJ: Users', ' user')).toBe(false);
+    });
+});
+
+/** Two contributions under one key: the browser's collapse and the server's composition pick the same one. */
+describe('FormContributionOutranks', () => {
+    it('lets the higher precedence win, whatever the scope or source', () => {
+        expect(FormContributionOutranks({ Precedence: 2, Scope: 'Global' }, { Precedence: 1, Scope: 'User' })).toBe(true);
+        expect(FormContributionOutranks({ Precedence: 1, Scope: 'User' }, { Precedence: 0, Compiled: true })).toBe(true);
+        expect(FormContributionOutranks({ Precedence: 0, Compiled: true }, { Precedence: 1, Scope: 'Global' })).toBe(false);
+    });
+
+    it('breaks a tie by the narrower scope between rows', () => {
+        expect(FormContributionOutranks({ Precedence: 0, Scope: 'User' }, { Precedence: 0, Scope: 'Role' })).toBe(true);
+        expect(FormContributionOutranks({ Precedence: 0, Scope: 'Role' }, { Precedence: 0, Scope: 'Global' })).toBe(true);
+        expect(FormContributionOutranks({ Precedence: 0, Scope: 'Global' }, { Precedence: 0, Scope: 'User' })).toBe(false);
+    });
+
+    it('lets a compiled panel win a tie against any row', () => {
+        expect(FormContributionOutranks({ Precedence: 0, Compiled: true }, { Precedence: 0, Scope: 'User' })).toBe(true);
+        expect(FormContributionOutranks({ Precedence: 0, Scope: 'User' }, { Precedence: 0, Compiled: true })).toBe(false);
+    });
+
+    it('keeps the incumbent on a full tie, and reads a missing precedence as 0', () => {
+        expect(FormContributionOutranks({ Precedence: 0, Scope: 'Role' }, { Precedence: 0, Scope: 'Role' })).toBe(false);
+        expect(FormContributionOutranks({ Precedence: 0, Compiled: true }, { Precedence: 0, Compiled: true })).toBe(false);
+        expect(FormContributionOutranks({ Precedence: null, Scope: 'User' }, { Precedence: undefined, Scope: 'Role' })).toBe(true);
+    });
+});
+
+/** A form the user may pick: an Active one, or their own set aside; never a retracted shared one or a draft. */
+describe('IsSelectableFormOverride', () => {
+    it('offers live forms and the user\'s own set-aside form', () => {
+        expect(IsSelectableFormOverride({ Status: 'Active', Scope: 'Global' })).toBe(true);
+        expect(IsSelectableFormOverride({ Status: 'Active', Scope: 'Role' })).toBe(true);
+        expect(IsSelectableFormOverride({ Status: 'Inactive', Scope: 'User' })).toBe(true);
+    });
+
+    it('withholds a shared form set aside, and every draft', () => {
+        expect(IsSelectableFormOverride({ Status: 'Inactive', Scope: 'Global' })).toBe(false);
+        expect(IsSelectableFormOverride({ Status: 'Inactive', Scope: 'Role' })).toBe(false);
+        expect(IsSelectableFormOverride({ Status: 'Pending', Scope: 'User' })).toBe(false);
     });
 });

@@ -122,7 +122,11 @@ vi.mock('@memberjunction/core-entities', async () => {
         FormLifecycleComponentStatus: typeof FormLifecycleComponentStatus;
         SameFormAudience: typeof SameFormAudience;
     }>('@memberjunction/core-entities/dist/custom/FormScope/FormContributionLifecycle.js');
+    // The same-key tie-break the rendering check collapses with.
+    const rules = await vi.importActual<{ FormContributionOutranks: unknown }>(
+        '@memberjunction/core-entities/dist/custom/FormScope/FormScopeRules.js');
     return {
+        FormContributionOutranks: rules.FormContributionOutranks,
         InteractiveFormsEngine: { get Instance() { return { Contributions: contributions, Overrides: overrides }; } },
         UserCanManageFormDefaults: vi.fn(() => true),
         ApplyContributionSpecToRow: mapper.ApplyContributionSpecToRow,

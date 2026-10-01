@@ -380,8 +380,9 @@ describe('GetFormCompositionForEntityAction — the panels the user sees', () =>
 });
 
 /**
- * A failed query used to read as an empty result: a failed override lookup said there was no
- * full custom form, and an agent then designed a panel for a form the user does not see.
+ * A failed query returns QUERY_FAILED rather than an answer built from a partial read: an empty
+ * override list would say no full custom form renders, and an agent would design a panel for a
+ * form the user does not see.
  */
 describe('GetFormCompositionForEntityAction — a failed query', () => {
     it.each(['MJ: Form Chrome Rules', 'MJ: Entity Form Contributions', 'MJ: Entity Form Overrides', 'MJ: User Settings'])(

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { FormVariantChoices, IsSelectableOverride } from '../form-variants';
+import { FormVariantChoices } from '../form-variants';
 import type { EntityFormOverrideRow } from '../form-resolver.service';
 
 /**
@@ -68,19 +68,5 @@ describe('FormVariantChoices — shared forms set aside', () => {
             row({ ID: '4', Name: 'My Old Form', Status: 'Inactive' }),
         ]);
         expect(choices.map((c) => c.ID)).toEqual(['1', '4']);
-    });
-});
-
-describe('IsSelectableOverride', () => {
-    it('allows a live form of any audience and the user\'s own form set aside', () => {
-        expect(IsSelectableOverride({ Status: 'Active', Scope: 'Global' })).toBe(true);
-        expect(IsSelectableOverride({ Status: 'Active', Scope: 'Role' })).toBe(true);
-        expect(IsSelectableOverride({ Status: 'Inactive', Scope: 'User' })).toBe(true);
-    });
-
-    it('refuses a shared form set aside and every draft', () => {
-        expect(IsSelectableOverride({ Status: 'Inactive', Scope: 'Global' })).toBe(false);
-        expect(IsSelectableOverride({ Status: 'Inactive', Scope: 'Role' })).toBe(false);
-        expect(IsSelectableOverride({ Status: 'Pending', Scope: 'User' })).toBe(false);
     });
 });

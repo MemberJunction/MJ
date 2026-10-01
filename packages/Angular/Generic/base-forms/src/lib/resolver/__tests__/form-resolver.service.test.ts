@@ -19,10 +19,9 @@ const hoisted = vi.hoisted(() => ({
 }));
 
 vi.mock('@memberjunction/core-entities', async () => ({
-    // The scope rule is pure, so the real one decides. Loads from core-entities' dist, so that
+    // The scope rules are pure, so the real ones decide. Loads from core-entities' dist, so that
     // package must be built first.
-    FormScopeAllowedOnEntity: (await vi.importActual<{ FormScopeAllowedOnEntity: unknown }>(
-        '@memberjunction/core-entities/dist/custom/FormScope/FormScopeRules.js')).FormScopeAllowedOnEntity,
+    ...(await vi.importActual<Record<string, unknown>>('@memberjunction/core-entities/dist/custom/FormScope/FormScopeRules.js')),
     InteractiveFormsEngine: {
         Instance: {
             Config: async () => undefined,

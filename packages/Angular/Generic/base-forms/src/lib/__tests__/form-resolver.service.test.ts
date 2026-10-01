@@ -20,9 +20,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const settingsBacking: Record<string, string> = {};
 let overridesBacking: any[] = [];
 vi.mock('@memberjunction/core-entities', async () => ({
-    // The scope rule is pure, so the real one decides. Loads from core-entities' dist.
-    FormScopeAllowedOnEntity: (await vi.importActual<{ FormScopeAllowedOnEntity: unknown }>(
-        '@memberjunction/core-entities/dist/custom/FormScope/FormScopeRules.js')).FormScopeAllowedOnEntity,
+    // The scope rules are pure, so the real ones decide. Loads from core-entities' dist.
+    ...(await vi.importActual<Record<string, unknown>>('@memberjunction/core-entities/dist/custom/FormScope/FormScopeRules.js')),
     UserInfoEngine: {
         Instance: {
             GetSetting: (key: string) => settingsBacking[key],

@@ -174,7 +174,11 @@ vi.mock('@memberjunction/ng-base-forms', async () => {
 });
 
 /** The rows the collector reads come from the forms engine, which has to be loaded first. */
-vi.mock('@memberjunction/core-entities', () => ({
+vi.mock('@memberjunction/core-entities', async () => ({
+    // The same-key tie-break the collapse uses; pure, so the real one decides. Loads from
+    // core-entities' dist, so that package must be built first.
+    FormContributionOutranks: (await vi.importActual<{ FormContributionOutranks: unknown }>(
+        '@memberjunction/core-entities/dist/custom/FormScope/FormScopeRules.js')).FormContributionOutranks,
     InteractiveFormsEngine: {
         Instance: {
             Config: async () => { hoisted.events.push('engine'); },

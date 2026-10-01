@@ -3,9 +3,10 @@ import { BaseAction } from "@memberjunction/actions";
 import { Metadata, LogError, RunView, ReadRelationshipInclusion, type EntityInfo, type EntityRelationshipInfo, type RunViewResult } from "@memberjunction/core";
 import { EscapeSQLString, RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import {
-    ContributionScopeRank,
+    FormContributionOutranks,
     FormPanelHideSettingKey,
     FormScopeAllowedOnEntity,
+    IsSelectableFormOverride,
     ParseClaimedFieldNames,
     ParseHiddenFormPanelKeys,
     type FormScope,
@@ -173,7 +174,7 @@ export class GetFormCompositionForEntityAction extends BaseAction {
      *
      * Mirrors `FormResolverService.pickActive` in the browser, which is what actually
      * decides. A stored pick wins when the user may pick it: an Active form, or their own
-     * form set aside by a later apply (`IsSelectableOverride`). The explicit-default sentinel
+     * form set aside by a later apply ({@link IsSelectableFormOverride}). The explicit-default sentinel
      * means they asked for the generated form, so no custom form renders at all. With no
      * pick, or a pick naming a form that has gone or cannot be picked, the auto-pick rule
      * applies: the first Active override, if there is one.
@@ -181,8 +182,7 @@ export class GetFormCompositionForEntityAction extends BaseAction {
     private rendersFullCustomForm(overrides: readonly OverrideRow[], preference: string | null): boolean {
         const selected = (preference ?? '').trim();
         if (selected === FORM_VARIANT_EXPLICIT_DEFAULT) return false;
-        const selectable = (o: OverrideRow) => o.Status === 'Active' || (o.Status === 'Inactive' && o.Scope === 'User');
-        if (selected && overrides.some(o => selectable(o) && UUIDsEqual(o.ID, selected))) return true;
+        if (selected && overrides.some(o => IsSelectableFormOverride(o) && UUIDsEqual(o.ID, selected))) return true;
         return overrides.some(o => o.Status === 'Active');
     }
 
@@ -285,20 +285,14 @@ function contributionRowKey(row: ContributionRow): string | null {
     );
 }
 
-/** Whether `row` beats `incumbent` for a key: higher Precedence, then the narrower scope. */
-function outranks(row: ContributionRow, incumbent: ContributionRow): boolean {
-    const precedence = (row.Precedence ?? 0) - (incumbent.Precedence ?? 0);
-    return precedence > 0 || (precedence === 0 && ContributionScopeRank(row.Scope) > ContributionScopeRank(incumbent.Scope));
-}
-
-/** One row per key, the one {@link outranks} picks; rows without a key never collapse. */
+/** One row per key, the one {@link FormContributionOutranks} picks; rows without a key never collapse. */
 function collapseByKey(rows: readonly ContributionRow[]): ContributionRow[] {
     const winners = new Map<string, ContributionRow>();
     let unique = 0;
     for (const row of rows) {
         const key = contributionRowKey(row) ?? `__unique:${unique++}`;
         const incumbent = winners.get(key);
-        if (!incumbent || outranks(row, incumbent)) winners.set(key, row);
+        if (!incumbent || FormContributionOutranks(row, incumbent)) winners.set(key, row);
     }
     return [...winners.values()];
 }

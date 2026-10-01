@@ -101,6 +101,45 @@ export function ContributionScopeRank(scope: FormScope | null | undefined): numb
     }
 }
 
+/** The fields the same-key tie-break reads from a contribution. */
+export interface RankedFormContribution {
+    /** Last-wins rank; null or undefined reads as 0. */
+    Precedence: number | null | undefined;
+    /** The row's scope. Not read for a compiled panel. */
+    Scope?: FormScope | null;
+    /** True for a compiled `BaseFormPanel` registration, which wins every precedence tie against a row. */
+    Compiled?: boolean;
+}
+
+/**
+ * Whether `candidate` beats `incumbent` for one contribution key: higher precedence first; on a
+ * tie a compiled panel beats any row, and between rows the narrower scope wins
+ * ({@link ContributionScopeRank}). On a full tie the incumbent stays, so the result follows the
+ * order the caller walks the contributions in.
+ */
+export function FormContributionOutranks(candidate: RankedFormContribution, incumbent: RankedFormContribution): boolean {
+    const precedence = (candidate.Precedence ?? 0) - (incumbent.Precedence ?? 0);
+    if (precedence !== 0) return precedence > 0;
+    return tieRank(candidate) > tieRank(incumbent);
+}
+
+function tieRank(contribution: RankedFormContribution): number {
+    return contribution.Compiled ? Number.POSITIVE_INFINITY : ContributionScopeRank(contribution.Scope);
+}
+
+/**
+ * Whether a user may pick a full custom form and see it rendered.
+ *
+ * A live (`Active`) form always. A set-aside (`Inactive`) form only when it is the user's own
+ * `User` row: applying a second form sets the first aside, and the user must be able to swap back.
+ * A shared form set to `Inactive` was retracted by whoever manages it, so it is neither offered nor
+ * rendered. A `Pending` row is a draft and is never either. The browser's form resolver and the
+ * server's composition action both decide with this.
+ */
+export function IsSelectableFormOverride(row: { Status: string | null | undefined; Scope: string | null | undefined }): boolean {
+    return row.Status === 'Active' || (row.Status === 'Inactive' && row.Scope === 'User');
+}
+
 /**
  * Entities whose forms show only the user's own full custom forms and panels, lowercased.
  *

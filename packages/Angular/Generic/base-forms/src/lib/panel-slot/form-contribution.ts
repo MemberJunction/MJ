@@ -22,7 +22,7 @@ import {
     type FormContributionSpec,
 } from '@memberjunction/interactive-component-types/forms';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
-import { ContributionScopeRank, type MJEntityFormContributionEntity } from '@memberjunction/core-entities';
+import { FormContributionOutranks, type MJEntityFormContributionEntity } from '@memberjunction/core-entities';
 import { FormPanelRegistrationMetadata, FormPanelSlot } from './base-form-panel';
 
 /** Minimum relationship shape the composer reads. Satisfied by EntityRelationshipInfo. */
@@ -307,21 +307,20 @@ export function IsWildcardPlaceClaim(meta: FormPanelRegistrationMetadata): boole
         && (!!meta.relatedEntity || ReplacedSectionKeys(meta).length > 0 || !!meta.inSectionKey?.trim());
 }
 
-/**
- * Tie-break rank at equal priority, higher wins. A compiled registration beats any row; between
- * rows the narrower audience wins ({@link ContributionScopeRank}: User over Role over Global).
- */
-function sourceRank(reg: { Source?: FormContributionRegistrationSource; Scope?: FormContributionRegistration['Scope'] }): number {
-    return reg.Source === 'metadata' ? ContributionScopeRank(reg.Scope) : Number.POSITIVE_INFINITY;
-}
-
 /** The fields the collapse ranks a registration by. */
 type RankedRegistration = Pick<FormContributionRegistration, 'Priority' | 'Source' | 'Scope'>;
 
-/** Whether `reg` beats `incumbent`: higher Priority, then {@link sourceRank}. */
+/**
+ * Whether `reg` beats `incumbent`, by the rule the server's composition answer also uses
+ * ({@link FormContributionOutranks}): higher Priority; on a tie a compiled registration beats any
+ * row, and between rows the narrower audience wins.
+ */
 function outranks(reg: RankedRegistration, incumbent: RankedRegistration): boolean {
-    return reg.Priority > incumbent.Priority
-        || (reg.Priority === incumbent.Priority && sourceRank(reg) > sourceRank(incumbent));
+    return FormContributionOutranks(rankOf(reg), rankOf(incumbent));
+}
+
+function rankOf(reg: RankedRegistration) {
+    return { Precedence: reg.Priority, Scope: reg.Scope, Compiled: reg.Source !== 'metadata' };
 }
 
 /**

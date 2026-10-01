@@ -1,6 +1,6 @@
 import { Injectable, Type } from '@angular/core';
 import { IMetadataProvider, UserInfo, EntityInfo, LogError } from '@memberjunction/core';
-import { FormScopeAllowedOnEntity, InteractiveFormsEngine } from '@memberjunction/core-entities';
+import { FormScopeAllowedOnEntity, InteractiveFormsEngine, IsSelectableFormOverride } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { BaseFormComponent } from '../base-form-component';
 import { UserInfoEngine } from '@memberjunction/core-entities';
@@ -8,7 +8,6 @@ import {
     FORM_VARIANT_EXPLICIT_DEFAULT,
     FORM_VARIANT_SETTING_PREFIX,
 } from '@memberjunction/interactive-component-types/forms';
-import { IsSelectableOverride } from './form-variants';
 
 /**
  * Slim row shape for an `EntityFormOverride` lookup. Resolution doesn't need
@@ -212,7 +211,7 @@ export class FormResolverService {
 
         // Filter cached overrides for this (entity, user, roles) tuple.
         // Includes Active + Pending + Inactive; the variant picker and
-        // pickActive() keep the ones IsSelectableOverride allows. Replaces
+        // pickActive() keep the ones IsSelectableFormOverride allows. Replaces
         // a per-LoadForm RunView with an in-memory predicate — sub-ms.
         // An identity or permission entity takes only the user's own forms.
         const applicable = InteractiveFormsEngine.Instance.Overrides.filter(o => {
@@ -272,7 +271,7 @@ export class FormResolverService {
      *     form-loading path falls back to CodeGen's `@RegisterClass` lookup.
      *     This is what makes the Angular fallback reachable from the UI.
      *   - Else if the user has a saved variant ID AND that variant is in
-     *     the applicable list AND it is selectable (`IsSelectableOverride`:
+     *     the applicable list AND it is selectable (`IsSelectableFormOverride`:
      *     Active, or the user's own form set aside by a later apply) → use it.
      *   - Else → the stored choice is dropped, and the first Active row in
      *     tier+priority order is used (auto-pick).
@@ -291,7 +290,7 @@ export class FormResolverService {
             // second form sets the first one aside rather than merging into it, so the picker
             // offers both and the user's pick outranks which row happens to hold Active. A
             // shared form set aside was retracted, and a Pending row is a draft; neither renders.
-            const sel = variants.find(v => IsSelectableOverride(v) && UUIDsEqual(v.ID, selectedID));
+            const sel = variants.find(v => IsSelectableFormOverride(v) && UUIDsEqual(v.ID, selectedID));
             if (sel) return sel;
             // Selection no longer valid — wipe it so future loads auto-pick.
             this.ClearSelectedVariant(entity.Name);
