@@ -1,6 +1,8 @@
+import { AIPromptParams } from '@memberjunction/ai-core-plus';
+import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { RunView } from '@memberjunction/core';
 import type { RubricNodeSnapshot } from '@memberjunction/rubrics-base';
-import { RubricEngine, type RubricEvaluationStore, type RubricRecords } from './RubricEngine.js';
+import { RubricEngine, type RubricEvaluationStore, type RubricPromptRun, type RubricRecords } from './RubricEngine.js';
 
 interface RubricRow {
     NewRecord?: () => void;
@@ -155,8 +157,36 @@ function numberOrNull(value: unknown): number | null {
     return Number.isFinite(parsed) ? parsed : null;
 }
 
-/** A RubricEngine whose catalog and evaluation store use the caller's provider. */
+/**
+ * Runs the already-rendered rubric text through the named prompt, so model
+ * selection stays on that prompt. The action does not receive a runner.
+ */
+export function rubricEvaluatorPromptRun(provider: RubricProvider, user: unknown): RubricPromptRun {
+    return {
+        async run(promptName, rendered) {
+            const view = RunView.FromMetadataProvider(provider as never);
+            const found = await view.RunView({
+                EntityName: 'MJ: AI Prompts',
+                ExtraFilter: `Name='${promptName.replace(/'/g, "''")}'`,
+                ResultType: 'entity_object',
+                MaxRows: 1,
+            }, user as never);
+            const prompt = found.Results?.[0];
+            if (!prompt) throw new Error(`The ${promptName} prompt was not found.`);
+            const params = new AIPromptParams();
+            params.prompt = prompt as AIPromptParams['prompt'];
+            params.systemPromptOverride = rendered;
+            params.contextUser = user as AIPromptParams['contextUser'];
+            const result = await new AIPromptRunner().ExecutePrompt(params);
+            if (!result.success) throw new Error(result.errorMessage || `The ${promptName} prompt failed.`);
+            if (typeof result.rawResult === 'string' && result.rawResult.length > 0) return result.rawResult;
+            return JSON.stringify(result.result ?? {});
+        },
+    };
+}
+
+/** A RubricEngine whose catalog, evaluations, and Rubric Evaluator prompt use the caller's provider. */
 export function providerRubricEngine(provider: unknown, user: unknown): RubricEngine {
     const data = provider as RubricProvider;
-    return new RubricEngine(providerEvaluationStore(data, user), providerRecords(data, user));
+    return new RubricEngine(providerEvaluationStore(data, user), providerRecords(data, user), rubricEvaluatorPromptRun(data, user));
 }

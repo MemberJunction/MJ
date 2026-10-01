@@ -13,6 +13,14 @@ vi.mock('@memberjunction/core', () => ({
     RunView: { FromMetadataProvider() { throw new Error('this test does not read the database'); } },
 }));
 
+vi.mock('@memberjunction/ai-core-plus', () => ({
+    AIPromptParams: class AIPromptParams {},
+}));
+
+vi.mock('@memberjunction/ai-prompts', () => ({
+    AIPromptRunner: class AIPromptRunner {},
+}));
+
 import { CreateRubricDraftAction, EvaluateRecordAgainstRubricAction, GetRubricAction, GetRubricConsensusAction } from '../actions.js';
 import { createDraftVersion } from '../providerRecords.js';
 import { RubricEngine, type RubricEvaluationStore, type RubricRecords } from '../RubricEngine.js';
@@ -54,11 +62,16 @@ function catalog(): RubricRecords & { filters: string[]; draftCalls: number; dra
         async rows(entityName: string, filter: string) {
             filters.push(`${entityName} ${filter}`);
             if (entityName === 'MJ: Rubrics') return [{ ID: 'rubric', Name: 'Writing' }];
-            if (entityName === 'MJ: Rubric Versions' && filter.includes("Status='Published'")) return [published('version-3', 3), published('version-4', 4)];
+            if (entityName === 'MJ: Rubric Versions' && filter.includes("Status='Published'")) return [published('version-1', 1), published('version-4', 4)];
             if (entityName === 'MJ: Rubric Versions' && filter.includes('version-9')) return [published('version-9', 1)];
-            if (entityName === 'MJ: Rubric Versions') return [published('version-3', 3), published('version-4', 4)];
+            if (entityName === 'MJ: Rubric Versions') return [published('version-1', 1), published('version-4', 4)];
             if (entityName === 'MJ: Entities') return [{ ID: 'entity-1', Name: 'MJ: Documents' }];
-            if (entityName === 'MJ: Rubric Evaluations') return [{ NormalizedScore: 0.2 }, { NormalizedScore: null }, { NormalizedScore: 0.8 }];
+            if (entityName === 'MJ: Rubric Evaluations') {
+                const rows = [];
+                if (filter.includes("'version-1'")) rows.push({ NormalizedScore: 0.2 });
+                if (filter.includes("'version-4'")) rows.push({ NormalizedScore: 0.8 });
+                return rows;
+            }
             return [];
         },
         async createDraft() {
@@ -118,8 +131,16 @@ describe('rubric actions', () => {
             method: 'Median',
         });
         expect(stats.method).toBe('Median');
-        expect(stats.overall).toBe(0.5);
-        expect(stats.sampleSize).toBe(2);
+        expect(stats.overall).toBe(0.8);
+        expect(stats.sampleSize).toBe(1);
+        const majorOne = await new GetRubricConsensusAction().Invoke(engine, {
+            rubricName: 'Writing',
+            subjectRecordId: 'record-1',
+            major: 1,
+            method: 'Median',
+        });
+        expect(majorOne.overall).toBe(0.2);
+        expect(majorOne.sampleSize).toBe(1);
         expect(records.filters.some(filter => filter.startsWith('MJ: Rubric Evaluations') && filter.includes("Status='Submitted'") && !filter.includes('scores'))).toBe(true);
         expect(await new GetRubricAction().Invoke(engine, { rubricName: 'Writing', versionId: 'version-9' })).toMatchObject({ id: 'version-9' });
         expect(store.submitCalls).toBe(0);
@@ -160,5 +181,42 @@ describe('rubric actions', () => {
         expect(draft).toEqual({ id: 'version-new', status: 'Draft' });
         expect(saved.map(row => row.status)).toEqual(['Draft', undefined]);
         expect(saved.some(row => row.status === 'Published')).toBe(false);
+    });
+
+    it('runs LLM through the Rubric Evaluator prompt and does not accept AI', async () => {
+        const records = catalog();
+        const store = evaluations();
+        const prompts: string[] = [];
+        const engine = new RubricEngine(store, records, {
+            async run(name) {
+                prompts.push(name);
+                return '{"decisions":[]}';
+            },
+        });
+        const action = new EvaluateRecordAgainstRubricAction();
+        const llm = await action.InternalRunAction({
+            Params: [
+                { Name: 'RubricID', Type: 'Input', Value: 'rubric' },
+                { Name: 'SubjectEntityName', Type: 'Input', Value: 'MJ: Documents' },
+                { Name: 'SubjectRecordID', Type: 'Input', Value: 'record-1' },
+                { Name: 'Evaluator', Type: 'Input', Value: 'LLM' },
+            ],
+            Context: { rubricEngine: engine },
+        } as never);
+        expect(llm.Success).toBe(true);
+        expect(llm.Message ?? '').not.toMatch(/prompt runner/i);
+        expect(prompts).toEqual(['Rubric Evaluator']);
+        const ai = await action.InternalRunAction({
+            Params: [
+                { Name: 'RubricID', Type: 'Input', Value: 'rubric' },
+                { Name: 'SubjectEntityName', Type: 'Input', Value: 'MJ: Documents' },
+                { Name: 'SubjectRecordID', Type: 'Input', Value: 'record-1' },
+                { Name: 'Evaluator', Type: 'Input', Value: 'AI' },
+            ],
+            Context: { rubricEngine: engine },
+        } as never);
+        expect(ai.Success).toBe(false);
+        expect(ai.Message).toBe('Evaluator AI is not accepted.');
+        expect(ai.Message ?? '').not.toMatch(/prompt runner/i);
     });
 });

@@ -38,6 +38,13 @@ export interface RubricRecords {
     createDraft(input: { rubricId: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: string }>;
 }
 
+/** Runs a named prompt. The engine builds the Rubric Evaluator runner from this. */
+export interface RubricPromptRun {
+    run(promptName: string, rendered: string): Promise<string>;
+}
+
+const RUBRIC_EVALUATOR_PROMPT = 'Rubric Evaluator';
+
 export interface EvaluateParams {
     version: RubricVersionSnapshot;
     subject: { entityName: string; recordId: string; entityId: string };
@@ -88,6 +95,7 @@ export class RubricEngine {
     public constructor(
         private readonly evaluations: RubricEvaluationStore,
         private readonly records: RubricRecords = emptyRecords,
+        private readonly promptRun?: RubricPromptRun,
     ) {}
 
     /**
@@ -158,6 +166,7 @@ export class RubricEngine {
      * {@link evaluate}. This is not the Get Rubric action.
      */
     public async evaluateRecord(input: EvaluateRecordInput): Promise<EvaluateRecordResult> {
+        if (input.evaluator === 'AI') throw new Error('Evaluator AI is not accepted.');
         const version = await this.latestPublished(input);
         if (!version) throw new Error('No published version of that rubric.');
         const scored = input.passThreshold === undefined || input.passThreshold === null
@@ -173,6 +182,7 @@ export class RubricEngine {
             context,
             passThreshold: input.passThreshold ?? null,
             evaluator: input.evaluator ?? 'Deterministic',
+            promptRunner: input.evaluator === 'LLM' ? this.rubricEvaluatorRunner() : undefined,
             loadRecord: async (entityName, recordId) => {
                 const rows = await this.records.rows(entityName, `ID=${sqlLiteral(recordId)}`);
                 return rows[0] ?? {};
@@ -209,11 +219,17 @@ export class RubricEngine {
         rubricName?: string;
         subjectRecordId: string;
         contextRecordId?: string;
+        /** When omitted, the latest Published major. Scores from other majors are left out. */
+        major?: number;
         method?: ConsensusResult['method'];
     }): Promise<ConsensusResult> {
         const rubric = await this.rubricRow(input);
         const versions = await this.records.rows('MJ: Rubric Versions', `RubricID=${sqlLiteral(text(rubric.ID))}`);
-        const ids = versions.map(row => text(row.ID)).filter(id => id.length > 0);
+        const major = input.major ?? latestPublishedMajor(versions);
+        const ids = versions
+            .filter(row => major !== null && numberOrNull(row.MajorVersion) === major)
+            .map(row => text(row.ID))
+            .filter(id => id.length > 0);
         if (ids.length === 0) return this.consensus([], input.method);
         let filter = `Status='Submitted' AND SubjectRecordID=${sqlLiteral(input.subjectRecordId)} AND RubricVersionID IN (${ids.map(sqlLiteral).join(', ')})`;
         if (input.contextRecordId !== undefined) filter += ` AND ContextRecordID=${sqlLiteral(input.contextRecordId)}`;
@@ -245,6 +261,17 @@ export class RubricEngine {
     /** Item-analysis flags for a published major version's criteria. */
     public diagnostics(criteria: { key: string; scores: (number | null)[]; notApplicable: number }[]): DiagnosticFlag[] {
         return getDiagnostics(criteria);
+    }
+
+    /** The catalog does not pass a runner. This one executes the Rubric Evaluator prompt. */
+    private rubricEvaluatorRunner(): RubricPromptRunner {
+        const prompts = this.promptRun;
+        return {
+            run(rendered: string) {
+                if (!prompts) throw new Error('The Rubric Evaluator prompt is not configured.');
+                return prompts.run(RUBRIC_EVALUATOR_PROMPT, rendered);
+            },
+        };
     }
 
     private draftInput(params: EvaluateParams) {
@@ -357,6 +384,14 @@ export class RubricEngine {
             })),
         };
     }
+}
+
+function latestPublishedMajor(versions: Record<string, unknown>[]): number | null {
+    const majors = versions
+        .filter(row => text(row.Status) === 'Published')
+        .map(row => numberOrNull(row.MajorVersion))
+        .filter((value): value is number => value !== null);
+    return majors.length === 0 ? null : Math.max(...majors);
 }
 
 function versionRank(row: Record<string, unknown>): number {

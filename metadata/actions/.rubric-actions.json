@@ -105,7 +105,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "AI, Deterministic, or LLM. Deterministic when omitted.",
+            "Description": "Deterministic, or LLM. LLM runs the Rubric Evaluator prompt. AI is not accepted. Deterministic when omitted.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -278,6 +278,20 @@
           },
           "primaryKey": {
             "ID": "C33CD64D-41D4-4CAC-BAE8-BE0B007E1B5A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Major",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional major version. When omitted, only the latest Published major is included.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A1C4E8B2-7D61-4F0A-9C33-6E5B0A19D274"
           }
         },
         {

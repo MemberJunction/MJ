@@ -21,6 +21,13 @@ function inputValue(params: RunActionParams, name: string): unknown {
     return params.Params?.find(item => item.Name.trim().toLowerCase() === name.toLowerCase())?.Value;
 }
 
+function numberInput(params: RunActionParams, name: string): number | undefined {
+    const value = inputValue(params, name);
+    if (value === undefined || value === null || value === '') return undefined;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 function textValue(params: RunActionParams, name: string): string | undefined {
     const value = inputValue(params, name);
     return value === undefined || value === null || value === '' ? undefined : String(value);
@@ -80,6 +87,7 @@ export class GetRubricConsensusAction extends BaseAction {
         rubricName?: string;
         subjectRecordId: string;
         contextRecordId?: string;
+        major?: number;
         method?: ConsensusResult['method'];
     }): Promise<ConsensusResult> {
         return engine.consensusForSubject(input);
@@ -92,6 +100,7 @@ export class GetRubricConsensusAction extends BaseAction {
                 rubricName: textValue(params, 'RubricName'),
                 subjectRecordId: textValue(params, 'SubjectRecordID') ?? '',
                 contextRecordId: textValue(params, 'ContextRecordID'),
+                major: numberInput(params, 'Major'),
                 method: textValue(params, 'Method') as ConsensusResult['method'],
             });
             output(params, 'ConsensusMethod', result.method);
