@@ -33,177 +33,52 @@
   "relatedEntities": {
     "MJ: Application Entities": [
       {
-        "fields": {
-          "ApplicationID": "@parent:ID",
-          "EntityID": "@lookup:MJ: Entities.Name=MJ: Rubrics",
-          "Sequence": 1,
-          "DefaultForNewUser": true
-        },
-        "primaryKey": {
-          "ID": "D1B321CA-C672-4D5F-9FCF-6C8DDD60B6D8"
-        },
-        "sync": {
-          "lastModified": "2026-10-01T15:36:20.960Z",
-          "checksum": "b3dec2afc2188223da01bbb1d20deb08f3fa5ea560940dcc9cb32125c0b37e00"
-        }
+        "fields": { "ApplicationID": "@parent:ID", "EntityID": "@lookup:MJ: Entities.Name=MJ: Rubrics", "Sequence": 1, "DefaultForNewUser": true },
+        "primaryKey": { "ID": "D1B321CA-C672-4D5F-9FCF-6C8DDD60B6D8" }
       },
       {
-        "fields": {
-          "ApplicationID": "@parent:ID",
-          "EntityID": "@lookup:MJ: Entities.Name=MJ: Rubric Versions",
-          "Sequence": 2,
-          "DefaultForNewUser": true
-        },
-        "primaryKey": {
-          "ID": "9BBB1B56-2B2C-4239-ABA7-D5ABDCF41C24"
-        },
-        "sync": {
-          "lastModified": "2026-10-01T15:36:20.974Z",
-          "checksum": "d6d622b4e2576e85e2dc7e86448a05d8815ae4863612f20b5d4dfeedba78f80a"
-        }
+        "fields": { "ApplicationID": "@parent:ID", "EntityID": "@lookup:MJ: Entities.Name=MJ: Rubric Versions", "Sequence": 2, "DefaultForNewUser": true },
+        "primaryKey": { "ID": "9BBB1B56-2B2C-4239-ABA7-D5ABDCF41C24" }
       },
       {
-        "fields": {
-          "ApplicationID": "@parent:ID",
-          "EntityID": "@lookup:MJ: Entities.Name=MJ: Rubric Criteria",
-          "Sequence": 3,
-          "DefaultForNewUser": true
-        },
-        "primaryKey": {
-          "ID": "7B2E0F34-CA4E-40DD-99DA-2B76DE76DECA"
-        },
-        "sync": {
-          "lastModified": "2026-10-01T15:36:20.987Z",
-          "checksum": "9fce3d11c5b0ae01a3b4e559a93d15c490d76d764ed1842a8b50daabeb17ae63"
-        }
+        "fields": { "ApplicationID": "@parent:ID", "EntityID": "@lookup:MJ: Entities.Name=MJ: Rubric Criteria", "Sequence": 3, "DefaultForNewUser": true },
+        "primaryKey": { "ID": "7B2E0F34-CA4E-40DD-99DA-2B76DE76DECA" }
       },
       {
-        "fields": {
-          "ApplicationID": "@parent:ID",
-          "EntityID": "@lookup:MJ: Entities.Name=MJ: Rubric Criterion Levels",
-          "Sequence": 4,
-          "DefaultForNewUser": true
-        },
-        "primaryKey": {
-          "ID": "DD90918E-A82D-4B80-BB66-59D9B5EC81EC"
-        },
-        "sync": {
-          "lastModified": "2026-10-01T15:36:21.000Z",
-          "checksum": "ee65fbc5e8da0436bab02e900d9a1f2afde3b2fb6795f2de9487c1a9158d92eb"
-        }
+        "fields": { "ApplicationID": "@parent:ID", "EntityID": "@lookup:MJ: Entities.Name=MJ: Rubric Criterion Levels", "Sequence": 4, "DefaultForNewUser": true },
+        "primaryKey": { "ID": "DD90918E-A82D-4B80-BB66-59D9B5EC81EC" }
       },
       {
-        "fields": {
-          "ApplicationID": "@parent:ID",
-          "EntityID": "@lookup:MJ: Entities.Name=MJ: Rubric Scales",
-          "Sequence": 5,
-          "DefaultForNewUser": true
-        },
-        "primaryKey": {
-          "ID": "824C09F1-C6B9-4480-B1E7-406EC8D8131A"
-        },
-        "sync": {
-          "lastModified": "2026-10-01T15:36:21.014Z",
-          "checksum": "afd3eb9a7768f20af6214574cb0b7b4cb26b39370c8d792ab91934cffbaf1879"
-        }
+        "fields": { "ApplicationID": "@parent:ID", "EntityID": "@lookup:MJ: Entities.Name=MJ: Rubric Scales", "Sequence": 5, "DefaultForNewUser": true },
+        "primaryKey": { "ID": "824C09F1-C6B9-4480-B1E7-406EC8D8131A" }
       },
       {
-        "fields": {
-          "ApplicationID": "@parent:ID",
-          "EntityID": "@lookup:MJ: Entities.Name=MJ: Rubric Scale Levels",
-          "Sequence": 6,
-          "DefaultForNewUser": true
-        },
-        "primaryKey": {
-          "ID": "664C8DFD-86C9-4D67-835C-2F5BA89F18B3"
-        },
-        "sync": {
-          "lastModified": "2026-10-01T15:36:21.026Z",
-          "checksum": "09690393c8c43915f5d1f09685df5501a9476c7d213256eaf4793958512ff491"
-        }
+        "fields": { "ApplicationID": "@parent:ID", "EntityID": "@lookup:MJ: Entities.Name=MJ: Rubric Scale Levels", "Sequence": 6, "DefaultForNewUser": true },
+        "primaryKey": { "ID": "664C8DFD-86C9-4D67-835C-2F5BA89F18B3" }
       },
       {
-        "fields": {
-          "ApplicationID": "@parent:ID",
-          "EntityID": "@lookup:MJ: Entities.Name=MJ: Rubric Bands",
-          "Sequence": 7,
-          "DefaultForNewUser": true
-        },
-        "primaryKey": {
-          "ID": "3BBF6849-7A68-4E2F-96C3-6E96A02CD675"
-        },
-        "sync": {
-          "lastModified": "2026-10-01T15:36:21.039Z",
-          "checksum": "dd453ac491eda5a89ded77112e6fa597d705708be327d47df031d4edd5812c02"
-        }
+        "fields": { "ApplicationID": "@parent:ID", "EntityID": "@lookup:MJ: Entities.Name=MJ: Rubric Bands", "Sequence": 7, "DefaultForNewUser": true },
+        "primaryKey": { "ID": "3BBF6849-7A68-4E2F-96C3-6E96A02CD675" }
       },
       {
-        "fields": {
-          "ApplicationID": "@parent:ID",
-          "EntityID": "@lookup:MJ: Entities.Name=MJ: Rubric Categories",
-          "Sequence": 8,
-          "DefaultForNewUser": true
-        },
-        "primaryKey": {
-          "ID": "21FADBDB-948B-4B13-B6AA-BBEEB5F37244"
-        },
-        "sync": {
-          "lastModified": "2026-10-01T15:36:21.051Z",
-          "checksum": "8d4926b8c9a95853c63d087e2826744a0301d6164e9ddb9a77e545328a020193"
-        }
+        "fields": { "ApplicationID": "@parent:ID", "EntityID": "@lookup:MJ: Entities.Name=MJ: Rubric Categories", "Sequence": 8, "DefaultForNewUser": true },
+        "primaryKey": { "ID": "21FADBDB-948B-4B13-B6AA-BBEEB5F37244" }
       },
       {
-        "fields": {
-          "ApplicationID": "@parent:ID",
-          "EntityID": "@lookup:MJ: Entities.Name=MJ: Rubric Evaluations",
-          "Sequence": 9,
-          "DefaultForNewUser": true
-        },
-        "primaryKey": {
-          "ID": "1CE1097D-508B-4015-9F61-E8460CA70B5F"
-        },
-        "sync": {
-          "lastModified": "2026-10-01T15:36:21.064Z",
-          "checksum": "d8beac4ce2b4cdd41b1ed608f6c564ed0f2bf374c7093a30bfbe398c72eb868a"
-        }
+        "fields": { "ApplicationID": "@parent:ID", "EntityID": "@lookup:MJ: Entities.Name=MJ: Rubric Evaluations", "Sequence": 9, "DefaultForNewUser": true },
+        "primaryKey": { "ID": "1CE1097D-508B-4015-9F61-E8460CA70B5F" }
       },
       {
-        "fields": {
-          "ApplicationID": "@parent:ID",
-          "EntityID": "@lookup:MJ: Entities.Name=MJ: Rubric Evaluation Scores",
-          "Sequence": 10,
-          "DefaultForNewUser": true
-        },
-        "primaryKey": {
-          "ID": "074E8D30-5FFA-4A13-9F64-F7E394100B0A"
-        },
-        "sync": {
-          "lastModified": "2026-10-01T15:36:21.076Z",
-          "checksum": "6b3e47ce8b900c315b7677254f7ee2e8d6d74310769938cc66f4b6957bda2789"
-        }
+        "fields": { "ApplicationID": "@parent:ID", "EntityID": "@lookup:MJ: Entities.Name=MJ: Rubric Evaluation Scores", "Sequence": 10, "DefaultForNewUser": true },
+        "primaryKey": { "ID": "074E8D30-5FFA-4A13-9F64-F7E394100B0A" }
       },
       {
-        "fields": {
-          "ApplicationID": "@parent:ID",
-          "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Rubrics",
-          "Sequence": 11,
-          "DefaultForNewUser": true
-        },
-        "primaryKey": {
-          "ID": "75A70A50-D8C4-4200-B0B8-A7412359AFC4"
-        },
-        "sync": {
-          "lastModified": "2026-10-01T15:36:21.088Z",
-          "checksum": "8944e4a7c428d5814ff793ae1ee96187df079183de351aa6109b560ec5ff5bbb"
-        }
+        "fields": { "ApplicationID": "@parent:ID", "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Rubrics", "Sequence": 11, "DefaultForNewUser": true },
+        "primaryKey": { "ID": "75A70A50-D8C4-4200-B0B8-A7412359AFC4" }
       }
     ]
   },
   "primaryKey": {
     "ID": "773865A6-096C-4782-A556-ED4D425DF3E8"
-  },
-  "sync": {
-    "lastModified": "2026-10-01T15:36:20.925Z",
-    "checksum": "0a7953578bef9cd53a1ddbc353d9f24bad00594a298e897d3f9f81e52f8189b1"
   }
 }
