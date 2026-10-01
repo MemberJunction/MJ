@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { humanEvaluationFields, humanScoreFields, judgedRubric, versionSnapshot } from '../lib/models/human-review';
+import { humanEvaluationFields, humanScoreFields, judgedRubric, priorHumanEvaluation, versionSnapshot } from '../lib/models/human-review';
 
 const JUDGE = {
     Status: 'Submitted',
@@ -56,5 +56,28 @@ describe('human rubric review', () => {
         );
         expect(version.nodes[0]).toMatchObject({ key: 'accurate', weight: 2, isGate: true, gateMinimumScore: 1 });
         expect(version.scales[0].levels[0].label).toBe('Met');
+    });
+
+    it('keeps guidance, the leaf policy, and the anchor on the node', () => {
+        const version = versionSnapshot(
+            { ID: 'version-1', RubricID: 'rubric-1', NotApplicablePolicy: 'ExcludeAndRedistribute' },
+            [{ ID: 'c1', Key: 'accurate', Name: 'Accurate', NodeType: 'Criterion', ScaleID: 'scale-1', Weight: 1, NotApplicablePolicy: 'NotAllowed', Guidance: 'Check the figure.', Sequence: 0 }],
+            [],
+            [],
+            [{ CriterionID: 'c1', ScaleLevelID: 'met', Descriptor: 'The figure matches.' }],
+        );
+        expect(version.nodes[0].guidance).toBe('Check the figure.');
+        expect(version.nodes[0].notApplicablePolicy).toBe('NotAllowed');
+        expect(version.nodes[0].anchors).toEqual([{ scaleLevelId: 'met', anchorValue: null, descriptor: 'The figure matches.' }]);
+    });
+
+    it('points a second human score at the reviewer\'s current submitted evaluation', () => {
+        const judged = judgedRubric([JUDGE])!;
+        const prior = priorHumanEvaluation([
+            { ...JUDGE, ID: 'human-1', EvaluatorType: 'Human', EvaluatorUserID: 'user-1' },
+            { ...JUDGE, ID: 'other-person', EvaluatorType: 'Human', EvaluatorUserID: 'user-2' },
+        ], judged, 'user-1');
+        expect(prior).toBe('human-1');
+        expect(humanEvaluationFields(judged, 'user-1', prior).SupersedesEvaluationID).toBe('human-1');
     });
 });

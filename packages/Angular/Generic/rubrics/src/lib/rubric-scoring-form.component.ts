@@ -2,7 +2,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import type { NotApplicablePolicy } from '@memberjunction/rubrics-base';
-import { answerLevel, canSubmit, effectivePolicy, incompleteAnswers, type RubricFormAnswer } from './model.js';
+import { anchorsForLevel, answerLevel, canSubmit, effectivePolicy, incompleteAnswers, type RubricFormAnswer } from './model.js';
 
 /**
  * Answer form. Keyboard: a digit selects that level, and N marks not applicable.
@@ -52,6 +52,10 @@ export class RubricScoringFormComponent {
 
     public IsNotApplicable(node: RubricNodeSnapshot): boolean {
         return this.Answers.find(item => item.criterionId === node.id)?.isNotApplicable === true;
+    }
+
+    public Anchors(node: RubricNodeSnapshot, levelId: string): { descriptor: string }[] {
+        return anchorsForLevel(node, levelId);
     }
 
     public OnLevel(node: RubricNodeSnapshot, levelId: string): void {

@@ -25,8 +25,24 @@ export function judgedRubric(rows: Record<string, unknown>[]): JudgedRubric | nu
     };
 }
 
+/**
+ * This reviewer's current Submitted human score for the same subject and version.
+ * The new evaluation supersedes it so the cohort does not count the same person twice.
+ */
+export function priorHumanEvaluation(rows: Record<string, unknown>[], judged: JudgedRubric, userId: string): string | null {
+    const prior = rows.find(row =>
+        String(row.Status ?? '') === 'Submitted'
+        && String(row.EvaluatorType ?? '') === 'Human'
+        && String(row.EvaluatorUserID ?? '') === userId
+        && String(row.RubricID ?? '') === judged.rubricId
+        && String(row.RubricVersionID ?? '') === judged.versionId
+        && String(row.SubjectRecordID ?? '') === judged.subjectRecordId
+        && blank(row.ContextRecordID) === judged.contextRecordId);
+    return prior?.ID == null || prior.ID === '' ? null : String(prior.ID);
+}
+
 /** Draft fields for the human score. Subject and context match the judgment. Status stays Draft until the scores are saved. */
-export function humanEvaluationFields(judged: JudgedRubric, userId: string): Record<string, unknown> {
+export function humanEvaluationFields(judged: JudgedRubric, userId: string, supersedesEvaluationId?: string | null): Record<string, unknown> {
     return {
         RubricID: judged.rubricId,
         RubricVersionID: judged.versionId,
@@ -37,6 +53,7 @@ export function humanEvaluationFields(judged: JudgedRubric, userId: string): Rec
         EvaluatorType: 'Human',
         EvaluatorUserID: userId,
         Status: 'Draft',
+        SupersedesEvaluationID: supersedesEvaluationId ?? null,
     };
 }
 
@@ -58,6 +75,7 @@ export function versionSnapshot(
     criteria: Record<string, unknown>[],
     scales: Record<string, unknown>[],
     levels: Record<string, unknown>[],
+    criterionLevels: Record<string, unknown>[] = [],
 ): RubricVersionSnapshot {
     return {
         id: String(version.ID),
@@ -71,19 +89,26 @@ export function versionSnapshot(
             key: String(row.Key),
             parentId: blank(row.ParentID),
             name: String(row.Name ?? row.Key),
-            nodeType: (row.NodeType as 'Criterion' | 'Group') ?? 'Criterion',
+            guidance: row.Guidance == null || row.Guidance === '' ? null : String(row.Guidance),
+            nodeType: (row.NodeType === 'Group' ? 'Group' : 'Criterion') as 'Group' | 'Criterion',
             scaleId: blank(row.ScaleID),
             weight: Number(row.Weight ?? 1),
             isAdvisory: flag(row.IsAdvisory),
             isGate: flag(row.IsGate),
-            gateMinimumScore: row.GateMinimumScore == null ? null : Number(row.GateMinimumScore),
+            gateMinimumScore: row.GateMinimumScore == null || row.GateMinimumScore === '' ? null : Number(row.GateMinimumScore),
+            notApplicablePolicy: row.NotApplicablePolicy == null || row.NotApplicablePolicy === '' ? null : row.NotApplicablePolicy as RubricVersionSnapshot['notApplicablePolicy'],
             evidenceRequired: flag(row.EvidenceRequired),
             rationaleRequired: flag(row.RationaleRequired),
             sequence: Number(row.Sequence ?? 0),
+            anchors: criterionLevels.filter(level => String(level.CriterionID) === String(row.ID)).map(level => ({
+                scaleLevelId: blank(level.ScaleLevelID),
+                anchorValue: level.AnchorValue == null || level.AnchorValue === '' ? null : Number(level.AnchorValue),
+                descriptor: String(level.Descriptor ?? ''),
+            })),
         })),
         scales: scales.map(scale => ({
             id: String(scale.ID),
-            scaleType: (scale.ScaleType as 'Levels' | 'Numeric') ?? 'Levels',
+            scaleType: (scale.ScaleType === 'Numeric' ? 'Numeric' : 'Levels') as 'Levels' | 'Numeric',
             higherIsBetter: scale.HigherIsBetter !== false && scale.HigherIsBetter !== 0,
             levels: levels.filter(level => String(level.ScaleID) === String(scale.ID)).map(level => ({
                 id: String(level.ID),

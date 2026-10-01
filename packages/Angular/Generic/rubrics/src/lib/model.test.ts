@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { addCriterion, addNode, answerLevel, bandFor, canSubmit, comparisonMatrix, displayScore, draftProblems, incompleteAnswers, moveNode, moveProblem, nodeFields, nodeFromRow, planBandSave, planNodeSave, previewScore, publishPreview, scaleFromRow, setAnchor, setGate, setScale, setWeight, versionRows, weightShares } from './model.js';
+import { addCriterion, addNode, anchorsForLevel, answerLevel, bandFor, canSubmit, comparisonMatrix, displayScore, draftProblems, incompleteAnswers, moveNode, moveProblem, nodeFields, nodeFromRow, planBandSave, planNodeSave, previewScore, publishPreview, scaleFromRow, setAnchor, setGate, setScale, setWeight, versionRows, weightShares } from './model.js';
 
 const scale: RubricScaleSnapshot = {
     id: 'scale',
@@ -103,6 +103,7 @@ describe('answer form', () => {
         const note = leaf('note', 1, { isAdvisory: true });
         const kept = answerLevel([{ criterionId: 'must', scaleLevelId: 'high' }], 'must', null, true, 'NotAllowed');
         expect(kept).toEqual([{ criterionId: 'must', scaleLevelId: 'high' }]);
+        expect(anchorsForLevel({ ...mandatory, guidance: 'Check the figure.', anchors: [{ scaleLevelId: 'high', descriptor: 'The figure matches.' }] }, 'high').map(anchor => anchor.descriptor)).toEqual(['The figure matches.']);
         expect(canSubmit([mandatory], [{ criterionId: 'must', isNotApplicable: true }], 'ExcludeAndRedistribute')).toBe(false);
         expect(canSubmit([note], [])).toBe(true);
     });

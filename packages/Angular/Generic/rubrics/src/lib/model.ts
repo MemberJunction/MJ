@@ -125,6 +125,11 @@ export function updateBand(bands: RubricBandSnapshot[], id: string, patch: Parti
     return bands.map(band => band.id === id ? { ...band, ...patch } : band);
 }
 
+/** Anchor text shown beside one scale level. */
+export function anchorsForLevel(node: RubricNodeSnapshot, levelId: string): { descriptor: string }[] {
+    return (node.anchors ?? []).filter(anchor => anchor.scaleLevelId === levelId && (anchor.descriptor ?? '').trim().length > 0);
+}
+
 export function effectivePolicy(node: RubricNodeSnapshot, versionPolicy: NotApplicablePolicy): NotApplicablePolicy {
     return node.notApplicablePolicy ?? versionPolicy;
 }
@@ -355,6 +360,7 @@ export function nodeFromRow(row: Record<string, unknown>, anchors: RubricNodeSna
         evidenceRequired: row.EvidenceRequired === true || row.EvidenceRequired === 1,
         rationaleRequired: row.RationaleRequired === true || row.RationaleRequired === 1,
         sequence: Number(row.Sequence ?? 0),
+        guidance: row.Guidance == null || row.Guidance === '' ? null : String(row.Guidance),
         anchors,
     };
 }
@@ -440,6 +446,7 @@ export function nodeFields(node: RubricNodeSnapshot): Record<string, unknown> {
         IsGate: node.isGate,
         GateMinimumScore: node.gateMinimumScore ?? null,
         NotApplicablePolicy: node.notApplicablePolicy ?? null,
+        Guidance: node.guidance ?? null,
         EvidenceRequired: node.evidenceRequired,
         RationaleRequired: node.rationaleRequired,
         Sequence: node.sequence,
