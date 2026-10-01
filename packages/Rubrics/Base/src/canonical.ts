@@ -1,8 +1,13 @@
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricVersionSnapshot } from './types.js';
 
 /** Fixed-precision decimal so 0.1 and 0.1000000 hash the same. */
-export function canonicalNumber(value: number): string {
+export function CanonicalNumber(value: number): string {
     return value.toFixed(6);
+}
+
+/** @deprecated Use {@link CanonicalNumber}. */
+export function canonicalNumber(value: number): string {
+    return CanonicalNumber(value);
 }
 
 function parentKey(version: RubricVersionSnapshot, node: RubricNodeSnapshot): string | null {
@@ -21,8 +26,8 @@ function scaleSignature(scale: RubricScaleSnapshot | undefined): unknown {
         levels: [...scale.levels]
             .sort((a, b) => a.sequence - b.sequence || a.normalizedValue - b.normalizedValue)
             .map(level => ({
-                normalizedValue: canonicalNumber(level.normalizedValue),
-                value: canonicalNumber(level.value),
+                normalizedValue: CanonicalNumber(level.normalizedValue),
+                value: CanonicalNumber(level.value),
             })),
     };
 }
@@ -32,7 +37,7 @@ function scaleSignature(scale: RubricScaleSnapshot | undefined): unknown {
  * Equal projections mean identical scores from identical answers. Adding or
  * editing an advisory node does not change it. Wording, thresholds, and bands do not.
  */
-export function scoringProjection(version: RubricVersionSnapshot): unknown {
+export function ScoringProjection(version: RubricVersionSnapshot): unknown {
     const scales = new Map(version.scales.map(scale => [scale.id, scale]));
     const nodes = version.nodes
         .filter(node => !node.isAdvisory)
@@ -47,7 +52,7 @@ export function scoringProjection(version: RubricVersionSnapshot): unknown {
             parentKey: parentKey(version, node),
             rollupMethod: node.rollupMethod ?? null,
             scale: scaleSignature(node.scaleId ? scales.get(node.scaleId) : undefined),
-            weight: canonicalNumber(node.weight),
+            weight: CanonicalNumber(node.weight),
         }));
     return {
         nodes,
@@ -55,8 +60,13 @@ export function scoringProjection(version: RubricVersionSnapshot): unknown {
     };
 }
 
+/** @deprecated Use {@link ScoringProjection}. */
+export function scoringProjection(version: RubricVersionSnapshot): unknown {
+    return ScoringProjection(version);
+}
+
 /** Everything, including wording. Nodes sorted by key, properties sorted by the JSON serializer below. */
-export function contentProjection(version: RubricVersionSnapshot): unknown {
+export function ContentProjection(version: RubricVersionSnapshot): unknown {
     const scales = new Map(version.scales.map(scale => [scale.id, scale]));
     return {
         bands: [...version.bands]
@@ -65,8 +75,8 @@ export function contentProjection(version: RubricVersionSnapshot): unknown {
                 description: band.description ?? null,
                 displayTone: band.displayTone,
                 label: band.label,
-                maxScore: canonicalNumber(band.maxScore),
-                minScore: canonicalNumber(band.minScore),
+                maxScore: CanonicalNumber(band.maxScore),
+                minScore: CanonicalNumber(band.minScore),
                 sequence: band.sequence,
             })),
         instructions: version.instructions ?? null,
@@ -82,7 +92,7 @@ export function contentProjection(version: RubricVersionSnapshot): unknown {
                         return {
                             anchorValue: anchor.anchorValue ?? null,
                             descriptor: anchor.descriptor,
-                            normalizedValue: level ? canonicalNumber(level.normalizedValue) : null,
+                            normalizedValue: level ? CanonicalNumber(level.normalizedValue) : null,
                         };
                     })
                     .sort((a, b) => (a.normalizedValue ?? '').localeCompare(b.normalizedValue ?? '') || (a.anchorValue ?? 0) - (b.anchorValue ?? 0)),
@@ -102,18 +112,28 @@ export function contentProjection(version: RubricVersionSnapshot): unknown {
                 rollupMethod: node.rollupMethod ?? null,
                 scale: scaleSignature(node.scaleId ? scales.get(node.scaleId) : undefined),
                 sequence: node.sequence,
-                weight: canonicalNumber(node.weight),
+                weight: CanonicalNumber(node.weight),
             })),
         notApplicablePolicy: version.notApplicablePolicy,
         passThreshold: version.passThreshold ?? null,
-        scoreDisplayMax: canonicalNumber(version.scoreDisplayMax),
-        scoreDisplayMin: canonicalNumber(version.scoreDisplayMin),
+        scoreDisplayMax: CanonicalNumber(version.scoreDisplayMax),
+        scoreDisplayMin: CanonicalNumber(version.scoreDisplayMin),
     };
 }
 
+/** @deprecated Use {@link ContentProjection}. */
+export function contentProjection(version: RubricVersionSnapshot): unknown {
+    return ContentProjection(version);
+}
+
 /** Stable JSON: object keys sorted, no undefined. */
-export function canonicalJson(value: unknown): string {
+export function CanonicalJson(value: unknown): string {
     return JSON.stringify(sortValue(value));
+}
+
+/** @deprecated Use {@link CanonicalJson}. */
+export function canonicalJson(value: unknown): string {
+    return CanonicalJson(value);
 }
 
 function sortValue(value: unknown): unknown {
@@ -128,7 +148,12 @@ function sortValue(value: unknown): unknown {
 }
 
 /** SHA-256 hex of a canonical projection. Available in browsers and Node. */
-export async function sha256Hex(text: string): Promise<string> {
+export async function Sha256Hex(text: string): Promise<string> {
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
     return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/** @deprecated Use {@link Sha256Hex}. */
+export async function sha256Hex(text: string): Promise<string> {
+    return Sha256Hex(text);
 }

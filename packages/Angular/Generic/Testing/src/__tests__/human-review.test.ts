@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { humanEvaluationFields, humanScoreFields, judgedRubric, priorHumanEvaluation, versionSnapshot } from '../lib/models/human-review';
+import { HumanEvaluationFields, HumanScoreFields, judgedRubric, PriorHumanEvaluation, VersionSnapshot } from '../lib/models/human-review';
 
 const JUDGE = {
     Status: 'Submitted',
@@ -18,8 +18,8 @@ describe('human rubric review', () => {
             { ...JUDGE, EvaluatorType: 'Human', RubricVersionID: 'other' },
             JUDGE,
         ]);
-        expect(judged?.versionId).toBe('version-1');
-        expect(humanEvaluationFields(judged!, 'user-1')).toMatchObject({
+        expect(judged?.VersionId).toBe('version-1');
+        expect(HumanEvaluationFields(judged!, 'user-1')).toMatchObject({
             RubricID: 'rubric-1',
             RubricVersionID: 'version-1',
             SubjectEntityID: 'entity-runs',
@@ -38,7 +38,7 @@ describe('human rubric review', () => {
     });
 
     it('writes the chosen level onto a score row and leaves a not-applicable leaf without a level', () => {
-        expect(humanScoreFields('eval-1', [
+        expect(HumanScoreFields('eval-1', [
             { criterionId: 'c1', scaleLevelId: 'met', rationale: 'Matches.' },
             { criterionId: 'c2', isNotApplicable: true },
         ])).toEqual([
@@ -48,7 +48,7 @@ describe('human rubric review', () => {
     });
 
     it('builds the form version from the stored criterion and scale rows', () => {
-        const version = versionSnapshot(
+        const version = VersionSnapshot(
             { ID: 'version-1', RubricID: 'rubric-1', NotApplicablePolicy: 'NotAllowed', PassThreshold: 0.7, ScoreDisplayMin: 0, ScoreDisplayMax: 1 },
             [{ ID: 'c1', Key: 'accurate', Name: 'Accurate', NodeType: 'Criterion', ScaleID: 'scale-1', Weight: 2, IsGate: 1, GateMinimumScore: 1, Sequence: 0 }],
             [{ ID: 'scale-1', ScaleType: 'Levels', HigherIsBetter: true }],
@@ -59,7 +59,7 @@ describe('human rubric review', () => {
     });
 
     it('keeps guidance, the leaf policy, and the anchor on the node', () => {
-        const version = versionSnapshot(
+        const version = VersionSnapshot(
             { ID: 'version-1', RubricID: 'rubric-1', NotApplicablePolicy: 'ExcludeAndRedistribute' },
             [{ ID: 'c1', Key: 'accurate', Name: 'Accurate', NodeType: 'Criterion', ScaleID: 'scale-1', Weight: 1, NotApplicablePolicy: 'NotAllowed', Guidance: 'Check the figure.', Sequence: 0 }],
             [],
@@ -73,11 +73,11 @@ describe('human rubric review', () => {
 
     it('points a second human score at the reviewer\'s current submitted evaluation', () => {
         const judged = judgedRubric([JUDGE])!;
-        const prior = priorHumanEvaluation([
+        const prior = PriorHumanEvaluation([
             { ...JUDGE, ID: 'human-1', EvaluatorType: 'Human', EvaluatorUserID: 'user-1' },
             { ...JUDGE, ID: 'other-person', EvaluatorType: 'Human', EvaluatorUserID: 'user-2' },
         ], judged, 'user-1');
         expect(prior).toBe('human-1');
-        expect(humanEvaluationFields(judged, 'user-1', prior).SupersedesEvaluationID).toBe('human-1');
+        expect(HumanEvaluationFields(judged, 'user-1', prior).SupersedesEvaluationID).toBe('human-1');
     });
 });

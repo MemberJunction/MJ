@@ -11,7 +11,7 @@ import type { ProductionSamplingCatalog } from './sampling.js';
  * `RubricID` on that view is the version's rubric, so the catalog reads the
  * version row instead.
  */
-export function providerProductionCatalog(provider: unknown, user: unknown): ProductionSamplingCatalog {
+export function ProviderProductionCatalog(provider: unknown, user: unknown): ProductionSamplingCatalog {
     const read = async (entityName: string, filter: string): Promise<Record<string, unknown>[]> => {
         const view = RunView.FromMetadataProvider(provider as never);
         const result = await view.RunView({
@@ -60,4 +60,9 @@ export function providerProductionCatalog(provider: unknown, user: unknown): Pro
             }));
         },
     };
+}
+
+/** @deprecated Use {@link ProviderProductionCatalog}. */
+export function providerProductionCatalog(provider: unknown, user: unknown): ProductionSamplingCatalog {
+    return ProviderProductionCatalog(provider, user);
 }

@@ -1,20 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { inlineOracleFromVerdicts, scoreInline } from '../oracles/inline-rubric.js';
+import { InlineOracleFromVerdicts, ScoreInline } from '../oracles/inline-rubric.js';
 
 describe('inline rubric', () => {
     it('scores equal binary leaves and does not persist an evaluation id', () => {
-        const scored = scoreInline(['Accurate', 'Sourced'], [
+        const scored = ScoreInline(['Accurate', 'Sourced'], [
             { index: 0, met: true },
             { index: 1, met: false },
         ], { passThreshold: 0.7 });
         expect(scored.normalizedScore).toBe(0.5);
         expect(scored.outcome).toBe('BelowThreshold');
-        const strict = scoreInline(['Accurate', 'Sourced'], [
+        const strict = ScoreInline(['Accurate', 'Sourced'], [
             { index: 0, met: true },
             { index: 1, met: false },
         ], { strict: true, passThreshold: 0.7 });
         expect(strict.outcome).toBe('GateFailed');
-        const report = inlineOracleFromVerdicts([
+        const report = InlineOracleFromVerdicts([
             { criterion: 'Accurate', met: true, evidence: 'The figure matches.' },
             { criterion: 'Sourced', met: true, evidence: 'Cited.' },
         ]);
@@ -27,13 +27,13 @@ describe('inline rubric', () => {
     });
 
     it('weights a met leaf of 2 against an unmet leaf of 1 as two thirds, and drops weight 0', () => {
-        const weighted = scoreInline(
+        const weighted = ScoreInline(
             [{ text: 'Light', weight: 1 }, { text: 'Heavy', weight: 2 }],
             [{ index: 0, met: false }, { index: 1, met: true }],
             { passThreshold: 0.7 },
         );
         expect(weighted.normalizedScore).toBeCloseTo(2 / 3, 6);
-        const silent = scoreInline(
+        const silent = ScoreInline(
             [{ text: 'Heavy', weight: 2 }, { text: 'Silent', weight: 0 }],
             [{ index: 0, met: true }, { index: 1, met: false }],
             { passThreshold: 0.7 },
@@ -42,7 +42,7 @@ describe('inline rubric', () => {
     });
 
     it('leaves an omitted leaf unanswered', () => {
-        const omitted = scoreInline(['First', 'Second'], [{ index: 0, met: true }], { passThreshold: 0.7 });
+        const omitted = ScoreInline(['First', 'Second'], [{ index: 0, met: true }], { passThreshold: 0.7 });
         expect(omitted.normalizedScore).toBe(1);
         expect(omitted.completeness).toBe(0.5);
         expect(omitted.nodes[1].normalizedScore).toBeNull();

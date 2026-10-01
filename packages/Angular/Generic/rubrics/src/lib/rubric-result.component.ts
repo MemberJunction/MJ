@@ -1,7 +1,7 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import type { RubricScoreResult, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { bandFor, displayScore, type RubricFormAnswer } from './model.js';
+import { BandFor, DisplayScore, type RubricFormAnswer } from './model.js';
 
 /** Read-only result. The score is on the version's display range, with the band and each criterion. */
 @Component({
@@ -19,11 +19,11 @@ export class RubricResultComponent {
 
     public get Shown(): number | null {
         if (!this.Version || !this.Result) return null;
-        return displayScore(this.Result.normalizedScore, this.Version.scoreDisplayMin, this.Version.scoreDisplayMax);
+        return DisplayScore(this.Result.normalizedScore, this.Version.scoreDisplayMin, this.Version.scoreDisplayMax);
     }
 
     public get BandLabel(): string | null {
-        return bandFor(this.Result?.normalizedScore ?? null, this.Version?.bands ?? [])?.label ?? null;
+        return BandFor(this.Result?.normalizedScore ?? null, this.Version?.bands ?? [])?.label ?? null;
     }
 
     public Note(id: string, field: 'rationale' | 'evidence'): string {

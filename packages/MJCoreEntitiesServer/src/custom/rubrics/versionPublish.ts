@@ -33,7 +33,7 @@ export interface PublishResult {
  * non-advisory children are all weight 0, and when a gate's effective not-applicable
  * policy is ExcludeAndRedistribute.
  */
-export function validateRubricTree(version: RubricVersionSnapshot): { errors: string[]; warnings: PublishWarning[] } {
+export function ValidateRubricTree(version: RubricVersionSnapshot): { errors: string[]; warnings: PublishWarning[] } {
     const errors: string[] = [];
     const warnings: PublishWarning[] = [];
     const byId = new Map(version.nodes.map(node => [node.id, node]));
@@ -64,18 +64,23 @@ export function validateRubricTree(version: RubricVersionSnapshot): { errors: st
     return { errors, warnings };
 }
 
+/** @deprecated Use {@link ValidateRubricTree}. */
+export function validateRubricTree(version: RubricVersionSnapshot): { errors: string[]; warnings: PublishWarning[] } {
+    return ValidateRubricTree(version);
+}
+
 /**
  * Publishes a draft. Refuses an identical draft and a tree that fails
  * {@link validateRubricTree}. Writes the bump from {@link RubricVersionDiff},
  * and ContentHash and ScoringHash from its canonical projections. Does not
  * touch the database.
  */
-export async function publishRubricVersion(
+export async function PublishRubricVersion(
     base: RubricVersionSnapshot | null,
     draft: RubricVersionSnapshot,
     requestedBump?: 'Major' | 'Minor' | 'Patch' | null,
 ): Promise<PublishResult> {
-    const validation = validateRubricTree(draft);
+    const validation = ValidateRubricTree(draft);
     if (validation.errors.length > 0) throw new RubricPublishError(validation.errors);
     const diff = RubricVersionDiff.diff(base, draft, requestedBump);
     if (!diff.appliedBump || !diff.nextVersion) {
@@ -95,14 +100,28 @@ export async function publishRubricVersion(
     };
 }
 
+/** @deprecated Use {@link PublishRubricVersion}. */
+export async function publishRubricVersion(
+    base: RubricVersionSnapshot | null,
+    draft: RubricVersionSnapshot,
+    requestedBump?: 'Major' | 'Minor' | 'Patch' | null,
+): Promise<PublishResult> {
+    return PublishRubricVersion(base, draft, requestedBump);
+}
+
 /** A new draft: new ids, status left to the caller, keys and parent structure preserved. */
-export function cloneVersionNodes(nodes: RubricNodeSnapshot[]): RubricNodeSnapshot[] {
+export function CloneVersionNodes(nodes: RubricNodeSnapshot[]): RubricNodeSnapshot[] {
     const ids = new Map(nodes.map(node => [node.id, crypto.randomUUID()]));
     return nodes.map(node => ({
         ...node,
         id: ids.get(node.id) as string,
         parentId: node.parentId ? ids.get(node.parentId) ?? null : null,
     }));
+}
+
+/** @deprecated Use {@link CloneVersionNodes}. */
+export function cloneVersionNodes(nodes: RubricNodeSnapshot[]): RubricNodeSnapshot[] {
+    return CloneVersionNodes(nodes);
 }
 
 type RowRun = (entityName: string, filter: string) => Promise<{ Success: boolean; Results?: unknown[] }>;
@@ -114,10 +133,15 @@ function read(row: unknown, name: string): unknown {
 }
 
 /** Loads the draft tree and the base version so Save can publish without a separate call. */
-export async function loadDraftForPublish(run: RowRun, versionId: string, rubricId: string, basedOnVersionId: string | null): Promise<{ base: RubricVersionSnapshot | null; draft: RubricVersionSnapshot }> {
+export async function LoadDraftForPublish(run: RowRun, versionId: string, rubricId: string, basedOnVersionId: string | null): Promise<{ base: RubricVersionSnapshot | null; draft: RubricVersionSnapshot }> {
     const draft = await loadSnapshot(run, versionId, rubricId);
     const base = basedOnVersionId ? await loadSnapshot(run, basedOnVersionId, rubricId) : null;
     return { base, draft };
+}
+
+/** @deprecated Use {@link LoadDraftForPublish}. */
+export async function loadDraftForPublish(run: RowRun, versionId: string, rubricId: string, basedOnVersionId: string | null): Promise<{ base: RubricVersionSnapshot | null; draft: RubricVersionSnapshot }> {
+    return LoadDraftForPublish(run, versionId, rubricId, basedOnVersionId);
 }
 
 async function loadSnapshot(run: RowRun, versionId: string, rubricId: string): Promise<RubricVersionSnapshot> {

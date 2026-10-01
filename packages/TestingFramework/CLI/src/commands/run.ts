@@ -14,7 +14,7 @@ import { ParseVariableFlags, GetTestVariablesSchema } from '../utils/variable-pa
 import { LoadOraclesModule } from '../utils/oracle-module-loader';
 import { LoadCheckModules } from '../utils/check-module-loader';
 import { installInstrumentedCacheFirst } from '@memberjunction/testing-integration';
-import { lookupRubricOverride } from './rubric-cli';
+import { LookupRubricOverride } from './rubric-cli';
 
 /**
  * Run command - Execute a single test or filtered set of tests
@@ -180,7 +180,7 @@ export class RunCommand {
             // Execute test
             this.spinner.start(`Running test: ${test.Name}...`);
 
-            const rubric = flags.rubric ? await lookupRubricOverride(flags.rubric, contextUser) : undefined;
+            const rubric = flags.rubric ? await LookupRubricOverride(flags.rubric, contextUser) : undefined;
             const result = await engine.RunTest(test.ID, {
                 environment,
                 verbose: flags.verbose,

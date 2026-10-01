@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricScoreResult, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import type { NotApplicablePolicy, RubricBandSnapshot } from '@memberjunction/rubrics-base';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
-import { addBand, addNode, draftProblems, moveNode, moveProblem, previewScore, sampleMatchesTree, setAnchor, setGate, setPolicy, setScale, setWeight, updateBand, weightShares, type RubricFormAnswer } from './model.js';
+import { AddBand, AddNode, DraftProblems, MoveNode, MoveProblem, PreviewScore, SampleMatchesTree, SetAnchor, SetGate, SetPolicy, SetScale, SetWeight, UpdateBand, WeightShares, type RubricFormAnswer } from './model.js';
 
 /**
  * Draft author. Edits the tree the host passes in and emits the new tree.
@@ -40,12 +40,12 @@ export class RubricBuilderComponent implements OnChanges {
     public Preview: RubricScoreResult | null = null;
 
     ngOnChanges(): void {
-        this.Shares = weightShares(this.Nodes);
-        this.Problems = draftProblems(this.Nodes, this.Scales);
-        if (!sampleMatchesTree(this.Nodes, this.SampleAnswers) && this.Nodes.some(node => node.nodeType === 'Criterion' && node.scaleId)) {
+        this.Shares = WeightShares(this.Nodes);
+        this.Problems = DraftProblems(this.Nodes, this.Scales);
+        if (!SampleMatchesTree(this.Nodes, this.SampleAnswers) && this.Nodes.some(node => node.nodeType === 'Criterion' && node.scaleId)) {
             this.SampleAnswers = this.sample(true);
         }
-        this.Preview = this.Version ? previewScore({ ...this.Version, nodes: this.Nodes, scales: this.Scales }, this.SampleAnswers) : null;
+        this.Preview = this.Version ? PreviewScore({ ...this.Version, nodes: this.Nodes, scales: this.Scales }, this.SampleAnswers) : null;
         this.selectLoadedScales();
     }
 
@@ -69,7 +69,7 @@ export class RubricBuilderComponent implements OnChanges {
     }
 
     public Parents(node: RubricNodeSnapshot): RubricNodeSnapshot[] {
-        return this.Nodes.filter(item => item.nodeType === 'Group' && item.id !== node.id && !moveProblem(this.Nodes, node.id, item.id));
+        return this.Nodes.filter(item => item.nodeType === 'Group' && item.id !== node.id && !MoveProblem(this.Nodes, node.id, item.id));
     }
 
     public get Removed(): RubricBandSnapshot[] {
@@ -103,51 +103,51 @@ export class RubricBuilderComponent implements OnChanges {
     }
 
     public OnAdd(kind: 'Group' | 'Criterion'): void {
-        this.NodesChange.emit(addNode(this.Nodes, kind === 'Group' ? 'New group' : 'New criterion', kind, this.Scales[0]?.id ?? null, null));
+        this.NodesChange.emit(AddNode(this.Nodes, kind === 'Group' ? 'New group' : 'New criterion', kind, this.Scales[0]?.id ?? null, null));
     }
 
     public OnWeight(node: RubricNodeSnapshot, event: Event): void {
-        this.NodesChange.emit(setWeight(this.Nodes, node.id, Number((event.target as HTMLInputElement).value)));
+        this.NodesChange.emit(SetWeight(this.Nodes, node.id, Number((event.target as HTMLInputElement).value)));
     }
 
     public OnParent(node: RubricNodeSnapshot, event: Event): void {
         const value = (event.target as HTMLSelectElement).value;
         const parentId = value === '' ? null : value;
-        const problem = moveProblem(this.Nodes, node.id, parentId);
+        const problem = MoveProblem(this.Nodes, node.id, parentId);
         this.MoveProblem = problem;
-        if (!problem) this.NodesChange.emit(moveNode(this.Nodes, node.id, parentId));
+        if (!problem) this.NodesChange.emit(MoveNode(this.Nodes, node.id, parentId));
     }
 
     public OnScale(node: RubricNodeSnapshot, event: Event): void {
         const value = (event.target as HTMLSelectElement).value;
-        this.NodesChange.emit(setScale(this.Nodes, node.id, value === '' ? null : value));
+        this.NodesChange.emit(SetScale(this.Nodes, node.id, value === '' ? null : value));
     }
 
     public OnAnchor(node: RubricNodeSnapshot, levelId: string, event: Event): void {
-        this.NodesChange.emit(setAnchor(this.Nodes, node.id, levelId, (event.target as HTMLInputElement).value));
+        this.NodesChange.emit(SetAnchor(this.Nodes, node.id, levelId, (event.target as HTMLInputElement).value));
     }
 
     public OnGate(node: RubricNodeSnapshot, event: Event): void {
         const checked = (event.target as HTMLInputElement).checked;
-        this.NodesChange.emit(setGate(this.Nodes, node.id, checked, checked ? node.gateMinimumScore ?? 0.6 : null));
+        this.NodesChange.emit(SetGate(this.Nodes, node.id, checked, checked ? node.gateMinimumScore ?? 0.6 : null));
     }
 
     public OnMinimum(node: RubricNodeSnapshot, event: Event): void {
-        this.NodesChange.emit(setGate(this.Nodes, node.id, true, Number((event.target as HTMLInputElement).value)));
+        this.NodesChange.emit(SetGate(this.Nodes, node.id, true, Number((event.target as HTMLInputElement).value)));
     }
 
     public OnPolicy(node: RubricNodeSnapshot, event: Event): void {
         const value = (event.target as HTMLSelectElement).value;
-        this.NodesChange.emit(setPolicy(this.Nodes, node.id, value === '' ? null : value as NotApplicablePolicy));
+        this.NodesChange.emit(SetPolicy(this.Nodes, node.id, value === '' ? null : value as NotApplicablePolicy));
     }
 
     public OnAddBand(): void {
-        this.BandsChange.emit(addBand(this.Bands, 'New band'));
+        this.BandsChange.emit(AddBand(this.Bands, 'New band'));
     }
 
     public OnBand(id: string, field: 'label' | 'minScore' | 'maxScore', event: Event): void {
         const raw = (event.target as HTMLInputElement).value;
         const patch = field === 'label' ? { label: raw } : { [field]: Number(raw) };
-        this.BandsChange.emit(updateBand(this.Bands, id, patch));
+        this.BandsChange.emit(UpdateBand(this.Bands, id, patch));
     }
 }

@@ -2,11 +2,11 @@
 
 > **Status:** schema and CodeGen tails are in the branch. Engine, testing-framework, agent, and UI
 > work (R2 onward, T, A, U) has not started. `guides/RUBRICS_GUIDE.md` is still owed.
-> **Schema:** `migrations/v6/V202609302204__v6.2.x__Rubrics.sql`, `…2205…`, and `…2206…`.
+> **Schema:** `migrations/v6/V202609302342__v6.2.x__Rubrics.sql`, `…2343…`, and `…2344…`.
 > Hand-written DDL is the tables and the consensus wrapper views. Layering flags live in
 > `metadata/entities/.layered-base-views.json`. Label name-field pins live in
 > `metadata/entities/.rubric-label-name-fields.json`. Neither is an `UPDATE` in a migration.
-> `V202609302205` is the captured inner views only. CodeGen tails are appended (§9, task R0).
+> `V202609302343` is the captured inner views only. CodeGen tails are appended (§9, task R0).
 > **Scope of this plan:** the core primitive, the testing framework integration, and the agent
 > integration. All three ship from this plan.
 >
@@ -126,7 +126,7 @@ that matters.
 ## 4. Data model
 
 All tables are in the core schema; entity names get the `MJ: ` prefix from CodeGen. Full column
-definitions, constraints and descriptions are in `V202609302204__v6.2.x__Rubrics.sql` — that file
+definitions, constraints and descriptions are in `V202609302342__v6.2.x__Rubrics.sql` — that file
 is authoritative; this section explains the shape.
 
 ```
@@ -503,9 +503,9 @@ view is generated.
 
 | File | Hand-written section | CodeGen section (appended) | Why it is its own file |
 |---|---|---|---|
-| `V202609302204__v6.2.x__Rubrics.sql` | tables, constraints, triggers, descriptions | entity registration (public views, procs, fields) | — |
-| `V202609302205__v6.2.x__Rubrics_Layered_Base_View_Flags.sql` | none — no Entity or EntityField DML | the two **inner** views | The inner views cannot be created until 2204's capture has registered the entities, and they cannot live below that capture because it is replaced wholesale. |
-| `V202609302206__v6.2.x__Rubrics_Consensus_Views.sql` | `CREATE OR ALTER VIEW` for the two public wrappers | virtual EntityFields for the wrapper columns, and CRUD that returns them | A view cannot be created before the view it selects from, and hand-written SQL cannot live below a CodeGen section that is replaced wholesale. |
+| `V202609302342__v6.2.x__Rubrics.sql` | tables, constraints, triggers, descriptions | entity registration (public views, procs, fields) | — |
+| `V202609302343__v6.2.x__Rubrics_Layered_Base_View_Flags.sql` | none — no Entity or EntityField DML | the two **inner** views | The inner views cannot be created until 2204's capture has registered the entities, and they cannot live below that capture because it is replaced wholesale. |
+| `V202609302344__v6.2.x__Rubrics_Consensus_Views.sql` | `CREATE OR ALTER VIEW` for the two public wrappers | virtual EntityFields for the wrapper columns, and CRUD that returns them | A view cannot be created before the view it selects from, and hand-written SQL cannot live below a CodeGen section that is replaced wholesale. |
 
 `BaseViewGenerated` is set to false in the same metadata record as `GeneratedBaseViewName`.
 New entities are created with `BaseViewGenerated = 1`, and the column check rejects an inner
@@ -914,7 +914,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
   `RubricVersionDiff` with unit tests for every N/A policy, both rollups, the zero-weight
   fallback, gates, completeness, outcome order, six-place rounding, bump classification,
   and the ScoringHash invariant. `RubricEngineBase` is not in this commit.
-- **2026-10-01** — Correction: the three hand-written `UPDATE`s in `V202609302205` are removed.
+- **2026-10-01** — Correction: the three hand-written `UPDATE`s in `V202609302343` are removed.
   Layering flags stay only in `.layered-base-views.json`. Label name-field pins are
   `.rubric-label-name-fields.json` (Entity Field lookups, no sync block, no hand-written UUID).
   The CodeGen section of 2205 — the inner views — stays. A no-sync CodeGen run is not the gate
@@ -927,7 +927,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
   `mj codegen --skipfiles` with no sync) `BaseView` is `vwRubricCriteria`, `vwRubricCriterions`
   does not exist, and `vwRubricEvaluations` still selects `CohortMeanScore`. IT96 with
   `RUN_MUTATION_TESTS=1`: 5 passed, 0 failed, 0 skipped.
-- **2026-09-30** — Review of `9c8a8611`. Restored `V202609302205`: migrate does not sync metadata,
+- **2026-09-30** — Review of `9c8a8611`. Restored `V202609302343`: migrate does not sync metadata,
   so the layering flags have to be in the migration or the next CodeGen replaces the wrappers.
   The metadata file stays. `GeneratePluralName` pluralizes the last word (`Rubric Criterion` →
   `Rubric Criteria`). `TestSuiteRun.Score` is `DECIMAL(9,6)`. `Label` is pinned as the name field
@@ -939,15 +939,15 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
   `MJ: Rubric Criteria`. `TestSuiteRun.Score` is `decimal(9,6)`. Updating `PassThreshold`
   on a published version threw 51102.
 - **2026-09-30** — CodeGen tail captured. Pass 1 registers the entities. Pass 2, after
-  `mj sync push` of `.layered-base-views.json`, appends the inner views to `V202609302204`.
-  Pass 3 appends the wrapper virtual fields to `V202609302206`. Generated entity classes,
+  `mj sync push` of `.layered-base-views.json`, appends the inner views to `V202609302342`.
+  Pass 3 appends the wrapper virtual fields to `V202609302344`. Generated entity classes,
   GraphQL schema, and forms are committed. A fresh database (`MJ_6_2_CLEAN_pr4937_verify`)
   applied both migrations, 104 scripts, with no error. `check:codegen-tail` and
   `check-migration-entityfield-sequence` passed. R0 is not done: `packages/Rubrics/*` is
   not in the workspace globs, and the package build is not started.
-- **2026-09-30** — Removed `V202609302205` (the `UPDATE Entity` that set layered-base-view flags).
+- **2026-09-30** — Removed `V202609302343` (the `UPDATE Entity` that set layered-base-view flags).
   Those flags now live only in `metadata/entities/.layered-base-views.json`, applied with
-  `mj sync push`. `V202609302206` stays: the consensus wrappers are schema DDL, and they have
+  `mj sync push`. `V202609302344` stays: the consensus wrappers are schema DDL, and they have
   to run after 2204's CodeGen section creates the inner views.
 - **2026-09-30** — `TestRubric` deprecation moved out of the migration into
   `metadata/entities/.test-rubrics-deprecation.json` (entity `Status = Deprecated` + description).

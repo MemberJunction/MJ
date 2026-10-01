@@ -14,7 +14,7 @@ export interface SupersedeTarget {
  * or rubric differs from the evaluation replacing it. The caller then sets
  * Status to Superseded in the same transaction as the submit.
  */
-export function assertCanSupersede(target: SupersedeTarget, current: SupersedeTarget): void {
+export function AssertCanSupersede(target: SupersedeTarget, current: SupersedeTarget): void {
     if (target.status !== 'Submitted') {
         throw new RubricEvaluationError('Only a Submitted evaluation can be superseded.');
     }
@@ -27,6 +27,11 @@ export function assertCanSupersede(target: SupersedeTarget, current: SupersedeTa
     if (target.rubricId !== current.rubricId) {
         throw new RubricEvaluationError('A supersede must be the same rubric.');
     }
+}
+
+/** @deprecated Use {@link AssertCanSupersede}. */
+export function assertCanSupersede(target: SupersedeTarget, current: SupersedeTarget): void {
+    return AssertCanSupersede(target, current);
 }
 
 export class RubricEvaluationError extends Error {
@@ -87,7 +92,7 @@ export interface PersistedEvaluation {
  * answer must use that criterion's scale. A numeric answer is the only place
  * RawValue is accepted. IsComputed rows are refused from the client.
  */
-export function validateEvaluationScores(input: SubmitEvaluationInput): void {
+export function ValidateEvaluationScores(input: SubmitEvaluationInput): void {
     if (input.versionStatus === 'Draft' || (input.versionStatus === 'Retired' && !input.supersedesEvaluationId)) {
         throw new RubricEvaluationError('A new evaluation must pin a Published version. Retired is only allowed when superseding an evaluation pinned to that version.');
     }
@@ -117,14 +122,19 @@ export function validateEvaluationScores(input: SubmitEvaluationInput): void {
     }
 }
 
+/** @deprecated Use {@link ValidateEvaluationScores}. */
+export function validateEvaluationScores(input: SubmitEvaluationInput): void {
+    return ValidateEvaluationScores(input);
+}
+
 /**
  * Validates, then scores with {@link RubricScoring.compute} and returns the
  * fields to persist. The caller writes score rows while the evaluation is
  * still Draft, then writes these evaluation fields and sets Status to Submitted.
  * This is the only copy of the math.
  */
-export function submitEvaluation(input: SubmitEvaluationInput): { evaluation: PersistedEvaluation; scores: PersistedScore[] } {
-    validateEvaluationScores(input);
+export function SubmitEvaluation(input: SubmitEvaluationInput): { evaluation: PersistedEvaluation; scores: PersistedScore[] } {
+    ValidateEvaluationScores(input);
     const answers: RubricAnswer[] = input.scores.map(score => ({
         criterionId: score.criterionId,
         scaleLevelId: score.scaleLevelId,
@@ -160,4 +170,9 @@ export function submitEvaluation(input: SubmitEvaluationInput): { evaluation: Pe
             isComputed: input.version.nodes.find(item => item.id === node.id)?.nodeType === 'Group',
         })),
     };
+}
+
+/** @deprecated Use {@link SubmitEvaluation}. */
+export function submitEvaluation(input: SubmitEvaluationInput): { evaluation: PersistedEvaluation; scores: PersistedScore[] } {
+    return SubmitEvaluation(input);
 }

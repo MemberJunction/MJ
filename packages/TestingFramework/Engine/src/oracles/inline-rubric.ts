@@ -9,7 +9,7 @@ function inlineLeaves(criteria: Array<string | InlineCriterion>): { text: string
 }
 
 /** A binary inline rubric. Met = 1 and Not met = 0. There is no version row. */
-export function inlineVersion(criteria: Array<string | InlineCriterion>, strict: boolean, passThreshold: number): RubricVersionSnapshot {
+export function InlineVersion(criteria: Array<string | InlineCriterion>, strict: boolean, passThreshold: number): RubricVersionSnapshot {
     const leaves = inlineLeaves(criteria);
     return {
         id: 'inline',
@@ -45,8 +45,13 @@ export function inlineVersion(criteria: Array<string | InlineCriterion>, strict:
     };
 }
 
-export function scoreInline(criteria: Array<string | InlineCriterion>, answers: { index: number; met: boolean; rationale?: string }[], options: { strict?: boolean; passThreshold?: number }): RubricScoreResult {
-    const version = inlineVersion(criteria, options.strict === true, options.passThreshold ?? 0.7);
+/** @deprecated Use {@link InlineVersion}. */
+export function inlineVersion(criteria: Array<string | InlineCriterion>, strict: boolean, passThreshold: number): RubricVersionSnapshot {
+    return InlineVersion(criteria, strict, passThreshold);
+}
+
+export function ScoreInline(criteria: Array<string | InlineCriterion>, answers: { index: number; met: boolean; rationale?: string }[], options: { strict?: boolean; passThreshold?: number }): RubricScoreResult {
+    const version = InlineVersion(criteria, options.strict === true, options.passThreshold ?? 0.7);
     return RubricScoring.compute({
         version,
         answers: answers.map(answer => ({
@@ -57,17 +62,27 @@ export function scoreInline(criteria: Array<string | InlineCriterion>, answers: 
     });
 }
 
+/** @deprecated Use {@link ScoreInline}. */
+export function scoreInline(criteria: Array<string | InlineCriterion>, answers: { index: number; met: boolean; rationale?: string }[], options: { strict?: boolean; passThreshold?: number }): RubricScoreResult {
+    return ScoreInline(criteria, answers, options);
+}
+
 /** Computer Use verdicts, reported in the same inline details shape. Not stored as a RubricEvaluation. */
-export function inlineOracleFromVerdicts(verdicts: { criterion: string; met: boolean; evidence?: string }[], passThreshold = 0.7): OracleResult {
-    const scored = scoreInline(verdicts.map(verdict => verdict.criterion), verdicts.map((verdict, index) => ({
+export function InlineOracleFromVerdicts(verdicts: { criterion: string; met: boolean; evidence?: string }[], passThreshold = 0.7): OracleResult {
+    const scored = ScoreInline(verdicts.map(verdict => verdict.criterion), verdicts.map((verdict, index) => ({
         index,
         met: verdict.met,
         rationale: verdict.evidence,
     })), { passThreshold });
-    return inlineOracleResult(verdicts.map(verdict => verdict.criterion), scored, verdicts.map(verdict => verdict.evidence));
+    return InlineOracleResult(verdicts.map(verdict => verdict.criterion), scored, verdicts.map(verdict => verdict.evidence));
 }
 
-export function inlineOracleResult(criteria: string[], scored: RubricScoreResult, evidence: (string | undefined)[] = []): OracleResult {
+/** @deprecated Use {@link InlineOracleFromVerdicts}. */
+export function inlineOracleFromVerdicts(verdicts: { criterion: string; met: boolean; evidence?: string }[], passThreshold = 0.7): OracleResult {
+    return InlineOracleFromVerdicts(verdicts, passThreshold);
+}
+
+export function InlineOracleResult(criteria: string[], scored: RubricScoreResult, evidence: (string | undefined)[] = []): OracleResult {
     const passed = scored.outcome === 'Passed';
     return {
         oracleType: 'llm-judge',
@@ -86,4 +101,9 @@ export function inlineOracleResult(criteria: string[], scored: RubricScoreResult
             })),
         },
     };
+}
+
+/** @deprecated Use {@link InlineOracleResult}. */
+export function inlineOracleResult(criteria: string[], scored: RubricScoreResult, evidence: (string | undefined)[] = []): OracleResult {
+    return InlineOracleResult(criteria, scored, evidence);
 }

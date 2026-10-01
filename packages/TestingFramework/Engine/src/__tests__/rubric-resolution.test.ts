@@ -4,32 +4,32 @@ const evaluateRecord = vi.hoisted(() => vi.fn(async () => ({
     evaluationId: 'eval-1', score: 0.75, displayScore: 75, outcome: 'Passed', criteria: [],
 })));
 vi.mock('@memberjunction/rubrics', () => ({
-    providerRubricEngine: () => ({ evaluateRecord }),
+    providerRubricEngine: () => ({ EvaluateRecord: evaluateRecord, evaluateRecord }),
 }));
 
-import { PublishedVersionPin, ensureImplicitRubricOracle, resolveRubric, weightsForImplicitRubric } from '../oracles/rubric-resolution.js';
+import { PublishedVersionPin, EnsureImplicitRubricOracle, ResolveRubric, WeightsForImplicitRubric } from '../oracles/rubric-resolution.js';
 import { RubricOracle } from '../oracles/RubricOracle.js';
 
 const suites = [
-    { id: 'child', parentId: 'parent', rubricId: null },
-    { id: 'parent', parentId: null, rubricId: 'suite-rubric' },
+    { Id: 'child', ParentId: 'parent', RubricId: null },
+    { Id: 'parent', ParentId: null, RubricId: 'suite-rubric' },
 ];
 
 describe('rubric resolution', () => {
     it('uses the first source that names a rubric', () => {
-        expect(resolveRubric({
+        expect(ResolveRubric({
             run: { rubricId: 'run' },
             oracle: { rubricId: 'oracle' },
             testRubricId: 'test',
             suites,
             suiteId: 'child',
             agentRubricId: 'agent',
-        }).source).toBe('run');
-        expect(resolveRubric({ oracle: { rubricVersionId: 'version-9' }, testRubricId: 'test' })).toMatchObject({ source: 'oracle', explicitVersion: true });
-        expect(resolveRubric({ testRubricId: 'test', suites, suiteId: 'child' }).source).toBe('test');
-        expect(resolveRubric({ suites, suiteId: 'child' })).toMatchObject({ rubricId: 'suite-rubric', source: 'suite' });
-        expect(resolveRubric({ agentRubricId: 'agent' }).source).toBe('agent');
-        expect(resolveRubric({}).source).toBe('none');
+        }).Source).toBe('run');
+        expect(ResolveRubric({ oracle: { rubricVersionId: 'version-9' }, testRubricId: 'test' })).toMatchObject({ Source: 'oracle', ExplicitVersion: true });
+        expect(ResolveRubric({ testRubricId: 'test', suites, suiteId: 'child' }).Source).toBe('test');
+        expect(ResolveRubric({ suites, suiteId: 'child' })).toMatchObject({ RubricId: 'suite-rubric', Source: 'suite' });
+        expect(ResolveRubric({ agentRubricId: 'agent' }).Source).toBe('agent');
+        expect(ResolveRubric({}).Source).toBe('none');
     });
 
     it('pins the published version for a suite run and leaves an explicit version alone', async () => {
@@ -45,25 +45,25 @@ describe('rubric resolution', () => {
     });
 
     it('adds a rubric oracle only when the test did not name one', () => {
-        const choice = resolveRubric({ testRubricId: 'rubric' });
-        const added = ensureImplicitRubricOracle([{ type: 'trace-no-errors' }], choice, 'v1');
+        const choice = ResolveRubric({ testRubricId: 'rubric' });
+        const added = EnsureImplicitRubricOracle([{ type: 'trace-no-errors' }], choice, 'v1');
         expect(added.map(oracle => oracle.type)).toEqual(['trace-no-errors', 'rubric']);
-        expect(ensureImplicitRubricOracle([{ type: 'rubric', config: { rubricId: 'named' } }], choice).some(oracle => oracle.config?.rubricId === 'named')).toBe(true);
-        expect(weightsForImplicitRubric(undefined, true)).toEqual({ rubric: 1 });
-        expect(weightsForImplicitRubric({ trace: 1 }, true)).toEqual({ trace: 1 });
+        expect(EnsureImplicitRubricOracle([{ type: 'rubric', config: { rubricId: 'named' } }], choice).some(oracle => oracle.config?.rubricId === 'named')).toBe(true);
+        expect(WeightsForImplicitRubric(undefined, true)).toEqual({ rubric: 1 });
+        expect(WeightsForImplicitRubric({ trace: 1 }, true)).toEqual({ trace: 1 });
     });
 
     it('keeps an existing llm-judge and does not add the agent rubric', () => {
-        const choice = resolveRubric({ testRubricId: 'rubric' });
+        const choice = ResolveRubric({ testRubricId: 'rubric' });
         const inline = [{ type: 'llm-judge', config: { criteria: ['Accurate'] } }, { type: 'trace-no-errors' }];
-        const published = ensureImplicitRubricOracle(inline, choice, 'v1', '1.0.0');
+        const published = EnsureImplicitRubricOracle(inline, choice, 'v1', '1.0.0');
         expect(published).toEqual(inline);
     });
 
     it('calls the engine with the test run as the subject and the test as the context', async () => {
         const seen: unknown[] = [];
         const oracle = new RubricOracle({
-            async evaluateRecord(request) {
+            async EvaluateRecord(request) {
                 seen.push(request);
                 return { evaluationId: 'eval-1', score: 0.75, displayScore: 75, outcome: 'Passed', criteria: [{ key: 'clarity', normalizedScore: 0.75, rationale: 'Clear.' }] };
             },

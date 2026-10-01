@@ -2,18 +2,23 @@ import type { UserInfo } from '@memberjunction/core';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 
 /** `name`, `id`, `name@1.2.0`, or `id@version-id`. */
-export function parseRubricRef(value: string): { rubric: string; version?: string } {
+export function ParseRubricRef(value: string): { rubric: string; version?: string } {
     const at = value.lastIndexOf('@');
     if (at <= 0) return { rubric: value.trim() };
     return { rubric: value.slice(0, at).trim(), version: value.slice(at + 1).trim() };
 }
 
-export function resolveRubricRef(
+/** @deprecated Use {@link ParseRubricRef}. */
+export function parseRubricRef(value: string): { rubric: string; version?: string } {
+    return ParseRubricRef(value);
+}
+
+export function ResolveRubricRef(
     rubrics: { id: string; name: string }[],
     versions: { id: string; rubricId: string; major: number; minor: number; patch: number }[],
     ref: string,
 ): { rubricId: string; versionId?: string } | { error: string } {
-    const parsed = parseRubricRef(ref);
+    const parsed = ParseRubricRef(ref);
     const rubric = rubrics.find(row => row.id === parsed.rubric || row.name === parsed.rubric);
     if (!rubric) return { error: `Rubric "${parsed.rubric}" was not found.` };
     if (!parsed.version) return { rubricId: rubric.id };
@@ -29,8 +34,17 @@ export function resolveRubricRef(
     return { rubricId: rubric.id, versionId: byId.id };
 }
 
+/** @deprecated Use {@link ResolveRubricRef}. */
+export function resolveRubricRef(
+    rubrics: { id: string; name: string }[],
+    versions: { id: string; rubricId: string; major: number; minor: number; patch: number }[],
+    ref: string,
+): { rubricId: string; versionId?: string } | { error: string } {
+    return ResolveRubricRef(rubrics, versions, ref);
+}
+
 /** One line per criterion from a rubric or inline-judge oracle result. */
-export function formatCriterionReport(oracleResults: { oracleType?: string; type?: string; Name?: string; details?: unknown; Details?: unknown }[] | null | undefined): string {
+export function FormatCriterionReport(oracleResults: { oracleType?: string; type?: string; Name?: string; details?: unknown; Details?: unknown }[] | null | undefined): string {
     const list = oracleResults ?? [];
     const chosen = list.find(oracle => kind(oracle) === 'rubric' && criteria(oracle).length > 0)
         ?? list.find(oracle => kind(oracle).includes('judge') && criteria(oracle).length > 0);
@@ -44,13 +58,23 @@ export function formatCriterionReport(oracleResults: { oracleType?: string; type
     }).join('\n');
 }
 
-export function formatVersionDiff(result: { computedBump: string | null; changes: { bump: string; subject: string; property: string }[] }): string {
+/** @deprecated Use {@link FormatCriterionReport}. */
+export function formatCriterionReport(oracleResults: { oracleType?: string; type?: string; Name?: string; details?: unknown; Details?: unknown }[] | null | undefined): string {
+    return FormatCriterionReport(oracleResults);
+}
+
+export function FormatVersionDiff(result: { computedBump: string | null; changes: { bump: string; subject: string; property: string }[] }): string {
     const lines = [result.computedBump ?? 'none'];
     for (const change of result.changes) lines.push(`${change.bump}  ${change.subject}  ${change.property}`);
     return lines.join('\n');
 }
 
-export function validateSnapshot(version: { nodes?: { id?: string; key?: string; parentId?: string | null; weight?: number; isGate?: boolean; gateMinimumScore?: number | null; scaleId?: string | null; nodeType?: string }[]; scales?: { id: string }[] }): string[] {
+/** @deprecated Use {@link FormatVersionDiff}. */
+export function formatVersionDiff(result: { computedBump: string | null; changes: { bump: string; subject: string; property: string }[] }): string {
+    return FormatVersionDiff(result);
+}
+
+export function ValidateSnapshot(version: { nodes?: { id?: string; key?: string; parentId?: string | null; weight?: number; isGate?: boolean; gateMinimumScore?: number | null; scaleId?: string | null; nodeType?: string }[]; scales?: { id: string }[] }): string[] {
     const errors: string[] = [];
     const nodes = version.nodes ?? [];
     if (nodes.length === 0) errors.push('The rubric has no criteria.');
@@ -75,6 +99,11 @@ export function validateSnapshot(version: { nodes?: { id?: string; key?: string;
     return errors;
 }
 
+/** @deprecated Use {@link ValidateSnapshot}. */
+export function validateSnapshot(version: { nodes?: { id?: string; key?: string; parentId?: string | null; weight?: number; isGate?: boolean; gateMinimumScore?: number | null; scaleId?: string | null; nodeType?: string }[]; scales?: { id: string }[] }): string[] {
+    return ValidateSnapshot(version);
+}
+
 function parentIsDescendant(nodes: { id?: string; parentId?: string | null }[], node: { id?: string; parentId?: string | null }): boolean {
     const byId = new Map(nodes.filter(item => item.id).map(item => [item.id as string, item]));
     const seen = new Set<string>();
@@ -88,7 +117,7 @@ function parentIsDescendant(nodes: { id?: string; parentId?: string | null }[], 
 }
 
 /** A version snapshot for RubricVersionDiff, including parents, scales, levels, and bands. */
-export function snapshotFromRows(
+export function SnapshotFromRows(
     version: Record<string, unknown>,
     criteria: Record<string, unknown>[],
     scales: Record<string, unknown>[],
@@ -145,10 +174,21 @@ export function snapshotFromRows(
     };
 }
 
+/** @deprecated Use {@link SnapshotFromRows}. */
+export function snapshotFromRows(
+    version: Record<string, unknown>,
+    criteria: Record<string, unknown>[],
+    scales: Record<string, unknown>[],
+    levels: Record<string, unknown>[],
+    bands: Record<string, unknown>[],
+): RubricVersionSnapshot {
+    return SnapshotFromRows(version, criteria, scales, levels, bands);
+}
+
 /** Loads the rubric and, when a version was named, that version's id. */
-export async function lookupRubricOverride(ref: string, user: UserInfo): Promise<{ rubricId: string; versionId?: string }> {
+export async function LookupRubricOverride(ref: string, user: UserInfo): Promise<{ rubricId: string; versionId?: string }> {
     const { RunView } = await import('@memberjunction/core');
-    const parsed = parseRubricRef(ref);
+    const parsed = ParseRubricRef(ref);
     const view = new RunView();
     const escaped = parsed.rubric.replace(/'/g, "''");
     const found = await view.RunView({
@@ -175,9 +215,14 @@ export async function lookupRubricOverride(ref: string, user: UserInfo): Promise
             patch: Number(row.PatchVersion ?? 0),
         }));
     }
-    const resolved = resolveRubricRef(rubrics, versions, ref);
+    const resolved = ResolveRubricRef(rubrics, versions, ref);
     if ('error' in resolved) throw new Error(resolved.error);
     return resolved;
+}
+
+/** @deprecated Use {@link LookupRubricOverride}. */
+export async function lookupRubricOverride(ref: string, user: UserInfo): Promise<{ rubricId: string; versionId?: string }> {
+    return LookupRubricOverride(ref, user);
 }
 
 function kind(oracle: { oracleType?: string; type?: string; Name?: string }): string {

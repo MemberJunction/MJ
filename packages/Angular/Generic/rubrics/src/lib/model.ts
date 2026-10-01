@@ -10,7 +10,7 @@ export interface RubricFormAnswer {
 }
 
 /** Live weight share among a node's included siblings, as a percent. Advisory nodes are left out. */
-export function weightShares(nodes: RubricNodeSnapshot[]): Map<string, number> {
+export function WeightShares(nodes: RubricNodeSnapshot[]): Map<string, number> {
     const shares = new Map<string, number>();
     const groups = new Map<string, RubricNodeSnapshot[]>();
     for (const node of nodes) {
@@ -33,8 +33,13 @@ export function weightShares(nodes: RubricNodeSnapshot[]): Map<string, number> {
     return shares;
 }
 
+/** @deprecated Use {@link WeightShares}. */
+export function weightShares(nodes: RubricNodeSnapshot[]): Map<string, number> {
+    return WeightShares(nodes);
+}
+
 /** Problems that block a draft from being a publishable tree. */
-export function draftProblems(nodes: RubricNodeSnapshot[], scales: RubricScaleSnapshot[]): string[] {
+export function DraftProblems(nodes: RubricNodeSnapshot[], scales: RubricScaleSnapshot[]): string[] {
     const problems: string[] = [];
     const keys = new Set<string>();
     const ids = new Set(nodes.map(node => node.id));
@@ -52,8 +57,13 @@ export function draftProblems(nodes: RubricNodeSnapshot[], scales: RubricScaleSn
     return problems;
 }
 
+/** @deprecated Use {@link DraftProblems}. */
+export function draftProblems(nodes: RubricNodeSnapshot[], scales: RubricScaleSnapshot[]): string[] {
+    return DraftProblems(nodes, scales);
+}
+
 /** A new group or leaf. The host saves the draft. The widget does not publish. */
-export function addNode(nodes: RubricNodeSnapshot[], name: string, nodeType: 'Group' | 'Criterion', scaleId: string | null, parentId: string | null = null): RubricNodeSnapshot[] {
+export function AddNode(nodes: RubricNodeSnapshot[], name: string, nodeType: 'Group' | 'Criterion', scaleId: string | null, parentId: string | null = null): RubricNodeSnapshot[] {
     const key = uniqueKey(nodes, slug(name));
     const sequence = nodes.filter(node => (node.parentId ?? null) === parentId).length;
     return [...nodes, {
@@ -72,36 +82,66 @@ export function addNode(nodes: RubricNodeSnapshot[], name: string, nodeType: 'Gr
     }];
 }
 
+/** @deprecated Use {@link AddNode}. */
+export function addNode(nodes: RubricNodeSnapshot[], name: string, nodeType: 'Group' | 'Criterion', scaleId: string | null, parentId: string | null = null): RubricNodeSnapshot[] {
+    return AddNode(nodes, name, nodeType, scaleId, parentId);
+}
+
+export function AddCriterion(nodes: RubricNodeSnapshot[], name: string, scaleId: string | null): RubricNodeSnapshot[] {
+    return AddNode(nodes, name, 'Criterion', scaleId, null);
+}
+
+/** @deprecated Use {@link AddCriterion}. */
 export function addCriterion(nodes: RubricNodeSnapshot[], name: string, scaleId: string | null): RubricNodeSnapshot[] {
-    return addNode(nodes, name, 'Criterion', scaleId, null);
+    return AddCriterion(nodes, name, scaleId);
 }
 
 /**
  * Moving sets the parent and puts the node at the end of that parent's children.
  * A move under the node's own descendant leaves the tree unchanged.
  */
-export function moveNode(nodes: RubricNodeSnapshot[], id: string, parentId: string | null): RubricNodeSnapshot[] {
+export function MoveNode(nodes: RubricNodeSnapshot[], id: string, parentId: string | null): RubricNodeSnapshot[] {
     if (parentId === id || isAncestor(nodes, id, parentId)) return nodes;
     const sequence = nodes.filter(node => node.id !== id && (node.parentId ?? null) === parentId).length;
     return nodes.map(node => node.id === id ? { ...node, parentId, sequence } : node);
 }
 
+/** @deprecated Use {@link MoveNode}. */
+export function moveNode(nodes: RubricNodeSnapshot[], id: string, parentId: string | null): RubricNodeSnapshot[] {
+    return MoveNode(nodes, id, parentId);
+}
+
 /** Names the key when the new parent is the node or one of its descendants. */
-export function moveProblem(nodes: RubricNodeSnapshot[], id: string, parentId: string | null): string | null {
+export function MoveProblem(nodes: RubricNodeSnapshot[], id: string, parentId: string | null): string | null {
     if (parentId !== id && !isAncestor(nodes, id, parentId)) return null;
     const node = nodes.find(item => item.id === id);
     return `${node?.key ?? id} cannot be moved under its own descendant.`;
 }
 
-export function setWeight(nodes: RubricNodeSnapshot[], id: string, weight: number): RubricNodeSnapshot[] {
+/** @deprecated Use {@link MoveProblem}. */
+export function moveProblem(nodes: RubricNodeSnapshot[], id: string, parentId: string | null): string | null {
+    return MoveProblem(nodes, id, parentId);
+}
+
+export function SetWeight(nodes: RubricNodeSnapshot[], id: string, weight: number): RubricNodeSnapshot[] {
     return nodes.map(node => node.id === id ? { ...node, weight: weight < 0 ? 0 : weight } : node);
 }
 
-export function setScale(nodes: RubricNodeSnapshot[], id: string, scaleId: string | null): RubricNodeSnapshot[] {
+/** @deprecated Use {@link SetWeight}. */
+export function setWeight(nodes: RubricNodeSnapshot[], id: string, weight: number): RubricNodeSnapshot[] {
+    return SetWeight(nodes, id, weight);
+}
+
+export function SetScale(nodes: RubricNodeSnapshot[], id: string, scaleId: string | null): RubricNodeSnapshot[] {
     return nodes.map(node => node.id === id ? { ...node, scaleId } : node);
 }
 
-export function setAnchor(nodes: RubricNodeSnapshot[], id: string, scaleLevelId: string, descriptor: string): RubricNodeSnapshot[] {
+/** @deprecated Use {@link SetScale}. */
+export function setScale(nodes: RubricNodeSnapshot[], id: string, scaleId: string | null): RubricNodeSnapshot[] {
+    return SetScale(nodes, id, scaleId);
+}
+
+export function SetAnchor(nodes: RubricNodeSnapshot[], id: string, scaleLevelId: string, descriptor: string): RubricNodeSnapshot[] {
     return nodes.map(node => {
         if (node.id !== id) return node;
         const anchors = [...(node.anchors ?? []).filter(anchor => anchor.scaleLevelId !== scaleLevelId), { scaleLevelId, descriptor }];
@@ -109,40 +149,75 @@ export function setAnchor(nodes: RubricNodeSnapshot[], id: string, scaleLevelId:
     });
 }
 
-export function setGate(nodes: RubricNodeSnapshot[], id: string, isGate: boolean, gateMinimumScore: number | null): RubricNodeSnapshot[] {
+/** @deprecated Use {@link SetAnchor}. */
+export function setAnchor(nodes: RubricNodeSnapshot[], id: string, scaleLevelId: string, descriptor: string): RubricNodeSnapshot[] {
+    return SetAnchor(nodes, id, scaleLevelId, descriptor);
+}
+
+export function SetGate(nodes: RubricNodeSnapshot[], id: string, isGate: boolean, gateMinimumScore: number | null): RubricNodeSnapshot[] {
     return nodes.map(node => node.id === id ? { ...node, isGate, gateMinimumScore: isGate ? gateMinimumScore : null } : node);
 }
 
-export function setPolicy(nodes: RubricNodeSnapshot[], id: string, notApplicablePolicy: NotApplicablePolicy | null): RubricNodeSnapshot[] {
+/** @deprecated Use {@link SetGate}. */
+export function setGate(nodes: RubricNodeSnapshot[], id: string, isGate: boolean, gateMinimumScore: number | null): RubricNodeSnapshot[] {
+    return SetGate(nodes, id, isGate, gateMinimumScore);
+}
+
+export function SetPolicy(nodes: RubricNodeSnapshot[], id: string, notApplicablePolicy: NotApplicablePolicy | null): RubricNodeSnapshot[] {
     return nodes.map(node => node.id === id ? { ...node, notApplicablePolicy } : node);
 }
 
-export function addBand(bands: RubricBandSnapshot[], label: string): RubricBandSnapshot[] {
+/** @deprecated Use {@link SetPolicy}. */
+export function setPolicy(nodes: RubricNodeSnapshot[], id: string, notApplicablePolicy: NotApplicablePolicy | null): RubricNodeSnapshot[] {
+    return SetPolicy(nodes, id, notApplicablePolicy);
+}
+
+export function AddBand(bands: RubricBandSnapshot[], label: string): RubricBandSnapshot[] {
     return [...bands, { id: crypto.randomUUID(), label, minScore: 0, maxScore: 1, displayTone: 'Neutral', sequence: bands.length }];
 }
 
-export function updateBand(bands: RubricBandSnapshot[], id: string, patch: Partial<Pick<RubricBandSnapshot, 'label' | 'minScore' | 'maxScore'>>): RubricBandSnapshot[] {
+/** @deprecated Use {@link AddBand}. */
+export function addBand(bands: RubricBandSnapshot[], label: string): RubricBandSnapshot[] {
+    return AddBand(bands, label);
+}
+
+export function UpdateBand(bands: RubricBandSnapshot[], id: string, patch: Partial<Pick<RubricBandSnapshot, 'label' | 'minScore' | 'maxScore'>>): RubricBandSnapshot[] {
     return bands.map(band => band.id === id ? { ...band, ...patch } : band);
 }
 
+/** @deprecated Use {@link UpdateBand}. */
+export function updateBand(bands: RubricBandSnapshot[], id: string, patch: Partial<Pick<RubricBandSnapshot, 'label' | 'minScore' | 'maxScore'>>): RubricBandSnapshot[] {
+    return UpdateBand(bands, id, patch);
+}
+
 /** Anchor text shown beside one scale level. */
-export function anchorsForLevel(node: RubricNodeSnapshot, levelId: string): { descriptor: string }[] {
+export function AnchorsForLevel(node: RubricNodeSnapshot, levelId: string): { descriptor: string }[] {
     return (node.anchors ?? []).filter(anchor => anchor.scaleLevelId === levelId && (anchor.descriptor ?? '').trim().length > 0);
 }
 
-export function effectivePolicy(node: RubricNodeSnapshot, versionPolicy: NotApplicablePolicy): NotApplicablePolicy {
+/** @deprecated Use {@link AnchorsForLevel}. */
+export function anchorsForLevel(node: RubricNodeSnapshot, levelId: string): { descriptor: string }[] {
+    return AnchorsForLevel(node, levelId);
+}
+
+export function EffectivePolicy(node: RubricNodeSnapshot, versionPolicy: NotApplicablePolicy): NotApplicablePolicy {
     return node.notApplicablePolicy ?? versionPolicy;
+}
+
+/** @deprecated Use {@link EffectivePolicy}. */
+export function effectivePolicy(node: RubricNodeSnapshot, versionPolicy: NotApplicablePolicy): NotApplicablePolicy {
+    return EffectivePolicy(node, versionPolicy);
 }
 
 /**
  * Names the leaves that still need an answer, a required rationale, or required evidence.
  * An unanswered advisory leaf does not block submit. NotAllowed refuses a not-applicable answer.
  */
-export function incompleteAnswers(nodes: RubricNodeSnapshot[], answers: RubricFormAnswer[], versionPolicy: NotApplicablePolicy = 'ExcludeAndRedistribute'): string[] {
+export function IncompleteAnswers(nodes: RubricNodeSnapshot[], answers: RubricFormAnswer[], versionPolicy: NotApplicablePolicy = 'ExcludeAndRedistribute'): string[] {
     const missing: string[] = [];
     for (const node of nodes.filter(item => item.nodeType === 'Criterion')) {
         const answer = answers.find(item => item.criterionId === node.id);
-        const policy = effectivePolicy(node, versionPolicy);
+        const policy = EffectivePolicy(node, versionPolicy);
         if (node.isAdvisory && !answer?.scaleLevelId && !answer?.isNotApplicable) continue;
         if (!answer?.scaleLevelId && !answer?.isNotApplicable) {
             missing.push(`${node.name} is unanswered.`);
@@ -158,15 +233,25 @@ export function incompleteAnswers(nodes: RubricNodeSnapshot[], answers: RubricFo
     return missing;
 }
 
+/** @deprecated Use {@link IncompleteAnswers}. */
+export function incompleteAnswers(nodes: RubricNodeSnapshot[], answers: RubricFormAnswer[], versionPolicy: NotApplicablePolicy = 'ExcludeAndRedistribute'): string[] {
+    return IncompleteAnswers(nodes, answers, versionPolicy);
+}
+
+export function CanSubmit(nodes: RubricNodeSnapshot[], answers: RubricFormAnswer[], versionPolicy: NotApplicablePolicy = 'ExcludeAndRedistribute'): boolean {
+    return IncompleteAnswers(nodes, answers, versionPolicy).length === 0;
+}
+
+/** @deprecated Use {@link CanSubmit}. */
 export function canSubmit(nodes: RubricNodeSnapshot[], answers: RubricFormAnswer[], versionPolicy: NotApplicablePolicy = 'ExcludeAndRedistribute'): boolean {
-    return incompleteAnswers(nodes, answers, versionPolicy).length === 0;
+    return CanSubmit(nodes, answers, versionPolicy);
 }
 
 /**
  * Selects a level, or clears it when the leaf is marked not applicable.
  * NotAllowed leaves the answers unchanged, so N does not clear the level.
  */
-export function answerLevel(answers: RubricFormAnswer[], criterionId: string, scaleLevelId: string | null, notApplicable: boolean, policy: NotApplicablePolicy = 'ExcludeAndRedistribute'): RubricFormAnswer[] {
+export function AnswerLevel(answers: RubricFormAnswer[], criterionId: string, scaleLevelId: string | null, notApplicable: boolean, policy: NotApplicablePolicy = 'ExcludeAndRedistribute'): RubricFormAnswer[] {
     if (notApplicable && policy === 'NotAllowed') return answers;
     const next = answers.filter(item => item.criterionId !== criterionId);
     const previous = answers.find(item => item.criterionId === criterionId);
@@ -180,8 +265,13 @@ export function answerLevel(answers: RubricFormAnswer[], criterionId: string, sc
     return next;
 }
 
+/** @deprecated Use {@link AnswerLevel}. */
+export function answerLevel(answers: RubricFormAnswer[], criterionId: string, scaleLevelId: string | null, notApplicable: boolean, policy: NotApplicablePolicy = 'ExcludeAndRedistribute'): RubricFormAnswer[] {
+    return AnswerLevel(answers, criterionId, scaleLevelId, notApplicable, policy);
+}
+
 /** Scores the sample answers with RubricScoring. The widget does not keep a second copy of the math. */
-export function previewScore(version: RubricVersionSnapshot, answers: RubricFormAnswer[]): RubricScoreResult {
+export function PreviewScore(version: RubricVersionSnapshot, answers: RubricFormAnswer[]): RubricScoreResult {
     return RubricScoring.compute({
         version,
         answers: answers.filter(item => item.scaleLevelId || item.isNotApplicable).map(item => ({
@@ -192,17 +282,27 @@ export function previewScore(version: RubricVersionSnapshot, answers: RubricForm
     });
 }
 
+/** @deprecated Use {@link PreviewScore}. */
+export function previewScore(version: RubricVersionSnapshot, answers: RubricFormAnswer[]): RubricScoreResult {
+    return PreviewScore(version, answers);
+}
+
 /** Maps a 0..1 score onto the version's display range. Null stays null. */
-export function displayScore(normalized: number | null, min: number, max: number): number | null {
+export function DisplayScore(normalized: number | null, min: number, max: number): number | null {
     if (normalized === null) return null;
     return min + normalized * (max - min);
+}
+
+/** @deprecated Use {@link DisplayScore}. */
+export function displayScore(normalized: number | null, min: number, max: number): number | null {
+    return DisplayScore(normalized, min, max);
 }
 
 /**
  * The same half-open rule as RubricScoring.bandId. A score equal to a band's max
  * belongs to the next band. The band whose max is 1 also contains 1.
  */
-export function bandFor(normalized: number | null, bands: RubricBandSnapshot[]): RubricBandSnapshot | null {
+export function BandFor(normalized: number | null, bands: RubricBandSnapshot[]): RubricBandSnapshot | null {
     if (normalized === null) return null;
     const ordered = [...bands].sort((a, b) => a.minScore - b.minScore || a.maxScore - b.maxScore);
     for (const band of ordered) {
@@ -210,6 +310,11 @@ export function bandFor(normalized: number | null, bands: RubricBandSnapshot[]):
         if (normalized >= band.minScore && (normalized < band.maxScore || top)) return band;
     }
     return null;
+}
+
+/** @deprecated Use {@link BandFor}. */
+export function bandFor(normalized: number | null, bands: RubricBandSnapshot[]): RubricBandSnapshot | null {
+    return BandFor(normalized, bands);
 }
 
 /** True when `ancestorId` sits on the parent chain of `nodeId`, including a cycle back to itself. */
@@ -239,7 +344,7 @@ export interface PublishPreview {
 }
 
 /** The dialog shows this. Confirming is the host's job. The widget does not publish. */
-export function publishPreview(base: RubricVersionSnapshot | null, draft: RubricVersionSnapshot, requested?: 'Major' | 'Minor' | 'Patch' | null): PublishPreview {
+export function PublishPreview(base: RubricVersionSnapshot | null, draft: RubricVersionSnapshot, requested?: 'Major' | 'Minor' | 'Patch' | null): PublishPreview {
     const diff = RubricVersionDiff.diff(base, draft, requested);
     const computed = diff.computedBump;
     return {
@@ -252,6 +357,11 @@ export function publishPreview(base: RubricVersionSnapshot | null, draft: Rubric
     };
 }
 
+/** @deprecated Use {@link PublishPreview}. */
+export function publishPreview(base: RubricVersionSnapshot | null, draft: RubricVersionSnapshot, requested?: 'Major' | 'Minor' | 'Patch' | null): PublishPreview {
+    return PublishPreview(base, draft, requested);
+}
+
 export interface DiffRow {
     key: string;
     left: string | null;
@@ -261,12 +371,17 @@ export interface DiffRow {
 
 /** Criterion keys, plus one row for each change that is not a criterion (version, band, or scale). */
 /** True when every sample answer points at a criterion that is on screen. */
-export function sampleMatchesTree(nodes: { id: string; nodeType: string }[], answers: { criterionId: string }[]): boolean {
+export function SampleMatchesTree(nodes: { id: string; nodeType: string }[], answers: { criterionId: string }[]): boolean {
     const ids = new Set(nodes.filter(node => node.nodeType === 'Criterion').map(node => node.id));
     return answers.length > 0 && answers.length === ids.size && answers.every(answer => ids.has(answer.criterionId));
 }
 
-export function versionRows(base: RubricVersionSnapshot, draft: RubricVersionSnapshot): DiffRow[] {
+/** @deprecated Use {@link SampleMatchesTree}. */
+export function sampleMatchesTree(nodes: { id: string; nodeType: string }[], answers: { criterionId: string }[]): boolean {
+    return SampleMatchesTree(nodes, answers);
+}
+
+export function VersionRows(base: RubricVersionSnapshot, draft: RubricVersionSnapshot): DiffRow[] {
     const diff = RubricVersionDiff.diff(base, draft);
     const keys = [...new Set([...base.nodes.map(node => node.key), ...draft.nodes.map(node => node.key)])];
     const rows: DiffRow[] = keys.map(key => ({
@@ -291,6 +406,11 @@ export function versionRows(base: RubricVersionSnapshot, draft: RubricVersionSna
         });
     }
     return rows;
+}
+
+/** @deprecated Use {@link VersionRows}. */
+export function versionRows(base: RubricVersionSnapshot, draft: RubricVersionSnapshot): DiffRow[] {
+    return VersionRows(base, draft);
 }
 
 function mark(change: VersionChange): string {
@@ -321,7 +441,7 @@ export interface MatrixModel {
 }
 
 /** Evaluators across, criteria down. A cell disagrees when the other included scores on that row differ. Withdrawn columns stay visible and out of the means. */
-export function comparisonMatrix(keys: string[], columns: MatrixColumn[]): MatrixModel {
+export function ComparisonMatrix(keys: string[], columns: MatrixColumn[]): MatrixModel {
     const included = columns.filter(column => column.status !== 'Withdrawn' && column.evaluatorType !== 'Self');
     const rows = keys.map(key => {
         const values = included.map(column => column.scores.find(score => score.key === key)?.normalizedScore ?? null).filter((score): score is number => score !== null);
@@ -343,6 +463,11 @@ export function comparisonMatrix(keys: string[], columns: MatrixColumn[]): Matri
     };
 }
 
+/** @deprecated Use {@link ComparisonMatrix}. */
+export function comparisonMatrix(keys: string[], columns: MatrixColumn[]): MatrixModel {
+    return ComparisonMatrix(keys, columns);
+}
+
 function meanOf(columns: MatrixColumn[]): number | null {
     const scores = columns.flatMap(column => column.scores.map(score => score.normalizedScore)).filter((score): score is number => score !== null);
     if (scores.length === 0) return null;
@@ -350,7 +475,7 @@ function meanOf(columns: MatrixColumn[]): number | null {
 }
 
 /** A criterion row from MJ: Rubric Criteria, as the author widget expects it. */
-export function nodeFromRow(row: Record<string, unknown>, anchors: RubricNodeSnapshot['anchors'] = []): RubricNodeSnapshot {
+export function NodeFromRow(row: Record<string, unknown>, anchors: RubricNodeSnapshot['anchors'] = []): RubricNodeSnapshot {
     return {
         id: String(row.ID ?? ''),
         key: String(row.Key ?? ''),
@@ -371,18 +496,28 @@ export function nodeFromRow(row: Record<string, unknown>, anchors: RubricNodeSna
     };
 }
 
+/** @deprecated Use {@link NodeFromRow}. */
+export function nodeFromRow(row: Record<string, unknown>, anchors: RubricNodeSnapshot['anchors'] = []): RubricNodeSnapshot {
+    return NodeFromRow(row, anchors);
+}
+
 /** Writes include the client id, so a new row is stored under the id the form already holds. Removed ids are deleted children first. */
-export function planNodeSave(existing: { id: string; parentId: string | null }[], nodes: RubricNodeSnapshot[]): { upserts: { id: string; isNew: boolean; fields: Record<string, unknown> }[]; removedIds: string[] } {
+export function PlanNodeSave(existing: { id: string; parentId: string | null }[], nodes: RubricNodeSnapshot[]): { upserts: { id: string; isNew: boolean; fields: Record<string, unknown> }[]; removedIds: string[] } {
     const known = new Set(existing.map(row => row.id));
     const kept = new Set(nodes.map(node => node.id));
     const removed = new Set(existing.filter(row => !kept.has(row.id)).map(row => row.id));
     return {
-        upserts: nodes.map(node => ({ id: node.id, isNew: !known.has(node.id), fields: { ...nodeFields(node), ID: node.id } })),
+        upserts: nodes.map(node => ({ id: node.id, isNew: !known.has(node.id), fields: { ...NodeFields(node), ID: node.id } })),
         removedIds: deleteChildrenFirst(existing, removed),
     };
 }
 
-export function scaleFromRow(row: Record<string, unknown>, levels: Record<string, unknown>[]): RubricScaleSnapshot {
+/** @deprecated Use {@link PlanNodeSave}. */
+export function planNodeSave(existing: { id: string; parentId: string | null }[], nodes: RubricNodeSnapshot[]): { upserts: { id: string; isNew: boolean; fields: Record<string, unknown> }[]; removedIds: string[] } {
+    return PlanNodeSave(existing, nodes);
+}
+
+export function ScaleFromRow(row: Record<string, unknown>, levels: Record<string, unknown>[]): RubricScaleSnapshot {
     return {
         id: String(row.ID ?? ''),
         name: String(row.Name ?? ''),
@@ -402,7 +537,12 @@ export function scaleFromRow(row: Record<string, unknown>, levels: Record<string
     };
 }
 
-export function bandFromRow(row: Record<string, unknown>): RubricBandSnapshot {
+/** @deprecated Use {@link ScaleFromRow}. */
+export function scaleFromRow(row: Record<string, unknown>, levels: Record<string, unknown>[]): RubricScaleSnapshot {
+    return ScaleFromRow(row, levels);
+}
+
+export function BandFromRow(row: Record<string, unknown>): RubricBandSnapshot {
     return {
         id: String(row.ID ?? ''),
         label: String(row.Label ?? ''),
@@ -414,8 +554,13 @@ export function bandFromRow(row: Record<string, unknown>): RubricBandSnapshot {
     };
 }
 
+/** @deprecated Use {@link BandFromRow}. */
+export function bandFromRow(row: Record<string, unknown>): RubricBandSnapshot {
+    return BandFromRow(row);
+}
+
 /** New bands keep the client id. Bands missing from the emit are removed. */
-export function planBandSave(existingIds: string[], bands: RubricBandSnapshot[]): { upserts: { id: string; isNew: boolean; fields: Record<string, unknown> }[]; removedIds: string[] } {
+export function PlanBandSave(existingIds: string[], bands: RubricBandSnapshot[]): { upserts: { id: string; isNew: boolean; fields: Record<string, unknown> }[]; removedIds: string[] } {
     const known = new Set(existingIds);
     const kept = new Set(bands.map(band => band.id));
     return {
@@ -426,6 +571,11 @@ export function planBandSave(existingIds: string[], bands: RubricBandSnapshot[])
         })),
         removedIds: existingIds.filter(id => !kept.has(id)),
     };
+}
+
+/** @deprecated Use {@link PlanBandSave}. */
+export function planBandSave(existingIds: string[], bands: RubricBandSnapshot[]): { upserts: { id: string; isNew: boolean; fields: Record<string, unknown> }[]; removedIds: string[] } {
+    return PlanBandSave(existingIds, bands);
 }
 
 function deleteChildrenFirst(rows: { id: string; parentId: string | null }[], removed: Set<string>): string[] {
@@ -441,7 +591,7 @@ function deleteChildrenFirst(rows: { id: string; parentId: string | null }[], re
 }
 
 /** Fields the Explorer form writes back when the author emits a node. */
-export function nodeFields(node: RubricNodeSnapshot): Record<string, unknown> {
+export function NodeFields(node: RubricNodeSnapshot): Record<string, unknown> {
     return {
         Key: node.key,
         Name: node.name,
@@ -458,6 +608,11 @@ export function nodeFields(node: RubricNodeSnapshot): Record<string, unknown> {
         RationaleRequired: node.rationaleRequired,
         Sequence: node.sequence,
     };
+}
+
+/** @deprecated Use {@link NodeFields}. */
+export function nodeFields(node: RubricNodeSnapshot): Record<string, unknown> {
+    return NodeFields(node);
 }
 
 function slug(name: string): string {
@@ -548,7 +703,7 @@ function versionLabel(version: CatalogVersionInput | null): string | null {
 }
 
 /** One catalog row. Draft text comes from publishPreview, so null version numbers are never printed. */
-export function catalogRow(input: CatalogRubricInput): CatalogRowView {
+export function CatalogRow(input: CatalogRubricInput): CatalogRowView {
     const published = input.versions.find(version => version.status === 'Published') ?? null;
     const draft = input.versions.find(version => version.status === 'Draft') ?? null;
     const shown = draft ?? published;
@@ -569,4 +724,9 @@ export function catalogRow(input: CatalogRubricInput): CatalogRowView {
         criteriaCount: leaves.length,
         scaleName,
     };
+}
+
+/** @deprecated Use {@link CatalogRow}. */
+export function catalogRow(input: CatalogRubricInput): CatalogRowView {
+    return CatalogRow(input);
 }

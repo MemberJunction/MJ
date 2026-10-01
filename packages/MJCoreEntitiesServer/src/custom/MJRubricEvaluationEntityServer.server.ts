@@ -1,8 +1,8 @@
 import { BaseEntity, type EntitySaveOptions } from '@memberjunction/core';
 import { MJRubricEvaluationEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { loadDraftForPublish } from './rubrics/versionPublish.js';
-import { assertCanSupersede, submitEvaluation, type PersistedEvaluation, type PersistedScore, type SubmitEvaluationInput } from './rubrics/evaluationSubmit.js';
+import { LoadDraftForPublish } from './rubrics/versionPublish.js';
+import { AssertCanSupersede, SubmitEvaluation, type PersistedEvaluation, type PersistedScore, type SubmitEvaluationInput } from './rubrics/evaluationSubmit.js';
 
 /**
  * Creates and submits an evaluation.
@@ -21,8 +21,8 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
      * Scores the draft and copies the computed fields onto this evaluation,
      * including Status Submitted. Returns the score rows to persist first.
      */
-    public submit(input: SubmitEvaluationInput): { evaluation: PersistedEvaluation; scores: PersistedScore[] } {
-        const result = submitEvaluation(input);
+    public Submit(input: SubmitEvaluationInput): { evaluation: PersistedEvaluation; scores: PersistedScore[] } {
+        const result = SubmitEvaluation(input);
         const written = result.evaluation;
         this.NormalizedScore = written.normalizedScore;
         this.Completeness = written.completeness;
@@ -36,6 +36,11 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
         this.Status = 'Submitted';
         this.SubmittedAt = written.submittedAt;
         return result;
+    }
+
+    /** @deprecated Use {@link Submit}. */
+    public submit(input: SubmitEvaluationInput): { evaluation: PersistedEvaluation; scores: PersistedScore[] } {
+        return this.Submit(input);
     }
 
     /**
@@ -55,7 +60,7 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
             const versionRows = await run('MJ: Rubric Versions', `ID='${this.RubricVersionID}'`);
             const versionRow = versionRows.Results?.[0] as { Status?: string; RubricID?: string } | undefined;
             if (!versionRow) throw new Error('The pinned rubric version was not found.');
-            const loaded = await loadDraftForPublish(run, this.RubricVersionID, String(versionRow.RubricID ?? this.RubricID), null);
+            const loaded = await LoadDraftForPublish(run, this.RubricVersionID, String(versionRow.RubricID ?? this.RubricID), null);
             const scoreRows = await run('MJ: Rubric Evaluation Scores', `EvaluationID='${this.ID}'`);
             const input: SubmitEvaluationInput = {
                 version: loaded.draft,
@@ -68,7 +73,7 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
             if (prior) {
                 // RubricID on an evaluation is a view column. A record created in this
                 // session has the pinned version, not that column, until it is reloaded.
-                assertCanSupersede(prior.target, {
+                AssertCanSupersede(prior.target, {
                     status: 'Submitted',
                     subjectEntityId: this.SubjectEntityID,
                     subjectRecordId: this.SubjectRecordID,
@@ -77,7 +82,7 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
                     rubricId: String(versionRow.RubricID ?? this.RubricID ?? ''),
                 });
             }
-            const result = submitEvaluation(input);
+            const result = SubmitEvaluation(input);
             const writtenIds = new Set<string>();
             for (const row of scoreRows.Results ?? []) {
                 const record = row as Record<string, unknown> & { Save?: () => Promise<boolean>; Get?: (name: string) => unknown };

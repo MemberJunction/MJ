@@ -23,7 +23,7 @@ export class DeterministicRubricEvaluator extends RubricEvaluator {
     /**
      * Scores the subject JSON. Does not call an agent or a model.
      */
-    public evaluateData(version: RubricVersionSnapshot, content: RubricSubjectContent): RubricEvaluatorOutput {
+    public EvaluateData(version: RubricVersionSnapshot, content: RubricSubjectContent): RubricEvaluatorOutput {
         const candidates: RubricCandidate[] = [];
         for (const node of version.nodes) {
             if (node.nodeType !== 'Criterion') continue;
@@ -43,6 +43,11 @@ export class DeterministicRubricEvaluator extends RubricEvaluator {
             });
         }
         return this.evaluate(version, candidates);
+    }
+
+    /** @deprecated Use {@link EvaluateData}. */
+    public evaluateData(version: RubricVersionSnapshot, content: RubricSubjectContent): RubricEvaluatorOutput {
+        return this.EvaluateData(version, content);
     }
 }
 

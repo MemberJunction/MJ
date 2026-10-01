@@ -3,20 +3,25 @@ import { BaseAction } from '@memberjunction/actions';
 import { RegisterClass } from '@memberjunction/global';
 import type { RubricNodeSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { RubricEngine, type EvaluateRecordInput, type EvaluateRecordResult } from './RubricEngine.js';
-import { nodesFromDescription, nodesFromMatrix } from './architect.js';
+import { NodesFromDescription, NodesFromMatrix } from './architect.js';
 import type { RubricSubjectContent } from './content.js';
-import { providerRubricEngine } from './providerRecords.js';
+import { ProviderRubricEngine } from './providerRecords.js';
 import type { ConsensusResult } from './statistics.js';
 
 /**
  * The engine for this run. A caller may pass one on the context. Otherwise the
  * action builds one from the provider. It does not construct another action.
  */
-export function engineForAction(params: RunActionParams): RubricEngine {
+export function EngineForAction(params: RunActionParams): RubricEngine {
     const provided = (params.Context as { rubricEngine?: RubricEngine } | undefined)?.rubricEngine;
     if (provided) return provided;
     if (!params.Provider || !params.ContextUser) throw new Error('A rubric action needs a provider and a context user.');
-    return providerRubricEngine(params.Provider, params.ContextUser);
+    return ProviderRubricEngine(params.Provider, params.ContextUser);
+}
+
+/** @deprecated Use {@link EngineForAction}. */
+export function engineForAction(params: RunActionParams): RubricEngine {
+    return EngineForAction(params);
 }
 
 function inputValue(params: RunActionParams, name: string): unknown {
@@ -69,7 +74,7 @@ export class EvaluateRecordAgainstRubricAction extends BaseAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            const result = await this.Invoke(engineForAction(params), {
+            const result = await this.Invoke(EngineForAction(params), {
                 rubricId: textValue(params, 'RubricID'),
                 rubricName: textValue(params, 'RubricName'),
                 subjectEntityName: textValue(params, 'SubjectEntityName') ?? '',
@@ -104,26 +109,26 @@ export class GetRubricConsensusAction extends BaseAction {
         subjectRecordId: string;
         contextRecordId?: string;
         major?: number;
-        method?: ConsensusResult['method'];
+        method?: ConsensusResult['Method'];
     }): Promise<ConsensusResult> {
         return engine.consensusForSubject(input);
     }
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            const result = await this.Invoke(engineForAction(params), {
+            const result = await this.Invoke(EngineForAction(params), {
                 rubricId: textValue(params, 'RubricID'),
                 rubricName: textValue(params, 'RubricName'),
                 subjectRecordId: textValue(params, 'SubjectRecordID') ?? '',
                 contextRecordId: textValue(params, 'ContextRecordID'),
                 major: numberInput(params, 'Major'),
-                method: textValue(params, 'Method') as ConsensusResult['method'],
+                method: textValue(params, 'Method') as ConsensusResult['Method'],
             });
-            output(params, 'ConsensusMethod', result.method);
-            output(params, 'Overall', result.overall);
-            output(params, 'StdDev', result.stdDev);
-            output(params, 'Range', result.range);
-            output(params, 'SampleSize', result.sampleSize);
+            output(params, 'ConsensusMethod', result.Method);
+            output(params, 'Overall', result.Overall);
+            output(params, 'StdDev', result.StdDev);
+            output(params, 'Range', result.Range);
+            output(params, 'SampleSize', result.SampleSize);
             return { Success: true, ResultCode: 'SUCCESS' };
         } catch (error) {
             return failed(error);
@@ -140,7 +145,7 @@ export class GetRubricSubjectAction extends BaseAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            const content = await this.Invoke(engineForAction(params), {
+            const content = await this.Invoke(EngineForAction(params), {
                 subjectEntityName: textValue(params, 'SubjectEntityName') ?? '',
                 subjectRecordId: textValue(params, 'SubjectRecordID') ?? '',
             });
@@ -161,7 +166,7 @@ export class GetRubricAction extends BaseAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            const tree = await this.Invoke(engineForAction(params), {
+            const tree = await this.Invoke(EngineForAction(params), {
                 rubricId: textValue(params, 'RubricID'),
                 rubricName: textValue(params, 'RubricName'),
                 versionId: textValue(params, 'VersionID'),
@@ -183,16 +188,16 @@ export class GetRubricAction extends BaseAction {
 export class CreateRubricDraftAction extends BaseAction {
     public async Invoke(engine: RubricEngine, input: { rubricId: string; nodes?: RubricNodeSnapshot[]; matrix?: string; description?: string }): Promise<{ id: string; status: 'Draft' }> {
         const nodes = input.matrix
-            ? nodesFromMatrix(input.matrix)
+            ? NodesFromMatrix(input.matrix)
             : input.description
-                ? nodesFromDescription(input.description)
+                ? NodesFromDescription(input.description)
                 : input.nodes ?? [];
         return engine.createDraft({ rubricId: input.rubricId, nodes });
     }
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            const draft = await this.Invoke(engineForAction(params), {
+            const draft = await this.Invoke(EngineForAction(params), {
                 rubricId: textValue(params, 'RubricID') ?? '',
                 nodes: nodeInput(params),
                 matrix: textValue(params, 'Matrix'),

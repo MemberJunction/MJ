@@ -2,7 +2,7 @@ import { BaseEntity, type EntitySaveOptions } from '@memberjunction/core';
 import { MJRubricVersionEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { cloneVersionNodes, loadDraftForPublish, publishRubricVersion, type PublishResult } from './rubrics/versionPublish.js';
+import { CloneVersionNodes, LoadDraftForPublish, PublishRubricVersion, type PublishResult } from './rubrics/versionPublish.js';
 
 /**
  * Draft, publish, and hash a rubric version.
@@ -19,20 +19,25 @@ export class MJRubricVersionEntityServer extends MJRubricVersionEntity {
      * Deep-clones criteria onto a new draft. Keys are kept. Ids and parent ids
      * are new. The caller sets Status to Draft and BasedOnVersionID to the source.
      */
+    public CloneNodes(source: RubricVersionSnapshot['nodes']): RubricVersionSnapshot['nodes'] {
+        return CloneVersionNodes(source);
+    }
+
+    /** @deprecated Use {@link CloneNodes}. */
     public cloneNodes(source: RubricVersionSnapshot['nodes']): RubricVersionSnapshot['nodes'] {
-        return cloneVersionNodes(source);
+        return this.CloneNodes(source);
     }
 
     /**
      * Computes the publish result and copies it onto this version. Refuses the
      * cases documented on the class. The caller saves inside its transaction.
      */
-    public async publish(
+    public async Publish(
         base: RubricVersionSnapshot | null,
         draft: RubricVersionSnapshot,
         requestedBump?: 'Major' | 'Minor' | 'Patch' | null,
     ): Promise<PublishResult> {
-        const result = await publishRubricVersion(base, draft, requestedBump);
+        const result = await PublishRubricVersion(base, draft, requestedBump);
         this.Status = 'Published';
         this.MajorVersion = result.majorVersion;
         this.MinorVersion = result.minorVersion;
@@ -44,6 +49,15 @@ export class MJRubricVersionEntityServer extends MJRubricVersionEntity {
         this.ChangeDetails = JSON.stringify(result.changeDetails);
         this.PublishedAt = result.publishedAt;
         return result;
+    }
+
+    /** @deprecated Use {@link Publish}. */
+    public async publish(
+        base: RubricVersionSnapshot | null,
+        draft: RubricVersionSnapshot,
+        requestedBump?: 'Major' | 'Minor' | 'Patch' | null,
+    ): Promise<PublishResult> {
+        return this.Publish(base, draft, requestedBump);
     }
 
     /**
@@ -58,9 +72,9 @@ export class MJRubricVersionEntityServer extends MJRubricVersionEntity {
             const provider = this.ProviderToUse as { RunView?: (params: { EntityName: string; ExtraFilter: string }, user?: unknown) => Promise<{ Success: boolean; Results?: unknown[] }> };
             if (!provider?.RunView) throw new Error('Publishing a rubric version requires a provider that can load the draft tree.');
             const run = (entityName: string, filter: string) => provider.RunView!({ EntityName: entityName, ExtraFilter: filter }, this.ContextCurrentUser);
-            const loaded = await loadDraftForPublish(run, this.ID, this.RubricID, this.BasedOnVersionID);
+            const loaded = await LoadDraftForPublish(run, this.ID, this.RubricID, this.BasedOnVersionID);
             const requested = (this as { RequestedBump?: 'Major' | 'Minor' | 'Patch' | null }).RequestedBump ?? null;
-            await this.publish(loaded.base, loaded.draft, requested);
+            await this.Publish(loaded.base, loaded.draft, requested);
         }
         return super.Save(options);
     }

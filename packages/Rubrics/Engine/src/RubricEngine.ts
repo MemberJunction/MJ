@@ -1,11 +1,11 @@
 import type { RubricAnswer, RubricNodeSnapshot, RubricScoreResult, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { AgentRubricEvaluator, type EvaluationAgentRunner } from './AgentRubricEvaluator.js';
 import { LLMRubricEvaluator, type RubricPromptMode, type RubricPromptRunner } from './LLMRubricEvaluator.js';
-import { shapeContent, type RubricSubjectContent } from './content.js';
+import { ShapeContent, type RubricSubjectContent } from './content.js';
 import { DeterministicRubricEvaluator } from './DeterministicRubricEvaluator.js';
 import { HumanRubricEvaluator, type EvaluationDraftStore, type RubricTaskStore } from './HumanRubricEvaluator.js';
 import { RubricEvaluator, type RubricEvaluatorOutput } from './RubricEvaluator.js';
-import { getAgreement, getConsensus, getDiagnostics, type AgreementResult, type ConsensusResult, type DiagnosticFlag } from './statistics.js';
+import { GetAgreement, GetConsensus, GetDiagnostics, type AgreementResult, type ConsensusResult, type DiagnosticFlag } from './statistics.js';
 
 export interface RubricEvaluationRecord {
     id: string;
@@ -40,7 +40,7 @@ export interface RubricRecords {
 
 /** Runs a named prompt. The engine builds the Rubric Evaluator runner from this. */
 export interface RubricPromptRun {
-    run(promptName: string, rendered: string): Promise<string>;
+    Run(promptName: string, rendered: string): Promise<string>;
 }
 
 const RUBRIC_EVALUATOR_PROMPT = 'Rubric Evaluator';
@@ -106,7 +106,7 @@ export class RubricEngine {
      * Runs the evaluator, saves the draft, and submits it. On failure the
      * returned record is Failed and carries the error message.
      */
-    public async evaluate(params: EvaluateParams): Promise<{ evaluation: RubricEvaluationRecord; output?: RubricEvaluatorOutput }> {
+    public async Evaluate(params: EvaluateParams): Promise<{ evaluation: RubricEvaluationRecord; output?: RubricEvaluatorOutput }> {
         let draft: RubricEvaluationRecord | null = null;
         try {
             const content = params.content ?? await this.resolveContent(params);
@@ -123,11 +123,16 @@ export class RubricEngine {
         }
     }
 
+    /** @deprecated Use {@link Evaluate}. */
+    public async evaluate(params: EvaluateParams): Promise<{ evaluation: RubricEvaluationRecord; output?: RubricEvaluatorOutput }> {
+        return this.Evaluate(params);
+    }
+
     /**
      * Creates a Draft and a task for the assignee. Does not score.
      * The human fills the draft in and submits it later.
      */
-    public async startHumanEvaluation(input: {
+    public async StartHumanEvaluation(input: {
         versionId: string;
         rubricId: string;
         rubricName: string;
@@ -147,6 +152,20 @@ export class RubricEngine {
         });
     }
 
+    /** @deprecated Use {@link StartHumanEvaluation}. */
+    public async startHumanEvaluation(input: {
+        versionId: string;
+        rubricId: string;
+        rubricName: string;
+        subjectEntityId: string;
+        subjectRecordId: string;
+        assigneeId: string;
+        drafts: EvaluationDraftStore;
+        tasks: RubricTaskStore;
+    }): Promise<{ evaluationId: string; taskId: string }> {
+        return this.StartHumanEvaluation(input);
+    }
+
     private async runEvaluator(params: EvaluateParams, content: RubricSubjectContent): Promise<RubricEvaluatorOutput> {
         const subject = { entityName: params.subject.entityName, recordId: params.subject.recordId };
         if (params.evaluator === 'AI') {
@@ -163,17 +182,17 @@ export class RubricEngine {
     private async resolveContent(params: EvaluateParams): Promise<RubricSubjectContent> {
         if (!params.loadRecord) return { text: '' };
         const record = await params.loadRecord(params.subject.entityName, params.subject.recordId);
-        return shapeContent(params.subject.entityName, record, params.canRead);
+        return ShapeContent(params.subject.entityName, record, params.canRead);
     }
 
     /**
      * Resolves the rubric name or id to its latest Published version, then calls
      * {@link evaluate}. This is not the Get Rubric action.
      */
-    public async evaluateRecord(input: EvaluateRecordInput): Promise<EvaluateRecordResult> {
+    public async EvaluateRecord(input: EvaluateRecordInput): Promise<EvaluateRecordResult> {
         if (input.evaluator === 'AI') throw new Error('Evaluator AI is not accepted.');
         const version = input.versionId
-            ? await this.getRubric({ versionId: input.versionId })
+            ? await this.GetRubric({ versionId: input.versionId })
             : await this.latestPublished(input);
         if (!version) throw new Error(input.versionId ? 'That rubric version was not found.' : 'No published version of that rubric.');
         const scored = input.passThreshold === undefined || input.passThreshold === null
@@ -183,7 +202,7 @@ export class RubricEngine {
         const context = input.contextEntityName && input.contextRecordId
             ? { entityId: await this.entityId(input.contextEntityName), recordId: input.contextRecordId, entityName: input.contextEntityName }
             : undefined;
-        const done = await this.evaluate({
+        const done = await this.Evaluate({
             version: scored,
             subject: { entityName: input.subjectEntityName, recordId: input.subjectRecordId, entityId: subjectEntityId },
             context,
@@ -211,11 +230,16 @@ export class RubricEngine {
         };
     }
 
+    /** @deprecated Use {@link EvaluateRecord}. */
+    public async evaluateRecord(input: EvaluateRecordInput): Promise<EvaluateRecordResult> {
+        return this.EvaluateRecord(input);
+    }
+
     /**
      * The version tree for a name, id, or a specific version. Does not score.
      * A version id returns that version. Otherwise this is the latest Published version.
      */
-    public async getRubric(input: { rubricId?: string; rubricName?: string; versionId?: string }): Promise<RubricVersionSnapshot | null> {
+    public async GetRubric(input: { rubricId?: string; rubricName?: string; versionId?: string }): Promise<RubricVersionSnapshot | null> {
         if (input.versionId) {
             const rows = await this.records.rows('MJ: Rubric Versions', `ID=${sqlLiteral(input.versionId)}`);
             const row = rows[0];
@@ -224,18 +248,23 @@ export class RubricEngine {
         return this.latestPublished(input);
     }
 
+    /** @deprecated Use {@link GetRubric}. */
+    public async getRubric(input: { rubricId?: string; rubricName?: string; versionId?: string }): Promise<RubricVersionSnapshot | null> {
+        return this.GetRubric(input);
+    }
+
     /**
      * Loads the subject's Submitted scores and returns the consensus.
      * The caller does not pass the scores.
      */
-    public async consensusForSubject(input: {
+    public async ConsensusForSubject(input: {
         rubricId?: string;
         rubricName?: string;
         subjectRecordId: string;
         contextRecordId?: string;
         /** When omitted, the latest Published major. Scores from other majors are left out. */
         major?: number;
-        method?: ConsensusResult['method'];
+        method?: ConsensusResult['Method'];
     }): Promise<ConsensusResult> {
         const rubric = await this.rubricRow(input);
         const versions = await this.records.rows('MJ: Rubric Versions', `RubricID=${sqlLiteral(text(rubric.ID))}`);
@@ -244,37 +273,70 @@ export class RubricEngine {
             .filter(row => major !== null && numberOrNull(row.MajorVersion) === major)
             .map(row => text(row.ID))
             .filter(id => id.length > 0);
-        if (ids.length === 0) return this.consensus([], input.method);
+        if (ids.length === 0) return this.Consensus([], input.method);
         let filter = `Status='Submitted' AND SubjectRecordID=${sqlLiteral(input.subjectRecordId)} AND RubricVersionID IN (${ids.map(sqlLiteral).join(', ')})`;
         if (input.contextRecordId !== undefined) filter += ` AND ContextRecordID=${sqlLiteral(input.contextRecordId)}`;
         const scores = await this.records.rows('MJ: Rubric Evaluations', filter);
         const values = scores.map(row => numberOrNull(row.NormalizedScore)).filter((value): value is number => value !== null);
-        return this.consensus(values, input.method);
+        return this.Consensus(values, input.method);
+    }
+
+    /** @deprecated Use {@link ConsensusForSubject}. */
+    public async consensusForSubject(input: {
+        rubricId?: string;
+        rubricName?: string;
+        subjectRecordId: string;
+        contextRecordId?: string;
+        /** When omitted, the latest Published major. Scores from other majors are left out. */
+        major?: number;
+        method?: ConsensusResult['Method'];
+    }): Promise<ConsensusResult> {
+        return this.ConsensusForSubject(input);
     }
 
     /**
      * Stores the payload as a Draft version. Throws when the stored status is
      * anything else. Publishing stays a human action.
      */
-    public async createDraft(input: { rubricId: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: 'Draft' }> {
+    public async CreateDraft(input: { rubricId: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: 'Draft' }> {
         const draft = await this.records.createDraft(input);
         if (draft.status !== 'Draft') throw new Error('Create Rubric Draft never publishes.');
         return { id: draft.id, status: 'Draft' };
     }
 
+    /** @deprecated Use {@link CreateDraft}. */
+    public async createDraft(input: { rubricId: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: 'Draft' }> {
+        return this.CreateDraft(input);
+    }
+
     /** Mean, median, or trimmed mean of normalized scores, with spread. */
-    public consensus(scores: number[], method?: ConsensusResult['method'], trim?: number): ConsensusResult {
-        return getConsensus(scores, method, trim);
+    public Consensus(scores: number[], method?: ConsensusResult['Method'], trim?: number): ConsensusResult {
+        return GetConsensus(scores, method, trim);
+    }
+
+    /** @deprecated Use {@link Consensus}. */
+    public consensus(scores: number[], method?: ConsensusResult['Method'], trim?: number): ConsensusResult {
+        return this.Consensus(scores, method, trim);
     }
 
     /** Kappa and alpha, withheld below the sample floor. */
+    public Agreement(ratings: number[][], minimumSample?: number): AgreementResult {
+        return GetAgreement(ratings, minimumSample);
+    }
+
+    /** @deprecated Use {@link Agreement}. */
     public agreement(ratings: number[][], minimumSample?: number): AgreementResult {
-        return getAgreement(ratings, minimumSample);
+        return this.Agreement(ratings, minimumSample);
     }
 
     /** Item-analysis flags for a published major version's criteria. */
+    public Diagnostics(criteria: { key: string; scores: (number | null)[]; notApplicable: number }[]): DiagnosticFlag[] {
+        return GetDiagnostics(criteria);
+    }
+
+    /** @deprecated Use {@link Diagnostics}. */
     public diagnostics(criteria: { key: string; scores: (number | null)[]; notApplicable: number }[]): DiagnosticFlag[] {
-        return getDiagnostics(criteria);
+        return this.Diagnostics(criteria);
     }
 
     /** The catalog does not pass a runner. This one executes the Rubric Evaluator prompt. */
@@ -283,7 +345,7 @@ export class RubricEngine {
         return {
             run(rendered: string) {
                 if (!prompts) throw new Error('The Rubric Evaluator prompt is not configured.');
-                return prompts.run(RUBRIC_EVALUATOR_PROMPT, rendered);
+                return prompts.Run(RUBRIC_EVALUATOR_PROMPT, rendered);
             },
         };
     }
@@ -403,9 +465,14 @@ export class RubricEngine {
      * The content an evaluator may read for one subject record. Read-only.
      * Does not score and does not publish.
      */
-    public async subjectContent(input: { subjectEntityName: string; subjectRecordId: string }): Promise<RubricSubjectContent> {
+    public async SubjectContent(input: { subjectEntityName: string; subjectRecordId: string }): Promise<RubricSubjectContent> {
         const rows = await this.records.rows(input.subjectEntityName, `ID=${sqlLiteral(input.subjectRecordId)}`);
-        return shapeContent(input.subjectEntityName, rows[0] ?? {});
+        return ShapeContent(input.subjectEntityName, rows[0] ?? {});
+    }
+
+    /** @deprecated Use {@link SubjectContent}. */
+    public async subjectContent(input: { subjectEntityName: string; subjectRecordId: string }): Promise<RubricSubjectContent> {
+        return this.SubjectContent(input);
     }
 }
 

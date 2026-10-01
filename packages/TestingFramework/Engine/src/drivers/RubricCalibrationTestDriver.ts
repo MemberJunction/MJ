@@ -2,7 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { RunView } from '@memberjunction/core';
 import { providerRubricEngine } from '@memberjunction/rubrics';
 import { BaseTestDriver } from './BaseTestDriver';
-import { calibrationOracles, calibrationPairs, type CalibrationExpectation, type CalibrationPair } from './calibration';
+import { CalibrationOracles, CalibrationPairs, type CalibrationExpectation, type CalibrationPair } from './calibration';
 import type { DriverExecutionContext, DriverExecutionResult } from '../types';
 
 interface CalibrationInput {
@@ -21,7 +21,7 @@ export class RubricCalibrationTestDriver extends BaseTestDriver {
         const input = this.parseInputDefinition<CalibrationInput>(context.test);
         const expected = this.parseExpectedOutcomes<CalibrationExpectation>(context.test) ?? {};
         const pairs = await this.loadPairs(input, context);
-        const judged = calibrationOracles(pairs, expected);
+        const judged = CalibrationOracles(pairs, expected);
         const passedChecks = judged.oracles.filter(oracle => oracle.passed).length;
         return {
             targetType: 'Rubric',
@@ -159,7 +159,7 @@ export class RubricCalibrationTestDriver extends BaseTestDriver {
             ResultType: 'simple',
             MaxRows: 500,
         }, user)).Results ?? []) as Record<string, unknown>[];
-        return calibrationPairs({
+        return CalibrationPairs({
             evaluations: evaluations.map(row => ({
                 id: String(row.ID),
                 subjectId: String(row.SubjectRecordID ?? ''),

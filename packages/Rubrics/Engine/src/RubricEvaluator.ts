@@ -46,7 +46,7 @@ export class RubricEvaluator {
      * Scores the candidates against the version and returns the normalized
      * score, the combined rationale, and the evidence refs.
      */
-    public evaluate(version: RubricVersionSnapshot, candidates: RubricCandidate[]): RubricEvaluatorOutput {
+    public Evaluate(version: RubricVersionSnapshot, candidates: RubricCandidate[]): RubricEvaluatorOutput {
         const answers: RubricAnswer[] = candidates.map(candidate => ({
             criterionId: candidate.criterionId,
             scaleLevelId: candidate.scaleLevelId,
@@ -63,5 +63,10 @@ export class RubricEvaluator {
             result,
             answers,
         };
+    }
+
+    /** @deprecated Use {@link Evaluate}. */
+    public evaluate(version: RubricVersionSnapshot, candidates: RubricCandidate[]): RubricEvaluatorOutput {
+        return this.Evaluate(version, candidates);
     }
 }

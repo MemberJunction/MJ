@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { disableLink, makeDefaultLink } from './agent-rubrics.model';
+import { DisableLink, MakeDefaultLink } from './agent-rubrics.model';
 
 describe('agent rubric links', () => {
     it('leaves only the newly saved Evaluation link as the default', () => {
-        const next = makeDefaultLink([
+        const next = MakeDefaultLink([
             { ID: 'first', Purpose: 'Evaluation', Status: 'Active', IsDefault: true },
             { ID: 'second', Purpose: 'Evaluation', Status: 'Active', IsDefault: false },
             { ID: 'check', Purpose: 'SelfCheck', Status: 'Active', IsDefault: true },
@@ -14,7 +14,7 @@ describe('agent rubric links', () => {
     });
 
     it('turns a link off without deleting it, and it is no longer the default', () => {
-        expect(disableLink({ ID: 'first', Purpose: 'Evaluation', Status: 'Active', IsDefault: true })).toEqual({
+        expect(DisableLink({ ID: 'first', Purpose: 'Evaluation', Status: 'Active', IsDefault: true })).toEqual({
             ID: 'first',
             Purpose: 'Evaluation',
             Status: 'Disabled',

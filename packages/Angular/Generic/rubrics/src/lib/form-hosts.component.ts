@@ -1,7 +1,7 @@
 import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core';
 import { CompositeKey, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { categoryParentChoices, hostSnapshot, priorPublishedVersion, scaleIsFrozen } from './form-hosts.model';
+import { CategoryParentChoices, HostSnapshot, PriorPublishedVersion, ScaleIsFrozen } from './form-hosts.model';
 import { publishPreview } from './model.js';
 import { RubricCategoryEditorComponent, RubricCriterionEditorComponent, RubricScaleLevelEditorComponent } from './record-editors.component';
 import { RubricVersionDiffComponent } from './version-diff.component';
@@ -39,14 +39,14 @@ export class RubricVersionHostComponent implements OnChanges {
         if (!this.Provider || !this.VersionId || !this.RubricId) return;
         const versions = await rows(this.Provider, 'MJ: Rubric Versions', `RubricID='${quote(this.RubricId)}'`);
         const listed = versions.map(row => ({
-            id: String(row.ID),
-            status: String(row.Status ?? ''),
-            basedOnId: row.BasedOnVersionID == null ? null : String(row.BasedOnVersionID),
-            major: Number(row.MajorVersion ?? 0),
-            minor: Number(row.MinorVersion ?? 0),
-            patch: Number(row.PatchVersion ?? 0),
+            Id: String(row.ID),
+            Status: String(row.Status ?? ''),
+            BasedOnId: row.BasedOnVersionID == null ? null : String(row.BasedOnVersionID),
+            Major: Number(row.MajorVersion ?? 0),
+            Minor: Number(row.MinorVersion ?? 0),
+            Patch: Number(row.PatchVersion ?? 0),
         }));
-        const priorId = priorPublishedVersion(listed, this.VersionId);
+        const priorId = PriorPublishedVersion(listed, this.VersionId);
         this.Draft = await snapshot(this.Provider, versions.find(row => String(row.ID) === this.VersionId));
         this.Base = priorId ? await snapshot(this.Provider, versions.find(row => String(row.ID) === priorId)) : null;
         this.NextVersion = this.Draft ? publishPreview(this.Base, this.Draft).nextVersion ?? '' : '';
@@ -85,7 +85,7 @@ export class RubricScaleLevelHostComponent implements OnChanges {
         const versionIds = [...new Set(criteria.map(row => String(row.RubricVersionID ?? '')).filter(id => id))];
         if (versionIds.length === 0) { this.Frozen = false; return; }
         const versions = await rows(this.Provider, 'MJ: Rubric Versions', `ID IN (${versionIds.map(id => `'${quote(id)}'`).join(', ')}) AND Status='Published'`);
-        this.Frozen = scaleIsFrozen(versions.length > 0 ? [this.ScaleId] : [], this.ScaleId);
+        this.Frozen = ScaleIsFrozen(versions.length > 0 ? [this.ScaleId] : [], this.ScaleId);
     }
 }
 
@@ -114,10 +114,10 @@ export class RubricCategoryHostComponent implements OnChanges {
     private async load(): Promise<void> {
         if (!this.Provider || !this.CategoryId) return;
         const categories = await rows(this.Provider, 'MJ: Rubric Categories', '1=1');
-        this.Parents = categoryParentChoices(categories.map(row => ({
-            id: String(row.ID),
-            name: String(row.Name ?? ''),
-            parentId: row.ParentID == null ? null : String(row.ParentID),
+        this.Parents = CategoryParentChoices(categories.map(row => ({
+            Id: String(row.ID),
+            Name: String(row.Name ?? ''),
+            ParentId: row.ParentID == null ? null : String(row.ParentID),
         })), this.CategoryId);
     }
 }
@@ -189,10 +189,10 @@ export class RubricCriterionHostComponent implements OnChanges {
         }));
         if (this.VersionId) {
             const siblings = await rows(this.Provider, 'MJ: Rubric Criteria', `RubricVersionID='${quote(this.VersionId)}'`);
-            this.Parents = categoryParentChoices(siblings.map(row => ({
-                id: String(row.ID),
-                name: String(row.Name ?? row.Key ?? ''),
-                parentId: row.ParentID == null ? null : String(row.ParentID),
+            this.Parents = CategoryParentChoices(siblings.map(row => ({
+                Id: String(row.ID),
+                Name: String(row.Name ?? row.Key ?? ''),
+                ParentId: row.ParentID == null ? null : String(row.ParentID),
             })), this.CriterionId ?? '');
             const group = siblings.filter(row => (row.ParentID == null ? '' : String(row.ParentID)) === (this.ParentId ?? ''));
             const total = group.reduce((sum, row) => sum + Number(row.Weight ?? 0), 0);
@@ -218,7 +218,7 @@ async function snapshot(provider: IMetadataProvider, version: Row | undefined): 
     const scales = scaleIds.length === 0 ? [] : await rows(provider, 'MJ: Rubric Scales', `ID IN (${scaleIds.join(', ')})`);
     const levels = scaleIds.length === 0 ? [] : await rows(provider, 'MJ: Rubric Scale Levels', `ScaleID IN (${scaleIds.join(', ')})`);
     const bands = await rows(provider, 'MJ: Rubric Bands', `RubricVersionID='${quote(String(version.ID))}'`);
-    return hostSnapshot(version, criteria, scales, levels, bands);
+    return HostSnapshot(version, criteria, scales, levels, bands);
 }
 
 function quote(value: string): string {

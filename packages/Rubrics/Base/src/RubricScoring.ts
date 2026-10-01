@@ -64,7 +64,7 @@ interface Calc {
  * Stored decimals are rounded to 6 places after the arithmetic.
  */
 export class RubricScoring {
-    public static compute(input: RubricScoreInput): RubricScoreResult {
+    public static Compute(input: RubricScoreInput): RubricScoreResult {
         const version = input.version;
         const answers = new Map(input.answers.map(answer => [answer.criterionId, answer]));
         const scales = new Map(version.scales.map(scale => [scale.id, scale]));
@@ -109,6 +109,11 @@ export class RubricScoring {
             nodes: RubricScoring.flatten(roots).map(RubricScoring.toStored),
             scoringEngineVersion: SCORING_ENGINE_VERSION,
         };
+    }
+
+    /** @deprecated Use {@link Compute}. */
+    public static compute(input: RubricScoreInput): RubricScoreResult {
+        return this.Compute(input);
     }
 
     private static scoreNode(

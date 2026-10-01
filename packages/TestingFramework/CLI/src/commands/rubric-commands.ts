@@ -2,7 +2,7 @@ import { readFileSync } from 'fs';
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { RubricVersionDiff, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { providerRubricEngine } from '@memberjunction/rubrics';
-import { formatVersionDiff, parseRubricRef, snapshotFromRows, validateSnapshot } from './rubric-cli';
+import { FormatVersionDiff, ParseRubricRef, SnapshotFromRows, ValidateSnapshot } from './rubric-cli';
 
 /** Thin database operations behind `mj rubric`. */
 export class RubricCommands {
@@ -26,15 +26,15 @@ export class RubricCommands {
 
     async Diff(ref: string, from: string, to: string): Promise<void> {
         const user = await this.context();
-        const parsed = parseRubricRef(ref);
+        const parsed = ParseRubricRef(ref);
         const left = await this.snapshot(parsed.rubric, from, user);
         const right = await this.snapshot(parsed.rubric, to, user);
-        console.log(formatVersionDiff(RubricVersionDiff.diff(left, right)));
+        console.log(FormatVersionDiff(RubricVersionDiff.diff(left, right)));
     }
 
     Validate(file: string): void {
         const snapshot = JSON.parse(readFileSync(file, 'utf8')) as RubricVersionSnapshot;
-        const errors = validateSnapshot(snapshot);
+        const errors = ValidateSnapshot(snapshot);
         if (errors.length === 0) {
             console.log('Valid.');
             return;
@@ -59,7 +59,7 @@ export class RubricCommands {
     }
 
     private async version(ref: string, user: UserInfo): Promise<{ rubric: Record<string, unknown>; version: Record<string, unknown> }> {
-        const parsed = parseRubricRef(ref);
+        const parsed = ParseRubricRef(ref);
         const escaped = parsed.rubric.replace(/'/g, "''");
         const rubrics = await this.rows('MJ: Rubrics', `ID='${escaped}' OR Name='${escaped}'`, user);
         const rubric = rubrics.find(row => String(row.ID) === parsed.rubric || String(row.Name) === parsed.rubric);
@@ -80,7 +80,7 @@ export class RubricCommands {
         const scales = scaleIds.length === 0 ? [] : await this.rows('MJ: Rubric Scales', `ID IN (${scaleIds.join(', ')})`, user);
         const levels = scaleIds.length === 0 ? [] : await this.rows('MJ: Rubric Scale Levels', `ScaleID IN (${scaleIds.join(', ')})`, user);
         const bands = await this.rows('MJ: Rubric Bands', `RubricVersionID='${versionId}'`, user);
-        return snapshotFromRows(version, criteria, scales, levels, bands);
+        return SnapshotFromRows(version, criteria, scales, levels, bands);
     }
 
     private async context(): Promise<UserInfo> {

@@ -12,7 +12,7 @@ export interface ScaleShape {
  * step, or level values. Labels and descriptions may still change. Returns the
  * refusal message, or null when the edit is allowed.
  */
-export function frozenScaleChange(usedByPublishedVersion: boolean, before: ScaleShape, after: ScaleShape): string | null {
+export function FrozenScaleChange(usedByPublishedVersion: boolean, before: ScaleShape, after: ScaleShape): string | null {
     if (!usedByPublishedVersion) return null;
     if (before.scaleType !== after.scaleType) return 'A scale used by a published version cannot change type.';
     if ((before.minValue ?? null) !== (after.minValue ?? null) || (before.maxValue ?? null) !== (after.maxValue ?? null)) {
@@ -30,4 +30,9 @@ export function frozenScaleChange(usedByPublishedVersion: boolean, before: Scale
         }
     }
     return null;
+}
+
+/** @deprecated Use {@link FrozenScaleChange}. */
+export function frozenScaleChange(usedByPublishedVersion: boolean, before: ScaleShape, after: ScaleShape): string | null {
+    return FrozenScaleChange(usedByPublishedVersion, before, after);
 }

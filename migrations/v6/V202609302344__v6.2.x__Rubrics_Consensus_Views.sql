@@ -5,7 +5,7 @@
     metadata/entities/.layered-base-views.json and are applied with mj sync push. They are not
     set from a migration. The inner views vwRubricEvaluationsGenerated and
     vwRubricEvaluationScoresGenerated are created by the CodeGen section of
-    V202609302204, which is why this file is separate: a view cannot be created before the
+    V202609302342, which is why this file is separate: a view cannot be created before the
     view it selects from, and hand-written SQL cannot sit below a CodeGen section that is
     replaced wholesale on the next capture.
 

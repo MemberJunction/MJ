@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { RubricScoring } from '@memberjunction/rubrics-base';
-import { publishRubricVersion, RubricPublishError, validateRubricTree, cloneVersionNodes } from '../custom/rubrics/versionPublish.js';
-import { RubricEvaluationError, submitEvaluation } from '../custom/rubrics/evaluationSubmit.js';
-import { frozenScaleChange } from '../custom/rubrics/scaleFreeze.js';
+import { PublishRubricVersion, RubricPublishError, ValidateRubricTree, CloneVersionNodes } from '../custom/rubrics/versionPublish.js';
+import { RubricEvaluationError, SubmitEvaluation } from '../custom/rubrics/evaluationSubmit.js';
+import { FrozenScaleChange } from '../custom/rubrics/scaleFreeze.js';
 
 function version(extra: Partial<RubricVersionSnapshot> = {}): RubricVersionSnapshot {
     return {
@@ -46,7 +46,7 @@ describe('rubric version publish', () => {
                 { id: 'c', key: 'missing-scale', name: 'Missing', nodeType: 'Criterion', scaleId: 'not-on-version', weight: 1, isAdvisory: false, isGate: false, evidenceRequired: false, rationaleRequired: false, sequence: 3 },
             ],
         });
-        const errors = validateRubricTree(draft).errors.join(' ');
+        const errors = ValidateRubricTree(draft).errors.join(' ');
         expect(errors).toMatch(/no scale/);
         expect(errors).toMatch(/missing parent/);
         expect(errors).toMatch(/no minimum/);
@@ -57,9 +57,9 @@ describe('rubric version publish', () => {
 
     it('refuses an identical draft and publishes a weight change as major with hashes', async () => {
         const base = version();
-        await expect(publishRubricVersion(base, version())).rejects.toBeInstanceOf(RubricPublishError);
+        await expect(PublishRubricVersion(base, version())).rejects.toBeInstanceOf(RubricPublishError);
         const heavier = version({ nodes: [{ ...version().nodes[0], weight: 2 }] });
-        const published = await publishRubricVersion(base, heavier);
+        const published = await PublishRubricVersion(base, heavier);
         expect(published.appliedBump).toBe('Major');
         expect(published.majorVersion).toBe(1);
         expect(published.scoringHash).toHaveLength(64);
@@ -69,7 +69,7 @@ describe('rubric version publish', () => {
     });
 
     it('clones keys and rewrites parent ids', () => {
-        const nodes = cloneVersionNodes([
+        const nodes = CloneVersionNodes([
             { id: 'g', key: 'group', name: 'Group', nodeType: 'Group', weight: 1, isAdvisory: false, isGate: false, evidenceRequired: false, rationaleRequired: false, sequence: 0 },
             { id: 'c', key: 'clarity', name: 'Clarity', parentId: 'g', nodeType: 'Criterion', scaleId: 'scale', weight: 1, isAdvisory: false, isGate: false, evidenceRequired: false, rationaleRequired: false, sequence: 1 },
         ]);
@@ -83,8 +83,8 @@ describe('rubric evaluation submit', () => {
     const draft = version({ passThreshold: 0.5 });
 
     it('refuses a draft version, a raw value on a levels scale, and a missing rationale', () => {
-        expect(() => submitEvaluation({ version: draft, versionStatus: 'Draft', scores: [] })).toThrow(RubricEvaluationError);
-        expect(() => submitEvaluation({
+        expect(() => SubmitEvaluation({ version: draft, versionStatus: 'Draft', scores: [] })).toThrow(RubricEvaluationError);
+        expect(() => SubmitEvaluation({
             version: draft,
             versionStatus: 'Published',
             scores: [{ criterionId: 'a', rawValue: 3 }],
@@ -93,7 +93,7 @@ describe('rubric evaluation submit', () => {
             passThreshold: 0.5,
             nodes: [{ ...draft.nodes[0], rationaleRequired: true }],
         });
-        expect(() => submitEvaluation({
+        expect(() => SubmitEvaluation({
             version: needsRationale,
             versionStatus: 'Published',
             scores: [{ criterionId: 'a', scaleLevelId: 'high' }],
@@ -101,7 +101,7 @@ describe('rubric evaluation submit', () => {
     });
 
     it('persists the RubricScoring result and no other math', () => {
-        const scored = submitEvaluation({
+        const scored = SubmitEvaluation({
             version: draft,
             versionStatus: 'Published',
             scores: [{ criterionId: 'a', scaleLevelId: 'high' }],
@@ -119,8 +119,8 @@ describe('rubric evaluation submit', () => {
     });
 
     it('allows Retired only when superseding', () => {
-        expect(() => submitEvaluation({ version: draft, versionStatus: 'Retired', scores: [] })).toThrow(/Published/);
-        const scored = submitEvaluation({
+        expect(() => SubmitEvaluation({ version: draft, versionStatus: 'Retired', scores: [] })).toThrow(/Published/);
+        const scored = SubmitEvaluation({
             version: draft,
             versionStatus: 'Retired',
             supersedesEvaluationId: 'old',
@@ -132,11 +132,11 @@ describe('rubric evaluation submit', () => {
 
 describe('supersede', () => {
     it('refuses a different subject and accepts a matching Submitted row', async () => {
-        const { assertCanSupersede } = await import('../custom/rubrics/evaluationSubmit.js');
+        const { AssertCanSupersede } = await import('../custom/rubrics/evaluationSubmit.js');
         const current = { status: 'Submitted', subjectEntityId: 'e', subjectRecordId: 'r', contextEntityId: null, contextRecordId: null, rubricId: 'rubric' };
-        expect(() => assertCanSupersede({ ...current, subjectRecordId: 'other' }, current)).toThrow(/subject/);
-        expect(() => assertCanSupersede({ ...current, status: 'Draft' }, current)).toThrow(/Submitted/);
-        expect(() => assertCanSupersede(current, current)).not.toThrow();
+        expect(() => AssertCanSupersede({ ...current, subjectRecordId: 'other' }, current)).toThrow(/subject/);
+        expect(() => AssertCanSupersede({ ...current, status: 'Draft' }, current)).toThrow(/Submitted/);
+        expect(() => AssertCanSupersede(current, current)).not.toThrow();
     });
 });
 
@@ -148,12 +148,12 @@ describe('scale freeze', () => {
     };
 
     it('allows any edit when no published version uses the scale, and refuses a level value when one does', () => {
-        expect(frozenScaleChange(false, shape, { ...shape, scaleType: 'Numeric', minValue: 0, maxValue: 1 })).toBeNull();
-        expect(frozenScaleChange(true, shape, {
+        expect(FrozenScaleChange(false, shape, { ...shape, scaleType: 'Numeric', minValue: 0, maxValue: 1 })).toBeNull();
+        expect(FrozenScaleChange(true, shape, {
             ...shape,
             levels: [{ ...shape.levels[0], normalizedValue: 0.4 }],
         })).toMatch(/level value/);
-        expect(frozenScaleChange(true, shape, {
+        expect(FrozenScaleChange(true, shape, {
             ...shape,
             levels: [{ ...shape.levels[0], description: 'clearer' }],
         })).toBeNull();

@@ -4,7 +4,7 @@ import type { OracleConfig, OracleInput, OracleResult } from '../types';
 import type { IOracle } from './IOracle';
 
 export interface RubricOracleEngine {
-    evaluateRecord(input: {
+    EvaluateRecord(input: {
         rubricId?: string;
         versionId?: string;
         subjectEntityName: string;
@@ -38,7 +38,7 @@ export class RubricOracle implements IOracle {
         if (!engine) {
             return { oracleType: this.type, passed: false, score: 0, message: 'No rubric engine is configured.' };
         }
-        const result = await engine.evaluateRecord({
+        const result = await engine.EvaluateRecord({
             rubricId: settings.rubricId,
             versionId: settings.rubricVersionId,
             subjectEntityName: 'MJ: Test Runs',

@@ -1,7 +1,7 @@
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 
 /** A version snapshot that includes the scales, levels, and bands the diff widget reads. */
-export function hostSnapshot(
+export function HostSnapshot(
     version: Record<string, unknown>,
     criteria: Record<string, unknown>[],
     scales: Record<string, unknown>[],
@@ -57,39 +57,55 @@ export function hostSnapshot(
     };
 }
 
+/** @deprecated Use {@link HostSnapshot}. */
+export function hostSnapshot(
+    version: Record<string, unknown>,
+    criteria: Record<string, unknown>[],
+    scales: Record<string, unknown>[],
+    levels: Record<string, unknown>[],
+    bands: Record<string, unknown>[],
+): RubricVersionSnapshot {
+    return HostSnapshot(version, criteria, scales, levels, bands);
+}
+
 export interface VersionRow {
-    id: string;
-    status: string;
-    basedOnId: string | null;
-    major: number;
-    minor: number;
-    patch: number;
+    Id: string;
+    Status: string;
+    BasedOnId: string | null;
+    Major: number;
+    Minor: number;
+    Patch: number;
 }
 
 /** The version this one was based on, otherwise the newest other published version of the rubric. */
-export function priorPublishedVersion(versions: VersionRow[], currentId: string): string | null {
-    const current = versions.find(version => version.id === currentId);
-    if (current?.basedOnId) return current.basedOnId;
+export function PriorPublishedVersion(versions: VersionRow[], currentId: string): string | null {
+    const current = versions.find(version => version.Id === currentId);
+    if (current?.BasedOnId) return current.BasedOnId;
     const published = versions
-        .filter(version => version.id !== currentId && version.status === 'Published')
-        .sort((left, right) => right.major - left.major || right.minor - left.minor || right.patch - left.patch);
-    return published[0]?.id ?? null;
+        .filter(version => version.Id !== currentId && version.Status === 'Published')
+        .sort((left, right) => right.Major - left.Major || right.Minor - left.Minor || right.Patch - left.Patch);
+    return published[0]?.Id ?? null;
+}
+
+/** @deprecated Use {@link PriorPublishedVersion}. */
+export function priorPublishedVersion(versions: VersionRow[], currentId: string): string | null {
+    return PriorPublishedVersion(versions, currentId);
 }
 
 export interface CategoryRow {
-    id: string;
-    name: string;
-    parentId: string | null;
+    Id: string;
+    Name: string;
+    ParentId: string | null;
 }
 
 /** Other categories, excluding this record and anything nested under it. */
-export function categoryParentChoices(rows: CategoryRow[], selfId: string): { id: string; name: string }[] {
+export function CategoryParentChoices(rows: CategoryRow[], selfId: string): { id: string; name: string }[] {
     const children = new Map<string, string[]>();
     for (const row of rows) {
-        if (!row.parentId) continue;
-        const list = children.get(row.parentId) ?? [];
-        list.push(row.id);
-        children.set(row.parentId, list);
+        if (!row.ParentId) continue;
+        const list = children.get(row.ParentId) ?? [];
+        list.push(row.Id);
+        children.set(row.ParentId, list);
     }
     const excluded = new Set<string>([selfId]);
     const pending = [selfId];
@@ -101,14 +117,24 @@ export function categoryParentChoices(rows: CategoryRow[], selfId: string): { id
             pending.push(child);
         }
     }
-    return rows.filter(row => !excluded.has(row.id)).map(row => ({ id: row.id, name: row.name }));
+    return rows.filter(row => !excluded.has(row.Id)).map(row => ({ id: row.Id, name: row.Name }));
+}
+
+/** @deprecated Use {@link CategoryParentChoices}. */
+export function categoryParentChoices(rows: CategoryRow[], selfId: string): { id: string; name: string }[] {
+    return CategoryParentChoices(rows, selfId);
 }
 
 /** A level is frozen only when a published version uses its scale. */
-export function scaleIsFrozen(publishedScaleIds: Iterable<string>, scaleId: string | null): boolean {
+export function ScaleIsFrozen(publishedScaleIds: Iterable<string>, scaleId: string | null): boolean {
     if (!scaleId) return false;
     for (const id of publishedScaleIds) {
         if (id === scaleId) return true;
     }
     return false;
+}
+
+/** @deprecated Use {@link ScaleIsFrozen}. */
+export function scaleIsFrozen(publishedScaleIds: Iterable<string>, scaleId: string | null): boolean {
+    return ScaleIsFrozen(publishedScaleIds, scaleId);
 }

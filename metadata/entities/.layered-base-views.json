@@ -52,7 +52,7 @@
   {
     "_comments": [
       "Rubric Evaluations. CodeGen owns the inner view; the public view is the consensus",
-      "wrapper in V202609302206. BaseViewGenerated must be false in the same record as",
+      "wrapper in V202609302344. BaseViewGenerated must be false in the same record as",
       "GeneratedBaseViewName — the column check rejects an inner name while CodeGen still",
       "owns the public view. New entities come out of CodeGen with BaseViewGenerated = 1,",
       "unlike the two adopters above, which were already fully custom."

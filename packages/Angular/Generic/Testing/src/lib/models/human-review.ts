@@ -2,54 +2,64 @@ import type { RubricFormAnswer, RubricVersionSnapshot } from '@memberjunction/ng
 
 /** The rubric judgment already stored for a test run. Human rows are not a judgment. */
 export interface JudgedRubric {
-    rubricId: string;
-    versionId: string;
-    subjectEntityId: string;
-    subjectRecordId: string;
-    contextEntityId: string | null;
-    contextRecordId: string | null;
+    RubricId: string;
+    VersionId: string;
+    SubjectEntityId: string;
+    SubjectRecordId: string;
+    ContextEntityId: string | null;
+    ContextRecordId: string | null;
 }
 
 /** A submitted non-human evaluation for this run. Prefers the AI prompt judge. */
-export function judgedRubric(rows: Record<string, unknown>[]): JudgedRubric | null {
+export function JudgedRubric(rows: Record<string, unknown>[]): JudgedRubric | null {
     const submitted = rows.filter(row => String(row.Status ?? '') === 'Submitted' && String(row.EvaluatorType ?? '') !== 'Human');
     const judge = submitted.find(row => String(row.EvaluatorType) === 'AIPrompt') ?? submitted[0];
     if (!judge?.RubricID || !judge.RubricVersionID || !judge.SubjectEntityID || !judge.SubjectRecordID) return null;
     return {
-        rubricId: String(judge.RubricID),
-        versionId: String(judge.RubricVersionID),
-        subjectEntityId: String(judge.SubjectEntityID),
-        subjectRecordId: String(judge.SubjectRecordID),
-        contextEntityId: blank(judge.ContextEntityID),
-        contextRecordId: blank(judge.ContextRecordID),
+        RubricId: String(judge.RubricID),
+        VersionId: String(judge.RubricVersionID),
+        SubjectEntityId: String(judge.SubjectEntityID),
+        SubjectRecordId: String(judge.SubjectRecordID),
+        ContextEntityId: blank(judge.ContextEntityID),
+        ContextRecordId: blank(judge.ContextRecordID),
     };
+}
+
+/** @deprecated Use {@link JudgedRubric}. */
+export function judgedRubric(rows: Record<string, unknown>[]): JudgedRubric | null {
+    return JudgedRubric(rows);
 }
 
 /**
  * This reviewer's current Submitted human score for the same subject and version.
  * The new evaluation supersedes it so the cohort does not count the same person twice.
  */
-export function priorHumanEvaluation(rows: Record<string, unknown>[], judged: JudgedRubric, userId: string): string | null {
+export function PriorHumanEvaluation(rows: Record<string, unknown>[], judged: JudgedRubric, userId: string): string | null {
     const prior = rows.find(row =>
         String(row.Status ?? '') === 'Submitted'
         && String(row.EvaluatorType ?? '') === 'Human'
         && String(row.EvaluatorUserID ?? '') === userId
-        && String(row.RubricID ?? '') === judged.rubricId
-        && String(row.RubricVersionID ?? '') === judged.versionId
-        && String(row.SubjectRecordID ?? '') === judged.subjectRecordId
-        && blank(row.ContextRecordID) === judged.contextRecordId);
+        && String(row.RubricID ?? '') === judged.RubricId
+        && String(row.RubricVersionID ?? '') === judged.VersionId
+        && String(row.SubjectRecordID ?? '') === judged.SubjectRecordId
+        && blank(row.ContextRecordID) === judged.ContextRecordId);
     return prior?.ID == null || prior.ID === '' ? null : String(prior.ID);
 }
 
+/** @deprecated Use {@link PriorHumanEvaluation}. */
+export function priorHumanEvaluation(rows: Record<string, unknown>[], judged: JudgedRubric, userId: string): string | null {
+    return PriorHumanEvaluation(rows, judged, userId);
+}
+
 /** Draft fields for the human score. Subject and context match the judgment. Status stays Draft until the scores are saved. */
-export function humanEvaluationFields(judged: JudgedRubric, userId: string, supersedesEvaluationId?: string | null): Record<string, unknown> {
+export function HumanEvaluationFields(judged: JudgedRubric, userId: string, supersedesEvaluationId?: string | null): Record<string, unknown> {
     return {
-        RubricID: judged.rubricId,
-        RubricVersionID: judged.versionId,
-        SubjectEntityID: judged.subjectEntityId,
-        SubjectRecordID: judged.subjectRecordId,
-        ContextEntityID: judged.contextEntityId,
-        ContextRecordID: judged.contextRecordId,
+        RubricID: judged.RubricId,
+        RubricVersionID: judged.VersionId,
+        SubjectEntityID: judged.SubjectEntityId,
+        SubjectRecordID: judged.SubjectRecordId,
+        ContextEntityID: judged.ContextEntityId,
+        ContextRecordID: judged.ContextRecordId,
         EvaluatorType: 'Human',
         EvaluatorUserID: userId,
         Status: 'Draft',
@@ -57,8 +67,13 @@ export function humanEvaluationFields(judged: JudgedRubric, userId: string, supe
     };
 }
 
+/** @deprecated Use {@link HumanEvaluationFields}. */
+export function humanEvaluationFields(judged: JudgedRubric, userId: string, supersedesEvaluationId?: string | null): Record<string, unknown> {
+    return HumanEvaluationFields(judged, userId, supersedesEvaluationId);
+}
+
 /** Score rows written while the evaluation is still Draft. The server computes the result on submit. */
-export function humanScoreFields(evaluationId: string, answers: RubricFormAnswer[]): Record<string, unknown>[] {
+export function HumanScoreFields(evaluationId: string, answers: RubricFormAnswer[]): Record<string, unknown>[] {
     return answers.map(answer => ({
         EvaluationID: evaluationId,
         CriterionID: answer.criterionId,
@@ -69,8 +84,13 @@ export function humanScoreFields(evaluationId: string, answers: RubricFormAnswer
     }));
 }
 
+/** @deprecated Use {@link HumanScoreFields}. */
+export function humanScoreFields(evaluationId: string, answers: RubricFormAnswer[]): Record<string, unknown>[] {
+    return HumanScoreFields(evaluationId, answers);
+}
+
 /** The version the scoring form needs, built from the stored rows. */
-export function versionSnapshot(
+export function VersionSnapshot(
     version: Record<string, unknown>,
     criteria: Record<string, unknown>[],
     scales: Record<string, unknown>[],
@@ -120,6 +140,17 @@ export function versionSnapshot(
         })),
         bands: [],
     };
+}
+
+/** @deprecated Use {@link VersionSnapshot}. */
+export function versionSnapshot(
+    version: Record<string, unknown>,
+    criteria: Record<string, unknown>[],
+    scales: Record<string, unknown>[],
+    levels: Record<string, unknown>[],
+    criterionLevels: Record<string, unknown>[] = [],
+): RubricVersionSnapshot {
+    return VersionSnapshot(version, criteria, scales, levels, criterionLevels);
 }
 
 function blank(value: unknown): string | null {

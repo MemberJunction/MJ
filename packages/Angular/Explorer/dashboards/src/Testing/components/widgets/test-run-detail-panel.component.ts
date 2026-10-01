@@ -396,8 +396,13 @@ export class TestRunDetailPanelComponent {
   @Input() set oracleResults(value: OracleResult[]) {
     this.OracleResults = value;
   }
-  get rubricView() {
+  get RubricView() {
     return rubricRunView(this.oracleResults);
+  }
+
+  /** @deprecated Use {@link RubricView}. */
+  get rubricView() {
+    return this.RubricView;
   }
 
   /** @deprecated Use {@link OracleResults}. */

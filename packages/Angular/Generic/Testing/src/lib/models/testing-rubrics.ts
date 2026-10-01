@@ -11,17 +11,22 @@ export interface DisagreementItem {
 const AI_EVALUATORS = new Set(['AIPrompt', 'Agent']);
 
 /** Score rows identify a criterion by CriterionID. Criterion is the label. CriterionKey is not a column. */
-export function criterionIdentity(row: { CriterionID?: unknown; Criterion?: unknown }): { key: string; name: string | null } {
+export function CriterionIdentity(row: { CriterionID?: unknown; Criterion?: unknown }): { key: string; name: string | null } {
     const key = row.CriterionID == null || row.CriterionID === '' ? '' : String(row.CriterionID);
     const name = row.Criterion == null || row.Criterion === '' ? null : String(row.Criterion);
     return { key, name };
+}
+
+/** @deprecated Use {@link CriterionIdentity}. */
+export function criterionIdentity(row: { CriterionID?: unknown; Criterion?: unknown }): { key: string; name: string | null } {
+    return CriterionIdentity(row);
 }
 
 /**
  * Means of submitted human scores and submitted AI scores for one criterion,
  * within one subject and version. A criterion with only one side is left out.
  */
-export function disagreementFromScores(input: {
+export function DisagreementFromScores(input: {
     evaluations: { id: string; subjectId: string; versionId: string; evaluatorType: string; status: string }[];
     scores: { evaluationId: string; key: string; name?: string | null; normalizedScore: number | null }[];
 }): DisagreementItem[] {
@@ -39,7 +44,7 @@ export function disagreementFromScores(input: {
         group[side].push(score.normalizedScore);
         groups.set(id, group);
     }
-    return disagreementQueue([...groups.values()].map(group => ({
+    return DisagreementQueue([...groups.values()].map(group => ({
         key: group.key,
         name: group.name,
         humanMean: group.human.length ? group.human.reduce((sum, score) => sum + score, 0) / group.human.length : null,
@@ -47,8 +52,16 @@ export function disagreementFromScores(input: {
     })));
 }
 
+/** @deprecated Use {@link DisagreementFromScores}. */
+export function disagreementFromScores(input: {
+    evaluations: { id: string; subjectId: string; versionId: string; evaluatorType: string; status: string }[];
+    scores: { evaluationId: string; key: string; name?: string | null; normalizedScore: number | null }[];
+}): DisagreementItem[] {
+    return DisagreementFromScores(input);
+}
+
 /** Largest |human mean − AI mean| first. A criterion with either mean missing is left out. */
-export function disagreementQueue(rows: { key: string; name?: string | null; humanMean: number | null; aiMean: number | null }[]): DisagreementItem[] {
+export function DisagreementQueue(rows: { key: string; name?: string | null; humanMean: number | null; aiMean: number | null }[]): DisagreementItem[] {
     return rows
         .filter(row => row.humanMean != null && row.aiMean != null)
         .map(row => ({
@@ -61,16 +74,26 @@ export function disagreementQueue(rows: { key: string; name?: string | null; hum
         .sort((left, right) => right.gap - left.gap || left.key.localeCompare(right.key));
 }
 
+/** @deprecated Use {@link DisagreementQueue}. */
+export function disagreementQueue(rows: { key: string; name?: string | null; humanMean: number | null; aiMean: number | null }[]): DisagreementItem[] {
+    return DisagreementQueue(rows);
+}
+
 /** Scores for one test or suite, oldest first. Runs with no score are left out. */
-export function scoreTrend(runs: { at: string | Date; score: number | null; scopeId: string }[], scopeId: string): { at: string; score: number }[] {
+export function ScoreTrend(runs: { at: string | Date; score: number | null; scopeId: string }[], scopeId: string): { at: string; score: number }[] {
     return runs
         .filter(run => run.scopeId === scopeId && run.score != null)
         .map(run => ({ at: run.at instanceof Date ? run.at.toISOString() : run.at, score: run.score as number }))
         .sort((left, right) => left.at.localeCompare(right.at));
 }
 
+/** @deprecated Use {@link ScoreTrend}. */
+export function scoreTrend(runs: { at: string | Date; score: number | null; scopeId: string }[], scopeId: string): { at: string; score: number }[] {
+    return ScoreTrend(runs, scopeId);
+}
+
 /** A leaf fails when its gate failed, or when its score is below that version's pass threshold. */
-export function criterionFailureRates(scores: { key: string; normalizedScore: number | null; gateFailed?: boolean; passThreshold?: number | null }[]): { key: string; rate: number; count: number }[] {
+export function CriterionFailureRates(scores: { key: string; normalizedScore: number | null; gateFailed?: boolean; passThreshold?: number | null }[]): { key: string; rate: number; count: number }[] {
     const buckets = new Map<string, { failed: number; total: number }>();
     for (const score of scores) {
         if (score.normalizedScore == null && !score.gateFailed) continue;
@@ -85,13 +108,23 @@ export function criterionFailureRates(scores: { key: string; normalizedScore: nu
         .sort((left, right) => right.rate - left.rate || left.key.localeCompare(right.key));
 }
 
+/** @deprecated Use {@link CriterionFailureRates}. */
+export function criterionFailureRates(scores: { key: string; normalizedScore: number | null; gateFailed?: boolean; passThreshold?: number | null }[]): { key: string; rate: number; count: number }[] {
+    return CriterionFailureRates(scores);
+}
+
 /** Active rubrics, by name, for the Test and Test Suite RubricID picker. */
-export function rubricPickerOptions(rows: { ID?: string; id?: string; Name?: string; name?: string; Status?: string | null }[]): { id: string; name: string }[] {
+export function RubricPickerOptions(rows: { ID?: string; id?: string; Name?: string; name?: string; Status?: string | null }[]): { id: string; name: string }[] {
     return rows
         .filter(row => (row.Status ?? 'Active') === 'Active')
         .map(row => ({ id: String(row.ID ?? row.id ?? ''), name: String(row.Name ?? row.name ?? '') }))
         .filter(row => row.id.length > 0 && row.name.length > 0)
         .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+/** @deprecated Use {@link RubricPickerOptions}. */
+export function rubricPickerOptions(rows: { ID?: string; id?: string; Name?: string; name?: string; Status?: string | null }[]): { id: string; name: string }[] {
+    return RubricPickerOptions(rows);
 }
 
 export interface RubricRunView {
@@ -101,7 +134,7 @@ export interface RubricRunView {
 }
 
 /** A rubric or inline-judge oracle result, shaped for mj-rubric-result. */
-export function rubricRunView(oracleResults: { oracleType?: string; type?: string; Name?: string; details?: unknown; Details?: unknown }[] | null | undefined): RubricRunView | null {
+export function RubricRunView(oracleResults: { oracleType?: string; type?: string; Name?: string; details?: unknown; Details?: unknown }[] | null | undefined): RubricRunView | null {
     const list = oracleResults ?? [];
     const chosen = list.find(item => kind(item) === 'rubric' && criteriaOf(item).length > 0)
         ?? list.find(item => (kind(item) === 'llm-judge' || kind(item).includes('judge')) && criteriaOf(item).length > 0);
@@ -153,6 +186,11 @@ export function rubricRunView(oracleResults: { oracleType?: string; type?: strin
         },
         answers: nodes.map(node => ({ criterionId: node.id, rationale: node.rationale, evidence: node.evidence })),
     };
+}
+
+/** @deprecated Use {@link RubricRunView}. */
+export function rubricRunView(oracleResults: { oracleType?: string; type?: string; Name?: string; details?: unknown; Details?: unknown }[] | null | undefined): RubricRunView | null {
+    return RubricRunView(oracleResults);
 }
 
 function kind(item: { oracleType?: string; type?: string; Name?: string }): string {

@@ -6,7 +6,7 @@
 import { UserInfo, RunView } from '@memberjunction/core';
 import { ReportFlags } from '../types';
 import { OutputFormatter } from '../utils/output-formatter';
-import { formatCriterionReport } from './rubric-cli';
+import { FormatCriterionReport } from './rubric-cli';
 
 /**
  * Report command - Generate test run reports
@@ -46,7 +46,7 @@ export class ReportCommand {
                 return;
             }
             const details = row.ResultDetails ? JSON.parse(row.ResultDetails) : [];
-            console.log(formatCriterionReport(Array.isArray(details) ? details : []));
+            console.log(FormatCriterionReport(Array.isArray(details) ? details : []));
         } catch (error) {
             console.error(OutputFormatter.formatError('Failed to generate report', error as Error));
             process.exit(1);

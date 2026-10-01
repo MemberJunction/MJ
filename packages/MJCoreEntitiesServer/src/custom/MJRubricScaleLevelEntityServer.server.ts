@@ -1,7 +1,7 @@
 import { BaseEntity, type ValidationResult } from '@memberjunction/core';
 import { MJRubricScaleLevelEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { frozenScaleChange, type ScaleShape } from './rubrics/scaleFreeze.js';
+import { FrozenScaleChange, type ScaleShape } from './rubrics/scaleFreeze.js';
 
 type RunView = (params: { EntityName: string; ExtraFilter: string }, user?: unknown) => Promise<{ Success: boolean; Results?: unknown[] }>;
 
@@ -47,7 +47,7 @@ export class MJRubricScaleLevelEntityServer extends MJRubricScaleLevelEntity {
             higherIsBetter: Boolean(scale.HigherIsBetter),
             levels: [level],
         });
-        const message = frozenScaleChange(true,
+        const message = FrozenScaleChange(true,
             shape({
                 id: this.ID,
                 value: Number(storedLevel.Value),

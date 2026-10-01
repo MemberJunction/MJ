@@ -11,20 +11,25 @@ export const RUBRIC_WORLD = {
 } as const;
 
 export interface WorldCriterion {
-    key: string;
-    name: string;
-    publishedWeight: number;
-    draftWeight: number;
-    gate: boolean;
+    Key: string;
+    Name: string;
+    PublishedWeight: number;
+    DraftWeight: number;
+    Gate: boolean;
 }
 
 /** The tree the world publishes, and the draft that changes Accuracy's weight. */
-export function rubricWorldCriteria(): WorldCriterion[] {
+export function RubricWorldCriteria(): WorldCriterion[] {
     return [
-        { key: 'accuracy', name: 'Accuracy', publishedWeight: 1, draftWeight: 2, gate: true },
-        { key: 'sourcing', name: 'Sourcing', publishedWeight: 1, draftWeight: 1, gate: false },
-        { key: 'completeness', name: 'Completeness', publishedWeight: 1, draftWeight: 1, gate: false },
+        { Key: 'accuracy', Name: 'Accuracy', PublishedWeight: 1, DraftWeight: 2, Gate: true },
+        { Key: 'sourcing', Name: 'Sourcing', PublishedWeight: 1, DraftWeight: 1, Gate: false },
+        { Key: 'completeness', Name: 'Completeness', PublishedWeight: 1, DraftWeight: 1, Gate: false },
     ];
+}
+
+/** @deprecated Use {@link RubricWorldCriteria}. */
+export function rubricWorldCriteria(): WorldCriterion[] {
+    return RubricWorldCriteria();
 }
 
 function version(weightOf: (criterion: WorldCriterion) => number, ids: { version: string; rubric: string; scale: string; met: string }): RubricVersionSnapshot {
@@ -38,16 +43,16 @@ function version(weightOf: (criterion: WorldCriterion) => number, ids: { version
         passThreshold: 0.6,
         scoreDisplayMin: 0,
         scoreDisplayMax: 1,
-        nodes: rubricWorldCriteria().map((criterion, sequence) => ({
-            id: `${ids.version}-${criterion.key}`,
-            key: criterion.key,
-            name: criterion.name,
+        nodes: RubricWorldCriteria().map((criterion, sequence) => ({
+            id: `${ids.version}-${criterion.Key}`,
+            key: criterion.Key,
+            name: criterion.Name,
             nodeType: 'Criterion' as const,
             scaleId: ids.scale,
             weight: weightOf(criterion),
             isAdvisory: false,
-            isGate: criterion.gate,
-            gateMinimumScore: criterion.gate ? 1 : null,
+            isGate: criterion.Gate,
+            gateMinimumScore: criterion.Gate ? 1 : null,
             evidenceRequired: false,
             rationaleRequired: true,
             sequence,
@@ -69,19 +74,29 @@ function version(weightOf: (criterion: WorldCriterion) => number, ids: { version
 const ids = { rubric: 'world-rubric', scale: 'world-scale', met: 'met' };
 
 /** Published 1.0.0. Accuracy weighs 1 and is a gate at Met. */
+export function PublishedWorld(): RubricVersionSnapshot {
+    return version(criterion => criterion.PublishedWeight, { ...ids, version: 'published' });
+}
+
+/** @deprecated Use {@link PublishedWorld}. */
 export function publishedWorld(): RubricVersionSnapshot {
-    return version(criterion => criterion.publishedWeight, { ...ids, version: 'published' });
+    return PublishedWorld();
 }
 
 /** Draft based on that publish. Accuracy weighs 2, so the bump is Major and the next version is 2.0.0. */
+export function DraftWorld(): RubricVersionSnapshot {
+    return version(criterion => criterion.DraftWeight, { ...ids, version: 'draft' });
+}
+
+/** @deprecated Use {@link DraftWorld}. */
 export function draftWorld(): RubricVersionSnapshot {
-    return version(criterion => criterion.draftWeight, { ...ids, version: 'draft' });
+    return DraftWorld();
 }
 
 /** A human who marks every leaf Met passes the published tree. */
-export function scorePublishedMet(): { outcome: string; normalizedScore: number | null; bump: string | null; nextVersion: string | null } {
-    const published = publishedWorld();
-    const draft = draftWorld();
+export function ScorePublishedMet(): { outcome: string; normalizedScore: number | null; bump: string | null; nextVersion: string | null } {
+    const published = PublishedWorld();
+    const draft = DraftWorld();
     const score = RubricScoring.compute({
         version: published,
         answers: published.nodes.map(node => ({ criterionId: node.id, scaleLevelId: 'met', rationale: 'Met in the world model.' })),
@@ -94,4 +109,9 @@ export function scorePublishedMet(): { outcome: string; normalizedScore: number 
         bump: preview.computedBump,
         nextVersion: next ? `${next.major}.${next.minor}.${next.patch}` : null,
     };
+}
+
+/** @deprecated Use {@link ScorePublishedMet}. */
+export function scorePublishedMet(): { outcome: string; normalizedScore: number | null; bump: string | null; nextVersion: string | null } {
+    return ScorePublishedMet();
 }

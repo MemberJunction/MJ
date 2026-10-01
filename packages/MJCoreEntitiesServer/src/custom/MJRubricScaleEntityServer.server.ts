@@ -1,7 +1,7 @@
 import { BaseEntity, type ValidationResult } from '@memberjunction/core';
 import { MJRubricScaleEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { frozenScaleChange, type ScaleShape } from './rubrics/scaleFreeze.js';
+import { FrozenScaleChange, type ScaleShape } from './rubrics/scaleFreeze.js';
 
 /**
  * Freezes a scale once any published version uses it.
@@ -17,7 +17,7 @@ export class MJRubricScaleEntityServer extends MJRubricScaleEntity {
      * otherwise null. The caller throws that message instead of saving.
      */
     public refusalFor(usedByPublishedVersion: boolean, before: ScaleShape, after: ScaleShape): string | null {
-        return frozenScaleChange(usedByPublishedVersion, before, after);
+        return FrozenScaleChange(usedByPublishedVersion, before, after);
     }
 
     /**
@@ -66,7 +66,7 @@ export class MJRubricScaleEntityServer extends MJRubricScaleEntity {
             higherIsBetter: this.HigherIsBetter,
             levels: before.levels,
         };
-        const message = frozenScaleChange(true, before, after);
+        const message = FrozenScaleChange(true, before, after);
         if (message) {
             result.Success = false;
             result.Errors.push({ Message: message, FieldName: 'ScaleType' } as never);

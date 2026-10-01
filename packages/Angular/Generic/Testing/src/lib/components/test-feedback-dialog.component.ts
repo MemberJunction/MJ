@@ -3,7 +3,7 @@ import { UserInfo, RunView } from '@memberjunction/core';
 import { MJTestRunFeedbackEntity } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import type { RubricFormAnswer, RubricVersionSnapshot } from '@memberjunction/ng-rubrics';
-import { humanEvaluationFields, humanScoreFields, judgedRubric, priorHumanEvaluation, versionSnapshot, type JudgedRubric } from '../models/human-review';
+import { HumanEvaluationFields, HumanScoreFields, judgedRubric, PriorHumanEvaluation, VersionSnapshot, type JudgedRubric } from '../models/human-review';
 
 export interface TestFeedbackDialogData {
   testRunId: string;
@@ -687,23 +687,23 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
     }
   }
 
-  async openRubric(): Promise<void> {
+  async OpenRubric(): Promise<void> {
     if (!this.Judged || this.ShowRubric) return;
     this.errorMessage = '';
     try {
-      const versions = await this.rows('MJ: Rubric Versions', `ID='${this.Judged.versionId}'`);
+      const versions = await this.rows('MJ: Rubric Versions', `ID='${this.Judged.VersionId}'`);
       const version = versions[0];
       if (!version) {
         this.errorMessage = 'The rubric version for this run was not found.';
         return;
       }
-      const criteria = await this.rows('MJ: Rubric Criteria', `RubricVersionID='${this.Judged.versionId}'`);
+      const criteria = await this.rows('MJ: Rubric Criteria', `RubricVersionID='${this.Judged.VersionId}'`);
       const scaleIds = [...new Set(criteria.map(row => row.ScaleID).filter(id => id != null).map(id => `'${String(id).replace(/'/g, "''")}'`))];
       const scales = scaleIds.length === 0 ? [] : await this.rows('MJ: Rubric Scales', `ID IN (${scaleIds.join(', ')})`);
       const levels = scaleIds.length === 0 ? [] : await this.rows('MJ: Rubric Scale Levels', `ScaleID IN (${scaleIds.join(', ')})`);
       const criterionIds = criteria.map(row => `'${String(row.ID).replace(/'/g, "''")}'`);
       const criterionLevels = criterionIds.length === 0 ? [] : await this.rows('MJ: Rubric Criterion Levels', `CriterionID IN (${criterionIds.join(', ')})`);
-      this.RubricVersion = versionSnapshot(version, criteria, scales, levels, criterionLevels);
+      this.RubricVersion = VersionSnapshot(version, criteria, scales, levels, criterionLevels);
       this.RubricAnswers = [];
       this.ShowRubric = true;
     } catch (error) {
@@ -713,17 +713,22 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
     }
   }
 
-  async onRubricSubmit(answers: RubricFormAnswer[]): Promise<void> {
+  /** @deprecated Use {@link OpenRubric}. */
+  async openRubric(): Promise<void> {
+    return this.OpenRubric();
+  }
+
+  async OnRubricSubmit(answers: RubricFormAnswer[]): Promise<void> {
     if (!this.Judged || this.IsSaving) return;
     this.IsSaving = true;
     this.errorMessage = '';
     this.RubricMessage = '';
     try {
       const existing = await this.rows('MJ: Rubric Evaluations', `SubjectRecordID='${this.Data.testRunId.replace(/'/g, "''")}'`);
-      const priorId = priorHumanEvaluation(existing, this.Judged, this.Data.currentUser.ID);
+      const priorId = PriorHumanEvaluation(existing, this.Judged, this.Data.currentUser.ID);
       const evaluation = await this.metadata.GetEntityObject('MJ: Rubric Evaluations', this.Data.currentUser);
       evaluation.NewRecord();
-      for (const [field, value] of Object.entries(humanEvaluationFields(this.Judged, this.Data.currentUser.ID, priorId))) {
+      for (const [field, value] of Object.entries(HumanEvaluationFields(this.Judged, this.Data.currentUser.ID, priorId))) {
         evaluation.Set(field, value);
       }
       if (!await evaluation.Save()) {
@@ -731,7 +736,7 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
         return;
       }
       const evaluationId = String(evaluation.Get('ID'));
-      for (const fields of humanScoreFields(evaluationId, answers)) {
+      for (const fields of HumanScoreFields(evaluationId, answers)) {
         const score = await this.metadata.GetEntityObject('MJ: Rubric Evaluation Scores', this.Data.currentUser);
         score.NewRecord();
         for (const [field, value] of Object.entries(fields)) score.Set(field, value);
@@ -753,6 +758,11 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
       this.IsSaving = false;
       this.cdr.detectChanges();
     }
+  }
+
+  /** @deprecated Use {@link OnRubricSubmit}. */
+  async onRubricSubmit(answers: RubricFormAnswer[]): Promise<void> {
+    return this.OnRubricSubmit(answers);
   }
 
   private async rows(entityName: string, filter: string): Promise<Record<string, unknown>[]> {

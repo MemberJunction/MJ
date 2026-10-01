@@ -115,7 +115,7 @@ export class RubricEngineBase {
      * Replace the whole cache. Published versions are stored with their tree.
      * A Draft or Retired version is not stored, even when its criteria were loaded.
      */
-    public replaceCache(snapshot: RubricCacheSnapshot): void {
+    public ReplaceCache(snapshot: RubricCacheSnapshot): void {
         this.categories = new Map(snapshot.categories.map(category => [category.id, category]));
         this.scales = new Map(snapshot.scales.map(scale => [scale.id, scale]));
         this.rubrics = new Map(snapshot.rubrics.map(rubric => [rubric.id, rubric]));
@@ -155,44 +155,84 @@ export class RubricEngineBase {
         }
     }
 
+    /** @deprecated Use {@link ReplaceCache}. */
+    public replaceCache(snapshot: RubricCacheSnapshot): void {
+        return this.ReplaceCache(snapshot);
+    }
+
     /** Category by id, or null when it was not in the last snapshot. */
-    public getCategory(id: string): RubricCategoryRecord | null {
+    public GetCategory(id: string): RubricCategoryRecord | null {
         return this.categories.get(id) ?? null;
     }
 
+    /** @deprecated Use {@link GetCategory}. */
+    public getCategory(id: string): RubricCategoryRecord | null {
+        return this.GetCategory(id);
+    }
+
     /** Scale by id, including its levels, or null. */
-    public getScale(id: string): RubricScaleRecord | null {
+    public GetScale(id: string): RubricScaleRecord | null {
         return this.scales.get(id) ?? null;
     }
 
+    /** @deprecated Use {@link GetScale}. */
+    public getScale(id: string): RubricScaleRecord | null {
+        return this.GetScale(id);
+    }
+
     /** Rubric definition by id, or null. */
-    public getRubric(id: string): RubricRecord | null {
+    public GetRubric(id: string): RubricRecord | null {
         return this.rubrics.get(id) ?? null;
+    }
+
+    /** @deprecated Use {@link GetRubric}. */
+    public getRubric(id: string): RubricRecord | null {
+        return this.GetRubric(id);
     }
 
     /**
      * A published version with its criteria, anchors, bands, and scales.
      * Returns null for an unknown id and for a draft that was present in the snapshot.
      */
-    public getPublishedVersion(versionId: string): CachedPublishedVersion | null {
+    public GetPublishedVersion(versionId: string): CachedPublishedVersion | null {
         return this.published.get(versionId) ?? null;
     }
 
+    /** @deprecated Use {@link GetPublishedVersion}. */
+    public getPublishedVersion(versionId: string): CachedPublishedVersion | null {
+        return this.GetPublishedVersion(versionId);
+    }
+
     /** Every cached published version of one rubric, highest number first. */
-    public getPublishedVersions(rubricId: string): CachedPublishedVersion[] {
+    public GetPublishedVersions(rubricId: string): CachedPublishedVersion[] {
         const list = this.publishedByRubric.get(rubricId) ?? [];
         return [...list].sort(compareVersionDesc);
     }
 
+    /** @deprecated Use {@link GetPublishedVersions}. */
+    public getPublishedVersions(rubricId: string): CachedPublishedVersion[] {
+        return this.GetPublishedVersions(rubricId);
+    }
+
     /** The highest published version of a rubric, or null when none is published. */
+    public GetLatestPublishedVersion(rubricId: string): CachedPublishedVersion | null {
+        return this.GetPublishedVersions(rubricId)[0] ?? null;
+    }
+
+    /** @deprecated Use {@link GetLatestPublishedVersion}. */
     public getLatestPublishedVersion(rubricId: string): CachedPublishedVersion | null {
-        return this.getPublishedVersions(rubricId)[0] ?? null;
+        return this.GetLatestPublishedVersion(rubricId);
     }
 
     /** Rubrics linked to an agent, highest priority first. */
-    public getAgentRubrics(agentId: string): AgentRubricRecord[] {
+    public GetAgentRubrics(agentId: string): AgentRubricRecord[] {
         const list = this.agentRubrics.get(agentId) ?? [];
         return [...list].sort((a, b) => b.priority - a.priority);
+    }
+
+    /** @deprecated Use {@link GetAgentRubrics}. */
+    public getAgentRubrics(agentId: string): AgentRubricRecord[] {
+        return this.GetAgentRubrics(agentId);
     }
 }
 

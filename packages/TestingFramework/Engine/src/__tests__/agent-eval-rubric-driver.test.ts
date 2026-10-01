@@ -10,8 +10,8 @@ class SuiteProbe extends AgentEvalDriver {
 
     protected override async loadSuiteChain(): Promise<RubricSuiteRow[]> {
         return [
-            { id: 'child', parentId: 'parent', rubricId: null },
-            { id: 'parent', parentId: null, rubricId: 'parent-rubric' },
+            { Id: 'child', ParentId: 'parent', RubricId: null },
+            { Id: 'parent', ParentId: null, RubricId: 'parent-rubric' },
         ];
     }
 

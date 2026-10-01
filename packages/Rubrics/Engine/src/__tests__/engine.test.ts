@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { fallbackContent, shapeContent, testRunContent } from '../content.js';
+import { FallbackContent, ShapeContent, TestRunContent } from '../content.js';
 import { DeterministicRubricEvaluator } from '../DeterministicRubricEvaluator.js';
 import { RubricEngine, type RubricEvaluationStore } from '../RubricEngine.js';
-import { getAgreement, getConsensus, getDiagnostics, krippendorffAlpha, quadraticKappa } from '../statistics.js';
+import { GetAgreement, GetConsensus, GetDiagnostics, KrippendorffAlpha, QuadraticKappa } from '../statistics.js';
 
 function version(): RubricVersionSnapshot {
     return {
@@ -34,11 +34,11 @@ describe('DeterministicRubricEvaluator', () => {
 
 describe('content providers', () => {
     it('maps a test run and omits fields the user cannot read', () => {
-        expect(testRunContent({ input: 'q', expectedOutcomes: 'yes', actualOutput: 'no', trace: 'ran' }).data).toEqual({
+        expect(TestRunContent({ input: 'q', expectedOutcomes: 'yes', actualOutput: 'no', trace: 'ran' }).data).toEqual({
             input: 'q', expectedOutcomes: 'yes', actualOutput: 'no',
         });
-        expect(fallbackContent({ name: 'Ada', secret: 'x' }, field => field !== 'secret').data).toEqual({ name: 'Ada' });
-        expect(shapeContent('MJ: Widgets', { name: 'Ada', secret: 'x' }).data).toEqual({});
+        expect(FallbackContent({ name: 'Ada', secret: 'x' }, field => field !== 'secret').data).toEqual({ name: 'Ada' });
+        expect(ShapeContent('MJ: Widgets', { name: 'Ada', secret: 'x' }).data).toEqual({});
     });
 });
 
@@ -135,41 +135,41 @@ describe('agreement and consensus', () => {
             ...Array.from({ length: 10 }, () => [1, 0] as [number, number]),
             ...Array.from({ length: 15 }, () => [1, 1] as [number, number]),
         ];
-        expect(quadraticKappa(pairs)).toBeCloseTo(0.4, 6);
-        const small = getAgreement([[1, 1], [1, 2], [2, 2]]);
-        expect(small.withheld).toBe(true);
-        expect(small.kappa).toBeUndefined();
-        expect(small.sampleSize).toBe(3);
-        const enough = getAgreement(pairs, 20);
-        expect(enough.withheld).toBe(false);
-        expect(enough.kappa).toBeCloseTo(0.4, 6);
+        expect(QuadraticKappa(pairs)).toBeCloseTo(0.4, 6);
+        const small = GetAgreement([[1, 1], [1, 2], [2, 2]]);
+        expect(small.Withheld).toBe(true);
+        expect(small.Kappa).toBeUndefined();
+        expect(small.SampleSize).toBe(3);
+        const enough = GetAgreement(pairs, 20);
+        expect(enough.Withheld).toBe(false);
+        expect(enough.Kappa).toBeCloseTo(0.4, 6);
     });
 
     it('matches a hand-computed ordinal alpha of 4/9', () => {
-        expect(krippendorffAlpha([[1, 1], [1, 2], [2, 2]])).toBeCloseTo(4 / 9, 6);
+        expect(KrippendorffAlpha([[1, 1], [1, 2], [2, 2]])).toBeCloseTo(4 / 9, 6);
     });
 
     it('averages scores for the mean consensus', () => {
-        const result = getConsensus([0.2, 0.4, 0.6], 'Mean');
-        expect(result.overall).toBeCloseTo(0.4, 6);
-        expect(result.range).toBeCloseTo(0.4, 6);
-        expect(result.sampleSize).toBe(3);
-        const perCriterion = getConsensus([], 'Mean', 0.1, [
+        const result = GetConsensus([0.2, 0.4, 0.6], 'Mean');
+        expect(result.Overall).toBeCloseTo(0.4, 6);
+        expect(result.Range).toBeCloseTo(0.4, 6);
+        expect(result.SampleSize).toBe(3);
+        const perCriterion = GetConsensus([], 'Mean', 0.1, [
             { key: 'a', scores: [0.2, 0.4] },
             { key: 'b', scores: [0.8, 1] },
         ]);
-        expect(perCriterion.criteria?.[0].mean).toBeCloseTo(0.3, 6);
-        expect(perCriterion.criteria?.[1].mean).toBeCloseTo(0.9, 6);
-        expect(perCriterion.criteria?.[0].range).toBeCloseTo(0.2, 6);
+        expect(perCriterion.Criteria?.[0].Mean).toBeCloseTo(0.3, 6);
+        expect(perCriterion.Criteria?.[1].Mean).toBeCloseTo(0.9, 6);
+        expect(perCriterion.Criteria?.[0].Range).toBeCloseTo(0.2, 6);
     });
 
     it('flags noise against the other criteria, and names both keys in a high correlation', () => {
-        const flags = getDiagnostics([
+        const flags = GetDiagnostics([
             { key: 'noise', scores: [0, 1, 0, 1], notApplicable: 0 },
             { key: 'a', scores: [0, 0, 1, 1], notApplicable: 0 },
             { key: 'b', scores: [0, 0, 1, 1], notApplicable: 0 },
         ]);
-        expect(flags.filter(flag => flag.flag === 'NoDiscrimination').map(flag => flag.criterionKey)).toEqual(['noise']);
-        expect(flags.filter(flag => flag.flag === 'HighCorrelation').map(flag => `${flag.criterionKey}:${flag.otherKey}`).sort()).toEqual(['a:b', 'b:a']);
+        expect(flags.filter(flag => flag.Flag === 'NoDiscrimination').map(flag => flag.CriterionKey)).toEqual(['noise']);
+        expect(flags.filter(flag => flag.Flag === 'HighCorrelation').map(flag => `${flag.CriterionKey}:${flag.OtherKey}`).sort()).toEqual(['a:b', 'b:a']);
     });
 });

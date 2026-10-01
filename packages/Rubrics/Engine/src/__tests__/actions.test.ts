@@ -22,7 +22,7 @@ vi.mock('@memberjunction/ai-prompts', () => ({
 }));
 
 import { CreateRubricDraftAction, EvaluateRecordAgainstRubricAction, GetRubricAction, GetRubricConsensusAction } from '../actions.js';
-import { createDraftVersion } from '../providerRecords.js';
+import { CreateDraftVersion } from '../providerRecords.js';
 import { RubricEngine, type RubricEvaluationStore, type RubricRecords } from '../RubricEngine.js';
 
 const score: RubricScoreResult = {
@@ -133,17 +133,17 @@ describe('rubric actions', () => {
             subjectRecordId: 'record-1',
             method: 'Median',
         });
-        expect(stats.method).toBe('Median');
-        expect(stats.overall).toBe(0.8);
-        expect(stats.sampleSize).toBe(1);
+        expect(stats.Method).toBe('Median');
+        expect(stats.Overall).toBe(0.8);
+        expect(stats.SampleSize).toBe(1);
         const majorOne = await new GetRubricConsensusAction().Invoke(engine, {
             rubricName: 'Writing',
             subjectRecordId: 'record-1',
             major: 1,
             method: 'Median',
         });
-        expect(majorOne.overall).toBe(0.2);
-        expect(majorOne.sampleSize).toBe(1);
+        expect(majorOne.Overall).toBe(0.2);
+        expect(majorOne.SampleSize).toBe(1);
         expect(records.filters.some(filter => filter.startsWith('MJ: Rubric Evaluations') && filter.includes("Status='Submitted'") && !filter.includes('scores'))).toBe(true);
         expect(await new GetRubricAction().Invoke(engine, { rubricName: 'Writing', versionId: 'version-9' })).toMatchObject({ id: 'version-9' });
         expect(store.submitCalls).toBe(0);
@@ -186,7 +186,7 @@ describe('rubric actions', () => {
                 };
             },
         };
-        const draft = await createDraftVersion(provider, { id: 'user' }, {
+        const draft = await CreateDraftVersion(provider, { id: 'user' }, {
             rubricId: 'rubric',
             nodes: [{ id: 'leaf', key: 'clarity', name: 'Clarity', nodeType: 'Criterion', weight: 1, isAdvisory: false, isGate: false, evidenceRequired: false, rationaleRequired: false, sequence: 0 }],
         });
@@ -200,7 +200,7 @@ describe('rubric actions', () => {
         const store = evaluations();
         const prompts: string[] = [];
         const engine = new RubricEngine(store, records, {
-            async run(name) {
+            async Run(name) {
                 prompts.push(name);
                 return '{"decisions":[]}';
             },

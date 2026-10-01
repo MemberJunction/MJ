@@ -1,7 +1,7 @@
 import { Component, Input } from '@angular/core';
 import { CompositeKey, RunView } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { disableLink, makeDefaultLink, sortAgentRubrics, type AgentRubricLink } from './agent-rubrics.model';
+import { DisableLink, MakeDefaultLink, SortAgentRubrics, type AgentRubricLink } from './agent-rubrics.model';
 
 @Component({
     standalone: false,
@@ -80,7 +80,7 @@ export class AgentRubricsComponent extends BaseAngularComponent {
         this.IsLoading = true;
         this.Error = '';
         try {
-            const view = this.ProviderToUse ? RunView.FromMetadataProvider(this.ProviderToUse) : new RunView();
+            const view = RunView.FromMetadataProvider(this.ProviderToUse);
             const escaped = this.agentID.replace(/'/g, "''");
             const links = await view.RunView({
                 EntityName: 'MJ: AI Agent Rubrics',
@@ -88,7 +88,7 @@ export class AgentRubricsComponent extends BaseAngularComponent {
                 ResultType: 'simple',
                 MaxRows: 100,
             }, this.ProviderToUse?.CurrentUser);
-            this.Links = sortAgentRubrics((links.Results ?? []) as typeof this.Links);
+            this.Links = SortAgentRubrics((links.Results ?? []) as typeof this.Links);
             const rubrics = await view.RunView({
                 EntityName: 'MJ: Rubrics',
                 ExtraFilter: `Status='Active'`,
@@ -133,14 +133,14 @@ export class AgentRubricsComponent extends BaseAngularComponent {
 
     public async TurnOff(link: AgentRubricLink): Promise<void> {
         if (!link.ID) return;
-        const turnedOff = disableLink(link);
+        const turnedOff = DisableLink(link);
         await this.saveLink(link.ID, { Status: turnedOff.Status, IsDefault: turnedOff.IsDefault });
         this.loaded = false;
         await this.Load();
     }
 
     private async clearOtherDefaults(purpose: string): Promise<void> {
-        const next = makeDefaultLink([...this.Links, { ID: 'pending', Purpose: purpose, Status: 'Active', IsDefault: false }], 'pending');
+        const next = MakeDefaultLink([...this.Links, { ID: 'pending', Purpose: purpose, Status: 'Active', IsDefault: false }], 'pending');
         for (const row of this.Links) {
             const updated = next.find(item => item.ID === row.ID);
             if (!row.ID || !updated) continue;

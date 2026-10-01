@@ -7,8 +7,8 @@ import { TestEngine } from '@memberjunction/testing-engine';
 import { UserInfo } from '@memberjunction/core';
 import { SuiteFlags } from '../types';
 import { OutputFormatter } from '../utils/output-formatter';
-import { criterionSpreads } from './criterion-spread';
-import { lookupRubricOverride } from './rubric-cli';
+import { CriterionSpreads } from './criterion-spread';
+import { LookupRubricOverride } from './rubric-cli';
 import { SpinnerManager } from '../utils/spinner-manager';
 import { LoadMJConfig, LoadCLIConfig } from '../utils/config-loader';
 import { InitializeMJProvider, CloseMJProvider, GetContextUser } from '../lib/mj-provider';
@@ -154,7 +154,7 @@ export class SuiteCommand {
             // so integration suites MUST run strictly serially (CANONICAL D). Force serial
             // execution under MJ_INTEGRATION_TEST=1 regardless of any --parallel flag.
             const integrationSerial = process.env.MJ_INTEGRATION_TEST === '1';
-            const rubric = flags.rubric ? await lookupRubricOverride(flags.rubric, contextUser) : undefined;
+            const rubric = flags.rubric ? await LookupRubricOverride(flags.rubric, contextUser) : undefined;
             const result = await engine.RunSuite(suite.ID, {
                 verbose: flags.verbose,
                 variables,
@@ -245,7 +245,7 @@ export class SuiteCommand {
             const variance = max - min;
             const uniqueStatuses = new Set(entry.statuses);
             const mixedStatus = uniqueStatuses.size > 1;
-            const criteria = criterionSpreads(entry.oracleResults.map(oracleResults => ({ oracleResults })));
+            const criteria = CriterionSpreads(entry.oracleResults.map(oracleResults => ({ oracleResults })));
             const criterionFlaky = criteria.some(criterion => criterion.spread > VARIANCE_THRESHOLD);
             const flaky = variance > VARIANCE_THRESHOLD || mixedStatus || criterionFlaky;
             rows.push({ ...entry, variance, mixedStatus, flaky, criteria });

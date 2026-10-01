@@ -1,11 +1,11 @@
 export interface CriterionSpread {
-    key: string;
-    scores: number[];
-    spread: number;
+    Key: string;
+    Scores: number[];
+    Spread: number;
 }
 
 /** Max-minus-min of each criterion's normalized score across repeats. A criterion seen once is left out. */
-export function criterionSpreads(repeats: { oracleResults?: { oracleType?: string; type?: string; Name?: string; details?: unknown; Details?: unknown }[] | null }[]): CriterionSpread[] {
+export function CriterionSpreads(repeats: { oracleResults?: { oracleType?: string; type?: string; Name?: string; details?: unknown; Details?: unknown }[] | null }[]): CriterionSpread[] {
     const byKey = new Map<string, number[]>();
     for (const repeat of repeats) {
         for (const [key, score] of criteriaOf(repeat.oracleResults ?? [])) {
@@ -16,8 +16,13 @@ export function criterionSpreads(repeats: { oracleResults?: { oracleType?: strin
     }
     return [...byKey.entries()]
         .filter(([, scores]) => scores.length >= 2)
-        .map(([key, scores]) => ({ key, scores, spread: Math.max(...scores) - Math.min(...scores) }))
-        .sort((left, right) => right.spread - left.spread || left.key.localeCompare(right.key));
+        .map(([key, scores]) => ({ Key: key, Scores: scores, Spread: Math.max(...scores) - Math.min(...scores) }))
+        .sort((left, right) => right.Spread - left.Spread || left.Key.localeCompare(right.Key));
+}
+
+/** @deprecated Use {@link CriterionSpreads}. */
+export function criterionSpreads(repeats: { oracleResults?: { oracleType?: string; type?: string; Name?: string; details?: unknown; Details?: unknown }[] | null }[]): CriterionSpread[] {
+    return CriterionSpreads(repeats);
 }
 
 function criteriaOf(oracles: { oracleType?: string; type?: string; Name?: string; details?: unknown; Details?: unknown }[]): [string, number][] {

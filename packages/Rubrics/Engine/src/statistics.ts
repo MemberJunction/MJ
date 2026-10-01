@@ -1,18 +1,18 @@
 export interface CriterionConsensus {
-    key: string;
-    mean: number | null;
-    stdDev: number | null;
-    range: number | null;
-    sampleSize: number;
+    Key: string;
+    Mean: number | null;
+    StdDev: number | null;
+    Range: number | null;
+    SampleSize: number;
 }
 
 export interface ConsensusResult {
-    method: 'Mean' | 'Median' | 'TrimmedMean';
-    overall: number | null;
-    stdDev: number | null;
-    range: number | null;
-    sampleSize: number;
-    criteria?: CriterionConsensus[];
+    Method: 'Mean' | 'Median' | 'TrimmedMean';
+    Overall: number | null;
+    StdDev: number | null;
+    Range: number | null;
+    SampleSize: number;
+    Criteria?: CriterionConsensus[];
 }
 
 /**
@@ -21,37 +21,47 @@ export interface ConsensusResult {
  * deviation and the range are the disagreement measures.
  */
 /** Per-criterion mean, spread, and range. Subjects line up by index across criteria. */
-export function criterionConsensus(criteria: { key: string; scores: (number | null)[] }[]): CriterionConsensus[] {
+export function CriterionConsensus(criteria: { key: string; scores: (number | null)[] }[]): CriterionConsensus[] {
     return criteria.map(item => {
         const scored = item.scores.filter((value): value is number => value !== null);
-        if (scored.length === 0) return { key: item.key, mean: null, stdDev: null, range: null, sampleSize: 0 };
+        if (scored.length === 0) return { Key: item.key, Mean: null, StdDev: null, Range: null, SampleSize: 0 };
         const sorted = [...scored].sort((a, b) => a - b);
-        return { key: item.key, mean: mean(scored), stdDev: populationStdDev(scored), range: sorted[sorted.length - 1] - sorted[0], sampleSize: scored.length };
+        return { Key: item.key, Mean: mean(scored), StdDev: populationStdDev(scored), Range: sorted[sorted.length - 1] - sorted[0], SampleSize: scored.length };
     });
 }
 
-export function getConsensus(scores: number[], method: ConsensusResult['method'] = 'Mean', trim = 0.1, criteria?: { key: string; scores: (number | null)[] }[]): ConsensusResult {
+/** @deprecated Use {@link CriterionConsensus}. */
+export function criterionConsensus(criteria: { key: string; scores: (number | null)[] }[]): CriterionConsensus[] {
+    return CriterionConsensus(criteria);
+}
+
+export function GetConsensus(scores: number[], method: ConsensusResult['Method'] = 'Mean', trim = 0.1, criteria?: { key: string; scores: (number | null)[] }[]): ConsensusResult {
     const sample = [...scores].sort((a, b) => a - b);
     const n = sample.length;
-    if (n === 0) return { method, overall: null, stdDev: null, range: null, sampleSize: 0, criteria: criteria ? criterionConsensus(criteria) : undefined };
+    if (n === 0) return { Method: method, Overall: null, StdDev: null, Range: null, SampleSize: 0, Criteria: criteria ? CriterionConsensus(criteria) : undefined };
     const used = method === 'TrimmedMean' ? trimEnds(sample, trim) : sample;
     const overall = method === 'Median' ? median(sample) : mean(used);
     return {
-        method,
-        overall,
-        stdDev: populationStdDev(sample),
-        range: sample[n - 1] - sample[0],
-        sampleSize: n,
-        criteria: criteria ? criterionConsensus(criteria) : undefined,
+        Method: method,
+        Overall: overall,
+        StdDev: populationStdDev(sample),
+        Range: sample[n - 1] - sample[0],
+        SampleSize: n,
+        Criteria: criteria ? CriterionConsensus(criteria) : undefined,
     };
 }
 
+/** @deprecated Use {@link GetConsensus}. */
+export function getConsensus(scores: number[], method: ConsensusResult['Method'] = 'Mean', trim = 0.1, criteria?: { key: string; scores: (number | null)[] }[]): ConsensusResult {
+    return GetConsensus(scores, method, trim, criteria);
+}
+
 export interface AgreementResult {
-    withheld: boolean;
-    sampleSize: number;
-    minimumSample: number;
-    kappa?: number;
-    alpha?: number;
+    Withheld: boolean;
+    SampleSize: number;
+    MinimumSample: number;
+    Kappa?: number;
+    Alpha?: number;
 }
 
 /**
@@ -60,28 +70,33 @@ export interface AgreementResult {
  * omitted when the number of subjects is below the floor. The sample size is
  * always returned, so a withheld result is not a bare statistic.
  */
-export function getAgreement(ratings: number[][], minimumSample = 20): AgreementResult {
+export function GetAgreement(ratings: number[][], minimumSample = 20): AgreementResult {
     const sampleSize = ratings.length;
-    if (sampleSize < minimumSample) return { withheld: true, sampleSize, minimumSample };
+    if (sampleSize < minimumSample) return { Withheld: true, SampleSize: sampleSize, MinimumSample: minimumSample };
     const pairs = ratings.filter(row => row.length >= 2).map(row => [row[0], row[1]] as const);
     return {
-        withheld: false,
-        sampleSize,
-        minimumSample,
-        kappa: pairs.length > 0 ? quadraticKappa(pairs) : undefined,
-        alpha: krippendorffAlpha(ratings),
+        Withheld: false,
+        SampleSize: sampleSize,
+        MinimumSample: minimumSample,
+        Kappa: pairs.length > 0 ? QuadraticKappa(pairs) : undefined,
+        Alpha: KrippendorffAlpha(ratings),
     };
 }
 
+/** @deprecated Use {@link GetAgreement}. */
+export function getAgreement(ratings: number[][], minimumSample = 20): AgreementResult {
+    return GetAgreement(ratings, minimumSample);
+}
+
 export interface DiagnosticFlag {
-    criterionKey: string;
+    CriterionKey: string;
     /** Set on HighCorrelation so the pair is named, not only the first key. */
-    otherKey?: string;
-    flag: 'NoDiscrimination' | 'RangeCollapse' | 'HighCorrelation' | 'MostlyNotApplicable' | 'InsufficientData';
+    OtherKey?: string;
+    Flag: 'NoDiscrimination' | 'RangeCollapse' | 'HighCorrelation' | 'MostlyNotApplicable' | 'InsufficientData';
 }
 
 /** Item analysis. Flags are attached to the criterion key. InsufficientData is n < 20. */
-export function getDiagnostics(criteria: { key: string; scores: (number | null)[]; notApplicable: number }[]): DiagnosticFlag[] {
+export function GetDiagnostics(criteria: { key: string; scores: (number | null)[]; notApplicable: number }[]): DiagnosticFlag[] {
     const flags: DiagnosticFlag[] = [];
     for (const [index, item] of criteria.entries()) {
         const others = criteria.filter((_, other) => other !== index);
@@ -91,26 +106,31 @@ export function getDiagnostics(criteria: { key: string; scores: (number | null)[
         });
         const scored = item.scores.filter((value): value is number => value !== null);
         const n = item.scores.length;
-        if (n < 20) flags.push({ criterionKey: item.key, flag: 'InsufficientData' });
-        if (n > 0 && item.notApplicable / n >= 0.5) flags.push({ criterionKey: item.key, flag: 'MostlyNotApplicable' });
-        if (scored.length >= 2 && populationStdDev(scored) === 0) flags.push({ criterionKey: item.key, flag: 'RangeCollapse' });
+        if (n < 20) flags.push({ CriterionKey: item.key, Flag: 'InsufficientData' });
+        if (n > 0 && item.notApplicable / n >= 0.5) flags.push({ CriterionKey: item.key, Flag: 'MostlyNotApplicable' });
+        if (scored.length >= 2 && populationStdDev(scored) === 0) flags.push({ CriterionKey: item.key, Flag: 'RangeCollapse' });
         if (scored.length >= 2 && Math.abs(correlation(item.scores, rest)) < 0.05) {
-            flags.push({ criterionKey: item.key, flag: 'NoDiscrimination' });
+            flags.push({ CriterionKey: item.key, Flag: 'NoDiscrimination' });
         }
     }
     for (let i = 0; i < criteria.length; i++) {
         for (let j = i + 1; j < criteria.length; j++) {
             if (Math.abs(correlation(criteria[i].scores, criteria[j].scores)) >= 0.9) {
-                flags.push({ criterionKey: criteria[i].key, otherKey: criteria[j].key, flag: 'HighCorrelation' });
-                flags.push({ criterionKey: criteria[j].key, otherKey: criteria[i].key, flag: 'HighCorrelation' });
+                flags.push({ CriterionKey: criteria[i].key, OtherKey: criteria[j].key, Flag: 'HighCorrelation' });
+                flags.push({ CriterionKey: criteria[j].key, OtherKey: criteria[i].key, Flag: 'HighCorrelation' });
             }
         }
     }
     return flags;
 }
 
+/** @deprecated Use {@link GetDiagnostics}. */
+export function getDiagnostics(criteria: { key: string; scores: (number | null)[]; notApplicable: number }[]): DiagnosticFlag[] {
+    return GetDiagnostics(criteria);
+}
+
 /** Quadratic-weighted Cohen's kappa. Categories are the distinct rating values, ordered. */
-export function quadraticKappa(pairs: readonly (readonly [number, number])[]): number {
+export function QuadraticKappa(pairs: readonly (readonly [number, number])[]): number {
     const categories = [...new Set(pairs.flat())].sort((a, b) => a - b);
     const index = new Map(categories.map((value, position) => [value, position]));
     const k = categories.length;
@@ -133,8 +153,13 @@ export function quadraticKappa(pairs: readonly (readonly [number, number])[]): n
     return 1 - observed / expected;
 }
 
+/** @deprecated Use {@link QuadraticKappa}. */
+export function quadraticKappa(pairs: readonly (readonly [number, number])[]): number {
+    return QuadraticKappa(pairs);
+}
+
 /** Ordinal Krippendorff's alpha. Each inner array is one subject's ratings. */
-export function krippendorffAlpha(units: number[][]): number {
+export function KrippendorffAlpha(units: number[][]): number {
     const values = [...new Set(units.flat())].sort((a, b) => a - b);
     const index = new Map(values.map((value, position) => [value, position]));
     const k = values.length;
@@ -170,6 +195,11 @@ export function krippendorffAlpha(units: number[][]): number {
     }
     if (expected === 0) return 1;
     return 1 - (observed / n) / (expected / (n * (n - 1)));
+}
+
+/** @deprecated Use {@link KrippendorffAlpha}. */
+export function krippendorffAlpha(units: number[][]): number {
+    return KrippendorffAlpha(units);
 }
 
 function mean(values: number[]): number {

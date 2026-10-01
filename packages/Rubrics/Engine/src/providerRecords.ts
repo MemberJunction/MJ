@@ -21,7 +21,7 @@ interface RubricProvider {
  * Reads rubric rows through RunView and writes a Draft version through the
  * entity objects. Create sets Status to Draft and does not publish.
  */
-export function providerRecords(provider: RubricProvider, user: unknown): RubricRecords {
+export function ProviderRecords(provider: RubricProvider, user: unknown): RubricRecords {
     return {
         async rows(entityName, filter) {
             const view = RunView.FromMetadataProvider(provider as never);
@@ -30,13 +30,18 @@ export function providerRecords(provider: RubricProvider, user: unknown): Rubric
             return (result.Results ?? []) as Record<string, unknown>[];
         },
         createDraft(input) {
-            return createDraftVersion(provider, user, input);
+            return CreateDraftVersion(provider, user, input);
         },
     };
 }
 
+/** @deprecated Use {@link ProviderRecords}. */
+export function providerRecords(provider: RubricProvider, user: unknown): RubricRecords {
+    return ProviderRecords(provider, user);
+}
+
 /** Inserts a Draft version and its criteria. The status written is Draft. */
-export async function createDraftVersion(provider: RubricProvider, user: unknown, input: { rubricId: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: string }> {
+export async function CreateDraftVersion(provider: RubricProvider, user: unknown, input: { rubricId: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: string }> {
     const version = await provider.GetEntityObject('MJ: Rubric Versions', user);
     version.NewRecord?.();
     version.Set('RubricID', input.rubricId);
@@ -70,6 +75,11 @@ export async function createDraftVersion(provider: RubricProvider, user: unknown
     return { id: versionId, status: String(version.Get('Status') ?? '') };
 }
 
+/** @deprecated Use {@link CreateDraftVersion}. */
+export async function createDraftVersion(provider: RubricProvider, user: unknown, input: { rubricId: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: string }> {
+    return CreateDraftVersion(provider, user, input);
+}
+
 function parentsFirst(nodes: RubricNodeSnapshot[]): RubricNodeSnapshot[] {
     const byId = new Map(nodes.map(node => [node.id, node]));
     const ordered: RubricNodeSnapshot[] = [];
@@ -88,7 +98,7 @@ function parentsFirst(nodes: RubricNodeSnapshot[]): RubricNodeSnapshot[] {
  * Evaluation store for a provider. Submit writes the leaf answers, then sets
  * Status to Submitted so the entity server scores the draft.
  */
-export function providerEvaluationStore(provider: RubricProvider, user: unknown): RubricEvaluationStore {
+export function ProviderEvaluationStore(provider: RubricProvider, user: unknown): RubricEvaluationStore {
     return {
         async createDraft(input) {
             const row = await provider.GetEntityObject('MJ: Rubric Evaluations', user);
@@ -145,6 +155,11 @@ export function providerEvaluationStore(provider: RubricProvider, user: unknown)
     };
 }
 
+/** @deprecated Use {@link ProviderEvaluationStore}. */
+export function providerEvaluationStore(provider: RubricProvider, user: unknown): RubricEvaluationStore {
+    return ProviderEvaluationStore(provider, user);
+}
+
 function evaluatorType(evaluator: string | undefined): string {
     if (evaluator === 'AI') return 'Agent';
     if (evaluator === 'LLM') return 'AIPrompt';
@@ -161,9 +176,9 @@ function numberOrNull(value: unknown): number | null {
  * Runs the already-rendered rubric text through the named prompt, so model
  * selection stays on that prompt. The action does not receive a runner.
  */
-export function rubricEvaluatorPromptRun(provider: RubricProvider, user: unknown): RubricPromptRun {
+export function RubricEvaluatorPromptRun(provider: RubricProvider, user: unknown): RubricPromptRun {
     return {
-        async run(promptName, rendered) {
+        async Run(promptName, rendered) {
             const view = RunView.FromMetadataProvider(provider as never);
             const found = await view.RunView({
                 EntityName: 'MJ: AI Prompts',
@@ -185,8 +200,18 @@ export function rubricEvaluatorPromptRun(provider: RubricProvider, user: unknown
     };
 }
 
+/** @deprecated Use {@link RubricEvaluatorPromptRun}. */
+export function rubricEvaluatorPromptRun(provider: RubricProvider, user: unknown): RubricPromptRun {
+    return RubricEvaluatorPromptRun(provider, user);
+}
+
 /** A RubricEngine whose catalog, evaluations, and Rubric Evaluator prompt use the caller's provider. */
-export function providerRubricEngine(provider: unknown, user: unknown): RubricEngine {
+export function ProviderRubricEngine(provider: unknown, user: unknown): RubricEngine {
     const data = provider as RubricProvider;
-    return new RubricEngine(providerEvaluationStore(data, user), providerRecords(data, user), rubricEvaluatorPromptRun(data, user));
+    return new RubricEngine(ProviderEvaluationStore(data, user), ProviderRecords(data, user), RubricEvaluatorPromptRun(data, user));
+}
+
+/** @deprecated Use {@link ProviderRubricEngine}. */
+export function providerRubricEngine(provider: unknown, user: unknown): RubricEngine {
+    return ProviderRubricEngine(provider, user);
 }

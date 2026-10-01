@@ -10,7 +10,7 @@ export interface ImportedCriterion {
 }
 
 /** A requirements matrix. Numbered paths such as 3.2.1 nest under 3.2. A knockout column marks a gate. */
-export function importMatrix(csv: string): ImportedCriterion[] {
+export function ImportMatrix(csv: string): ImportedCriterion[] {
     const lines = csv.split(/\r?\n/).map(line => line.trim()).filter(line => line && !line.toLowerCase().startsWith('path'));
     return lines.map(line => {
         const [path, name, weight, knockout] = line.split(',').map(part => part.trim());
@@ -26,8 +26,13 @@ export function importMatrix(csv: string): ImportedCriterion[] {
     });
 }
 
+/** @deprecated Use {@link ImportMatrix}. */
+export function importMatrix(csv: string): ImportedCriterion[] {
+    return ImportMatrix(csv);
+}
+
 /** Vague names, missing anchors, unbalanced weights, and a gate that allows not-applicable. */
-export function critiqueRubric(version: RubricVersionSnapshot): string[] {
+export function CritiqueRubric(version: RubricVersionSnapshot): string[] {
     const notes: string[] = [];
     const names = new Map<string, number>();
     const leaves = version.nodes.filter(node => node.nodeType !== 'Group');
@@ -47,40 +52,65 @@ export function critiqueRubric(version: RubricVersionSnapshot): string[] {
     return notes;
 }
 
+/** @deprecated Use {@link CritiqueRubric}. */
+export function critiqueRubric(version: RubricVersionSnapshot): string[] {
+    return CritiqueRubric(version);
+}
+
 export interface DraftVersionStore {
-    saveVersion(fields: { name: string; status: 'Draft'; nodes: ImportedCriterion[] }): Promise<string>;
-    saveCriteria(versionId: string, nodes: ImportedCriterion[]): Promise<void>;
+    SaveVersion(fields: { name: string; status: 'Draft'; nodes: ImportedCriterion[] }): Promise<string>;
+    SaveCriteria(versionId: string, nodes: ImportedCriterion[]): Promise<void>;
 }
 
 /** Saves the imported tree as a Draft version and creates its criterion rows. */
-export async function saveImportedDraft(store: DraftVersionStore, name: string, csv: string): Promise<{ id: string; status: 'Draft' }> {
-    const draft = draftFromImport(name, csv);
-    const id = await store.saveVersion({ name: draft.name, status: draft.status, nodes: draft.nodes });
-    await store.saveCriteria(id, draft.nodes);
+export async function SaveImportedDraft(store: DraftVersionStore, name: string, csv: string): Promise<{ id: string; status: 'Draft' }> {
+    const draft = DraftFromImport(name, csv);
+    const id = await store.SaveVersion({ name: draft.name, status: draft.status, nodes: draft.nodes });
+    await store.SaveCriteria(id, draft.nodes);
     return { id, status: 'Draft' };
 }
 
+/** @deprecated Use {@link SaveImportedDraft}. */
+export async function saveImportedDraft(store: DraftVersionStore, name: string, csv: string): Promise<{ id: string; status: 'Draft' }> {
+    return SaveImportedDraft(store, name, csv);
+}
+
 /** Notes from item analysis and agreement. A withheld agreement adds no kappa note. */
-export function improveFromData(diagnostics: { criterionKey: string; flag: string }[], agreement: { withheld: boolean; kappa?: number }): string[] {
+export function ImproveFromData(diagnostics: { criterionKey: string; flag: string }[], agreement: { withheld: boolean; kappa?: number }): string[] {
     const notes = diagnostics.map(flag => `${flag.criterionKey}: ${flag.flag}`);
     if (!agreement.withheld && agreement.kappa != null && agreement.kappa < 0.4) notes.push(`Agreement kappa ${agreement.kappa} is low.`);
     return notes;
 }
 
+/** @deprecated Use {@link ImproveFromData}. */
+export function improveFromData(diagnostics: { criterionKey: string; flag: string }[], agreement: { withheld: boolean; kappa?: number }): string[] {
+    return ImproveFromData(diagnostics, agreement);
+}
+
 /** The imported tree is a Draft. This path does not publish. */
+export function DraftFromImport(name: string, csv: string): { name: string; status: 'Draft'; nodes: ImportedCriterion[] } {
+    return { name, status: 'Draft', nodes: ImportMatrix(csv) };
+}
+
+/** @deprecated Use {@link DraftFromImport}. */
 export function draftFromImport(name: string, csv: string): { name: string; status: 'Draft'; nodes: ImportedCriterion[] } {
-    return { name, status: 'Draft', nodes: importMatrix(csv) };
+    return DraftFromImport(name, csv);
 }
 
 /** A description becomes a Draft version. This path does not publish. */
-export async function draftFromDescription(store: DraftVersionStore, description: string): Promise<{ id: string; status: 'Draft' }> {
+export async function DraftFromDescription(store: DraftVersionStore, description: string): Promise<{ id: string; status: 'Draft' }> {
     const title = description.trim().replace(/[\r\n,]+/g, ' ').slice(0, 120) || 'Draft rubric';
-    return saveImportedDraft(store, title, `1,${title},1,no`);
+    return SaveImportedDraft(store, title, `1,${title},1,no`);
+}
+
+/** @deprecated Use {@link DraftFromDescription}. */
+export async function draftFromDescription(store: DraftVersionStore, description: string): Promise<{ id: string; status: 'Draft' }> {
+    return DraftFromDescription(store, description);
 }
 
 /** Numbered-matrix rows as criterion snapshots. A row that has children is a group. */
-export function nodesFromMatrix(csv: string): RubricNodeSnapshot[] {
-    const imported = importMatrix(csv);
+export function NodesFromMatrix(csv: string): RubricNodeSnapshot[] {
+    const imported = ImportMatrix(csv);
     const ids = new Map(imported.map(row => [row.key, randomUUID()]));
     const parentKeys = new Set(imported.map(row => row.parentKey).filter((key): key is string => !!key));
     return imported.map((row, sequence) => ({
@@ -99,14 +129,29 @@ export function nodesFromMatrix(csv: string): RubricNodeSnapshot[] {
     }));
 }
 
-/** One criterion whose name is the description. This path does not publish. */
-export function nodesFromDescription(description: string): RubricNodeSnapshot[] {
-    const title = description.trim().replace(/[\r\n,]+/g, ' ').slice(0, 120) || 'Draft rubric';
-    return nodesFromMatrix(`1,${title},1,no`);
+/** @deprecated Use {@link NodesFromMatrix}. */
+export function nodesFromMatrix(csv: string): RubricNodeSnapshot[] {
+    return NodesFromMatrix(csv);
 }
 
-export function publishImportedDraft(): { ok: false; message: string } {
+/** One criterion whose name is the description. This path does not publish. */
+export function NodesFromDescription(description: string): RubricNodeSnapshot[] {
+    const title = description.trim().replace(/[\r\n,]+/g, ' ').slice(0, 120) || 'Draft rubric';
+    return NodesFromMatrix(`1,${title},1,no`);
+}
+
+/** @deprecated Use {@link NodesFromDescription}. */
+export function nodesFromDescription(description: string): RubricNodeSnapshot[] {
+    return NodesFromDescription(description);
+}
+
+export function PublishImportedDraft(): { ok: false; message: string } {
     return { ok: false, message: 'The architect does not publish.' };
+}
+
+/** @deprecated Use {@link PublishImportedDraft}. */
+export function publishImportedDraft(): { ok: false; message: string } {
+    return PublishImportedDraft();
 }
 
 function slug(value: string): string {

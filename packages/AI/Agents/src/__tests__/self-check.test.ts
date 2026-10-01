@@ -1,45 +1,45 @@
 import { describe, expect, it } from 'vitest';
 import { RubricEngine, type RubricRecords } from '@memberjunction/rubrics';
 import type { RubricScoreResult } from '@memberjunction/rubrics-base';
-import { decideSelfCheck, executeSelfCheck, type SelfCheckEngine, type SelfCheckValidation } from '../self-check.js';
+import { DecideSelfCheck, ExecuteSelfCheck, type SelfCheckEngine, type SelfCheckValidation } from '../self-check.js';
 
-const link = { purpose: 'SelfCheck', status: 'Active', maxAttempts: 2 };
+const link = { Purpose: 'SelfCheck', Status: 'Active', MaxAttempts: 2 };
 
 describe('agent self-check', () => {
     it('skips when there is no Active SelfCheck link', () => {
-        expect(decideSelfCheck({ agentKind: 'loop', link: null, attempt: 1, passed: false }).action).toBe('skip');
-        expect(decideSelfCheck({ agentKind: 'loop', link: { purpose: 'Evaluation', status: 'Active' }, attempt: 1, passed: false }).action).toBe('skip');
+        expect(DecideSelfCheck({ agentKind: 'loop', link: null, attempt: 1, passed: false }).Action).toBe('skip');
+        expect(DecideSelfCheck({ agentKind: 'loop', link: { Purpose: 'Evaluation', Status: 'Active' }, attempt: 1, passed: false }).Action).toBe('skip');
     });
 
     it('retries a loop agent once, then fails without dropping the reason', () => {
-        const failed = [{ key: 'accuracy', rationale: 'The figure is wrong.' }];
-        const first = decideSelfCheck({ agentKind: 'loop', link, attempt: 1, passed: false, failedCriteria: failed });
-        expect(first.action).toBe('retry');
-        expect(first.message).toMatch(/accuracy/);
-        const second = decideSelfCheck({ agentKind: 'loop', link, attempt: 2, passed: false, failedCriteria: failed });
-        expect(second.action).toBe('fail');
-        expect(second.message).toMatch(/The figure is wrong/);
+        const failed = [{ Key: 'accuracy', Rationale: 'The figure is wrong.' }];
+        const first = DecideSelfCheck({ agentKind: 'loop', link, attempt: 1, passed: false, failedCriteria: failed });
+        expect(first.Action).toBe('retry');
+        expect(first.Message).toMatch(/accuracy/);
+        const second = DecideSelfCheck({ agentKind: 'loop', link, attempt: 2, passed: false, failedCriteria: failed });
+        expect(second.Action).toBe('fail');
+        expect(second.Message).toMatch(/The figure is wrong/);
     });
 
     it('records a flow-agent failure and does not retry', () => {
-        const decision = decideSelfCheck({ agentKind: 'flow', link, attempt: 1, passed: false, failedCriteria: [{ key: 'evidence' }] });
-        expect(decision.action).toBe('fail');
+        const decision = DecideSelfCheck({ agentKind: 'flow', link, attempt: 1, passed: false, failedCriteria: [{ Key: 'evidence' }] });
+        expect(decision.Action).toBe('fail');
     });
 
     it('accepts a passing score', () => {
-        expect(decideSelfCheck({ agentKind: 'loop', link, attempt: 1, passed: true }).action).toBe('accept');
+        expect(DecideSelfCheck({ agentKind: 'loop', link, attempt: 1, passed: true }).Action).toBe('accept');
     });
 
     it('records one evaluation and keeps Success when the score passes', async () => {
         const steps: SelfCheckValidation[] = [];
         const seen: unknown[] = [];
         const engine: SelfCheckEngine = {
-            async evaluateRecord(request) {
+            async EvaluateRecord(request) {
                 seen.push(request);
                 return { evaluationId: 'eval-pass', outcome: 'Passed', criteria: [] };
             },
         };
-        const done = await executeSelfCheck({
+        const done = await ExecuteSelfCheck({
             engine,
             link: { ...link, rubricId: 'rubric', passThreshold: 0.6 },
             runId: 'run-1',
@@ -55,7 +55,7 @@ describe('agent self-check', () => {
             passThreshold: 0.6,
         }]);
         expect(done.step).toBe('Success');
-        expect(steps).toEqual([{ stepType: 'Validation', evaluationId: 'eval-pass', passed: true, message: '' }]);
+        expect(steps).toEqual([{ StepType: 'Validation', EvaluationId: 'eval-pass', Passed: true, Message: '' }]);
     });
 
     it('records one failing evaluation and keeps the rationale from the real engine result', async () => {
@@ -88,8 +88,8 @@ describe('agent self-check', () => {
             async createDraft() { return { id: 'eval-fail', status: 'Draft' }; },
             async submit() { return score; },
             async fail() { throw new Error('should not fail the draft'); },
-        }, records, { async run() { return JSON.stringify({ decisions: [{ key: 'accuracy', level: 'Miss', rationale: 'The figure is wrong.' }] }); } });
-        const done = await executeSelfCheck({
+        }, records, { async Run() { return JSON.stringify({ decisions: [{ key: 'accuracy', level: 'Miss', rationale: 'The figure is wrong.' }] }); } });
+        const done = await ExecuteSelfCheck({
             engine,
             link: { ...link, rubricId: 'rubric', passThreshold: null },
             runId: 'run-1',
@@ -98,8 +98,8 @@ describe('agent self-check', () => {
             record: step => steps.push(step),
         });
         expect(done.step).toBe('Failed');
-        expect(steps[0].evaluationId).toBe('eval-fail');
-        expect(steps[0].message).toBe('accuracy: The figure is wrong.');
-        expect(steps[0].message).not.toMatch(/could not score/i);
+        expect(steps[0].EvaluationId).toBe('eval-fail');
+        expect(steps[0].Message).toBe('accuracy: The figure is wrong.');
+        expect(steps[0].Message).not.toMatch(/could not score/i);
     });
 });

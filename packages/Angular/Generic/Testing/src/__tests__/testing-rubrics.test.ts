@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { criterionFailureRates, criterionIdentity, disagreementFromScores, rubricPickerOptions, rubricRunView, scoreTrend } from '../lib/models/testing-rubrics';
+import { CriterionFailureRates, CriterionIdentity, DisagreementFromScores, RubricPickerOptions, rubricRunView, ScoreTrend } from '../lib/models/testing-rubrics';
 
 describe('testing rubric UI', () => {
     it('orders the review queue by the largest human–AI gap', () => {
-        const queue = disagreementFromScores({
+        const queue = DisagreementFromScores({
             evaluations: [
                 { id: 'human-facts', subjectId: 'run', versionId: 'v1', evaluatorType: 'Human', status: 'Submitted' },
                 { id: 'ai-facts', subjectId: 'run', versionId: 'v1', evaluatorType: 'AIPrompt', status: 'Submitted' },
@@ -21,8 +21,8 @@ describe('testing rubric UI', () => {
         });
         expect(queue.map(row => row.key)).toEqual(['run|v1|facts', 'run|v1|tone']);
         expect(queue[0].gap).toBeCloseTo(0.6);
-        const facts = criterionIdentity({ CriterionID: 'c-facts', Criterion: 'Facts' });
-        const twoSubjects = disagreementFromScores({
+        const facts = CriterionIdentity({ CriterionID: 'c-facts', Criterion: 'Facts' });
+        const twoSubjects = DisagreementFromScores({
             evaluations: [
                 { id: 'a-human', subjectId: 'run-a', versionId: 'v1', evaluatorType: 'Human', status: 'Submitted' },
                 { id: 'a-ai', subjectId: 'run-a', versionId: 'v1', evaluatorType: 'AIPrompt', status: 'Submitted' },
@@ -38,18 +38,18 @@ describe('testing rubric UI', () => {
         });
         expect(twoSubjects.map(row => row.key)).toEqual(['run-a|v1|c-facts', 'run-b|v1|c-facts']);
         expect(twoSubjects.every(row => row.name === 'Facts')).toBe(true);
-        expect(criterionIdentity({}).key).toBe('');
+        expect(CriterionIdentity({}).key).toBe('');
     });
 
     it('trends one suite and reports per-criterion failure rates', () => {
-        const trend = scoreTrend([
+        const trend = ScoreTrend([
             { at: '2026-02-01', score: 0.5, scopeId: 'suite' },
             { at: '2026-01-01', score: 1, scopeId: 'suite' },
             { at: '2026-03-01', score: null, scopeId: 'suite' },
             { at: '2026-01-01', score: 0, scopeId: 'other' },
         ], 'suite');
         expect(trend.map(point => point.score)).toEqual([1, 0.5]);
-        const rates = criterionFailureRates([
+        const rates = CriterionFailureRates([
             { key: 'facts', normalizedScore: 0.4, passThreshold: 0.7 },
             { key: 'facts', normalizedScore: 0.9, passThreshold: 0.7 },
             { key: 'tone', normalizedScore: 1, passThreshold: 0.7 },
@@ -64,7 +64,7 @@ describe('testing rubric UI', () => {
     });
 
     it('offers active rubrics by name and builds a run result with rationale and evidence', () => {
-        expect(rubricPickerOptions([
+        expect(RubricPickerOptions([
             { ID: 'b', Name: 'Beta', Status: 'Active' },
             { ID: 'a', Name: 'Alpha', Status: 'Disabled' },
             { ID: 'c', Name: 'Caret', Status: 'Active' },

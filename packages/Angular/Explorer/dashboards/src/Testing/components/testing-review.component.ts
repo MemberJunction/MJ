@@ -1171,11 +1171,11 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.restoreState();
     this.setupSubscriptions();
-    void this.loadDisagreement();
+    void this.LoadDisagreement();
   }
 
   /** Per-criterion human–AI gap, largest first. An empty result leaves the section hidden. */
-  async loadDisagreement(): Promise<void> {
+  async LoadDisagreement(): Promise<void> {
     try {
       const provider = Metadata.Provider;
       if (!provider) return;
@@ -1211,6 +1211,11 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
     } catch {
       this.Disagreement = [];
     }
+  }
+
+  /** @deprecated Use {@link LoadDisagreement}. */
+  async loadDisagreement(): Promise<void> {
+    return this.LoadDisagreement();
   }
 
   ngOnDestroy(): void {

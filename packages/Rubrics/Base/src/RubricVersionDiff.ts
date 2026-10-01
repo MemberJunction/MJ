@@ -1,4 +1,4 @@
-import { canonicalJson, contentProjection, scoringProjection } from './canonical.js';
+import { CanonicalJson, ContentProjection, ScoringProjection } from './canonical.js';
 import type { RubricNodeSnapshot, RubricVersionSnapshot, VersionBump, VersionChange, VersionDiffResult } from './types.js';
 
 const RANK: Record<'Patch' | 'Minor' | 'Major', number> = { Patch: 1, Minor: 2, Major: 3 };
@@ -29,7 +29,7 @@ const RANK: Record<'Patch' | 'Minor' | 'Major', number> = { Patch: 1, Minor: 2, 
  * ParentID strings would mark every node major.
  */
 export class RubricVersionDiff {
-    public static diff(
+    public static Diff(
         base: RubricVersionSnapshot | null,
         draft: RubricVersionSnapshot,
         requestedBump?: 'Major' | 'Minor' | 'Patch' | null,
@@ -56,14 +56,33 @@ export class RubricVersionDiff {
         };
     }
 
+    /** @deprecated Use {@link Diff}. */
+    public static diff(
+        base: RubricVersionSnapshot | null,
+        draft: RubricVersionSnapshot,
+        requestedBump?: 'Major' | 'Minor' | 'Patch' | null,
+    ): VersionDiffResult {
+        return this.Diff(base, draft, requestedBump);
+    }
+
     /** Canonical major-row projection. Hash this for ScoringHash. */
+    public static ScoringCanonical(version: RubricVersionSnapshot): string {
+        return CanonicalJson(ScoringProjection(version));
+    }
+
+    /** @deprecated Use {@link ScoringCanonical}. */
     public static scoringCanonical(version: RubricVersionSnapshot): string {
-        return canonicalJson(scoringProjection(version));
+        return this.ScoringCanonical(version);
     }
 
     /** Canonical full projection. Hash this for ContentHash. */
+    public static ContentCanonical(version: RubricVersionSnapshot): string {
+        return CanonicalJson(ContentProjection(version));
+    }
+
+    /** @deprecated Use {@link ContentCanonical}. */
     public static contentCanonical(version: RubricVersionSnapshot): string {
-        return canonicalJson(contentProjection(version));
+        return this.ContentCanonical(version);
     }
 
     private static collect(base: RubricVersionSnapshot, draft: RubricVersionSnapshot): VersionChange[] {
@@ -117,7 +136,7 @@ export class RubricVersionDiff {
         RubricVersionDiff.pushScalar(changes, scoringBump, subject, 'GateMinimumScore', previous.gateMinimumScore ?? null, node.gateMinimumScore ?? null);
         RubricVersionDiff.pushScalar(changes, scoringBump, subject, 'NotApplicablePolicy', previous.notApplicablePolicy ?? null, node.notApplicablePolicy ?? null);
         RubricVersionDiff.pushScalar(changes, scoringBump, subject, 'RollupMethod', previous.rollupMethod ?? null, node.rollupMethod ?? null);
-        RubricVersionDiff.pushScalar(changes, scoringBump, subject, 'EvaluatorConfig', canonicalJson(previous.evaluatorConfig ?? null), canonicalJson(node.evaluatorConfig ?? null));
+        RubricVersionDiff.pushScalar(changes, scoringBump, subject, 'EvaluatorConfig', CanonicalJson(previous.evaluatorConfig ?? null), CanonicalJson(node.evaluatorConfig ?? null));
         RubricVersionDiff.pushScalar(changes, 'Minor', subject, 'EvidenceRequired', previous.evidenceRequired, node.evidenceRequired);
         RubricVersionDiff.pushScalar(changes, 'Minor', subject, 'RationaleRequired', previous.rationaleRequired, node.rationaleRequired);
         RubricVersionDiff.pushScalar(changes, 'Patch', subject, 'Name', previous.name, node.name);

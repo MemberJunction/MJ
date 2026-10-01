@@ -9,7 +9,7 @@ import { MJAIAgentEntity, MJAIAgentRunEntity, MJTestEntity, MJTestRunEntity } fr
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessage } from '@memberjunction/ai';
 import { BaseTestDriver } from './BaseTestDriver';
-import { ensureImplicitRubricOracle, PublishedVersionPin, resolveRubric, weightsForImplicitRubric, type RubricSuiteRow } from '../oracles/rubric-resolution';
+import { EnsureImplicitRubricOracle, PublishedVersionPin, ResolveRubric, WeightsForImplicitRubric, type RubricSuiteRow } from '../oracles/rubric-resolution';
 import {
     DriverExecutionContext,
     DriverExecutionResult,
@@ -208,8 +208,13 @@ export interface AgentEvalExpectedOutcomes {
  * ```
  */
 /** Said on a completed run whose oracle list is empty, so the failure is not a silent status. */
-export function messageWhenNoOracleJudged(results: unknown[]): string | undefined {
+export function MessageWhenNoOracleJudged(results: unknown[]): string | undefined {
     return results.length === 0 ? 'No oracle judged this run.' : undefined;
+}
+
+/** @deprecated Use {@link MessageWhenNoOracleJudged}. */
+export function messageWhenNoOracleJudged(results: unknown[]): string | undefined {
+    return MessageWhenNoOracleJudged(results);
 }
 
 @RegisterClass(BaseTestDriver, 'AgentEvalDriver')
@@ -343,7 +348,7 @@ export class AgentEvalDriver extends BaseTestDriver {
             // adds an oracle before this point; an empty list means nothing judged the run.
             const score = this.calculateScore(oracleResults, config.scoringWeights);
             const status = this.determineStatus(oracleResults);
-            const errorMessage = messageWhenNoOracleJudged(oracleResults);
+            const errorMessage = MessageWhenNoOracleJudged(oracleResults);
 
             // Count checks
             const passedChecks = oracleResults.filter(r => r.passed).length;
@@ -846,7 +851,7 @@ export class AgentEvalDriver extends BaseTestDriver {
     protected async withResolvedRubric(config: AgentEvalConfig, context: DriverExecutionContext): Promise<AgentEvalConfig> {
         const named = config.oracles?.find(oracle => oracle.type === 'rubric')?.config as { rubricId?: string; rubricVersionId?: string } | undefined;
         const suites = await this.loadSuiteChain(context);
-        const choice = resolveRubric({
+        const choice = ResolveRubric({
             run: context.options.rubricId ? { rubricId: context.options.rubricId, versionId: context.options.rubricVersionId } : undefined,
             oracle: named,
             testRubricId: (context.test as { RubricID?: string | null }).RubricID,
@@ -856,22 +861,22 @@ export class AgentEvalDriver extends BaseTestDriver {
         });
         const hadRubric = (config.oracles ?? []).some(oracle => oracle.type === 'rubric');
         const suiteRunId = (context.testRun as { TestSuiteRunID?: string }).TestSuiteRunID || context.testRun.ID;
-        const labelKey = choice.rubricId ? `${suiteRunId}:${choice.rubricId}` : '';
+        const labelKey = choice.RubricId ? `${suiteRunId}:${choice.RubricId}` : '';
         let versionId: string | undefined;
         let versionLabel: string | undefined;
-        if (choice.rubricId && choice.explicitVersion && choice.versionId) {
-            versionId = choice.versionId;
-            versionLabel = await this.lookupVersionLabel(context, choice.versionId);
-        } else if (choice.rubricId) {
-            versionId = await this.versionPins.remember(suiteRunId, choice.rubricId, undefined, async () => {
-                const found = await this.lookupLatestPublished(context, choice.rubricId!);
+        if (choice.RubricId && choice.ExplicitVersion && choice.VersionId) {
+            versionId = choice.VersionId;
+            versionLabel = await this.lookupVersionLabel(context, choice.VersionId);
+        } else if (choice.RubricId) {
+            versionId = await this.versionPins.remember(suiteRunId, choice.RubricId, undefined, async () => {
+                const found = await this.lookupLatestPublished(context, choice.RubricId!);
                 if (found) this.versionLabels.set(labelKey, found.label);
                 return found?.id;
             });
             versionLabel = this.versionLabels.get(labelKey);
         }
-        const oracles = ensureImplicitRubricOracle(config.oracles, choice, versionId, versionLabel);
-        return { ...config, oracles, scoringWeights: weightsForImplicitRubric(config.scoringWeights, oracles.length > (config.oracles?.length ?? 0) && !hadRubric) };
+        const oracles = EnsureImplicitRubricOracle(config.oracles, choice, versionId, versionLabel);
+        return { ...config, oracles, scoringWeights: WeightsForImplicitRubric(config.scoringWeights, oracles.length > (config.oracles?.length ?? 0) && !hadRubric) };
     }
 
     /** The suite and its parents, nearest first. A test subclass can supply this without a database. */
@@ -886,9 +891,9 @@ export class AgentEvalDriver extends BaseTestDriver {
             const row = await this.readOne(context, 'MJ: Test Suites', `ID='${current}'`);
             if (!row) break;
             rows.push({
-                id: String(row.ID),
-                parentId: row.ParentID == null ? null : String(row.ParentID),
-                rubricId: row.RubricID == null ? null : String(row.RubricID),
+                Id: String(row.ID),
+                ParentId: row.ParentID == null ? null : String(row.ParentID),
+                RubricId: row.RubricID == null ? null : String(row.RubricID),
             });
             current = row.ParentID == null ? undefined : String(row.ParentID);
         }

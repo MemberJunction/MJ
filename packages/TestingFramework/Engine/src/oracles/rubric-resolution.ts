@@ -1,16 +1,16 @@
 /** Which rubric a test run uses. The first source that names one wins. */
 export interface RubricChoice {
-    rubricId?: string;
-    versionId?: string;
+    RubricId?: string;
+    VersionId?: string;
     /** Set when the caller named a version. That version is not replaced by the suite pin. */
-    explicitVersion: boolean;
-    source: 'run' | 'oracle' | 'test' | 'suite' | 'agent' | 'none';
+    ExplicitVersion: boolean;
+    Source: 'run' | 'oracle' | 'test' | 'suite' | 'agent' | 'none';
 }
 
 export interface RubricSuiteRow {
-    id: string;
-    parentId?: string | null;
-    rubricId?: string | null;
+    Id: string;
+    ParentId?: string | null;
+    RubricId?: string | null;
 }
 
 /**
@@ -18,7 +18,7 @@ export interface RubricSuiteRow {
  * run override, the rubric oracle's own config, the test, the suite chain
  * walking up ParentID, then the agent's default Evaluation rubric.
  */
-export function resolveRubric(input: {
+export function ResolveRubric(input: {
     run?: { rubricId?: string; versionId?: string };
     oracle?: { rubricId?: string; rubricVersionId?: string };
     testRubricId?: string | null;
@@ -27,26 +27,38 @@ export function resolveRubric(input: {
     agentRubricId?: string | null;
 }): RubricChoice {
     if (input.run?.rubricId) {
-        return { rubricId: input.run.rubricId, versionId: input.run.versionId, explicitVersion: !!input.run.versionId, source: 'run' };
+        return { RubricId: input.run.rubricId, VersionId: input.run.versionId, ExplicitVersion: !!input.run.versionId, Source: 'run' };
     }
     if (input.oracle?.rubricId || input.oracle?.rubricVersionId) {
-        return { rubricId: input.oracle.rubricId, versionId: input.oracle.rubricVersionId, explicitVersion: !!input.oracle.rubricVersionId, source: 'oracle' };
+        return { RubricId: input.oracle.rubricId, VersionId: input.oracle.rubricVersionId, ExplicitVersion: !!input.oracle.rubricVersionId, Source: 'oracle' };
     }
-    if (input.testRubricId) return { rubricId: input.testRubricId, explicitVersion: false, source: 'test' };
+    if (input.testRubricId) return { RubricId: input.testRubricId, ExplicitVersion: false, Source: 'test' };
     const fromSuite = walkSuites(input.suites ?? [], input.suiteId);
-    if (fromSuite) return { rubricId: fromSuite, explicitVersion: false, source: 'suite' };
-    if (input.agentRubricId) return { rubricId: input.agentRubricId, explicitVersion: false, source: 'agent' };
-    return { explicitVersion: false, source: 'none' };
+    if (fromSuite) return { RubricId: fromSuite, ExplicitVersion: false, Source: 'suite' };
+    if (input.agentRubricId) return { RubricId: input.agentRubricId, ExplicitVersion: false, Source: 'agent' };
+    return { ExplicitVersion: false, Source: 'none' };
+}
+
+/** @deprecated Use {@link ResolveRubric}. */
+export function resolveRubric(input: {
+    run?: { rubricId?: string; versionId?: string };
+    oracle?: { rubricId?: string; rubricVersionId?: string };
+    testRubricId?: string | null;
+    suites?: RubricSuiteRow[];
+    suiteId?: string;
+    agentRubricId?: string | null;
+}): RubricChoice {
+    return ResolveRubric(input);
 }
 
 function walkSuites(suites: RubricSuiteRow[], start?: string): string | undefined {
-    const byId = new Map(suites.map(suite => [suite.id, suite]));
+    const byId = new Map(suites.map(suite => [suite.Id, suite]));
     const seen = new Set<string>();
     let current = start ? byId.get(start) : undefined;
-    while (current && !seen.has(current.id)) {
-        seen.add(current.id);
-        if (current.rubricId) return current.rubricId;
-        current = current.parentId ? byId.get(current.parentId) : undefined;
+    while (current && !seen.has(current.Id)) {
+        seen.add(current.Id);
+        if (current.RubricId) return current.RubricId;
+        current = current.ParentId ? byId.get(current.ParentId) : undefined;
     }
     return undefined;
 }
@@ -59,7 +71,7 @@ function walkSuites(suites: RubricSuiteRow[], start?: string): string | undefine
 export class PublishedVersionPin {
     private readonly pinned = new Map<string, Map<string, string>>();
 
-    public async remember(suiteRunId: string, rubricId: string, explicitVersionId: string | undefined, lookupLatest: () => Promise<string | undefined>): Promise<string | undefined> {
+    public async Remember(suiteRunId: string, rubricId: string, explicitVersionId: string | undefined, lookupLatest: () => Promise<string | undefined>): Promise<string | undefined> {
         if (explicitVersionId) return explicitVersionId;
         const suite = this.pinned.get(suiteRunId) ?? new Map<string, string>();
         this.pinned.set(suiteRunId, suite);
@@ -69,11 +81,17 @@ export class PublishedVersionPin {
         if (latest) suite.set(rubricId, latest);
         return latest;
     }
+
+    /** @deprecated Use {@link Remember}. */
+    public async remember(suiteRunId: string, rubricId: string, explicitVersionId: string | undefined, lookupLatest: () => Promise<string | undefined>): Promise<string | undefined> {
+        return this.Remember(suiteRunId, rubricId, explicitVersionId, lookupLatest);
+    }
 }
 
 export interface OracleConfigLike {
-    type: string;
-    config?: Record<string, unknown>;
+    /** Same field as IOracle.type. Test configuration stores it as `type`. */
+    type: string; // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    config?: Record<string, unknown>; // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -81,25 +99,35 @@ export interface OracleConfigLike {
  * A test that has an llm-judge keeps that oracle list, and the rubric is not added.
  * A test with no llm-judge and no rubric oracle gets the resolved version.
  */
-export function ensureImplicitRubricOracle(oracles: OracleConfigLike[] | undefined, choice: RubricChoice, versionId?: string, versionLabel?: string): OracleConfigLike[] {
+export function EnsureImplicitRubricOracle(oracles: OracleConfigLike[] | undefined, choice: RubricChoice, versionId?: string, versionLabel?: string): OracleConfigLike[] {
     const list = oracles ?? [];
     if (list.some(oracle => oracle.type === 'llm-judge')) return list;
-    if (!choice.rubricId || !versionId) return list;
+    if (!choice.RubricId || !versionId) return list;
     const pinned = { rubricVersionId: versionId, versionLabel };
     if (list.some(oracle => oracle.type === 'rubric')) {
         return list.map(oracle => oracle.type === 'rubric'
             ? { ...oracle, config: { ...pinned, ...oracle.config, versionLabel: oracle.config?.versionLabel ?? versionLabel } }
             : oracle);
     }
-    return [...list, { type: 'rubric', config: { rubricId: choice.rubricId, ...pinned } }];
+    return [...list, { type: 'rubric', config: { rubricId: choice.RubricId, ...pinned } }];
+}
+
+/** @deprecated Use {@link EnsureImplicitRubricOracle}. */
+export function ensureImplicitRubricOracle(oracles: OracleConfigLike[] | undefined, choice: RubricChoice, versionId?: string, versionLabel?: string): OracleConfigLike[] {
+    return EnsureImplicitRubricOracle(oracles, choice, versionId, versionLabel);
 }
 
 /**
  * The implicit rubric always gates status. It contributes to the score when
  * weights are absent, or when the weights already name `rubric`.
  */
-export function weightsForImplicitRubric(weights: Record<string, number> | undefined, addedImplicit: boolean): Record<string, number> | undefined {
+export function WeightsForImplicitRubric(weights: Record<string, number> | undefined, addedImplicit: boolean): Record<string, number> | undefined {
     if (!addedImplicit) return weights;
     if (!weights) return { rubric: 1 };
     return weights;
+}
+
+/** @deprecated Use {@link WeightsForImplicitRubric}. */
+export function weightsForImplicitRubric(weights: Record<string, number> | undefined, addedImplicit: boolean): Record<string, number> | undefined {
+    return WeightsForImplicitRubric(weights, addedImplicit);
 }

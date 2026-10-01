@@ -23,7 +23,7 @@ import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@me
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { providerRubricEngine } from '@memberjunction/rubrics';
-import { executeSelfCheck, type SelfCheckLink } from './self-check';
+import { ExecuteSelfCheck, type SelfCheckLink } from './self-check';
 import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
 import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString, IsPlainObject, CleanAndParseJSON } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
@@ -6384,15 +6384,15 @@ export class BaseAgent {
         }
         if (!row?.RubricID) return null;
         const link: SelfCheckLink & { rubricId: string; passThreshold?: number | null } = {
-            purpose: String(row.Purpose ?? ''),
-            status: String(row.Status ?? ''),
-            maxAttempts: row.MaxSelfCheckAttempts ?? null,
+            Purpose: String(row.Purpose ?? ''),
+            Status: String(row.Status ?? ''),
+            MaxAttempts: row.MaxSelfCheckAttempts ?? null,
             rubricId: String(row.RubricID),
             passThreshold: row.PassThreshold ?? null,
         };
         this._selfCheckAttempts += 1;
         const provider = params.provider || this._activeProvider;
-        const outcome = await executeSelfCheck({
+        const outcome = await ExecuteSelfCheck({
             engine: providerRubricEngine(provider, params.contextUser),
             link,
             runId: agentRun.ID,
@@ -6403,14 +6403,14 @@ export class BaseAgent {
                     stepType: 'Validation',
                     stepName: 'Rubric self-check',
                     contextUser: params.contextUser,
-                    inputData: { rubricEvaluationId: step.evaluationId, passed: step.passed },
+                    inputData: { rubricEvaluationId: step.EvaluationId, passed: step.Passed },
                 });
-                await this.finalizeStepEntity(saved, step.passed, step.message || undefined);
+                await this.finalizeStepEntity(saved, step.Passed, step.Message || undefined);
             },
         });
         if (outcome.step === 'Success') return null;
-        if (outcome.step === 'Retry') return { ...nextStep, step: 'Retry', message: outcome.decision.message };
-        return { ...nextStep, step: 'Failed', message: outcome.decision.message, errorMessage: outcome.decision.message };
+        if (outcome.step === 'Retry') return { ...nextStep, step: 'Retry', message: outcome.decision.Message };
+        return { ...nextStep, step: 'Failed', message: outcome.decision.Message, errorMessage: outcome.decision.Message };
     }
 
     protected async checkExecutionGuardrails<P>(

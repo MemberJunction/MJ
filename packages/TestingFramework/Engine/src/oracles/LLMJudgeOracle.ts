@@ -5,7 +5,7 @@
 
 import { IOracle } from './IOracle';
 import { BuildJudgeTrace, ReadJudgeCriteria, ReadJudgeTimeoutMS } from './judge-trace';
-import { inlineOracleResult, inlineVersion, scoreInline } from './inline-rubric';
+import { InlineOracleResult, InlineVersion, ScoreInline } from './inline-rubric';
 import { OracleInput, OracleConfig, OracleResult } from '../types';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -136,7 +136,7 @@ Respond in JSON format:
             const texts = leaves.map(leaf => leaf.text);
             const strict = config.strictMode === true;
             const passThreshold = typeof config.passThreshold === 'number' ? config.passThreshold : 0.7;
-            const version = inlineVersion(leaves, strict, passThreshold);
+            const version = InlineVersion(leaves, strict, passThreshold);
             const rendered = renderRubricEvaluatorPrompt(version, { text: judgeSubject(trace) }, 'SinglePass');
 
             await AIEngine.Instance.Config(false, input.contextUser);
@@ -171,10 +171,10 @@ Respond in JSON format:
             }
 
             const answers = answersFromModel(result.result, texts);
-            const scored = scoreInline(leaves, answers, { strict, passThreshold });
+            const scored = ScoreInline(leaves, answers, { strict, passThreshold });
             const evidence: (string | undefined)[] = [];
             for (const answer of answers) evidence[answer.index] = answer.rationale;
-            const report = inlineOracleResult(texts, scored, evidence);
+            const report = InlineOracleResult(texts, scored, evidence);
             report.details = { ...(report.details as object), llmModel: config.model || 'default', llmCost: result.cost };
             return report;
 

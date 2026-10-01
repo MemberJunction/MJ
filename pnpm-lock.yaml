@@ -8838,6 +8838,9 @@ importers:
       '@angular/core':
         specifier: ^21.2.22
         version: 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)
+      '@memberjunction/core':
+        specifier: 6.2.0-edge.1
+        version: link:../../../MJCore
       '@memberjunction/ng-ui-components':
         specifier: 6.2.0-edge.1
         version: link:../ui-components

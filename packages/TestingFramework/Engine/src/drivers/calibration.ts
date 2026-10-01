@@ -1,7 +1,7 @@
 import type { OracleResult } from '@memberjunction/testing-engine-base';
 
 /** Rank a scale's levels by sequence into indexes 0..n-1. n is every level on the scale. */
-export function rankLevels(levels: { id: string; scaleId: string; sequence: number }[]): { indexByLevel: Map<string, number>; countByScale: Map<string, number> } {
+export function RankLevels(levels: { id: string; scaleId: string; sequence: number }[]): { indexByLevel: Map<string, number>; countByScale: Map<string, number> } {
     const byScale = new Map<string, { id: string; sequence: number }[]>();
     for (const level of levels) {
         const list = byScale.get(level.scaleId) ?? [];
@@ -18,8 +18,13 @@ export function rankLevels(levels: { id: string; scaleId: string; sequence: numb
     return { indexByLevel, countByScale };
 }
 
+/** @deprecated Use {@link RankLevels}. */
+export function rankLevels(levels: { id: string; scaleId: string; sequence: number }[]): { indexByLevel: Map<string, number>; countByScale: Map<string, number> } {
+    return RankLevels(levels);
+}
+
 /** Pair submitted human and AI scores. Criterion identity is the criterion Key. Level indexes are ranked, not the stored sequence. */
-export function calibrationPairs(input: {
+export function CalibrationPairs(input: {
     evaluations: { id: string; subjectId: string; versionId: string; evaluatorType: string; status: string }[];
     versions: { id: string; major: number }[];
     scores: { evaluationId: string; criterionId: string; normalizedScore: number | null; scaleLevelId: string | null }[];
@@ -29,7 +34,7 @@ export function calibrationPairs(input: {
     const majorByVersion = new Map(input.versions.map(row => [row.id, row.major]));
     const keyByCriterion = new Map(input.criteria.map(row => [row.id, row.key || row.id]));
     const levelById = new Map(input.levels.map(level => [level.id, level]));
-    const { indexByLevel, countByScale } = rankLevels(input.levels);
+    const { indexByLevel, countByScale } = RankLevels(input.levels);
     const buckets = new Map<string, { subjectId: string; criterionId: string; major: number; human?: { level: number; score: number; categories: number }; ai?: { level: number; score: number; categories: number } }>();
     for (const score of input.scores) {
         if (score.normalizedScore == null) continue;
@@ -65,6 +70,17 @@ export function calibrationPairs(input: {
     return pairs;
 }
 
+/** @deprecated Use {@link CalibrationPairs}. */
+export function calibrationPairs(input: {
+    evaluations: { id: string; subjectId: string; versionId: string; evaluatorType: string; status: string }[];
+    versions: { id: string; major: number }[];
+    scores: { evaluationId: string; criterionId: string; normalizedScore: number | null; scaleLevelId: string | null }[];
+    levels: { id: string; scaleId: string; sequence: number }[];
+    criteria: { id: string; key: string }[];
+}): CalibrationPair[] {
+    return CalibrationPairs(input);
+}
+
 export interface CalibrationPair {
     subjectId: string;
     criterionId: string;
@@ -97,7 +113,7 @@ export interface CriterionAgreement {
 }
 
 /** Quadratic-weighted Cohen's kappa. Returns null when there are no paired ratings or fewer than two levels. */
-export function quadraticWeightedKappa(humanLevels: number[], aiLevels: number[], categoryCount: number): number | null {
+export function QuadraticWeightedKappa(humanLevels: number[], aiLevels: number[], categoryCount: number): number | null {
     const count = Math.min(humanLevels.length, aiLevels.length);
     if (count === 0 || categoryCount < 2) return null;
     const observed = Array.from({ length: categoryCount }, () => Array(categoryCount).fill(0));
@@ -128,8 +144,13 @@ export function quadraticWeightedKappa(humanLevels: number[], aiLevels: number[]
     return 1 - weightedObserved / weightedExpected;
 }
 
+/** @deprecated Use {@link QuadraticWeightedKappa}. */
+export function quadraticWeightedKappa(humanLevels: number[], aiLevels: number[], categoryCount: number): number | null {
+    return QuadraticWeightedKappa(humanLevels, aiLevels, categoryCount);
+}
+
 /** One agreement record per criterion. Subjects that do not have both a human and an AI score are left out. */
-export function agreementByCriterion(pairs: CalibrationPair[]): CriterionAgreement[] {
+export function AgreementByCriterion(pairs: CalibrationPair[]): CriterionAgreement[] {
     const groups = new Map<string, CalibrationPair[]>();
     for (const pair of pairs) {
         const list = groups.get(pair.criterionId) ?? [];
@@ -141,22 +162,32 @@ export function agreementByCriterion(pairs: CalibrationPair[]): CriterionAgreeme
         const exactAgreement = rows.filter(row => row.humanLevel === row.aiLevel).length / sampleSize;
         const meanAbsoluteError = rows.reduce((sum, row) => sum + Math.abs(row.humanScore - row.aiScore), 0) / sampleSize;
         const categoryCount = Math.max(...rows.map(row => row.categoryCount));
-        const weightedKappa = quadraticWeightedKappa(rows.map(row => row.humanLevel), rows.map(row => row.aiLevel), categoryCount) ?? 0;
+        const weightedKappa = QuadraticWeightedKappa(rows.map(row => row.humanLevel), rows.map(row => row.aiLevel), categoryCount) ?? 0;
         return { criterionId, sampleSize, exactAgreement, meanAbsoluteError, weightedKappa };
     }).sort((left, right) => left.criterionId.localeCompare(right.criterionId));
 }
 
-export function clampScore(kappa: number): number {
+/** @deprecated Use {@link AgreementByCriterion}. */
+export function agreementByCriterion(pairs: CalibrationPair[]): CriterionAgreement[] {
+    return AgreementByCriterion(pairs);
+}
+
+export function ClampScore(kappa: number): number {
     if (!Number.isFinite(kappa)) return 0;
     return Math.min(1, Math.max(0, kappa));
+}
+
+/** @deprecated Use {@link ClampScore}. */
+export function clampScore(kappa: number): number {
+    return ClampScore(kappa);
 }
 
 /**
  * One oracle per criterion and one overall. The test score is the mean of the
  * per-criterion quadratic-weighted kappas, clamped to 0..1.
  */
-export function calibrationOracles(pairs: CalibrationPair[], expected: CalibrationExpectation = {}): { score: number; oracles: OracleResult[] } {
-    const criteria = agreementByCriterion(pairs);
+export function CalibrationOracles(pairs: CalibrationPair[], expected: CalibrationExpectation = {}): { score: number; oracles: OracleResult[] } {
+    const criteria = AgreementByCriterion(pairs);
     if (criteria.length === 0) {
         return {
             score: 0,
@@ -164,10 +195,15 @@ export function calibrationOracles(pairs: CalibrationPair[], expected: Calibrati
         };
     }
     const overallKappa = criteria.reduce((sum, row) => sum + row.weightedKappa, 0) / criteria.length;
-    const score = clampScore(overallKappa);
+    const score = ClampScore(overallKappa);
     const oracles = criteria.map(row => criterionOracle(row, expected.perCriterion?.[row.criterionId] ?? expected));
     oracles.push(overallOracle(criteria, overallKappa, score, expected));
     return { score, oracles };
+}
+
+/** @deprecated Use {@link CalibrationOracles}. */
+export function calibrationOracles(pairs: CalibrationPair[], expected: CalibrationExpectation = {}): { score: number; oracles: OracleResult[] } {
+    return CalibrationOracles(pairs, expected);
 }
 
 function criterionOracle(row: CriterionAgreement, thresholds: CalibrationThresholds): OracleResult {
@@ -175,7 +211,7 @@ function criterionOracle(row: CriterionAgreement, thresholds: CalibrationThresho
     return {
         oracleType: 'rubric-calibration',
         passed,
-        score: clampScore(row.weightedKappa),
+        score: ClampScore(row.weightedKappa),
         message: `${row.criterionId}: kappa ${row.weightedKappa.toFixed(3)} (n=${row.sampleSize}), exact ${row.exactAgreement.toFixed(3)}, mae ${row.meanAbsoluteError.toFixed(3)}`,
         details: { ...row, scope: 'criterion' },
     };

@@ -10,9 +10,9 @@
     A feature migration does not UPDATE __mj.Entity or __mj.EntityField. mj sync push applies
     the folder. The release build is what turns that folder into a metadata migration.
 
-    This file is separate from V202609302204 because the inner views cannot be created until
+    This file is separate from V202609302342 because the inner views cannot be created until
     that file's CodeGen section has registered the entities, and hand-written SQL cannot sit
-    below a CodeGen section that is replaced wholesale. V202609302206 creates the wrappers
+    below a CodeGen section that is replaced wholesale. V202609302344 creates the wrappers
     after these inner views exist.
 
     The section below the banner was captured after mj sync push --dir=metadata --include=entities

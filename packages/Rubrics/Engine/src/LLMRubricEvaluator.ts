@@ -45,7 +45,7 @@ export class LLMRubricEvaluator extends RubricEvaluator {
     /**
      * Renders the prompt, runs it, and scores the accepted answers with RubricScoring.
      */
-    public async evaluateContent(version: RubricVersionSnapshot, content: RubricSubjectContent): Promise<LLMRubricResult> {
+    public async EvaluateContent(version: RubricVersionSnapshot, content: RubricSubjectContent): Promise<LLMRubricResult> {
         const text = content.text ?? '';
         const decisions = this.mode === 'SinglePass'
             ? await this.singlePass(version, content)
@@ -92,12 +92,17 @@ export class LLMRubricEvaluator extends RubricEvaluator {
         return { ...scored, droppedUnknownKeys, droppedQuotes };
     }
 
+    /** @deprecated Use {@link EvaluateContent}. */
+    public async evaluateContent(version: RubricVersionSnapshot, content: RubricSubjectContent): Promise<LLMRubricResult> {
+        return this.EvaluateContent(version, content);
+    }
+
     /**
      * Runs the rubric n times. Each criterion keeps the median level by normalized
      * value, and the result records every level that appeared. Scoring runs once,
      * on those median answers.
      */
-    public async evaluateSamples(version: RubricVersionSnapshot, content: RubricSubjectContent, samples: number): Promise<LLMRubricResult> {
+    public async EvaluateSamples(version: RubricVersionSnapshot, content: RubricSubjectContent, samples: number): Promise<LLMRubricResult> {
         const runs: LLMDecision[][] = [];
         for (let i = 0; i < samples; i++) {
             runs.push(this.mode === 'SinglePass' ? await this.singlePass(version, content) : await this.perCriterion(version, content));
@@ -138,8 +143,13 @@ export class LLMRubricEvaluator extends RubricEvaluator {
         return { ...scored, droppedUnknownKeys: scored.droppedUnknownKeys + droppedUnknownKeys, sampleSpread };
     }
 
+    /** @deprecated Use {@link EvaluateSamples}. */
+    public async evaluateSamples(version: RubricVersionSnapshot, content: RubricSubjectContent, samples: number): Promise<LLMRubricResult> {
+        return this.EvaluateSamples(version, content, samples);
+    }
+
     private async singlePass(version: RubricVersionSnapshot, content: RubricSubjectContent): Promise<LLMDecision[]> {
-        const raw = await this.runner.run(renderRubricEvaluatorPrompt(version, content, 'SinglePass'));
+        const raw = await this.runner.run(RenderRubricEvaluatorPrompt(version, content, 'SinglePass'));
         const parsed = JSON.parse(raw) as { decisions?: LLMDecision[] } | LLMDecision[];
         return Array.isArray(parsed) ? parsed : parsed.decisions ?? [];
     }
@@ -147,7 +157,7 @@ export class LLMRubricEvaluator extends RubricEvaluator {
     private async perCriterion(version: RubricVersionSnapshot, content: RubricSubjectContent): Promise<LLMDecision[]> {
         const decisions: LLMDecision[] = [];
         for (const node of version.nodes.filter(item => item.nodeType === 'Criterion')) {
-            const raw = await this.runner.run(renderRubricEvaluatorPrompt(version, content, 'PerCriterion', node));
+            const raw = await this.runner.run(RenderRubricEvaluatorPrompt(version, content, 'PerCriterion', node));
             const parsed = JSON.parse(raw) as LLMDecision;
             decisions.push({ ...parsed, key: node.key });
         }
@@ -159,17 +169,27 @@ export class LLMRubricEvaluator extends RubricEvaluator {
 const TEMPLATE_URL = new URL('../templates/rubric-evaluator.md', import.meta.url);
 
 /** The Rubric Evaluator template file, with its three tokens filled. */
+export function RenderRubricEvaluatorPrompt(
+    version: RubricVersionSnapshot,
+    content: RubricSubjectContent,
+    mode: RubricPromptMode,
+    only?: RubricNodeSnapshot,
+): string {
+    return FillRubricEvaluatorTemplate(readFileSync(TEMPLATE_URL, 'utf8'), version, content, mode, only);
+}
+
+/** @deprecated Use {@link RenderRubricEvaluatorPrompt}. */
 export function renderRubricEvaluatorPrompt(
     version: RubricVersionSnapshot,
     content: RubricSubjectContent,
     mode: RubricPromptMode,
     only?: RubricNodeSnapshot,
 ): string {
-    return fillRubricEvaluatorTemplate(readFileSync(TEMPLATE_URL, 'utf8'), version, content, mode, only);
+    return RenderRubricEvaluatorPrompt(version, content, mode, only);
 }
 
 /** Fills {{instructions}}, {{criteria}}, and {{content}} in the template text. */
-export function fillRubricEvaluatorTemplate(
+export function FillRubricEvaluatorTemplate(
     template: string,
     version: RubricVersionSnapshot,
     content: RubricSubjectContent,
@@ -186,6 +206,17 @@ export function fillRubricEvaluatorTemplate(
         .replaceAll('{{instructions}}', [ask, version.instructions ?? ''].filter(part => part.length > 0).join('\n\n'))
         .replaceAll('{{criteria}}', criteria)
         .replaceAll('{{content}}', body);
+}
+
+/** @deprecated Use {@link FillRubricEvaluatorTemplate}. */
+export function fillRubricEvaluatorTemplate(
+    template: string,
+    version: RubricVersionSnapshot,
+    content: RubricSubjectContent,
+    mode: RubricPromptMode,
+    only?: RubricNodeSnapshot,
+): string {
+    return FillRubricEvaluatorTemplate(template, version, content, mode, only);
 }
 
 function perCriterionConfidence(decision: LLMDecision, chosen: string | undefined): number | null {

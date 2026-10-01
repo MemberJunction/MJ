@@ -1,7 +1,7 @@
 import { BaseEntity, type ValidationResult } from '@memberjunction/core';
 import { MJRubricEvaluationScoreEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { validateEvaluationScores, type SubmitEvaluationInput } from './rubrics/evaluationSubmit.js';
+import { ValidateEvaluationScores, type SubmitEvaluationInput } from './rubrics/evaluationSubmit.js';
 
 /**
  * Validates one score row against its version.
@@ -17,11 +17,25 @@ export class MJRubricEvaluationScoreEntityServer extends MJRubricEvaluationScore
      * Set by the evaluation server before it saves a group rollup row.
      * A client save leaves this false, so IsComputed is refused.
      */
-    public allowServerComputedWrite = false;
+    public AllowServerComputedWrite = false;
+
+    /** @deprecated Use {@link AllowServerComputedWrite}. */
+    public get allowServerComputedWrite() {
+        return this.AllowServerComputedWrite;
+    }
+    /** @deprecated Use {@link AllowServerComputedWrite}. */
+    public set allowServerComputedWrite(value) {
+        this.AllowServerComputedWrite = value;
+    }
 
     /** Throws RubricEvaluationError when this row is not a legal client write. */
+    public AssertWritable(input: SubmitEvaluationInput): void {
+        ValidateEvaluationScores(input);
+    }
+
+    /** @deprecated Use {@link AssertWritable}. */
     public assertWritable(input: SubmitEvaluationInput): void {
-        validateEvaluationScores(input);
+        return this.AssertWritable(input);
     }
 
     /**
@@ -30,7 +44,7 @@ export class MJRubricEvaluationScoreEntityServer extends MJRubricEvaluationScore
      */
     public override async ValidateAsync(): Promise<ValidationResult> {
         const result = await super.ValidateAsync();
-        if (this.IsComputed && !this.allowServerComputedWrite) {
+        if (this.IsComputed && !this.AllowServerComputedWrite) {
             result.Success = false;
             result.Errors.push({ Message: 'Computed score rows are written by the server.', FieldName: 'IsComputed' } as never);
         }

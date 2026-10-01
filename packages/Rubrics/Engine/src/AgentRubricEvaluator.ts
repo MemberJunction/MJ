@@ -36,7 +36,7 @@ function decisionsFrom(payload: EvaluationAgentDecision | EvaluationAgentDecisio
 export class AgentRubricEvaluator {
     public constructor(private readonly agent: EvaluationAgentRunner) {}
 
-    public async evaluateContent(
+    public async EvaluateContent(
         version: RubricVersionSnapshot,
         content: RubricSubjectContent,
         subject?: { entityName: string; recordId: string },
@@ -46,5 +46,14 @@ export class AgentRubricEvaluator {
         return new LLMRubricEvaluator({
             async run() { return JSON.stringify({ decisions }); },
         }).evaluateContent(version, content);
+    }
+
+    /** @deprecated Use {@link EvaluateContent}. */
+    public async evaluateContent(
+        version: RubricVersionSnapshot,
+        content: RubricSubjectContent,
+        subject?: { entityName: string; recordId: string },
+    ): Promise<LLMRubricResult> {
+        return this.EvaluateContent(version, content, subject);
     }
 }

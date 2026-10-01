@@ -1,7 +1,7 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { publishPreview, versionRows, type DiffRow } from './model.js';
+import { publishPreview, VersionRows, type DiffRow } from './model.js';
 
 /** Base on the left, draft on the right, one row per criterion key. */
 @Component({
@@ -16,7 +16,7 @@ export class RubricVersionDiffComponent {
     @Input() Draft: RubricVersionSnapshot | null = null;
 
     public get Rows(): DiffRow[] {
-        return this.Base && this.Draft ? versionRows(this.Base, this.Draft) : [];
+        return this.Base && this.Draft ? VersionRows(this.Base, this.Draft) : [];
     }
 
     public get Bump(): string | null {

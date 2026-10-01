@@ -31,7 +31,7 @@ export class HumanRubricEvaluator {
      * Creates the draft, then the task. Returns both ids. The task title
      * names the rubric so the assignee can find it.
      */
-    public async start(input: DraftEvaluationInput & { rubricName: string }): Promise<{ evaluationId: string; taskId: string }> {
+    public async Start(input: DraftEvaluationInput & { rubricName: string }): Promise<{ evaluationId: string; taskId: string }> {
         const draft = await this.evaluations.createDraft(input);
         const task = await this.tasks.create({
             assigneeId: input.assigneeId,
@@ -39,5 +39,10 @@ export class HumanRubricEvaluator {
             title: `Score ${input.rubricName}`,
         });
         return { evaluationId: draft.id, taskId: task.id };
+    }
+
+    /** @deprecated Use {@link Start}. */
+    public async start(input: DraftEvaluationInput & { rubricName: string }): Promise<{ evaluationId: string; taskId: string }> {
+        return this.Start(input);
     }
 }

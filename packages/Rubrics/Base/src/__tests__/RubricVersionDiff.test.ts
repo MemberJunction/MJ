@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { RubricVersionDiff } from '../RubricVersionDiff.js';
-import { sha256Hex } from '../canonical.js';
+import { Sha256Hex } from '../canonical.js';
 import type { RubricNodeSnapshot, RubricVersionSnapshot } from '../types.js';
 
 function node(partial: Partial<RubricNodeSnapshot> & Pick<RubricNodeSnapshot, 'key'>): RubricNodeSnapshot {
@@ -43,7 +43,7 @@ function snapshot(nodes: RubricNodeSnapshot[], extra: Partial<RubricVersionSnaps
 }
 
 async function scoringHash(version: RubricVersionSnapshot): Promise<string> {
-    return sha256Hex(RubricVersionDiff.scoringCanonical(version));
+    return Sha256Hex(RubricVersionDiff.scoringCanonical(version));
 }
 
 describe('RubricVersionDiff', () => {

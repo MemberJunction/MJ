@@ -64,12 +64,12 @@ export class RubricsDashboardComponent extends BaseDashboard implements AfterVie
         } finally {
             this.Loading = false;
             this.changeDetector.markForCheck();
-            this.PublishAgent();
+            this.publishAgent();
         }
     }
 
     public ngAfterViewInit(): void {
-        this.PublishAgent();
+        this.publishAgent();
     }
 
     public get Visible(): CatalogRowView[] {
@@ -84,7 +84,7 @@ export class RubricsDashboardComponent extends BaseDashboard implements AfterVie
 
     public OnSearch(value: string): void {
         this.Search = value;
-        this.PublishAgent();
+        this.publishAgent();
         this.changeDetector.markForCheck();
     }
 
@@ -124,7 +124,7 @@ export class RubricsDashboardComponent extends BaseDashboard implements AfterVie
         };
     }
 
-    private PublishAgent(): void {
+    private publishAgent(): void {
         this.navigationService.SetAgentContext(this, {
             Search: this.Search,
             RowCount: this.Visible.length,

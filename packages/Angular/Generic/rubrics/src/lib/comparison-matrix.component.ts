@@ -1,6 +1,6 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { comparisonMatrix, type MatrixColumn, type MatrixModel } from './model.js';
+import { ComparisonMatrix, type MatrixColumn, type MatrixModel } from './model.js';
 
 /** Evaluators across, criteria down. Disagreeing cells are marked. Self is its own column. */
 @Component({
@@ -36,7 +36,7 @@ export class RubricComparisonMatrixComponent {
     }
 
     public get Model(): MatrixModel {
-        return comparisonMatrix(this.Keys, this.Shown);
+        return ComparisonMatrix(this.Keys, this.Shown);
     }
 
     public Cell(row: { cells: { columnId: string; score: number | null }[] }, columnId: string): { columnId: string; score: number | null } | null {

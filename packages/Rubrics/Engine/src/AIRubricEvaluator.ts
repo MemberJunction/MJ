@@ -61,7 +61,7 @@ export class AIRubricEvaluator extends RubricEvaluator {
      * Runs one agent call per criterion and returns the scored evaluation.
      * Does not call a model itself.
      */
-    public async evaluateVersion(request: RubricEvaluatorRequest, configs: Map<string, RubricEvaluatorConfig> = new Map()): Promise<RubricEvaluatorOutput> {
+    public async EvaluateVersion(request: RubricEvaluatorRequest, configs: Map<string, RubricEvaluatorConfig> = new Map()): Promise<RubricEvaluatorOutput> {
         const leaves = request.version.nodes.filter(node => node.nodeType === 'Criterion');
         const candidates = [];
         for (const leaf of leaves) {
@@ -93,6 +93,11 @@ export class AIRubricEvaluator extends RubricEvaluator {
             });
         }
         return this.evaluate(request.version, candidates);
+    }
+
+    /** @deprecated Use {@link EvaluateVersion}. */
+    public async evaluateVersion(request: RubricEvaluatorRequest, configs: Map<string, RubricEvaluatorConfig> = new Map()): Promise<RubricEvaluatorOutput> {
+        return this.EvaluateVersion(request, configs);
     }
 }
 

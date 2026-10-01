@@ -2,7 +2,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import type { NotApplicablePolicy } from '@memberjunction/rubrics-base';
-import { anchorsForLevel, answerLevel, canSubmit, effectivePolicy, incompleteAnswers, type RubricFormAnswer } from './model.js';
+import { AnchorsForLevel, AnswerLevel, CanSubmit, EffectivePolicy, IncompleteAnswers, type RubricFormAnswer } from './model.js';
 
 /**
  * Answer form. Keyboard: a digit selects that level, and N marks not applicable.
@@ -27,15 +27,15 @@ export class RubricScoringFormComponent {
     }
 
     public get Problems(): string[] {
-        return incompleteAnswers(this.Version?.nodes ?? [], this.Answers, this.Version?.notApplicablePolicy ?? 'ExcludeAndRedistribute');
+        return IncompleteAnswers(this.Version?.nodes ?? [], this.Answers, this.Version?.notApplicablePolicy ?? 'ExcludeAndRedistribute');
     }
 
     public get CanSubmit(): boolean {
-        return this.Version !== null && canSubmit(this.Version.nodes, this.Answers, this.Version.notApplicablePolicy);
+        return this.Version !== null && CanSubmit(this.Version.nodes, this.Answers, this.Version.notApplicablePolicy);
     }
 
     public Policy(node: RubricNodeSnapshot): NotApplicablePolicy {
-        return effectivePolicy(node, this.Version?.notApplicablePolicy ?? 'ExcludeAndRedistribute');
+        return EffectivePolicy(node, this.Version?.notApplicablePolicy ?? 'ExcludeAndRedistribute');
     }
 
     public Text(node: RubricNodeSnapshot, field: 'rationale' | 'evidence'): string {
@@ -55,15 +55,15 @@ export class RubricScoringFormComponent {
     }
 
     public Anchors(node: RubricNodeSnapshot, levelId: string): { descriptor: string }[] {
-        return anchorsForLevel(node, levelId);
+        return AnchorsForLevel(node, levelId);
     }
 
     public OnLevel(node: RubricNodeSnapshot, levelId: string): void {
-        this.AnswersChange.emit(answerLevel(this.Answers, node.id, levelId, false));
+        this.AnswersChange.emit(AnswerLevel(this.Answers, node.id, levelId, false));
     }
 
     public OnNotApplicable(node: RubricNodeSnapshot): void {
-        this.AnswersChange.emit(answerLevel(this.Answers, node.id, null, !this.IsNotApplicable(node), this.Policy(node)));
+        this.AnswersChange.emit(AnswerLevel(this.Answers, node.id, null, !this.IsNotApplicable(node), this.Policy(node)));
     }
 
     public OnText(node: RubricNodeSnapshot, field: 'rationale' | 'evidence', event: Event): void {

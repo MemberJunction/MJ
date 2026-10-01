@@ -11,7 +11,7 @@ export type {
 } from './RubricEngineBase.js';
 export { RubricScoring, RubricValidationError, SCORING_ENGINE_VERSION } from './RubricScoring.js';
 export { RubricVersionDiff } from './RubricVersionDiff.js';
-export { canonicalJson, contentProjection, scoringProjection, sha256Hex } from './canonical.js';
+export { CanonicalJson, canonicalJson, ContentProjection, contentProjection, ScoringProjection, scoringProjection, Sha256Hex, sha256Hex } from './canonical.js';
 export type {
     NotApplicablePolicy,
     RollupMethod,

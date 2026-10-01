@@ -859,11 +859,11 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
     this.restoreState();
     this.setupObservables();
     this.loadVersionMetrics();
-    void this.loadRubricAnalytics();
+    void this.LoadRubricAnalytics();
   }
 
   /** Score trend for the suite with the most scored runs, and per-criterion failure rates. */
-  async loadRubricAnalytics(): Promise<void> {
+  async LoadRubricAnalytics(): Promise<void> {
     try {
       const provider = Metadata.Provider;
       if (!provider) return;
@@ -896,6 +896,11 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
       this.RubricTrend = [];
       this.FailureRates = [];
     }
+  }
+
+  /** @deprecated Use {@link LoadRubricAnalytics}. */
+  async loadRubricAnalytics(): Promise<void> {
+    return this.LoadRubricAnalytics();
   }
 
   ngOnDestroy(): void {

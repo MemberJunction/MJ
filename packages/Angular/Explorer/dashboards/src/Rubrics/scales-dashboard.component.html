@@ -19,23 +19,23 @@
           <tr><th>Name</th><th>Type</th><th>Published use</th><th></th></tr>
         </thead>
         <tbody>
-          @for (row of Visible; track row.id) {
+          @for (row of Visible; track row.Id) {
             <tr>
-              <td><strong>{{ row.name }}</strong></td>
-              <td>{{ row.type }}</td>
-              <td>{{ row.frozen ? 'Locked by a published rubric' : 'Editable' }}</td>
-              <td><button mjButton variant="outline" size="sm" type="button" (click)="Open(row.id)">Open</button></td>
+              <td><strong>{{ row.Name }}</strong></td>
+              <td>{{ row.Type }}</td>
+              <td>{{ row.Frozen ? 'Locked by a published rubric' : 'Editable' }}</td>
+              <td><button mjButton variant="outline" size="sm" type="button" (click)="Open(row.Id)">Open</button></td>
             </tr>
           }
         </tbody>
       </table>
       <div class="catalog-cards">
-        @for (row of Visible; track row.id) {
+        @for (row of Visible; track row.Id) {
           <article class="catalog-card">
-            <strong>{{ row.name }}</strong>
-            <span>{{ row.type }}</span>
-            <span>{{ row.frozen ? 'Locked by a published rubric' : 'Editable' }}</span>
-            <button mjButton variant="outline" size="sm" type="button" (click)="Open(row.id)">Open</button>
+            <strong>{{ row.Name }}</strong>
+            <span>{{ row.Type }}</span>
+            <span>{{ row.Frozen ? 'Locked by a published rubric' : 'Editable' }}</span>
+            <button mjButton variant="outline" size="sm" type="button" (click)="Open(row.Id)">Open</button>
           </article>
         }
       </div>

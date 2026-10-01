@@ -6,10 +6,10 @@ import { BaseDashboard } from '@memberjunction/ng-shared';
 type Row = Record<string, unknown>;
 
 export interface ScaleCatalogRow {
-    id: string;
-    name: string;
-    type: string;
-    frozen: boolean;
+    Id: string;
+    Name: string;
+    Type: string;
+    Frozen: boolean;
 }
 
 /** Scales list. A scale is frozen when a published version uses it. */
@@ -52,26 +52,26 @@ export class RubricScalesDashboardComponent extends BaseDashboard implements Aft
                 .filter(row => published.has(String(row.RubricVersionID ?? '').toLowerCase()) && row.ScaleID)
                 .map(row => String(row.ScaleID).toLowerCase()));
             this.Rows = ((scales.Results as Row[] ?? [])).map(row => ({
-                id: String(row.ID),
-                name: String(row.Name ?? ''),
-                type: String(row.ScaleType ?? ''),
-                frozen: frozenScales.has(String(row.ID).toLowerCase()),
+                Id: String(row.ID),
+                Name: String(row.Name ?? ''),
+                Type: String(row.ScaleType ?? ''),
+                Frozen: frozenScales.has(String(row.ID).toLowerCase()),
             }));
         } finally {
             this.Loading = false;
             this.changeDetector.markForCheck();
-            this.PublishAgent();
+            this.publishAgent();
         }
     }
 
     public ngAfterViewInit(): void {
-        this.PublishAgent();
+        this.publishAgent();
     }
 
     public get Visible(): ScaleCatalogRow[] {
         const query = this.Search.trim().toLowerCase();
         if (!query) return this.Rows;
-        return this.Rows.filter(row => `${row.name} ${row.type}`.toLowerCase().includes(query));
+        return this.Rows.filter(row => `${row.Name} ${row.Type}`.toLowerCase().includes(query));
     }
 
     public OnSearch(value: string): void {
@@ -87,7 +87,7 @@ export class RubricScalesDashboardComponent extends BaseDashboard implements Aft
         this.navigationService.OpenNewEntityRecord('MJ: Rubric Scales');
     }
 
-    private PublishAgent(): void {
+    private publishAgent(): void {
         this.navigationService.SetAgentContext(this, { Search: this.Search, RowCount: this.Visible.length });
         this.navigationService.SetAgentClientTools(this, [
             {
@@ -96,7 +96,7 @@ export class RubricScalesDashboardComponent extends BaseDashboard implements Aft
                 ParameterSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
                 Handler: async (params: Record<string, unknown>) => {
                     const id = String(params['id'] ?? '');
-                    if (!this.Rows.some(row => row.id.toLowerCase() === id.toLowerCase())) return { Success: false, ErrorMessage: 'That scale is not in the list.' };
+                    if (!this.Rows.some(row => row.Id.toLowerCase() === id.toLowerCase())) return { Success: false, ErrorMessage: 'That scale is not in the list.' };
                     this.Open(id);
                     return { Success: true };
                 },

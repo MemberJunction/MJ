@@ -49,8 +49,8 @@
     (metadata/entities/.layered-base-views.json and .rubric-label-name-fields.json), applied
     with mj sync push. They are not updated from a migration. Two further files, forced by
     ordering:
-      V202609302205  the captured inner vw*Generated views (no Entity or EntityField DML)
-      V202609302206  the wrapper views, then the capture that registers their columns
+      V202609302343  the captured inner vw*Generated views (no Entity or EntityField DML)
+      V202609302344  the wrapper views, then the capture that registers their columns
     See the plan, section "Layered base views: the migration sequence".
 
     TestRubric is DEPRECATED alongside this migration, through metadata rather than DDL:
