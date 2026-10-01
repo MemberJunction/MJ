@@ -9,6 +9,13 @@ describe('NormalizeGeneratedValidatorText', () => {
         );
     });
 
+    it('unescapes a double-escaped one-liner that ends in a real newline', () => {
+        const escaped = 'public ValidateX(result: ValidationResult) {\\n\\tresult.Errors.push(\\"X\\");\\n}\n';
+        expect(NormalizeGeneratedValidatorText(escaped)).toBe(
+            'public ValidateX(result: ValidationResult) {\n\tresult.Errors.push("X");\n}\n',
+        );
+    });
+
     it('leaves real source unchanged, including escapes inside regular expressions', () => {
         const source = [
             'public ValidateY(result: ValidationResult) {',
