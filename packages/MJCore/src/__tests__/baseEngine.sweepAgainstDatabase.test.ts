@@ -67,6 +67,10 @@ function provider(status: RunViewDatabaseStatus | ((params: RunViewParams[]) => 
     const entity = {
         Name: 'Widgets',
         AllowCaching: true,
+        // The sweep only visits entities that DECLARE they can change without firing an event, which
+        // is what `TrustServerCacheCompletely: false` says. Every test here is about detecting such a
+        // change, so the fixture declares it (plan §26).
+        TrustServerCacheCompletely: false,
         PrimaryKeys: [{ Name: 'ID' }],
         Fields: [{ Name: 'ID', IsUpdatedAtField: false }, ...(options.hasUpdatedAt === false ? [] : [{ Name: '__mj_UpdatedAt', IsUpdatedAtField: true }])],
     };
@@ -76,6 +80,14 @@ function provider(status: RunViewDatabaseStatus | ((params: RunViewParams[]) => 
         Probe: probe,
         ...(options.probe === false ? {} : { GetRunViewsDatabaseStatus: probe }),
     } as unknown as IMetadataProvider & { Probe: ReturnType<typeof vi.fn> };
+}
+
+/** A provider whose entity still trusts its cache — the default for every MJ entity. */
+function trustingProvider(status: RunViewDatabaseStatus): IMetadataProvider & { Probe: ReturnType<typeof vi.fn> } {
+    const p = provider(status);
+    const entity = { Name: 'Widgets', AllowCaching: true, TrustServerCacheCompletely: true, PrimaryKeys: [{ Name: 'ID' }], Fields: [{ Name: '__mj_UpdatedAt', IsUpdatedAtField: true }] };
+    (p as unknown as { EntityByName: ReturnType<typeof vi.fn> }).EntityByName = vi.fn(() => entity);
+    return p;
 }
 
 function matching(rows: Row[]): RunViewDatabaseStatus {
@@ -229,5 +241,58 @@ describe('BaseEngineSweeper', () => {
         expect(BaseEngineSweeper.Instance.IsRunning).toBe(false);
         vi.useRealTimers();
         vi.restoreAllMocks();
+    });
+});
+
+/**
+ * The sweep is a periodic database query, and a periodic query is not free (plan §26).
+ *
+ * On Azure SQL serverless a recurring query prevents auto-pause outright, and the interval does not
+ * help — auto-pause needs sustained inactivity, so 3600 s is no better than 300 s. Several installs
+ * pay for that, and MJ's answer has been "turn the scheduled jobs off", which means finding a knob.
+ *
+ * So the cost is made proportional to the declared risk. `Entity.TrustServerCacheCompletely` already
+ * states whether an entity's rows can change without firing an event: true (the default) means every
+ * mutation flows through `BaseEntity.Save()`, false is set "for entities whose rows are created as
+ * side-effects of other operations via raw SQL". An entity that still trusts its cache has nothing
+ * for the sweep to discover, so it is not queried at all — and an install where nothing writes out
+ * of band therefore sweeps nothing and lets the database sleep, with no configuration to find.
+ */
+describe('the sweep only visits entities that declare they can drift', () => {
+    let storage: MockCacheStorageProvider;
+
+    beforeEach(async () => {
+        delete GetGlobalObjectStore()['___SINGLETON__LocalCacheManager'];
+        storage = new MockCacheStorageProvider();
+        await LocalCacheManager.Instance.Initialize(storage);
+    });
+
+    /** The database reports far more rows than the engine holds — drift a sweep would catch. */
+    const DRIFTED: RunViewDatabaseStatus = { Success: true, RowCount: 99, MaxUpdatedAt: '2026-06-01T00:00:00.000Z' };
+    const HELD: Row[] = [{ ID: '1', __mj_UpdatedAt: '2026-01-01T00:00:00.000Z' }];
+
+    it('asks the database NOTHING for an entity that still trusts its cache', async () => {
+        const p = trustingProvider(DRIFTED);
+        const engine = new SweepEngine();
+        engine.Prepare(p, HELD);
+
+        const result = await engine.SweepAgainstDatabase();
+
+        // Real drift, and the database is not even asked — the entity declares that cannot happen
+        // without an event, so there is nothing a query could tell us.
+        expect(p.Probe).not.toHaveBeenCalled();
+        expect(result.Checked).toBe(0);
+        expect(result.Reloaded).toEqual([]);
+    });
+
+    it('still sweeps an entity that declares out-of-band writes', async () => {
+        const p = provider(DRIFTED);
+        const engine = new SweepEngine();
+        engine.Prepare(p, HELD);
+
+        const result = await engine.SweepAgainstDatabase();
+
+        expect(p.Probe).toHaveBeenCalledTimes(1);
+        expect(result.Reloaded).toEqual(['_items']);
     });
 });

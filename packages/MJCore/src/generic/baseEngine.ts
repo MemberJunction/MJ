@@ -2510,12 +2510,48 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         return result;
     }
 
-    /** Entity configs holding a successful, readable load. */
+    /** Entity configs holding a successful, readable load whose entity can drift outside MJ. */
     private sweepableConfigs(): BaseEnginePropertyConfig[] {
         return this._metadataConfigs.filter(config => {
             const entry = this._dataMap.get(config.PropertyName);
-            return config.Type === 'entity' && !!entry?.loadedSuccessfully && !entry.readDenied && !entry.permissionDenied;
+            if (config.Type !== 'entity' || !entry?.loadedSuccessfully || entry.readDenied || entry.permissionDenied) {
+                return false;
+            }
+            return this.entityMayChangeWithoutAnEvent(config.EntityName);
         });
+    }
+
+    /**
+     * Whether this entity has **declared** that its rows can change without firing an event — the
+     * only situation the sweep exists for.
+     *
+     * `Entity.TrustServerCacheCompletely` is that declaration, in its own words: when true (the
+     * default) the cache trusts "that all mutations flow through BaseEntity.Save() which fires cache
+     * invalidation events", and it is set false "for entities whose rows are created as side-effects
+     * of other operations via raw SQL … since those inserts bypass BaseEntity and never trigger
+     * cache invalidation". An entity that still trusts its cache has nothing for a sweep to find, so
+     * querying it every interval buys nothing.
+     *
+     * It also subsumes the `AllowDirectSQLInsert`/`Update`/`Delete` flags: a database CHECK requires
+     * `TrustServerCacheCompletely = false` whenever any of those is set, so this one flag already
+     * covers every entity that sanctions writes outside `BaseEntity`.
+     *
+     * **Why gate at all.** The sweep is a periodic database query, and a periodic query is not free:
+     * on Azure SQL serverless it prevents auto-pause outright, which several installs pay for, and
+     * the interval does not help — auto-pause needs sustained inactivity, so a long interval is no
+     * better than a short one. Gating here makes the cost proportional to the declared risk: an
+     * install where nothing writes out of band sweeps nothing and issues no queries, with no knob to
+     * find. Operators who do write out of band mark those entities — which they must do anyway for
+     * the cache to be correct at all — and get the backstop exactly there (plan §26).
+     *
+     * An entity absent from metadata answers false: the sweep cannot establish that it drifts, and
+     * guessing in favour of a recurring query is the expensive guess.
+     */
+    private entityMayChangeWithoutAnEvent(entityName: string | undefined): boolean {
+        if (!entityName) {
+            return false;
+        }
+        return this.ProviderToUse?.EntityByName(entityName)?.TrustServerCacheCompletely === false;
     }
 
     /** The configs whose held rows disagree with what the database reports. */

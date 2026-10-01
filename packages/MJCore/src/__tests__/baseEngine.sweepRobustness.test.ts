@@ -32,6 +32,8 @@ function entityInfo(hasUpdatedAt: boolean): EntityInfo {
         Name: ENTITY,
         SchemaName: '__mj',
         BaseView: 'vwAIModels',
+        // Declares that rows can change without an event — the only case the sweep visits (§26).
+        TrustServerCacheCompletely: false,
         PrimaryKeys: [{ Name: 'ID' }],
         Fields: hasUpdatedAt ? [{ Name: '__mj_UpdatedAt', IsUpdatedAtField: true }] : [{ Name: 'ID', IsUpdatedAtField: false }],
     } as unknown as EntityInfo;

@@ -694,8 +694,18 @@ describe('UserCache', () => {
     // The periodic safety net
     // -----------------------------------------------------------------
     describe('RefreshIfChangedInDatabase', () => {
+        /**
+         * Entity metadata declaring that these rows CAN change without an event — which is the only
+         * thing a periodic database check can discover, and therefore the only case it runs in.
+         * `TrustServerCacheCompletely: false` is that declaration (plan §26).
+         */
+        const DECLARES_RAW_SQL = [
+            { Name: 'MJ: Users', SchemaName: '__mj', BaseView: 'vwUsers', TrustServerCacheCompletely: false },
+            { Name: 'MJ: User Roles', SchemaName: '__mj', BaseView: 'vwUserRoles', TrustServerCacheCompletely: false },
+        ];
+
         it('does not reload when the database matches what the cache was built from', async () => {
-            const stub = makeProviderStub({ users: [{ ID: 'id1', Name: 'Alice' }], roles: [] });
+            const stub = makeProviderStub({ users: [{ ID: 'id1', Name: 'Alice' }], roles: [], entities: DECLARES_RAW_SQL });
             await UserCache.Instance.Refresh(stub.Provider);
             stub.Queries.length = 0;
 
@@ -704,7 +714,7 @@ describe('UserCache', () => {
         });
 
         it('reloads when a row was added, changed or removed outside MJ', async () => {
-            const stub = makeProviderStub({ users: [{ ID: 'id1', Name: 'Alice' }], roles: [] });
+            const stub = makeProviderStub({ users: [{ ID: 'id1', Name: 'Alice' }], roles: [], entities: DECLARES_RAW_SQL });
             await UserCache.Instance.Refresh(stub.Provider);
             stub.Queries.length = 0;
 
@@ -716,6 +726,41 @@ describe('UserCache', () => {
             stub.Stamp.updatedAt = '2026-09-18T00:00:00.000Z'; // an update, same row count
             expect(await UserCache.Instance.RefreshIfChangedInDatabase()).toBe(true);
             expect(stub.Queries).toHaveLength(2);
+        });
+
+        it('does not touch the database when both entities still trust their cache', async () => {
+            // The default for every MJ entity. Every mutation then flows through BaseEntity.Save(),
+            // which this cache already hears — so a poll can only cost a query that, on Azure SQL
+            // serverless, is enough to prevent auto-pause. The row count below has drifted and is
+            // deliberately NOT discovered.
+            const stub = makeProviderStub({
+                users: [{ ID: 'id1', Name: 'Alice' }], roles: [],
+                entities: [
+                    { Name: 'MJ: Users', SchemaName: '__mj', BaseView: 'vwUsers', TrustServerCacheCompletely: true },
+                    { Name: 'MJ: User Roles', SchemaName: '__mj', BaseView: 'vwUserRoles', TrustServerCacheCompletely: true },
+                ],
+            });
+            await UserCache.Instance.Refresh(stub.Provider);
+            stub.Queries.length = 0;
+            stub.Stamp.users = 2;
+
+            expect(await UserCache.Instance.RefreshIfChangedInDatabase()).toBe(false);
+            expect(stub.Queries).toHaveLength(0); // not even the stamp probe
+        });
+
+        it('runs when EITHER entity declares out-of-band writes', async () => {
+            const stub = makeProviderStub({
+                users: [{ ID: 'id1', Name: 'Alice' }], roles: [],
+                entities: [
+                    { Name: 'MJ: Users', SchemaName: '__mj', BaseView: 'vwUsers', TrustServerCacheCompletely: true },
+                    { Name: 'MJ: User Roles', SchemaName: '__mj', BaseView: 'vwUserRoles', TrustServerCacheCompletely: false },
+                ],
+            });
+            await UserCache.Instance.Refresh(stub.Provider);
+            stub.Queries.length = 0;
+            stub.Stamp.users = 2;
+
+            expect(await UserCache.Instance.RefreshIfChangedInDatabase()).toBe(true);
         });
 
         it('does nothing when this process never had a provider', async () => {

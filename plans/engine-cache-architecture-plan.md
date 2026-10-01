@@ -2932,3 +2932,55 @@ index, would be strictly better than today's either/or).
 Verified: MJCore 197 files / 2,871 tests; GenericDatabaseProvider 1,188; MJServer 1,408;
 RedisProvider 87; GraphQLDataProvider 454; deterministic tier 79 passed / 1 skipped / 0 failed with
 IT07 3/3, IT29 8/8, IT96 5/5.
+
+## 26. The periodic checks must not keep the database awake (2026-09-30)
+
+Raised by the owner, and it is a real cost: several installs run MJ against **Azure SQL serverless**,
+where a recurring query prevents auto-pause and therefore prevents the database from scaling to zero.
+MJ already ships enough scheduled jobs that those clients turn them off; this branch added two more —
+the engine sweep (`engineSweepIntervalSeconds`, default 300) and the user-cache staleness check
+(`userCacheCheckIntervalSeconds`, default 300).
+
+**The interval is not the lever.** Auto-pause needs sustained inactivity, so 3600 s is no better than
+300 s; only *not running* is. A knob is also the wrong answer on its own — it means every affected
+client must discover it, which is exactly the situation they are already complaining about.
+
+**The existing flag that says it.** `Entity.TrustServerCacheCompletely` is, in its own words, the
+declaration the sweep needs: true (the default) means the cache trusts "that all mutations flow
+through BaseEntity.Save() which fires cache invalidation events", and false is set "for entities whose
+rows are created as side-effects of other operations via raw SQL … since those inserts bypass
+BaseEntity and never trigger cache invalidation". An entity that still trusts its cache has nothing a
+sweep could discover. It also **subsumes** `AllowDirectSQLInsert`/`Update`/`Delete`: a database CHECK
+requires `TrustServerCacheCompletely = false` whenever any of those is set, so one flag covers every
+entity that sanctions writes outside `BaseEntity`. No new column, which is what the owner asked for.
+
+**What changed.**
+- `BaseEngine.sweepableConfigs` now also requires `entityMayChangeWithoutAnEvent(config.EntityName)`,
+  which reads `TrustServerCacheCompletely === false` through the engine's own provider. An entity
+  missing from metadata answers false — the sweep cannot establish that it drifts, and guessing in
+  favour of a recurring query is the expensive guess.
+- `UserCache.RefreshIfChangedInDatabase` returns immediately unless `MJ: Users` or `MJ: User Roles`
+  carries the same declaration. Nothing regresses for #4247: a save raises an event, a save elsewhere
+  publishes the shared stamp, and `FindUser` falls back to an authoritative read on a miss — so a user
+  inserted by raw SQL can still authenticate without the poll.
+
+**The consequence is the point:** on a default install both timers still tick, find no entity that
+declares drift, and issue **no database queries at all**. The database sleeps. Installs that do write
+out of band mark those entities and get the backstop precisely there.
+
+**Tests, each verified against the un-gated code.**
+
+| Test | Un-gated result |
+|---|---|
+| the sweep asks the database nothing for a trusting entity (while real drift exists) | `expected "spy" to not be called at all, but actually been called 1 times` |
+| the sweep still visits an entity that declares out-of-band writes | passes either way (invariant pin) |
+| the user-cache check does not touch the database when both entities are trusted | `expected true to be false` |
+| the user-cache check runs when EITHER entity declares drift | passes either way (invariant pin) |
+
+Four existing fixtures were updated to declare `TrustServerCacheCompletely: false`, which is what they
+always meant — every one of them is a test about detecting a change made outside MJ.
+
+**What this gives up.** The sweep was also an unintentional backstop for *infrastructure* failures — a
+dropped pub/sub message, a slot that expired (F9). Those are now covered directly: F9 is fixed in
+§25.5, index groups find peers' slots, and the metadata check has its own path. What remains uncovered
+is a trusted entity whose event was genuinely lost to an outage, which is #4759's territory.
