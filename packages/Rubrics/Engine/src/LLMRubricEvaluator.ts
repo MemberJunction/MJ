@@ -103,28 +103,35 @@ export class LLMRubricEvaluator extends RubricEvaluator {
             runs.push(this.mode === 'SinglePass' ? await this.singlePass(version, content) : await this.perCriterion(version, content));
         }
         const leaves = version.nodes.filter(node => node.nodeType === 'Criterion');
+        const known = new Set(leaves.map(node => node.key));
+        let droppedUnknownKeys = 0;
+        for (const run of runs) {
+            for (const decision of run) {
+                if (!decision.key || !known.has(decision.key)) droppedUnknownKeys += 1;
+            }
+        }
         const chosen: LLMDecision[] = [];
         const sampleSpread: { key: string; levels: string[]; median: string }[] = [];
-        let droppedUnknownKeys = 0;
         for (const node of leaves) {
             const levels: string[] = [];
             for (const run of runs) {
-                const decision = run.find(item => (item.key ?? node.key) === node.key);
-                const label = this.mode === 'PerCriterion' ? decision?.chosen ?? decision?.level : decision?.level;
-                if (!decision || !label) {
-                    if (decision?.key && !leaves.some(leaf => leaf.key === decision.key)) droppedUnknownKeys += 1;
-                    continue;
-                }
-                levels.push(label);
+                const decision = run.find(item => item.key === node.key);
+                const label = labelOf(this.mode, decision);
+                if (label) levels.push(label);
             }
             if (levels.length === 0) continue;
             const median = medianLevel(version, node.scaleId, levels);
             sampleSpread.push({ key: node.key, levels, median });
-            const sample = runs.map(run => run.find(item => (item.key ?? node.key) === node.key)).find(item => {
-                const label = this.mode === 'PerCriterion' ? item?.chosen ?? item?.level : item?.level;
-                return label === median;
+            const sample = runs.map(run => run.find(item => item.key === node.key)).find(item => labelOf(this.mode, item) === median);
+            if (!sample) continue;
+            const probability = sample.probabilities?.[median];
+            chosen.push({
+                ...sample,
+                key: node.key,
+                level: median,
+                chosen: median,
+                confidence: probability ?? sample.confidence,
             });
-            if (sample) chosen.push({ ...sample, key: node.key, level: median, chosen: median });
         }
         const once = new LLMRubricEvaluator({ async run() { return JSON.stringify({ decisions: chosen }); } }, 'SinglePass');
         const scored = await once.evaluateContent(version, content);
@@ -195,6 +202,11 @@ function renderCriterion(version: RubricVersionSnapshot, node: RubricNodeSnapsho
         ? `Numeric ${scale.minValue}..${scale.maxValue}, step ${scale.step ?? 'any'}, higher is better: ${scale.higherIsBetter}`
         : levels;
     return `### ${node.name} (${node.key})\n\nGuidance: ${node.guidance ?? ''}\n\n${numeric}`;
+}
+
+function labelOf(mode: RubricPromptMode, decision: LLMDecision | undefined): string | undefined {
+    if (!decision?.key) return undefined;
+    return mode === 'PerCriterion' ? decision.chosen ?? decision.level : decision.level;
 }
 
 function medianLevel(version: RubricVersionSnapshot, scaleId: string | null | undefined, labels: string[]): string {

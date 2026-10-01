@@ -115,4 +115,31 @@ describe('LLMRubricEvaluator', () => {
         expect(output.sampleSpread).toEqual([{ key: 'clarity', levels: ['High', 'Low', 'High'], median: 'High' }]);
         expect(output.answers[0].scaleLevelId).toBe('high');
     });
+
+    it('keeps the median level probability when PerCriterion samples have no confidence field', async () => {
+        const tree = version();
+        tree.nodes.push({ ...tree.nodes[0], id: 'b', key: 'accuracy', name: 'Accuracy', anchors: [] });
+        tree.scales[0].levels.push({ id: 'low', label: 'Low', value: 0, normalizedValue: 0, sequence: 1 });
+        let call = 0;
+        const script = [
+            { chosen: 'High', probabilities: { High: 0.8, Low: 0.2 } },
+            { chosen: 'Low', probabilities: { High: 0.3, Low: 0.7 } },
+            { chosen: 'High', probabilities: { High: 0.6, Low: 0.4 } },
+        ];
+        const runner = { async run() { return JSON.stringify({ ...script[call++ % script.length], rationale: 'x', evidence: [{ quote: 'Easy' }] }); } };
+        const output = await new LLMRubricEvaluator(runner, 'PerCriterion').evaluateSamples(tree, { text: 'Easy to read.' }, 3);
+        const clarity = output.answers.find(answer => answer.criterionId === 'a');
+        expect(clarity?.scaleLevelId).toBe('high');
+        expect(clarity?.confidence).toBe(0.8);
+        expect(output.answers.some(answer => answer.criterionId === 'b')).toBe(true);
+    });
+
+    it('does not copy a keyless decision onto every criterion', async () => {
+        const tree = version();
+        tree.nodes.push({ ...tree.nodes[0], id: 'b', key: 'accuracy', name: 'Accuracy', anchors: [] });
+        const runner = { async run() { return JSON.stringify({ decisions: [{ level: 'High', rationale: 'No key.', evidence: [{ quote: 'Easy' }] }] }); } };
+        const output = await new LLMRubricEvaluator(runner, 'SinglePass').evaluateSamples(tree, { text: 'Easy to read.' }, 1);
+        expect(output.answers).toHaveLength(0);
+        expect(output.droppedUnknownKeys).toBe(1);
+    });
 });
