@@ -2,10 +2,9 @@
  * @fileoverview The placement decision — what the user answers before a panel is written.
  *
  * A generated panel arrives carrying a `formContribution` block. Its **identity** —
- * `presentation`, `title`, `icon` — describes what the component is, and only its author knows
- * it, so it seeds the dialog. Its **placement** — slot, claims, ordering, key — is the user's,
- * and is seeded from a fixed default rather than from the block, so the same request produces
- * the same starting point every time.
+ * `presentation`, `title`, `icon` — describes what the component is. Its **placement** — slot,
+ * claims, ordering — is a proposal: the dialog starts from every claim the open form can
+ * honour and from a fixed default for the rest, and the user confirms or changes it.
  *
  * Everything here is pure. The component holds a {@link FormPlacementState} and renders it;
  * these functions decide what that state means. The sentences that describe a state are in
@@ -388,9 +387,8 @@ export function DefaultSlotFor(context: FormPlacementContext): FormContributionS
 /**
  * The starting answers.
  *
- * Placement is NOT read from the proposal. The dialog's default is fixed, so a user who
- * asks for the same panel twice starts from the same place both times, and a proposal that
- * omits placement entirely behaves identically to one that does not.
+ * The fixed default. A host that wants the dialog to start from a proposal's claims seeds it
+ * with {@link PlacementStateFromContribution}.
  *
  * The one thing that moves the default is the form: starting on a slot the form does not
  * emit would put the panel at the bottom no matter what the dialog showed.
@@ -421,12 +419,9 @@ export function InitialPlacementState(
 }
 
 /**
- * The starting answers when editing a contribution that is already on the form.
- *
- * The opposite of {@link InitialPlacementState}, and deliberately so. That one ignores
- * the proposal's placement because the placement is the user's to choose and a component
- * author should not preselect it. Here the placement being read back IS the user's own
- * earlier choice, so discarding it would make every edit start from scratch.
+ * The starting answers read from a contribution block: the user's own earlier choice when
+ * editing a saved row, or a generated panel's proposal when applying one. Every claim is
+ * checked against the form; one the form cannot honour falls back to the default.
  *
  * @param activeNow Whether the panel is on now, so the edit keeps it on.
  * @param keepOff Whether the panel is off now, so the edit keeps it off rather than making it a draft.
@@ -464,6 +459,12 @@ export function PlacementStateFromContribution(
         ? context.Existing.findIndex((e) => e.Key === spec.contributionKey)
         : -1;
 
+    // A section to draw inside must be one the form draws, unless the form was never read.
+    const inSectionKey = (spec.inSectionKey ?? '').trim();
+    const keptInSectionKey = inSectionKey && (unread || context.Sections.some((s) => s.Key === inSectionKey))
+        ? inSectionKey
+        : '';
+
     let mode: FormPlacementReplaceMode = 'none';
     if (isRailTab) mode = 'rail-tab';
     else if (sectionKey) mode = 'section';
@@ -480,7 +481,7 @@ export function PlacementStateFromContribution(
         ReplaceRailKey: isRailTab ? railKey : DefaultRailKeyFor(context),
         ReplaceSectionKey: sectionKey || context.Sections[0]?.Key || '',
         ReplaceSectionKeys: listed.length > 1 ? listed : [],
-        InSectionKey: mode === 'none' ? (spec.inSectionKey ?? '').trim() : '',
+        InSectionKey: mode === 'none' ? keptInSectionKey : '',
         SectionPosition: spec.sectionPosition === 'end' ? 'end' : 'start',
         ReplaceFieldSectionKey: fieldSection?.Key || DefaultFieldSectionKey(context),
         ReplaceFieldNames: keptFields,

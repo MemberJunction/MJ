@@ -71,10 +71,10 @@ export class MjFormPlacementDialogComponent extends BaseAngularComponent {
     /**
      * A hook to overwrite the starting answers.
      *
-     * A new panel starts from a fixed default, deliberately. Editing one already on the
-     * form has to start from what it is doing now, and only the caller knows that — the
-     * dialog is handed a context, not a row. It runs once the context, the proposal and the
-     * hook are all set, in whatever order they arrive.
+     * Without it the dialog starts from a fixed default. The caller seeds what only it knows:
+     * a saved row's placement when editing one, or a generated panel's proposed claims when
+     * applying one. It runs once the context, the proposal and the hook are all set, in
+     * whatever order they arrive.
      */
     @Input()
     set SeedState(value: ((dialog: MjFormPlacementDialogComponent) => void) | null) {
@@ -83,7 +83,10 @@ export class MjFormPlacementDialogComponent extends BaseAngularComponent {
     }
     get SeedState(): ((dialog: MjFormPlacementDialogComponent) => void) | null { return this._seedState; }
 
-    /** The component's own registration intent. Only identity fields are read from it. */
+    /**
+     * The component's own registration intent. Identity fields are read from it directly; its
+     * claims reach the answers only through `SeedState`.
+     */
     @Input()
     set Proposal(value: FormContributionSpec | null) {
         this._proposal = value;

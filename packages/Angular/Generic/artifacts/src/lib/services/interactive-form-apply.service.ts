@@ -33,7 +33,7 @@ import {
 import {
     ApplyDecisionToSpec, CollectFormContributionRegistrations,
     FieldGroupsInDetails, FormCompositionRegistry, FormSlotProbeService, HumanizeEntityTitle, MjFormPlacementDialogComponent,
-    ResolveContributionKey, ResolveFormContributionWinners,
+    PlacementStateFromContribution, ResolveContributionKey, ResolveFormContributionWinners,
     type FormCompositionSnapshot, type FormPlacementContext, type FormPlacementDecision, type FormRecordRef,
 } from '@memberjunction/ng-base-forms';
 
@@ -436,8 +436,8 @@ export class InteractiveFormApplyService {
     /**
      * Opens the placement dialog and waits for the answers. Null means the user backed out.
      *
-     * The proposal is passed in whole, but the dialog reads only what the component's author
-     * can know from having built it — where the panel goes is decided here, not upstream.
+     * The proposal is passed in whole. The dialog reads its identity directly and starts from
+     * the claims the open form can honour; the user confirms where the panel goes.
      */
     private askWherePanelGoes(
         context: FormPlacementContext,
@@ -463,6 +463,16 @@ export class InteractiveFormApplyService {
             dialog.Provider = provider;
             dialog.ComponentName = componentName ?? proposal.title;
             dialog.Proposal = proposal;
+            // The dialog starts from the proposal's claims the open form can honour. The
+            // proposal's own key is left out: a key that matches an installed panel would
+            // read as "replace that panel", which the author cannot have meant.
+            dialog.SeedState = (d) => {
+                d.State = PlacementStateFromContribution(
+                    { ...proposal, contributionKey: undefined },
+                    d.Context,
+                    !d.Context.FullCustomForm,
+                );
+            };
             // The preview draws the component itself, not a placeholder, before anything is saved.
             dialog.PanelComponentSpec = component;
             dialog.RecordKey = recordKey;

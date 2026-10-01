@@ -65,7 +65,7 @@ const CONTEXT: FormPlacementContext = {
     TargetsVerified: true,
 };
 
-/** A proposal that names a slot and a claim — everything the dialog must now ignore. */
+/** A proposal that names a slot and a claim, all of which `InitialPlacementState` ignores. */
 const PROPOSAL: FormContributionSpec = {
     slot: 'after-everything',
     presentation: 'bare',
@@ -110,6 +110,39 @@ describe('InitialPlacementState', () => {
 
     it('preselects the first section, so choosing to hide one needs no second step', () => {
         expect(InitialPlacementState(PROPOSAL, CONTEXT).ReplaceSectionKey).toBe('details');
+    });
+});
+
+describe('PlacementStateFromContribution as a proposal seed', () => {
+    const proposal = (over: Partial<FormContributionSpec>): FormContributionSpec =>
+        ({ presentation: 'bare', title: 'Status strip', ...over });
+
+    it('keeps inSectionKey when the form draws that section', () => {
+        const key = CONTEXT.Sections[0].Key;
+        const state = PlacementStateFromContribution(proposal({ inSectionKey: key, sectionPosition: 'end' }), CONTEXT, true);
+        expect(state.ReplaceMode).toBe('none');
+        expect(state.InSectionKey).toBe(key);
+        expect(state.SectionPosition).toBe('end');
+    });
+
+    it('drops inSectionKey the form does not draw once targets are verified', () => {
+        const state = PlacementStateFromContribution(proposal({ inSectionKey: 'noSuchSection' }), { ...CONTEXT, TargetsVerified: true }, true);
+        expect(state.InSectionKey).toBe('');
+    });
+
+    it('keeps an unverifiable inSectionKey when the targets are unread', () => {
+        const unread = { ...CONTEXT, Sections: [], TargetsVerified: false };
+        const state = PlacementStateFromContribution(proposal({ inSectionKey: 'details' }), unread, true);
+        expect(state.InSectionKey).toBe('details');
+    });
+
+    it('seeds a field claim from a proposal whose fields the form draws', () => {
+        const section = CONTEXT.Sections.find((s) => (s.Fields ?? []).length > 0)!;
+        const name = section.Fields![0].Name;
+        const state = PlacementStateFromContribution(proposal({ replacesFieldNames: [name] }), CONTEXT, true);
+        expect(state.ReplaceMode).toBe('field');
+        expect(state.ReplaceFieldNames).toEqual([name]);
+        expect(state.ReplaceFieldSectionKey).toBe(section.Key);
     });
 });
 
@@ -543,10 +576,8 @@ describe('ShowsRail — a form with rail groups but no rail', () => {
 
 
 /**
- * Editing a panel already on the form is the opposite case to adding one.
- * `InitialPlacementState` throws the proposal's placement away on purpose — a component's
- * author should not preselect where it goes. Here the placement being read back is the
- * user's own earlier choice, so discarding it would make every edit start from scratch.
+ * Editing a panel already on the form starts from the placement it has now, which is the
+ * user's own earlier choice. Discarding it would make every edit start from scratch.
  */
 describe('PlacementStateFromContribution', () => {
     const railed: FormPlacementContext = {

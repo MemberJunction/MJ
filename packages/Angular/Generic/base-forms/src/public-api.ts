@@ -103,10 +103,12 @@ export * from './lib/interactive-form/form-panel-host-props.builder';
 export * from './lib/chrome/form-composition-snapshot';
 export * from './lib/chrome/form-composition-registry';
 
-// Placing a panel: the dialog, its form preview and the form probe, with the types a host
-// passes in and gets back. The placement rules behind them stay internal.
+// Placing a panel: the dialog, its form preview and the form probe, the types a host passes in
+// and gets back, and the helpers that seed the dialog and apply its answer. The other placement
+// rules stay internal.
 export {
     ApplyDecisionToSpec,
+    PlacementStateFromContribution,
     type FormPlacementContext,
     type FormPlacementDecision,
     type FormPlacementExisting,

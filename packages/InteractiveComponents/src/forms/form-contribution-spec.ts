@@ -34,9 +34,9 @@ export interface FormContributionSpec {
     /**
      * Where on the form the panel sits.
      *
-     * Optional because placement is the user's choice, made in the apply dialog, not the
-     * component author's — a generated spec that omits it behaves exactly like one that
-     * names a slot. {@link GetDeclaredFormContribution} fills the default, so everything
+     * Optional because placement is the user's choice, made in the apply dialog. A slot named
+     * here is a proposal: the dialog starts on it when the form draws it, and on its default
+     * otherwise. {@link GetDeclaredFormContribution} fills the default, so everything
      * downstream of normalization still sees a concrete slot.
      */
     slot?: FormContributionSlot;

@@ -16,8 +16,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { CompositeKey } from '@memberjunction/core';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import type {
-    FieldGroupsInDetails, FormCompositionRegistry, FormCompositionSnapshot, HumanizeEntityTitle, ResolveContributionKey,
-    ResolveFormContributionWinners,
+    FieldGroupsInDetails, FormCompositionRegistry, FormCompositionSnapshot, HumanizeEntityTitle, PlacementStateFromContribution,
+    ResolveContributionKey, ResolveFormContributionWinners,
 } from '@memberjunction/ng-base-forms';
 
 // ─── Hoisted state buckets the mocks read/write ──────────────────────────
@@ -49,6 +49,8 @@ const hoisted = vi.hoisted(() => ({
     placementContext: null as Record<string, unknown> | null,
     /** The record the dialog's preview was told to show. */
     placementRecordKey: null as CompositeKey | null,
+    /** The placement dialog instance the service last opened. */
+    placementDialog: null as Record<string, unknown> | null,
     /** Registrations the collector reports. */
     registrations: [] as Array<{ Priority: number; Source: 'class' | 'metadata'; Title?: string; Metadata: Record<string, unknown> }>,
     /** Registrations the collector reports only when asked for the ones the user hid. */
@@ -118,6 +120,7 @@ const mockDialog = {
                     subscribe: (cb: () => void) => { if (hoisted.dialogResult !== 'apply') cb(); },
                 },
             };
+            hoisted.placementDialog = instance;
             return { Content: { instance }, Result: { subscribe: () => { /* closed via the outputs */ } }, Close: () => { /* no DOM */ } };
         }
         if (typeof settings?.content === 'string') hoisted.confirmTexts.push(settings.content);
@@ -141,8 +144,9 @@ const mockDialog = {
 /**
  * The placement dialog is an Angular component; importing the package root here would drag
  * the framework into a node-preset suite. `ApplyDecisionToSpec` is reproduced exactly so the
- * test still asserts the real merge. The chrome and key helpers are pure and framework-free,
- * so the built ones run. The collector reads the ClassFactory, so it reports what a test sets.
+ * test still asserts the real merge. The chrome, key and placement helpers are pure and
+ * framework-free, so the built ones run. The collector reads the ClassFactory, so it reports
+ * what a test sets.
  */
 vi.mock('@memberjunction/ng-base-forms', async () => {
     // Loads from ng-base-forms' dist, so that package must be built first.
@@ -156,6 +160,8 @@ vi.mock('@memberjunction/ng-base-forms', async () => {
     }>('@memberjunction/ng-base-forms/dist/lib/panel-slot/form-contribution.js');
     const compositions = await vi.importActual<{ FormCompositionRegistry: typeof FormCompositionRegistry }>(
         '@memberjunction/ng-base-forms/dist/lib/chrome/form-composition-registry.js');
+    const placement = await vi.importActual<{ PlacementStateFromContribution: typeof PlacementStateFromContribution }>(
+        '@memberjunction/ng-base-forms/dist/lib/apply/form-placement.js');
     return {
         FormCompositionRegistry: compositions.FormCompositionRegistry,
         MjFormPlacementDialogComponent: class MjFormPlacementDialogComponent {},
@@ -163,6 +169,7 @@ vi.mock('@memberjunction/ng-base-forms', async () => {
             ({ ...spec, formContribution: decision.Contribution }),
         FieldGroupsInDetails: chrome.FieldGroupsInDetails,
         HumanizeEntityTitle: chrome.HumanizeEntityTitle,
+        PlacementStateFromContribution: placement.PlacementStateFromContribution,
         ResolveContributionKey: keys.ResolveContributionKey,
         ResolveFormContributionWinners: keys.ResolveFormContributionWinners,
         CollectFormContributionRegistrations: (_entity: unknown, _provider: unknown, options?: { IncludeHidden?: boolean }) => {
@@ -261,6 +268,7 @@ beforeEach(() => {
     hoisted.confirmResult = null;
     hoisted.resolveActionIdsByName = false;
     hoisted.placementRecordKey = null;
+    hoisted.placementDialog = null;
     hoisted.registrations = [];
     hoisted.hiddenRegistrations = [];
     hoisted.events = [];
@@ -642,6 +650,22 @@ describe('InteractiveFormApplyService — form-panel specs', () => {
         expect(sent.formContribution.presentation).toBe('bare');
         expect(sent.formContribution.replacesSectionKey).toBeUndefined();
         expect(sent.formContribution.contributionKey).toBeUndefined();
+    });
+
+    it('starts the dialog from the panel\'s proposed claims', async () => {
+        const spec = panelSpec();
+        const proposal = (spec as unknown as { formContribution: { presentation: string } }).formContribution;
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(spec, ENTITY, provider(), snapshot());
+        const dialog = hoisted.placementDialog as { SeedState?: (d: never) => void };
+        const context = hoisted.placementContext!;
+        expect(typeof dialog.SeedState).toBe('function');
+        const fake = {
+            Context: { ...context, FullCustomForm: false },
+            State: undefined as unknown,
+        };
+        dialog.SeedState!(fake as never);
+        expect((fake.State as { Presentation: string }).Presentation).toBe(proposal.presentation);
     });
 
     it('offers the sections the live form actually has', async () => {
