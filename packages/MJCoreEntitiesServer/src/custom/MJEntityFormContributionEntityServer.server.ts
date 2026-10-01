@@ -30,9 +30,11 @@ import { FormRowComponentGuardRefusal, type GuardedFormComponentRow } from './Fo
  * Anything less leaves a path around the rule.
  *
  * `Save()` also checks the component the row points at, on create or when `ComponentID` changes
- * (`FormRowComponentGuardRefusal`): a component another user's personal row uses is refused for
- * everyone, and one a `Role` or `Global` row uses needs the grant. That check needs a query, so it
- * runs in `Save()` rather than `Validate()`.
+ * (`FormRowComponentGuardRefusal`). Without the grant the component must be the caller's own: used
+ * by at least one row and only by the caller's own personal rows, or used by no row and created by
+ * the caller, read from its Internal `Create` record change. With the grant, a component another
+ * user's personal row uses is refused for everyone, an Owner included, and any other is allowed.
+ * That check needs a query, so it runs in `Save()` rather than `Validate()`.
  */
 @RegisterClass(BaseEntity, 'MJ: Entity Form Contributions')
 export class MJEntityFormContributionEntityServer extends MJEntityFormContributionEntity {

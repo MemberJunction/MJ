@@ -20,18 +20,20 @@ import { ComponentGuardRefusal, type GuardedComponentRow } from "./FormComponent
  * or panel draws the component its row points at, and a form's spec can load a component by name,
  * so a change to a component's specification, status, name, namespace or type, or its deletion,
  * changes what other people's forms draw:
- * - without the `Manage Form Defaults` grant, it is allowed only when at least one row uses the
- *   component and every such row is the caller's own personal row; a component no row uses is
- *   read-only;
+ * - without the `Manage Form Defaults` grant, it is allowed only for a component of the caller's
+ *   own (`IsCallersOwnComponent`): used by at least one row and only by the caller's own personal
+ *   rows, or used by no row and created by the caller;
  * - with the grant, it is allowed unless another user's personal row uses the component.
  * Without the grant, a created or renamed component also may not share its name with another
  * component that is not the caller's own. A save or delete with no caller (a trusted server
  * context) is not checked.
  *
- * The rows and the stored columns are read as the caller, and the changed columns are found by
- * comparing with the stored row, not with the values as loaded. When a read fails, the write is
- * refused. The check needs a query and `Validate()` is synchronous, so it runs in `Save()` (an
- * ordinary save and a `ReplayOnly` save alike) and in `Delete()`, before the write.
+ * The rows, the stored columns and the creator are read in one batch as the caller. The creator is
+ * the component's `Create` record in `MJ: Record Changes` with `Source` 'Internal', which the
+ * platform writes with every insert and which a caller cannot create. The changed columns are
+ * found by comparing with the stored row, not with the values as loaded. When a read fails, the
+ * write is refused. The check needs a query and `Validate()` is synchronous, so it runs in `Save()`
+ * (an ordinary save and a `ReplayOnly` save alike) and in `Delete()`, before the write.
  */
 @RegisterClass(BaseEntity, 'MJ: Components')
 export class MJComponentEntityServer extends MJComponentEntityExtended  {

@@ -195,10 +195,12 @@ function usesViews(componentIDs: string[]): Pick<Record<ViewRole, RunViewParams>
 }
 
 /**
- * The caller's `Create` record changes for these components. `MJ: Components` tracks record
- * changes, so every component created through the platform has one, written in the same batch as
- * the insert. Null when the component entity is missing from the metadata, which `runBatch`
- * reports as a failed read.
+ * The caller's `Create` record changes for these components, with `Source` 'Internal'.
+ * `MJ: Components` tracks record changes, so every component created through the platform has one,
+ * written by the database provider in the same batch as the insert. `MJRecordChangeEntityServer`
+ * refuses an Internal record change created by a caller, so such a row cannot be forged through the
+ * API. Null when the component entity is missing from the metadata, which `runBatch` reports as a
+ * failed read.
  */
 function createdByCallerView(caller: GuardCaller, componentIDs: string[]): RunViewParams | null {
     const componentEntity = caller.MetadataProvider.EntityByName('MJ: Components');
@@ -206,7 +208,7 @@ function createdByCallerView(caller: GuardCaller, componentIDs: string[]): RunVi
     const recordIDs = componentIDs.map((id) => `'${EscapeSQLString(recordChangeKey(id))}'`).join(',');
     return {
         EntityName: 'MJ: Record Changes',
-        ExtraFilter: `EntityID='${EscapeSQLString(componentEntity.ID)}' AND Type='Create' ` +
+        ExtraFilter: `EntityID='${EscapeSQLString(componentEntity.ID)}' AND Source='Internal' AND Type='Create' ` +
             `AND UserID='${EscapeSQLString(caller.User.ID)}' AND RecordID IN (${recordIDs})`,
         Fields: ['RecordID'],
         ResultType: 'simple',
@@ -231,12 +233,13 @@ function storedComponentView(componentID: string): RunViewParams {
 }
 
 /**
- * The other components a lookup by this name finds: the same `Name='...'` filter
- * `ComponentMetadataEngine.FindComponent` uses, in any namespace, because that lookup may be
- * made without one.
+ * The other components a lookup by this name finds. The name is compared trimmed and lower-cased,
+ * as `ComponentMetadataEngineServer.FindComponent` compares it, so stored padding or a
+ * case-sensitive database cannot hide a match. It is matched in any namespace, because a lookup
+ * may be made without one.
  */
 function sameNameView(name: unknown, excludeID: string | null): RunViewParams {
-    const nameFilter = `Name='${EscapeSQLString(String(name ?? '').trim())}'`;
+    const nameFilter = `LOWER(LTRIM(RTRIM(Name)))=LOWER('${EscapeSQLString(String(name ?? '').trim())}')`;
     return {
         EntityName: 'MJ: Components',
         ExtraFilter: excludeID ? `${nameFilter} AND ID<>'${EscapeSQLString(excludeID)}'` : nameFilter,

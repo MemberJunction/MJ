@@ -55,8 +55,8 @@ const { db } = vi.hoisted(() => ({
     db: {
         components: [] as StoredComponent[],
         uses: [] as StoredUse[],
-        /** `Create` record changes: which user created which component. */
-        created: [] as Array<{ ComponentID: string; UserID: string }>,
+        /** `Create` record changes: which user created which component, and the row's Source. */
+        created: [] as Array<{ ComponentID: string; UserID: string; Source: string }>,
         failing: new Set<string>(),
         throws: false,
         calls: [] as ViewCall[][],
@@ -68,18 +68,20 @@ function answer(entityName: string, filter: string): Array<Record<string, unknow
     if (entityName === 'MJ: Record Changes') {
         const userID = /UserID='([^']*)'/.exec(filter)?.[1];
         const recordIDs = [...filter.matchAll(/'ID\|([^']*)'/g)].map((m) => m[1]);
+        const internalOnly = filter.includes("Source='Internal'");
         return db.created
             .filter((c) => c.UserID === userID && recordIDs.includes(c.ComponentID))
+            .filter((c) => !internalOnly || c.Source === 'Internal')
             .map((c) => ({ RecordID: `ID|${c.ComponentID.toUpperCase()}` }));
     }
     if (entityName === 'MJ: Components') {
         const byID = /^ID='([^']*)'$/.exec(filter);
         if (byID) return db.components.filter((c) => c.ID === byID[1]).map((c) => ({ ...c }));
-        const byName = /^Name='((?:[^']|'')*)'(?: AND ID<>'([^']*)')?$/.exec(filter);
+        const byName = /^LOWER\(LTRIM\(RTRIM\(Name\)\)\)=LOWER\('((?:[^']|'')*)'\)(?: AND ID<>'([^']*)')?$/.exec(filter);
         if (byName) {
-            const name = byName[1].replace(/''/g, "'").toLowerCase();
+            const name = byName[1].replace(/''/g, "'").trim().toLowerCase();
             return db.components
-                .filter((c) => c.Name.toLowerCase() === name && c.ID !== byName[2])
+                .filter((c) => c.Name.trim().toLowerCase() === name && c.ID !== byName[2])
                 .map((c) => ({ ID: c.ID }));
         }
         throw new Error(`unexpected component filter: ${filter}`);
@@ -211,9 +213,9 @@ function make(caller: StubCaller | null, over: Partial<StubHooks> = {}): StubHoo
     return e;
 }
 
-/** Records that this user created the component. */
-function createdBy(componentID: string, user: StubCaller): void {
-    db.created.push({ ComponentID: componentID, UserID: user.ID });
+/** Records that this user created the component, through the platform unless a Source is given. */
+function createdBy(componentID: string, user: StubCaller, source = 'Internal'): void {
+    db.created.push({ ComponentID: componentID, UserID: user.ID, Source: source });
 }
 
 beforeEach(() => {
@@ -257,6 +259,12 @@ describe('MJComponentEntityServer — form component guard', () => {
             storeComponent();
             createdBy('COMP-1', ALICE);
             expect(await make(ALICE, { Specification: '{"v":2}' }).Save()).toBe(true);
+        });
+
+        it('ignores a Create record change that is not Internal when reading the creator', async () => {
+            storeComponent();
+            createdBy('COMP-1', ALICE, 'External');
+            expect(await make(ALICE, { Specification: '{"v":2}' }).Save()).toBe(false);
         });
 
         it('is refused for a component a Role or Global row uses', async () => {
@@ -311,9 +319,9 @@ describe('MJComponentEntityServer — form component guard', () => {
             expect(batch.map((c) => c.EntityName)).toEqual([CONTRIBUTIONS, OVERRIDES, 'MJ: Components', 'MJ: Components', 'MJ: Record Changes']);
             expect(batch[0]).toMatchObject({ ExtraFilter: "ComponentID='COMP-''1'", ContextUser: ALICE });
             expect(batch[2].Fields).toEqual(['Specification', 'Status', 'Name', 'Type', 'Namespace']);
-            expect(batch[3].ExtraFilter).toBe("Name='PersonLtvStrip' AND ID<>'COMP-''1'");
+            expect(batch[3].ExtraFilter).toBe("LOWER(LTRIM(RTRIM(Name)))=LOWER('PersonLtvStrip') AND ID<>'COMP-''1'");
             expect(batch[4].ExtraFilter).toBe(
-                `EntityID='ENT-COMPONENTS' AND Type='Create' AND UserID='${ALICE.ID}' AND RecordID IN ('ID|COMP-''1')`);
+                `EntityID='ENT-COMPONENTS' AND Source='Internal' AND Type='Create' AND UserID='${ALICE.ID}' AND RecordID IN ('ID|COMP-''1')`);
         });
 
         it('is refused when a read fails or throws', async () => {
@@ -362,6 +370,14 @@ describe('MJComponentEntityServer — form component guard', () => {
             db.created = [];
             createdBy('LEFTOVER', BOB);
             expect(await make(ALICE, { IsSaved: false, ID: 'NEW' }).Save()).toBe(false);
+        });
+
+        it('finds a stored name with padding or other casing, as the server lookup compares names', async () => {
+            db.components.push({ ID: 'PADDED', Name: ' Foo', Namespace: null, Specification: '{}', Status: null, Type: null });
+            const e = make(ALICE, { IsSaved: false, ID: 'NEW', Name: 'foo' });
+            expect(await e.Save()).toBe(false);
+            expect(e.Recorded?.Message).toMatch(/already has this name/);
+            expect(db.calls[0][0].ExtraFilter).toBe("LOWER(LTRIM(RTRIM(Name)))=LOWER('foo')");
         });
 
         it('allows a create with no same-named component', async () => {

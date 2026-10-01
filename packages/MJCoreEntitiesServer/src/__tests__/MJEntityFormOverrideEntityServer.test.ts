@@ -42,6 +42,8 @@ const { views } = vi.hoisted(() => ({
         uses: [] as StoredUse[],
         /** Users whose `Create` record change exists for COMP-1. */
         createdBy: new Set<string>(),
+        /** The Source of those record changes. */
+        createdSource: 'Internal',
         failing: false,
         calls: 0,
     },
@@ -59,7 +61,9 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
                 if (p.EntityName === 'MJ: Record Changes') {
                     const userID = /UserID='([^']*)'/.exec(p.ExtraFilter)?.[1] ?? '';
                     const asksForComp1 = p.ExtraFilter.includes("'ID|COMP-1'");
-                    return { Success: true, Results: asksForComp1 && views.createdBy.has(userID) ? [{ RecordID: 'ID|COMP-1' }] : [] };
+                    const sourceMatches = !p.ExtraFilter.includes("Source='Internal'") || views.createdSource === 'Internal';
+                    const found = asksForComp1 && sourceMatches && views.createdBy.has(userID);
+                    return { Success: true, Results: found ? [{ RecordID: 'ID|COMP-1' }] : [] };
                 }
                 const componentID = /ComponentID='([^']*)'/.exec(p.ExtraFilter)?.[1];
                 // Both entities share the stand-in rows; the contributions view serves them all.
@@ -171,6 +175,7 @@ describe.each<[string, GuardedClass]>([
         views.uses = [];
         // ALICE created COMP-1 unless a test says otherwise, so creates by her reach Validate().
         views.createdBy = new Set([ALICE.ID]);
+        views.createdSource = 'Internal';
         views.failing = false;
         views.calls = 0;
     });
@@ -297,6 +302,11 @@ describe.each<[string, GuardedClass]>([
             expect(await notMine.Save()).toBe(false);
             expect(notMine.SuperSaveCalled).toBe(false);
             views.createdBy = new Set();
+            expect(await make({ IsSaved: false, Scope: 'User', UserID: ALICE.ID, Caller: ALICE }).Save()).toBe(false);
+        });
+
+        it('ignores a Create record change that is not Internal when reading the creator', async () => {
+            views.createdSource = 'External';
             expect(await make({ IsSaved: false, Scope: 'User', UserID: ALICE.ID, Caller: ALICE }).Save()).toBe(false);
         });
 
