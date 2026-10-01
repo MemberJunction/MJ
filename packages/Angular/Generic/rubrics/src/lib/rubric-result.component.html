@@ -1,6 +1,9 @@
 <section class="rubric-panel" aria-label="Rubric result">
   @if (Result) {
     <p>{{ Shown }} <span>{{ Result.outcome }}</span></p>
+    @if (Result.gateFailed) {
+      <p>A gate failed.</p>
+    }
     @if (BandLabel) {
       <p>Band {{ BandLabel }}</p>
     }
@@ -11,6 +14,15 @@
           <span>{{ node.key }}</span>
           <span class="rubric-bar" [style.width.%]="Bar(node.normalizedScore)"></span>
           <span>{{ Bar(node.normalizedScore) }}%</span>
+          @if (node.gateFailed) {
+            <span>Gate failed</span>
+          }
+          @if (Note(node.id, 'rationale')) {
+            <p>{{ Note(node.id, 'rationale') }}</p>
+          }
+          @if (Note(node.id, 'evidence')) {
+            <p>{{ Note(node.id, 'evidence') }}</p>
+          }
         </li>
       }
     </ul>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { addCriterion, answerLevel, bandFor, canSubmit, displayScore, draftProblems, incompleteAnswers, previewScore, setWeight, weightShares } from './model.js';
+import { addCriterion, addNode, answerLevel, bandFor, canSubmit, displayScore, draftProblems, incompleteAnswers, moveNode, previewScore, setAnchor, setGate, setScale, setWeight, weightShares } from './model.js';
 
 const scale: RubricScaleSnapshot = {
     id: 'scale',
@@ -55,6 +55,21 @@ describe('rubric author', () => {
         expect(scored.normalizedScore).toBe(1);
         expect(scored.outcome).toBe('Scored');
     });
+
+    it('builds a parent and a gated child with a scale and an anchor', () => {
+        let nodes = addNode([], 'Quality', 'Group', null);
+        const parent = nodes[0];
+        nodes = addCriterion(nodes, 'Clarity', null);
+        const child = nodes[1];
+        nodes = moveNode(nodes, child.id, parent.id);
+        nodes = setScale(nodes, child.id, 'scale');
+        nodes = setAnchor(nodes, child.id, 'high', 'Clear enough to act on');
+        nodes = setGate(nodes, child.id, true, 0.6);
+        const built = nodes.find(node => node.id === child.id);
+        expect(built?.parentId).toBe(parent.id);
+        expect(built?.sequence).toBe(0);
+        expect(draftProblems(nodes, [scale])).toEqual([]);
+    });
 });
 
 describe('answer form', () => {
@@ -70,6 +85,15 @@ describe('answer form', () => {
         expect(skipped[0].isNotApplicable).toBe(true);
         expect(canSubmit(nodes, skipped)).toBe(true);
     });
+
+    it('refuses not applicable when the policy is NotAllowed, and ignores an unanswered advisory leaf', () => {
+        const mandatory = leaf('must', 1, { notApplicablePolicy: 'NotAllowed' });
+        const note = leaf('note', 1, { isAdvisory: true });
+        const kept = answerLevel([{ criterionId: 'must', scaleLevelId: 'high' }], 'must', null, true, 'NotAllowed');
+        expect(kept).toEqual([{ criterionId: 'must', scaleLevelId: 'high' }]);
+        expect(canSubmit([mandatory], [{ criterionId: 'must', isNotApplicable: true }], 'ExcludeAndRedistribute')).toBe(false);
+        expect(canSubmit([note], [])).toBe(true);
+    });
 });
 
 describe('read-only result', () => {
@@ -78,5 +102,11 @@ describe('read-only result', () => {
         expect(displayScore(null, 0, 100)).toBeNull();
         expect(bandFor(0.8, version([]).bands)?.label).toBe('High');
         expect(bandFor(0.2, version([]).bands)).toBeNull();
+        const bands = [
+            { id: 'low', label: 'Low', minScore: 0, maxScore: 0.5, displayTone: 'Neutral', sequence: 0 },
+            { id: 'high', label: 'Upper', minScore: 0.5, maxScore: 1, displayTone: 'Success', sequence: 1 },
+        ];
+        expect(bandFor(0.5, bands)?.label).toBe('Upper');
+        expect(bandFor(1, bands)?.label).toBe('Upper');
     });
 });

@@ -46,26 +46,100 @@ Published and retired versions are frozen. The database rejects a change with er
 
 ## Worked examples
 
+Each example is one published rubric and two evaluations of it. Scores are the `RubricScoring` result for those answers. The levels scale below is Meets = 1, Partial = 0.5, Miss = 0, unless an example names a different scale.
+
 ### Agent evaluation
 
-A research agent is scored on accuracy, sourcing, and completeness. Accuracy is a gate: below 0.6 the run fails even if the other leaves are strong. An AI judge and a human reviewer each submit an evaluation of the same agent run. Their scores stay comparable only while they use the same major version. A calibration set of at least 20 subjects is what makes agreement statistics meaningful.
+| Key | Weight | Scale | Gate |
+|---|---|---|---|
+| accuracy | 1 | Meets / Partial / Miss | minimum 0.6 |
+| sourcing | 1 | Meets / Partial / Miss | no |
+| completeness | 1 | Meets / Partial / Miss | no |
+
+Pass threshold 0.6.
+
+| Evaluation | Answers | Score | Outcome |
+|---|---|---|---|
+| AI judge | accuracy Partial, sourcing Meets, completeness Meets | 0.833333 | GateFailed |
+| Human reviewer | all three Meets | 1 | Passed |
+
+The AI judge's weighted score is above the pass threshold. Accuracy is 0.5, under the gate, so the outcome is GateFailed. The human review clears the gate and passes.
 
 ### Peer review
 
-Three reviewers score one submission. Each reviewer's evaluation is the submission's subject, and the review round is the context. Consensus is the mean of the submitted scores on that major. A reviewer who has a conflict withdraws. The withdrawn row stays in the record and is not part of the cohort mean. Blinded reviewers do not see the cohort columns until they have submitted their own evaluation.
+| Key | Weight | Scale |
+|---|---|---|
+| argument | 1 | Meets / Partial / Miss |
+| evidence | 1 | Meets / Partial / Miss |
+
+| Evaluation | Status | Answers | Score | Outcome |
+|---|---|---|---|---|
+| Reviewer A | Submitted | both Meets | 1 | Scored |
+| Reviewer B | Submitted | argument Meets, evidence Partial | 0.75 | Scored |
+| Reviewer C | Withdrawn | both Miss | 0 | Scored, then withdrawn |
+
+The cohort mean is the mean of the submitted scores, `(1 + 0.75) / 2 = 0.875`. Reviewer C's 0 is not in that mean.
 
 ### Awards
 
-A panel scores entries in one category on the same published rubric. Ranking within the category uses the cohort mean of those submitted scores. A knockout eligibility criterion is a gate. An entry that fails it is out, regardless of the weighted score on the other criteria.
+| Key | Weight | Scale | Gate |
+|---|---|---|---|
+| eligible | 1 | Met = 1 / Not met = 0 | minimum 1 |
+| craft | 2 | Meets / Partial / Miss | no |
+| originality | 1 | Meets / Partial / Miss | no |
+
+Pass threshold 0.6.
+
+| Evaluation | Answers | Score | Outcome |
+|---|---|---|---|
+| Entry north | eligible Met, craft Meets, originality Partial | 0.875 | Passed |
+| Entry south | eligible Not met, craft Meets, originality Meets | 0.75 | GateFailed |
+
+South's weighted score is high. The eligibility gate is 0, so the entry is out. Ranking inside the category uses the cohort mean of the entries that were scored, not the gated-out row's score as a rank.
 
 ### Procurement
 
-Requirements nest: a group for security, a group for delivery. Mandatory items use the Compliance scale and Not Allowed for not applicable, so a vendor cannot skip them. The vendor's own response is a Self evaluation. Evaluators then score the same proposal. The Self score is reported beside the cohort and is not inside the cohort mean.
+| Key | Parent | Weight | Scale | Policy |
+|---|---|---|---|---|
+| security | | 1 | group | |
+| delivery | | 1 | group | |
+| encryption | security | 1 | Compliant = 1 / Partial = 0.5 / Non-compliant = 0 | NotAllowed |
+| schedule | delivery | 1 | Meets / Partial / Miss | Exclude and redistribute |
+
+| Evaluation | Evaluator | Answers | Score | Outcome |
+|---|---|---|---|---|
+| Vendor packet | Self | encryption Compliant, schedule Meets | 1 | Scored |
+| Buyer | Human | encryption Partial, schedule Meets | 0.75 | Scored |
+
+The vendor cannot mark encryption not applicable. The Self score is reported beside the cohort and is not inside the cohort mean. The buyer's 0.75 is the cohort mean when it is the only non-self submitted score.
 
 ### Accreditation
 
-Standards are groups and criteria are leaves. Evidence is required, so an answer without a citation cannot be submitted. The institution files a Self evaluation. The visiting team files its own evaluation of the same subject. The two stay distinct, and the cohort mean is the team's submitted scores.
+| Key | Parent | Weight | Required |
+|---|---|---|---|
+| standard-1 | | 1 | group |
+| records | standard-1 | 1 | evidence required |
+| faculty | standard-1 | 1 | evidence required |
+
+Scale for both leaves: Met = 1 / Not met = 0.
+
+| Evaluation | Evaluator | Answers | Score | Outcome |
+|---|---|---|---|---|
+| Self-study | Self | both Met, each with a file citation | 1 | Scored |
+| Visiting team | Human | records Met, faculty Not met, each with a citation | 0.5 | Scored |
+
+An answer with no citation cannot be submitted. The team's 0.5 is the cohort mean. The self-study stays visible and is not inside that mean.
 
 ### Hiring
 
-A structured interview uses an anchored 1–5 scale. Each level has a descriptor the interviewer can see while they choose. Several interviewers submit human evaluations. An AI evaluation of the transcript uses the same rubric and the same major, so the comparison is the difference between the human mean and the AI score, not a mix of old and new rubric versions.
+| Key | Weight | Scale |
+|---|---|---|
+| structure | 1 | 1 = 0, 2 = 0.25, 3 = 0.5, 4 = 0.75, 5 = 1, each level anchored |
+| evidence | 1 | the same 1–5 anchors |
+
+| Evaluation | Evaluator | Answers | Score | Outcome |
+|---|---|---|---|---|
+| Interviewer | Human | structure 4, evidence 4 | 0.75 | Scored |
+| Transcript | AI | structure 5, evidence 3 | 0.75 | Scored |
+
+Both use the same major, so the comparison is 0.75 against 0.75, not a mix with an older rubric. The anchors are what the interviewer reads while choosing the level.

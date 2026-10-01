@@ -11,13 +11,13 @@
       @if (node.rationaleRequired) {
         <label>
           Rationale
-          <textarea (change)="OnText(node, 'rationale', $event)"></textarea>
+          <textarea [value]="Text(node, 'rationale')" (input)="OnText(node, 'rationale', $event)"></textarea>
         </label>
       }
       @if (node.evidenceRequired) {
         <label>
           Evidence
-          <textarea (change)="OnText(node, 'evidence', $event)"></textarea>
+          <textarea [value]="Text(node, 'evidence')" (input)="OnText(node, 'evidence', $event)"></textarea>
         </label>
       }
     </fieldset>

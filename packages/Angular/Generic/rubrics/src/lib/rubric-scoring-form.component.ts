@@ -1,7 +1,8 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { answerLevel, canSubmit, incompleteAnswers, type RubricFormAnswer } from './model.js';
+import type { NotApplicablePolicy } from '@memberjunction/rubrics-base';
+import { answerLevel, canSubmit, effectivePolicy, incompleteAnswers, type RubricFormAnswer } from './model.js';
 
 /**
  * Answer form. Keyboard: a digit selects that level, and N marks not applicable.
@@ -26,11 +27,19 @@ export class RubricScoringFormComponent {
     }
 
     public get Problems(): string[] {
-        return incompleteAnswers(this.Version?.nodes ?? [], this.Answers);
+        return incompleteAnswers(this.Version?.nodes ?? [], this.Answers, this.Version?.notApplicablePolicy ?? 'ExcludeAndRedistribute');
     }
 
     public get CanSubmit(): boolean {
-        return this.Version !== null && canSubmit(this.Version.nodes, this.Answers);
+        return this.Version !== null && canSubmit(this.Version.nodes, this.Answers, this.Version.notApplicablePolicy);
+    }
+
+    public Policy(node: RubricNodeSnapshot): NotApplicablePolicy {
+        return effectivePolicy(node, this.Version?.notApplicablePolicy ?? 'ExcludeAndRedistribute');
+    }
+
+    public Text(node: RubricNodeSnapshot, field: 'rationale' | 'evidence'): string {
+        return this.Answers.find(item => item.criterionId === node.id)?.[field] ?? '';
     }
 
     public Scale(node: RubricNodeSnapshot): RubricScaleSnapshot | undefined {
@@ -50,7 +59,7 @@ export class RubricScoringFormComponent {
     }
 
     public OnNotApplicable(node: RubricNodeSnapshot): void {
-        this.AnswersChange.emit(answerLevel(this.Answers, node.id, null, !this.IsNotApplicable(node)));
+        this.AnswersChange.emit(answerLevel(this.Answers, node.id, null, !this.IsNotApplicable(node), this.Policy(node)));
     }
 
     public OnText(node: RubricNodeSnapshot, field: 'rationale' | 'evidence', event: Event): void {

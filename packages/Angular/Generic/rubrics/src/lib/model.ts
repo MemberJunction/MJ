@@ -1,4 +1,4 @@
-import { RubricScoring, type RubricBandSnapshot, type RubricNodeSnapshot, type RubricScaleSnapshot, type RubricScoreResult, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
+import { RubricScoring, type NotApplicablePolicy, type RubricBandSnapshot, type RubricNodeSnapshot, type RubricScaleSnapshot, type RubricScoreResult, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 
 /** One answer on the scoring form. Groups are not answered. */
 export interface RubricFormAnswer {
@@ -51,52 +51,107 @@ export function draftProblems(nodes: RubricNodeSnapshot[], scales: RubricScaleSn
     return problems;
 }
 
-/** A new leaf the author can edit. The host saves the draft. */
-export function addCriterion(nodes: RubricNodeSnapshot[], name: string, scaleId: string | null): RubricNodeSnapshot[] {
+/** A new group or leaf. The host saves the draft. The widget does not publish. */
+export function addNode(nodes: RubricNodeSnapshot[], name: string, nodeType: 'Group' | 'Criterion', scaleId: string | null, parentId: string | null = null): RubricNodeSnapshot[] {
     const key = uniqueKey(nodes, slug(name));
+    const sequence = nodes.filter(node => (node.parentId ?? null) === parentId).length;
     return [...nodes, {
         id: crypto.randomUUID(),
         key,
         name,
-        nodeType: 'Criterion',
-        scaleId,
+        parentId,
+        nodeType,
+        scaleId: nodeType === 'Criterion' ? scaleId : null,
         weight: 1,
         isAdvisory: false,
         isGate: false,
         evidenceRequired: false,
         rationaleRequired: false,
-        sequence: nodes.length,
+        sequence,
     }];
+}
+
+export function addCriterion(nodes: RubricNodeSnapshot[], name: string, scaleId: string | null): RubricNodeSnapshot[] {
+    return addNode(nodes, name, 'Criterion', scaleId, null);
+}
+
+/** Moving sets the parent and puts the node at the end of that parent's children. */
+export function moveNode(nodes: RubricNodeSnapshot[], id: string, parentId: string | null): RubricNodeSnapshot[] {
+    if (parentId === id) return nodes;
+    const sequence = nodes.filter(node => node.id !== id && (node.parentId ?? null) === parentId).length;
+    return nodes.map(node => node.id === id ? { ...node, parentId, sequence } : node);
 }
 
 export function setWeight(nodes: RubricNodeSnapshot[], id: string, weight: number): RubricNodeSnapshot[] {
     return nodes.map(node => node.id === id ? { ...node, weight: weight < 0 ? 0 : weight } : node);
 }
 
-/** Names the leaves that still need an answer, a required rationale, or required evidence. */
-export function incompleteAnswers(nodes: RubricNodeSnapshot[], answers: RubricFormAnswer[]): string[] {
+export function setScale(nodes: RubricNodeSnapshot[], id: string, scaleId: string | null): RubricNodeSnapshot[] {
+    return nodes.map(node => node.id === id ? { ...node, scaleId } : node);
+}
+
+export function setAnchor(nodes: RubricNodeSnapshot[], id: string, scaleLevelId: string, descriptor: string): RubricNodeSnapshot[] {
+    return nodes.map(node => {
+        if (node.id !== id) return node;
+        const anchors = [...(node.anchors ?? []).filter(anchor => anchor.scaleLevelId !== scaleLevelId), { scaleLevelId, descriptor }];
+        return { ...node, anchors };
+    });
+}
+
+export function setGate(nodes: RubricNodeSnapshot[], id: string, isGate: boolean, gateMinimumScore: number | null): RubricNodeSnapshot[] {
+    return nodes.map(node => node.id === id ? { ...node, isGate, gateMinimumScore: isGate ? gateMinimumScore : null } : node);
+}
+
+export function setPolicy(nodes: RubricNodeSnapshot[], id: string, notApplicablePolicy: NotApplicablePolicy | null): RubricNodeSnapshot[] {
+    return nodes.map(node => node.id === id ? { ...node, notApplicablePolicy } : node);
+}
+
+export function addBand(bands: RubricBandSnapshot[], label: string): RubricBandSnapshot[] {
+    return [...bands, { id: crypto.randomUUID(), label, minScore: 0, maxScore: 1, displayTone: 'Neutral', sequence: bands.length }];
+}
+
+export function updateBand(bands: RubricBandSnapshot[], id: string, patch: Partial<Pick<RubricBandSnapshot, 'label' | 'minScore' | 'maxScore'>>): RubricBandSnapshot[] {
+    return bands.map(band => band.id === id ? { ...band, ...patch } : band);
+}
+
+export function effectivePolicy(node: RubricNodeSnapshot, versionPolicy: NotApplicablePolicy): NotApplicablePolicy {
+    return node.notApplicablePolicy ?? versionPolicy;
+}
+
+/**
+ * Names the leaves that still need an answer, a required rationale, or required evidence.
+ * An unanswered advisory leaf does not block submit. NotAllowed refuses a not-applicable answer.
+ */
+export function incompleteAnswers(nodes: RubricNodeSnapshot[], answers: RubricFormAnswer[], versionPolicy: NotApplicablePolicy = 'ExcludeAndRedistribute'): string[] {
     const missing: string[] = [];
     for (const node of nodes.filter(item => item.nodeType === 'Criterion')) {
         const answer = answers.find(item => item.criterionId === node.id);
-        if (!answer || (!answer.isNotApplicable && !answer.scaleLevelId && answer.scaleLevelId !== '')) {
-            if (!answer?.scaleLevelId && !answer?.isNotApplicable) {
-                missing.push(`${node.name} is unanswered.`);
-                continue;
-            }
+        const policy = effectivePolicy(node, versionPolicy);
+        if (node.isAdvisory && !answer?.scaleLevelId && !answer?.isNotApplicable) continue;
+        if (!answer?.scaleLevelId && !answer?.isNotApplicable) {
+            missing.push(`${node.name} is unanswered.`);
+            continue;
         }
-        if (answer?.isNotApplicable) continue;
+        if (answer?.isNotApplicable) {
+            if (policy === 'NotAllowed') missing.push(`${node.name} cannot be not applicable.`);
+            continue;
+        }
         if (node.rationaleRequired && !(answer?.rationale ?? '').trim()) missing.push(`${node.name} requires a rationale.`);
         if (node.evidenceRequired && !(answer?.evidence ?? '').trim()) missing.push(`${node.name} requires evidence.`);
     }
     return missing;
 }
 
-export function canSubmit(nodes: RubricNodeSnapshot[], answers: RubricFormAnswer[]): boolean {
-    return incompleteAnswers(nodes, answers).length === 0;
+export function canSubmit(nodes: RubricNodeSnapshot[], answers: RubricFormAnswer[], versionPolicy: NotApplicablePolicy = 'ExcludeAndRedistribute'): boolean {
+    return incompleteAnswers(nodes, answers, versionPolicy).length === 0;
 }
 
-/** Selects a level, or clears it when the leaf is marked not applicable. */
-export function answerLevel(answers: RubricFormAnswer[], criterionId: string, scaleLevelId: string | null, notApplicable: boolean): RubricFormAnswer[] {
+/**
+ * Selects a level, or clears it when the leaf is marked not applicable.
+ * NotAllowed leaves the answers unchanged, so N does not clear the level.
+ */
+export function answerLevel(answers: RubricFormAnswer[], criterionId: string, scaleLevelId: string | null, notApplicable: boolean, policy: NotApplicablePolicy = 'ExcludeAndRedistribute'): RubricFormAnswer[] {
+    if (notApplicable && policy === 'NotAllowed') return answers;
     const next = answers.filter(item => item.criterionId !== criterionId);
     const previous = answers.find(item => item.criterionId === criterionId);
     next.push({
@@ -127,10 +182,18 @@ export function displayScore(normalized: number | null, min: number, max: number
     return min + normalized * (max - min);
 }
 
-/** The band whose range contains the normalized score. */
+/**
+ * The same half-open rule as RubricScoring.bandId. A score equal to a band's max
+ * belongs to the next band. The band whose max is 1 also contains 1.
+ */
 export function bandFor(normalized: number | null, bands: RubricBandSnapshot[]): RubricBandSnapshot | null {
     if (normalized === null) return null;
-    return bands.find(band => normalized >= band.minScore && normalized <= band.maxScore) ?? null;
+    const ordered = [...bands].sort((a, b) => a.minScore - b.minScore || a.maxScore - b.maxScore);
+    for (const band of ordered) {
+        const top = band.maxScore === 1 && normalized === 1;
+        if (normalized >= band.minScore && (normalized < band.maxScore || top)) return band;
+    }
+    return null;
 }
 
 function slug(name: string): string {
