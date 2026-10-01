@@ -603,25 +603,23 @@ export class UserCache extends BaseSingleton<UserCache> {
     }
 
     /**
-     * Re-arms the periodic reload, which reads the database **only when an entity has declared it
-     * can change without firing an event**.
+     * Arms the periodic full reload of users and roles, replacing any previous schedule.
      *
-     * This timer used to reload every user and role unconditionally, every interval, for the life of
-     * the process. That is a recurring database query, and on Azure SQL serverless a recurring query
-     * prevents auto-pause outright — the cost §26 exists to remove, which that section missed. When
-     * nothing declares out-of-band writes there is nothing for the reload to discover: a save raises
-     * an event, a save on another server publishes the shared stamp, and `FindUser` falls back to an
-     * authoritative read on a miss.
+     * The timer ticks every `intervalMs`, but it reads the database **only when `MJ: Users` or
+     * `MJ: User Roles` declares `TrustServerCacheCompletely = false`** — see
+     * {@link usersMayChangeWithoutAnEvent}. A tick with nothing declared costs one in-memory lookup
+     * and issues no query, so an entity marked later is honoured on the next tick without a restart.
      *
-     * The timer keeps ticking either way, so an entity marked later starts being honoured on the
-     * next tick without a restart; a tick that finds nothing declared costs one in-memory lookup and
-     * no query. Measured on two live servers before this change: a role revoked by raw SQL was
-     * enforced ~20s later purely by this reload — so it works, and it is exactly what kept the
-     * database awake.
+     * Why the reload is conditional: a recurring query prevents a serverless database from pausing,
+     * and when every mutation flows through `BaseEntity` there is nothing for a reload to discover —
+     * a local save raises an event, a save on another process publishes the shared stamp, and
+     * {@link FindUser} falls back to an authoritative read on a miss. The reload therefore earns its
+     * cost only where rows can appear without an event.
      *
-     * Also replaces the previous timer rather than stacking on it: `Refresh` can be called more than
-     * once (bootstrap, then host configuration), and each call used to schedule another self-
-     * rescheduling chain.
+     * `Refresh` may be called more than once in a process (a bootstrap pass, then host
+     * configuration); each call re-arms this single timer rather than starting another chain.
+     *
+     * @param intervalMs Tick interval. `0` or absent leaves the timer off.
      */
     private scheduleAutoRefresh(provider: DatabaseProviderBase, intervalMs?: number): void {
       if (this._autoRefreshTimer) {

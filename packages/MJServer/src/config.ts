@@ -273,6 +273,12 @@ const cacheSettingsSchema = z.object({
    */
   userCacheCheckIntervalSeconds: z.number().int().nonnegative().optional().default(300),
   /**
+   * How often to compare this process's metadata with the database, in seconds (0 disables).
+   * Costs nothing unless an entity the metadata is built from declares
+   * `TrustServerCacheCompletely = false`; see `ProviderBase.SweepMetadataAgainstDatabase`.
+   */
+  metadataSweepIntervalSeconds: z.number().int().nonnegative().optional().default(300),
+  /**
    * How long, in seconds, a server holds the shared warm-up turn while it loads its engines, so
    * servers starting together load one at a time and the rest find the cache warm. The lease is
    * renewed while the load runs; this value is both its expiry and how long another server waits

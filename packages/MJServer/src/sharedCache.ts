@@ -4,7 +4,7 @@
  *
  * See plans/engine-cache-architecture-plan.md (F11, N1).
  */
-import { BaseEngineSweeper, CacheCategory, LocalCacheManager, LogStatusEx } from '@memberjunction/core';
+import { BaseEngineSweeper, CacheCategory, LocalCacheManager, LogError, LogStatusEx } from '@memberjunction/core';
 import type { CacheChangedEvent, LocalCacheManagerConfig, ProviderBase } from '@memberjunction/core';
 import type { CacheSettingsConfig } from './config.js';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
@@ -97,6 +97,67 @@ export function StartEngineSweeper(settings: CacheSettingsConfig | undefined): n
     const intervalMs = (settings?.engineSweepIntervalSeconds ?? 300) * 1000;
     BaseEngineSweeper.Instance.Start(intervalMs);
     return intervalMs;
+}
+
+/** The periodic metadata sweep, so a restart or a config change can replace it. @internal */
+let metadataSweepTimer: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Starts the periodic metadata-vs-database sweep at `cacheSettings.metadataSweepIntervalSeconds`
+ * (default 300; 0 leaves it off).
+ *
+ * The sweep asks the database **nothing** unless one of the entities the metadata is built from
+ * declares `TrustServerCacheCompletely = false` — see `ProviderBase.SweepMetadataAgainstDatabase`.
+ * On a stock installation no metadata entity declares it, so the timer ticks and costs nothing. It
+ * exists for installations that write metadata tables directly, where no event is ever raised and
+ * nothing else would notice.
+ *
+ * One process per interval does the work, via a shared lease: a process that refreshes writes a new
+ * snapshot and publishes a notice, which the others act on, so there is no value in each of them
+ * asking the database the same question.
+ *
+ * @returns The interval in milliseconds, 0 when disabled.
+ */
+export function StartMetadataSweep(settings: CacheSettingsConfig | undefined, metadataProvider: () => ProviderBase | undefined): number {
+    if (metadataSweepTimer) {
+        clearInterval(metadataSweepTimer);
+        metadataSweepTimer = null;
+    }
+    const intervalMs = (settings?.metadataSweepIntervalSeconds ?? 300) * 1000;
+    if (intervalMs <= 0) {
+        return 0;
+    }
+    const leaseMs = Math.max(5_000, intervalMs - 5_000);
+    const timer = setInterval(() => void runMetadataSweep(metadataProvider(), leaseMs), intervalMs);
+    if (typeof timer === 'object' && timer !== null && 'unref' in timer) {
+        (timer as { unref(): void }).unref();
+    }
+    metadataSweepTimer = timer;
+    return intervalMs;
+}
+
+/** One sweep: take the fleet lease only when there is something to check. @internal */
+async function runMetadataSweep(provider: ProviderBase | undefined, leaseMs: number): Promise<void> {
+    if (!provider) {
+        return;
+    }
+    try {
+        // The lease is taken only when an entity declares drift, so a stock installation costs no
+        // Redis round trip either — the provider answers from its own membership set.
+        const declared = provider.MetadataMembersDeclaringDrift();
+        if (declared.length === 0) {
+            return;
+        }
+        if (!(await LocalCacheManager.Instance.TryAcquireSharedLease('metadata-sweep', leaseMs))) {
+            return;
+        }
+        const result = await provider.SweepMetadataAgainstDatabase();
+        if (result.Refreshed) {
+            LogStatusEx({ message: `[MJAPI] metadata sweep reloaded metadata; entities declaring drift: ${result.Declared.join(', ')}`, verboseOnly: false });
+        }
+    } catch (e) {
+        LogError(`[MJAPI] metadata sweep failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
 }
 
 /**

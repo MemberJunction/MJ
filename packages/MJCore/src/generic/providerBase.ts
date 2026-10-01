@@ -1,6 +1,6 @@
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 import { EntityDependency, EntityDocumentTypeInfo, EntityFieldTSType, EntityInfo, EntityPermissionType, FieldSecurityDenialMessage, FieldSecurityError, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
-import { IEntityDataProvider, IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem, SearchEntityParams, SearchEntitiesOptions, EntitySearchResult, IRemoteOperationProvider, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
+import { IEntityDataProvider, IMetadataProvider, MetadataSweepResult, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem, SearchEntityParams, SearchEntitiesOptions, EntitySearchResult, IRemoteOperationProvider, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
 import { RecordChangeFieldSecurityProjector } from "./recordChangeFieldSecurity";
 import { ComputeRRF, ScoredCandidate } from "./scoring/ReciprocalRankFusion";
 import { RunQueryParams } from "./runQuery";
@@ -608,6 +608,66 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
         this._metadataDatasetEntityNames = names;
         this.ensureInflightViewInvalidation();
+    }
+
+    /**
+     * Result of {@link SweepMetadataAgainstDatabase}.
+     */
+    public static readonly MetadataSweepSkipped: Readonly<MetadataSweepResult> = { Declared: [], Checked: false, Refreshed: false };
+
+    /**
+     * Compares this provider's metadata with the database — but only for metadata whose entities
+     * have **declared** that their rows can change without firing an event.
+     *
+     * Metadata staleness is otherwise event-driven: a `BaseEntity` write to one of the entities the
+     * metadata is built from schedules a refresh, another process saving its snapshot publishes a
+     * notice, and a tool that changed the database clears the shared cache. None of those fire for a
+     * change made with raw SQL, so metadata edited directly in the database is never noticed by a
+     * running process. This is the backstop for that case.
+     *
+     * It is deliberately **not** an unconditional poll. `Entity.TrustServerCacheCompletely = true`
+     * (the default) states that every mutation flows through `BaseEntity`, which the event paths
+     * already hear; polling such an entity cannot discover anything, and a recurring query prevents a
+     * serverless database from pausing. So the check reads the database only when at least one
+     * metadata member entity declares `false` — typically because an operator writes that table
+     * directly. On a stock installation no metadata entity declares it, and this costs one in-memory
+     * pass over the membership set.
+     *
+     * @param providerToUse Provider to compare against, for multi-provider clients.
+     * @returns Which entities declared drift, whether the database was consulted, and whether
+     *          metadata was actually reloaded.
+     */
+    public async SweepMetadataAgainstDatabase(providerToUse?: IMetadataProvider): Promise<MetadataSweepResult> {
+        const declared = this.MetadataMembersDeclaringDrift();
+        if (declared.length === 0) {
+            return { Declared: [], Checked: false, Refreshed: false };
+        }
+        // bypassMinCheckInterval: the sweep interval is the throttle, and this caller holds positive
+        // evidence that an entity can change without telling anyone.
+        const refreshed = await this.RefreshIfNeeded(providerToUse, true);
+        return { Declared: declared, Checked: true, Refreshed: refreshed };
+    }
+
+    /**
+     * The entities this provider's metadata is built from that declare they can change without
+     * firing an event (`Entity.TrustServerCacheCompletely === false`).
+     *
+     * Empty — the usual case — means a metadata sweep has nothing to look for, so a caller can skip
+     * the work (and any lease) without asking the database anything.
+     */
+    public MetadataMembersDeclaringDrift(): string[] {
+        const names = this._metadataDatasetEntityNames;
+        if (!names || names.size === 0) {
+            return [];
+        }
+        const declared: string[] = [];
+        for (const lowerName of names) {
+            const entity = this.Entities.find(e => e.Name.trim().toLowerCase() === lowerName);
+            if (entity && entity.TrustServerCacheCompletely === false) {
+                declared.push(entity.Name);
+            }
+        }
+        return declared;
     }
 
     /**

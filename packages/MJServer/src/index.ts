@@ -58,7 +58,7 @@ import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, Lo
 import { getSystemUser, validateAuthProvidersRegistered } from './auth/index.js';
 import { createAuthProviderCatalogRouter, AUTH_CATALOG_MOUNT_PATH } from './auth/AuthProviderCatalogRouter.js';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
-import { CacheManagerConfigFromSettings, CreateSharedCacheFromEnvironment, StartEngineSweeper, StartUserCacheChecks, WarmupLeaseMsFromSettings, WireSharedCacheEvents } from './sharedCache.js';
+import { CacheManagerConfigFromSettings, CreateSharedCacheFromEnvironment, StartEngineSweeper, StartMetadataSweep, StartUserCacheChecks, WarmupLeaseMsFromSettings, WireSharedCacheEvents } from './sharedCache.js';
 // Type-only: the provider itself is built in ./sharedCache.ts; this file only hands it to the push-status fan-out.
 import type { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { PubSubManager } from './generic/PubSubManager.js';
@@ -781,6 +781,9 @@ const setupComplete$ = new ReplaySubject(1);
   startupLog.LogIf('verbose', engineSweepMs > 0 ? `Engine/database sweep every ${engineSweepMs / 1000}s` : 'Engine/database sweep disabled');
   const userCacheCheckMs = StartUserCacheChecks(configInfo.cacheSettings);
   startupLog.LogIf('verbose', userCacheCheckMs > 0 ? `User cache staleness check every ${userCacheCheckMs / 1000}s` : 'User cache staleness check disabled');
+  // Costs nothing unless a metadata entity declares TrustServerCacheCompletely = false.
+  const metadataSweepMs = StartMetadataSweep(configInfo.cacheSettings, () => (Metadata.Provider instanceof ProviderBase ? Metadata.Provider : undefined)); // global-provider-ok: bootstrap (this process's one provider)
+  startupLog.LogIf('verbose', metadataSweepMs > 0 ? `Metadata/database sweep every ${metadataSweepMs / 1000}s (only for entities declaring drift)` : 'Metadata/database sweep disabled');
 
   // Initialize APIKeyEngine singleton — reads apiKeyGeneration from mj.config.cjs automatically
   // This must happen before any request handler calls GetAPIKeyEngine()
