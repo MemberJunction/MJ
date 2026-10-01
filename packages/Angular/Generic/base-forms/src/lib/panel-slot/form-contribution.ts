@@ -171,8 +171,9 @@ export function ContributionSectionKey(registration: FormContributionRegistratio
     }
     const own = meta.contributionKey?.trim();
     if (own) return own;
+    // The key compiled panel templates use (`contactMethods`), not the generated-form grid key.
     const entityName = meta.relatedEntity?.split(':').pop()?.trim();
-    return entityName ? entityName.charAt(0).toLowerCase() + entityName.slice(1).replace(/\s+/g, '') : '';
+    return entityName ? FormSectionCamelCase(entityName) : '';
 }
 
 /**
@@ -298,19 +299,12 @@ export function FormContributionEntityMatches(registeredEntity: string | null | 
 }
 
 /**
- * The registrations that act on one entity's form: its own, and wildcard ones that claim nothing.
- * A wildcard that claims a grid, a section or fields would take it from every form, so it is left out.
+ * A wildcard registration that claims a grid or a section, or names a section to draw in. It
+ * still mounts, but its claim is ignored: it would take that grid or section from every form.
  */
-function applicableRegistrations<T extends FormContributionRegistration>(
-    entityName: string,
-    registrations: readonly T[],
-): T[] {
-    return registrations.filter((reg) => {
-        const meta = reg.Metadata;
-        if (!meta?.entity || !FormContributionEntityMatches(meta.entity, entityName)) return false;
-        if (meta.entity !== '*') return true;
-        return !meta.relatedEntity && ReplacedSectionKeys(meta).length === 0 && !ContributionDrawsInSection(meta);
-    });
+function isWildcardPlaceClaim(meta: FormPanelRegistrationMetadata): boolean {
+    return meta.entity === '*'
+        && (!!meta.relatedEntity || ReplacedSectionKeys(meta).length > 0 || !!meta.inSectionKey?.trim());
 }
 
 /**
@@ -354,7 +348,10 @@ export function CollapseFormPanelRegistrations<T extends {
 
 /** One form's contributions after the collapse. */
 export interface ResolvedFormContributions {
-    /** The winners that act on the form: one per key, and each registration that has no key. */
+    /**
+     * The winners among the registrations for this entity or for every entity (`'*'`): one per
+     * key, and each registration that has no key.
+     */
     readonly Winners: readonly FormContributionRegistration[];
     /**
      * The winners the rail files, by {@link ContributionSectionKey}: they name the entity rather
@@ -381,7 +378,8 @@ export function ResolveFormContributionWinners(
     let byEntity = resolvedMemo.get(registrations);
     const hit = byEntity?.get(entityName);
     if (hit) return hit;
-    const winners = CollapseFormPanelRegistrations(applicableRegistrations(entityName, registrations));
+    const applicable = registrations.filter((reg) => FormContributionEntityMatches(reg.Metadata?.entity, entityName));
+    const winners = CollapseFormPanelRegistrations(applicable);
     const railItems = new Map<string, FormContributionRegistration>();
     for (const reg of winners) {
         const meta = reg.Metadata;
@@ -461,6 +459,7 @@ export function ResolveFormContributions(input: ResolveFormContributionsInput): 
     const claimedKeys = new Set<string>();
     const registered: FormContributionWinner[] = [];
     for (const reg of winners) {
+        if (isWildcardPlaceClaim(reg.Metadata)) continue;
         const key = ResolveContributionKey(reg.Metadata) || `${reg.Metadata.entity}:${reg.Metadata.slot}:${reg.Priority}`;
         const related = reg.Metadata.relatedEntity?.trim();
         const peer = related

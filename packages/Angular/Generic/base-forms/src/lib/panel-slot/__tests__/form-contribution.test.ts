@@ -493,11 +493,11 @@ describe('ResolveFormContributionWinners', () => {
         expect(inSlot('after-fields')).toEqual([]);
     });
 
-    it('drops registrations for another entity and wildcard claims', () => {
+    it('drops registrations for another entity and keeps wildcard ones, whatever they claim', () => {
         const other = reg({ entity: 'Other', slot: 'after-fields', contributionKey: 'x' });
         const wildcardClaim = reg({ entity: '*', slot: 'after-fields', replacesFieldNames: ['Name'] });
         const wildcardExtra = reg({ entity: '*', slot: 'after-fields' });
-        expect(ResolveFormContributionWinners(PEOPLE, [other, wildcardClaim, wildcardExtra]).Winners).toEqual([wildcardExtra]);
+        expect(ResolveFormContributionWinners(PEOPLE, [other, wildcardClaim, wildcardExtra]).Winners).toEqual([wildcardClaim, wildcardExtra]);
     });
 
     it('files as rail items only this entity\'s keyed winners that draw a section', () => {
@@ -555,6 +555,8 @@ describe('ContributionSectionKey', () => {
     it('keys a compiled grid claim with no key the way its template names the section', () => {
         const contactMethods = reg({ entity: PEOPLE, slot: 'after-related', relatedEntity: 'MJ_BizApps_Common: Contact Methods', relatedJoinField: 'PersonID' });
         expect(ContributionSectionKey(contactMethods)).toBe('contactMethods');
+        const lowerCase = reg({ entity: PEOPLE, slot: 'after-related', relatedEntity: 'Acme: Contact methods' });
+        expect(ContributionSectionKey(lowerCase)).toBe('contactMethods');
     });
 
     it('gives a compiled panel with neither no key', () => {
@@ -650,6 +652,16 @@ describe('ContributionClaimedFieldNames', () => {
             entity: PEOPLE, slot: 'after-fields', contributionKey: 'ltv', replacesFieldNames: ['LifetimeValue'],
         })];
         expect(ContributionHiddenSectionKeys(PEOPLE, [], [], registrations)).toEqual([]);
+    });
+});
+
+/** A wildcard panel acts on every form: its field claim hides those fields wherever they are drawn. */
+describe('A wildcard field claim', () => {
+    const wildcard = reg({ entity: '*', slot: 'after-fields', contributionKey: 'fleet.address', replacesFieldNames: ['Street'] });
+
+    it('claims its fields on any entity', () => {
+        expect(ContributionClaimedFieldNames(PEOPLE, [], [], [wildcard])).toEqual(['Street']);
+        expect(ContributionClaimedFieldNames('Some Other Entity', [], [], [wildcard])).toEqual(['Street']);
     });
 });
 

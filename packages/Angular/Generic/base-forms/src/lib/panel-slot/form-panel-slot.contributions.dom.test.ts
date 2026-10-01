@@ -68,6 +68,13 @@ class CompiledHeaderPanel extends BaseFormPanel {}
 @Component({ standalone: true, selector: 'test-compiled-address', template: '' })
 class CompiledAddressPanel extends BaseFormPanel {}
 
+@RegisterClassEx(BaseFormPanel, {
+    key: 'zzz-slot-contribution:wildcard-field',
+    metadata: { entity: '*', slot: 'after-fields', contributionKey: 'zzz.wildcard', replacesFieldNames: ['ZZZWildField'] },
+})
+@Component({ standalone: true, selector: 'test-wildcard-field', template: '' })
+class WildcardFieldPanel extends BaseFormPanel {}
+
 const PROVIDER = { CurrentUser: { ID: 'user-1', UserRoles: [] } } as unknown as IMetadataProvider;
 const RECORD = { EntityInfo: { ID: 'ent-slot', Name: ENTITY, RelatedEntities: [], ChildEntities: [] }, Get: () => null } as unknown as BaseEntity;
 const FORM = {
@@ -112,10 +119,13 @@ function renderSlot(slot: string) {
     return f;
 }
 
-function renderFieldSlot(fieldNames: string[]) {
+function renderFieldSlot(fieldNames: string[], entity = ENTITY) {
+    const record = entity === ENTITY
+        ? RECORD
+        : { EntityInfo: { ID: `ent-${entity}`, Name: entity, RelatedEntities: [], ChildEntities: [] }, Get: () => null } as unknown as BaseEntity;
     const f = renderComponentFixture(FormFieldPanelSlotComponent, {
         declarations: [FormFieldPanelSlotComponent],
-        inputs: { Entity: ENTITY, FieldNames: fieldNames, Record: RECORD, FormComponent: FORM },
+        inputs: { Entity: entity, FieldNames: fieldNames, Record: record, FormComponent: FORM },
     });
     f.componentRef.setInput('FormContext', {});
     f.detectChanges();
@@ -146,6 +156,7 @@ describe('FormPanelSlotComponent (DOM) — the first mount waits for contributio
     it('registers the compiled panels (guard)', () => {
         expect(CompiledHeaderPanel).toBeDefined();
         expect(CompiledAddressPanel).toBeDefined();
+        expect(WildcardFieldPanel).toBeDefined();
     });
 
     it('waits while the engine is loading, then mounts once the load completes', async () => {
@@ -244,5 +255,13 @@ describe('FormPanelSlotComponent (DOM) — a row that takes a key from a compile
         engine.rows = [row({ ContributionKey: 'address', Slot: 'after-related' })];
         renderSlot('after-related');
         expect(mountedKeys()).toEqual(['metadata:address@after-related']);
+    });
+});
+
+/** A wildcard panel acts on every form, so its field claim draws in whichever section holds the field. */
+describe('FormFieldPanelSlotComponent (DOM) — a wildcard field claim', () => {
+    it('draws in the section holding its field, on any entity', () => {
+        renderFieldSlot(['ZZZWildField'], 'ZZZ_AnyOtherEntity');
+        expect(mountedKeys()).toEqual(['class:zzz.wildcard@after-fields']);
     });
 });
