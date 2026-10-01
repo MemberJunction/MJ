@@ -129,16 +129,6 @@
             "default": false,
             "description": "Teach the model to request inline decisions (typed questions answered on the same turn by a decision model): the Decisions docs and the decisions field in the response type. Off by default: they add about 1,200 tokens to every turn, and on the Prompt Eval corpus no model used them (typed-decision plan, Task 4.7). Turn on for agents that classify, filter or route many items."
           },
-          "finishIfMode": {
-            "type": "string",
-            "enum": [
-              "off",
-              "shadow",
-              "on"
-            ],
-            "default": "off",
-            "description": "Whether this agent writes finishIf gates (one to three yes/no questions and a final message on an Actions or single Sub-Agent step), and whether they act. 'off' (the default): the model is not taught finishIf and a gate is never evaluated. 'shadow': the model writes gates and each is evaluated and recorded as a Finish check step, but never ends the run, which measures the agent's gates on real traffic. 'on': a passing gate ends the run with the model's message, without another LLM turn. Off by default because a replay of recorded action rounds found a gate at the 0.9 threshold would have ended 22% of the rounds where the agent went on to act (typed-decision plan, Task 4.6)."
-          },
           "payloadFeedbackCheck": {
             "type": "boolean",
             "default": false,

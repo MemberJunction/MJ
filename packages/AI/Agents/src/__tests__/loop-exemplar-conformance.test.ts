@@ -45,7 +45,7 @@ const TOP_LEVEL_FIELDS = new Set([
 ]);
 const NEXT_STEP_FIELDS = new Set([
     'type', 'actions', 'pipeline', 'messageIndex', 'reason', 'subAgent', 'subAgents',
-    'clientTools', 'forEach', 'while', 'skills', 'plan', 'tasks', 'taskGraph', 'finishIf'
+    'clientTools', 'forEach', 'while', 'skills', 'plan', 'tasks', 'taskGraph'
 ]);
 const ACTION_FIELDS = new Set(['name', 'params']);
 const SUB_AGENT_FIELDS = new Set(['name', 'message', 'templateParameters', 'terminateAfter']);

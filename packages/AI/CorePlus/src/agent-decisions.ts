@@ -51,11 +51,3 @@ export interface AgentDecisionAnswerSummary {
   confidence?: number;
 }
 
-/** Ends the run after this step without another LLM turn, when a fast decision model confirms the step's results are good. */
-export interface AgentFinishIf {
-  /** One to three yes/no questions about what the step's results show; each must be a confident yes. */
-  questions: string[];
-  /** The final reply to the user if every question passes. Write it as your final message. */
-  message: string;
-}
-

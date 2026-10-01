@@ -105,14 +105,6 @@ export interface ResponseTypeInclusionRules {
     decisions?: boolean;
 
     /**
-     * Include finishIf field in the nextStep response interface.
-     * Auto-aligns with includeFinishIfDocs unless explicitly set, and so is off whenever
-     * `finishIfMode` is `'off'`, the default.
-     * @default true
-     */
-    finishIf?: boolean;
-
-    /**
      * Include `'Tasks'` in the nextStep.type union and the `tasks` property.
      * Auto-aligns with `enableTaskGraphs` unless explicitly set.
      *
@@ -137,11 +129,65 @@ export const DEFAULT_RESPONSE_TYPE_INCLUSION_RULES: Required<ResponseTypeInclusi
     artifactToolCalls: true,
     pipeline: true,
     decisions: true,
-    finishIf: true,
     // The one section that defaults OFF — see `enableTaskGraphs` (D3).
     tasks: false
 };
 
+/**
+ * Configuration parameters for Loop Agent Type.
+ *
+ * Controls prompt content (which sections are included), client tool availability,
+ * and content limits. Stored in `AIAgent.AgentTypePromptParams` as JSON.
+ *
+ * All boolean prompt-inclusion properties default to true (include section).
+ * Set to false to exclude a section from the prompt and save tokens.
+ *
+ * These parameters are configured at three levels with merge precedence:
+ * 1. Schema defaults (from AIAgentType.PromptParamsSchema) - lowest priority
+ * 2. Agent config (from AIAgent.AgentTypePromptParams) - medium priority
+ * 3. Runtime override (from ExecuteAgentParams.data.__agentTypePromptParams) - highest priority
+ *
+ * @example
+ * ```typescript
+ * // Agent configuration to disable unused features
+ * const agentConfig: LoopAgentTypePromptParams = {
+ *     includeForEachDocs: false,      // Agent never iterates collections
+ *     includeWhileDocs: false,        // Agent never polls/retries
+ *     includeResponseFormDocs: false, // Agent never collects user input
+ *     includeCommandDocs: false       // Agent doesn't trigger UI actions
+ * };
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Runtime override to enable a feature for a specific execution
+ * const result = await agent.Execute({
+ *     agent: myAgent,
+ *     conversationMessages: messages,
+ *     data: {
+ *         __agentTypePromptParams: {
+ *             includeForEachDocs: true  // Enable for this run only
+ *         }
+ *     }
+ * });
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Minimal response type with granular control
+ * const minimalConfig: LoopAgentTypePromptParams = {
+ *     includeResponseTypeDefinition: {
+ *         payload: true,        // Keep payload in type
+ *         responseForms: false, // Exclude responseForm from type
+ *         commands: false,      // Exclude commands from type
+ *         forEach: false,       // Exclude ForEach from nextStep.type
+ *         while: false          // Exclude While from nextStep.type
+ *     },
+ *     includeForEachDocs: false,
+ *     includeWhileDocs: false
+ * };
+ * ```
+ */
 /**
  * Where the agent's specialization (its child prompt) is placed.
  *
@@ -204,71 +250,6 @@ export type SpecializationPlacement = 'auto' | 'systemPrompt' | 'trailingMessage
  */
 export type TrailingStateMode = 'auto' | 'appendOnly' | 'replace';
 
-/**
- * How a loop agent treats `finishIf` gates.
- * - `'off'`: the model is not taught `finishIf`, and a gate it writes anyway is ignored.
- * - `'shadow'`: the model is taught `finishIf`, and every gate is evaluated and recorded as a
- *   `Finish check` step, but it never ends the run: the model always gets its next turn. This
- *   measures an agent's gates on its real traffic at the cost of one decision call per gate.
- * - `'on'`: a passing gate ends the run with the model's pre-written message.
- */
-export type FinishIfMode = 'off' | 'shadow' | 'on';
-
-/**
- * Configuration parameters for Loop Agent Type.
- *
- * Controls prompt content (which sections are included), client tool availability,
- * and content limits. Stored in `AIAgent.AgentTypePromptParams` as JSON.
- *
- * All boolean prompt-inclusion properties default to true (include section).
- * Set to false to exclude a section from the prompt and save tokens.
- *
- * These parameters are configured at three levels with merge precedence:
- * 1. Schema defaults (from AIAgentType.PromptParamsSchema) - lowest priority
- * 2. Agent config (from AIAgent.AgentTypePromptParams) - medium priority
- * 3. Runtime override (from ExecuteAgentParams.data.__agentTypePromptParams) - highest priority
- *
- * @example
- * ```typescript
- * // Agent configuration to disable unused features
- * const agentConfig: LoopAgentTypePromptParams = {
- *     includeForEachDocs: false,      // Agent never iterates collections
- *     includeWhileDocs: false,        // Agent never polls/retries
- *     includeResponseFormDocs: false, // Agent never collects user input
- *     includeCommandDocs: false       // Agent doesn't trigger UI actions
- * };
- * ```
- *
- * @example
- * ```typescript
- * // Runtime override to enable a feature for a specific execution
- * const result = await agent.Execute({
- *     agent: myAgent,
- *     conversationMessages: messages,
- *     data: {
- *         __agentTypePromptParams: {
- *             includeForEachDocs: true  // Enable for this run only
- *         }
- *     }
- * });
- * ```
- *
- * @example
- * ```typescript
- * // Minimal response type with granular control
- * const minimalConfig: LoopAgentTypePromptParams = {
- *     includeResponseTypeDefinition: {
- *         payload: true,        // Keep payload in type
- *         responseForms: false, // Exclude responseForm from type
- *         commands: false,      // Exclude commands from type
- *         forEach: false,       // Exclude ForEach from nextStep.type
- *         while: false          // Exclude While from nextStep.type
- *     },
- *     includeForEachDocs: false,
- *     includeWhileDocs: false
- * };
- * ```
- */
 export interface LoopAgentTypePromptParams {
     // === Section Inclusion Flags ===
 
@@ -453,32 +434,6 @@ export interface LoopAgentTypePromptParams {
     decisionPromptName?: string;
 
     /**
-     * Whether this agent writes finishIf gates, and whether they act. See {@link FinishIfMode}.
-     *
-     * **Defaults to `'off'`: gates are opt-in per agent.** A replay of recorded action rounds (plan
-     * Task 4.6) found that a gate at the 0.9 threshold would have ended 22% of the rounds where the
-     * agent went on to act, and neither a stricter threshold nor calibration fixed that. Use
-     * `'shadow'` to measure an agent's own gates on real traffic before turning them `'on'`.
-     * @default 'off'
-     */
-    finishIfMode?: FinishIfMode;
-
-    /**
-     * Include conditional completion (finishIf) documentation in the prompt. Takes effect only when
-     * `finishIfMode` is `'shadow'` or `'on'`; with `'off'` the documentation is always omitted.
-     * Set false to keep the documentation out even then.
-     * @default true
-     */
-    includeFinishIfDocs?: boolean;
-
-    /**
-     * Probability threshold (0.0 to 1.0) required for each finishIf question to pass.
-     * If all questions evaluate to a probability >= this threshold, the agent completes immediately.
-     * @default 0.9
-     */
-    finishIfThreshold?: number;
-
-    /**
      * Check the agent's own payload changes that the payload analyzer flags as needing feedback
      * (large truncations, removed keys, type changes). Each flagged change becomes one Likelihood
      * ("was this change intended?"), all asked in one decision call with the `decisionPromptName`
@@ -581,25 +536,6 @@ export const MAX_DECISION_REQUESTS_PER_TURN = 8;
  */
 export const MAX_DECISION_CALLS_PER_TURN = 100;
 
-/** Every {@link FinishIfMode}, for validation. Mode names are case-sensitive. */
-export const FINISH_IF_MODES: readonly FinishIfMode[] = ['off', 'shadow', 'on'];
-
-/**
- * Whether a prompt-param value is one of the {@link FINISH_IF_MODES}. The check is exact, so `'On'`
- * and `'true'` are not modes.
- */
-export function IsFinishIfMode(value: unknown): value is FinishIfMode {
-    return FINISH_IF_MODES.some(mode => mode === value);
-}
-
-/**
- * The mode a prompt-param value names. Anything else, an absent value included, is `'off'`.
- * `BaseAgent` warns once per agent and value when a value is set but is not a mode.
- */
-export function ResolveFinishIfMode(value: unknown): FinishIfMode {
-    return IsFinishIfMode(value) ? value : 'off';
-}
-
 /**
  * Default values for LoopAgentTypePromptParams.
  * Section flags default to true (include) and the prompt-content limits to -1 (include all); the
@@ -627,9 +563,6 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     decisionsMaxRequests: MAX_DECISION_REQUESTS_PER_TURN,
     decisionsMaxCallsPerTurn: MAX_DECISION_CALLS_PER_TURN,
     decisionPromptName: 'Default Decision',
-    finishIfMode: 'off',
-    includeFinishIfDocs: true,
-    finishIfThreshold: 0.9,
     // Off: an opt-in check that costs a decision call per flagged payload change.
     payloadFeedbackCheck: false,
     // Deliberately false — a capability gate, not a token-savings flag (D3).

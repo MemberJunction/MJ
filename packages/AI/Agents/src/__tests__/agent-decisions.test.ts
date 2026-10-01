@@ -139,7 +139,6 @@ describe('Agent Decisions', () => {
             const loop = agentTypes.find((t) => t.fields.Name === 'Loop');
             const properties = loop?.fields.PromptParamsSchema?.properties;
             expect(properties?.includeDecisionsDocs?.default).toBe(false);
-            expect(properties?.finishIfMode?.default).toBe('off');
         });
 
         it('has decisions enabled by default in DEFAULT_RESPONSE_TYPE_INCLUSION_RULES', () => {

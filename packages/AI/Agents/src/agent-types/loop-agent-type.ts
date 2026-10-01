@@ -19,11 +19,10 @@ import { GetToolCallingDecision } from '@memberjunction/ai-prompts';
 
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, ExecuteAgentParams, AgentConfiguration, AgentAction, AgentClientToolInvocation, AgentPayloadChangeRequest,
          FormatValidationErrors, ValidateTaskGraphSpec, type TaskGraphSpec,
-    ConfigOf, AgentResponseForm, AgentFinishIf } from '@memberjunction/ai-core-plus';
+    ConfigOf, AgentResponseForm } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatusEx } from '@memberjunction/core';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { LoopAgentResponse, LOOP_NEXT_STEP_TYPES } from './loop-agent-response-type';
-import { IsValidFinishIf } from '../finish-if-state';
 import { ConversationMessageResolver } from '../utils/ConversationMessageResolver'; 
 /** A native tool call paired with the binding it resolved to. */
 interface ResolvedNativeCall<B extends NativeToolBinding = NativeToolBinding> {
@@ -544,9 +543,6 @@ export class LoopAgentType extends BaseAgentType {
             // Computed once here — consumed by the read-tool pre-emption AND the
             // taskComplete gate below (client tools are yield/await, see both sites).
             const hasClientTools = (response.nextStep?.clientTools?.length || 0) > 0;
-            // An Actions or Sub-Agent step with a valid finishIf runs even when taskComplete is set,
-            // so the gate decides whether the run ends.
-            const hasFinishIfStep = this.isGatedStep(response);
             const preemptionStep = this.buildReadToolPreemptionStep<P>(response, hasClientTools);
             if (preemptionStep) {
                 return preemptionStep;
@@ -585,10 +581,7 @@ export class LoopAgentType extends BaseAgentType {
             // the LLM loop. If taskComplete was true, the LLM will naturally complete on the
             // next iteration after seeing tool results. (hasClientTools is computed above,
             // where the inline read-tool pre-emption also consults it.)
-            // Similarly, if a valid finishIf completion gate is attached to an Actions or
-            // Sub-Agent step, let the step execute and evaluate the gate instead of
-            // short-circuiting to immediate success.
-            if (response.taskComplete && !hasClientTools && !hasFinishIfStep) {
+            if (response.taskComplete && !hasClientTools) {
                 LogStatusEx({
                     message: '✅ Loop Agent: Task completed successfully. Message: ' + response.message,
                     verboseOnly: true
@@ -622,7 +615,7 @@ export class LoopAgentType extends BaseAgentType {
                 artifactToolCalls: response.artifactToolCalls,
                 conversationToolCalls: response.conversationToolCalls,
                 memoryWrites: response.memoryWrites,
-                terminate: hasFinishIfStep ? false : response.taskComplete,
+                terminate: response.taskComplete,
                 responseForm: response.responseForm,
                 actionableCommands: response.actionableCommands,
                 automaticCommands: response.automaticCommands
@@ -651,7 +644,6 @@ export class LoopAgentType extends BaseAgentType {
                                 templateParameters: response.nextStep.subAgent.templateParameters || {}
                             };
                         }
-                        retVal.finishIf = this.carryFinishIf(response.nextStep.finishIf, 'Sub-Agent');
                     }
                     break;
                 case 'Actions':
@@ -665,8 +657,7 @@ export class LoopAgentType extends BaseAgentType {
                         retVal.actions = response.nextStep.actions.map(action => ({
                             name: action.name,
                             params: action.params
-                        }));
-                        retVal.finishIf = this.carryFinishIf(response.nextStep.finishIf, 'Actions');
+                        }))
                     }
                     break;
                 case 'ClientTools':
@@ -758,34 +749,6 @@ export class LoopAgentType extends BaseAgentType {
             LogError(`Error in LoopAgentType.DetermineNextStep: ${error.message}`);
             return this.createRetryStep(`Failed to parse loop agent response: ${error.message}`);
         }
-    }
-
-    /** Whether the response requests an Actions or Sub-Agent step that carries a valid finishIf. */
-    private isGatedStep(response: LoopAgentResponse): boolean {
-        const nextStep = response.nextStep;
-        const isGateable = (nextStep?.type === 'Actions' && (nextStep.actions?.length ?? 0) > 0)
-            || (nextStep?.type === 'Sub-Agent' && Boolean(nextStep.subAgent));
-        return isGateable && this.isValidFinishIf(nextStep?.finishIf);
-    }
-
-    /** Returns a valid finishIf to carry onto the step, or drops an invalid one with a log line. */
-    private carryFinishIf(candidate: unknown, stepType: 'Actions' | 'Sub-Agent'): AgentFinishIf | undefined {
-        if (candidate === undefined) {
-            return undefined;
-        }
-        if (this.isValidFinishIf(candidate)) {
-            return candidate;
-        }
-        LogStatusEx({
-            message: `⚠️ Loop Agent: dropped an invalid finishIf on a ${stepType} step (it needs one to three non-empty questions and a non-empty message)`,
-            verboseOnly: true
-        });
-        return undefined;
-    }
-
-    /** A valid finishIf has one to three non-empty string questions and a non-empty string message. */
-    private isValidFinishIf(candidate: unknown): candidate is AgentFinishIf {
-        return IsValidFinishIf(candidate);
     }
 
     /**

@@ -47,12 +47,11 @@ import { BaseAgentType } from '../agent-types/base-agent-type';
 import '../agent-types/loop-agent-type';
 import type { LoopAgentResponse } from '../agent-types/loop-agent-response-type';
 import type { AgentPreExecutionRAGResult } from '../agent-pre-execution-rag';
-import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended, MJAIAgentRunStepEntityExtended, AgentDecisionRequest, AgentFinishIf, BaseAgentNextStep, AgentChatMessage } from '@memberjunction/ai-core-plus';
+import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended, MJAIAgentRunStepEntityExtended, AgentDecisionRequest, BaseAgentNextStep, AgentChatMessage } from '@memberjunction/ai-core-plus';
 import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { RecordToolCallingDecision } from '@memberjunction/ai-prompts';
 import { SanitizeToolName } from '../native-tools/action-tool-builder';
-import { FINISH_IF_MODE_WARNING_SHOWN_MAX, FINISH_IF_MODE_WARNINGS_REMEMBERED } from '../finish-if-mode-warnings';
-import { LogErrorEx, LogStatus } from '@memberjunction/core';
+import { LogStatus } from '@memberjunction/core';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { MJActionEntityExtended } from '@memberjunction/actions-base';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
@@ -444,11 +443,6 @@ let harness: LoopHarness;
 class HarnessAgent extends BaseAgent {
     protected override async InjectPreExecutionRAG(): Promise<AgentPreExecutionRAGResult | null> {
         return null;
-    }
-
-    /** Merges the agent's prompt params as each turn of a run does, with `overrides` as the run's runtime overrides. */
-    public MergePromptParams(agent: MJAIAgentEntityExtended, overrides: Record<string, unknown>): Record<string, unknown> {
-        return this.buildAgentTypePromptParams(undefined, agent, overrides);
     }
 
     /** The decision service this agent asks through, so a test can spy on this agent's calls alone. */
@@ -1421,37 +1415,19 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
         TotalCost: 0.0042,
     } satisfies Pick<MJAIPromptRunEntity, 'ID' | 'TokensUsedRollup' | 'TokensPromptRollup' | 'TokensCompletionRollup' | 'TokensCacheReadRollup' | 'TokensCacheWriteRollup' | 'TotalCost'>;
     const TRIAGE: AgentDecisionRequest = { id: 'triage', state: 'The printer is on fire.', questions: { urgent: { kind: 'Likelihood', instructions: 'Is this urgent?' } } };
-    const FINISH_IF: AgentFinishIf = { questions: ['The results show the action ran.'], message: 'Done, the action ran.' };
     const textOf = (m: { content: unknown }): string => (typeof m.content === 'string' ? m.content : '');
     const statusLines = (): string[] => vi.mocked(LogStatus).mock.calls.map(([message]) => String(message));
     /** The log lines that skip held decision requests. Every way out of the run must log them exactly once. */
     const skippedLines = (): string[] => statusLines().filter((line) => line.startsWith('[Decisions] Skipped') && line.includes('held decision request(s)'));
 
-    /** Answers the finishIf gate (questions q1…) with `gateProbability`, and every decision request with `urgent` 0.8. */
-    function answerDecisions(gateProbability = 0.95) {
-        return vi.spyOn(AgentDecisionService.prototype, 'Ask').mockImplementation(async (args) => 'q1' in args.Questions
-            ? { success: true, Answers: { q1: { Kind: 'Likelihood', Probability: gateProbability } } }
-            : { success: true, Answers: { urgent: { Kind: 'Likelihood', Probability: 0.8 } }, promptRun: DECISION_RUN as MJAIPromptRunEntity });
+    /** Answers every decision request with `urgent` 0.8. */
+    function answerDecisions() {
+        return vi.spyOn(AgentDecisionService.prototype, 'Ask').mockResolvedValue(
+            { success: true, Answers: { urgent: { Kind: 'Likelihood', Probability: 0.8 } }, promptRun: DECISION_RUN as MJAIPromptRunEntity });
     }
-
-    /** Asked only the decision requests, never the gate. */
-    const decisionCalls = (ask: ReturnType<typeof answerDecisions>) => ask.mock.calls.filter(([args]) => !('q1' in args.Questions));
 
     /** The agent's own prompt params: decisions are opt-in, so every agent here opts in. */
     const DECISIONS_ON = JSON.stringify({ includeDecisionsDocs: true });
-
-    /** Run params for an agent whose finishIf gates are `mode` (gates are opt-in; the default is off). */
-    function gateParams(mode: 'on' | 'shadow'): ExecuteAgentParams {
-        return makeParams({ data: { __agentTypePromptParams: { finishIfMode: mode } } });
-    }
-
-    function gatedActionsEnvelope(): LoopAgentResponse {
-        return {
-            taskComplete: false,
-            nextStep: { type: 'Actions', actions: [{ name: ACTION_NAME, params: { foo: 'bar' } }], finishIf: FINISH_IF },
-            decisions: [TRIAGE],
-        };
-    }
 
     function clientToolsEnvelope(taskComplete: boolean): LoopAgentResponse {
         return {
@@ -1576,76 +1552,6 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
         expect(harness.runActionCalls).toHaveLength(0);
     });
 
-    it('never asks decisions sent with a finishIf gate that ends the run, and logs that they were skipped', async () => {
-        const ask = answerDecisions(0.95);
-        const { agent, runner } = makeAgent([
-            () => llmEnvelope(gatedActionsEnvelope()),
-            () => llmEnvelope(successEnvelope()),
-        ]);
-
-        const result = await agent.Execute(gateParams('on'));
-
-        expect(result.success).toBe(true);
-        expect(runner.Calls).toHaveLength(1);
-        expect(harness.run.Message).toBe(FINISH_IF.message);
-        expect(decisionCalls(ask)).toHaveLength(0);
-        expect(harness.steps.some((s) => s.StepName.includes('Decision: triage'))).toBe(false);
-        expect(skippedLines()).toEqual([expect.stringContaining('Skipped 1 held decision request(s) (triage)')]);
-        expect(skippedLines()[0]).toContain('the run ended after the step that carried them');
-        expect(skippedLines()[0]).toContain('finishIf gate');
-    });
-
-    it('asks decisions sent with a finishIf gate that does not pass, before the next prompt reads them', async () => {
-        const ask = answerDecisions(0.4);
-        const { agent, runner } = makeAgent([
-            () => llmEnvelope(gatedActionsEnvelope()),
-            () => llmEnvelope(successEnvelope()),
-        ]);
-        const params = gateParams('on');
-
-        const result = await agent.Execute(params);
-
-        expect(result.success).toBe(true);
-        expect(decisionCalls(ask)).toHaveLength(1);
-        // Held through the actions and the gate, then answered ahead of the prompt that reads them.
-        expect(harness.steps.map((s) => s.StepType)).toEqual(['Validation', 'Prompt', 'Actions', 'Decision', 'Decision', 'Prompt']);
-        expect(harness.steps[3].StepName).toContain('Finish check');
-        expect(harness.steps[4].StepName).toContain('Decision: triage');
-        expect(runner.Calls[1].conversationMessages?.map(textOf).some((c) => c.startsWith('Decision results:') && c.includes('"id":"triage"'))).toBe(true);
-    });
-
-    it('in shadow mode, records a passing gate, does not end the run, and asks the decisions for the next prompt', async () => {
-        const ask = answerDecisions(0.95);
-        const { agent, runner } = makeAgent([
-            () => llmEnvelope(gatedActionsEnvelope()),
-            () => llmEnvelope(successEnvelope()),
-        ]);
-
-        const result = await agent.Execute(gateParams('shadow'));
-
-        expect(result.success).toBe(true);
-        expect(runner.Calls).toHaveLength(2);
-        expect(harness.run.Message).not.toBe(FINISH_IF.message);
-        expect(decisionCalls(ask)).toHaveLength(1);
-        expect(harness.steps.some((s) => s.StepName.includes('Finish check'))).toBe(true);
-    });
-
-    it('with gates off (the default), asks no gate, and asks the decisions for the next prompt', async () => {
-        const ask = answerDecisions(0.95);
-        const { agent, runner } = makeAgent([
-            () => llmEnvelope(gatedActionsEnvelope()),
-            () => llmEnvelope(successEnvelope()),
-        ]);
-
-        const result = await agent.Execute(makeParams());
-
-        expect(result.success).toBe(true);
-        expect(runner.Calls).toHaveLength(2);
-        expect(ask.mock.calls.some(([args]) => 'q1' in args.Questions)).toBe(false);
-        expect(decisionCalls(ask)).toHaveLength(1);
-        expect(harness.steps.some((s) => s.StepName.includes('Finish check'))).toBe(false);
-    });
-
     it('never asks decisions sent with client tools and taskComplete, which end the run once the tools return', async () => {
         const ask = answerDecisions();
         vi.spyOn(ClientToolRequestManager.Instance, 'RequestClientTool').mockResolvedValue({ RequestID: 'ct-1', Success: true, Result: 'opened' });
@@ -1715,30 +1621,6 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
         expect(runner.Calls[1].conversationMessages?.map(textOf).some((c) => c.startsWith('Decision results:'))).toBe(true);
     });
 
-    it('logs held decisions exactly once when the run is cancelled before they are asked', async () => {
-        // The gate does not pass, so the decisions stay held for the next prompt, which the cancellation stops.
-        const ask = answerDecisions(0.4);
-        const controller = new AbortController();
-        harness.runAction = () => {
-            controller.abort('user cancelled mid-action');
-            return { Success: true, Message: 'Action completed', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null };
-        };
-        const { agent, runner } = makeAgent([
-            () => llmEnvelope(gatedActionsEnvelope()),
-            () => llmEnvelope(successEnvelope()),
-        ]);
-
-        const result = await agent.Execute({ ...gateParams('on'), cancellationToken: controller.signal });
-
-        expect(result.success).toBe(false);
-        expect(harness.run.Status).toBe('Cancelled');
-        expect(runner.Calls).toHaveLength(1);
-        expect(decisionCalls(ask)).toHaveLength(0);
-        expect(skippedLines()).toEqual([expect.stringContaining('Skipped 1 held decision request(s) (triage)')]);
-        expect(skippedLines()[0]).toContain('the run was cancelled before they were asked');
-        expect(skippedLines()[0]).toContain('finishIf gate');
-    });
-
     it('logs held decisions exactly once when a step throws out of the loop', async () => {
         const ask = answerDecisions();
         const { agent, runner, internals } = makeAgent([
@@ -1775,114 +1657,12 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
 
         expect(result.success).toBe(true);
         // Three items and one single request want four calls; the budget allows two.
-        expect(decisionCalls(ask)).toHaveLength(2);
+        expect(ask).toHaveBeenCalledTimes(2);
         const injected = runner.Calls[1].conversationMessages?.map(textOf).find((c) => c.startsWith('Decision results:'));
         expect(injected).toContain('"id":"batch","success":true,"answers":');
         expect(injected).toContain('"skippedCount":1');
         expect(injected).toContain('"id":"triage","success":false');
         expect(injected).toContain('at most 2 decision calls in total');
-    });
-});
-
-describe('BaseAgent.Execute — a finishIfMode that is not a mode', () => {
-    const SECOND_AGENT_ID = 'aaaaaaaa-0000-4000-8000-00000000000a';
-
-    /** The warnings about finishIfMode, in the order they were logged. */
-    const finishIfModeWarnings = (): string[] => vi.mocked(LogErrorEx).mock.calls
-        .map(([options]) => (typeof options === 'string' ? options : options.message))
-        .filter((message) => message.includes('finishIfMode'));
-
-    /**
-     * Runs the agent for two prompt turns with `finishIfMode` as a runtime override, which merges the
-     * prompt params again on every turn, the path that would warn on every turn without the dedupe.
-     */
-    async function runWithMode(finishIfMode: string): Promise<void> {
-        const { agent, runner } = makeAgent([
-            () => llmEnvelope(actionsEnvelope()),
-            () => llmEnvelope(successEnvelope()),
-        ]);
-        const result = await agent.Execute(makeParams({ data: { __agentTypePromptParams: { finishIfMode } } }));
-        expect(result.success).toBe(true);
-        expect(runner.Calls).toHaveLength(2);
-    }
-
-    beforeEach(() => {
-        vi.mocked(LogErrorEx).mockClear();
-    });
-
-    // The warned-about set is process-wide, so each test below uses values no other test uses.
-
-    it('warns once, naming the agent and the value, however many turns and runs read it', async () => {
-        await runWithMode('On');
-        await runWithMode('On');
-
-        expect(finishIfModeWarnings()).toHaveLength(1);
-        const [warning] = finishIfModeWarnings();
-        expect(warning).toContain("Agent 'Loop Test Agent'");
-        expect(warning).toContain('finishIfMode "On"');
-        expect(warning).toContain("not one of 'off', 'shadow', 'on'");
-        expect(warning).toContain('gates are off');
-    });
-
-    it('warns again for a different value, and for a different agent with the same value', async () => {
-        await runWithMode('true');
-        await runWithMode('Shadow');
-        await runWithMode('true');
-        harness.agent = makeAgentRow({ ID: SECOND_AGENT_ID, Name: 'Second Loop Agent' });
-        await runWithMode('true');
-
-        expect(finishIfModeWarnings()).toEqual([
-            expect.stringContaining(`Agent 'Loop Test Agent' has finishIfMode "true"`),
-            expect.stringContaining(`Agent 'Loop Test Agent' has finishIfMode "Shadow"`),
-            expect.stringContaining(`Agent 'Second Loop Agent' has finishIfMode "true"`),
-        ]);
-    });
-
-    it('does not warn for a valid mode or an absent one', async () => {
-        await runWithMode('shadow');
-        await runWithMode('off');
-        const { agent } = makeAgent([() => llmEnvelope(successEnvelope())]);
-        await agent.Execute(makeParams());
-
-        expect(finishIfModeWarnings()).toEqual([]);
-    });
-
-    it('logs only the start of a huge value from a run request, and still warns about it once', async () => {
-        const huge = `huge-${'x'.repeat(200_000)}`;
-
-        await runWithMode(huge);
-        await runWithMode(huge);
-
-        expect(finishIfModeWarnings()).toHaveLength(1);
-        const [warning] = finishIfModeWarnings();
-        expect(warning).toContain(`finishIfMode "${huge.slice(0, FINISH_IF_MODE_WARNING_SHOWN_MAX)}"… (${huge.length} characters)`);
-        expect(warning).not.toContain(huge.slice(0, FINISH_IF_MODE_WARNING_SHOWN_MAX + 1));
-        expect(warning.length).toBeLessThan(500);
-    });
-
-    // Runs last in this block: it fills the process-wide memory of reported values.
-    it(`remembers at most ${FINISH_IF_MODE_WARNINGS_REMEMBERED} agent and value pairs, so a run request per value cannot grow it without bound`, () => {
-        const agent = new HarnessAgent();
-        const agentRow = makeParams().agent;
-        const merge = (finishIfMode: string): void => {
-            agent.MergePromptParams(agentRow, { finishIfMode });
-        };
-
-        merge('flood-first');
-        for (let i = 0; i < FINISH_IF_MODE_WARNINGS_REMEMBERED; i++) {
-            merge(`flood-${i}`);
-        }
-        const newest = `flood-${FINISH_IF_MODE_WARNINGS_REMEMBERED - 1}`;
-        merge(newest);
-        merge('flood-first');
-
-        const warnings = finishIfModeWarnings();
-        // Every value warned once. The newest is still remembered, so it did not warn again, but
-        // 'flood-first' was the pair seen least recently when the memory filled, so it was dropped
-        // to keep the memory at its cap, and it warned a second time.
-        expect(warnings).toHaveLength(FINISH_IF_MODE_WARNINGS_REMEMBERED + 2);
-        expect(warnings.filter((w) => w.includes(`"${newest}"`))).toHaveLength(1);
-        expect(warnings.filter((w) => w.includes('"flood-first"'))).toHaveLength(2);
     });
 });
 

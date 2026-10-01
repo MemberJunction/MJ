@@ -1,4 +1,4 @@
-import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand, AgentScratchpad, AgentPipelineRequest, TaskGraphSpec, AgentDecisionRequest, AgentFinishIf } from "@memberjunction/ai-core-plus";
+import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand, AgentScratchpad, AgentPipelineRequest, TaskGraphSpec, AgentDecisionRequest } from "@memberjunction/ai-core-plus";
 import { ArtifactToolCall } from "../ArtifactToolManager";
 import { ConversationToolCall } from "../ConversationToolManager";
 import { MemoryWriteRequest } from "../MemoryWriteManager";
@@ -258,13 +258,6 @@ export interface LoopAgentResponse<P = any> {
          * results into the conversation or starts you a fresh turn with the outcome.
          */
         tasks?: TaskGraphSpec;
-
-        /**
-         * Conditional completion gate for Actions or Sub-Agent steps.
-         * Evaluated inline after the step executes: if all questions pass the probability
-         * threshold, the agent completes immediately with `message` without an extra turn.
-         */
-        finishIf?: AgentFinishIf;
     };
 }
 

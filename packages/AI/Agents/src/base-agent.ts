@@ -114,7 +114,6 @@ import {
     AgentDecisionRequest,
     AgentDecisionResult,
     AgentDecisionAnswerSummary,
-    AgentFinishIf,
     SummarizeDecisionAnswers,
     SystemPlaceholderManager
 } from '@memberjunction/ai-core-plus';
@@ -140,8 +139,7 @@ import { MemoryWriteManager, MemoryWriteRequest, MemoryWriteResult } from './Mem
 import { AgentDecisionService, DecisionQuestionMapping } from './AgentDecisionService';
 import { PayloadFeedbackManager, PayloadFeedbackContext, PayloadFeedbackQuestion, PayloadFeedbackResponse } from './PayloadFeedbackManager';
 import { PayloadAnalysisResult } from './PayloadChangeAnalyzer';
-import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS, MAX_DECISION_CALLS_PER_TURN, MAX_DECISION_REQUESTS_PER_TURN, ResolveFinishIfMode, type FinishIfMode } from './agent-types/loop-agent-prompt-params';
-import { FinishIfModeWarnings } from './finish-if-mode-warnings';
+import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS, MAX_DECISION_CALLS_PER_TURN, MAX_DECISION_REQUESTS_PER_TURN } from './agent-types/loop-agent-prompt-params';
 import {
     ApplyCatalogNarrowing,
     BuildCatalogNarrowingQuestions,
@@ -180,16 +178,6 @@ import {
     IsOpeningTurn,
     MentionsAgent,
 } from './decision-discovery';
-import {
-    BuildFinishIfQuestions,
-    CapFinishIfState,
-    FINISH_IF_STATE_EXCERPT,
-    FormatActionForFinishIf,
-    FormatSubAgentForFinishIf,
-    JudgeFinishIf,
-    type FinishIfOutcome,
-    type SubAgentStepResult
-} from './finish-if-state';
 import {
     PipelineExecutor,
     PipelineToolRegistry,
@@ -474,16 +462,6 @@ interface AgentBaseCatalog {
     actionDetails: string;
     /** Agent-type prompt params merged from schema defaults + agent config (NO runtime overrides). */
     baseAgentTypePromptParams: Record<string, unknown>;
-}
-
-/** The finishIf settings of the current step. */
-interface FinishIfSettings {
-    /** Whether a gate is evaluated: `finishIfMode` is `shadow` or `on`, and the response field is on. */
-    Enabled: boolean;
-    /** The agent's `finishIfMode`. Only `on` lets a passing gate end the run. */
-    Mode: FinishIfMode;
-    Threshold: number;
-    PromptName: string;
 }
 
 /** The top-level `reasoning` and `message` of a prompt's JSON response, when it has them. */
@@ -1516,14 +1494,6 @@ export class BaseAgent {
      * @private
      */
     private _effectiveSubAgents: MJAIAgentEntityExtended[] = [];
-
-    /**
-     * The merged agent-type prompt params of the current step. Populated during
-     * gatherPromptTemplateData() and read by the finishIf gate, which runs in executeActionsStep()
-     * and executeNextStep() after the prompt that requested the step.
-     * @private
-     */
-    private _agentTypePromptParams: Record<string, unknown> | undefined;
 
     /**
      * The run's catalog narrowing (plan Task 3.7): what the prompt hides from its action, sub-agent
@@ -8791,16 +8761,12 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Why the decisions sent with this step would be paid for and never read, or `undefined` when
-     * the next turn reads them. Three ways a step's own outcome ends the run: a passing finishIf gate
-     * (only an Actions step or a single sub-agent is gated), a sub-agent's `terminateAfter`, and
-     * client tools sent with `taskComplete`, which end the run once the tools return. Every other
-     * step, including client tools without `taskComplete`, goes on to a prompt that reads them.
+     * the next turn reads them. Two ways a step's own outcome ends the run: a sub-agent's
+     * `terminateAfter`, and client tools sent with `taskComplete`, which end the run once the tools
+     * return. Every other step, including client tools without `taskComplete`, goes on to a prompt
+     * that reads them.
      */
     private decisionsHoldReason(step: BaseAgentNextStep): string | undefined {
-        const isSingleSubAgent = step.step === 'Sub-Agent' && !!step.subAgent && !step.subAgents?.length;
-        if (step.finishIf && (step.step === 'Actions' || isSingleSubAgent) && this.finishIfActs()) {
-            return `the ${step.step} step carries a finishIf gate, and a passing gate ends the run`;
-        }
         if (step.step === 'Sub-Agent' && this.getRequestedSubAgents(step).some(r => r.terminateAfter === true)) {
             return 'the Sub-Agent step has terminateAfter, which ends the run after it';
         }
@@ -8992,8 +8958,6 @@ The context is now within limits. Please retry your request with the recovered c
                 // and removes any cache-poisoning foot-gun should a future consumer write to it.
                 agentTypePromptParams = { ...catalog.baseAgentTypePromptParams };
             }
-            // Store for the finishIf gate, which runs after this prompt in executeActionsStep / executeNextStep
-            this._agentTypePromptParams = agentTypePromptParams;
 
             // Skill catalog (name + description only — progressive disclosure). This is the
             // SELF-ACTIVATION surface, so it uses the double-gated auto set: empty unless the
@@ -9495,31 +9459,9 @@ The context is now within limits. Please retry your request with the recovered c
         // to distinguish between explicit user settings and schema defaults
         const explicitResponseType = (runtimeOverrides?.includeResponseTypeDefinition as Record<string, unknown> | undefined) ||
                                      (agentParams.includeResponseTypeDefinition as Record<string, unknown> | undefined);
-        this.warnOnceOnUnknownFinishIfMode(merged.finishIfMode, agent);
         this.applyResponseTypeAutoAlignment(merged, explicitResponseType);
 
         return merged;
-    }
-
-    /**
-     * The agent and value pairs {@link warnOnceOnUnknownFinishIfMode} has already reported. It is
-     * process-wide because the prompt params are merged again for every run of an agent, and on every
-     * turn that carries runtime overrides. One warning per agent and value is enough. A run request
-     * can set the value, so what this keeps is bounded: see {@link FinishIfModeWarnings}.
-     */
-    private static readonly finishIfModeWarnings = new FinishIfModeWarnings();
-
-    /**
-     * Warns, once per agent and value, when the merged `finishIfMode` is set but is not a
-     * {@link FinishIfMode}. {@link ResolveFinishIfMode} treats such a value as `'off'`, so without
-     * this a typo such as `"On"` or `"true"` would turn the agent's gates off without a word. An
-     * absent value is the default, so it is not reported.
-     */
-    private warnOnceOnUnknownFinishIfMode(value: unknown, agent: MJAIAgentEntityExtended): void {
-        const warning = BaseAgent.finishIfModeWarnings.WarningFor(agent.ID, agent.Name, value);
-        if (warning) {
-            this.logError(warning, { agent, category: 'AgentConfiguration', severity: 'warning' });
-        }
     }
 
     /**
@@ -9555,18 +9497,11 @@ The context is now within limits. Please retry your request with the recovered c
                 forEach: true,
                 while: true,
                 scratchpad: true,
-                decisions: true,
-                finishIf: true
+                decisions: true
             };
         }
 
         const responseType = params.includeResponseTypeDefinition as Record<string, unknown>;
-
-        // finishIf gates are opt-in (`finishIfMode`). While off, the model is not taught to write one,
-        // whatever includeFinishIfDocs says, so the response field below follows it off too.
-        if (ResolveFinishIfMode(params.finishIfMode) === 'off') {
-            params.includeFinishIfDocs = false;
-        }
 
         // `decisions` is opt-in too (`includeDecisionsDocs: true`). Its docs and types add about 1,200
         // tokens to every turn, and on the Prompt Eval corpus no model used it (typed-decision plan,
@@ -9587,8 +9522,7 @@ The context is now within limits. Please retry your request with the recovered c
             { docsFlag: 'includeConversationToolsDocs', responseTypeKey: 'conversationToolCalls' },
             { docsFlag: 'includePipelineDocs', responseTypeKey: 'pipeline' },
             { docsFlag: 'includeMemoryWritesDocs', responseTypeKey: 'memoryWrites' },
-            { docsFlag: 'includeDecisionsDocs', responseTypeKey: 'decisions' },
-            { docsFlag: 'includeFinishIfDocs', responseTypeKey: 'finishIf' }
+            { docsFlag: 'includeDecisionsDocs', responseTypeKey: 'decisions' }
         ];
 
         for (const { docsFlag, responseTypeKey } of alignmentMappings) {
@@ -9655,235 +9589,6 @@ The context is now within limits. Please retry your request with the recovered c
         } catch (e) {
             LogError(`Failed to parse PromptParamsSchema: ${e instanceof Error ? e.message : String(e)}`);
             return {};
-        }
-    }
-
-    /**
-     * The finishIf settings of the current step, from its merged agent-type prompt params. A gate is
-     * evaluated when `finishIfMode` is `shadow` or `on` and `includeResponseTypeDefinition.finishIf`
-     * is not `false`; it ends the run only in `on`.
-     */
-    private finishIfSettings(): FinishIfSettings {
-        const promptParams = this._agentTypePromptParams;
-        const rules = promptParams?.includeResponseTypeDefinition as Record<string, unknown> | undefined;
-        const threshold = promptParams?.finishIfThreshold;
-        const mode = ResolveFinishIfMode(promptParams?.finishIfMode);
-        return {
-            Enabled: mode !== 'off' && rules?.finishIf !== false,
-            Mode: mode,
-            Threshold: typeof threshold === 'number' && threshold > 0 && threshold <= 1
-                ? threshold
-                : DEFAULT_LOOP_AGENT_PROMPT_PARAMS.finishIfThreshold,
-            PromptName: typeof promptParams?.decisionPromptName === 'string'
-                ? promptParams.decisionPromptName
-                : AgentDecisionService.DEFAULT_PROMPT_NAME,
-        };
-    }
-
-    /** Whether a passing finishIf gate ends the run: only in `on` mode. */
-    private finishIfActs(): boolean {
-        const settings = this.finishIfSettings();
-        return settings.Enabled && settings.Mode === 'on';
-    }
-
-    /**
-     * Whether an evaluated gate ends the run. In shadow mode a passing gate is only logged: the
-     * outcome is already recorded on its `Finish check` step, and the model takes its next turn.
-     */
-    private gateEndsRun(outcome: FinishIfOutcome, params: ExecuteAgentParams): boolean {
-        if (!outcome.Passed) {
-            return false;
-        }
-        if (!this.finishIfActs()) {
-            this.logStatus('[finishIf] Shadow mode: the gate passed, and the run continues as it would have', true, params);
-            return false;
-        }
-        return true;
-    }
-
-    /**
-     * Runs the finishIf gate after an Actions step, and returns the Success step when it passes.
-     * ForEach and While call executeActionsStep without a conversation message, and are never gated.
-     */
-    private async finishAfterActions<P>(
-        params: ExecuteAgentParams,
-        decision: BaseAgentNextStep<P>,
-        actionResults: Array<{ success: boolean; result?: ActionResult }>,
-        actionSummaries: ActionResultSummary[],
-        payload: P,
-        parentStepId: string | undefined,
-        addConversationMessage: boolean
-    ): Promise<BaseAgentNextStep<P> | undefined> {
-        const finishIf = decision.finishIf;
-        if (!finishIf || !addConversationMessage || !this.finishIfSettings().Enabled) {
-            return undefined;
-        }
-        // (In shadow mode the gate below is still evaluated and recorded; it just never ends the run.)
-        // `success` means only that the action did not throw; `result.Success` is its outcome.
-        if (!actionResults.every(r => r.success && r.result?.Success === true)) {
-            return undefined;
-        }
-        // AIDirectives are instructions for the model's next turn, which a passing gate would take away.
-        const withDirectives = actionSummaries.filter(a => (a.aiDirectives?.length ?? 0) > 0).map(a => a.actionName);
-        if (withDirectives.length > 0) {
-            this.logStatus(`[finishIf] Gate skipped: ${withDirectives.join(', ')} returned AIDirectives, which the model must see on its next turn`, false, params);
-            return undefined;
-        }
-        const state = CapFinishIfState(actionSummaries.map(FormatActionForFinishIf).join('\n\n'));
-        const outcome = await this.evaluateFinishIf(finishIf, state, params, decision, payload, parentStepId);
-        return this.gateEndsRun(outcome, params)
-            ? { ...this.finishIfSuccessStep(finishIf, decision, payload), priorStepResult: actionSummaries }
-            : undefined;
-    }
-
-    /**
-     * Runs the finishIf gate after a Sub-Agent step that succeeded without terminating, and returns
-     * the step with `terminate: true` when it passes, as `terminateAfter` would.
-     */
-    private async finishAfterSubAgent<P>(
-        params: ExecuteAgentParams,
-        decision: BaseAgentNextStep<P>,
-        result: SubAgentStepResult<P>
-    ): Promise<BaseAgentNextStep<P> | undefined> {
-        const finishIf = decision.finishIf;
-        if (!finishIf || result.terminate || result.step !== 'Success' || !this.finishIfSettings().Enabled) {
-            return undefined;
-        }
-        const outcome = await this.evaluateFinishIf(finishIf, FormatSubAgentForFinishIf(result), params, decision, result.newPayload);
-        return this.gateEndsRun(outcome, params) ? { ...result, terminate: true, message: finishIf.message } : undefined;
-    }
-
-    /**
-     * Asks the finishIf questions about the step's results, then checks that the normal Success
-     * validation would allow the run to end. Records the check as a `Finish check` Decision step.
-     * Never throws: any error means the gate did not pass, and the run continues as it would have.
-     */
-    private async evaluateFinishIf<P>(
-        finishIf: AgentFinishIf,
-        state: string,
-        params: ExecuteAgentParams,
-        decision: BaseAgentNextStep<P>,
-        payload: P,
-        parentStepId?: string
-    ): Promise<FinishIfOutcome> {
-        const settings = this.finishIfSettings();
-        let step: MJAIAgentRunStepEntityExtended | undefined;
-        let outcome: FinishIfOutcome;
-        try {
-            step = await this.createStepEntity({
-                stepType: 'Decision',
-                stepName: 'Finish check',
-                contextUser: params.contextUser,
-                inputData: { questions: finishIf.questions, state: state.slice(0, FINISH_IF_STATE_EXCERPT) },
-                parentId: parentStepId
-            });
-            outcome = await this.askFinishIf(finishIf, state, settings, params, step);
-            if (outcome.Passed) {
-                const refusal = await this.finishIfValidationRefusal(params, this.finishIfSuccessStep(finishIf, decision, payload), payload, step);
-                if (refusal) {
-                    outcome = { ...outcome, Passed: false, Reason: refusal };
-                }
-            }
-        } catch (error) {
-            outcome = { Passed: false, Probabilities: {}, Reason: error instanceof Error ? error.message : String(error) };
-            LogError(`finishIf gate failed, so the run continues: ${outcome.Reason}`);
-        }
-        await this.finalizeFinishCheckStep(step, outcome, settings);
-        return outcome;
-    }
-
-    /**
-     * Asks each finishIf question as a Likelihood. Every one must reach the threshold. The call's
-     * prompt run is linked to the `Finish check` step, so the run's cost and tokens count it.
-     */
-    private async askFinishIf(
-        finishIf: AgentFinishIf,
-        state: string,
-        settings: FinishIfSettings,
-        params: ExecuteAgentParams,
-        step: MJAIAgentRunStepEntityExtended
-    ): Promise<FinishIfOutcome> {
-        const questions = BuildFinishIfQuestions(finishIf);
-        const result = await this._agentDecisionService.Ask({
-            State: state,
-            Questions: questions,
-            ContextUser: params.contextUser,
-            AgentID: params.agent?.ID,
-            PromptName: settings.PromptName,
-            CancellationToken: params.cancellationToken
-        });
-        this.attachDecisionPromptRun(step, result);
-        if (!result.success) {
-            return { Passed: false, Probabilities: {}, Reason: `The decision call failed: ${result.errorMessage ?? 'no error message'}` };
-        }
-        return JudgeFinishIf(result.Answers, questions, settings.Threshold);
-    }
-
-    /**
-     * Returns why the normal Success validation would refuse to end the run, or `undefined` when it
-     * allows it. The check must not count as a validation retry, so the counters are restored:
-     * otherwise a gate that keeps not passing could exhaust the retries and fail the run.
-     */
-    private async finishIfValidationRefusal<P>(
-        params: ExecuteAgentParams,
-        successStep: BaseAgentNextStep<P>,
-        payload: P,
-        step: MJAIAgentRunStepEntityExtended
-    ): Promise<string | undefined> {
-        if (!this._agentRun) {
-            return 'There is no agent run to validate against';
-        }
-        const generalRetries = this._generalValidationRetryCount;
-        const payloadRetries = this._validationRetryCount;
-        try {
-            const validated = await this.validateSuccessNextStep<P>(params, successStep, payload, this._agentRun, step);
-            if (validated.step === 'Success') {
-                return undefined;
-            }
-            return validated.errorMessage || validated.retryInstructions || `Success validation returned '${validated.step}'`;
-        } finally {
-            this._generalValidationRetryCount = generalRetries;
-            this._validationRetryCount = payloadRetries;
-        }
-    }
-
-    /** The Success step a passing gate returns after actions, in the shape of the client-tools `terminateAfterExecution` branch. */
-    private finishIfSuccessStep<P>(finishIf: AgentFinishIf, decision: BaseAgentNextStep<P>, payload: P): BaseAgentNextStep<P> {
-        return {
-            step: 'Success',
-            terminate: true,
-            message: finishIf.message,
-            payloadChangeRequest: decision.payloadChangeRequest,
-            previousPayload: decision.previousPayload,
-            newPayload: payload,
-            scratchpad: decision.scratchpad,
-            responseForm: decision.responseForm,
-            actionableCommands: decision.actionableCommands,
-            automaticCommands: decision.automaticCommands,
-            artifactDirective: decision.artifactDirective
-        };
-    }
-
-    /** Finalizes the `Finish check` step with the outcome. A failure to save it never affects the run. */
-    private async finalizeFinishCheckStep(
-        step: MJAIAgentRunStepEntityExtended | undefined,
-        outcome: FinishIfOutcome,
-        settings: FinishIfSettings
-    ): Promise<void> {
-        if (!step) {
-            return;
-        }
-        try {
-            await this.finalizeStepEntity(step, true, undefined, {
-                passed: outcome.Passed,
-                mode: settings.Mode,
-                endedRun: outcome.Passed && settings.Mode === 'on',
-                threshold: settings.Threshold,
-                probabilities: outcome.Probabilities,
-                reason: outcome.Reason
-            });
-        } catch (error) {
-            LogError(`Could not save the finishIf step: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 
@@ -11960,14 +11665,12 @@ The context is now within limits. Please retry your request with the recovered c
                     }
                 }
                 return await this.executePromptStep(params, config, previousDecision, stepCount);
-            case 'Sub-Agent': {
+            case 'Sub-Agent':
                 // A Sub-Agent step carrying a task graph is a FOLDED graph (D9): the agent type
                 // rewrote a one-node graph into an ordinary in-run call. Record it before running,
                 // so the run shows what was emitted even if the sub-agent then fails.
                 await this.recordFoldedTaskGraph(params, previousDecision);
-                const subAgentResult = await this.processSubAgentStep<P, P>(params, previousDecision!, undefined, undefined, stepCount);
-                return (await this.finishAfterSubAgent<P>(params, previousDecision, subAgentResult)) ?? subAgentResult;
-            }
+                return await this.processSubAgentStep<P, P>(params, previousDecision!, undefined, undefined, stepCount);
             case 'Actions':
                 return await this.executeActionsStep(params, previousDecision, undefined, true, stepCount, this.actionOptionsForAgentType());
             // Type assertion required because 'Skill' is not part of the BaseAgentNextStep step
@@ -14730,12 +14433,7 @@ The context is now within limits. Please retry your request with the recovered c
             } catch (error) {
                 LogError(`Error in PostProcessActionStep: ${error.message}`);
             }
-
-            const finished = await this.finishAfterActions(params, previousDecision, actionResults, actionSummaries, finalPayload, parentStepId, addConversationMessage);
-            if (finished) {
-                return finished;
-            }
-
+            
             // After actions complete, we need to process the results
             // The retry step is used to re-execute the prompt with the action results
             // This allows the agent to analyze the results and determine what to do next
@@ -17287,8 +16985,8 @@ The context is now within limits. Please retry your request with the recovered c
             for (const step of this._agentRun.Steps) {
                 if ((step.StepType === 'Prompt' || step.StepType === 'Compaction' || step.StepType === 'Decision') && step.PromptRun) {
                     // Add tokens from prompt runs (rollup fields include any nested child prompt runs).
-                    // A Decision step carries its own decision call's run — the Finish check, a single-state
-                    // request, or one item of a forEachItemIn request — so each call is counted once.
+                    // A Decision step carries its own decision call's run — a single-state request, or one
+                    // item of a forEachItemIn request — so each call is counted once.
                     totalTokens += step.PromptRun.TokensUsedRollup || 0;
                     promptTokens += step.PromptRun.TokensPromptRollup || 0;
                     completionTokens += step.PromptRun.TokensCompletionRollup || 0;
