@@ -106,7 +106,7 @@ graph LR
 | Oracle | Description |
 |--------|-------------|
 | `ExactMatchOracle` | Compares output against an expected string |
-| `LLMJudgeOracle` | Uses an LLM to evaluate output quality with rubrics |
+| `LLMJudgeOracle` | Scores the test's inline criteria with RubricScoring. It does not read MJ: Test Rubrics |
 | `SchemaValidatorOracle` | Validates output against a JSON schema |
 | `SQLValidatorOracle` | Validates output by running SQL queries |
 | `TraceValidatorOracle` | Validates execution trace/steps of an agent run |

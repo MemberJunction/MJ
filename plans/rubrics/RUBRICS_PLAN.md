@@ -851,7 +851,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 - [x] **T7** Testing UI: run detail, Review disagreement queue, analytics, rubric pickers (§10.7).
 - [x] **T8** Judge calibration test type + driver (§10.8).
 - [x] **T9** Per-criterion spread on `--flaky-check` (§10.9) and the rubric CLI (§10.10).
-- [ ] **T10** `TestRubric` deprecation and README corrections (§10.11).
+- [x] **T10** `TestRubric` deprecation and README corrections (§10.11).
 
 **A — agents**
 - [ ] **A1** Agent rubric links: metadata support, agent form Rubrics tab (§11.1).
