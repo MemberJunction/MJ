@@ -19,8 +19,31 @@ export interface AgentCriterionResult {
  * One model call, already run. Tests pass a fake. Production wraps an AI agent.
  * There is no network inside this class.
  */
+export interface AgentScaleView {
+    scaleType: 'Levels' | 'Numeric';
+    levels: { label: string; normalizedValue: number }[];
+    minValue?: number | null;
+    maxValue?: number | null;
+    step?: number | null;
+    higherIsBetter: boolean;
+}
+
 export interface RubricAgent {
-    run(input: { criterionKey: string; hints?: string; content: string; config?: RubricEvaluatorConfig }): Promise<AgentCriterionResult>;
+    /**
+     * One leaf. The scale lists the labels the agent may return. Subject and
+     * content are the record being scored. Config is that leaf's evaluator
+     * config, with a caller map overriding the node's own config.
+     */
+    run(input: {
+        criterionKey: string;
+        criterionName: string;
+        guidance?: string | null;
+        scale: AgentScaleView | null;
+        subject: { entityName: string; recordId: string };
+        content: string;
+        hints?: string;
+        config?: RubricEvaluatorConfig;
+    }): Promise<AgentCriterionResult>;
 }
 
 /**
@@ -42,13 +65,23 @@ export class AIRubricEvaluator extends RubricEvaluator {
         const leaves = request.version.nodes.filter(node => node.nodeType === 'Criterion');
         const candidates = [];
         for (const leaf of leaves) {
-            const config = configs.get(leaf.id) ?? configs.get(leaf.key);
+            const config = configs.get(leaf.id) ?? configs.get(leaf.key) ?? asConfig(leaf.evaluatorConfig);
             const raw = await this.agent.run({
                 criterionKey: leaf.key,
-                hints: config?.AI?.Hints,
+                criterionName: leaf.name,
+                guidance: leaf.guidance,
+                scale: scaleView(request.version, leaf.scaleId),
+                subject: request.subject,
                 content: request.content,
+                hints: config?.AI?.Hints,
                 config,
             });
+            if (config?.AI?.RequireQuote && raw.evidence.some(item => !item.quote)) {
+                throw new Error(`Evidence for ${leaf.key} must include a quote.`);
+            }
+            if (config?.AI?.RequireQuote && raw.evidence.length === 0) {
+                throw new Error(`Evidence for ${leaf.key} must include a quote.`);
+            }
             candidates.push({
                 criterionId: leaf.id,
                 scaleLevelId: raw.level ? levelId(request.version, leaf.scaleId, raw.level, leaf.key) : null,
@@ -61,6 +94,24 @@ export class AIRubricEvaluator extends RubricEvaluator {
         }
         return this.evaluate(request.version, candidates);
     }
+}
+
+function asConfig(value: unknown): RubricEvaluatorConfig | undefined {
+    if (!value || typeof value !== 'object') return undefined;
+    return value as RubricEvaluatorConfig;
+}
+
+function scaleView(version: RubricVersionSnapshot, scaleId: string | null | undefined): AgentScaleView | null {
+    const scale = version.scales.find(item => item.id === scaleId);
+    if (!scale) return null;
+    return {
+        scaleType: scale.scaleType,
+        levels: scale.levels.map(level => ({ label: level.label, normalizedValue: level.normalizedValue })),
+        minValue: scale.minValue,
+        maxValue: scale.maxValue,
+        step: scale.step,
+        higherIsBetter: scale.higherIsBetter,
+    };
 }
 
 function levelId(version: RubricVersionSnapshot, scaleId: string | null | undefined, label: string, key: string): string {

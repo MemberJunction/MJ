@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { RubricScoring, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { AIRubricEvaluator, type RubricAgent } from '../AIRubricEvaluator.js';
 import { HumanRubricEvaluator } from '../HumanRubricEvaluator.js';
@@ -13,7 +13,7 @@ function version(): RubricVersionSnapshot {
         scoreDisplayMin: 0,
         scoreDisplayMax: 100,
         nodes: [
-            { id: 'a', key: 'clarity', name: 'Clarity', nodeType: 'Criterion', scaleId: 'scale', weight: 1, isAdvisory: false, isGate: false, evidenceRequired: false, rationaleRequired: false, sequence: 0 },
+            { id: 'a', key: 'clarity', name: 'Clarity', guidance: 'Look at the first sentence.', nodeType: 'Criterion', scaleId: 'scale', weight: 1, isAdvisory: false, isGate: false, evidenceRequired: false, rationaleRequired: false, sequence: 0, evaluatorConfig: { AI: { Hints: 'Quote the sentence.' } } },
             { id: 'b', key: 'accuracy', name: 'Accuracy', nodeType: 'Criterion', scaleId: 'scale', weight: 1, isAdvisory: false, isGate: false, evidenceRequired: false, rationaleRequired: false, sequence: 1 },
         ],
         scales: [{
@@ -56,7 +56,13 @@ describe('AIRubricEvaluator', () => {
         const agent: RubricAgent = {
             async run(input) {
                 calls.push(input.criterionKey);
-                expect(input.hints).toBe(input.criterionKey === 'clarity' ? 'Quote the sentence.' : undefined);
+                if (input.criterionKey === 'clarity') {
+                    expect(input.criterionName).toBe('Clarity');
+                    expect(input.guidance).toBe('Look at the first sentence.');
+                    expect(input.scale?.levels.map(level => level.label)).toEqual(['Low', 'High']);
+                    expect(input.subject).toEqual({ entityName: 'MJ: Documents', recordId: '1' });
+                    expect(input.hints).toBe('Quote the sentence.');
+                }
                 return {
                     level: input.criterionKey === 'clarity' ? 'High' : 'Low',
                     rationale: input.criterionKey,
@@ -66,7 +72,6 @@ describe('AIRubricEvaluator', () => {
         };
         const output = await new AIRubricEvaluator(agent).evaluateVersion(
             { version: version(), subject: { entityName: 'MJ: Documents', recordId: '1' }, content: 'The text.' },
-            new Map([['clarity', { AI: { Hints: 'Quote the sentence.' } }]]),
         );
         expect(calls).toEqual(['clarity', 'accuracy']);
         const direct = RubricScoring.compute({
@@ -78,6 +83,40 @@ describe('AIRubricEvaluator', () => {
         });
         expect(output.normalizedScore).toBe(direct.normalizedScore);
         expect(output.evidence.map(item => item.ref)).toEqual(['ev:clarity', 'ev:accuracy']);
+    });
+
+    it('refuses an unknown level before scoring', async () => {
+        const spy = vi.spyOn(RubricScoring, 'compute');
+        const agent: RubricAgent = {
+            async run() {
+                return { level: 'Outstanding', rationale: 'No such level.', evidence: [{ ref: 'ev:1', quote: 'text' }] };
+            },
+        };
+        await expect(new AIRubricEvaluator(agent).evaluateVersion({
+            version: version(),
+            subject: { entityName: 'MJ: Documents', recordId: '1' },
+            content: 'The text.',
+        })).rejects.toThrow(/unknown level/);
+        expect(spy).not.toHaveBeenCalled();
+        spy.mockRestore();
+    });
+
+    it('refuses evidence without a quote when the criterion requires one, before scoring', async () => {
+        const spy = vi.spyOn(RubricScoring, 'compute');
+        const tree = version();
+        tree.nodes[0].evaluatorConfig = { AI: { RequireQuote: true } };
+        const agent: RubricAgent = {
+            async run() {
+                return { level: 'High', rationale: 'Clear.', evidence: [{ ref: 'ev:1' }] };
+            },
+        };
+        await expect(new AIRubricEvaluator(agent).evaluateVersion({
+            version: tree,
+            subject: { entityName: 'MJ: Documents', recordId: '1' },
+            content: 'The text.',
+        })).rejects.toThrow(/quote/);
+        expect(spy).not.toHaveBeenCalled();
+        spy.mockRestore();
     });
 });
 
