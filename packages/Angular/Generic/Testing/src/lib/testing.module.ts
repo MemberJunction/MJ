@@ -8,6 +8,7 @@ import { MJButtonDirective, MJEmptyStateComponent, MJAlertComponent, MJAccordion
 // MemberJunction Modules
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { RubricScoringFormComponent } from '@memberjunction/ng-rubrics';
+import { TestingRubricResultComponent } from './components/testing-rubric-result.component';
 
 // Components
 import { TestFeedbackDialogComponent } from './components/test-feedback-dialog.component';
@@ -43,7 +44,8 @@ import { ExecutionContextComponent } from './components/widgets/execution-contex
     MJAlertComponent,
     MJAccordionModule,
     ContainerDirectivesModule,
-    RubricScoringFormComponent
+    RubricScoringFormComponent,
+    TestingRubricResultComponent
   ],
   exports: [
     TestFeedbackDialogComponent,
@@ -55,7 +57,8 @@ import { ExecutionContextComponent } from './components/widgets/execution-contex
     EvaluationBadgeComponent,
     EvaluationModeToggleComponent,
     ReviewStatusIndicatorComponent,
-    ExecutionContextComponent
+    ExecutionContextComponent,
+    TestingRubricResultComponent
   ],
   providers: [
     // TestingDialogService, TestingExecutionService, and EvaluationPreferencesService

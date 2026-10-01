@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { TestRunSummary } from '../../services/testing-instrumentation.service';
 import { OracleResult } from './oracle-breakdown-table.component';
+import { rubricRunView } from '@memberjunction/ng-testing';
 
 @Component({
   standalone: false,
@@ -61,6 +62,9 @@ import { OracleResult } from './oracle-breakdown-table.component';
             <div class="oracle-section">
               <app-oracle-breakdown-table [results]="oracleResults"></app-oracle-breakdown-table>
             </div>
+          }
+          @if (rubricView) {
+            <mj-testing-rubric-result [OracleResults]="oracleResults"></mj-testing-rubric-result>
           }
           <!-- Result Details -->
           @if (resultDetails) {
@@ -392,6 +396,10 @@ export class TestRunDetailPanelComponent {
   @Input() set oracleResults(value: OracleResult[]) {
     this.OracleResults = value;
   }
+  get rubricView() {
+    return rubricRunView(this.oracleResults);
+  }
+
   /** @deprecated Use {@link OracleResults}. */
   get oracleResults(): OracleResult[] {
     return this.OracleResults;

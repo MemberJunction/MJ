@@ -1,0 +1,140 @@
+import type { RubricFormAnswer, RubricScoreResult, RubricVersionSnapshot } from '@memberjunction/ng-rubrics';
+
+export interface DisagreementItem {
+    key: string;
+    name: string;
+    humanMean: number;
+    aiMean: number;
+    gap: number;
+}
+
+/** Largest |human mean − AI mean| first. A criterion with either mean missing is left out. */
+export function disagreementQueue(rows: { key: string; name?: string | null; humanMean: number | null; aiMean: number | null }[]): DisagreementItem[] {
+    return rows
+        .filter(row => row.humanMean != null && row.aiMean != null)
+        .map(row => ({
+            key: row.key,
+            name: row.name || row.key,
+            humanMean: row.humanMean as number,
+            aiMean: row.aiMean as number,
+            gap: Math.abs((row.humanMean as number) - (row.aiMean as number)),
+        }))
+        .sort((left, right) => right.gap - left.gap || left.key.localeCompare(right.key));
+}
+
+/** Scores for one test or suite, oldest first. Runs with no score are left out. */
+export function scoreTrend(runs: { at: string | Date; score: number | null; scopeId: string }[], scopeId: string): { at: string; score: number }[] {
+    return runs
+        .filter(run => run.scopeId === scopeId && run.score != null)
+        .map(run => ({ at: run.at instanceof Date ? run.at.toISOString() : run.at, score: run.score as number }))
+        .sort((left, right) => left.at.localeCompare(right.at));
+}
+
+/** Share of scored leaves that failed a gate or scored below 1. Unscored leaves are left out. */
+export function criterionFailureRates(scores: { key: string; normalizedScore: number | null; gateFailed?: boolean }[]): { key: string; rate: number; count: number }[] {
+    const buckets = new Map<string, { failed: number; total: number }>();
+    for (const score of scores) {
+        if (score.normalizedScore == null && !score.gateFailed) continue;
+        const bucket = buckets.get(score.key) ?? { failed: 0, total: 0 };
+        bucket.total += 1;
+        if (score.gateFailed || (score.normalizedScore != null && score.normalizedScore < 1)) bucket.failed += 1;
+        buckets.set(score.key, bucket);
+    }
+    return [...buckets.entries()]
+        .map(([key, bucket]) => ({ key, rate: bucket.failed / bucket.total, count: bucket.total }))
+        .sort((left, right) => right.rate - left.rate || left.key.localeCompare(right.key));
+}
+
+/** Active rubrics, by name, for the Test and Test Suite RubricID picker. */
+export function rubricPickerOptions(rows: { ID?: string; id?: string; Name?: string; name?: string; Status?: string | null }[]): { id: string; name: string }[] {
+    return rows
+        .filter(row => (row.Status ?? 'Active') === 'Active')
+        .map(row => ({ id: String(row.ID ?? row.id ?? ''), name: String(row.Name ?? row.name ?? '') }))
+        .filter(row => row.id.length > 0 && row.name.length > 0)
+        .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+export interface RubricRunView {
+    version: RubricVersionSnapshot;
+    result: RubricScoreResult;
+    answers: RubricFormAnswer[];
+}
+
+/** A rubric or inline-judge oracle result, shaped for mj-rubric-result. */
+export function rubricRunView(oracleResults: { oracleType?: string; type?: string; Name?: string; details?: unknown; Details?: unknown }[] | null | undefined): RubricRunView | null {
+    const list = oracleResults ?? [];
+    const chosen = list.find(item => kind(item) === 'rubric' && criteriaOf(item).length > 0)
+        ?? list.find(item => (kind(item) === 'llm-judge' || kind(item).includes('judge')) && criteriaOf(item).length > 0);
+    if (!chosen) return null;
+    const details = detailsOf(chosen);
+    const criteria = criteriaOf(chosen);
+    const nodes = criteria.map((item, index) => {
+        const key = String(item.Key ?? item.key ?? `c${index}`);
+        return {
+            id: key,
+            key,
+            name: String(item.Name ?? item.name ?? key),
+            normalizedScore: numberOrNull(item.NormalizedScore ?? item.normalizedScore),
+            gateFailed: item.GateFailed === true || item.gateFailed === true,
+            rationale: text(item.Rationale ?? item.rationale),
+            evidence: text(item.Evidence ?? item.evidence),
+        };
+    });
+    const scored = nodes.map(node => node.normalizedScore).filter((score): score is number => score != null);
+    const normalizedScore = numberOrNull(details?.NormalizedScore) ?? (scored.length ? scored.reduce((sum, score) => sum + score, 0) / scored.length : null);
+    return {
+        version: {
+            id: 'run',
+            rubricId: 'run',
+            notApplicablePolicy: 'NotAllowed',
+            scoreDisplayMin: 0,
+            scoreDisplayMax: 1,
+            nodes: nodes.map(node => ({
+                id: node.id, key: node.key, name: node.name, nodeType: 'Criterion' as const, weight: 1,
+                isAdvisory: false, isGate: false, evidenceRequired: false, rationaleRequired: false, sequence: 0,
+            })),
+            scales: [],
+            bands: [],
+        },
+        result: {
+            normalizedScore,
+            completeness: numberOrNull(details?.Completeness) ?? 1,
+            outcome: (details?.Outcome as RubricScoreResult['outcome']) ?? 'Scored',
+            passed: details?.Passed === true ? true : details?.Passed === false ? false : null,
+            gateFailed: details?.GateFailed === true || nodes.some(node => node.gateFailed),
+            passThresholdApplied: null,
+            bandId: null,
+            confidence: null,
+            scoringEngineVersion: '1.0',
+            nodes: nodes.map(node => ({
+                id: node.id, key: node.key, normalizedScore: node.normalizedScore, effectiveWeight: 1,
+                overallContribution: node.normalizedScore, gateFailed: node.gateFailed, isNotApplicable: false, isAdvisory: false,
+            })),
+        },
+        answers: nodes.map(node => ({ criterionId: node.id, rationale: node.rationale, evidence: node.evidence })),
+    };
+}
+
+function kind(item: { oracleType?: string; type?: string; Name?: string }): string {
+    return String(item.oracleType ?? item.type ?? item.Name ?? '').toLowerCase();
+}
+
+function detailsOf(item: { details?: unknown; Details?: unknown }): Record<string, unknown> | null {
+    const value = item.details ?? item.Details;
+    return value && typeof value === 'object' ? value as Record<string, unknown> : null;
+}
+
+function criteriaOf(item: { details?: unknown; Details?: unknown }): Record<string, unknown>[] {
+    const criteria = detailsOf(item)?.Criteria;
+    return Array.isArray(criteria) ? criteria.filter(row => row && typeof row === 'object') as Record<string, unknown>[] : [];
+}
+
+function numberOrNull(value: unknown): number | null {
+    if (value == null || value === '') return null;
+    const parsed = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function text(value: unknown): string | undefined {
+    return value == null || value === '' ? undefined : String(value);
+}

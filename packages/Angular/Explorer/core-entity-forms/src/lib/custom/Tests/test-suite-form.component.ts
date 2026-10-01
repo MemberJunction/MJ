@@ -16,7 +16,8 @@ import {
   TagsHelper,
   TestRunComparison,
   EvaluationPreferencesService,
-  EvaluationPreferences
+  EvaluationPreferences,
+  rubricPickerOptions
 } from '@memberjunction/ng-testing';
 
 /** Settings key for keyboard shortcuts visibility */
@@ -404,6 +405,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     this.IsSaving = value;
   }
   ParentSuiteOptions: MJTestSuiteEntity[] = [];
+  RubricOptions: { id: string; name: string }[] = [];
 
   /** @deprecated Use {@link ParentSuiteOptions}. */
   get parentSuiteOptions(): MJTestSuiteEntity[] {
@@ -548,6 +550,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     this.loadShortcutsSetting();
     // Fire-and-forget: parent suite list for the edit form
     this.loadParentSuiteOptions();
+    void this.loadRubricOptions();
 
     // Subscribe to evaluation preferences
     this.evalPrefsService.preferences$
@@ -2715,6 +2718,17 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
    * Load all suites for the Parent Suite dropdown. Excludes the current
    * suite (a suite cannot be its own parent).
    */
+  private async loadRubricOptions(): Promise<void> {
+    try {
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const result = await rv.RunView({ EntityName: 'MJ: Rubrics', ExtraFilter: `Status='Active'`, OrderBy: 'Name', ResultType: 'simple', MaxRows: 500 });
+      this.RubricOptions = rubricPickerOptions((result.Results ?? []) as { ID: string; Name: string; Status: string }[]);
+      this.cdr.markForCheck();
+    } catch (error) {
+      console.warn('Failed to load rubric options:', error);
+    }
+  }
+
   private async loadParentSuiteOptions() {
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);

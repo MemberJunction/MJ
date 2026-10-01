@@ -8,6 +8,7 @@ export * from './lib/testing.module';
 // Models
 export * from './lib/models/testing.models';
 export * from './lib/models/evaluation.types';
+export * from './lib/models/testing-rubrics';
 
 // Components
 export * from './lib/components/test-feedback-dialog.component';

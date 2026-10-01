@@ -18,6 +18,8 @@ import {
   EvaluationSummaryMetrics
 } from '../services/testing-instrumentation.service';
 import { UUIDsEqual } from '@memberjunction/global';
+import { Metadata, RunView } from '@memberjunction/core';
+import { disagreementQueue, type DisagreementItem } from '@memberjunction/ng-testing';
 
 type ViewMode = 'queue' | 'history';
 type HistorySort = 'date' | 'rating' | 'test-name';
@@ -64,6 +66,14 @@ interface ReviewFormState {
     <ng-template #content>
     <!-- Inner page content -->
     <div class="review-page">
+      @if (Disagreement.length) {
+        <section class="rubric-disagreement" aria-label="Rubric disagreement">
+          <h3>Rubric disagreement</h3>
+          @for (row of Disagreement; track row.key) {
+            <p>{{ row.name }} — human {{ row.humanMean }} / AI {{ row.aiMean }}</p>
+          }
+        </section>
+      }
 
       <!-- KPI Summary Row -->
       @if (Metrics) {
@@ -1148,6 +1158,7 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
   FilteredHistoryItems: TestRunWithFeedbackSummary[] = [];
   Metrics: EvaluationSummaryMetrics | null = null;
   PendingCount = 0;
+  Disagreement: DisagreementItem[] = [];
 
   // Constants
   readonly RatingNumbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -1160,6 +1171,31 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.restoreState();
     this.setupSubscriptions();
+    void this.loadDisagreement();
+  }
+
+  /** Per-criterion human–AI gap, largest first. An empty result leaves the section hidden. */
+  async loadDisagreement(): Promise<void> {
+    try {
+      const provider = Metadata.Provider;
+      if (!provider) return;
+      const view = RunView.FromMetadataProvider(provider);
+      const result = await view.RunView({
+        EntityName: 'MJ: Rubric Evaluation Scores',
+        ExtraFilter: 'CriterionCohortHumanMeanScore IS NOT NULL AND CriterionCohortAIMeanScore IS NOT NULL',
+        ResultType: 'simple',
+        MaxRows: 200,
+      });
+      this.Disagreement = disagreementQueue(((result.Results ?? []) as Record<string, unknown>[]).map(row => ({
+        key: String(row.CriterionKey ?? row.Key ?? row.ID ?? ''),
+        name: row.Criterion == null ? null : String(row.Criterion),
+        humanMean: row.CriterionCohortHumanMeanScore == null ? null : Number(row.CriterionCohortHumanMeanScore),
+        aiMean: row.CriterionCohortAIMeanScore == null ? null : Number(row.CriterionCohortAIMeanScore),
+      })));
+      this.cdr.markForCheck();
+    } catch {
+      this.Disagreement = [];
+    }
   }
 
   ngOnDestroy(): void {

@@ -8,6 +8,8 @@ import {
   TestRunSummary,
   VersionMetrics
 } from '../services/testing-instrumentation.service';
+import { Metadata, RunView } from '@memberjunction/core';
+import { criterionFailureRates, scoreTrend } from '@memberjunction/ng-testing';
 
 // ---------------------------------------------------------------------------
 // Local interfaces
@@ -73,6 +75,18 @@ interface VersionRow {
 
     <ng-template #content>
     <div class="testing-analytics">
+      @if (RubricTrend.length || FailureRates.length) {
+        <div class="section-title">
+          <i class="fa-solid fa-scale-balanced"></i>
+          Rubric scores
+        </div>
+        @for (point of RubricTrend; track point.at) {
+          <p>{{ point.at }} — {{ point.score }}</p>
+        }
+        @for (rate of FailureRates; track rate.key) {
+          <p>{{ rate.key }} — {{ rate.rate }}</p>
+        }
+      }
 
       <!-- ===== 2. Trend Overview (2-column CSS charts) ===== -->
       <div class="section-title">
@@ -812,6 +826,8 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
   SelectedDays = 30;
   VersionRows: VersionRow[] = [];
   IsLoadingVersions = false;
+  RubricTrend: { at: string; score: number }[] = [];
+  FailureRates: { key: string; rate: number; count: number }[] = [];
 
   // Cached breakdown name lists for the dashboard's agent context.
   private topFailingNames: string[] = [];
@@ -843,6 +859,34 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
     this.restoreState();
     this.setupObservables();
     this.loadVersionMetrics();
+    void this.loadRubricAnalytics();
+  }
+
+  /** Score trend for the suite with the most scored runs, and per-criterion failure rates. */
+  async loadRubricAnalytics(): Promise<void> {
+    try {
+      const provider = Metadata.Provider;
+      if (!provider) return;
+      const view = RunView.FromMetadataProvider(provider);
+      const runs = await view.RunView({ EntityName: 'MJ: Test Suite Runs', ExtraFilter: 'Score IS NOT NULL', ResultType: 'simple', MaxRows: 200 });
+      const points = ((runs.Results ?? []) as Record<string, unknown>[]).map(row => ({
+        at: String(row.CompletedAt ?? row.__mj_CreatedAt ?? ''),
+        score: row.Score == null ? null : Number(row.Score),
+        scopeId: String(row.TestSuiteID ?? row.SuiteID ?? ''),
+      }));
+      const scopes = [...new Set(points.map(point => point.scopeId).filter(id => id.length > 0))];
+      this.RubricTrend = scopes.map(scope => scoreTrend(points, scope)).sort((left, right) => right.length - left.length)[0] ?? [];
+      const scores = await view.RunView({ EntityName: 'MJ: Rubric Evaluation Scores', ExtraFilter: 'NormalizedScore IS NOT NULL OR GateFailed = 1', ResultType: 'simple', MaxRows: 500 });
+      this.FailureRates = criterionFailureRates(((scores.Results ?? []) as Record<string, unknown>[]).map(row => ({
+        key: String(row.CriterionKey ?? row.Key ?? row.CriterionID ?? ''),
+        normalizedScore: row.NormalizedScore == null ? null : Number(row.NormalizedScore),
+        gateFailed: row.GateFailed === true || row.GateFailed === 1,
+      })).filter(row => row.key.length > 0));
+      this.cdr.markForCheck();
+    } catch {
+      this.RubricTrend = [];
+      this.FailureRates = [];
+    }
   }
 
   ngOnDestroy(): void {
