@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 let backing: Record<string, unknown[]> = {};
+let loadedConfigs: Array<Record<string, unknown>> = [];
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/global')>();
@@ -18,13 +19,14 @@ vi.mock('@memberjunction/core', () => ({
             if (!ctor._testInstance) ctor._testInstance = new ctor();
             return ctor._testInstance;
         }
-        async Load(): Promise<void> { /* no-op */ }
+        async Load(configs: Array<Record<string, unknown>>): Promise<void> { loadedConfigs = configs; }
         GetConfigData<T>(prop: string): T[] { return (backing[prop] ?? []) as T[]; }
         ObserveProperty<T>(prop: string) { return { prop }; }
     },
     BaseEnginePropertyConfig: class {},
     IMetadataProvider: class {},
     UserInfo: class {},
+    ProviderType: { Database: 'Database', Network: 'Network' },
 }));
 
 import { InteractiveFormsEngine } from '../engines/interactive-forms';
@@ -134,5 +136,38 @@ describe('InteractiveFormsEngine kill switch', () => {
         InteractiveFormsEngine.MetadataContributionsEnabled = false;
         InteractiveFormsEngine.MetadataContributionsEnabled = true;
         expect(InteractiveFormsEngine.Instance.Contributions).toHaveLength(1);
+    });
+});
+
+/**
+ * A browser cache holds one user's view, so other users' personal rows — with their Notes and
+ * Configuration — are not loaded into it. A server cache is shared by every user of the process,
+ * so it holds every row and each reader filters what it serves.
+ */
+describe('InteractiveFormsEngine contribution load', () => {
+    beforeEach(() => {
+        loadedConfigs = [];
+        InteractiveFormsEngine.MetadataContributionsEnabled = true;
+    });
+
+    const contributionConfig = () => loadedConfigs.find(c => c.EntityName === 'MJ: Entity Form Contributions');
+
+    it('loads shared rows and only the signed-in user\'s personal rows in the browser', async () => {
+        const browser = { ProviderType: 'Network', CurrentUser: { ID: USER } };
+        await InteractiveFormsEngine.Instance.Config(true, undefined, browser as never);
+        expect(contributionConfig()?.Filter).toBe(`Scope <> 'User' OR UserID = '${USER}'`);
+    });
+
+    it('filters by the user the caller passes when there is one', async () => {
+        const browser = { ProviderType: 'Network', CurrentUser: { ID: 'someone-else' } };
+        await InteractiveFormsEngine.Instance.Config(true, { ID: USER } as never, browser as never);
+        expect(contributionConfig()?.Filter).toContain(USER);
+    });
+
+    it('loads every row on a server', async () => {
+        const server = { ProviderType: 'Database', CurrentUser: { ID: USER } };
+        await InteractiveFormsEngine.Instance.Config(true, { ID: USER } as never, server as never);
+        expect(contributionConfig()).toBeDefined();
+        expect(contributionConfig()?.Filter).toBeUndefined();
     });
 });

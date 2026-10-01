@@ -1,5 +1,5 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
-import { NormalizeUUID, UUIDsEqual } from "@memberjunction/global";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, ProviderType, UserInfo } from "@memberjunction/core";
+import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from "@memberjunction/global";
 import type { Observable } from "rxjs";
 import type { MJComponentEntity, MJEntityFormContributionEntity, MJEntityFormOverrideEntity } from "../generated/entity_subclasses";
 
@@ -153,14 +153,34 @@ export class InteractiveFormsEngine extends BaseEngine<InteractiveFormsEngine> {
             },
         ];
         if (contributionsEnabled) {
-            c.push({
+            const contributions: Partial<BaseEnginePropertyConfig> = {
                 Type: 'entity',
                 EntityName: 'MJ: Entity Form Contributions',
                 PropertyName: '_contributions',
                 CacheLocal: true,
-            });
+            };
+            const filter = InteractiveFormsEngine.contributionLoadFilter(provider ?? this.ProviderToUse, contextUser);
+            if (filter) contributions.Filter = filter;
+            c.push(contributions);
         }
         await this.Load(c, provider, forceRefresh, contextUser);
+    }
+
+    /**
+     * The filter for the contribution load: in the browser, every shared row plus the signed-in
+     * user's own personal rows; on a server, none.
+     *
+     * A browser cache holds one user's view, so other users' personal rows (with their Notes and
+     * Configuration) stay on the server. A server cache is shared by every user of the process,
+     * so it holds every row and each reader filters what it serves.
+     */
+    private static contributionLoadFilter(
+        provider: IMetadataProvider | null | undefined,
+        contextUser: UserInfo | undefined,
+    ): string | null {
+        if (!provider || provider.ProviderType === ProviderType.Database) return null;
+        const userID = (contextUser ?? provider.CurrentUser)?.ID;
+        return userID ? `Scope <> 'User' OR UserID = '${EscapeSQLString(userID)}'` : null;
     }
 
     // ─── Read-side accessors ────────────────────────────────────────────────
