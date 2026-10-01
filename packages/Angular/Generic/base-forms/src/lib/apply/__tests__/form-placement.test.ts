@@ -144,6 +144,19 @@ describe('PlacementStateFromContribution as a proposal seed', () => {
         expect(state.ReplaceFieldNames).toEqual([name]);
         expect(state.ReplaceFieldSectionKey).toBe(section.Key);
     });
+
+    it('drops listed sections the form does not draw', () => {
+        const state = PlacementStateFromContribution(proposal({ replacesSectionKeys: ['gone1', 'gone2'] }), CONTEXT, true);
+        expect(state.ReplaceMode).toBe('none');
+        expect(state.ReplaceSectionKeys).toEqual([]);
+    });
+
+    it('keeps listed sections when the targets are unread', () => {
+        const unread = { ...CONTEXT, Sections: [], TargetsVerified: false };
+        const state = PlacementStateFromContribution(proposal({ replacesSectionKeys: ['gone1', 'gone2'] }), unread, true);
+        expect(state.ReplaceMode).toBe('section');
+        expect(state.ReplaceSectionKeys).toEqual(['gone1', 'gone2']);
+    });
 });
 
 describe('ResolvePlacementDecision', () => {

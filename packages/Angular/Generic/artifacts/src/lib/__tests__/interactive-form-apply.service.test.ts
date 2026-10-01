@@ -653,10 +653,10 @@ describe('InteractiveFormApplyService — form-panel specs', () => {
     });
 
     it('starts the dialog from the panel\'s proposed claims', async () => {
-        const spec = panelSpec();
-        const proposal = (spec as unknown as { formContribution: { presentation: string } }).formContribution;
+        const panel = panelSpec();
+        const proposal = (panel as unknown as { formContribution: { presentation: string } }).formContribution;
         const svc = new InteractiveFormApplyService();
-        await svc.ConfirmAndApply(spec, ENTITY, provider(), snapshot());
+        await svc.ConfirmAndApply(panel, ENTITY, provider(), snapshot());
         const dialog = hoisted.placementDialog as { SeedState?: (d: never) => void };
         const context = hoisted.placementContext!;
         expect(typeof dialog.SeedState).toBe('function');
@@ -666,6 +666,22 @@ describe('InteractiveFormApplyService — form-panel specs', () => {
         };
         dialog.SeedState!(fake as never);
         expect((fake.State as { Presentation: string }).Presentation).toBe(proposal.presentation);
+        expect((fake.State as { ReplaceMode: string }).ReplaceMode).toBe('section');
+    });
+
+    it('does not read the proposal\'s key or sort order as claims', async () => {
+        hoisted.dialogResult = 'cancel';
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(panelSpec({ replacesSectionKey: undefined, sortKey: 90 }), ENTITY, provider(), snapshot({
+            Contributions: [{ Key: 'header', Slot: 'before-fields', Source: 'class', Title: 'Header', Presentation: 'bare', Hidden: false, Precedence: 3 }],
+        }));
+        const dialog = hoisted.placementDialog as { SeedState?: (d: never) => void };
+        const context = hoisted.placementContext as { Existing: Array<{ Key: string }> };
+        expect(context.Existing.map((e) => e.Key)).toContain('header');
+        const fake = { Context: context, State: undefined as unknown };
+        dialog.SeedState!(fake as never);
+        expect((fake.State as { ReplaceMode: string; SortKey: number | null }).ReplaceMode).toBe('none');
+        expect((fake.State as { ReplaceMode: string; SortKey: number | null }).SortKey).toBeNull();
     });
 
     it('offers the sections the live form actually has', async () => {

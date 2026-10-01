@@ -464,11 +464,12 @@ export class InteractiveFormApplyService {
             dialog.ComponentName = componentName ?? proposal.title;
             dialog.Proposal = proposal;
             // The dialog starts from the proposal's claims the open form can honour. The
-            // proposal's own key is left out: a key that matches an installed panel would
-            // read as "replace that panel", which the author cannot have meant.
+            // proposal's own key and sort order are left out: a key that matches an installed
+            // panel would read as "replace that panel", which the author cannot have meant, and
+            // the order among the panels in one position is the host's.
             dialog.SeedState = (d) => {
                 d.State = PlacementStateFromContribution(
-                    { ...proposal, contributionKey: undefined },
+                    { ...proposal, contributionKey: undefined, sortKey: undefined },
                     d.Context,
                     !d.Context.FullCustomForm,
                 );

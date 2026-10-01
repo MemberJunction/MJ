@@ -2,9 +2,9 @@
  * @fileoverview The placement decision — what the user answers before a panel is written.
  *
  * A generated panel arrives carrying a `formContribution` block. Its **identity** —
- * `presentation`, `title`, `icon` — describes what the component is. Its **placement** — slot,
- * claims, ordering — is a proposal: the dialog starts from every claim the open form can
- * honour and from a fixed default for the rest, and the user confirms or changes it.
+ * `presentation`, `title`, `icon` — describes what the component is. Its **placement** — slot
+ * and claims — is a proposal: the dialog starts from every claim the open form can honour and
+ * from a fixed default for the rest, and the user confirms or changes it.
  *
  * Everything here is pure. The component holds a {@link FormPlacementState} and renders it;
  * these functions decide what that state means. The sentences that describe a state are in
@@ -432,10 +432,12 @@ export function PlacementStateFromContribution(
     activeNow: boolean,
     keepOff = false,
 ): FormPlacementState {
-    const railKey = (spec.replacesSectionKey ?? '').trim();
-    const listed = (spec.replacesSectionKeys ?? []).map((k) => k.trim()).filter((k) => k.length > 0);
     // A claim that cannot be checked is kept as stored: Details and More are tabs, any other key a section.
     const unread = TargetsUnread(context);
+    const railKey = (spec.replacesSectionKey ?? '').trim();
+    const listed = (spec.replacesSectionKeys ?? [])
+        .map((k) => k.trim())
+        .filter((k) => k.length > 0 && (unread || context.Sections.some((s) => s.Key === k)));
     const unreadTab = unread && railKeyChromeGroup(railKey) !== null;
     const sectionKey = context.Sections.some((s) => s.Key === railKey)
         ? railKey
