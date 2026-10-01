@@ -15,8 +15,8 @@ import {
 } from '@memberjunction/integration-pk-classifier';
 import { BaseIntegrationConnector, type ExternalObjectSchema, type ExternalFieldSchema } from './BaseIntegrationConnector.js';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
-import { IntegrationSchemaSync, type PersistSchemaResult } from './IntegrationSchemaSync.js';
-import type { IntrospectSchemaOptions, SourceObjectInfo } from './types.js';
+import { IntegrationSchemaSync, type PersistSchemaOptions, type PersistSchemaResult } from './IntegrationSchemaSync.js';
+import type { IntrospectSchemaOptions, SourceObjectInfo, SourceSchemaInfo } from './types.js';
 import { MergeDeclaredWithSample } from './DeclaredSampleMerge.js';
 import { getHeapStatistics } from 'node:v8';
 import { totalmem } from 'node:os';
@@ -107,6 +107,35 @@ export function ShouldStopForMemory(
 ): boolean {
     return ShouldStopSamplingForHeap(sample.HeapUsed, sample.HeapLimit, heapStopFraction, heapMinHeadroomBytes)
         || ShouldStopSamplingForHeap(sample.RSS, sample.TotalMemory, rssStopFraction);
+}
+
+/** The run-deadline race `runInternal` wraps each stage in. */
+type StageDeadline = <T>(stage: string, work: Promise<T>) => Promise<T>;
+
+/** A persist result with nothing in it yet — the accumulator a streaming persist sums into. */
+function emptyPersistResult(): PersistSchemaResult {
+    return {
+        ObjectsCreated: 0,
+        ObjectsUpdated: 0,
+        FieldsCreated: 0,
+        FieldsUpdated: 0,
+        ObjectMergeLog: [],
+        FieldMergeLog: [],
+        ObjectsDeactivated: [],
+        FieldsDeactivated: [],
+    };
+}
+
+/** Folds one per-object persist into the streaming total. */
+function addPersistResult(total: PersistSchemaResult, part: PersistSchemaResult): void {
+    total.ObjectsCreated += part.ObjectsCreated;
+    total.ObjectsUpdated += part.ObjectsUpdated;
+    total.FieldsCreated += part.FieldsCreated;
+    total.FieldsUpdated += part.FieldsUpdated;
+    total.ObjectMergeLog.push(...part.ObjectMergeLog);
+    total.FieldMergeLog.push(...part.FieldMergeLog);
+    total.ObjectsDeactivated.push(...part.ObjectsDeactivated);
+    total.FieldsDeactivated.push(...part.FieldsDeactivated);
 }
 
 /** Options for the creation/refresh pipeline run. */
@@ -496,8 +525,9 @@ export class IntegrationConnectorCreationPipeline {
 
         try {
             await withDeadline('ConnectionTest', this.StageConnectionTest(emitter, opts));
-            const sourceSchema = await withDeadline('Introspect', this.StageIntrospect(emitter, opts));
-            const persistResult = await withDeadline('Persist', this.StagePersist(emitter, opts, sourceSchema));
+            // Introspect + Persist as ONE traversal of the source when the connector can stream;
+            // the old whole-schema persist when it cannot. See StreamIntrospectAndPersist.
+            const persistResult = await this.StreamIntrospectAndPersist(emitter, opts, withDeadline);
             const { verdicts, unresolved } = await withDeadline('PKClassify', this.StagePKClassify(emitter, opts));
 
             emitter.stageComplete('Pipeline', {
@@ -552,8 +582,9 @@ export class IntegrationConnectorCreationPipeline {
 
     private async StageIntrospect(
         emitter: IntegrationProgressEmitter,
-        opts: ConnectorCreationPipelineOptions
-    ) {
+        opts: ConnectorCreationPipelineOptions,
+        onObject?: (obj: SourceObjectInfo) => Promise<void>,
+    ): Promise<SourceSchemaInfo> {
         emitter.stageStart('Introspect', 'Discovering objects and fields via connector');
         const startMs = Date.now();
         // Sampling is now per OBJECT, so this stage's cost scales with the catalog — and on a large
@@ -607,7 +638,7 @@ export class IntegrationConnectorCreationPipeline {
             const schema = await opts.Connector.IntrospectSchema(
                 opts.CompanyIntegration,
                 opts.ContextUser,
-                { ...(opts.IntrospectOptions ?? {}), OnProgress: onProgress }
+                { ...(opts.IntrospectOptions ?? {}), OnProgress: onProgress, OnObject: onObject }
             );
 
             // UNIVERSAL additive runtime-object discovery — the single chokepoint EVERY connector
@@ -902,10 +933,60 @@ export class IntegrationConnectorCreationPipeline {
         }
     }
 
+    /**
+     * One traversal of the source, persisted object by object.
+     *
+     * Peak memory becomes one object's fields instead of the whole catalog. Only object NAMES are
+     * carried to the end, because that is all absent-object retirement needs.
+     *
+     * Retirement is split across the two moments deliberately (see IntegrationSchemaSync):
+     *   per object — its own field list is complete, so absent FIELDS may retire; absent OBJECTS may
+     *                not, because from one object's vantage every other object looks absent.
+     *   final pass — the complete name set is known, so absent OBJECTS may retire; absent FIELDS may
+     *                not, because name stubs carry no fields and would retire every column.
+     *
+     * A connector whose IntrospectSchema override ignores OnObject simply returns a populated schema
+     * with `Streamed` falsy, and the old whole-schema persist runs unchanged — which is what keeps
+     * connector overrides in other repositories working untouched.
+     */
+    private async StreamIntrospectAndPersist(
+        emitter: IntegrationProgressEmitter,
+        opts: ConnectorCreationPipelineOptions,
+        withDeadline: StageDeadline,
+    ): Promise<PersistSchemaResult> {
+        const names: string[] = [];
+        const agg = emptyPersistResult();
+        const onObject = async (obj: SourceObjectInfo): Promise<void> => {
+            names.push(obj.ExternalName);
+            const r = await this.StagePersist(
+                emitter, opts,
+                { Objects: [obj], IsAuthoritative: false },
+                { DeactivateAbsentObjects: false, DeactivateAbsentFields: opts.DeactivateAbsent ?? false },
+            );
+            addPersistResult(agg, r);
+        };
+        const sourceSchema = await withDeadline('Introspect', this.StageIntrospect(emitter, opts, onObject));
+        if (!sourceSchema.Streamed) {
+            // The connector did not stream — persist the whole schema exactly as before.
+            return withDeadline('Persist', this.StagePersist(emitter, opts, sourceSchema));
+        }
+        const tail = await this.StagePersist(
+            emitter, opts,
+            {
+                Objects: names.map(n => ({ ExternalName: n, ExternalLabel: n, Fields: [], PrimaryKeyFields: [], Relationships: [] })),
+                IsAuthoritative: sourceSchema.IsAuthoritative,
+            },
+            { DeactivateAbsentObjects: opts.DeactivateAbsent ?? false, DeactivateAbsentFields: false },
+        );
+        agg.ObjectsDeactivated.push(...tail.ObjectsDeactivated);
+        return agg;
+    }
+
     private async StagePersist(
         emitter: IntegrationProgressEmitter,
         opts: ConnectorCreationPipelineOptions,
-        sourceSchema: Awaited<ReturnType<BaseIntegrationConnector['IntrospectSchema']>>
+        sourceSchema: SourceSchemaInfo,
+        retirement?: Pick<PersistSchemaOptions, 'DeactivateAbsentObjects' | 'DeactivateAbsentFields'>,
     ): Promise<PersistSchemaResult> {
         emitter.stageStart('Persist', 'Upserting IntegrationObject/Field rows with overlay precedence');
         const startMs = Date.now();
@@ -917,6 +998,10 @@ export class IntegrationConnectorCreationPipeline {
             UseTransactionGroup: true,
             // §7 comprehensive-refresh deactivation (objects + fields absent from this discovery).
             DeactivateAbsent: opts.DeactivateAbsent ?? false,
+            // The streaming path drives the two halves separately (see StreamIntrospectAndPersist);
+            // every other caller leaves them undefined and inherits DeactivateAbsent exactly as before.
+            DeactivateAbsentObjects: retirement?.DeactivateAbsentObjects,
+            DeactivateAbsentFields: retirement?.DeactivateAbsentFields,
         });
 
         // Emit per-object + per-field structural-transparency events so the UI/audit
