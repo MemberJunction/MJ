@@ -182,6 +182,12 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
   }
   public FormInitError: string | null = null;
 
+  /**
+   * Why Apply did nothing, shown beside the button until the next Apply succeeds or the
+   * component's code arrives.
+   */
+  public ApplyNotice: string | null = null;
+
   /** @deprecated Use {@link FormInitError}. */
   public get formInitError(): string | null {
     return this.FormInitError;
@@ -495,6 +501,7 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    */
   OnReactComponentInitialized(): void {
     const host = this.liveReactComponent;
+    if (host?.resolvedComponentSpec?.code) this.ApplyNotice = null;
     if (host?.resolvedComponentSpec &&
         host.resolvedComponentSpec !== this.Component) {
       // Cache the resolved spec so it's available even after the React component is destroyed
@@ -553,7 +560,8 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     // MJReactComponent.getCurrentDataState() already includes the fallback
     // to intercepted RunView/RunQuery results when the React component
     // doesn't register getCurrentDataState() via callbacks.RegisterMethod.
-    const dataState = this.ReactComponent?.getCurrentDataState?.();
+    // A form panel previews through its own React host, so the live host is read.
+    const dataState = this.liveReactComponent?.getCurrentDataState?.();
     if (dataState && typeof dataState === 'object') {
       return dataState as DataSnapshot;
     }
@@ -619,6 +627,7 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     this.FormRecordIsReal = false;
     this.FormRecordLabel = '';
     this.FormInitError = null;
+    this.ApplyNotice = null;
 
     const spec = this.Component;
     if (!spec || (!isFormRole(spec) && !IsFormPanelRole(spec))) return;
@@ -822,11 +831,12 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     if (!spec) {
       // The artifact stores a registry reference, so the code arrives only once
       // the preview has resolved it. Saying so beats a button that does nothing.
-      this.FormInitError = 'Component code is still loading. Try again in a moment.';
+      this.ApplyNotice = 'Component code is still loading. Try again in a moment.';
       this.cdr.detectChanges();
       return;
     }
 
+    this.ApplyNotice = null;
     this.ApplyFormRequested.emit({
       spec,
       entityName: this.FormEntityInfo.Name,
