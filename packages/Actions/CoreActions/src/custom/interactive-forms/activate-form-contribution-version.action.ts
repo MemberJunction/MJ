@@ -91,7 +91,9 @@ export class ActivateFormContributionVersionAction extends BaseAction {
                         }
                         if (priorComponent) {
                             priorComponent.Status = MapToComponentStatus('Inactive');
-                            await priorComponent.Save();
+                            if (!(await priorComponent.Save())) {
+                                throw new Error(`Could not deprecate prior component ${prior.ComponentID}: ${priorComponent.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                            }
                         }
                     }
                     component.Status = MapToComponentStatus('Active');

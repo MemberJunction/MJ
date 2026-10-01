@@ -16,6 +16,8 @@ const { hoisted } = vi.hoisted(() => ({
         priorRows: [] as Array<Record<string, unknown>>,
         runViewSucceeds: true,
         filters: [] as string[],
+        /** Row IDs whose saves fail. */
+        failingSaves: new Set<string>(),
     },
 }));
 
@@ -29,7 +31,12 @@ function row(seed: Record<string, unknown>): Row {
             Object.assign(target, found, { Load: target.Load, Save: target.Save });
             return true;
         },
-        async Save() { target.saved = true; hoisted.rows.set(target.ID, target); return true; },
+        async Save() {
+            if (hoisted.failingSaves.has(target.ID)) return false;
+            target.saved = true;
+            hoisted.rows.set(target.ID, target);
+            return true;
+        },
         NewRecord() { /* no-op */ },
     };
     return target;
@@ -95,6 +102,7 @@ beforeEach(() => {
     hoisted.priorRows = [];
     hoisted.runViewSucceeds = true;
     hoisted.filters = [];
+    hoisted.failingSaves = new Set();
     seedTarget();
 });
 
@@ -119,6 +127,18 @@ describe('ActivateFormContributionVersionAction', () => {
         expect(JSON.parse(result.Message ?? '{}')).toMatchObject({
             PreviousActiveContributionID: 'ROW-1', DemotedCount: 1,
         });
+    });
+
+    it('fails, without activating, when the prior sibling\'s component cannot be set aside', async () => {
+        hoisted.rows.set('ROW-1', row({ ID: 'ROW-1', ComponentID: 'COMP-1', Status: 'Active' }));
+        hoisted.rows.set('COMP-1', row({ ID: 'COMP-1', Status: 'Published' }));
+        hoisted.priorRows = [live({ ID: 'ROW-1', ComponentID: 'COMP-1' })];
+        hoisted.failingSaves.add('COMP-1');
+        const result = await run(params());
+        expect(result.Success).toBe(false);
+        expect(result.ResultCode).toBe('PERSIST_FAILED');
+        expect(result.Message).toContain('COMP-1');
+        expect(hoisted.rows.get('ROW-2')!.Status).toBe('Pending');
     });
 
     it('demotes only the owner\'s row, never another audience\'s or the target itself', async () => {

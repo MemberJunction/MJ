@@ -233,6 +233,28 @@ describe('ActivateInteractiveFormVersionAction', () => {
         expect(r.ResultCode).toBe('NOT_PENDING');
     });
 
+    /**
+     * The prior version is set aside after the promotion's transaction. A save that fails there
+     * fails the action, so the caller learns that two forms are now Active.
+     */
+    it.each([['its override', 'OVER-PRIOR'], ['its component', 'COMP-OLD']])(
+        'fails when the prior Active version cannot be set aside (%s)',
+        async (_label, failingID) => {
+            seedOverride('OVER-PENDING', { ComponentID: 'COMP-NEW', Scope: 'User', Status: 'Pending' });
+            seedComponent('COMP-NEW', { Status: 'Draft' });
+            seedOverride('OVER-PRIOR', { ComponentID: 'COMP-OLD', Scope: 'User', Status: 'Active' });
+            seedComponent('COMP-OLD', { Status: 'Published' });
+            hoisted.runViewResults.push([{ ID: 'OVER-PRIOR', ComponentID: 'COMP-OLD' }]);
+            hoisted.failingSaves.add(failingID);
+
+            const r = await run(new ActivateInteractiveFormVersionAction(), mkParams({ OverrideID: 'OVER-PENDING' }));
+            expect(r.Success).toBe(false);
+            expect(r.ResultCode).toBe('PERSIST_FAILED');
+            expect(r.Message).toContain(failingID);
+            expect(r.Message).toContain('OVER-PENDING');
+        },
+    );
+
     it('promotes Pending → Active and demotes the prior sibling Active', async () => {
         seedOverride('OVER-PENDING', { ComponentID: 'COMP-NEW', Scope: 'User', Status: 'Pending' });
         seedComponent('COMP-NEW', { Status: 'Draft' });

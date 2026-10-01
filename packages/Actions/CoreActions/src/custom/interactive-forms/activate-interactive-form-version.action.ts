@@ -22,7 +22,9 @@ import {
  * override, or another user's, returns FORBIDDEN for every caller (see
  * `CheckPersonalWrite` in `_shared.ts`): shared forms are managed from Form
  * Builder or the form's Manage drawer. The target's Component and Override flip
- * to Active in one entity transaction.
+ * to Active in one entity transaction. The prior Active sibling is set aside after
+ * that transaction; if one of those saves fails, the action returns
+ * `PERSIST_FAILED` and the target stays Active.
  *
  * Idempotency. If the target Override is already Active, returns SUCCESS
  * with a no-op message. If it's Inactive, that's a misuse — we surface
@@ -110,11 +112,15 @@ export class ActivateInteractiveFormVersionAction extends BaseAction {
                 const priorC = await LoadComponent(provider, user, prior.ComponentID);
                 if (priorO) {
                     priorO.Status = 'Inactive';
-                    await priorO.Save();
+                    if (!(await priorO.Save())) {
+                        return notSetAside(target.ID, `override ${prior.ID}`, priorO.LatestResult?.CompleteMessage);
+                    }
                 }
                 if (priorC) {
                     priorC.Status = MapToComponentStatus('Inactive');
-                    await priorC.Save();
+                    if (!(await priorC.Save())) {
+                        return notSetAside(target.ID, `component ${prior.ComponentID}`, priorC.LatestResult?.CompleteMessage);
+                    }
                 }
             }
 
@@ -134,6 +140,12 @@ export class ActivateInteractiveFormVersionAction extends BaseAction {
             return Failure("UNEXPECTED_ERROR", message);
         }
     }
+}
+
+/** The result when the target is Active but a prior version's row could not be set aside. */
+function notSetAside(targetID: string, what: string, reason: string | undefined): ActionResultSimple {
+    return Failure("PERSIST_FAILED",
+        `Override ${targetID} is now Active, but the prior ${what} could not be set aside: ${reason ?? 'unknown error'}`);
 }
 
 /** Tree-shaking guard. */
