@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, DoCheck, Input, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, DoCheck, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
 import { LogError, ValidationResult, type BaseEntity, type CompositeKey } from '@memberjunction/core';
 import { ValidationErrorInfo } from '@memberjunction/global';
 import { InteractiveFormsEngine } from '@memberjunction/core-entities';
@@ -14,9 +14,8 @@ import {
     type FormValidationChangedArgs,
 } from '@memberjunction/interactive-component-types/forms';
 import { MJReactComponent, ReactBridgeService, type ReactComponentEvent } from '@memberjunction/ng-react';
-import { NormalizeIconClass } from '@memberjunction/ng-ui-components';
-import { BaseFormPanel, type FormPanelRegistrationMetadata } from '../panel-slot/base-form-panel';
-import { ContributionSectionKey, ReplacedSectionKeys, type FormContributionRegistration } from '../panel-slot/form-contribution';
+import { BaseContributionPanel } from '../panel-slot/base-contribution-panel';
+import { ContributionSectionKey } from '../panel-slot/form-contribution';
 import { BuildFormPanelHostProps } from './form-panel-host-props.builder';
 
 /**
@@ -36,9 +35,7 @@ import { BuildFormPanelHostProps } from './form-panel-host-props.builder';
     selector: 'mj-interactive-form-panel',
     templateUrl: './interactive-form-panel.component.html',
 })
-export class InteractiveFormPanelComponent extends BaseFormPanel implements OnInit, DoCheck, OnDestroy {
-    @Input() Contribution!: FormContributionRegistration;
-
+export class InteractiveFormPanelComponent extends BaseContributionPanel implements OnInit, DoCheck, OnDestroy {
     @ViewChild('reactComponent') public ReactComponent?: MJReactComponent;
 
     public componentSpec: ComponentSpec | null = null;
@@ -71,46 +68,6 @@ export class InteractiveFormPanelComponent extends BaseFormPanel implements OnIn
 
     public get Title(): string {
         return this.Contribution.Title ?? this.Contribution.Metadata.contributionKey ?? this.SectionKey;
-    }
-
-    /**
-     * The panel's icon, completed if it was stored without a style.
-     *
-     * Font Awesome needs a style class beside the name: `fa-chart-column` alone matches a
-     * rule that sets a glyph but no font family, so nothing draws. Rows written before the
-     * picker existed carry bare names, and normalizing on the way out makes them render
-     * rather than requiring each one to be edited.
-     */
-    public get Icon(): string {
-        return NormalizeIconClass(this.Contribution.Icon) || 'fa-solid fa-puzzle-piece';
-    }
-
-    /**
-     * The key a bare strip is filed under in the rail, when it replaces blocks and so belongs to
-     * their tab. Null for a strip that replaces nothing, which sits above every tab.
-     */
-    public get BareTabKey(): string | null {
-        return ReplacedSectionKeys(this.Contribution.Metadata).length > 0 ? this.SectionKey : null;
-    }
-
-    public get IsBare(): boolean {
-        return (this.Contribution.Presentation ?? this.Contribution.Metadata.presentation) === 'bare';
-    }
-
-    public get IsRelatedClaim(): boolean {
-        return !!this.Contribution.Metadata.relatedEntity?.trim();
-    }
-
-    /**
-     * The registration this panel renders, which it holds as a whole contribution rather
-     * than as the bare bag the slot host assigns. Answers `DisplayOrder` on the base.
-     */
-    protected override get PanelMetadata(): FormPanelRegistrationMetadata | undefined {
-        return this.Contribution?.Metadata ?? super.PanelMetadata;
-    }
-
-    public get Variant(): 'default' | 'related-entity' {
-        return this.IsRelatedClaim ? 'related-entity' : 'default';
     }
 
     public async ngOnInit(): Promise<void> {

@@ -71,6 +71,7 @@ export * from './lib/isa-related-panel/isa-related-panel.component';
 // See packages/Angular/Generic/base-forms/PANELS.md for the architecture +
 // authoring guide.
 export * from './lib/panel-slot/base-form-panel';
+export * from './lib/panel-slot/base-contribution-panel';
 export * from './lib/panel-slot/form-panel-slot.component';
 export * from './lib/panel-slot/form-field-panel-slot.component';
 export * from './lib/panel-slot/mount-form-contribution';

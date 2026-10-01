@@ -1,7 +1,6 @@
-import { Component, Input } from '@angular/core';
-import { NormalizeIconClass } from '@memberjunction/ng-ui-components';
-import { BaseFormPanel, type FormPanelRegistrationMetadata } from './base-form-panel';
-import { ReplacedSectionKeys, ResolveContributionKey, type FormContributionRegistration } from './form-contribution';
+import { Component } from '@angular/core';
+import { BaseContributionPanel } from './base-contribution-panel';
+import { ResolveContributionKey } from './form-contribution';
 import { PLACEMENT_PREVIEW_KEY } from './placement-preview';
 
 /**
@@ -29,7 +28,7 @@ import { PLACEMENT_PREVIEW_KEY } from './placement-preview';
             [Order]="DisplayOrder"
             [SectionName]="Title"
             [Icon]="Icon"
-            [Variant]="IsRelatedClaim ? 'related-entity' : 'default'"
+            [Variant]="Variant"
             [Form]="FormComponent"
             [FormContext]="FormContext"
             [DefaultExpanded]="true">
@@ -60,35 +59,12 @@ import { PLACEMENT_PREVIEW_KEY } from './placement-preview';
       }
     `],
 })
-export class PlacementPreviewPanelComponent extends BaseFormPanel {
-    @Input() Contribution!: FormContributionRegistration;
-
+export class PlacementPreviewPanelComponent extends BaseContributionPanel {
     public get SectionKey(): string {
         return ResolveContributionKey(this.Contribution.Metadata) || PLACEMENT_PREVIEW_KEY;
     }
 
     public get Title(): string {
         return this.Contribution.Title || 'Your panel';
-    }
-
-    public get Icon(): string {
-        return NormalizeIconClass(this.Contribution.Icon) || 'fa-solid fa-puzzle-piece';
-    }
-
-    /** The rail key of a bare strip that replaces blocks; null for one that replaces nothing. */
-    public get BareTabKey(): string | null {
-        return ReplacedSectionKeys(this.Contribution.Metadata).length > 0 ? this.SectionKey : null;
-    }
-
-    public get IsBare(): boolean {
-        return (this.Contribution.Presentation ?? this.Contribution.Metadata.presentation) === 'bare';
-    }
-
-    public get IsRelatedClaim(): boolean {
-        return !!this.Contribution.Metadata.relatedEntity?.trim();
-    }
-
-    protected override get PanelMetadata(): FormPanelRegistrationMetadata | undefined {
-        return this.Contribution?.Metadata ?? super.PanelMetadata;
     }
 }
