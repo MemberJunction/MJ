@@ -1,9 +1,9 @@
 import { Component } from '@angular/core';
 import { RunView } from '@memberjunction/core';
 import { MJRubricEvaluationEntity } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { bandFromRow, nodeFromRow, scaleFromRow, type MatrixColumn, type RubricFormAnswer, type RubricScoreResult, type RubricVersionSnapshot } from '@memberjunction/ng-rubrics';
+import { RegisterClass, RegisterClassEx } from '@memberjunction/global';
+import { BaseFormComponent, BaseFormPanel, BaseFormPolicy, BaseFormsModule, type FormChromeContext, type FormChromeSpec } from '@memberjunction/ng-base-forms';
+import { RubricComparisonMatrixComponent, RubricResultComponent, bandFromRow, nodeFromRow, scaleFromRow, type MatrixColumn, type RubricFormAnswer, type RubricScoreResult, type RubricVersionSnapshot } from '@memberjunction/ng-rubrics';
 import { MJRubricEvaluationFormComponent } from '../../generated/Entities/MJRubricEvaluation/mjrubricevaluation.form.component';
 
 /** Evaluation form. Loads the stored result and the cohort, and shows the read-only widgets. */
@@ -11,8 +11,7 @@ import { MJRubricEvaluationFormComponent } from '../../generated/Entities/MJRubr
 @Component({
     standalone: false,
     selector: 'mj-rubric-evaluation-form',
-    templateUrl: './evaluation-form.component.html',
-    styleUrls: ['./evaluation-form.component.css'],
+    templateUrl: '../../generated/Entities/MJRubricEvaluation/mjrubricevaluation.form.component.html',
 })
 export class MJRubricEvaluationFormComponentExtended extends MJRubricEvaluationFormComponent {
     public override record!: MJRubricEvaluationEntity;
@@ -101,4 +100,73 @@ export class MJRubricEvaluationFormComponentExtended extends MJRubricEvaluationF
         const result = await view.RunView({ EntityName: entityName, ExtraFilter: filter, ResultType: 'simple', MaxRows: 500 }, this.ProviderToUse.CurrentUser);
         return (result.Results ?? []) as Record<string, unknown>[];
     }
+}
+
+/** The evaluation record uses the left-nav rail. Result and comparison are their own items. */
+@RegisterClassEx(BaseFormPolicy, { key: 'MJ: Rubric Evaluations', metadata: { entity: 'MJ: Rubric Evaluations' } })
+export class RubricEvaluationFormPolicy extends BaseFormPolicy {
+    public override DecorateChrome(spec: FormChromeSpec, _ctx: FormChromeContext): FormChromeSpec {
+        return { ...spec, Layout: 'left-nav' };
+    }
+}
+
+function evaluationForm(panel: BaseFormPanel<MJRubricEvaluationEntity>): MJRubricEvaluationFormComponentExtended {
+    return panel.FormComponent as MJRubricEvaluationFormComponentExtended;
+}
+
+@RegisterClassEx(BaseFormPanel, {
+    key: 'form-panel:MJRubricEvaluations:result',
+    metadata: {
+        entity: 'MJ: Rubric Evaluations',
+        slot: 'before-fields',
+        sortKey: 100,
+        contributionKey: 'rubric-eval-result',
+        inclusion: 'Primary',
+        leadsWhenUnsaved: true,
+    },
+})
+@Component({
+    selector: 'mj-rubric-eval-result-panel',
+    standalone: true,
+    imports: [BaseFormsModule, RubricResultComponent],
+    template: `
+      <mj-collapsible-panel SectionKey="rubric-eval-result" SectionName="Result" Icon="fa-solid fa-square-poll-vertical" [Form]="FormComponent" [FormContext]="FormContext" [DefaultExpanded]="true">
+        @if (Form.Loading) {
+          <p>Loading the evaluation...</p>
+        } @else {
+          <mj-rubric-result [Version]="Form.Version" [Result]="Form.Result" [Answers]="Form.Answers"></mj-rubric-result>
+        }
+      </mj-collapsible-panel>
+    `,
+})
+export class RubricEvaluationResultPanel extends BaseFormPanel<MJRubricEvaluationEntity> {
+    public get Form(): MJRubricEvaluationFormComponentExtended { return evaluationForm(this); }
+}
+
+@RegisterClassEx(BaseFormPanel, {
+    key: 'form-panel:MJRubricEvaluations:compare',
+    metadata: {
+        entity: 'MJ: Rubric Evaluations',
+        slot: 'before-fields',
+        sortKey: 90,
+        contributionKey: 'rubric-eval-compare',
+        inclusion: 'Primary',
+    },
+})
+@Component({
+    selector: 'mj-rubric-eval-compare-panel',
+    standalone: true,
+    imports: [BaseFormsModule, RubricComparisonMatrixComponent],
+    template: `
+      <mj-collapsible-panel SectionKey="rubric-eval-compare" SectionName="Comparison" Icon="fa-solid fa-table-cells" [Form]="FormComponent" [FormContext]="FormContext" [DefaultExpanded]="true">
+        @if (Form.Loading) {
+          <p>Loading the cohort...</p>
+        } @else {
+          <mj-rubric-comparison-matrix [Keys]="Form.Keys" [Columns]="Form.Columns"></mj-rubric-comparison-matrix>
+        }
+      </mj-collapsible-panel>
+    `,
+})
+export class RubricEvaluationComparePanel extends BaseFormPanel<MJRubricEvaluationEntity> {
+    public get Form(): MJRubricEvaluationFormComponentExtended { return evaluationForm(this); }
 }

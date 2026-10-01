@@ -1,46 +1,38 @@
-@if (record) {
-<mj-record-form-container [Record]="record" [FormComponent]="this"
-    (Navigate)="OnFormNavigate($event)"
-    (DeleteRequested)="OnDeleteRequested()"
-    (FavoriteToggled)="OnFavoriteToggled()"
-    (HistoryRequested)="OnHistoryRequested()"
-    (ListManagementRequested)="OnListManagementRequested()">
-    @if (Loading) {
-        <mj-loading text="Loading scale..."></mj-loading>
-    } @else {
-        <section class="scale-sheet">
-            @if (Frozen) {
-                <p class="callout">This scale is used by a published rubric. Level values stay locked. Labels and descriptions stay editable.</p>
-            }
-            <div class="scale-card">
-              <h2><i class="fa-solid fa-sliders"></i> {{ record.Name }}</h2>
-              <div class="property-row">
-                  <div><span>Name</span><strong>{{ record.Name }}</strong></div>
-                  <div><span>Type</span><strong>{{ record.ScaleType }}</strong></div>
-                  <div><span>Direction</span><strong>{{ record.HigherIsBetter ? 'Higher is better' : 'Lower is better' }}</strong></div>
-                  <div><span>Range</span><strong>{{ RangeMin }} to {{ RangeMax }}</strong></div>
-              </div>
-            </div>
-            <h3>Levels</h3>
-            <ul class="level-list">
-                @for (level of Levels; track level.ID) {
-                    <li class="level-row">
-                        <label>Value
-                            <span class="value-lock">
-                                <input type="text" [value]="level.Value" [disabled]="Frozen" />
-                                @if (Frozen) { <span class="pill">Locked</span> }
-                            </span>
-                        </label>
-                        <label>Label
-                            <input type="text" [value]="level.Label" (change)="OnLabel(level, $event)" />
-                        </label>
-                        <label>Description
-                            <input type="text" [value]="level.Description" (change)="OnDescription(level, $event)" />
-                        </label>
-                    </li>
-                }
-            </ul>
-        </section>
-    }
-</mj-record-form-container>
-}
+<mj-collapsible-panel SectionKey="rubric-scale-levels" SectionName="Levels" Icon="fa-solid fa-sliders" [Form]="FormComponent" [FormContext]="FormContext" [DefaultExpanded]="true">
+  @if (Form.Loading) {
+    <p>Loading the scale...</p>
+  } @else {
+    <section class="scale-sheet">
+      @if (Form.Frozen) {
+        <p class="callout">This scale is used by a published rubric. Level values stay locked. Labels and descriptions stay editable.</p>
+      }
+      <div class="scale-card">
+        <h2><i class="fa-solid fa-sliders"></i> {{ Record.Name }}</h2>
+        <div class="property-row">
+          <div><span>Name</span><strong>{{ Record.Name }}</strong></div>
+          <div><span>Type</span><strong>{{ Record.ScaleType }}</strong></div>
+          <div><span>Direction</span><strong>{{ Record.HigherIsBetter ? 'Higher is better' : 'Lower is better' }}</strong></div>
+          <div><span>Range</span><strong>{{ Form.RangeMin }} to {{ Form.RangeMax }}</strong></div>
+        </div>
+      </div>
+      <ul class="level-list">
+        @for (level of Form.Levels; track level.ID) {
+          <li class="level-row">
+            <label>Value
+              <span class="value-lock">
+                <input type="text" [value]="level.Value" [disabled]="Form.Frozen" />
+                @if (Form.Frozen) { <span class="pill">Locked</span> }
+              </span>
+            </label>
+            <label>Label
+              <input type="text" [value]="level.Label" (change)="Form.OnLabel(level, $event)" />
+            </label>
+            <label>Description
+              <input type="text" [value]="level.Description" (change)="Form.OnDescription(level, $event)" />
+            </label>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+</mj-collapsible-panel>

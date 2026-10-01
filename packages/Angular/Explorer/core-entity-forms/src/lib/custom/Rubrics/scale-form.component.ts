@@ -1,8 +1,8 @@
 import { Component } from '@angular/core';
 import { CompositeKey, RunView } from '@memberjunction/core';
 import { MJRubricScaleEntity } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import { RegisterClass, RegisterClassEx } from '@memberjunction/global';
+import { BaseFormComponent, BaseFormPanel, BaseFormPolicy, BaseFormsModule, type FormChromeContext, type FormChromeSpec } from '@memberjunction/ng-base-forms';
 import { MJRubricScaleFormComponent } from '../../generated/Entities/MJRubricScale/mjrubricscale.form.component';
 
 /** Scale form. Loads the levels and saves a label edit. */
@@ -10,8 +10,7 @@ import { MJRubricScaleFormComponent } from '../../generated/Entities/MJRubricSca
 @Component({
     standalone: false,
     selector: 'mj-rubric-scale-form',
-    templateUrl: './scale-form.component.html',
-    styleUrls: ['./scale-form.component.css'],
+    templateUrl: '../../generated/Entities/MJRubricScale/mjrubricscale.form.component.html',
 })
 export class MJRubricScaleFormComponentExtended extends MJRubricScaleFormComponent {
     public override record!: MJRubricScaleEntity;
@@ -80,5 +79,37 @@ export class MJRubricScaleFormComponentExtended extends MJRubricScaleFormCompone
         row.Set('Description', description);
         await row.Save();
         level.Description = description;
+    }
+}
+
+/** The scale record uses the left-nav rail. The level editor is its own item. */
+@RegisterClassEx(BaseFormPolicy, { key: 'MJ: Rubric Scales', metadata: { entity: 'MJ: Rubric Scales' } })
+export class RubricScaleFormPolicy extends BaseFormPolicy {
+    public override DecorateChrome(spec: FormChromeSpec, _ctx: FormChromeContext): FormChromeSpec {
+        return { ...spec, Layout: 'left-nav' };
+    }
+}
+
+@RegisterClassEx(BaseFormPanel, {
+    key: 'form-panel:MJRubricScales:levels',
+    metadata: {
+        entity: 'MJ: Rubric Scales',
+        slot: 'before-fields',
+        sortKey: 100,
+        contributionKey: 'rubric-scale-levels',
+        inclusion: 'Primary',
+        leadsWhenUnsaved: true,
+    },
+})
+@Component({
+    selector: 'mj-rubric-scale-levels-panel',
+    standalone: true,
+    imports: [BaseFormsModule],
+    styleUrls: ['./scale-form.component.css'],
+    templateUrl: './scale-form.component.html',
+})
+export class RubricScaleLevelsPanel extends BaseFormPanel<MJRubricScaleEntity> {
+    public get Form(): MJRubricScaleFormComponentExtended {
+        return this.FormComponent as MJRubricScaleFormComponentExtended;
     }
 }
