@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { addCriterion, addNode, answerLevel, bandFor, canSubmit, displayScore, draftProblems, incompleteAnswers, moveNode, moveProblem, previewScore, setAnchor, setGate, setScale, setWeight, weightShares } from './model.js';
+import { addCriterion, addNode, answerLevel, bandFor, canSubmit, comparisonMatrix, displayScore, draftProblems, incompleteAnswers, moveNode, moveProblem, previewScore, publishPreview, setAnchor, setGate, setScale, setWeight, versionRows, weightShares } from './model.js';
 
 const scale: RubricScaleSnapshot = {
     id: 'scale',
@@ -105,6 +105,53 @@ describe('answer form', () => {
         expect(kept).toEqual([{ criterionId: 'must', scaleLevelId: 'high' }]);
         expect(canSubmit([mandatory], [{ criterionId: 'must', isNotApplicable: true }], 'ExcludeAndRedistribute')).toBe(false);
         expect(canSubmit([note], [])).toBe(true);
+    });
+});
+
+describe('publish, diff, and comparison', () => {
+    function snap(weight: number, instructions: string | null): RubricVersionSnapshot {
+        return {
+            id: 'v', rubricId: 'r', majorVersion: 1, minorVersion: 0, patchVersion: 0,
+            notApplicablePolicy: 'ExcludeAndRedistribute', scoreDisplayMin: 0, scoreDisplayMax: 100,
+            instructions, nodes: [leaf('clarity', weight)], scales: [scale], bands: [],
+        };
+    }
+
+    it('shows a major weight change and will not apply a lower request', () => {
+        const preview = publishPreview(snap(1, null), snap(2, null), 'Patch');
+        expect(preview.computedBump).toBe('Major');
+        expect(preview.appliedBump).toBe('Major');
+        expect(preview.nextVersion).toBe('2.0.0');
+        expect(preview.changes.some(change => change.subject === 'clarity' && change.property === 'Weight')).toBe(true);
+        expect(preview.higherBumps).toEqual([]);
+    });
+
+    it('offers a higher bump for a wording change and lines the keys up', () => {
+        const base = snap(1, null);
+        const draft = snap(1, 'Clearer instructions');
+        const preview = publishPreview(base, draft, 'Major');
+        expect(preview.computedBump).toBe('Patch');
+        expect(preview.appliedBump).toBe('Major');
+        expect(preview.higherBumps).toEqual(['Minor', 'Major']);
+        const rows = versionRows(base, { ...draft, nodes: [...draft.nodes, leaf('sourcing', 1)] });
+        expect(rows.find(row => row.key === 'sourcing')?.left).toBeNull();
+        expect(rows.find(row => row.key === 'clarity')?.right).toBe('clarity');
+    });
+
+    it('marks disagreement and keeps self and withdrawn out of the human and AI means', () => {
+        const matrix = comparisonMatrix(['clarity', 'evidence'], [
+            { id: 'human', name: 'Ada', evaluatorType: 'Human', status: 'Submitted', scores: [{ key: 'clarity', normalizedScore: 1 }, { key: 'evidence', normalizedScore: 0 }] },
+            { id: 'ai', name: 'Judge', evaluatorType: 'AI', status: 'Submitted', scores: [{ key: 'clarity', normalizedScore: 1 }, { key: 'evidence', normalizedScore: 1 }] },
+            { id: 'self', name: 'Vendor', evaluatorType: 'Self', status: 'Submitted', scores: [{ key: 'clarity', normalizedScore: 0 }, { key: 'evidence', normalizedScore: 0 }] },
+            { id: 'gone', name: 'Withdrawn', evaluatorType: 'Human', status: 'Withdrawn', scores: [{ key: 'clarity', normalizedScore: 0 }, { key: 'evidence', normalizedScore: 0 }] },
+        ]);
+        const evidence = matrix.rows.find(row => row.key === 'evidence');
+        expect(evidence?.cells.find(cell => cell.columnId === 'human')?.disagree).toBe(true);
+        expect(evidence?.cells.find(cell => cell.columnId === 'self')?.disagree).toBe(false);
+        expect(matrix.rows.find(row => row.key === 'clarity')?.cells.every(cell => !cell.disagree)).toBe(true);
+        expect(matrix.humanMean).toBe(0.5);
+        expect(matrix.aiMean).toBe(1);
+        expect(matrix.selfScore).toBe(0);
     });
 });
 

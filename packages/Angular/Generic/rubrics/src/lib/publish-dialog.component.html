@@ -1,0 +1,28 @@
+<section class="rubric-panel" aria-label="Publish rubric">
+  @if (Preview) {
+    <p>Computed {{ Preview.computedBump ?? 'none' }}</p>
+    <p>Applied {{ Preview.appliedBump ?? 'cannot publish' }}</p>
+    @if (Preview.nextVersion) {
+      <p>Next {{ Preview.nextVersion }}</p>
+    }
+    <ul>
+      @for (change of Preview.changes; track change.subject + change.property) {
+        <li>{{ change.subject }} {{ change.property }} ({{ change.bump }})</li>
+      }
+    </ul>
+    <label>
+      Higher bump
+      <select [value]="RequestedBump ?? ''" (change)="OnBump($event)">
+        <option value="">Computed</option>
+        @for (bump of Preview.higherBumps; track bump) {
+          <option [value]="bump">{{ bump }}</option>
+        }
+      </select>
+    </label>
+    <label>
+      Change summary
+      <textarea [value]="Summary" (input)="OnSummary($event)"></textarea>
+    </label>
+    <button type="button" [disabled]="Preview.identical" (click)="OnConfirm()">Publish</button>
+  }
+</section>

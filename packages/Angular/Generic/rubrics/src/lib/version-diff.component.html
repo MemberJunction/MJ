@@ -1,0 +1,17 @@
+<section class="rubric-panel" aria-label="Version diff">
+  <table>
+    <thead>
+      <tr><th>Key</th><th>Base</th><th>Draft</th><th>Changes</th></tr>
+    </thead>
+    <tbody>
+      @for (row of Rows; track row.key) {
+        <tr>
+          <td>{{ row.key }}</td>
+          <td>{{ row.left ?? '—' }}</td>
+          <td>{{ row.right ?? '—' }}</td>
+          <td>{{ row.marks.join(', ') }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</section>

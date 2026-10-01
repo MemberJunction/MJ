@@ -1,4 +1,4 @@
-import { RubricScoring, type NotApplicablePolicy, type RubricBandSnapshot, type RubricNodeSnapshot, type RubricScaleSnapshot, type RubricScoreResult, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
+import { RubricScoring, RubricVersionDiff, type NotApplicablePolicy, type RubricBandSnapshot, type RubricNodeSnapshot, type RubricScaleSnapshot, type RubricScoreResult, type RubricVersionSnapshot, type VersionChange } from '@memberjunction/rubrics-base';
 
 /** One answer on the scoring form. Groups are not answered. */
 export interface RubricFormAnswer {
@@ -219,6 +219,95 @@ function isAncestor(nodes: RubricNodeSnapshot[], ancestorId: string, nodeId: str
         current = byId.get(current)?.parentId ?? null;
     }
     return false;
+}
+
+const BUMP_ORDER = ['Patch', 'Minor', 'Major'] as const;
+
+export interface PublishPreview {
+    computedBump: 'Major' | 'Minor' | 'Patch' | null;
+    appliedBump: string | null;
+    nextVersion: string | null;
+    changes: VersionChange[];
+    identical: boolean;
+    /** Bumps the author may request. Lower than the computed bump is omitted. */
+    higherBumps: ('Major' | 'Minor' | 'Patch')[];
+}
+
+/** The dialog shows this. Confirming is the host's job. The widget does not publish. */
+export function publishPreview(base: RubricVersionSnapshot | null, draft: RubricVersionSnapshot, requested?: 'Major' | 'Minor' | 'Patch' | null): PublishPreview {
+    const diff = RubricVersionDiff.diff(base, draft, requested);
+    const computed = diff.computedBump;
+    return {
+        computedBump: computed,
+        appliedBump: diff.appliedBump,
+        nextVersion: diff.nextVersion ? `${diff.nextVersion.major}.${diff.nextVersion.minor}.${diff.nextVersion.patch}` : null,
+        changes: diff.changes,
+        identical: diff.appliedBump === null,
+        higherBumps: computed ? BUMP_ORDER.filter(item => BUMP_ORDER.indexOf(item) > BUMP_ORDER.indexOf(computed)) : [],
+    };
+}
+
+export interface DiffRow {
+    key: string;
+    left: string | null;
+    right: string | null;
+    marks: string[];
+}
+
+/** One row per key, base on the left and draft on the right, with the diff's reasons. */
+export function versionRows(base: RubricVersionSnapshot, draft: RubricVersionSnapshot): DiffRow[] {
+    const diff = RubricVersionDiff.diff(base, draft);
+    const keys = [...new Set([...base.nodes.map(node => node.key), ...draft.nodes.map(node => node.key)])];
+    return keys.map(key => ({
+        key,
+        left: base.nodes.find(node => node.key === key)?.name ?? null,
+        right: draft.nodes.find(node => node.key === key)?.name ?? null,
+        marks: diff.changes.filter(change => change.subject === key).map(change => `${change.property} (${change.bump})`),
+    }));
+}
+
+export interface MatrixColumn {
+    id: string;
+    name: string;
+    evaluatorType: 'Human' | 'AI' | 'Self' | 'Deterministic';
+    status: string;
+    scores: { key: string; normalizedScore: number | null }[];
+}
+
+export interface MatrixModel {
+    rows: { key: string; cells: { columnId: string; score: number | null; disagree: boolean }[] }[];
+    humanMean: number | null;
+    aiMean: number | null;
+    selfScore: number | null;
+}
+
+/** Evaluators across, criteria down. A cell disagrees when the other included scores on that row differ. Withdrawn columns stay visible and out of the means. */
+export function comparisonMatrix(keys: string[], columns: MatrixColumn[]): MatrixModel {
+    const included = columns.filter(column => column.status !== 'Withdrawn' && column.evaluatorType !== 'Self');
+    const rows = keys.map(key => {
+        const values = included.map(column => column.scores.find(score => score.key === key)?.normalizedScore ?? null).filter((score): score is number => score !== null);
+        const disagree = new Set(values).size > 1;
+        return {
+            key,
+            cells: columns.map(column => ({
+                columnId: column.id,
+                score: column.scores.find(score => score.key === key)?.normalizedScore ?? null,
+                disagree: disagree && column.status !== 'Withdrawn' && column.evaluatorType !== 'Self',
+            })),
+        };
+    });
+    return {
+        rows,
+        humanMean: meanOf(columns.filter(column => column.evaluatorType === 'Human' && column.status !== 'Withdrawn')),
+        aiMean: meanOf(columns.filter(column => column.evaluatorType === 'AI' && column.status !== 'Withdrawn')),
+        selfScore: meanOf(columns.filter(column => column.evaluatorType === 'Self' && column.status !== 'Withdrawn')),
+    };
+}
+
+function meanOf(columns: MatrixColumn[]): number | null {
+    const scores = columns.flatMap(column => column.scores.map(score => score.normalizedScore)).filter((score): score is number => score !== null);
+    if (scores.length === 0) return null;
+    return scores.reduce((sum, score) => sum + score, 0) / scores.length;
 }
 
 function slug(name: string): string {

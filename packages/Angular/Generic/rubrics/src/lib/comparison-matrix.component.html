@@ -1,0 +1,25 @@
+<section class="rubric-panel" aria-label="Comparison matrix">
+  <table>
+    <thead>
+      <tr>
+        <th>Criterion</th>
+        @for (column of Columns; track column.id) {
+          <th>{{ column.name }} {{ column.evaluatorType }}</th>
+        }
+      </tr>
+    </thead>
+    <tbody>
+      @for (row of Model.rows; track row.key) {
+        <tr>
+          <td>{{ row.key }}</td>
+          @for (cell of row.cells; track cell.columnId) {
+            <td [attr.data-disagree]="cell.disagree">{{ cell.score ?? '—' }}</td>
+          }
+        </tr>
+      }
+    </tbody>
+  </table>
+  <p>Human {{ Model.humanMean ?? '—' }}</p>
+  <p>AI {{ Model.aiMean ?? '—' }}</p>
+  <p>Self {{ Model.selfScore ?? '—' }}</p>
+</section>
