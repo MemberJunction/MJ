@@ -137,17 +137,35 @@ function groupOf(groups: readonly FormChromeGroup[], sectionKey: string): string
     return groups.find((g) => !g.IsMore && g.SectionKeys.includes(sectionKey))?.Key ?? null;
 }
 
+/** A hero (`bare`) or a card (`panel`). `presentation` is the only statement of it, on both sources. */
 function presentationOf(reg: FormContributionRegistration): 'panel' | 'bare' {
-    // No `contributionKey === 'header'` fallback: `presentation` is now the only
-    // statement of hero-ness, on both sources. A11 migrates the panels that relied
-    // on the old convention — and none of them actually rendered, so nothing regresses.
     return reg.Presentation ?? reg.Metadata.presentation ?? 'panel';
+}
+
+/**
+ * The contributions on the form, as the server's composition answer lists them: one winner per
+ * key among the panels the form draws, then, marked hidden by the caller, the winners among the
+ * panels this user hid whose keys no drawn panel holds. A hidden panel is out of the collapse, so
+ * a panel it would have outranked holds its key.
+ */
+function listedWinners(
+    entityName: string,
+    drawn: readonly FormContributionRegistration[],
+    userHidden: readonly FormContributionRegistration[],
+): readonly FormContributionRegistration[] {
+    const shown = ResolveFormContributionWinners(entityName, drawn).Winners;
+    if (userHidden.length === 0) return shown;
+    const shownKeys = new Set(shown.map((reg) => ResolveContributionKey(reg.Metadata)).filter((key) => !!key));
+    const hiddenOnly = ResolveFormContributionWinners(entityName, userHidden).Winners
+        .filter((reg) => !shownKeys.has(ResolveContributionKey(reg.Metadata)));
+    return [...shown, ...hiddenOnly];
 }
 
 export function BuildFormCompositionSnapshot(input: BuildFormCompositionSnapshotInput): FormCompositionSnapshot {
     const userHidden = new Set(input.HiddenPanelKeys ?? []);
     const isUserHidden = (reg: FormContributionRegistration) => IsPanelHiddenByUser(reg, userHidden);
     const drawn = userHidden.size > 0 ? input.Registrations.filter((reg) => !isUserHidden(reg)) : input.Registrations;
+    const hiddenByUser = userHidden.size > 0 ? input.Registrations.filter(isUserHidden) : [];
     const resolved = ResolveFormContributions({
         EntityName: input.EntityName,
         RelatedEntities: input.RelatedEntities,
@@ -180,7 +198,7 @@ export function BuildFormCompositionSnapshot(input: BuildFormCompositionSnapshot
     });
 
     let unique = 0;
-    const winners = ResolveFormContributionWinners(input.EntityName, input.Registrations).Winners;
+    const winners = listedWinners(input.EntityName, drawn, hiddenByUser);
     const contributions: FormCompositionContribution[] = winners.map((reg) => {
         const key = ResolveContributionKey(reg.Metadata) || `__unique:${unique++}`;
         return {

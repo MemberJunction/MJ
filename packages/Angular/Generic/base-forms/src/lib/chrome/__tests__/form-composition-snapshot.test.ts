@@ -180,8 +180,9 @@ describe('BuildFormAgentContext', () => {
 });
 
 /**
- * The apply flow reads a key's holder from the snapshot, and a panel the user hid still holds its
- * key. So the snapshot lists it, marked hidden, the same way the apply flow finds it without one.
+ * The snapshot lists the contributions the form draws, one per key, as the server's composition
+ * answer does. A panel the user hid is listed, marked hidden, only for a key that no drawn panel
+ * holds.
  */
 describe('BuildFormCompositionSnapshot — panels the user hid', () => {
     const TICKETS_KEY = `related:${TICKETS}:PersonID`;
@@ -221,5 +222,36 @@ describe('BuildFormCompositionSnapshot — panels the user hid', () => {
 
     it('marks nothing hidden when the user hid nothing', () => {
         expect(build([]).Contributions).toEqual([expect.objectContaining({ Key: TICKETS_KEY, Hidden: false })]);
+    });
+
+    // A compiled panel wins a tie against a row, so collapsing the hidden one in would name it
+    // the holder while the form draws the user's row.
+    it('names the user\'s own row as the holder when they hid the compiled panel it ties with', () => {
+        const ownRow: FormContributionRegistration = {
+            Priority: 2, Source: 'metadata', Scope: 'User', ComponentID: 'c-mine', Title: 'My tickets', Presentation: 'panel',
+            Metadata: { entity: PEOPLE, slot: 'after-related', relatedEntity: TICKETS, relatedJoinField: 'PersonID' },
+        };
+        const snapshot = BuildFormCompositionSnapshot({
+            EntityName: PEOPLE, RecordPrimaryKey: null, FormChoice: STANDARD_FORM, Layout: 'accordion', Groups: [], Panels: [],
+            HiddenSectionKeys: new Set(), RelatedEntities: [tickets], IsaChildEntityIDs: [], BakedSectionKeys: [],
+            Registrations: [compiledTickets, ownRow], HiddenPanelKeys: [TICKETS_KEY],
+            RelatedRoles: new Map(), HiddenContributionKeys: new Set(), SlotsPresent: [], ChromeRuleCount: 0,
+        });
+        expect(snapshot.Contributions).toEqual([
+            expect.objectContaining({ Key: TICKETS_KEY, Source: 'metadata', Title: 'My tickets', Hidden: false }),
+        ]);
+    });
+
+    it('lists the drawn panels first, then the hidden ones whose keys nothing drawn holds', () => {
+        const notes: FormContributionRegistration = {
+            Priority: 0, Source: 'class', Title: 'Notes', Metadata: { entity: PEOPLE, slot: 'after-fields', contributionKey: 'notes-card' },
+        };
+        const snapshot = BuildFormCompositionSnapshot({
+            EntityName: PEOPLE, RecordPrimaryKey: null, FormChoice: STANDARD_FORM, Layout: 'accordion', Groups: [], Panels: [],
+            HiddenSectionKeys: new Set(), RelatedEntities: [tickets], IsaChildEntityIDs: [], BakedSectionKeys: [],
+            Registrations: [compiledTickets, notes], HiddenPanelKeys: [TICKETS_KEY],
+            RelatedRoles: new Map(), HiddenContributionKeys: new Set(), SlotsPresent: [], ChromeRuleCount: 0,
+        });
+        expect(snapshot.Contributions.map((c) => [c.Key, c.Hidden])).toEqual([['notes-card', false], [TICKETS_KEY, true]]);
     });
 });
