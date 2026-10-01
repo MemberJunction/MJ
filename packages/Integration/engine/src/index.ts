@@ -173,6 +173,7 @@ export {
     RunOutsideCatalogScope,
     InstallCatalogScopeResolver,
     LoadCatalogScope,
+    RefreshCatalogScope,
     WarmCatalogObject,
     UnpinCatalogObjects,
     EvictCatalogScope,

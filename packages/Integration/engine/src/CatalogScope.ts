@@ -297,7 +297,8 @@ export function UnpinCatalogObjects(objectIDs: readonly string[]): void {
  *
  * Inside an OPEN scope this is not a refresh: the getters are synchronous and cannot reload, so a
  * dropped connection reads as having no catalog of its own and falls back to the shared one until
- * something async loads it again.
+ * something async loads it again. To re-read a connection a scope is using, use
+ * {@link RefreshCatalogScope}.
  */
 export function EvictCatalogScope(companyIntegrationID?: string): void {
     if (!companyIntegrationID) {
@@ -317,6 +318,42 @@ export function EvictCatalogScope(companyIntegrationID?: string): void {
         if (entry.owner !== owner) continue;
         dropFields(key);
         pins.delete(key);
+    }
+}
+
+/**
+ * Re-read one connection's catalog INSIDE a scope that is already open (MJ-RUN-46).
+ *
+ * A scope's catalog is memoised from when it was loaded. A first discovery loads it before the
+ * connection has any rows, so it holds none — and Persist then writing 888 rows does not disturb
+ * it. The two-pass discovery heal exists to sample the objects that "came into existence in the
+ * Persist that follows", and `IntegrationEngineBase.RefreshCatalog` refreshes only the SHARED
+ * catalog, which is no longer where a connection's own rows live. So without this the heal re-read
+ * an empty catalog and sampled nothing. Observed on the sandbox 2026-09-21: both passes failed
+ * with 460+1248 `IntegrationObject not found` AFTER Persist had written all 888 rows; 862 of 888
+ * objects ended with no primary key and no fields, and the run reported Success.
+ *
+ * Eviction alone is not enough: inside an open scope the getters are synchronous and cannot
+ * query, so an evicted connection reads as having no catalog of its own and silently falls back
+ * to the shared one. This READS FIRST and swaps after, so the previous catalog keeps answering
+ * until the fresh one replaces it, and a failed read leaves it in place and throws.
+ *
+ * The connection's field rows are stale by definition once its catalog has been rewritten, so the
+ * ones nobody holds are dropped. A row a running map has pinned is left to that map; it goes at
+ * the connection's next refresh, which every sync does at its head.
+ *
+ * Call sites: the head of every sync run, and the discovery heal, right after it refreshes the
+ * shared catalog and before its second Introspect + Persist.
+ */
+export async function RefreshCatalogScope(companyIntegrationID: string, contextUser?: UserInfo): Promise<void> {
+    if (!companyIntegrationID) return;
+    const key = NormalizeUUID(companyIntegrationID);
+    const fresh = await readCatalog(companyIntegrationID, contextUser);
+    // An older load still in flight read before this one, so it must not overwrite it.
+    catalogLoads.delete(key);
+    catalogCache.set(key, fresh);
+    for (const [objectKey, entry] of [...fieldCache]) {
+        if (entry.owner === key && (pins.get(objectKey) ?? 0) === 0) dropFields(objectKey);
     }
 }
 

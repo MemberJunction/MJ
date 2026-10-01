@@ -182,7 +182,8 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
         // The SHARED pair only. A connection's own rows are no longer datasets of this engine (see
         // Config), so they are not refreshed here: they belong to the catalog scope, which re-reads
         // them itself. A caller that has just rewritten a connection's catalog inside an open scope
-        // — the two-pass discovery heal — must refresh that scope as well as calling this.
+        // — the two-pass discovery heal — must refresh that scope as well as calling this
+        // (`RefreshCatalogScope` in @memberjunction/integration-engine).
         for (const prop of ['_integrationObjects', '_integrationObjectFields']) {
             const cfg = this.Configs.find(c => c.PropertyName === prop);
             if (cfg) await this.LoadSingleConfig(cfg, (contextUser ?? this.ContextUser) as UserInfo, /*bypassCache*/ true);

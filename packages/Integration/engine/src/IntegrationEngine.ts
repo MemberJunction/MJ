@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { EvictCatalogScope, LoadCatalogScope, RunInWarmedCatalogScope, UnpinCatalogObjects, WarmCatalogObject } from './CatalogScope.js';
+import { RefreshCatalogScope, RunInWarmedCatalogScope, UnpinCatalogObjects, WarmCatalogObject } from './CatalogScope.js';
 import { CompositeKey, DatabaseProviderBase, IMetadataProvider, LogError, LogStatusEx, Metadata, RunView, type UserInfo, TransactionGroupBase, BaseEntity, EntitySaveOptions, EntityDeleteOptions } from '@memberjunction/core';
 import { RunOwnershipLostError, RunOwnershipService, type TerminalRunStatus } from './RunOwnershipService.js';
 import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
@@ -1822,8 +1822,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // read when it was last loaded, memoised for the process. Re-read them here, at the async
         // head of the run — both the direct and the adopted path come through — for the same reason
         // the shared catalog is re-read at the head of a run: a discovery since (on this host or
-        // another) must be what this run syncs, not whatever this process first read.
-        await this.refreshRunCatalogScope(config.companyIntegration.ID, contextUser);
+        // another) must be what this run syncs, not whatever this process first read. Read-then-swap
+        // (MJ-RUN-46), so anything else reading this connection meanwhile never sees it catalog-less.
+        await RefreshCatalogScope(config.companyIntegration.ID, contextUser);
         const aggregate: SyncResult = {
             Success: true,
             RecordsProcessed: 0,
@@ -2114,17 +2115,6 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             parentsByIoId.set(ioId, set);
         }
         return { mapToIoId, parentsByIoId };
-    }
-
-    /**
-     * Re-read this connection's catalog into the scope cache: objects and dependency edges now,
-     * field rows lazily as maps warm them. Field rows cached from before are dropped with the rest —
-     * they are what a discovery since would have rewritten.
-     */
-    private async refreshRunCatalogScope(companyIntegrationID: string, contextUser: UserInfo): Promise<void> {
-        if (!companyIntegrationID) return;
-        EvictCatalogScope(companyIntegrationID);
-        await LoadCatalogScope(companyIntegrationID, contextUser);
     }
 
     /**
