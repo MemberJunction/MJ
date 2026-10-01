@@ -33,12 +33,24 @@ describe('DeterministicRubricEvaluator', () => {
 });
 
 describe('content providers', () => {
-    it('maps a test run and omits fields the user cannot read', () => {
+    it('maps the columns the tables actually have and keeps fields a read already returned', () => {
         expect(TestRunContent({ input: 'q', expectedOutcomes: 'yes', actualOutput: 'no', trace: 'ran' }).data).toEqual({
             input: 'q', expectedOutcomes: 'yes', actualOutput: 'no',
         });
+        expect(ShapeContent('MJ: Test Runs', {
+            Input: 'wrong', ExpectedOutcomes: 'wrong', ActualOutput: 'wrong', Trace: 'wrong',
+        }).data).toEqual({ input: undefined, expectedOutcomes: undefined, actualOutput: undefined });
+        expect(ShapeContent('MJ: Test Runs', {
+            InputData: 'q', ExpectedOutputData: 'yes', ActualOutputData: 'shipped', ResultDetails: 'trace line',
+        })).toMatchObject({ text: 'trace line', data: { input: 'q', expectedOutcomes: 'yes', actualOutput: 'shipped' } });
+        expect(ShapeContent('MJ: AI Agent Runs', { FinalPayload: { rows: 1 }, Turns: [{ who: 'model' }] }).data).toEqual({ finalPayload: { rows: 1 } });
+        expect(ShapeContent('MJ: Conversations', { Name: 'Standup', Description: 'Shipped it', Transcript: 'fake' })).toEqual({
+            text: 'Standup\nShipped it',
+            data: { name: 'Standup', description: 'Shipped it' },
+        });
         expect(FallbackContent({ name: 'Ada', secret: 'x' }, field => field !== 'secret').data).toEqual({ name: 'Ada' });
-        expect(ShapeContent('MJ: Widgets', { name: 'Ada', secret: 'x' }).data).toEqual({});
+        expect(ShapeContent('MJ: Widgets', { name: 'Ada', secret: 'x' }).data).toEqual({ name: 'Ada', secret: 'x' });
+        expect(ShapeContent('MJ: Widgets', { name: 'Ada', secret: 'x' }, field => field !== 'secret').data).toEqual({ name: 'Ada' });
     });
 });
 
@@ -77,7 +89,7 @@ describe('RubricEngine', () => {
         const done = await new RubricEngine(store).evaluate({
             version: tree,
             subject: { entityName: 'MJ: Test Runs', recordId: 'run-1', entityId: 'entity' },
-            loadRecord: async () => ({ actualOutput: 'shipped', input: 'q' }),
+            loadRecord: async () => ({ ActualOutputData: 'shipped', InputData: 'q' }),
             evaluator: 'Deterministic',
         });
         expect(done.output?.answers[0].scaleLevelId).toBe('high');

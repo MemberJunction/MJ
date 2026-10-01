@@ -73,6 +73,11 @@ export interface EvaluateRecordInput {
     passThreshold?: number | null;
     /** When set, this version is used instead of the latest Published version. */
     versionId?: string;
+    /**
+     * Subject text already in memory. When set, EvaluateRecord does not load the
+     * stored row. Self-check uses this because FinalPayload is written later.
+     */
+    content?: RubricSubjectContent;
 }
 
 export interface EvaluateRecordResult {
@@ -209,7 +214,8 @@ export class RubricEngine {
             passThreshold: input.passThreshold ?? null,
             evaluator: input.evaluator ?? 'Deterministic',
             promptRunner: input.evaluator === 'LLM' ? this.rubricEvaluatorRunner() : undefined,
-            loadRecord: async (entityName, recordId) => {
+            content: input.content,
+            loadRecord: input.content ? undefined : async (entityName, recordId) => {
                 const rows = await this.records.rows(entityName, `ID=${sqlLiteral(recordId)}`);
                 return rows[0] ?? {};
             },

@@ -12,18 +12,11 @@
       {
         "fields": {
           "RubricID": "@parent:ID",
-          "Status": "Published",
-          "MajorVersion": 1,
-          "MinorVersion": 0,
-          "PatchVersion": 0,
-          "AppliedBump": "Initial",
+          "Status": "Draft",
           "PassThreshold": 0.7,
           "NotApplicablePolicy": "NotAllowed",
           "ScoreDisplayMin": 0,
           "ScoreDisplayMax": 1,
-          "ContentHash": "b3c796a58e6930fc5b56cf0cccec1e4b580860912df3c358a53e847b8d5e36c1",
-          "ScoringHash": "ea8e6381cb8f6919e032c9b10224c4ac470dbe72f2a41861c0757c7c38735cfe",
-          "PublishedAt": "2026-10-01T16:00:00.000Z",
           "ChangeSummary": "Initial publish."
         },
         "primaryKey": {
@@ -34,7 +27,7 @@
             {
               "fields": {
                 "RubricVersionID": "@parent:ID",
-                "Key": "every-column-the-person-asked-for-is-in-the-prop",
+                "Key": "includes-every-requested-column",
                 "Name": "Every column the person asked for is in the proposal",
                 "NodeType": "Criterion",
                 "Weight": 1,
@@ -115,7 +108,7 @@
             {
               "fields": {
                 "RubricVersionID": "@parent:ID",
-                "Key": "the-reply-is-a-proposal-not-a-migration-that-alr",
+                "Key": "proposal-not-an-applied-migration",
                 "Name": "The reply is a proposal, not a migration that already ran",
                 "NodeType": "Criterion",
                 "Weight": 1,

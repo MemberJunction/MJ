@@ -12,18 +12,11 @@
       {
         "fields": {
           "RubricID": "@parent:ID",
-          "Status": "Published",
-          "MajorVersion": 1,
-          "MinorVersion": 0,
-          "PatchVersion": 0,
-          "AppliedBump": "Initial",
+          "Status": "Draft",
           "PassThreshold": 0.7,
           "NotApplicablePolicy": "NotAllowed",
           "ScoreDisplayMin": 0,
           "ScoreDisplayMax": 1,
-          "ContentHash": "409a40033558c90f1a3996a0d8bf4460c9582da074e6e47550813531dd6c319e",
-          "ScoringHash": "decbe140be955378b53bb4e343290e1ca530e78b6602f6e8c9f0acddd1ad9eb1",
-          "PublishedAt": "2026-10-01T16:00:00.000Z",
           "ChangeSummary": "Initial publish."
         },
         "primaryKey": {
@@ -75,7 +68,7 @@
             {
               "fields": {
                 "RubricVersionID": "@parent:ID",
-                "Key": "names-the-fields-that-agree-and-the-fields-that-",
+                "Key": "names-agreeing-and-conflicting-fields",
                 "Name": "Names the fields that agree and the fields that conflict",
                 "NodeType": "Criterion",
                 "Weight": 1,
@@ -115,7 +108,7 @@
             {
               "fields": {
                 "RubricVersionID": "@parent:ID",
-                "Key": "refuses-a-merge-when-a-conflicting-unique-field-",
+                "Key": "refuses-merge-on-unique-conflict",
                 "Name": "Refuses a merge when a conflicting unique field is present",
                 "NodeType": "Criterion",
                 "Weight": 1,

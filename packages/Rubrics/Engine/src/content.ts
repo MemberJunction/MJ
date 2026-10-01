@@ -5,7 +5,7 @@ export interface RubricSubjectContent {
     files?: { fileId: string; name: string }[];
 }
 
-/** MJ: Test Runs. Input, expected outcomes, actual output, and output files. */
+/** MJ: Test Runs. InputData, ExpectedOutputData, ActualOutputData, ResultDetails, and output files. */
 export function TestRunContent(record: {
     input?: unknown;
     expectedOutcomes?: unknown;
@@ -31,9 +31,11 @@ export function testRunContent(record: {
     return TestRunContent(record);
 }
 
-/** MJ: AI Agent Runs. Conversation turns and the final payload. */
-export function AgentRunContent(record: { turns?: unknown; finalPayload?: unknown }): RubricSubjectContent {
-    return { data: { turns: record.turns, finalPayload: record.finalPayload } };
+/** MJ: AI Agent Runs. The final payload, and the in-memory message when the run has not stored it yet. There is no Turns column. */
+export function AgentRunContent(record: { finalPayload?: unknown; message?: unknown }): RubricSubjectContent {
+    const data: Record<string, unknown> = { finalPayload: record.finalPayload };
+    if (record.message !== undefined) data.message = record.message;
+    return { text: typeof record.message === 'string' ? record.message : undefined, data };
 }
 
 /** @deprecated Use {@link AgentRunContent}. */
@@ -51,13 +53,18 @@ export function promptRunContent(record: { messages?: unknown; result?: unknown 
     return PromptRunContent(record);
 }
 
-/** MJ: Conversations. The transcript. */
-export function ConversationContent(record: { transcript?: string }): RubricSubjectContent {
-    return { text: record.transcript, data: { transcript: record.transcript } };
+/** MJ: Conversations. Name and Description. There is no Transcript column. */
+export function ConversationContent(record: { name?: unknown; description?: unknown }): RubricSubjectContent {
+    const name = record.name == null ? '' : String(record.name);
+    const description = record.description == null ? '' : String(record.description);
+    return {
+        text: [name, description].filter(part => part.length > 0).join('\n'),
+        data: { name: record.name, description: record.description },
+    };
 }
 
-/** @deprecated Use {@link ConversationContent}. */
-export function conversationContent(record: { transcript?: string }): RubricSubjectContent {
+/** @deprecated Use {@link ConversationContent}. There is no transcript column. */
+export function conversationContent(record: { name?: unknown; description?: unknown }): RubricSubjectContent {
     return ConversationContent(record);
 }
 
@@ -69,17 +76,27 @@ export function conversationContent(record: { transcript?: string }): RubricSubj
 export function ShapeContent(entityName: string, record: Record<string, unknown>, canRead?: (fieldName: string) => boolean): RubricSubjectContent {
     if (entityName === 'MJ: Test Runs') {
         return TestRunContent({
-            input: record.Input ?? record.input,
-            expectedOutcomes: record.ExpectedOutcomes ?? record.expectedOutcomes,
-            actualOutput: record.ActualOutput ?? record.actualOutput,
-            trace: (record.Trace ?? record.trace) as string | undefined,
+            input: record.InputData ?? record.inputData,
+            expectedOutcomes: record.ExpectedOutputData ?? record.expectedOutputData,
+            actualOutput: record.ActualOutputData ?? record.actualOutputData,
+            trace: (record.ResultDetails ?? record.resultDetails) as string | undefined,
             files: record.files as { fileId: string; name: string }[] | undefined,
         });
     }
-    if (entityName === 'MJ: AI Agent Runs') return AgentRunContent({ turns: record.Turns ?? record.turns, finalPayload: record.FinalPayload ?? record.finalPayload });
+    if (entityName === 'MJ: AI Agent Runs') {
+        return AgentRunContent({
+            finalPayload: record.FinalPayload ?? record.finalPayload,
+            message: record.Message ?? record.message,
+        });
+    }
     if (entityName === 'MJ: AI Prompt Runs') return PromptRunContent({ messages: record.Messages ?? record.messages, result: record.Result ?? record.result });
-    if (entityName === 'MJ: Conversations') return ConversationContent({ transcript: (record.Transcript ?? record.transcript) as string | undefined });
-    return FallbackContent(record, canRead ?? (() => false));
+    if (entityName === 'MJ: Conversations') {
+        return ConversationContent({
+            name: record.Name ?? record.name,
+            description: record.Description ?? record.description,
+        });
+    }
+    return FallbackContent(record, canRead ?? (() => true));
 }
 
 /** @deprecated Use {@link ShapeContent}. */

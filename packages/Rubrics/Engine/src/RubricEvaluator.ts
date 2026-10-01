@@ -54,6 +54,7 @@ export class RubricEvaluator {
             isNotApplicable: candidate.isNotApplicable,
             confidence: candidate.confidence,
             rationale: candidate.rationale || undefined,
+            evidence: candidate.evidence.length > 0 ? candidate.evidence : undefined,
         }));
         const result = RubricScoring.compute({ version, answers });
         return {

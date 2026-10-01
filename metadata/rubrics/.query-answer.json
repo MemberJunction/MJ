@@ -12,18 +12,11 @@
       {
         "fields": {
           "RubricID": "@parent:ID",
-          "Status": "Published",
-          "MajorVersion": 1,
-          "MinorVersion": 0,
-          "PatchVersion": 0,
-          "AppliedBump": "Initial",
+          "Status": "Draft",
           "PassThreshold": 0.7,
           "NotApplicablePolicy": "NotAllowed",
           "ScoreDisplayMin": 0,
           "ScoreDisplayMax": 1,
-          "ContentHash": "0f357c67f4d45d81f3f38e705ac1064799ac7a0358e725b7da820b31243b3986",
-          "ScoringHash": "16a046b47e0bf61d75c306682ee778445e330e4e135b3fc5091b522731a53a87",
-          "PublishedAt": "2026-10-01T16:00:00.000Z",
           "ChangeSummary": "Initial publish."
         },
         "primaryKey": {
@@ -34,7 +27,7 @@
             {
               "fields": {
                 "RubricVersionID": "@parent:ID",
-                "Key": "the-stated-result-matches-the-rows-the-run-retur",
+                "Key": "stated-result-matches-returned-rows",
                 "Name": "The stated result matches the rows the run returned",
                 "NodeType": "Criterion",
                 "Weight": 1,
@@ -75,7 +68,7 @@
             {
               "fields": {
                 "RubricVersionID": "@parent:ID",
-                "Key": "answers-the-business-question-in-the-user-s-term",
+                "Key": "answers-the-business-question",
                 "Name": "Answers the business question in the user's terms",
                 "NodeType": "Criterion",
                 "Weight": 1,
@@ -115,7 +108,7 @@
             {
               "fields": {
                 "RubricVersionID": "@parent:ID",
-                "Key": "does-not-describe-columns-that-are-not-in-the-re",
+                "Key": "no-columns-outside-the-result",
                 "Name": "Does not describe columns that are not in the result",
                 "NodeType": "Criterion",
                 "Weight": 1,

@@ -12,18 +12,11 @@
       {
         "fields": {
           "RubricID": "@parent:ID",
-          "Status": "Published",
-          "MajorVersion": 1,
-          "MinorVersion": 0,
-          "PatchVersion": 0,
-          "AppliedBump": "Initial",
+          "Status": "Draft",
           "PassThreshold": 0.7,
           "NotApplicablePolicy": "NotAllowed",
           "ScoreDisplayMin": 0,
           "ScoreDisplayMax": 1,
-          "ContentHash": "c19dcb5edd1c93abffc633f2a575362a02cf8e62a11a2814c990f6bc1fefac8f",
-          "ScoringHash": "88621b6001fc1241af5f4e1f5cff7964d3a8fb738621c1264e0ca39ee27b3730",
-          "PublishedAt": "2026-10-01T16:00:00.000Z",
           "ChangeSummary": "Initial publish."
         },
         "primaryKey": {
@@ -34,7 +27,7 @@
             {
               "fields": {
                 "RubricVersionID": "@parent:ID",
-                "Key": "the-code-does-the-transformation-that-was-asked-",
+                "Key": "does-the-asked-transformation",
                 "Name": "The code does the transformation that was asked for",
                 "NodeType": "Criterion",
                 "Weight": 1,
@@ -115,7 +108,7 @@
             {
               "fields": {
                 "RubricVersionID": "@parent:ID",
-                "Key": "says-what-it-could-not-do-instead-of-pretending-",
+                "Key": "reports-what-it-could-not-do",
                 "Name": "Says what it could not do instead of pretending it ran",
                 "NodeType": "Criterion",
                 "Weight": 1,

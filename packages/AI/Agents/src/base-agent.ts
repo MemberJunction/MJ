@@ -6374,6 +6374,7 @@ export class BaseAgent {
         params: ExecuteAgentParams,
         nextStep: BaseAgentNextStep<P>,
         agentRun: MJAIAgentRunEntityExtended,
+        currentPayload: P,
     ): Promise<BaseAgentNextStep<P> | null> {
         let row: { Purpose?: string; Status?: string; MaxSelfCheckAttempts?: number | null; RubricID?: string; PassThreshold?: number | null } | undefined;
         try {
@@ -6405,6 +6406,7 @@ export class BaseAgent {
             runId: agentRun.ID,
             agentKind: this.AgentTypeInstance?.constructor?.name === 'LoopAgentType' ? 'loop' : 'flow',
             attempt: this._selfCheckAttempts,
+            candidate: { message: nextStep.message, payload: nextStep.newPayload ?? currentPayload },
             record: async step => {
                 const saved = await this.createStepEntity({
                     stepType: 'Validation',
@@ -6431,7 +6433,7 @@ export class BaseAgent {
             return nextStep;
         }
         if (nextStep.step === 'Success') {
-            const checked = await this.applySelfCheck(params, nextStep, agentRun);
+            const checked = await this.applySelfCheck(params, nextStep, agentRun, currentPayload);
             return checked ?? nextStep;
         }
 

@@ -1,7 +1,7 @@
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { RunView } from '@memberjunction/core';
-import type { RubricNodeSnapshot } from '@memberjunction/rubrics-base';
+import type { RubricNodeSnapshot, ScoredNode } from '@memberjunction/rubrics-base';
 import { RubricEngine, type RubricEvaluationStore, type RubricPromptRun, type RubricRecords } from './RubricEngine.js';
 
 interface RubricRow {
@@ -125,6 +125,10 @@ export function ProviderEvaluationStore(provider: RubricProvider, user: unknown)
                 score.Set('IsNotApplicable', answer.isNotApplicable === true);
                 score.Set('Confidence', answer.confidence ?? null);
                 score.Set('IsComputed', false);
+                if (answer.rationale) score.Set('Rationale', answer.rationale);
+                if (answer.evidence !== undefined && answer.evidence !== null) {
+                    score.Set('Evidence', typeof answer.evidence === 'string' ? answer.evidence : JSON.stringify(answer.evidence));
+                }
                 if (!await score.Save()) throw new Error(score.LatestResult?.Message || 'Could not save an answer.');
             }
             const evaluation = await provider.GetEntityObject('MJ: Rubric Evaluations', user);
@@ -140,7 +144,7 @@ export function ProviderEvaluationStore(provider: RubricProvider, user: unknown)
                 passThresholdApplied: numberOrNull(evaluation.Get('PassThresholdApplied')),
                 bandId: evaluation.Get('BandID') == null ? null : String(evaluation.Get('BandID')),
                 confidence: numberOrNull(evaluation.Get('Confidence')),
-                nodes: [],
+                nodes: await loadScoredNodes(provider, user, evaluationId),
                 scoringEngineVersion: '1.0',
             };
         },
@@ -164,6 +168,43 @@ function evaluatorType(evaluator: string | undefined): string {
     if (evaluator === 'AI') return 'Agent';
     if (evaluator === 'LLM') return 'AIPrompt';
     return 'Deterministic';
+}
+
+/** Reads the score rows the entity server just wrote and returns them as scored nodes. */
+async function loadScoredNodes(provider: RubricProvider, user: unknown, evaluationId: string): Promise<ScoredNode[]> {
+    const view = RunView.FromMetadataProvider(provider as never);
+    const scores = await view.RunView({
+        EntityName: 'MJ: Rubric Evaluation Scores',
+        ExtraFilter: `EvaluationID='${evaluationId.replace(/'/g, "''")}'`,
+        ResultType: 'simple',
+    }, user as never);
+    if (!scores.Success) throw new Error(scores.ErrorMessage || 'Could not read the scored nodes.');
+    const rows = (scores.Results ?? []) as Record<string, unknown>[];
+    const ids = rows.map(row => String(row.CriterionID ?? '')).filter(id => id.length > 0);
+    let criteriaResults: Record<string, unknown>[] = [];
+    if (ids.length > 0) {
+        const criteria = await view.RunView({
+            EntityName: 'MJ: Rubric Criteria',
+            ExtraFilter: `ID IN (${ids.map(id => `'${id.replace(/'/g, "''")}'`).join(',')})`,
+            ResultType: 'simple',
+        }, user as never);
+        if (!criteria.Success) throw new Error(criteria.ErrorMessage || 'Could not read the scored criteria.');
+        criteriaResults = (criteria.Results ?? []) as Record<string, unknown>[];
+    }
+    const byId = new Map(criteriaResults.map(row => [String(row.ID), row]));
+    return rows.map(row => {
+        const criterion = byId.get(String(row.CriterionID));
+        return {
+            id: String(row.CriterionID ?? ''),
+            key: String(criterion?.Key ?? ''),
+            normalizedScore: numberOrNull(row.NormalizedScore),
+            effectiveWeight: numberOrNull(row.EffectiveWeight),
+            overallContribution: numberOrNull(row.OverallContribution),
+            gateFailed: row.GateFailed === true || row.GateFailed === 1,
+            isNotApplicable: row.IsNotApplicable === true || row.IsNotApplicable === 1,
+            isAdvisory: criterion?.IsAdvisory === true || criterion?.IsAdvisory === 1,
+        };
+    });
 }
 
 function numberOrNull(value: unknown): number | null {

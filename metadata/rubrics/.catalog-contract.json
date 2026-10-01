@@ -12,18 +12,11 @@
       {
         "fields": {
           "RubricID": "@parent:ID",
-          "Status": "Published",
-          "MajorVersion": 1,
-          "MinorVersion": 0,
-          "PatchVersion": 0,
-          "AppliedBump": "Initial",
+          "Status": "Draft",
           "PassThreshold": 0.7,
           "NotApplicablePolicy": "NotAllowed",
           "ScoreDisplayMin": 0,
           "ScoreDisplayMax": 1,
-          "ContentHash": "9fc950e887e27618b2817a25eda52fc02afe0243baed56c899ccf9074b5badb4",
-          "ScoringHash": "5322a00cf08ca6fc116495d2dd5b03cfa6fd730d29e78ff2d80a658b1a2455c2",
-          "PublishedAt": "2026-10-01T16:00:00.000Z",
           "ChangeSummary": "Initial publish."
         },
         "primaryKey": {
@@ -115,7 +108,7 @@
             {
               "fields": {
                 "RubricVersionID": "@parent:ID",
-                "Key": "names-an-existing-catalog-overlap-when-there-is-",
+                "Key": "names-an-existing-catalog-overlap",
                 "Name": "Names an existing catalog overlap when there is one",
                 "NodeType": "Criterion",
                 "Weight": 1,

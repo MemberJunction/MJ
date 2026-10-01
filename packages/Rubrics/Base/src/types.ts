@@ -109,6 +109,8 @@ export interface RubricAnswer {
     confidence?: number | null;
     /** The evaluator's reason for this leaf. Copied onto the score row. */
     rationale?: string;
+    /** Quotes or other evidence the evaluator attached. Copied onto the score row as JSON. */
+    evidence?: unknown;
 }
 
 export interface RubricScoreInput {

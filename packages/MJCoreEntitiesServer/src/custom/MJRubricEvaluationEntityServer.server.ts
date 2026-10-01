@@ -1,4 +1,4 @@
-import { BaseEntity, type EntitySaveOptions } from '@memberjunction/core';
+import { BaseEntity, RunInEntityTransaction, type EntitySaveOptions } from '@memberjunction/core';
 import { MJRubricEvaluationEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { LoadDraftForPublish } from './rubrics/versionPublish.js';
@@ -47,13 +47,18 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
      * When Status moves Draft → Submitted, loads the pinned version and the
      * score rows and calls {@link submit}. Setting Status and saving is enough.
      * Score rows are written before this row, while the stored status is still
-     * Draft. A supersede target is refused when the subject, context, rubric,
-     * or status does not match, and otherwise saved as Superseded in this same
-     * save. SubmittedAt is set with the status.
+     * Draft. This evaluation is saved next. A supersede target is refused when
+     * the subject, context, rubric, or status does not match, and is marked
+     * Superseded only after this evaluation saves. A false Save throws, so a
+     * failed save does not leave the prior row Superseded. SubmittedAt is set
+     * with the status. The three writes share one entity transaction.
      */
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
         const status = this.GetFieldByName('Status');
-        if (status?.Dirty && status.OldValue === 'Draft' && this.Status === 'Submitted') {
+        if (!(status?.Dirty && status.OldValue === 'Draft' && this.Status === 'Submitted')) {
+            return super.Save(options);
+        }
+        return RunInEntityTransaction(this.ProviderToUse as Parameters<typeof RunInEntityTransaction>[0], async () => {
             const provider = this.ProviderToUse as { RunView?: (params: { EntityName: string; ExtraFilter: string; ResultType?: 'simple' | 'entity_object' }, user?: unknown) => Promise<{ Success: boolean; Results?: unknown[] }> };
             if (!provider?.RunView) throw new Error('Submitting an evaluation requires a provider that can load the version and scores.');
             const run = (entityName: string, filter: string) => provider.RunView!({ EntityName: entityName, ExtraFilter: filter, ResultType: 'entity_object' }, this.ContextCurrentUser);
@@ -88,7 +93,7 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
                 const record = row as Record<string, unknown> & { Save?: () => Promise<boolean>; Get?: (name: string) => unknown };
                 const criterionId = String(record.CriterionID ?? record.Get?.('CriterionID'));
                 const computed = result.scores.find(score => score.criterionId === criterionId);
-                if (!computed || !record.Save) continue;
+                if (!computed) continue;
                 record.NormalizedScore = computed.normalizedScore;
                 record.EffectiveWeight = computed.effectiveWeight;
                 record.OverallContribution = computed.overallContribution;
@@ -96,7 +101,7 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
                 record.IsComputed = computed.isComputed;
                 if (computed.isComputed) record.allowServerComputedWrite = true;
                 writtenIds.add(criterionId);
-                await record.Save();
+                await saveOrThrow(record, 'the score');
             }
             const providerWithCreate = provider as { GetEntityObject?: (name: string, user?: unknown) => Promise<Record<string, unknown> & { NewRecord?: () => void; Save?: () => Promise<boolean> }> };
             for (const computed of result.scores) {
@@ -111,11 +116,7 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
                 created.GateFailed = computed.gateFailed;
                 created.IsComputed = true;
                 created.allowServerComputedWrite = true;
-                if (created.Save) await created.Save();
-            }
-            if (prior) {
-                prior.row.Status = 'Superseded';
-                await prior.row.Save();
+                await saveOrThrow(created, 'the computed score');
             }
             const written = result.evaluation;
             this.NormalizedScore = written.normalizedScore;
@@ -129,9 +130,18 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
             this.ScoringEngineVersion = written.scoringEngineVersion;
             this.Status = 'Submitted';
             this.SubmittedAt = written.submittedAt;
-        }
-        return super.Save(options);
+            if (!await super.Save(options)) throw new Error('Could not save the evaluation.');
+            if (prior) {
+                prior.row.Status = 'Superseded';
+                await saveOrThrow(prior.row, 'the previous evaluation');
+            }
+            return true;
+        });
     }
+}
+
+async function saveOrThrow(record: { Save?: () => Promise<boolean> }, label: string): Promise<void> {
+    if (!record.Save || !await record.Save()) throw new Error(`Could not save ${label}.`);
 }
 
 async function loadPrior(run: (entityName: string, filter: string) => Promise<{ Success: boolean; Results?: unknown[] }>, id: string): Promise<{ target: { status: string; subjectEntityId: string; subjectRecordId: string; contextEntityId: string | null; contextRecordId: string | null; rubricId: string }; row: { Status?: string; Save: () => Promise<boolean> } }> {

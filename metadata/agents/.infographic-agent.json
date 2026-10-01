@@ -141,7 +141,7 @@
             "RubricID": "@lookup:MJ: Rubrics.Name=Picture from the data",
             "Purpose": "SelfCheck",
             "IsDefault": true,
-            "Status": "Active",
+            "Status": "Disabled",
             "MaxSelfCheckAttempts": 1
           },
           "primaryKey": {

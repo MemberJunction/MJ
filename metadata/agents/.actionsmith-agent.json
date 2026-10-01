@@ -196,7 +196,7 @@
             "RubricID": "@lookup:MJ: Rubrics.Name=Catalog contract",
             "Purpose": "SelfCheck",
             "IsDefault": true,
-            "Status": "Active",
+            "Status": "Disabled",
             "MaxSelfCheckAttempts": 1
           },
           "primaryKey": {

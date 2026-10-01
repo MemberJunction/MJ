@@ -30,13 +30,15 @@ vi.mock('@memberjunction/core-entities', () => {
         public Confidence: number | null = null;
         public ScoringEngineVersion: string | null = null;
         public SubmittedAt: Date | null = null;
+        public SaveReturns = true;
         public GetFieldByName(name: string): { Dirty: boolean; OldValue: string; Value: string } | null {
             if (name !== 'Status') return null;
             return { Dirty: this.Status !== this.LoadedStatus, OldValue: this.LoadedStatus, Value: this.Status };
         }
         public async Save(): Promise<boolean> {
             this.SuperSaveCalled = true;
-            return true;
+            events.push('evaluation');
+            return this.SaveReturns;
         }
     }
     return { MJRubricEvaluationEntity };
@@ -103,7 +105,7 @@ describe('MJRubricEvaluationEntityServer.Save', () => {
         expect(host.NormalizedScore).toBe(1);
         expect(host.Outcome).toBe('Passed');
         expect(host.SubmittedAt).toBeInstanceOf(Date);
-        expect(events).toEqual(['score']);
+        expect(events).toEqual(['score', 'evaluation']);
     });
 
     it('refuses a supersede of a different subject and does not save', async () => {
@@ -154,8 +156,62 @@ describe('MJRubricEvaluationEntityServer.Save', () => {
         host.Status = 'Submitted';
         await evaluation.Save();
         expect(prior.Status).toBe('Superseded');
-        expect(events).toEqual(['score', 'prior']);
+        expect(events).toEqual(['score', 'evaluation', 'prior']);
         expect(host.SuperSaveCalled).toBe(true);
+    });
+
+    it('throws and leaves the prior submitted when this evaluation does not save', async () => {
+        const prior = {
+            Status: 'Submitted',
+            SubjectEntityID: 'entity-1',
+            SubjectRecordID: 'record-1',
+            ContextEntityID: null,
+            ContextRecordID: null,
+            RubricID: 'rubric-1',
+            async Save() { events.push('prior'); return true; },
+        };
+        const evaluation = new MJRubricEvaluationEntityServer();
+        const host = evaluation as unknown as {
+            Status: string;
+            SupersedesEvaluationID: string;
+            ProviderToUse: ReturnType<typeof provider>;
+            SaveReturns: boolean;
+        };
+        host.SupersedesEvaluationID = 'old';
+        host.ProviderToUse = provider(prior);
+        host.SaveReturns = false;
+        host.Status = 'Submitted';
+        await expect(evaluation.Save()).rejects.toThrow(/evaluation/);
+        expect(prior.Status).toBe('Submitted');
+        expect(events).toEqual(['score', 'evaluation']);
+    });
+
+    it('throws when a score does not save and does not supersede', async () => {
+        const prior = {
+            Status: 'Submitted',
+            SubjectEntityID: 'entity-1',
+            SubjectRecordID: 'record-1',
+            ContextEntityID: null,
+            ContextRecordID: null,
+            RubricID: 'rubric-1',
+            async Save() { events.push('prior'); return true; },
+        };
+        const evaluation = new MJRubricEvaluationEntityServer();
+        const host = evaluation as unknown as { Status: string; SupersedesEvaluationID: string; ProviderToUse: ReturnType<typeof provider> };
+        host.SupersedesEvaluationID = 'old';
+        host.ProviderToUse = provider(prior);
+        const original = host.ProviderToUse.RunView.bind(host.ProviderToUse);
+        host.ProviderToUse.RunView = async (params: { EntityName: string }) => {
+            const result = await original(params);
+            if (params.EntityName === 'MJ: Rubric Evaluation Scores') {
+                return { Success: true, Results: [{ CriterionID: 'a', ScaleLevelID: 'high', IsNotApplicable: false, IsComputed: false, async Save() { events.push('score'); return false; } }] };
+            }
+            return result;
+        };
+        host.Status = 'Submitted';
+        await expect(evaluation.Save()).rejects.toThrow(/score/);
+        expect(prior.Status).toBe('Submitted');
+        expect(events).toEqual(['score']);
     });
 
     it('inserts a computed row for a group that the client did not send', async () => {
@@ -192,7 +248,7 @@ describe('MJRubricEvaluationEntityServer.Save', () => {
         expect(created.saved).toBe(true);
         expect(created.IsComputed).toBe(true);
         expect(created.CriterionID).toBe('g');
-        expect(events).toEqual(['leaf', 'group']);
+        expect(events).toEqual(['leaf', 'group', 'evaluation']);
         expect(host.SuperSaveCalled).toBe(true);
     });
 });

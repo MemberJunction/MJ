@@ -11,7 +11,7 @@ export interface SelfCheckFailure {
 }
 
 export interface SelfCheckDecision {
-    Action: 'skip' | 'accept' | 'retry' | 'fail';
+    Action: 'skip' | 'accept' | 'retry' | 'fail' | 'record';
     Attempt: number;
     Message?: string;
 }
@@ -19,8 +19,9 @@ export interface SelfCheckDecision {
 /**
  * Decides what a self-check does with a candidate final output.
  * No Active SelfCheck link skips. A passing score is accepted.
- * A loop agent retries while attempts remain. A flow agent, or a loop
- * that has used its attempts, fails and the message is kept.
+ * A loop agent retries while the attempt is still within MaxAttempts, so
+ * MaxAttempts 1 allows the first failure to retry. A flow agent records the
+ * result and leaves the run successful. A loop that has used its attempts fails.
  */
 export function DecideSelfCheck(input: {
     agentKind: 'loop' | 'flow';
@@ -37,8 +38,11 @@ export function DecideSelfCheck(input: {
         .map(item => item.Rationale ? `${item.Key}: ${item.Rationale}` : item.Key)
         .join('\n');
     const maxAttempts = input.link.MaxAttempts ?? 1;
-    if (input.agentKind === 'loop' && input.attempt < maxAttempts) {
+    if (input.agentKind === 'loop' && input.attempt <= maxAttempts) {
         return { Action: 'retry', Attempt: input.attempt, Message: message };
+    }
+    if (input.agentKind === 'flow') {
+        return { Action: 'record', Attempt: input.attempt, Message: message };
     }
     return { Action: 'fail', Attempt: input.attempt, Message: message || 'Self-check failed.' };
 }
@@ -54,6 +58,12 @@ export function decideSelfCheck(input: {
     return DecideSelfCheck(input);
 }
 
+/** The candidate still in memory. FinalPayload is written only after the run finishes. */
+export interface SelfCheckCandidate {
+    message?: string;
+    payload?: unknown;
+}
+
 export interface SelfCheckEngine {
     EvaluateRecord(input: {
         rubricId: string;
@@ -61,6 +71,7 @@ export interface SelfCheckEngine {
         subjectRecordId: string;
         evaluator: 'LLM';
         passThreshold?: number | null;
+        content?: { text?: string; data?: Record<string, unknown> };
     }): Promise<{
         evaluationId: string;
         outcome: string | null;
@@ -77,8 +88,10 @@ export interface SelfCheckValidation {
 
 /**
  * Runs one self-check evaluation and records a Validation step linked to it.
- * The subject is the current agent run. The evaluator is the LLM rubric evaluator.
- * The threshold is the link override when set, otherwise the version's threshold.
+ * The subject pointer is the current agent run. The text the judge scores is the
+ * in-memory message and payload, because the stored run does not have FinalPayload yet.
+ * The evaluator is the LLM rubric evaluator. The threshold is the link override
+ * when set, otherwise the version's threshold.
  */
 export async function ExecuteSelfCheck(input: {
     engine: SelfCheckEngine;
@@ -86,6 +99,7 @@ export async function ExecuteSelfCheck(input: {
     runId: string;
     agentKind: 'loop' | 'flow';
     attempt: number;
+    candidate?: SelfCheckCandidate;
     record: (step: SelfCheckValidation) => void | Promise<void>;
 }): Promise<{ decision: SelfCheckDecision; step: 'Success' | 'Failed' | 'Retry'; evaluationId: string }> {
     const result = await input.engine.EvaluateRecord({
@@ -94,6 +108,12 @@ export async function ExecuteSelfCheck(input: {
         subjectRecordId: input.runId,
         evaluator: 'LLM',
         passThreshold: input.link.passThreshold ?? null,
+        ...(input.candidate ? {
+            content: {
+                text: input.candidate.message,
+                data: { message: input.candidate.message, finalPayload: input.candidate.payload },
+            },
+        } : {}),
     });
     const passed = result.outcome === 'Passed' || result.outcome === 'Scored';
     const failedCriteria = passed ? [] : result.criteria.map(item => ({ Key: item.key, Rationale: item.rationale }));
@@ -121,6 +141,7 @@ export async function executeSelfCheck(input: {
     runId: string;
     agentKind: 'loop' | 'flow';
     attempt: number;
+    candidate?: SelfCheckCandidate;
     record: (step: SelfCheckValidation) => void | Promise<void>;
 }): Promise<{ decision: SelfCheckDecision; step: 'Success' | 'Failed' | 'Retry'; evaluationId: string }> {
     return ExecuteSelfCheck(input);

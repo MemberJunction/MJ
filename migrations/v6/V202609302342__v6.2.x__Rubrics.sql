@@ -675,9 +675,11 @@ BEGIN
 END;
 GO
 
--- 4f. A submitted evaluation is frozen. Its only permitted change is Status moving
---     Submitted -> Superseded (a newer evaluation replaces it) or Submitted -> Withdrawn.
---     Superseded, Withdrawn and Failed are terminal.
+-- 4f. A submitted evaluation is frozen. Its only permitted changes are Status moving
+--     Submitted -> Superseded (a newer evaluation replaces it) or Submitted -> Withdrawn,
+--     and clearing AIAgentRunID or AIPromptRunID. The generated delete procedures
+--     null those foreign keys, so a submitted evaluation must allow that clear and
+--     no other change to those columns. Superseded, Withdrawn and Failed are terminal.
 CREATE TRIGGER [${flyway:defaultSchema}].[trgRubricEvaluation_Immutable]
 ON [${flyway:defaultSchema}].[RubricEvaluation]
 AFTER UPDATE, DELETE
@@ -706,19 +708,21 @@ BEGIN
                     )
              OR EXISTS (
                     SELECT d.[RubricVersionID], d.[SubjectEntityID], d.[SubjectRecordID], d.[ContextEntityID], d.[ContextRecordID],
-                           d.[EvaluatorType], d.[EvaluatorUserID], d.[AIPromptRunID], d.[AIAgentRunID], d.[EvaluatorName],
+                           d.[EvaluatorType], d.[EvaluatorUserID], d.[EvaluatorName],
                            d.[SupersedesEvaluationID], d.[SubmittedAt], d.[PassThresholdApplied], d.[NormalizedScore], d.[Passed],
                            d.[Outcome], d.[BandID], d.[GateFailed], d.[Completeness], d.[ScoredCriteriaCount],
                            d.[ApplicableCriteriaCount], d.[TotalCriteriaCount], d.[Confidence], d.[Narrative], d.[ErrorMessage],
                            d.[ScoringEngineVersion], d.[Metadata]
                     EXCEPT
                     SELECT i.[RubricVersionID], i.[SubjectEntityID], i.[SubjectRecordID], i.[ContextEntityID], i.[ContextRecordID],
-                           i.[EvaluatorType], i.[EvaluatorUserID], i.[AIPromptRunID], i.[AIAgentRunID], i.[EvaluatorName],
+                           i.[EvaluatorType], i.[EvaluatorUserID], i.[EvaluatorName],
                            i.[SupersedesEvaluationID], i.[SubmittedAt], i.[PassThresholdApplied], i.[NormalizedScore], i.[Passed],
                            i.[Outcome], i.[BandID], i.[GateFailed], i.[Completeness], i.[ScoredCriteriaCount],
                            i.[ApplicableCriteriaCount], i.[TotalCriteriaCount], i.[Confidence], i.[Narrative], i.[ErrorMessage],
                            i.[ScoringEngineVersion], i.[Metadata]
                 )
+             OR (i.[AIAgentRunID] IS NOT NULL AND (d.[AIAgentRunID] IS NULL OR i.[AIAgentRunID] <> d.[AIAgentRunID]))
+             OR (i.[AIPromptRunID] IS NOT NULL AND (d.[AIPromptRunID] IS NULL OR i.[AIPromptRunID] <> d.[AIPromptRunID]))
           )
     )
     BEGIN

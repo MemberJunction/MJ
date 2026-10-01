@@ -132,6 +132,17 @@ function read(row: unknown, name: string): unknown {
     return record?.[name];
 }
 
+/** EvaluatorConfig is stored as JSON text. A parsed object is kept as-is. */
+function readConfig(row: unknown): unknown {
+    const value = read(row, 'EvaluatorConfig');
+    if (typeof value !== 'string' || value.length === 0) return value ?? null;
+    try {
+        return JSON.parse(value);
+    } catch {
+        return value;
+    }
+}
+
 /** Loads the draft tree and the base version so Save can publish without a separate call. */
 export async function LoadDraftForPublish(run: RowRun, versionId: string, rubricId: string, basedOnVersionId: string | null): Promise<{ base: RubricVersionSnapshot | null; draft: RubricVersionSnapshot }> {
     const draft = await loadSnapshot(run, versionId, rubricId);
@@ -195,8 +206,12 @@ async function loadSnapshot(run: RowRun, versionId: string, rubricId: string): P
             key: String(read(row, 'Key')),
             parentId: read(row, 'ParentID') as string | null,
             name: String(read(row, 'Name') ?? read(row, 'Key')),
+            description: (read(row, 'Description') ?? null) as string | null,
+            guidance: (read(row, 'Guidance') ?? null) as string | null,
             nodeType: read(row, 'NodeType') as 'Group' | 'Criterion',
             scaleId: read(row, 'ScaleID') as string | null,
+            rollupMethod: (read(row, 'RollupMethod') ?? null) as RubricNodeSnapshot['rollupMethod'],
+            evaluatorConfig: readConfig(row),
             weight: Number(read(row, 'Weight') ?? 0),
             isAdvisory: Boolean(read(row, 'IsAdvisory')),
             isGate: Boolean(read(row, 'IsGate')),
