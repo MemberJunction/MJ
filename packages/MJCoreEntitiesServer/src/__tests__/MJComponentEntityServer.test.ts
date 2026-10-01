@@ -55,6 +55,8 @@ const { db } = vi.hoisted(() => ({
     db: {
         components: [] as StoredComponent[],
         uses: [] as StoredUse[],
+        /** `Create` record changes: which user created which component. */
+        created: [] as Array<{ ComponentID: string; UserID: string }>,
         failing: new Set<string>(),
         throws: false,
         calls: [] as ViewCall[][],
@@ -63,6 +65,13 @@ const { db } = vi.hoisted(() => ({
 
 /** Answers a view the way the database would for the filters the guard writes. */
 function answer(entityName: string, filter: string): Array<Record<string, unknown>> {
+    if (entityName === 'MJ: Record Changes') {
+        const userID = /UserID='([^']*)'/.exec(filter)?.[1];
+        const recordIDs = [...filter.matchAll(/'ID\|([^']*)'/g)].map((m) => m[1]);
+        return db.created
+            .filter((c) => c.UserID === userID && recordIDs.includes(c.ComponentID))
+            .map((c) => ({ RecordID: `ID|${c.ComponentID.toUpperCase()}` }));
+    }
     if (entityName === 'MJ: Components') {
         const byID = /^ID='([^']*)'$/.exec(filter);
         if (byID) return db.components.filter((c) => c.ID === byID[1]).map((c) => ({ ...c }));
@@ -119,7 +128,7 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         public EmbeddingsGenerated = false;
         public Recorded: { Success: boolean; Type: string; Message: string } | null = null;
         /** No authorization metadata: only an `Owner`-type caller holds the grant. */
-        public ProviderToUse = { Authorizations: [] };
+        public ProviderToUse = { Authorizations: [], EntityByName: () => ({ ID: 'ENT-COMPONENTS' }) };
 
         /** BaseEntity exposes this as a protected getter; the guard reads it. */
         protected get ActiveUser(): StubCaller | null {
@@ -202,9 +211,15 @@ function make(caller: StubCaller | null, over: Partial<StubHooks> = {}): StubHoo
     return e;
 }
 
+/** Records that this user created the component. */
+function createdBy(componentID: string, user: StubCaller): void {
+    db.created.push({ ComponentID: componentID, UserID: user.ID });
+}
+
 beforeEach(() => {
     db.components = [];
     db.uses = [];
+    db.created = [];
     db.failing = new Set();
     db.throws = false;
     db.calls = [];
@@ -222,14 +237,26 @@ describe('MJComponentEntityServer — form component guard', () => {
             expect(e.EmbeddingsGenerated).toBe(true);
         });
 
-        it('is refused for a component no row uses, before the write', async () => {
+        it('is refused for a component no row uses and someone else created, before the write', async () => {
             storeComponent();
+            createdBy('COMP-1', BOB);
             const e = make(ALICE, { Specification: '{"v":2}' });
             expect(await e.Save()).toBe(false);
             expect(e.SuperSaveCalled).toBe(false);
             expect(e.EmbeddingsGenerated).toBe(false);
             expect(e.Recorded).toMatchObject({ Success: false, Type: 'update' });
-            expect(e.Recorded?.Message).toMatch(/No form or panel uses this one/);
+            expect(e.Recorded?.Message).toMatch(/No form or panel uses this one, you did not create it/);
+        });
+
+        it('is refused for a component no row uses and no Create record change names the caller', async () => {
+            storeComponent();
+            expect(await make(ALICE, { Specification: '{"v":2}' }).Save()).toBe(false);
+        });
+
+        it('is allowed for a component no row uses that the caller created', async () => {
+            storeComponent();
+            createdBy('COMP-1', ALICE);
+            expect(await make(ALICE, { Specification: '{"v":2}' }).Save()).toBe(true);
         });
 
         it('is refused for a component a Role or Global row uses', async () => {
@@ -281,10 +308,12 @@ describe('MJComponentEntityServer — form component guard', () => {
             await e.Save();
             expect(db.calls).toHaveLength(1);
             const batch = db.calls[0];
-            expect(batch.map((c) => c.EntityName)).toEqual([CONTRIBUTIONS, OVERRIDES, 'MJ: Components', 'MJ: Components']);
+            expect(batch.map((c) => c.EntityName)).toEqual([CONTRIBUTIONS, OVERRIDES, 'MJ: Components', 'MJ: Components', 'MJ: Record Changes']);
             expect(batch[0]).toMatchObject({ ExtraFilter: "ComponentID='COMP-''1'", ContextUser: ALICE });
             expect(batch[2].Fields).toEqual(['Specification', 'Status', 'Name', 'Type', 'Namespace']);
             expect(batch[3].ExtraFilter).toBe("Name='PersonLtvStrip' AND ID<>'COMP-''1'");
+            expect(batch[4].ExtraFilter).toBe(
+                `EntityID='ENT-COMPONENTS' AND Type='Create' AND UserID='${ALICE.ID}' AND RecordID IN ('ID|COMP-''1')`);
         });
 
         it('is refused when a read fails or throws', async () => {
@@ -324,6 +353,15 @@ describe('MJComponentEntityServer — form component guard', () => {
             db.components.push({ ID: 'MINE', Name: 'PersonLtvStrip', Namespace: null, Specification: '{}', Status: null, Type: null });
             use('MINE', 'User', ALICE.ID);
             expect(await make(ALICE, { IsSaved: false, ID: 'NEW' }).Save()).toBe(true);
+        });
+
+        it('allows a create without the grant when the same-named component is one no row uses that the caller created', async () => {
+            db.components.push({ ID: 'LEFTOVER', Name: 'PersonLtvStrip', Namespace: null, Specification: '{}', Status: null, Type: null });
+            createdBy('LEFTOVER', ALICE);
+            expect(await make(ALICE, { IsSaved: false, ID: 'NEW' }).Save()).toBe(true);
+            db.created = [];
+            createdBy('LEFTOVER', BOB);
+            expect(await make(ALICE, { IsSaved: false, ID: 'NEW' }).Save()).toBe(false);
         });
 
         it('allows a create with no same-named component', async () => {
@@ -376,11 +414,20 @@ describe('MJComponentEntityServer — form component guard', () => {
             expect(e.SuperDeleteCalled).toBe(true);
         });
 
-        it('refuses a user without the grant deleting a component no row uses, before the delete', async () => {
+        it('refuses a user without the grant deleting a component no row uses that they did not create, before the delete', async () => {
             const e = make(ALICE);
             expect(await e.Delete()).toBe(false);
             expect(e.SuperDeleteCalled).toBe(false);
             expect(e.Recorded).toMatchObject({ Success: false, Type: 'delete' });
+            createdBy('COMP-1', ALICE);
+            expect(await make(ALICE).Delete()).toBe(true);
+        });
+
+        it('refuses when the component entity is missing from the metadata, so the creator cannot be read', async () => {
+            const e = make(ALICE);
+            (e as unknown as { ProviderToUse: { EntityByName: () => undefined } }).ProviderToUse.EntityByName = () => undefined;
+            expect(await e.Delete()).toBe(false);
+            expect(e.Recorded?.Message).toMatch(/could not be read/);
         });
 
         it('lets a holder delete a component a shared row or no row uses, but not one another user\'s row uses', async () => {

@@ -10,8 +10,8 @@
  * `@memberjunction/core-entities`.
  *
  * `Save()` also checks the component a row points at when the row is created or its
- * `ComponentID` changes: the other rows that use that component are read (here from a stand-in
- * `RunView`) and checked with `FormRowComponentRefusal`.
+ * `ComponentID` changes: the other rows that use that component, and whether the caller created
+ * it, are read (here from a stand-in `RunView`) and checked with `FormRowComponentRefusal`.
  *
  * The generated bases are mocked to a settable stub with per-field OldValue state, matching the
  * approach in MJUserRoleEntityServer.test.ts.
@@ -38,7 +38,13 @@ interface StoredUse {
 }
 
 const { views } = vi.hoisted(() => ({
-    views: { uses: [] as StoredUse[], failing: false, calls: 0 },
+    views: {
+        uses: [] as StoredUse[],
+        /** Users whose `Create` record change exists for COMP-1. */
+        createdBy: new Set<string>(),
+        failing: false,
+        calls: 0,
+    },
 }));
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
@@ -46,10 +52,15 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     class StubRunView {
         public async RunViews(
             params: Array<{ EntityName: string; ExtraFilter: string }>,
-        ): Promise<Array<{ Success: boolean; Results: StoredUse[]; ErrorMessage?: string }>> {
+        ): Promise<Array<{ Success: boolean; Results: Array<Record<string, unknown>>; ErrorMessage?: string }>> {
             views.calls++;
             return params.map((p) => {
                 if (views.failing) return { Success: false, Results: [], ErrorMessage: 'cannot read' };
+                if (p.EntityName === 'MJ: Record Changes') {
+                    const userID = /UserID='([^']*)'/.exec(p.ExtraFilter)?.[1] ?? '';
+                    const asksForComp1 = p.ExtraFilter.includes("'ID|COMP-1'");
+                    return { Success: true, Results: asksForComp1 && views.createdBy.has(userID) ? [{ RecordID: 'ID|COMP-1' }] : [] };
+                }
                 const componentID = /ComponentID='([^']*)'/.exec(p.ExtraFilter)?.[1];
                 // Both entities share the stand-in rows; the contributions view serves them all.
                 const rows = p.EntityName === 'MJ: Entity Form Contributions'
@@ -78,7 +89,7 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         public SuperDeleteCalled = false;
         public SuperSaveCalled = false;
         /** No authorization metadata: only an `Owner`-type caller holds the grant. */
-        public ProviderToUse = { Authorizations: [] };
+        public ProviderToUse = { Authorizations: [], EntityByName: () => ({ ID: 'ENT-COMPONENTS' }) };
 
         protected oldValues = new Map<string, unknown>();
 
@@ -158,6 +169,8 @@ describe.each<[string, GuardedClass]>([
     beforeEach(() => {
         vi.clearAllMocks();
         views.uses = [];
+        // ALICE created COMP-1 unless a test says otherwise, so creates by her reach Validate().
+        views.createdBy = new Set([ALICE.ID]);
         views.failing = false;
         views.calls = 0;
     });
@@ -271,11 +284,25 @@ describe.each<[string, GuardedClass]>([
             expect(await make({ IsSaved: false, Scope: 'Global', UserID: null, Caller: OWNER }).Save()).toBe(true);
         });
 
-        it('lets the caller aim a new row at a component only their own rows use, or no row uses', async () => {
+        it('lets the caller aim a new row at a component only their own rows use, whoever created it', async () => {
             used('User', ALICE.ID);
+            views.createdBy = new Set();
             expect(await make({ IsSaved: false, Scope: 'User', UserID: ALICE.ID, Caller: ALICE }).Save()).toBe(true);
-            views.uses = [];
+        });
+
+        it('lets the caller aim a new row at a component no row uses only when they created it', async () => {
             expect(await make({ IsSaved: false, Scope: 'User', UserID: ALICE.ID, Caller: ALICE }).Save()).toBe(true);
+            views.createdBy = new Set([BOB.ID]);
+            const notMine = make({ IsSaved: false, Scope: 'User', UserID: ALICE.ID, Caller: ALICE });
+            expect(await notMine.Save()).toBe(false);
+            expect(notMine.SuperSaveCalled).toBe(false);
+            views.createdBy = new Set();
+            expect(await make({ IsSaved: false, Scope: 'User', UserID: ALICE.ID, Caller: ALICE }).Save()).toBe(false);
+        });
+
+        it('lets a holder aim a row at a component no row uses, whoever created it', async () => {
+            views.createdBy = new Set();
+            expect(await make({ IsSaved: false, Scope: 'Global', UserID: null, Caller: OWNER }).Save()).toBe(true);
         });
 
         it('does not read anything when an update leaves ComponentID alone', async () => {

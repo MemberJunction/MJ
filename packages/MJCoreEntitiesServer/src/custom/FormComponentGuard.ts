@@ -1,4 +1,5 @@
 import {
+    CompositeKey,
     LogError,
     RunView,
     type IMetadataProvider,
@@ -17,6 +18,7 @@ import {
     type FormScope,
     type FormScopeOperation,
     type GuardedComponentField,
+    type OwnedComponentCheck,
 } from '@memberjunction/core-entities';
 
 /** The entities whose rows draw a component on a form, each through its `ComponentID` column. */
@@ -53,8 +55,22 @@ export interface GuardedFormComponentRow {
     readonly MetadataProvider: IMetadataProvider;
 }
 
-/** The results of one batch of views, or why it failed. */
-type BatchOutcome = { Results: Array<Array<Record<string, unknown>>> } | { Error: string };
+/** The views one guard batch can run, by role. */
+type ViewRole = 'contributions' | 'overrides' | 'stored' | 'sameName' | 'created';
+
+/** A batch to run: undefined leaves a view out, null is a view that could not be built. */
+type ViewSet = Partial<Record<ViewRole, RunViewParams | null | undefined>>;
+
+/** The rows each view returned, by role, or why the batch failed. */
+type BatchOutcome = { Results: Partial<Record<ViewRole, Array<Record<string, unknown>>>> } | { Error: string };
+
+/** Who is writing, as every guard needs to know. */
+interface GuardCaller {
+    User: UserInfo;
+    HoldsGrant: boolean;
+    RunViewProvider: IRunViewProvider;
+    MetadataProvider: IMetadataProvider;
+}
 
 /**
  * Why this write to a component is refused, or null when it may proceed.
@@ -62,94 +78,145 @@ type BatchOutcome = { Results: Array<Array<Record<string, unknown>>> } | { Error
  * With no caller (a trusted server context) nothing is checked. A create by a caller without the
  * `Manage Form Defaults` grant is checked for a name another component already has. An update or
  * delete reads, in one batch and as the caller: every form and panel row that uses the component,
- * the component's stored guarded columns, and (for an update by a caller without the grant) the
- * other components with the same name. The changed columns are found by comparing the write's
- * values with the stored ones. When a read fails, the write is refused.
+ * the component's stored guarded columns (update), the other components with the same name
+ * (update without the grant), and whether the caller created the component (without the grant).
+ * The changed columns are found by comparing the write's values with the stored ones. When a read
+ * fails, the write is refused.
  */
 export async function ComponentGuardRefusal(row: GuardedComponentRow, operation: FormScopeOperation): Promise<string | null> {
-    const caller = row.ActiveUser;
+    const caller = guardCaller(row);
     if (!caller) return null;
-    const holdsGrant = UserCanManageFormDefaults(caller, row.MetadataProvider);
-    if (operation === 'create') {
-        return holdsGrant ? null : nameCollisionRefusal(row, caller, sameNameView(row.Values.Name, null));
-    }
+    if (operation === 'create') return caller.HoldsGrant ? null : createNameRefusal(row, caller);
     const isUpdate = operation === 'update';
-    const checkName = isUpdate && !holdsGrant;
-    const views = [
-        ...usesViews(`ComponentID='${EscapeSQLString(row.ID)}'`),
-        ...(isUpdate ? [storedComponentView(row.ID)] : []),
-        ...(checkName ? [sameNameView(row.Values.Name, row.ID)] : []),
-    ];
-    const batch = await runBatch(row.RunViewProvider, views, caller);
+    const batch = await runBatch(caller, {
+        ...usesViews([row.ID]),
+        stored: isUpdate ? storedComponentView(row.ID) : undefined,
+        sameName: isUpdate && !caller.HoldsGrant ? sameNameView(row.Values.Name, row.ID) : undefined,
+        created: caller.HoldsGrant ? undefined : createdByCallerView(caller, [row.ID]),
+    });
     if ('Error' in batch) return readRefusal(batch.Error);
-    const [contributions, overrides, stored, sameName] = batch.Results;
+    const stored = batch.Results.stored ?? [];
     if (isUpdate && stored.length === 0) return readRefusal('the component as stored was not found');
     const changed = isUpdate ? changedFields(row.Values, stored[0]) : [];
     const writeRefusal = ComponentWriteRefusal({
         Operation: operation,
         ChangedFields: changed,
-        References: [...contributions, ...overrides].map(asUse),
-        CallerID: caller.ID,
-        CallerHoldsGrant: holdsGrant,
+        ...ownership(batch.Results, row.ID),
+        CallerID: caller.User.ID,
+        CallerHoldsGrant: caller.HoldsGrant,
     });
-    if (writeRefusal || !checkName || !changed.some((f) => f === 'Name' || f === 'Namespace')) return writeRefusal;
-    return collisionRefusal(row, caller, sameName.map((r) => String(r.ID)));
+    if (writeRefusal || caller.HoldsGrant || !changed.some((f) => f === 'Name' || f === 'Namespace')) return writeRefusal;
+    return collisionRefusal(caller, idsOf(batch.Results.sameName));
 }
 
 /**
  * Why a form or panel row may not point at its component, or null when it may.
  *
  * Checked when the row is created or its `ComponentID` differs from the value as loaded, for a
- * caller; a trusted server context with no caller is not checked. Every other row that uses the
- * component is read as the caller and checked with `FormRowComponentRefusal`. When the rows cannot
- * be read, the write is refused.
+ * caller; a trusted server context with no caller is not checked. The rows that use the component
+ * and, without the grant, whether the caller created it are read in one batch as the caller and
+ * checked with `FormRowComponentRefusal`. When a read fails, the write is refused.
  */
 export async function FormRowComponentGuardRefusal(row: GuardedFormComponentRow): Promise<string | null> {
-    const caller = row.ActiveUser;
+    const caller = guardCaller(row);
     if (!caller || !row.ComponentID) return null;
     const prior = row.GetFieldByName('ComponentID')?.OldValue;
     if (row.IsSaved && typeof prior === 'string' && UUIDsEqual(prior, row.ComponentID)) return null;
-    const batch = await runBatch(row.RunViewProvider, usesViews(`ComponentID='${EscapeSQLString(row.ComponentID)}'`), caller);
+    const batch = await runBatch(caller, {
+        ...usesViews([row.ComponentID]),
+        created: caller.HoldsGrant ? undefined : createdByCallerView(caller, [row.ComponentID]),
+    });
     if ('Error' in batch) return readRefusal(batch.Error);
     return FormRowComponentRefusal({
         RowID: row.IsSaved ? row.ID : null,
-        References: batch.Results.flat().map(asUse),
-        CallerID: caller.ID,
-        CallerHoldsGrant: UserCanManageFormDefaults(caller, row.MetadataProvider),
+        ...ownership(batch.Results, row.ComponentID),
+        CallerID: caller.User.ID,
+        CallerHoldsGrant: caller.HoldsGrant,
     });
 }
 
-/** The name check for a create: the other components with this name, then the rows that use them. */
-async function nameCollisionRefusal(row: GuardedComponentRow, caller: UserInfo, view: RunViewParams): Promise<string | null> {
-    const batch = await runBatch(row.RunViewProvider, [view], caller);
-    if ('Error' in batch) return readRefusal(batch.Error);
-    return collisionRefusal(row, caller, batch.Results[0].map((r) => String(r.ID)));
+/** The caller and whether they hold the grant, or null with no caller. */
+function guardCaller(row: { ActiveUser: UserInfo | null; RunViewProvider: IRunViewProvider; MetadataProvider: IMetadataProvider }): GuardCaller | null {
+    if (!row.ActiveUser) return null;
+    return {
+        User: row.ActiveUser,
+        HoldsGrant: UserCanManageFormDefaults(row.ActiveUser, row.MetadataProvider),
+        RunViewProvider: row.RunViewProvider,
+        MetadataProvider: row.MetadataProvider,
+    };
 }
 
-/** Applies `ComponentNameCollisionRefusal` to these same-named components, reading the rows that use them. */
-async function collisionRefusal(row: GuardedComponentRow, caller: UserInfo, componentIDs: string[]): Promise<string | null> {
-    if (componentIDs.length === 0) return null;
-    const inList = componentIDs.map((id) => `'${EscapeSQLString(id)}'`).join(',');
-    const batch = await runBatch(row.RunViewProvider, usesViews(`ComponentID IN (${inList})`), caller);
+/** The name check for a create: the other components with this name, then whose they are. */
+async function createNameRefusal(row: GuardedComponentRow, caller: GuardCaller): Promise<string | null> {
+    const batch = await runBatch(caller, { sameName: sameNameView(row.Values.Name, null) });
     if ('Error' in batch) return readRefusal(batch.Error);
-    const uses = batch.Results.flat().map(asUse);
+    return collisionRefusal(caller, idsOf(batch.Results.sameName));
+}
+
+/** Applies `ComponentNameCollisionRefusal` to these same-named components, reading whose they are. */
+async function collisionRefusal(caller: GuardCaller, componentIDs: string[]): Promise<string | null> {
+    if (componentIDs.length === 0) return null;
+    const batch = await runBatch(caller, {
+        ...usesViews(componentIDs),
+        created: createdByCallerView(caller, componentIDs),
+    });
+    if ('Error' in batch) return readRefusal(batch.Error);
     return ComponentNameCollisionRefusal({
         NamesComponent: true,
-        Collisions: componentIDs.map((id) => ({ References: uses.filter((use) => UUIDsEqual(use.ComponentID, id)) })),
-        CallerID: caller.ID,
+        Collisions: componentIDs.map((id) => ownership(batch.Results, id)),
+        CallerID: caller.User.ID,
         CallerHoldsGrant: false,
     });
 }
 
-/** One view per form entity: the rows whose `ComponentID` matches the filter. */
-function usesViews(filter: string): RunViewParams[] {
-    return FORM_ROW_ENTITIES.map((EntityName) => ({
+/** The rows that use one component, and whether the caller created it, from a batch's results. */
+function ownership(results: Partial<Record<ViewRole, Array<Record<string, unknown>>>>, componentID: string): OwnedComponentCheck {
+    const uses = [...(results.contributions ?? []), ...(results.overrides ?? [])].map(asUse);
+    const createdKey = recordChangeKey(componentID).toLowerCase();
+    return {
+        References: uses.filter((use) => UUIDsEqual(use.ComponentID, componentID)),
+        CreatedByCaller: (results.created ?? []).some((r) => String(r.RecordID ?? '').toLowerCase() === createdKey),
+    };
+}
+
+/** One view per form entity: the rows that use any of these components. */
+function usesViews(componentIDs: string[]): Pick<Record<ViewRole, RunViewParams>, 'contributions' | 'overrides'> {
+    const filter = componentIDs.length === 1
+        ? `ComponentID='${EscapeSQLString(componentIDs[0])}'`
+        : `ComponentID IN (${componentIDs.map((id) => `'${EscapeSQLString(id)}'`).join(',')})`;
+    const view = (EntityName: string): RunViewParams => ({
         EntityName,
         ExtraFilter: filter,
         Fields: ['ID', 'ComponentID', 'Scope', 'UserID'],
-        ResultType: 'simple' as const,
+        ResultType: 'simple',
         BypassCache: true,
-    }));
+    });
+    return { contributions: view(FORM_ROW_ENTITIES[0]), overrides: view(FORM_ROW_ENTITIES[1]) };
+}
+
+/**
+ * The caller's `Create` record changes for these components. `MJ: Components` tracks record
+ * changes, so every component created through the platform has one, written in the same batch as
+ * the insert. Null when the component entity is missing from the metadata, which `runBatch`
+ * reports as a failed read.
+ */
+function createdByCallerView(caller: GuardCaller, componentIDs: string[]): RunViewParams | null {
+    const componentEntity = caller.MetadataProvider.EntityByName('MJ: Components');
+    if (!componentEntity) return null;
+    const recordIDs = componentIDs.map((id) => `'${EscapeSQLString(recordChangeKey(id))}'`).join(',');
+    return {
+        EntityName: 'MJ: Record Changes',
+        ExtraFilter: `EntityID='${EscapeSQLString(componentEntity.ID)}' AND Type='Create' ` +
+            `AND UserID='${EscapeSQLString(caller.User.ID)}' AND RecordID IN (${recordIDs})`,
+        Fields: ['RecordID'],
+        ResultType: 'simple',
+        BypassCache: true,
+    };
+}
+
+/** A component's `RecordID` as `MJ: Record Changes` stores it for 'MJ: Components': `ID|<id>`. */
+function recordChangeKey(componentID: string): string {
+    return CompositeKey.FromID(componentID).ToURLSegment(); // first-pk-ok: 'MJ: Components' has the single key ID
 }
 
 /** The component's guarded columns as stored. */
@@ -189,27 +256,39 @@ function asUse(row: Record<string, unknown>): FormComponentUse {
     };
 }
 
+function idsOf(rows: Array<Record<string, unknown>> | undefined): string[] {
+    return (rows ?? []).map((r) => String(r.ID));
+}
+
 /** The guarded columns whose new value differs from the stored one. */
 function changedFields(values: GuardedComponentValues, stored: Record<string, unknown>): GuardedComponentField[] {
     return GUARDED_COMPONENT_FIELDS.filter((field) => (values[field] ?? null) !== (stored[field] ?? null));
 }
 
-/** Runs the views as the caller. Any view that fails, or a throw, is an error. */
-async function runBatch(provider: IRunViewProvider, views: RunViewParams[], caller: UserInfo): Promise<BatchOutcome> {
-    try {
-        const results = await new RunView(provider).RunViews<Record<string, unknown>>(views, caller);
-        const reasons = views.flatMap((view, i) =>
-            results?.[i]?.Success ? [] : [results?.[i]?.ErrorMessage || `${view.EntityName} could not be read`]);
-        if (reasons.length > 0) {
-            LogError(`Form component guard: a read failed, so the write is refused: ${reasons.join('; ')}`);
-            return { Error: reasons.join('; ') };
-        }
-        return { Results: results.map((result) => result.Results ?? []) };
-    } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        LogError(`Form component guard: a read threw, so the write is refused: ${message}`);
-        return { Error: message };
+/**
+ * Runs the given views in one `RunViews` call as the caller. A view that could not be built, any
+ * view that fails, or a throw is an error.
+ */
+async function runBatch(caller: GuardCaller, views: ViewSet): Promise<BatchOutcome> {
+    const entries = Object.entries(views) as Array<[ViewRole, RunViewParams | null | undefined]>;
+    if (entries.some(([, view]) => view === null)) {
+        return failedRead('the MJ: Components entity is not in the metadata');
     }
+    const present = entries.filter((entry): entry is [ViewRole, RunViewParams] => !!entry[1]);
+    try {
+        const results = await new RunView(caller.RunViewProvider).RunViews<Record<string, unknown>>(present.map(([, view]) => view), caller.User);
+        const reasons = present.flatMap(([, view], i) =>
+            results?.[i]?.Success ? [] : [results?.[i]?.ErrorMessage || `${view.EntityName} could not be read`]);
+        if (reasons.length > 0) return failedRead(reasons.join('; '));
+        return { Results: Object.fromEntries(present.map(([role], i) => [role, results[i].Results ?? []])) };
+    } catch (err) {
+        return failedRead(err instanceof Error ? err.message : String(err));
+    }
+}
+
+function failedRead(reason: string): BatchOutcome {
+    LogError(`Form component guard: a read failed, so the write is refused: ${reason}`);
+    return { Error: reason };
 }
 
 function readRefusal(reason: string): string {
