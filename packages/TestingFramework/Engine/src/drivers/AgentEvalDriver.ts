@@ -206,6 +206,11 @@ export interface AgentEvalExpectedOutcomes {
  * }
  * ```
  */
+/** Said on a completed run whose oracle list is empty, so the failure is not a silent status. */
+export function messageWhenNoOracleJudged(results: unknown[]): string | undefined {
+    return results.length === 0 ? 'No oracle judged this run.' : undefined;
+}
+
 @RegisterClass(BaseTestDriver, 'AgentEvalDriver')
 export class AgentEvalDriver extends BaseTestDriver {
     /**
@@ -337,6 +342,7 @@ export class AgentEvalDriver extends BaseTestDriver {
             // adds an oracle before this point; an empty list means nothing judged the run.
             const score = this.calculateScore(oracleResults, config.scoringWeights);
             const status = this.determineStatus(oracleResults);
+            const errorMessage = messageWhenNoOracleJudged(oracleResults);
 
             // Count checks
             const passedChecks = oracleResults.filter(r => r.passed).length;
@@ -360,6 +366,7 @@ export class AgentEvalDriver extends BaseTestDriver {
                 inputData: input,
                 expectedOutput: expected,
                 actualOutput,
+                errorMessage,
                 totalCost,
                 durationMs,
                 // Multi-turn specific fields

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AgentEvalDriver } from '../drivers/AgentEvalDriver.js';
+import { AgentEvalDriver, messageWhenNoOracleJudged } from '../drivers/AgentEvalDriver.js';
 
 class StatusProbe extends AgentEvalDriver {
     public status(results: { oracleType: string; passed: boolean; score: number; message: string }[]) {
@@ -13,5 +13,7 @@ describe('agent eval oracles', () => {
         expect(driver.status([])).toBe('Failed');
         expect(driver.status([{ oracleType: 'rubric', passed: true, score: 1, message: 'ok' }])).toBe('Passed');
         expect(driver.status([{ oracleType: 'rubric', passed: false, score: 0, message: 'no' }])).toBe('Failed');
+        expect(messageWhenNoOracleJudged([])).toBe('No oracle judged this run.');
+        expect(messageWhenNoOracleJudged([{ passed: true }])).toBeUndefined();
     });
 });

@@ -42,3 +42,63 @@ export function decideSelfCheck(input: {
     }
     return { action: 'fail', attempt: input.attempt, message: message || 'Self-check failed.' };
 }
+
+export interface SelfCheckEngine {
+    evaluateRecord(input: {
+        rubricId: string;
+        subjectEntityName: string;
+        subjectRecordId: string;
+        evaluator: 'LLM';
+        passThreshold?: number | null;
+    }): Promise<{
+        evaluationId: string;
+        outcome: string | null;
+        criteria: { key: string; rationale?: string }[];
+    }>;
+}
+
+export interface SelfCheckValidation {
+    stepType: 'Validation';
+    evaluationId: string;
+    passed: boolean;
+    message: string;
+}
+
+/**
+ * Runs one self-check evaluation and records a Validation step linked to it.
+ * The subject is the current agent run. The evaluator is the LLM rubric evaluator.
+ * The threshold is the link override when set, otherwise the version's threshold.
+ */
+export async function executeSelfCheck(input: {
+    engine: SelfCheckEngine;
+    link: SelfCheckLink & { rubricId: string; passThreshold?: number | null };
+    runId: string;
+    agentKind: 'loop' | 'flow';
+    attempt: number;
+    record: (step: SelfCheckValidation) => void | Promise<void>;
+}): Promise<{ decision: SelfCheckDecision; step: 'Success' | 'Failed' | 'Retry'; evaluationId: string }> {
+    const result = await input.engine.evaluateRecord({
+        rubricId: input.link.rubricId,
+        subjectEntityName: 'MJ: AI Agent Runs',
+        subjectRecordId: input.runId,
+        evaluator: 'LLM',
+        passThreshold: input.link.passThreshold ?? null,
+    });
+    const passed = result.outcome === 'Passed' || result.outcome === 'Scored';
+    const failedCriteria = passed ? [] : result.criteria.map(item => ({ key: item.key, rationale: item.rationale }));
+    const decision = decideSelfCheck({
+        agentKind: input.agentKind,
+        link: input.link,
+        attempt: input.attempt,
+        passed,
+        failedCriteria,
+    });
+    await input.record({
+        stepType: 'Validation',
+        evaluationId: result.evaluationId,
+        passed,
+        message: decision.message ?? '',
+    });
+    const step = decision.action === 'retry' ? 'Retry' : decision.action === 'fail' ? 'Failed' : 'Success';
+    return { decision, step, evaluationId: result.evaluationId };
+}

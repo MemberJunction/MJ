@@ -2,6 +2,7 @@ export { CreateRubricDraftAction, EvaluateRecordAgainstRubricAction, GetRubricAc
 export { agentRunContent, conversationContent, fallbackContent, promptRunContent, testRunContent, type RubricSubjectContent } from './content.js';
 export { DeterministicRubricEvaluator, type DeterministicRule } from './DeterministicRubricEvaluator.js';
 export { RubricEngine, type EvaluateParams, type EvaluateRecordInput, type EvaluateRecordResult, type RubricEvaluationRecord, type RubricEvaluationStore, type RubricRecords } from './RubricEngine.js';
+export { providerRubricEngine } from './providerRecords.js';
 export { getAgreement, getConsensus, getDiagnostics, krippendorffAlpha, quadraticKappa } from './statistics.js';
 export { LLMRubricEvaluator, renderRubricEvaluatorPrompt, type LLMDecision, type LLMRubricResult, type RubricPromptMode, type RubricPromptRunner } from './LLMRubricEvaluator.js';
 export { AIRubricEvaluator, type AgentCriterionResult, type AgentScaleView, type RubricAgent, type RubricEvaluatorConfig } from './AIRubricEvaluator.js';

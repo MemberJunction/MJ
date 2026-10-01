@@ -22,7 +22,8 @@ import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
-import { decideSelfCheck, type SelfCheckLink } from './self-check';
+import { providerRubricEngine } from '@memberjunction/rubrics';
+import { executeSelfCheck } from './self-check';
 import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
 import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString, CleanAndParseJSON } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
@@ -6000,24 +6001,12 @@ export class BaseAgent {
      */
     private _selfCheckAttempts = 0;
 
-    /**
-     * Scores the candidate final output against the agent's SelfCheck rubric.
-     * The default has no evaluator, so a configured link is recorded as a failure
-     * rather than returned as a pass. A subclass or host attaches the evaluator.
-     */
-    protected async scoreSelfCheck(
-        _output: BaseAgentNextStep,
-        _link: SelfCheckLink,
-    ): Promise<{ passed: boolean; failedCriteria: { key: string; rationale?: string }[] } | null> {
-        return null;
-    }
-
     private async applySelfCheck<P>(
         params: ExecuteAgentParams,
         nextStep: BaseAgentNextStep<P>,
         agentRun: MJAIAgentRunEntityExtended,
     ): Promise<BaseAgentNextStep<P> | null> {
-        let link: SelfCheckLink | null = null;
+        let row: { Purpose?: string; Status?: string; MaxSelfCheckAttempts?: number | null; RubricID?: string; PassThreshold?: number | null } | undefined;
         try {
             const view = new RunView();
             const found = await view.RunView({
@@ -6026,27 +6015,40 @@ export class BaseAgent {
                 ResultType: 'simple',
                 MaxRows: 1,
             }, params.contextUser);
-            const row = ((found.Results ?? []) as { Purpose?: string; Status?: string; MaxSelfCheckAttempts?: number | null }[])[0];
-            if (!row) return null;
-            link = { purpose: String(row.Purpose ?? ''), status: String(row.Status ?? ''), maxAttempts: row.MaxSelfCheckAttempts ?? null };
+            row = ((found.Results ?? []) as typeof row[])[0];
         } catch (error) {
             LogError(`Self-check lookup failed, so the run continues: ${error instanceof Error ? error.message : String(error)}`);
             return null;
         }
+        if (!row?.RubricID) return null;
+        const link: SelfCheckLink & { rubricId: string; passThreshold?: number | null } = {
+            purpose: String(row.Purpose ?? ''),
+            status: String(row.Status ?? ''),
+            maxAttempts: row.MaxSelfCheckAttempts ?? null,
+            rubricId: String(row.RubricID),
+            passThreshold: row.PassThreshold ?? null,
+        };
         this._selfCheckAttempts += 1;
-        const scored = await this.scoreSelfCheck(nextStep, link);
-        const decision = decideSelfCheck({
-            agentKind: this.AgentTypeInstance?.constructor?.name === 'LoopAgentType' ? 'loop' : 'flow',
+        const provider = params.provider || this._activeProvider;
+        const outcome = await executeSelfCheck({
+            engine: providerRubricEngine(provider, params.contextUser),
             link,
+            runId: agentRun.ID,
+            agentKind: this.AgentTypeInstance?.constructor?.name === 'LoopAgentType' ? 'loop' : 'flow',
             attempt: this._selfCheckAttempts,
-            passed: scored?.passed ?? false,
-            failedCriteria: scored?.failedCriteria ?? [{ key: 'self-check', rationale: 'Self-check could not score the output.' }],
+            record: async step => {
+                const saved = await this.createStepEntity({
+                    stepType: 'Validation',
+                    stepName: 'Rubric self-check',
+                    contextUser: params.contextUser,
+                    inputData: { rubricEvaluationId: step.evaluationId, passed: step.passed },
+                });
+                await this.finalizeStepEntity(saved, step.passed, step.message || undefined);
+            },
         });
-        if (decision.action === 'skip' || decision.action === 'accept') return null;
-        if (decision.action === 'retry') {
-            return { ...nextStep, step: 'Retry', message: decision.message };
-        }
-        return { ...nextStep, step: 'Failed', message: decision.message, errorMessage: decision.message };
+        if (outcome.step === 'Success') return null;
+        if (outcome.step === 'Retry') return { ...nextStep, step: 'Retry', message: outcome.decision.message };
+        return { ...nextStep, step: 'Failed', message: outcome.decision.message, errorMessage: outcome.decision.message };
     }
 
     protected async checkExecutionGuardrails<P>(
