@@ -79,6 +79,7 @@ class MJEmbeddingProvider implements EmbeddingProvider {
         this.model = config.model || PROVIDER_DEFAULT_MODEL[config.provider] || '';
         this.batchSize = config.BatchSize ?? 100;
 
+        // BaseEmbeddings used directly: DBAutoDoc runs standalone against arbitrary databases without MemberJunction metadata.
         const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
             BaseEmbeddings,
             driverClass,
