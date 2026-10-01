@@ -857,14 +857,20 @@ export class AgentEvalDriver extends BaseTestDriver {
         const hadRubric = (config.oracles ?? []).some(oracle => oracle.type === 'rubric');
         const suiteRunId = (context.testRun as { TestSuiteRunID?: string }).TestSuiteRunID || context.testRun.ID;
         const labelKey = choice.rubricId ? `${suiteRunId}:${choice.rubricId}` : '';
-        const versionId = choice.rubricId
-            ? await this.versionPins.remember(suiteRunId, choice.rubricId, choice.explicitVersion ? choice.versionId : undefined, async () => {
+        let versionId: string | undefined;
+        let versionLabel: string | undefined;
+        if (choice.rubricId && choice.explicitVersion && choice.versionId) {
+            versionId = choice.versionId;
+            versionLabel = await this.lookupVersionLabel(context, choice.versionId);
+        } else if (choice.rubricId) {
+            versionId = await this.versionPins.remember(suiteRunId, choice.rubricId, undefined, async () => {
                 const found = await this.lookupLatestPublished(context, choice.rubricId!);
                 if (found) this.versionLabels.set(labelKey, found.label);
                 return found?.id;
-            })
-            : undefined;
-        const oracles = ensureImplicitRubricOracle(config.oracles, choice, versionId, choice.rubricId ? this.versionLabels.get(labelKey) : undefined);
+            });
+            versionLabel = this.versionLabels.get(labelKey);
+        }
+        const oracles = ensureImplicitRubricOracle(config.oracles, choice, versionId, versionLabel);
         return { ...config, oracles, scoringWeights: weightsForImplicitRubric(config.scoringWeights, oracles.length > (config.oracles?.length ?? 0) && !hadRubric) };
     }
 
@@ -902,6 +908,13 @@ export class AgentEvalDriver extends BaseTestDriver {
         const best = [...rows].sort((a, b) => Number(b.MajorVersion ?? 0) - Number(a.MajorVersion ?? 0) || Number(b.MinorVersion ?? 0) - Number(a.MinorVersion ?? 0) || Number(b.PatchVersion ?? 0) - Number(a.PatchVersion ?? 0))[0];
         if (!best) return undefined;
         return { id: String(best.ID), label: `${best.MajorVersion ?? 0}.${best.MinorVersion ?? 0}.${best.PatchVersion ?? 0}` };
+    }
+
+    /** Major.Minor.Patch for an explicitly named version. This does not change the suite pin. */
+    protected async lookupVersionLabel(context: DriverExecutionContext, versionId: string): Promise<string | undefined> {
+        const row = await this.readOne(context, 'MJ: Rubric Versions', `ID='${versionId}'`);
+        if (!row) return undefined;
+        return `${row.MajorVersion ?? 0}.${row.MinorVersion ?? 0}.${row.PatchVersion ?? 0}`;
     }
 
     private async readOne(context: DriverExecutionContext, entityName: string, filter: string): Promise<Record<string, unknown> | undefined> {

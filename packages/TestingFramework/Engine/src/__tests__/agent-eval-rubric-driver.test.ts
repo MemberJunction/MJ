@@ -38,4 +38,41 @@ describe('agent eval rubric driver', () => {
         const resolved = await driver.resolve(config, context);
         expect(resolved.oracles).toEqual([{ type: 'rubric', config: { rubricId: 'parent-rubric', rubricVersionId: 'version-4', versionLabel: '1.2.0' } }]);
     });
+
+    it('labels an explicit version without pinning it', async () => {
+        const latest: { id: string; label: string } = { id: 'version-9', label: '9.0.0' };
+        class ExplicitProbe extends AgentEvalDriver {
+            public async resolve(config: AgentEvalConfig, context: DriverExecutionContext) {
+                return this.withResolvedRubric(config, context);
+            }
+
+            protected override async loadSuiteChain(): Promise<RubricSuiteRow[]> {
+                return [];
+            }
+
+            protected override async loadAgentEvaluationRubric(): Promise<string | undefined> {
+                return undefined;
+            }
+
+            protected override async lookupLatestPublished(): Promise<{ id: string; label: string } | undefined> {
+                return latest;
+            }
+
+            protected override async lookupVersionLabel(): Promise<string | undefined> {
+                return '1.2.0';
+            }
+        }
+        const driver = new ExplicitProbe();
+        const context = {
+            test: { ID: 'test' },
+            testRun: { ID: 'run', TestSuiteRunID: 'suite-run' },
+            options: { rubricId: 'named', rubricVersionId: 'version-explicit' },
+            contextUser: {},
+            oracleRegistry: new Map(),
+        } as unknown as DriverExecutionContext;
+        const explicit = await driver.resolve({ agentId: 'agent', oracles: [] }, context);
+        expect(explicit.oracles[0].config).toEqual({ rubricId: 'named', rubricVersionId: 'version-explicit', versionLabel: '1.2.0' });
+        const pinned = await driver.resolve({ agentId: 'agent', oracles: [] }, { ...context, options: { rubricId: 'named' } } as DriverExecutionContext);
+        expect(pinned.oracles[0].config).toEqual({ rubricId: 'named', rubricVersionId: 'version-9', versionLabel: '9.0.0' });
+    });
 });
