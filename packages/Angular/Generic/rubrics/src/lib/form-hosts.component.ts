@@ -13,9 +13,11 @@ type Row = Record<string, unknown>;
     standalone: true,
     selector: 'mj-rubric-version-host',
     imports: [RubricVersionDiffComponent],
+    styleUrls: ['./rubric-builder.component.css'],
     template: `
-      <p>{{ StatusLine }}</p>
-      <mj-rubric-version-diff [Base]="Base" [Draft]="Draft"></mj-rubric-version-diff>
+      <section class="author">
+        <mj-rubric-version-diff [Base]="Base" [Draft]="Draft"></mj-rubric-version-diff>
+      </section>
     `,
 })
 export class RubricVersionHostComponent implements OnChanges {
@@ -29,11 +31,6 @@ export class RubricVersionHostComponent implements OnChanges {
     public Base: RubricVersionSnapshot | null = null;
     public Draft: RubricVersionSnapshot | null = null;
     public NextVersion = '';
-    public get StatusLine(): string {
-        if (this.Status === 'Draft') return `Draft (next ${this.NextVersion || '…'})`;
-        if (this.MajorVersion == null) return this.Status;
-        return `${this.Status} ${this.MajorVersion}.${this.MinorVersion}.${this.PatchVersion}`;
-    }
     public ngOnChanges(): void { void this.load(); }
     private async load(): Promise<void> {
         if (!this.Provider || !this.VersionId || !this.RubricId) return;

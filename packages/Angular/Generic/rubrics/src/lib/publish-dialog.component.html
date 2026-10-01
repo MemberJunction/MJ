@@ -1,30 +1,39 @@
-<section class="rubric-panel" aria-label="Publish rubric">
+<section class="publish" aria-label="Publish rubric">
   @if (Preview) {
-    <p>Computed {{ Preview.computedBump ?? Preview.appliedBump ?? 'none' }}</p>
-    <p>Applied {{ Preview.appliedBump ?? 'cannot publish' }}</p>
-    @if (Preview.nextVersion) {
-      <p>Next {{ Preview.nextVersion }}</p>
+    <div class="publish-callout">
+      <strong><i class="fa-solid fa-triangle-exclamation"></i> Computed version bump: {{ BumpLabel }}</strong>
+      <p>{{ Why }}</p>
+    </div>
+    @if (Preview.changes.length > 0) {
+      <div>
+        <span class="eyebrow">Changes ({{ Preview.changes.length }})</span>
+        <div class="change-list">
+          @for (change of Preview.changes; track change.subject + change.property) {
+            <div class="change-row">
+              <span><strong>{{ SubjectName(change.subject) }}</strong> · {{ ChangeText(change.property) }}</span>
+              <span class="pill-major">{{ change.bump }}</span>
+            </div>
+          }
+        </div>
+      </div>
     }
-    <ul>
-      @for (change of Preview.changes; track change.subject + change.property) {
-        <li>{{ change.subject }} {{ change.property }} ({{ change.bump }})</li>
-      }
-    </ul>
-    <label>
-      Higher bump
+    <label class="publish-field">
+      Request higher bump (optional)
       <select [value]="RequestedBump ?? ''" (change)="OnBump($event)">
-        <option value="">Computed</option>
+        <option value="">Computed ({{ BumpLabel }})</option>
         @for (bump of Preview.higherBumps; track bump) {
           <option [value]="bump">{{ bump }}</option>
         }
       </select>
     </label>
-    <label>
-      Change summary
-      <textarea [value]="Summary" (input)="OnSummary($event)"></textarea>
+    <label class="publish-field">
+      Release notes and change summary
+      <textarea [value]="Summary" (input)="OnSummary($event)" placeholder="Summarize the changes for the people who will be scored."></textarea>
     </label>
     <div class="rubric-actions">
-      <button type="button" [disabled]="Preview.identical" (click)="OnConfirm()">Publish</button>
+      <button mjButton variant="primary" type="button" [disabled]="Preview.identical" (click)="OnConfirm()">
+        <i class="fa-solid fa-cloud-arrow-up"></i> Publish {{ Preview.nextVersion || 'version' }}
+      </button>
       <ng-content></ng-content>
     </div>
   }

@@ -1,7 +1,7 @@
 <section class="author" aria-label="Version diff">
   <div class="card cockpit">
     <span class="eyebrow">Rubric version diff</span>
-    <h2>Draft vs {{ BaseLabel }}</h2>
+    <h2>{{ Heading }}</h2>
     @if (Bump) {
       <span class="pill-major"><i class="fa-solid fa-triangle-exclamation"></i> {{ Bump }} → {{ NextVersion }}</span>
     }
@@ -10,14 +10,16 @@
     <article class="card">
       <h3><i class="fa-solid fa-scale-balanced"></i> Criterion: {{ row.name }}</h3>
       <div class="diff-grid">
+        @if (Base) {
         <div class="diff-side">
           <span class="eyebrow">Base {{ BaseLabel }}</span>
           <p>Weight {{ row.baseWeight }}</p>
           <p>Quality gate {{ row.baseGate }}</p>
           <p>Scale {{ row.baseScale }}</p>
         </div>
+        }
         <div class="diff-side diff-draft">
-          <span class="eyebrow">Draft next {{ NextVersion }}</span>
+          <span class="eyebrow">{{ Base ? 'Draft next ' + NextVersion : DraftLabel }}</span>
           <p>Weight {{ row.draftWeight }}</p>
           <p>Quality gate {{ row.draftGate }}</p>
           <p>Scale {{ row.draftScale }}</p>

@@ -2,7 +2,8 @@ import { Component } from '@angular/core';
 import { RegisterClassEx } from '@memberjunction/global';
 import { BaseFormPanel, BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { MJRubricEntity } from '@memberjunction/core-entities';
-import { RubricBuilderComponent, RubricPublishDialogComponent, RubricVersionDiffComponent } from '@memberjunction/ng-rubrics';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { RubricBuilderComponent, RubricPublishDialogComponent, RubricVersionBoardComponent, RubricVersionDiffComponent } from '@memberjunction/ng-rubrics';
 import { MJRubricFormComponentExtended } from './rubric-form.component';
 
 /** The author, the diff, and publish are each their own left-nav contribution. */
@@ -80,12 +81,12 @@ export class RubricDiffPanel extends BaseFormPanel<MJRubricEntity> {
 @Component({
     selector: 'mj-rubric-publish-panel',
     standalone: true,
-    imports: [BaseFormsModule, RubricPublishDialogComponent],
+    imports: [BaseFormsModule, MJButtonDirective, RubricPublishDialogComponent],
     template: `
       <mj-collapsible-panel SectionKey="rubric-publish" SectionName="Publish" Icon="fa-solid fa-cloud-arrow-up" [Form]="FormComponent" [FormContext]="FormContext" [DefaultExpanded]="true">
         @if (Form.DraftVersion) {
           <mj-rubric-publish-dialog [Base]="Form.BaseVersion" [Draft]="Form.DraftVersion" [RequestedBump]="Form.RequestedBump" [Summary]="Form.Summary" (RequestedBumpChange)="Form.RequestedBump = $event" (SummaryChange)="Form.Summary = $event" (Confirm)="Form.OnPublish($event)">
-            <button type="button" (click)="Form.OnCancel()">Cancel</button>
+            <button mjButton variant="outline" size="sm" type="button" (click)="Form.OnCancel()">Cancel</button>
           </mj-rubric-publish-dialog>
           @if (Form.Message) { <p>{{ Form.Message }}</p> }
         } @else {
@@ -95,5 +96,29 @@ export class RubricDiffPanel extends BaseFormPanel<MJRubricEntity> {
     `,
 })
 export class RubricPublishPanel extends BaseFormPanel<MJRubricEntity> {
+    public get Form(): MJRubricFormComponentExtended { return host(this); }
+}
+
+@RegisterClassEx(BaseFormPanel, {
+    key: 'form-panel:MJRubrics:versions',
+    metadata: {
+        entity: 'MJ: Rubrics',
+        slot: 'after-fields',
+        sortKey: 95,
+        contributionKey: 'rubric-versions',
+        inclusion: 'Primary',
+    },
+})
+@Component({
+    selector: 'mj-rubric-versions-panel',
+    standalone: true,
+    imports: [BaseFormsModule, RubricVersionBoardComponent],
+    template: `
+      <mj-collapsible-panel SectionKey="rubric-versions" SectionName="Versions" Icon="fa-solid fa-code-branch" [Form]="FormComponent" [FormContext]="FormContext" [DefaultExpanded]="true">
+        <mj-rubric-version-board [Cards]="Form.VersionCards" (Open)="Form.OpenVersion($event)"></mj-rubric-version-board>
+      </mj-collapsible-panel>
+    `,
+})
+export class RubricVersionsPanel extends BaseFormPanel<MJRubricEntity> {
     public get Form(): MJRubricFormComponentExtended { return host(this); }
 }

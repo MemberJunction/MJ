@@ -2,7 +2,8 @@ import { Component } from '@angular/core';
 import { CompositeKey, RunView } from '@memberjunction/core';
 import { RegisterClass, RegisterClassEx } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormPolicy, type FormChromeContext, type FormChromeSpec } from '@memberjunction/ng-base-forms';
-import { bandFromRow, nodeFromRow, planBandSave, planNodeSave, publishPreview, scaleFromRow, type RubricBandSnapshot, type RubricNodeSnapshot, type RubricScaleSnapshot, type RubricVersionSnapshot } from '@memberjunction/ng-rubrics';
+import { SharedService } from '@memberjunction/ng-shared';
+import { bandFromRow, nodeFromRow, planBandSave, planNodeSave, publishPreview, scaleFromRow, type RubricBandSnapshot, type RubricNodeSnapshot, type RubricScaleSnapshot, type RubricVersionCard, type RubricVersionSnapshot } from '@memberjunction/ng-rubrics';
 import { MJRubricEntity } from '@memberjunction/core-entities';
 import { MJRubricFormComponent } from '../../generated/Entities/MJRubric/mjrubric.form.component';
 
@@ -30,6 +31,7 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
     public Summary = '';
     public Message = '';
     public Viewing: 'draft' | 'published' = 'draft';
+    public VersionCards: RubricVersionCard[] = [];
 
     public get PublishedLabel(): string {
         const row = this.Versions.find(item => item.Status === 'Published');
@@ -69,9 +71,40 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
                     this.BaseVersion = this.snapshot(base, baseNodes, baseBands);
                 }
             }
+            this.VersionCards = await this.BuildVersionCards(rows);
         } finally {
             this.Loading = false;
         }
+    }
+
+    public OpenVersion(id: string): void {
+        SharedService.Instance.OpenEntityRecord('MJ: Rubric Versions', CompositeKey.FromID(id));
+    }
+
+    private async BuildVersionCards(versions: Record<string, unknown>[]): Promise<RubricVersionCard[]> {
+        if (versions.length === 0) return [];
+        const ids = versions.map(row => `'${String(row.ID).replace(/'/g, "''")}'`).join(', ');
+        const criteria = await this.rows('MJ: Rubric Criteria', `RubricVersionID IN (${ids})`);
+        const bands = await this.rows('MJ: Rubric Bands', `RubricVersionID IN (${ids})`);
+        return versions.map(row => {
+            const id = String(row.ID);
+            const nodes = criteria.filter(item => String(item.RubricVersionID) === id);
+            const versionBands = bands.filter(item => String(item.RubricVersionID) === id);
+            const status = String(row.Status ?? '');
+            const numbered = row.MajorVersion == null ? '' : `${row.MajorVersion}.${row.MinorVersion}.${row.PatchVersion}`;
+            const label = status === 'Draft' ? `Draft${this.NextVersion ? ` · next ${this.NextVersion}` : ''}` : (numbered || status);
+            return {
+                id,
+                status,
+                label,
+                bump: String(row.AppliedBump || row.ComputedBump || ''),
+                threshold: row.PassThreshold == null ? '' : String(row.PassThreshold),
+                criteria: nodes.filter(item => item.NodeType === 'Criterion' || item.NodeType == null).length,
+                gates: nodes.filter(item => item.IsGate === true || item.IsGate === 1).length,
+                bands: versionBands.map(item => String(item.Label ?? '')).filter(Boolean).join(', '),
+                summary: row.ChangeSummary == null ? '' : String(row.ChangeSummary),
+            };
+        }).sort((left, right) => Number(left.status === 'Draft') - Number(right.status === 'Draft'));
     }
 
     public async OnNodes(nodes: RubricNodeSnapshot[]): Promise<void> {

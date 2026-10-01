@@ -265,7 +265,7 @@ async function ensureItWorld(ctx: IntegrationCheckContext): Promise<void> {
     `);
     const versionId = published.recordset[0].ID as string;
     const leaves = await pool.request().query(`
-        SELECT CONVERT(nvarchar(36), [ID]) AS ID, CONVERT(nvarchar(36), [ScaleID]) AS ScaleID
+        SELECT CONVERT(nvarchar(36), [ID]) AS ID, CONVERT(nvarchar(36), [ScaleID]) AS ScaleID, [Key] AS [Key]
         FROM [${s}].[RubricCriterion]
         WHERE [RubricVersionID] = '${versionId}' AND [NodeType] = N'Criterion'
     `);
@@ -305,6 +305,8 @@ async function ensureItWorld(ctx: IntegrationCheckContext): Promise<void> {
         Assert(evaluation.Outcome === 'Passed', `the human evaluation outcome was ${evaluation.Outcome}`);
     }
 
+    await ensureItWorldDetails(ctx, rubricId, versionId, leaves.recordset as { ID: string; ScaleID: string; Key: string }[], subjectEntityId, agentId);
+
     const defaults = await pool.request().query(`
         SELECT a.[Name] AS AgentName
         FROM [${s}].[AIAgentRubric] ar
@@ -320,6 +322,100 @@ async function ensureItWorld(ctx: IntegrationCheckContext): Promise<void> {
     Assert(String(judged.recordset[0].Configuration ?? '').includes('trace-no-errors'), 'the trace oracle is in Configuration.oracles');
     const category = await pool.request().query(`SELECT [CategoryID] AS CategoryID FROM [${s}].[Rubric] WHERE [ID] = '${rubricId}'`);
     Assert(String(category.recordset[0].CategoryID).toLowerCase() === categoryId.toLowerCase(), 'the IT world rubric is in IT World — Agent quality');
+}
+
+/** Anchors, bands, and a submitted evaluation of each kind, with a score on every leaf. */
+async function ensureItWorldDetails(ctx: IntegrationCheckContext, rubricId: string, versionId: string, leaves: { ID: string; ScaleID: string; Key: string }[], subjectEntityId: string, agentId: string): Promise<void> {
+    const pool = poolOf(ctx);
+    const s = schemaOf(ctx);
+    const scaleId = leaves[0]?.ScaleID;
+    if (!scaleId) return;
+    const levels = await pool.request().query(`
+        SELECT CONVERT(nvarchar(36), [ID]) AS ID, [Label] AS Label
+        FROM [${s}].[RubricScaleLevel]
+        WHERE [ScaleID] = '${scaleId}'
+    `);
+    const levelId = new Map((levels.recordset as { ID: string; Label: string }[]).map(level => [level.Label, level.ID]));
+    const met = levelId.get('Met');
+    const missed = levelId.get('Not met');
+    Assert(!!met && !!missed, 'the IT world scale has Met and Not met');
+    const criteria = await pool.request().query(`
+        SELECT CONVERT(nvarchar(36), c.[ID]) AS ID
+        FROM [${s}].[RubricCriterion] c
+        INNER JOIN [${s}].[RubricVersion] v ON v.[ID] = c.[RubricVersionID]
+        WHERE v.[RubricID] = '${rubricId}' AND v.[Status] = N'Draft' AND c.[NodeType] = N'Criterion'
+    `);
+    for (const criterion of criteria.recordset as { ID: string }[]) {
+        await ensureAnchor(ctx, criterion.ID, met!, 'The answer matches the source.');
+        await ensureAnchor(ctx, criterion.ID, missed!, 'Does not meet: the answer misses the source.');
+    }
+    const drafts = await pool.request().query(`
+        SELECT CONVERT(nvarchar(36), [ID]) AS ID
+        FROM [${s}].[RubricVersion]
+        WHERE [RubricID] = '${rubricId}' AND [Status] = N'Draft'
+    `);
+    for (const version of drafts.recordset as { ID: string }[]) {
+        await ensureBand(ctx, version.ID, 'Needs work', 0, 0.5, 'Warning', 0);
+    }
+    await ensureScoredEvaluation(ctx, versionId, subjectEntityId, agentId, 'Deterministic', 'IT World — Deterministic', leaves, met!, missed!, new Set(['sourcing']));
+    await ensureScoredEvaluation(ctx, versionId, subjectEntityId, agentId, 'Self', 'IT World — Self check', leaves, met!, missed!, new Set());
+}
+
+async function ensureAnchor(ctx: IntegrationCheckContext, criterionId: string, scaleLevelId: string, descriptor: string): Promise<void> {
+    const found = await poolOf(ctx).request().query(`
+        SELECT TOP 1 [ID] AS ID FROM [${schemaOf(ctx)}].[RubricCriterionLevel]
+        WHERE [CriterionID] = '${criterionId}' AND [ScaleLevelID] = '${scaleLevelId}'
+    `);
+    if (found.recordset[0]) return;
+    const row = await rubricRow(ctx, 'MJ: Rubric Criterion Levels');
+    row.CriterionID = criterionId;
+    row.ScaleLevelID = scaleLevelId;
+    row.Descriptor = descriptor;
+    await saveRow(row);
+}
+
+async function ensureBand(ctx: IntegrationCheckContext, versionId: string, label: string, min: number, max: number, tone: string, sequence: number): Promise<void> {
+    const found = await poolOf(ctx).request().query(`
+        SELECT TOP 1 [ID] AS ID FROM [${schemaOf(ctx)}].[RubricBand]
+        WHERE [RubricVersionID] = '${versionId}' AND [Label] = N'${sqlText(label)}'
+    `);
+    if (found.recordset[0]) return;
+    const row = await rubricRow(ctx, 'MJ: Rubric Bands');
+    row.RubricVersionID = versionId;
+    row.Label = label;
+    row.MinScore = min;
+    row.MaxScore = max;
+    row.DisplayTone = tone;
+    row.Sequence = sequence;
+    await saveRow(row);
+}
+
+async function ensureScoredEvaluation(ctx: IntegrationCheckContext, versionId: string, subjectEntityId: string, agentId: string, evaluatorType: string, evaluatorName: string, leaves: { ID: string; Key: string }[], met: string, missed: string, missKeys: Set<string>): Promise<void> {
+    const found = await poolOf(ctx).request().query(`
+        SELECT TOP 1 CONVERT(nvarchar(36), [ID]) AS ID
+        FROM [${schemaOf(ctx)}].[RubricEvaluation]
+        WHERE [RubricVersionID] = '${versionId}' AND [EvaluatorType] = N'${evaluatorType}' AND [SubjectRecordID] = N'${agentId}'
+    `);
+    if (found.recordset[0]) return;
+    const evaluation = await rubricRow(ctx, 'MJ: Rubric Evaluations');
+    evaluation.RubricVersionID = versionId;
+    evaluation.SubjectEntityID = subjectEntityId;
+    evaluation.SubjectRecordID = agentId;
+    evaluation.EvaluatorType = evaluatorType;
+    evaluation.EvaluatorName = evaluatorName;
+    evaluation.Status = 'Draft';
+    await saveRow(evaluation);
+    for (const leaf of leaves) {
+        const score = await rubricRow(ctx, 'MJ: Rubric Evaluation Scores');
+        score.EvaluationID = evaluation.ID;
+        score.CriterionID = leaf.ID;
+        score.ScaleLevelID = missKeys.has(leaf.Key) ? missed : met;
+        score.Rationale = missKeys.has(leaf.Key) ? 'Not met.' : 'Met.';
+        score.Evidence = 'The IT world wrote this score.';
+        await saveRow(score);
+    }
+    evaluation.Status = 'Submitted';
+    await saveRow(evaluation);
 }
 
 async function withProviderRollback(ctx: IntegrationCheckContext, body: () => Promise<void>): Promise<void> {
@@ -839,7 +935,7 @@ export const RubricsChecks: NamedCheck[] = [
                 `);
                 const engine = getConsensus([0.2, 0.8], 'Mean');
                 const viewMean = Number(view.recordset[0].MeanScore);
-                Assert(engine.overall !== null && Math.abs(viewMean - engine.overall) < 0.000001, `view mean ${viewMean}, engine mean ${engine.overall}`);
+                Assert(engine.Overall !== null && Math.abs(viewMean - engine.Overall) < 0.000001, `view mean ${viewMean}, engine mean ${engine.Overall}`);
                 Assert(Number(view.recordset[0].SelfCount) === 1, `SelfAssessmentCount was ${view.recordset[0].SelfCount}`);
             });
         },
@@ -897,7 +993,11 @@ export const RubricsChecks: NamedCheck[] = [
                     row.IsGate = criterion.gate;
                     if (criterion.gate) row.GateMinimumScore = 1;
                     await saveRow(row);
+                    await ensureAnchor(ctx, row.ID, met.ID, 'The answer matches the source.');
+                    await ensureAnchor(ctx, row.ID, missed.ID, 'Does not meet: the answer misses the source.');
                 }
+                await ensureBand(ctx, version.ID, 'Needs work', 0, 0.5, 'Warning', 0);
+                await ensureBand(ctx, version.ID, 'Good', 0.5, 1, 'Success', 1);
                 version.Status = 'Published';
                 await saveRow(version);
                 const draft = await rubricRow(ctx, 'MJ: Rubric Versions');
@@ -922,7 +1022,10 @@ export const RubricsChecks: NamedCheck[] = [
                     row.IsGate = criterion.gate;
                     if (criterion.gate) row.GateMinimumScore = 1;
                     await saveRow(row);
+                    await ensureAnchor(ctx, row.ID, met.ID, 'The answer matches the source.');
+                    await ensureAnchor(ctx, row.ID, missed.ID, 'Does not meet: the answer misses the source.');
                 }
+                await ensureBand(ctx, draft.ID, 'Needs work', 0, 0.5, 'Warning', 0);
             }
             const published = await pool.request().query(`
                 SELECT v.[MajorVersion] AS Major, v.[MinorVersion] AS Minor, v.[PatchVersion] AS Patch, v.[AppliedBump] AS Bump

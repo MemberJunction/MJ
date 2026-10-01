@@ -27,6 +27,17 @@ export class RubricVersionDiffComponent {
         return this.Base && this.Draft ? publishPreview(this.Base, this.Draft).nextVersion ?? '' : '';
     }
 
+    public get Heading(): string {
+        if (!this.Base) return this.DraftLabel;
+        return `Draft vs ${this.BaseLabel}`;
+    }
+
+    public get DraftLabel(): string {
+        const version = this.Draft;
+        if (!version || version.majorVersion == null) return 'This version';
+        return `${version.majorVersion}.${version.minorVersion ?? 0}.${version.patchVersion ?? 0}`;
+    }
+
     public get BaseLabel(): string {
         const version = this.Base;
         if (version?.majorVersion == null) return 'Published base';

@@ -1,8 +1,9 @@
 import { Component } from '@angular/core';
 import { RunView } from '@memberjunction/core';
 import { MJAIAgentRubricEntity, MJRubricBandEntity, MJRubricCategoryEntity, MJRubricCriterionEntity, MJRubricEvaluationScoreEntity, MJRubricScaleLevelEntity, MJRubricVersionEntity } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import { RegisterClass, RegisterClassEx } from '@memberjunction/global';
+import { BaseFormComponent, BaseFormPanel, BaseFormPolicy, BaseFormsModule, type FormChromeContext, type FormChromeSpec } from '@memberjunction/ng-base-forms';
+import { RubricVersionHostComponent } from '@memberjunction/ng-rubrics';
 import { MJAIAgentRubricFormComponent } from '../../generated/Entities/MJAIAgentRubric/mjaiagentrubric.form.component';
 import { MJRubricBandFormComponent } from '../../generated/Entities/MJRubricBand/mjrubricband.form.component';
 import { MJRubricCategoryFormComponent } from '../../generated/Entities/MJRubricCategory/mjrubriccategory.form.component';
@@ -14,12 +15,43 @@ import { MJRubricVersionFormComponent } from '../../generated/Entities/MJRubricV
 @Component({
     standalone: false,
     selector: 'mj-rubric-version-form',
-    template: `@if (record) { <mj-record-form-container [Record]="record" [FormComponent]="this" (Navigate)="OnFormNavigate($event)" (DeleteRequested)="OnDeleteRequested()" (FavoriteToggled)="OnFavoriteToggled()" (HistoryRequested)="OnHistoryRequested()" (ListManagementRequested)="OnListManagementRequested()"><mj-rubric-version-host [VersionId]="record.ID" [RubricId]="record.RubricID" [Status]="record.Status" [MajorVersion]="record.MajorVersion" [MinorVersion]="record.MinorVersion" [PatchVersion]="record.PatchVersion" [Provider]="ProviderToUse"></mj-rubric-version-host></mj-record-form-container> }`,
+    templateUrl: '../../generated/Entities/MJRubricVersion/mjrubricversion.form.component.html',
 })
 @RegisterClass(BaseFormComponent, 'MJ: Rubric Versions')
 export class MJRubricVersionFormComponentExtended extends MJRubricVersionFormComponent {
     public override record!: MJRubricVersionEntity;
 }
+
+/** The version record uses the same left-nav rail as the rubric. */
+@RegisterClassEx(BaseFormPolicy, { key: 'MJ: Rubric Versions', metadata: { entity: 'MJ: Rubric Versions' } })
+export class RubricVersionFormPolicy extends BaseFormPolicy {
+    public override DecorateChrome(spec: FormChromeSpec, _ctx: FormChromeContext): FormChromeSpec {
+        return { ...spec, Layout: 'left-nav' };
+    }
+}
+
+@RegisterClassEx(BaseFormPanel, {
+    key: 'form-panel:MJRubricVersions:summary',
+    metadata: {
+        entity: 'MJ: Rubric Versions',
+        slot: 'before-fields',
+        sortKey: 100,
+        contributionKey: 'rubric-version-summary',
+        inclusion: 'Primary',
+        leadsWhenUnsaved: true,
+    },
+})
+@Component({
+    selector: 'mj-rubric-version-summary-panel',
+    standalone: true,
+    imports: [BaseFormsModule, RubricVersionHostComponent],
+    template: `
+      <mj-collapsible-panel SectionKey="rubric-version-summary" SectionName="This version" Icon="fa-solid fa-code-compare" [Form]="FormComponent" [FormContext]="FormContext" [DefaultExpanded]="true">
+        <mj-rubric-version-host [VersionId]="Record.ID" [RubricId]="Record.RubricID" [Status]="Record.Status" [MajorVersion]="Record.MajorVersion" [MinorVersion]="Record.MinorVersion" [PatchVersion]="Record.PatchVersion" [Provider]="FormComponent.ProviderToUse"></mj-rubric-version-host>
+      </mj-collapsible-panel>
+    `,
+})
+export class RubricVersionSummaryPanel extends BaseFormPanel<MJRubricVersionEntity> {}
 
 @Component({
     standalone: false,
