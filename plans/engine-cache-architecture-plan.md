@@ -2984,3 +2984,44 @@ always meant — every one of them is a test about detecting a change made outsi
 dropped pub/sub message, a slot that expired (F9). Those are now covered directly: F9 is fixed in
 §25.5, index groups find peers' slots, and the metadata check has its own path. What remains uncovered
 is a trusted entity whose event was genuinely lost to an outage, which is #4759's territory.
+
+## 27. The changeset numbers, re-measured (2026-10-01)
+
+Measured on the current branch (25 commits, post-rebase, with §25.5 and §26 in), 3 replicas against
+`mj_test_2` and a private Redis, on an otherwise idle machine. Where a "before" could be produced on
+the *same build* it was, rather than quoted from a months-old run.
+
+| Claim | Measured now |
+|---|---|
+| Warm boot | **14** database calls vs **111** cold (was 9 vs 109) |
+| Fleet boot | 3 replicas **139** total (111 + 2×14); 5 replicas **167** (111 + 4×14) |
+| 100 saves, serial vs one transaction | **111 → 12** slot writes; **9.96 MB → 3.45 MB**; per peer **100 handler calls / ~100 rebuilds / 190 ms → 1 / 1 / 3 ms** |
+| 100 deletes, serial vs one transaction | **100 → 1** slot write; **6.53 MB → 17.5 KB**; per peer **100 / 100 / 239 ms → 1 / 1 / 2–4 ms** |
+| Sweep (3 s interval) | raw SQL change seen everywhere in **1,282 ms** and **1,489 ms**; exactly one replica swept and reloaded, the other two adopted its payload |
+| Race (concurrent saves) | **0 of 20** rounds disagree |
+| Save → seen on peers | p50 **52 ms**, p95 **370 ms**, max 370, **0 misses** over 20 trials / 40 observations |
+| `mj cache clear` | **0.17–0.19 s** light vs **2.44–2.62 s** with its id removed from the list, same build |
+
+**Three of these are now A/B on one build**, which is better evidence than the originals: the burst
+comparison (`--burst-mode=serial` vs `transaction`), the CLI timing (the entry removed from the
+built light-command list), and the boot comparison (the cold replica in the same run is the "before"
+for the warm ones). The race and sweep "before" figures still come from the pre-fix code, since
+reproducing them would mean removing the key lock and the sweep.
+
+**Two numbers moved for reasons worth recording.** The warm boot is 14 rather than 9, and the cold
+111 rather than 109 — 168 upstream commits of engine changes sit between the two runs. The
+transaction saves leg is 12 writes rather than the 1 the changeset claimed: 100 saves in one
+transaction touch several distinct slots, and only the deletes leg collapses to a single write. The
+old "1 write (96 KB)" matched the deletes leg and was stated as though it covered both. The per-peer
+figures are the honest headline either way — **1 handler call and 1 rebuild instead of 100**.
+
+**Two defects surfaced while measuring, both mine.**
+
+1. The rig did not run at all: `ReferenceError: name is not defined`. The §24 naming-gate rename of
+   the rig's `Replica` members (`name` → `Name`) left three template literals referencing the old
+   parameter. Nothing caught it because the rig is a scratch tool outside CI and has no test — the
+   same blind spot §16.7 is about. Fixed.
+2. The sweep phase would have reported `recoveredMs: null` under §26, because it mutates
+   `MJ: AI Models` by raw SQL and that entity trusts its cache by default. That is the gate working,
+   not a regression — but it reads like one. The phase now documents the precondition and prints it
+   at run time, and the measurement above was taken with the flag set to 0 and restored afterwards.

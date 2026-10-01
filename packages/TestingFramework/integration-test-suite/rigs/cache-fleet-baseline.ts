@@ -89,7 +89,7 @@ class Replica {
 
     constructor(public readonly Name: string, mode: 'replica' | 'cli') {
         mkdirSync(LOG_DIR, { recursive: true });
-        const out = openSync(path.join(LOG_DIR, `${PREFIX}-${name}.log`), 'a');
+        const out = openSync(path.join(LOG_DIR, `${PREFIX}-${Name}.log`), 'a');
         // Inherit tsx's loader flags so the child can run a .ts entry, drop anything else.
         const execArgv = process.execArgv.filter((a, i, arr) =>
             a === '--require' || a === '--import' || arr[i - 1] === '--require' || arr[i - 1] === '--import');
@@ -113,10 +113,10 @@ class Replica {
             if (!w) return;
             this.waiting.delete(msg.id);
             if (msg.ok) w.resolve(msg.result);
-            else w.reject(new Error(`${name}: ${msg.error}`));
+            else w.reject(new Error(`${Name}: ${msg.error}`));
         });
         this.Proc.on('exit', (code) => {
-            for (const [, w] of this.waiting) w.reject(new Error(`${name} exited (code ${code})`));
+            for (const [, w] of this.waiting) w.reject(new Error(`${Name} exited (code ${code})`));
             this.waiting.clear();
         });
     }
@@ -508,9 +508,19 @@ async function phaseBurst(reps: Replica[]): Promise<void> {
 /**
  * Plan 3.1 gate: a raw SQL change (no event, no cache clear) reaches every replica within the
  * sweep interval, and on a shared cache one replica does the reload.
+ *
+ * **Precondition since §26: `MJ: AI Models` must carry `TrustServerCacheCompletely = 0` in the
+ * database BEFORE the replicas boot.** The sweep now visits only entities that declare their rows
+ * can change without firing an event, which is exactly what this phase does by raw SQL. Without the
+ * declaration the sweep correctly ignores the entity, `recoveredMs` comes back null, and the phase
+ * reads like a regression when it is the gate working as designed. The replicas read the flag from
+ * metadata at boot, so setting it after they start has no effect:
+ *
+ *     UPDATE __mj.Entity SET TrustServerCacheCompletely = 0 WHERE Name = 'MJ: AI Models'
  */
 async function phaseSweep(reps: Replica[]): Promise<void> {
     console.log(`\n[sweep] engine sweep every ${SWEEP_MS} ms …`);
+    console.log('[sweep] precondition: MJ: AI Models must have TrustServerCacheCompletely = 0 (see §26); a null recoveredMs with 0 sweeps usually means it does not.');
     const model = await reps[0].Call<{ id: string; description: string | null }>('pick-model');
     await Promise.all(reps.map(x => x.Call('start-sweeper', { intervalMs: SWEEP_MS })));
     const trial = async (value: string | null) => {
