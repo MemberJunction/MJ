@@ -342,6 +342,7 @@ const options = new EntitySaveOptions();
 options.IgnoreDirtyState = true;     // Force save even if no changes detected
 options.SkipEntityAIActions = true;  // Skip AI-related actions
 options.SkipEntityActions = true;    // Skip entity actions
+options.SkipShareNotification = true; // A share entity saves without the "shared with you" notice (a grant written as plumbing)
 await entity.Save(options);
 
 // Delete
