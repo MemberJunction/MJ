@@ -42,7 +42,8 @@ Turn it on for an agent and pick the uses it needs:
 }
 ```
 
-A run can turn it on or off for itself with `data.__agentTypePromptParams.decisionsEnabled`.
+A run can turn it on or off with `data.__agentTypePromptParams.decisionsEnabled`. The sub-agents
+the run starts inherit its `data`, so the override reaches them too.
 
 The Memory Manager is a Loop agent too. Its note gate needs `decisionsEnabled: true` in its own
 `AgentTypePromptParams` or in the run's `__agentTypePromptParams`, as well as `enableDecisionGate`.
