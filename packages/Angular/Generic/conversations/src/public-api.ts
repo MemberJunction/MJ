@@ -13,6 +13,8 @@ export * from './lib/models/navigation-request.model';
 // Host rules for an agent turn: reply mode, routes, and the host turn handler contract
 export * from './lib/models/agent-turn.model';
 export * from './lib/utils/agent-turn-routing';
+// Opt-in decision routing for an unmentioned message (EnableDecisionRouting)
+export * from './lib/utils/decision-routing';
 
 // Services - State
 export * from './lib/services/data-cache.service';

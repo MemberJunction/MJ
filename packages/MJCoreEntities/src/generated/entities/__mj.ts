@@ -18517,7 +18517,7 @@ export const MJEntityDocumentSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Master switch for the LLM reasoning layer on this entity. When 0 (default), duplicate detection runs the existing vector-only path unchanged and the reasoning columns/AutomationLevel are ignored. When 1, candidates above ReasoningThreshold are reasoned over.`),
-    ReasoningMode: z.union([z.literal('Agent'), z.literal('Prompt')]).describe(`
+    ReasoningMode: z.union([z.literal('Agent'), z.literal('Decision'), z.literal('DecisionThenPrompt'), z.literal('Prompt')]).describe(`
         * * Field Name: ReasoningMode
         * * Display Name: Reasoning Mode
         * * SQL Data Type: nvarchar(20)
@@ -18525,6 +18525,8 @@ export const MJEntityDocumentSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Agent
+    *   * Decision
+    *   * DecisionThenPrompt
     *   * Prompt
         * * Description: Which reasoning provider runs for this entity. Prompt (default) = a single-shot AI Prompt (cheap/fast); Agent = an AI Agent with memory + context-exploration tools (for heavy entities needing deeper reasoning). Both consume one shared core instruction set.`),
     ReasoningThreshold: z.number().nullable().describe(`
@@ -87047,13 +87049,15 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     * * Value List Type: List
     * * Possible Values 
     *   * Agent
+    *   * Decision
+    *   * DecisionThenPrompt
     *   * Prompt
     * * Description: Which reasoning provider runs for this entity. Prompt (default) = a single-shot AI Prompt (cheap/fast); Agent = an AI Agent with memory + context-exploration tools (for heavy entities needing deeper reasoning). Both consume one shared core instruction set.
     */
-    get ReasoningMode(): 'Agent' | 'Prompt' {
+    get ReasoningMode(): 'Agent' | 'Decision' | 'DecisionThenPrompt' | 'Prompt' {
         return this.Get('ReasoningMode');
     }
-    set ReasoningMode(value: 'Agent' | 'Prompt') {
+    set ReasoningMode(value: 'Agent' | 'Decision' | 'DecisionThenPrompt' | 'Prompt') {
         this.Set('ReasoningMode', value);
     }
 
