@@ -682,7 +682,11 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('agent-decisions-switch', {
         if (!f) {
             return;
         }
+        // A driver class with no registration before the bundle keeps resolving to the doubles after the
+        // restore, so both must stop answering: later bundles in this process get a failure, never a script.
         f.Decider.Disarm();
+        f.Llm.Reset();
+        f.Llm.SetDefaultOutcome({ kind: 'fail', error: new Error('The agent-decisions-switch TestLLM is not armed: its bundle has finished') });
         for (const restore of f.Restores) {
             restore();
         }
