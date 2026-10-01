@@ -2,6 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 let backing: Record<string, unknown[]> = {};
 let loadedConfigs: Array<Record<string, unknown>> = [];
+/** Subscribers of each engine property, so a test can announce that an array changed. */
+const propertySubscribers = new Map<string, Array<() => void>>();
+/** Answers the component lookup by ID; each call is recorded. */
+const componentQueries: Array<{ EntityName: string; ExtraFilter?: string }> = [];
+let componentRows: Record<string, unknown> = {};
+let componentLookupFails = false;
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/global')>();
@@ -21,8 +27,31 @@ vi.mock('@memberjunction/core', () => ({
         }
         async Load(configs: Array<Record<string, unknown>>): Promise<void> { loadedConfigs = configs; }
         GetConfigData<T>(prop: string): T[] { return (backing[prop] ?? []) as T[]; }
-        ObserveProperty<T>(prop: string) { return { prop }; }
+        ObserveProperty(prop: string) {
+            return {
+                prop,
+                subscribe: (fn: () => void) => {
+                    const list = propertySubscribers.get(prop) ?? [];
+                    list.push(fn);
+                    propertySubscribers.set(prop, list);
+                    return { unsubscribe() {} };
+                },
+            };
+        }
+        get ProviderToUse() { return { CurrentUser: null }; }
     },
+    RunView: {
+        FromMetadataProvider: () => ({
+            RunView: async (params: { EntityName: string; ExtraFilter?: string }) => {
+                componentQueries.push(params);
+                if (componentLookupFails) return { Success: false, Results: [], ErrorMessage: 'boom' };
+                const id = /ID='([^']*)'/.exec(params.ExtraFilter ?? '')?.[1] ?? '';
+                const found = componentRows[id];
+                return { Success: true, Results: found ? [found] : [] };
+            },
+        }),
+    },
+    LogError: () => undefined,
     BaseEnginePropertyConfig: class {},
     IMetadataProvider: class {},
     UserInfo: class {},
@@ -205,6 +234,7 @@ describe('InteractiveFormsEngine contribution load', () => {
         expect(contributionConfig()?.Filter).toBeUndefined();
     });
 });
+
 /**
  * The identity and permission surfaces take only the user's own forms and panels. A full custom
  * form published to a role or to everyone would replace the whole body of the Users form for
@@ -245,5 +275,75 @@ describe('InteractiveFormsEngine.GetActiveOverrideForEntity on a restricted enti
             expect(InteractiveFormsEngine.Instance.GetActiveOverrideForEntity(ENTITY, USER, [ROLE])).toBeNull();
             expect(InteractiveFormsEngine.Instance.GetApplicableContributions(ENTITY, USER, [ROLE])).toEqual([]);
         }
+    });
+});
+
+/**
+ * A panel's component is a Widget, which the engine does not load with the forms. Each mounted
+ * panel used to run its own query for it; the engine now fetches a component once by ID and
+ * serves it from memory until a component changes.
+ */
+describe('InteractiveFormsEngine.GetComponentByID', () => {
+    const WIDGET = '44444444-4444-4444-4444-444444444444';
+    const provider = { CurrentUser: { ID: USER } } as never;
+
+    beforeEach(() => {
+        backing = {};
+        componentQueries.length = 0;
+        componentRows = { [WIDGET]: { ID: WIDGET, Name: 'LTV strip', Type: 'Widget' } };
+        componentLookupFails = false;
+        InteractiveFormsEngine.Instance.ClearComponentCache();
+    });
+
+    it('answers a whole form from the loaded forms without a query', async () => {
+        backing._forms = [{ ID: 'FORM-1', Name: 'Members form', Type: 'Form' }];
+        const found = await InteractiveFormsEngine.Instance.GetComponentByID('form-1', undefined, provider);
+        expect(found?.Name).toBe('Members form');
+        expect(componentQueries).toHaveLength(0);
+    });
+
+    it('fetches a widget once and serves it from memory after that', async () => {
+        const first = await InteractiveFormsEngine.Instance.GetComponentByID(WIDGET, undefined, provider);
+        const second = await InteractiveFormsEngine.Instance.GetComponentByID(WIDGET.toUpperCase(), undefined, provider);
+        expect(first?.Name).toBe('LTV strip');
+        expect(second).toBe(first);
+        expect(componentQueries).toHaveLength(1);
+        expect(componentQueries[0]).toMatchObject({ EntityName: 'MJ: Components', ExtraFilter: `ID='${WIDGET}'` });
+        expect(InteractiveFormsEngine.Instance.FindComponentByID(WIDGET)).toBe(first);
+    });
+
+    it('runs one query for panels that mount at the same time', async () => {
+        const [a, b] = await Promise.all([
+            InteractiveFormsEngine.Instance.GetComponentByID(WIDGET, undefined, provider),
+            InteractiveFormsEngine.Instance.GetComponentByID(WIDGET, undefined, provider),
+        ]);
+        expect(a).toBe(b);
+        expect(componentQueries).toHaveLength(1);
+    });
+
+    it('escapes the id it puts in the filter', async () => {
+        await InteractiveFormsEngine.Instance.GetComponentByID("x' OR 1=1 --", undefined, provider);
+        expect(componentQueries[0].ExtraFilter).toBe("ID='x'' OR 1=1 --'");
+    });
+
+    it('does not remember a failed or empty lookup, so the next mount tries again', async () => {
+        componentLookupFails = true;
+        expect(await InteractiveFormsEngine.Instance.GetComponentByID(WIDGET, undefined, provider)).toBeNull();
+        componentLookupFails = false;
+        expect((await InteractiveFormsEngine.Instance.GetComponentByID(WIDGET, undefined, provider))?.Name).toBe('LTV strip');
+        expect(componentQueries).toHaveLength(2);
+    });
+
+    it('fetches again after any component changes', async () => {
+        await InteractiveFormsEngine.Instance.GetComponentByID(WIDGET, undefined, provider);
+        componentRows = { [WIDGET]: { ID: WIDGET, Name: 'LTV strip v2', Type: 'Widget' } };
+        for (const notify of propertySubscribers.get('_forms') ?? []) notify();
+        expect((await InteractiveFormsEngine.Instance.GetComponentByID(WIDGET, undefined, provider))?.Name).toBe('LTV strip v2');
+        expect(componentQueries).toHaveLength(2);
+    });
+
+    it('returns null for a blank id without a query', async () => {
+        expect(await InteractiveFormsEngine.Instance.GetComponentByID('', undefined, provider)).toBeNull();
+        expect(componentQueries).toHaveLength(0);
     });
 });

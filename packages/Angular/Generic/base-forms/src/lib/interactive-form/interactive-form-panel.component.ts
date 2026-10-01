@@ -1,7 +1,7 @@
 import { ChangeDetectorRef, Component, DoCheck, Input, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
-import { LogError, RunView, ValidationResult, type BaseEntity, type CompositeKey, type IMetadataProvider } from '@memberjunction/core';
+import { LogError, ValidationResult, type BaseEntity, type CompositeKey } from '@memberjunction/core';
 import { ValidationErrorInfo } from '@memberjunction/global';
-import { InteractiveFormsEngine, type MJComponentEntity } from '@memberjunction/core-entities';
+import { InteractiveFormsEngine } from '@memberjunction/core-entities';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import {
     FormPanelEventNames,
@@ -25,9 +25,11 @@ import { BuildFormPanelHostProps } from './form-panel-host-props.builder';
  * `Source: 'metadata'` winners exactly where a compiled BaseFormPanel would mount.
  *
  * Layering: the React component never touches BaseEntity. This host owns the
- * `FormPanelHostProps` snapshot, applies `FieldChanged` to the PARENT record (the
- * parent form's Save persists it), forwards `RowCountChanged` to the rail badge, and
- * surfaces `Validate` through `BaseFormPanel.Validate()`.
+ * `FormPanelHostProps` snapshot and rebuilds it when the parent record's values change,
+ * applies `FieldChanged` to the PARENT record (only for the fields the contribution
+ * claims, and only in edit mode; the parent form's Save persists it), forwards
+ * `RowCountChanged` to the rail badge, and surfaces `Validate` through
+ * `BaseFormPanel.Validate()`.
  */
 @Component({
     standalone: false,
@@ -57,6 +59,8 @@ export class InteractiveFormPanelComponent extends BaseFormPanel implements OnIn
     private lastValidation: FormPanelValidateResult | null = null;
     private lastEditMode: boolean | null = null;
     private lastExpanded: boolean | null = null;
+    /** The record's field values when {@link HostProps} was last built, by field position. */
+    private shownValues: unknown[] | null = null;
     private readonly cdr = inject(ChangeDetectorRef);
     private readonly reactBridge = inject(ReactBridgeService);
 
@@ -121,7 +125,10 @@ export class InteractiveFormPanelComponent extends BaseFormPanel implements OnIn
         this.RebuildHostProps();
     }
 
-    /** Edit mode and expanded state are not inputs; detect their transitions cheaply. */
+    /**
+     * Edit mode, expanded state and the parent record's values are not inputs; detect their
+     * changes cheaply. A field the user edits elsewhere on the form reaches the panel this way.
+     */
     public ngDoCheck(): void {
         const edit = this.FormComponent?.EditMode ?? false;
         const expanded = this.isExpanded();
@@ -131,15 +138,19 @@ export class InteractiveFormPanelComponent extends BaseFormPanel implements OnIn
             this.lastExpanded = expanded;
             if (this.HostProps) this.RebuildHostProps();
             if (modeChanged) this.invokeIfRegistered(FormPanelMethodNames.SetEditMode, { mode: edit ? 'edit' : 'view' });
+        } else if (this.HostProps && this.recordValuesChanged()) {
+            this.RebuildHostProps();
         }
     }
 
     public ngOnDestroy(): void {
         this.HostProps = null;
+        this.shownValues = null;
     }
 
     public RebuildHostProps(): void {
-        if (!this.Record) { this.HostProps = null; return; }
+        if (!this.Record) { this.HostProps = null; this.shownValues = null; return; }
+        this.shownValues = this.Record.Fields.map((f) => f.Value);
         this.HostProps = BuildFormPanelHostProps({
             Record: this.Record,
             FormComponent: this.FormComponent ?? null,
@@ -210,42 +221,44 @@ export class InteractiveFormPanelComponent extends BaseFormPanel implements OnIn
         return result;
     }
 
-    /**
-     * One component, by ID. Bulk-loading every `Type='Widget'` row would put an open-ended,
-     * unrelated set of specs in the engine cache (and in client local storage); scoping the
-     * engine's own filter with a subquery made a failure there fatal for every form. Fetching
-     * the single component a mounted panel needs costs one query per distinct panel component
-     * and cannot break anything that is not already rendering it.
-     */
-    private async loadComponentByID(id: string, provider: IMetadataProvider): Promise<MJComponentEntity | undefined> {
-        try {
-            const rv = RunView.FromMetadataProvider(provider);
-            const result = await rv.RunView<MJComponentEntity>({
-                EntityName: 'MJ: Components',
-                ExtraFilter: `ID='${id}'`,
-                ResultType: 'entity_object',
-                MaxRows: 1,
-            }, provider.CurrentUser);
-            if (!result.Success) {
-                LogError(`InteractiveFormPanelComponent: component lookup failed for ${id}: ${result.ErrorMessage ?? 'unknown error'}`);
-                return undefined;
-            }
-            return (result.Results ?? [])[0];
-        } catch (err) {
-            LogError(`InteractiveFormPanelComponent: component lookup threw for ${id}: ${err instanceof Error ? err.message : String(err)}`);
-            return undefined;
-        }
-    }
-
     private isExpanded(): boolean {
         return this.FormComponent?.IsSectionExpanded(this.SectionKey, !this.IsRelatedClaim) ?? true;
     }
 
+    /** True when a field of the record no longer holds the value {@link HostProps} was built from. */
+    private recordValuesChanged(): boolean {
+        const shown = this.shownValues;
+        const fields = this.Record?.Fields;
+        if (!shown || !fields) return false;
+        if (fields.length !== shown.length) return true;
+        for (let i = 0; i < fields.length; i++) {
+            if (!Object.is(fields[i].Value, shown[i])) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Writes a panel's `FieldChanged` to the parent record: only a field the contribution claims
+     * (`replacesFieldNames`), and only while the form is in edit mode. Anything else is ignored
+     * and logged, so a panel cannot change a field the user did not hand it or edit a record the
+     * user is only viewing.
+     */
     private applyFieldChange(fieldName: string | undefined, value: unknown): void {
         if (!fieldName || !this.Record) return;
-        const field = this.Record.Fields.find((f) => f.Name.trim().toLowerCase() === fieldName.trim().toLowerCase());
+        const wanted = fieldName.trim().toLowerCase();
+        const entityName = this.Record.EntityInfo.Name;
+        if (!this.FormComponent?.EditMode) {
+            LogError(`InteractiveFormPanelComponent: "${fieldName}" on ${entityName} changed while the form is not in edit mode; change ignored.`);
+            return;
+        }
+        const claimed = (this.Contribution.Metadata.replacesFieldNames ?? []).some((name) => name.trim().toLowerCase() === wanted);
+        if (!claimed) {
+            LogError(`InteractiveFormPanelComponent: "${fieldName}" on ${entityName} is not a field this panel claims; change ignored.`);
+            return;
+        }
+        const field = this.Record.Fields.find((f) => f.Name.trim().toLowerCase() === wanted);
         if (!field) {
-            LogError(`InteractiveFormPanelComponent: unknown field "${fieldName}" on ${this.Record.EntityInfo.Name}; change ignored.`);
+            LogError(`InteractiveFormPanelComponent: unknown field "${fieldName}" on ${entityName}; change ignored.`);
             return;
         }
         // Dynamic field name from the React side — the same sanctioned Set() path the whole-form host uses.
@@ -278,10 +291,9 @@ export class InteractiveFormPanelComponent extends BaseFormPanel implements OnIn
         } catch (err) {
             LogError(`InteractiveFormPanelComponent: engine Config failed: ${err instanceof Error ? err.message : String(err)}`);
         }
-        // The engine caches whole-form Components only, so a panel's Widget component is
-        // normally NOT there — fetch exactly the one this contribution renders.
-        let component = InteractiveFormsEngine.Instance.FindComponentByID(id);
-        if (!component && provider) component = await this.loadComponentByID(id, provider);
+        // A panel's Widget component is not in the engine's loaded forms; the engine fetches it
+        // by ID once and serves every later mount of it from memory.
+        const component = await InteractiveFormsEngine.Instance.GetComponentByID(id, provider?.CurrentUser, provider);
         if (!component) { this.loadError = `Component ${id} not found.`; return; }
         try {
             this.componentSpec = JSON.parse(component.Specification ?? 'null') as ComponentSpec;

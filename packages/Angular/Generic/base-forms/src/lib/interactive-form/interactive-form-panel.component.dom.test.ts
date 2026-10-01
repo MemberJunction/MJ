@@ -4,6 +4,7 @@ import type { BaseEntity } from '@memberjunction/core';
 import { ReactBridgeService } from '@memberjunction/ng-react';
 import { By } from '@angular/platform-browser';
 import { renderComponentFixture, query, text } from '@memberjunction/ng-test-utils';
+import { InteractiveFormsEngine, type MJComponentEntity } from '@memberjunction/core-entities';
 import { InteractiveFormPanelComponent } from './interactive-form-panel.component';
 import type { FormContributionRegistration } from '../panel-slot/form-contribution';
 import type { BaseFormComponent } from '../base-form-component';
@@ -117,5 +118,102 @@ describe('InteractiveFormPanelComponent (DOM) — order follows the slot', () =>
     const stub = f.debugElement.query(By.directive(PanelStub)).componentInstance as PanelStub;
     expect(stub.Order).toBe(f.componentInstance.DisplayOrder);
     expect(stub.Order).toBeLessThan(0);
+  });
+});
+
+/** A record with real field values, for the tests that read or write them. */
+function editableRecord(values: Record<string, unknown>) {
+  const fields = Object.keys(values).map((name) => ({ Name: name, Value: values[name] }));
+  return {
+    EntityInfo: { Name: 'MJ_BizApps_Common: People', DisplayName: 'People' },
+    Fields: fields.map((f) => ({ ...f, EntityFieldInfo: { Name: f.Name } })),
+    GetAll() { return Object.fromEntries(this.Fields.map((f: { Name: string; Value: unknown }) => [f.Name, f.Value])); },
+    Set(name: string, value: unknown) { const f = this.Fields.find((x: { Name: string }) => x.Name === name); if (f) f.Value = value; },
+    PrimaryKey: { HasValue: false },
+  };
+}
+type PanelInternals = { loadSpec(): Promise<void>; applyFieldChange(name: string, value: unknown): void };
+
+/**
+ * A panel's component is a Widget the forms engine does not load with the forms. The engine
+ * fetches it once by ID, so a second mount of the same panel costs no query.
+ */
+describe('InteractiveFormPanelComponent (DOM) — loading its component', () => {
+  it('asks the forms engine for the component by ID', async () => {
+    vi.spyOn(InteractiveFormsEngine.Instance, 'Config').mockResolvedValue(undefined);
+    const lookup = vi.spyOn(InteractiveFormsEngine.Instance, 'GetComponentByID').mockResolvedValue({
+      Name: 'LTV strip', Specification: JSON.stringify({ name: 'LTV', componentRole: 'form-panel' }),
+    } as unknown as MJComponentEntity);
+    const f = render(contribution());
+    await (f.componentInstance as unknown as PanelInternals).loadSpec();
+    expect(lookup).toHaveBeenCalledWith('comp-1', undefined, undefined);
+    expect(f.componentInstance.componentSpec?.name).toBe('LTV');
+    expect(f.componentInstance.loadError).toBeNull();
+  });
+
+  it('reports a component the engine cannot find', async () => {
+    vi.spyOn(InteractiveFormsEngine.Instance, 'Config').mockResolvedValue(undefined);
+    vi.spyOn(InteractiveFormsEngine.Instance, 'GetComponentByID').mockResolvedValue(null);
+    const f = render(contribution());
+    await (f.componentInstance as unknown as PanelInternals).loadSpec();
+    expect(f.componentInstance.loadError).toBe('Component comp-1 not found.');
+  });
+});
+
+/**
+ * A panel writes to the parent record only where the user handed it a field, and only while the
+ * user is editing. Without the check, a panel in view mode could change any field of the record.
+ */
+describe('InteractiveFormPanelComponent (DOM) — writing a parent field', () => {
+  const claimsEmail = () => contribution({
+    Metadata: { entity: 'MJ_BizApps_Common: People', slot: 'after-fields', contributionKey: 'skip:email', replacesFieldNames: ['Email'] },
+  } as Partial<FormContributionRegistration>);
+
+  function renderEditable(editMode: boolean) {
+    const record = editableRecord({ Email: 'old@x.io', Notes: 'keep' });
+    vi.spyOn(InteractiveFormPanelComponent.prototype as unknown as OnInitProto, 'ngOnInit').mockResolvedValue(undefined);
+    const f = renderComponentFixture(InteractiveFormPanelComponent, {
+      imports: [ReactStub, AlertStub, PanelStub],
+      declarations: [InteractiveFormPanelComponent],
+      providers: [{ provide: ReactBridgeService, useValue: {} }],
+      inputs: { Contribution: claimsEmail(), Record: record as unknown as BaseEntity, FormComponent: { ...FORM, EditMode: editMode } as unknown as BaseFormComponent },
+    });
+    return { f, record };
+  }
+
+  it('writes a claimed field in edit mode', () => {
+    const { f, record } = renderEditable(true);
+    (f.componentInstance as unknown as PanelInternals).applyFieldChange('email', 'new@x.io');
+    expect(record.Fields.find((x) => x.Name === 'Email')?.Value).toBe('new@x.io');
+  });
+
+  it('ignores a field the panel does not claim', () => {
+    const { f, record } = renderEditable(true);
+    (f.componentInstance as unknown as PanelInternals).applyFieldChange('Notes', 'overwritten');
+    expect(record.Fields.find((x) => x.Name === 'Notes')?.Value).toBe('keep');
+  });
+
+  it('ignores every write while the form is in view mode', () => {
+    const { f, record } = renderEditable(false);
+    (f.componentInstance as unknown as PanelInternals).applyFieldChange('Email', 'new@x.io');
+    expect(record.Fields.find((x) => x.Name === 'Email')?.Value).toBe('old@x.io');
+  });
+
+  it('hands the panel the new value when the user edits a field elsewhere on the form', () => {
+    const { f, record } = renderEditable(true);
+    f.componentInstance.RebuildHostProps();
+    expect(f.componentInstance.HostProps?.record['Email']).toBe('old@x.io');
+    record.Set('Email', 'typed@x.io');
+    f.componentInstance.ngDoCheck();
+    expect(f.componentInstance.HostProps?.record['Email']).toBe('typed@x.io');
+  });
+
+  it('keeps the same props while nothing changed', () => {
+    const { f } = renderEditable(true);
+    f.componentInstance.RebuildHostProps();
+    f.componentInstance.ngDoCheck();
+    const before = f.componentInstance.HostProps;
+    f.componentInstance.ngDoCheck();
+    expect(f.componentInstance.HostProps).toBe(before);
   });
 });

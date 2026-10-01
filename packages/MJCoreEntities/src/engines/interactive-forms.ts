@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, ProviderType, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, ProviderType, RunView, UserInfo } from "@memberjunction/core";
 import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from "@memberjunction/global";
 import type { Observable } from "rxjs";
 import type { MJComponentEntity, MJEntityFormContributionEntity, MJEntityFormOverrideEntity } from "../generated/entity_subclasses";
@@ -28,17 +28,20 @@ import type { InstanceConfigEngine } from "./InstanceConfigEngine";
  *      because the full Component table includes ~150MB of `Specification`
  *      JSON across non-form types (Skip artifacts, dashboards, etc.).
  *
- * This engine threads the needle: load `Type='Form'` Components plus only the
- * widgets that a `MJ: Entity Form Contributions` row actually references
- * (small dataset — a few dozen per typical deployment, ~5MB max). It deliberately
- * does NOT load every `Type='Widget'` row: `Widget` is an open set grown by
- * registry sync and general authoring, unrelated to form-panel adoption, and this
- * cache is written to client local storage on every boot. Scoping by reference
- * keeps the set proportional to the feature's use. Plus
- * **all** `EntityFormOverride` rows (tiny). Specification is included
- * because the cockpit + Skip rendering both need it. Loaded as
- * `entity_object` so callers can call `.Save()` / `.Delete()` on the
- * cached instances directly.
+ * This engine threads the needle: it loads `Type='Form'` Components (small
+ * dataset — a few dozen per typical deployment, ~5MB max), **all**
+ * `EntityFormOverride` rows (tiny) and the `MJ: Entity Form Contributions`
+ * rows. Specification is included because the cockpit + Skip rendering both
+ * need it. Loaded as `entity_object` so callers can call `.Save()` /
+ * `.Delete()` on the cached instances directly.
+ *
+ * It deliberately does NOT load `Type='Widget'` rows: `Widget` is an open set
+ * grown by registry sync and general authoring, unrelated to form-panel
+ * adoption, and this cache is written to client local storage on every boot.
+ * The widget a contribution renders is fetched by ID on first use
+ * ({@link InteractiveFormsEngine.GetComponentByID}) and kept in memory, so each
+ * distinct panel component costs one query per session, and a component
+ * change drops what was kept.
  *
  * ## Reactivity for free
  *
@@ -133,6 +136,12 @@ export class InteractiveFormsEngine extends BaseEngine<InteractiveFormsEngine> {
     private _overrides: MJEntityFormOverrideEntity[] = [];
     private _contributions: MJEntityFormContributionEntity[] = [];
 
+    /** Components fetched by {@link GetComponentByID}, by normalized ID. */
+    private _componentsByID = new Map<string, MJComponentEntity>();
+    /** Lookups in flight, by normalized ID, so panels that mount together share one query. */
+    private _componentLookups = new Map<string, Promise<MJComponentEntity | null>>();
+    private _componentInvalidationSubscribed = false;
+
     /**
      * Lazy-load the form Component + override caches. Safe to call from
      * every entry point — no-op if already loaded (unless `forceRefresh`).
@@ -153,13 +162,13 @@ export class InteractiveFormsEngine extends BaseEngine<InteractiveFormsEngine> {
                 // written to client local storage on every boot.
                 //
                 // A contribution's panel Component (Type='Widget') is therefore NOT in this
-                // cache; `InteractiveFormPanelComponent` fetches the single component it needs
-                // by ID. An earlier version scoped this filter with a subquery over
-                // `vwEntityFormContributions`, which is worse in every way that matters: the
-                // view name resolves against the connecting user's default schema rather than
-                // the core schema, and a filter that fails takes the WHOLE engine down with it
-                // — every form then waits on a cache that never loads. Loading exactly the
-                // components that render, lazily, needs no cross-schema SQL at all.
+                // cache; `GetComponentByID` fetches it by ID on first use. An earlier version
+                // scoped this filter with a subquery over `vwEntityFormContributions`, which is
+                // worse in every way that matters: the view name resolves against the
+                // connecting user's default schema rather than the core schema, and a filter
+                // that fails takes the WHOLE engine down with it — every form then waits on a
+                // cache that never loads. Fetching exactly the components that render, lazily,
+                // needs no cross-schema SQL at all.
                 Filter: "Type='Form'",
                 CacheLocal: true,
             },
@@ -312,11 +321,85 @@ export class InteractiveFormsEngine extends BaseEngine<InteractiveFormsEngine> {
     }
 
     /**
-     * Find any cached form or panel Component by ID. `FindFormByID` remains as an alias —
-     * the cache now also holds the widget Components that contributions reference.
+     * A form from the loaded forms, or a widget {@link GetComponentByID} has already fetched.
+     * Undefined for a widget not fetched yet.
      */
     public FindComponentByID(id: string): MJComponentEntity | undefined {
-        return this.FindFormByID(id);
+        if (!id) return undefined;
+        return this.FindFormByID(id) ?? this._componentsByID.get(NormalizeUUID(id));
+    }
+
+    /**
+     * Any Component by ID: a whole form from the loaded forms, otherwise one query by ID, kept in
+     * memory for the next caller. Panels that ask at the same time share one query. A failed or
+     * empty lookup is not kept, so the next caller tries again. Every kept component is dropped
+     * when any `MJ: Components` row changes.
+     *
+     * @returns The component, or null when it does not exist or the lookup failed.
+     */
+    public async GetComponentByID(
+        id: string,
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<MJComponentEntity | null> {
+        if (!id) return null;
+        const loaded = this.FindComponentByID(id);
+        if (loaded) return loaded;
+        this.subscribeComponentInvalidation();
+        const key = NormalizeUUID(id);
+        const inFlight = this._componentLookups.get(key);
+        if (inFlight) return inFlight;
+        const lookup = this.queryComponentByID(id, contextUser, provider).then((component) => {
+            // A component change during the query cleared the maps; this result is then stale.
+            if (this._componentLookups.get(key) !== lookup) return component;
+            this._componentLookups.delete(key);
+            if (component) this._componentsByID.set(key, component);
+            return component;
+        });
+        this._componentLookups.set(key, lookup);
+        return lookup;
+    }
+
+    /** Drops every component {@link GetComponentByID} kept. */
+    public ClearComponentCache(): void {
+        this._componentsByID.clear();
+        this._componentLookups.clear();
+    }
+
+    private async queryComponentByID(
+        id: string,
+        contextUser: UserInfo | undefined,
+        provider: IMetadataProvider | undefined,
+    ): Promise<MJComponentEntity | null> {
+        const source = provider ?? this.ProviderToUse;
+        try {
+            const result = await RunView.FromMetadataProvider(source).RunView<MJComponentEntity>({
+                EntityName: 'MJ: Components',
+                ExtraFilter: `ID='${EscapeSQLString(id)}'`,
+                ResultType: 'entity_object',
+                MaxRows: 1,
+            }, contextUser ?? source?.CurrentUser);
+            if (!result.Success) {
+                LogError(`InteractiveFormsEngine: component lookup failed for ${id}: ${result.ErrorMessage ?? 'unknown error'}`);
+                return null;
+            }
+            return (result.Results ?? [])[0] ?? null;
+        } catch (err) {
+            LogError(`InteractiveFormsEngine: component lookup threw for ${id}: ${err instanceof Error ? err.message : String(err)}`);
+            return null;
+        }
+    }
+
+    /**
+     * Any save, delete or remote change to an `MJ: Components` row refreshes the forms array, a
+     * widget included (it is not in the array), so that emission is the signal to drop what
+     * {@link GetComponentByID} kept. Subscribed before anything is kept, so the replay on
+     * subscribe clears nothing.
+     */
+    private subscribeComponentInvalidation(): void {
+        if (this._componentInvalidationSubscribed) return;
+        this._componentInvalidationSubscribed = true;
+        this.Forms$.subscribe(() => this.ClearComponentCache());
     }
 
 
