@@ -871,6 +871,10 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 
 ## 16. Progress log
 
+- **2026-10-01** — `RubricEngineBase` caches categories, scales with levels, rubrics, agent
+  rubric links, and published versions with their criteria, anchors, bands, and scales.
+  Drafts are not cached. The class holds no database; the server engine will load rows
+  and call `replaceCache`.
 - **2026-10-01** — An advisory node's parent and type use the same non-major bump as its
   weight. Reparenting an advisory node does not change ScoringHash.
 - **2026-10-01** — Scoring review. A scale value change is Major. Bands match by label.

@@ -1,3 +1,14 @@
+export { RubricEngineBase } from './RubricEngineBase.js';
+export type {
+    AgentRubricRecord,
+    CachedPublishedVersion,
+    RubricCacheSnapshot,
+    RubricCategoryRecord,
+    RubricRecord,
+    RubricScaleLevelRecord,
+    RubricScaleRecord,
+    RubricVersionRecord,
+} from './RubricEngineBase.js';
 export { RubricScoring, RubricValidationError, SCORING_ENGINE_VERSION } from './RubricScoring.js';
 export { RubricVersionDiff } from './RubricVersionDiff.js';
 export { canonicalJson, contentProjection, scoringProjection, sha256Hex } from './canonical.js';
