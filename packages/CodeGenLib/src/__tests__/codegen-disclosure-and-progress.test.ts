@@ -44,9 +44,9 @@ function contacts(extra: Record<string, unknown> = {}): EntityInfo {
 
 const searchFields = [contacts().Fields[1], contacts().Fields[2]];
 
-describe('fullTextSearchCostDisclosure — the standing cost is named', () => {
+describe('FullTextSearchCostDisclosure — the standing cost is named', () => {
     it('PostgreSQL names the trigger, the GIN index and the backfill', () => {
-        const msg = new PostgreSQLCodeGenProvider().fullTextSearchCostDisclosure(contacts(), searchFields);
+        const msg = new PostgreSQLCodeGenProvider().FullTextSearchCostDisclosure(contacts(), searchFields);
         expect(msg).toBeTruthy();
         expect(msg).toContain('trg_fts_contact');
         expect(msg).toContain('idx_fts_contact');
@@ -56,7 +56,7 @@ describe('fullTextSearchCostDisclosure — the standing cost is named', () => {
     });
 
     it('SQL Server names the index, the change tracking and the re-crawl', () => {
-        const msg = new SQLServerCodeGenProvider().fullTextSearchCostDisclosure(
+        const msg = new SQLServerCodeGenProvider().FullTextSearchCostDisclosure(
             contacts({ FullTextIndexGenerated: true }), searchFields
         );
         expect(msg).toContain('change tracking');
@@ -65,15 +65,15 @@ describe('fullTextSearchCostDisclosure — the standing cost is named', () => {
     });
 
     it('SQL Server says nothing when no fulltext INDEX is generated — there is no standing cost', () => {
-        expect(new SQLServerCodeGenProvider().fullTextSearchCostDisclosure(
+        expect(new SQLServerCodeGenProvider().FullTextSearchCostDisclosure(
             contacts({ FullTextIndexGenerated: false }), searchFields
         )).toBeNull();
     });
 
     it('every disclosure warns that turning the flags back off does not remove the objects', () => {
         for (const msg of [
-            new PostgreSQLCodeGenProvider().fullTextSearchCostDisclosure(contacts(), searchFields),
-            new SQLServerCodeGenProvider().fullTextSearchCostDisclosure(contacts({ FullTextIndexGenerated: true }), searchFields),
+            new PostgreSQLCodeGenProvider().FullTextSearchCostDisclosure(contacts(), searchFields),
+            new SQLServerCodeGenProvider().FullTextSearchCostDisclosure(contacts({ FullTextIndexGenerated: true }), searchFields),
         ]) {
             expect(msg).toContain('does not drop');
         }

@@ -94,11 +94,11 @@ export interface FKGraphWalkerOptions {
      * (spoke → hub) search. See {@link bfsPaths} for why an unbounded frontier
      * is not a theoretical concern.
      */
-    maxFrontier?: number;
+    MaxFrontier?: number;
     /** Hard ceiling on the paths retained per (spoke → hub) search. */
-    maxPathsPerPair?: number;
+    MaxPathsPerPair?: number;
     /** Hard ceiling on the paths retained across the whole walk. */
-    maxTotalPaths?: number;
+    MaxTotalPaths?: number;
 }
 
 const DEFAULTS: Required<FKGraphWalkerOptions> = {
@@ -109,22 +109,22 @@ const DEFAULTS: Required<FKGraphWalkerOptions> = {
     // anticipated cannot take the process down; a schema that hits one is a
     // schema whose bridge set was never going to be usable anyway, and the
     // truncation is reported rather than swallowed.
-    maxFrontier: 50_000,
-    maxPathsPerPair: 50,
-    maxTotalPaths: 25_000,
+    MaxFrontier: 50_000,
+    MaxPathsPerPair: 50,
+    MaxTotalPaths: 25_000,
 };
 
 /** What a bounded walk found, and whether a bound stopped it finding more. */
 export interface BridgePathWalkResult {
-    paths: BridgePath[];
+    Paths: BridgePath[];
     /** True when any cap (frontier, per-pair, or total) truncated the search. */
-    truncated: boolean;
+    Truncated: boolean;
     /** Which caps fired, for logging. Empty when the walk ran to completion. */
-    truncationReasons: Array<'frontier' | 'pathsPerPair' | 'totalPaths'>;
+    TruncationReasons: Array<'frontier' | 'pathsPerPair' | 'totalPaths'>;
     /** (spoke, hub) pairs actually searched, after skipping pairs with no graph edge. */
-    pairsSearched: number;
+    PairsSearched: number;
     /** (spoke, hub) pairs skipped because the spoke has no FK edge at all. */
-    pairsSkipped: number;
+    PairsSkipped: number;
 }
 
 /**
@@ -144,15 +144,15 @@ export function FindBridgePaths(
     spokes: Array<{ schema: string; table: string }>,
     opts: FKGraphWalkerOptions = {},
 ): BridgePath[] {
-    return walkBridgePaths(edges, hubs, spokes, opts).paths;
+    return WalkBridgePaths(edges, hubs, spokes, opts).Paths;
 }
 
 /**
- * The bounded walk. {@link findBridgePaths} is the historical shape (paths only);
+ * The bounded walk. {@link FindBridgePaths} is the historical shape (paths only);
  * this one also reports whether a bound truncated the search, which is the
  * difference between "this schema has no bridges" and "we stopped looking".
  */
-export function walkBridgePaths(
+export function WalkBridgePaths(
     edges: FKEdge[],
     hubs: Array<{ schema: string; table: string; keyField: string }>,
     spokes: Array<{ schema: string; table: string }>,
@@ -180,7 +180,7 @@ export function walkBridgePaths(
     // joined to any other, so every BFS below would dequeue its start node, find
     // no neighbours and return nothing — `hubs × spokes` times.
     if (adjacency.size === 0) {
-        return { paths: [], truncated: false, truncationReasons: [], pairsSearched: 0, pairsSkipped: hubs.length * spokes.length };
+        return { Paths: [], Truncated: false, TruncationReasons: [], PairsSearched: 0, PairsSkipped: hubs.length * spokes.length };
     }
 
     outer:
@@ -203,13 +203,13 @@ export function walkBridgePaths(
             }
             pairsSearched++;
             // BFS from spoke → hub.
-            const search = bfsPaths(adjacency, spokeKey, hubKey, o.MaxHops, o.PruneCycles, o.maxFrontier, o.maxPathsPerPair);
+            const search = bfsPaths(adjacency, spokeKey, hubKey, o.MaxHops, o.PruneCycles, o.MaxFrontier, o.MaxPathsPerPair);
             if (search.frontierTruncated) reasons.add('frontier');
             if (search.pathsTruncated) reasons.add('pathsPerPair');
             for (const p of search.paths) {
                 if (p.length === 0) continue; // self
                 if (p.length === 1) continue; // direct FK already handled by existing relationship system
-                if (out.length >= o.maxTotalPaths) {
+                if (out.length >= o.MaxTotalPaths) {
                     reasons.add('totalPaths');
                     break outer;
                 }
@@ -223,11 +223,11 @@ export function walkBridgePaths(
         return b.PathConfidence - a.PathConfidence;
     });
     return {
-        paths: out,
-        truncated: reasons.size > 0,
-        truncationReasons: [...reasons],
-        pairsSearched,
-        pairsSkipped,
+        Paths: out,
+        Truncated: reasons.size > 0,
+        TruncationReasons: [...reasons],
+        PairsSearched: pairsSearched,
+        PairsSkipped: pairsSkipped,
     };
 }
 

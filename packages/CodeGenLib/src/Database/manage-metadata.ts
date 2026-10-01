@@ -1,5 +1,5 @@
 import { SQLDialect, SQLServerDialect, PostgreSQLDialect } from '@memberjunction/sql-dialect';
-import { CodeGenConnection, CodeGenTransaction, CodeGenQueryResult, CodeGenQueryRow, CodeGenDatabaseProvider, MaterializedColumnSpec, setBaseViewExclusionsPermitted, baseViewExclusionsPermitted } from './codeGenDatabaseProvider';
+import { CodeGenConnection, CodeGenTransaction, CodeGenQueryResult, CodeGenQueryRow, CodeGenDatabaseProvider, MaterializedColumnSpec, SetBaseViewExclusionsPermitted, BaseViewExclusionsPermitted } from './codeGenDatabaseProvider';
 import { AnalyzeQueryForMaterialization, DetectAggregationKeyColumns, DetectAdditiveMeasures, MATERIALIZATION_SURROGATE_COLUMN, type ReadFilterSpecEntry } from './materializationAnalysis';
 import { EvaluateMaterializationDrift, type MaterializationDriftFacts } from './materializationDrift';
 import { ClassifyQueryParameters, BuildHeldValues, type QueryParamDef, type VariantRenderer } from './materializationParamClassifier';
@@ -5885,8 +5885,8 @@ export class ManageMetadataBase {
     * Returns the names of entities whose BASE VIEW exposes a view-only column that MJ has no
     * `EntityField` for — the virtual-field drift probe.
     *
-    * WHY THIS IS NEEDED AND WHY NOTHING ELSE FINDS IT. Pass 2 of `manageEntityFields` is scoped to
-    * `newEntityList ∪ modifiedEntityList`, and the only writer of `modifiedEntityList` is the
+    * WHY THIS IS NEEDED AND WHY NOTHING ELSE FINDS IT. Pass 2 of `ManageEntityFields` is scoped to
+    * `NewEntityList ∪ ModifiedEntityList`, and the only writer of `ModifiedEntityList` is the
     * reconciler pass — it lists entities something CHANGED on during THIS run. A related-entity name
     * field whose `EntityField` row was missed once therefore drops out of scope permanently: nothing
     * changes on that entity again, so it is never in the list, so pass 2 never revisits it, so the
@@ -5912,7 +5912,7 @@ export class ManageMetadataBase {
     * `IsVirtual <> 0` rather than `= 1` deliberately: the column is an INTEGER in the PostgreSQL view
     * and a bit-valued expression in the SQL Server one, and `<> 0` is correct for both.
     */
-   public async findVirtualFieldDriftEntities(pool: CodeGenConnection, excludeSchemas: string[]): Promise<string[]> {
+   public async FindVirtualFieldDriftEntities(pool: CodeGenConnection, excludeSchemas: string[]): Promise<string[]> {
       try {
          const excluded = (excludeSchemas ?? []).filter(sc => sc && sc.trim().length > 0);
          const schemaFilter = excluded.length > 0
@@ -5999,11 +5999,11 @@ export class ManageMetadataBase {
    protected async resolveBaseViewExclusionSupport(pool: CodeGenConnection): Promise<void> {
       const configured = (configInfo.baseViewExcludedFields ?? []).filter(f => f && f.trim().length > 0);
       if (configured.length === 0) {
-         setBaseViewExclusionsPermitted(false);
+         SetBaseViewExclusionsPermitted(false);
          return;
       }
       const supported = await this.pruneSupportsProtectedFieldNames(pool);
-      setBaseViewExclusionsPermitted(supported);
+      SetBaseViewExclusionsPermitted(supported);
       if (supported) {
          LogWarning(`   > baseViewExcludedFields is set (${configured.join(', ')}). Affected entities get an EXPLICIT base-view column list instead of SELECT alias.*, those columns are absent from every MJ read of the entity, and the view stops auto-absorbing new physical columns until the next CodeGen run.`);
       }
@@ -6014,7 +6014,7 @@ export class ManageMetadataBase {
 
    /** The configured base-view exclusions, as bare field names for the prune's protected list. */
    protected configuredProtectedFieldNames(): string[] {
-      if (!baseViewExclusionsPermitted()) {
+      if (!BaseViewExclusionsPermitted()) {
          return [];
       }
       const out = new Set<string>();

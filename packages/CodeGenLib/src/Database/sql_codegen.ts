@@ -380,7 +380,7 @@ export class SQLCodeGenBase {
             // column with no EntityField and unions those in, so recovery is a normal run.
             const driftEntities = configInfo.forceRegeneration?.enabled
                 ? []
-                : await manageMD.findVirtualFieldDriftEntities(pool, configInfo.excludeSchemas);
+                : await manageMD.FindVirtualFieldDriftEntities(pool, configInfo.excludeSchemas);
             const pass2EntityFilter: string[] | undefined = configInfo.forceRegeneration?.enabled
                 ? undefined
                 : [...new Set([
@@ -1803,7 +1803,7 @@ export class SQLCodeGenBase {
         // Say what enabling full-text search costs, at the one moment the person who enabled it is
         // still in the room. The objects below are charged on every write to the table from here on
         // and are not removed by turning the entity's flags back off.
-        const costDisclosure = this._dbProvider.fullTextSearchCostDisclosure(entity, searchFields);
+        const costDisclosure = this._dbProvider.FullTextSearchCostDisclosure(entity, searchFields);
         if (costDisclosure) {
             LogWarning(`   > ${costDisclosure}`);
         }
@@ -1862,7 +1862,7 @@ export class SQLCodeGenBase {
      * under one `Promise.all`), so a per-entity line would just interleave five entities' names at
      * random. The named entity is the batch's first, which is what the run is demonstrably on.
      *
-     * `updateSpinner` covers both output modes by construction — in verbose mode it routes to
+     * `UpdateSpinner` covers both output modes by construction — in verbose mode it routes to
      * `logStatus`, so a verbose run gets the same information as a line per batch instead of a
      * re-rendered spinner.
      */

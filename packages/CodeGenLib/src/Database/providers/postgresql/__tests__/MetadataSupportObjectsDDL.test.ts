@@ -27,9 +27,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildMetadataSupportObjectsSQL } from '../metadataSupportObjects';
+import { BuildMetadataSupportObjectsSQL } from '../metadataSupportObjects';
 
-const ddl = buildMetadataSupportObjectsSQL('__mj');
+const ddl = BuildMetadataSupportObjectsSQL('__mj');
 
 /** The body of one routine/section, so an assertion cannot be satisfied by a different routine. */
 function section(header: string): string {
@@ -126,7 +126,7 @@ describe('the DDL is a valid TypeScript template literal and a valid schema subs
     });
 
     it('substitutes the core schema everywhere', () => {
-        const custom = buildMetadataSupportObjectsSQL('mj_core');
+        const custom = BuildMetadataSupportObjectsSQL('mj_core');
         expect(custom).not.toContain('__mj."spRecompileAllViews"');
         expect(custom).toContain('mj_core."spRecompileAllViews"');
     });

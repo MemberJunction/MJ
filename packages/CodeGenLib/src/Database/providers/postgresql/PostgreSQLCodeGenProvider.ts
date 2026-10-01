@@ -9,7 +9,7 @@ import {
     MaterializedColumnSpec,
     PhasedExecutionResult,
     DataSourceResult,
-    excludedBaseViewFieldNames,
+    ExcludedBaseViewFieldNames,
 } from '../../codeGenDatabaseProvider';
 import { configInfo, MjCoreSchema } from '../../../Config/config';
 import { logError, logStatus, LogWarning, StartSpinner, SucceedSpinner } from '../../../Misc/status_logging';
@@ -1132,7 +1132,7 @@ EXECUTE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, trigFnName)}();
      * clearing the entity's full-text flags later — the column, trigger and index stay until someone
      * drops them.
      */
-    fullTextSearchCostDisclosure(entity: EntityInfo, searchFields: EntityFieldInfo[]): string | null {
+    FullTextSearchCostDisclosure(entity: EntityInfo, searchFields: EntityFieldInfo[]): string | null {
         const trigName = `trg_fts_${this.toSnakeCase(entity.BaseTable)}`;
         const indexName = `idx_fts_${this.toSnakeCase(entity.BaseTable)}`;
         const fields = searchFields.map((f: EntityFieldInfo) => f.Name).join(', ');
@@ -2554,11 +2554,11 @@ WHERE p.prokind IN ('f', 'p')
         // parentFieldsSelect and rootFieldsSelect have leading commas (e.g. ",\n    Field AS Alias").
         // relatedFieldsSelect does NOT have a leading comma for the first field (starts with "\n    Field...").
         // `alias.*` unless this entity has a configured base-view column exclusion, in which case the
-        // base-table columns are enumerated instead. See baseTableSelectList / excludedBaseViewFieldNames.
+        // base-table columns are enumerated instead. See baseTableSelectList / ExcludedBaseViewFieldNames.
         let select = this.baseTableSelectList(
             context.entity,
             alias,
-            excludedBaseViewFieldNames(context.entity.Name, configInfo?.baseViewExcludedFields ?? [])
+            ExcludedBaseViewFieldNames(context.entity.Name, configInfo?.baseViewExcludedFields ?? [])
         );
         if (context.parentFieldsSelect) select += context.parentFieldsSelect;
         if (context.relatedFieldsSelect) select += `,${context.relatedFieldsSelect}`;

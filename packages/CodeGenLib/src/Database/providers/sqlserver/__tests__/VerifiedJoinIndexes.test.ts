@@ -49,16 +49,16 @@ const BASE_FIELDS = [
     field('Name', 4),
 ];
 
-describe('generateForeignKeyIndexes — verified joins, not just declared FKs', () => {
+describe('GenerateForeignKeyIndexes — verified joins, not just declared FKs', () => {
     const provider = new SQLServerCodeGenProvider();
 
     it('indexes NOTHING when the entity has no FK metadata and no verified join (unchanged behaviour)', () => {
-        expect(provider.generateForeignKeyIndexes(entity({ fields: BASE_FIELDS }))).toEqual([]);
+        expect(provider.GenerateForeignKeyIndexes(entity({ fields: BASE_FIELDS }))).toEqual([]);
     });
 
     it('still indexes a declared FK exactly as before', () => {
         const e = entity({ fields: [...BASE_FIELDS.slice(0, 1), field('OwnerID', 2, { RelatedEntityID: 'other' }), ...BASE_FIELDS.slice(2)] });
-        const indexes = provider.generateForeignKeyIndexes(e);
+        const indexes = provider.GenerateForeignKeyIndexes(e);
         expect(indexes).toHaveLength(1);
         expect(indexes[0]).toContain('[OwnerID]');
     });
@@ -68,7 +68,7 @@ describe('generateForeignKeyIndexes — verified joins, not just declared FKs', 
             fields: BASE_FIELDS,
             relationships: [{ ID: 'r1', EntityID: 'e-1', RelatedEntityID: 'e-2', RelatedEntityJoinField: 'Customer_Key', EntityKeyField: 'Customer_Key', Type: 'One To Many' }],
         });
-        const indexes = provider.generateForeignKeyIndexes(e);
+        const indexes = provider.GenerateForeignKeyIndexes(e);
         expect(indexes).toHaveLength(1);
         expect(indexes[0]).toContain('[Customer_Key]');
     });
@@ -78,7 +78,7 @@ describe('generateForeignKeyIndexes — verified joins, not just declared FKs', 
             fields: BASE_FIELDS,
             relationships: [{ ID: 'r1', EntityID: 'e-1', RelatedEntityID: 'e-2', RelatedEntityJoinField: 'x', EntityKeyField: 'customer_key', Type: 'One To Many' }],
         });
-        expect(provider.generateForeignKeyIndexes(e)[0]).toContain('[Customer_Key]');
+        expect(provider.GenerateForeignKeyIndexes(e)[0]).toContain('[Customer_Key]');
     });
 
     it('indexes an ExactMatch organic key\'s match fields', () => {
@@ -86,7 +86,7 @@ describe('generateForeignKeyIndexes — verified joins, not just declared FKs', 
             fields: BASE_FIELDS,
             organicKeys: [{ ID: 'ok1', EntityID: 'e-1', Name: 'external_id', MatchFieldNames: 'Customer_Key, Email', NormalizationStrategy: 'ExactMatch', Status: 'Active' }],
         });
-        const indexes = provider.generateForeignKeyIndexes(e);
+        const indexes = provider.GenerateForeignKeyIndexes(e);
         expect(indexes).toHaveLength(2);
         expect(indexes.join('\n')).toContain('[Customer_Key]');
         expect(indexes.join('\n')).toContain('[Email]');
@@ -97,7 +97,7 @@ describe('generateForeignKeyIndexes — verified joins, not just declared FKs', 
             fields: BASE_FIELDS,
             organicKeys: [{ ID: 'ok1', EntityID: 'e-1', Name: 'email_address', MatchFieldNames: 'Email', NormalizationStrategy: 'LowerCaseTrim', Status: 'Active' }],
         });
-        const out = provider.generateForeignKeyIndexes(e);
+        const out = provider.GenerateForeignKeyIndexes(e);
         // No CREATE INDEX at all — only the disclosure.
         expect(out.filter(s => s.includes('CREATE'))).toEqual([]);
         expect(out).toHaveLength(1);
@@ -111,7 +111,7 @@ describe('generateForeignKeyIndexes — verified joins, not just declared FKs', 
             fields: BASE_FIELDS,
             organicKeys: [{ ID: 'ok1', EntityID: 'e-1', Name: 'email_address', MatchFieldNames: 'Email', NormalizationStrategy: 'LowerCaseTrim', Status: 'Disabled' }],
         });
-        expect(provider.generateForeignKeyIndexes(e)).toEqual([]);
+        expect(provider.GenerateForeignKeyIndexes(e)).toEqual([]);
     });
 
     it('never double-indexes a primary key, however it is declared as a join', () => {
@@ -119,7 +119,7 @@ describe('generateForeignKeyIndexes — verified joins, not just declared FKs', 
             fields: BASE_FIELDS,
             relationships: [{ ID: 'r1', EntityID: 'e-1', RelatedEntityID: 'e-2', RelatedEntityJoinField: 'x', EntityKeyField: 'ID', Type: 'One To Many' }],
         });
-        expect(provider.generateForeignKeyIndexes(e)).toEqual([]);
+        expect(provider.GenerateForeignKeyIndexes(e)).toEqual([]);
     });
 
     it('never indexes a virtual field — there is no column to index', () => {
@@ -127,6 +127,6 @@ describe('generateForeignKeyIndexes — verified joins, not just declared FKs', 
             fields: [...BASE_FIELDS, field('OwnerName', 5, { IsVirtual: true })],
             relationships: [{ ID: 'r1', EntityID: 'e-1', RelatedEntityID: 'e-2', RelatedEntityJoinField: 'x', EntityKeyField: 'OwnerName', Type: 'One To Many' }],
         });
-        expect(provider.generateForeignKeyIndexes(e)).toEqual([]);
+        expect(provider.GenerateForeignKeyIndexes(e)).toEqual([]);
     });
 });

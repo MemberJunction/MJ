@@ -67,7 +67,7 @@ export class OrganicKeyDetector {
         const startedAt = new Date().toISOString();
 
         const a = await RunSemanticPhase(state, this.config, this.aiConfig, progress);
-        const b = RunStructuralPhase(state, a.clusters, { provider: this.databaseProvider });
+        const b = RunStructuralPhase(state, a.clusters, { Provider: this.databaseProvider });
         // Say WHY when the phase produced nothing: "0 bridges" from a completed walk and
         // "0 bridges" from a walk that never ran are different facts, and a truncated walk
         // is a third. Reporting them separately is the difference between a schema with no

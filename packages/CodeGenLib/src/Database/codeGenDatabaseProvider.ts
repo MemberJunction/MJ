@@ -229,19 +229,19 @@ let _baseViewExclusionsPermitted = false;
 
 /**
  * Records whether base-view column exclusions may be applied in this run.
- * Called by metadata management after probing the prune routine. See {@link excludedBaseViewFieldNames}.
+ * Called by metadata management after probing the prune routine. See {@link ExcludedBaseViewFieldNames}.
  */
-export function setBaseViewExclusionsPermitted(permitted: boolean): void {
+export function SetBaseViewExclusionsPermitted(permitted: boolean): void {
     _baseViewExclusionsPermitted = permitted;
 }
 
 /** Whether base-view column exclusions may be applied in this run. */
-export function baseViewExclusionsPermitted(): boolean {
+export function BaseViewExclusionsPermitted(): boolean {
     return _baseViewExclusionsPermitted;
 }
 
 /** Test-only: restore the default (disabled) between cases. */
-export function resetBaseViewExclusionsPermitted(): void {
+export function ResetBaseViewExclusionsPermitted(): void {
     _baseViewExclusionsPermitted = false;
 }
 
@@ -255,7 +255,7 @@ export function resetBaseViewExclusionsPermitted(): void {
  * Returns an empty set when exclusions are not permitted in this run, so every caller gets the
  * unchanged `alias.*` behaviour without having to remember to check.
  */
-export function excludedBaseViewFieldNames(entityName: string, configuredEntries: readonly string[]): ReadonlySet<string> {
+export function ExcludedBaseViewFieldNames(entityName: string, configuredEntries: readonly string[]): ReadonlySet<string> {
     const out = new Set<string>();
     if (!_baseViewExclusionsPermitted) {
         return out;
@@ -643,7 +643,7 @@ export abstract class CodeGenDatabaseProvider {
      * emission orchestrator-local, so the call site cannot accidentally describe the wrong dialect's
      * objects.
      */
-    fullTextSearchCostDisclosure(_entity: EntityInfo, _searchFields: EntityFieldInfo[]): string | null {
+    FullTextSearchCostDisclosure(_entity: EntityInfo, _searchFields: EntityFieldInfo[]): string | null {
         return null;
     }
 
@@ -760,7 +760,7 @@ export abstract class CodeGenDatabaseProvider {
      * none.
      *
      * A normalizing organic key is the one case where the honest answer is "no index, and here is
-     * why". Saying it in the emitted SQL follows {@link generateSoftPrimaryKeyIndex}: the failure
+     * why". Saying it in the emitted SQL follows {@link GenerateSoftPrimaryKeyIndex}: the failure
      * mode both methods exist to end is an index that is silently absent, and swapping one silence
      * for another leaves the next person with the same puzzle. The fix is an expression index, which
      * has to match the normalization expression exactly and is therefore a deliberate act, not

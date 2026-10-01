@@ -41,17 +41,17 @@ export interface StructuralPhaseOptions {
      * produce keys. That is the difference between a large schema emitting a reduced result
      * and a large schema emitting nothing.
      */
-    skip?: boolean;
+    Skip?: boolean;
     /** Bounds handed to the graph walk. Omitted entries take the walker's own ceilings. */
-    maxFrontier?: number;
-    maxPathsPerPair?: number;
-    maxTotalPaths?: number;
+    MaxFrontier?: number;
+    MaxPathsPerPair?: number;
+    MaxTotalPaths?: number;
     /**
      * Platform of the analyzed database; the bridge-view SQL this phase emits is written in
      * its dialect. Carried in the options rather than as a third positional parameter so the
      * bounds above and the dialect stay one argument.
      */
-    provider?: BridgeViewProvider;
+    Provider?: BridgeViewProvider;
 }
 
 const EMPTY = (skipReason: 'disabled' | 'no-clusters' | 'no-edges'): StructuralPhaseResult => ({
@@ -64,7 +64,7 @@ export function RunStructuralPhase(
     clusters: OrganicKeyCluster[],
     opts: StructuralPhaseOptions = {},
 ): StructuralPhaseResult {
-    if (opts.skip) {
+    if (opts.Skip) {
         return EMPTY('disabled');
     }
     if (clusters.length === 0) {
@@ -81,18 +81,18 @@ export function RunStructuralPhase(
         return EMPTY('no-edges');
     }
 
-    // Only pass bounds the caller actually set: a spread of `{maxFrontier: undefined}` would
+    // Only pass bounds the caller actually set: a spread of `{MaxFrontier: undefined}` would
     // overwrite the walker's ceiling with undefined and un-bound the walk.
-    const walkBounds: { maxFrontier?: number; maxPathsPerPair?: number; maxTotalPaths?: number } = {};
-    if (opts.maxFrontier !== undefined) walkBounds.maxFrontier = opts.maxFrontier;
-    if (opts.maxPathsPerPair !== undefined) walkBounds.maxPathsPerPair = opts.maxPathsPerPair;
-    if (opts.maxTotalPaths !== undefined) walkBounds.maxTotalPaths = opts.maxTotalPaths;
+    const walkBounds: { MaxFrontier?: number; MaxPathsPerPair?: number; MaxTotalPaths?: number } = {};
+    if (opts.MaxFrontier !== undefined) walkBounds.MaxFrontier = opts.MaxFrontier;
+    if (opts.MaxPathsPerPair !== undefined) walkBounds.MaxPathsPerPair = opts.MaxPathsPerPair;
+    if (opts.MaxTotalPaths !== undefined) walkBounds.MaxTotalPaths = opts.MaxTotalPaths;
 
     let truncationReasons: string[] | undefined;
     const bridges = DetectTransitiveBridges(clusters, edges, state, {
-        walkBounds,
-        onTruncated: (reasons) => { truncationReasons = reasons; },
-        ...(opts.provider ? { provider: opts.provider } : {}),
+        WalkBounds: walkBounds,
+        OnTruncated: (reasons) => { truncationReasons = reasons; },
+        ...(opts.Provider ? { provider: opts.Provider } : {}),
     });
     return {
         Bridges: bridges,

@@ -26,10 +26,10 @@ vi.mock('mssql', () => ({}));
 import { SQLServerCodeGenProvider } from '../Database/providers/sqlserver/SQLServerCodeGenProvider';
 import { PostgreSQLCodeGenProvider } from '../Database/providers/postgresql/PostgreSQLCodeGenProvider';
 import {
-    excludedBaseViewFieldNames,
-    setBaseViewExclusionsPermitted,
-    resetBaseViewExclusionsPermitted,
-    baseViewExclusionsPermitted,
+    ExcludedBaseViewFieldNames,
+    SetBaseViewExclusionsPermitted,
+    ResetBaseViewExclusionsPermitted,
+    BaseViewExclusionsPermitted,
 } from '../Database/codeGenDatabaseProvider';
 import type { BaseViewGenerationContext } from '../Database/codeGenDatabaseProvider';
 import { BuildHealSchemaRoutineParams } from '../Database/heal-schema-params';
@@ -69,43 +69,43 @@ const emptyContext = (entity: EntityInfo): BaseViewGenerationContext => ({
 let savedExclusions: string[];
 beforeEach(() => {
     savedExclusions = configInfo.baseViewExcludedFields ?? [];
-    resetBaseViewExclusionsPermitted();
+    ResetBaseViewExclusionsPermitted();
 });
 afterEach(() => {
     configInfo.baseViewExcludedFields = savedExclusions;
-    resetBaseViewExclusionsPermitted();
+    ResetBaseViewExclusionsPermitted();
 });
 
-describe('excludedBaseViewFieldNames — matching, and the default-off switch', () => {
+describe('ExcludedBaseViewFieldNames — matching, and the default-off switch', () => {
     it('is EMPTY until something permits exclusions, however the config is set', () => {
-        expect(baseViewExclusionsPermitted()).toBe(false);
-        expect(excludedBaseViewFieldNames('Invoices', [SNAPSHOT]).size).toBe(0);
+        expect(BaseViewExclusionsPermitted()).toBe(false);
+        expect(ExcludedBaseViewFieldNames('Invoices', [SNAPSHOT]).size).toBe(0);
     });
 
     it('matches a bare field name against every entity, case-insensitively', () => {
-        setBaseViewExclusionsPermitted(true);
-        expect([...excludedBaseViewFieldNames('Invoices', ['  __MJ_Integration_LastSyncedSnapshot '])])
+        SetBaseViewExclusionsPermitted(true);
+        expect([...ExcludedBaseViewFieldNames('Invoices', ['  __MJ_Integration_LastSyncedSnapshot '])])
             .toEqual([SNAPSHOT.toLowerCase()]);
-        expect(excludedBaseViewFieldNames('Orders', [SNAPSHOT]).size).toBe(1);
+        expect(ExcludedBaseViewFieldNames('Orders', [SNAPSHOT]).size).toBe(1);
     });
 
     it('scopes an EntityName.FieldName entry to that entity only', () => {
-        setBaseViewExclusionsPermitted(true);
-        expect(excludedBaseViewFieldNames('Invoices', [`Invoices.${SNAPSHOT}`]).size).toBe(1);
-        expect(excludedBaseViewFieldNames('Orders', [`Invoices.${SNAPSHOT}`]).size).toBe(0);
+        SetBaseViewExclusionsPermitted(true);
+        expect(ExcludedBaseViewFieldNames('Invoices', [`Invoices.${SNAPSHOT}`]).size).toBe(1);
+        expect(ExcludedBaseViewFieldNames('Orders', [`Invoices.${SNAPSHOT}`]).size).toBe(0);
     });
 
     it('handles an MJ entity name containing a colon and a space', () => {
-        setBaseViewExclusionsPermitted(true);
-        expect(excludedBaseViewFieldNames('MJ: Entities', ['MJ: Entities.Description']).size).toBe(1);
-        expect(excludedBaseViewFieldNames('MJ: Entity Fields', ['MJ: Entities.Description']).size).toBe(0);
+        SetBaseViewExclusionsPermitted(true);
+        expect(ExcludedBaseViewFieldNames('MJ: Entities', ['MJ: Entities.Description']).size).toBe(1);
+        expect(ExcludedBaseViewFieldNames('MJ: Entity Fields', ['MJ: Entities.Description']).size).toBe(0);
     });
 
     it('ignores blank entries and a trailing dot', () => {
-        setBaseViewExclusionsPermitted(true);
-        expect(excludedBaseViewFieldNames('Invoices', ['', '   ']).size).toBe(0);
+        SetBaseViewExclusionsPermitted(true);
+        expect(ExcludedBaseViewFieldNames('Invoices', ['', '   ']).size).toBe(0);
         // "Invoices." names no field; treated as a bare (unmatchable) name, not a wildcard.
-        expect(excludedBaseViewFieldNames('Invoices', ['Invoices.']).has('')).toBe(false);
+        expect(ExcludedBaseViewFieldNames('Invoices', ['Invoices.']).has('')).toBe(false);
     });
 });
 
@@ -118,13 +118,13 @@ describe('base view emission — the star survives unless something is excluded'
     });
 
     it('SQL Server emits alias.* when exclusions are ON but nothing matches this entity', () => {
-        setBaseViewExclusionsPermitted(true);
+        SetBaseViewExclusionsPermitted(true);
         configInfo.baseViewExcludedFields = ['Orders.SomethingElse'];
         expect(new SQLServerCodeGenProvider().generateBaseView(emptyContext(invoices()))).toContain('    i.*');
     });
 
     it('SQL Server enumerates base-table columns, minus the excluded one, in Sequence order', () => {
-        setBaseViewExclusionsPermitted(true);
+        SetBaseViewExclusionsPermitted(true);
         configInfo.baseViewExcludedFields = [SNAPSHOT];
         const sql = new SQLServerCodeGenProvider().generateBaseView(emptyContext(invoices()));
         expect(sql).not.toContain('i.*');
@@ -136,7 +136,7 @@ describe('base view emission — the star survives unless something is excluded'
     });
 
     it('PostgreSQL enumerates the same set with PG quoting', () => {
-        setBaseViewExclusionsPermitted(true);
+        SetBaseViewExclusionsPermitted(true);
         configInfo.baseViewExcludedFields = [SNAPSHOT];
         const sql = new PostgreSQLCodeGenProvider().generateBaseView(emptyContext(invoices()));
         expect(sql).not.toContain(SNAPSHOT);
@@ -145,7 +145,7 @@ describe('base view emission — the star survives unless something is excluded'
     });
 
     it('falls back to alias.* rather than emitting a zero-column view', () => {
-        setBaseViewExclusionsPermitted(true);
+        SetBaseViewExclusionsPermitted(true);
         configInfo.baseViewExcludedFields = ['ID', 'Number', 'Total', SNAPSHOT];
         expect(new SQLServerCodeGenProvider().generateBaseView(emptyContext(invoices()))).toContain('    i.*');
     });

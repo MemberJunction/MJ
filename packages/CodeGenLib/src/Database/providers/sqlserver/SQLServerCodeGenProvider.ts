@@ -7,7 +7,7 @@ import {
     FullTextSearchResult,
     MaterializedColumnSpec,
     DataSourceResult,
-    excludedBaseViewFieldNames,
+    ExcludedBaseViewFieldNames,
 } from '../../codeGenDatabaseProvider';
 import { SQLServerDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 import { ordinalCompare, RegisterClass } from '@memberjunction/global';
@@ -125,11 +125,11 @@ export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
             ? `WHERE\n    ${alias}.[${EntityInfo.DeletedAtFieldName}] IS NULL\n`
             : '';
         // `alias.*` unless this entity has a configured base-view column exclusion, in which case the
-        // base-table columns are enumerated instead. See baseTableSelectList / excludedBaseViewFieldNames.
+        // base-table columns are enumerated instead. See baseTableSelectList / ExcludedBaseViewFieldNames.
         const baseTableSelect = this.baseTableSelectList(
             entity,
             alias,
-            excludedBaseViewFieldNames(entity.Name, configInfo?.baseViewExcludedFields ?? [])
+            ExcludedBaseViewFieldNames(entity.Name, configInfo?.baseViewExcludedFields ?? [])
         );
 
         return `
@@ -660,7 +660,7 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] (${col
      * occupies catalog storage. The generated script also DROPs and RECREATEs the index, which means
      * a full re-crawl of the table each time this entity's SQL is applied.
      */
-    fullTextSearchCostDisclosure(entity: EntityInfo, searchFields: EntityFieldInfo[]): string | null {
+    FullTextSearchCostDisclosure(entity: EntityInfo, searchFields: EntityFieldInfo[]): string | null {
         if (!entity.FullTextIndexGenerated) {
             return null;
         }

@@ -3,11 +3,11 @@
  *
  * Three properties compounded on a large schema:
  *
- *  1. `runStructuralPhase` guarded only `clusters.length === 0`. The register asked for a second gate
- *     on "no DECLARED foreign keys" — which would not have helped, because `collectFKEdgesFromState`
+ *  1. `RunStructuralPhase` guarded only `clusters.length === 0`. The register asked for a second gate
+ *     on "no DECLARED foreign keys" — which would not have helped, because `CollectFKEdgesFromState`
  *     also pulls the SOFT FKs the key-detection phase inferred, and on an imported schema those ARE
  *     the edges. The gate has to be on the EDGE SET.
- *  2. `findBridgePaths` ran one BFS per hub × EVERY TABLE IN THE DATABASE, including every table with
+ *  2. `FindBridgePaths` ran one BFS per hub × EVERY TABLE IN THE DATABASE, including every table with
  *     no join edge at all, each of which can only ever return nothing.
  *  3. `bfsPaths` pushed a FRESH `Set<string>` and a FRESH path array per neighbour per dequeued node
  *     onto an unbounded queue, drained with `Array.shift()` (O(n)), into an uncapped result array.
@@ -18,7 +18,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { RunStructuralPhase } from '../discovery/StructuralPhase';
-import { walkBridgePaths, FKEdge } from '../discovery/FKGraphWalker';
+import { WalkBridgePaths, FKEdge } from '../discovery/FKGraphWalker';
 import { DatabaseDocumentation } from '../types/state';
 import { OrganicKeyCluster } from '../types/organic-keys';
 
@@ -97,7 +97,7 @@ describe('RunStructuralPhase — gated on the edge set, not on declared FKs', ()
 
     it('can be skipped outright, so a large schema still gets its semantic-phase keys', () => {
         const s = state([table('A', ['ID', 'BID'], [{ schema: 'dbo', table: 'B', column: 'BID', referencedColumn: 'ID' }]), table('B', ['ID'])]);
-        const r = RunStructuralPhase(s, [cluster([{ table: 'A', column: 'ID' }])], { skip: true });
+        const r = RunStructuralPhase(s, [cluster([{ table: 'A', column: 'ID' }])], { Skip: true });
         expect(r.Summary.walked).toBe(false);
         expect(r.Summary.skipReason).toBe('disabled');
     });
@@ -105,7 +105,7 @@ describe('RunStructuralPhase — gated on the edge set, not on declared FKs', ()
 
 // ─── The bounds ──────────────────────────────────────────────────────────────
 
-describe('walkBridgePaths — the walk is bounded and says when a bound fired', () => {
+describe('WalkBridgePaths — the walk is bounded and says when a bound fired', () => {
     it('skips every (hub, spoke) pair whose spoke has no edge at all', () => {
         const { edges } = denseGraph(3);
         const spokes = [
@@ -113,60 +113,60 @@ describe('walkBridgePaths — the walk is bounded and says when a bound fired', 
             // 20 tables that are in the database and in no relationship
             ...Array.from({ length: 20 }, (_, i) => ({ schema: 'dbo', table: `Orphan${i}` })),
         ];
-        const r = walkBridgePaths(edges, [{ schema: 'dbo', table: 'T0', keyField: 'ID' }], spokes);
-        expect(r.pairsSearched).toBe(2);
-        expect(r.pairsSkipped).toBe(20);
+        const r = WalkBridgePaths(edges, [{ schema: 'dbo', table: 'T0', keyField: 'ID' }], spokes);
+        expect(r.PairsSearched).toBe(2);
+        expect(r.PairsSkipped).toBe(20);
     });
 
     it('skips every spoke for a HUB that has no edge — it is unreachable from all of them', () => {
         const { edges, tables } = denseGraph(4);
         // Hub H is a real table in the database and in no relationship.
-        const r = walkBridgePaths(edges, [{ schema: 'dbo', table: 'H', keyField: 'ID' }], tables);
-        expect(r.pairsSearched).toBe(0);
-        expect(r.pairsSkipped).toBe(tables.length);
-        expect(r.paths).toEqual([]);
+        const r = WalkBridgePaths(edges, [{ schema: 'dbo', table: 'H', keyField: 'ID' }], tables);
+        expect(r.PairsSearched).toBe(0);
+        expect(r.PairsSkipped).toBe(tables.length);
+        expect(r.Paths).toEqual([]);
     });
 
     it('returns immediately on an empty edge set without searching any pair', () => {
-        const r = walkBridgePaths([], [{ schema: 'dbo', table: 'T0', keyField: 'ID' }], [{ schema: 'dbo', table: 'T1' }]);
-        expect(r.paths).toEqual([]);
-        expect(r.pairsSearched).toBe(0);
-        expect(r.truncated).toBe(false);
+        const r = WalkBridgePaths([], [{ schema: 'dbo', table: 'T0', keyField: 'ID' }], [{ schema: 'dbo', table: 'T1' }]);
+        expect(r.Paths).toEqual([]);
+        expect(r.PairsSearched).toBe(0);
+        expect(r.Truncated).toBe(false);
     });
 
     it('caps paths per pair and reports the cap, rather than growing the result array', () => {
         const { edges, tables } = denseGraph(8);
-        const r = walkBridgePaths(edges, [{ schema: 'dbo', table: 'T0', keyField: 'ID' }], tables.slice(1), { maxPathsPerPair: 2 });
-        expect(r.truncated).toBe(true);
-        expect(r.truncationReasons).toContain('pathsPerPair');
+        const r = WalkBridgePaths(edges, [{ schema: 'dbo', table: 'T0', keyField: 'ID' }], tables.slice(1), { MaxPathsPerPair: 2 });
+        expect(r.Truncated).toBe(true);
+        expect(r.TruncationReasons).toContain('pathsPerPair');
         // 7 spokes, at most 2 paths each, and length-1 paths are dropped as direct FKs.
-        expect(r.paths.length).toBeLessThanOrEqual(7 * 2);
+        expect(r.Paths.length).toBeLessThanOrEqual(7 * 2);
     });
 
     it('caps the total result array and reports the cap', () => {
         const { edges, tables } = denseGraph(8);
-        const r = walkBridgePaths(edges, [{ schema: 'dbo', table: 'T0', keyField: 'ID' }], tables.slice(1), { maxTotalPaths: 5 });
-        expect(r.paths.length).toBe(5);
-        expect(r.truncationReasons).toContain('totalPaths');
+        const r = WalkBridgePaths(edges, [{ schema: 'dbo', table: 'T0', keyField: 'ID' }], tables.slice(1), { MaxTotalPaths: 5 });
+        expect(r.Paths.length).toBe(5);
+        expect(r.TruncationReasons).toContain('totalPaths');
     });
 
     it('caps the live BFS frontier and reports the cap', () => {
         const { edges, tables } = denseGraph(10);
-        const r = walkBridgePaths(edges, [{ schema: 'dbo', table: 'T0', keyField: 'ID' }], tables.slice(1), { maxFrontier: 2 });
-        expect(r.truncated).toBe(true);
-        expect(r.truncationReasons).toContain('frontier');
+        const r = WalkBridgePaths(edges, [{ schema: 'dbo', table: 'T0', keyField: 'ID' }], tables.slice(1), { MaxFrontier: 2 });
+        expect(r.Truncated).toBe(true);
+        expect(r.TruncationReasons).toContain('frontier');
     });
 
     it('an explicitly-undefined bound does not UNSET the ceiling', () => {
         const { edges, tables } = denseGraph(8);
         // The one way a caller could accidentally un-bound the walk: spreading an options object
         // whose keys are present but undefined. Defaults must survive that.
-        const r = walkBridgePaths(edges, [{ schema: 'dbo', table: 'T0', keyField: 'ID' }], tables.slice(1), {
-            maxFrontier: undefined, maxPathsPerPair: undefined, maxTotalPaths: undefined, MaxHops: undefined,
+        const r = WalkBridgePaths(edges, [{ schema: 'dbo', table: 'T0', keyField: 'ID' }], tables.slice(1), {
+            MaxFrontier: undefined, MaxPathsPerPair: undefined, MaxTotalPaths: undefined, MaxHops: undefined,
         });
         // maxHops back at its default of 3, so no path is longer than that.
-        expect(r.paths.every((p) => p.PathLength <= 3)).toBe(true);
-        expect(r.paths.length).toBeLessThanOrEqual(25_000);
+        expect(r.Paths.every((p) => p.PathLength <= 3)).toBe(true);
+        expect(r.Paths.length).toBeLessThanOrEqual(25_000);
     });
 
     it('a graph small enough to exhaust is unaffected by the bounds', () => {
@@ -175,11 +175,11 @@ describe('walkBridgePaths — the walk is bounded and says when a bound fired', 
             { SourceSchema: 'dbo', SourceTable: 'B', SourceColumn: 'AID', TargetSchema: 'dbo', TargetTable: 'A', TargetColumn: 'ID', Kind: 'hard', confidence: 1 },
             { SourceSchema: 'dbo', SourceTable: 'C', SourceColumn: 'BID', TargetSchema: 'dbo', TargetTable: 'B', TargetColumn: 'ID', Kind: 'hard', confidence: 1 },
         ];
-        const r = walkBridgePaths(edges, [{ schema: 'dbo', table: 'A', keyField: 'ID' }], [{ schema: 'dbo', table: 'B' }, { schema: 'dbo', table: 'C' }]);
-        expect(r.truncated).toBe(false);
-        expect(r.paths).toHaveLength(1);
-        expect(r.paths[0].SpokeTable).toBe('C');
-        expect(r.paths[0].PathLength).toBe(2);
+        const r = WalkBridgePaths(edges, [{ schema: 'dbo', table: 'A', keyField: 'ID' }], [{ schema: 'dbo', table: 'B' }, { schema: 'dbo', table: 'C' }]);
+        expect(r.Truncated).toBe(false);
+        expect(r.Paths).toHaveLength(1);
+        expect(r.Paths[0].SpokeTable).toBe('C');
+        expect(r.Paths[0].PathLength).toBe(2);
     });
 
     it('does NOT return a path longer than maxHops', () => {
@@ -190,11 +190,11 @@ describe('walkBridgePaths — the walk is bounded and says when a bound fired', 
             TargetSchema: 'dbo', TargetTable: i === 0 ? 'A' : chain[i - 1], TargetColumn: 'ID',
             Kind: 'hard' as const, confidence: 1,
         }));
-        const r = walkBridgePaths(edges, [{ schema: 'dbo', table: 'A', keyField: 'ID' }], [{ schema: 'dbo', table: 'E' }]);
-        expect(r.paths).toEqual([]);
+        const r = WalkBridgePaths(edges, [{ schema: 'dbo', table: 'A', keyField: 'ID' }], [{ schema: 'dbo', table: 'E' }]);
+        expect(r.Paths).toEqual([]);
         // ...and the 3-hop spoke on the same chain IS found, so this is the bound and not a bug.
-        const r3 = walkBridgePaths(edges, [{ schema: 'dbo', table: 'A', keyField: 'ID' }], [{ schema: 'dbo', table: 'D' }]);
-        expect(r3.paths.map((p) => p.PathLength)).toEqual([3]);
+        const r3 = WalkBridgePaths(edges, [{ schema: 'dbo', table: 'A', keyField: 'ID' }], [{ schema: 'dbo', table: 'D' }]);
+        expect(r3.Paths.map((p) => p.PathLength)).toEqual([3]);
     });
 
     it('still finds a maxHops-length path — the index cursor did not break the queue drain', () => {
@@ -204,9 +204,9 @@ describe('walkBridgePaths — the walk is bounded and says when a bound fired', 
             { SourceSchema: 'dbo', SourceTable: 'C', SourceColumn: 'BID', TargetSchema: 'dbo', TargetTable: 'B', TargetColumn: 'ID', Kind: 'hard', confidence: 1 },
             { SourceSchema: 'dbo', SourceTable: 'D', SourceColumn: 'CID', TargetSchema: 'dbo', TargetTable: 'C', TargetColumn: 'ID', Kind: 'hard', confidence: 1 },
         ];
-        const r = walkBridgePaths(edges, [{ schema: 'dbo', table: 'A', keyField: 'ID' }], [{ schema: 'dbo', table: 'D' }]);
-        expect(r.paths).toHaveLength(1);
-        expect(r.paths[0].PathLength).toBe(3);
-        expect(r.paths[0].Hops.map((h) => h.fromTable)).toEqual(['D', 'C', 'B']);
+        const r = WalkBridgePaths(edges, [{ schema: 'dbo', table: 'A', keyField: 'ID' }], [{ schema: 'dbo', table: 'D' }]);
+        expect(r.Paths).toHaveLength(1);
+        expect(r.Paths[0].PathLength).toBe(3);
+        expect(r.Paths[0].Hops.map((h) => h.fromTable)).toEqual(['D', 'C', 'B']);
     });
 });

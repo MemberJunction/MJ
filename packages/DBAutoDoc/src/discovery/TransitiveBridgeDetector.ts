@@ -21,7 +21,7 @@
  *     are skipped (composite-PK bridge join is future work).
  */
 
-import { walkBridgePaths, FKEdge, FKGraphWalkerOptions } from './FKGraphWalker.js';
+import { WalkBridgePaths, FKEdge, FKGraphWalkerOptions } from './FKGraphWalker.js';
 import { GenerateBridgeView, GeneratedBridgeView, BridgeViewProvider } from './BridgeViewSQLGenerator.js';
 import { OrganicKeyCluster, MemberColumns } from '../types/organic-keys.js';
 import { DatabaseDocumentation, ForeignKeyReference } from '../types/state.js';
@@ -59,12 +59,12 @@ export interface TransitiveBridgeDetectorOptions {
     /** Platform the generated bridge-view SQL is written for. Default `'sqlserver'`. */
     provider?: BridgeViewProvider;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /** Walk bounds. See {@link FKGraphWalkerOptions}; omitted entries take the walker's ceilings. */
-    walkBounds?: Pick<FKGraphWalkerOptions, 'maxFrontier' | 'maxPathsPerPair' | 'maxTotalPaths'>;
+    WalkBounds?: Pick<FKGraphWalkerOptions, 'MaxFrontier' | 'MaxPathsPerPair' | 'MaxTotalPaths'>;
     /** Called once when a walk bound truncated the search, so the caller can report it. */
-    onTruncated?: (reasons: string[]) => void;
+    OnTruncated?: (reasons: string[]) => void;
 }
 
-const DEFAULTS: Required<Omit<TransitiveBridgeDetectorOptions, 'walkBounds' | 'onTruncated'>> = {
+const DEFAULTS: Required<Omit<TransitiveBridgeDetectorOptions, 'WalkBounds' | 'OnTruncated'>> = {
     MaxHops: 3,
     MinSoftFKConfidence: 0.6,
     MinPathConfidence: 0.7,
@@ -128,16 +128,16 @@ export function DetectTransitiveBridges(
     for (const h of hubsByKey.values()) {
         hubsForWalker.push({ schema: h.schema, table: h.table, keyField: h.keyFields[0] });
     }
-    const walk = walkBridgePaths(edges, hubsForWalker, allTables, {
+    const walk = WalkBridgePaths(edges, hubsForWalker, allTables, {
         MaxHops: o.MaxHops,
         MinSoftFKConfidence: o.MinSoftFKConfidence,
         PruneCycles: true,
-        ...(opts.walkBounds ?? {}),
+        ...(opts.WalkBounds ?? {}),
     });
-    if (walk.truncated) {
-        opts.onTruncated?.(walk.truncationReasons);
+    if (walk.Truncated) {
+        opts.OnTruncated?.(walk.TruncationReasons);
     }
-    const allPaths = walk.paths;
+    const allPaths = walk.Paths;
 
     // Hub lookup by (schema, table, primary match field). Built ONCE: the loop below used to
     // call `Array.from(hubsByKey.values()).find(...)` per path, which allocates a fresh array
