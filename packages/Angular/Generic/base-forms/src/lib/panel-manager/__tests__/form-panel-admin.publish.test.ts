@@ -447,10 +447,10 @@ describe('FormPanelAdminService.SetActive', () => {
 });
 
 /**
- * The stock UI role may update `MJ: Components`, and the server refuses a component change only
- * when a shared or another user's panel uses the component. So a user without Manage Form
- * Defaults turns their own panel on, off or to a draft, and the component's save goes in the
- * same transaction as the row's.
+ * The stock UI role may update `MJ: Components`, and without Manage Form Defaults the server
+ * allows a component change only when every row that uses the component is the user's own. So a
+ * user without the grant turns their own panel on, off or to a draft, and the component's save
+ * goes in the same transaction as the row's.
  */
 describe('FormPanelAdminService — a user without Manage Form Defaults, on their own panel', () => {
     const mine = (over: Partial<StoredRow> & { ID: string }) => panel({ Scope: 'User', UserID: ME, ...over });
