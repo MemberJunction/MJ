@@ -1,15 +1,7 @@
 import { Component, Input } from '@angular/core';
-import { RunView } from '@memberjunction/core';
+import { CompositeKey, RunView } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-
-function sortAgentRubrics<T extends { Purpose?: string; IsDefault?: boolean | number; Sequence?: number; Rubric?: string }>(rows: T[]): T[] {
-    const purposeOrder = (purpose: string | undefined) => purpose === 'Evaluation' ? 0 : purpose === 'SelfCheck' ? 1 : 2;
-    return [...rows].sort((left, right) =>
-        Number(right.IsDefault === true || right.IsDefault === 1) - Number(left.IsDefault === true || left.IsDefault === 1)
-        || purposeOrder(left.Purpose) - purposeOrder(right.Purpose)
-        || Number(left.Sequence ?? 0) - Number(right.Sequence ?? 0)
-        || String(left.Rubric ?? '').localeCompare(String(right.Rubric ?? '')));
-}
+import { disableLink, makeDefaultLink, sortAgentRubrics, type AgentRubricLink } from './agent-rubrics.model';
 
 @Component({
     standalone: false,
@@ -18,7 +10,12 @@ function sortAgentRubrics<T extends { Purpose?: string; IsDefault?: boolean | nu
       @if (Error) { <p>{{ Error }}</p> }
       @if (Links.length === 0 && !IsLoading) { <p>This agent has no rubrics.</p> }
       @for (link of Links; track link.ID) {
-        <p>{{ link.Purpose }} — {{ link.Rubric }} — {{ link.Status }}{{ link.IsDefault ? ' (default)' : '' }}</p>
+        <p>
+          {{ link.Purpose }} — {{ link.Rubric }} — {{ link.Status }}{{ link.IsDefault && link.Status !== 'Disabled' ? ' (default)' : '' }}
+          @if (link.Status !== 'Disabled') {
+            <button type="button" (click)="TurnOff(link)">Turn off</button>
+          }
+        </p>
       }
       <form (submit)="Add($event)">
         <label>Purpose
@@ -58,7 +55,7 @@ export class AgentRubricsComponent extends BaseAngularComponent {
         if (value && this.agentID && !this.loaded && !this.IsLoading) void this.Load();
     }
 
-    public Links: { ID: string; Purpose?: string; Rubric?: string; Status?: string; IsDefault?: boolean | number; Sequence?: number }[] = [];
+    public Links: AgentRubricLink[] = [];
     public RubricOptions: { ID: string; Name: string }[] = [];
     public Purpose = 'Evaluation';
     public RubricID = '';
@@ -100,6 +97,7 @@ export class AgentRubricsComponent extends BaseAngularComponent {
     public async Add(event: Event): Promise<void> {
         event.preventDefault();
         if (!this.agentID || !this.RubricID || !this.ProviderToUse) return;
+        if (this.IsDefault) await this.clearOtherDefaults(this.Purpose);
         const row = await this.ProviderToUse.GetEntityObject('MJ: AI Agent Rubrics', this.ProviderToUse.CurrentUser);
         row.NewRecord();
         row.Set('AgentID', this.agentID);
@@ -113,5 +111,32 @@ export class AgentRubricsComponent extends BaseAngularComponent {
         }
         this.loaded = false;
         await this.Load();
+    }
+
+    public async TurnOff(link: AgentRubricLink): Promise<void> {
+        if (!link.ID) return;
+        const turnedOff = disableLink(link);
+        await this.saveLink(link.ID, { Status: turnedOff.Status, IsDefault: turnedOff.IsDefault });
+        this.loaded = false;
+        await this.Load();
+    }
+
+    private async clearOtherDefaults(purpose: string): Promise<void> {
+        const next = makeDefaultLink([...this.Links, { ID: 'pending', Purpose: purpose, Status: 'Active', IsDefault: false }], 'pending');
+        for (const row of this.Links) {
+            const updated = next.find(item => item.ID === row.ID);
+            if (!row.ID || !updated) continue;
+            if ((row.IsDefault === true || row.IsDefault === 1) && updated.IsDefault === false) {
+                await this.saveLink(row.ID, { IsDefault: false });
+            }
+        }
+    }
+
+    private async saveLink(id: string, fields: Record<string, unknown>): Promise<void> {
+        if (!this.ProviderToUse) return;
+        const row = await this.ProviderToUse.GetEntityObject('MJ: AI Agent Rubrics', this.ProviderToUse.CurrentUser);
+        await row.InnerLoad(CompositeKey.FromID(id));
+        for (const [field, value] of Object.entries(fields)) row.Set(field, value);
+        if (!await row.Save()) throw new Error(row.LatestResult?.Message || 'Could not update the rubric link.');
     }
 }
