@@ -457,3 +457,46 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
 
 
 
+
+describe('DataFeatureSpec — PipelineType validation', () => {
+  const baseSpec = (): DataFeatureSpec => ({
+    Name: 'Seniority',
+    Description: 'Classifies seniority',
+    Context: { Fields: ['CurrentJobTitle'] },
+    PromptID: 'prompt-1',
+    Outputs: [
+      { Ref: '$.seniority', Name: 'SeniorityLevel', Target: { Mode: 'field', EntityFieldName: 'SeniorityLevel' } },
+    ],
+    Caching: { Cacheable: false },
+  });
+  const pipelineTypeIssues = (spec: DataFeatureSpec) => ValidateSpec(spec).filter(i => i.Path === 'PipelineType');
+
+  it('accepts a spec without PipelineType', () => {
+    expect(pipelineTypeIssues(baseSpec())).toHaveLength(0);
+  });
+
+  it('accepts a non-empty PipelineType', () => {
+    expect(pipelineTypeIssues({ ...baseSpec(), PipelineType: 'LLM' })).toHaveLength(0);
+    expect(pipelineTypeIssues({ ...baseSpec(), PipelineType: 'Decision' })).toHaveLength(0);
+  });
+
+  it('treats a JSON null PipelineType as absent', () => {
+    const spec = JSON.parse(JSON.stringify({ ...baseSpec(), PipelineType: null })) as DataFeatureSpec;
+    expect(pipelineTypeIssues(spec)).toHaveLength(0);
+  });
+
+  it('rejects an empty or whitespace PipelineType', () => {
+    for (const value of ['', '   ']) {
+      const issues = pipelineTypeIssues({ ...baseSpec(), PipelineType: value });
+      expect(issues).toHaveLength(1);
+      expect(issues[0].Severity).toBe('error');
+    }
+  });
+
+  it('rejects a PipelineType that is not a string', () => {
+    const spec = JSON.parse(JSON.stringify({ ...baseSpec(), PipelineType: 42 })) as DataFeatureSpec;
+    const issues = pipelineTypeIssues(spec);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].Severity).toBe('error');
+  });
+});

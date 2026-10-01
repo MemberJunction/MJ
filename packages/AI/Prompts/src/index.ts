@@ -26,3 +26,4 @@ export * from './ParallelExecutionCoordinator';
 export * from './decision/LLMDecision';
 export * from './decision/decision-runner.types';
 export * from './decision/AIDecisionRunner';
+export * from './decision/decision-questions';

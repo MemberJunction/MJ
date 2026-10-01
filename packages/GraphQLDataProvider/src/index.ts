@@ -17,6 +17,8 @@ export { GraphQLAIClient } from './graphQLAIClient';
 export type {
     RunAIPromptParams,
     RunAIPromptResult,
+    RunDecisionParams,
+    RunDecisionResult,
     ExecuteSimplePromptParams,
     SimplePromptResult,
     EmbedTextParams,
