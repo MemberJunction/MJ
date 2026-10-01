@@ -810,6 +810,33 @@ describe('MjRecordFormContainerComponent (DOM) — contributions it files and re
     expect(inclusion.get('summary')).toBe('Primary');
   });
 
+  it('hides a whole tab for the entity\'s own claim on it, and nothing for a wildcard\'s', () => {
+    type Tabs = { railTabSectionKeys(): string[] };
+    const own = renderWith([row({ contributionKey: 'k', replacesSectionKey: DETAILS_SECTION_KEY })]);
+    expect((own.componentInstance as unknown as Tabs).railTabSectionKeys()).toEqual(['identity']);
+  });
+
+  it('hides nothing for a wildcard panel that claims a whole tab', () => {
+    type Tabs = { railTabSectionKeys(): string[] };
+    const wildcard: FormContributionRegistration = {
+      Priority: 0, Source: 'class', Metadata: { entity: '*', slot: 'before-fields', contributionKey: 'w', replacesSectionKey: DETAILS_SECTION_KEY },
+    };
+    const f = renderWith([wildcard]);
+    expect((f.componentInstance as unknown as Tabs).railTabSectionKeys()).toEqual([]);
+  });
+
+  it('does not warn for a wildcard panel\'s section or field the form lacks', () => {
+    const f = renderWith([
+      { Priority: 0, Source: 'class', Metadata: { entity: '*', slot: 'after-fields', contributionKey: 'w1', replacesSectionKey: 'ghost' } },
+      { Priority: 0, Source: 'class', Metadata: { entity: '*', slot: 'after-fields', contributionKey: 'w2', replacesFieldNames: ['Nope'] } },
+      { Priority: 0, Source: 'class', Metadata: { entity: '*', slot: 'after-fields', contributionKey: 'w3', inSectionKey: 'ghost' } },
+    ]);
+    expect(warnings(() => {
+      internals(f).warnUnmatchedReplaceKeys();
+      internals(f).warnUnmatchedFieldClaims();
+    })).toEqual([]);
+  });
+
   it('does not warn for a claim on a whole rail tab', () => {
     const f = renderWith([row({ contributionKey: 'k', replacesSectionKey: DETAILS_SECTION_KEY })]);
     expect(warnings(() => internals(f).warnUnmatchedReplaceKeys())).toEqual([]);

@@ -299,10 +299,10 @@ export function FormContributionEntityMatches(registeredEntity: string | null | 
 }
 
 /**
- * A wildcard registration that claims a grid or a section, or names a section to draw in. It
- * still mounts, but its claim is ignored: it would take that grid or section from every form.
+ * A wildcard registration that claims a grid, a section or a rail tab, or names a section to draw
+ * in. It still mounts, but its claim is ignored: it would take that place from every form.
  */
-function isWildcardPlaceClaim(meta: FormPanelRegistrationMetadata): boolean {
+export function IsWildcardPlaceClaim(meta: FormPanelRegistrationMetadata): boolean {
     return meta.entity === '*'
         && (!!meta.relatedEntity || ReplacedSectionKeys(meta).length > 0 || !!meta.inSectionKey?.trim());
 }
@@ -459,7 +459,8 @@ export function ResolveFormContributions(input: ResolveFormContributionsInput): 
     const claimedKeys = new Set<string>();
     const registered: FormContributionWinner[] = [];
     for (const reg of winners) {
-        if (isWildcardPlaceClaim(reg.Metadata)) continue;
+        // One winner per key per form: a wildcard place claim that won key K hides the entity's own K too.
+        if (IsWildcardPlaceClaim(reg.Metadata)) continue;
         const key = ResolveContributionKey(reg.Metadata) || `${reg.Metadata.entity}:${reg.Metadata.slot}:${reg.Priority}`;
         const related = reg.Metadata.relatedEntity?.trim();
         const peer = related

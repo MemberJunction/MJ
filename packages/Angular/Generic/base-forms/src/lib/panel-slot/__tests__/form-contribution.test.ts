@@ -8,6 +8,7 @@ import {
     ContributionHiddenSectionKeys,
     FormContributionEntityMatches,
     FormSectionCamelCase,
+    IsWildcardPlaceClaim,
     RelatedContributionKey,
     RelatedEntitySectionKey,
     ResolveContributionKey,
@@ -662,6 +663,14 @@ describe('A wildcard field claim', () => {
     it('claims its fields on any entity', () => {
         expect(ContributionClaimedFieldNames(PEOPLE, [], [], [wildcard])).toEqual(['Street']);
         expect(ContributionClaimedFieldNames('Some Other Entity', [], [], [wildcard])).toEqual(['Street']);
+    });
+
+    it('is not a place claim, which a wildcard grid, section, tab or placement claim is', () => {
+        expect(IsWildcardPlaceClaim(wildcard.Metadata)).toBe(false);
+        expect(IsWildcardPlaceClaim({ entity: '*', slot: 'after-related', relatedEntity: TICKETS })).toBe(true);
+        expect(IsWildcardPlaceClaim({ entity: '*', slot: 'before-fields', replacesSectionKey: '__mj_form_details' })).toBe(true);
+        expect(IsWildcardPlaceClaim({ entity: '*', slot: 'after-fields', inSectionKey: 'profile' })).toBe(true);
+        expect(IsWildcardPlaceClaim({ entity: PEOPLE, slot: 'before-fields', replacesSectionKey: 'details' })).toBe(false);
     });
 });
 

@@ -65,6 +65,7 @@ import type { FormPanelRegistrationMetadata } from '../panel-slot/base-form-pane
 import {
   ContributionDrawsInSection,
   ContributionHiddenSectionKeys,
+  IsWildcardPlaceClaim,
   ReplacedSectionKeys,
   ResolveContributionKey,
   ResolveFormContributionWinners,
@@ -1196,6 +1197,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * contribution mounts beside the section it meant to replace. Section keys are not a
    * closed set (custom forms invent their own), so this is validated and reported rather
    * than restricted. A rail tab's key is a tab claim, and matches when the tab has sections.
+   * Wildcard panels are skipped: they act on every form, so most forms lack what they name.
    */
   private warnUnmatchedReplaceKeys(): void {
     const entity = this.EffectiveEntityInfo;
@@ -1203,6 +1205,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     const present = this.presentSectionKeys();
     const tabMembers = this.railTabMembership();
     for (const reg of this.resolvedContributions().Winners) {
+      if (reg.Metadata.entity === '*') continue;
       const tabKey = reg.Metadata.replacesSectionKey?.trim();
       for (const key of ReplacedSectionKeys(reg.Metadata)) {
         if (present.has(key) || this.warnedReplaceKeys.has(key)) continue;
@@ -1223,7 +1226,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * Unlike a section claim, which still mounts beside the section it meant to replace, such a
    * panel is mounted by the section named by its `inSectionKey` or drawing one of its claimed
    * fields — so when there is none, the panel is simply absent. That is a worse silence than a
-   * misplaced panel, which is why it is reported separately.
+   * misplaced panel, which is why it is reported separately. Wildcard panels are skipped.
    */
   private warnUnmatchedFieldClaims(): void {
     const entity = this.EffectiveEntityInfo;
@@ -1235,6 +1238,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     const sections = this.presentSectionKeys();
     if (drawn.size === 0 && sections.size === 0) return;
     for (const reg of this.resolvedContributions().Winners) {
+      if (reg.Metadata.entity === '*') continue;
       const reason = unhostedSectionClaim(reg.Metadata, sections, drawn);
       if (!reason) continue;
       const id = ResolveContributionKey(reg.Metadata) || reg.RowID || 'unknown';
@@ -1531,12 +1535,14 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * Rail tab keys named by a winning contribution's `replacesSectionKey`.
    *
    * A key that matches a panel on the form is that panel, not a tab, and is handled by the
-   * ordinary single-section claim. Only a key matching no panel can be a tab's.
+   * ordinary single-section claim. Only a key matching no panel can be a tab's. A wildcard
+   * panel's claim is ignored, as the composer ignores it.
    */
   private claimedRailTabKeys(): string[] {
     const panelKeys = new Set(this.allChromePanels().map((panel) => panel.SectionKey));
     const out: string[] = [];
     for (const reg of this.resolvedContributions().Winners) {
+      if (IsWildcardPlaceClaim(reg.Metadata)) continue;
       const key = reg.Metadata.replacesSectionKey?.trim();
       if (!key) continue;
       if (key === DETAILS_SECTION_KEY || key === MORE_SECTION_KEY || !panelKeys.has(key)) out.push(key);
