@@ -75,4 +75,42 @@ describe('agent eval rubric driver', () => {
         const pinned = await driver.resolve({ agentId: 'agent', oracles: [] }, { ...context, options: { rubricId: 'named' } } as DriverExecutionContext);
         expect(pinned.oracles[0].config).toEqual({ rubricId: 'named', rubricVersionId: 'version-9', versionLabel: '9.0.0' });
     });
+
+    it('keeps the inline judge when the resolved rubric has no published version', async () => {
+        class DraftProbe extends SuiteProbe {
+            protected override async lookupLatestPublished(): Promise<{ id: string; label: string } | undefined> {
+                return undefined;
+            }
+        }
+        const driver = new DraftProbe();
+        const context = {
+            test: { ID: 'test', RubricID: 'draft-rubric' },
+            testRun: { ID: 'run', TestSuiteRunID: 'suite-run' },
+            options: {},
+            contextUser: {},
+            oracleRegistry: new Map(),
+        } as unknown as DriverExecutionContext;
+        const resolved = await driver.resolve({
+            agentId: 'agent',
+            oracles: [{ type: 'llm-judge', config: { criteria: ['Accurate'] } }],
+        }, context);
+        expect(resolved.oracles.map(oracle => oracle.type)).toEqual(['llm-judge']);
+    });
+
+    it('drops the inline judge once the resolved rubric has a published version', async () => {
+        const driver = new SuiteProbe();
+        const context = {
+            test: { ID: 'test', RubricID: 'published-rubric' },
+            testRun: { ID: 'run', TestSuiteRunID: 'suite-run' },
+            options: {},
+            contextUser: {},
+            oracleRegistry: new Map(),
+        } as unknown as DriverExecutionContext;
+        const resolved = await driver.resolve({
+            agentId: 'agent',
+            oracles: [{ type: 'llm-judge', config: { criteria: ['Accurate'] } }, { type: 'trace-no-errors' }],
+        }, context);
+        expect(resolved.oracles.map(oracle => oracle.type)).toEqual(['trace-no-errors', 'rubric']);
+        expect(resolved.oracles[1].config).toMatchObject({ rubricId: 'published-rubric', rubricVersionId: 'version-4' });
+    });
 });
