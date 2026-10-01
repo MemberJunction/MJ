@@ -135,7 +135,7 @@ describe('EntityDataGridComponent — aggregates from a foreign grid state', () 
         expect(internalsOf(grid).buildCurrentGridState().aggregates).toBeUndefined();
     });
 
-    it('does NOT resurrect view aggregates when the user genuinely cleared them', () => {
+    it('persists an EXPLICIT empty config as empty, not as the view record\'s aggregates', () => {
         // No refusal here: the state describes this entity, so an empty explicit config is a real
         // user action and must persist as empty rather than being overwritten by the view record.
         const empty = { expressions: [] };
@@ -145,6 +145,23 @@ describe('EntityDataGridComponent — aggregates from a foreign grid state', () 
         internalsOf(grid).gridApi = { getColumnState: () => [] };
 
         expect(internalsOf(grid).buildCurrentGridState().aggregates).toEqual(empty);
+    });
+
+    it('does not consult the view record at all when nothing was refused', () => {
+        // The guard for the fallback's scope. The state describes this entity, carries no
+        // aggregates, and no explicit config is set — so nothing was refused, and capture must
+        // behave exactly as it did before this change: no aggregates. A naive fallback
+        // (`effective ?? viewRecord`) would instead pull the record's aggregates in here.
+        // The explicit-empty spec above cannot catch that, because `{ expressions: [] }` is
+        // truthy and short-circuits the naive form too (pointed out by @rkihm-BC).
+        const viewOwn = {
+            expressions: [{ id: 'v1', expression: 'COUNT(*)', displayType: 'card', label: 'Care Logs', enabled: true }],
+        };
+        const grid = withState(makeGrid(CARE_LOGS), ['CareDate'], undefined);
+        internalsOf(grid)._viewEntity = { GridStateObject: { aggregates: viewOwn } };
+        internalsOf(grid).gridApi = { getColumnState: () => [] };
+
+        expect(internalsOf(grid).buildCurrentGridState().aggregates).toBeUndefined();
     });
 
     it('ARE honoured when the state does describe this entity', () => {
@@ -166,7 +183,7 @@ describe('EntityDataGridComponent — aggregates from a foreign grid state', () 
         expect(internalsOf(grid).effectiveAggregatesConfig?.expressions).toHaveLength(2);
     });
 
-    it('an EXPLICIT [Aggregates] config always wins over the grid state', () => {
+    it('an explicit [AggregatesConfig] always wins over the grid state', () => {
         // The host said what it wants; a foreign grid state must not suppress it.
         const explicit = {
             expressions: [{ id: 'x1', expression: 'COUNT(*)', displayType: 'card', label: 'Explicit', enabled: true }],

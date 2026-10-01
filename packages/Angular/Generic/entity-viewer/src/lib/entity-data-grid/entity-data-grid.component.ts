@@ -1198,31 +1198,29 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   }
 
   /**
-   * Returns the effective aggregates config, preferring _aggregatesConfig but falling back to _gridState.aggregates.
-   * This ensures aggregates work regardless of whether they came from explicit config or from view's GridState.
-   *
-   * The fallback is refused when the grid state is not this entity's. Aggregates are raw SQL
-   * expressions carrying their own labels, so a foreign state does not fail visibly the way a
-   * foreign column list does — `COUNT(*)` evaluates against any entity, so a card reading
-   * "Open Orders" renders a real count of whatever this grid is actually showing. A plausible
-   * number under someone else's label is worse than a blank one, because nothing looks wrong.
-   * An explicit `[Aggregates]` config is the host's instruction and always wins.
-   */
-  /**
    * The aggregates to write into CAPTURED state, as distinct from the ones to compute.
    *
    * These differ in exactly one case. {@link effectiveAggregatesConfig} returns `undefined` when it
-   * refuses a foreign grid state, which is right for computing — but captured state is persisted
-   * WHOLESALE (`persistUserDefaultGridState()` assigns `aggregates` unconditionally, and
-   * `GridStateChanged` replaces the renderer's whole `config.gridState`), so writing `undefined`
-   * does not mean "no opinion", it means "this view has no aggregates". A single column resize
-   * would then erase the destination view's real aggregates. Refusing the wrong numbers only to
-   * delete the right ones is not an improvement (raised by @rkihm-BC reviewing #4656).
+   * refuses a foreign grid state, which is right for computing — but `persistGridStateToView()` and
+   * `persistUserDefaultGridState()` both assign `aggregates` unconditionally, so `undefined` does not mean
+   * "no opinion", it means "this view has no aggregates". A single column resize would then erase
+   * the loaded view's real aggregates. Refusing the wrong numbers only to delete the right ones is
+   * not an improvement (raised by @rkihm-BC reviewing #4656).
    *
-   * So on refusal — and ONLY on refusal, so that genuinely clearing aggregates still persists —
-   * fall back to what the loaded view record legitimately holds. The user-default path needs no
-   * equivalent: `loadUserDefaultGridState()` adopts its aggregates into `_aggregatesConfig`, which
-   * outranks the grid state and so never reaches a refusal.
+   * So on refusal — and ONLY on refusal, so that nothing about a non-refused state changes — fall
+   * back to what the loaded view record legitimately holds.
+   *
+   * Which hosts this protects. It serves a host that binds `mj-entity-data-grid` DIRECTLY with a
+   * saved-view `[Params]` (`ViewID`/`ViewName`) and a separate `[GridState]`: only there does the
+   * grid hold a `_viewEntity` whose aggregates can differ from the state's. It does NOT reach the
+   * `mj-entity-viewer` path. There `mj-grid-view-renderer` hands the grid `{ EntityName }` unless a
+   * view-type config supplies `params` (nothing in-repo does), so `_viewEntity` is null; and both
+   * in-repo hosts parse the `[GridState]` they bind from the very record the viewer saves to. A
+   * foreign state on that path is therefore a POLLUTED record whose aggregates are the foreign
+   * ones, and capturing `undefined` is what removes them — which is the intended outcome.
+   *
+   * The user-default path needs no equivalent: `loadUserDefaultGridState()` adopts its aggregates
+   * into `_aggregatesConfig`, which outranks the grid state and so never reaches a refusal.
    */
   private get capturableAggregatesConfig(): ViewGridAggregatesConfig | undefined {
     const refusedForeignState =
@@ -1236,6 +1234,17 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     return this.effectiveAggregatesConfig ?? undefined;
   }
 
+  /**
+   * Returns the effective aggregates config, preferring _aggregatesConfig but falling back to _gridState.aggregates.
+   * This ensures aggregates work regardless of whether they came from explicit config or from view's GridState.
+   *
+   * The fallback is refused when the grid state is not this entity's. Aggregates are raw SQL
+   * expressions carrying their own labels, so a foreign state does not fail visibly the way a
+   * foreign column list does — `COUNT(*)` evaluates against any entity, so a card reading
+   * "Open Orders" renders a real count of whatever this grid is actually showing. A plausible
+   * number under someone else's label is worse than a blank one, because nothing looks wrong.
+   * An explicit `[AggregatesConfig]` is the host's instruction and always wins.
+   */
   private get effectiveAggregatesConfig(): ViewGridAggregatesConfig | null | undefined {
     if (this._aggregatesConfig) {
       return this._aggregatesConfig;
