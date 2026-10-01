@@ -25,6 +25,7 @@
  *        score is counted separately rather than inside that mean.
  */
 import type { ConnectionPool, Transaction } from 'mssql';
+import { MJRubricBandEntity, MJRubricCriterionLevelEntity, MJRubricEvaluationEntity, MJRubricEvaluationScoreEntity } from '@memberjunction/core-entities';
 import { RubricScoring, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { getConsensus } from '@memberjunction/rubrics';
 import { Assert } from '@memberjunction/testing-integration';
@@ -166,8 +167,9 @@ async function idByName(ctx: IntegrationCheckContext, table: string, name: strin
 async function ensureItWorld(ctx: IntegrationCheckContext): Promise<void> {
     const pool = poolOf(ctx);
     const s = schemaOf(ctx);
-    const rubricId = await idByName(ctx, 'Rubric', IT_WORLD.rubric);
-    Assert(rubricId !== null, 'the IT world rubric exists before its attachments');
+    const foundRubricId = await idByName(ctx, 'Rubric', IT_WORLD.rubric);
+    Assert(foundRubricId !== null, 'the IT world rubric exists before its attachments');
+    const rubricId = foundRubricId ?? '';
 
     let categoryId = await idByName(ctx, 'RubricCategory', IT_WORLD.category);
     if (!categoryId) {
@@ -177,10 +179,11 @@ async function ensureItWorld(ctx: IntegrationCheckContext): Promise<void> {
         await saveRow(category);
         categoryId = category.ID;
     }
+    const categoryKey = categoryId ?? '';
     const rubric = await rubricRow(ctx, 'MJ: Rubrics');
     await rubric.Load(rubricId);
-    if ((rubric.CategoryID ?? '').toLowerCase() !== categoryId.toLowerCase()) {
-        rubric.CategoryID = categoryId;
+    if ((rubric.CategoryID ?? '').toLowerCase() !== categoryKey.toLowerCase()) {
+        rubric.CategoryID = categoryKey;
         await saveRow(rubric);
     }
 
@@ -193,6 +196,7 @@ async function ensureItWorld(ctx: IntegrationCheckContext): Promise<void> {
         await saveRow(agent);
         agentId = agent.ID;
     }
+    const reviewedAgentId = agentId ?? '';
 
     const links = await pool.request().query(`
         SELECT CONVERT(nvarchar(36), ar.[ID]) AS ID, a.[Name] AS AgentName, ar.[Status] AS Status, ar.[IsDefault] AS IsDefault
@@ -212,7 +216,7 @@ async function ensureItWorld(ctx: IntegrationCheckContext): Promise<void> {
     const own = (links.recordset as { ID: string; AgentName: string; Status: string; IsDefault: boolean | number }[]).find(link => link.AgentName === IT_WORLD.agent);
     if (!own) {
         const link = await rubricRow(ctx, 'MJ: AI Agent Rubrics');
-        link.AgentID = agentId;
+        link.AgentID = reviewedAgentId;
         link.RubricID = rubricId;
         link.Purpose = 'Evaluation';
         link.Status = 'Active';
@@ -230,7 +234,7 @@ async function ensureItWorld(ctx: IntegrationCheckContext): Promise<void> {
     const typeId = type.recordset[0]?.ID as string | undefined;
     Assert(!!typeId, 'the Agent Eval test type exists');
     const expected = JSON.stringify({ semanticGoals: ['The answer names the source.'] });
-    const configuration = JSON.stringify({ agentId, oracles: [{ type: 'trace-no-errors', weight: 1 }] });
+    const configuration = JSON.stringify({ agentId: reviewedAgentId, oracles: [{ type: 'trace-no-errors', weight: 1 }] });
     let testId = await idByName(ctx, 'Test', IT_WORLD.test);
     if (!testId) {
         const test = await rubricRow(ctx, 'MJ: Tests');
@@ -241,7 +245,6 @@ async function ensureItWorld(ctx: IntegrationCheckContext): Promise<void> {
         test.InputDefinition = JSON.stringify({ userMessage: 'Summarize the source and name it.' });
         test.ExpectedOutcomes = expected;
         test.Configuration = configuration;
-        test.RubricID = null;
         await saveRow(test);
         testId = test.ID;
     } else {
@@ -249,8 +252,7 @@ async function ensureItWorld(ctx: IntegrationCheckContext): Promise<void> {
         await test.Load(testId);
         const outcomes = test.ExpectedOutcomes ?? '';
         const config = test.Configuration ?? '';
-        if (test.RubricID || outcomes.includes('llm-judge') || outcomes.includes('trace-no-errors') || !config.includes(agentId) || !config.includes('trace-no-errors')) {
-            test.RubricID = null;
+        if (test.RubricID || outcomes.includes('llm-judge') || outcomes.includes('trace-no-errors') || !config.includes(reviewedAgentId) || !config.includes('trace-no-errors')) {
             test.TypeID = typeId;
             test.ExpectedOutcomes = expected;
             test.Configuration = configuration;
@@ -275,13 +277,13 @@ async function ensureItWorld(ctx: IntegrationCheckContext): Promise<void> {
         SELECT TOP 1 CONVERT(nvarchar(36), [ID]) AS ID
         FROM [${s}].[RubricEvaluation]
         WHERE [RubricVersionID] = '${versionId}' AND [EvaluatorType] = N'Human' AND [Status] = N'Submitted'
-          AND [SubjectRecordID] = N'${agentId}'
+          AND [SubjectRecordID] = N'${reviewedAgentId}'
     `);
     if (!existing.recordset[0]) {
         const evaluation = await rubricRow(ctx, 'MJ: Rubric Evaluations');
         evaluation.RubricVersionID = versionId;
         evaluation.SubjectEntityID = subjectEntityId;
-        evaluation.SubjectRecordID = agentId;
+        evaluation.SubjectRecordID = reviewedAgentId;
         evaluation.EvaluatorType = 'Human';
         evaluation.EvaluatorUserID = ctx.User.ID;
         evaluation.Status = 'Draft';
@@ -305,7 +307,7 @@ async function ensureItWorld(ctx: IntegrationCheckContext): Promise<void> {
         Assert(evaluation.Outcome === 'Passed', `the human evaluation outcome was ${evaluation.Outcome}`);
     }
 
-    await ensureItWorldDetails(ctx, rubricId, versionId, leaves.recordset as { ID: string; ScaleID: string; Key: string }[], subjectEntityId, agentId);
+    await ensureItWorldDetails(ctx, rubricId, versionId, leaves.recordset as { ID: string; ScaleID: string; Key: string }[], subjectEntityId, reviewedAgentId);
 
     const defaults = await pool.request().query(`
         SELECT a.[Name] AS AgentName
@@ -318,10 +320,10 @@ async function ensureItWorld(ctx: IntegrationCheckContext): Promise<void> {
     Assert(judged.recordset[0].RubricID == null, 'the judged test does not pin Test.RubricID');
     Assert(!String(judged.recordset[0].ExpectedOutcomes ?? '').includes('llm-judge'), 'the judged test has no llm-judge oracle');
     Assert(!String(judged.recordset[0].ExpectedOutcomes ?? '').includes('trace-no-errors'), 'the trace oracle is not stored on ExpectedOutcomes');
-    Assert(String(judged.recordset[0].Configuration ?? '').includes(agentId), 'the judged test aims at the IT agent');
+    Assert(String(judged.recordset[0].Configuration ?? '').includes(reviewedAgentId), 'the judged test aims at the IT agent');
     Assert(String(judged.recordset[0].Configuration ?? '').includes('trace-no-errors'), 'the trace oracle is in Configuration.oracles');
     const category = await pool.request().query(`SELECT [CategoryID] AS CategoryID FROM [${s}].[Rubric] WHERE [ID] = '${rubricId}'`);
-    Assert(String(category.recordset[0].CategoryID).toLowerCase() === categoryId.toLowerCase(), 'the IT world rubric is in IT World — Agent quality');
+    Assert(String(category.recordset[0].CategoryID).toLowerCase() === categoryKey.toLowerCase(), 'the IT world rubric is in IT World — Agent quality');
 }
 
 /** Anchors, bands, and a submitted evaluation of each kind, with a score on every leaf. */
@@ -367,55 +369,64 @@ async function ensureAnchor(ctx: IntegrationCheckContext, criterionId: string, s
         WHERE [CriterionID] = '${criterionId}' AND [ScaleLevelID] = '${scaleLevelId}'
     `);
     if (found.recordset[0]) return;
-    const row = await rubricRow(ctx, 'MJ: Rubric Criterion Levels');
+    const row = await ctx.Provider.GetEntityObject<MJRubricCriterionLevelEntity>('MJ: Rubric Criterion Levels', ctx.User);
+    row.NewRecord();
     row.CriterionID = criterionId;
     row.ScaleLevelID = scaleLevelId;
     row.Descriptor = descriptor;
-    await saveRow(row);
+    await saveEntity(row);
 }
 
-async function ensureBand(ctx: IntegrationCheckContext, versionId: string, label: string, min: number, max: number, tone: string, sequence: number): Promise<void> {
+async function ensureBand(ctx: IntegrationCheckContext, versionId: string, label: string, min: number, max: number, tone: 'Error' | 'Info' | 'Neutral' | 'Success' | 'Warning', sequence: number): Promise<void> {
     const found = await poolOf(ctx).request().query(`
         SELECT TOP 1 [ID] AS ID FROM [${schemaOf(ctx)}].[RubricBand]
         WHERE [RubricVersionID] = '${versionId}' AND [Label] = N'${sqlText(label)}'
     `);
     if (found.recordset[0]) return;
-    const row = await rubricRow(ctx, 'MJ: Rubric Bands');
+    const row = await ctx.Provider.GetEntityObject<MJRubricBandEntity>('MJ: Rubric Bands', ctx.User);
+    row.NewRecord();
     row.RubricVersionID = versionId;
     row.Label = label;
     row.MinScore = min;
     row.MaxScore = max;
     row.DisplayTone = tone;
     row.Sequence = sequence;
-    await saveRow(row);
+    await saveEntity(row);
 }
 
-async function ensureScoredEvaluation(ctx: IntegrationCheckContext, versionId: string, subjectEntityId: string, agentId: string, evaluatorType: string, evaluatorName: string, leaves: { ID: string; Key: string }[], met: string, missed: string, missKeys: Set<string>): Promise<void> {
+async function ensureScoredEvaluation(ctx: IntegrationCheckContext, versionId: string, subjectEntityId: string, agentId: string, evaluatorType: 'Agent' | 'Human' | 'External' | 'Deterministic' | 'Self' | 'AIPrompt', evaluatorName: string, leaves: { ID: string; Key: string }[], met: string, missed: string, missKeys: Set<string>): Promise<void> {
     const found = await poolOf(ctx).request().query(`
         SELECT TOP 1 CONVERT(nvarchar(36), [ID]) AS ID
         FROM [${schemaOf(ctx)}].[RubricEvaluation]
         WHERE [RubricVersionID] = '${versionId}' AND [EvaluatorType] = N'${evaluatorType}' AND [SubjectRecordID] = N'${agentId}'
     `);
     if (found.recordset[0]) return;
-    const evaluation = await rubricRow(ctx, 'MJ: Rubric Evaluations');
+    const evaluation = await ctx.Provider.GetEntityObject<MJRubricEvaluationEntity>('MJ: Rubric Evaluations', ctx.User);
+    evaluation.NewRecord();
     evaluation.RubricVersionID = versionId;
     evaluation.SubjectEntityID = subjectEntityId;
     evaluation.SubjectRecordID = agentId;
     evaluation.EvaluatorType = evaluatorType;
     evaluation.EvaluatorName = evaluatorName;
     evaluation.Status = 'Draft';
-    await saveRow(evaluation);
+    await saveEntity(evaluation);
     for (const leaf of leaves) {
-        const score = await rubricRow(ctx, 'MJ: Rubric Evaluation Scores');
+        const score = await ctx.Provider.GetEntityObject<MJRubricEvaluationScoreEntity>('MJ: Rubric Evaluation Scores', ctx.User);
+        score.NewRecord();
         score.EvaluationID = evaluation.ID;
         score.CriterionID = leaf.ID;
         score.ScaleLevelID = missKeys.has(leaf.Key) ? missed : met;
         score.Rationale = missKeys.has(leaf.Key) ? 'Not met.' : 'Met.';
-        score.Evidence = 'The IT world wrote this score.';
-        await saveRow(score);
+        score.Evidence = JSON.stringify([{ Type: 'Quote', Text: 'The IT world wrote this score.' }]);
+        await saveEntity(score);
     }
     evaluation.Status = 'Submitted';
-    await saveRow(evaluation);
+    await saveEntity(evaluation);
+}
+
+async function saveEntity(record: { Save(): Promise<boolean>; LatestResult?: { Message?: string } }): Promise<void> {
+    const ok = await record.Save();
+    Assert(ok === true, record.LatestResult?.Message || 'Save returned false');
 }
 
 async function withProviderRollback(ctx: IntegrationCheckContext, body: () => Promise<void>): Promise<void> {
