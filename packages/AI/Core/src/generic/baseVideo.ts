@@ -1,4 +1,5 @@
-import { BaseModel } from "./baseModel";
+import { BaseModel, ModelUsage } from "./baseModel";
+import type { AIErrorInfo } from "./errorTypes";
 
 /**
  * Base class for all video generation models. Each AI model will have a sub-class implementing the abstract methods in this base class. Not all 
@@ -22,6 +23,21 @@ export class VideoResult {
      * Platform-specific video ID for the generated video when success == true
      */
     videoId: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+
+    /**
+     * Usage for the request, when the provider reported it: normally the video's length as
+     * `ModelUsage.ForMedia('Seconds', 0, seconds)`, which per-second video pricing prices. Left
+     * undefined when the length is not known, as it is not for a provider that only accepts a render
+     * job (HeyGen's `CreateAvatarVideo` returns the job's ID before the video exists).
+     */
+    usage?: ModelUsage;  // case-violation-ok-legacy-back-compat: named as SpeechResult.usage and the other fields here are, since drivers fill this class as an object literal
+
+    /**
+     * How a failure is classified, when the request failed: `ErrorAnalyzer`'s reading of the error,
+     * with its HTTP status. See `SpeechResult.errorInfo`, which this mirrors. Undefined on success,
+     * and from a driver that reports only `errorMessage`.
+     */
+    errorInfo?: AIErrorInfo;  // case-violation-ok-legacy-back-compat: named as BaseResult.errorInfo, which the failover loop reads
 }
 
 export class AvatarInfo {

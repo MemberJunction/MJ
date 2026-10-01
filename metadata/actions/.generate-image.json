@@ -36,7 +36,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Optional model name to use. Options: 'GPT-4o Image 1.5', 'GPT-4o Image 1.0', 'Nano Banana Pro', 'FLUX.2 Pro', 'FLUX 1.1 Pro'. If not specified, uses highest power-ranked available model.",
+            "Description": "Optional model name to use, which pins that model. Options: 'GPT Image 2', 'GPT 4.o Image 1.5', 'GPT-4o Image 1.0', 'FLUX.2 Pro', 'FLUX 1.1 Pro'. If not specified, the Default Image Generation prompt's models are tried in order (GPT Image 2 first), failing over to the next when one is unavailable.",
             "IsRequired": false
           },
           "primaryKey": {
