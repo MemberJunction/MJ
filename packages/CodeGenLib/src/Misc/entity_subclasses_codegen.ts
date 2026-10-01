@@ -441,7 +441,7 @@ ${loadModule}
                ts.isEnumDeclaration(node) || ts.isClassDeclaration(node)) && node.name) {
               const originalName = node.name.text;
               const prefixedName = `${sClassName}_${originalName}`;
-              rewrittenDef = rewrittenDef.replace(new RegExp('\\b' + originalName + '\\b', 'g'), prefixedName);
+              rewrittenDef = rewrittenDef.replace(new RegExp('\\b' + originalName + '\\b', 'g'), () => prefixedName);
           }
       });
       return rewrittenDef;
