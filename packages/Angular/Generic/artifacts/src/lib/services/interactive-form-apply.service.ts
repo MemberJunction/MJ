@@ -30,8 +30,9 @@ import {
     type FormContributionSlot, type FormContributionSpec,
 } from '@memberjunction/interactive-component-types/forms';
 import {
-    ApplyDecisionToSpec, CollapseFormPanelRegistrations, CollectFormContributionRegistrations,
+    ApplyDecisionToSpec, CollectFormContributionRegistrations,
     FieldGroupsInDetails, HumanizeEntityTitle, MjFormPlacementDialogComponent, ResolveContributionKey,
+    ResolveFormContributionWinners,
     type FormCompositionSnapshot, type FormPlacementContext, type FormPlacementDecision,
 } from '@memberjunction/ng-base-forms';
 
@@ -470,9 +471,8 @@ export class InteractiveFormApplyService {
         provider: IMetadataProvider,
     ): { Title: string; Precedence: number } | null {
         if (snapshot) return snapshot.Contributions.find(c => c.Key === key && c.Source === 'class') ?? null;
-        const applicable = CollectFormContributionRegistrations(entity, provider, { IncludeHidden: true })
-            .filter(reg => reg.Metadata.entity === '*' || reg.Metadata.entity === entity.Name);
-        const winner = CollapseFormPanelRegistrations(applicable)
+        const registrations = CollectFormContributionRegistrations(entity, provider, { IncludeHidden: true });
+        const winner = ResolveFormContributionWinners(entity.Name, registrations).Winners
             .find(reg => ResolveContributionKey(reg.Metadata) === key);
         if (!winner || (winner.Source ?? 'class') !== 'class') return null;
         return { Title: winner.Title ?? key, Precedence: winner.Priority };

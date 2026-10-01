@@ -16,7 +16,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { CompositeKey } from '@memberjunction/core';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import type {
-    CollapseFormPanelRegistrations, FieldGroupsInDetails, HumanizeEntityTitle, ResolveContributionKey,
+    FieldGroupsInDetails, HumanizeEntityTitle, ResolveContributionKey, ResolveFormContributionWinners,
 } from '@memberjunction/ng-base-forms';
 
 // ─── Hoisted state buckets the mocks read/write ──────────────────────────
@@ -138,8 +138,8 @@ vi.mock('@memberjunction/ng-base-forms', async () => {
         HumanizeEntityTitle: typeof HumanizeEntityTitle;
     }>('@memberjunction/ng-base-forms/dist/lib/chrome/form-chrome.js');
     const keys = await vi.importActual<{
-        CollapseFormPanelRegistrations: typeof CollapseFormPanelRegistrations;
         ResolveContributionKey: typeof ResolveContributionKey;
+        ResolveFormContributionWinners: typeof ResolveFormContributionWinners;
     }>('@memberjunction/ng-base-forms/dist/lib/panel-slot/form-contribution.js');
     return {
         MjFormPlacementDialogComponent: class MjFormPlacementDialogComponent {},
@@ -147,8 +147,8 @@ vi.mock('@memberjunction/ng-base-forms', async () => {
             ({ ...spec, formContribution: decision.Contribution }),
         FieldGroupsInDetails: chrome.FieldGroupsInDetails,
         HumanizeEntityTitle: chrome.HumanizeEntityTitle,
-        CollapseFormPanelRegistrations: keys.CollapseFormPanelRegistrations,
         ResolveContributionKey: keys.ResolveContributionKey,
+        ResolveFormContributionWinners: keys.ResolveFormContributionWinners,
         CollectFormContributionRegistrations: (_entity: unknown, _provider: unknown, options?: { IncludeHidden?: boolean }) =>
             options?.IncludeHidden ? [...hoisted.registrations, ...hoisted.hiddenRegistrations] : hoisted.registrations,
     };
@@ -817,6 +817,21 @@ describe('InteractiveFormApplyService — form-panel specs', () => {
             const svc = new InteractiveFormApplyService();
             await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
             expect(precedenceSent()).toBe('8');
+        });
+
+        it('does not ask about a panel registered for another entity, whatever its rank', async () => {
+            hoisted.registrations = [header(9, 'class', 'Some Other Entity')];
+            hoisted.confirmResult = 'cancel';
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
+            expect(precedenceSent()).toBe('0');
+        });
+
+        it('counts a compiled panel registered for every entity that holds the key', async () => {
+            hoisted.registrations = [header(5, 'class', '*')];
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
+            expect(precedenceSent()).toBe('6');
         });
 
         it('counts a compiled panel the user has hidden, which still holds its key', async () => {
