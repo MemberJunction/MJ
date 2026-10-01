@@ -10,12 +10,18 @@
     } @else {
         <section class="rubric-form">
             <h2>{{ record.Name }}</h2>
+            <div class="rubric-actions">
+                <span>Select version</span>
+                @if (PublishedLabel) { <span>Published {{ PublishedLabel }}</span> }
+                @if (DraftVersion) { <span>Draft (next {{ NextVersion }})</span> }
+                @if (ComputedBump) { <span>Computed {{ ComputedBump }}</span> }
+            </div>
             <ul>
                 @for (version of Versions; track version.ID) {
                     <li>{{ version.Status }} {{ version.MajorVersion }}.{{ version.MinorVersion }}.{{ version.PatchVersion }}</li>
                 }
             </ul>
-            <mj-rubric-builder [Nodes]="Nodes" [Scales]="Scales" [Bands]="Bands" [Version]="DraftVersion" (NodesChange)="OnNodes($event)" (BandsChange)="OnBands($event)"></mj-rubric-builder>
+            <mj-rubric-builder [Nodes]="Nodes" [Scales]="Scales" [Bands]="Bands" [BaseBands]="BaseVersion?.bands ?? []" [Version]="DraftVersion" (NodesChange)="OnNodes($event)" (BandsChange)="OnBands($event)"></mj-rubric-builder>
             @if (BaseVersion && DraftVersion) {
                 <mj-rubric-version-diff [Base]="BaseVersion" [Draft]="DraftVersion"></mj-rubric-version-diff>
             }

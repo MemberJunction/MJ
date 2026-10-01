@@ -28,6 +28,25 @@
 .rubric-actions {
   display: flex;
   flex-direction: row;
+  flex-wrap: wrap;
   gap: var(--mj-space-3, 0.75rem);
   align-items: center;
+}
+
+.rubric-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--mj-space-4, 1rem);
+}
+
+.rubric-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-2, 0.5rem);
+}
+
+@media (max-width: 520px) {
+  .rubric-split {
+    grid-template-columns: 1fr;
+  }
 }

@@ -8,14 +8,27 @@
     @if (Loading) {
         <mj-loading text="Loading scale..."></mj-loading>
     } @else {
-        <section>
+        <section class="rubric-stack">
             <h2>{{ record.Name }}</h2>
-            <ul>
+            @if (Frozen) {
+                <p>This scale is used by a published rubric. Level values stay locked. Labels and descriptions stay editable.</p>
+            }
+            <p>Name: {{ record.Name }}</p>
+            <p>Type: {{ record.ScaleType }}</p>
+            <p>Direction: {{ record.HigherIsBetter ? 'Higher is better' : 'Lower is better' }}</p>
+            <p>Range: {{ RangeMin }} to {{ RangeMax }}</p>
+            <h3>Levels</h3>
+            <ul class="rubric-list">
                 @for (level of Levels; track level.ID) {
                     <li>
-                        <label>
-                            {{ level.Value }}
+                        <label>Value
+                            <input type="text" [value]="level.Value" [disabled]="Frozen" />
+                        </label>
+                        <label>Label
                             <input type="text" [value]="level.Label" (change)="OnLabel(level, $event)" />
+                        </label>
+                        <label>Description
+                            <input type="text" [value]="level.Description" (change)="OnDescription(level, $event)" />
                         </label>
                     </li>
                 }

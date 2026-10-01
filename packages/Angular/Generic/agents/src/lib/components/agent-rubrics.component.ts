@@ -14,6 +14,8 @@ import { disableLink, makeDefaultLink, sortAgentRubrics, type AgentRubricLink } 
           {{ link.Purpose }} — {{ link.Rubric }} — {{ link.Status }}{{ link.IsDefault && link.Status !== 'Disabled' ? ' (default)' : '' }}
           @if (link.Status !== 'Disabled') {
             <button type="button" (click)="TurnOff(link)">Turn off</button>
+          } @else {
+            <button type="button" (click)="Enable(link)">Enable</button>
           }
         </p>
       }
@@ -109,6 +111,13 @@ export class AgentRubricsComponent extends BaseAngularComponent {
             this.Error = row.LatestResult?.Message || 'Could not add the rubric.';
             return;
         }
+        this.loaded = false;
+        await this.Load();
+    }
+
+    public async Enable(link: AgentRubricLink): Promise<void> {
+        if (!link.ID) return;
+        await this.saveLink(link.ID, { Status: 'Active' });
         this.loaded = false;
         await this.Load();
     }

@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { CompositeKey, RunView } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { bandFromRow, nodeFromRow, planBandSave, planNodeSave, scaleFromRow, type RubricBandSnapshot, type RubricNodeSnapshot, type RubricScaleSnapshot, type RubricVersionSnapshot } from '@memberjunction/ng-rubrics';
+import { bandFromRow, nodeFromRow, planBandSave, planNodeSave, publishPreview, scaleFromRow, type RubricBandSnapshot, type RubricNodeSnapshot, type RubricScaleSnapshot, type RubricVersionSnapshot } from '@memberjunction/ng-rubrics';
 import { MJRubricEntity } from '@memberjunction/core-entities';
 import { MJRubricFormComponent } from '../../generated/Entities/MJRubric/mjrubric.form.component';
 
@@ -30,6 +30,19 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
     public RequestedBump: 'Major' | 'Minor' | 'Patch' | null = null;
     public Summary = '';
     public Message = '';
+
+    public get PublishedLabel(): string {
+        const row = this.Versions.find(item => item.Status === 'Published');
+        return row ? `${row.MajorVersion}.${row.MinorVersion}.${row.PatchVersion}` : '';
+    }
+
+    public get NextVersion(): string {
+        return this.DraftVersion ? publishPreview(this.BaseVersion, this.DraftVersion).nextVersion ?? '' : '';
+    }
+
+    public get ComputedBump(): string | null {
+        return this.DraftVersion ? publishPreview(this.BaseVersion, this.DraftVersion).computedBump : null;
+    }
 
     public override async ngOnInit(): Promise<void> {
         await super.ngOnInit();

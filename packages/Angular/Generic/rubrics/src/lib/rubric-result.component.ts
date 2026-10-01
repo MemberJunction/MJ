@@ -34,4 +34,20 @@ export class RubricResultComponent {
         if (score === null) return 0;
         return Math.round(score * 100);
     }
+
+    public Weight(id: string): string {
+        const node = this.Version?.nodes.find(item => item.id === id || item.key === id);
+        return node ? String(node.weight) : '';
+    }
+
+    public Gate(id: string): string {
+        const node = this.Version?.nodes.find(item => item.id === id || item.key === id);
+        if (!node?.isGate) return 'Not a gate';
+        return `Gate ≥ ${node.gateMinimumScore ?? ''}`;
+    }
+
+    public ScaleName(id: string): string {
+        const node = this.Version?.nodes.find(item => item.id === id || item.key === id);
+        return this.Version?.scales.find(scale => scale.id === node?.scaleId)?.name ?? '';
+    }
 }

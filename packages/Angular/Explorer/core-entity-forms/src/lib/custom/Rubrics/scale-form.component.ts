@@ -15,7 +15,18 @@ import { MJRubricScaleFormComponent } from '../../generated/Entities/MJRubricSca
 export class MJRubricScaleFormComponentExtended extends MJRubricScaleFormComponent {
     public override record!: MJRubricScaleEntity;
     public Loading = true;
+    public Frozen = false;
     public Levels: Record<string, unknown>[] = [];
+
+    public get RangeMin(): string {
+        const values = this.Levels.map(level => Number(level.Value)).filter(value => Number.isFinite(value));
+        return values.length ? String(Math.min(...values)) : '';
+    }
+
+    public get RangeMax(): string {
+        const values = this.Levels.map(level => Number(level.Value)).filter(value => Number.isFinite(value));
+        return values.length ? String(Math.max(...values)) : '';
+    }
 
     public override async ngOnInit(): Promise<void> {
         await super.ngOnInit();
@@ -33,6 +44,13 @@ export class MJRubricScaleFormComponentExtended extends MJRubricScaleFormCompone
                 MaxRows: 200,
             }, this.ProviderToUse.CurrentUser);
             this.Levels = (result.Results ?? []) as Record<string, unknown>[];
+            const used = await view.RunView({
+                EntityName: 'MJ: Rubric Criteria',
+                ExtraFilter: `ScaleID='${this.record.ID}'`,
+                ResultType: 'simple',
+                MaxRows: 1,
+            }, this.ProviderToUse.CurrentUser);
+            this.Frozen = (used.Results ?? []).length > 0;
         } finally {
             this.Loading = false;
         }
@@ -45,5 +63,14 @@ export class MJRubricScaleFormComponentExtended extends MJRubricScaleFormCompone
         row.Set('Label', label);
         await row.Save();
         level.Label = label;
+    }
+
+    public async OnDescription(level: Record<string, unknown>, event: Event): Promise<void> {
+        const description = (event.target as HTMLInputElement).value;
+        const row = await this.ProviderToUse.GetEntityObject('MJ: Rubric Scale Levels', this.ProviderToUse.CurrentUser);
+        await row.InnerLoad(CompositeKey.FromID(String(level.ID)));
+        row.Set('Description', description);
+        await row.Save();
+        level.Description = description;
     }
 }

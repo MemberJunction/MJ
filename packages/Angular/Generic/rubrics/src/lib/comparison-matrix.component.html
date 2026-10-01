@@ -1,25 +1,21 @@
 <section class="rubric-panel" aria-label="Comparison matrix">
-  <table>
-    <thead>
-      <tr>
-        <th>Criterion</th>
-        @for (column of Columns; track column.id) {
-          <th>{{ column.name }}@if (column.evaluatorType.trim().toLowerCase() !== column.name.trim().toLowerCase()) { <span> {{ column.evaluatorType }}</span> }</th>
-        }
-      </tr>
-    </thead>
-    <tbody>
+  <h3>Evaluator comparison</h3>
+  <div class="rubric-split">
+    <div>
+      <p>Criterion</p>
       @for (row of Model.rows; track row.key) {
-        <tr>
-          <td>{{ row.key }}</td>
-          @for (cell of row.cells; track cell.columnId) {
-            <td [attr.data-disagree]="cell.disagree">{{ cell.score ?? '—' }}</td>
-          }
-        </tr>
+        <p><strong>{{ row.key }}</strong></p>
       }
-    </tbody>
-  </table>
-  <p>Human {{ Model.humanMean ?? '—' }}</p>
-  <p>AI {{ Model.aiMean ?? '—' }}</p>
-  <p>Self {{ Model.selfScore ?? '—' }}</p>
+    </div>
+    @for (column of Shown; track column.id) {
+      <div class="rubric-stack">
+        <p>{{ column.name }}</p>
+        @for (row of Model.rows; track row.key) {
+          @if (Cell(row, column.id); as cell) {
+            <p>{{ cell.score ?? 'No score yet' }}</p>
+          }
+        }
+      </div>
+    }
+  </div>
 </section>

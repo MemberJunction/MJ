@@ -2,8 +2,13 @@
   <ol class="rubric-list">
     @for (node of Nodes; track node.id) {
       <li>
-        <span>{{ node.name }} <small>{{ node.nodeType }}</small></span>
-        <span>{{ Share(node.id) }}% of its group</span>
+        <span>{{ node.name }} <small>{{ node.key }}</small> {{ node.nodeType }}</span>
+        <span>Weight {{ node.weight }} ({{ Share(node.id) }}%)</span>
+        @if (node.nodeType === 'Criterion') {
+          <span>{{ ScaleLabel(node) }}</span>
+          @if (node.isGate) { <span>Gate ≥ {{ node.gateMinimumScore }}</span> }
+          <span>NA: {{ node.notApplicablePolicy || 'Version default' }}</span>
+        }
         <label>
           Parent
           <select [value]="node.parentId ?? ''" (change)="OnParent(node, $event)">
@@ -70,6 +75,12 @@
     }
   </ul>
   <button type="button" (click)="OnAddBand()">Add band</button>
+  @for (band of Removed; track band.label) {
+    <p>Removed in draft: Band {{ band.label }} ({{ band.minScore }}–{{ band.maxScore }})</p>
+  }
+  <h2>Live scoring</h2>
+  <button type="button" (click)="Simulate(true)">Simulate Meets</button>
+  <button type="button" (click)="Simulate(false)">Simulate Miss</button>
   @if (MoveProblem) {
     <p>{{ MoveProblem }}</p>
   }

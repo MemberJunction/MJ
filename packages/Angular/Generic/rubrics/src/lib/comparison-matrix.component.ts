@@ -14,7 +14,22 @@ export class RubricComparisonMatrixComponent {
     @Input() Keys: string[] = [];
     @Input() Columns: MatrixColumn[] = [];
 
+    public get Shown(): MatrixColumn[] {
+        const labels: Record<string, string> = { Human: 'Human', AI: 'AI Evaluator', Self: 'Agent Self-Check' };
+        return (['Human', 'AI', 'Self'] as const).map(type => this.Columns.find(column => column.evaluatorType === type) ?? {
+            id: type,
+            name: labels[type],
+            evaluatorType: type,
+            status: type === 'Self' ? 'Disabled' : 'Empty',
+            scores: [],
+        });
+    }
+
     public get Model(): MatrixModel {
-        return comparisonMatrix(this.Keys, this.Columns);
+        return comparisonMatrix(this.Keys, this.Shown);
+    }
+
+    public Cell(row: { cells: { columnId: string; score: number | null }[] }, columnId: string): { columnId: string; score: number | null } | null {
+        return row.cells.find(cell => cell.columnId === columnId) ?? null;
     }
 }

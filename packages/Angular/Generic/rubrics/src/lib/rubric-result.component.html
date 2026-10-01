@@ -1,27 +1,22 @@
 <section class="rubric-panel" aria-label="Rubric result">
   @if (Result) {
-    <p>{{ Shown }} <span>{{ Result.outcome }}</span></p>
-    @if (Result.gateFailed) {
-      <p>A gate failed.</p>
-    }
-    @if (BandLabel) {
-      <p>Band {{ BandLabel }}</p>
-    }
-    <p>Completeness {{ Result.completeness }}</p>
+    <header class="rubric-stack">
+      <p>{{ Shown }} {{ Result.outcome }}</p>
+      <p>Band {{ BandLabel ?? '—' }}</p>
+      <p>Completeness {{ Result.completeness }}</p>
+      <p>Quality gate: {{ Result.gateFailed ? 'Not met' : 'Met' }}</p>
+    </header>
     <ul class="rubric-list">
       @for (node of Result.nodes; track node.id) {
-        <li>
-          <span>{{ node.key }}</span>
+        <li class="rubric-stack">
+          <strong>{{ node.key }}</strong>
+          <span>Weight {{ Weight(node.id) }}</span>
+          <span>{{ Gate(node.id) }}</span>
+          <span>{{ ScaleName(node.id) }}</span>
           <span class="rubric-bar" [style.width.%]="Bar(node.normalizedScore)"></span>
           <span>{{ Bar(node.normalizedScore) }}%</span>
-          @if (node.gateFailed) {
-            <span>Gate failed</span>
-          }
           @if (Note(node.id, 'rationale')) {
             <p>{{ Note(node.id, 'rationale') }}</p>
-          }
-          @if (Note(node.id, 'evidence')) {
-            <p>{{ Note(node.id, 'evidence') }}</p>
           }
         </li>
       }

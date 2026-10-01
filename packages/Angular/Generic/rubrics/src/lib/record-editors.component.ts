@@ -11,7 +11,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
           @for (parent of Parents; track parent.id) { <option [value]="parent.id">{{ parent.name }}</option> }
         </select>
       </label>
-      <label>Weight <input type="number" [value]="Weight" (change)="WeightChange.emit(numberOf($event))"></label>
+      <label>Weight <input type="number" [value]="Weight" (change)="WeightChange.emit(numberOf($event))"> <span>{{ Share }}% of its parent</span></label>
       <label>Scale
         <select [value]="ScaleId ?? ''" (change)="ScaleIdChange.emit(valueOf($event) || null)">
           <option value="">— None —</option>
@@ -39,6 +39,7 @@ export class RubricCriterionEditorComponent {
     @Input() ParentId: string | null = null;
     @Input() Parents: { id: string; name: string }[] = [];
     @Input() Weight = 1;
+    @Input() Share = 100;
     @Input() ScaleId: string | null = null;
     @Input() Scales: { id: string; name: string; levels: { id: string; label: string }[] }[] = [];
     @Input() Anchors: { scaleLevelId: string | null; descriptor: string }[] = [];
@@ -70,10 +71,11 @@ export class RubricCriterionEditorComponent {
     standalone: true,
     selector: 'mj-rubric-score-editor',
     template: `
-      <label>Level <input [value]="ScaleLevelId ?? ''" (change)="ScaleLevelIdChange.emit(valueOf($event) || null)"></label>
-      <label>Value <input type="number" [value]="RawValue ?? ''" (change)="RawValueChange.emit(valueOf($event) === '' ? null : Number(valueOf($event)))"></label>
-      <label><input type="checkbox" [checked]="IsNotApplicable" (change)="IsNotApplicableChange.emit((($event.target) as HTMLInputElement).checked)"> Not applicable</label>
-      <label>Rationale <textarea [value]="Rationale ?? ''" (change)="RationaleChange.emit(valueOf($event))"></textarea></label>
+      @for (level of Levels; track level.id) {
+        <button type="button" (click)="ScaleLevelIdChange.emit(level.id)">{{ level.label }} {{ level.normalizedValue }} — {{ level.anchor }}</button>
+      }
+      <label><input type="checkbox" [checked]="IsNotApplicable" [disabled]="NotApplicablePolicy === 'NotAllowed'" (change)="IsNotApplicableChange.emit(checked($event))"> Not applicable</label>
+      <label>Rationale <textarea required [value]="Rationale ?? ''" (change)="RationaleChange.emit(valueOf($event))"></textarea></label>
       <label>Evidence <textarea [value]="Evidence ?? ''" (change)="EvidenceChange.emit(valueOf($event))"></textarea></label>
     `,
 })
@@ -83,12 +85,15 @@ export class RubricScoreEditorComponent {
     @Input() IsNotApplicable = false;
     @Input() Rationale: string | null = null;
     @Input() Evidence: string | null = null;
+    @Input() NotApplicablePolicy: string | null = null;
+    @Input() Levels: { id: string; label: string; normalizedValue: number; anchor: string }[] = [];
     @Output() ScaleLevelIdChange = new EventEmitter<string | null>();
     @Output() RawValueChange = new EventEmitter<number | null>();
     @Output() IsNotApplicableChange = new EventEmitter<boolean>();
     @Output() RationaleChange = new EventEmitter<string>();
     @Output() EvidenceChange = new EventEmitter<string>();
     protected valueOf(event: Event): string { return (event.target as HTMLInputElement | HTMLTextAreaElement).value; }
+    protected checked(event: Event): boolean { return (event.target as HTMLInputElement).checked; }
 }
 
 /** Scale type, range, and direction. Levels are a separate record. */
@@ -99,7 +104,7 @@ export class RubricScoreEditorComponent {
       <label>Type <input [value]="ScaleType" (change)="ScaleTypeChange.emit(text($event))"></label>
       <label>Min <input type="number" [value]="MinValue ?? ''" (change)="MinValueChange.emit(optionalNumber($event))"></label>
       <label>Max <input type="number" [value]="MaxValue ?? ''" (change)="MaxValueChange.emit(optionalNumber($event))"></label>
-      <label><input type="checkbox" [checked]="HigherIsBetter" (change)="HigherIsBetterChange.emit((($event.target) as HTMLInputElement).checked)"> Higher is better</label>
+      <label><input type="checkbox" [checked]="HigherIsBetter" (change)="HigherIsBetterChange.emit(checked($event))"> Higher is better</label>
     `,
 })
 export class RubricScaleFieldsComponent {
@@ -116,6 +121,7 @@ export class RubricScaleFieldsComponent {
         const value = (event.target as HTMLInputElement).value;
         return value === '' ? null : Number(value);
     }
+    protected checked(event: Event): boolean { return (event.target as HTMLInputElement).checked; }
 }
 
 /** Label and description. Value edits stay blocked once the scale is frozen. */
@@ -125,8 +131,8 @@ export class RubricScaleFieldsComponent {
     template: `
       <label>Label <input [value]="Label" (change)="LabelChange.emit(text($event))"></label>
       <label>Description <textarea [value]="Description ?? ''" (change)="DescriptionChange.emit(text($event))"></textarea></label>
-      <label>Value <input type="number" [value]="Value" [disabled]="Frozen" (change)="ValueChange.emit(Number(text($event)))"></label>
-      <label>Normalized <input type="number" [value]="NormalizedValue" [disabled]="Frozen" (change)="NormalizedValueChange.emit(Number(text($event)))"></label>
+      <label>Value <input type="number" [value]="Value" [disabled]="Frozen" (change)="ValueChange.emit(asNumber($event))"></label>
+      <label>Normalized <input type="number" [value]="NormalizedValue" [disabled]="Frozen" (change)="NormalizedValueChange.emit(asNumber($event))"></label>
     `,
 })
 export class RubricScaleLevelEditorComponent {
@@ -140,6 +146,7 @@ export class RubricScaleLevelEditorComponent {
     @Output() ValueChange = new EventEmitter<number>();
     @Output() NormalizedValueChange = new EventEmitter<number>();
     protected text(event: Event): string { return (event.target as HTMLInputElement | HTMLTextAreaElement).value; }
+    protected asNumber(event: Event): number { return Number(this.text(event)); }
 }
 
 /** Band label, range, and description. */
@@ -148,8 +155,11 @@ export class RubricScaleLevelEditorComponent {
     selector: 'mj-rubric-band-editor',
     template: `
       <label>Label <input [value]="Label" (change)="LabelChange.emit(text($event))"></label>
-      <label>From <input type="number" [value]="MinScore" (change)="MinScoreChange.emit(Number(text($event)))"></label>
-      <label>To <input type="number" [value]="MaxScore" (change)="MaxScoreChange.emit(Number(text($event)))"></label>
+      <label>Range {{ MinScore }}–{{ MaxScore }}
+        <input type="number" [value]="MinScore" (change)="MinScoreChange.emit(asNumber($event))">
+        to
+        <input type="number" [value]="MaxScore" (change)="MaxScoreChange.emit(asNumber($event))">
+      </label>
       <label>Description <textarea [value]="Description ?? ''" (change)="DescriptionChange.emit(text($event))"></textarea></label>
     `,
 })
@@ -163,6 +173,7 @@ export class RubricBandEditorComponent {
     @Output() MaxScoreChange = new EventEmitter<number>();
     @Output() DescriptionChange = new EventEmitter<string>();
     protected text(event: Event): string { return (event.target as HTMLInputElement | HTMLTextAreaElement).value; }
+    protected asNumber(event: Event): number { return Number(this.text(event)); }
 }
 
 /** Category name and parent. The parent list is the hierarchy. */
@@ -171,6 +182,7 @@ export class RubricBandEditorComponent {
     selector: 'mj-rubric-category-editor',
     template: `
       <label>Name <input [value]="Name" (change)="NameChange.emit(text($event))"></label>
+      <label>Description <textarea [value]="Description" (change)="DescriptionChange.emit(text($event))"></textarea></label>
       <label>Parent
         <select [value]="ParentId ?? ''" (change)="ParentIdChange.emit(text($event) || null)">
           <option value="">— None —</option>
@@ -183,9 +195,11 @@ export class RubricBandEditorComponent {
 })
 export class RubricCategoryEditorComponent {
     @Input() Name = '';
+    @Input() Description = '';
     @Input() ParentId: string | null = null;
     @Input() Parents: { id: string; name: string }[] = [];
     @Output() NameChange = new EventEmitter<string>();
+    @Output() DescriptionChange = new EventEmitter<string>();
     @Output() ParentIdChange = new EventEmitter<string | null>();
     protected text(event: Event): string { return (event.target as HTMLInputElement | HTMLSelectElement).value; }
 }

@@ -22,6 +22,7 @@ export class RubricBuilderComponent implements OnChanges {
     @Input() Bands: RubricBandSnapshot[] = [];
     @Input() Version: RubricVersionSnapshot | null = null;
     @Input() SampleAnswers: RubricFormAnswer[] = [];
+    @Input() BaseBands: RubricBandSnapshot[] = [];
     @Output() NodesChange = new EventEmitter<RubricNodeSnapshot[]>();
     @Output() BandsChange = new EventEmitter<RubricBandSnapshot[]>();
 
@@ -40,13 +41,13 @@ export class RubricBuilderComponent implements OnChanges {
     /** The select's value is applied before its options exist, so re-apply after render. */
     private selectLoadedScales(): void {
         queueMicrotask(() => {
-            const selects = [...document.querySelectorAll('mj-rubric-builder select')].filter(select =>
-                [...select.options].some(option => this.Scales.some(scale => option.value.toLowerCase() === scale.id.toLowerCase())));
+            const selects = Array.from(document.querySelectorAll('mj-rubric-builder select')).map(element => element as HTMLSelectElement).filter(select =>
+                Array.from(select.options).some(option => this.Scales.some(scale => option.value.toLowerCase() === scale.id.toLowerCase())));
             const criteria = this.Nodes.filter(node => node.nodeType === 'Criterion');
             selects.forEach((select, index) => {
                 const scaleId = criteria[index]?.scaleId;
                 if (!scaleId) return;
-                const match = [...select.options].find(option => option.value.toLowerCase() === scaleId.toLowerCase());
+                const match = Array.from(select.options).find(option => option.value.toLowerCase() === scaleId.toLowerCase());
                 if (match) select.value = match.value;
             });
         });
@@ -58,6 +59,24 @@ export class RubricBuilderComponent implements OnChanges {
 
     public Parents(node: RubricNodeSnapshot): RubricNodeSnapshot[] {
         return this.Nodes.filter(item => item.nodeType === 'Group' && item.id !== node.id && !moveProblem(this.Nodes, node.id, item.id));
+    }
+
+    public get Removed(): RubricBandSnapshot[] {
+        const labels = new Set(this.Bands.map(band => band.label));
+        return this.BaseBands.filter(band => !labels.has(band.label));
+    }
+
+    public ScaleLabel(node: RubricNodeSnapshot): string {
+        return this.Scales.find(scale => scale.id.toLowerCase() === (node.scaleId ?? '').toLowerCase())?.name || 'No scale';
+    }
+
+    public Simulate(meets: boolean): void {
+        this.SampleAnswers = this.Nodes.filter(node => node.nodeType === 'Criterion').map(node => {
+            const levels = [...(this.Scales.find(scale => scale.id === node.scaleId)?.levels ?? [])].sort((a, b) => a.normalizedValue - b.normalizedValue);
+            const level = meets ? levels[levels.length - 1] : levels[0];
+            return { criterionId: node.id, scaleLevelId: level?.id ?? null };
+        });
+        this.ngOnChanges();
     }
 
     public Levels(node: RubricNodeSnapshot): { id: string; label: string }[] {

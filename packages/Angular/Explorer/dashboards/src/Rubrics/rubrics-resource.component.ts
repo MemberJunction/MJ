@@ -14,7 +14,7 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 })
 export class RubricsResourceComponent extends BaseResourceComponent implements OnInit {
     public Loading = true;
-    public Rubrics: { ID: string; Name: string }[] = [];
+    public Rubrics: { ID: string; Name: string; Status: string; Version: string; HasDraft: boolean }[] = [];
     public Scales: { ID: string; Name: string }[] = [];
 
     public override async ngOnInit(): Promise<void> {
@@ -28,7 +28,19 @@ export class RubricsResourceComponent extends BaseResourceComponent implements O
         try {
             const view = new RunView();
             const result = await view.RunView({ EntityName: 'MJ: Rubrics', ResultType: 'simple', MaxRows: 200, OrderBy: 'Name' });
-            this.Rubrics = ((result.Results ?? []) as { ID: string; Name: string }[]);
+            const versions = await view.RunView({ EntityName: 'MJ: Rubric Versions', ResultType: 'simple', MaxRows: 500 });
+            const versionRows = (versions.Results ?? []) as { RubricID: string; Status: string; MajorVersion: number; MinorVersion: number; PatchVersion: number }[];
+            this.Rubrics = ((result.Results ?? []) as { ID: string; Name: string; Status: string }[]).map(rubric => {
+                const mine = versionRows.filter(row => row.RubricID === rubric.ID);
+                const published = mine.find(row => row.Status === 'Published');
+                return {
+                    ID: rubric.ID,
+                    Name: rubric.Name,
+                    Status: rubric.Status ?? '',
+                    Version: published ? `${published.MajorVersion}.${published.MinorVersion}.${published.PatchVersion}` : '—',
+                    HasDraft: mine.some(row => row.Status === 'Draft'),
+                };
+            });
             const scales = await view.RunView({ EntityName: 'MJ: Rubric Scales', ResultType: 'simple', MaxRows: 200, OrderBy: 'Name' });
             this.Scales = ((scales.Results ?? []) as { ID: string; Name: string }[]);
         } finally {

@@ -1,17 +1,43 @@
 <section class="rubric-panel" aria-label="Version diff">
-  <table>
-    <thead>
-      <tr><th>Key</th><th>Base</th><th>Draft</th><th>Changes</th></tr>
-    </thead>
-    <tbody>
-      @for (row of Rows; track row.key) {
-        <tr>
-          <td>{{ row.key }}</td>
-          <td>{{ row.left ?? '—' }}</td>
-          <td>{{ row.right ?? '—' }}</td>
-          <td>{{ row.marks.join(', ') }}</td>
-        </tr>
+  <header class="rubric-stack">
+    <p>Rubric version diff</p>
+    <h2>Draft vs {{ BaseLabel }}</h2>
+    @if (Bump) {
+      <p>Computed bump: {{ Bump }} → {{ NextVersion }}</p>
+    }
+  </header>
+  @for (row of CriterionRows; track row.key) {
+    <article class="rubric-stack">
+      <h3>Criterion: {{ row.name }}</h3>
+      <div class="rubric-split">
+        <div class="rubric-stack">
+          <p>Base: {{ BaseLabel }}</p>
+          <p>Weight: {{ row.baseWeight }}</p>
+          <p>Quality gate: {{ row.baseGate }}</p>
+          <p>Scale: {{ row.baseScale }}</p>
+        </div>
+        <div class="rubric-stack">
+          <p>Draft: next {{ NextVersion }}</p>
+          <p>Weight: {{ row.draftWeight }}</p>
+          <p>Quality gate: {{ row.draftGate }}</p>
+          <p>Scale: {{ row.draftScale }}</p>
+        </div>
+      </div>
+      @if (row.marks.length) {
+        <p>{{ row.marks.join(', ') }}</p>
       }
-    </tbody>
-  </table>
+    </article>
+  }
+  @for (band of RemovedBands; track band.label) {
+    <article class="rubric-split">
+      <div>
+        <p>Band: {{ band.label }}</p>
+        <p>Range: {{ band.min }}–{{ band.max }}</p>
+      </div>
+      <div>
+        <p>Band removed</p>
+        <p>{{ band.label }} is not on the draft.</p>
+      </div>
+    </article>
+  }
 </section>
