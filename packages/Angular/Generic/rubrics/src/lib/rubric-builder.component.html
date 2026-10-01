@@ -75,13 +75,19 @@
   <ul class="rubric-list">
     @for (band of Bands; track band.id) {
       <li>
-        <label>Label <input type="text" [value]="band.label" (input)="OnBand(band.id, 'label', $event)" /></label>
-        <label>Min <input type="number" min="0" max="1" step="0.1" [value]="band.minScore" (change)="OnBand(band.id, 'minScore', $event)" /></label>
-        <label>Max <input type="number" min="0" max="1" step="0.1" [value]="band.maxScore" (change)="OnBand(band.id, 'maxScore', $event)" /></label>
+        @if (ReadOnly) {
+          <span>Band {{ band.label }} ({{ band.minScore }}–{{ band.maxScore }})</span>
+        } @else {
+          <label>Label <input type="text" [value]="band.label" (input)="OnBand(band.id, 'label', $event)" /></label>
+          <label>Min <input type="number" min="0" max="1" step="0.1" [value]="band.minScore" (change)="OnBand(band.id, 'minScore', $event)" /></label>
+          <label>Max <input type="number" min="0" max="1" step="0.1" [value]="band.maxScore" (change)="OnBand(band.id, 'maxScore', $event)" /></label>
+        }
       </li>
     }
   </ul>
-  <button type="button" (click)="OnAddBand()">Add band</button>
+  @if (!ReadOnly) {
+    <button type="button" (click)="OnAddBand()">Add band</button>
+  }
   @for (band of Removed; track band.label) {
     <p>Removed in draft: Band {{ band.label }} ({{ band.minScore }}–{{ band.maxScore }})</p>
   }
