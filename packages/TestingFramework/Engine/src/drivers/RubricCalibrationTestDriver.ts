@@ -2,7 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { RunView } from '@memberjunction/core';
 import { providerRubricEngine } from '@memberjunction/rubrics';
 import { BaseTestDriver } from './BaseTestDriver';
-import { calibrationOracles, type CalibrationExpectation, type CalibrationPair } from './calibration';
+import { calibrationOracles, calibrationPairs, type CalibrationExpectation, type CalibrationPair } from './calibration';
 import type { DriverExecutionContext, DriverExecutionResult } from '../types';
 
 interface CalibrationInput {
@@ -137,50 +137,45 @@ export class RubricCalibrationTestDriver extends BaseTestDriver {
             ResultType: 'simple',
             MaxRows: 2000,
         }, user);
-        const byCriterion = new Map<string, { human?: { level: number; score: number; categories: number }; ai?: { level: number; score: number; categories: number }; major: number }>();
-        const levelIds = [...new Set(((scores.Results ?? []) as Record<string, unknown>[]).map(row => row.ScaleLevelID).filter(id => id != null).map(id => String(id)))];
-        const levels = levelIds.length === 0 ? [] : ((await view.RunView({
+        const scoreRows = (scores.Results ?? []) as Record<string, unknown>[];
+        const levelIds = [...new Set(scoreRows.map(row => row.ScaleLevelID).filter(id => id != null).map(id => String(id)))];
+        const usedLevels = levelIds.length === 0 ? [] : ((await view.RunView({
             EntityName: 'MJ: Rubric Scale Levels',
             ExtraFilter: `ID IN (${levelIds.map(id => `'${id.replace(/'/g, "''")}'`).join(', ')})`,
             ResultType: 'simple',
             MaxRows: 500,
         }, user)).Results ?? []) as Record<string, unknown>[];
-        const levelIndex = new Map(levels.map(row => [String(row.ID), Number(row.Sequence ?? 0)]));
-        const counts = new Map<string, number>();
-        for (const level of levels) {
-            const scale = String(level.ScaleID);
-            counts.set(scale, (counts.get(scale) ?? 0) + 1);
-        }
-        for (const score of (scores.Results ?? []) as Record<string, unknown>[]) {
-            const evaluation = evaluations.find(row => String(row.ID) === String(score.EvaluationID));
-            if (!evaluation || String(evaluation.Status) !== 'Submitted') continue;
-            const side = String(evaluation.EvaluatorType) === 'Human' ? 'human' : (String(evaluation.EvaluatorType) === 'AIPrompt' || String(evaluation.EvaluatorType) === 'Agent') ? 'ai' : null;
-            if (!side) continue;
-            const major = majorByVersion.get(String(evaluation.RubricVersionID)) ?? 0;
-            const criterionId = String(score.CriterionID ?? '');
-            if (!criterionId) continue;
-            const key = `${evaluation.SubjectRecordID}|${major}|${criterionId}`;
-            const bucket = byCriterion.get(key) ?? { major };
-            const level = score.ScaleLevelID == null ? (Number(score.NormalizedScore) >= 0.5 ? 1 : 0) : (levelIndex.get(String(score.ScaleLevelID)) ?? 0);
-            const categories = score.ScaleLevelID == null ? 2 : Math.max(2, counts.get(String(levels.find(row => String(row.ID) === String(score.ScaleLevelID))?.ScaleID ?? '')) ?? 2);
-            bucket[side] = { level, score: Number(score.NormalizedScore), categories };
-            byCriterion.set(key, bucket);
-        }
-        const pairs: CalibrationPair[] = [];
-        for (const [key, bucket] of byCriterion) {
-            if (!bucket.human || !bucket.ai) continue;
-            const [subjectId, , criterionId] = key.split('|');
-            pairs.push({
-                subjectId,
-                criterionId,
-                humanLevel: bucket.human.level,
-                aiLevel: bucket.ai.level,
-                categoryCount: Math.max(bucket.human.categories, bucket.ai.categories),
-                humanScore: bucket.human.score,
-                aiScore: bucket.ai.score,
-                major: bucket.major,
-            });
-        }
-        return pairs;
+        const scaleIds = [...new Set(usedLevels.map(row => String(row.ScaleID ?? '')).filter(id => id.length > 0))];
+        const scaleLevels = scaleIds.length === 0 ? usedLevels : ((await view.RunView({
+            EntityName: 'MJ: Rubric Scale Levels',
+            ExtraFilter: `ScaleID IN (${scaleIds.map(id => `'${id.replace(/'/g, "''")}'`).join(', ')})`,
+            ResultType: 'simple',
+            MaxRows: 500,
+        }, user)).Results ?? []) as Record<string, unknown>[];
+        const criterionIds = [...new Set(scoreRows.map(row => String(row.CriterionID ?? '')).filter(id => id.length > 0))];
+        const criteria = criterionIds.length === 0 ? [] : ((await view.RunView({
+            EntityName: 'MJ: Rubric Criteria',
+            ExtraFilter: `ID IN (${criterionIds.map(id => `'${id.replace(/'/g, "''")}'`).join(', ')})`,
+            ResultType: 'simple',
+            MaxRows: 500,
+        }, user)).Results ?? []) as Record<string, unknown>[];
+        return calibrationPairs({
+            evaluations: evaluations.map(row => ({
+                id: String(row.ID),
+                subjectId: String(row.SubjectRecordID ?? ''),
+                versionId: String(row.RubricVersionID ?? ''),
+                evaluatorType: String(row.EvaluatorType ?? ''),
+                status: String(row.Status ?? ''),
+            })),
+            versions: versions.map(row => ({ id: String(row.ID), major: majorByVersion.get(String(row.ID)) ?? 0 })),
+            scores: scoreRows.map(row => ({
+                evaluationId: String(row.EvaluationID ?? ''),
+                criterionId: String(row.CriterionID ?? ''),
+                normalizedScore: row.NormalizedScore == null ? null : Number(row.NormalizedScore),
+                scaleLevelId: row.ScaleLevelID == null ? null : String(row.ScaleLevelID),
+            })),
+            levels: scaleLevels.map(row => ({ id: String(row.ID), scaleId: String(row.ScaleID ?? ''), sequence: Number(row.Sequence ?? 0) })),
+            criteria: criteria.map(row => ({ id: String(row.ID), key: String(row.Key ?? '') })),
+        });
     }
 }

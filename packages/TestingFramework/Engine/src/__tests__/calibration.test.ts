@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { agreementByCriterion, calibrationOracles, quadraticWeightedKappa } from '../drivers/calibration.js';
+import { agreementByCriterion, calibrationOracles, calibrationPairs, quadraticWeightedKappa } from '../drivers/calibration.js';
 
 const agreed = [
     { subjectId: 'a', criterionId: 'facts', humanLevel: 1, aiLevel: 1, categoryCount: 2, humanScore: 1, aiScore: 1, major: 1 },
@@ -27,6 +27,59 @@ describe('rubric judge calibration', () => {
         expect(agreementByCriterion(swapped.oracles.length ? [
             { subjectId: 'a', criterionId: 'facts', humanLevel: 0, aiLevel: 1, categoryCount: 2, humanScore: 0, aiScore: 1, major: 1 },
         ] : [])[0].meanAbsoluteError).toBe(1);
+    });
+
+    it('ranks sequence 1 and 2 the same as 0 and 1, and keys the oracle by the criterion key', () => {
+        const levels = [
+            { id: 'low', scaleId: 'scale', sequence: 1 },
+            { id: 'high', scaleId: 'scale', sequence: 2 },
+        ];
+        const shared = {
+            versions: [{ id: 'version', major: 1 }],
+            levels,
+            criteria: [{ id: 'criterion-row', key: 'facts' }],
+        };
+        const rows = (humanLevel: string, aiLevel: string, humanId: string, aiId: string, subjectId: string) => ({
+            evaluations: [
+                { id: humanId, subjectId, versionId: 'version', evaluatorType: 'Human', status: 'Submitted' },
+                { id: aiId, subjectId, versionId: 'version', evaluatorType: 'AIPrompt', status: 'Submitted' },
+            ],
+            scores: [
+                { evaluationId: humanId, criterionId: 'criterion-row', normalizedScore: humanLevel === 'high' ? 1 : 0, scaleLevelId: humanLevel },
+                { evaluationId: aiId, criterionId: 'criterion-row', normalizedScore: aiLevel === 'high' ? 1 : 0, scaleLevelId: aiLevel },
+            ],
+        });
+        const agreed = calibrationPairs({
+            ...shared,
+            ...rows('high', 'high', 'h1', 'a1', 'one'),
+            evaluations: [
+                ...rows('high', 'high', 'h1', 'a1', 'one').evaluations,
+                ...rows('low', 'low', 'h2', 'a2', 'two').evaluations,
+            ],
+            scores: [
+                ...rows('high', 'high', 'h1', 'a1', 'one').scores,
+                ...rows('low', 'low', 'h2', 'a2', 'two').scores,
+            ],
+        });
+        expect(agreed.map(pair => pair.humanLevel)).toEqual([1, 0]);
+        expect(agreed[0].categoryCount).toBe(2);
+        expect(agreed[0].criterionId).toBe('facts');
+        expect(quadraticWeightedKappa(agreed.map(pair => pair.humanLevel), agreed.map(pair => pair.aiLevel), agreed[0].categoryCount)).toBe(1);
+        const swapped = calibrationPairs({
+            ...shared,
+            evaluations: [
+                ...rows('high', 'low', 'h1', 'a1', 'one').evaluations,
+                ...rows('low', 'high', 'h2', 'a2', 'two').evaluations,
+            ],
+            scores: [
+                ...rows('high', 'low', 'h1', 'a1', 'one').scores,
+                ...rows('low', 'high', 'h2', 'a2', 'two').scores,
+            ],
+        });
+        expect(quadraticWeightedKappa(swapped.map(pair => pair.humanLevel), swapped.map(pair => pair.aiLevel), 2)).toBe(-1);
+        const judged = calibrationOracles(swapped, { perCriterion: { facts: { minWeightedKappa: 0.5 } } });
+        expect(judged.oracles[0].message.startsWith('facts:')).toBe(true);
+        expect(judged.oracles[0].passed).toBe(false);
     });
 
     it('returns no comparison when the gold set has no paired scores', () => {

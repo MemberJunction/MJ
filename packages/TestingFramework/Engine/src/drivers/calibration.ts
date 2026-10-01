@@ -1,5 +1,70 @@
 import type { OracleResult } from '@memberjunction/testing-engine-base';
 
+/** Rank a scale's levels by sequence into indexes 0..n-1. n is every level on the scale. */
+export function rankLevels(levels: { id: string; scaleId: string; sequence: number }[]): { indexByLevel: Map<string, number>; countByScale: Map<string, number> } {
+    const byScale = new Map<string, { id: string; sequence: number }[]>();
+    for (const level of levels) {
+        const list = byScale.get(level.scaleId) ?? [];
+        list.push(level);
+        byScale.set(level.scaleId, list);
+    }
+    const indexByLevel = new Map<string, number>();
+    const countByScale = new Map<string, number>();
+    for (const [scaleId, list] of byScale) {
+        const ordered = [...list].sort((left, right) => left.sequence - right.sequence || left.id.localeCompare(right.id));
+        countByScale.set(scaleId, ordered.length);
+        ordered.forEach((level, index) => indexByLevel.set(level.id, index));
+    }
+    return { indexByLevel, countByScale };
+}
+
+/** Pair submitted human and AI scores. Criterion identity is the criterion Key. Level indexes are ranked, not the stored sequence. */
+export function calibrationPairs(input: {
+    evaluations: { id: string; subjectId: string; versionId: string; evaluatorType: string; status: string }[];
+    versions: { id: string; major: number }[];
+    scores: { evaluationId: string; criterionId: string; normalizedScore: number | null; scaleLevelId: string | null }[];
+    levels: { id: string; scaleId: string; sequence: number }[];
+    criteria: { id: string; key: string }[];
+}): CalibrationPair[] {
+    const majorByVersion = new Map(input.versions.map(row => [row.id, row.major]));
+    const keyByCriterion = new Map(input.criteria.map(row => [row.id, row.key || row.id]));
+    const levelById = new Map(input.levels.map(level => [level.id, level]));
+    const { indexByLevel, countByScale } = rankLevels(input.levels);
+    const buckets = new Map<string, { subjectId: string; criterionId: string; major: number; human?: { level: number; score: number; categories: number }; ai?: { level: number; score: number; categories: number } }>();
+    for (const score of input.scores) {
+        if (score.normalizedScore == null) continue;
+        const evaluation = input.evaluations.find(row => row.id === score.evaluationId);
+        if (!evaluation || evaluation.status !== 'Submitted') continue;
+        const side = evaluation.evaluatorType === 'Human' ? 'human' : (evaluation.evaluatorType === 'AIPrompt' || evaluation.evaluatorType === 'Agent') ? 'ai' : null;
+        if (!side) continue;
+        const criterionId = keyByCriterion.get(score.criterionId) || score.criterionId;
+        if (!criterionId) continue;
+        const major = majorByVersion.get(evaluation.versionId) ?? 0;
+        const id = `${evaluation.subjectId}|${major}|${criterionId}`;
+        const bucket = buckets.get(id) ?? { subjectId: evaluation.subjectId, criterionId, major };
+        const levelRow = score.scaleLevelId == null ? undefined : levelById.get(score.scaleLevelId);
+        const level = levelRow ? (indexByLevel.get(levelRow.id) ?? 0) : (score.normalizedScore >= 0.5 ? 1 : 0);
+        const categories = levelRow ? Math.max(2, countByScale.get(levelRow.scaleId) ?? 2) : 2;
+        bucket[side] = { level, score: score.normalizedScore, categories };
+        buckets.set(id, bucket);
+    }
+    const pairs: CalibrationPair[] = [];
+    for (const bucket of buckets.values()) {
+        if (!bucket.human || !bucket.ai) continue;
+        pairs.push({
+            subjectId: bucket.subjectId,
+            criterionId: bucket.criterionId,
+            humanLevel: bucket.human.level,
+            aiLevel: bucket.ai.level,
+            categoryCount: Math.max(bucket.human.categories, bucket.ai.categories),
+            humanScore: bucket.human.score,
+            aiScore: bucket.ai.score,
+            major: bucket.major,
+        });
+    }
+    return pairs;
+}
+
 export interface CalibrationPair {
     subjectId: string;
     criterionId: string;
