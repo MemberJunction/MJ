@@ -1,0 +1,12 @@
+{
+  "fields": {
+    "Name": "Binary (Met / Not met)",
+    "ScaleType": "Levels",
+    "HigherIsBetter": true,
+    "Status": "Active",
+    "Description": "Met is 1. Not met is 0."
+  },
+  "primaryKey": {
+    "Name": "Binary (Met / Not met)"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "fields": {
+    "Name": "Compliance (Compliant / Partial / Non-compliant)",
+    "ScaleType": "Levels",
+    "HigherIsBetter": true,
+    "Status": "Active",
+    "Description": "Compliant is 1, Partial is 0.5, and Non-compliant is 0."
+  },
+  "primaryKey": {
+    "Name": "Compliance (Compliant / Partial / Non-compliant)"
+  }
+}

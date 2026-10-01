@@ -857,9 +857,9 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 - [x] **A1** Agent rubric links: metadata support, agent form Rubrics tab (§11.1).
 - [x] **A2** Default Evaluation rubric in resolution (§11.2) — the last source in T2.
 - [x] **A3** Self-check in `BaseAgent` (§11.3). `decideSelfCheck` covers pass, retry, exhausted attempts, and a flow-agent failure.
-- [~] **A4** Production sampling job + drift view (§11.4). Not in the form commit.
-- [ ] **A5** Rubric Evaluation Agent, `AgentRubricEvaluator` (§8.3).
-- [ ] **A6** Rubric Architect agent: draft, import, critique, improve-from-data (§11.5).
+- [~] **A4** Production sampling selection and drift deltas (§11.4). The scheduled job is not wired.
+- [~] **A5** `AIRubricEvaluator` is the agent evaluator (§8.3). The shipped agent metadata is not in this commit.
+- [~] **A6** Import a numbered matrix and critique a draft (§11.5). The architect agent is not shipped.
 
 **U — UI and docs**
 - [x] **U1** `@memberjunction/ng-rubrics` widgets (§12). Author, answer form, result, publish
@@ -869,7 +869,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
       form loads levels and saves a label. Rubrics is a nav item in the AI application.
 - [~] **U3** `guides/RUBRICS_GUIDE.md` with the six worked examples; the ng-rubrics README.
       The TestingFramework and Engine README updates are not in this pass.
-- [ ] **U4** Example rubrics under `metadata/rubrics/` matching the guide's examples.
+- [~] **U4** Shipped scales and the Agent evaluation rubric under `metadata/`. The other five guide examples are not records yet.
 
 **Definition of done** (repo `CLAUDE.md`): every touched package builds and its unit tests pass;
 `pnpm run test:integration` passes with the new bundle; `npm run check:codegen-tail`,

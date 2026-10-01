@@ -1,0 +1,10 @@
+{
+  "fields": {
+    "Name": "Agent evaluation",
+    "Status": "Active",
+    "Description": "Accuracy is a gate at 0.6. Sourcing and completeness are equal weights. Pass threshold 0.6. See guides/RUBRICS_GUIDE.md."
+  },
+  "primaryKey": {
+    "Name": "Agent evaluation"
+  }
+}

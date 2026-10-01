@@ -1,0 +1,14 @@
+{
+  "fields": {
+    "Name": "Percentage 0-100",
+    "ScaleType": "Numeric",
+    "MinValue": 0,
+    "MaxValue": 100,
+    "HigherIsBetter": true,
+    "Status": "Active",
+    "Description": "A number from 0 to 100."
+  },
+  "primaryKey": {
+    "Name": "Percentage 0-100"
+  }
+}

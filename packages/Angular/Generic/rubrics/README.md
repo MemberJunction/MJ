@@ -8,3 +8,4 @@ Presentational widgets for a rubric draft, an evaluation, and a finished result.
 - `mj-rubric-publish-dialog` shows the computed bump, each change's reason, and the higher bumps an author may request. Confirm emits. The widget does not publish.
 - `mj-rubric-version-diff` puts the base on the left and the draft on the right, one row per key.
 - `mj-rubric-comparison-matrix` is evaluators across and criteria down. Cells that disagree are marked. Human, AI, and Self means are separate, and a withdrawn column stays out of them.
+- Record editors and hosts bind one version, criterion, scale level, band, or category. They load through the metadata provider the form passes in. They do not navigate.
