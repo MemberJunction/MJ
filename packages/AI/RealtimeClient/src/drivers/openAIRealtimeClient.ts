@@ -1,7 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { ClientRealtimeSessionConfig, JSONObject } from '@memberjunction/ai';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
-import { BaseRealtimeClient } from '../generic/baseRealtimeClient';
+import { BaseRealtimeClient, ToProviderSessionConfig } from '../generic/baseRealtimeClient';
 import {
     OpenAIProtocolRealtimeClient,
     OpenAIProtocolClientEvent,
@@ -344,12 +344,17 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
      * host supplied no config (e.g. it failed to parse the server payload — the host
      * already logged that; sending an EMPTY `session.update` would be wrong).
      */
+    protected override currentSessionInstructions(): string | null {
+        const instructions = this.sessionConfig?.['instructions'];
+        return typeof instructions === 'string' ? instructions : null;
+    }
+
     private applySessionConfig(channel: IRealtimeDataChannel): void {
         if (!this.sessionConfig || Object.keys(this.sessionConfig).length === 0) {
             return;
         }
         if (channel.readyState === 'open') {
-            channel.send(JSON.stringify({ type: 'session.update', session: this.sessionConfig }));
+            channel.send(JSON.stringify({ type: 'session.update', session: ToProviderSessionConfig(this.sessionConfig) }));
         }
     }
 }
