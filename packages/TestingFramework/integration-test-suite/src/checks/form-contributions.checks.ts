@@ -1,5 +1,5 @@
 /**
- * form-contributions.checks.ts — the 'form-contributions' bundle (FC1–FC15).
+ * form-contributions.checks.ts — the 'form-contributions' bundle (FC1–FC17).
  *
  * Deterministic (no LLM) coverage for metadata-registered form contributions: a
  * `MJ: Entity Form Contributions` row pointing at a `Type='Widget'` Component whose spec
@@ -28,6 +28,8 @@
  *   - FC13: a panel standing in for several sections persists them as a list.
  *   - FC14: a panel placed inside a section persists the section and its position.
  *   - FC15: the database refuses a row that makes two kinds of claim at once.
+ *   - FC16: a UI-only user cannot change the status of a component a Global panel draws.
+ *   - FC17: a UI-only user cannot point a personal panel at a component a Global panel draws.
  *
  * SQL Server only for FC1 (raw `ctx.Pool`); it skips-as-pass without a pool. Every row this
  * bundle creates is torn down FK-safe in the lifecycle.
@@ -190,6 +192,23 @@ function uiOnlyUser(ctx: IntegrationCheckContext): UserInfo {
 function assertCallerHoldsGrant(ctx: IntegrationCheckContext): void {
     Assert(UserCanManageFormDefaults(ctx.User, ctx.Provider),
         'the harness user must hold Manage Form Defaults (Developer or Integration role, or Owner) to write shared rows');
+}
+
+/** The component a contribution row points at. */
+async function componentOf(ctx: IntegrationCheckContext, contributionID: string): Promise<string> {
+    const row = await loadContribution(ctx.Provider, ctx.User, contributionID);
+    return row.ComponentID;
+}
+
+/** The component's status as stored, bypassing every cache. */
+async function storedComponentStatus(ctx: IntegrationCheckContext, componentID: string): Promise<string | null> {
+    const result = await new RunView().RunView<{ Status: string | null }>({
+        EntityName: COMPONENT_ENTITY,
+        ExtraFilter: `ID='${componentID}'`,
+        Fields: ['Status'], ResultType: 'simple', BypassCache: true,
+    }, ctx.User);
+    Assert(result.Success && result.Results.length === 1, `component ${componentID} did not read back`);
+    return result.Results[0].Status;
 }
 
 /** The row's scope columns and status as stored, bypassing every cache. */
@@ -565,6 +584,61 @@ export const FormContributionsChecks: NamedCheck[] = [
             const fresh = await loadContribution(ctx.Provider, ctx.User, id);
             fresh.SectionPosition = 'end';
             Assert(!(await fresh.Save()), 'a position with no section to apply to must be refused');
+        }
+    },
+    {
+        Id: 'form-contributions.FC16',
+        Name: 'FC16: a UI-only user cannot change the status of a component a Global panel draws',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            assertCallerHoldsGrant(ctx);
+            const id = await insertRowDirect(ctx, {
+                EntityID: fx().TargetEntityID, ContributionKey: `${RUN_KEY}:shared-component`,
+                Scope: 'Global', UserID: null, RoleID: null,
+            });
+            const componentID = await componentOf(ctx, id);
+            const before = await storedComponentStatus(ctx, componentID);
+
+            const component = await ctx.Provider.GetEntityObject<MJComponentEntity>(COMPONENT_ENTITY, uiOnlyUser(ctx));
+            Assert(await component.Load(componentID), `component ${componentID} did not load for the UI-only user`);
+            component.Status = before === 'Deprecated' ? 'Published' : 'Deprecated';
+            Assert(!(await component.Save()), 'changing a Global panel\'s component without Manage Form Defaults must be refused');
+            Assert((component.LatestResult?.CompleteMessage ?? '').includes('Manage Form Defaults'),
+                `the refusal must name the missing grant, got: ${component.LatestResult?.CompleteMessage}`);
+            AssertEqual(await storedComponentStatus(ctx, componentID), before, 'a refused change must leave the component as it was');
+        }
+    },
+    {
+        Id: 'form-contributions.FC17',
+        Name: 'FC17: a UI-only user cannot point a personal panel at a component a Global panel draws',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            assertCallerHoldsGrant(ctx);
+            const sharedID = await insertRowDirect(ctx, {
+                EntityID: fx().TargetEntityID, ContributionKey: `${RUN_KEY}:shared-target`,
+                Scope: 'Global', UserID: null, RoleID: null,
+            });
+            const componentID = await componentOf(ctx, sharedID);
+
+            const row = await ctx.Provider.GetEntityObject<MJEntityFormContributionEntity>(CONTRIBUTION_ENTITY, uiOnlyUser(ctx));
+            row.NewRecord();
+            row.EntityID = fx().TargetEntityID;
+            row.ComponentID = componentID;
+            row.Name = `${RUN_KEY} claimed component`;
+            row.Description = TAG;
+            row.Slot = 'after-fields';
+            row.SortKey = 0;
+            row.ContributionKey = `${RUN_KEY}:claimed-component`;
+            row.Presentation = 'panel';
+            row.Title = 'Claimed';
+            row.Scope = 'User';
+            row.UserID = ctx.User.ID;
+            row.RoleID = null;
+            row.Status = 'Inactive';
+            row.Precedence = 0;
+            const saved = await row.Save();
+            if (saved) fx().CreatedContributionIds.unshift(row.ID);
+            Assert(!saved, 'a personal panel pointed at a shared panel\'s component must be refused');
+            Assert((row.LatestResult?.CompleteMessage ?? '').includes('already uses this component'),
+                `the refusal must say another panel uses the component, got: ${row.LatestResult?.CompleteMessage}`);
         }
     },
 ];

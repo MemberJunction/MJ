@@ -152,7 +152,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['content-vectorization', ContentVectorizationChecks, 10], // CV1-CV10 content vectorization pipeline (IT67)
         ['materialized-read', MaterializedReadChecks, 3], // MR1-MR2 served-from-snapshot proof + MR3 delete-path FK cleanup (IT79)
         ['materialized-entity-read', MaterializedEntityReadChecks, 2], // EMR1-EMR2 entity base-view RunView redirect (IT78)
-        ['form-contributions', FormContributionsChecks, 15], // FC1-FC15 metadata form contributions: schema, actions, clamp, kill switch, scoping, section claims (IT97)
+        ['form-contributions', FormContributionsChecks, 17], // FC1-FC17 metadata form contributions: schema, actions, clamp, kill switch, scoping, section claims, component guard (IT97)
         ['scoped-anon-elevation', ScopedAnonElevationChecks, 6], // SA1-SA6 scoped-anonymous elevation permission contract (IT68)
         ['entity-graph', EntityGraphChecks, 11], // EG1-EG8 related-record collection graph saves (IT72)
         ['entity-embedded', EntityEmbeddedChecks, 6], // EE1-EE6 owner-held embedded records
@@ -264,7 +264,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'fls-enforcement': 23,
         'fls-enforcement-client': 6,
         'fls-lifecycle': 9,
-        'form-contributions': 15,
+        'form-contributions': 17,
         'layered-base-views': 6,
         'lists': 3,
         'materialized-entity-read': 2,
