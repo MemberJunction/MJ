@@ -21,6 +21,11 @@ import { MJRecordChangeEntity } from '@memberjunction/core-entities';
  *    narrows who may annotate; it doesn't replace the role permission.
  *
  * Any other update is strictly forbidden to protect audit trail integrity.
+ *
+ * A create with a caller (`ActiveUser` set) of a record change whose `Source` is `Internal` is
+ * refused for every caller. Internal record changes are the platform's own audit rows, which the
+ * database provider writes in SQL alongside each save; other code trusts them, for example to
+ * read who created a component.
  */
 /** The entity's data provider when it also serves metadata (the server providers do). */
 function asMetadataProvider(provider: IEntityDataProvider | null | undefined): Pick<IMetadataProvider, 'Authorizations'> | undefined {
@@ -38,6 +43,11 @@ function authorizationsOf(provider: IEntityDataProvider | null | undefined): Aut
 @RegisterClass(BaseEntity, 'MJ: Record Changes')
 export class MJRecordChangeEntityServer extends MJRecordChangeEntity {
     public override CheckPermissions(type: EntityPermissionType, throwError: boolean): boolean {
+        if (type === EntityPermissionType.Create && this.isCallerCreatingInternalRow()) {
+            const msg = `Record Changes with Source 'Internal' are written by the platform and cannot be created through the API.`;
+            if (throwError) throw new Error(msg);
+            return false;
+        }
         if (type === EntityPermissionType.Update) {
             const u = this.ActiveUser;
             if (!u) {
@@ -76,5 +86,10 @@ export class MJRecordChangeEntityServer extends MJRecordChangeEntity {
         }
 
         return super.CheckPermissions(type, throwError);
+    }
+
+    /** True for a new row with `Source` 'Internal' that a caller is creating. */
+    private isCallerCreatingInternalRow(): boolean {
+        return !this.IsSaved && !!this.ActiveUser && this.Source === 'Internal';
     }
 }
