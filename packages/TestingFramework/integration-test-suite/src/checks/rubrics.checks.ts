@@ -94,6 +94,10 @@ interface RubricRow {
     BasedOnVersionID?: string | null;
     ScaleID?: string;
     Weight?: number;
+    IsGate?: boolean;
+    GateMinimumScore?: number | null;
+    NotApplicablePolicy?: string;
+    PassThreshold?: number | null;
     Key?: string;
     NodeType?: string;
     Label?: string;
@@ -648,6 +652,102 @@ export const RubricsChecks: NamedCheck[] = [
                 Assert(engine.overall !== null && Math.abs(viewMean - engine.overall) < 0.000001, `view mean ${viewMean}, engine mean ${engine.overall}`);
                 Assert(Number(view.recordset[0].SelfCount) === 1, `SelfAssessmentCount was ${view.recordset[0].SelfCount}`);
             });
+        },
+    },
+    {
+        Id: 'rubrics.W1',
+        Name: 'W1: the IT world rubric stays published for the product to open',
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            const pool = poolOf(ctx);
+            const s = schemaOf(ctx);
+            const name = 'IT World — Agent evaluation';
+            const existing = await pool.request().query(`SELECT TOP 1 CONVERT(nvarchar(36), [ID]) AS ID FROM [${s}].[Rubric] WHERE [Name] = N'${name}'`);
+            if (!existing.recordset[0]) {
+                const rubric = await rubricRow(ctx, 'MJ: Rubrics');
+                rubric.Name = name;
+                rubric.Status = 'Active';
+                await saveRow(rubric);
+                const scale = await rubricRow(ctx, 'MJ: Rubric Scales');
+                scale.Name = 'IT World — Met / Not met';
+                scale.ScaleType = 'Levels';
+                await saveRow(scale);
+                const met = await rubricRow(ctx, 'MJ: Rubric Scale Levels');
+                met.ScaleID = scale.ID;
+                met.Label = 'Met';
+                met.Value = 1;
+                met.NormalizedValue = 1;
+                met.Sequence = 1;
+                await saveRow(met);
+                const missed = await rubricRow(ctx, 'MJ: Rubric Scale Levels');
+                missed.ScaleID = scale.ID;
+                missed.Label = 'Not met';
+                missed.Value = 0;
+                missed.NormalizedValue = 0;
+                missed.Sequence = 0;
+                await saveRow(missed);
+                const version = await rubricRow(ctx, 'MJ: Rubric Versions');
+                version.RubricID = rubric.ID;
+                version.Status = 'Draft';
+                version.NotApplicablePolicy = 'NotAllowed';
+                version.PassThreshold = 0.6;
+                await saveRow(version);
+                for (const criterion of [
+                    { key: 'accuracy', name: 'Accuracy', weight: 1, gate: true },
+                    { key: 'sourcing', name: 'Sourcing', weight: 1, gate: false },
+                    { key: 'completeness', name: 'Completeness', weight: 1, gate: false },
+                ]) {
+                    const row = await rubricRow(ctx, 'MJ: Rubric Criteria');
+                    row.RubricVersionID = version.ID;
+                    row.Key = criterion.key;
+                    row.Name = criterion.name;
+                    row.NodeType = 'Criterion';
+                    row.ScaleID = scale.ID;
+                    row.Weight = criterion.weight;
+                    row.IsGate = criterion.gate;
+                    if (criterion.gate) row.GateMinimumScore = 1;
+                    await saveRow(row);
+                }
+                version.Status = 'Published';
+                await saveRow(version);
+                const draft = await rubricRow(ctx, 'MJ: Rubric Versions');
+                draft.RubricID = rubric.ID;
+                draft.BasedOnVersionID = version.ID;
+                draft.Status = 'Draft';
+                draft.NotApplicablePolicy = 'NotAllowed';
+                draft.PassThreshold = 0.6;
+                await saveRow(draft);
+                for (const criterion of [
+                    { key: 'accuracy', name: 'Accuracy', weight: 2, gate: true },
+                    { key: 'sourcing', name: 'Sourcing', weight: 1, gate: false },
+                    { key: 'completeness', name: 'Completeness', weight: 1, gate: false },
+                ]) {
+                    const row = await rubricRow(ctx, 'MJ: Rubric Criteria');
+                    row.RubricVersionID = draft.ID;
+                    row.Key = criterion.key;
+                    row.Name = criterion.name;
+                    row.NodeType = 'Criterion';
+                    row.ScaleID = scale.ID;
+                    row.Weight = criterion.weight;
+                    row.IsGate = criterion.gate;
+                    if (criterion.gate) row.GateMinimumScore = 1;
+                    await saveRow(row);
+                }
+            }
+            const published = await pool.request().query(`
+                SELECT v.[MajorVersion] AS Major, v.[MinorVersion] AS Minor, v.[PatchVersion] AS Patch, v.[AppliedBump] AS Bump
+                FROM [${s}].[Rubric] r
+                INNER JOIN [${s}].[RubricVersion] v ON v.[RubricID] = r.[ID]
+                WHERE r.[Name] = N'${name}' AND v.[Status] = N'Published'
+            `);
+            Assert(published.recordset.length === 1, 'the IT world rubric has one published version');
+            Assert(published.recordset[0].Major === 1 && published.recordset[0].Bump === 'Initial', `published world version was ${published.recordset[0].Major} ${published.recordset[0].Bump}`);
+            const draft = await pool.request().query(`
+                SELECT COUNT(*) AS Drafts FROM [${s}].[Rubric] r
+                INNER JOIN [${s}].[RubricVersion] v ON v.[RubricID] = r.[ID]
+                WHERE r.[Name] = N'${name}' AND v.[Status] = N'Draft'
+            `);
+            Assert(Number(draft.recordset[0].Drafts) === 1, 'the IT world rubric keeps one draft');
         },
     },
 ];

@@ -260,6 +260,12 @@ export interface DiffRow {
 }
 
 /** Criterion keys, plus one row for each change that is not a criterion (version, band, or scale). */
+/** True when every sample answer points at a criterion that is on screen. */
+export function sampleMatchesTree(nodes: { id: string; nodeType: string }[], answers: { criterionId: string }[]): boolean {
+    const ids = new Set(nodes.filter(node => node.nodeType === 'Criterion').map(node => node.id));
+    return answers.length > 0 && answers.length === ids.size && answers.every(answer => ids.has(answer.criterionId));
+}
+
 export function versionRows(base: RubricVersionSnapshot, draft: RubricVersionSnapshot): DiffRow[] {
     const diff = RubricVersionDiff.diff(base, draft);
     const keys = [...new Set([...base.nodes.map(node => node.key), ...draft.nodes.map(node => node.key)])];

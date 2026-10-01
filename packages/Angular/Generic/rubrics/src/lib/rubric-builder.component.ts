@@ -2,7 +2,7 @@ import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core
 import { CommonModule } from '@angular/common';
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricScoreResult, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import type { NotApplicablePolicy, RubricBandSnapshot } from '@memberjunction/rubrics-base';
-import { addBand, addNode, draftProblems, moveNode, moveProblem, previewScore, setAnchor, setGate, setPolicy, setScale, setWeight, updateBand, weightShares, type RubricFormAnswer } from './model.js';
+import { addBand, addNode, draftProblems, moveNode, moveProblem, previewScore, sampleMatchesTree, setAnchor, setGate, setPolicy, setScale, setWeight, updateBand, weightShares, type RubricFormAnswer } from './model.js';
 
 /**
  * Draft author. Edits the tree the host passes in and emits the new tree.
@@ -35,7 +35,7 @@ export class RubricBuilderComponent implements OnChanges {
     ngOnChanges(): void {
         this.Shares = weightShares(this.Nodes);
         this.Problems = draftProblems(this.Nodes, this.Scales);
-        if (this.SampleAnswers.length === 0 && this.Nodes.some(node => node.nodeType === 'Criterion' && node.scaleId)) {
+        if (!sampleMatchesTree(this.Nodes, this.SampleAnswers) && this.Nodes.some(node => node.nodeType === 'Criterion' && node.scaleId)) {
             this.SampleAnswers = this.sample(true);
         }
         this.Preview = this.Version ? previewScore({ ...this.Version, nodes: this.Nodes, scales: this.Scales }, this.SampleAnswers) : null;

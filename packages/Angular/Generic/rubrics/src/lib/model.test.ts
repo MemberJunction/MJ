@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { addCriterion, addNode, anchorsForLevel, answerLevel, bandFor, canSubmit, comparisonMatrix, displayScore, draftProblems, incompleteAnswers, moveNode, moveProblem, nodeFields, nodeFromRow, planBandSave, planNodeSave, previewScore, publishPreview, scaleFromRow, setAnchor, setGate, setScale, setWeight, versionRows, weightShares } from './model.js';
+import { addCriterion, addNode, anchorsForLevel, answerLevel, bandFor, canSubmit, comparisonMatrix, displayScore, draftProblems, incompleteAnswers, moveNode, moveProblem, nodeFields, nodeFromRow, planBandSave, planNodeSave, previewScore, publishPreview, sampleMatchesTree, scaleFromRow, setAnchor, setGate, setScale, setWeight, versionRows, weightShares } from './model.js';
 
 const scale: RubricScaleSnapshot = {
     id: 'scale',
@@ -214,5 +214,15 @@ describe('read-only result', () => {
         ];
         expect(bandFor(0.5, bands)?.label).toBe('Upper');
         expect(bandFor(1, bands)?.label).toBe('Upper');
+    });
+});
+
+describe('sampleMatchesTree', () => {
+    it('is false when the sample still points at another version of the tree', () => {
+        const published = [leaf('published-accuracy', 1)];
+        const draftAnswers = [{ criterionId: 'draft-accuracy' }];
+        expect(sampleMatchesTree(published, draftAnswers)).toBe(false);
+        expect(sampleMatchesTree(published, [{ criterionId: 'published-accuracy' }])).toBe(true);
+        expect(sampleMatchesTree(published, [])).toBe(false);
     });
 });
