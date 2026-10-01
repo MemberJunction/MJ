@@ -6,7 +6,7 @@ import type { MJEntityFormContributionEntity } from "@memberjunction/core-entiti
 import { CONTRIBUTION_KEY_PATTERN } from "@memberjunction/interactive-component-types/forms";
 import {
     AddOutput,
-    CheckOwnContributionWrite,
+    CheckPersonalWrite,
     Failure,
     GetStringParam,
     LoadComponent,
@@ -46,7 +46,7 @@ export class ActivateFormContributionVersionAction extends BaseAction {
 
             const target = await LoadContribution(provider, user, contributionID);
             if (!target) return Failure("CONTRIBUTION_NOT_FOUND", `Contribution '${contributionID}' not found.`);
-            const forbidden = CheckOwnContributionWrite(target, user, provider);
+            const forbidden = CheckPersonalWrite(target, user);
             if (forbidden) return forbidden;
 
             if (target.Status === 'Active') {

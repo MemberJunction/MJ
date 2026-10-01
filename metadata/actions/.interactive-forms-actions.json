@@ -630,7 +630,7 @@
   {
     "fields": {
       "Name": "Modify Interactive Form",
-      "Description": "Modify an existing interactive-form override. Routes off the source Override's status (not the underlying Component). Behavior is driven by the optional VersionBumpKind input: 'in-place' (default for Pending sources) overwrites the Pending Component row with no new version; 'patch'/'minor'/'major' snapshot a new Pending Component + sibling Override using the bumped version. Pending sources with a bump demote the prior Pending to Inactive (preserves rollback history). Active sources reject 'in-place' (would corrupt the live row) and default to 'minor'. Inactive sources reject 'in-place' (use Revert to re-activate first) but accept patch/minor/major as a branch-from-historical operation — default 'patch'; the Inactive source row is left untouched. Scope is preserved from the existing override.",
+      "Description": "Modify an existing interactive-form override. Routes off the source Override's status (not the underlying Component). Behavior is driven by the optional VersionBumpKind input: 'in-place' (default for Pending sources) overwrites the Pending Component row with no new version; 'patch'/'minor'/'major' snapshot a new Pending Component + sibling Override using the bumped version. Pending sources with a bump demote the prior Pending to Inactive (preserves rollback history). Active sources reject 'in-place' (would corrupt the live row) and default to 'minor'. Inactive sources reject 'in-place' (use Revert to re-activate first) but accept patch/minor/major as a branch-from-historical operation — default 'patch'; the Inactive source row is left untouched. Acts only on the caller's own User-scope overrides: a Role or Global override, or another user's, returns FORBIDDEN, because shared forms are managed from Form Builder or the form's Manage drawer. Any new override is User scope. The Component and override writes run in one transaction, so a refused override save leaves no Component change.",
       "DriverClass": "__ModifyInteractiveForm",
       "Type": "Custom",
       "Status": "Active",
@@ -920,6 +920,16 @@
             "lastModified": "2026-05-29T19:48:54.324Z",
             "checksum": "7a5aded980c8b4d9858c40d84ba904a947409d38a4e45f52c56b8d30b02c2ecc"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FORBIDDEN",
+            "Description": "The override is not one of the caller's own User-scope overrides (a Role or Global override, or another user's). Shared forms are managed from Form Builder or the form's Manage drawer."
+          },
+          "primaryKey": {
+            "ID": "07022CCB-70E0-4CDD-AD03-C9CFEC12840C"
+          }
         }
       ]
     },
@@ -934,7 +944,7 @@
   {
     "fields": {
       "Name": "Activate Interactive Form Version",
-      "Description": "Promote a Pending EntityFormOverride to Active. Atomically demotes any sibling Active override at the same scope target to Inactive (and its Component). The Pending Override is the one the agent just produced via Modify; activating it makes it the live form. Old Component rows persist forever as immutable history — revertible via 'Revert Interactive Form'.",
+      "Description": "Promote one of the caller's Pending EntityFormOverrides to Active; its Component and override flip in one transaction. Then demotes the caller's other Active override on the entity to Inactive (and its Component). The Pending Override is the one the agent just produced via Modify; activating it makes it the live form. Old Component rows persist forever as immutable history — revertible via 'Revert Interactive Form'. Acts only on the caller's own User-scope overrides: a Role or Global override, or another user's, returns FORBIDDEN, because shared forms are managed from Form Builder or the form's Manage drawer.",
       "DriverClass": "__ActivateInteractiveFormVersion",
       "Type": "Custom",
       "Status": "Active",
@@ -1124,6 +1134,16 @@
             "lastModified": "2026-05-29T19:48:54.682Z",
             "checksum": "7a5aded980c8b4d9858c40d84ba904a947409d38a4e45f52c56b8d30b02c2ecc"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FORBIDDEN",
+            "Description": "The override is not one of the caller's own User-scope overrides (a Role or Global override, or another user's). Shared forms are managed from Form Builder or the form's Manage drawer."
+          },
+          "primaryKey": {
+            "ID": "EF86D943-3D4E-42A7-850C-95C9ED305898"
+          }
         }
       ]
     },
@@ -1138,7 +1158,7 @@
   {
     "fields": {
       "Name": "Revert Interactive Form",
-      "Description": "Re-point an Active EntityFormOverride at an older Component version in the same Name lineage. Pure UPDATE on the override row; no new Components or Overrides are created. Use to roll back to a prior working form when a recent change misbehaves. Old Component rows are never deleted, so revert is fully reversible by reverting again to the original version.",
+      "Description": "Re-point an Active EntityFormOverride at an older Component version in the same Name lineage. Pure UPDATE on the override row; no new Components or Overrides are created. Use to roll back to a prior working form when a recent change misbehaves. Old Component rows are never deleted, so revert is fully reversible by reverting again to the original version. Acts only on the caller's own User-scope overrides: a Role or Global override, or another user's, returns FORBIDDEN, because shared forms are managed from Form Builder or the form's Manage drawer.",
       "DriverClass": "__RevertInteractiveForm",
       "Type": "Custom",
       "Status": "Active",
@@ -1399,6 +1419,16 @@
           "sync": {
             "lastModified": "2026-05-29T19:48:55.164Z",
             "checksum": "7a5aded980c8b4d9858c40d84ba904a947409d38a4e45f52c56b8d30b02c2ecc"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FORBIDDEN",
+            "Description": "The override is not one of the caller's own User-scope overrides (a Role or Global override, or another user's). Shared forms are managed from Form Builder or the form's Manage drawer."
+          },
+          "primaryKey": {
+            "ID": "FF3BDD7C-ADEA-4292-A4D4-B4A81DFC206A"
           }
         }
       ]

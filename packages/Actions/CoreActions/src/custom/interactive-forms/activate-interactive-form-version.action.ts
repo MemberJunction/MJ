@@ -1,9 +1,10 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { Metadata, LogError, RunView } from "@memberjunction/core";
-import { RegisterClass } from "@memberjunction/global";
+import { EscapeSQLString, RegisterClass } from "@memberjunction/global";
 import {
-    AddOutput, CheckOverrideOwnership, Failure, GetStringParam, LoadComponent, LoadOverride, MapToComponentStatus,
+    AddOutput, CheckPersonalWrite, Failure, GetStringParam, LoadComponent, LoadOverride, MapToComponentStatus,
+    WriteAtomically,
 } from "./_shared";
 
 /**
@@ -13,9 +14,15 @@ import {
  *   - prior Active sibling Override:     Status='Inactive'
  *   - prior Active sibling Component:    Status='Inactive'
  *
- * "Sibling" = same EntityID + (Scope, UserID, RoleID) tuple as the target
- * Override. The target is the row identified by the input `OverrideID`; the
- * priors are any rows currently Status='Active' at the same scope target.
+ * "Sibling" = another of the caller's User-scope overrides on the same
+ * EntityID that is currently Status='Active'. The target is the row identified
+ * by the input `OverrideID`.
+ *
+ * Only the caller's own User-scope overrides can be activated. A Role or Global
+ * override, or another user's, returns FORBIDDEN for every caller (see
+ * `CheckPersonalWrite` in `_shared.ts`): shared forms are managed from Form
+ * Builder or the form's Manage drawer. The target's Component and Override flip
+ * to Active in one entity transaction.
  *
  * Idempotency. If the target Override is already Active, returns SUCCESS
  * with a no-op message. If it's Inactive, that's a misuse — we surface
@@ -48,7 +55,7 @@ export class ActivateInteractiveFormVersionAction extends BaseAction {
             if (!target) {
                 return Failure("OVERRIDE_NOT_FOUND", `EntityFormOverride '${overrideID}' not found.`);
             }
-            const ownershipFail = CheckOverrideOwnership(target, user);
+            const ownershipFail = CheckPersonalWrite(target, user);
             if (ownershipFail) return ownershipFail;
             if (target.Status === 'Active') {
                 AddOutput(params, "ComponentID", target.ComponentID);
@@ -62,16 +69,11 @@ export class ActivateInteractiveFormVersionAction extends BaseAction {
                     `Override ${overrideID} is Inactive. Use 'Revert Interactive Form' to restore an older version, not 'Activate'.`);
             }
 
-            // Find sibling Active overrides at the same (entity, scope target).
+            // Find the caller's other Active overrides on this entity.
             const rv = RunView.FromMetadataProvider(provider);
-            const scopeClause = target.Scope === 'User'
-                ? `Scope='User' AND UserID='${target.UserID}'`
-                : target.Scope === 'Role'
-                    ? `Scope='Role' AND RoleID='${target.RoleID}'`
-                    : `Scope='Global' AND UserID IS NULL AND RoleID IS NULL`;
             const priorResult = await rv.RunView<{ ID: string; ComponentID: string }>({
                 EntityName: "MJ: Entity Form Overrides",
-                ExtraFilter: `EntityID='${target.EntityID}' AND ${scopeClause} AND Status='Active' AND ID <> '${target.ID}'`,
+                ExtraFilter: `EntityID='${EscapeSQLString(target.EntityID)}' AND Scope='User' AND UserID='${EscapeSQLString(target.UserID ?? '')}' AND Status='Active' AND ID <> '${EscapeSQLString(target.ID)}'`,
                 Fields: ['ID', 'ComponentID'],
                 ResultType: 'simple',
             }, user);
@@ -85,18 +87,20 @@ export class ActivateInteractiveFormVersionAction extends BaseAction {
                 return Failure("COMPONENT_NOT_FOUND",
                     `Override ${overrideID} points at Component ${target.ComponentID} which no longer exists.`);
             }
-            newComponent.Status = MapToComponentStatus('Active');
-            const ncSaved = await newComponent.Save();
-            if (!ncSaved) {
-                return Failure("PERSIST_FAILED",
-                    `Could not flip Component to Active: ${newComponent.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-            }
-            target.Status = 'Active';
-            const tSaved = await target.Save();
-            if (!tSaved) {
-                return Failure("PERSIST_FAILED",
-                    `Could not flip Override to Active: ${target.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-            }
+            const promoted = await WriteAtomically(provider, async () => {
+                newComponent.Status = MapToComponentStatus('Active');
+                if (!(await newComponent.Save())) {
+                    return { error: Failure("PERSIST_FAILED",
+                        `Could not flip Component to Active: ${newComponent.LatestResult?.CompleteMessage ?? 'unknown error'}`) };
+                }
+                target.Status = 'Active';
+                if (!(await target.Save())) {
+                    return { error: Failure("PERSIST_FAILED",
+                        `Could not flip Override to Active: ${target.LatestResult?.CompleteMessage ?? 'unknown error'}`) };
+                }
+                return { ok: true };
+            });
+            if ('error' in promoted) return promoted.error;
 
             // Demote priors. Component AND Override flipped in lock-step.
             let firstPriorID: string | null = null;

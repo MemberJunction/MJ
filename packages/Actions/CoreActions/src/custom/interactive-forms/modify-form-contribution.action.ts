@@ -7,7 +7,7 @@ import type { ComponentSpec } from "@memberjunction/interactive-component-types"
 import {
     AddOutput,
     BumpVersion,
-    CheckOwnContributionWrite,
+    CheckPersonalWrite,
     Failure,
     GetPrecedenceParam,
     GetStringParam,
@@ -92,7 +92,7 @@ export class ModifyFormContributionAction extends BaseAction {
 
             const source = await LoadContribution(provider, user, inputs.ContributionID);
             if (!source) return Failure("CONTRIBUTION_NOT_FOUND", `Contribution '${inputs.ContributionID}' not found.`);
-            const forbidden = CheckOwnContributionWrite(source, user, provider);
+            const forbidden = CheckPersonalWrite(source, user);
             if (forbidden) return forbidden;
 
             const lintFail = await LintFormPanelSpec(inputs.Spec, user);

@@ -6,17 +6,17 @@
  */
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { IMetadataProvider, RunInEntityTransaction, UserInfo } from "@memberjunction/core";
-import { EscapeSQLString, UUIDsEqual } from "@memberjunction/global";
+import { EscapeSQLString } from "@memberjunction/global";
 import {
     ApplyContributionSpecToRow,
     ContributionClaimRefusal,
     ContributionSpecColumns,
     type ContributionRowOptions,
     FormScopeWriteRefusal,
+    type FormScope,
     MJComponentEntity,
     MJEntityFormContributionEntity,
     MJEntityFormOverrideEntity,
-    UserCanManageFormDefaults,
 } from "@memberjunction/core-entities";
 import type { ComponentSpec } from "@memberjunction/interactive-component-types";
 import {
@@ -266,96 +266,35 @@ export function ContributionScopeFilter(entityID: string, user: NonNullable<RunA
     return `EntityID='${EscapeSQLString(entityID)}' AND ((Scope='User' AND UserID='${EscapeSQLString(user.ID)}') OR ${roleClause} OR Scope='Global')`;
 }
 
-/**
- * Defense-in-depth ownership check for the override-mutation actions
- * (Modify / Activate / Revert).
- *
- * `Create` is naturally self-scoped — it always emits a fresh User-scope
- * row owned by the caller. The mutation actions, however, take an
- * `OverrideID` from the caller and operate on it; without this guard a
- * user could mutate another user's User-scope override by guessing the ID.
- * Row-level security may catch some of this, but we don't rely on it.
- *
- * Rules:
- *   - `Scope='User'`   → caller must be the owning user.
- *   - `Scope='Role'`   → caller must be a member of the override's role.
- *   - `Scope='Global'` → caller must be a system admin (`UserInfo.Type==='Owner'`).
- *
- * Returns `null` on success; a `FORBIDDEN` failure result on rejection.
- */
-export function CheckOverrideOwnership(
-    override: Pick<MJEntityFormOverrideEntity, 'ID' | 'Scope' | 'UserID' | 'RoleID'>,
-    user: UserInfo,
-): ActionResultSimple | null {
-    const ID = override.ID;
-    switch (override.Scope) {
-        case 'User': {
-            if (!UUIDsEqual(override.UserID, user.ID)) {
-                return Failure(
-                    "FORBIDDEN",
-                    `Override ${ID} is User-scoped to a different user. Only the owning user can mutate it.`,
-                );
-            }
-            return null;
-        }
-        case 'Role': {
-            const userRoleIds = ((user as { UserRoles?: { RoleID?: string }[] }).UserRoles ?? [])
-                .map(r => r.RoleID).filter((x): x is string => !!x);
-            if (!override.RoleID || !userRoleIds.some(id => UUIDsEqual(id, override.RoleID))) {
-                return Failure(
-                    "FORBIDDEN",
-                    `Override ${ID} is Role-scoped (${override.RoleID}). Only members of that role can mutate it.`,
-                );
-            }
-            return null;
-        }
-        case 'Global': {
-            // `UserInfo.Type === 'Owner'` is MJ's canonical admin marker —
-            // see packages/MJCore/src/userInfo.ts (Type is a Pick from the
-            // generated entity field). Owners can manage Global overrides;
-            // everyone else is rejected.
-            const isOwner = ((user as { Type?: string }).Type ?? '').toLowerCase() === 'owner';
-            if (!isOwner) {
-                return Failure(
-                    "FORBIDDEN",
-                    `Override ${ID} is Global. Only Owner-type users can mutate Global overrides; promote / demote them via Component Studio with appropriate privileges.`,
-                );
-            }
-            return null;
-        }
-        default:
-            return Failure(
-                "FORBIDDEN",
-                `Override ${ID} has an unrecognized Scope ('${override.Scope}').`,
-            );
-    }
+/** What {@link CheckPersonalWrite} reads from a form override or contribution row. */
+export interface ScopedFormRow {
+    ID: string;
+    Scope: FormScope;
+    UserID: string | null;
 }
 
 /**
- * Why an action may not change this contribution, as a `FORBIDDEN` result, or null.
+ * Why an action may not change this form or panel, as a `FORBIDDEN` result, or null.
  *
- * Actions change the caller's own personal panels only. A row whose Scope is not `User`, or that
- * belongs to someone else, is refused for every caller, a Manage Form Defaults holder included:
- * shared panels are managed by people, from the form's Manage drawer or Form Builder. The caller's
- * own row is then checked with `FormScopeWriteRefusal`, the rule the server entity applies on
- * save, so the action never accepts a write the save would refuse.
+ * Actions change the caller's own personal forms and panels only. A row whose Scope is not
+ * `User` is refused for every caller, a Manage Form Defaults holder included: shared forms and
+ * panels are managed by people, from Form Builder or the form's Manage drawer. A `User` row is
+ * then checked with `FormScopeWriteRefusal`, the rule the server entity applies on save, which
+ * refuses a row that belongs to someone else.
  */
-export function CheckOwnContributionWrite(
-    row: Pick<MJEntityFormContributionEntity, 'ID' | 'Scope' | 'UserID'>,
-    user: UserInfo,
-    provider: IMetadataProvider,
-): ActionResultSimple | null {
-    if (row.Scope !== 'User' || !UUIDsEqual(row.UserID, user.ID)) {
+export function CheckPersonalWrite(row: ScopedFormRow, user: UserInfo): ActionResultSimple | null {
+    if (row.Scope !== 'User') {
         return Failure("FORBIDDEN",
-            `Contribution ${row.ID} is not one of your personal panels (Scope '${row.Scope}'). Actions change ` +
-            `personal panels only; shared panels are managed from the form's Manage drawer or Form Builder.`);
+            `${row.ID} is shared (Scope '${row.Scope}'). Actions change only your own personal forms and panels; ` +
+            `shared ones are managed from Form Builder or the form's Manage drawer.`);
     }
     const refusal = FormScopeWriteRefusal({
         Operation: 'update',
         PriorScope: row.Scope, PriorUserID: row.UserID,
         NextScope: row.Scope, NextUserID: row.UserID,
         CallerID: user.ID,
-        CallerHoldsGrant: UserCanManageFormDefaults(user, provider),
+        // A User row needs no grant, so only the ownership half of the rule can refuse it.
+        CallerHoldsGrant: false,
     });
     return refusal ? Failure("FORBIDDEN", refusal) : null;
 }
@@ -389,14 +328,6 @@ export async function WriteAtomically<T extends object>(
         if (err instanceof RolledBackWrite) return err.Outcome;
         throw err;
     }
-}
-
-/** @deprecated Use {@link CheckOverrideOwnership}. */
-export function checkOverrideOwnership(
-    override: Pick<MJEntityFormOverrideEntity, 'ID' | 'Scope' | 'UserID' | 'RoleID'>,
-    user: UserInfo,
-): ActionResultSimple | null {
-    return CheckOverrideOwnership(override, user);
 }
 
 /**

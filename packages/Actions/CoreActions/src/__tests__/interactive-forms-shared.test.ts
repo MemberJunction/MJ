@@ -12,8 +12,7 @@ import {
     GetNumberParam,
     GetPrecedenceParam,
     ResolveContributionRegistration,
-    CheckOwnContributionWrite,
-    CheckOverrideOwnership,
+    CheckPersonalWrite,
     WriteAtomically,
 } from '../custom/interactive-forms/_shared';
 import type { RunActionParams } from '@memberjunction/actions-base';
@@ -320,38 +319,37 @@ describe('GetPrecedenceParam', () => {
 });
 
 /**
- * Actions change the caller's own personal panels only; shared panels are managed by people. The
- * check must never accept a write the server entity would refuse on save.
+ * Actions change the caller's own personal forms and panels only; shared ones are managed by
+ * people. The check must never accept a write the server entity would refuse on save.
  */
-describe('CheckOwnContributionWrite', () => {
-    const provider = { Authorizations: [] } as unknown as IMetadataProvider;
+describe('CheckPersonalWrite', () => {
     const me = { ID: 'USER-1', Type: 'User', UserRoles: [{ RoleID: 'ROLE-1' }] } as unknown as UserInfo;
     const owner = { ID: 'USER-1', Type: 'Owner', UserRoles: [{ RoleID: 'ROLE-1' }] } as unknown as UserInfo;
 
     it('accepts the caller\'s own personal row, whatever the casing of its owner ID', () => {
-        expect(CheckOwnContributionWrite({ ID: 'R', Scope: 'User', UserID: 'USER-1' }, me, provider)).toBeNull();
-        expect(CheckOwnContributionWrite({ ID: 'R', Scope: 'User', UserID: 'user-1' }, me, provider)).toBeNull();
+        expect(CheckPersonalWrite({ ID: 'R', Scope: 'User', UserID: 'USER-1' }, me)).toBeNull();
+        expect(CheckPersonalWrite({ ID: 'R', Scope: 'User', UserID: 'user-1' }, me)).toBeNull();
     });
 
-    it('refuses another user\'s personal row', () => {
-        expect(CheckOwnContributionWrite({ ID: 'R', Scope: 'User', UserID: 'USER-2' }, owner, provider)?.ResultCode).toBe('FORBIDDEN');
+    it('refuses another user\'s personal row, for a holder too', () => {
+        const result = CheckPersonalWrite({ ID: 'R', Scope: 'User', UserID: 'USER-2' }, owner);
+        expect(result?.ResultCode).toBe('FORBIDDEN');
+        expect(result?.Message).toMatch(/your own/i);
     });
 
-    it('refuses a Role or Global row for a role member and for a holder, pointing at the Manage drawer', () => {
+    it('refuses a Role or Global row for a role member and for a holder, pointing at Form Builder', () => {
         for (const row of [{ ID: 'R', Scope: 'Role', UserID: null }, { ID: 'G', Scope: 'Global', UserID: null }] as const) {
             for (const user of [me, owner]) {
-                const result = CheckOwnContributionWrite(row, user, provider);
+                const result = CheckPersonalWrite(row, user);
                 expect(result?.ResultCode).toBe('FORBIDDEN');
+                expect(result?.Message).toMatch(/Form Builder/);
                 expect(result?.Message).toMatch(/Manage drawer/);
             }
         }
     });
-});
 
-describe('CheckOverrideOwnership', () => {
-    it('matches the caller\'s roles case-insensitively', () => {
-        const user = { ID: 'USER-1', UserRoles: [{ RoleID: 'role-abc' }] } as unknown as UserInfo;
-        expect(CheckOverrideOwnership({ ID: 'O', Scope: 'Role', UserID: null, RoleID: 'ROLE-ABC' }, user)).toBeNull();
+    it('refuses a Scope that is not exactly User', () => {
+        expect(CheckPersonalWrite({ ID: 'R', Scope: 'user' as 'User', UserID: 'USER-1' }, me)?.ResultCode).toBe('FORBIDDEN');
     });
 });
 
