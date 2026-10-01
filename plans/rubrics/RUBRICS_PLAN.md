@@ -824,11 +824,10 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
       ScoringHash/major invariant. Then `RubricEngineBase`.
 - [~] **R3** Entity server subclasses: version clone/validate/publish (tree rules, bump, hashes);
       scale freeze; evaluation creation rules and submit (§7); score validation. Unit tests with mocks.
-- [~] **R4** `@memberjunction/rubrics`: `RubricEngine` evaluates and records a failure,
-      deterministic evaluator, content providers, and consensus/agreement/diagnostics are in.
-      The prompt evaluator (R5) is not started. Content providers,
-      deterministic evaluator, consensus/agreement/diagnostics statistics (unit-tested against
-      hand-computed fixtures, including kappa and alpha).
+- [~] **R4** `@memberjunction/rubrics`: `RubricEngine` evaluates, records a failure,
+      and starts a human draft. Deterministic evaluator, content providers, and
+      consensus/agreement/diagnostics are in, with hand-computed kappa and alpha.
+      The prompt evaluator (R5) is not started.
 - [ ] **R5** "Rubric Evaluator" prompt + `LLMRubricEvaluator` (SinglePass, PerCriterion via
       `AIDecisionRunner`, samples, evidence verification).
 - [ ] **R6** Actions (§8.6).
