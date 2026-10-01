@@ -13,9 +13,9 @@
 
 import { createHash } from 'node:crypto';
 import { LogError, Metadata, RunQuery, RunView } from '@memberjunction/core';
-import { UUIDsEqual, Canonicalize, ComputeContentHashAsync, EscapeSQLString, resolveMappingRef, resolveValueMapping } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual, Canonicalize, ComputeContentHashAsync, EscapeSQLString, resolveMappingRef, resolveValueMapping } from '@memberjunction/global';
+import { KnowledgeHubMetadataEngine, type MJFeaturePipelineTypeEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
-import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams, type AIPromptRunResult, type MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import {
     IRecordProcessor,
@@ -34,9 +34,22 @@ import {
 } from '@memberjunction/feature-pipelines';
 import { EntityDocumentCache, EntityDocumentTemplateParser } from '@memberjunction/entity-documents';
 import type { OutputMappingConfig } from '../writeBack';
+import { BaseFeaturePipelineDriver, type FeaturePipelineComputeHooks } from '../feature-pipeline-drivers/BaseFeaturePipelineDriver';
+import { LLMFeaturePipelineDriver } from '../feature-pipeline-drivers/LLMFeaturePipelineDriver';
+
+/** The pipeline type a spec without `PipelineType` runs as. */
+const LLM_PIPELINE_TYPE = 'LLM';
+
+/** Whether a pipeline type name means `LLM` (case-insensitive, trimmed). */
+function isLLMPipelineType(typeName: string): boolean {
+    return typeName.trim().toLowerCase() === LLM_PIPELINE_TYPE.toLowerCase();
+}
 
 /** Runs an AI Prompt per record and returns its structured output (write-back is the wrapper's job). */
 export class InferProcessor implements IRecordProcessor {
+    /** The driver resolution, started on first use and shared by every record this processor runs. */
+    private driverResolution?: Promise<BaseFeaturePipelineDriver>;
+
     /**
      * @param promptID - The `MJ: AI Prompts` ID to run for each record.
      * @param inputMapping - Optional mapping shaping the data passed to the prompt (default: `{ record }`).
@@ -58,6 +71,10 @@ export class InferProcessor implements IRecordProcessor {
         const prompt = AIEngine.Instance.Prompts.find((p) => UUIDsEqual(p.ID, this.promptID));
         if (!prompt) {
             return { Status: 'Failed', ErrorMessage: `AI Prompt '${this.promptID}' not found` };
+        }
+        const resolution = await this.resolveDriverOrError(context);
+        if ('ErrorMessage' in resolution) {
+            return { Status: 'Failed', ErrorMessage: resolution.ErrorMessage };
         }
 
         const isCacheable = this.spec?.Caching?.Cacheable === true;
@@ -117,52 +134,24 @@ export class InferProcessor implements IRecordProcessor {
             }
         }
 
-        // P1-6 Hook: beforeBuildContext
-        await this.beforeBuildContext(record, context);
-
-        // Carry ValidationBehavior on the execution run (AIPromptParams.validationBehavior)
-        // and wrap the prompt in an execution-scoped Proxy so reads of params.prompt.ValidationBehavior
-        // see the execution's behavior without mutating the shared entity in AIEngine cache (R11-B).
-        const targetValidationBehavior = (this.spec?.Outputs && this.spec.Outputs.length > 0) ? 'Strict' : prompt.ValidationBehavior;
-
-        const executionPrompt = new Proxy(prompt, {
-            get(target, prop, receiver) {
-                if (prop === 'ValidationBehavior') {
-                    return targetValidationBehavior;
-                }
-                return Reflect.get(target, prop, receiver);
-            }
+        // The pipeline type's driver turns the record's context into its outputs (for LLM: the prompt run and its hooks)
+        const computed = await resolution.Driver.ComputeOutputs({
+            Record: record,
+            Context: context,
+            Prompt: prompt,
+            Spec: this.spec,
+            Hooks: this.buildComputeHooks(),
         });
 
-        const params = new AIPromptParams();
-        params.prompt = executionPrompt;
-        params.validationBehavior = targetValidationBehavior;
-        params.data = await this.buildPromptData(record, context);
-        params.contextUser = context.contextUser;
-
-        // P1-6 Hook: beforePromptExecute
-        await this.beforePromptExecute(params, record, context);
-
-        const result: AIPromptRunResult = await new AIPromptRunner().ExecutePrompt(params);
-
-        const aiPromptRunID = result.promptRun?.ID;
-        if (!result.success) {
+        const aiPromptRunID = computed.AIPromptRunID;
+        if ('ErrorMessage' in computed) {
             return {
                 Status: 'Failed',
-                ErrorMessage: result.errorMessage ?? 'AI prompt execution failed',
+                ErrorMessage: computed.ErrorMessage,
                 AIPromptRunID: aiPromptRunID,
             };
         }
-
-        // P1-6 Hook: afterPromptExecute
-        let rawResult = await this.afterPromptExecute(result, record, context);
-        if (typeof rawResult === 'string') {
-            try {
-                rawResult = JSON.parse(rawResult);
-            } catch {
-                // leave as raw string if not JSON
-            }
-        }
+        const rawResult = computed.RawResult;
 
         // Layer 2: Validate outputs against constraints and apply OnViolation policy
         const validationOutcome = await this.validateOutputs(
@@ -219,6 +208,7 @@ export class InferProcessor implements IRecordProcessor {
             constraintHash,
             aiPromptRunID,
             featureValueCacheID,
+            ...(computed.Confidence ? { outputConfidence: computed.Confidence } : {}),
         });
 
         return {
@@ -250,6 +240,14 @@ export class InferProcessor implements IRecordProcessor {
         if (!prompt) {
             for (const r of records) {
                 results.set(r.RecordID, { Status: 'Failed', ErrorMessage: `AI Prompt '${this.promptID}' not found` });
+            }
+            return results;
+        }
+        // Resolve before the cache phases, so a type that cannot run fails every record rather than serving cache hits
+        const resolution = await this.resolveDriverOrError(context);
+        if ('ErrorMessage' in resolution) {
+            for (const r of records) {
+                results.set(r.RecordID, { Status: 'Failed', ErrorMessage: resolution.ErrorMessage });
             }
             return results;
         }
@@ -353,13 +351,26 @@ export class InferProcessor implements IRecordProcessor {
         return results;
     }
 
-    /** Computes a deterministic SHA-256 hash representing the prompt version and constraint instructions. */
+    /**
+     * Computes a deterministic SHA-256 hash representing the prompt version and constraint instructions.
+     * A pipeline type other than `LLM` is part of the hash, so switching a pipeline's type never serves
+     * the old type's cached values. An LLM pipeline's hash is unchanged by the type's introduction.
+     */
     protected computePromptVersionHash(prompt: MJAIPromptEntityExtended, spec?: DataFeatureSpec): string {
         const promptText = prompt.TemplateText ?? prompt.Description ?? prompt.Name ?? '';
         const outputsStr = spec?.Outputs ? JSON.stringify(spec.Outputs) : '';
         const constraintBlock = spec?.Outputs ? renderConstraintBlock(spec.Outputs) : '';
-        const hashBasis = `${prompt.ID}::${promptText}::${outputsStr}::${constraintBlock}`;
+        const hashBasis = `${prompt.ID}::${promptText}::${outputsStr}::${constraintBlock}${this.pipelineTypeHashSuffix(spec)}`;
         return createHash('sha256').update(hashBasis).digest('hex');
+    }
+
+    /** The pipeline type's part of the prompt version hash: empty when the type is absent or `LLM`. */
+    private pipelineTypeHashSuffix(spec?: DataFeatureSpec): string {
+        const pipelineType = spec?.PipelineType?.trim();
+        if (!pipelineType || isLLMPipelineType(pipelineType)) {
+            return '';
+        }
+        return `::PipelineType=${pipelineType.toLowerCase()}`;
     }
 
     /** Computes a deterministic SHA-256 hash representing the output constraints. */
@@ -377,6 +388,8 @@ export class InferProcessor implements IRecordProcessor {
 
     /**
      * Records historical audit rows in MJ: Feature Values for all outputs on a record.
+     * `outputConfidence` (from a driver that produces confidence) sets each output's confidence by
+     * output name, ahead of the single `confidence`.
      */
     protected async recordFeatureValuesHistory(params: {
         record: RecordRef;
@@ -384,6 +397,7 @@ export class InferProcessor implements IRecordProcessor {
         payload: unknown;
         reasoning?: string | null;
         confidence?: number | null;
+        outputConfidence?: Record<string, number>;
         promptID?: string | null;
         promptVersionHash?: string | null;
         constraintHash?: string | null;
@@ -404,7 +418,7 @@ export class InferProcessor implements IRecordProcessor {
                 featureName: output.Name,
                 value: val !== undefined ? val : null,
                 reasoning: params.reasoning,
-                confidence: params.confidence,
+                confidence: params.outputConfidence?.[output.Name] ?? params.confidence,
             });
         }
 
@@ -442,6 +456,110 @@ export class InferProcessor implements IRecordProcessor {
             promptData,
             promptVersionHash,
         });
+    }
+
+    // -------------------------------------------------------------------------------------------------
+    // Feature Pipeline driver (resolved from MJ: Feature Pipeline Types by DataFeatureSpec.PipelineType)
+    // -------------------------------------------------------------------------------------------------
+
+    /**
+     * Resolves the driver for this pipeline's type, once per processor instance.
+     *
+     * The type is `DataFeatureSpec.PipelineType`, or `LLM` when absent. It is matched by name
+     * (case-insensitive, trimmed) against the `MJ: Feature Pipeline Types` catalog cached by
+     * `KnowledgeHubMetadataEngine`, and its `DriverClass` is created through the ClassFactory. `LLM`
+     * resolves to {@link LLMFeaturePipelineDriver} when the catalog has no `LLM` row, or cannot be read,
+     * so a database without the seed row keeps working. The driver's `ValidateOutputs` then runs once.
+     *
+     * @throws Error when the type is not in the catalog (and is not `LLM`), is not Active, names a
+     * DriverClass that is not registered, or cannot produce every output (naming each one).
+     */
+    protected async ResolveDriver(context: RecordProcessorContext): Promise<BaseFeaturePipelineDriver> {
+        this.driverResolution ??= this.resolveDriverFromCatalog(context);
+        return this.driverResolution;
+    }
+
+    /** Runs {@link ResolveDriver}, turning a resolution error into a message the caller fails the record with. */
+    private async resolveDriverOrError(
+        context: RecordProcessorContext
+    ): Promise<{ Driver: BaseFeaturePipelineDriver } | { ErrorMessage: string }> {
+        try {
+            return { Driver: await this.ResolveDriver(context) };
+        } catch (e) {
+            return { ErrorMessage: e instanceof Error ? e.message : String(e) };
+        }
+    }
+
+    /** Finds the pipeline's type in the catalog, creates its driver, and checks it can produce every output. */
+    private async resolveDriverFromCatalog(context: RecordProcessorContext): Promise<BaseFeaturePipelineDriver> {
+        const typeName = this.spec?.PipelineType ?? LLM_PIPELINE_TYPE;
+        const pipelineType = await this.findPipelineType(typeName, context);
+        const driver = pipelineType ? this.createDriver(pipelineType) : this.createDriverWithoutCatalogRow(typeName);
+        if (this.spec) {
+            this.assertDriverProducesOutputs(driver, typeName, this.spec);
+        }
+        return driver;
+    }
+
+    /**
+     * Looks the type up by name in the catalog. If the catalog cannot be read, `LLM` is treated as not
+     * found (and so still resolves); any other type fails, because only the catalog names its driver.
+     */
+    private async findPipelineType(typeName: string, context: RecordProcessorContext): Promise<MJFeaturePipelineTypeEntity | undefined> {
+        try {
+            await KnowledgeHubMetadataEngine.Instance.Config(false, context.contextUser, context.provider);
+            const wanted = typeName.trim().toLowerCase();
+            return KnowledgeHubMetadataEngine.Instance.FeaturePipelineTypes.find((t) => t.Name?.trim().toLowerCase() === wanted);
+        } catch (e) {
+            const reason = e instanceof Error ? e.message : String(e);
+            if (!isLLMPipelineType(typeName)) {
+                throw new Error(`Feature Pipeline type '${typeName}' could not be resolved: MJ: Feature Pipeline Types could not be read: ${reason}`);
+            }
+            LogError(`InferProcessor: MJ: Feature Pipeline Types could not be read (${reason}); running as LLM`);
+            return undefined;
+        }
+    }
+
+    /** The driver for a type with no catalog row: `LLM` still runs; any other name is an error. */
+    private createDriverWithoutCatalogRow(typeName: string): BaseFeaturePipelineDriver {
+        if (isLLMPipelineType(typeName)) {
+            return new LLMFeaturePipelineDriver();
+        }
+        throw new Error(`Feature Pipeline type '${typeName}' was not found in MJ: Feature Pipeline Types.`);
+    }
+
+    /** Creates an Active type's driver from its registered `DriverClass`. */
+    private createDriver(pipelineType: MJFeaturePipelineTypeEntity): BaseFeaturePipelineDriver {
+        if (pipelineType.Status !== 'Active') {
+            throw new Error(`Feature Pipeline type '${pipelineType.Name}' is ${pipelineType.Status}; only an Active type can run.`);
+        }
+        const driverClass = pipelineType.DriverClass;
+        const driver = MJGlobal.Instance.ClassFactory.CreateInstance<BaseFeaturePipelineDriver>(BaseFeaturePipelineDriver, driverClass);
+        if (!driver || driver.constructor === BaseFeaturePipelineDriver) {
+            throw new Error(
+                `Feature Pipeline type '${pipelineType.Name}' names DriverClass '${driverClass}', which is not registered ` +
+                `with @RegisterClass(BaseFeaturePipelineDriver, '${driverClass}').`
+            );
+        }
+        return driver;
+    }
+
+    /** Fails when the driver cannot produce one or more of the spec's outputs, naming every one. */
+    private assertDriverProducesOutputs(driver: BaseFeaturePipelineDriver, typeName: string, spec: DataFeatureSpec): void {
+        const messages = driver.ValidateOutputs(spec);
+        if (messages.length > 0) {
+            throw new Error(`Feature Pipeline type '${typeName}' cannot produce every output: ${messages.join(' ')}`);
+        }
+    }
+
+    /** The driver's callbacks into this processor's overridable steps, so extensions keep working. */
+    private buildComputeHooks(): FeaturePipelineComputeHooks {
+        return {
+            BuildPromptData: (record, ctx) => this.buildPromptData(record, ctx),
+            BeforeBuildContext: (record, ctx) => this.beforeBuildContext(record, ctx),
+            BeforePromptExecute: (params, record, ctx) => this.beforePromptExecute(params, record, ctx),
+            AfterPromptExecute: (result, record, ctx) => this.afterPromptExecute(result, record, ctx),
+        };
     }
 
     // -------------------------------------------------------------------------------------------------
