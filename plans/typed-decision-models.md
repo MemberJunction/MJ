@@ -139,10 +139,18 @@ the Loop agent architecture yet, and to ship in two phases.
   - Consumers a user turns on: the Feature Pipeline `Decision` type, duplicate detection's Decision
     modes, `DecisionReranker`, the decision judge oracle.
 - **Phase 2, later: the agent framework using decisions on its own.**
-  - Loop `decisions`, `finishIf`, decision discovery, catalog narrowing, the payload-change check,
-    the memory-note gate and conversation routing.
-  - All of it was off by default. It is removed from `next` before the release and kept on
-    `park/decision-agent-framework` (`next` at `705ab4e7d5`).
+  - Loop `decisions`, `finishIf`, decision discovery, catalog narrowing, the payload-change check
+    and the memory-note gate.
+  - **They stay in the code behind one master switch, `decisionsEnabled`** (a Loop agent-type
+    prompt param, default `false`, overridable per agent and per run). Unless it is `true`, an agent
+    never calls a decision model on its own, whatever the sub-flags say. Amith's decision,
+    2026-10-01, after first planning to remove them.
+  - Conversation routing in the chat client keeps its own `EnableDecisionRouting` flag, which is off.
+  - A copy of `next` from before the switch is on `park/decision-agent-framework` (`705ab4e7d5`).
+- **Before turning any of it on: make the measurements match the plan's theory.** The plan predicted
+  wins that the with-and-without tests did not show. Each automatic use needs an end-to-end
+  comparison on real conversations, with cost, latency and correctness, before its sub-flag is
+  recommended.
 - **Why the line falls there.** Measured on Sage:
   - Explicit decisions held up: Jev at 0.928 balanced accuracy against 0.861 for LLM Decision, and
     missed urgent tickets cut from 16.7% to 5.2% on the 120-ticket triage.
