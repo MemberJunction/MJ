@@ -1,0 +1,40 @@
+{
+  "primaryKey": {
+    "ID": "FE0A363B-4EF6-4CCA-A7E3-93E3C015F3AF"
+  },
+  "fields": {
+    "Name": "Job Function and Seniority Derivation"
+  },
+  "relatedEntities": {
+    "MJ: Template Contents": [
+      {
+        "primaryKey": {
+          "ID": "00AAECBA-0772-49C0-9E6A-B9E6205E1A4B"
+        },
+        "fields": {
+          "TemplateID": "@parent:ID"
+        },
+        "deleteRecord": {
+          "delete": true
+        }
+      }
+    ],
+    "MJ: Template Params": [
+      {
+        "primaryKey": {
+          "ID": "A6FE72EC-AA38-444A-A38D-DC33FA7F0030"
+        },
+        "fields": {
+          "TemplateID": "@parent:ID",
+          "Name": "CurrentJobTitle"
+        },
+        "deleteRecord": {
+          "delete": true
+        }
+      }
+    ]
+  },
+  "deleteRecord": {
+    "delete": true
+  }
+}

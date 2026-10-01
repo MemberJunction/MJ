@@ -18,6 +18,7 @@
 
 import {
     BaseEntity,
+    SerializeCloneChangeContext,
     DatabaseProviderBase,
     EntityInfo,
     EntityFieldInfo,
@@ -723,6 +724,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 entity.PrimaryKey.Values(),
                 user?.ID ?? '',
                 options.ISAActiveChildEntityName,
+                undefined,
+                entity.CloneContext ? 'Clone' : 'Internal',
+                entity.CloneContext ? SerializeCloneChangeContext(entity.CloneContext) : null,
             )
             : null;
 
@@ -1380,6 +1384,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 user,
                 entity.RestoreContext,
                 "'",
+                entity.CloneContext,
             );
             if (payload) {
                 saveSQL = this.WrapSaveCallWithRecordChange(saveSQL, binding, payload, entity);

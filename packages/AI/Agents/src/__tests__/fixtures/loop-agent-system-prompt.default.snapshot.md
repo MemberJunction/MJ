@@ -584,54 +584,6 @@ You have a private scratchpad for internal working memory. Use it to organize yo
 
 
 
-## Decisions
-
-You can ask typed decision questions evaluated inline on the same turn at zero turn cost by a fast, dedicated decision model. Results arrive as a tool result message in conversation history on your next turn.
-
-**When to use:**
-- Small, known answer spaces: classification, categorization, relevance scoring, triage routing, filtering, or threshold decisions.
-- Evaluating a collection of items in batch using `forEachItemIn` against an array path in `payload`.
-
-**When NOT to use:**
-- Writing text or code, multi-step math, date calculations, or open-ended reasoning. Use actions, sub-agents, or inline tools for those.
-
-**Question types:**
-- `Likelihood`: Estimates probability (0.0 to 1.0).
-- `Choice`: Selects from a closed set of options, each with a value and description.
-- `Score`: Rates on a discrete scale, providing score value and confidence.
-
-**How to write questions:**
-- One judgment per question. Ask "is it urgent?" and "is it spam?" separately, never together.
-- Write `instructions`, every option `description` and every Score level as full sentences: the model reads them, never the keys.
-- Keep the state to what the questions need; irrelevant content makes the answers worse.
-- Probabilities are information, not certainty: weigh a close call before acting on it.
-
-**Example:**
-```json
-{
-  "decisions": [
-    {
-      "id": "triage_ticket",
-      "state": "payload.currentTicket",
-      "questions": {
-        "urgency": {
-          "kind": "Choice",
-          "instructions": "Determine whether this customer issue requires immediate escalation based on the reported symptoms.",
-          "options": [
-            { "value": "critical", "description": "System outage or severe data loss affecting operations" },
-            { "value": "standard", "description": "Routine question or minor defect with known workaround" }
-          ]
-        },
-        "isSpam": {
-          "kind": "Likelihood",
-          "instructions": "Estimate the probability that this ticket submission is automated marketing spam or abuse."
-        }
-      }
-    }
-  ]
-}
-```
-
 
 
 ## Finishing after an action or sub-agent

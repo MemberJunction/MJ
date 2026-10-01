@@ -32,6 +32,7 @@ import { MjEntityFormHostComponent } from './lib/host/entity-form-host.component
 import { MjFormPlacementDialogComponent } from './lib/apply/form-placement-dialog.component';
 import { MjFormPlacementPreviewComponent } from './lib/apply/form-placement-preview.component';
 import { PlacementPreviewPanelComponent } from './lib/panel-slot/placement-preview-panel.component';
+import { RecordCloneSlideInComponent } from '@memberjunction/ng-record-clone';
 
 /**
  * BaseFormsModule - Form components and base classes for rendering and editing MemberJunction entity records.
@@ -91,7 +92,8 @@ import { PlacementPreviewPanelComponent } from './lib/panel-slot/placement-previ
     MJSafeRichHtmlPipe,
     SharedGenericModule,
     MJButtonDirective,
-    MjIconPickerComponent
+    MjIconPickerComponent,
+    RecordCloneSlideInComponent
   ],
   exports: [
     MjFormToolbarComponent,

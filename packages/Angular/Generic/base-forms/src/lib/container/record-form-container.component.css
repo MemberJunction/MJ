@@ -22,6 +22,39 @@ mj-record-form-container {
 }
 
 /* ============================================
+   POSSIBLE-DUPLICATE NOTICE (entry-time check on a new record)
+   Sits between the toolbar and the scroll area, so it stays in view.
+   ============================================ */
+.mj-forms-duplicate-notice {
+  flex: 0 0 auto;
+  margin: var(--mj-space-2) var(--mj-space-4);
+}
+
+.mj-forms-duplicate-notice-lead {
+  margin-right: var(--mj-space-1);
+}
+
+.mj-forms-duplicate-notice-candidate {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--mj-text-link);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.mj-forms-duplicate-notice-candidate:hover {
+  color: var(--mj-text-link-hover);
+}
+
+.mj-forms-duplicate-notice-candidate:focus-visible {
+  outline: var(--mj-ring-width) solid var(--mj-focus-ring-color);
+  outline-offset: 2px;
+  border-radius: var(--mj-radius-sm);
+}
+
+/* ============================================
    SCROLL AREA (full-width so mouse wheel works anywhere)
    ============================================ */
 .mj-forms-scroll-area {

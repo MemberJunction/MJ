@@ -50,6 +50,10 @@ export * from './lib/base-form-section-info';
 export * from './lib/form-state.interface';
 export * from './lib/form-state.service';
 export * from './lib/form-record-refresh.coordinator';
+export * from './lib/form-field-edit.coordinator';
+
+// Entry-time duplicate check (flags possible duplicates while a new record is entered)
+export * from './lib/duplicate-entry-check/duplicate-entry-check';
 
 // Components
 export * from './lib/toolbar/form-toolbar.component';

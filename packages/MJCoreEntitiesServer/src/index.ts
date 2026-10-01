@@ -66,3 +66,4 @@ export {
 } from './custom/FormScopeGuard';
 export * from './custom/MJEntityFormOverrideEntityServer.server';
 export * from './custom/MJEntityFormContributionEntityServer.server';
+export * from './custom/MJRecordChangeEntityServer.server';
