@@ -1,4 +1,5 @@
 import { RubricScoring, type RubricAnswer, type RubricScoreResult, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
+import type { RubricSubjectContent } from './content.js';
 
 export interface EvidenceRef {
     ref: string;
@@ -19,7 +20,7 @@ export interface RubricCandidate {
 export interface RubricEvaluatorRequest {
     version: RubricVersionSnapshot;
     subject: { entityName: string; recordId: string };
-    content: string;
+    content: RubricSubjectContent;
 }
 
 export interface RubricEvaluatorOutput {

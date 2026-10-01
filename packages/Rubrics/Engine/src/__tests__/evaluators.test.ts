@@ -71,7 +71,7 @@ describe('AIRubricEvaluator', () => {
             },
         };
         const output = await new AIRubricEvaluator(agent).evaluateVersion(
-            { version: version(), subject: { entityName: 'MJ: Documents', recordId: '1' }, content: 'The text.' },
+            { version: version(), subject: { entityName: 'MJ: Documents', recordId: '1' }, content: { text: 'The text.' } },
         );
         expect(calls).toEqual(['clarity', 'accuracy']);
         const direct = RubricScoring.compute({
@@ -95,7 +95,7 @@ describe('AIRubricEvaluator', () => {
         await expect(new AIRubricEvaluator(agent).evaluateVersion({
             version: version(),
             subject: { entityName: 'MJ: Documents', recordId: '1' },
-            content: 'The text.',
+            content: { text: 'The text.' },
         })).rejects.toThrow(/unknown level/);
         expect(spy).not.toHaveBeenCalled();
         spy.mockRestore();
@@ -113,7 +113,7 @@ describe('AIRubricEvaluator', () => {
         await expect(new AIRubricEvaluator(agent).evaluateVersion({
             version: tree,
             subject: { entityName: 'MJ: Documents', recordId: '1' },
-            content: 'The text.',
+            content: { text: 'The text.' },
         })).rejects.toThrow(/quote/);
         expect(spy).not.toHaveBeenCalled();
         spy.mockRestore();

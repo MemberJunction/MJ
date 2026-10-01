@@ -1,7 +1,7 @@
 import type { RubricScoreResult, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import type { RubricAnswer } from '@memberjunction/rubrics-base';
 import { AIRubricEvaluator, type RubricAgent } from './AIRubricEvaluator.js';
-import type { RubricSubjectContent } from './content.js';
+import { shapeContent, type RubricSubjectContent } from './content.js';
 import { DeterministicRubricEvaluator } from './DeterministicRubricEvaluator.js';
 import { HumanRubricEvaluator, type EvaluationDraftStore, type RubricTaskStore } from './HumanRubricEvaluator.js';
 import { RubricEvaluator, type RubricEvaluatorOutput } from './RubricEvaluator.js';
@@ -27,6 +27,9 @@ export interface EvaluateParams {
     version: RubricVersionSnapshot;
     subject: { entityName: string; recordId: string; entityId: string };
     content?: RubricSubjectContent;
+    /** Used when content is omitted. Loads the subject record so the engine can shape it. */
+    loadRecord?: (entityName: string, recordId: string) => Promise<Record<string, unknown>>;
+    canRead?: (fieldName: string) => boolean;
     evaluator: 'AI' | 'Deterministic';
     agent?: RubricAgent;
 }
@@ -47,9 +50,9 @@ export class RubricEngine {
     public async evaluate(params: EvaluateParams): Promise<{ evaluation: RubricEvaluationRecord; output?: RubricEvaluatorOutput }> {
         let draft: RubricEvaluationRecord | null = null;
         try {
-            const content = params.content ?? { text: '' };
+            const content = params.content ?? await this.resolveContent(params);
             const output = params.evaluator === 'AI'
-                ? await new AIRubricEvaluator(requiredAgent(params.agent)).evaluateVersion({ version: params.version, subject: { entityName: params.subject.entityName, recordId: params.subject.recordId }, content: content.text ?? '' })
+                ? await new AIRubricEvaluator(requiredAgent(params.agent)).evaluateVersion({ version: params.version, subject: { entityName: params.subject.entityName, recordId: params.subject.recordId }, content })
                 : new DeterministicRubricEvaluator().evaluateData(params.version, content);
             draft = await this.evaluations.createDraft({
                 versionId: params.version.id,
@@ -95,6 +98,12 @@ export class RubricEngine {
             subjectRecordId: input.subjectRecordId,
             assigneeId: input.assigneeId,
         });
+    }
+
+    private async resolveContent(params: EvaluateParams): Promise<RubricSubjectContent> {
+        if (!params.loadRecord) return { text: '' };
+        const record = await params.loadRecord(params.subject.entityName, params.subject.recordId);
+        return shapeContent(params.subject.entityName, record, params.canRead ?? (() => true));
     }
 
     /** Mean, median, or trimmed mean of normalized scores, with spread. */

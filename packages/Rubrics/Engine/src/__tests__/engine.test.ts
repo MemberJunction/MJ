@@ -3,7 +3,7 @@ import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { fallbackContent, testRunContent } from '../content.js';
 import { DeterministicRubricEvaluator } from '../DeterministicRubricEvaluator.js';
 import { RubricEngine, type RubricEvaluationStore } from '../RubricEngine.js';
-import { getAgreement, getConsensus, krippendorffAlpha, quadraticKappa } from '../statistics.js';
+import { getAgreement, getConsensus, getDiagnostics, krippendorffAlpha, quadraticKappa } from '../statistics.js';
 
 function version(): RubricVersionSnapshot {
     return {
@@ -65,6 +65,24 @@ describe('RubricEngine', () => {
         expect(done.output?.normalizedScore).toBe(1);
     });
 
+    it('loads a test run when content is omitted and the rule sees the actual output', async () => {
+        const tree = version();
+        tree.nodes[0].evaluatorConfig = { Deterministic: { path: 'actualOutput', equals: 'shipped', level: 'High' } };
+        const store: RubricEvaluationStore = {
+            async createDraft() { return { id: 'eval-3', status: 'Draft' }; },
+            async submit() { return { normalizedScore: 1, completeness: 0.5, outcome: 'Passed', passed: true, gateFailed: false, passThresholdApplied: 0.5, bandId: null, confidence: null, nodes: [], scoringEngineVersion: '1.0' }; },
+            async fail() { throw new Error('should not fail'); },
+        };
+        const done = await new RubricEngine(store).evaluate({
+            version: tree,
+            subject: { entityName: 'MJ: Test Runs', recordId: 'run-1', entityId: 'entity' },
+            loadRecord: async () => ({ actualOutput: 'shipped', input: 'q' }),
+            evaluator: 'Deterministic',
+        });
+        expect(done.output?.answers[0].scaleLevelId).toBe('high');
+        expect(done.output?.normalizedScore).toBe(1);
+    });
+
     it('records a Failed evaluation when the evaluator throws', async () => {
         const failed: string[] = [];
         const store: RubricEvaluationStore = {
@@ -112,5 +130,24 @@ describe('agreement and consensus', () => {
         expect(result.overall).toBeCloseTo(0.4, 6);
         expect(result.range).toBeCloseTo(0.4, 6);
         expect(result.sampleSize).toBe(3);
+        const perCriterion = getConsensus([], 'Mean', 0.1, [
+            { key: 'a', scores: [0.2, 0.4] },
+            { key: 'b', scores: [0.8, 1] },
+        ]);
+        expect(perCriterion.criteria?.[0].mean).toBeCloseTo(0.3, 6);
+        expect(perCriterion.criteria?.[1].mean).toBeCloseTo(0.9, 6);
+        expect(perCriterion.criteria?.[0].range).toBeCloseTo(0.2, 6);
+    });
+
+    it('flags noise against the other criteria, and names both keys in a high correlation', () => {
+        const moving = Array.from({ length: 4 }, (_, index) => index % 2);
+        const noise = Array.from({ length: 4 }, () => 0.5);
+        const flags = getDiagnostics([
+            { key: 'noise', scores: noise, notApplicable: 0 },
+            { key: 'a', scores: moving, notApplicable: 0 },
+            { key: 'b', scores: moving, notApplicable: 0 },
+        ]);
+        expect(flags.filter(flag => flag.flag === 'NoDiscrimination').map(flag => flag.criterionKey)).toEqual(['noise']);
+        expect(flags.filter(flag => flag.flag === 'HighCorrelation').map(flag => `${flag.criterionKey}:${flag.otherKey}`).sort()).toEqual(['a:b', 'b:a']);
     });
 });

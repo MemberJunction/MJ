@@ -40,7 +40,7 @@ export interface RubricAgent {
         guidance?: string | null;
         scale: AgentScaleView | null;
         subject: { entityName: string; recordId: string };
-        content: string;
+        content: { text?: string; data?: Record<string, unknown> };
         hints?: string;
         config?: RubricEvaluatorConfig;
     }): Promise<AgentCriterionResult>;
@@ -72,7 +72,7 @@ export class AIRubricEvaluator extends RubricEvaluator {
                 guidance: leaf.guidance,
                 scale: scaleView(request.version, leaf.scaleId),
                 subject: request.subject,
-                content: request.content,
+                content: { text: request.content.text, data: request.content.data },
                 hints: config?.AI?.Hints,
                 config,
             });

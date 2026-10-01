@@ -39,6 +39,23 @@ export function conversationContent(record: { transcript?: string }): RubricSubj
  * Fallback for any other entity. Fields the context user may not read are
  * omitted. canRead is the field-level permission check.
  */
+/** Picks the built-in mapper from the entity name. Unknown entities use the fallback. */
+export function shapeContent(entityName: string, record: Record<string, unknown>, canRead: (fieldName: string) => boolean = () => true): RubricSubjectContent {
+    if (entityName === 'MJ: Test Runs') {
+        return testRunContent({
+            input: record.Input ?? record.input,
+            expectedOutcomes: record.ExpectedOutcomes ?? record.expectedOutcomes,
+            actualOutput: record.ActualOutput ?? record.actualOutput,
+            trace: (record.Trace ?? record.trace) as string | undefined,
+            files: record.files as { fileId: string; name: string }[] | undefined,
+        });
+    }
+    if (entityName === 'MJ: AI Agent Runs') return agentRunContent({ turns: record.Turns ?? record.turns, finalPayload: record.FinalPayload ?? record.finalPayload });
+    if (entityName === 'MJ: AI Prompt Runs') return promptRunContent({ messages: record.Messages ?? record.messages, result: record.Result ?? record.result });
+    if (entityName === 'MJ: Conversations') return conversationContent({ transcript: (record.Transcript ?? record.transcript) as string | undefined });
+    return fallbackContent(record, canRead);
+}
+
 export function fallbackContent(fields: Record<string, unknown>, canRead: (fieldName: string) => boolean): RubricSubjectContent {
     const data: Record<string, unknown> = {};
     for (const [name, value] of Object.entries(fields)) {

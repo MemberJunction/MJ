@@ -1,9 +1,18 @@
+export interface CriterionConsensus {
+    key: string;
+    mean: number | null;
+    stdDev: number | null;
+    range: number | null;
+    sampleSize: number;
+}
+
 export interface ConsensusResult {
     method: 'Mean' | 'Median' | 'TrimmedMean';
     overall: number | null;
     stdDev: number | null;
     range: number | null;
     sampleSize: number;
+    criteria?: CriterionConsensus[];
 }
 
 /**
@@ -11,13 +20,30 @@ export interface ConsensusResult {
  * TrimmedMean drops the floor(p * n) scores from each end. Population standard
  * deviation and the range are the disagreement measures.
  */
-export function getConsensus(scores: number[], method: ConsensusResult['method'] = 'Mean', trim = 0.1): ConsensusResult {
+/** Per-criterion mean, spread, and range. Subjects line up by index across criteria. */
+export function criterionConsensus(criteria: { key: string; scores: (number | null)[] }[]): CriterionConsensus[] {
+    return criteria.map(item => {
+        const scored = item.scores.filter((value): value is number => value !== null);
+        if (scored.length === 0) return { key: item.key, mean: null, stdDev: null, range: null, sampleSize: 0 };
+        const sorted = [...scored].sort((a, b) => a - b);
+        return { key: item.key, mean: mean(scored), stdDev: populationStdDev(scored), range: sorted[sorted.length - 1] - sorted[0], sampleSize: scored.length };
+    });
+}
+
+export function getConsensus(scores: number[], method: ConsensusResult['method'] = 'Mean', trim = 0.1, criteria?: { key: string; scores: (number | null)[] }[]): ConsensusResult {
     const sample = [...scores].sort((a, b) => a - b);
     const n = sample.length;
-    if (n === 0) return { method, overall: null, stdDev: null, range: null, sampleSize: 0 };
+    if (n === 0) return { method, overall: null, stdDev: null, range: null, sampleSize: 0, criteria: criteria ? criterionConsensus(criteria) : undefined };
     const used = method === 'TrimmedMean' ? trimEnds(sample, trim) : sample;
     const overall = method === 'Median' ? median(sample) : mean(used);
-    return { method, overall, stdDev: populationStdDev(sample), range: sample[n - 1] - sample[0], sampleSize: n };
+    return {
+        method,
+        overall,
+        stdDev: populationStdDev(sample),
+        range: sample[n - 1] - sample[0],
+        sampleSize: n,
+        criteria: criteria ? criterionConsensus(criteria) : undefined,
+    };
 }
 
 export interface AgreementResult {
@@ -49,30 +75,34 @@ export function getAgreement(ratings: number[][], minimumSample = 20): Agreement
 
 export interface DiagnosticFlag {
     criterionKey: string;
+    /** Set on HighCorrelation so the pair is named, not only the first key. */
+    otherKey?: string;
     flag: 'NoDiscrimination' | 'RangeCollapse' | 'HighCorrelation' | 'MostlyNotApplicable' | 'InsufficientData';
 }
 
 /** Item analysis. Flags are attached to the criterion key. InsufficientData is n < 20. */
 export function getDiagnostics(criteria: { key: string; scores: (number | null)[]; notApplicable: number }[]): DiagnosticFlag[] {
     const flags: DiagnosticFlag[] = [];
-    const totals = criteria[0]?.scores.map((_, index) => {
-        const values = criteria.map(item => item.scores[index]).filter((value): value is number => value !== null);
-        return values.length === 0 ? null : mean(values);
-    }) ?? [];
-    for (const item of criteria) {
+    for (const [index, item] of criteria.entries()) {
+        const others = criteria.filter((_, other) => other !== index);
+        const rest = item.scores.map((_, scoreIndex) => {
+            const values = others.map(other => other.scores[scoreIndex]).filter((value): value is number => value !== null);
+            return values.length === 0 ? null : mean(values);
+        });
         const scored = item.scores.filter((value): value is number => value !== null);
         const n = item.scores.length;
         if (n < 20) flags.push({ criterionKey: item.key, flag: 'InsufficientData' });
         if (n > 0 && item.notApplicable / n >= 0.5) flags.push({ criterionKey: item.key, flag: 'MostlyNotApplicable' });
         if (scored.length >= 2 && populationStdDev(scored) === 0) flags.push({ criterionKey: item.key, flag: 'RangeCollapse' });
-        if (scored.length >= 2 && Math.abs(correlation(item.scores, totals)) < 0.05) {
+        if (scored.length >= 2 && Math.abs(correlation(item.scores, rest)) < 0.05) {
             flags.push({ criterionKey: item.key, flag: 'NoDiscrimination' });
         }
     }
     for (let i = 0; i < criteria.length; i++) {
         for (let j = i + 1; j < criteria.length; j++) {
             if (Math.abs(correlation(criteria[i].scores, criteria[j].scores)) >= 0.9) {
-                flags.push({ criterionKey: criteria[i].key, flag: 'HighCorrelation' });
+                flags.push({ criterionKey: criteria[i].key, otherKey: criteria[j].key, flag: 'HighCorrelation' });
+                flags.push({ criterionKey: criteria[j].key, otherKey: criteria[i].key, flag: 'HighCorrelation' });
             }
         }
     }
