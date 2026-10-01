@@ -2868,3 +2868,67 @@ expectation is visible to whoever writes the next engine.
 
 **Registry:** `cache-architecture` drops 6 → 5 checks (CA1–CA5); the snapshot test and the IT96
 bundle description are updated to match.
+
+### 25.5 F9's residual: a warm read now counts (2026-09-30)
+
+**The problem, stated correctly.** An engine loads its rows once and never reads its slot again. That
+is the design — the slot is a boot shortcut and a propagation channel, and correctness comes from
+events, not re-reads. Giving slots a finite TTL (this branch; on `next` MJServer passed no
+`defaultTTLSeconds`, so slots never expired and this could not happen) opened a window the events
+cannot cross: when a slot expires under running replicas, a save finds nothing to rewrite and
+publishes nothing, so every peer engine keeps serving what it loaded.
+
+F9 fixed that by invalidating a slot that cannot be maintained, which publishes `removed`. But the
+invalidation only fires if the saving process still holds the fingerprint, and only a process that
+**wrote** the slot did: the index is filled by `SetRunViewResult`, by the shared-group merge, and by
+`loadRegistry` — which returns immediately on a shared store. A server that booted warm *read* the
+slot, and a read indexed nothing. So F9's guarantee held only when the saver happened to be the
+filler; behind a load balancer that is arbitrary, with the 300 s sweep as the real backstop.
+
+**The fix is to index the warm read**, in `materializeCachedRunViewResult` — the single choke point
+every hit passes through (single read, batched read, maintenance read). Chosen over §22.3's
+`_changeCallbacks` union: same guarantee, far less machinery, and no dependence on an engine's
+registered fingerprint matching the slot's.
+
+**The review found a real hazard, and it dictated the shape of the fix.** On a provider with no
+shared per-entity index, `resolveFingerprintsForEntity` falls back to listing the whole category —
+but *only when the local index is empty*:
+
+```ts
+const local = this._entityFingerprintIndex.get(entityName);
+if (local && local.size > 0) return local;      // the scan below never runs
+```
+
+Indexing reads unconditionally would make **one** read enough to suppress that scan, and the scan is
+what finds slots persisted from an earlier session (a browser's IndexedDB) that the index does not
+know about. Those slots would then never be invalidated — stale rows served from local storage
+indefinitely. The hazard exists in miniature today (one slot written this session has the same
+effect), but indexing reads would widen it from an edge case to the common path.
+
+So read-indexing is **gated on the provider exposing a shared per-entity index**, which is exactly
+the branch that answers from that index and has no scan fallback. On a process-local store there is
+nothing to gain either — no peers to notify, and every slot in it was written by this process, so it
+is already indexed.
+
+**Tests, each verified against the un-fixed code.**
+
+| Test | Without the fix |
+|---|---|
+| a warm-read slot enters the index | `expected false to be true` |
+| the expired slot is invalidated by a save on the process that only READ it | `expected [] to include 'Users\|_\|_\|-1\|0\|_\|_'` |
+| a miss indexes nothing | passes either way (invariant pin) |
+| a process-local read does **not** enter the index | `expected 1 to be +0` *(with the gate removed)* |
+| a process-local save still finds slots it never read | `expected [] to include "Users\|Name LIKE 'A%'\|…"` *(with the gate removed)* |
+
+The last two are why the gate is in the product rather than in a comment.
+
+**Residual, accepted.** A server whose engine loaded rows while the shared store was unavailable
+holds rows having touched no slot, so it has nothing to index and will never notify peers; the sweep
+remains its backstop. The `_changeCallbacks` union would cover it, and is not worth its assumption
+for one degraded-boot case. Also noted and NOT fixed here: the pre-existing process-local scan
+suppression above, which deserves its own change (a one-time scan per entity, unioned with the
+index, would be strictly better than today's either/or).
+
+Verified: MJCore 197 files / 2,871 tests; GenericDatabaseProvider 1,188; MJServer 1,408;
+RedisProvider 87; GraphQLDataProvider 454; deterministic tier 79 passed / 1 skipped / 0 failed with
+IT07 3/3, IT29 8/8, IT96 5/5.

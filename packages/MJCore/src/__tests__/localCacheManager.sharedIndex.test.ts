@@ -54,7 +54,9 @@ class SharedIndexStore implements ILocalStorageProvider {
             this.groups.get(g)!.add(key);
         }
     }
+    public readonly Removed: string[] = [];
     public async Remove(key: string, category?: string): Promise<void> {
+        this.Removed.push(key);
         this.store.delete(this.k(key, category));
     }
     public GetCategoryKeys = vi.fn(async (category: string): Promise<string[]> =>
@@ -294,5 +296,76 @@ describe('LocalCacheManager — cross-process lock for in-place rewrites (plan N
 
         expect(store.Writes.filter(w => w.key === UNFILTERED)).toHaveLength(0);
         expect(removeSpy).toHaveBeenCalledWith(UNFILTERED, CacheCategory.RunViewCache);
+    });
+});
+
+/**
+ * F9, the half that only held for whichever process FILLED the slot (plan §25.5).
+ *
+ * An engine loads its rows once and never reads its slot again — by design. The slot is a boot
+ * shortcut and a propagation channel, not a read-through cache. Correctness comes from events.
+ *
+ * Giving slots a finite TTL (this branch) created a window the events cannot cross. When a slot
+ * expires under running replicas, a later save finds nothing to rewrite and publishes nothing, so
+ * every peer engine keeps serving what it loaded. F9's fix was to invalidate a slot that cannot be
+ * maintained, which publishes `removed` and makes peers reload — but that only fires if the saving
+ * process still has the fingerprint in its index, and a process only had it there if it WROTE the
+ * slot. A server that booted warm read the slot instead, and a read indexed nothing. Behind a load
+ * balancer, which server takes the save is arbitrary.
+ *
+ * So the warm read is indexed too: it is the only trace a process has of a slot it did not write.
+ */
+describe('F9 — a warm read is enough to notify peers later', () => {
+    let manager: LocalCacheManager;
+    let store: SharedIndexStore;
+
+    beforeEach(async () => {
+        resetLocalCacheManager();
+        manager = LocalCacheManager.Instance;
+        store = new SharedIndexStore();
+        await manager.Initialize(store);
+    });
+
+    /** A slot written by another process, which this one has never seen. */
+    async function peerWroteSlot(): Promise<void> {
+        await store.SetItem(UNFILTERED, { results: [{ ID: '1', Name: 'A' }], maxUpdatedAt: '2024-01-01T00:00:00Z' },
+            CacheCategory.RunViewCache, { IndexGroup: 'Users' });
+    }
+
+    it('indexes a slot this process read but did not write', async () => {
+        await peerWroteSlot();
+        expect(manager.GetFingerprintsForEntity('Users').has(UNFILTERED)).toBe(false);
+
+        const hit = await manager.GetRunViewResult(UNFILTERED);
+
+        expect(hit?.results).toHaveLength(1);
+        expect(manager.GetFingerprintsForEntity('Users').has(UNFILTERED)).toBe(true);
+    });
+
+    it('invalidates the expired slot on a later save, so peers holding its rows reload', async () => {
+        // The warm-boot sequence: a peer filled the slot, this process read it at boot and holds
+        // the rows in memory.
+        await peerWroteSlot();
+        await manager.GetRunViewResult(UNFILTERED);
+
+        // The slot's TTL elapses. The shared group drops it too (members whose key is gone are
+        // pruned on read), so the group can no longer tell anyone the slot existed.
+        await store.Remove(UNFILTERED, CacheCategory.RunViewCache);
+        store.Removed.length = 0;
+        expect(await store.GetIndexGroupKeys(CacheCategory.RunViewCache, 'Users')).toEqual([]);
+
+        // A row is saved on THIS process — the one that read the slot rather than filling it.
+        await (manager as unknown as Internals).HandleBaseEntityEvent(saveEvent('1', 'B'));
+
+        // The slot could not be maintained, so it is invalidated — and on a real shared provider
+        // that Remove publishes `removed`, which is what the peers reload on.
+        expect(store.Removed).toContain(UNFILTERED);
+        // Invalidation forgets the fingerprint, so the notice costs one message per slot, once.
+        expect(manager.GetFingerprintsForEntity('Users').has(UNFILTERED)).toBe(false);
+    });
+
+    it('does not index a miss', async () => {
+        expect(await manager.GetRunViewResult(UNFILTERED)).toBeNull();
+        expect(manager.GetFingerprintsForEntity('Users').size).toBe(0);
     });
 });
