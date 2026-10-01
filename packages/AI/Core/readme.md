@@ -21,8 +21,10 @@ Every AI capability is represented by an abstract base class. Provider packages 
 | `BaseLLM` | Chat completions (text generation) | `ChatCompletion()`, `ChatCompletions()` (parallel batch), `GetFileCapabilities()` |
 | `BaseEmbeddings` | Text & multimodal embeddings | `EmbedText()`, `EmbedTexts()`, `EmbedContent()`, `GetFileCapabilities()` |
 | `BaseImageGenerator` | Image generation, editing, variations | `GenerateImage()`, `EditImage()`, `CreateVariation()` |
-| `BaseAudio` | Text-to-speech and speech-to-text | `TextToSpeech()`, `SpeechToText()` |
-| `BaseVideo` | Video generation from text/images | `GenerateVideo()` |
+| `BaseTextToSpeech` | Text-to-speech (`TTS` models) | `CreateSpeech()`, `GetVoices()`, `GetModels()`, `GetPronounciationDictionaries()` |
+| `BaseSpeechToText` | Speech-to-text (`Speech to Text` models) | `SpeechToText()`, `GetModels()`; oversized audio via `TranscribeAudioWithSplitting()` |
+| `BaseAudioGenerator` | **Deprecated.** Both of the above on one class. Kept, and still working, for existing drivers and callers; it implements both new classes | `CreateSpeech()`, `SpeechToText()`, `GetVoices()` |
+| `BaseVideoGenerator` | Avatar video generation (`Video` models) | `CreateAvatarVideo()`, `GetAvatars()` |
 | `BaseReranker` | Document reranking for retrieval | `Rerank()` |
 | `BaseDecision` | Typed decisions (Likelihood, Choice, Score) with a probability per answer | `Decide()` |
 | `BaseRealtimeModel` | Live, full-duplex, tool-calling realtime sessions (voice) | `StartSession()`, `CreateClientSession()` |

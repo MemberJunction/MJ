@@ -3478,6 +3478,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.2.0-edge.1
         version: link:../../../MJGlobal
+      '@memberjunction/integration-engine':
+        specifier: 6.2.0-edge.1
+        version: link:../../../Integration/engine
     devDependencies:
       '@types/node':
         specifier: 24.10.11
@@ -10926,6 +10929,9 @@ importers:
       '@memberjunction/actions-base':
         specifier: 6.2.0-edge.1
         version: link:../Actions/Base
+      '@memberjunction/ai':
+        specifier: 6.2.0-edge.1
+        version: link:../AI/Core
       '@memberjunction/ai-core-plus':
         specifier: 6.2.0-edge.1
         version: link:../AI/CorePlus
@@ -14062,6 +14068,9 @@ importers:
       '@memberjunction/ai':
         specifier: 6.2.0-edge.1
         version: link:../AI/Core
+      '@memberjunction/ai-prompts':
+        specifier: 6.2.0-edge.1
+        version: link:../AI/Prompts
       '@memberjunction/ai-vectordb':
         specifier: 6.2.0-edge.1
         version: link:../AI/Vectors/Database
