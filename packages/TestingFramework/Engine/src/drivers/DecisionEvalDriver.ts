@@ -19,6 +19,7 @@ import {
     DECISION_DISCOVERY_TIMEOUT_MS,
     DecisionDiscoveryAgentSearch,
     DecisionDiscoveryCatalog,
+    DecisionDiscoveryFromResult,
     DecisionDiscoveryRunnableAgents,
     DecisionPromptOptionCap,
     JudgeDecisionDiscovery,
@@ -751,10 +752,11 @@ export function BuildDiscoveryDecisionParams(
 
 /**
  * What a discovery decision run records as its `ActualOutput`: the options, the summarized answers,
- * the chosen agent with its confidence, the `anyApplies` probability, `JudgeDecisionDiscovery`'s
- * verdict at production's threshold, whether the labelled agent was an option, the model and
- * sampling records, the call's latency and the whole discovery's, the prompt run and its cost, and
- * the error when there are no answers.
+ * the chosen agent with its raw confidence, the raw `anyApplies` probability, production's own
+ * verdict (`DecisionDiscoveryFromResult`: calibrated for the answering model, at production's
+ * threshold), whether the labelled agent was an option, the model and sampling records, the call's
+ * latency and the whole discovery's, the prompt run and its cost, and the error when there are no
+ * answers.
  *
  * A discovery that took longer than {@link DECISION_DISCOVERY_TIMEOUT_MS} is recorded as not
  * injected, with a "timed out" reason, whatever its answer: production would have given up by then.
@@ -772,8 +774,11 @@ export function BuildDiscoveryEvalActualOutput(
 ): DiscoveryEvalActualOutput {
     const { Result: result, OptionSet: optionSet } = call;
     const answers = result.success ? result.Answers : {};
+    // The raw answers are recorded, because calibration is fitted on them; whether production would
+    // inject, and why not, come from production's own calibrated path.
     const verdict = result.success ? JudgeDecisionDiscovery(answers, optionSet.Options, DECISION_DISCOVERY_MIN_CONFIDENCE) : null;
     const answer = verdict?.Answer;
+    const production = answer ? DecisionDiscoveryFromResult(result, optionSet.Options, DECISION_DISCOVERY_MIN_CONFIDENCE) : null;
     const onTime = call.DiscoveryLatencyMs <= DECISION_DISCOVERY_TIMEOUT_MS;
     return {
         Decision: 'agent-discovery',
@@ -786,9 +791,11 @@ export function BuildDiscoveryEvalActualOutput(
         ChosenAgentName: answer?.Agent.Name ?? null,
         Confidence: answer?.Confidence ?? null,
         AnyApplies: answer?.AnyApplies ?? null,
-        WouldInject: answer && verdict ? verdict.Confident && onTime : null,
+        WouldInject: production ? production.Injected && onTime : null,
         MinConfidence: DECISION_DISCOVERY_MIN_CONFIDENCE,
-        VerdictReason: answer && !onTime ? DiscoveryTimedOutReason(call.DiscoveryLatencyMs) : verdict?.Reason ?? null,
+        VerdictReason: production && !onTime
+            ? DiscoveryTimedOutReason(call.DiscoveryLatencyMs)
+            : production ? production.Reason ?? null : verdict?.Reason ?? null,
         Baseline: null,
         Model: modelRecord(config, result),
         Sampling: samplingRecord(config),

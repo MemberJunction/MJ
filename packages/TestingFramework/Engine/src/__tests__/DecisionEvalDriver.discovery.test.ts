@@ -14,6 +14,7 @@ import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import {
     BuildDecisionDiscoveryOptionSet,
     BuildDecisionDiscoveryQuestions,
+    DECISION_DISCOVERY_MIN_CONFIDENCE,
     DECISION_DISCOVERY_MIN_OPTIONS,
     DECISION_DISCOVERY_TIMEOUT_MS,
     type DecisionDiscoveryAgent
@@ -35,6 +36,8 @@ import type { DriverExecutionContext, DriverExecutionResult } from '../types';
 import type { IOracle } from '../oracles/IOracle';
 
 const PINNED_MODEL = '0B000000-0000-4000-8000-000000000001';
+/** Jev's pinned `APIName`, which it reports back as the resolved model. */
+const JEV_RESOLVED_MODEL = 'typesafe/jev-1.13-20260917';
 const PINNED_VENDOR = '0C000000-0000-4000-8000-000000000001';
 const REQUEST = '  Can you send Acme their invoice for the March consulting hours?  ';
 const STATE = REQUEST.trim();
@@ -132,7 +135,8 @@ function decided(choice: string, confidence: number, applies: number): AIDecisio
         anyApplies: { Kind: 'Likelihood', Probability: applies }
     };
     const driverResult = new DecisionResult(true, new Date(0), new Date(1));
-    driverResult.ResolvedModel = 'jev-2026-09-01';
+    // The version Jev's discovery calibration was fitted on: another version's answers are uncalibrated.
+    driverResult.ResolvedModel = JEV_RESOLVED_MODEL;
     const promptRun = { ID: 'prun-1', TotalCost: 0.002, Cost: 0.002 } satisfies Pick<MJAIPromptRunEntity, 'ID' | 'TotalCost' | 'Cost'>;
     return {
         success: true,
@@ -235,22 +239,43 @@ describe('DecisionEvalDriver — agent discovery', () => {
             expect(actual).toMatchObject({
                 Decision: 'agent-discovery', Arm: 'decision', PromptName: 'Default Decision',
                 ChosenAgentId: BILLING.ID, ChosenAgentName: 'Billing Agent', Confidence: 0.9, AnyApplies: 0.9,
-                WouldInject: true, MinConfidence: 0.7, VerdictReason: null, LabelledAgentOffered: true,
+                // The raw answers are recorded; production judges them calibrated for the answering
+                // model, and Jev's calibrated confidence for a raw 0.9 is about 0.81.
+                WouldInject: false, MinConfidence: DECISION_DISCOVERY_MIN_CONFIDENCE,
+                VerdictReason: expect.stringContaining(`below ${DECISION_DISCOVERY_MIN_CONFIDENCE}`), LabelledAgentOffered: true,
                 Options: { Count: 3, Limit: 25, CatalogSize: 3, WithoutDescription: 0, DeclaredCap: null, NarrowedFrom: null },
                 Baseline: null, PromptRunId: 'prun-1', CostUSD: 0.002, Error: null, WithinProductionTimeout: true
             });
             expect(actual.Answers.agent).toEqual({ Kind: 'Choice', Value: BILLING.ID, Confidence: 0.9, Probabilities: { [BILLING.ID]: 0.9, [RESEARCH.ID]: expect.closeTo(0.1, 10) } });
             expect(actual.Answers.anyApplies).toEqual({ Kind: 'Likelihood', Probability: 0.9 });
-            expect(actual.Model).toMatchObject({ PinnedModelId: PINNED_MODEL, AnsweredModelName: 'Jev', ResolvedModel: 'jev-2026-09-01', FailedOver: false });
+            expect(actual.Model).toMatchObject({ PinnedModelId: PINNED_MODEL, AnsweredModelName: 'Jev', ResolvedModel: JEV_RESOLVED_MODEL, FailedOver: false });
             expect(actual.LatencyMs).toBeGreaterThanOrEqual(0);
             expect(actual.DiscoveryLatencyMs).toBeGreaterThanOrEqual(actual.LatencyMs ?? 0);
             expect(result).toMatchObject({ status: 'Passed', targetType: 'AI Prompt', targetLogId: 'prun-1', totalCost: 0.002 });
         });
 
+        it('records that production would inject when the calibrated answers clear its threshold', async () => {
+            const { result } = await run({ respond: async () => decided(BILLING.ID, 0.99, 0.9) });
+            expect(actualOf(result)).toMatchObject({ WouldInject: true, VerdictReason: null, Confidence: 0.99, AnyApplies: 0.9 });
+        });
+
+        it('records no injection when LLM Decision answered through a chat model its calibration was not fitted on', async () => {
+            const throughOtherChatModel = async (): Promise<AIDecisionRunResult> => {
+                const answer = decided(BILLING.ID, 0.99, 0.99);
+                const driverResult = new DecisionResult(true, new Date(0), new Date(1));
+                driverResult.ResolvedModel = 'GPT 5.5 Instant';
+                return { ...answer, modelInfo: { modelId: PINNED_MODEL, modelName: 'LLM Decision' }, DecisionResult: driverResult, DriverClass: 'LLMDecision' };
+            };
+            const { result } = await run({ respond: throughOtherChatModel });
+            const actual = actualOf(result);
+            expect(actual).toMatchObject({ WouldInject: false, Confidence: 0.99, AnyApplies: 0.99 });
+            expect(actual.VerdictReason).toContain('LLM Decision (GPT 5.5 Instant) has no discovery calibration');
+        });
+
         it("judges an unsure answer as production would: no injection, and why", async () => {
             const { result } = await run({ respond: async () => decided(BILLING.ID, 0.6, 0.9) });
             expect(actualOf(result)).toMatchObject({ WouldInject: false, Confidence: 0.6 });
-            expect(actualOf(result).VerdictReason).toContain('below 0.7');
+            expect(actualOf(result).VerdictReason).toContain(`below ${DECISION_DISCOVERY_MIN_CONFIDENCE}`);
             // The agent label is still right: top-1 is the Choice, whatever its confidence.
             expect(result.status).toBe('Passed');
         });
@@ -267,7 +292,10 @@ describe('DecisionEvalDriver — agent discovery', () => {
             vi.useRealTimers();
         });
 
-        /** A catalog over the option cap, so the semantic search runs, taking `searchMs`; the call takes `callMs`. */
+        /**
+         * A catalog over the option cap, so the semantic search runs, taking `searchMs`; the call takes
+         * `callMs`, and answers with raw values whose calibration clears production's threshold.
+         */
         async function timed(searchMs: number, callMs: number, expected: DiscoveryEvalExpected = AGENT_LABEL) {
             vi.useFakeTimers({ toFake: ['Date'] });
             const search = new FakeSearch([{ ID: BILLING.ID }, { ID: MARKETING.ID }, { ID: RESEARCH.ID }, { ID: LEGAL.ID }], searchMs);
@@ -276,7 +304,7 @@ describe('DecisionEvalDriver — agent discovery', () => {
                 environment: environment(search, { DeclaredCap: 3, RunnableAgents: WIDE, AllAgents: WIDE }),
                 respond: async () => {
                     takes(callMs);
-                    return decided(BILLING.ID, 0.9, 0.9);
+                    return decided(BILLING.ID, 0.99, 0.9);
                 }
             });
         }
@@ -292,7 +320,7 @@ describe('DecisionEvalDriver — agent discovery', () => {
             expect(actual).toMatchObject({
                 LatencyMs: 700, DiscoveryLatencyMs: 1600, WithinProductionTimeout: false, WouldInject: false,
                 // The answer is still recorded, for calibration and top-1.
-                ChosenAgentId: BILLING.ID, Confidence: 0.9, AnyApplies: 0.9
+                ChosenAgentId: BILLING.ID, Confidence: 0.99, AnyApplies: 0.9
             });
             expect(actual.VerdictReason).toBe(DiscoveryTimedOutReason(1600));
             expect(actual.VerdictReason).toMatch(/^timed out/);
@@ -319,7 +347,7 @@ describe('DecisionEvalDriver — agent discovery', () => {
 
         it('passes a none label when discovery would not inject, and fails it when it would', async () => {
             expect((await run({ expected: NONE_LABEL, respond: async () => decided(BILLING.ID, 0.9, 0.3) })).result.status).toBe('Passed');
-            expect((await run({ expected: NONE_LABEL, respond: async () => decided(BILLING.ID, 0.9, 0.8) })).result.status).toBe('Failed');
+            expect((await run({ expected: NONE_LABEL, respond: async () => decided(BILLING.ID, 0.99, 0.8) })).result.status).toBe('Failed');
         });
 
         it('fails, without an answer to score, when the Choice names no option', async () => {

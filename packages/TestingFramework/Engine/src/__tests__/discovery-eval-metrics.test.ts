@@ -3,6 +3,7 @@
  * calibrations (out of fold), the injection operating table with production's timeout, production's
  * verdict, repeatability, latency, cost, and the baseline's metrics.
  */
+import { DECISION_DISCOVERY_MIN_CONFIDENCE } from '@memberjunction/ai-agents';
 import { describe, it, expect } from 'vitest';
 import {
     AssignCaseFolds,
@@ -286,7 +287,7 @@ describe('ComputeDiscoveryDecisionMetrics', () => {
         // The late n3 is not injected at any calibrated threshold either.
         expect(metrics.Injection.Calibrated?.every(p => (p.FalseInjectionRate ?? 0) <= 2 / 3)).toBe(true);
         expect(metrics.Production).toEqual({
-            MinConfidence: 0.7,
+            MinConfidence: DECISION_DISCOVERY_MIN_CONFIDENCE,
             Coverage: 0.5,
             Precision: 0.5,
             FalseInjectionRate: 1 / 3,

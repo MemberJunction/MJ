@@ -4064,7 +4064,9 @@ export class BaseAgent {
 
     /**
      * Records one `Agent discovery` step around a bounded discovery, and returns what it found. A
-     * failed discovery is logged as a warning; an unsure one only in verbose logs.
+     * failed discovery is logged as a warning; an unsure one only in verbose logs, except that an
+     * answer from a model with no discovery calibration is warned about once per model, because
+     * then discovery can never suggest anything.
      */
     private async runDecisionDiscovery(
         agent: MJAIAgentEntityExtended,
@@ -4081,9 +4083,36 @@ export class BaseAgent {
         if (!outcome.Succeeded) {
             this.warnDecisionDiscovery(agent, outcome.Reason ?? 'unknown error');
         } else if (!outcome.Injected) {
+            if (outcome.UncalibratedModel) {
+                BaseAgent.warnUncalibratedDiscoveryModel(outcome.UncalibratedModel);
+            }
             this.logStatus(`Decision discovery for '${agent.Name}' suggested no agent: ${outcome.Reason}`, true);
         }
         return outcome;
+    }
+
+    /** The answering models already warned about as having no discovery calibration, so each is warned about once per process. */
+    private static readonly _uncalibratedDiscoveryModelsWarned = new Set<string>();
+
+    /**
+     * Warns, once per model, that discovery answered by a model with no discovery calibration
+     * suggests nothing. That happens when a decision model is added or renamed, when a vendor model
+     * moves to another version (Jev's `APIName`), or when LLM Decision answers through a chat model
+     * other than the one its calibration was fitted on; without the warning the only trace is each
+     * `Agent discovery` step's reason.
+     */
+    private static warnUncalibratedDiscoveryModel(model: string): void {
+        if (BaseAgent._uncalibratedDiscoveryModelsWarned.has(model)) {
+            return;
+        }
+        BaseAgent._uncalibratedDiscoveryModelsWarned.add(model);
+        LogErrorEx({
+            message: `Decision discovery answered by ${model} suggests nothing: the model has no discovery calibration `
+                + '(DECISION_DISCOVERY_CALIBRATION), so its answers are treated as unsure. Fit one with the agent-discovery '
+                + 'Decision Eval, or check that the model was not renamed or moved to another version.',
+            severity: 'warning',
+            category: 'DecisionDiscovery',
+        });
     }
 
     /**
