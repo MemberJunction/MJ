@@ -4,8 +4,8 @@ import { BaseAction } from "@memberjunction/actions";
 import { UserInfo } from "@memberjunction/core";
 import { AIEngine } from "@memberjunction/aiengine";
 import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
-import { AIDecisionRunner, AIDecisionParams, AIDecisionRunResult } from "@memberjunction/ai-prompts";
-import { ChoiceOption, DecisionQuestion, DecisionAnswer } from "@memberjunction/ai";
+import { AIDecisionRunner, AIDecisionParams, AIDecisionRunResult, ParseDecisionQuestions } from "@memberjunction/ai-prompts";
+import { DecisionQuestion, DecisionAnswer } from "@memberjunction/ai";
 
 /**
  * Result codes produced by RunDecisionAction.
@@ -26,18 +26,10 @@ type StateValidationResult =
     | { valid: true; state: string | Record<string, unknown>; message?: never }
     | { valid: false; state?: never; message: string };
 
-type QuestionsValidationResult =
-    | { valid: true; questions: Record<string, DecisionQuestion>; message?: never }
-    | { valid: false; questions?: never; message: string };
-
 /** The validated inputs of one run, or the failure to return instead. */
 type InputsResult =
     | { state: string | Record<string, unknown>; questions: Record<string, DecisionQuestion>; promptName: string }
     | { failure: ActionResultSimple };
-
-type QuestionValidationResult =
-    | { valid: true; question: DecisionQuestion; message?: never }
-    | { valid: false; question?: never; message: string };
 
 /**
  * Action that exposes typed decision execution to AI agents, flows, and low-code workflows.
@@ -85,12 +77,12 @@ export class RunDecisionAction extends BaseAction {
         if (!state.valid) {
             return { failure: this.failure(RunDecisionResultCodes.MISSING_STATE, state.message) };
         }
-        const questions = this.parseAndValidateQuestions(this.getParamValue(params, "questions"));
-        if (!questions.valid) {
-            return { failure: this.failure(RunDecisionResultCodes.INVALID_QUESTIONS, questions.message) };
+        const questions = ParseDecisionQuestions(this.getParamValue(params, "questions"));
+        if (!questions.Valid) {
+            return { failure: this.failure(RunDecisionResultCodes.INVALID_QUESTIONS, questions.Message) };
         }
         const promptName = this.getStringParam(params, "decisionpromptname") || RunDecisionAction.DEFAULT_PROMPT_NAME;
-        return { state: state.state, questions: questions.questions, promptName };
+        return { state: state.state, questions: questions.Questions, promptName };
     }
 
     private buildDecisionParams(
@@ -139,118 +131,6 @@ export class RunDecisionAction extends BaseAction {
             return { valid: true, state: rawState };
         }
         return { valid: false, message: "State parameter must be a non-empty string or object" };
-    }
-
-    private parseAndValidateQuestions(rawQuestions: unknown): QuestionsValidationResult {
-        if (rawQuestions === undefined || rawQuestions === null) {
-            return { valid: false, message: "Questions parameter is required" };
-        }
-
-        let parsed: unknown = rawQuestions;
-        if (typeof rawQuestions === "string") {
-            const trimmed = rawQuestions.trim();
-            if (trimmed.length === 0) {
-                return { valid: false, message: "Questions string cannot be empty" };
-            }
-            try {
-                parsed = JSON.parse(trimmed);
-            } catch (err) {
-                return {
-                    valid: false,
-                    message: `Questions JSON parsing failed: ${err instanceof Error ? err.message : String(err)}`,
-                };
-            }
-        }
-
-        if (!this.isObject(parsed)) {
-            return { valid: false, message: "Questions must be an object" };
-        }
-
-        const entries = Object.entries(parsed);
-        if (entries.length === 0) {
-            return { valid: false, message: "Questions object must have at least one question" };
-        }
-
-        const questions: Record<string, DecisionQuestion> = {};
-        for (const [key, q] of entries) {
-            if (!key || typeof key !== "string" || key.trim().length === 0) {
-                return { valid: false, message: "Question keys must be non-empty strings" };
-            }
-            const qValidation = this.validateQuestion(key, q);
-            if (!qValidation.valid) {
-                return { valid: false, message: qValidation.message };
-            }
-            questions[key] = qValidation.question;
-        }
-
-        return { valid: true, questions };
-    }
-
-    private validateQuestion(key: string, q: unknown): QuestionValidationResult {
-        if (!this.isObject(q)) {
-            return { valid: false, message: `Question '${key}' must be an object` };
-        }
-
-        const kind = q["Kind"];
-        if (kind !== "Likelihood" && kind !== "Choice" && kind !== "Score") {
-            return { valid: false, message: `Question '${key}' must have a known Kind ('Likelihood', 'Choice', or 'Score')` };
-        }
-
-        const instructions = q["Instructions"];
-        if (typeof instructions !== "string" || instructions.trim().length === 0) {
-            return { valid: false, message: `Question '${key}' must have string Instructions` };
-        }
-
-        if (kind === "Likelihood") {
-            return {
-                valid: true,
-                question: {
-                    Kind: "Likelihood",
-                    Instructions: instructions,
-                },
-            };
-        }
-
-        if (kind === "Choice") {
-            const options = this.validateChoiceOptions(q["Options"]);
-            if (typeof options === "string") {
-                return { valid: false, message: `Question '${key}' ${options}` };
-            }
-            return { valid: true, question: { Kind: "Choice", Instructions: instructions, Options: options } };
-        }
-
-        const levels = q["Levels"];
-        if (!Array.isArray(levels)) {
-            return { valid: false, message: `Question '${key}' of Kind 'Score' must have a Levels array` };
-        }
-        for (const lvl of levels) {
-            if (typeof lvl !== "string") {
-                return { valid: false, message: `Question '${key}' Levels must be an array of strings` };
-            }
-        }
-        return {
-            valid: true,
-            question: {
-                Kind: "Score",
-                Instructions: instructions,
-                Levels: [...levels],
-            },
-        };
-    }
-
-    /** Returns the validated options, or the reason they are invalid. */
-    private validateChoiceOptions(options: unknown): ChoiceOption[] | string {
-        if (!Array.isArray(options)) {
-            return "of Kind 'Choice' must have an Options array";
-        }
-        const validated: ChoiceOption[] = [];
-        for (const opt of options) {
-            if (!this.isObject(opt) || typeof opt["Value"] !== "string" || typeof opt["Description"] !== "string") {
-                return "Options must contain objects with string Value and Description";
-            }
-            validated.push({ Value: opt["Value"], Description: opt["Description"] });
-        }
-        return validated;
     }
 
     private buildSummaryMessage(answers: Record<string, DecisionAnswer>): string {

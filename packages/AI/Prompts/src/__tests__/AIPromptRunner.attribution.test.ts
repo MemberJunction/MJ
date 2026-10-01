@@ -4,7 +4,7 @@
  * 1. Single prompt runs stamp AgentID and UserID (with contextUser fallback).
  * 2. Parallel execution planner / coordinator propagate AgentID and UserID to child execution tasks.
  * 3. Parallel child prompt runs and result-selector runs inherit AgentID and UserID.
- * 4. AIModelRunner stamps UserID on embedding/model run records.
+ * 4. The embedding runner (AIModelRunner delegates to AIEmbeddingRunner) stamps UserID on its run records.
  *
  * The agent RUN a prompt run belongs to is deliberately not stamped here: it is owned by the agent
  * layer (AIAgentRunStep.TargetLogID) and resolved at query time by vwAIUsageFacts.
@@ -84,8 +84,10 @@ vi.mock('@memberjunction/credentials', async (importOriginal) => {
 
 import { AIPromptRunner } from '../AIPromptRunner';
 import { ParallelExecutionCoordinator } from '../ParallelExecutionCoordinator';
-import { AIModelRunner, EmbeddingRunParams } from '../AIModelRunner';
-import { AIPromptParams, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { EmbeddingRunParams } from '../AIModelRunner';
+import { AIEmbeddingRunner } from '../embedding/AIEmbeddingRunner';
+import type { ModelVendorCandidate } from '../BaseModelRunner';
+import { AIPromptParams, MJAIPromptEntityExtended, type AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJGlobal } from '@memberjunction/global';
 import { TestLLM } from '@memberjunction/unit-testing';
@@ -289,49 +291,43 @@ describe('Spec §6 — AIPromptRunner Attribution Writers', () => {
   });
 });
 
-describe('Spec §6 — AIModelRunner Attribution Writers', () => {
-  let modelRunner: AIModelRunner;
+describe('Spec §6 — embedding run attribution', () => {
+  // AIModelRunner.RunEmbedding delegates to AIEmbeddingRunner, whose run row is written by
+  // BaseModelRunner.CreateRunRecord; that is where the user attribution is stamped.
   const testUser: UserInfo = { ID: 'user-embedding-1', Name: 'Embedding User', UserRoles: [] } as unknown as UserInfo;
+
+  type EmbeddingRunnerPrivates = {
+    createEmbeddingRunRecord(
+      prompt: MJAIPromptEntityExtended,
+      selected: ModelVendorCandidate,
+      promptParams: AIPromptParams,
+      params: EmbeddingRunParams,
+      startTime: Date,
+      selectionInfo: AIModelSelectionInfo
+    ): Promise<FakePromptRun | null>;
+  };
 
   beforeEach(() => {
     vi.restoreAllMocks();
     prSeq = 0;
     createdPromptRuns.length = 0;
-    modelRunner = new AIModelRunner();
-    modelRunner.Provider = fakeProvider as never;
   });
 
-  it('stamps UserID on model/embedding run record', async () => {
-    const params: EmbeddingRunParams = {
-      Texts: ['text to embed'],
-      ContextUser: testUser,
-      ModelID: 'model-embed-1',
-    };
+  it('stamps the context user as UserID on the embedding run record', async () => {
+    const runner = new AIEmbeddingRunner();
+    const params: EmbeddingRunParams = { Texts: ['text to embed'], ContextUser: testUser, ModelID: 'model-embed-1' };
+    const promptParams = new AIPromptParams();
+    promptParams.contextUser = testUser;
+    promptParams.provider = fakeProvider as unknown as AIPromptParams['provider'];
+    const prompt = { ID: 'prompt-embed-1', Name: 'Embed' } as unknown as MJAIPromptEntityExtended;
+    const selected = { model: { ID: 'model-embed-1', Name: 'Embed Model' }, vendorId: 'vendor-embed-2', driverClass: 'TestEmbeddings', isPreferredVendor: false, priority: 1, source: 'explicit' } as unknown as ModelVendorCandidate;
+    const selectionInfo = { modelsConsidered: [], selectionReason: 'test', fallbackUsed: false } as unknown as AIModelSelectionInfo;
 
-    type ModelRunnerPrivates = {
-      createRunRecord(prompt: unknown, modelID: string, vendorID: string, params: EmbeddingRunParams, startTime: number): Promise<FakePromptRun>;
-    };
-    const priv = modelRunner as unknown as ModelRunnerPrivates;
+    const priv = runner as unknown as EmbeddingRunnerPrivates;
+    const runRecord = await priv.createEmbeddingRunRecord(prompt, selected, promptParams, params, new Date(), selectionInfo);
 
-    const runRecord = await priv.createRunRecord(null, 'model-embed-1', 'vendor-embed-2', params, Date.now());
     expect(runRecord).toBeDefined();
-    expect(runRecord.UserID).toBe('user-embedding-1');
-  });
-
-  it('falls back to contextUser.ID for UserID when not supplied', async () => {
-    const params: EmbeddingRunParams = {
-      Texts: ['text to embed'],
-      ContextUser: testUser,
-      ModelID: 'model-embed-1',
-    };
-
-    type ModelRunnerPrivates = {
-      createRunRecord(prompt: unknown, modelID: string, vendorID: string, params: EmbeddingRunParams, startTime: number): Promise<FakePromptRun>;
-    };
-    const priv = modelRunner as unknown as ModelRunnerPrivates;
-
-    const runRecord = await priv.createRunRecord(null, 'model-embed-1', 'vendor-embed-2', params, Date.now());
-    expect(runRecord).toBeDefined();
-    expect(runRecord.UserID).toBe('user-embedding-1');
+    expect(runRecord?.UserID).toBe('user-embedding-1');
+    expect(runRecord?.ModelID).toBe('model-embed-1');
   });
 });
