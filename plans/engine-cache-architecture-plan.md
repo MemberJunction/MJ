@@ -3179,3 +3179,49 @@ new recurring query, which is what §26 just removed; the entities involved are 
 the §26 gate would make it dead on arrival; and the declared paths (`mj sync push`, `mj cache clear`,
 any `BaseEntity` write) already notify. The real gap is that hand-editing metadata in SSMS looks like
 it works and does not — which is documentation, now written.
+
+## 30. A metadata sweep, gated the same way (2026-10-01)
+
+§29 closed by arguing against a metadata sweeper. The owner asked for one anyway, gated by
+`TrustServerCacheCompletely` exactly as the engine sweep is — and that reframing is what makes it
+right, because it removes the objection rather than accepting it.
+
+**The objection was cost, and the gate removes it.** Measured on `mj_test_2`: the MJ_Metadata dataset
+has **31 member entities, and 0 of them declare drift**. The twelve entities that do are all log and
+audit tables (`MJ: Record Changes`, `MJ: Error Logs`, `MJ: User Record Logs`, …), none of which are
+metadata. So on a stock installation the sweep issues no database query and takes no Redis lease — it
+ticks, makes one in-memory pass over a 31-entry set, and stops. It becomes active only when an
+operator marks a metadata entity, which is the declaration "I write this table directly".
+
+That is the opposite of what I argued in §29. The argument there was "a new recurring query"; with
+the gate there is no recurring query until someone asks for one.
+
+**What it closes.** Metadata staleness was entirely event-driven: a `BaseEntity` write to a member
+entity, a peer's snapshot notice, a CLI clear, or boot. None fire for raw SQL, so metadata edited in
+SSMS was never noticed by a running process — the trap §28 hit and §29 documented. Now it is a
+declaration away from being handled.
+
+**Implementation, reusing what already existed.**
+- `ProviderBase.MetadataMembersDeclaringDrift()` — public, reads `TrustServerCacheCompletely` for each
+  entity in `_metadataDatasetEntityNames`, the membership set `registerMetadataDatasetMembership`
+  already maintains from the loaded dataset.
+- `ProviderBase.SweepMetadataAgainstDatabase()` — returns `{ Declared, Checked, Refreshed }`; when
+  nothing is declared it returns without touching the database, otherwise it calls `RefreshIfNeeded`
+  with the throttle bypassed (the sweep interval *is* the throttle, and the caller holds positive
+  evidence).
+- `MJServer.StartMetadataSweep(settings, provider)` — `cacheSettings.metadataSweepIntervalSeconds`,
+  default 300, 0 disables; replaces its own timer rather than stacking. It checks the declaration
+  **before** taking the lease, so a stock installation costs no Redis round trip either — which is
+  also the fix for the lease churn noted in §28, applied here from the start.
+
+**Tests.** Three in MJServer, one of them a regression pin verified by removing the gate
+(`expected "spy" to not be called at all, but actually been called 3 times` across three intervals):
+the interval is returned and 0 disables; nothing is asked of the provider when no entity declares
+drift; the sweep runs when one does.
+
+Verified: full build 0 TS errors; MJCore 2,873; MJServer 1,411; GenericDatabaseProvider 1,193;
+`check:naming` 0 errors.
+
+**Still outstanding from §28:** the *engine* sweeper still takes its ~21 leases before discovering it
+has nothing to sweep. The metadata sweep now shows the shape of the fix — check the declaration first,
+then take the lease — and the same change belongs in `BaseEngineSweeper.SweepOnce`.

@@ -2,7 +2,7 @@
  * Routing of shared-cache events in MJAPI (plan F11): metadata notices trigger a metadata check,
  * everything reaches LocalCacheManager, and only RunView slot changes reach browsers.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { CacheChangedEvent, ProviderBase } from '@memberjunction/core';
 
 const dispatch = vi.fn();
@@ -14,8 +14,13 @@ const userCacheInterval: number[] = [];
 
 vi.mock('@memberjunction/core', () => ({
     CacheCategory: { RunViewCache: 'RunViewCache', RunQueryCache: 'RunQueryCache', DatasetCache: 'DatasetCache', Metadata: 'Metadata', Default: 'default' },
-    LocalCacheManager: { Instance: { DispatchCacheChange: (e: CacheChangedEvent) => dispatch(e) } },
+    LocalCacheManager: { Instance: {
+        DispatchCacheChange: (e: CacheChangedEvent) => dispatch(e),
+        // The metadata sweep takes a fleet lease before doing any work; grant it in tests.
+        TryAcquireSharedLease: vi.fn(async () => true),
+    } },
     LogStatusEx: vi.fn(),
+    LogError: vi.fn(),
     BaseEngineSweeper: { Instance: { Start: (ms: number) => startSweeper(ms) } },
 }));
 vi.mock('@memberjunction/redis-provider', () => ({ RedisLocalStorageProvider: vi.fn(function (this: Record<string, unknown>, cfg: unknown) { this.cfg = cfg; }) }));
@@ -29,6 +34,7 @@ import {
     CacheManagerConfigFromSettings, CreateSharedCacheFromEnvironment, MJAPI_PUBLISH_MODES, ResolveSharedCacheTTLSeconds, RouteSharedCacheEvent,
     StartEngineSweeper,
     StartUserCacheChecks,
+    StartMetadataSweep,
 } from '../sharedCache.js';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import type { CacheSettingsConfig } from '../config.js';
@@ -126,5 +132,57 @@ describe('shared cache configuration', () => {
         expect(StartUserCacheChecks(undefined)).toBe(300_000);
         expect(StartUserCacheChecks(settings({ userCacheCheckIntervalSeconds: 0 }))).toBe(0);
         expect(userCacheInterval).toEqual([60_000, 300_000, 0]);
+    });
+});
+
+/**
+ * The metadata sweep is the backstop for metadata written outside MJ — and nothing else.
+ *
+ * Metadata staleness is otherwise event-driven: a `BaseEntity` write to a member entity schedules a
+ * refresh, a peer's snapshot write publishes a notice, a CLI write clears the cache. None of those
+ * fire for raw SQL, so metadata edited directly in the database is never noticed by a running
+ * process.
+ *
+ * It must not become an unconditional poll. A recurring query prevents a serverless database from
+ * pausing, and `TrustServerCacheCompletely = true` (every MJ entity, by default) states that the
+ * event paths already cover the entity — so there is nothing a query could find.
+ */
+describe('StartMetadataSweep', () => {
+    afterEach(() => {
+        StartMetadataSweep(settings({ metadataSweepIntervalSeconds: 0 }), () => undefined);
+        vi.useRealTimers();
+    });
+
+    it('returns the configured interval, and 0 disables it', () => {
+        expect(StartMetadataSweep(settings({ metadataSweepIntervalSeconds: 45 }), () => undefined)).toBe(45_000);
+        expect(StartMetadataSweep(settings({ metadataSweepIntervalSeconds: 0 }), () => undefined)).toBe(0);
+    });
+
+    it('asks the provider NOTHING when no metadata entity declares drift', async () => {
+        vi.useFakeTimers();
+        const sweep = vi.fn();
+        const provider = {
+            MetadataMembersDeclaringDrift: () => [],
+            SweepMetadataAgainstDatabase: sweep,
+        } as unknown as ProviderBase;
+
+        StartMetadataSweep(settings({ metadataSweepIntervalSeconds: 10 }), () => provider);
+        await vi.advanceTimersByTimeAsync(10_000 * 3 + 100);
+
+        expect(sweep).not.toHaveBeenCalled();
+    });
+
+    it('sweeps when a metadata entity declares drift', async () => {
+        vi.useFakeTimers();
+        const sweep = vi.fn().mockResolvedValue({ Declared: ['MJ: Entities'], Checked: true, Refreshed: true });
+        const provider = {
+            MetadataMembersDeclaringDrift: () => ['MJ: Entities'],
+            SweepMetadataAgainstDatabase: sweep,
+        } as unknown as ProviderBase;
+
+        StartMetadataSweep(settings({ metadataSweepIntervalSeconds: 10 }), () => provider);
+        await vi.advanceTimersByTimeAsync(10_000 + 100);
+
+        expect(sweep).toHaveBeenCalled();
     });
 });

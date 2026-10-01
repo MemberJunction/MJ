@@ -2429,9 +2429,19 @@ entity:
   live servers: after a raw SQL flag change the sweep ignored the entity across several intervals,
   and swept it ~12 s after the snapshot was dropped.
 
-  There is **no periodic metadata poller** to fall back on — metadata staleness is checked on a peer
-  notice, on a `BaseEntity` write to a member entity, or at boot, never on a timer. So a metadata
-  change made outside MJ is not picked up at all until one of those happens.
+  **The metadata sweep is the same idea, one level up** (`cacheSettings.metadataSweepIntervalSeconds`,
+  default 300 s, 0 disables). Metadata staleness is otherwise event-driven — a `BaseEntity` write to
+  one of the entities the metadata is built from, a peer's snapshot notice, or a CLI clear — and none
+  of those fire for raw SQL, so metadata edited directly in the database is never noticed by a running
+  process. The sweep covers exactly that case, and only that case: it reads the database **only when a
+  metadata member entity declares `TrustServerCacheCompletely = false`**. On a stock installation none
+  do (all 31 members are trusted), so the timer ticks, costs one in-memory pass, and issues neither a
+  query nor a Redis round trip. One process per interval does the work, via a shared lease, because a
+  process that refreshes publishes a notice the others act on.
+
+  So if you write metadata tables directly — `__mj.Entity`, `__mj.EntityField` and so on — mark those
+  entities as untrusted and the sweep will keep every server converged. If you do not, it stays
+  dormant.
 
   **The user cache's periodic reload is gated the same way** (`UserCache`'s auto-refresh, fed by
   `databaseSettings.metadataCacheRefreshInterval`, default 180 s). It used to reload every user and

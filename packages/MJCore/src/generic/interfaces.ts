@@ -1954,6 +1954,16 @@ export type DatasetStatusResultType = {
     EntityUpdateDates: DatasetStatusEntityUpdateDateType[];
  }
 
+/** What `ProviderBase.SweepMetadataAgainstDatabase` found and did. */
+export type MetadataSweepResult = {
+    /** Metadata member entities that declare they can change without firing an event. */
+    Declared: string[];
+    /** Whether the database was consulted at all (false when nothing declared drift). */
+    Checked: boolean;
+    /** Whether metadata was actually reloaded. */
+    Refreshed: boolean;
+};
+
 /**
  * Update date information for a single entity within a dataset.
  * Tracks when each entity's data was last modified.
