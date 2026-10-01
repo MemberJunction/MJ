@@ -8,7 +8,7 @@ import { PendingRecordItem } from '@memberjunction/ng-base-types';
  * creates with the same client-generated ID, a primary-key violation. The first occurrence wins,
  * keeping its action.
  */
-export function dedupePendingRecordsByEntity(records: readonly PendingRecordItem[]): PendingRecordItem[] {
+export function DedupePendingRecordsByEntity(records: readonly PendingRecordItem[]): PendingRecordItem[] {
     const seen = new Set<object>();
     const unique: PendingRecordItem[] = [];
     for (const record of records) {

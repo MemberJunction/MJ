@@ -44,7 +44,7 @@ function getReactDOMFallbackUrl(debug: boolean = false): string {
  * Get the core runtime libraries configuration
  * @param debug Whether to use development builds for better error messages
  */
-export function getCoreRuntimeLibraries(debug: boolean = false): ExternalLibraryConfig[] {
+export function GetCoreRuntimeLibraries(debug: boolean = false): ExternalLibraryConfig[] {
   return [
     {
       id: 'react',
@@ -91,10 +91,20 @@ export function getCoreRuntimeLibraries(debug: boolean = false): ExternalLibrary
   ];
 }
 
+/** @deprecated Use {@link GetCoreRuntimeLibraries}. */
+export function getCoreRuntimeLibraries(debug: boolean = false): ExternalLibraryConfig[] {
+  return GetCoreRuntimeLibraries(debug);
+}
+
 /**
  * Check if a library ID is a core runtime library
  */
-export function isCoreRuntimeLibrary(libraryId: string): boolean {
-  const coreLibraries = getCoreRuntimeLibraries();
+export function IsCoreRuntimeLibrary(libraryId: string): boolean {
+  const coreLibraries = GetCoreRuntimeLibraries();
   return coreLibraries.some((lib: ExternalLibraryConfig) => lib.id === libraryId);
+}
+
+/** @deprecated Use {@link IsCoreRuntimeLibrary}. */
+export function isCoreRuntimeLibrary(libraryId: string): boolean {
+  return IsCoreRuntimeLibrary(libraryId);
 }

@@ -1,0 +1,64 @@
+[
+  {
+    "fields": {
+      "Name": "LLM Decision",
+      "Description": "Answers typed decision questions (Likelihood, Choice, Score) about a state with a fast chat model, for the LLMDecision driver of BaseDecision. Returns one JSON object of probabilities and no prose. The template variables are state, questions and outputFormat.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/system/llm-decision.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Lowest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "@file:output/system/llm-decision.example.json",
+      "ValidationBehavior": "None",
+      "MaxRetries": 1,
+      "RetryDelayMS": 500,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "D169CAB3-80EB-4E77-BBC4-503EC27FB607"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 5
+          },
+          "primaryKey": {
+            "ID": "7FE4CD71-5756-4FDF-8771-D8E6E3DC186B"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5.5 Instant",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "E47635E8-44D8-4EFB-9387-74E890A45E07"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "8BF4E860-C309-4F38-BBFA-73B45DC64380"
+    }
+  }
+]

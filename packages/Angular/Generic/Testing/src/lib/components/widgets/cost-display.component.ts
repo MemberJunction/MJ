@@ -68,13 +68,58 @@ import { Component, Input } from '@angular/core';
   `]
 })
 export class CostDisplayComponent {
-  @Input() cost!: number;
-  @Input() showIcon = true;
-  @Input() label?: string;
-  @Input() decimals = 6;
-  @Input() threshold = { low: 0.01, high: 1.0 }; // Default thresholds in USD
+  @Input() Cost!: number;
 
-  formatCost(cost: number): string {
+  /** @deprecated Use {@link Cost}. */
+  @Input() set cost(value: number) {
+    this.Cost = value;
+  }
+  /** @deprecated Use {@link Cost}. */
+  get cost(): number {
+    return this.Cost;
+  }
+  @Input() ShowIcon = true;
+
+  /** @deprecated Use {@link ShowIcon}. */
+  @Input() set showIcon(value: CostDisplayComponent['ShowIcon']) {
+    this.ShowIcon = value;
+  }
+  /** @deprecated Use {@link ShowIcon}. */
+  get showIcon(): CostDisplayComponent['ShowIcon'] {
+    return this.ShowIcon;
+  }
+  @Input() Label?: string;
+
+  /** @deprecated Use {@link Label}. */
+  @Input() set label(value: string | undefined) {
+    this.Label = value;
+  }
+  /** @deprecated Use {@link Label}. */
+  get label(): string | undefined {
+    return this.Label;
+  }
+  @Input() Decimals = 6;
+
+  /** @deprecated Use {@link Decimals}. */
+  @Input() set decimals(value: CostDisplayComponent['Decimals']) {
+    this.Decimals = value;
+  }
+  /** @deprecated Use {@link Decimals}. */
+  get decimals(): CostDisplayComponent['Decimals'] {
+    return this.Decimals;
+  }
+  @Input() Threshold = { low: 0.01, high: 1.0 };
+
+  /** @deprecated Use {@link Threshold}. */
+  @Input() set threshold(value: CostDisplayComponent['Threshold']) {
+    this.Threshold = value;
+  }
+  /** @deprecated Use {@link Threshold}. */
+  get threshold(): CostDisplayComponent['Threshold'] {
+    return this.Threshold;
+  } // Default thresholds in USD
+
+  FormatCost(cost: number): string {
     if (cost == null) return '$0.00';
 
     // Format based on magnitude
@@ -85,14 +130,24 @@ export class CostDisplayComponent {
     } else if (cost >= 0.01) {
       return `$${cost.toFixed(4)}`;
     } else {
-      return `$${cost.toFixed(this.decimals)}`;
+      return `$${cost.toFixed(this.Decimals)}`;
     }
   }
 
-  getMagnitudeClass(): string {
-    if (this.cost < this.threshold.low) return 'cost-display--low';
-    if (this.cost >= this.threshold.high) return 'cost-display--high';
-    if (this.cost >= this.threshold.low && this.cost < this.threshold.high) return 'cost-display--medium';
+  /** @deprecated Use {@link FormatCost}. */
+  formatCost(cost: number): string {
+    return this.FormatCost(cost);
+  }
+
+  GetMagnitudeClass(): string {
+    if (this.Cost < this.Threshold.low) return 'cost-display--low';
+    if (this.Cost >= this.Threshold.high) return 'cost-display--high';
+    if (this.Cost >= this.Threshold.low && this.Cost < this.Threshold.high) return 'cost-display--medium';
     return 'cost-display--normal';
+  }
+
+  /** @deprecated Use {@link GetMagnitudeClass}. */
+  getMagnitudeClass(): string {
+    return this.GetMagnitudeClass();
   }
 }

@@ -169,7 +169,7 @@ interface SentMessageShape {
 }
 
 function setupProviderMetadata(engine: CommunicationEngine): void {
-    ((engine as unknown as { Base: Record<string, unknown> }).Base)['_Metadata'] = {
+    ((engine as unknown as { base: Record<string, unknown> }).base)['_Metadata'] = {
         Providers: [{
             Name: 'P',
             MessageTypes: [{ Name: 'T', ID: 'pmt-1', CommunicationProviderID: 'prov-1' }],
@@ -187,7 +187,7 @@ describe('CommunicationEngine DryRun threading', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         engine = new CommunicationEngine();
-        (engine as unknown as { Base: { Loaded: boolean } }).Base.Loaded = true;
+        (engine as unknown as { base: { Loaded: boolean } }).base.Loaded = true;
         (engine as Record<string, unknown>)['ContextUser'] = { ID: 'test-user-id', Name: 'Test' };
     });
 
@@ -201,7 +201,7 @@ describe('CommunicationEngine DryRun threading', () => {
         vi.spyOn(engine, 'GetProvider').mockReturnValue({ SendSingleMessage: providerSend, constructor: { name: 'TestProvider' } } as never);
         setupProviderMetadata(engine);
         vi.spyOn(ProcessedMessageServer.prototype, 'Process').mockResolvedValue({ Success: true });
-        const startLogSpy = vi.spyOn((engine as unknown as { Base: object }).Base as never, 'StartLog' as never);
+        const startLogSpy = vi.spyOn((engine as unknown as { base: object }).base as never, 'StartLog' as never);
 
         const message = { To: 'test@test.com', Body: 'Hello', Subject: 'Test', MessageType: null, DryRun: true };
         const result = await engine.SendSingleMessage('P', 'T', message as never);
@@ -223,8 +223,8 @@ describe('CommunicationEngine DryRun threading', () => {
             set Status(_v: string) {},
             set EndedAt(_v: Date) {},
         };
-        vi.spyOn((engine as unknown as { Base: object }).Base as never, 'StartRun' as never).mockResolvedValue(mockRun as never);
-        vi.spyOn((engine as unknown as { Base: object }).Base as never, 'EndRun' as never).mockResolvedValue(true as never);
+        vi.spyOn((engine as unknown as { base: object }).base as never, 'StartRun' as never).mockResolvedValue(mockRun as never);
+        vi.spyOn((engine as unknown as { base: object }).base as never, 'EndRun' as never).mockResolvedValue(true as never);
 
         const sendSpy = vi.spyOn(engine, 'SendSingleMessage').mockImplementation(async (_p, _t, m) => ({
             Success: true,
@@ -254,7 +254,7 @@ describe('CommunicationEngine DryRun threading', () => {
         vi.spyOn(engine, 'GetProvider').mockReturnValue({ SendSingleMessage: providerSend, constructor: { name: 'TestProvider' } } as never);
         setupProviderMetadata(engine);
         vi.spyOn(ProcessedMessageServer.prototype, 'Process').mockResolvedValue({ Success: true });
-        const startLogSpy = vi.spyOn((engine as unknown as { Base: object }).Base as never, 'StartLog' as never);
+        const startLogSpy = vi.spyOn((engine as unknown as { base: object }).base as never, 'StartLog' as never);
 
         const message = { To: 'test@test.com', Body: 'Hello', Subject: 'Test', MessageType: null };
         const result = await engine.SendSingleMessage('P', 'T', message as never, undefined, true);

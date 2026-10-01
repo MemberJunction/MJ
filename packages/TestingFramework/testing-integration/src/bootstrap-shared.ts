@@ -56,16 +56,36 @@ let currentServerBootstrap: IntegrationBootstrapContext | null = null;
 let currentClientBootstrap: IntegrationClientContext | null = null;
 
 /** @internal Setters used by the server/client bootstrap modules to publish process state. */
-export function _setActiveStorage(s: InstrumentedLocalStorageProvider): void { activeStorage = s; }
-export function _setCurrentServerBootstrap(c: IntegrationBootstrapContext): void { currentServerBootstrap = c; }
-export function _setCurrentClientBootstrap(c: IntegrationClientContext): void { currentClientBootstrap = c; }
+export function SetActiveStorage(s: InstrumentedLocalStorageProvider): void { activeStorage = s; }
+
+/** @deprecated Use {@link SetActiveStorage}. */
+export function _setActiveStorage(s: InstrumentedLocalStorageProvider): void {
+    return SetActiveStorage(s);
+}
+export function SetCurrentServerBootstrap(c: IntegrationBootstrapContext): void { currentServerBootstrap = c; }
+
+/** @deprecated Use {@link SetCurrentServerBootstrap}. */
+export function _setCurrentServerBootstrap(c: IntegrationBootstrapContext): void {
+    return SetCurrentServerBootstrap(c);
+}
+export function SetCurrentClientBootstrap(c: IntegrationClientContext): void { currentClientBootstrap = c; }
+
+/** @deprecated Use {@link SetCurrentClientBootstrap}. */
+export function _setCurrentClientBootstrap(c: IntegrationClientContext): void {
+    return SetCurrentClientBootstrap(c);
+}
 
 /**
  * The instrumented storage installed in this process (by any path), or null if none.
  * The IntegrationTestDriver reads this to get the cache counters without re-bootstrapping.
  */
-export function getActiveIntegrationStorage(): InstrumentedLocalStorageProvider | null {
+export function GetActiveIntegrationStorage(): InstrumentedLocalStorageProvider | null {
     return activeStorage;
+}
+
+/** @deprecated Use {@link GetActiveIntegrationStorage}. */
+export function getActiveIntegrationStorage(): InstrumentedLocalStorageProvider | null {
+    return GetActiveIntegrationStorage();
 }
 
 /**
@@ -75,18 +95,33 @@ export function getActiveIntegrationStorage(): InstrumentedLocalStorageProvider 
  * under which `bootstrapIntegrationServer()` would throw `assertOwnsProcess` — exposed so
  * the driver can fail fast with a dashboard-friendly message instead of a bootstrap stack.
  */
-export function serverProcessAlreadyClaimed(): boolean {
+export function ServerProcessAlreadyClaimed(): boolean {
     return !activeStorage && LocalCacheManager.Instance.IsInitialized;
 }
 
+/** @deprecated Use {@link ServerProcessAlreadyClaimed}. */
+export function serverProcessAlreadyClaimed(): boolean {
+    return ServerProcessAlreadyClaimed();
+}
+
 /** The full server bootstrap context (with owned Pool), or null if not server-bootstrapped. */
-export function getActiveIntegrationBootstrap(): IntegrationBootstrapContext | null {
+export function GetActiveIntegrationBootstrap(): IntegrationBootstrapContext | null {
     return currentServerBootstrap;
 }
 
+/** @deprecated Use {@link GetActiveIntegrationBootstrap}. */
+export function getActiveIntegrationBootstrap(): IntegrationBootstrapContext | null {
+    return GetActiveIntegrationBootstrap();
+}
+
 /** The client (GraphQL) bootstrap context, or null if not client-bootstrapped in this process. */
-export function getActiveIntegrationClientBootstrap(): IntegrationClientContext | null {
+export function GetActiveIntegrationClientBootstrap(): IntegrationClientContext | null {
     return currentClientBootstrap;
+}
+
+/** @deprecated Use {@link GetActiveIntegrationClientBootstrap}. */
+export function getActiveIntegrationClientBootstrap(): IntegrationClientContext | null {
+    return GetActiveIntegrationClientBootstrap();
 }
 
 /**
@@ -94,7 +129,7 @@ export function getActiveIntegrationClientBootstrap(): IntegrationClientContext 
  * provider state is mutated. Used by both the driver (via bootstrapIntegrationClient)
  * and the tsx scripts so they preflight identically.
  */
-export async function preflightMJAPI(url: string, apiKey: string): Promise<void> {
+export async function PreflightMJAPI(url: string, apiKey: string): Promise<void> {
     let response: Response;
     try {
         response = await fetch(url, {
@@ -114,12 +149,17 @@ export async function preflightMJAPI(url: string, apiKey: string): Promise<void>
     }
 }
 
+/** @deprecated Use {@link PreflightMJAPI}. */
+export async function preflightMJAPI(url: string, apiKey: string): Promise<void> {
+    return PreflightMJAPI(url, apiKey);
+}
+
 /**
  * Refuse to run an owning bootstrap when the cache is already initialized by some
  * other component. SetStorageProvider is a destructive global mutation with no
  * restore, so we never wedge instrumentation into a live host — we fail loudly.
  */
-export function assertOwnsProcess(): void {
+export function AssertOwnsProcess(): void {
     if (LocalCacheManager.Instance.IsInitialized) {
         throw new Error(
             'Integration bootstrap must own its process — LocalCacheManager is already initialized by another component. ' +
@@ -128,6 +168,11 @@ export function assertOwnsProcess(): void {
             'co-host the integration test inside a serving MJAPI.'
         );
     }
+}
+
+/** @deprecated Use {@link AssertOwnsProcess}. */
+export function assertOwnsProcess(): void {
+    return AssertOwnsProcess();
 }
 
 /**
@@ -140,7 +185,7 @@ export function assertOwnsProcess(): void {
  * by something else (can't instrument retroactively — the caller decides whether to
  * proceed uninstrumented or abort).
  */
-export async function installInstrumentedCacheFirst(opts: { VerboseCacheLogging?: boolean } = {}): Promise<InstrumentedLocalStorageProvider | null> {
+export async function InstallInstrumentedCacheFirst(opts: { VerboseCacheLogging?: boolean } = {}): Promise<InstrumentedLocalStorageProvider | null> {
     if (activeStorage) {
         return activeStorage;
     }
@@ -151,4 +196,9 @@ export async function installInstrumentedCacheFirst(opts: { VerboseCacheLogging?
     await LocalCacheManager.Instance.Initialize(storage, { verboseLogging: opts.VerboseCacheLogging ?? false });
     activeStorage = storage;
     return storage;
+}
+
+/** @deprecated Use {@link InstallInstrumentedCacheFirst}. */
+export async function installInstrumentedCacheFirst(opts: { VerboseCacheLogging?: boolean } = {}): Promise<InstrumentedLocalStorageProvider | null> {
+    return InstallInstrumentedCacheFirst(opts);
 }

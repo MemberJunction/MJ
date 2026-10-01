@@ -23,6 +23,8 @@ export async function VectorizeEntity(): Promise<void> {
   TemplateEngineServer.Instance.SetupNunjucks();
   const startTime = Date.now();
 
+  // Not AIEmbeddingRunner: this runs in an isolated worker thread with no MJ metadata or AIEngine, so
+  // it can only use the driver class and key its context carries. The main thread uses the runner.
   const embedding: BaseEmbeddings = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(BaseEmbeddings, context.embeddingDriverClass, context.embeddingAPIKey);
   const processedBatch: string[] = [];
   const failedRecords: { RecordID: string; Message: string }[] = [];

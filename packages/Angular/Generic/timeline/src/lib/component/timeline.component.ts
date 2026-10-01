@@ -152,10 +152,10 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
    * Each group defines a data source and display configuration.
    */
   @Input()
-  get groups(): TimelineGroup<T>[] {
+  get Groups(): TimelineGroup<T>[] {
     return this._groups;
   }
-  set groups(value: TimelineGroup<T>[]) {
+  set Groups(value: TimelineGroup<T>[]) {
     const prevGroups = this._groups;
     this._groups = value || [];
     const hasGroups = this._groups.length > 0;
@@ -169,15 +169,24 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
     // so ngAfterViewInit's real refresh would be skipped and the timeline would show "No events"
     // until something forced a re-refresh (e.g. changing the date field). Only refresh from the setter
     // once the view is ready.
-    if (this.allowLoad && hasGroups && this._viewReady) {
+    if (this.AllowLoad && hasGroups && this._viewReady) {
       if (!this._hasLoaded) {
         // First load
-        this.refresh();
+        this.Refresh();
       } else if (groupsChanged) {
         // Groups changed after initial load - force refresh
-        this.refresh(true);
+        this.Refresh(true);
       }
     }
+  }
+
+  /** @deprecated Use {@link Groups}. */
+  get groups(): TimelineGroup<T>[] {
+    return this.Groups;
+  }
+  /** @deprecated Use {@link Groups}. */
+  @Input() set groups(value: TimelineGroup<T>[]) {
+    this.Groups = value;
   }
   private _groups: TimelineGroup<T>[] = [];
   /** True once ngAfterViewInit has run — the view is ready to render refreshed events. */
@@ -206,16 +215,25 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
    * @default true
    */
   @Input()
-  get allowLoad(): boolean {
+  get AllowLoad(): boolean {
     return this._allowLoad;
   }
-  set allowLoad(value: boolean) {
+  set AllowLoad(value: boolean) {
     const wasDisabled = !this._allowLoad;
     this._allowLoad = value;
     // When allowLoad becomes true and we have groups, trigger refresh
     if (value && wasDisabled && this._groups.length > 0) {
-      this.refresh(this._hasLoaded);
+      this.Refresh(this._hasLoaded);
     }
+  }
+
+  /** @deprecated Use {@link AllowLoad}. */
+  get allowLoad(): boolean {
+    return this.AllowLoad;
+  }
+  /** @deprecated Use {@link AllowLoad}. */
+  @Input() set allowLoad(value: boolean) {
+    this.AllowLoad = value;
   }
   private _allowLoad = true;
 
@@ -230,14 +248,23 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
    * @default 'vertical'
    */
   @Input()
-  get orientation(): TimelineOrientation {
+  get Orientation(): TimelineOrientation {
     return this._orientation;
   }
-  set orientation(value: TimelineOrientation) {
+  set Orientation(value: TimelineOrientation) {
     if (this._orientation !== value) {
       this._orientation = value;
       this.cdr.markForCheck();
     }
+  }
+
+  /** @deprecated Use {@link Orientation}. */
+  get orientation(): TimelineOrientation {
+    return this.Orientation;
+  }
+  /** @deprecated Use {@link Orientation}. */
+  @Input() set orientation(value: TimelineOrientation) {
+    this.Orientation = value;
   }
   private _orientation: TimelineOrientation = 'vertical';
 
@@ -248,14 +275,23 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
    * @default 'single'
    */
   @Input()
-  get layout(): TimelineLayout {
+  get Layout(): TimelineLayout {
     return this._layout;
   }
-  set layout(value: TimelineLayout) {
+  set Layout(value: TimelineLayout) {
     if (this._layout !== value) {
       this._layout = value;
       this.cdr.markForCheck();
     }
+  }
+
+  /** @deprecated Use {@link Layout}. */
+  get layout(): TimelineLayout {
+    return this.Layout;
+  }
+  /** @deprecated Use {@link Layout}. */
+  @Input() set layout(value: TimelineLayout) {
+    this.Layout = value;
   }
   private _layout: TimelineLayout = 'single';
 
@@ -266,18 +302,27 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
    * @default 'desc'
    */
   @Input()
-  get sortOrder(): TimelineSortOrder {
+  get SortOrder(): TimelineSortOrder {
     return this._sortOrder;
   }
-  set sortOrder(value: TimelineSortOrder) {
+  set SortOrder(value: TimelineSortOrder) {
     if (this._sortOrder !== value) {
       this._sortOrder = value;
       // Re-process events when sort order changes - force refresh since data already loaded
       if (this._initialized) {
-        this.refresh(true);
+        this.Refresh(true);
       }
       this.cdr.markForCheck();
     }
+  }
+
+  /** @deprecated Use {@link SortOrder}. */
+  get sortOrder(): TimelineSortOrder {
+    return this.SortOrder;
+  }
+  /** @deprecated Use {@link SortOrder}. */
+  @Input() set sortOrder(value: TimelineSortOrder) {
+    this.SortOrder = value;
   }
   private _sortOrder: TimelineSortOrder = 'desc';
 
@@ -286,18 +331,27 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
    * @default 'month'
    */
   @Input()
-  get segmentGrouping(): TimeSegmentGrouping {
+  get SegmentGrouping(): TimeSegmentGrouping {
     return this._segmentGrouping;
   }
-  set segmentGrouping(value: TimeSegmentGrouping) {
+  set SegmentGrouping(value: TimeSegmentGrouping) {
     if (this._segmentGrouping !== value) {
       this._segmentGrouping = value;
       // Re-segment events when grouping changes - force refresh since data already loaded
       if (this._initialized) {
-        this.refresh(true);
+        this.Refresh(true);
       }
       this.cdr.markForCheck();
     }
+  }
+
+  /** @deprecated Use {@link SegmentGrouping}. */
+  get segmentGrouping(): TimeSegmentGrouping {
+    return this.SegmentGrouping;
+  }
+  /** @deprecated Use {@link SegmentGrouping}. */
+  @Input() set segmentGrouping(value: TimeSegmentGrouping) {
+    this.SegmentGrouping = value;
   }
   private _segmentGrouping: TimeSegmentGrouping = 'month';
 
@@ -309,7 +363,16 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
    * Default card configuration applied to all groups.
    * Individual groups can override these settings.
    */
-  @Input() defaultCardConfig: TimelineCardConfig = { ...DEFAULT_CARD_CONFIG };
+  @Input() DefaultCardConfig: TimelineCardConfig = { ...DEFAULT_CARD_CONFIG };
+
+  /** @deprecated Use {@link DefaultCardConfig}. */
+  @Input() set defaultCardConfig(value: TimelineCardConfig) {
+    this.DefaultCardConfig = value;
+  }
+  /** @deprecated Use {@link DefaultCardConfig}. */
+  get defaultCardConfig(): TimelineCardConfig {
+    return this.DefaultCardConfig;
+  }
 
   // ============================================================================
   // INPUTS - VIRTUAL SCROLLING
@@ -318,7 +381,16 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
   /**
    * Virtual scrolling configuration.
    */
-  @Input() virtualScroll: VirtualScrollConfig = { ...DEFAULT_VIRTUAL_SCROLL_CONFIG };
+  @Input() VirtualScroll: VirtualScrollConfig = { ...DEFAULT_VIRTUAL_SCROLL_CONFIG };
+
+  /** @deprecated Use {@link VirtualScroll}. */
+  @Input() set virtualScroll(value: VirtualScrollConfig) {
+    this.VirtualScroll = value;
+  }
+  /** @deprecated Use {@link VirtualScroll}. */
+  get virtualScroll(): VirtualScrollConfig {
+    return this.VirtualScroll;
+  }
 
   // ============================================================================
   // INPUTS - SEGMENTS
@@ -328,13 +400,13 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
    * Whether time segments can be collapsed.
    * @default true
    */
-  @Input() segmentsCollapsible = true;
+  @Input() segmentsCollapsible = true;  // case-violation-ok-legacy-back-compat: untyped member on a generic class — the alias cannot name its type
 
   /**
    * Whether segments start expanded.
    * @default true
    */
-  @Input() segmentsDefaultExpanded = true;
+  @Input() segmentsDefaultExpanded = true;  // case-violation-ok-legacy-back-compat: untyped member on a generic class — the alias cannot name its type
 
   // ============================================================================
   // INPUTS - EMPTY & LOADING STATES
@@ -344,19 +416,19 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
    * Message shown when no events exist.
    * @default 'No events to display'
    */
-  @Input() emptyMessage = 'No events to display';
+  @Input() emptyMessage = 'No events to display';  // case-violation-ok-legacy-back-compat: untyped member on a generic class — the alias cannot name its type
 
   /**
    * Icon shown with empty message.
    * @default 'fa-regular fa-calendar-xmark'
    */
-  @Input() emptyIcon = 'fa-regular fa-calendar-xmark';
+  @Input() emptyIcon = 'fa-regular fa-calendar-xmark';  // case-violation-ok-legacy-back-compat: untyped member on a generic class — the alias cannot name its type
 
   /**
    * Message shown while loading.
    * @default 'Loading timeline...'
    */
-  @Input() loadingMessage = 'Loading timeline...';
+  @Input() loadingMessage = 'Loading timeline...';  // case-violation-ok-legacy-back-compat: untyped member on a generic class — the alias cannot name its type
 
   // ============================================================================
   // INPUTS - ACCESSIBILITY
@@ -366,28 +438,37 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
    * ARIA label for the timeline container.
    * @default 'Timeline'
    */
-  @Input() ariaLabel = 'Timeline';
+  @Input() ariaLabel = 'Timeline';  // case-violation-ok-legacy-back-compat: untyped member on a generic class — the alias cannot name its type
 
   /**
    * Enable keyboard navigation.
    * @default true
    */
-  @Input() enableKeyboardNavigation = true;
+  @Input() enableKeyboardNavigation = true;  // case-violation-ok-legacy-back-compat: untyped member on a generic class — the alias cannot name its type
 
   /**
    * ID of the currently selected event.
    * When set, the corresponding event will be highlighted with the focused style.
    */
   @Input()
-  get selectedEventId(): string | null {
+  get SelectedEventId(): string | null {
     return this._selectedEventId;
   }
-  set selectedEventId(value: string | null) {
+  set SelectedEventId(value: string | null) {
     const changed = this._selectedEventId !== value;
     this._selectedEventId = value;
     if (changed) {
       this.cdr.markForCheck();
     }
+  }
+
+  /** @deprecated Use {@link SelectedEventId}. */
+  get selectedEventId(): string | null {
+    return this.SelectedEventId;
+  }
+  /** @deprecated Use {@link SelectedEventId}. */
+  @Input() set selectedEventId(value: string | null) {
+    this.SelectedEventId = value;
   }
   private _selectedEventId: string | null = null;
 
@@ -396,109 +477,370 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
   // ============================================================================
 
   /** Emitted before an event card is clicked. Set `cancel = true` to prevent. */
-  @Output() beforeEventClick = new EventEmitter<BeforeEventClickArgs<T>>();
+  @Output() BeforeEventClick = new EventEmitter<BeforeEventClickArgs<T>>();
+
+  /**
+   * @deprecated Use {@link BeforeEventClick}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (beforeEventClick) keeps working. Must stay AFTER BeforeEventClick: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() beforeEventClick = this.BeforeEventClick;
 
   /** Emitted before an event card expands. Set `cancel = true` to prevent. */
-  @Output() beforeEventExpand = new EventEmitter<BeforeEventExpandArgs<T>>();
+  @Output() BeforeEventExpand = new EventEmitter<BeforeEventExpandArgs<T>>();
+
+  /**
+   * @deprecated Use {@link BeforeEventExpand}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (beforeEventExpand) keeps working. Must stay AFTER BeforeEventExpand: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() beforeEventExpand = this.BeforeEventExpand;
 
   /** Emitted before an event card collapses. Set `cancel = true` to prevent. */
-  @Output() beforeEventCollapse = new EventEmitter<BeforeEventCollapseArgs<T>>();
+  @Output() BeforeEventCollapse = new EventEmitter<BeforeEventCollapseArgs<T>>();
+
+  /**
+   * @deprecated Use {@link BeforeEventCollapse}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (beforeEventCollapse) keeps working. Must stay AFTER BeforeEventCollapse: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() beforeEventCollapse = this.BeforeEventCollapse;
 
   /** Emitted before hover state changes. Set `cancel = true` to prevent. */
-  @Output() beforeEventHover = new EventEmitter<BeforeEventHoverArgs<T>>();
+  @Output() BeforeEventHover = new EventEmitter<BeforeEventHoverArgs<T>>();
+
+  /**
+   * @deprecated Use {@link BeforeEventHover}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (beforeEventHover) keeps working. Must stay AFTER BeforeEventHover: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() beforeEventHover = this.BeforeEventHover;
 
   /** Emitted before an action button is clicked. Set `cancel = true` to prevent. */
-  @Output() beforeActionClick = new EventEmitter<BeforeActionClickArgs<T>>();
+  @Output() BeforeActionClick = new EventEmitter<BeforeActionClickArgs<T>>();
+
+  /**
+   * @deprecated Use {@link BeforeActionClick}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (beforeActionClick) keeps working. Must stay AFTER BeforeActionClick: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() beforeActionClick = this.BeforeActionClick;
 
   /** Emitted before a time segment expands. Set `cancel = true` to prevent. */
-  @Output() beforeSegmentExpand = new EventEmitter<BeforeSegmentExpandArgs>();
+  @Output() BeforeSegmentExpand = new EventEmitter<BeforeSegmentExpandArgs>();
+
+  /**
+   * @deprecated Use {@link BeforeSegmentExpand}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (beforeSegmentExpand) keeps working. Must stay AFTER BeforeSegmentExpand: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() beforeSegmentExpand = this.BeforeSegmentExpand;
 
   /** Emitted before a time segment collapses. Set `cancel = true` to prevent. */
-  @Output() beforeSegmentCollapse = new EventEmitter<BeforeSegmentCollapseArgs>();
+  @Output() BeforeSegmentCollapse = new EventEmitter<BeforeSegmentCollapseArgs>();
+
+  /**
+   * @deprecated Use {@link BeforeSegmentCollapse}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (beforeSegmentCollapse) keeps working. Must stay AFTER BeforeSegmentCollapse: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() beforeSegmentCollapse = this.BeforeSegmentCollapse;
 
   /** Emitted before data loading begins. Set `cancel = true` to prevent. */
-  @Output() beforeLoad = new EventEmitter<BeforeLoadArgs>();
+  @Output() BeforeLoad = new EventEmitter<BeforeLoadArgs>();
+
+  /**
+   * @deprecated Use {@link BeforeLoad}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (beforeLoad) keeps working. Must stay AFTER BeforeLoad: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() beforeLoad = this.BeforeLoad;
 
   // ============================================================================
   // OUTPUTS - AFTER EVENTS
   // ============================================================================
 
   /** Emitted after an event card is clicked. */
-  @Output() afterEventClick = new EventEmitter<AfterEventClickArgs<T>>();
+  @Output() AfterEventClick = new EventEmitter<AfterEventClickArgs<T>>();
+
+  /**
+   * @deprecated Use {@link AfterEventClick}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (afterEventClick) keeps working. Must stay AFTER AfterEventClick: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() afterEventClick = this.AfterEventClick;
 
   /** Emitted after an event card expands. */
-  @Output() afterEventExpand = new EventEmitter<AfterEventExpandArgs<T>>();
+  @Output() AfterEventExpand = new EventEmitter<AfterEventExpandArgs<T>>();
+
+  /**
+   * @deprecated Use {@link AfterEventExpand}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (afterEventExpand) keeps working. Must stay AFTER AfterEventExpand: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() afterEventExpand = this.AfterEventExpand;
 
   /** Emitted after an event card collapses. */
-  @Output() afterEventCollapse = new EventEmitter<AfterEventCollapseArgs<T>>();
+  @Output() AfterEventCollapse = new EventEmitter<AfterEventCollapseArgs<T>>();
+
+  /**
+   * @deprecated Use {@link AfterEventCollapse}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (afterEventCollapse) keeps working. Must stay AFTER AfterEventCollapse: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() afterEventCollapse = this.AfterEventCollapse;
 
   /** Emitted after hover state changes. */
-  @Output() afterEventHover = new EventEmitter<AfterEventHoverArgs<T>>();
+  @Output() AfterEventHover = new EventEmitter<AfterEventHoverArgs<T>>();
+
+  /**
+   * @deprecated Use {@link AfterEventHover}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (afterEventHover) keeps working. Must stay AFTER AfterEventHover: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() afterEventHover = this.AfterEventHover;
 
   /** Emitted after an action button is clicked. */
-  @Output() afterActionClick = new EventEmitter<AfterActionClickArgs<T>>();
+  @Output() AfterActionClick = new EventEmitter<AfterActionClickArgs<T>>();
+
+  /**
+   * @deprecated Use {@link AfterActionClick}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (afterActionClick) keeps working. Must stay AFTER AfterActionClick: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() afterActionClick = this.AfterActionClick;
 
   /** Emitted after a time segment expands. */
-  @Output() afterSegmentExpand = new EventEmitter<AfterSegmentExpandArgs>();
+  @Output() AfterSegmentExpand = new EventEmitter<AfterSegmentExpandArgs>();
+
+  /**
+   * @deprecated Use {@link AfterSegmentExpand}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (afterSegmentExpand) keeps working. Must stay AFTER AfterSegmentExpand: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() afterSegmentExpand = this.AfterSegmentExpand;
 
   /** Emitted after a time segment collapses. */
-  @Output() afterSegmentCollapse = new EventEmitter<AfterSegmentCollapseArgs>();
+  @Output() AfterSegmentCollapse = new EventEmitter<AfterSegmentCollapseArgs>();
+
+  /**
+   * @deprecated Use {@link AfterSegmentCollapse}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (afterSegmentCollapse) keeps working. Must stay AFTER AfterSegmentCollapse: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() afterSegmentCollapse = this.AfterSegmentCollapse;
 
   /** Emitted after data loading completes. */
-  @Output() afterLoad = new EventEmitter<AfterLoadArgs>();
+  @Output() AfterLoad = new EventEmitter<AfterLoadArgs>();
+
+  /**
+   * @deprecated Use {@link AfterLoad}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (afterLoad) keeps working. Must stay AFTER AfterLoad: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() afterLoad = this.AfterLoad;
 
   // ============================================================================
   // CONTENT CHILDREN - OPTIONAL TEMPLATES
   // ============================================================================
 
   /** Custom template for entire card. Context: { event, group } */
-  @ContentChild('cardTemplate') cardTemplate?: TemplateRef<{ event: MJTimelineEvent<T>; group: TimelineGroup<T> }>;
+  @ContentChild('cardTemplate') CardTemplate?: TemplateRef<{ event: MJTimelineEvent<T>; group: TimelineGroup<T> }>;
+
+  /** @deprecated Use {@link CardTemplate}. */
+  get cardTemplate(): TemplateRef<{ event: MJTimelineEvent<T>; group: TimelineGroup<T> }> | undefined {
+    return this.CardTemplate;
+  }
+  /** @deprecated Use {@link CardTemplate}. */
+  set cardTemplate(value: TemplateRef<{ event: MJTimelineEvent<T>; group: TimelineGroup<T> }> | undefined) {
+    this.CardTemplate = value;
+  }
 
   /** Custom template for card header. Context: { event } */
-  @ContentChild('headerTemplate') headerTemplate?: TemplateRef<{ event: MJTimelineEvent<T> }>;
+  @ContentChild('headerTemplate') HeaderTemplate?: TemplateRef<{ event: MJTimelineEvent<T> }>;
+
+  /** @deprecated Use {@link HeaderTemplate}. */
+  get headerTemplate(): TemplateRef<{ event: MJTimelineEvent<T> }> | undefined {
+    return this.HeaderTemplate;
+  }
+  /** @deprecated Use {@link HeaderTemplate}. */
+  set headerTemplate(value: TemplateRef<{ event: MJTimelineEvent<T> }> | undefined) {
+    this.HeaderTemplate = value;
+  }
 
   /** Custom template for card body. Context: { event } */
-  @ContentChild('bodyTemplate') bodyTemplate?: TemplateRef<{ event: MJTimelineEvent<T> }>;
+  @ContentChild('bodyTemplate') BodyTemplate?: TemplateRef<{ event: MJTimelineEvent<T> }>;
+
+  /** @deprecated Use {@link BodyTemplate}. */
+  get bodyTemplate(): TemplateRef<{ event: MJTimelineEvent<T> }> | undefined {
+    return this.BodyTemplate;
+  }
+  /** @deprecated Use {@link BodyTemplate}. */
+  set bodyTemplate(value: TemplateRef<{ event: MJTimelineEvent<T> }> | undefined) {
+    this.BodyTemplate = value;
+  }
 
   /** Custom template for card actions. Context: { event, actions } */
-  @ContentChild('actionsTemplate') actionsTemplate?: TemplateRef<{ event: MJTimelineEvent<T>; actions: TimelineAction[] }>;
+  @ContentChild('actionsTemplate') ActionsTemplate?: TemplateRef<{ event: MJTimelineEvent<T>; actions: TimelineAction[] }>;
+
+  /** @deprecated Use {@link ActionsTemplate}. */
+  get actionsTemplate(): TemplateRef<{ event: MJTimelineEvent<T>; actions: TimelineAction[] }> | undefined {
+    return this.ActionsTemplate;
+  }
+  /** @deprecated Use {@link ActionsTemplate}. */
+  set actionsTemplate(value: TemplateRef<{ event: MJTimelineEvent<T>; actions: TimelineAction[] }> | undefined) {
+    this.ActionsTemplate = value;
+  }
 
   /** Custom template for segment header. Context: { segment } */
-  @ContentChild('segmentHeaderTemplate') segmentHeaderTemplate?: TemplateRef<{ segment: TimelineSegment }>;
+  @ContentChild('segmentHeaderTemplate') SegmentHeaderTemplate?: TemplateRef<{ segment: TimelineSegment }>;
+
+  /** @deprecated Use {@link SegmentHeaderTemplate}. */
+  get segmentHeaderTemplate(): TemplateRef<{ segment: TimelineSegment }> | undefined {
+    return this.SegmentHeaderTemplate;
+  }
+  /** @deprecated Use {@link SegmentHeaderTemplate}. */
+  set segmentHeaderTemplate(value: TemplateRef<{ segment: TimelineSegment }> | undefined) {
+    this.SegmentHeaderTemplate = value;
+  }
 
   /** Custom template for empty state. */
-  @ContentChild('emptyTemplate') emptyTemplate?: TemplateRef<void>;
+  @ContentChild('emptyTemplate') EmptyTemplate?: TemplateRef<void>;
+
+  /** @deprecated Use {@link EmptyTemplate}. */
+  get emptyTemplate(): TemplateRef<void> | undefined {
+    return this.EmptyTemplate;
+  }
+  /** @deprecated Use {@link EmptyTemplate}. */
+  set emptyTemplate(value: TemplateRef<void> | undefined) {
+    this.EmptyTemplate = value;
+  }
 
   /** Custom template for loading state. */
-  @ContentChild('loadingTemplate') loadingTemplate?: TemplateRef<void>;
+  @ContentChild('loadingTemplate') LoadingTemplate?: TemplateRef<void>;
+
+  /** @deprecated Use {@link LoadingTemplate}. */
+  get loadingTemplate(): TemplateRef<void> | undefined {
+    return this.LoadingTemplate;
+  }
+  /** @deprecated Use {@link LoadingTemplate}. */
+  set loadingTemplate(value: TemplateRef<void> | undefined) {
+    this.LoadingTemplate = value;
+  }
 
   // ============================================================================
   // VIEW CHILDREN
   // ============================================================================
 
-  @ViewChild('scrollContainer') scrollContainer?: ElementRef<HTMLElement>;
+  @ViewChild('scrollContainer') ScrollContainer?: ElementRef<HTMLElement>;
+
+  /** @deprecated Use {@link ScrollContainer}. */
+  get scrollContainer(): ElementRef<HTMLElement> | undefined {
+    return this.ScrollContainer;
+  }
+  /** @deprecated Use {@link ScrollContainer}. */
+  set scrollContainer(value: ElementRef<HTMLElement> | undefined) {
+    this.ScrollContainer = value;
+  }
 
   // ============================================================================
   // PUBLIC PROPERTIES
   // ============================================================================
 
   /** Current time segments with events. */
-  segments: TimelineSegment[] = [];
+  Segments: TimelineSegment[] = [];
+
+  /** @deprecated Use {@link Segments}. */
+  get segments(): TimelineSegment[] {
+    return this.Segments;
+  }
+  /** @deprecated Use {@link Segments}. */
+  set segments(value: TimelineSegment[]) {
+    this.Segments = value;
+  }
 
   /** All flattened events (for non-segmented display). */
-  allEvents: MJTimelineEvent<T>[] = [];
+  AllEvents: MJTimelineEvent<T>[] = [];
+
+  /** @deprecated Use {@link AllEvents}. */
+  get allEvents(): MJTimelineEvent<T>[] {
+    return this.AllEvents;
+  }
+  /** @deprecated Use {@link AllEvents}. */
+  set allEvents(value: MJTimelineEvent<T>[]) {
+    this.AllEvents = value;
+  }
 
   /** Virtual scroll state. */
-  scrollState: VirtualScrollState = { ...DEFAULT_VIRTUAL_SCROLL_STATE };
+  ScrollState: VirtualScrollState = { ...DEFAULT_VIRTUAL_SCROLL_STATE };
+
+  /** @deprecated Use {@link ScrollState}. */
+  get scrollState(): VirtualScrollState {
+    return this.ScrollState;
+  }
+  /** @deprecated Use {@link ScrollState}. */
+  set scrollState(value: VirtualScrollState) {
+    this.ScrollState = value;
+  }
 
   /** Whether initial load is complete. */
-  isInitialized = false;
+  IsInitialized = false;
+
+  /** @deprecated Use {@link IsInitialized}. */
+  get isInitialized() {
+    return this.IsInitialized;
+  }
+  /** @deprecated Use {@link IsInitialized}. */
+  set isInitialized(value) {
+    this.IsInitialized = value;
+  }
 
   /** Whether currently loading data. */
   isLoading = false;
 
   /** Index of currently focused event (for keyboard navigation). */
-  focusedEventIndex = -1;
+  FocusedEventIndex = -1;
+
+  /** @deprecated Use {@link FocusedEventIndex}. */
+  get focusedEventIndex() {
+    return this.FocusedEventIndex;
+  }
+  /** @deprecated Use {@link FocusedEventIndex}. */
+  set focusedEventIndex(value) {
+    this.FocusedEventIndex = value;
+  }
 
   // ============================================================================
   // PRIVATE PROPERTIES
@@ -541,8 +883,8 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
     // The view is now ready — first loads triggered by the `groups`/`allowLoad` setters were deferred
     // to here so refreshed events actually render (see the `groups` setter).
     this._viewReady = true;
-    if (this.allowLoad && !this._hasLoaded && this._groups.length > 0) {
-      this.refresh();
+    if (this.AllowLoad && !this._hasLoaded && this._groups.length > 0) {
+      this.Refresh();
     }
 
     // Set up intersection observer for virtual scroll trigger
@@ -566,7 +908,7 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
    * Refreshes all data from the configured groups.
    * Clears existing data and reloads from sources.
    */
-  async refresh(force: boolean = false): Promise<void> {
+  async Refresh(force: boolean = false): Promise<void> {
     // Prevent concurrent refresh calls - if already refreshing, exit immediately
     if (this.isLoading || (this._hasLoaded && !force)) {
       return;
@@ -580,7 +922,7 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
       groups: this._groups,
       isIncremental: false
     };
-    this.beforeLoad.emit(beforeArgs);
+    this.BeforeLoad.emit(beforeArgs);
 
     if (beforeArgs.cancel) {
       return;
@@ -591,9 +933,9 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
 
     try {
       // Clear existing data
-      this.allEvents = [];
-      this.segments = [];
-      this.scrollState = { ...DEFAULT_VIRTUAL_SCROLL_STATE };
+      this.AllEvents = [];
+      this.Segments = [];
+      this.ScrollState = { ...DEFAULT_VIRTUAL_SCROLL_STATE };
 
       // Load data from all groups
       await this.loadAllGroups();
@@ -602,17 +944,17 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
       this.buildSegments();
 
       this._hasLoaded = true;
-      this.isInitialized = true;
+      this.IsInitialized = true;
 
       // Emit after event
       const afterArgs: AfterLoadArgs = {
         success: true,
-        eventsLoaded: this.allEvents.length,
-        totalEvents: this.allEvents.length,
+        eventsLoaded: this.AllEvents.length,
+        totalEvents: this.AllEvents.length,
         loadTimeMs: Date.now() - startTime,
-        hasMore: this.scrollState.hasMore
+        hasMore: this.ScrollState.hasMore
       };
-      this.afterLoad.emit(afterArgs);
+      this.AfterLoad.emit(afterArgs);
     } catch (error) {
       console.error('Timeline: Error loading data', error);
 
@@ -624,18 +966,23 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
         loadTimeMs: Date.now() - startTime,
         hasMore: false
       };
-      this.afterLoad.emit(afterArgs);
+      this.AfterLoad.emit(afterArgs);
     } finally {
       this.isLoading = false;
       this.cdr.markForCheck();
     }
   }
 
+  /** @deprecated Use {@link Refresh}. */
+  async refresh(force: boolean = false): Promise<void> {
+    return this.Refresh(force);
+  }
+
   /**
    * Loads more events (for virtual scrolling).
    */
-  async loadMore(): Promise<void> {
-    if (!this.virtualScroll.enabled || this.scrollState.isLoading || !this.scrollState.hasMore) {
+  async LoadMore(): Promise<void> {
+    if (!this.VirtualScroll.enabled || this.ScrollState.isLoading || !this.ScrollState.hasMore) {
       return;
     }
 
@@ -646,20 +993,20 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
       cancel: false,
       groups: this._groups,
       isIncremental: true,
-      offset: this.scrollState.loadedCount,
-      batchSize: this.virtualScroll.batchSize
+      offset: this.ScrollState.loadedCount,
+      batchSize: this.VirtualScroll.batchSize
     };
-    this.beforeLoad.emit(beforeArgs);
+    this.BeforeLoad.emit(beforeArgs);
 
     if (beforeArgs.cancel) {
       return;
     }
 
-    this.scrollState.isLoading = true;
+    this.ScrollState.isLoading = true;
     this.cdr.markForCheck();
 
     try {
-      const previousCount = this.allEvents.length;
+      const previousCount = this.AllEvents.length;
 
       // Load next batch from all groups
       await this.loadNextBatch();
@@ -667,30 +1014,35 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
       // Rebuild segments with new data
       this.buildSegments();
 
-      const newCount = this.allEvents.length - previousCount;
+      const newCount = this.AllEvents.length - previousCount;
 
       // Emit after event
       const afterArgs: AfterLoadArgs = {
         success: true,
         eventsLoaded: newCount,
-        totalEvents: this.allEvents.length,
+        totalEvents: this.AllEvents.length,
         loadTimeMs: Date.now() - startTime,
-        hasMore: this.scrollState.hasMore
+        hasMore: this.ScrollState.hasMore
       };
-      this.afterLoad.emit(afterArgs);
+      this.AfterLoad.emit(afterArgs);
     } catch (error) {
       console.error('Timeline: Error loading more data', error);
     } finally {
-      this.scrollState.isLoading = false;
+      this.ScrollState.isLoading = false;
       this.cdr.markForCheck();
     }
+  }
+
+  /** @deprecated Use {@link LoadMore}. */
+  async loadMore(): Promise<void> {
+    return this.LoadMore();
   }
 
   /**
    * Expands all event cards.
    */
-  expandAllEvents(): void {
-    for (const event of this.allEvents) {
+  ExpandAllEvents(): void {
+    for (const event of this.AllEvents) {
       if (!event.isExpanded) {
         this.setEventExpanded(event, true);
       }
@@ -698,11 +1050,16 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
     this.cdr.markForCheck();
   }
 
+  /** @deprecated Use {@link ExpandAllEvents}. */
+  expandAllEvents(): void {
+    return this.ExpandAllEvents();
+  }
+
   /**
    * Collapses all event cards.
    */
-  collapseAllEvents(): void {
-    for (const event of this.allEvents) {
+  CollapseAllEvents(): void {
+    for (const event of this.AllEvents) {
       if (event.isExpanded) {
         this.setEventExpanded(event, false);
       }
@@ -710,11 +1067,16 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
     this.cdr.markForCheck();
   }
 
+  /** @deprecated Use {@link CollapseAllEvents}. */
+  collapseAllEvents(): void {
+    return this.CollapseAllEvents();
+  }
+
   /**
    * Expands all time segments.
    */
-  expandAllSegments(): void {
-    for (const segment of this.segments) {
+  ExpandAllSegments(): void {
+    for (const segment of this.Segments) {
       if (!segment.isExpanded) {
         this.setSegmentExpanded(segment, true);
       }
@@ -722,11 +1084,16 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
     this.cdr.markForCheck();
   }
 
+  /** @deprecated Use {@link ExpandAllSegments}. */
+  expandAllSegments(): void {
+    return this.ExpandAllSegments();
+  }
+
   /**
    * Collapses all time segments.
    */
-  collapseAllSegments(): void {
-    for (const segment of this.segments) {
+  CollapseAllSegments(): void {
+    for (const segment of this.Segments) {
       if (segment.isExpanded) {
         this.setSegmentExpanded(segment, false);
       }
@@ -734,44 +1101,64 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
     this.cdr.markForCheck();
   }
 
+  /** @deprecated Use {@link CollapseAllSegments}. */
+  collapseAllSegments(): void {
+    return this.CollapseAllSegments();
+  }
+
   /**
    * Expands a specific event by ID.
    */
-  expandEvent(eventId: string): void {
-    const event = this.getEvent(eventId);
+  ExpandEvent(eventId: string): void {
+    const event = this.GetEvent(eventId);
     if (event && !event.isExpanded) {
       this.setEventExpanded(event, true);
       this.cdr.markForCheck();
     }
   }
 
+  /** @deprecated Use {@link ExpandEvent}. */
+  expandEvent(eventId: string): void {
+    return this.ExpandEvent(eventId);
+  }
+
   /**
    * Collapses a specific event by ID.
    */
-  collapseEvent(eventId: string): void {
-    const event = this.getEvent(eventId);
+  CollapseEvent(eventId: string): void {
+    const event = this.GetEvent(eventId);
     if (event && event.isExpanded) {
       this.setEventExpanded(event, false);
       this.cdr.markForCheck();
     }
   }
 
+  /** @deprecated Use {@link CollapseEvent}. */
+  collapseEvent(eventId: string): void {
+    return this.CollapseEvent(eventId);
+  }
+
   /**
    * Scrolls to a specific event.
    */
-  scrollToEvent(eventId: string, behavior: ScrollBehavior = 'smooth'): void {
+  ScrollToEvent(eventId: string, behavior: ScrollBehavior = 'smooth'): void {
     const element = this.elementRef.nativeElement.querySelector(`[data-event-id="${eventId}"]`);
     if (element) {
       element.scrollIntoView({ behavior, block: 'center' });
     }
   }
 
+  /** @deprecated Use {@link ScrollToEvent}. */
+  scrollToEvent(eventId: string, behavior: ScrollBehavior = 'smooth'): void {
+    return this.ScrollToEvent(eventId, behavior);
+  }
+
   /**
    * Scrolls to a specific date.
    */
-  scrollToDate(date: Date, behavior: ScrollBehavior = 'smooth'): void {
+  ScrollToDate(date: Date, behavior: ScrollBehavior = 'smooth'): void {
     // Find the segment containing this date
-    const segment = this.segments.find(s =>
+    const segment = this.Segments.find(s =>
       date >= s.startDate && date < s.endDate
     );
 
@@ -785,18 +1172,33 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
     }
   }
 
+  /** @deprecated Use {@link ScrollToDate}. */
+  scrollToDate(date: Date, behavior: ScrollBehavior = 'smooth'): void {
+    return this.ScrollToDate(date, behavior);
+  }
+
   /**
    * Gets an event by ID.
    */
+  GetEvent(eventId: string): MJTimelineEvent<T> | undefined {
+    return this.AllEvents.find(e => e.id === eventId);
+  }
+
+  /** @deprecated Use {@link GetEvent}. */
   getEvent(eventId: string): MJTimelineEvent<T> | undefined {
-    return this.allEvents.find(e => e.id === eventId);
+    return this.GetEvent(eventId);
   }
 
   /**
    * Gets all events (flattened).
    */
+  GetAllEvents(): MJTimelineEvent<T>[] {
+    return [...this.AllEvents];
+  }
+
+  /** @deprecated Use {@link GetAllEvents}. */
   getAllEvents(): MJTimelineEvent<T>[] {
-    return [...this.allEvents];
+    return this.GetAllEvents();
   }
 
   // ============================================================================
@@ -806,7 +1208,7 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
   /**
    * Handles click on an event card.
    */
-  onEventClick(event: MJTimelineEvent<T>, index: number, domEvent: Event): void {
+  OnEventClick(event: MJTimelineEvent<T>, index: number, domEvent: Event): void {
     const group = this._groups[event.groupIndex];
 
     // Emit before event
@@ -817,14 +1219,14 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
       index,
       domEvent
     };
-    this.beforeEventClick.emit(beforeArgs);
+    this.BeforeEventClick.emit(beforeArgs);
 
     if (beforeArgs.cancel) {
       return;
     }
 
     // Default behavior: toggle expand/collapse if collapsible
-    const cardConfig = this.getEffectiveCardConfig(event);
+    const cardConfig = this.GetEffectiveCardConfig(event);
     if (cardConfig.collapsible) {
       this.toggleEventExpanded(event, index, domEvent);
     }
@@ -837,21 +1239,31 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
       index,
       domEvent
     };
-    this.afterEventClick.emit(afterArgs);
+    this.AfterEventClick.emit(afterArgs);
+  }
+
+  /** @deprecated Use {@link OnEventClick}. */
+  onEventClick(event: MJTimelineEvent<T>, index: number, domEvent: Event): void {
+    return this.OnEventClick(event, index, domEvent);
   }
 
   /**
    * Handles expand/collapse toggle on an event.
    */
-  onToggleExpand(event: MJTimelineEvent<T>, index: number, domEvent: Event): void {
+  OnToggleExpand(event: MJTimelineEvent<T>, index: number, domEvent: Event): void {
     domEvent.stopPropagation();
     this.toggleEventExpanded(event, index, domEvent);
+  }
+
+  /** @deprecated Use {@link OnToggleExpand}. */
+  onToggleExpand(event: MJTimelineEvent<T>, index: number, domEvent: Event): void {
+    return this.OnToggleExpand(event, index, domEvent);
   }
 
   /**
    * Handles mouse enter on an event card.
    */
-  onEventMouseEnter(event: MJTimelineEvent<T>, index: number, domEvent: Event): void {
+  OnEventMouseEnter(event: MJTimelineEvent<T>, index: number, domEvent: Event): void {
     const group = this._groups[event.groupIndex];
 
     const beforeArgs: BeforeEventHoverArgs<T> = {
@@ -862,7 +1274,7 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
       domEvent,
       hoverState: 'enter'
     };
-    this.beforeEventHover.emit(beforeArgs);
+    this.BeforeEventHover.emit(beforeArgs);
 
     if (!beforeArgs.cancel) {
       const afterArgs: AfterEventHoverArgs<T> = {
@@ -873,14 +1285,19 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
         domEvent,
         hoverState: 'enter'
       };
-      this.afterEventHover.emit(afterArgs);
+      this.AfterEventHover.emit(afterArgs);
     }
+  }
+
+  /** @deprecated Use {@link OnEventMouseEnter}. */
+  onEventMouseEnter(event: MJTimelineEvent<T>, index: number, domEvent: Event): void {
+    return this.OnEventMouseEnter(event, index, domEvent);
   }
 
   /**
    * Handles mouse leave on an event card.
    */
-  onEventMouseLeave(event: MJTimelineEvent<T>, index: number, domEvent: Event): void {
+  OnEventMouseLeave(event: MJTimelineEvent<T>, index: number, domEvent: Event): void {
     const group = this._groups[event.groupIndex];
 
     const beforeArgs: BeforeEventHoverArgs<T> = {
@@ -891,7 +1308,7 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
       domEvent,
       hoverState: 'leave'
     };
-    this.beforeEventHover.emit(beforeArgs);
+    this.BeforeEventHover.emit(beforeArgs);
 
     if (!beforeArgs.cancel) {
       const afterArgs: AfterEventHoverArgs<T> = {
@@ -902,14 +1319,19 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
         domEvent,
         hoverState: 'leave'
       };
-      this.afterEventHover.emit(afterArgs);
+      this.AfterEventHover.emit(afterArgs);
     }
+  }
+
+  /** @deprecated Use {@link OnEventMouseLeave}. */
+  onEventMouseLeave(event: MJTimelineEvent<T>, index: number, domEvent: Event): void {
+    return this.OnEventMouseLeave(event, index, domEvent);
   }
 
   /**
    * Handles action button click.
    */
-  onActionClick(event: MJTimelineEvent<T>, action: TimelineAction, index: number, domEvent: Event): void {
+  OnActionClick(event: MJTimelineEvent<T>, action: TimelineAction, index: number, domEvent: Event): void {
     domEvent.stopPropagation();
 
     if (action.disabled) {
@@ -926,7 +1348,7 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
       domEvent,
       action
     };
-    this.beforeActionClick.emit(beforeArgs);
+    this.BeforeActionClick.emit(beforeArgs);
 
     if (!beforeArgs.cancel) {
       const afterArgs: AfterActionClickArgs<T> = {
@@ -937,14 +1359,19 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
         domEvent,
         action
       };
-      this.afterActionClick.emit(afterArgs);
+      this.AfterActionClick.emit(afterArgs);
     }
+  }
+
+  /** @deprecated Use {@link OnActionClick}. */
+  onActionClick(event: MJTimelineEvent<T>, action: TimelineAction, index: number, domEvent: Event): void {
+    return this.OnActionClick(event, action, index, domEvent);
   }
 
   /**
    * Handles segment header click.
    */
-  onSegmentClick(segment: TimelineSegment): void {
+  OnSegmentClick(segment: TimelineSegment): void {
     if (!this.segmentsCollapsible) {
       return;
     }
@@ -956,17 +1383,27 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
     }
   }
 
+  /** @deprecated Use {@link OnSegmentClick}. */
+  onSegmentClick(segment: TimelineSegment): void {
+    return this.OnSegmentClick(segment);
+  }
+
   /**
    * Handles scroll events for virtual scrolling.
    */
-  onScroll(event: Event): void {
+  OnScroll(event: Event): void {
     this._scroll$.next(event);
+  }
+
+  /** @deprecated Use {@link OnScroll}. */
+  onScroll(event: Event): void {
+    return this.OnScroll(event);
   }
 
   /**
    * Handles keyboard navigation.
    */
-  onKeyDown(event: KeyboardEvent): void {
+  OnKeyDown(event: KeyboardEvent): void {
     if (!this.enableKeyboardNavigation) {
       return;
     }
@@ -1007,6 +1444,11 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
     }
   }
 
+  /** @deprecated Use {@link OnKeyDown}. */
+  onKeyDown(event: KeyboardEvent): void {
+    return this.OnKeyDown(event);
+  }
+
   // ============================================================================
   // TEMPLATE HELPERS
   // ============================================================================
@@ -1014,19 +1456,24 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
   /**
    * Gets the effective card config for an event.
    */
-  getEffectiveCardConfig(event: MJTimelineEvent<T>): TimelineCardConfig {
+  GetEffectiveCardConfig(event: MJTimelineEvent<T>): TimelineCardConfig {
     const group = this._groups[event.groupIndex];
     return {
-      ...this.defaultCardConfig,
+      ...this.DefaultCardConfig,
       ...group?.CardConfig,
       ...this.mapEventConfigToCardConfig(event.config)
     };
   }
 
+  /** @deprecated Use {@link GetEffectiveCardConfig}. */
+  getEffectiveCardConfig(event: MJTimelineEvent<T>): TimelineCardConfig {
+    return this.GetEffectiveCardConfig(event);
+  }
+
   /**
    * Gets the color for a group/event.
    */
-  getColor(event: MJTimelineEvent<T>): string {
+  GetColor(event: MJTimelineEvent<T>): string {
     if (event.config?.color) {
       return event.config.color;
     }
@@ -1037,6 +1484,11 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
     }
 
     return AUTO_COLORS[event.groupIndex % AUTO_COLORS.length];
+  }
+
+  /** @deprecated Use {@link GetColor}. */
+  getColor(event: MJTimelineEvent<T>): string {
+    return this.GetColor(event);
   }
 
   /**
@@ -1058,27 +1510,32 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
   /**
    * Gets the actions for an event.
    */
-  getActions(event: MJTimelineEvent<T>): TimelineAction[] {
+  GetActions(event: MJTimelineEvent<T>): TimelineAction[] {
     if (event.config?.actions) {
       return event.config.actions;
     }
 
-    const cardConfig = this.getEffectiveCardConfig(event);
+    const cardConfig = this.GetEffectiveCardConfig(event);
     return cardConfig.actions || [];
+  }
+
+  /** @deprecated Use {@link GetActions}. */
+  getActions(event: MJTimelineEvent<T>): TimelineAction[] {
+    return this.GetActions(event);
   }
 
   /**
    * Formats a date for display.
    */
   formatDate(date: Date, format?: string): string {
-    const fmt = format || this.defaultCardConfig.dateFormat || 'MMM d, yyyy';
+    const fmt = format || this.DefaultCardConfig.dateFormat || 'MMM d, yyyy';
     return this.formatDateInternal(date, fmt);
   }
 
   /**
    * Gets the value of a display field from an event.
    */
-  getFieldValue(event: MJTimelineEvent<T>, field: TimelineDisplayField): string {
+  GetFieldValue(event: MJTimelineEvent<T>, field: TimelineDisplayField): string {
     const value = getFieldValue(event.entity, field.fieldName);
 
     if (field.formatter) {
@@ -1096,25 +1553,45 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
     return String(value);
   }
 
+  /** @deprecated Use {@link GetFieldValue}. */
+  getFieldValue(event: MJTimelineEvent<T>, field: TimelineDisplayField): string {
+    return this.GetFieldValue(event, field);
+  }
+
   /**
    * Track by function for ngFor.
    */
-  trackByEventId(_index: number, event: MJTimelineEvent<T>): string {
+  TrackByEventId(_index: number, event: MJTimelineEvent<T>): string {
     return event.id;
+  }
+
+  /** @deprecated Use {@link TrackByEventId}. */
+  trackByEventId(_index: number, event: MJTimelineEvent<T>): string {
+    return this.TrackByEventId(_index, event);
   }
 
   /**
    * Track by function for segments.
    */
-  trackBySegmentLabel(_index: number, segment: TimelineSegment): string {
+  TrackBySegmentLabel(_index: number, segment: TimelineSegment): string {
     return segment.label;
+  }
+
+  /** @deprecated Use {@link TrackBySegmentLabel}. */
+  trackBySegmentLabel(_index: number, segment: TimelineSegment): string {
+    return this.TrackBySegmentLabel(_index, segment);
   }
 
   /**
    * Gets the global index of an event in the allEvents array.
    */
+  GetGlobalIndex(event: MJTimelineEvent<T>): number {
+    return this.AllEvents.indexOf(event);
+  }
+
+  /** @deprecated Use {@link GetGlobalIndex}. */
   getGlobalIndex(event: MJTimelineEvent<T>): number {
-    return this.allEvents.indexOf(event);
+    return this.GetGlobalIndex(event);
   }
 
   /**
@@ -1123,13 +1600,18 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
    * - Its ID matches the selectedEventId input
    * - Its global index matches the focusedEventIndex (keyboard navigation)
    */
-  isEventSelected(event: MJTimelineEvent<T>, globalIndex: number): boolean {
+  IsEventSelected(event: MJTimelineEvent<T>, globalIndex: number): boolean {
     // Check selectedEventId from parent first (takes priority)
-    if (this.selectedEventId && event.id === this.selectedEventId) {
+    if (this.SelectedEventId && event.id === this.SelectedEventId) {
       return true;
     }
     // Fall back to keyboard navigation focus
-    return this.focusedEventIndex === globalIndex;
+    return this.FocusedEventIndex === globalIndex;
+  }
+
+  /** @deprecated Use {@link IsEventSelected}. */
+  isEventSelected(event: MJTimelineEvent<T>, globalIndex: number): boolean {
+    return this.IsEventSelected(event, globalIndex);
   }
 
   // ============================================================================
@@ -1149,8 +1631,8 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
     this.sortEvents();
 
     // Update scroll state
-    this.scrollState.loadedCount = this.allEvents.length;
-    this.scrollState.hasMore = false; // TODO: Implement proper pagination detection
+    this.ScrollState.loadedCount = this.AllEvents.length;
+    this.ScrollState.hasMore = false; // TODO: Implement proper pagination detection
   }
 
   /**
@@ -1168,7 +1650,7 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
     // Convert records to timeline events
     for (const record of records) {
       const event = this.createTimelineEvent(record, group, groupIndex);
-      this.allEvents.push(event);
+      this.AllEvents.push(event);
     }
   }
 
@@ -1230,9 +1712,9 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
    * Sorts events by date according to sortOrder.
    */
   private sortEvents(): void {
-    this.allEvents.sort((a, b) => {
+    this.AllEvents.sort((a, b) => {
       const diff = a.date.getTime() - b.date.getTime();
-      return this.sortOrder === 'asc' ? diff : -diff;
+      return this.SortOrder === 'asc' ? diff : -diff;
     });
   }
 
@@ -1244,14 +1726,14 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
    * Builds time segments from events.
    */
   private buildSegments(): void {
-    if (this.segmentGrouping === 'none') {
-      this.segments = [];
+    if (this.SegmentGrouping === 'none') {
+      this.Segments = [];
       return;
     }
 
     const segmentMap = new Map<string, TimelineSegment>();
 
-    for (const event of this.allEvents) {
+    for (const event of this.AllEvents) {
       const { label, startDate, endDate } = this.getSegmentInfo(event.date);
 
       if (!segmentMap.has(label)) {
@@ -1271,10 +1753,10 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
     }
 
     // Convert to array and sort
-    this.segments = Array.from(segmentMap.values());
-    this.segments.sort((a, b) => {
+    this.Segments = Array.from(segmentMap.values());
+    this.Segments.sort((a, b) => {
       const diff = a.startDate.getTime() - b.startDate.getTime();
-      return this.sortOrder === 'asc' ? diff : -diff;
+      return this.SortOrder === 'asc' ? diff : -diff;
     });
   }
 
@@ -1286,7 +1768,7 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
     const month = date.getMonth();
     const day = date.getDate();
 
-    switch (this.segmentGrouping) {
+    switch (this.SegmentGrouping) {
       case 'day':
         return {
           label: this.formatDateInternal(date, 'MMMM d, yyyy'),
@@ -1371,7 +1853,7 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
       index,
       domEvent
     };
-    this.beforeEventExpand.emit(beforeArgs);
+    this.BeforeEventExpand.emit(beforeArgs);
 
     if (beforeArgs.cancel) {
       return;
@@ -1387,7 +1869,7 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
       index,
       domEvent
     };
-    this.afterEventExpand.emit(afterArgs);
+    this.AfterEventExpand.emit(afterArgs);
   }
 
   /**
@@ -1403,7 +1885,7 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
       index,
       domEvent
     };
-    this.beforeEventCollapse.emit(beforeArgs);
+    this.BeforeEventCollapse.emit(beforeArgs);
 
     if (beforeArgs.cancel) {
       return;
@@ -1419,7 +1901,7 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
       index,
       domEvent
     };
-    this.afterEventCollapse.emit(afterArgs);
+    this.AfterEventCollapse.emit(afterArgs);
   }
 
   /**
@@ -1434,7 +1916,7 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
       endDate: segment.endDate,
       eventCount: segment.eventCount
     };
-    this.beforeSegmentExpand.emit(beforeArgs);
+    this.BeforeSegmentExpand.emit(beforeArgs);
 
     if (beforeArgs.cancel) {
       return;
@@ -1451,7 +1933,7 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
       endDate: segment.endDate,
       eventCount: segment.eventCount
     };
-    this.afterSegmentExpand.emit(afterArgs);
+    this.AfterSegmentExpand.emit(afterArgs);
   }
 
   /**
@@ -1466,7 +1948,7 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
       endDate: segment.endDate,
       eventCount: segment.eventCount
     };
-    this.beforeSegmentCollapse.emit(beforeArgs);
+    this.BeforeSegmentCollapse.emit(beforeArgs);
 
     if (beforeArgs.cancel) {
       return;
@@ -1483,7 +1965,7 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
       endDate: segment.endDate,
       eventCount: segment.eventCount
     };
-    this.afterSegmentCollapse.emit(afterArgs);
+    this.AfterSegmentCollapse.emit(afterArgs);
   }
 
   /**
@@ -1498,56 +1980,56 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
   // ============================================================================
 
   private focusNextEvent(): void {
-    if (this.allEvents.length === 0) return;
+    if (this.AllEvents.length === 0) return;
 
-    this.focusedEventIndex = Math.min(
-      this.focusedEventIndex + 1,
-      this.allEvents.length - 1
+    this.FocusedEventIndex = Math.min(
+      this.FocusedEventIndex + 1,
+      this.AllEvents.length - 1
     );
     this.scrollToFocusedEvent();
   }
 
   private focusPreviousEvent(): void {
-    if (this.allEvents.length === 0) return;
+    if (this.AllEvents.length === 0) return;
 
-    this.focusedEventIndex = Math.max(this.focusedEventIndex - 1, 0);
+    this.FocusedEventIndex = Math.max(this.FocusedEventIndex - 1, 0);
     this.scrollToFocusedEvent();
   }
 
   private focusFirstEvent(): void {
-    if (this.allEvents.length === 0) return;
+    if (this.AllEvents.length === 0) return;
 
-    this.focusedEventIndex = 0;
+    this.FocusedEventIndex = 0;
     this.scrollToFocusedEvent();
   }
 
   private focusLastEvent(): void {
-    if (this.allEvents.length === 0) return;
+    if (this.AllEvents.length === 0) return;
 
-    this.focusedEventIndex = this.allEvents.length - 1;
+    this.FocusedEventIndex = this.AllEvents.length - 1;
     this.scrollToFocusedEvent();
   }
 
   private activateFocusedEvent(): void {
-    if (this.focusedEventIndex >= 0 && this.focusedEventIndex < this.allEvents.length) {
-      const event = this.allEvents[this.focusedEventIndex];
-      this.toggleEventExpanded(event, this.focusedEventIndex);
+    if (this.FocusedEventIndex >= 0 && this.FocusedEventIndex < this.AllEvents.length) {
+      const event = this.AllEvents[this.FocusedEventIndex];
+      this.toggleEventExpanded(event, this.FocusedEventIndex);
     }
   }
 
   private collapseFocusedEvent(): void {
-    if (this.focusedEventIndex >= 0 && this.focusedEventIndex < this.allEvents.length) {
-      const event = this.allEvents[this.focusedEventIndex];
+    if (this.FocusedEventIndex >= 0 && this.FocusedEventIndex < this.AllEvents.length) {
+      const event = this.AllEvents[this.FocusedEventIndex];
       if (event.isExpanded) {
-        this.collapseEventInternal(event, this.focusedEventIndex);
+        this.collapseEventInternal(event, this.FocusedEventIndex);
       }
     }
   }
 
   private scrollToFocusedEvent(): void {
-    if (this.focusedEventIndex >= 0 && this.focusedEventIndex < this.allEvents.length) {
-      const event = this.allEvents[this.focusedEventIndex];
-      this.scrollToEvent(event.id, 'smooth');
+    if (this.FocusedEventIndex >= 0 && this.FocusedEventIndex < this.AllEvents.length) {
+      const event = this.AllEvents[this.FocusedEventIndex];
+      this.ScrollToEvent(event.id, 'smooth');
     }
     this.cdr.markForCheck();
   }
@@ -1557,7 +2039,7 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
   // ============================================================================
 
   private setupIntersectionObserver(): void {
-    if (!this.virtualScroll.enabled) return;
+    if (!this.VirtualScroll.enabled) return;
 
     // Use requestAnimationFrame to ensure DOM is ready
     requestAnimationFrame(() => {
@@ -1567,14 +2049,14 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
       this._intersectionObserver = new IntersectionObserver(
         (entries) => {
           const entry = entries[0];
-          if (entry?.isIntersecting && !this.scrollState.isLoading && this.scrollState.hasMore) {
-            this.ngZone.run(() => this.loadMore());
+          if (entry?.isIntersecting && !this.ScrollState.isLoading && this.ScrollState.hasMore) {
+            this.ngZone.run(() => this.LoadMore());
           }
         },
         {
-          root: this.scrollContainer?.nativeElement,
+          root: this.ScrollContainer?.nativeElement,
           threshold: 0,
-          rootMargin: `${this.virtualScroll.loadThreshold}px`
+          rootMargin: `${this.VirtualScroll.loadThreshold}px`
         }
       );
 
@@ -1583,16 +2065,16 @@ export class TimelineComponent<T = any> extends BaseAngularComponent implements 
   }
 
   private onScrollCheck(): void {
-    if (!this.scrollContainer?.nativeElement || !this.virtualScroll.enabled) {
+    if (!this.ScrollContainer?.nativeElement || !this.VirtualScroll.enabled) {
       return;
     }
 
-    const el = this.scrollContainer.nativeElement;
-    this.scrollState.scrollOffset = el.scrollTop;
+    const el = this.ScrollContainer.nativeElement;
+    this.ScrollState.scrollOffset = el.scrollTop;
 
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    if (distanceFromBottom < this.virtualScroll.loadThreshold && this.scrollState.hasMore) {
-      this.loadMore();
+    if (distanceFromBottom < this.VirtualScroll.loadThreshold && this.ScrollState.hasMore) {
+      this.LoadMore();
     }
   }
 

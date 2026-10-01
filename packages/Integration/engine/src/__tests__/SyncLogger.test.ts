@@ -20,7 +20,7 @@ describe('SyncLogger.warning (structured warning channel)', () => {
         // Minimal emitter stub — warning() only triggers the 'sync.warning' forward, which calls
         // emitter.warning(). (Test-only mock cast.)
         emitter = { warning: warnSpy } as unknown as IntegrationProgressEmitter;
-        logger = new SyncLogger({ ciId: 'ci-1', integration: 'HubSpot' });
+        logger = new SyncLogger({ CiId: 'ci-1', Integration: 'HubSpot' });
     });
 
     afterEach(() => {

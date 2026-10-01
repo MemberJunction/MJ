@@ -39,12 +39,12 @@ export function ArtifactContentView({ artifact }: { artifact: LoadedArtifact }) 
     const { width } = useWindowDimensions();
     const contentWidth = width - BODY_PADDING * 2;
 
-    const Registered = ResolveMobileArtifactRenderer(artifact.typeName, artifact.contentType);
+    const Registered = ResolveMobileArtifactRenderer(artifact.TypeName, artifact.ContentType);
     if (Registered) {
         return (
             <Registered
-                TypeName={artifact.typeName}
-                ContentType={artifact.contentType}
+                TypeName={artifact.TypeName}
+                ContentType={artifact.ContentType}
                 Content={artifact.content}
                 Name={artifact.name}
             />
@@ -55,7 +55,7 @@ export function ArtifactContentView({ artifact }: { artifact: LoadedArtifact }) 
         case 'json-table':
             return (
                 <View style={styles.cards}>
-                    {(artifact.rows ?? []).slice(0, 100).map((row, idx) => {
+                    {(artifact.Rows ?? []).slice(0, 100).map((row, idx) => {
                         const keys = Object.keys(row).slice(0, 6);
                         return (
                             <View key={idx} style={styles.recordCard}>
@@ -73,17 +73,17 @@ export function ArtifactContentView({ artifact }: { artifact: LoadedArtifact }) 
                 </View>
             );
         case 'json':
-            return <Text style={styles.code}>{JSON.stringify(artifact.json, null, 2)}</Text>;
+            return <Text style={styles.code}>{JSON.stringify(artifact.Json, null, 2)}</Text>;
         case 'chart':
             return artifact.chart
-                ? <View style={styles.chartCard}><Chart spec={artifact.chart} width={contentWidth - 28} /></View>
-                : <Text style={styles.code}>{JSON.stringify(artifact.json, null, 2)}</Text>;
+                ? <View style={styles.chartCard}><Chart Spec={artifact.chart} Width={contentWidth - 28} /></View>
+                : <Text style={styles.code}>{JSON.stringify(artifact.Json, null, 2)}</Text>;
         case 'interactive':
             return <InteractiveArtifact artifact={artifact} />;
         case 'html':
             return <HtmlRenderer html={artifact.content} />;
         case 'code':
-            return <CodeView code={artifact.content} language={artifact.language} />;
+            return <CodeView code={artifact.content} language={artifact.Language} />;
         case 'markdown':
             return <MarkdownView source={artifact.content} />;
         case 'text':
@@ -100,10 +100,10 @@ export function ArtifactContentView({ artifact }: { artifact: LoadedArtifact }) 
  * same choice.
  */
 function InteractiveArtifact({ artifact }: { artifact: LoadedArtifact }) {
-    if (!artifact.spec) {
+    if (!artifact.Spec) {
         return <DesktopFallback reason="This artifact does not contain a renderable component." />;
     }
-    return <ComponentRenderer spec={artifact.spec} />;
+    return <ComponentRenderer spec={artifact.Spec} />;
 }
 
 /**
@@ -115,7 +115,7 @@ function CodeView({ code, language }: { code: string; language?: string }) {
         <ScrollView horizontal directionalLockEnabled nestedScrollEnabled showsHorizontalScrollIndicator={false} style={styles.codeScroll}>
             <Text style={styles.code}>
                 {HighlightCode(code, language).map((run, i) => (
-                    <Text key={i} style={{ color: run.color }}>{run.text}</Text>
+                    <Text key={i} style={{ color: run.Color }}>{run.Text}</Text>
                 ))}
             </Text>
         </ScrollView>

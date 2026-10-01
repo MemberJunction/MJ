@@ -122,7 +122,7 @@ export class OAuth2TokenManager {
             ...req,
             RefreshToken: this.lastRefreshToken ?? req.RefreshToken,
         };
-        const token = await this.RequestToken(effectiveReq, grant);
+        const token = await this.requestToken(effectiveReq, grant);
         this.cached = token;
         this.lastRefreshToken = token.RefreshToken ?? effectiveReq.RefreshToken;
         return token;
@@ -135,8 +135,8 @@ export class OAuth2TokenManager {
     }
 
     /** Executes the token-endpoint round-trip for the chosen grant. */
-    private async RequestToken(req: OAuth2TokenRequest, grant: OAuth2GrantType): Promise<OAuth2Token> {
-        const body = this.BuildGrantBody(req, grant);
+    private async requestToken(req: OAuth2TokenRequest, grant: OAuth2GrantType): Promise<OAuth2Token> {
+        const body = this.buildGrantBody(req, grant);
         const headers: Record<string, string> = {
             'Content-Type': 'application/x-www-form-urlencoded',
             'Accept': 'application/json',
@@ -185,7 +185,7 @@ export class OAuth2TokenManager {
     }
 
     /** Builds the `application/x-www-form-urlencoded` grant body for the chosen flow. */
-    private BuildGrantBody(req: OAuth2TokenRequest, grant: OAuth2GrantType): URLSearchParams {
+    private buildGrantBody(req: OAuth2TokenRequest, grant: OAuth2GrantType): URLSearchParams {
         const body = new URLSearchParams();
         // Seed vendor extra params FIRST so the standard params set below always take precedence
         // (a caller can never clobber grant_type/scope/credentials via ExtraParams).

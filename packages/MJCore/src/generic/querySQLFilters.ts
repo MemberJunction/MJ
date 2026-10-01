@@ -91,16 +91,26 @@ export const RUN_QUERY_SQL_FILTERS: RunQuerySQLFilter[] = [
  * @param filterName The name of the filter to retrieve
  * @returns The filter definition or undefined if not found
  */
-export function getRunQuerySQLFilter(filterName: string): RunQuerySQLFilter | undefined {
+export function GetRunQuerySQLFilter(filterName: string): RunQuerySQLFilter | undefined {
     return RUN_QUERY_SQL_FILTERS.find(f => f.name === filterName);
+}
+
+/** @deprecated Use {@link GetRunQuerySQLFilter}. */
+export function getRunQuerySQLFilter(filterName: string): RunQuerySQLFilter | undefined {
+    return GetRunQuerySQLFilter(filterName);
 }
 
 /**
  * Gets an array of all SQL filter names
  * @returns Array of filter names
  */
-export function getRunQuerySQLFilterNames(): string[] {
+export function GetRunQuerySQLFilterNames(): string[] {
     return RUN_QUERY_SQL_FILTERS.map(f => f.name);
+}
+
+/** @deprecated Use {@link GetRunQuerySQLFilterNames}. */
+export function getRunQuerySQLFilterNames(): string[] {
+    return GetRunQuerySQLFilterNames();
 }
 
 /**

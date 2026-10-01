@@ -53,6 +53,10 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 
 vi.mock('@memberjunction/core-entities', () => ({}));
 vi.mock('@memberjunction/ai', () => ({}));
+// renderAndEmbedBatch embeds through the runner it is handed; the real module is never loaded.
+vi.mock('@memberjunction/ai-prompts', () => ({
+  AIEmbeddingRunner: class {},
+}));
 vi.mock('@memberjunction/ai-vectordb', () => ({
   VectorDBBase: class { constructor(_k: string) {} },
 }));
@@ -87,6 +91,7 @@ vi.mock('@memberjunction/entity-documents', () => ({
 
 import { EntityVectorSyncer } from '../models/entityVectorSync';
 import type { EmbeddingData } from '../generic/vectorSync.types';
+import type { EmbeddingRunParams, EmbeddingRunResult } from '@memberjunction/ai-prompts';
 
 /* ------------------------------------------------------------------ */
 /*  Fixtures                                                           */
@@ -96,11 +101,17 @@ const RAW_TEMPLATE = "Name: {{ (org_name or '') | lower | trim }}";
 const templateContent = { TemplateText: RAW_TEMPLATE };
 const template = { ID: 'T1' };
 
-/** Embedding double: records every text it is asked to embed and returns one vector per text. */
-const embedTextsMock = vi.fn(async ({ texts }: { texts: string[] }) => ({
-  vectors: texts.map((text, i) => [i, text.length]),
+/** Embedding runner double: records every text it is asked to embed and returns one vector per text. */
+const runEmbeddingMock = vi.fn(async (params: EmbeddingRunParams): Promise<EmbeddingRunResult> => ({
+  Success: true,
+  Vectors: params.Texts.map((text, i) => [i, text.length]),
+  PromptRunID: null,
+  TokensUsed: 0,
+  Cost: 0,
+  ExecutionTimeMs: 0,
+  ErrorMessage: null,
 }));
-const embedding = { EmbedTexts: (params: { texts: string[] }) => embedTextsMock(params) };
+const embeddingRunner = { RunEmbedding: (params: EmbeddingRunParams) => runEmbeddingMock(params) };
 
 const batch: Record<string, unknown>[] = [
   { __mj_recordID: 'R1', __mj_compositeKey: 'ID|R1', org_name: 'Acme Corp', VectorID: '', VectorIndexID: 'VI1' },
@@ -110,7 +121,7 @@ const batch: Record<string, unknown>[] = [
 class TestableSyncer extends EntityVectorSyncer {
   public testRenderAndEmbedBatch(rows: Record<string, unknown>[]): Promise<EmbeddingData[]> {
     return (this as unknown as Record<string, CallableFunction>)['renderAndEmbedBatch'](
-      rows, template, templateContent, embedding, 'text-embedding-3-small', 0
+      rows, template, templateContent, embeddingRunner, 'model-1', 'text-embedding-3-small', 0
     ) as Promise<EmbeddingData[]>;
   }
 }
@@ -120,7 +131,7 @@ describe('renderAndEmbedBatch → EmbeddingData.TemplateContent (DocumentText)',
 
   beforeEach(async () => {
     renderTemplateMock.mockClear();
-    embedTextsMock.mockClear();
+    runEmbeddingMock.mockClear();
     result = await new TestableSyncer().testRenderAndEmbedBatch(batch);
   });
 
@@ -139,8 +150,8 @@ describe('renderAndEmbedBatch → EmbeddingData.TemplateContent (DocumentText)',
   });
 
   it('carries exactly the text that was embedded for that record', () => {
-    expect(embedTextsMock).toHaveBeenCalledTimes(1);
-    const embedded = embedTextsMock.mock.calls[0][0].texts;
+    expect(runEmbeddingMock).toHaveBeenCalledTimes(1);
+    const embedded = runEmbeddingMock.mock.calls[0][0].Texts;
     expect(result.map(r => r.TemplateContent)).toEqual(embedded);
     expect(result.map(r => r.__mj_recordID)).toEqual(['R1', 'R2']);
   });

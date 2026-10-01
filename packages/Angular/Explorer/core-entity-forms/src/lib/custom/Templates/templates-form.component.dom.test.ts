@@ -12,7 +12,7 @@
  * Class-behaviour spec, like base-form-component.validation.dom.test.ts: the form is constructed in
  * an injection context with its injected services provided, the template is empty so no lifecycle
  * hook runs, and the `<mj-template-editor>` view child is a stub that hands back the content rows a
- * real editor would report from `getPendingChanges()`. The records are REAL `BaseEntity`s whose
+ * real editor would report from `GetPendingChanges()`. The records are REAL `BaseEntity`s whose
  * `Save()` is the only thing doubled, so validation and dirty tracking are the real thing.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -124,8 +124,8 @@ function fakeProvider(tg: FakeTransactionGroup): IMetadataProvider {
 /** Stands in for the <mj-template-editor> view child: reports the given rows as its pending changes. */
 function fakeEditor(pending: RecordingEntity[]) {
   return {
-    getPendingChanges: () => pending.map(entityObject => ({ entityObject, action: 'save' as const })),
-    markContentsSaved: vi.fn(),
+    GetPendingChanges: () => pending.map(entityObject => ({ entityObject, action: 'save' as const })),
+    MarkContentsSaved: vi.fn(),
   };
 }
 
@@ -133,7 +133,7 @@ function makeForm(record: RecordingEntity, editor: ReturnType<typeof fakeEditor>
   const form = TestBed.runInInjectionContext(() => new MJTemplateFormComponentExtended());
   form.record = record as unknown as MJTemplateFormComponentExtended['record'];
   form.Provider = fakeProvider(tg);
-  form.templateEditor = editor as unknown as TemplateEditorComponent;
+  form.TemplateEditor = editor as unknown as TemplateEditorComponent;
   form.EditMode = true;
   return form;
 }
@@ -172,8 +172,8 @@ describe('MJTemplateFormComponentExtended.SaveRecord persists the editor content
 
     await form.SaveRecord(false);
 
-    expect(editor.markContentsSaved).toHaveBeenCalledTimes(1);
-    expect(form.hasUnsavedChanges).toBe(false);
+    expect(editor.MarkContentsSaved).toHaveBeenCalledTimes(1);
+    expect(form.HasUnsavedChanges).toBe(false);
   });
 
   it('refuses the whole save, with the content error painted, when a content row fails validation', async () => {

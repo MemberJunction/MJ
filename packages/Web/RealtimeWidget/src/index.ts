@@ -36,9 +36,9 @@ export {
 } from './voice/channels/base-widget-channel.js';
 export { WidgetChannelHost, type ChannelToolRouteResult } from './voice/channels/widget-channel-host.js';
 export { WidgetWhiteboardChannel, LoadWidgetWhiteboardChannel } from './voice/channels/whiteboard-channel.js';
-export { SupportWidgetElement, defineSupportWidgetElement, WIDGET_TAG_NAME } from './ui/support-widget-element.js';
+export { SupportWidgetElement, DefineSupportWidgetElement, defineSupportWidgetElement, WIDGET_TAG_NAME } from './ui/support-widget-element.js';
 export { WIDGET_SHADOW_STYLES } from './ui/tokens.js';
-export { mountWidget, bootstrapFromDocument, type WidgetMountDeps } from './loader.js';
+export { MountWidget, mountWidget, BootstrapFromDocument, bootstrapFromDocument, type WidgetMountDeps } from './loader.js';
 
 import { defineSupportWidgetElement } from './ui/support-widget-element.js';
 import { bootstrapFromDocument } from './loader.js';

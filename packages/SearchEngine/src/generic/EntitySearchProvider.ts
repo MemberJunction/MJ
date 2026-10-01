@@ -12,7 +12,7 @@ import { CompositeKey, IMetadataProvider, LogError, LogStatus, RunView, UserInfo
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSearchProvider } from './ISearchProvider';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints, ScopeEntityConstraint } from './search.types';
-import { envIntOverride } from './env-config';
+import { EnvIntOverride } from './env-config';
 
 /**
  * Provides entity-level LIKE-based search using RunView + UserSearchString.
@@ -44,7 +44,7 @@ export class EntitySearchProvider extends BaseSearchProvider {
      * to bound the row-materialization cost of the parallel fan-out), or override the default at
      * process start via the `MJ_SEARCH_PER_ENTITY_FETCH_DEPTH` environment variable.
      */
-    public static PerEntityFetchDepth = envIntOverride('MJ_SEARCH_PER_ENTITY_FETCH_DEPTH', 15);
+    public static PerEntityFetchDepth = EnvIntOverride('MJ_SEARCH_PER_ENTITY_FETCH_DEPTH', 15);
 
     /**
      * Per-entity hard timeout, in milliseconds. If one entity's RunView takes longer
@@ -64,7 +64,7 @@ export class EntitySearchProvider extends BaseSearchProvider {
      * EntitySearchProvider.PerEntityTimeoutMS = 30_000;
      * ```
      */
-    public static PerEntityTimeoutMS = envIntOverride('MJ_SEARCH_PER_ENTITY_TIMEOUT_MS', 3000);
+    public static PerEntityTimeoutMS = EnvIntOverride('MJ_SEARCH_PER_ENTITY_TIMEOUT_MS', 3000);
 
     /**
      * Execute an entity search across all entities with AllowUserSearchAPI=true.

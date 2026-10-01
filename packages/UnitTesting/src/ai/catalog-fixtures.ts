@@ -128,7 +128,7 @@ export interface AICatalog {
 // Builders
 // ---------------------------------------------------------------------------
 let _mvSeq = 0;
-export function makeModelVendor(p: Partial<FxModelVendor> & { ModelID: string; VendorID: string }): FxModelVendor {
+export function MakeModelVendor(p: Partial<FxModelVendor> & { ModelID: string; VendorID: string }): FxModelVendor {
   return {
     ID: p.ID ?? `mv-${++_mvSeq}`,
     Vendor: p.Vendor ?? 'UnknownVendor',
@@ -143,7 +143,12 @@ export function makeModelVendor(p: Partial<FxModelVendor> & { ModelID: string; V
   };
 }
 
-export function makeModel(p: Partial<FxModel> & { ID: string; Name: string }): FxModel {
+/** @deprecated Use {@link MakeModelVendor}. */
+export function makeModelVendor(p: Partial<FxModelVendor> & { ModelID: string; VendorID: string }): FxModelVendor {
+  return MakeModelVendor(p);
+}
+
+export function MakeModel(p: Partial<FxModel> & { ID: string; Name: string }): FxModel {
   return {
     APIName: p.APIName ?? null,
     DriverClass: p.DriverClass ?? null,
@@ -159,7 +164,12 @@ export function makeModel(p: Partial<FxModel> & { ID: string; Name: string }): F
   };
 }
 
-export function makePromptModel(p: Partial<FxPromptModel> & { PromptID: string; ModelID: string }): FxPromptModel {
+/** @deprecated Use {@link MakeModel}. */
+export function makeModel(p: Partial<FxModel> & { ID: string; Name: string }): FxModel {
+  return MakeModel(p);
+}
+
+export function MakePromptModel(p: Partial<FxPromptModel> & { PromptID: string; ModelID: string }): FxPromptModel {
   return {
     ID: p.ID ?? `pm-${p.PromptID}-${p.ModelID}-${p.VendorID ?? 'any'}-${p.ConfigurationID ?? 'null'}`,
     VendorID: p.VendorID ?? null,
@@ -172,12 +182,17 @@ export function makePromptModel(p: Partial<FxPromptModel> & { PromptID: string; 
   };
 }
 
+/** @deprecated Use {@link MakePromptModel}. */
+export function makePromptModel(p: Partial<FxPromptModel> & { PromptID: string; ModelID: string }): FxPromptModel {
+  return MakePromptModel(p);
+}
+
 /**
  * Builds a believable production-shaped catalog. Models carry their own
  * ModelVendors array (the real engine attaches this during AdditionalLoading).
  * `promptModels` starts empty — selection tests add the associations they need.
  */
-export function buildRealisticCatalog(): AICatalog {
+export function BuildRealisticCatalog(): AICatalog {
   const vendorTypeDefinitions: FxVendorType[] = [
     { ID: VENDOR_TYPE.ModelDeveloper, Name: 'Model Developer' },
     { ID: VENDOR_TYPE.InferenceProvider, Name: 'Inference Provider' },
@@ -220,98 +235,103 @@ export function buildRealisticCatalog(): AICatalog {
 
   // Claude 4.5 Opus — Anthropic (developer + inference) + Bedrock (inference, lower priority)
   add(
-    makeModel({ ID: MODEL.ClaudeOpus45, Name: 'Claude 4.5 Opus', Vendor: 'Anthropic', PowerRank: 21, SupportsEffortLevel: true }),
+    MakeModel({ ID: MODEL.ClaudeOpus45, Name: 'Claude 4.5 Opus', Vendor: 'Anthropic', PowerRank: 21, SupportsEffortLevel: true }),
     [
-      makeModelVendor({ ModelID: MODEL.ClaudeOpus45, VendorID: VENDOR.Anthropic, Vendor: 'Anthropic', TypeID: VENDOR_TYPE.ModelDeveloper, Priority: 0 }),
-      makeModelVendor({ ModelID: MODEL.ClaudeOpus45, VendorID: VENDOR.Anthropic, Vendor: 'Anthropic', DriverClass: 'AnthropicLLM', APIName: 'claude-opus-4-5-20251101', Priority: 1, SupportsEffortLevel: true }),
-      makeModelVendor({ ModelID: MODEL.ClaudeOpus45, VendorID: VENDOR.AmazonBedrock, Vendor: 'Amazon Bedrock', DriverClass: 'BedrockLLM', APIName: 'anthropic.claude-opus-4-5-20251101-v1:0', Priority: 5, SupportsEffortLevel: true }),
+      MakeModelVendor({ ModelID: MODEL.ClaudeOpus45, VendorID: VENDOR.Anthropic, Vendor: 'Anthropic', TypeID: VENDOR_TYPE.ModelDeveloper, Priority: 0 }),
+      MakeModelVendor({ ModelID: MODEL.ClaudeOpus45, VendorID: VENDOR.Anthropic, Vendor: 'Anthropic', DriverClass: 'AnthropicLLM', APIName: 'claude-opus-4-5-20251101', Priority: 1, SupportsEffortLevel: true }),
+      MakeModelVendor({ ModelID: MODEL.ClaudeOpus45, VendorID: VENDOR.AmazonBedrock, Vendor: 'Amazon Bedrock', DriverClass: 'BedrockLLM', APIName: 'anthropic.claude-opus-4-5-20251101-v1:0', Priority: 5, SupportsEffortLevel: true }),
     ],
   );
 
   // Claude 4.5 Sonnet — Anthropic inference only
   add(
-    makeModel({ ID: MODEL.ClaudeSonnet45, Name: 'Claude 4.5 Sonnet', Vendor: 'Anthropic', PowerRank: 19, SupportsEffortLevel: true }),
+    MakeModel({ ID: MODEL.ClaudeSonnet45, Name: 'Claude 4.5 Sonnet', Vendor: 'Anthropic', PowerRank: 19, SupportsEffortLevel: true }),
     [
-      makeModelVendor({ ModelID: MODEL.ClaudeSonnet45, VendorID: VENDOR.Anthropic, Vendor: 'Anthropic', DriverClass: 'AnthropicLLM', APIName: 'claude-sonnet-4-5-20250929', Priority: 1, SupportsEffortLevel: true }),
+      MakeModelVendor({ ModelID: MODEL.ClaudeSonnet45, VendorID: VENDOR.Anthropic, Vendor: 'Anthropic', DriverClass: 'AnthropicLLM', APIName: 'claude-sonnet-4-5-20250929', Priority: 1, SupportsEffortLevel: true }),
     ],
   );
 
   // Claude Haiku 4.5 — fast/cheap
   add(
-    makeModel({ ID: MODEL.ClaudeHaiku45, Name: 'Claude Haiku 4.5', Vendor: 'Anthropic', PowerRank: 12, SupportsEffortLevel: true }),
+    MakeModel({ ID: MODEL.ClaudeHaiku45, Name: 'Claude Haiku 4.5', Vendor: 'Anthropic', PowerRank: 12, SupportsEffortLevel: true }),
     [
-      makeModelVendor({ ModelID: MODEL.ClaudeHaiku45, VendorID: VENDOR.Anthropic, Vendor: 'Anthropic', DriverClass: 'AnthropicLLM', APIName: 'claude-haiku-4-5', Priority: 1, SupportsEffortLevel: true }),
+      MakeModelVendor({ ModelID: MODEL.ClaudeHaiku45, VendorID: VENDOR.Anthropic, Vendor: 'Anthropic', DriverClass: 'AnthropicLLM', APIName: 'claude-haiku-4-5', Priority: 1, SupportsEffortLevel: true }),
     ],
   );
 
   // GPT-5 — OpenAI + Azure-ish (use OpenAI inference here)
   add(
-    makeModel({ ID: MODEL.GPT5, Name: 'GPT-5', Vendor: 'OpenAI', PowerRank: 20, SupportsEffortLevel: true }),
+    MakeModel({ ID: MODEL.GPT5, Name: 'GPT-5', Vendor: 'OpenAI', PowerRank: 20, SupportsEffortLevel: true }),
     [
-      makeModelVendor({ ModelID: MODEL.GPT5, VendorID: VENDOR.OpenAI, Vendor: 'OpenAI', DriverClass: 'OpenAILLM', APIName: 'gpt-5', Priority: 1, SupportsEffortLevel: true }),
+      MakeModelVendor({ ModelID: MODEL.GPT5, VendorID: VENDOR.OpenAI, Vendor: 'OpenAI', DriverClass: 'OpenAILLM', APIName: 'gpt-5', Priority: 1, SupportsEffortLevel: true }),
     ],
   );
 
   // GPT-5 Mini
   add(
-    makeModel({ ID: MODEL.GPT5Mini, Name: 'GPT-5 Mini', Vendor: 'OpenAI', PowerRank: 13 }),
+    MakeModel({ ID: MODEL.GPT5Mini, Name: 'GPT-5 Mini', Vendor: 'OpenAI', PowerRank: 13 }),
     [
-      makeModelVendor({ ModelID: MODEL.GPT5Mini, VendorID: VENDOR.OpenAI, Vendor: 'OpenAI', DriverClass: 'OpenAILLM', APIName: 'gpt-5-mini', Priority: 1 }),
+      MakeModelVendor({ ModelID: MODEL.GPT5Mini, VendorID: VENDOR.OpenAI, Vendor: 'OpenAI', DriverClass: 'OpenAILLM', APIName: 'gpt-5-mini', Priority: 1 }),
     ],
   );
 
   // Gemini 3 Pro — INACTIVE model (should be excluded from selection)
   add(
-    makeModel({ ID: MODEL.Gemini3Pro, Name: 'Gemini 3 Pro', Vendor: 'Google', PowerRank: 25, IsActive: false }),
+    MakeModel({ ID: MODEL.Gemini3Pro, Name: 'Gemini 3 Pro', Vendor: 'Google', PowerRank: 25, IsActive: false }),
     [
-      makeModelVendor({ ModelID: MODEL.Gemini3Pro, VendorID: VENDOR.Google, Vendor: 'Google', DriverClass: 'GeminiLLM', APIName: 'gemini-3-pro', Priority: 1 }),
+      MakeModelVendor({ ModelID: MODEL.Gemini3Pro, VendorID: VENDOR.Google, Vendor: 'Google', DriverClass: 'GeminiLLM', APIName: 'gemini-3-pro', Priority: 1 }),
     ],
   );
 
   // Gemini 3 Flash — two inference providers (Google priority 1, Vertex priority 1) + developer rows
   add(
-    makeModel({ ID: MODEL.Gemini3Flash, Name: 'Gemini 3 Flash', Vendor: 'Google', PowerRank: 22 }),
+    MakeModel({ ID: MODEL.Gemini3Flash, Name: 'Gemini 3 Flash', Vendor: 'Google', PowerRank: 22 }),
     [
-      makeModelVendor({ ModelID: MODEL.Gemini3Flash, VendorID: VENDOR.Google, Vendor: 'Google', TypeID: VENDOR_TYPE.ModelDeveloper, Priority: 0 }),
-      makeModelVendor({ ModelID: MODEL.Gemini3Flash, VendorID: VENDOR.Google, Vendor: 'Google', DriverClass: 'GeminiLLM', APIName: 'gemini-3-flash-preview', Priority: 2 }),
-      makeModelVendor({ ModelID: MODEL.Gemini3Flash, VendorID: VENDOR.VertexAI, Vendor: 'Vertex AI', DriverClass: 'VertexLLM', APIName: 'gemini-3-flash-preview', Priority: 1 }),
+      MakeModelVendor({ ModelID: MODEL.Gemini3Flash, VendorID: VENDOR.Google, Vendor: 'Google', TypeID: VENDOR_TYPE.ModelDeveloper, Priority: 0 }),
+      MakeModelVendor({ ModelID: MODEL.Gemini3Flash, VendorID: VENDOR.Google, Vendor: 'Google', DriverClass: 'GeminiLLM', APIName: 'gemini-3-flash-preview', Priority: 2 }),
+      MakeModelVendor({ ModelID: MODEL.Gemini3Flash, VendorID: VENDOR.VertexAI, Vendor: 'Vertex AI', DriverClass: 'VertexLLM', APIName: 'gemini-3-flash-preview', Priority: 1 }),
     ],
   );
 
   // Qwen 3 32B — Groq (active, effort) + Cerebras (INACTIVE vendor row) + Alibaba developer
   add(
-    makeModel({ ID: MODEL.Qwen3_32B, Name: 'Qwen 3 32B', Vendor: 'Alibaba Cloud', PowerRank: 11 }),
+    MakeModel({ ID: MODEL.Qwen3_32B, Name: 'Qwen 3 32B', Vendor: 'Alibaba Cloud', PowerRank: 11 }),
     [
-      makeModelVendor({ ModelID: MODEL.Qwen3_32B, VendorID: VENDOR.Cerebras, Vendor: 'Cerebras', DriverClass: 'CerebrasLLM', APIName: 'qwen-3-32b', Priority: 0, Status: 'Inactive' }),
-      makeModelVendor({ ModelID: MODEL.Qwen3_32B, VendorID: VENDOR.Groq, Vendor: 'Groq', DriverClass: 'GroqLLM', APIName: 'qwen/qwen3-32b', Priority: 1, SupportsEffortLevel: true }),
+      MakeModelVendor({ ModelID: MODEL.Qwen3_32B, VendorID: VENDOR.Cerebras, Vendor: 'Cerebras', DriverClass: 'CerebrasLLM', APIName: 'qwen-3-32b', Priority: 0, Status: 'Inactive' }),
+      MakeModelVendor({ ModelID: MODEL.Qwen3_32B, VendorID: VENDOR.Groq, Vendor: 'Groq', DriverClass: 'GroqLLM', APIName: 'qwen/qwen3-32b', Priority: 1, SupportsEffortLevel: true }),
     ],
   );
 
   // Llama 70B on Groq
   add(
-    makeModel({ ID: MODEL.Llama70B, Name: 'Llama 3 70B', Vendor: 'Groq', PowerRank: 9 }),
+    MakeModel({ ID: MODEL.Llama70B, Name: 'Llama 3 70B', Vendor: 'Groq', PowerRank: 9 }),
     [
-      makeModelVendor({ ModelID: MODEL.Llama70B, VendorID: VENDOR.Groq, Vendor: 'Groq', DriverClass: 'GroqLLM', APIName: 'llama-3.3-70b', Priority: 1 }),
+      MakeModelVendor({ ModelID: MODEL.Llama70B, VendorID: VENDOR.Groq, Vendor: 'Groq', DriverClass: 'GroqLLM', APIName: 'llama-3.3-70b', Priority: 1 }),
     ],
   );
 
   // DeepSeek V4
   add(
-    makeModel({ ID: MODEL.DeepSeekV4, Name: 'DeepSeek V4 Pro', Vendor: 'DeepSeek', PowerRank: 15 }),
+    MakeModel({ ID: MODEL.DeepSeekV4, Name: 'DeepSeek V4 Pro', Vendor: 'DeepSeek', PowerRank: 15 }),
     [
-      makeModelVendor({ ModelID: MODEL.DeepSeekV4, VendorID: VENDOR.DeepSeek, Vendor: 'DeepSeek', DriverClass: 'DeepSeekLLM', APIName: 'deepseek-v4-pro', Priority: 1 }),
+      MakeModelVendor({ ModelID: MODEL.DeepSeekV4, VendorID: VENDOR.DeepSeek, Vendor: 'DeepSeek', DriverClass: 'DeepSeekLLM', APIName: 'deepseek-v4-pro', Priority: 1 }),
     ],
   );
 
   // Grok 4 — INACTIVE model
   add(
-    makeModel({ ID: MODEL.GrokInactive, Name: 'Grok 4', Vendor: 'x.ai', PowerRank: 19, IsActive: false }),
+    MakeModel({ ID: MODEL.GrokInactive, Name: 'Grok 4', Vendor: 'x.ai', PowerRank: 19, IsActive: false }),
     [
-      makeModelVendor({ ModelID: MODEL.GrokInactive, VendorID: VENDOR.xAI, Vendor: 'x.ai', DriverClass: 'xAILLM', APIName: 'grok-4-0709', Priority: 1 }),
+      MakeModelVendor({ ModelID: MODEL.GrokInactive, VendorID: VENDOR.xAI, Vendor: 'x.ai', DriverClass: 'xAILLM', APIName: 'grok-4-0709', Priority: 1 }),
     ],
   );
 
   return { vendorTypeDefinitions, vendors, modelTypes, configurations, models, modelVendors, promptModels: [] };
+}
+
+/** @deprecated Use {@link BuildRealisticCatalog}. */
+export function buildRealisticCatalog(): AICatalog {
+  return BuildRealisticCatalog();
 }
 
 /** Driver classes that have valid credentials by default in tests (the common LLM providers). */

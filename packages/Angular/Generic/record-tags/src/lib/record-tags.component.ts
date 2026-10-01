@@ -105,27 +105,27 @@ export class RecordTagsComponent extends BaseAngularComponent implements OnInit 
         if (result.Success) {
             // Sort by weight descending
             this.TaggedItems = result.Results.sort((a, b) => b.Weight - a.Weight);
-            this.CloudItems = this.BuildCloudItems(this.TaggedItems);
+            this.CloudItems = this.buildCloudItems(this.TaggedItems);
         }
         this.IsLoading = false;
         this.TagCountChanged.emit(this.TaggedItems.length);
 
         // Check if entity has vectors available
-        this.HasVectors = this.CheckEntityHasVectors();
+        this.HasVectors = this.checkEntityHasVectors();
 
         // Load related records in background (non-blocking)
         const shouldLoadByTags = this.TaggedItems.length > 0 && this.RelatedRecordsMode !== 'vectors';
         const shouldLoadByVectors = this.HasVectors && this.RelatedRecordsMode !== 'tags';
 
         if (shouldLoadByTags || shouldLoadByVectors) {
-            this.LoadRelatedRecordsCombined(shouldLoadByTags, shouldLoadByVectors);
+            this.loadRelatedRecordsCombined(shouldLoadByTags, shouldLoadByVectors);
         }
     }
 
     /**
      * Check if the current entity has an active EntityDocument with vector sync.
      */
-    private CheckEntityHasVectors(): boolean {
+    private checkEntityHasVectors(): boolean {
         try {
             const entityName = this.Record.EntityInfo.Name;
             const docs = KnowledgeHubMetadataEngine.Instance.GetEntityDocumentsForEntity(entityName);
@@ -139,16 +139,16 @@ export class RecordTagsComponent extends BaseAngularComponent implements OnInit 
      * Load related records using tags, vectors, or both.
      * Merges results from both sources, combining scores via simple averaging.
      */
-    private async LoadRelatedRecordsCombined(useTags: boolean, useVectors: boolean): Promise<void> {
+    private async loadRelatedRecordsCombined(useTags: boolean, useVectors: boolean): Promise<void> {
         this.IsLoadingRelated = true;
 
-        const tagResults: RelatedRecord[] = useTags ? await this.LoadTagRelatedRecords() : [];
-        const vectorResults: RelatedRecord[] = useVectors ? await this.LoadVectorRelatedRecords() : [];
+        const tagResults: RelatedRecord[] = useTags ? await this.loadTagRelatedRecords() : [];
+        const vectorResults: RelatedRecord[] = useVectors ? await this.loadVectorRelatedRecords() : [];
 
         // Merge tag and vector results
-        const merged = this.MergeRelatedResults(tagResults, vectorResults);
+        const merged = this.mergeRelatedResults(tagResults, vectorResults);
         this.RelatedRecords = merged.slice(0, 10);
-        await this.ResolveRelatedRecordNames();
+        await this.resolveRelatedRecordNames();
 
         this.IsLoadingRelated = false;
     }
@@ -157,7 +157,7 @@ export class RecordTagsComponent extends BaseAngularComponent implements OnInit 
      * Merge tag-based and vector-based related records.
      * Records found by both sources get boosted score and Source='both'.
      */
-    private MergeRelatedResults(tagResults: RelatedRecord[], vectorResults: RelatedRecord[]): RelatedRecord[] {
+    private mergeRelatedResults(tagResults: RelatedRecord[], vectorResults: RelatedRecord[]): RelatedRecord[] {
         const map = new Map<string, RelatedRecord>();
 
         for (const r of tagResults) {
@@ -189,7 +189,7 @@ export class RecordTagsComponent extends BaseAngularComponent implements OnInit 
      * Load related records via vector similarity using SearchKnowledge GraphQL mutation.
      * Uses the record's display name as the search query.
      */
-    private async LoadVectorRelatedRecords(): Promise<RelatedRecord[]> {
+    private async loadVectorRelatedRecords(): Promise<RelatedRecord[]> {
         try {
             const entityName = this.Record.EntityInfo.Name;
             const recordID = this.Record.PrimaryKey.Values();
@@ -260,7 +260,7 @@ export class RecordTagsComponent extends BaseAngularComponent implements OnInit 
      * Load related records by finding other records that share the same tags.
      * Groups by entity+recordID and scores by number of shared tags weighted by tag weight.
      */
-    private async LoadTagRelatedRecords(): Promise<RelatedRecord[]> {
+    private async loadTagRelatedRecords(): Promise<RelatedRecord[]> {
         const entityID = this.Record.EntityInfo.ID;
         const recordID = this.Record.PrimaryKey.Values();
 
@@ -345,7 +345,7 @@ export class RecordTagsComponent extends BaseAngularComponent implements OnInit 
     /**
      * Resolve display names for related records using GetEntityRecordNames.
      */
-    private async ResolveRelatedRecordNames(): Promise<void> {
+    private async resolveRelatedRecordNames(): Promise<void> {
         const md = this.ProviderToUse;
         for (const related of this.RelatedRecords) {
             try {
@@ -379,7 +379,7 @@ export class RecordTagsComponent extends BaseAngularComponent implements OnInit 
     public async RemoveTag(taggedItem: MJTaggedItemEntity): Promise<void> {
         await taggedItem.Delete();
         this.TaggedItems = this.TaggedItems.filter(t => !UUIDsEqual(t.ID, taggedItem.ID));
-        this.CloudItems = this.BuildCloudItems(this.TaggedItems);
+        this.CloudItems = this.buildCloudItems(this.TaggedItems);
         this.TagCountChanged.emit(this.TaggedItems.length);
     }
 
@@ -424,7 +424,7 @@ export class RecordTagsComponent extends BaseAngularComponent implements OnInit 
     /**
      * Converts TaggedItems to WordCloudItem format.
      */
-    private BuildCloudItems(items: MJTaggedItemEntity[]): WordCloudItem[] {
+    private buildCloudItems(items: MJTaggedItemEntity[]): WordCloudItem[] {
         return items.map(item => ({
             Text: item.Tag,
             Weight: item.Weight,

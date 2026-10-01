@@ -18,6 +18,8 @@
  */
 import type { MJAIAgentStepEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
+import { RewriteDecisionReferences } from './decision-conditions';
+import { ReadFlowDecisionStepConfiguration } from './flow-decision-step';
 import { DetectCycle, type TaskGraphEdge, type TaskGraphNode } from './graph-algorithms';
 import {
     TaskNode,
@@ -100,7 +102,18 @@ export type FlowCompilerOptions = {
 
 /** Why a flow could not be compiled, in workflow vocabulary (D18 — never graph/DAG/node). */
 export type FlowCompileError = {
-    Code: 'NoStartingStep' | 'UnreachableStartingStep' | 'LoopDetected' | 'UnresolvedReference' | 'UnsupportedStepType';
+    Code:
+        | 'NoStartingStep'
+        | 'UnreachableStartingStep'
+        | 'LoopDetected'
+        | 'UnresolvedReference'
+        | 'UnsupportedStepType'
+        /** A Decision step's `Configuration` cannot be read, or asks questions a decision cannot answer. */
+        | 'InvalidDecisionStep'
+        /** Two Decision steps share a key, so a path condition could not say which one it reads. */
+        | 'DuplicateDecisionKey'
+        /** A path condition reads `decisions.<key>` and no Decision step in the workflow has that key. */
+        | 'UnknownDecisionKey';
     Message: string;
     /** The offending step, when attributable. */
     StepID?: string;
@@ -201,7 +214,12 @@ export function CompileFlowToTaskGraph(
     }
 
     // ── 5. Emission ──────────────────────────────────────────────────────────
-    const dependenciesByDestination = buildDependencies(compiledPaths, options);
+    // A condition names a Decision step by its key; the compiled node's tempId is its step ID. The
+    // conditions are rewritten here, once, so the graph the dispatcher runs names what it contains.
+    const decisionKeys = CollectDecisionStepKeys(compiledSteps);
+    errors.push(...decisionKeys.Errors);
+    const routedPaths = compiledPaths.map((p) => withDecisionStepIDs(p, decisionKeys.StepIDByKey, compiledSteps, errors));
+    const dependenciesByDestination = buildDependencies(routedPaths, options);
 
     const tasks: TaskGraphSpecNode[] = [];
     for (const step of compiledSteps) {
@@ -224,6 +242,93 @@ export function CompileFlowToTaskGraph(
         },
         Errors: [],
         Excluded: excluded,
+    };
+}
+
+/** The step columns the Decision key check reads. `MJAIAgentStepEntity` satisfies it as-is. */
+export type FlowDecisionKeyStep = Pick<FlowCompilerStep, 'ID' | 'Name' | 'StepType' | 'Configuration'>;
+
+/** A flow's Decision steps by key, and every key more than one of them uses. */
+export type FlowDecisionKeys = {
+    /** Each key's step ID. A duplicated key maps to the first step that used it. */
+    StepIDByKey: Map<string, string>;
+    /** One `DuplicateDecisionKey` error per step whose key an earlier step already took. */
+    Errors: FlowCompileError[];
+};
+
+/**
+ * Reads every Decision step's key and refuses any key two of them share.
+ *
+ * A path condition names a Decision step by key (`decisions.triage.intent`), so a shared key would
+ * leave it unsaid which step it reads. Both engines run this: the compiler over the steps it
+ * compiles, and the in-run walker over the flow's active steps when a run starts.
+ *
+ * A step whose configuration cannot be read has no key here; the engine that runs it reports why.
+ */
+export function CollectDecisionStepKeys(steps: readonly FlowDecisionKeyStep[]): FlowDecisionKeys {
+    const keys: FlowDecisionKeys = { StepIDByKey: new Map<string, string>(), Errors: [] };
+    const nameByKey = new Map<string, string>();
+    for (const step of steps) {
+        if (step.StepType !== 'Decision') continue;
+        const read = ReadFlowDecisionStepConfiguration(step.Configuration);
+        if ('Error' in read) continue;
+
+        const key = read.Config.key;
+        const taken = nameByKey.get(key);
+        if (taken === undefined) {
+            keys.StepIDByKey.set(key, step.ID);
+            nameByKey.set(key, step.Name);
+            continue;
+        }
+        keys.Errors.push({
+            Code: 'DuplicateDecisionKey',
+            Message:
+                `Decision steps "${taken}" and "${step.Name}" both use the key "${key}". A path condition names a ` +
+                `Decision step by its key (decisions.${key}.<question>), so each Decision step needs its own.`,
+            StepID: step.ID,
+        });
+    }
+    return keys;
+}
+
+/**
+ * A path whose condition names Decision steps by step ID rather than by key, or reports each key it
+ * reads that no Decision step here has.
+ *
+ * A compiled node's `tempId` is its step ID, and that is what the dispatcher keys answers by.
+ */
+function withDecisionStepIDs(
+    path: FlowCompilerPath,
+    stepIDByKey: ReadonlyMap<string, string>,
+    steps: readonly FlowCompilerStep[],
+    errors: FlowCompileError[],
+): FlowCompilerPath {
+    if (!path.Condition?.trim()) return path;
+
+    const rewrite = RewriteDecisionReferences(path.Condition, (key) => stepIDByKey.get(key));
+    if (rewrite.Unknown.length > 0) {
+        const origin = steps.find((s) => UUIDsEqual(s.ID, path.OriginStepID))?.Name ?? path.OriginStepID;
+        const known = [...stepIDByKey.keys()].map((k) => `"${k}"`).join(', ') || 'none';
+        for (const key of rewrite.Unknown) {
+            errors.push({
+                Code: 'UnknownDecisionKey',
+                Message:
+                    `A path from step "${origin}" reads decisions.${key}, but no Decision step in this workflow that ` +
+                    `can run has the key "${key}" (keys: ${known}). The condition was: ${path.Condition}`,
+                StepID: path.OriginStepID,
+            });
+        }
+    }
+    if (rewrite.Expression === path.Condition) return path;
+    // Copied field by field, not spread: callers may pass entity objects, whose fields are getters
+    // that a spread silently drops.
+    return {
+        ID: path.ID,
+        OriginStepID: path.OriginStepID,
+        DestinationStepID: path.DestinationStepID,
+        Condition: rewrite.Expression,
+        Priority: path.Priority,
+        PathPoints: path.PathPoints,
     };
 }
 
@@ -375,6 +480,12 @@ function emitNode(
             return TaskNode.ForEach(base, buildForEach(step, options, errors));
         case 'While':
             return TaskNode.While(base, buildWhile(step, options, errors));
+        case 'Decision': {
+            // NULL means the node's own default, `Default Decision`; a set one must still resolve.
+            const promptName = step.PromptID ? options.ResolvePromptName(step.PromptID) : undefined;
+            if (step.PromptID && !promptName) return unresolved('a prompt', step.PromptID);
+            return emitDecisionNode(step, base, promptName ?? undefined, errors);
+        }
         default:
             errors.push({
                 Code: 'UnsupportedStepType',
@@ -383,6 +494,32 @@ function emitNode(
             });
             return null;
     }
+}
+
+/**
+ * A Decision step → a Decision node, or the reason it cannot be one.
+ *
+ * `promptName` is the step's `PromptID` resolved by name, like every other reference. Absent means
+ * the node's own default, `Default Decision`, so none is emitted rather than a guess at it.
+ */
+function emitDecisionNode(
+    step: FlowCompilerStep,
+    base: TaskNodeBase,
+    promptName: string | undefined,
+    errors: FlowCompileError[],
+): TaskGraphSpecNode | null {
+    const read = ReadFlowDecisionStepConfiguration(step.Configuration);
+    if ('Error' in read) {
+        errors.push({ Code: 'InvalidDecisionStep', Message: `Decision step "${step.Name}" cannot run: ${read.Error}.`, StepID: step.ID });
+        return null;
+    }
+
+    const { state, questions } = read.Config;
+    return TaskNode.Decision(base, {
+        ...(promptName ? { promptName } : {}),
+        ...(state !== undefined ? { state } : {}),
+        questions,
+    });
 }
 
 /**

@@ -51,7 +51,12 @@ export class LiveKitAudioMeterComponent implements OnDestroy {
   private participant: LiveKitParticipantView | null = null;
 
   /** The bar slots to render (count comes from the core constant). */
-  public readonly bars = new Array(AUDIO_METER_BIN_COUNT).fill(0);
+  public readonly Bars = new Array(AUDIO_METER_BIN_COUNT).fill(0);
+
+  /** @deprecated Use {@link Bars}. */
+  public get bars() {
+    return this.Bars;
+  }
 
   /** The participant whose audio level this meter renders. */
   @Input()

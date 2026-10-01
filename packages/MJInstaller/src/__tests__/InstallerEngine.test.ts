@@ -16,8 +16,10 @@ vi.mock('../models/InstallConfig.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../models/InstallConfig.js')>();
   return {
     ...actual,
-    resolveFromEnvironment: (...args: Parameters<typeof actual.resolveFromEnvironment>) => mockResolveFromEnv(...args),
-    loadConfigFile: (...args: Parameters<typeof actual.loadConfigFile>) => mockLoadConfigFile(...args),
+    ResolveFromEnvironment: (...args: Parameters<typeof actual.resolveFromEnvironment>) => mockResolveFromEnv(...args),
+    get resolveFromEnvironment() { return this.ResolveFromEnvironment; },
+    LoadConfigFile: (...args: Parameters<typeof actual.loadConfigFile>) => mockLoadConfigFile(...args),
+    get loadConfigFile() { return this.LoadConfigFile; },
     // mergeConfigs uses the real implementation — it's pure logic with no I/O
   };
 });

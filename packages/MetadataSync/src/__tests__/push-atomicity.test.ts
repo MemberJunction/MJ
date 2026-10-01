@@ -82,6 +82,19 @@ class FakeDbProvider {
         this.pending.push(row);
         await this.CommitTransaction();
     }
+
+    /** This fake records no metadata-dataset writes, so a push does not reload. */
+    IsMetadataDatasetMember(_entityName: string): boolean {
+        return false;
+    }
+
+    async RefreshWithinTransaction(): Promise<boolean> {
+        return true;
+    }
+
+    async Refresh(): Promise<boolean> {
+        return true;
+    }
 }
 
 let db = new FakeDatabase();

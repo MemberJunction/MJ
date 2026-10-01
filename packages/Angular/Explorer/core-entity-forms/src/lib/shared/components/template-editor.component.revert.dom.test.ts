@@ -1,12 +1,12 @@
 /**
  * When a host form discards its edit, `BaseFormComponent.CancelEdit()` reverts every pending record
- * (including the contents this editor handed over via `getPendingChanges()`) and broadcasts
+ * (including the contents this editor handed over via `GetPendingChanges()`) and broadcasts
  * REVERT_PENDING_CHANGES. The editor must reload its rows from the saved state on that event, so the
  * screen stops showing discarded text and the dirty flag clears; otherwise the next save fails on a
  * row the user believes they threw away. It must react only to a form it sits inside.
  *
  * Class-behaviour spec: the editor is constructed in an injection context with a real DOM element,
- * nested inside (or beside) the element the fake form event carries, and `refreshAndDiscardChanges`
+ * nested inside (or beside) the element the fake form event carries, and `RefreshAndDiscardChanges`
  * is spied so no data load runs.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -27,7 +27,7 @@ function makeEditor(hostElement: HTMLElement): TemplateEditorComponent {
   const editor = TestBed.runInInjectionContext(
     () => new TemplateEditorComponent({} as MJNotificationService, {} as MJConfirmService)
   );
-  editor.template = null; // ngOnInit then skips the content load
+  editor.Template = null; // ngOnInit then skips the content load
   return editor;
 }
 
@@ -56,7 +56,7 @@ describe('TemplateEditorComponent reacts to the host form discarding its edit', 
 
   it('reloads its rows when the form it sits inside reverts pending changes', async () => {
     const editor = makeEditor(formElement);
-    const reload = vi.spyOn(editor, 'refreshAndDiscardChanges').mockResolvedValue();
+    const reload = vi.spyOn(editor, 'RefreshAndDiscardChanges').mockResolvedValue();
     await editor.ngOnInit();
 
     raiseFormEvent(formElement, BaseFormComponentEventCodes.REVERT_PENDING_CHANGES);
@@ -67,7 +67,7 @@ describe('TemplateEditorComponent reacts to the host form discarding its edit', 
 
   it('ignores a revert from a form it is not inside, and other form events from its own form', async () => {
     const editor = makeEditor(formElement);
-    const reload = vi.spyOn(editor, 'refreshAndDiscardChanges').mockResolvedValue();
+    const reload = vi.spyOn(editor, 'RefreshAndDiscardChanges').mockResolvedValue();
     await editor.ngOnInit();
 
     const otherForm = document.createElement('form');
@@ -81,7 +81,7 @@ describe('TemplateEditorComponent reacts to the host form discarding its edit', 
 
   it('stops listening once destroyed', async () => {
     const editor = makeEditor(formElement);
-    const reload = vi.spyOn(editor, 'refreshAndDiscardChanges').mockResolvedValue();
+    const reload = vi.spyOn(editor, 'RefreshAndDiscardChanges').mockResolvedValue();
     await editor.ngOnInit();
     editor.ngOnDestroy();
 

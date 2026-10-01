@@ -11,8 +11,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-    buildDashboardBrowserAgentContext,
-    isValidBrowserViewMode,
+    BuildDashboardBrowserAgentContext,
+    IsValidBrowserViewMode,
     AGENT_CONTEXT_NAME_LIST_CAP,
     DashboardBrowserAgentContextInput,
     OpenedDashboardPanelSummary,
@@ -41,24 +41,24 @@ describe('dashboard-browser-agent-context', () => {
 
     describe('isValidBrowserViewMode', () => {
         it('accepts the two known modes', () => {
-            expect(isValidBrowserViewMode('cards')).toBe(true);
-            expect(isValidBrowserViewMode('list')).toBe(true);
+            expect(IsValidBrowserViewMode('cards')).toBe(true);
+            expect(IsValidBrowserViewMode('list')).toBe(true);
         });
 
         it('rejects unknown / malformed input without throwing', () => {
-            expect(isValidBrowserViewMode('grid')).toBe(false);
-            expect(isValidBrowserViewMode('')).toBe(false);
-            expect(isValidBrowserViewMode('CARDS')).toBe(false); // case-sensitive
-            expect(isValidBrowserViewMode(undefined)).toBe(false);
-            expect(isValidBrowserViewMode(null)).toBe(false);
-            expect(isValidBrowserViewMode(42)).toBe(false);
-            expect(isValidBrowserViewMode({})).toBe(false);
+            expect(IsValidBrowserViewMode('grid')).toBe(false);
+            expect(IsValidBrowserViewMode('')).toBe(false);
+            expect(IsValidBrowserViewMode('CARDS')).toBe(false); // case-sensitive
+            expect(IsValidBrowserViewMode(undefined)).toBe(false);
+            expect(IsValidBrowserViewMode(null)).toBe(false);
+            expect(IsValidBrowserViewMode(42)).toBe(false);
+            expect(IsValidBrowserViewMode({})).toBe(false);
         });
     });
 
     describe('buildDashboardBrowserAgentContext', () => {
         it('passes through the list-level snapshot fields', () => {
-            const ctx = buildDashboardBrowserAgentContext(base);
+            const ctx = BuildDashboardBrowserAgentContext(base);
             expect(ctx['Mode']).toBe('list');
             expect(ctx['SelectedDashboardId']).toBeNull();
             expect(ctx['SelectedDashboardName']).toBeNull();
@@ -74,7 +74,7 @@ describe('dashboard-browser-agent-context', () => {
         });
 
         it('reflects a selected dashboard in view mode', () => {
-            const ctx = buildDashboardBrowserAgentContext({
+            const ctx = BuildDashboardBrowserAgentContext({
                 ...base,
                 Mode: 'view',
                 SelectedDashboardId: 'abc-123',
@@ -94,7 +94,7 @@ describe('dashboard-browser-agent-context', () => {
         });
 
         it('publishes the visible dashboard NAMES so the agent can pick one to open', () => {
-            const ctx = buildDashboardBrowserAgentContext({
+            const ctx = BuildDashboardBrowserAgentContext({
                 ...base,
                 VisibleDashboardNames: ['Revenue', 'Pipeline', 'Churn'],
                 FilteredDashboardCount: 3,
@@ -104,7 +104,7 @@ describe('dashboard-browser-agent-context', () => {
         });
 
         it('publishes the available category NAMES and the selected category name', () => {
-            const ctx = buildDashboardBrowserAgentContext({
+            const ctx = BuildDashboardBrowserAgentContext({
                 ...base,
                 AvailableCategoryNames: ['Finance', 'Ops', 'Marketing'],
                 SelectedCategoryId: 'cat-7',
@@ -116,7 +116,7 @@ describe('dashboard-browser-agent-context', () => {
 
         it('caps the visible-dashboard name list and adds a companion count when truncated', () => {
             const visible = names('Dashboard', AGENT_CONTEXT_NAME_LIST_CAP + 10);
-            const ctx = buildDashboardBrowserAgentContext({
+            const ctx = BuildDashboardBrowserAgentContext({
                 ...base,
                 VisibleDashboardNames: visible,
                 FilteredDashboardCount: visible.length,
@@ -129,13 +129,13 @@ describe('dashboard-browser-agent-context', () => {
 
         it('caps the available-category name list and adds a companion count when truncated', () => {
             const cats = names('Category', AGENT_CONTEXT_NAME_LIST_CAP + 5);
-            const ctx = buildDashboardBrowserAgentContext({ ...base, AvailableCategoryNames: cats });
+            const ctx = BuildDashboardBrowserAgentContext({ ...base, AvailableCategoryNames: cats });
             expect((ctx['AvailableCategories'] as string[]).length).toBe(AGENT_CONTEXT_NAME_LIST_CAP);
             expect(ctx['AvailableCategoryCount']).toBe(cats.length);
         });
 
         it('omits the companion count fields when the lists are within the cap', () => {
-            const ctx = buildDashboardBrowserAgentContext({
+            const ctx = BuildDashboardBrowserAgentContext({
                 ...base,
                 VisibleDashboardNames: names('Dashboard', 5),
                 AvailableCategoryNames: names('Category', 3),
@@ -145,18 +145,18 @@ describe('dashboard-browser-agent-context', () => {
         });
 
         it('derives HasSearch = false for empty / whitespace search text', () => {
-            expect(buildDashboardBrowserAgentContext({ ...base, SearchText: '' })['HasSearch']).toBe(false);
-            expect(buildDashboardBrowserAgentContext({ ...base, SearchText: '   ' })['HasSearch']).toBe(false);
+            expect(BuildDashboardBrowserAgentContext({ ...base, SearchText: '' })['HasSearch']).toBe(false);
+            expect(BuildDashboardBrowserAgentContext({ ...base, SearchText: '   ' })['HasSearch']).toBe(false);
         });
 
         it('derives HasSearch = true and forwards the search text when present', () => {
-            const ctx = buildDashboardBrowserAgentContext({ ...base, SearchText: 'revenue' });
+            const ctx = BuildDashboardBrowserAgentContext({ ...base, SearchText: 'revenue' });
             expect(ctx['HasSearch']).toBe(true);
             expect(ctx['SearchText']).toBe('revenue');
         });
 
         it('produces exactly the documented keys when lists are within the cap (no leakage)', () => {
-            const ctx = buildDashboardBrowserAgentContext({
+            const ctx = BuildDashboardBrowserAgentContext({
                 ...base,
                 VisibleDashboardNames: ['A'],
                 AvailableCategoryNames: ['X'],
@@ -179,7 +179,7 @@ describe('dashboard-browser-agent-context', () => {
         });
 
         it('omits ALL opened-dashboard fields in list mode (no leakage at the list level)', () => {
-            const ctx = buildDashboardBrowserAgentContext({
+            const ctx = BuildDashboardBrowserAgentContext({
                 ...base,
                 Mode: 'list',
                 // Even if a caller accidentally supplies opened-dashboard data, list
@@ -211,7 +211,7 @@ describe('dashboard-browser-agent-context', () => {
         ];
 
         function openCtx(overrides: Partial<DashboardBrowserAgentContextInput> = {}): Record<string, unknown> {
-            return buildDashboardBrowserAgentContext({
+            return BuildDashboardBrowserAgentContext({
                 ...base,
                 Mode: 'view',
                 SelectedDashboardId: 'dash-1',
@@ -246,7 +246,7 @@ describe('dashboard-browser-agent-context', () => {
         });
 
         it('defaults opened-dashboard fields tolerantly when not supplied', () => {
-            const ctx = buildDashboardBrowserAgentContext({ ...base, Mode: 'view' });
+            const ctx = BuildDashboardBrowserAgentContext({ ...base, Mode: 'view' });
             // Present (because mode !== 'list') but defaulted.
             expect(ctx['OpenedDashboardName']).toBeNull();
             expect(ctx['OpenedDashboardId']).toBeNull();

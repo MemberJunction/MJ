@@ -204,11 +204,16 @@ export type BaseFormContext = FormContext;
 /**
  * Creates a default FormContext with sensible defaults.
  */
-export function createDefaultFormContext(): FormContext {
+export function CreateDefaultFormContext(): FormContext {
   return {
     sectionFilter: '',
     showEmptyFields: false,
     showValidation: false,
     validationErrors: []
   };
+}
+
+/** @deprecated Use {@link CreateDefaultFormContext}. */
+export function createDefaultFormContext(): FormContext {
+  return CreateDefaultFormContext();
 }
