@@ -4,7 +4,7 @@ import { BaseArtifactViewerPluginComponent, ArtifactViewerTab } from '../base-ar
 import { MJReactComponent, AngularAdapterService } from '@memberjunction/ng-react';
 import { BuildComponentCompleteCode, ComponentSpec } from '@memberjunction/interactive-component-types';
 import {
-  isFormRole, IsFormPanelRole, getDeclaredFormEntityName, GetDeclaredFormContribution,
+  isFormRole, IsFormPanelRole, getDeclaredFormEntityName, GetDeclaredFormContribution, StripJoinFieldBrackets,
   type FormPanelHostProps,
 } from '@memberjunction/interactive-component-types/forms';
 import {
@@ -635,9 +635,9 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     this.IsFormArtifact = true;
     this.IsFormPanelArtifact = IsFormPanelRole(spec);
 
-    const entityName = getDeclaredFormEntityName(spec);
+    const entityName = this.IsFormPanelArtifact ? this.panelHostEntityName(spec) : getDeclaredFormEntityName(spec);
     if (!entityName) {
-      this.FormInitError = 'Form artifact has no declared entity. Showing without record context.';
+      this.FormInitError ??= 'Form artifact has no declared entity. Showing without record context.';
       return;
     }
 
@@ -647,6 +647,7 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
       this.FormInitError = `Entity "${entityName}" not registered with the active provider.`;
       return;
     }
+    if (this.IsFormPanelArtifact && !this.panelFitsForm(spec, entity)) return;
     this.FormEntityInfo = entity;
 
     // Load Top-1 record by default. If empty / fails, fall back to a fresh
@@ -668,6 +669,43 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     // "Could not bind a record" message up until the user clicks. Force CD so the
     // auto-loaded record binds and the form mounts immediately on first render.
     this.cdr.detectChanges();
+  }
+
+  /**
+   * The form a panel goes on: the spec's own `entityName`, never the `dataRequirements`
+   * fallback a whole form uses. A related-grid panel usually lists the child entity first, so
+   * the fallback would put the panel on the child's form. Null, with `FormInitError` saying why,
+   * when the spec names no entity.
+   */
+  private panelHostEntityName(spec: ComponentSpec): string | null {
+    const declared = spec.entityName?.trim();
+    if (declared) return declared;
+    const inferred = getDeclaredFormEntityName(spec);
+    const related = GetDeclaredFormContribution(spec)?.relatedEntity?.trim();
+    this.FormInitError = inferred && related && sameEntityName(inferred, related)
+      ? `This panel shows ${related} rows but does not say which form it goes on. ` +
+        `${related} is the related entity, not the form. Set entityName in the spec to the parent entity.`
+      : 'This panel does not say which form it goes on. Set entityName in the spec to the entity whose form shows it.';
+    return null;
+  }
+
+  /**
+   * False, with `FormInitError` saying why, when a panel claims a grid of its own entity that
+   * entity's form does not show: the spec names the related entity as the form. A form whose
+   * entity relates to itself (a manager's reports, say) does show such a grid.
+   */
+  private panelFitsForm(spec: ComponentSpec, entity: EntityInfo): boolean {
+    const claim = GetDeclaredFormContribution(spec);
+    const related = claim?.relatedEntity?.trim();
+    if (!related || !sameEntityName(related, entity.Name)) return true;
+    const join = StripJoinFieldBrackets(claim?.relatedJoinField);
+    const selfGrid = (entity.RelatedEntities ?? []).some((r) =>
+      sameEntityName(r.RelatedEntity, related) && (!join || r.RelatedEntityJoinField.trim().toLowerCase() === join.toLowerCase()));
+    if (selfGrid) return true;
+    this.FormInitError =
+      `This panel shows ${related} rows, and its spec puts it on the ${related} form, which has no such grid. ` +
+      `Set entityName in the spec to the parent entity.`;
+    return false;
   }
 
   /**
@@ -806,7 +844,8 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
   /**
    * Host props for a form-panel preview. There is no host form here, so permissions
    * read false and the panel renders as if opened read-only — the preview shows what
-   * the panel looks like, not what it can do once installed.
+   * the panel looks like, not what it can do once installed. A related-grid panel still
+   * gets `related` for the previewed record, which the builder takes from the record.
    */
   private rebuildPanelPreviewProps(): void {
     this.PanelPreviewProps = null;
@@ -910,4 +949,9 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     }
     return null;
   }
+}
+
+/** Two entity names match when equal trimmed and case-folded. */
+function sameEntityName(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
 }

@@ -243,8 +243,10 @@ export class ComponentSpec {
     componentRole?: ComponentRole;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
-     * Canonical entity name a `form` or `form-panel` component binds to. Hosts resolve
-     * the entity from this first, then `dataRequirements.entities[0].name`.
+     * Canonical entity name a `form` or `form-panel` component binds to. For a `form`, hosts
+     * resolve the entity from this first, then `dataRequirements.entities[0].name`. A
+     * `form-panel` must set it: a related-grid panel usually lists the child entity first, so
+     * the fallback would name the wrong form.
      */
     entityName?: string;  // case-violation-ok-legacy-back-compat: ComponentSpec JSON wire format, written by Skip and stored in component specs
 

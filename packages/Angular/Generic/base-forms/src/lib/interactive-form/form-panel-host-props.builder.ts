@@ -1,4 +1,4 @@
-import type { BaseEntity, CompositeKey, PlatformSQL } from '@memberjunction/core';
+import { EntityInfo, type BaseEntity, type CompositeKey, type PlatformSQL } from '@memberjunction/core';
 import { SimpleEntityFieldInfo } from '@memberjunction/interactive-component-types';
 import type { FormPanelHostProps } from '@memberjunction/interactive-component-types/forms';
 import type { BaseFormComponent } from '../base-form-component';
@@ -7,7 +7,10 @@ import { StripJoinFieldBrackets } from '../panel-slot/form-contribution';
 
 export interface BuildFormPanelHostPropsInput {
     Record: BaseEntity;
-    /** Null when previewing outside a form (artifact viewer). Permissions then read false. */
+    /**
+     * Null when previewing outside a form (artifact viewer). Permissions then read false; a
+     * related claim still gets its view params, which come from the record.
+     */
     FormComponent: BaseFormComponent | null;
     Contribution: FormContributionRegistration;
     SectionKey: string;
@@ -25,7 +28,8 @@ function primaryKeyToPlain(pk: CompositeKey | null | undefined): Record<string, 
 /**
  * Build `FormPanelHostProps` for a metadata contribution. Same record snapshot the
  * whole-form host builds, plus the contribution context and — for related claims —
- * prebuilt view params so the panel never hand-writes an FK filter.
+ * prebuilt view params so the panel never hand-writes an FK filter. The view params come
+ * from the record and its relationships, so a preview with no form gets them too.
  */
 export function BuildFormPanelHostProps(input: BuildFormPanelHostPropsInput): FormPanelHostProps {
     const { Record: record, FormComponent: form, Contribution: contribution } = input;
@@ -59,24 +63,41 @@ export function BuildFormPanelHostProps(input: BuildFormPanelHostPropsInput): Fo
     };
 
     const related = meta.relatedEntity?.trim();
-    if (related && form) {
-        const join = StripJoinFieldBrackets(meta.relatedJoinField) || undefined;
-        const viewParams = form.BuildRelationshipViewParamsByEntityName(related, join);
-        props.related = {
-            entityName: related,
-            joinField: join,
-            viewParams: {
-                EntityName: viewParams.EntityName ?? related,
-                // RunView accepts `string | PlatformSQL`; the panel contract carries plain
-                // strings because these cross into React as JSON. Take the platform's own
-                // variant where one exists, else the default fragment.
-                ExtraFilter: plainSQL(viewParams.ExtraFilter) ?? '',
-                OrderBy: plainSQL(viewParams.OrderBy),
-            },
-            newRecordValues: form.NewRecordValues(related, join),
-        };
-    }
+    if (related) props.related = relatedPanelProps(record, related, StripJoinFieldBrackets(meta.relatedJoinField) || undefined);
     return props;
+}
+
+/**
+ * The related-grid props of a claim on `relatedEntity`, from the record alone.
+ *
+ * The rows are those whose join field holds this record's key: the named join field, or with
+ * none named, every relationship to that entity (Bill-To OR Ship-To). New rows get the same
+ * fields set to the record's key. A record not saved yet has no key, so its filter matches
+ * nothing.
+ */
+function relatedPanelProps(record: BaseEntity, relatedEntity: string, joinField: string | undefined): FormPanelHostProps['related'] {
+    const target = relatedEntity.toLowerCase();
+    const relationships = (record.EntityInfo.RelatedEntities ?? []).filter((r) => r.RelatedEntity.trim().toLowerCase() === target);
+    const joinFields = joinField ? [joinField] : relationships.map((r) => r.RelatedEntityJoinField);
+    const relationship = joinFields.length === 1
+        ? relationships.find((r) => r.RelatedEntityJoinField.trim().toLowerCase() === joinFields[0].trim().toLowerCase())
+        : undefined;
+    const viewParams = EntityInfo.BuildRelationshipViewParamsForJoinFields(record, relatedEntity, joinFields);
+    return {
+        entityName: relatedEntity,
+        joinField,
+        viewParams: {
+            EntityName: viewParams.EntityName ?? relatedEntity,
+            // RunView accepts `string | PlatformSQL`; the panel contract carries plain
+            // strings because these cross into React as JSON. Take the platform's own
+            // variant where one exists, else the default fragment.
+            ExtraFilter: plainSQL(viewParams.ExtraFilter) ?? '',
+            OrderBy: plainSQL(viewParams.OrderBy),
+        },
+        newRecordValues: relationship
+            ? EntityInfo.BuildRelationshipNewRecordValues(record, relationship)
+            : EntityInfo.BuildRelationshipNewRecordValuesForJoinFields(record, joinFields),
+    };
 }
 
 /**
