@@ -3506,19 +3506,20 @@ export const MJAIAgentStepSchema = z.object({
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    StepType: z.union([z.literal('Action'), z.literal('ForEach'), z.literal('Human'), z.literal('Prompt'), z.literal('Sub-Agent'), z.literal('While')]).describe(`
+    StepType: z.union([z.literal('Action'), z.literal('Decision'), z.literal('ForEach'), z.literal('Human'), z.literal('Prompt'), z.literal('Sub-Agent'), z.literal('While')]).describe(`
         * * Field Name: StepType
         * * Display Name: Step Type
         * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
     *   * Action
+    *   * Decision
     *   * ForEach
     *   * Human
     *   * Prompt
     *   * Sub-Agent
     *   * While
-        * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), or Prompt (run an AI prompt)`),
+        * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), Prompt (run an AI prompt), Decision (one typed decision call whose answers the outgoing paths route on), Human (ask a person), or ForEach / While (a loop).`),
     StartingStep: z.boolean().describe(`
         * * Field Name: StartingStep
         * * Display Name: Starting Step
@@ -3625,7 +3626,7 @@ export const MJAIAgentStepSchema = z.object({
         * * Field Name: Configuration
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON configuration object for step-specific settings. For loop steps: { type: "ForEach"|"While", collectionPath?, itemVariable?, indexVariable?, maxIterations?, continueOnError?, condition? }. For other step types: reserved for future use.`),
+        * * Description: JSON configuration object for step-specific settings. For loop steps: { type: "ForEach"|"While", collectionPath?, itemVariable?, indexVariable?, maxIterations?, continueOnError?, condition? }. For Decision steps: { key, state?, questions }, where key names the step in path conditions (decisions.<key>.<question>), state is "payload" or "payload.<path>", and questions are Likelihood, Choice or Score questions. For Human steps: { assignToUserID?, expiresInHours? }.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -18517,7 +18518,7 @@ export const MJEntityDocumentSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Master switch for the LLM reasoning layer on this entity. When 0 (default), duplicate detection runs the existing vector-only path unchanged and the reasoning columns/AutomationLevel are ignored. When 1, candidates above ReasoningThreshold are reasoned over.`),
-    ReasoningMode: z.union([z.literal('Agent'), z.literal('Prompt')]).describe(`
+    ReasoningMode: z.union([z.literal('Agent'), z.literal('Decision'), z.literal('DecisionThenPrompt'), z.literal('Prompt')]).describe(`
         * * Field Name: ReasoningMode
         * * Display Name: Reasoning Mode
         * * SQL Data Type: nvarchar(20)
@@ -18525,6 +18526,8 @@ export const MJEntityDocumentSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Agent
+    *   * Decision
+    *   * DecisionThenPrompt
     *   * Prompt
         * * Description: Which reasoning provider runs for this entity. Prompt (default) = a single-shot AI Prompt (cheap/fast); Agent = an AI Agent with memory + context-exploration tools (for heavy entities needing deeper reasoning). Both consume one shared core instruction set.`),
     ReasoningThreshold: z.number().nullable().describe(`
@@ -31498,7 +31501,7 @@ export const MJTaskSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)
         * * Description: The Action this task executes, when the node is action-assigned rather than agent-assigned or awaiting a person. Mutually exclusive with UserID and AgentID (CK_Task_Assignment). Set by durable entity-action dispatch, where a single-node graph carries one action to run with restart recovery.`),
-    StepType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('External'), z.literal('ForEach'), z.literal('Human'), z.literal('Prompt'), z.literal('While')]).nullable().describe(`
+    StepType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('Decision'), z.literal('External'), z.literal('ForEach'), z.literal('Human'), z.literal('Prompt'), z.literal('While')]).nullable().describe(`
         * * Field Name: StepType
         * * Display Name: Step Type
         * * SQL Data Type: nvarchar(20)
@@ -31506,6 +31509,7 @@ export const MJTaskSchema = z.object({
     * * Possible Values 
     *   * Action
     *   * Agent
+    *   * Decision
     *   * External
     *   * ForEach
     *   * Human
@@ -44681,17 +44685,18 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     * * Value List Type: List
     * * Possible Values 
     *   * Action
+    *   * Decision
     *   * ForEach
     *   * Human
     *   * Prompt
     *   * Sub-Agent
     *   * While
-    * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), or Prompt (run an AI prompt)
+    * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), Prompt (run an AI prompt), Decision (one typed decision call whose answers the outgoing paths route on), Human (ask a person), or ForEach / While (a loop).
     */
-    get StepType(): 'Action' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'While' {
+    get StepType(): 'Action' | 'Decision' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'While' {
         return this.Get('StepType');
     }
-    set StepType(value: 'Action' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'While') {
+    set StepType(value: 'Action' | 'Decision' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'While') {
         this.Set('StepType', value);
     }
 
@@ -44931,7 +44936,7 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     * * Field Name: Configuration
     * * Display Name: Configuration
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON configuration object for step-specific settings. For loop steps: { type: "ForEach"|"While", collectionPath?, itemVariable?, indexVariable?, maxIterations?, continueOnError?, condition? }. For other step types: reserved for future use.
+    * * Description: JSON configuration object for step-specific settings. For loop steps: { type: "ForEach"|"While", collectionPath?, itemVariable?, indexVariable?, maxIterations?, continueOnError?, condition? }. For Decision steps: { key, state?, questions }, where key names the step in path conditions (decisions.<key>.<question>), state is "payload" or "payload.<path>", and questions are Likelihood, Choice or Score questions. For Human steps: { assignToUserID?, expiresInHours? }.
     */
     get Configuration(): string | null {
         return this.Get('Configuration');
@@ -87047,13 +87052,15 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     * * Value List Type: List
     * * Possible Values 
     *   * Agent
+    *   * Decision
+    *   * DecisionThenPrompt
     *   * Prompt
     * * Description: Which reasoning provider runs for this entity. Prompt (default) = a single-shot AI Prompt (cheap/fast); Agent = an AI Agent with memory + context-exploration tools (for heavy entities needing deeper reasoning). Both consume one shared core instruction set.
     */
-    get ReasoningMode(): 'Agent' | 'Prompt' {
+    get ReasoningMode(): 'Agent' | 'Decision' | 'DecisionThenPrompt' | 'Prompt' {
         return this.Get('ReasoningMode');
     }
-    set ReasoningMode(value: 'Agent' | 'Prompt') {
+    set ReasoningMode(value: 'Agent' | 'Decision' | 'DecisionThenPrompt' | 'Prompt') {
         this.Set('ReasoningMode', value);
     }
 
@@ -120897,6 +120904,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     * * Possible Values 
     *   * Action
     *   * Agent
+    *   * Decision
     *   * External
     *   * ForEach
     *   * Human
@@ -120904,10 +120912,10 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     *   * While
     * * Description: Which kind of workflow step this task represents. NULL for a task that is not part of a workflow, such as a hand-authored to-do. Determines which of AgentID/ActionID/PromptID/UserID is meaningful and how Configuration is read. This is the executable vocabulary and is deliberately not the same value list as AIAgentStep.StepType, which describes a step at design time.
     */
-    get StepType(): 'Action' | 'Agent' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'While' | null {
+    get StepType(): 'Action' | 'Agent' | 'Decision' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'While' | null {
         return this.Get('StepType');
     }
-    set StepType(value: 'Action' | 'Agent' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'While' | null) {
+    set StepType(value: 'Action' | 'Agent' | 'Decision' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'While' | null) {
         this.Set('StepType', value);
     }
 

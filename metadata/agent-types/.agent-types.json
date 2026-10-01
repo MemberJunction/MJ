@@ -147,6 +147,11 @@
             "type": "integer",
             "default": -1,
             "description": "Catalog narrowing for actions and skills. -1 (the default) or 0 turns it off, and the prompt describes every action and skill. A positive N: when the agent has more than N actions (or skills), one decision call per run judges which are most useful for the run's opening request, and the prompt describes those N plus any action with MinExecutionsPerRun set and the Find Candidate Actions / Find Candidate Agents actions, after a line saying how many it hides and how to reach them. Hidden skills are named; hidden actions are found with Find Candidate Actions, so actions are narrowed only when the agent has that action. Narrowing only hides: every permitted action and skill can still be used, and a failed decision shows them all. It is prose-only: with native tool calling, every action is still declared as a tool. Setting N adds one decision call to each run."
+          },
+          "decisionDiscovery": {
+            "type": "boolean",
+            "default": false,
+            "description": "On a conversation's opening request, before the first prompt, ask one typed decision which agent should handle it, and suggest it to the agent in a <suggested_agent> block. Follow-up turns are never asked about, so a suggestion never pulls the agent away from one it has already engaged. For conversation managers such as Sage. Off by default."
           }
         }
       }

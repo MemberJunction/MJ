@@ -1090,8 +1090,10 @@ import {
     TranscriptSegmenter,
 } from '@memberjunction/ai-segmentation';
 
-// @memberjunction/ai-vector-dupe (1 classes)
+// @memberjunction/ai-vector-dupe (3 classes)
 import {
+    DecisionReasoningProvider,
+    DecisionThenPromptReasoningProvider,
     PromptReasoningProvider,
 } from '@memberjunction/ai-vector-dupe';
 
@@ -2271,6 +2273,8 @@ const CLASS_REGISTRATIONS_3: any[] = [
     SemanticTextSegmenter,
     StructuralTextSegmenter,
     TranscriptSegmenter,
+    DecisionReasoningProvider,
+    DecisionThenPromptReasoningProvider,
     PromptReasoningProvider,
     AutotagBaseEngine,
     AutotagCloudStorage,
