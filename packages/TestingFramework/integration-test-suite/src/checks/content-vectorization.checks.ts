@@ -30,7 +30,8 @@ import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { AutotagBaseEngine } from '@memberjunction/content-autotagging';
-import { AIModelRunner } from '@memberjunction/ai-prompts';
+import { AIEmbeddingRunner } from '@memberjunction/ai-prompts';
+import type { EmbeddingRunParams, EmbeddingRunResult } from '@memberjunction/ai-prompts';
 import { AIEngine } from '@memberjunction/aiengine';
 import {
     KnowledgeHubMetadataEngine,
@@ -66,9 +67,8 @@ interface BundleState {
     Upserts: CapturedUpsert[];
     DeletedVectorIds: string[];
     EmbedCalls: Array<{ count: number; dimensions?: number }>;
-    OrigCreateEmbedding?: (driverClass: string) => unknown;
     OrigCreateVectorDB?: (classKey: string) => unknown;
-    OrigRunEmbedding?: typeof AIModelRunner.prototype.RunEmbedding;
+    OrigRunEmbedding?: typeof AIEmbeddingRunner.prototype.RunEmbedding;
 }
 let S: BundleState;
 
@@ -81,18 +81,15 @@ function guardSkip(id: string): boolean {
     return false;
 }
 
-/** Install the two external-seam stubs on the engine singleton (idempotent), capturing payloads. */
+/** Install the two external-seam stubs (the engine's vector-DB factory and AIEmbeddingRunner.RunEmbedding), idempotently, capturing payloads. */
 function installStubs(): void {
     if (S.Installed) return;
     const seams = AutotagBaseEngine.Instance as unknown as {
-        createEmbeddingInstance: (driverClass: string) => unknown;
         createVectorDBInstance: (classKey: string) => unknown;
     };
-    S.OrigCreateEmbedding = seams.createEmbeddingInstance;
     S.OrigCreateVectorDB = seams.createVectorDBInstance;
-    S.OrigRunEmbedding = AIModelRunner.prototype.RunEmbedding;
+    S.OrigRunEmbedding = AIEmbeddingRunner.prototype.RunEmbedding;
 
-    seams.createEmbeddingInstance = () => ({ EmbedTexts: async () => ({ vectors: [] }) });
     seams.createVectorDBInstance = () => ({
         // Mimic Pinecone's namespace derivation so namespace routing is exercised for real.
         BuildProviderDirectives: (sourceRecord: Record<string, unknown>, providerConfig: Record<string, unknown>) => {
@@ -112,19 +109,19 @@ function installStubs(): void {
             return { success: true, message: 'stubbed delete (captured)' };
         },
     });
-    // Test-stub install: cast a fake through `unknown` (the sanctioned way to swap a prototype method).
-    AIModelRunner.prototype.RunEmbedding = (async (params: { Texts: string[]; Dimensions?: number }) => {
+    // The autotag pipeline embeds through AIEmbeddingRunner (AIModelRunner delegates to it too), so
+    // the stub goes on its prototype. It matches RunEmbedding's signature, so no cast is needed.
+    AIEmbeddingRunner.prototype.RunEmbedding = async (params: EmbeddingRunParams): Promise<EmbeddingRunResult> => {
         S.EmbedCalls.push({ count: params.Texts.length, dimensions: params.Dimensions });
         return { Success: true, Vectors: params.Texts.map(() => [0.01, 0.02, 0.03]), PromptRunID: null, TokensUsed: 0, Cost: 0, ErrorMessage: null, ExecutionTimeMs: 0 };
-    }) as unknown as typeof AIModelRunner.prototype.RunEmbedding;
+    };
     S.Installed = true;
 }
 function restoreStubs(): void {
     if (!S?.Installed) return;
-    const seams = AutotagBaseEngine.Instance as unknown as { createEmbeddingInstance: unknown; createVectorDBInstance: unknown };
-    if (S.OrigCreateEmbedding) seams.createEmbeddingInstance = S.OrigCreateEmbedding;
+    const seams = AutotagBaseEngine.Instance as unknown as { createVectorDBInstance: unknown };
     if (S.OrigCreateVectorDB) seams.createVectorDBInstance = S.OrigCreateVectorDB;
-    if (S.OrigRunEmbedding) AIModelRunner.prototype.RunEmbedding = S.OrigRunEmbedding;
+    if (S.OrigRunEmbedding) AIEmbeddingRunner.prototype.RunEmbedding = S.OrigRunEmbedding;
     S.Installed = false;
 }
 

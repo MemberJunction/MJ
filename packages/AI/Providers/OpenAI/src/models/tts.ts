@@ -1,5 +1,5 @@
 import { RegisterClass } from "@memberjunction/global";
-import { AudioSplitter, BaseAudioGenerator, TextToSpeechParams, SpeechResult, SpeechToTextParams, TranscriptionPiece, VoiceInfo, AudioModel, ModelUsage, PronounciationDictionary, ErrorAnalyzer } from "@memberjunction/ai";
+import { AudioSplitter, BaseAudioGenerator, BaseSpeechToText, BaseTextToSpeech, TextToSpeechParams, SpeechResult, SpeechToTextParams, TranscriptionPiece, VoiceInfo, AudioModel, ModelUsage, PronounciationDictionary, ErrorAnalyzer } from "@memberjunction/ai";
 import { OpenAI, toFile } from "openai";
 
 /**
@@ -33,7 +33,16 @@ function supportsVerboseJson(model: string): boolean {
     return model.toLowerCase().startsWith("whisper");
 }
 
+/**
+ * OpenAI audio: text-to-speech (`gpt-4o-mini-tts`) and speech-to-text (Whisper).
+ *
+ * It does both, so it is registered against {@link BaseTextToSpeech} and {@link BaseSpeechToText}
+ * under the key model metadata names. It still extends, and is registered against,
+ * `BaseAudioGenerator`, so callers that resolve it through the old base keep working.
+ */
 @RegisterClass(BaseAudioGenerator, "OpenAIAudioGenerator")
+@RegisterClass(BaseTextToSpeech, "OpenAIAudioGenerator")
+@RegisterClass(BaseSpeechToText, "OpenAIAudioGenerator")
 export class OpenAIAudioGenerator extends BaseAudioGenerator {
     private _openAI: OpenAI;
 
@@ -67,6 +76,9 @@ export class OpenAIAudioGenerator extends BaseAudioGenerator {
             const errorInfo = ErrorAnalyzer.analyzeError(error, 'OpenAI TTS');
             speechResult.success = false;
             speechResult.errorMessage = error?.message || 'Unknown error occurred';
+            // Kept so a caller can tell a rejected request (a 400) from an outage: the message alone
+            // loses the SDK error's HTTP status.
+            speechResult.errorInfo = errorInfo;
             console.error(`OpenAI TTS error:`, error, errorInfo);
         }
         return speechResult;
@@ -113,6 +125,9 @@ export class OpenAIAudioGenerator extends BaseAudioGenerator {
             const errorInfo = ErrorAnalyzer.analyzeError(error, 'OpenAI Whisper');
             result.success = false;
             result.errorMessage = error?.message || 'Unknown error occurred';
+            // Kept so a caller can tell a rejected upload (a 400 for an unsupported format) from an
+            // outage: the message alone loses the SDK error's HTTP status.
+            result.errorInfo = errorInfo;
             console.error(`OpenAI Whisper error:`, error, errorInfo);
         }
         return result;

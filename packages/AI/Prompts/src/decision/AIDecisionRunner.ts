@@ -9,6 +9,7 @@ import {
   DecisionQuestion,
   DecisionResult,
   ErrorAnalyzer,
+  ModelUsage,
 } from '@memberjunction/ai';
 import {
   MJAIPromptEntityExtended,
@@ -26,11 +27,37 @@ import {
   AIDecisionParams,
   AIDecisionRunResult,
 } from './decision-runner.types';
+import { LLMDecision } from './LLMDecision';
 
-/** The result of running a decision, and the candidate that produced it (after any failover). */
+/**
+ * The result of running a decision, the candidate that produced it (after any failover), and what
+ * its attempts cost through child runs.
+ */
 interface DecisionRun {
   Result: DecisionResult;
   AnsweredBy: ModelVendorCandidate;
+  /**
+   * Whether the answering attempt made its model call through a child run linked to the decision's
+   * run. Only then is its cost a descendant cost; otherwise it is the decision run's own.
+   */
+  AnsweredThroughChildRun: boolean;
+  /**
+   * What the child runs linked to the decision's run cost, summed over every attempt, the answering
+   * one included. Absent when no linked child run reported a cost.
+   */
+  ChildRunCost?: AttemptCost;
+}
+
+/** A cost, in its currency when known. */
+interface AttemptCost {
+  Amount: number;
+  Currency?: string;
+}
+
+/** One attempt on a candidate: the driver's result, and whether its model call ran as a linked child run. */
+interface CandidateAttempt {
+  Result: DecisionResult;
+  LinkedChildRun: boolean;
 }
 
 /** The candidate selected for a decision, with the credential probes made while selecting it. */
@@ -83,6 +110,28 @@ export class AIDecisionRunner extends BaseModelRunner {
   }
 
   /**
+   * Makes an `LLMDecision`'s chat run a child of this decision's run, and returns whether it did. The
+   * attempt's cost is booked as the decision run's descendant cost only when this returns true, so
+   * linking and booking cannot disagree.
+   *
+   * A driver that is not an `LLMDecision` calls its model directly: there is nothing to link. The
+   * child's INSERT names this run as its `ParentID`, so this run's queued INSERT must land first.
+   * When that INSERT failed there is no row to point at: the child would then fail its foreign key
+   * and go unrecorded too, so the chat run is left unlinked, a root run of its own.
+   */
+  private async linkChildRun(driver: BaseDecision, promptRun: MJAIPromptRunEntityExtended): Promise<boolean> {
+    if (!(driver instanceof LLMDecision)) {
+      return false;
+    }
+    await this.WaitForPendingPromptRunSaves();
+    if (!promptRun.IsSaved) {
+      return false;
+    }
+    driver.ParentPromptRunID = promptRun.ID;
+    return true;
+  }
+
+  /**
    * Answers the questions in `params.Questions` about the state. Never throws: every failure is a
    * result with `success: false` and an `errorMessage`.
    */
@@ -117,7 +166,7 @@ export class AIDecisionRunner extends BaseModelRunner {
       const run = await this.runDecision(prompt, params, candidates, selection, state, promptRun);
       const endTime = new Date();
       const executionTimeMS = endTime.getTime() - startTime.getTime();
-      await this.finalizeDecisionRun(promptRun, run.Result, endTime, executionTimeMS);
+      await this.finalizeDecisionRun(promptRun, run, endTime, executionTimeMS);
       return this.buildRunResult(run, promptRun, selectionInfo, executionTimeMS, params);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -230,7 +279,9 @@ export class AIDecisionRunner extends BaseModelRunner {
 
   /**
    * Runs the selected candidate alone when failover is off, otherwise the base failover loop. Tracks
-   * the candidate that produced the result, so the caller reports the model that actually answered.
+   * the candidate that produced the result, so the caller reports the model that actually answered,
+   * and adds up what every attempt's linked child run cost, so none of those costs is lost when a
+   * later attempt answers.
    */
   private async runDecision(
     prompt: MJAIPromptEntityExtended,
@@ -241,9 +292,17 @@ export class AIDecisionRunner extends BaseModelRunner {
     promptRun: MJAIPromptRunEntityExtended
   ): Promise<DecisionRun> {
     let answeredBy = selection.Candidate;
-    const attempt = (candidate: ModelVendorCandidate): Promise<DecisionResult> => {
+    let answeredThroughChildRun = false;
+    let childRunCost: AttemptCost | undefined;
+    const attempt = async (candidate: ModelVendorCandidate): Promise<DecisionResult> => {
       answeredBy = candidate;
-      return this.executeOnCandidate(candidate, state, params, prompt);
+      answeredThroughChildRun = false;
+      const outcome = await this.executeOnCandidate(candidate, state, params, prompt, promptRun);
+      answeredThroughChildRun = outcome.LinkedChildRun;
+      if (outcome.LinkedChildRun) {
+        childRunCost = this.addCost(childRunCost, outcome.Result.Usage);
+      }
+      return outcome.Result;
     };
     const failoverConfig = this.getFailoverConfiguration(prompt);
     const result = failoverConfig.strategy === 'None'
@@ -258,16 +317,45 @@ export class AIDecisionRunner extends BaseModelRunner {
           promptRun,
           selection.CredentialAvailability
         );
-    return { Result: result, AnsweredBy: answeredBy };
+    return { Result: result, AnsweredBy: answeredBy, AnsweredThroughChildRun: answeredThroughChildRun, ChildRunCost: childRunCost };
   }
 
-  /** Makes the decision on one candidate: checks its limits, builds its driver, and calls it. */
+  /** Adds an attempt's cost to a running total. An attempt that reported no cost adds nothing. */
+  private addCost(total: AttemptCost | undefined, usage: ModelUsage | undefined): AttemptCost | undefined {
+    if (usage?.cost === undefined) {
+      return total;
+    }
+    return { Amount: (total?.Amount ?? 0) + usage.cost, Currency: total?.Currency ?? usage.costCurrency };
+  }
+
+  /**
+   * Makes the decision on one candidate: builds its driver, links the driver's child run when it
+   * makes one, and calls it.
+   */
   private async executeOnCandidate(
     candidate: ModelVendorCandidate,
     state: string | Record<string, unknown>,
     params: AIDecisionParams,
+    prompt: MJAIPromptEntityExtended,
+    promptRun: MJAIPromptRunEntityExtended
+  ): Promise<CandidateAttempt> {
+    const driver = await this.driverForCandidate(candidate, params, prompt);
+    if (driver instanceof DecisionResult) {
+      return { Result: driver, LinkedChildRun: false };
+    }
+    const linkedChildRun = await this.linkChildRun(driver, promptRun);
+    return { Result: await this.callDriver(driver, candidate, state, params, prompt), LinkedChildRun: linkedChildRun };
+  }
+
+  /**
+   * The candidate's driver, after checking its limits and resolving its credential, or a failed
+   * result that allows failover and says why there is none.
+   */
+  private async driverForCandidate(
+    candidate: ModelVendorCandidate,
+    params: AIDecisionParams,
     prompt: MJAIPromptEntityExtended
-  ): Promise<DecisionResult> {
+  ): Promise<BaseDecision | DecisionResult> {
     const limitError = this.checkModelLimits(candidate, params.Questions);
     if (limitError) {
       return this.failedDecision(limitError, 'InvalidRequest');
@@ -281,10 +369,7 @@ export class AIDecisionRunner extends BaseModelRunner {
       }
     }
     const driver = this.createDriver(candidate, apiKey, params);
-    if (typeof driver === 'string') {
-      return this.failedDecision(driver, 'ModelError');
-    }
-    return this.callDriver(driver, candidate, state, params, prompt);
+    return typeof driver === 'string' ? this.failedDecision(driver, 'ModelError') : driver;
   }
 
   /**
@@ -398,31 +483,54 @@ export class AIDecisionRunner extends BaseModelRunner {
    */
   private async finalizeDecisionRun(
     promptRun: MJAIPromptRunEntityExtended,
-    decisionResult: DecisionResult,
+    decisionRun: DecisionRun,
     endTime: Date,
     executionTimeMS: number
   ): Promise<void> {
+    const decisionResult = decisionRun.Result;
     await this.FinalizeRunRecord(promptRun, decisionResult.success, endTime, executionTimeMS, run => {
       run.Result = JSON.stringify(decisionResult.Answers ?? {});
       if (decisionResult.ResolvedModel) {
         run.ModelSpecificResponseDetails = JSON.stringify({ ResolvedModel: decisionResult.ResolvedModel });
       }
-      const usage = decisionResult.Usage;
-      if (usage) {
-        run.TokensPrompt = usage.promptTokens;
-        run.TokensCompletion = usage.completionTokens;
-        run.TokensUsed = usage.totalTokens;
-        if (usage.cost !== undefined) {
-          run.Cost = usage.cost;
-        }
-        if (usage.costCurrency !== undefined) {
-          run.CostCurrency = usage.costCurrency;
-        }
-      }
+      this.applyUsage(run, decisionRun);
       if (!decisionResult.success && decisionResult.errorMessage) {
         run.ErrorMessage = decisionResult.errorMessage;
       }
     });
+  }
+
+  /**
+   * Records the answering attempt's tokens on the run, and the cost by where it was incurred:
+   * - a model call the answering driver made directly is this run's own `Cost`;
+   * - a model call made through a child run linked to this run (`LLMDecision`'s chat prompt) is that
+   *   child's cost, so it is recorded as `DescendantCost` and in `TotalCost`, never as `Cost`: a
+   *   report summing `Cost` over every run would otherwise count the chat call twice.
+   *
+   * `DescendantCost` sums every attempt's linked child run, not only the answering one's: each is a
+   * child of this run, and the server's rollup sums them all, so recording less would overwrite
+   * that rollup with a smaller number. An attempt whose chat run could not be linked is not a
+   * descendant, so when it answers, its cost is this run's own.
+   */
+  private applyUsage(run: MJAIPromptRunEntityExtended, decisionRun: DecisionRun): void {
+    const usage = decisionRun.Result.Usage;
+    if (usage) {
+      run.TokensPrompt = usage.promptTokens;
+      run.TokensCompletion = usage.completionTokens;
+      run.TokensUsed = usage.totalTokens;
+      if (usage.cost !== undefined && !decisionRun.AnsweredThroughChildRun) {
+        run.Cost = usage.cost;
+      }
+    }
+    const childRunCost = decisionRun.ChildRunCost;
+    if (childRunCost) {
+      run.DescendantCost = childRunCost.Amount;
+      run.TotalCost = (run.Cost ?? 0) + childRunCost.Amount;
+    }
+    const currency = usage?.costCurrency ?? childRunCost?.Currency;
+    if (currency !== undefined) {
+      run.CostCurrency = currency;
+    }
   }
 
   /** Builds the caller's result from the driver's, naming the candidate that answered. */
