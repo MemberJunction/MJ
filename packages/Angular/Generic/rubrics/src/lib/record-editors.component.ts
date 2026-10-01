@@ -1,29 +1,67 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 
-/** One criterion: parent, weight, scale, gate, and not-applicable policy. Anchors stay on the tree editor. */
+/** One criterion: parent, weight, a named scale, anchors for that scale, gate, and not-applicable policy. */
 @Component({
     standalone: true,
     selector: 'mj-rubric-criterion-editor',
     template: `
-      <label>Parent <input [value]="ParentId ?? ''" (change)="ParentIdChange.emit(valueOf($event) || null)"></label>
+      <label>Parent
+        <select [value]="ParentId ?? ''" (change)="ParentIdChange.emit(valueOf($event) || null)">
+          <option value="">— None —</option>
+          @for (parent of Parents; track parent.id) { <option [value]="parent.id">{{ parent.name }}</option> }
+        </select>
+      </label>
       <label>Weight <input type="number" [value]="Weight" (change)="WeightChange.emit(numberOf($event))"></label>
-      <label>Scale <input [value]="ScaleId ?? ''" (change)="ScaleIdChange.emit(valueOf($event) || null)"></label>
+      <label>Scale
+        <select [value]="ScaleId ?? ''" (change)="ScaleIdChange.emit(valueOf($event) || null)">
+          <option value="">— None —</option>
+          @for (scale of Scales; track scale.id) { <option [value]="scale.id">{{ scale.name }}</option> }
+        </select>
+      </label>
+      @for (level of Levels; track level.id) {
+        <label>{{ level.label }}
+          <input [value]="Anchor(level.id)" (change)="SetAnchor(level.id, valueOf($event))">
+        </label>
+      }
       <label>Gate minimum <input type="number" [value]="GateMinimumScore ?? ''" (change)="GateMinimumScoreChange.emit(valueOf($event) === '' ? null : numberOf($event))"></label>
-      <label>Not applicable <input [value]="NotApplicablePolicy ?? ''" (change)="NotApplicablePolicyChange.emit(valueOf($event) || null)"></label>
+      <label>Not applicable
+        <select [value]="NotApplicablePolicy ?? ''" (change)="NotApplicablePolicyChange.emit(valueOf($event) || null)">
+          <option value="">Version default</option>
+          <option value="ExcludeAndRedistribute">Exclude and redistribute</option>
+          <option value="CountAsZero">Count as zero</option>
+          <option value="FailEvaluation">Fail the evaluation</option>
+          <option value="NotAllowed">Not allowed</option>
+        </select>
+      </label>
     `,
 })
 export class RubricCriterionEditorComponent {
     @Input() ParentId: string | null = null;
+    @Input() Parents: { id: string; name: string }[] = [];
     @Input() Weight = 1;
     @Input() ScaleId: string | null = null;
+    @Input() Scales: { id: string; name: string; levels: { id: string; label: string }[] }[] = [];
+    @Input() Anchors: { scaleLevelId: string | null; descriptor: string }[] = [];
     @Input() GateMinimumScore: number | null = null;
     @Input() NotApplicablePolicy: string | null = null;
     @Output() ParentIdChange = new EventEmitter<string | null>();
     @Output() WeightChange = new EventEmitter<number>();
     @Output() ScaleIdChange = new EventEmitter<string | null>();
+    @Output() AnchorsChange = new EventEmitter<{ scaleLevelId: string | null; descriptor: string }[]>();
     @Output() GateMinimumScoreChange = new EventEmitter<number | null>();
     @Output() NotApplicablePolicyChange = new EventEmitter<string | null>();
-    protected valueOf(event: Event): string { return (event.target as HTMLInputElement).value; }
+    protected get Levels(): { id: string; label: string }[] {
+        return this.Scales.find(scale => scale.id === this.ScaleId)?.levels ?? [];
+    }
+    protected Anchor(levelId: string): string {
+        return this.Anchors.find(anchor => anchor.scaleLevelId === levelId)?.descriptor ?? '';
+    }
+    protected SetAnchor(levelId: string, descriptor: string): void {
+        const next = this.Anchors.filter(anchor => anchor.scaleLevelId !== levelId);
+        if (descriptor) next.push({ scaleLevelId: levelId, descriptor });
+        this.AnchorsChange.emit(next);
+    }
+    protected valueOf(event: Event): string { return (event.target as HTMLInputElement | HTMLSelectElement).value; }
     protected numberOf(event: Event): number { return Number((event.target as HTMLInputElement).value); }
 }
 

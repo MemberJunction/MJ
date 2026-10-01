@@ -6,9 +6,10 @@ import { RubricResultComponent } from './rubric-result.component.js';
 import { RubricScoringFormComponent } from './rubric-scoring-form.component.js';
 import { RubricVersionDiffComponent } from './version-diff.component.js';
 import { RubricBandEditorComponent, RubricCategoryEditorComponent, RubricCriterionEditorComponent, RubricScaleFieldsComponent, RubricScaleLevelEditorComponent, RubricScoreEditorComponent } from './record-editors.component.js';
+import { RubricCategoryHostComponent, RubricCriterionHostComponent, RubricScaleLevelHostComponent, RubricVersionHostComponent } from './form-hosts.component.js';
 
 @NgModule({
-    imports: [RubricBuilderComponent, RubricScoringFormComponent, RubricResultComponent, RubricPublishDialogComponent, RubricVersionDiffComponent, RubricComparisonMatrixComponent, RubricCriterionEditorComponent, RubricScoreEditorComponent, RubricScaleFieldsComponent, RubricScaleLevelEditorComponent, RubricBandEditorComponent, RubricCategoryEditorComponent],
-    exports: [RubricBuilderComponent, RubricScoringFormComponent, RubricResultComponent, RubricPublishDialogComponent, RubricVersionDiffComponent, RubricComparisonMatrixComponent, RubricCriterionEditorComponent, RubricScoreEditorComponent, RubricScaleFieldsComponent, RubricScaleLevelEditorComponent, RubricBandEditorComponent, RubricCategoryEditorComponent],
+    imports: [RubricBuilderComponent, RubricScoringFormComponent, RubricResultComponent, RubricPublishDialogComponent, RubricVersionDiffComponent, RubricComparisonMatrixComponent, RubricCriterionEditorComponent, RubricScoreEditorComponent, RubricScaleFieldsComponent, RubricScaleLevelEditorComponent, RubricBandEditorComponent, RubricCategoryEditorComponent, RubricVersionHostComponent, RubricScaleLevelHostComponent, RubricCategoryHostComponent, RubricCriterionHostComponent],
+    exports: [RubricBuilderComponent, RubricScoringFormComponent, RubricResultComponent, RubricPublishDialogComponent, RubricVersionDiffComponent, RubricComparisonMatrixComponent, RubricCriterionEditorComponent, RubricScoreEditorComponent, RubricScaleFieldsComponent, RubricScaleLevelEditorComponent, RubricBandEditorComponent, RubricCategoryEditorComponent, RubricVersionHostComponent, RubricScaleLevelHostComponent, RubricCategoryHostComponent, RubricCriterionHostComponent],
 })
 export class RubricsModule {}

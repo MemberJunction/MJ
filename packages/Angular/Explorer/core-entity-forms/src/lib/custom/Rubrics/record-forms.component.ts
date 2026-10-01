@@ -13,7 +13,7 @@ import { MJRubricVersionFormComponent } from '../../generated/Entities/MJRubricV
 @Component({
     standalone: false,
     selector: 'mj-rubric-version-form',
-    template: `@if (record) { <mj-record-form-container [Record]="record" [FormComponent]="this" (Navigate)="OnFormNavigate($event)" (DeleteRequested)="OnDeleteRequested()" (FavoriteToggled)="OnFavoriteToggled()" (HistoryRequested)="OnHistoryRequested()" (ListManagementRequested)="OnListManagementRequested()"><p>{{ record.Status }} {{ record.MajorVersion }}.{{ record.MinorVersion }}.{{ record.PatchVersion }}</p><mj-rubric-version-diff></mj-rubric-version-diff></mj-record-form-container> }`,
+    template: `@if (record) { <mj-record-form-container [Record]="record" [FormComponent]="this" (Navigate)="OnFormNavigate($event)" (DeleteRequested)="OnDeleteRequested()" (FavoriteToggled)="OnFavoriteToggled()" (HistoryRequested)="OnHistoryRequested()" (ListManagementRequested)="OnListManagementRequested()"><mj-rubric-version-host [VersionId]="record.ID" [RubricId]="record.RubricID" [Status]="record.Status" [MajorVersion]="record.MajorVersion" [MinorVersion]="record.MinorVersion" [PatchVersion]="record.PatchVersion" [Provider]="ProviderToUse"></mj-rubric-version-host></mj-record-form-container> }`,
 })
 @RegisterClass(BaseFormComponent, 'MJ: Rubric Versions')
 export class MJRubricVersionFormComponentExtended extends MJRubricVersionFormComponent {
@@ -23,11 +23,14 @@ export class MJRubricVersionFormComponentExtended extends MJRubricVersionFormCom
 @Component({
     standalone: false,
     selector: 'mj-rubric-criterion-form',
-    template: `@if (record) { <mj-record-form-container [Record]="record" [FormComponent]="this" (Navigate)="OnFormNavigate($event)" (DeleteRequested)="OnDeleteRequested()" (FavoriteToggled)="OnFavoriteToggled()" (HistoryRequested)="OnHistoryRequested()" (ListManagementRequested)="OnListManagementRequested()"><mj-rubric-criterion-editor [ParentId]="record.ParentID" [Weight]="record.Weight" [ScaleId]="record.ScaleID" [GateMinimumScore]="record.GateMinimumScore" [NotApplicablePolicy]="record.NotApplicablePolicy" (ParentIdChange)="record.ParentID = $event" (WeightChange)="record.Weight = $event" (ScaleIdChange)="record.ScaleID = $event" (GateMinimumScoreChange)="record.GateMinimumScore = $event" (NotApplicablePolicyChange)="record.NotApplicablePolicy = $event"></mj-rubric-criterion-editor></mj-record-form-container> }`,
+    template: `@if (record) { <mj-record-form-container [Record]="record" [FormComponent]="this" (Navigate)="OnFormNavigate($event)" (DeleteRequested)="OnDeleteRequested()" (FavoriteToggled)="OnFavoriteToggled()" (HistoryRequested)="OnHistoryRequested()" (ListManagementRequested)="OnListManagementRequested()"><mj-rubric-criterion-host [CriterionId]="record.ID" [VersionId]="record.RubricVersionID" [ParentId]="record.ParentID" [Weight]="record.Weight" [ScaleId]="record.ScaleID" [GateMinimumScore]="record.GateMinimumScore" [NotApplicablePolicy]="record.NotApplicablePolicy" [Provider]="ProviderToUse" (ParentIdChange)="record.ParentID = $event" (WeightChange)="record.Weight = $event" (ScaleIdChange)="record.ScaleID = $event" (GateMinimumScoreChange)="record.GateMinimumScore = $event" (NotApplicablePolicyChange)="SetPolicy($event)"></mj-rubric-criterion-host></mj-record-form-container> }`,
 })
 @RegisterClass(BaseFormComponent, 'MJ: Rubric Criteria')
 export class MJRubricCriterionFormComponentExtended extends MJRubricCriterionFormComponent {
     public override record!: MJRubricCriterionEntity;
+    public SetPolicy(value: string | null): void {
+        this.record.NotApplicablePolicy = (value || null) as typeof this.record.NotApplicablePolicy;
+    }
 }
 
 @Component({
@@ -43,7 +46,7 @@ export class MJRubricEvaluationScoreFormComponentExtended extends MJRubricEvalua
 @Component({
     standalone: false,
     selector: 'mj-rubric-scale-level-form',
-    template: `@if (record) { <mj-record-form-container [Record]="record" [FormComponent]="this" (Navigate)="OnFormNavigate($event)" (DeleteRequested)="OnDeleteRequested()" (FavoriteToggled)="OnFavoriteToggled()" (HistoryRequested)="OnHistoryRequested()" (ListManagementRequested)="OnListManagementRequested()"><mj-rubric-scale-level-editor [Label]="record.Label" [Description]="record.Description" [Value]="record.Value" [NormalizedValue]="record.NormalizedValue" [Frozen]="true" (LabelChange)="record.Label = $event" (DescriptionChange)="record.Description = $event"></mj-rubric-scale-level-editor></mj-record-form-container> }`,
+    template: `@if (record) { <mj-record-form-container [Record]="record" [FormComponent]="this" (Navigate)="OnFormNavigate($event)" (DeleteRequested)="OnDeleteRequested()" (FavoriteToggled)="OnFavoriteToggled()" (HistoryRequested)="OnHistoryRequested()" (ListManagementRequested)="OnListManagementRequested()"><mj-rubric-scale-level-host [ScaleId]="record.ScaleID" [Label]="record.Label" [Description]="record.Description" [Value]="record.Value" [NormalizedValue]="record.NormalizedValue" [Provider]="ProviderToUse" (LabelChange)="record.Label = $event" (DescriptionChange)="record.Description = $event" (ValueChange)="record.Value = $event" (NormalizedValueChange)="record.NormalizedValue = $event"></mj-rubric-scale-level-host></mj-record-form-container> }`,
 })
 @RegisterClass(BaseFormComponent, 'MJ: Rubric Scale Levels')
 export class MJRubricScaleLevelFormComponentExtended extends MJRubricScaleLevelFormComponent {
@@ -63,7 +66,7 @@ export class MJRubricBandFormComponentExtended extends MJRubricBandFormComponent
 @Component({
     standalone: false,
     selector: 'mj-rubric-category-form',
-    template: `@if (record) { <mj-record-form-container [Record]="record" [FormComponent]="this" (Navigate)="OnFormNavigate($event)" (DeleteRequested)="OnDeleteRequested()" (FavoriteToggled)="OnFavoriteToggled()" (HistoryRequested)="OnHistoryRequested()" (ListManagementRequested)="OnListManagementRequested()"><mj-rubric-category-editor [Name]="record.Name" [ParentId]="record.ParentID" (NameChange)="record.Name = $event" (ParentIdChange)="record.ParentID = $event"></mj-rubric-category-editor></mj-record-form-container> }`,
+    template: `@if (record) { <mj-record-form-container [Record]="record" [FormComponent]="this" (Navigate)="OnFormNavigate($event)" (DeleteRequested)="OnDeleteRequested()" (FavoriteToggled)="OnFavoriteToggled()" (HistoryRequested)="OnHistoryRequested()" (ListManagementRequested)="OnListManagementRequested()"><mj-rubric-category-host [CategoryId]="record.ID" [Name]="record.Name" [ParentId]="record.ParentID" [Provider]="ProviderToUse" (NameChange)="record.Name = $event" (ParentIdChange)="record.ParentID = $event"></mj-rubric-category-host></mj-record-form-container> }`,
 })
 @RegisterClass(BaseFormComponent, 'MJ: Rubric Categories')
 export class MJRubricCategoryFormComponentExtended extends MJRubricCategoryFormComponent {
