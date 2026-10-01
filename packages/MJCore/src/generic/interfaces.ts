@@ -580,6 +580,20 @@ export interface ILocalStorageProvider {
     readonly SharesReferences?: boolean;
 
     /**
+     * Whether values written here can be read back by a DIFFERENT process — Redis, or a
+     * browser's localStorage / IndexedDB surviving a reload.
+     *
+     * `false` marks an in-process store whose contents die with the process. `ProviderBase`
+     * then skips the metadata snapshot entirely: saving it costs a full `JSON.stringify` of all
+     * metadata plus gzip and base64, and loading it rebuilds every `EntityInfo` /
+     * `EntityFieldInfo` — all to hand the heap a copy of objects it already holds.
+     *
+     * Optional: `undefined` is treated as persistent, so existing implementations keep their
+     * current behavior.
+     */
+    readonly SupportsCrossProcessPersistence?: boolean;
+
+    /**
      * Retrieves a value from storage. The implementation is responsible for any
      * deserialization required by the underlying medium:
      *  - **IndexedDB**: returns the value directly via structured clone (Date/Map/Set/typed arrays preserved, no parse needed)
