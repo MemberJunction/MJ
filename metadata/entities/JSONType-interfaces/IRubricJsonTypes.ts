@@ -17,7 +17,7 @@ export interface IRubricDeterministicRule {
     /** JSON path into the subject content. */
     Path: string;
     Operator: 'equals' | 'notEquals' | 'in' | 'notIn' | 'contains' | 'exists' | 'between' | 'gte' | 'lte' | 'matches';
-    Values: unknown[];
+    Values: JsonValue[];
     /** Level label or numeric value when the rule matches. */
     LevelWhenTrue: string;
     LevelWhenFalse: string;
@@ -103,13 +103,13 @@ export interface IRubricVersionChange {
 
 /** RubricVersion.ChangeDetails */
 export interface IRubricVersionChangeDetails {
-    BaseVersionID: string;
+    BaseVersionID: string | null;
     Changes: IRubricVersionChange[];
 }
 
 /** AIAgentRubric.EvaluatorConfig */
 export interface IRubricEvaluatorSelection {
-    EvaluatorType: string;
+    EvaluatorType: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self';
     EvaluatorName?: string;
     PromptID?: string;
     AgentID?: string;

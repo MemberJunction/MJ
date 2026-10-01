@@ -88,7 +88,7 @@ export class RubricVersionDiff {
     private static collect(base: RubricVersionSnapshot, draft: RubricVersionSnapshot): VersionChange[] {
         const changes: VersionChange[] = [];
         if (base.notApplicablePolicy !== draft.notApplicablePolicy) {
-            changes.push({ bump: 'Major', subject: 'version', property: 'NotApplicablePolicy' });
+            changes.push({ bump: 'Major', subject: 'version', property: 'NotApplicablePolicy', from: base.notApplicablePolicy, to: draft.notApplicablePolicy });
         }
         RubricVersionDiff.pushScalar(changes, 'Minor', 'version', 'PassThreshold', base.passThreshold ?? null, draft.passThreshold ?? null);
         RubricVersionDiff.pushScalar(changes, 'Minor', 'version', 'MinimumCompleteness', base.minimumCompleteness ?? null, draft.minimumCompleteness ?? null);
@@ -101,14 +101,14 @@ export class RubricVersionDiff {
         for (const [key, node] of draftNodes) {
             const previous = baseNodes.get(key);
             if (!previous) {
-                changes.push({ bump: node.isAdvisory ? 'Minor' : 'Major', subject: key, property: 'added' });
+                changes.push({ bump: node.isAdvisory ? 'Minor' : 'Major', subject: key, property: 'added', from: null, to: node.name });
                 continue;
             }
             RubricVersionDiff.diffNode(changes, base, draft, previous, node);
         }
         for (const [key, node] of baseNodes) {
             if (!draftNodes.has(key)) {
-                changes.push({ bump: node.isAdvisory ? 'Minor' : 'Major', subject: key, property: 'removed' });
+                changes.push({ bump: node.isAdvisory ? 'Minor' : 'Major', subject: key, property: 'removed', from: node.name, to: null });
             }
         }
         RubricVersionDiff.diffBands(changes, base, draft);
@@ -156,18 +156,18 @@ export class RubricVersionDiff {
         for (const [label, band] of after) {
             const previous = before.get(label);
             if (!previous) {
-                changes.push({ bump: 'Minor', subject: label, property: 'band added' });
+                changes.push({ bump: 'Minor', subject: label, property: 'band added', from: null, to: { minScore: band.minScore, maxScore: band.maxScore, displayTone: band.displayTone } });
                 continue;
             }
             if (previous.minScore !== band.minScore || previous.maxScore !== band.maxScore || previous.displayTone !== band.displayTone) {
-                changes.push({ bump: 'Minor', subject: label, property: 'band range' });
+                changes.push({ bump: 'Minor', subject: label, property: 'band range', from: { minScore: previous.minScore, maxScore: previous.maxScore, displayTone: previous.displayTone }, to: { minScore: band.minScore, maxScore: band.maxScore, displayTone: band.displayTone } });
             }
             if ((previous.description ?? null) !== (band.description ?? null)) {
-                changes.push({ bump: 'Patch', subject: label, property: 'band wording' });
+                changes.push({ bump: 'Patch', subject: label, property: 'band wording', from: previous.description ?? null, to: band.description ?? null });
             }
         }
         for (const [label] of before) {
-            if (!after.has(label)) changes.push({ bump: 'Minor', subject: label, property: 'band removed' });
+            if (!after.has(label)) changes.push({ bump: 'Minor', subject: label, property: 'band removed', from: label, to: null });
         }
     }
 
@@ -190,7 +190,7 @@ export class RubricVersionDiff {
             for (const [levelId, level] of afterLevels) {
                 const was = beforeLevels.get(levelId);
                 if (!was) {
-                    changes.push({ bump: 'Major', subject: id, property: 'level added' });
+                    changes.push({ bump: 'Major', subject: id, property: 'level added', from: null, to: level.label });
                     continue;
                 }
                 RubricVersionDiff.pushScalar(changes, 'Major', id, 'Value', was.value, level.value);
@@ -199,7 +199,7 @@ export class RubricVersionDiff {
                 RubricVersionDiff.pushScalar(changes, 'Patch', id, 'level description', was.description ?? null, level.description ?? null);
             }
             for (const levelId of beforeLevels.keys()) {
-                if (!afterLevels.has(levelId)) changes.push({ bump: 'Major', subject: id, property: 'level removed' });
+                if (!afterLevels.has(levelId)) changes.push({ bump: 'Major', subject: id, property: 'level removed', from: beforeLevels.get(levelId)?.label ?? null, to: null });
             }
         }
     }
@@ -219,7 +219,7 @@ export class RubricVersionDiff {
     ): void {
         if (before === after) return;
         if (typeof before === 'number' && typeof after === 'number' && Object.is(before, after)) return;
-        changes.push({ bump, subject, property });
+        changes.push({ bump, subject, property, from: before ?? null, to: after ?? null });
     }
 
     private static highest(changes: VersionChange[]): 'Major' | 'Minor' | 'Patch' | null {

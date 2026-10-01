@@ -3,6 +3,7 @@
     "fields": {
       "Name": "MJ: Test Rubrics",
       "Status": "Deprecated",
+      "AutoUpdateDescription": false,
       "Description": "DEPRECATED: superseded by MJ: Rubrics (Rubric, RubricVersion, RubricCriterion). This entity was never read by the test engine, links to nothing and has no seed rows; it is scheduled for removal in the next major version. Assign a rubric to a test with Test.RubricID or TestSuite.RubricID instead. See plans/rubrics/RUBRICS_PLAN.md."
     },
     "primaryKey": {

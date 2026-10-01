@@ -64,7 +64,9 @@ describe('RubricVersionDiff', () => {
     it('classifies wording as Patch, a threshold as Minor, and a weight as Major', () => {
         expect(RubricVersionDiff.diff(base, snapshot([node({ key: 'clarity', name: 'Clarity' })])).computedBump).toBe('Patch');
         expect(RubricVersionDiff.diff(base, snapshot([node({ key: 'clarity' })], { passThreshold: 0.8 })).computedBump).toBe('Minor');
-        expect(RubricVersionDiff.diff(base, snapshot([node({ key: 'clarity', weight: 2 })])).computedBump).toBe('Major');
+        const heavier = RubricVersionDiff.diff(base, snapshot([node({ key: 'clarity', weight: 2 })]));
+        expect(heavier.computedBump).toBe('Major');
+        expect(heavier.changes.find(change => change.property === 'Weight')).toMatchObject({ from: 1, to: 2 });
     });
 
     it('treats an advisory add as Minor and a non-advisory add as Major', () => {

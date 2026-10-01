@@ -66,6 +66,9 @@ describe('rubric version publish', () => {
         expect(published.contentHash).toHaveLength(64);
         expect(published.scoringHash).not.toBe(published.contentHash);
         expect(published.publishedAt).toBeInstanceOf(Date);
+        const weight = published.changeDetails.Changes.find(change => change.Property === 'Weight');
+        expect(published.changeDetails.BaseVersionID).toBe(base.id);
+        expect(weight).toMatchObject({ From: 1, To: 2, Bump: 'Major', Path: 'clarity' });
     });
 
     it('clones keys and rewrites parent ids', () => {

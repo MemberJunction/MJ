@@ -20,7 +20,10 @@ export interface PublishResult {
     majorVersion: number;
     minorVersion: number;
     patchVersion: number;
-    changeDetails: { bump: string; subject: string; property: string }[];
+    changeDetails: {
+        BaseVersionID: string | null;
+        Changes: { Path: string; Property: string; From: unknown; To: unknown; Bump: string }[];
+    };
     contentHash: string;
     scoringHash: string;
     warnings: PublishWarning[];
@@ -92,7 +95,16 @@ export async function PublishRubricVersion(
         majorVersion: diff.nextVersion.major,
         minorVersion: diff.nextVersion.minor,
         patchVersion: diff.nextVersion.patch,
-        changeDetails: diff.changes,
+        changeDetails: {
+            BaseVersionID: base?.id ?? null,
+            Changes: diff.changes.map(change => ({
+                Path: change.subject,
+                Property: change.property,
+                From: change.from ?? null,
+                To: change.to ?? null,
+                Bump: change.bump,
+            })),
+        },
         contentHash: await sha256Hex(RubricVersionDiff.contentCanonical(draft)),
         scoringHash: await sha256Hex(RubricVersionDiff.scoringCanonical(draft)),
         warnings: validation.warnings,

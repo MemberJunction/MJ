@@ -162,6 +162,10 @@ export interface VersionChange {
     /** Node key, band id, scale id, or "version". */
     subject: string;
     property: string;
+    /** Previous value. Null when the subject was added. */
+    from: unknown;
+    /** Next value. Null when the subject was removed. */
+    to: unknown;
 }
 
 export interface VersionDiffResult {
