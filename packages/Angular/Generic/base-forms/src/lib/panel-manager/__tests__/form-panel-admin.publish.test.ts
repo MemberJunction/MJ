@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { ApplyContributionSpecToRow, ParseClaimedFieldNames } from '@memberjunction/core-entities';
+import type {
+    ActiveContributionSiblings, ApplyContributionSpecToRow, FormLifecycleComponentStatus, ParseClaimedFieldNames,
+    SameFormAudience,
+} from '@memberjunction/core-entities';
 
 /**
  * Publishing changes who a form or panel is for. Two things must hold, and neither is visible
@@ -16,16 +19,43 @@ interface StoredRow {
     ReplacesSectionKey?: string | null; ReplacesFieldNames?: string | null; InSectionKey?: string | null;
     SectionPosition?: 'start' | 'end' | null; Inclusion?: 'Primary' | 'More' | 'None' | null;
     ChromeGroup?: 'details' | 'more' | null; Configuration?: string | null;
+    ComponentID?: string | null;
 }
+
+/** A component a row renders: its status mirrors the row's. */
+interface StoredComponent { ID: string; Status: string }
 
 const ME = 'user-me';
 let contributions: StoredRow[] = [];
 let overrides: StoredRow[] = [];
-/** Every save, in the order it was enqueued, with the columns it carried. */
+let components: StoredComponent[] = [];
+/** Every row save, in the order it was enqueued, with the columns it carried. */
 let saves: Array<{ ID: string; Status: string; Scope: Scope; RoleID: string | null; UserID: string | null }> = [];
+/** Every component save, in the order it was enqueued. */
+let componentSaves: Array<{ ID: string; Status: string }> = [];
+/** Every row delete. */
+let deletes: string[] = [];
+let deleteSucceeds = true;
 let submit = vi.fn(async () => true);
 /** The row the service loaded last, to read what it wrote. */
 let lastRow: FakeRow | null = null;
+
+/** Stands in for a loaded component: holds its status and records its save. */
+class FakeComponent {
+    public ID = ''; public Status = '';
+    public TransactionGroup: unknown = null;
+    public LatestResult = { CompleteMessage: '' };
+    public async Load(id: string): Promise<boolean> {
+        const found = components.find((c) => c.ID === id);
+        if (!found) return false;
+        Object.assign(this, found);
+        return true;
+    }
+    public async Save(): Promise<boolean> {
+        componentSaves.push({ ID: this.ID, Status: this.Status });
+        return true;
+    }
+}
 
 /** Stands in for a loaded entity row: holds its columns and records its save. */
 class FakeRow {
@@ -41,8 +71,10 @@ class FakeRow {
     public SectionPosition: string | null = null;
     public Inclusion: string | null = null; public ChromeGroup: string | null = null;
     public Configuration: string | null = null;
+    public ComponentID: string | null = null;
+    public EntityID = '';
     public TransactionGroup: unknown = null;
-    public LatestResult = { CompleteMessage: '' };
+    public LatestResult: { Success?: boolean; CompleteMessage: string } = { CompleteMessage: '' };
     public constructor(private readonly source: () => StoredRow[]) {}
     public async Load(id: string): Promise<boolean> {
         const found = this.source().find((r) => r.ID === id);
@@ -54,6 +86,14 @@ class FakeRow {
         saves.push({ ID: this.ID, Status: this.Status, Scope: this.Scope, RoleID: this.RoleID, UserID: this.UserID });
         return true;
     }
+    public async Delete(): Promise<boolean> {
+        if (!deleteSucceeds) {
+            this.LatestResult = { CompleteMessage: 'Delete refused.' };
+            return false;
+        }
+        deletes.push(this.ID);
+        return true;
+    }
 }
 
 const ENROLLMENTS = { ID: 'ENT-ENROLL', Name: 'MoreCheese: Course Enrollments' };
@@ -63,6 +103,7 @@ const provider = {
     EntityByName: (name: string) => (name.trim().toLowerCase() === ENROLLMENTS.Name.toLowerCase() ? ENROLLMENTS : undefined),
     CreateTransactionGroup: async () => ({ Submit: submit }),
     GetEntityObject: async (name: string) => {
+        if (name === 'MJ: Components') return new FakeComponent();
         lastRow = new FakeRow(() => (name === 'MJ: Entity Form Overrides' ? overrides : contributions));
         return lastRow;
     },
@@ -75,11 +116,20 @@ vi.mock('@memberjunction/core-entities', async () => {
         ApplyContributionSpecToRow: typeof ApplyContributionSpecToRow;
         ParseClaimedFieldNames: typeof ParseClaimedFieldNames;
     }>('@memberjunction/core-entities/dist/custom/FormScope/FormContributionRow.js');
+    // The activation rule is pure too, and is the rule under test.
+    const lifecycle = await vi.importActual<{
+        ActiveContributionSiblings: typeof ActiveContributionSiblings;
+        FormLifecycleComponentStatus: typeof FormLifecycleComponentStatus;
+        SameFormAudience: typeof SameFormAudience;
+    }>('@memberjunction/core-entities/dist/custom/FormScope/FormContributionLifecycle.js');
     return {
         InteractiveFormsEngine: { get Instance() { return { Contributions: contributions, Overrides: overrides }; } },
         UserCanManageFormDefaults: vi.fn(() => true),
         ApplyContributionSpecToRow: mapper.ApplyContributionSpecToRow,
         ParseClaimedFieldNames: mapper.ParseClaimedFieldNames,
+        ActiveContributionSiblings: lifecycle.ActiveContributionSiblings,
+        FormLifecycleComponentStatus: lifecycle.FormLifecycleComponentStatus,
+        SameFormAudience: lifecycle.SameFormAudience,
     };
 });
 vi.mock('@memberjunction/core', () => ({
@@ -105,7 +155,11 @@ function panel(over: Partial<StoredRow> & { ID: string }): StoredRow {
 beforeEach(() => {
     contributions = [];
     overrides = [];
+    components = [];
     saves = [];
+    componentSaves = [];
+    deletes = [];
+    deleteSucceeds = true;
     submit = vi.fn(async () => true);
     setHidden.mockClear();
 });
@@ -183,13 +237,13 @@ describe('FormPanelAdminService.CanPublish', () => {
 describe('FormPanelAdminService.SetPlacement — order in its position', () => {
     it('writes the order the dialog chose', async () => {
         contributions = [panel({ ID: 'mine', Scope: 'User', UserID: ME })];
-        await new FormPanelAdminService().SetPlacement('mine', { slot: 'after-fields', presentation: 'panel', title: 'P', sortKey: 15 }, true);
+        await new FormPanelAdminService().SetPlacement('mine', { slot: 'after-fields', presentation: 'panel', title: 'P', sortKey: 15 }, 'Active');
         expect(lastRow?.SortKey).toBe(15);
     });
 
     it('keeps the order it had when the dialog left it alone', async () => {
         contributions = [panel({ ID: 'mine', Scope: 'User', UserID: ME })];
-        await new FormPanelAdminService().SetPlacement('mine', { slot: 'after-fields', presentation: 'panel', title: 'P' }, true);
+        await new FormPanelAdminService().SetPlacement('mine', { slot: 'after-fields', presentation: 'panel', title: 'P' }, 'Active');
         expect(lastRow?.SortKey).toBe(5);
     });
 });
@@ -198,19 +252,19 @@ describe('FormPanelAdminService.SetPlacement — section claims', () => {
     beforeEach(() => { contributions = [panel({ ID: 'mine', Scope: 'User', UserID: ME })]; });
 
     it('writes several replaced sections as a list, and one as the single key', async () => {
-        await new FormPanelAdminService().SetPlacement('mine', { slot: 'after-fields', presentation: 'panel', title: 'P', replacesSectionKeys: ['a', 'b'] }, true);
+        await new FormPanelAdminService().SetPlacement('mine', { slot: 'after-fields', presentation: 'panel', title: 'P', replacesSectionKeys: ['a', 'b'] }, 'Active');
         expect(lastRow).toMatchObject({ ReplacesSectionKey: null, ReplacesSectionKeys: '["a","b"]' });
-        await new FormPanelAdminService().SetPlacement('mine', { slot: 'after-fields', presentation: 'panel', title: 'P', replacesSectionKeys: ['a'] }, true);
+        await new FormPanelAdminService().SetPlacement('mine', { slot: 'after-fields', presentation: 'panel', title: 'P', replacesSectionKeys: ['a'] }, 'Active');
         expect(lastRow).toMatchObject({ ReplacesSectionKey: 'a', ReplacesSectionKeys: null });
     });
 
     it('writes a place inside a section with its position', async () => {
-        await new FormPanelAdminService().SetPlacement('mine', { slot: 'after-fields', presentation: 'panel', title: 'P', inSectionKey: 'profile', sectionPosition: 'end' }, true);
+        await new FormPanelAdminService().SetPlacement('mine', { slot: 'after-fields', presentation: 'panel', title: 'P', inSectionKey: 'profile', sectionPosition: 'end' }, 'Active');
         expect(lastRow).toMatchObject({ InSectionKey: 'profile', SectionPosition: 'end' });
     });
 
     it('drops a position that has no section to apply to', async () => {
-        await new FormPanelAdminService().SetPlacement('mine', { slot: 'after-fields', presentation: 'panel', title: 'P', sectionPosition: 'end' }, true);
+        await new FormPanelAdminService().SetPlacement('mine', { slot: 'after-fields', presentation: 'panel', title: 'P', sectionPosition: 'end' }, 'Active');
         expect(lastRow?.SectionPosition).toBeNull();
     });
 });
@@ -228,7 +282,7 @@ describe('FormPanelAdminService.SetPlacement — claims', () => {
             ID: 'mine', Scope: 'User', UserID: ME, ContributionKey: GRID_KEY,
             RelatedEntityID: 'ENT-ENROLL', RelatedJoinField: 'CourseID',
         })];
-        const result = await new FormPanelAdminService().SetPlacement('mine', { ...P, replacesFieldNames: ['Name'], sectionPosition: 'end' }, true);
+        const result = await new FormPanelAdminService().SetPlacement('mine', { ...P, replacesFieldNames: ['Name'], sectionPosition: 'end' }, 'Active');
         expect(result.Success).toBe(true);
         expect(lastRow).toMatchObject({
             RelatedEntityID: null, RelatedJoinField: null,
@@ -238,7 +292,7 @@ describe('FormPanelAdminService.SetPlacement — claims', () => {
 
     it('writes the grid and its key when the panel takes over a grid', async () => {
         contributions = [panel({ ID: 'mine', Scope: 'User', UserID: ME, ContributionKey: 'panel:Cohort', ReplacesFieldNames: '["Name"]' })];
-        await new FormPanelAdminService().SetPlacement('mine', { ...P, relatedEntity: 'MoreCheese: Course Enrollments', relatedJoinField: '[CourseID]' }, true);
+        await new FormPanelAdminService().SetPlacement('mine', { ...P, relatedEntity: 'MoreCheese: Course Enrollments', relatedJoinField: '[CourseID]' }, 'Active');
         expect(lastRow).toMatchObject({
             RelatedEntityID: 'ENT-ENROLL', RelatedJoinField: '[CourseID]',
             ReplacesFieldNames: null, ContributionKey: GRID_KEY,
@@ -247,14 +301,14 @@ describe('FormPanelAdminService.SetPlacement — claims', () => {
 
     it('refuses a grid on an entity that is not registered, and saves nothing', async () => {
         contributions = [panel({ ID: 'mine', Scope: 'User', UserID: ME })];
-        const result = await new FormPanelAdminService().SetPlacement('mine', { ...P, relatedEntity: 'Nope' }, true);
+        const result = await new FormPanelAdminService().SetPlacement('mine', { ...P, relatedEntity: 'Nope' }, 'Active');
         expect(result.Success).toBe(false);
         expect(saves).toEqual([]);
     });
 
     it('writes the key of the panel it now replaces', async () => {
         contributions = [panel({ ID: 'mine', Scope: 'User', UserID: ME })];
-        await new FormPanelAdminService().SetPlacement('mine', { ...P, contributionKey: 'skip:health' }, true);
+        await new FormPanelAdminService().SetPlacement('mine', { ...P, contributionKey: 'skip:health' }, 'Active');
         expect(lastRow?.ContributionKey).toBe('skip:health');
     });
 
@@ -263,7 +317,7 @@ describe('FormPanelAdminService.SetPlacement — claims', () => {
             ID: 'mine', Scope: 'User', UserID: ME, ContributionKey: GRID_KEY,
             RelatedEntityID: 'ENT-ENROLL', RelatedJoinField: 'CourseID',
         })];
-        await new FormPanelAdminService().SetPlacement('mine', P, true);
+        await new FormPanelAdminService().SetPlacement('mine', P, 'Active');
         expect(lastRow).toMatchObject({
             RelatedEntityID: null, RelatedJoinField: null, ReplacesSectionKey: null, ReplacesSectionKeys: null,
             ReplacesFieldNames: null, InSectionKey: null, SectionPosition: null, ContributionKey: 'panel:Cohort',
@@ -272,19 +326,164 @@ describe('FormPanelAdminService.SetPlacement — claims', () => {
 
     it('gives a bare strip no rail metadata', async () => {
         contributions = [panel({ ID: 'mine', Scope: 'User', UserID: ME, Inclusion: 'Primary', ChromeGroup: 'details' })];
-        await new FormPanelAdminService().SetPlacement('mine', { ...P, presentation: 'bare' }, true);
+        await new FormPanelAdminService().SetPlacement('mine', { ...P, presentation: 'bare' }, 'Active');
         expect(lastRow).toMatchObject({ Presentation: 'bare', Inclusion: null, ChromeGroup: null });
     });
 
     it('keeps what the dialog does not edit on a panel', async () => {
         contributions = [panel({ ID: 'mine', Scope: 'User', UserID: ME, Inclusion: 'Primary', Configuration: '{"window":30}' })];
-        await new FormPanelAdminService().SetPlacement('mine', P, true);
+        await new FormPanelAdminService().SetPlacement('mine', P, 'Active');
         expect(lastRow).toMatchObject({ Inclusion: 'Primary', Configuration: '{"window":30}' });
     });
 
     it('stores a draft as Pending', async () => {
         contributions = [panel({ ID: 'mine', Scope: 'User', UserID: ME })];
-        await new FormPanelAdminService().SetPlacement('mine', P, false);
+        await new FormPanelAdminService().SetPlacement('mine', P, 'Pending');
         expect(lastRow?.Status).toBe('Pending');
+    });
+});
+
+/**
+ * Turning a panel on from the drawer follows the rule the Activate action follows: the panel live
+ * under the same key for the same audience is retired first, in the same transaction, and each
+ * component's status follows its row's. Otherwise a draft turned on beside a live version is
+ * refused by the unique index, and a keyless pair goes live twice.
+ */
+describe('FormPanelAdminService.SetActive', () => {
+    const mine = (over: Partial<StoredRow> & { ID: string }) => panel({ Scope: 'User', UserID: ME, ...over });
+
+    it('retires the live version under the same key first, then turns this one on, in one transaction', async () => {
+        contributions = [
+            mine({ ID: 'old', ComponentID: 'c-old' }),
+            mine({ ID: 'new', Status: 'Pending', ComponentID: 'c-new' }),
+        ];
+        components = [{ ID: 'c-old', Status: 'Published' }, { ID: 'c-new', Status: 'Draft' }];
+        const result = await new FormPanelAdminService().SetActive('new', true);
+        expect(result.Success).toBe(true);
+        expect(saves.map((s) => `${s.ID}:${s.Status}`)).toEqual(['old:Inactive', 'new:Active']);
+        expect(componentSaves).toEqual([{ ID: 'c-old', Status: 'Deprecated' }, { ID: 'c-new', Status: 'Published' }]);
+        expect(submit).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves live panels under other keys and for other audiences alone', async () => {
+        contributions = [
+            mine({ ID: 'new', Status: 'Pending' }),
+            mine({ ID: 'other-key', ContributionKey: 'panel:Other' }),
+            panel({ ID: 'global' }),
+            panel({ ID: 'role', Scope: 'Role', RoleID: 'role-sales' }),
+        ];
+        await new FormPanelAdminService().SetActive('new', true);
+        expect(saves.map((s) => `${s.ID}:${s.Status}`)).toEqual(['new:Active']);
+    });
+
+    it('turns a shared panel on within its own audience', async () => {
+        contributions = [panel({ ID: 'old' }), panel({ ID: 'new', Status: 'Inactive' }), mine({ ID: 'personal' })];
+        await new FormPanelAdminService().SetActive('new', true);
+        expect(saves.map((s) => `${s.ID}:${s.Status}`)).toEqual(['old:Inactive', 'new:Active']);
+    });
+
+    it('turns two keyless panels on side by side', async () => {
+        contributions = [mine({ ID: 'a', ContributionKey: null }), mine({ ID: 'b', Status: 'Pending', ContributionKey: null })];
+        await new FormPanelAdminService().SetActive('b', true);
+        expect(saves.map((s) => `${s.ID}:${s.Status}`)).toEqual(['b:Active']);
+    });
+
+    it('turns a panel off and retires its component', async () => {
+        contributions = [mine({ ID: 'mine', ComponentID: 'c-1' })];
+        components = [{ ID: 'c-1', Status: 'Published' }];
+        await new FormPanelAdminService().SetActive('mine', false);
+        expect(saves.map((s) => `${s.ID}:${s.Status}`)).toEqual(['mine:Inactive']);
+        expect(componentSaves).toEqual([{ ID: 'c-1', Status: 'Deprecated' }]);
+    });
+
+    it('leaves a component another live panel still renders', async () => {
+        contributions = [mine({ ID: 'mine', ComponentID: 'c-1' }), panel({ ID: 'shared', ComponentID: 'c-1', ContributionKey: 'panel:Shared' })];
+        components = [{ ID: 'c-1', Status: 'Published' }];
+        await new FormPanelAdminService().SetActive('mine', false);
+        expect(componentSaves).toEqual([]);
+    });
+
+    it('does not rewrite a component that already has the status', async () => {
+        contributions = [mine({ ID: 'new', Status: 'Pending', ComponentID: 'c-1' })];
+        components = [{ ID: 'c-1', Status: 'Published' }];
+        await new FormPanelAdminService().SetActive('new', true);
+        expect(componentSaves).toEqual([]);
+    });
+
+    it('reports failure when the transaction does not commit', async () => {
+        contributions = [mine({ ID: 'new', Status: 'Pending' })];
+        submit = vi.fn(async () => false);
+        expect(await new FormPanelAdminService().SetActive('new', true))
+            .toEqual({ Success: false, Message: 'The change could not be saved.' });
+    });
+
+    it('reports the reason the refused write recorded', async () => {
+        contributions = [mine({ ID: 'new', Status: 'Pending' })];
+        submit = vi.fn(async () => {
+            lastRow!.LatestResult = { Success: false, CompleteMessage: 'Permission denied.' };
+            return false;
+        });
+        expect(await new FormPanelAdminService().SetActive('new', true)).toEqual({ Success: false, Message: 'Permission denied.' });
+    });
+
+    it('reports a panel that has gone', async () => {
+        const result = await new FormPanelAdminService().SetActive('gone', true);
+        expect(result).toMatchObject({ Success: false, Message: 'That panel is no longer registered.' });
+        expect(saves).toEqual([]);
+    });
+});
+
+describe('FormPanelAdminService.SetPlacement — turning on and keeping off', () => {
+    const P = { slot: 'after-fields' as const, presentation: 'panel' as const, title: 'P' };
+
+    it('retires the live panel under the key the edit gives it', async () => {
+        contributions = [
+            panel({ ID: 'mine', Scope: 'User', UserID: ME, ContributionKey: 'panel:Cohort' }),
+            panel({ ID: 'health', Scope: 'User', UserID: ME, ContributionKey: 'skip:health' }),
+        ];
+        await new FormPanelAdminService().SetPlacement('mine', { ...P, contributionKey: 'skip:health' }, 'Active');
+        expect(saves.map((s) => `${s.ID}:${s.Status}`)).toEqual(['health:Inactive', 'mine:Active']);
+        expect(submit).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps a panel that is off, off', async () => {
+        contributions = [panel({ ID: 'mine', Scope: 'User', UserID: ME, Status: 'Inactive' })];
+        await new FormPanelAdminService().SetPlacement('mine', P, 'Inactive');
+        expect(lastRow?.Status).toBe('Inactive');
+        expect(saves.map((s) => s.ID)).toEqual(['mine']);
+    });
+});
+
+describe('FormPanelAdminService.Remove', () => {
+    it('deletes the row', async () => {
+        contributions = [panel({ ID: 'mine', Scope: 'User', UserID: ME })];
+        expect((await new FormPanelAdminService().Remove('mine')).Success).toBe(true);
+        expect(deletes).toEqual(['mine']);
+    });
+
+    it('reports a refused delete with its reason', async () => {
+        contributions = [panel({ ID: 'mine', Scope: 'User', UserID: ME })];
+        deleteSucceeds = false;
+        expect(await new FormPanelAdminService().Remove('mine')).toEqual({ Success: false, Message: 'Delete refused.' });
+    });
+
+    it('reports a panel that has gone, and deletes nothing', async () => {
+        expect((await new FormPanelAdminService().Remove('gone')).Success).toBe(false);
+        expect(deletes).toEqual([]);
+    });
+});
+
+/** Publishing turns the item on: publishing a draft never takes the live panel away and leaves nothing. */
+describe('FormPanelAdminService.PublishContribution — a draft', () => {
+    it('retires the live panel and turns the draft on, in one transaction', async () => {
+        contributions = [
+            panel({ ID: 'draft', Scope: 'User', UserID: ME, Status: 'Pending', ComponentID: 'c-draft' }),
+            panel({ ID: 'live' }),
+        ];
+        components = [{ ID: 'c-draft', Status: 'Draft' }];
+        await new FormPanelAdminService().PublishContribution('draft', { Scope: 'Global', RoleID: null });
+        expect(saves.map((s) => `${s.ID}:${s.Status}:${s.Scope}`)).toEqual(['live:Inactive:Global', 'draft:Active:Global']);
+        expect(componentSaves).toEqual([{ ID: 'c-draft', Status: 'Published' }]);
+        expect(submit).toHaveBeenCalledTimes(1);
     });
 });

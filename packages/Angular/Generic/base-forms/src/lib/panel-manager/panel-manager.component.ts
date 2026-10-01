@@ -5,8 +5,9 @@ import {
 } from '@angular/core';
 import { Metadata, type CompositeKey, type EntityInfo, type IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import type { FormScope } from '@memberjunction/core-entities';
+import type { FormLifecycleStatus, FormScope } from '@memberjunction/core-entities';
 import { FormPanelAdminService } from './form-panel-admin.service';
+import { FormSlotProbeService } from '../apply/form-slot-probe.service';
 import { HiddenPanelKeys } from '../panel-slot/panel-hides';
 import type { FormAudience } from './form-audience';
 import type { FormContributionSpec } from '@memberjunction/interactive-component-types/forms';
@@ -24,6 +25,7 @@ import {
   type FormPanelStockGridRow,
 } from './form-panel-inventory';
 import {
+  DescribeVisibleTo,
   KeepEditedRowKey,
   PlacementStateFromContribution,
   type FormPlacementContext,
@@ -53,6 +55,7 @@ import {
 export class MjPanelManagerComponent implements OnChanges {
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly admin = inject(FormPanelAdminService);
+  private readonly probe = inject(FormSlotProbeService);
 
   @Input() Visible = false;
 
@@ -106,6 +109,8 @@ export class MjPanelManagerComponent implements OnChanges {
     Kind: 'panel' | 'form';
     ID: string;
     Title: string;
+    /** What the item is now. Publishing turns it on, which the chooser says first. */
+    Status: string;
     Scope: FormScope;
     RoleID: string | null;
   } | null = null;
@@ -121,6 +126,10 @@ export class MjPanelManagerComponent implements OnChanges {
   /** The component the panel being edited renders, for the placement preview. */
   public EditComponentID: string | null = null;
   public EditProposal: FormContributionSpec | null = null;
+  /** Who sees the panel being edited, for the placement dialog to state. */
+  public EditVisibleTo = DescribeVisibleTo('User');
+  /** What the panel being edited is now: on, a draft, or off. */
+  public EditStatus: FormLifecycleStatus = 'Active';
 
   /** ID of the row a write is running on, so only its buttons go quiet. */
   public Busy: string | null = null;
@@ -171,6 +180,7 @@ export class MjPanelManagerComponent implements OnChanges {
       CallerRoleIDs: (user?.UserRoles ?? []).map((r) => r.RoleID).filter((id): id is string => !!id),
       CanPublish: this.CanPublish,
       HiddenKeys: this.EntityName ? HiddenPanelKeys(this.EntityName) : [],
+      Rendering: this.admin.RenderingFor(this.Entity, provider),
     });
     this.Groups = GroupPanelInventory(this.Items);
     this.Forms = BuildFormItems({
@@ -239,6 +249,8 @@ export class MjPanelManagerComponent implements OnChanges {
     this.EditProposal = spec;
     this.EditContext = context;
     this.EditComponentID = row.ComponentID || null;
+    this.EditVisibleTo = DescribeVisibleTo(row.Scope, row.Role);
+    this.EditStatus = lifecycleStatus(row.Status);
     this.Error = '';
     this.cdr.markForCheck();
   }
@@ -252,8 +264,8 @@ export class MjPanelManagerComponent implements OnChanges {
    */
   public SeedEdit = (dialog: { State: FormPlacementState; Context: FormPlacementContext }): void => {
     if (!this.EditProposal || !this.Editing) return;
-    const active = this.Editing.State !== 'draft' && this.Editing.State !== 'off';
-    dialog.State = PlacementStateFromContribution(this.EditProposal, dialog.Context, active);
+    dialog.State = PlacementStateFromContribution(
+      this.EditProposal, dialog.Context, this.EditStatus === 'Active', this.EditStatus === 'Inactive');
   };
 
   public async OnEditApplied(decision: FormPlacementDecision): Promise<void> {
@@ -263,8 +275,8 @@ export class MjPanelManagerComponent implements OnChanges {
     if (!item) return;
     const row = this.rows.find((candidate) => UUIDsEqual(candidate.ID, item.ID));
     const contribution = row ? KeepEditedRowKey(decision.Contribution, row, existing) : decision.Contribution;
-    await this.run(item.ID, () =>
-      this.admin.SetPlacement(item.ID, contribution, decision.ActivateNow, this.Provider));
+    const status: FormLifecycleStatus = decision.ActivateNow ? 'Active' : decision.KeepOff ? 'Inactive' : 'Pending';
+    await this.run(item.ID, () => this.admin.SetPlacement(item.ID, contribution, status, this.Provider));
   }
 
   /** Clicking the backdrop closes the dialog; clicking the dialog itself does not. */
@@ -335,16 +347,14 @@ export class MjPanelManagerComponent implements OnChanges {
   public OnHide(item: FormPanelInventoryItem): void {
     if (!item.CanHide || !item.HideKey || !this.EntityName) return;
     this.admin.Hide(this.EntityName, item.HideKey);
-    this.Refresh();
-    this.Changed.emit();
+    this.afterChange();
   }
 
   /** Bring back a panel this user hid. */
   public OnShow(item: FormPanelInventoryItem): void {
     if (!item.CanShow || !item.HideKey || !this.EntityName) return;
     this.admin.Show(this.EntityName, item.HideKey);
-    this.Refresh();
-    this.Changed.emit();
+    this.afterChange();
   }
 
   /** Switch to another full custom form, or back to the generated form. */
@@ -358,18 +368,21 @@ export class MjPanelManagerComponent implements OnChanges {
     if (!item.CanPublish && !item.CanChangeAudience) return;
     const row = this.rows.find((r) => UUIDsEqual(r.ID, item.ID));
     if (!row) return;
-    this.openAudience('panel', item.ID, item.Title, row.Scope as FormScope, row.RoleID);
+    this.openAudience({ Kind: 'panel', ID: item.ID, Title: item.Title, Status: row.Status, Scope: row.Scope as FormScope, RoleID: row.RoleID });
   }
 
   /** Open the audience chooser on a full custom form. */
   public OnPublishForm(form: FormPanelFormItem): void {
     if (!form.ID || (!form.CanPublish && !form.CanChangeAudience)) return;
     const row = this.admin.OverridesForEntity(this.Entity).find((r) => UUIDsEqual(r.ID, form.ID));
-    this.openAudience('form', form.ID, form.Title, (row?.Scope ?? 'User') as FormScope, row?.RoleID ?? null);
+    this.openAudience({
+      Kind: 'form', ID: form.ID, Title: form.Title, Status: row?.Status ?? 'Active',
+      Scope: (row?.Scope ?? 'User') as FormScope, RoleID: row?.RoleID ?? null,
+    });
   }
 
-  private openAudience(kind: 'panel' | 'form', id: string, title: string, scope: FormScope, roleID: string | null): void {
-    this.Publishing = { Kind: kind, ID: id, Title: title, Scope: scope, RoleID: roleID };
+  private openAudience(target: NonNullable<MjPanelManagerComponent['Publishing']>): void {
+    this.Publishing = target;
     this.Error = '';
     this.cdr.markForCheck();
   }
@@ -385,17 +398,25 @@ export class MjPanelManagerComponent implements OnChanges {
    * What publishing will do, stated before it is done.
    *
    * Changing what other people see should never be a surprise, so the consequence is spelled
-   * out in the terms the publisher chose — which people, and on which records.
+   * out in the terms the publisher chose — which people, and on which records. Publishing turns
+   * the item on, so a draft or an item that is off says it will go live.
    */
   public get AudienceConsequence(): string {
     const target = this.Publishing;
     if (!target) return '';
+    const role = this.RoleOptions.find((r) => UUIDsEqual(r.ID, target.RoleID))?.Name;
+    if (target.Scope === 'Role' && !role) return 'Choose a role.';
     const what = target.Kind === 'form' ? 'this form' : 'this panel';
     const records = `every ${this.EntityName} record`;
+    const forWhom = target.Scope === 'User' ? 'you only' : target.Scope === 'Global' ? 'everyone' : `everyone in ${role}`;
+    if (target.Status === 'Pending') return `This draft will go live for ${forWhom}, on ${records}.`;
+    if (target.Status === 'Inactive') {
+      const state = target.Kind === 'form' ? 'This form is set aside' : 'This panel is off';
+      return `${state}. It will go live for ${forWhom}, on ${records}.`;
+    }
     if (target.Scope === 'User') return `Only you will see ${what}, on ${records}.`;
     if (target.Scope === 'Global') return `Everyone will see ${what} on ${records}.`;
-    const role = this.RoleOptions.find((r) => UUIDsEqual(r.ID, target.RoleID))?.Name;
-    return role ? `Everyone in ${role} will see ${what} on ${records}.` : 'Choose a role.';
+    return `Everyone in ${role} will see ${what} on ${records}.`;
   }
 
   /** Whether the chosen audience is complete enough to publish. */
@@ -444,12 +465,26 @@ export class MjPanelManagerComponent implements OnChanges {
       if (!result.Success) {
         this.Error = result.Message ?? 'That did not work.';
       } else {
-        this.Refresh();
-        this.Changed.emit();
+        this.afterChange();
       }
     } finally {
       this.Busy = null;
       this.cdr.markForCheck();
     }
   }
+
+  /**
+   * After a change to what is on the form: drop the placement dialog's reading of it, rebuild
+   * the list, and tell the form to resolve again.
+   */
+  private afterChange(): void {
+    if (this.EntityName) this.probe.Forget(this.EntityName);
+    this.Refresh();
+    this.Changed.emit();
+  }
+}
+
+/** A row's status as a lifecycle status. Anything unknown reads as off. */
+function lifecycleStatus(status: string): FormLifecycleStatus {
+  return status === 'Active' || status === 'Pending' ? status : 'Inactive';
 }

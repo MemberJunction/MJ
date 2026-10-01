@@ -4,7 +4,8 @@ import type { EntityInfo, IMetadataProvider } from '@memberjunction/core';
 import { renderComponentFixture, query } from '@memberjunction/ng-test-utils';
 import { MjPanelManagerComponent } from './panel-manager.component';
 import { FormPanelAdminService } from './form-panel-admin.service';
-import type { FormOverrideRow, FormPanelContributionRow } from './form-panel-inventory';
+import { FormSlotProbeService } from '../apply/form-slot-probe.service';
+import type { FormOverrideRow, FormPanelContributionRow, FormPanelRendering } from './form-panel-inventory';
 import type { FormPlacementState } from '../apply/form-placement';
 
 /**
@@ -53,7 +54,12 @@ const admin = {
     PublishOverride: vi.fn(async () => ({ Success: true })),
     Hide: vi.fn(),
     Show: vi.fn(),
+    /** Undefined: every item that is on draws, unless a test says which draw. */
+    RenderingFor: vi.fn((): FormPanelRendering | undefined => undefined),
 };
+
+/** The placement dialog's reading of the form, which every change has to drop. */
+const probe = { Forget: vi.fn() };
 
 /** The signed-in user the drawer decides "yours" by, and the roles a holder can publish to. */
 const PROVIDER = {
@@ -72,6 +78,8 @@ beforeEach(() => {
     admin.PublishOverride.mockReset().mockResolvedValue({ Success: true });
     admin.Hide.mockReset();
     admin.Show.mockReset();
+    admin.RenderingFor.mockReset().mockReturnValue(undefined);
+    probe.Forget.mockReset();
 });
 
 /** The placement dialog is covered by its own spec; here it only has to exist. */
@@ -86,6 +94,8 @@ class PlacementDialogStub {
     @Input() RecordKey: unknown;
     @Input() ReplacesRowID: unknown;
     @Input() PanelComponentID: unknown;
+    @Input() VisibleTo = '';
+    @Input() OfferKeepOff = false;
     @Output() Applied = new EventEmitter<unknown>();
     @Output() Cancelled = new EventEmitter<void>();
 }
@@ -94,7 +104,7 @@ function render(inputs: Record<string, unknown> = {}) {
     const f = renderComponentFixture(MjPanelManagerComponent, {
         imports: [PlacementDialogStub],
         declarations: [MjPanelManagerComponent],
-        providers: [{ provide: FormPanelAdminService, useValue: admin }],
+        providers: [{ provide: FormPanelAdminService, useValue: admin }, { provide: FormSlotProbeService, useValue: probe }],
         inputs: {
             Visible: true, Entity: ENTITY, TitleByKey: new Map([['details', 'Details']]),
             Provider: PROVIDER, ...inputs,
@@ -262,7 +272,7 @@ describe('MjPanelManagerComponent (DOM) — changing where a panel goes', () => 
         expect(admin.SetPlacement).toHaveBeenCalledWith(
             'ROW-1',
             { slot: 'after-fields', presentation: 'panel', title: 'Renamed', contributionKey: 'panel:OrgMemberOverviewPanel' },
-            true, PROVIDER);
+            'Active', PROVIDER);
         expect(f.componentInstance.Editing).toBeNull();
     });
 
@@ -278,7 +288,7 @@ describe('MjPanelManagerComponent (DOM) — changing where a panel goes', () => 
             ActivateNow: true,
         });
         expect(admin.SetPlacement).toHaveBeenCalledWith(
-            'ROW-1', { slot: 'after-fields', presentation: 'panel', title: 'Mine' }, true, PROVIDER);
+            'ROW-1', { slot: 'after-fields', presentation: 'panel', title: 'Mine' }, 'Active', PROVIDER);
     });
 
     // Two grids can show one entity; the join field is what tells them apart.
@@ -498,5 +508,139 @@ describe('MjPanelManagerComponent (DOM) — the edit dialog’s surface', () => 
         const inner = (f.nativeElement as HTMLElement).querySelector('.mj-pm-edit > *') as HTMLElement;
         inner.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         expect(f.componentInstance.Editing).not.toBeNull();
+    });
+});
+
+/**
+ * A panel can be on and still draw nothing: a compiled panel or another row holds its key, or the
+ * user's own row outranks a shared one. The list says so, and counts only what draws.
+ */
+describe('MjPanelManagerComponent (DOM) — what the form really draws', () => {
+    it('says a row that loses its key is not shown, and still lets it be switched off', () => {
+        admin.RenderingFor.mockReturnValue({ RowIDs: new Set(), CompiledKeys: new Set() });
+        const f = render();
+        expect(f.componentInstance.Items[0].State).toBe('outranked');
+        expect(text(f)).toContain('not shown');
+        expect(buttons(f)).toContain('Turn off');
+        expect(f.componentInstance.Summary).toBe('1 thing registered on this form · 0 rendering');
+    });
+
+    it('says a compiled panel a row took over is not shown', () => {
+        admin.RenderingFor.mockReturnValue({ RowIDs: new Set(['row-1']), CompiledKeys: new Set() });
+        const f = render({ Compiled: [{ Key: 'panel:OrgMemberOverviewPanel', Title: 'Built-in overview', Slot: 'before-fields', HideKey: 'panel:OrgMemberOverviewPanel' }] });
+        const compiled = f.componentInstance.Items.find((i) => i.Origin === 'compiled')!;
+        expect(compiled.State).toBe('outranked');
+        expect(f.componentInstance.Items.find((i) => i.ID === 'ROW-1')!.State).toBe('active');
+        expect(f.componentInstance.Summary).toBe('2 things registered on this form · 1 rendering');
+    });
+
+    it('says a shared row the user\'s own row outranks is not shown', () => {
+        admin.RowsForEntity.mockReturnValue([
+            row(),
+            row({ ID: 'ROW-G', Scope: 'Global', UserID: null, Title: 'Shared overview' }),
+        ]);
+        admin.RenderingFor.mockReturnValue({ RowIDs: new Set(['row-1']), CompiledKeys: new Set() });
+        const f = render();
+        expect(f.componentInstance.Items.find((i) => i.ID === 'ROW-G')!.StateLabel).toBe('not shown');
+        expect(f.componentInstance.Items.find((i) => i.ID === 'ROW-1')!.StateLabel).toBe('on');
+    });
+
+    it('asks the service with the drawer\'s own entity and provider', () => {
+        render();
+        expect(admin.RenderingFor).toHaveBeenCalledWith(ENTITY, PROVIDER);
+    });
+});
+
+/** The placement dialog reads the form once per entity, so a change to the form drops that reading. */
+describe('MjPanelManagerComponent (DOM) — the placement dialog\'s reading of the form', () => {
+    it('is dropped after a write', async () => {
+        const f = render();
+        await f.componentInstance.OnToggle(f.componentInstance.Items[0]);
+        expect(probe.Forget).toHaveBeenCalledWith(ENTITY.Name);
+    });
+
+    it('is dropped after a hide', () => {
+        admin.RowsForEntity.mockReturnValue([row({ ID: 'ROW-G', Scope: 'Global', UserID: null })]);
+        const f = render();
+        f.componentInstance.OnHide(f.componentInstance.Items[0]);
+        expect(probe.Forget).toHaveBeenCalledWith(ENTITY.Name);
+    });
+
+    it('is kept when a write fails', async () => {
+        admin.SetActive.mockResolvedValue({ Success: false, Message: 'No permission.' });
+        const f = render();
+        await f.componentInstance.OnToggle(f.componentInstance.Items[0]);
+        expect(probe.Forget).not.toHaveBeenCalled();
+    });
+});
+
+/** Editing a panel keeps its audience and its state unless the user changes them. */
+describe('MjPanelManagerComponent (DOM) — editing keeps what the panel is', () => {
+    it('states the panel\'s own audience in the dialog', () => {
+        admin.CanPublish.mockReturnValue(true);
+        admin.RowsForEntity.mockReturnValue([row({ Scope: 'Global', UserID: null })]);
+        const f = render();
+        f.componentInstance.OnEdit(f.componentInstance.Items[0]);
+        expect(f.componentInstance.EditVisibleTo).toBe('everyone');
+    });
+
+    it('offers keeping a panel that is off, off, and seeds that answer', () => {
+        admin.RowsForEntity.mockReturnValue([row({ Status: 'Inactive' })]);
+        const f = render();
+        f.componentInstance.OnEdit(f.componentInstance.Items[0]);
+        f.detectChanges();
+        expect(f.componentInstance.EditStatus).toBe('Inactive');
+        const dialog = {
+            State: { ReplaceMode: 'none' } as FormPlacementState,
+            Context: f.componentInstance.EditContext!,
+        };
+        f.componentInstance.SeedEdit(dialog);
+        expect(dialog.State.ActivateNow).toBe(false);
+        expect(dialog.State.KeepOff).toBe(true);
+    });
+
+    it('writes a kept-off answer as off, not as a draft', async () => {
+        admin.RowsForEntity.mockReturnValue([row({ Status: 'Inactive' })]);
+        const f = render();
+        f.componentInstance.OnEdit(f.componentInstance.Items[0]);
+        await f.componentInstance.OnEditApplied({
+            Contribution: { slot: 'after-fields', presentation: 'panel', title: 'P' },
+            ActivateNow: false, KeepOff: true,
+        });
+        expect(admin.SetPlacement).toHaveBeenCalledWith('ROW-1', expect.anything(), 'Inactive', PROVIDER);
+    });
+
+    it('writes a draft answer as Pending', async () => {
+        const f = render();
+        f.componentInstance.OnEdit(f.componentInstance.Items[0]);
+        await f.componentInstance.OnEditApplied({
+            Contribution: { slot: 'after-fields', presentation: 'panel', title: 'P' },
+            ActivateNow: false,
+        });
+        expect(admin.SetPlacement).toHaveBeenCalledWith('ROW-1', expect.anything(), 'Pending', PROVIDER);
+    });
+});
+
+/** Publishing turns the item on, so the chooser says a draft or an item that is off will go live. */
+describe('MjPanelManagerComponent (DOM) — publishing something that is not on', () => {
+    it('says a draft will go live for the audience', () => {
+        admin.CanPublish.mockReturnValue(true);
+        admin.RowsForEntity.mockReturnValue([row({ Status: 'Pending' })]);
+        const f = render();
+        f.componentInstance.OnPublishPanel(f.componentInstance.Items[0]);
+        f.componentInstance.Publishing!.Scope = 'Global';
+        expect(f.componentInstance.AudienceConsequence).toBe(
+            `This draft will go live for everyone, on every ${ENTITY.Name} record.`);
+    });
+
+    it('says a panel that is off will go live for the chosen role', () => {
+        admin.CanPublish.mockReturnValue(true);
+        admin.RowsForEntity.mockReturnValue([row({ Status: 'Inactive' })]);
+        const f = render();
+        f.componentInstance.OnPublishPanel(f.componentInstance.Items[0]);
+        f.componentInstance.Publishing!.Scope = 'Role';
+        f.componentInstance.Publishing!.RoleID = 'role-sales';
+        expect(f.componentInstance.AudienceConsequence).toBe(
+            `This panel is off. It will go live for everyone in Sales, on every ${ENTITY.Name} record.`);
     });
 });

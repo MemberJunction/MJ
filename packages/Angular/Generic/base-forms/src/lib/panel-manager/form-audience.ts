@@ -1,5 +1,5 @@
 import { UUIDsEqual } from '@memberjunction/global';
-import type { FormScope } from '@memberjunction/core-entities';
+import { ActiveContributionSiblings, SameFormAudience, type FormScope } from '@memberjunction/core-entities';
 
 /**
  * Who a full custom form or a panel is for, and which live item publishing one replaces.
@@ -39,36 +39,12 @@ export function AudienceColumns(
     };
 }
 
-/** Whether a row is aimed at exactly this audience. */
-function isFor(row: ScopedRow, audience: FormAudience, callerID: string): boolean {
-    if (row.Scope !== audience.Scope) return false;
-    if (audience.Scope === 'Role') return UUIDsEqual(row.RoleID ?? '', audience.RoleID ?? '');
-    if (audience.Scope === 'User') return UUIDsEqual(row.UserID ?? '', callerID);
-    return true;
-}
-
-/** An active row on the same entity, for the audience, that is not the one being published. */
-function liveAt(
-    rows: readonly ScopedRow[],
-    target: ScopedRow,
-    audience: FormAudience,
-    callerID: string,
-    sameItem: (row: ScopedRow) => boolean,
-): ScopedRow | null {
-    return rows.find((row) =>
-        !UUIDsEqual(row.ID, target.ID)
-        && row.Status === 'Active'
-        && UUIDsEqual(row.EntityID, target.EntityID)
-        && isFor(row, audience, callerID)
-        && sameItem(row),
-    ) ?? null;
-}
-
 /**
  * The panel live for this audience under the same contribution key — the one publishing replaces.
  *
- * Only the same key: two different panels can both be live for everyone, and publishing one must
- * not switch off the other.
+ * Only the same key, compared exactly as the form compares keys: two different panels can both be
+ * live for everyone, and publishing one must not switch off the other. The rule is the one that
+ * decides which panel turning one on retires ({@link ActiveContributionSiblings}).
  */
 export function LiveContributionAt(
     rows: readonly ScopedRow[],
@@ -76,10 +52,7 @@ export function LiveContributionAt(
     audience: FormAudience,
     callerID: string,
 ): ScopedRow | null {
-    const key = (target.ContributionKey ?? '').trim().toLowerCase();
-    if (!key) return null;
-    return liveAt(rows, target, audience, callerID,
-        (row) => (row.ContributionKey ?? '').trim().toLowerCase() === key);
+    return ActiveContributionSiblings(rows, { ...target, ...AudienceColumns(audience, callerID) })[0] ?? null;
 }
 
 /**
@@ -94,5 +67,11 @@ export function LiveOverrideAt(
     audience: FormAudience,
     callerID: string,
 ): ScopedRow | null {
-    return liveAt(rows, target, audience, callerID, () => true);
+    const aimed = AudienceColumns(audience, callerID);
+    return rows.find((row) =>
+        !UUIDsEqual(row.ID, target.ID)
+        && row.Status === 'Active'
+        && UUIDsEqual(row.EntityID, target.EntityID)
+        && SameFormAudience(row, aimed),
+    ) ?? null;
 }

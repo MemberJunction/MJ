@@ -18,8 +18,22 @@ export type FormPanelOrigin = 'contribution' | 'compiled' | 'stock-grid';
  */
 export type FormPanelAudience = 'yours' | 'shared' | 'builtin' | 'relationship';
 
-/** What the item is doing right now. */
-export type FormPanelState = 'active' | 'draft' | 'off' | 'held';
+/**
+ * What the item is doing right now. `outranked` is on and still draws nothing: another panel
+ * holds its key, or the form does not draw it for this user.
+ */
+export type FormPanelState = 'active' | 'draft' | 'off' | 'held' | 'outranked';
+
+/**
+ * Which items draw for the user, as the form resolves them: the winner of each key, with the
+ * user's hidden panels left out.
+ */
+export interface FormPanelRendering {
+    /** Contribution rows that draw, by row ID in lower case. */
+    RowIDs: ReadonlySet<string>;
+    /** Hide keys of the compiled panels that draw. */
+    CompiledKeys: ReadonlySet<string>;
+}
 
 /** One line in the manager. */
 export interface FormPanelInventoryItem {
@@ -150,6 +164,8 @@ export interface FormPanelInventoryInput {
     CanPublish: boolean;
     /** Keys this user has hidden on this entity. */
     HiddenKeys: readonly string[];
+    /** Which items draw for this user. Without it, every item that is on is taken to draw. */
+    Rendering?: FormPanelRendering;
 }
 
 /** The rail key the chrome layer builds from the field sections. */
@@ -206,6 +222,7 @@ export function DescribeAudience(scope: string, roleName?: string | null): strin
 export function DescribeState(state: FormPanelState): string {
     if (state === 'active') return 'on';
     if (state === 'held') return 'held back';
+    if (state === 'outranked') return 'not shown';
     if (state === 'draft') return 'draft';
     return 'off';
 }
@@ -232,14 +249,17 @@ export function IsListedFor(
 /**
  * What state a contribution is in.
  *
- * `held` is the case worth separating: the row is Active and correct, and still renders
- * nothing, because a full custom form owns the body. Reporting that as Active would be
- * true of the row and false of the form.
+ * `held` and `outranked` are the cases worth separating: the row is Active and correct, and
+ * still renders nothing — because a full custom form owns the body, or because another panel
+ * wins its key. Reporting either as Active would be true of the row and false of the form.
+ *
+ * @param draws Whether the form draws the row, from {@link FormPanelRendering}.
  */
-export function ContributionState(status: string, fullCustomForm: boolean): FormPanelState {
+export function ContributionState(status: string, fullCustomForm: boolean, draws = true): FormPanelState {
     if (status === 'Pending') return 'draft';
     if (status !== 'Active') return 'off';
-    return fullCustomForm ? 'held' : 'active';
+    if (fullCustomForm) return 'held';
+    return draws ? 'active' : 'outranked';
 }
 
 /**
@@ -267,10 +287,12 @@ function contributionItem(
     input: FormPanelInventoryInput,
     hidden: ReadonlySet<string>,
 ): FormPanelInventoryItem {
-    const state = ContributionState(row.Status, input.FullCustomForm);
     const yours = row.Scope === 'User';
     const hideKey = yours ? null : (row.ContributionKey ?? '').trim() || null;
     const isHidden = !!hideKey && hidden.has(hideKey);
+    // A hidden panel is listed under Hidden, so its state says what it does for everyone else.
+    const draws = isHidden || !input.Rendering || input.Rendering.RowIDs.has(row.ID.toLowerCase());
+    const state = ContributionState(row.Status, input.FullCustomForm, draws);
     return {
         ID: row.ID,
         Title: (row.Title ?? '').trim() || row.Name,
@@ -289,7 +311,7 @@ function contributionItem(
         // Turning on and off changes the row for everyone it reaches, so on a shared item it is
         // a holder's act; hiding is the per-user switch instead.
         CanTurnOn: (yours || input.CanPublish) && (state === 'draft' || state === 'off'),
-        CanTurnOff: (yours || input.CanPublish) && (state === 'active' || state === 'held'),
+        CanTurnOff: (yours || input.CanPublish) && (state === 'active' || state === 'held' || state === 'outranked'),
         CanRemove: yours || input.CanPublish,
         CanEdit: yours || input.CanPublish,
         CanHide: !!hideKey && !isHidden,
@@ -304,8 +326,10 @@ function compiledItem(
     input: FormPanelInventoryInput,
     hidden: ReadonlySet<string>,
 ): FormPanelInventoryItem {
-    const state: FormPanelState = input.FullCustomForm ? 'held' : 'active';
     const isHidden = !!row.HideKey && hidden.has(row.HideKey);
+    // A panel with no hide key has no key to lose, so it always draws.
+    const draws = isHidden || !input.Rendering || !row.HideKey || input.Rendering.CompiledKeys.has(row.HideKey);
+    const state: FormPanelState = input.FullCustomForm ? 'held' : draws ? 'active' : 'outranked';
     return {
         ID: row.Key,
         Title: row.Title || row.Key,
@@ -360,10 +384,10 @@ function stockGridItem(row: FormPanelStockGridRow, input: FormPanelInventoryInpu
     };
 }
 
-/** The count line under the list: how much is registered, and how much of it renders. */
+/** The count line under the list: how much is registered, and how much of it renders for this user. */
 export function SummarizeInventory(items: readonly FormPanelInventoryItem[]): string {
     const total = items.length;
-    const showing = items.filter((item) => item.State === 'active').length;
+    const showing = items.filter((item) => item.State === 'active' && !item.IsHidden).length;
     const noun = total === 1 ? 'thing' : 'things';
     return `${total} ${noun} registered on this form · ${showing} rendering`;
 }

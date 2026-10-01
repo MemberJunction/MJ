@@ -71,8 +71,10 @@ describe('LiveContributionAt', () => {
         expect(found?.ID).toBe('sales');
     });
 
-    it('compares keys and ids case-insensitively', () => {
-        const live = row({ ID: 'old', ContributionKey: 'PANEL:COHORT', EntityID: 'ENT-1' });
+    it('compares keys exactly after trimming, as the form does, and ids without regard to case', () => {
+        const recased = row({ ID: 'recased', ContributionKey: 'PANEL:COHORT' });
+        expect(LiveContributionAt([target, recased], target, { Scope: 'Global', RoleID: null }, ME)).toBeNull();
+        const live = row({ ID: 'old', ContributionKey: ' panel:Cohort ', EntityID: 'ENT-1' });
         expect(LiveContributionAt([target, live], target, { Scope: 'Global', RoleID: null }, ME)?.ID).toBe('old');
     });
 });

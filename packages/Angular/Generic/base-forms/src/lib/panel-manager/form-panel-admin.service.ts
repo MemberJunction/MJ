@@ -1,18 +1,28 @@
 import { Injectable } from '@angular/core';
-import { LogError, Metadata, type EntityInfo, type IMetadataProvider } from '@memberjunction/core';
+import {
+    LogError, Metadata, type BaseEntity, type EntityInfo, type IMetadataProvider, type TransactionGroupBase,
+} from '@memberjunction/core';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
+    ActiveContributionSiblings,
     ApplyContributionSpecToRow,
+    FormLifecycleComponentStatus,
     InteractiveFormsEngine,
     ParseClaimedFieldNames,
     UserCanManageFormDefaults,
+    type FormLifecycleStatus,
+    type MJComponentEntity,
     type MJEntityFormContributionEntity,
     type MJEntityFormOverrideEntity,
 } from '@memberjunction/core-entities';
-import { InvalidateFormContributionRegistrationCache } from '../panel-slot/collect-form-contribution-registrations';
+import {
+    CollectFormContributionRegistrations,
+    InvalidateFormContributionRegistrationCache,
+} from '../panel-slot/collect-form-contribution-registrations';
+import { ResolveFormContributionWinners } from '../panel-slot/form-contribution';
 import type { FormContributionSpec } from '@memberjunction/interactive-component-types/forms';
-import type { FormOverrideRow, FormPanelContributionRow } from './form-panel-inventory';
-import { SetPanelHidden } from '../panel-slot/panel-hides';
+import type { FormOverrideRow, FormPanelContributionRow, FormPanelRendering } from './form-panel-inventory';
+import { PanelHideKey, SetPanelHidden } from '../panel-slot/panel-hides';
 import {
     AudienceColumns,
     LiveContributionAt,
@@ -27,6 +37,20 @@ export interface FormPanelAdminResult {
     Message?: string;
 }
 
+/** The two entities the drawer writes. */
+type ScopedEntityName = 'MJ: Entity Form Contributions' | 'MJ: Entity Form Overrides';
+
+/** A form or panel row loaded for a write. */
+type ScopedEntity = MJEntityFormContributionEntity | MJEntityFormOverrideEntity;
+
+/** One transaction being built: the rows whose status it changes, and every entity enqueued in it. */
+interface PendingWrite {
+    Provider: IMetadataProvider;
+    Group: TransactionGroupBase;
+    Changing: ReadonlySet<string>;
+    Queued: BaseEntity[];
+}
+
 /**
  * Loads and changes the contribution rows behind one entity's form.
  *
@@ -37,6 +61,10 @@ export interface FormPanelAdminResult {
  * Writes go through `BaseEntity.Save()` and `.Delete()`. Direct SQL against an entity
  * skips the Record Changes audit row, the server cache invalidation, entity actions and
  * validation, all of which fail silently and leave a database that looks right.
+ *
+ * Turning a form or panel on follows the rule the Activate actions follow: the one live under the
+ * same key for the same audience is retired first, in the same transaction, and each component's
+ * status mirrors its row's.
  */
 @Injectable({ providedIn: 'root' })
 export class FormPanelAdminService {
@@ -77,19 +105,41 @@ export class FormPanelAdminService {
         }
     }
 
-    /** Switches a row on or off. Off leaves the row in place, rendering for nobody. */
+    /**
+     * Switches a row on or off. Off leaves the row in place, rendering for nobody. On retires the
+     * panel live under the same key for the same audience first, in the same transaction.
+     */
     public async SetActive(
         rowID: string,
         active: boolean,
         provider?: IMetadataProvider | null,
     ): Promise<FormPanelAdminResult> {
-        return this.write(rowID, provider, async (row) => {
-            row.Status = active ? 'Active' : 'Inactive';
-            const saved = await row.Save();
-            return saved
-                ? { Success: true }
-                : { Success: false, Message: row.LatestResult?.CompleteMessage ?? 'The change could not be saved.' };
-        });
+        return this.write(rowID, provider, (row, md) => this.saveAs(md, row, active ? 'Active' : 'Inactive'));
+    }
+
+    /**
+     * Which panels on this form draw for the current user: the winner of each key, with the
+     * user's hidden panels left out — the same resolution the form makes.
+     */
+    public RenderingFor(entity: EntityInfo | null | undefined, provider?: IMetadataProvider | null): FormPanelRendering {
+        const rowIDs = new Set<string>();
+        const compiledKeys = new Set<string>();
+        const md = provider ?? Metadata.Provider;
+        if (!entity || !md) return { RowIDs: rowIDs, CompiledKeys: compiledKeys };
+        try {
+            const registrations = CollectFormContributionRegistrations(entity, md);
+            for (const winner of ResolveFormContributionWinners(entity.Name, registrations).Winners) {
+                if (winner.Source === 'metadata') {
+                    if (winner.RowID) rowIDs.add(winner.RowID.toLowerCase());
+                    continue;
+                }
+                const key = PanelHideKey(winner);
+                if (key) compiledKeys.add(key);
+            }
+        } catch (err: unknown) {
+            LogError(`FormPanelAdminService: could not resolve what the form draws: ${this.message(err)}`);
+        }
+        return { RowIDs: rowIDs, CompiledKeys: compiledKeys };
     }
 
     /**
@@ -100,14 +150,17 @@ export class FormPanelAdminService {
      * user has just dropped is actually cleared. The key is the one the decision names, or the
      * one the write path derives from its grid claim or the row's component. The order,
      * rail inclusion and configuration, which the placement dialog does not edit, are kept.
+     *
+     * @param status What the row is saved as: on, a draft, or off. On retires the panel live under
+     *   the row's new key for its audience, in the same transaction.
      */
     public async SetPlacement(
         rowID: string,
         contribution: FormContributionSpec,
-        activeNow: boolean,
+        status: FormLifecycleStatus,
         provider?: IMetadataProvider | null,
     ): Promise<FormPanelAdminResult> {
-        return this.write(rowID, provider, async (row) => {
+        return this.write(rowID, provider, async (row, md) => {
             const relatedName = contribution.relatedEntity?.trim();
             const related = relatedName ? (provider ?? Metadata.Provider)?.EntityByName(relatedName) : null;
             if (relatedName && !related) {
@@ -118,11 +171,7 @@ export class FormPanelAdminService {
                 relatedEntityName: related?.Name ?? null,
                 componentName: row.Component || null,
             });
-            row.Status = activeNow ? 'Active' : 'Pending';
-            const saved = await row.Save();
-            return saved
-                ? { Success: true }
-                : { Success: false, Message: row.LatestResult?.CompleteMessage ?? 'The change could not be saved.' };
+            return this.saveAs(md, row, status);
         });
     }
 
@@ -164,11 +213,12 @@ export class FormPanelAdminService {
     }
 
     /**
-     * Changes who a panel is for.
+     * Changes who a panel is for, and turns it on.
      *
      * The panel live for that audience under the same key is retired first, in the same
      * transaction, so the audience never sees two and the unique index on active contributions
-     * never sees two either.
+     * never sees two either. A draft or a panel that is off goes live in the same transaction —
+     * publishing one never leaves the audience with neither.
      */
     public async PublishContribution(
         rowID: string,
@@ -184,8 +234,9 @@ export class FormPanelAdminService {
     }
 
     /**
-     * Changes who a full custom form is for. Whichever form was live for that audience is set
-     * aside in the same transaction — it stays in the picker, so the two can be swapped.
+     * Changes who a full custom form is for, and makes it live. Whichever form was live for that
+     * audience is set aside in the same transaction — it stays in the picker, so the two can be
+     * swapped.
      */
     public async PublishOverride(
         overrideID: string,
@@ -213,13 +264,14 @@ export class FormPanelAdminService {
     }
 
     /**
-     * Retire the live item for the audience, then re-aim the target, in one transaction.
+     * Retire the live item for the audience, then re-aim the target and turn it on, in one
+     * transaction.
      *
      * The retirement is enqueued first because the transaction applies writes in order, and the
      * unique index on active contributions would otherwise see two live rows mid-statement.
      */
     private async publish(
-        entityName: 'MJ: Entity Form Contributions' | 'MJ: Entity Form Overrides',
+        entityName: ScopedEntityName,
         targetID: string,
         retiringID: string | null,
         audience: FormAudience,
@@ -228,13 +280,10 @@ export class FormPanelAdminService {
         try {
             const md = provider ?? Metadata.Provider;
             if (!md?.CurrentUser) return { Success: false, Message: 'No signed-in user.' };
-            const group = await md.CreateTransactionGroup();
+            const write = await this.begin(md, retiringID ? [targetID, retiringID] : [targetID]);
             if (retiringID) {
-                const retiring = await this.loadScoped(md, entityName, retiringID);
-                if (!retiring) return { Success: false, Message: 'The item it replaces could not be loaded.' };
-                retiring.Status = 'Inactive';
-                retiring.TransactionGroup = group;
-                if (!(await retiring.Save())) return this.failure(retiring, 'The item it replaces could not be retired.');
+                const retired = await this.retire(write, entityName, retiringID);
+                if (retired) return retired;
             }
             const target = await this.loadScoped(md, entityName, targetID);
             if (!target) return { Success: false, Message: 'That item is no longer registered.' };
@@ -242,11 +291,11 @@ export class FormPanelAdminService {
             target.Scope = columns.Scope;
             target.RoleID = columns.RoleID;
             target.UserID = columns.UserID;
-            target.TransactionGroup = group;
-            if (!(await target.Save())) return this.failure(target, 'The change could not be saved.');
-            if (!(await group.Submit())) return { Success: false, Message: 'The change could not be saved.' };
-            InvalidateFormContributionRegistrationCache();
-            return { Success: true };
+            const failed = await this.enqueue(write, target, 'Active', 'The change could not be saved.');
+            if (failed) return failed;
+            const result = await this.submit(write);
+            if (result.Success) InvalidateFormContributionRegistrationCache();
+            return result;
         } catch (err: unknown) {
             const message = this.message(err);
             LogError(`FormPanelAdminService: publish of ${targetID} failed: ${message}`);
@@ -254,12 +303,101 @@ export class FormPanelAdminService {
         }
     }
 
+    /**
+     * Saves a panel row in `status`, in one transaction with what that carries: turning it on
+     * retires the panel live under its key for its audience first, and each component's status
+     * follows its row's.
+     */
+    private async saveAs(
+        md: IMetadataProvider,
+        row: MJEntityFormContributionEntity,
+        status: FormLifecycleStatus,
+    ): Promise<FormPanelAdminResult> {
+        const retiring = status === 'Active' ? ActiveContributionSiblings(this.contributionRows(), row) : [];
+        const write = await this.begin(md, [row.ID, ...retiring.map((sibling) => sibling.ID)]);
+        for (const sibling of retiring) {
+            const retired = await this.retire(write, 'MJ: Entity Form Contributions', sibling.ID);
+            if (retired) return retired;
+        }
+        const failed = await this.enqueue(write, row, status, 'The change could not be saved.');
+        return failed ?? this.submit(write);
+    }
+
+    private async begin(md: IMetadataProvider, changing: readonly string[]): Promise<PendingWrite> {
+        return { Provider: md, Group: await md.CreateTransactionGroup(), Changing: new Set(changing), Queued: [] };
+    }
+
+    /** Submits the transaction. When it fails, the reason the first refused write recorded. */
+    private async submit(write: PendingWrite): Promise<FormPanelAdminResult> {
+        if (await write.Group.Submit()) return { Success: true };
+        const refused = write.Queued.find((entity) => entity.LatestResult?.Success === false);
+        return { Success: false, Message: refused?.LatestResult?.CompleteMessage || 'The change could not be saved.' };
+    }
+
+    /** Enqueues turning off a live form or panel and its component. Null when that is enqueued. */
+    private async retire(write: PendingWrite, entityName: ScopedEntityName, id: string): Promise<FormPanelAdminResult | null> {
+        const row = await this.loadScoped(write.Provider, entityName, id);
+        if (!row) return { Success: false, Message: 'The item it replaces could not be loaded.' };
+        return this.enqueue(write, row, 'Inactive', 'The item it replaces could not be retired.');
+    }
+
+    /** Enqueues a row's save in `status`, then its component's. Null when both are enqueued. */
+    private async enqueue(
+        write: PendingWrite,
+        row: ScopedEntity,
+        status: FormLifecycleStatus,
+        fallback: string,
+    ): Promise<FormPanelAdminResult | null> {
+        row.Status = status;
+        row.TransactionGroup = write.Group;
+        write.Queued.push(row);
+        if (!(await row.Save())) return this.failure(row, fallback);
+        return this.mirrorOnComponent(write, row.ComponentID, status);
+    }
+
+    /**
+     * Enqueues the component status that mirrors `status`. A component another live row still
+     * renders keeps its status, and one that already has it is not written. Null unless the write
+     * is refused.
+     */
+    private async mirrorOnComponent(
+        write: PendingWrite,
+        componentID: string | null | undefined,
+        status: FormLifecycleStatus,
+    ): Promise<FormPanelAdminResult | null> {
+        if (!componentID) return null;
+        if (status !== 'Active' && this.componentLiveElsewhere(componentID, write.Changing)) return null;
+        const component = await write.Provider.GetEntityObject<MJComponentEntity>('MJ: Components');
+        if (!(await component.Load(componentID))) return null;
+        const next = FormLifecycleComponentStatus(status);
+        if (component.Status === next) return null;
+        component.Status = next;
+        component.TransactionGroup = write.Group;
+        write.Queued.push(component);
+        return (await component.Save()) ? null : this.failure(component, 'Its component could not be updated.');
+    }
+
+    /** Whether a live form or panel outside this write still renders the component. */
+    private componentLiveElsewhere(componentID: string, changing: ReadonlySet<string>): boolean {
+        const ids = [...changing];
+        const renders = (row: { ID: string; ComponentID: string; Status: string }): boolean =>
+            row.Status === 'Active'
+            && UUIDsEqual(row.ComponentID, componentID)
+            && !ids.some((id) => UUIDsEqual(id, row.ID));
+        try {
+            const engine = InteractiveFormsEngine.Instance;
+            return engine.Contributions.some(renders) || engine.Overrides.some(renders);
+        } catch {
+            return false;
+        }
+    }
+
     /** A fresh copy of a form or panel row, never the engine's own cached instance. */
     private async loadScoped(
         md: IMetadataProvider,
-        entityName: 'MJ: Entity Form Contributions' | 'MJ: Entity Form Overrides',
+        entityName: ScopedEntityName,
         id: string,
-    ): Promise<MJEntityFormContributionEntity | MJEntityFormOverrideEntity | null> {
+    ): Promise<ScopedEntity | null> {
         const row = entityName === 'MJ: Entity Form Contributions'
             ? await md.GetEntityObject<MJEntityFormContributionEntity>(entityName)
             : await md.GetEntityObject<MJEntityFormOverrideEntity>(entityName);
@@ -294,7 +432,7 @@ export class FormPanelAdminService {
     private async write(
         rowID: string,
         provider: IMetadataProvider | null | undefined,
-        act: (row: MJEntityFormContributionEntity) => Promise<FormPanelAdminResult>,
+        act: (row: MJEntityFormContributionEntity, md: IMetadataProvider) => Promise<FormPanelAdminResult>,
     ): Promise<FormPanelAdminResult> {
         if (!rowID) return { Success: false, Message: 'No panel was named.' };
         try {
@@ -304,7 +442,7 @@ export class FormPanelAdminService {
             if (!(await row.Load(rowID))) {
                 return { Success: false, Message: 'That panel is no longer registered.' };
             }
-            const result = await act(row);
+            const result = await act(row, md);
             if (result.Success) InvalidateFormContributionRegistrationCache();
             return result;
         } catch (err: unknown) {

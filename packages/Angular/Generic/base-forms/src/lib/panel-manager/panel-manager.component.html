@@ -184,6 +184,8 @@
             [RecordKey]="RecordKey"
             [ReplacesRowID]="Editing.ID"
             [PanelComponentID]="EditComponentID"
+            [VisibleTo]="EditVisibleTo"
+            [OfferKeepOff]="EditStatus === 'Inactive'"
             (Applied)="OnEditApplied($event)"
             (Cancelled)="CloseEdit()">
           </mj-form-placement-dialog>
