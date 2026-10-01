@@ -30,18 +30,19 @@ import type { InstanceConfigEngine } from "./InstanceConfigEngine";
  *
  * This engine threads the needle: it loads `Type='Form'` Components (small
  * dataset — a few dozen per typical deployment, ~5MB max), **all**
- * `EntityFormOverride` rows (tiny) and the `MJ: Entity Form Contributions`
- * rows. Specification is included because the cockpit + Skip rendering both
- * need it. Loaded as `entity_object` so callers can call `.Save()` /
- * `.Delete()` on the cached instances directly.
+ * `EntityFormOverride` rows (tiny) and, unless metadata contributions are
+ * switched off, the `MJ: Entity Form Contributions` rows (in the browser, the
+ * shared ones and the signed-in user's own). Specification is included because
+ * the cockpit + Skip rendering both need it. Loaded as `entity_object` so
+ * callers can call `.Save()` / `.Delete()` on the cached instances directly.
  *
  * It deliberately does NOT load `Type='Widget'` rows: `Widget` is an open set
  * grown by registry sync and general authoring, unrelated to form-panel
  * adoption, and this cache is written to client local storage on every boot.
  * The widget a contribution renders is fetched by ID on first use
- * ({@link InteractiveFormsEngine.GetComponentByID}) and kept in memory, so each
- * distinct panel component costs one query per session, and a component
- * change drops what was kept.
+ * ({@link InteractiveFormsEngine.GetComponentByID}) and kept in memory until any
+ * `MJ: Components` row changes, so each distinct panel component costs one
+ * query, not one per mount.
  *
  * ## Reactivity for free
  *

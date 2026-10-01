@@ -18,7 +18,7 @@ import type { FormChromeGroup, FormChromePanelSnapshot } from './form-chrome';
 
 /**
  * What is on this form right now — the input the apply flow needs to add or replace one piece.
- * Built by the container after every chrome resolve that changes it; published through
+ * Built by the container after every chrome resolve and, when it changed, published through
  * `BaseFormComponent.CompositionChanged` and the `FormCompositionRegistry`. It stays in the
  * browser: an agent is handed the compact {@link FormAgentContext} built from it.
  */
