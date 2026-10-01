@@ -69,7 +69,7 @@ export interface JoinedDecisionCorpus {
  * @param fileName The file's name, for messages.
  */
 export function ParseDecisionCorpus(text: string, fileName: string = 'corpus.jsonl'): DecisionCorpusPoint[] {
-    const points = parseJsonLines(text, fileName, DecisionCorpusPointSchema);
+    const points = ParseJsonLines(text, fileName, DecisionCorpusPointSchema);
     const firstLineById = new Map<string, number>();
     for (const { Line, Value } of points) {
         const key = Value.id.toUpperCase();
@@ -90,7 +90,7 @@ export function ParseDecisionCorpus(text: string, fileName: string = 'corpus.jso
  * @param fileName The file's name, for messages.
  */
 export function ParseDecisionLabels(text: string, fileName: string = 'labels.jsonl'): NumberedLine<DecisionCorpusLabel>[] {
-    return parseJsonLines(text, fileName, DecisionCorpusLabelSchema);
+    return ParseJsonLines(text, fileName, DecisionCorpusLabelSchema);
 }
 
 /**
@@ -150,8 +150,16 @@ export function JoinDecisionCorpus(
     return { Cases: cases, UnlabelledPointIds: unlabelled, OrphanLabelCount: orphans };
 }
 
-/** Parses each non-blank line as JSON and validates it, keeping line numbers. */
-function parseJsonLines<TSchema extends z.ZodTypeAny>(
+/**
+ * Parses each non-blank line as JSON and validates it, keeping line numbers. Throws a
+ * {@link DecisionCorpusError} naming the first line that is not JSON or does not match. Shared by
+ * the routing and discovery corpus readers.
+ *
+ * @param text The file's text.
+ * @param fileName The file's name, for messages.
+ * @param schema Each line's schema.
+ */
+export function ParseJsonLines<TSchema extends z.ZodTypeAny>(
     text: string,
     fileName: string,
     schema: TSchema
