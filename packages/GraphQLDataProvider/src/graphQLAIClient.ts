@@ -3,7 +3,7 @@ import { GraphQLDataProvider } from "./graphQLDataProvider";
 import { gql } from "graphql-request";
 import { ExecuteAgentParams, ExecuteAgentResult, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import type { DecisionAnswer, DecisionQuestion } from "@memberjunction/ai";
-import { SafeJSONParse, CleanAndParseJSON } from "@memberjunction/global";
+import { SafeJSONParse, CleanAndParseJSON, UUIDsEqual } from "@memberjunction/global";
 import { FireAndForgetHelper, StallDecision } from "./fireAndForgetHelper";
 
 /** Mutable holder for the most recent run id observed on the PubSub stream. */
@@ -505,6 +505,7 @@ export class GraphQLAIClient {
                     this.captureAgentRunId(parsed, runIdRef);
                     if (params.onProgress) this.forwardAgentProgress(parsed, params.onProgress);
                 },
+                isRelevantMessage: (parsed) => this.isMessageForAgentRun(parsed, runIdRef),
                 onStall: () => this.reconcileAgentRun(runIdRef.id ? `ID='${runIdRef.id}'` : undefined),
                 createErrorResult: (msg) => this.createAgentErrorResult(msg, requestAcknowledged),
             });
@@ -723,6 +724,8 @@ export class GraphQLAIClient {
                 // Reconcile by the caller-known ConversationDetailID rather than a run id scraped off
                 // the shared session stream: that key is operation-specific, so concurrent
                 // conversation-detail runs on one session can never cross-resolve to each other.
+                isRelevantMessage: (parsed) =>
+                    this.isMessageForConversationDetail(parsed, params.conversationDetailId),
                 onStall: () => this.reconcileAgentRun(`ConversationDetailID='${params.conversationDetailId}'`),
                 createErrorResult: (msg) => this.createAgentErrorResult(msg, requestAcknowledged),
             });
@@ -848,6 +851,53 @@ export class GraphQLAIClient {
             parsed.type === 'StreamingContent' &&
             data?.type === 'complete' &&
             data?.conversationDetailId === conversationDetailId;
+    }
+
+    /**
+     * Does this PubSub message belong to the operation watching `conversationDetailId`?
+     *
+     * FAILS OPEN by design (see `FireAndForgetConfig.isRelevantMessage`): a message carrying no
+     * operation identifier at all — a server-wide notice, a shape we do not recognise — counts as
+     * activity, preserving the pre-#4222 behaviour. Only a message that positively identifies a
+     * DIFFERENT conversation detail or a different agent run is ignored.
+     */
+    private isMessageForConversationDetail(
+        parsed: Record<string, unknown>,
+        conversationDetailId: string
+    ): boolean {
+        const data = parsed.data as Record<string, unknown> | undefined;
+        if (!data) {
+            return true;
+        }
+        const detailId = data.conversationDetailId as string | undefined;
+        if (detailId) {
+            return UUIDsEqual(detailId, conversationDetailId);
+        }
+        // Liveness pulses carry a runId but no conversationDetailId, so they cannot be attributed
+        // to a specific conversation detail from the payload alone. Fail open — treating a
+        // heartbeat as someone else's traffic would let a healthy long run time out.
+        return true;
+    }
+
+    /**
+     * Does this PubSub message belong to the agent run tracked by `ref`?
+     *
+     * Before any run id has been observed the operation has no identity to compare against, so
+     * everything counts (fail open). Once known, a message naming a different run is ignored.
+     */
+    private isMessageForAgentRun(parsed: Record<string, unknown>, ref: RunIdRef): boolean {
+        if (!ref.id) {
+            return true;
+        }
+        const data = parsed.data as Record<string, unknown> | undefined;
+        if (!data) {
+            return true;
+        }
+        const messageRunId = (data.agentRunId ?? data.runId) as string | undefined;
+        if (!messageRunId || messageRunId === 'unknown') {
+            return true;
+        }
+        return UUIDsEqual(messageRunId, ref.id);
     }
 
     // ===== Agent Run Reconciliation (idle-stall recovery) =====
@@ -1604,6 +1654,106 @@ export class GraphQLAIClient {
             };
         }
     }
+
+    /**
+     * Check the values a person is entering for a new record against the entity's existing records,
+     * and get back the ones to flag as possible duplicates.
+     *
+     * This calls the `CheckDuplicateEntry` mutation. The server finds vector candidates for the
+     * values, keeps those the current user can read, and asks a typed decision about them. It only
+     * flags: nothing is saved, merged or blocked. An entity whose documents do not turn the check on
+     * answers `NotConfigured`; a caller who may not run the check answers `NotAuthorized`.
+     *
+     * The method never throws. A failure on the server or in transport is `Status: 'Failed'` with an
+     * `ErrorMessage` and no candidates. It sets no timeout of its own: a caller with a latency budget
+     * abandons the promise when the budget runs out. The server bounds each check with its own
+     * budget, a little above the form's, so it stops working on an abandoned check soon after.
+     *
+     * @param params The entity and the values entered so far
+     * @returns The flagged candidates, most probable first, or why there are none
+     *
+     * @example
+     * ```typescript
+     * const result = await aiClient.CheckDuplicateEntry({
+     *   EntityName: 'Accounts',
+     *   Values: { Name: 'Acme', City: 'Boston' }
+     * });
+     * if (result.Status === 'Checked') {
+     *   result.Candidates.forEach(c => console.log(`${c.DisplayName} (${c.Probability})`));
+     * }
+     * ```
+     */
+    public async CheckDuplicateEntry(params: DuplicateEntryCheckParams): Promise<DuplicateEntryCheckResult> {
+        try {
+            const mutation = gql`
+                mutation CheckDuplicateEntry(
+                    $entityName: String!,
+                    $valuesJSON: String!
+                ) {
+                    CheckDuplicateEntry(
+                        entityName: $entityName,
+                        valuesJSON: $valuesJSON
+                    ) {
+                        Status
+                        ErrorMessage
+                        ElapsedMs
+                        Candidates {
+                            RecordID
+                            DisplayName
+                            VectorScore
+                            Probability
+                        }
+                    }
+                }
+            `;
+
+            const variables = { entityName: params.EntityName, valuesJSON: JSON.stringify(params.Values) };
+            const result: DuplicateEntryCheckResponse | null | undefined = await this._dataProvider.ExecuteGQL(mutation, variables);
+            return this.processDuplicateEntryCheckResult(result);
+        } catch (e) {
+            return this.handleDuplicateEntryCheckError(e);
+        }
+    }
+
+    /**
+     * Maps the entry-check mutation's result. A status the client does not know is a failure, so a
+     * caller never acts on a result it cannot read.
+     */
+    private processDuplicateEntryCheckResult(result: DuplicateEntryCheckResponse | null | undefined): DuplicateEntryCheckResult {
+        const check = result?.CheckDuplicateEntry;
+        if (!check) {
+            throw new Error('Invalid response from server');
+        }
+        const elapsed = check.ElapsedMs ?? undefined;
+        if (!this.isDuplicateEntryCheckStatus(check.Status)) {
+            return { Status: 'Failed', ErrorMessage: `The server returned an unknown status '${check.Status}'`, Candidates: [], ElapsedMs: elapsed };
+        }
+        const mapped: DuplicateEntryCheckResult = {
+            Status: check.Status,
+            Candidates: (check.Candidates ?? []).map(c => ({
+                RecordID: c.RecordID,
+                DisplayName: c.DisplayName,
+                VectorScore: c.VectorScore,
+                Probability: c.Probability ?? null,
+            })),
+            ElapsedMs: elapsed,
+        };
+        if (check.ErrorMessage) {
+            mapped.ErrorMessage = check.ErrorMessage;
+        }
+        return mapped;
+    }
+
+    private isDuplicateEntryCheckStatus(status: string): status is DuplicateEntryCheckStatus {
+        return status === 'Checked' || status === 'NotConfigured' || status === 'NotAuthorized' || status === 'Failed';
+    }
+
+    /** Maps a transport or parsing error to a failed entry-check result. */
+    private handleDuplicateEntryCheckError(e: unknown): DuplicateEntryCheckResult {
+        const message = e instanceof Error ? e.message : String(e);
+        LogError(`Error checking for a duplicate entry: ${message}`);
+        return { Status: 'Failed', ErrorMessage: message || 'Unknown error occurred', Candidates: [] };
+    }
 }
 
 /** Result from RunAutotagPipeline */
@@ -1689,6 +1839,104 @@ export interface FetchEntityVectorsResult {
     TotalCount: number;
     ElapsedMs: number;
     ErrorMessage?: string;
+}
+
+/**
+ * Parameters for {@link GraphQLAIClient.CheckDuplicateEntry}
+ */
+export interface DuplicateEntryCheckParams {
+    /**
+     * The entity the new record belongs to
+     */
+    EntityName: string;
+
+    /**
+     * The values entered so far, by field name (sent as JSON). The server ignores fields the entity
+     * does not have.
+     */
+    Values: Record<string, unknown>;
+}
+
+/**
+ * How an entry-time duplicate check ended.
+ * - `Checked`: the check ran; `Candidates` holds the flagged records, and may be empty.
+ * - `NotConfigured`: the entity's documents do not turn the check on. Nothing else ran.
+ * - `NotAuthorized`: the caller may not run the check (an API key without the scopes, or a user who
+ *   cannot read the entity). Nothing else ran; `ErrorMessage` says why.
+ * - `Failed`: the check could not finish; `ErrorMessage` says why, and nothing is flagged.
+ */
+export type DuplicateEntryCheckStatus = 'Checked' | 'NotConfigured' | 'NotAuthorized' | 'Failed';
+
+/**
+ * An existing record flagged as a possible duplicate of the values being entered
+ */
+export interface DuplicateEntryCandidate {
+    /**
+     * The candidate's primary key as a compact URL segment. `CompositeKey.FromURLSegment` reads it back.
+     */
+    RecordID: string;
+
+    /**
+     * The candidate's name, or its key when the current user may not read a name
+     */
+    DisplayName: string;
+
+    /**
+     * The vector similarity score that surfaced the candidate
+     */
+    VectorScore: number;
+
+    /**
+     * The decision's probability that the candidate is the same real-world entity, or null when it
+     * gave no answer for it
+     */
+    Probability: number | null;
+}
+
+/**
+ * Result from {@link GraphQLAIClient.CheckDuplicateEntry}
+ */
+export interface DuplicateEntryCheckResult {
+    /**
+     * How the check ended
+     */
+    Status: DuplicateEntryCheckStatus;
+
+    /**
+     * Why the check failed, when `Status` is `Failed`
+     */
+    ErrorMessage?: string;
+
+    /**
+     * The flagged candidates, most probable first. Empty unless `Status` is `Checked`.
+     */
+    Candidates: DuplicateEntryCandidate[];
+
+    /**
+     * How long the check took on the server, in milliseconds, when the server answered
+     */
+    ElapsedMs?: number;
+}
+
+/** One candidate of the `CheckDuplicateEntry` mutation's result, as the server sends it. */
+interface DuplicateEntryCandidateWireResult {
+    RecordID: string;
+    DisplayName: string;
+    VectorScore: number;
+    Probability?: number | null;
+}
+
+/** The `CheckDuplicateEntry` mutation's result fields as the server sends them: nullable fields arrive as null. */
+interface DuplicateEntryCheckWireResult {
+    Status: string;
+    ErrorMessage?: string | null;
+    ElapsedMs?: number | null;
+    Candidates?: DuplicateEntryCandidateWireResult[] | null;
+}
+
+/** The `CheckDuplicateEntry` mutation's response. */
+interface DuplicateEntryCheckResponse {
+    CheckDuplicateEntry?: DuplicateEntryCheckWireResult | null;
 }
 
 /**

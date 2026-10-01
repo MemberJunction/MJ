@@ -22,6 +22,7 @@ export * from './lib/utils/decision-routing';
 export * from './lib/services/data-cache.service';
 export * from './lib/services/artifact-state.service';
 export * from './lib/services/agent-state.service';
+export * from './lib/services/conversation-liveness-dom.service';
 export * from './lib/services/conversation-agent.service';
 export * from './lib/services/active-tasks.service';
 export * from './lib/services/conversation-streaming.service';
