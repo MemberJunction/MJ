@@ -15,6 +15,7 @@ export { HistoryCommand } from './commands/history';
 export { CompareCommand } from './commands/compare';
 export { ScriptsCommand } from './commands/scripts';
 export { PromoteCriteriaCommand } from './commands/promote-criteria';
+export { RubricCommands } from './commands/rubric-commands';
 
 // Utilities
 export { OutputFormatter } from './utils/output-formatter';

@@ -8,6 +8,7 @@ import { UserInfo } from '@memberjunction/core';
 import { SuiteFlags } from '../types';
 import { OutputFormatter } from '../utils/output-formatter';
 import { criterionSpreads } from './criterion-spread';
+import { lookupRubricOverride } from './rubric-cli';
 import { SpinnerManager } from '../utils/spinner-manager';
 import { LoadMJConfig, LoadCLIConfig } from '../utils/config-loader';
 import { InitializeMJProvider, CloseMJProvider, GetContextUser } from '../lib/mj-provider';
@@ -153,6 +154,7 @@ export class SuiteCommand {
             // so integration suites MUST run strictly serially (CANONICAL D). Force serial
             // execution under MJ_INTEGRATION_TEST=1 regardless of any --parallel flag.
             const integrationSerial = process.env.MJ_INTEGRATION_TEST === '1';
+            const rubric = flags.rubric ? await lookupRubricOverride(flags.rubric, contextUser) : undefined;
             const result = await engine.RunSuite(suite.ID, {
                 verbose: flags.verbose,
                 variables,
@@ -160,6 +162,8 @@ export class SuiteCommand {
                 parallel: integrationSerial ? false : flags.parallel,
                 maxParallel: integrationSerial ? 1 : flags.maxParallel,
                 repeatCountOverride: flags.flakyCheck && flags.flakyCheck > 1 ? flags.flakyCheck : undefined,
+                rubricId: rubric?.rubricId,
+                rubricVersionId: rubric?.versionId,
             }, contextUser);
 
             this.spinner.stop();
