@@ -144,6 +144,27 @@ describe('DecisionReasoningProvider', () => {
             expect(params.contextUser).toBe(CONTEXT_USER);
         });
 
+        it('bounds the model call with the context\'s cancellation token and timeout', async () => {
+            answerByRecord({ 'ID|c1': 0.9, 'ID|c2': 0.1, 'ID|c3': 0.6 });
+            const cancellation = new AbortController();
+
+            await new DecisionReasoningProvider().DecideCandidates(input(), {
+                ContextUser: CONTEXT_USER, CancellationToken: cancellation.signal, TimeoutMS: 1234,
+            });
+
+            const params = sentParams();
+            expect(params.cancellationToken).toBe(cancellation.signal);
+            expect(params.timeoutMS).toBe(1234);
+        });
+
+        it('sets no bound of its own when the context carries none', async () => {
+            answerByRecord({ 'ID|c1': 0.9, 'ID|c2': 0.1, 'ID|c3': 0.6 });
+            await reason();
+
+            expect(sentParams().cancellationToken).toBeUndefined();
+            expect(sentParams().timeoutMS).toBeUndefined();
+        });
+
         it('renders the state compactly from the prompt provider\'s helper', async () => {
             answerByRecord({ 'ID|c1': 0.9, 'ID|c2': 0.1, 'ID|c3': 0.6 });
             const provider = new ExposedDecisionProvider();
