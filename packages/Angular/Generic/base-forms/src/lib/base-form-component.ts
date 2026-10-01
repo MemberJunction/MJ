@@ -1049,6 +1049,11 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
    * the identity comparison below is what stops the cascade.
    */
   public get formContext(): FormContext {
+    // One collector read per access; both contribution-derived values come from it.
+    const entity = this.record?.EntityInfo;
+    const regs = entity
+      ? CollectFormContributionRegistrations(entity, this.ProviderToUse, { Preview: this.placementPreview })
+      : null;
     const next: FormContext = {
       sectionFilter: this.searchFilter,
       showEmptyFields: this.showEmptyFields,
@@ -1058,8 +1063,8 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       collapsibleSections: this.Config?.CollapsibleSections,
       enableRecordLinks: this.Config?.EnableRecordLinks,
       showRelatedEntities: this.Config?.ShowRelatedEntities,
-      hiddenSectionKeys: this.resolveHiddenSectionKeys(),
-      claimedFieldNames: this.contributionClaimedFieldNames(),
+      hiddenSectionKeys: this.resolveHiddenSectionKeys(entity, regs),
+      claimedFieldNames: this.contributionClaimedFieldNames(entity, regs),
       visibleSectionKeys: this.Config?.VisibleSectionKeys,
       allowSectionReorder: this.resolveAllowSectionReorder()
     };
@@ -1075,8 +1080,11 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
    */
   private _resolvedHiddenKeysMemo: { claimed: string[]; configured: string[] | undefined; merged: string[] } | null = null;
 
-  private resolveHiddenSectionKeys(): string[] | undefined {
-    const claimed = this.contributionHiddenSectionKeys();
+  private resolveHiddenSectionKeys(
+    entity: EntityInfo | undefined,
+    regs: readonly FormContributionRegistration[] | null,
+  ): string[] | undefined {
+    const claimed = this.contributionHiddenSectionKeys(entity, regs);
     const configured = this.Config?.HiddenSectionKeys;
     if (claimed.length === 0) return configured;
     // Memoized on the identity of both inputs: without it this concatenation returns a new
@@ -1098,10 +1106,11 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
    * change-detection pass, and a fresh empty array per pass would make every context look
    * different from the last one.
    */
-  private contributionClaimedFieldNames(): string[] | undefined {
-    const entity = this.record?.EntityInfo;
-    if (!entity) return undefined;
-    const regs = CollectFormContributionRegistrations(entity, this.ProviderToUse, { Preview: this.placementPreview });
+  private contributionClaimedFieldNames(
+    entity: EntityInfo | undefined,
+    regs: readonly FormContributionRegistration[] | null,
+  ): string[] | undefined {
+    if (!entity || !regs) return undefined;
     const memo = this._claimedFieldsMemo;
     if (!(memo && memo.entity === entity && memo.regs === regs)) {
       const names = ContributionClaimedFieldNames(
@@ -1129,11 +1138,12 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
    * (collapse, relationship walk, section-key construction) on each call. Running that per
    * binding per pass is what made forms lag.
    */
-  private contributionHiddenSectionKeys(): string[] {
-    const entity = this.record?.EntityInfo;
-    if (!entity) return [];
-    // Merged: compiled registrations plus the rows that apply to this user.
-    const regs = CollectFormContributionRegistrations(entity, this.ProviderToUse, { Preview: this.placementPreview });
+  private contributionHiddenSectionKeys(
+    entity: EntityInfo | undefined,
+    regs: readonly FormContributionRegistration[] | null,
+  ): string[] {
+    // `regs` is merged: compiled registrations plus the rows that apply to this user.
+    if (!entity || !regs) return [];
     const memo = this._hiddenKeysMemo;
     if (memo && memo.entity === entity && memo.regs === regs) return memo.keys;
     const keys = ContributionHiddenSectionKeys(

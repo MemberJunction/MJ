@@ -27,10 +27,44 @@ export function PanelHideKey(registration: FormContributionRegistration): string
     return classKey ? CLASS_KEY_PREFIX + classKey : null;
 }
 
-/** The raw stored value for one entity, which the collector folds into its memo key. */
+/**
+ * Each entity's stored hide list, by user and setting key. `UserInfoEngine.GetSetting` scans the
+ * user's settings, and the collector reads this on every call, so the value is kept until the
+ * user's settings change or a hide is written here.
+ */
+const settingMemo = new Map<string, string>();
+let settingsWatched = false;
+
+/** Clears {@link settingMemo} whenever the user's settings change. False when the engine cannot be watched. */
+function watchSettings(engine: UserInfoEngine): boolean {
+    if (settingsWatched) return true;
+    if (typeof engine.ObserveProperty !== 'function') return false;
+    engine.ObserveProperty('_userSettings').subscribe(() => settingMemo.clear());
+    settingsWatched = true;
+    return true;
+}
+
+/** Test seam: drops every remembered hide list. */
+export function ForgetHiddenPanelsSettings(): void {
+    settingMemo.clear();
+}
+
+/**
+ * The raw stored value for one entity, which the collector folds into its memo key. Remembered
+ * per user and entity until the user's settings change; read fresh when the settings cannot be
+ * watched.
+ */
 export function HiddenPanelsSetting(entityName: string): string {
     try {
-        return UserInfoEngine.Instance.GetSetting(FormPanelHideSettingKey(entityName)) ?? '';
+        const engine = UserInfoEngine.Instance;
+        const key = FormPanelHideSettingKey(entityName);
+        if (!watchSettings(engine)) return engine.GetSetting(key) ?? '';
+        const memoKey = `${engine.LoadedForUserId ?? ''}::${key}`;
+        const remembered = settingMemo.get(memoKey);
+        if (remembered !== undefined) return remembered;
+        const value = engine.GetSetting(key) ?? '';
+        settingMemo.set(memoKey, value);
+        return value;
     } catch {
         // No user settings in this context — nothing is hidden.
         return '';
@@ -49,6 +83,8 @@ export function SetPanelHidden(entityName: string, key: string, hidden: boolean)
         ? (current.includes(key) ? current : [...current, key])
         : current.filter((k) => k !== key);
     UserInfoEngine.Instance.SetSettingDebounced(FormPanelHideSettingKey(entityName), JSON.stringify(next));
+    // The write is debounced; GetSetting answers with it at once, so read it fresh.
+    settingMemo.clear();
 }
 
 /**

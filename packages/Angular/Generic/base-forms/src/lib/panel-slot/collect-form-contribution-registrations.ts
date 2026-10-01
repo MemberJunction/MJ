@@ -5,7 +5,7 @@ import { MJGlobal, SafeJSONParse } from '@memberjunction/global';
 import type { FormContributionSpec } from '@memberjunction/interactive-component-types/forms';
 import { BaseFormPanel, type FormPanelRegistrationMetadata } from './base-form-panel';
 import { ContributionSpecToRegistration, type FormContributionRegistration } from './form-contribution';
-import { HiddenPanelsSetting, WithoutHiddenPanels } from './panel-hides';
+import { ForgetHiddenPanelsSettings, HiddenPanelsSetting, WithoutHiddenPanels } from './panel-hides';
 import { WithPlacementPreview, type FormPlacementPreview } from './placement-preview';
 
 /**
@@ -64,9 +64,10 @@ function currentClassCount(): number {
     return lastClassCount;
 }
 
-/** Test seam and escape hatch — drops every memoized list. */
+/** Test seam and escape hatch — drops every memoized list and every remembered hide list. */
 export function InvalidateFormContributionRegistrationCache(): void {
     cache.clear();
+    ForgetHiddenPanelsSettings();
     lastClassCount = -1;
     lastClassCountAt = 0;
     providerKeys = new WeakMap<IMetadataProvider, string>();
@@ -184,7 +185,8 @@ function collectFromSources(
     // different rows under two providers. Without it, the second provider reads the
     // first one's memoized list.
     // The user's hidden panels are part of the identity too, so hiding one repaints at once
-    // rather than waiting for an unrelated change to clear the memo.
+    // rather than waiting for an unrelated change to clear the memo. The setting itself is
+    // remembered until the user's settings change (HiddenPanelsSetting), so this costs no scan.
     const includeHidden = options?.IncludeHidden === true;
     const hiddenSetting = includeHidden ? '' : HiddenPanelsSetting(entity.Name);
     const key = `${ProviderCacheKey(provider)}::${entity.Name}::${userID}::${classCount}::${engineVersion}` +

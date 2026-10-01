@@ -13,6 +13,7 @@ import type { BaseFormComponent } from '../base-form-component';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { FORM_PLACEMENT_PREVIEW, FormPlacementPreview, PLACEMENT_PREVIEW_KEY } from '../panel-slot/placement-preview';
+import { ForgetHiddenPanelsSettings } from '../panel-slot/panel-hides';
 import type { FormContributionRegistration } from '../panel-slot/form-contribution';
 import { InteractiveFormPanelComponent } from '../interactive-form/interactive-form-panel.component';
 import { ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
@@ -901,6 +902,8 @@ describe('MjRecordFormContainerComponent (DOM) — the record the snapshot names
     collector.answer = (options) => (options?.IncludeHidden ? [summary] : []);
     vi.spyOn(UserInfoEngine.Instance, 'GetSetting')
       .mockImplementation((key: string) => (key === 'mj.formPanels.hidden.accounts' ? JSON.stringify(['summary']) : undefined));
+    // The hide list is remembered until the settings change; this test changes them behind its back.
+    ForgetHiddenPanelsSettings();
     try {
       const f = render();
       const form = {
