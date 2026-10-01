@@ -229,8 +229,8 @@ async function ensureItWorld(ctx: IntegrationCheckContext): Promise<void> {
     const type = await pool.request().query(`SELECT TOP 1 CONVERT(nvarchar(36), [ID]) AS ID FROM [${s}].[TestType] WHERE [Name] = N'Agent Eval'`);
     const typeId = type.recordset[0]?.ID as string | undefined;
     Assert(!!typeId, 'the Agent Eval test type exists');
-    const expected = JSON.stringify({ oracles: [{ type: 'trace-no-errors', weight: 1 }] });
-    const configuration = JSON.stringify({ agentId });
+    const expected = JSON.stringify({ semanticGoals: ['The answer names the source.'] });
+    const configuration = JSON.stringify({ agentId, oracles: [{ type: 'trace-no-errors', weight: 1 }] });
     let testId = await idByName(ctx, 'Test', IT_WORLD.test);
     if (!testId) {
         const test = await rubricRow(ctx, 'MJ: Tests');
@@ -248,7 +248,8 @@ async function ensureItWorld(ctx: IntegrationCheckContext): Promise<void> {
         const test = await rubricRow(ctx, 'MJ: Tests');
         await test.Load(testId);
         const outcomes = test.ExpectedOutcomes ?? '';
-        if (test.RubricID || outcomes.includes('llm-judge') || !(test.Configuration ?? '').includes(agentId)) {
+        const config = test.Configuration ?? '';
+        if (test.RubricID || outcomes.includes('llm-judge') || outcomes.includes('trace-no-errors') || !config.includes(agentId) || !config.includes('trace-no-errors')) {
             test.RubricID = null;
             test.TypeID = typeId;
             test.ExpectedOutcomes = expected;
@@ -314,7 +315,9 @@ async function ensureItWorld(ctx: IntegrationCheckContext): Promise<void> {
     const judged = await pool.request().query(`SELECT [RubricID] AS RubricID, [ExpectedOutcomes] AS ExpectedOutcomes, [Configuration] AS Configuration FROM [${s}].[Test] WHERE [ID] = '${testId}'`);
     Assert(judged.recordset[0].RubricID == null, 'the judged test does not pin Test.RubricID');
     Assert(!String(judged.recordset[0].ExpectedOutcomes ?? '').includes('llm-judge'), 'the judged test has no llm-judge oracle');
+    Assert(!String(judged.recordset[0].ExpectedOutcomes ?? '').includes('trace-no-errors'), 'the trace oracle is not stored on ExpectedOutcomes');
     Assert(String(judged.recordset[0].Configuration ?? '').includes(agentId), 'the judged test aims at the IT agent');
+    Assert(String(judged.recordset[0].Configuration ?? '').includes('trace-no-errors'), 'the trace oracle is in Configuration.oracles');
     const category = await pool.request().query(`SELECT [CategoryID] AS CategoryID FROM [${s}].[Rubric] WHERE [ID] = '${rubricId}'`);
     Assert(String(category.recordset[0].CategoryID).toLowerCase() === categoryId.toLowerCase(), 'the IT world rubric is in IT World — Agent quality');
 }
