@@ -1,3 +1,4 @@
+export { createRubricDraft, evaluateRecordAgainstRubric, getRubric, getRubricConsensus, type EvaluateRecordResult, type RubricActionEngine } from './actions.js';
 export { agentRunContent, conversationContent, fallbackContent, promptRunContent, testRunContent, type RubricSubjectContent } from './content.js';
 export { DeterministicRubricEvaluator, type DeterministicRule } from './DeterministicRubricEvaluator.js';
 export { RubricEngine, type EvaluateParams, type RubricEvaluationRecord, type RubricEvaluationStore } from './RubricEngine.js';
