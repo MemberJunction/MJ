@@ -10,13 +10,17 @@
 
 import { IMetadataProvider, LogError, LogStatus, Metadata, UserInfo } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual, BaseSingleton } from '@memberjunction/global';
-import { AIEngine, NoteMatchResult } from '@memberjunction/aiengine';
-import { MJAIAgentNoteEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
+import { AIEngine, ExampleMatchResult, NoteMatchResult } from '@memberjunction/aiengine';
+import { MJAIAgentExampleEntity, MJAIAgentNoteEntity } from '@memberjunction/core-entities';
 import { BaseReranker, RerankDocument, GetAIAPIKey } from '@memberjunction/ai';
+import type { RerankResponse } from '@memberjunction/ai';
 import { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
+import type { MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
 import { RerankerConfiguration, ParseRerankerConfiguration, parseRerankerConfiguration } from './config.types';
 import { AIRerankerRunner } from './AIRerankerRunner';
+import { IsPromptBackedReranker } from './prompt-backed-rerankers';
 import type { AIRerankRunResult } from './rerank-runner.types';
+import type { DecisionRerankOptions } from './DecisionReranker';
 
 // Re-export config types for convenience
 export {
@@ -25,6 +29,9 @@ export {
     /** @deprecated Use {@link ParseRerankerConfiguration} instead. */
     parseRerankerConfiguration,
 };
+
+/** The driver class of `DecisionReranker`, which has a default decision prompt. */
+const DECISION_RERANKER_DRIVER = 'DecisionReranker';
 
 /**
  * Result from reranking operation including metrics.
@@ -78,6 +85,55 @@ export interface RerankObservabilityOptions {
      * Step sequence number
      */
     stepNumber?: number;
+
+    /**
+     * Called with the rerank's run step as soon as it is created, so the agent can add it to its run's
+     * steps. When the rerank finishes, the step's `PromptRun` is the rerank's `MJ: AI Prompt Runs` row,
+     * whose `TotalCost` and token rollups include a prompt-backed reranker's own prompt runs, so the
+     * agent run's cost and token totals, and its `MaxCostPerRun` / `MaxTokensPerRun` guardrails, count
+     * the rerank.
+     */
+    OnStepCreated?: (step: MJAIAgentRunStepEntityExtended) => void;
+}
+
+/** A rerank step's `InputData`: the request, and how many candidates it reranks. */
+interface RerankStepInput {
+    query: string;
+    rerankerModelId: string;
+    minRelevanceThreshold: number;
+    noteCount?: number;
+    exampleCount?: number;
+}
+
+/** A candidate as a rerank step's `PayloadAtStart` records it. */
+interface RerankCandidatePreview {
+    index: number;
+    id: string;
+    type?: string;
+    vectorScore: number;
+    preview: string;
+}
+
+/** A kept item as a rerank step's `PayloadAtEnd` records it. */
+interface RerankedPreview {
+    rank: number;
+    id: string;
+    type?: string;
+    rerankScore: number;
+    preview: string;
+}
+
+/** A rerank step's `PayloadAtEnd`: the kept notes or examples. */
+interface RerankedPayload {
+    rerankedNotes?: RerankedPreview[];
+    rerankedExamples?: RerankedPreview[];
+}
+
+/** What a rerank step records when it starts: its name, the request, and the candidates. */
+interface RerankStepStart {
+    StepName: string;
+    InputData: RerankStepInput;
+    PayloadAtStart: { candidateNotes?: RerankCandidatePreview[]; candidateExamples?: RerankCandidatePreview[] };
 }
 
 /**
@@ -139,7 +195,10 @@ export class RerankerService extends BaseSingleton<RerankerService> {
      *
      * @param modelID - ID of the AIModel with type='Reranker'
      * @param contextUser - User context for operations
-     * @param promptID - Optional prompt ID for LLM-based rerankers
+     * @param promptID - The prompt a prompt-backed reranker runs. `LLMReranker` requires its chat
+     * prompt's ID. For `DecisionReranker` it is optional: without one it asks the decision prompt its
+     * model-vendor row's `APIName` names, as `AIRerankerRunner` does, or `Default Decision` when that
+     * names no prompt.
      * @returns Reranker instance or null if unavailable
      */
     public async GetReranker(
@@ -177,18 +236,19 @@ export class RerankerService extends BaseSingleton<RerankerService> {
         try {
             let reranker: BaseReranker | null = null;
 
-            if (driverClass === 'LLMReranker') {
-                // LLM reranker needs promptID and contextUser
-                if (!promptID) {
-                    LogError(`RerankerService: LLMReranker requires a promptID`);
+            if (IsPromptBackedReranker(driverClass)) {
+                // A prompt-backed reranker (LLMReranker, DecisionReranker) needs the prompt it runs and contextUser
+                const promptToRun = promptID || this.defaultPromptID(driverClass, apiName);
+                if (promptToRun === undefined) {
+                    LogError(`RerankerService: ${driverClass} requires a promptID`);
                     return null;
                 }
                 reranker = MJGlobal.Instance.ClassFactory.CreateInstance<BaseReranker>(
                     BaseReranker,
                     driverClass,
-                    '', // No API key for LLM reranker
+                    '', // No API key for a prompt-backed reranker
                     apiName || model.APIName || '',
-                    promptID,
+                    promptToRun,
                     contextUser
                 );
             } else {
@@ -221,6 +281,21 @@ export class RerankerService extends BaseSingleton<RerankerService> {
             LogError(`RerankerService: Failed to create reranker: ${message}`);
             return null;
         }
+    }
+
+    /**
+     * The prompt a prompt-backed reranker runs when the caller names none. A `DecisionReranker` asks
+     * the decision prompt its model-vendor row's `APIName` names, as `AIRerankerRunner` does, or, when
+     * that names no prompt, an empty ID, which makes it ask `Default Decision`. An `LLMReranker` has no
+     * default: undefined, because its caller must name its chat prompt.
+     */
+    private defaultPromptID(driverClass: string, apiName: string | null): string | undefined {
+        if (driverClass !== DECISION_RERANKER_DRIVER) {
+            return undefined;
+        }
+        const target = apiName?.trim().toLowerCase();
+        const named = target ? AIEngine.Instance.Prompts.find(p => p.Name?.trim().toLowerCase() === target) : undefined;
+        return named?.ID ?? '';
     }
 
     /** @deprecated Use {@link GetReranker}. */
@@ -311,8 +386,6 @@ export class RerankerService extends BaseSingleton<RerankerService> {
         options?: RerankObservabilityOptions
     ): Promise<RerankServiceResult> {
         const startTime = Date.now();
-        let stepEntity: MJAIAgentRunStepEntity | null = null;
-        let promptRunID: string | undefined;
 
         // Early return if no notes to rerank
         if (notes.length === 0) {
@@ -323,71 +396,33 @@ export class RerankerService extends BaseSingleton<RerankerService> {
             };
         }
 
-        // Create run step if observability is enabled
-        if (options?.agentRunID) {
-            try {
-                stepEntity = await this.createRerankRunStep(
-                    options,
-                    contextUser,
-                    { query, noteCount: notes.length, config, notes },
-                    startTime
-                );
-            } catch (e) {
-                // Don't fail the reranking operation if step creation fails
-                LogError(`RerankerService: Failed to create observability step: ${e instanceof Error ? e.message : String(e)}`);
-            }
-        }
+        const step = await this.startRerankStep(options, contextUser, () => this.notesStepStart(query, config, notes), startTime);
+        // Rerank through the runner, which selects the model, fails over and records the run
+        const rerankedNotes = await this.observeRerank(
+            step,
+            startTime,
+            () => this.runReranker(notes, query, config, contextUser, options),
+            response => this.notesAboveThreshold(response, config),
+            kept => this.notesPayloadAtEnd(kept)
+        );
+        LogStatus(`RerankerService: Reranked to ${rerankedNotes.length} notes (threshold: ${config.minRelevanceThreshold})`);
 
-        try {
-            // Rerank through the runner, which selects the model, fails over and records the run
-            const run = await this.runReranker(notes, query, config, contextUser, options);
-            promptRunID = run.PromptRunID;
-            if (!run.Success || !run.Response) {
-                throw new Error(run.ErrorMessage || 'Reranking failed');
-            }
-            const response = run.Response;
+        return {
+            notes: rerankedNotes,
+            success: true,
+            durationMs: Date.now() - startTime,
+            runStepID: step?.ID
+        };
+    }
 
-            // Map results back to NoteMatchResult format
-            // Filter by minimum relevance threshold
-            const rerankedNotes: NoteMatchResult[] = response.results
-                .filter(r => r.relevanceScore >= config.minRelevanceThreshold)
-                .map(r => {
-                    const noteEntity = r.document.metadata?.noteEntity as MJAIAgentNoteEntity;
-                    return {
-                        note: noteEntity,
-                        similarity: r.relevanceScore
-                    };
-                });
-
-            LogStatus(`RerankerService: Reranked to ${rerankedNotes.length} notes (threshold: ${config.minRelevanceThreshold})`);
-
-            // Finalize step on success
-            if (stepEntity) {
-                await this.finalizeRerankRunStep(stepEntity, true, {
-                    rerankedCount: rerankedNotes.length,
-                    durationMs: Date.now() - startTime,
-                    rerankedNotes
-                }, undefined, promptRunID);
-            }
-
-            return {
-                notes: rerankedNotes,
-                success: true,
-                durationMs: Date.now() - startTime,
-                runStepID: stepEntity?.ID
-            };
-
-        } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            // Finalize step on failure
-            if (stepEntity) {
-                await this.finalizeRerankRunStep(stepEntity, false, {
-                    rerankedCount: 0,
-                    durationMs: Date.now() - startTime
-                }, message, promptRunID);
-            }
-            throw error;
-        }
+    /** The reranked notes at or above the threshold, most relevant first, each with its rerank score as `similarity`. */
+    private notesAboveThreshold(response: RerankResponse, config: RerankerConfiguration): NoteMatchResult[] {
+        return response.results
+            .filter(r => r.relevanceScore >= config.minRelevanceThreshold)
+            .map(r => ({
+                note: r.document.metadata?.noteEntity as MJAIAgentNoteEntity,
+                similarity: r.relevanceScore
+            }));
     }
 
     /**
@@ -410,15 +445,99 @@ export class RerankerService extends BaseSingleton<RerankerService> {
         }));
 
         LogStatus(`RerankerService: Reranking ${documents.length} notes`);
+        return this.rerankDocuments(documents, query, config, contextUser, options?.agentRunID);
+    }
+
+    /**
+     * Reranks documents through {@link AIRerankerRunner}, pinned to the configured model and its
+     * configured prompt. Asks for every document back, since the caller filters by threshold.
+     */
+    private rerankDocuments(
+        documents: RerankDocument[],
+        query: string,
+        config: RerankerConfiguration,
+        contextUser: UserInfo,
+        agentRunID?: string
+    ): Promise<AIRerankRunResult> {
         return new AIRerankerRunner().RunRerank({
             query,
             documents,
             topK: documents.length, // Get all, we'll filter by threshold
+            options: this.decisionRerankOptions(config),
             ContextUser: contextUser,
             ModelID: config.rerankerModelId,
             ChatPromptID: config.rerankPromptID,
-            AgentRunID: options?.agentRunID
+            AgentRunID: agentRunID
         });
+    }
+
+    /** The settings a DecisionReranker takes from the configuration. Other rerankers ignore them. */
+    private decisionRerankOptions(config: RerankerConfiguration): DecisionRerankOptions {
+        return { TimeoutMS: config.decisionTimeoutMS, MaxDocumentsPerCall: config.decisionMaxDocumentsPerCall };
+    }
+
+    /**
+     * Rerank agent examples using the configured reranker: the examples stage that
+     * `RerankerConfiguration.rerankExamples` turns on. It uses the same model, prompt and
+     * `minRelevanceThreshold` as {@link RerankNotes}. Each document is the example's input and
+     * output. With an agent run in `options`, it records a `Rerank Examples` step linked to the
+     * rerank's run, as {@link RerankNotes} records `Rerank Notes`.
+     *
+     * Like RerankNotes, this method throws when reranking fails. The calling code decides, from
+     * `config.fallbackOnError`, whether to fall back to the vector search results.
+     *
+     * @param examples - Vector search results to rerank
+     * @param query - User query for relevance scoring
+     * @param config - Reranker configuration from agent
+     * @param contextUser - User context for operations
+     * @param options - Optional observability parameters
+     * @returns The examples at or above the threshold, most relevant first, each with its rerank score as `similarity`
+     * @throws Error if reranking fails
+     */
+    public async RerankExamples(
+        examples: ExampleMatchResult[],
+        query: string,
+        config: RerankerConfiguration,
+        contextUser: UserInfo,
+        options?: RerankObservabilityOptions
+    ): Promise<ExampleMatchResult[]> {
+        if (examples.length === 0) {
+            return examples;
+        }
+        const startTime = Date.now();
+        const documents: RerankDocument[] = examples.map(match => ({
+            id: match.example.ID,
+            text: this.buildExampleText(match.example),
+            originalScore: match.similarity
+        }));
+
+        LogStatus(`RerankerService: Reranking ${documents.length} examples`);
+        const step = await this.startRerankStep(options, contextUser, () => this.examplesStepStart(query, config, examples), startTime);
+        const reranked = await this.observeRerank(
+            step,
+            startTime,
+            () => this.rerankDocuments(documents, query, config, contextUser, options?.agentRunID),
+            response => this.examplesAboveThreshold(response, examples, config),
+            kept => this.examplesPayloadAtEnd(kept)
+        );
+        LogStatus(`RerankerService: Reranked to ${reranked.length} examples (threshold: ${config.minRelevanceThreshold})`);
+        return reranked;
+    }
+
+    /** The reranked examples at or above the threshold, most relevant first, each with its rerank score as `similarity`. */
+    private examplesAboveThreshold(response: RerankResponse, examples: ExampleMatchResult[], config: RerankerConfiguration): ExampleMatchResult[] {
+        const byID = new Map(examples.map(match => [match.example.ID, match.example]));
+        return response.results
+            .filter(r => r.relevanceScore >= config.minRelevanceThreshold)
+            .flatMap(r => {
+                const example = byID.get(r.id);
+                return example ? [{ example, similarity: r.relevanceScore }] : [];
+            });
+    }
+
+    /** Build document text from an example entity for reranking: its input and its output. */
+    private buildExampleText(example: MJAIAgentExampleEntity): string {
+        return `Input: ${example.ExampleInput}\nOutput: ${example.ExampleOutput}`;
     }
 
     /** @deprecated Use {@link RerankNotes}. */
@@ -470,18 +589,150 @@ export class RerankerService extends BaseSingleton<RerankerService> {
     }
 
     /**
+     * Creates the rerank's run step when `options` names an agent run, and hands it to
+     * `options.OnStepCreated`. Returns null when there is no agent run. A failure here is logged and
+     * never fails the rerank.
+     */
+    private async startRerankStep(
+        options: RerankObservabilityOptions | undefined,
+        contextUser: UserInfo,
+        start: () => RerankStepStart,
+        startTime: number
+    ): Promise<MJAIAgentRunStepEntityExtended | null> {
+        if (!options?.agentRunID) {
+            return null;
+        }
+        let step: MJAIAgentRunStepEntityExtended | null = null;
+        try {
+            step = await this.createRerankRunStep(options, contextUser, start(), startTime);
+            options.OnStepCreated?.(step);
+        } catch (e) {
+            // Don't fail the reranking operation if step creation fails
+            LogError(`RerankerService: Failed to create observability step: ${e instanceof Error ? e.message : String(e)}`);
+        }
+        return step;
+    }
+
+    /**
+     * Runs a rerank and finalizes its step, when it has one: with the run, the kept items and their
+     * payload when it succeeds, or as failed, with the run when there is one, before rethrowing.
+     *
+     * @param keep - Picks the items to return from a successful response
+     * @param payloadAtEnd - The step's `PayloadAtEnd` for the kept items
+     * @throws Error if reranking fails
+     */
+    private async observeRerank<T>(
+        step: MJAIAgentRunStepEntityExtended | null,
+        startTime: number,
+        rerank: () => Promise<AIRerankRunResult>,
+        keep: (response: RerankResponse) => T[],
+        payloadAtEnd: (kept: T[]) => RerankedPayload
+    ): Promise<T[]> {
+        let run: AIRerankRunResult | undefined;
+        try {
+            run = await rerank();
+            if (!run.Success || !run.Response) {
+                throw new Error(run.ErrorMessage || 'Reranking failed');
+            }
+            const kept = keep(run.Response);
+            if (step) {
+                await this.finalizeRerankRunStep(step, true, { rerankedCount: kept.length, durationMs: Date.now() - startTime, payloadAtEnd: payloadAtEnd(kept) }, undefined, run);
+            }
+            return kept;
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            if (step) {
+                await this.finalizeRerankRunStep(step, false, { rerankedCount: 0, durationMs: Date.now() - startTime }, message, run);
+            }
+            throw error;
+        }
+    }
+
+    /** What a `Rerank Notes` step records when it starts: the request, and each candidate note. */
+    private notesStepStart(query: string, config: RerankerConfiguration, notes: NoteMatchResult[]): RerankStepStart {
+        return {
+            StepName: 'Rerank Notes',
+            InputData: { ...this.stepInput(query, config), noteCount: notes.length },
+            PayloadAtStart: {
+                candidateNotes: notes.map((n, idx) => ({
+                    index: idx,
+                    id: n.note.ID,
+                    type: n.note.Type,
+                    vectorScore: n.similarity,
+                    preview: this.preview(n.note.Note)
+                }))
+            }
+        };
+    }
+
+    /** What a `Rerank Examples` step records when it starts: the request, and each candidate example. */
+    private examplesStepStart(query: string, config: RerankerConfiguration, examples: ExampleMatchResult[]): RerankStepStart {
+        return {
+            StepName: 'Rerank Examples',
+            InputData: { ...this.stepInput(query, config), exampleCount: examples.length },
+            PayloadAtStart: {
+                candidateExamples: examples.map((e, idx) => ({
+                    index: idx,
+                    id: e.example.ID,
+                    vectorScore: e.similarity,
+                    preview: this.preview(e.example.ExampleInput)
+                }))
+            }
+        };
+    }
+
+    /** The request fields every rerank step records in its `InputData`. */
+    private stepInput(query: string, config: RerankerConfiguration): RerankStepInput {
+        return {
+            query: query.substring(0, 500), // Truncate for storage
+            rerankerModelId: config.rerankerModelId,
+            minRelevanceThreshold: config.minRelevanceThreshold
+        };
+    }
+
+    /** A `Rerank Notes` step's `PayloadAtEnd`: the kept notes with their scores. */
+    private notesPayloadAtEnd(notes: NoteMatchResult[]): RerankedPayload {
+        return {
+            rerankedNotes: notes.map((n, rank) => ({
+                rank: rank + 1,
+                id: n.note.ID,
+                type: n.note.Type,
+                rerankScore: n.similarity,
+                preview: this.preview(n.note.Note)
+            }))
+        };
+    }
+
+    /** A `Rerank Examples` step's `PayloadAtEnd`: the kept examples with their scores. */
+    private examplesPayloadAtEnd(examples: ExampleMatchResult[]): RerankedPayload {
+        return {
+            rerankedExamples: examples.map((e, rank) => ({
+                rank: rank + 1,
+                id: e.example.ID,
+                rerankScore: e.similarity,
+                preview: this.preview(e.example.ExampleInput)
+            }))
+        };
+    }
+
+    /** The first 150 characters of a text, for a step payload. */
+    private preview(text: string | null | undefined): string {
+        return (text || '').substring(0, 150);
+    }
+
+    /**
      * Create an AIAgentRunStep record for reranking operation.
      * This enables observability in the agent run trace.
      */
     private async createRerankRunStep(
         options: RerankObservabilityOptions,
         contextUser: UserInfo,
-        input: { query: string; noteCount: number; config: RerankerConfiguration; notes: NoteMatchResult[] },
+        start: RerankStepStart,
         startTime: number,
         provider?: IMetadataProvider
-    ): Promise<MJAIAgentRunStepEntity> {
-        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
-        const stepEntity = await md.GetEntityObject<MJAIAgentRunStepEntity>(
+    ): Promise<MJAIAgentRunStepEntityExtended> {
+        const md: Pick<IMetadataProvider, 'GetEntityObject'> = provider ?? new Metadata();
+        const stepEntity = await md.GetEntityObject<MJAIAgentRunStepEntityExtended>(
             'MJ: AI Agent Run Steps',
             contextUser
         );
@@ -489,27 +740,13 @@ export class RerankerService extends BaseSingleton<RerankerService> {
         stepEntity.AgentRunID = options.agentRunID!;
         stepEntity.StepNumber = options.stepNumber || 1;
         stepEntity.StepType = 'Decision'; // Reranking is a decision step for relevance scoring
-        stepEntity.StepName = 'Rerank Notes';
+        stepEntity.StepName = start.StepName;
         stepEntity.Status = 'Running';
         stepEntity.StartedAt = new Date(startTime);
         stepEntity.ParentID = options.parentStepID || null;
-        stepEntity.InputData = JSON.stringify({
-            query: input.query.substring(0, 500), // Truncate for storage
-            noteCount: input.noteCount,
-            rerankerModelId: input.config.rerankerModelId,
-            minRelevanceThreshold: input.config.minRelevanceThreshold
-        });
-
-        // Store input notes in PayloadAtStart for observability
-        stepEntity.PayloadAtStart = JSON.stringify({
-            candidateNotes: input.notes.map((n, idx) => ({
-                index: idx,
-                id: n.note.ID,
-                type: n.note.Type,
-                vectorScore: n.similarity,
-                preview: (n.note.Note || '').substring(0, 150)
-            }))
-        });
+        stepEntity.InputData = JSON.stringify(start.InputData);
+        // Store the candidates in PayloadAtStart for observability
+        stepEntity.PayloadAtStart = JSON.stringify(start.PayloadAtStart);
 
         if (!await stepEntity.Save()) {
             LogError(`RerankerService: Failed to create run step: ${JSON.stringify(stepEntity.LatestResult)}`);
@@ -520,22 +757,26 @@ export class RerankerService extends BaseSingleton<RerankerService> {
 
     /**
      * Finalize an AIAgentRunStep record after reranking completes.
-     * When the rerank wrote an `MJ: AI Prompt Runs` row, the step links to it through `TargetLogID`.
+     * When the rerank wrote an `MJ: AI Prompt Runs` row, the step links to it through `TargetLogID`,
+     * and carries it as its `PromptRun`, which is how an agent run counts a step's cost and tokens.
      */
     private async finalizeRerankRunStep(
-        stepEntity: MJAIAgentRunStepEntity,
+        stepEntity: MJAIAgentRunStepEntityExtended,
         success: boolean,
-        output: { rerankedCount: number; durationMs: number; rerankedNotes?: NoteMatchResult[] },
+        output: { rerankedCount: number; durationMs: number; payloadAtEnd?: RerankedPayload },
         errorMessage?: string,
-        promptRunID?: string
+        run?: AIRerankRunResult
     ): Promise<void> {
         try {
             stepEntity.Status = success ? 'Completed' : 'Failed';
             stepEntity.CompletedAt = new Date();
             stepEntity.Success = success;
             stepEntity.ErrorMessage = errorMessage || null;
-            if (promptRunID) {
-                stepEntity.TargetLogID = promptRunID;
+            if (run?.PromptRunID) {
+                stepEntity.TargetLogID = run.PromptRunID;
+            }
+            if (run?.PromptRun) {
+                stepEntity.PromptRun = run.PromptRun;
             }
             stepEntity.OutputData = JSON.stringify({
                 rerankedCount: output.rerankedCount,
@@ -543,17 +784,9 @@ export class RerankerService extends BaseSingleton<RerankerService> {
                 success
             });
 
-            // Store reranked notes with scores in PayloadAtEnd for observability
-            if (output.rerankedNotes) {
-                stepEntity.PayloadAtEnd = JSON.stringify({
-                    rerankedNotes: output.rerankedNotes.map((n, rank) => ({
-                        rank: rank + 1,
-                        id: n.note.ID,
-                        type: n.note.Type,
-                        rerankScore: n.similarity,
-                        preview: (n.note.Note || '').substring(0, 150)
-                    }))
-                });
+            // Store the reranked items with scores in PayloadAtEnd for observability
+            if (output.payloadAtEnd) {
+                stepEntity.PayloadAtEnd = JSON.stringify(output.payloadAtEnd);
             }
 
             if (!await stepEntity.Save()) {
