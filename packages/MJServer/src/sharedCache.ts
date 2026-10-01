@@ -1,6 +1,12 @@
 /**
- * The shared (Redis) cache wiring for an MJAPI process: which provider to build, what it
- * publishes, and what the process does with events from other servers.
+ * Everything an MJAPI process does with its shared (Redis) connection: which provider to build,
+ * what it publishes, what it does with events from other servers, and which periodic jobs the
+ * connection's leases coordinate.
+ *
+ * Two independent consumers share the one connection and its one subscriber:
+ * {@link WireSharedCacheEvents} for cache invalidation, and {@link WirePushStatusFanOut} for
+ * cross-instance push-status delivery (MJ #4222). Both live here rather than at the call site so
+ * that "what is our Redis used for" has a single answer.
  *
  * See plans/engine-cache-architecture-plan.md (F11, N1).
  */
@@ -9,7 +15,9 @@ import type { CacheChangedEvent, LocalCacheManagerConfig, ProviderBase } from '@
 import type { CacheSettingsConfig } from './config.js';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import type { CachePublishMode } from '@memberjunction/redis-provider';
+import { MJGlobal } from '@memberjunction/global';
 import { PubSubManager } from './generic/PubSubManager.js';
+import { PUSH_STATUS_UPDATES_TOPIC, SetPushStatusPublishHook, ParseReplicatedStatusUpdate } from './generic/PushStatusResolver.js';
 import { CACHE_INVALIDATION_TOPIC } from './generic/CacheInvalidationResolver.js';
 import { UserCache } from '@memberjunction/generic-database-provider';
 
@@ -232,4 +240,63 @@ function relayRunViewChangeToBrowsers(event: CacheChangedEvent): void {
         sourceServerId: event.SourceServerId || 'unknown',
         timestamp: new Date(),
     });
+}
+
+/** Redis channel carrying replicated push-status updates between server instances. */
+const PUSH_STATUS_FANOUT_CHANNEL = 'push-status-updates';
+
+/**
+ * Replicate push-status updates across server instances over Redis (MJ #4222).
+ *
+ * Outbound: every locally-published update is forwarded on a shared channel. Inbound: a message
+ * from another instance is republished onto THIS instance's local topic, where the normal
+ * subscription filter decides who receives it — so the identity gate (`ownerUserId` vs. the
+ * connection's authenticated user) still applies to a replicated message exactly as it does to a
+ * local one. The replica has no say in who sees what.
+ *
+ * Republishing goes straight to `PubSubManager`, never back through `publishStatusUpdate`, so an
+ * inbound message cannot be re-broadcast and loop. `SourceServerId` guards the remaining case: a
+ * publisher also receives its own message from Redis.
+ *
+ * The channel rides the same connection and subscriber as cache invalidation, and is namespaced
+ * with the provider's key prefix — so replicas configured with different `REDIS_KEY_PREFIX`
+ * values stop replicating to each other, exactly as their caches do.
+ *
+ * @param redis The shared cache provider, already built by {@link CreateSharedCacheFromEnvironment}.
+ */
+export async function WirePushStatusFanOut(redis: RedisLocalStorageProvider): Promise<void> {
+    try {
+        await redis.SubscribeToChannel(PUSH_STATUS_FANOUT_CHANNEL, (raw: string) => {
+            try {
+                const payload = ParseReplicatedStatusUpdate(raw, MJGlobal.Instance.ProcessUUID);
+                if (!payload) {
+                    return;
+                }
+                // Rebuilt as a plain record: the topic's publish signature takes an index-signature
+                // type, and listing the fields keeps the wire shape explicit at the one place it
+                // crosses hosts.
+                PubSubManager.Instance.Publish(PUSH_STATUS_UPDATES_TOPIC, {
+                    sessionId: payload.sessionId,
+                    ownerUserId: payload.ownerUserId,
+                    message: payload.message,
+                    SourceServerId: payload.SourceServerId,
+                });
+            } catch {
+                // A malformed message on a shared channel must not take down the subscriber.
+            }
+        });
+
+        SetPushStatusPublishHook((payload) => {
+            redis.PublishMessage(PUSH_STATUS_FANOUT_CHANNEL, JSON.stringify(payload));
+        });
+
+        // Printed unconditionally, not verbose-gated. "Is fan-out actually on?" is the first
+        // question anyone debugging a hung conversation behind a load balancer asks, and a silent
+        // default left no way to answer it.
+        console.log('[MJAPI] Push-status updates: cross-instance fan-out enabled via Redis');
+    } catch (err) {
+        // Single-instance delivery still works, and the durable tail query covers the rest.
+        // Degraded, not broken — so this must not stop the server from starting.
+        console.warn(`Push-status fan-out unavailable: ${(err as Error).message}`);
+    }
 }
