@@ -386,28 +386,11 @@ export interface LoopAgentTypePromptParams {
     includePipelineDocs?: boolean;
 
     /**
-     * Name of the decision prompt the agent's opt-in decision calls use (the payload change check,
-     * decision discovery and catalog narrowing).
+     * Name of the decision prompt the agent's opt-in decision calls use (decision discovery and
+     * catalog narrowing).
      * @default 'Default Decision'
      */
     decisionPromptName?: string;
-
-    /**
-     * Check the agent's own payload changes that the payload analyzer flags as needing feedback
-     * (large truncations, removed keys, type changes). Each flagged change becomes one Likelihood
-     * ("was this change intended?"), all asked in one decision call with the `decisionPromptName`
-     * prompt and recorded as a `Payload change check` Decision step. The changes judged unintended
-     * are listed on the agent's next turn, which asks it to confirm or restore them.
-     *
-     * A change is never reverted or blocked automatically: the agent decides. When the decision
-     * fails or takes longer than 30 seconds, every change is accepted, as it is when this is off. A
-     * step that ends the run (`Success`, `Chat`, or any step that terminates) is not checked, since
-     * no turn would read the result.
-     *
-     * Off by default: each check costs an extra decision call.
-     * @default false
-     */
-    payloadFeedbackCheck?: boolean;
 
     /**
      * Allow this agent to emit durable task graphs (`nextStep.type === 'Tasks'`).
@@ -503,8 +486,6 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     includeConversationToolsDocs: true,
     includePipelineDocs: true,
     decisionPromptName: 'Default Decision',
-    // Off: an opt-in check that costs a decision call per flagged payload change.
-    payloadFeedbackCheck: false,
     // Deliberately false — a capability gate, not a token-savings flag (D3).
     enableTaskGraphs: false,
     maxSubAgentsInPrompt: -1,

@@ -118,11 +118,6 @@
             "default": "auto",
             "description": "How the trailing runtime-state message is carried across iterations. OpenAI's automatic prompt cache only reuses a request whose entire prompt is a byte prefix of the new one, so replacing the fragment each iteration caps caching at the system prompt; retaining prior fragments and appending the new one keeps each request a prefix extension of the last. 'auto' appends when the model catalog's ModelConfiguration.LLM.PrefixPromptCache resolves to true for the serving path (Model Types < Models < Vendors' Configuration.ModelDefaults < Model Vendors: the vendor's defaults beat the model's own bag and the inference provider's row is the tie-breaker) and replaces otherwise; the answer is taken from the runtime model override or the first iteration's model selection and then frozen for the run, so a failover never flips the layout. 'appendOnly' forces append — use for a serving path whose catalog rows carry no flag yet. 'replace' forces replace-in-place to keep context compact."
           },
-          "payloadFeedbackCheck": {
-            "type": "boolean",
-            "default": false,
-            "description": "Check the agent's own payload changes that the payload analyzer flags as needing feedback (large truncations, removed keys, type changes). Each flagged change becomes one Likelihood ('was this change intended?'), all asked in one decision call with the decisionPromptName prompt and recorded as a 'Payload change check' Decision step. The changes judged unintended are listed on the agent's next turn, which asks it to confirm them or put them back. A change is never reverted or blocked automatically: the agent decides. When the decision fails or takes longer than 30 seconds, every change is accepted, as it is when this is off. A step that ends the run (Success, Chat, or any step that terminates) is not checked, since no turn would read the result. Off by default: each check costs an extra decision call."
-          },
           "enableTaskGraphs": {
             "type": "boolean",
             "default": false,
