@@ -5,7 +5,7 @@
   "description": "Server rubric evaluators. AI and human evaluators produce answers; RubricScoring is the only math.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["/dist"],
+  "files": ["/dist", "/templates"],
   "scripts": {
     "build": "tsc && tsc-alias -f",
     "test": "vitest run"

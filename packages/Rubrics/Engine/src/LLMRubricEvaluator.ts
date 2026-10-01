@@ -26,6 +26,8 @@ export interface LLMDecision {
 export interface LLMRubricResult extends RubricEvaluatorOutput {
     droppedUnknownKeys: number;
     droppedQuotes: number;
+    /** Set when Samples ran the rubric more than once. Distinct levels chosen for that criterion. */
+    sampleSpread?: { key: string; levels: string[]; median: string }[];
 }
 
 /**
@@ -90,6 +92,45 @@ export class LLMRubricEvaluator extends RubricEvaluator {
         return { ...scored, droppedUnknownKeys, droppedQuotes };
     }
 
+    /**
+     * Runs the rubric n times. Each criterion keeps the median level by normalized
+     * value, and the result records every level that appeared. Scoring runs once,
+     * on those median answers.
+     */
+    public async evaluateSamples(version: RubricVersionSnapshot, content: RubricSubjectContent, samples: number): Promise<LLMRubricResult> {
+        const runs: LLMDecision[][] = [];
+        for (let i = 0; i < samples; i++) {
+            runs.push(this.mode === 'SinglePass' ? await this.singlePass(version, content) : await this.perCriterion(version, content));
+        }
+        const leaves = version.nodes.filter(node => node.nodeType === 'Criterion');
+        const chosen: LLMDecision[] = [];
+        const sampleSpread: { key: string; levels: string[]; median: string }[] = [];
+        let droppedUnknownKeys = 0;
+        for (const node of leaves) {
+            const levels: string[] = [];
+            for (const run of runs) {
+                const decision = run.find(item => (item.key ?? node.key) === node.key);
+                const label = this.mode === 'PerCriterion' ? decision?.chosen ?? decision?.level : decision?.level;
+                if (!decision || !label) {
+                    if (decision?.key && !leaves.some(leaf => leaf.key === decision.key)) droppedUnknownKeys += 1;
+                    continue;
+                }
+                levels.push(label);
+            }
+            if (levels.length === 0) continue;
+            const median = medianLevel(version, node.scaleId, levels);
+            sampleSpread.push({ key: node.key, levels, median });
+            const sample = runs.map(run => run.find(item => (item.key ?? node.key) === node.key)).find(item => {
+                const label = this.mode === 'PerCriterion' ? item?.chosen ?? item?.level : item?.level;
+                return label === median;
+            });
+            if (sample) chosen.push({ ...sample, key: node.key, level: median, chosen: median });
+        }
+        const once = new LLMRubricEvaluator({ async run() { return JSON.stringify({ decisions: chosen }); } }, 'SinglePass');
+        const scored = await once.evaluateContent(version, content);
+        return { ...scored, droppedUnknownKeys: scored.droppedUnknownKeys + droppedUnknownKeys, sampleSpread };
+    }
+
     private async singlePass(version: RubricVersionSnapshot, content: RubricSubjectContent): Promise<LLMDecision[]> {
         const raw = await this.runner.run(renderRubricEvaluatorPrompt(version, content, 'SinglePass'));
         const parsed = JSON.parse(raw) as { decisions?: LLMDecision[] } | LLMDecision[];
@@ -107,7 +148,8 @@ export class LLMRubricEvaluator extends RubricEvaluator {
     }
 }
 
-const TEMPLATE_URL = new URL('../../../../metadata/prompts/templates/rubrics/rubric-evaluator.md', import.meta.url);
+/** Shipped next to src and dist, so an installed package does not read the MJ repo. */
+const TEMPLATE_URL = new URL('../templates/rubric-evaluator.md', import.meta.url);
 
 /** The Rubric Evaluator template file, with its three tokens filled. */
 export function renderRubricEvaluatorPrompt(
@@ -153,6 +195,14 @@ function renderCriterion(version: RubricVersionSnapshot, node: RubricNodeSnapsho
         ? `Numeric ${scale.minValue}..${scale.maxValue}, step ${scale.step ?? 'any'}, higher is better: ${scale.higherIsBetter}`
         : levels;
     return `### ${node.name} (${node.key})\n\nGuidance: ${node.guidance ?? ''}\n\n${numeric}`;
+}
+
+function medianLevel(version: RubricVersionSnapshot, scaleId: string | null | undefined, labels: string[]): string {
+    const scale = version.scales.find(item => item.id === scaleId);
+    const ranked = labels
+        .map(label => ({ label, value: scale?.levels.find(level => level.label === label)?.normalizedValue ?? 0 }))
+        .sort((a, b) => a.value - b.value || a.label.localeCompare(b.label));
+    return ranked[Math.floor((ranked.length - 1) / 2)].label;
 }
 
 function assertInScale(key: string, scale: RubricVersionSnapshot['scales'][number] | undefined, value: number): void {
