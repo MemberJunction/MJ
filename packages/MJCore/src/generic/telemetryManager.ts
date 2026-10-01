@@ -369,6 +369,11 @@ export interface TelemetrySettings {
     autoTrim: {
         enabled: boolean;
         maxEvents?: number;
+        /**
+         * Cap on retained analyzer insights. `_events` was the only collection ever trimmed, while
+         * `_insights` grows by one entry per emitted warning for the life of the process.
+         */
+        maxInsights?: number;
         maxAgeMs?: number;
     };
     /** Duplicate detection settings */
@@ -847,6 +852,7 @@ const DEFAULT_SETTINGS: TelemetrySettings = {
     autoTrim: {
         enabled: true,
         maxEvents: 10000,
+        maxInsights: 1000,
         maxAgeMs: 30 * 60 * 1000  // 30 minutes
     },
     duplicateDetection: {
@@ -882,6 +888,8 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
     private _analyzers: TelemetryAnalyzer[] = [];
     private _insights: TelemetryInsight[] = [];
     private _insightDedupeWindow: Map<string, number> = new Map();
+    /** When {@link trimIfNeeded} last swept the derived maps (getTimestamp() clock); null = never. */
+    private _lastDeepTrimAt: number | null = null;
 
     /**
      * Returns the singleton instance of TelemetryManager
@@ -1859,6 +1867,38 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         if (maxEvents && this._events.length > maxEvents) {
             this._events = this._events.slice(-maxEvents);
         }
+
+        // The collections DERIVED from events need bounds too, or a long-lived server keeps them for
+        // the life of the process: _insights grows by one entry per emitted warning, _patterns by one
+        // per distinct fingerprint (every new filter combination is a new fingerprint), and
+        // _insightDedupeWindow by one per dedupe key.
+        const maxInsights = this._settings.autoTrim.maxInsights ?? DEFAULT_SETTINGS.autoTrim.maxInsights;
+        if (maxInsights && this._insights.length > maxInsights) {
+            this._insights = this._insights.slice(-maxInsights);
+        }
+
+        // The map sweeps are O(n), so they run at most once a minute rather than on every event.
+        if (this._lastDeepTrimAt === null || now - this._lastDeepTrimAt > 60_000) {
+            this._lastDeepTrimAt = now;
+            if (maxAgeMs) {
+                // pattern.lastSeen is stamped with getTimestamp() — the same clock as `now`
+                for (const [fingerprint, pattern] of this._patterns) {
+                    if (now - pattern.lastSeen > maxAgeMs) {
+                        this._patterns.delete(fingerprint);
+                    }
+                }
+            }
+            // shouldEmitInsight() stamps the dedupe window with Date.now(), NOT getTimestamp():
+            // on Node getTimestamp() is performance.now() (ms since process start), and comparing
+            // the two would never find an entry old enough to release.
+            const wallNow = Date.now();
+            const dedupeWindowMs = this._settings.analyzers?.dedupeWindowMs ?? DEFAULT_SETTINGS.analyzers.dedupeWindowMs;
+            for (const [key, seenAt] of this._insightDedupeWindow) {
+                if (wallNow - seenAt > dedupeWindowMs) {
+                    this._insightDedupeWindow.delete(key);
+                }
+            }
+        }
     }
 
     private loadSettings(): TelemetrySettings {
@@ -1895,6 +1935,7 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         this._events = [];
         this._patterns.clear();
         this._activeEvents.clear();
+        this._lastDeepTrimAt = null;
     }
 
     /**
