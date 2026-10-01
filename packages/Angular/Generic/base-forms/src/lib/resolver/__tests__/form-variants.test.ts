@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { FormVariantChoices } from '../form-variants';
+import { FormVariantChoices, IsSelectableOverride } from '../form-variants';
 import type { EntityFormOverrideRow } from '../form-resolver.service';
 
 /**
@@ -55,5 +55,32 @@ describe('FormVariantChoices', () => {
     it('names an unnamed override by its id rather than showing a blank row', () => {
         expect(FormVariantChoices([row({ ID: 'abcdef12-0000', Name: undefined })])[0].Label)
             .toBe('Override abcdef12');
+    });
+});
+
+/** A shared form set to Inactive was retracted by whoever manages it; only the user's own set-aside forms stay offered. */
+describe('FormVariantChoices — shared forms set aside', () => {
+    it('leaves out a role or everyone form that was set aside', () => {
+        const choices = FormVariantChoices([
+            row({ ID: '1', Name: 'Ops Form', Status: 'Active', Scope: 'Global', UserID: null }),
+            row({ ID: '2', Name: 'Retired Global', Status: 'Inactive', Scope: 'Global', UserID: null }),
+            row({ ID: '3', Name: 'Retired Role', Status: 'Inactive', Scope: 'Role', UserID: null, RoleID: 'r1' }),
+            row({ ID: '4', Name: 'My Old Form', Status: 'Inactive' }),
+        ]);
+        expect(choices.map((c) => c.ID)).toEqual(['1', '4']);
+    });
+});
+
+describe('IsSelectableOverride', () => {
+    it('allows a live form of any audience and the user\'s own form set aside', () => {
+        expect(IsSelectableOverride({ Status: 'Active', Scope: 'Global' })).toBe(true);
+        expect(IsSelectableOverride({ Status: 'Active', Scope: 'Role' })).toBe(true);
+        expect(IsSelectableOverride({ Status: 'Inactive', Scope: 'User' })).toBe(true);
+    });
+
+    it('refuses a shared form set aside and every draft', () => {
+        expect(IsSelectableOverride({ Status: 'Inactive', Scope: 'Global' })).toBe(false);
+        expect(IsSelectableOverride({ Status: 'Inactive', Scope: 'Role' })).toBe(false);
+        expect(IsSelectableOverride({ Status: 'Pending', Scope: 'User' })).toBe(false);
     });
 });

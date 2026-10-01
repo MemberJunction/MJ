@@ -8,6 +8,7 @@ import {
     FORM_VARIANT_EXPLICIT_DEFAULT,
     FORM_VARIANT_SETTING_PREFIX,
 } from '@memberjunction/interactive-component-types/forms';
+import { IsSelectableOverride } from './form-variants';
 
 /**
  * Slim row shape for an `EntityFormOverride` lookup. Resolution doesn't need
@@ -210,8 +211,8 @@ export class FormResolverService {
         );
 
         // Filter cached overrides for this (entity, user, roles) tuple.
-        // Includes Active + Pending + Inactive (the variant picker shows
-        // all three; pickActive() filters to Active separately). Replaces
+        // Includes Active + Pending + Inactive; the variant picker and
+        // pickActive() keep the ones IsSelectableOverride allows. Replaces
         // a per-LoadForm RunView with an in-memory predicate — sub-ms.
         const applicable = InteractiveFormsEngine.Instance.Overrides.filter(o => {
             if (!o.EntityID || !UUIDsEqual(o.EntityID, entity.ID)) return false;
@@ -269,9 +270,10 @@ export class FormResolverService {
      *     form-loading path falls back to CodeGen's `@RegisterClass` lookup.
      *     This is what makes the Angular fallback reachable from the UI.
      *   - Else if the user has a saved variant ID AND that variant is in
-     *     the applicable list AND it is not Pending → use it, whether it
-     *     holds Active or was set aside by a later apply.
-     *   - Else → first Active row in tier+priority order (auto-pick).
+     *     the applicable list AND it is selectable (`IsSelectableOverride`:
+     *     Active, or the user's own form set aside by a later apply) → use it.
+     *   - Else → the stored choice is dropped, and the first Active row in
+     *     tier+priority order is used (auto-pick).
      *   - Else → null (fall back to CodeGen/@RegisterClass path).
      */
     private pickActive(
@@ -283,11 +285,11 @@ export class FormResolverService {
             return null;
         }
         if (selectedID) {
-            // A set-aside form is a legitimate choice, not history: applying a second form
-            // sets the first one aside rather than merging into it, so the picker offers
-            // both and the user's pick outranks which row happens to hold Active. A
-            // Pending row is an unfinished draft and is never rendered this way.
-            const sel = variants.find(v => v.Status !== 'Pending' && UUIDsEqual(v.ID, selectedID));
+            // The user's own set-aside form is a legitimate choice, not history: applying a
+            // second form sets the first one aside rather than merging into it, so the picker
+            // offers both and the user's pick outranks which row happens to hold Active. A
+            // shared form set aside was retracted, and a Pending row is a draft; neither renders.
+            const sel = variants.find(v => IsSelectableOverride(v) && UUIDsEqual(v.ID, selectedID));
             if (sel) return sel;
             // Selection no longer valid — wipe it so future loads auto-pick.
             this.ClearSelectedVariant(entity.Name);
