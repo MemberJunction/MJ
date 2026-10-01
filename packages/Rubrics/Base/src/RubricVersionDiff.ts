@@ -14,8 +14,9 @@ const RANK: Record<'Patch' | 'Minor' | 'Major', number> = { Patch: 1, Minor: 2, 
  * level's value or normalized value. A node that is advisory on both sides does not
  * produce a major bump from those scoring fields: they do not change ScoringHash.
  * Minor: the pass threshold or minimum completeness changed, a band's range or tone
- * changed, an advisory node was added or removed, an advisory node's scoring fields
- * changed, or evidence/rationale requirements changed.
+ * changed, an advisory node was added or removed, or an advisory node's parent, type,
+ * weight, scale, gate, rollup, or evaluator config changed, or evidence/rationale
+ * requirements changed.
  * Bands match by label, which is unique inside a version, so a clone's new band ids
  * are not a bump.
  * Patch: wording, sequence, and display range only.
@@ -104,11 +105,11 @@ export class RubricVersionDiff {
         node: RubricNodeSnapshot,
     ): void {
         const subject = node.key;
+        const scoringBump = previous.isAdvisory && node.isAdvisory ? 'Minor' : 'Major';
         const parentWas = RubricVersionDiff.parentKey(base, previous);
         const parentNow = RubricVersionDiff.parentKey(draft, node);
-        RubricVersionDiff.pushScalar(changes, 'Major', subject, 'ParentID', parentWas, parentNow);
-        RubricVersionDiff.pushScalar(changes, 'Major', subject, 'NodeType', previous.nodeType, node.nodeType);
-        const scoringBump = previous.isAdvisory && node.isAdvisory ? 'Minor' : 'Major';
+        RubricVersionDiff.pushScalar(changes, scoringBump, subject, 'ParentID', parentWas, parentNow);
+        RubricVersionDiff.pushScalar(changes, scoringBump, subject, 'NodeType', previous.nodeType, node.nodeType);
         RubricVersionDiff.pushScalar(changes, scoringBump, subject, 'Weight', previous.weight, node.weight);
         RubricVersionDiff.pushScalar(changes, scoringBump, subject, 'ScaleID', previous.scaleId ?? null, node.scaleId ?? null);
         RubricVersionDiff.pushScalar(changes, 'Major', subject, 'IsAdvisory', previous.isAdvisory, node.isAdvisory);

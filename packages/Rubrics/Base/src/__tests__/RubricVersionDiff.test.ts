@@ -122,6 +122,24 @@ describe('RubricVersionDiff', () => {
         expect(RubricVersionDiff.diff(base, cloned).computedBump).toBeNull();
     });
 
+    it('does not call reparenting an advisory node Major, and the hash stays', async () => {
+        const before = snapshot([
+            node({ id: 'group-a', key: 'group-a', nodeType: 'Group', scaleId: null }),
+            node({ id: 'group-b', key: 'group-b', nodeType: 'Group', scaleId: null }),
+            node({ key: 'clarity' }),
+            node({ key: 'aside', isAdvisory: true, parentId: 'group-a' }),
+        ]);
+        const after = snapshot([
+            node({ id: 'group-a', key: 'group-a', nodeType: 'Group', scaleId: null }),
+            node({ id: 'group-b', key: 'group-b', nodeType: 'Group', scaleId: null }),
+            node({ key: 'clarity' }),
+            node({ key: 'aside', isAdvisory: true, parentId: 'group-b' }),
+        ]);
+        const result = RubricVersionDiff.diff(before, after);
+        expect(result.computedBump).not.toBe('Major');
+        expect(await scoringHash(before)).toBe(await scoringHash(after));
+    });
+
     it('does not call an advisory weight change Major, and the hash stays', async () => {
         const light = snapshot([
             node({ key: 'clarity' }),

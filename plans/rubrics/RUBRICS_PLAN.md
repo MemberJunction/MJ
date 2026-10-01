@@ -871,6 +871,8 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 
 ## 16. Progress log
 
+- **2026-10-01** — An advisory node's parent and type use the same non-major bump as its
+  weight. Reparenting an advisory node does not change ScoringHash.
 - **2026-10-01** — Scoring review. A scale value change is Major. Bands match by label.
   Advisory-to-advisory scoring edits are Minor. FailEvaluation of the only leaf is
   NotApplicableFailure. Anchors in the content projection match by normalized value,
