@@ -341,9 +341,10 @@ Related section keys use the same camelCase as CodeGen (`FormSectionCamelCase` /
 
 A row carries the same registration bag this document describes for the compiled metadata object —
 `Slot`, `SortKey`, `ContributionKey`, `RelatedEntityID` + `RelatedJoinField`, `ReplacesSectionKey`,
-`ReplacesFieldNames`, `Inclusion`, `ChromeGroup`, `Presentation` — plus `Title`, `Icon`, a free-form
-`Configuration` JSON blob handed to the component, and scope (`User` / `Role` / `Global`) with
-status (`Active` / `Pending` / `Inactive`).
+`ReplacesSectionKeys`, `ReplacesFieldNames`, `InSectionKey` + `SectionPosition`, `Inclusion`,
+`ChromeGroup`, `Presentation` — plus `Title`, `Icon`, `Precedence`, a free-form `Configuration` JSON
+blob handed to the component, and scope (`User` / `Role` / `Global`) with status (`Active` /
+`Pending` / `Inactive`).
 
 ### What a contribution can stand in for
 
@@ -374,9 +375,17 @@ whose `SectionPosition` matches it (a field claim with no position draws at the 
 fields stop rendering through `FormContext.claimedFieldNames`.
 
 **You do not need to do anything to support this.** `CollectFormContributionRegistrations` merges
-rows and class registrations into one list before the composer runs, so a compiled panel competes
-with a row on exactly the terms it competes with another compiled panel: same `contributionKey`,
-highest rank wins, and a compiled registration wins a tie.
+rows and class registrations into one list, and the form collapses that list once per resolve
+(`ResolveFormContributionWinners`): one winner per `contributionKey`, which every slot host, the
+composer and the rail then read. The higher rank wins — a compiled panel's ClassFactory `Priority`,
+a row's `Precedence`. On a tie a compiled registration beats any row, and between two rows the
+narrower audience wins: `User`, then `Role`, then `Global` (`FormContributionOutranks` in
+`@memberjunction/core-entities`). Wildcard (`'*'`) registrations take part on every form, but a
+wildcard's place claim (a grid, a section, a tab, a place in a section) is ignored.
+
+`ResolveFormContributionWinners` remembers its answer per input array and entity name. The collector
+returns the same array until something changes, so the form resolves once. A caller that builds its
+own list must pass a new array after any change, and must not change the result it gets back.
 
 What a panel author should know:
 
@@ -392,19 +401,28 @@ What a panel author should know:
 - **A row's panel is React**, hosted by `InteractiveFormPanelComponent`. It receives
   `FormPanelHostProps` — the record snapshot, entity metadata, permissions, and the contribution's
   own key / slot / title / configuration — and reports validation back through the same
-  `BaseFormPanel.validate()` contract your panel implements.
+  `BaseFormPanel.Validate()` contract your panel implements. A panel can change only the fields it
+  claims in `replacesFieldNames`, and only while the form is in edit mode.
+- **`Validate()` runs on Save.** `BaseFormComponent.Save()` awaits every mounted panel's
+  `Validate()` (through `ValidateAsync()`) and refuses the save when one fails. `Validate()` may
+  return a `ValidationResult` or a Promise of one. Synchronous callers read
+  `LastKnownValidation()`, so a panel that validates asynchronously should override it to return
+  its last result.
 
 Rows are authored by an OpenApp under `metadata/entity-form-contributions/`, or by an agent through
-the `Create` / `Modify` / `Activate Form Contribution Version` actions. See
+the `Create` / `Modify` / `Activate Form Contribution Version` actions. The actions change only the
+caller's own `User` rows; a `Role` or `Global` row returns `FORBIDDEN`. See
 [Forms Architecture §7c Scenario I](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md) for the full
 picture.
 
 **Turning rows off.** One switch turns every row off and leaves compiled panels as they are. In
 Explorer, set the instance configuration `Forms.MetadataContributions.Enabled` to `false`; the shell
-applies it when Explorer starts, before any form opens. On a Node host (MJAPI, actions, the CLI), set
-`MJ_FORMS_METADATA_CONTRIBUTIONS=false`. Each setting covers only its own side. Another browser host
-calls `InteractiveFormsEngine.ApplyInstanceConfiguration(InstanceConfigEngine.Instance)` before the
-first form loads.
+applies it after `InstanceConfigEngine.Config()` has finished and before any form opens. On a Node
+host (MJAPI, actions, the CLI), set `MJ_FORMS_METADATA_CONTRIBUTIONS=false`. Each setting covers only
+its own side. Another browser host calls
+`InteractiveFormsEngine.ApplyInstanceConfiguration(InstanceConfigEngine.Instance)` at the same point.
+The instance configuration can only turn rows off, and when Instance Config fails to load, rows stay
+on.
 
 ## Who sees a panel
 
@@ -426,11 +444,21 @@ would refuse. The grant goes to `Developer` and `Integration` by default. An `Ow
 
 **Publishing moves the row, it does not copy it.** The item that was live for that audience under
 the same `contributionKey` is set `Inactive` in the same transaction, so the audience never sees
-two. A full form has no key, so the form that was live for that audience is set aside instead.
+two. Turning a panel on in the drawer retires that live sibling the same way, and sets the panel's
+component status to match the row, so it needs update rights on `MJ: Components` too. Keys are
+compared ignoring case, as the database's unique index does. A row with no key has no sibling, so
+two keyless rows can both be live. Publishing a draft, a panel that is off or a set-aside form turns
+it on, and the chooser says so first. A full form has no key, so the form that was live for that
+audience is set aside instead. A set-aside (`Inactive`) shared form is retracted: nobody is offered
+it and it does not render. A set-aside personal form stays in its owner's form picker.
+
+On identity, permission and form-metadata entities (`RESTRICTED_FORM_ENTITIES` in
+`@memberjunction/core-entities`, 11 entities) only `User` rows and forms render, whatever wrote the
+row.
 
 **Hiding is per user and changes no row.** `panel-hides.ts` keeps the hidden keys in the
 `mj.formPanels.hidden.<entity>` user setting, and the collector drops those registrations after
-the merge. A compiled panel is hidden by its `contributionKey`, or by `class:<Registration.Key>`
+the merge. The full custom form a user picks is kept the same way, in `mj.formVariant.<entity>`. A compiled panel is hidden by its `contributionKey`, or by `class:<Registration.Key>`
 when it has none, so give a compiled panel a key if its users may want to hide it. A user's own
 personal row is never dropped by a hide; they switch it off instead.
 
@@ -487,4 +515,8 @@ A contribution opts in with three optional keys:
 | `form-panel-slot.component.ts`                                                        | `<mj-form-panel-slot>` host — discovery, sorting, dynamic mount, fallback resolution. |
 | `form-slot-coordinator.service.ts`                                                    | `FormSlotCoordinator` — per-container registry of which slots are physically present. `FORM_SLOT_CHAIN` constant. |
 | `record-form-container.component.{ts,html}`                                           | Provides `FormSlotCoordinator` + fill-in contributions + the always-on `after-everything` slot. |
+| `base-contribution-panel.ts`                                                          | `BaseContributionPanel` — the chrome a panel drawing one contribution reads (title, icon, bare strip, variant). |
+| `../interactive-form/interactive-form-panel.component.ts`                             | Hosts a metadata row's React panel. |
+| `../apply/form-placement.ts`, `form-placement-text.ts`, `form-placement-order.ts`      | The placement dialog's rules: the state and decision, the sentences that describe it, and the order within one position. |
+| `../panel-manager/`                                                                   | The "Manage this form" drawer, its inventory and the service it writes through. |
 | `packages/CodeGenLib/src/Angular/angular-codegen.ts` (`innerCollapsiblePanelsHTML`)   | Emits the four primary slot markers into every generated form template. Related grids stay baked. |

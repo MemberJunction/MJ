@@ -416,42 +416,74 @@ Orders' full custom form already wraps `<mj-record-form-container>` and emits `b
 A contribution does not have to be compiled. A `MJ: Entity Form Contributions` row points a
 parent entity at a `MJ: Components` row (`Type='Widget'`, spec `componentRole: 'form-panel'`) and
 carries the same registration bag as `@RegisterClassEx` — `Slot`, `SortKey`, `ContributionKey`,
-`RelatedEntityID` + `RelatedJoinField`, `ReplacesSectionKey`, `Inclusion`, `ChromeGroup` — plus
-`Presentation` (`panel` | `bare`), `Title`, `Icon`, `Configuration`, and User / Role / Global scope
-with `Active` / `Pending` / `Inactive` status.
+`RelatedEntityID` + `RelatedJoinField`, `ReplacesSectionKey`, `ReplacesSectionKeys`,
+`ReplacesFieldNames`, `InSectionKey` + `SectionPosition`, `Inclusion`, `ChromeGroup` — plus
+`Presentation` (`panel` | `bare`), `Title`, `Icon`, `Configuration`, `Precedence`, and User / Role /
+Global scope with `Active` / `Pending` / `Inactive` status. A row makes at most one claim (a grid,
+one or several sections, fields in one section, or a place in a section); a CHECK constraint
+enforces it.
 
 `CollectFormContributionRegistrations(entity, provider)` merges these rows (from
 `InteractiveFormsEngine`) with the ClassFactory registrations. The composer, the slot hosts and the
 chrome layers see **one** list and cannot tell the two sources apart. `<mj-form-panel-slot>` mounts
 a row through `InteractiveFormPanelComponent`, which renders the React component with
-`FormPanelHostProps` inside a collapsible panel — or bare, for a hero.
+`FormPanelHostProps` inside a collapsible panel — or bare, for a hero. In the browser the engine
+loads the shared rows and the signed-in user's own personal rows only.
 
-**Precedence.** Rows and compiled registrations collapse on `contributionKey`. Highest rank wins,
-and **on a tie the compiled registration wins** — an installed app's panel is not displaced by
-accident. A row that deliberately replaces one carries `Precedence = incumbent + 1`, which the
-apply flow sets only after the user confirms.
+**Precedence.** The form collapses the list once per resolve (`ResolveFormContributionWinners`):
+one winner per `contributionKey`. The higher rank wins — a row's `Precedence`, a compiled panel's
+ClassFactory `Priority`. **On a tie the compiled registration wins**, so an installed app's panel is
+not displaced by accident, and between two rows the narrower audience wins: `User`, then `Role`,
+then `Global` (`FormContributionOutranks` in `@memberjunction/core-entities`, which the server's
+`Get Form Composition For Entity` uses too). A row that deliberately replaces a compiled panel
+carries `Precedence = incumbent + 1`, which the apply flow sets only after the user confirms. A
+user's own row written at the same precedence as a shared row wins by the audience rule. Wildcard
+(`'*'`) registrations take part on every form, but their place claims (a grid, a section, a tab, a
+place in a section) are ignored.
 
 **Where rows come from.** An OpenApp without Angular ships them under
-`metadata/entity-form-contributions/`. An agent writes them through `Create Form Contribution` /
+`metadata/entity-form-contributions/` (its pull filter is `Scope <> 'User'`, so personal rows are
+never pulled into files). An agent writes them through `Create Form Contribution` /
 `Modify Form Contribution` / `Activate Form Contribution Version`, and
-`Get Form Contributions For Entity` reads back what a user already has. The action family clamps
-**every** write to `Scope='User'` — Global and Role remain human acts.
+`Get Form Contributions For Entity` reads back what a user already has. The actions change only the
+caller's own personal (`Scope='User'`) rows — of contributions and of full custom forms alike — and
+return `FORBIDDEN` for a `Role` or `Global` row, whoever the caller is. A spec that makes more than
+one claim returns `INVALID_CLAIM` before anything is written, and the Component and the row are
+written in one transaction. `Modify Form Contribution` takes an optional `Precedence`. Sharing with a
+role or everyone is a human act in the form's Manage drawer or in Form Builder, and needs the
+`Manage Form Defaults` authorization.
 
-**Two safety properties worth knowing.** Contributions on identity and authorization surfaces
-(`MJ: Users`, `MJ: Roles`, `MJ: User Roles`, `MJ: Authorizations`, `MJ: Authorization Roles`) are
-dropped at `Global` or `Role` scope when the form resolves them — whatever wrote the row, including
+**Form context for agents.** Each record form publishes its composition snapshot (sections, related
+grids, contributions, rail, slots) to `FormCompositionRegistry` in `@memberjunction/ng-base-forms`;
+the apply path reads it there to check what a panel replaces. The record tab, while it is the tab on
+screen, publishes a compact `FormAgentContext` as `AppContext.AdditionalContext.Form`: the entity,
+`RecordPrimaryKey` (a `CompositeKey.ToURLSegment()` string, or null for an unsaved record), the form
+choice, and each section's key, title, variant, hidden flag and the contribution that holds it. It
+publishes again when its tab is reattached and never while it is detached. On the server,
+`Get Form Composition For Entity` answers for the form the user sees — hidden panels, the identity
+rule below and the same collapse — and returns `QUERY_FAILED` when a query fails.
+
+**Two safety properties worth knowing.** Shared forms and panels do not render on identity,
+permission and form-metadata entities: on the 11 entities in `RESTRICTED_FORM_ENTITIES`
+(`MJ: Users`, `Roles`, `User Roles`, `Authorizations`, `Authorization Roles`, `Entity Permissions`,
+`Row Level Security Filters`, `API Keys`, `Entity Field Permissions`, `Entity Form Overrides`,
+`Entity Form Contributions`) only `User` rows and forms are used. The rule
+(`FormScopeAllowedOnEntity`) is applied where rows are read, whatever wrote the row, including
 `mj sync` and direct SQL. And a kill switch turns the whole source off: the engine loads nothing,
 the collector returns compiled registrations only, and forms render exactly as they did before the
 feature existed. The switch has two settings, because the browser has no process environment:
 
 - **Node hosts** (MJAPI, actions, the CLI): set `MJ_FORMS_METADATA_CONTRIBUTIONS=false`.
-- **Explorer**: set the instance configuration `Forms.MetadataContributions.Enabled` to `false`. The
-  shell applies it when Explorer starts, before any form opens. Another browser host calls
+- **Explorer**: set the `MJ: Instance Configurations` key `Forms.MetadataContributions.Enabled` to
+  `false`. The shell applies it after `InstanceConfigEngine.Config()` has finished and before any
+  form opens. Another browser host calls
   `InteractiveFormsEngine.ApplyInstanceConfiguration(InstanceConfigEngine.Instance)`, or sets
-  `InteractiveFormsEngine.MetadataContributionsEnabled`, before the first form loads.
+  `InteractiveFormsEngine.MetadataContributionsEnabled`, at the same point.
 
-Each setting covers only its own side: the server variable does not reach the browser, and the
-instance configuration is not read by Node hosts.
+The instance configuration can only turn the source off, never back on, and when Instance Config
+fails to load the source stays on. The seed row reaches a database through `mj sync push`. Each
+setting covers only its own side: the server variable does not reach the browser, and the instance
+configuration is not read by Node hosts.
 
 L3 `MJ: Form Chrome Rules` still suppresses any of them by `ContributionKey`.
 

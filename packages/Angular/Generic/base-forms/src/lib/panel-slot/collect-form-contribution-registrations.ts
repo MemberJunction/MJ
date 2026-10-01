@@ -13,6 +13,9 @@ import { WithPlacementPreview, type FormPlacementPreview } from './placement-pre
  *   - compiled `BaseFormPanel` registrations in the ClassFactory (`Source: 'class'`)
  *   - Active, scope-matching `MJ: Entity Form Contributions` rows (`Source: 'metadata'`)
  *
+ * Rows come from the `InteractiveFormsEngine` singleton, which holds the rows of the
+ * provider that loaded it.
+ *
  * Memoized per (provider, entity, user). The memo key also folds in the ClassFactory
  * registration count (lazy-loaded OpenApp modules register late) and an engine
  * version that bumps on every `Contributions$` emission. The whole-form host
@@ -180,10 +183,9 @@ function collectFromSources(
     const userID = user?.ID ?? '';
     const roleIDs = (user?.UserRoles ?? []).map((r) => r.RoleID).filter((id): id is string => !!id);
     const classCount = currentClassCount();
-    // The provider is part of the identity: MJ supports per-provider Metadata scoping
-    // (.claude/rules/data-access.md), so the same entity name and user can resolve to
-    // different rows under two providers. Without it, the second provider reads the
-    // first one's memoized list.
+    // The provider is part of the key. Every provider reads rows from the one engine
+    // instance, but each has its own entity metadata and current user, so one provider's
+    // list is never served to another.
     // The user's hidden panels are part of the identity too, so hiding one repaints at once
     // rather than waiting for an unrelated change to clear the memo. The setting itself is
     // remembered until the user's settings change (HiddenPanelsSetting), so this costs no scan.

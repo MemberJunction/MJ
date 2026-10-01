@@ -118,6 +118,10 @@ export class InteractiveFormsEngine extends BaseEngine<InteractiveFormsEngine> {
      * Turns metadata contributions off when the instance configuration
      * ({@link MetadataContributionsConfigKey}) is `false`. A missing key leaves the switch as it is,
      * and a `true` never turns back on a switch that is already off.
+     *
+     * Call it after `InstanceConfigEngine.Config()` has finished and before the first form opens.
+     * Before Instance Config has loaded, or when it fails to load, the key reads as missing and
+     * the switch stays on.
      */
     public static ApplyInstanceConfiguration(config: Pick<InstanceConfigEngine, 'GetBoolean'>): void {
         if (!config.GetBoolean(InteractiveFormsEngine.MetadataContributionsConfigKey, true)) {

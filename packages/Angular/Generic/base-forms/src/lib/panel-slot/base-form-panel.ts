@@ -193,9 +193,9 @@ export interface FormContributionCountSpec {
  * Lifecycle hooks: standard Angular `ngOnInit` / `ngOnDestroy` work as usual.
  * `Record` is guaranteed to be set before the first change-detection pass.
  *
- * Optional `Validate()` returns a synchronous validation result; the parent
- * `BaseFormComponent.Save()` path will surface it via the existing validation
- * pipeline when called. Panels that don't validate anything beyond what the
+ * Optional `Validate()` returns a validation result, or a Promise of one.
+ * `BaseFormComponent.Save()` awaits every mounted panel's result and refuses the
+ * save when one fails. Panels that don't validate anything beyond what the
  * record itself does can leave this method off.
  */
 @Directive()

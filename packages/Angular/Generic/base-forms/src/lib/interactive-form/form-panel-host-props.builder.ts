@@ -89,8 +89,7 @@ function relatedPanelProps(record: BaseEntity, relatedEntity: string, joinField:
         viewParams: {
             EntityName: viewParams.EntityName ?? relatedEntity,
             // RunView accepts `string | PlatformSQL`; the panel contract carries plain
-            // strings because these cross into React as JSON. Take the platform's own
-            // variant where one exists, else the default fragment.
+            // strings because these cross into React as JSON, so the fragment is flattened.
             ExtraFilter: plainSQL(viewParams.ExtraFilter) ?? '',
             OrderBy: plainSQL(viewParams.OrderBy),
         },
@@ -102,8 +101,12 @@ function relatedPanelProps(record: BaseEntity, relatedEntity: string, joinField:
 
 /**
  * Flatten a `string | PlatformSQL` fragment to the string the panel receives.
- * The browser talks to one server at a time, so the SQL Server variant (when present)
- * is the right pick; `default` is the documented fallback.
+ *
+ * A plain string passes through. For a `PlatformSQL` value the `sqlserver` variant is taken when
+ * present, else `default`: the same choice a browser-side provider makes, since it does not know
+ * the server's platform and `ProviderBase.PlatformKey` defaults to SQL Server. On a PostgreSQL
+ * server a fragment with a different `postgresql` variant would therefore be the wrong one. The
+ * relationship filters built here are plain strings.
  */
 function plainSQL(value: string | PlatformSQL | undefined): string | undefined {
     if (value === undefined || value === null) return undefined;
