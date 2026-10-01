@@ -126,6 +126,7 @@
     "@memberjunction/external-data-source-snowflake": "6.2.0-edge.1",
     "@memberjunction/external-data-source-sqlserver": "6.2.0-edge.1",
     "@memberjunction/external-data-sources": "6.2.0-edge.1",
+    "@memberjunction/feature-pipelines": "6.2.0-edge.1",
     "@memberjunction/generic-database-provider": "6.2.0-edge.1",
     "@memberjunction/geo-core": "6.2.0-edge.1",
     "@memberjunction/integration-actions": "6.2.0-edge.1",
