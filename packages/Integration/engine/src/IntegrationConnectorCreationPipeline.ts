@@ -30,11 +30,38 @@ import { totalmem } from 'node:os';
  * A limit of zero means V8 did not report a ceiling. That must read as "do not stop": a missing
  * reading is not evidence of pressure, and treating it as pressure would halt sampling everywhere
  * the statistic is unavailable.
+ *
+ * `minHeadroomBytes` (default 0 = off) also stops when no more than that many bytes remain below
+ * the limit. A heap caller needs it; see {@link HEAP_STOP_MIN_HEADROOM_BYTES}. An RSS caller (limit
+ * = the box) does not pass it.
  */
-export function ShouldStopSamplingForHeap(usedBytes: number, limitBytes: number, stopFraction: number): boolean {
+export function ShouldStopSamplingForHeap(
+    usedBytes: number,
+    limitBytes: number,
+    stopFraction: number,
+    minHeadroomBytes = 0,
+): boolean {
     if (!(limitBytes > 0) || !(stopFraction > 0)) return false;
-    return usedBytes / limitBytes >= stopFraction;
+    if (usedBytes / limitBytes >= stopFraction) return true;
+    return minHeadroomBytes > 0 && limitBytes - usedBytes <= minHeadroomBytes;
 }
+
+/**
+ * The absolute headroom a HEAP reading must keep, beside its fraction.
+ *
+ * A fraction of `heap_size_limit` alone cannot fire on a small heap. That limit includes a fixed
+ * young-generation reserve (192 MB on Node 20-24, constant across `--max-old-space-size` values)
+ * which live data can never occupy: V8 aborts when the OLD space fills, i.e. at
+ * `heap_size_limit - reserve`. At 0.92 the fractional stop sits ABOVE that line for every old space
+ * under ~2.4 GB (1 GB: 95 MB above; 2 GB: 13 MB above; the ~2 GB ceiling a 4 GB box gets: 16 MB
+ * above), so on such a box the gate could not fire before the abort it exists to prevent. Measured
+ * 2026-09-24 on 888 objects / 97k fields: with the heap pre-filled to 92% of a 4 GB limit the gate
+ * stopped after 25 objects; the same fill at a 1 GB limit aborted V8 before the stage ran.
+ *
+ * 320 MB is the reserve plus 128 MB of old space. Above ~4 GB the 8% margin already exceeds it, so
+ * large workspaces are unaffected.
+ */
+export const HEAP_STOP_MIN_HEADROOM_BYTES = 320 * 1024 * 1024;
 
 /** One reading of the two numbers the two memory ceilings are measured against. */
 export interface MemorySample {
@@ -67,9 +94,18 @@ export function ReadMemorySample(): MemorySample {
  * 2026-09-21 on a 15.7 GB box: node killed at 15.3 GB and 15.6 GB anon-RSS mid-discovery while
  * the heap was still under its ceiling, so the heap gate never fired. An unknown reading (a
  * limit or a box size of 0) is not evidence of pressure, as for the heap.
+ *
+ * `heapMinHeadroomBytes` applies to the HEAP reading only (see
+ * {@link HEAP_STOP_MIN_HEADROOM_BYTES}); resident memory is judged against the whole box, where a
+ * fraction is the right measure.
  */
-export function ShouldStopForMemory(sample: MemorySample, heapStopFraction: number, rssStopFraction: number): boolean {
-    return ShouldStopSamplingForHeap(sample.HeapUsed, sample.HeapLimit, heapStopFraction)
+export function ShouldStopForMemory(
+    sample: MemorySample,
+    heapStopFraction: number,
+    rssStopFraction: number,
+    heapMinHeadroomBytes = 0,
+): boolean {
+    return ShouldStopSamplingForHeap(sample.HeapUsed, sample.HeapLimit, heapStopFraction, heapMinHeadroomBytes)
         || ShouldStopSamplingForHeap(sample.RSS, sample.TotalMemory, rssStopFraction);
 }
 
@@ -549,10 +585,13 @@ export class IntegrationConnectorCreationPipeline {
         // what is gathered, let the stage finish and persist. A smaller catalog beats no catalog.
         // Read synchronously and per object: `used_heap_size` is a counter V8 already maintains,
         // and the alternative (the async whole-machine reading) cannot be afforded per item.
+        // The heap side also keeps an absolute floor: on a small heap the fraction alone sits above
+        // V8's real abort line (see HEAP_STOP_MIN_HEADROOM_BYTES).
         const outOfMemory = (): boolean => ShouldStopForMemory(
             ReadMemorySample(),
             IntegrationConnectorCreationPipeline.HEAP_STOP_FRACTION,
             IntegrationConnectorCreationPipeline.RSS_STOP_FRACTION,
+            HEAP_STOP_MIN_HEADROOM_BYTES,
         );
         try {
             // U11 — determinate discovery progress: surface scanned/total on the structured
@@ -945,12 +984,13 @@ export class IntegrationConnectorCreationPipeline {
         const verdicts: ConnectorCreationPipelineResult['PKVerdicts'] = [];
         const unresolved: string[] = [];
 
-        // The same reading and the same threshold Introspect uses, so the two long stages agree
+        // The same reading, thresholds and heap floor Introspect uses, so the two long stages agree
         // about what "out of room" means.
         const outOfMemoryPK = (): boolean => ShouldStopForMemory(
             ReadMemorySample(),
             IntegrationConnectorCreationPipeline.HEAP_STOP_FRACTION,
             IntegrationConnectorCreationPipeline.RSS_STOP_FRACTION,
+            HEAP_STOP_MIN_HEADROOM_BYTES,
         );
         // This stage runs right after the run's largest write, so it starts wherever Introspect
         // left the heap, and then works a tight loop: a classifier verdict per object and a Save()
