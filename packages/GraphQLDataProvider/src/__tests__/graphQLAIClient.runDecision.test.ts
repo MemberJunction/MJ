@@ -38,6 +38,7 @@ const serverSuccess = () => ({
         answersJSON: JSON.stringify(ANSWERS),
         promptRunId: 'run-1',
         modelName: 'Jev',
+        resolvedModel: 'typesafe/jev-1.13-20260917',
         executionTimeMs: 182,
     },
 });
@@ -77,7 +78,7 @@ describe('GraphQLAIClient.RunDecision: the request', () => {
         expect(field.name.value).toBe('RunDecision');
         expect((field.arguments ?? []).map(a => a.name.value)).toEqual(['state', 'questions', 'promptId', 'promptName', 'timeoutMS']);
         expect((field.selectionSet?.selections ?? []).map(s => (s as FieldNode).name.value))
-            .toEqual(['success', 'errorMessage', 'answersJSON', 'promptRunId', 'modelName', 'executionTimeMs']);
+            .toEqual(['success', 'errorMessage', 'answersJSON', 'promptRunId', 'modelName', 'resolvedModel', 'executionTimeMs']);
     });
 
     it('sends the questions as JSON and text state as-is, leaving unset options out', async () => {
@@ -118,6 +119,7 @@ describe('GraphQLAIClient.RunDecision: the answers', () => {
             Answers: ANSWERS,
             PromptRunID: 'run-1',
             ModelName: 'Jev',
+            ResolvedModel: 'typesafe/jev-1.13-20260917',
             ExecutionTimeMs: 182,
         });
         const route = result.Answers.route;
@@ -126,7 +128,7 @@ describe('GraphQLAIClient.RunDecision: the answers', () => {
 
     it('turns null run details into undefined', async () => {
         const { client } = makeClient({
-            RunDecision: { ...serverSuccess().RunDecision, promptRunId: null, modelName: null, executionTimeMs: null },
+            RunDecision: { ...serverSuccess().RunDecision, promptRunId: null, modelName: null, resolvedModel: null, executionTimeMs: null },
         });
 
         const result = await client.RunDecision(baseParams());
@@ -134,6 +136,7 @@ describe('GraphQLAIClient.RunDecision: the answers', () => {
         expect(result.Success).toBe(true);
         expect(result.PromptRunID).toBeUndefined();
         expect(result.ModelName).toBeUndefined();
+        expect(result.ResolvedModel).toBeUndefined();
         expect(result.ExecutionTimeMs).toBeUndefined();
     });
 });

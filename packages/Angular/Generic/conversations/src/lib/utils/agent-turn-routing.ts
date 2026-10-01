@@ -6,7 +6,7 @@
  * @module @memberjunction/ng-conversations
  */
 
-import { UUIDsEqual } from '@memberjunction/global';
+import { IsAgentAllowed } from '@memberjunction/ai-core-plus';
 import type { AgentReplyMode, AgentTurnRoute, AgentTurnTarget } from '../models/agent-turn.model';
 
 /** The agent each route would use for one message, before the host's rules are applied. */
@@ -34,23 +34,6 @@ export interface AgentTurnRules {
     ReplyMode: AgentReplyMode;
     /** The agents that may answer. Null allows every agent. */
     AllowedAgentIDs: readonly string[] | null;
-}
-
-/**
- * True when the agent may take a turn. A null or undefined list allows every agent; an empty
- * list allows none.
- */
-export function IsAgentAllowed(
-    agentId: string | null | undefined,
-    allowedAgentIDs: readonly string[] | null | undefined
-): boolean {
-    if (!agentId) {
-        return false;
-    }
-    if (allowedAgentIDs == null) {
-        return true;
-    }
-    return allowedAgentIDs.some(id => UUIDsEqual(id, agentId));
 }
 
 /**

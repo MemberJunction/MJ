@@ -329,6 +329,7 @@ export class GraphQLAIClient {
                         answersJSON
                         promptRunId
                         modelName
+                        resolvedModel
                         executionTimeMs
                     }
                 }
@@ -369,6 +370,7 @@ export class GraphQLAIClient {
         const details = {
             PromptRunID: decision.promptRunId ?? undefined,
             ModelName: decision.modelName ?? undefined,
+            ResolvedModel: decision.resolvedModel ?? undefined,
             ExecutionTimeMs: decision.executionTimeMs ?? undefined
         };
         if (!decision.success) {
@@ -2272,6 +2274,14 @@ export interface RunDecisionResult {
     ModelName?: string;
 
     /**
+     * The exact model behind `ModelName`, as its driver reports it: the vendor's dated model for a
+     * vendor decision model (`typesafe/jev-1.13-20260917`), the chat model for LLM Decision
+     * (`GPT-OSS-120B`). A calibration fitted on one model applies only to that model's answers, so a
+     * consumer that calibrates needs both names. Absent when the driver reports none.
+     */
+    ResolvedModel?: string;
+
+    /**
      * Server-side execution time in milliseconds
      */
     ExecutionTimeMs?: number;
@@ -2293,6 +2303,7 @@ interface RunDecisionWireResult {
     answersJSON?: string | null;
     promptRunId?: string | null;
     modelName?: string | null;
+    resolvedModel?: string | null;
     executionTimeMs?: number | null;
 }
 

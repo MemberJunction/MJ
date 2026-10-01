@@ -9,7 +9,6 @@ import { describe, it, expect } from 'vitest';
 
 import {
     ResolveAgentTurn,
-    IsAgentAllowed,
     FindDisallowedTaskGraphAgents,
     type AgentTurnCandidates,
     type AgentTurnRules,
@@ -167,24 +166,6 @@ describe('ResolveAgentTurn — a continuity candidate a routing decision chose',
     it('without the flag, the same candidate is plain continuity', () => {
         expect(ResolveAgentTurn({ ...routed, ContinuityDecisionRouted: false }, rules('Always'), isKnown))
             .toEqual({ AgentId: OTHER, Route: 'Continuity' });
-    });
-});
-
-describe('IsAgentAllowed', () => {
-    it('allows every agent when there is no list', () => {
-        expect(IsAgentAllowed(OTHER, null)).toBe(true);
-        expect(IsAgentAllowed(OTHER, undefined)).toBe(true);
-    });
-
-    it('allows only listed agents, and none for an empty list', () => {
-        expect(IsAgentAllowed(TAGGED, [TAGGED])).toBe(true);
-        expect(IsAgentAllowed(OTHER, [TAGGED])).toBe(false);
-        expect(IsAgentAllowed(TAGGED, [])).toBe(false);
-    });
-
-    it('never allows a missing agent', () => {
-        expect(IsAgentAllowed(null, null)).toBe(false);
-        expect(IsAgentAllowed(undefined, [TAGGED])).toBe(false);
     });
 });
 
