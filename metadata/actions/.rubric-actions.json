@@ -550,11 +550,39 @@
             "Type": "Input",
             "ValueType": "Simple Object",
             "IsArray": true,
-            "Description": "The criteria tree to store on the draft.",
-            "IsRequired": true
+            "Description": "The criteria tree to store on the draft. Omit this when Matrix or Description is set.",
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "81300405-2891-4713-9B36-88B2E74874D8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Matrix",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Numbered CSV: path, name, weight, knockout. Saved as Draft criterion rows. A path such as 3.2 is a child of 3.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F81E08D2-132A-4696-A749-715A5BD8A325"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Description",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "A description to store as one Draft criterion. Used when Matrix and Nodes are omitted.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "645A7803-002E-4625-93A7-1EF409FD1A37"
           }
         },
         {

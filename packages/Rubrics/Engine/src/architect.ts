@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { RubricNodeSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 
 export interface ImportedCriterion {
@@ -74,7 +75,34 @@ export function draftFromImport(name: string, csv: string): { name: string; stat
 /** A description becomes a Draft version. This path does not publish. */
 export async function draftFromDescription(store: DraftVersionStore, description: string): Promise<{ id: string; status: 'Draft' }> {
     const title = description.trim().replace(/[\r\n,]+/g, ' ').slice(0, 120) || 'Draft rubric';
-    return saveImportedDraft(store, title, '1,Summary,1,no');
+    return saveImportedDraft(store, title, `1,${title},1,no`);
+}
+
+/** Numbered-matrix rows as criterion snapshots. A row that has children is a group. */
+export function nodesFromMatrix(csv: string): RubricNodeSnapshot[] {
+    const imported = importMatrix(csv);
+    const ids = new Map(imported.map(row => [row.key, randomUUID()]));
+    const parentKeys = new Set(imported.map(row => row.parentKey).filter((key): key is string => !!key));
+    return imported.map((row, sequence) => ({
+        id: ids.get(row.key) ?? randomUUID(),
+        key: row.key,
+        parentId: row.parentKey ? ids.get(row.parentKey) ?? null : null,
+        name: row.name,
+        nodeType: parentKeys.has(row.key) ? 'Group' : 'Criterion',
+        weight: row.weight,
+        isAdvisory: false,
+        isGate: row.gate,
+        gateMinimumScore: row.gate ? 1 : null,
+        evidenceRequired: false,
+        rationaleRequired: false,
+        sequence,
+    }));
+}
+
+/** One criterion whose name is the description. This path does not publish. */
+export function nodesFromDescription(description: string): RubricNodeSnapshot[] {
+    const title = description.trim().replace(/[\r\n,]+/g, ' ').slice(0, 120) || 'Draft rubric';
+    return nodesFromMatrix(`1,${title},1,no`);
 }
 
 export function publishImportedDraft(): { ok: false; message: string } {

@@ -53,12 +53,13 @@ function published(id: string, major: number) {
     };
 }
 
-function catalog(): RubricRecords & { filters: string[]; draftCalls: number; draftStatus: string } {
+function catalog(): RubricRecords & { filters: string[]; draftCalls: number; draftStatus: string; savedNodes: { id: string; key: string; name: string; weight: number; isGate: boolean; parentId?: string | null }[] } {
     const filters: string[] = [];
     const records = {
         filters,
         draftCalls: 0,
         draftStatus: 'Draft',
+        savedNodes: [] as { id: string; key: string; name: string; weight: number; isGate: boolean; parentId?: string | null }[],
         async rows(entityName: string, filter: string) {
             filters.push(`${entityName} ${filter}`);
             if (entityName === 'MJ: Rubrics') return [{ ID: 'rubric', Name: 'Writing' }];
@@ -74,8 +75,9 @@ function catalog(): RubricRecords & { filters: string[]; draftCalls: number; dra
             }
             return [];
         },
-        async createDraft() {
+        async createDraft(input?: { nodes?: { id: string; key: string; name: string; weight: number; isGate: boolean; parentId?: string | null }[] }) {
             records.draftCalls += 1;
+            records.savedNodes = input?.nodes ?? [];
             return { id: 'draft-1', status: records.draftStatus };
         },
     };
@@ -155,6 +157,15 @@ describe('rubric actions', () => {
         expect(draft).toEqual({ id: 'draft-1', status: 'Draft' });
         expect(records.draftCalls).toBe(1);
         expect(store.submitCalls).toBe(0);
+        const matrix = await new CreateRubricDraftAction().Invoke(engine, {
+            rubricId: 'rubric',
+            matrix: '3,Security,1,no\n3.2,Encryption,2,yes',
+        });
+        expect(matrix).toEqual({ id: 'draft-1', status: 'Draft' });
+        const encryption = records.savedNodes.find(node => node.key === '3.2');
+        const security = records.savedNodes.find(node => node.key === '3');
+        expect(encryption).toMatchObject({ name: 'Encryption', weight: 2, isGate: true });
+        expect(encryption?.parentId).toBe(security?.id);
         records.draftStatus = 'Published';
         await expect(new CreateRubricDraftAction().Invoke(engine, { rubricId: 'rubric', nodes: [] })).rejects.toThrow(/never publishes/);
     });

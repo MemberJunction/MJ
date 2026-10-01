@@ -3,6 +3,7 @@ import { BaseAction } from '@memberjunction/actions';
 import { RegisterClass } from '@memberjunction/global';
 import type { RubricNodeSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { RubricEngine, type EvaluateRecordInput, type EvaluateRecordResult } from './RubricEngine.js';
+import { nodesFromDescription, nodesFromMatrix } from './architect.js';
 import { providerRubricEngine } from './providerRecords.js';
 import type { ConsensusResult } from './statistics.js';
 
@@ -31,6 +32,20 @@ function numberInput(params: RunActionParams, name: string): number | undefined 
 function textValue(params: RunActionParams, name: string): string | undefined {
     const value = inputValue(params, name);
     return value === undefined || value === null || value === '' ? undefined : String(value);
+}
+
+function nodeInput(params: RunActionParams): RubricNodeSnapshot[] {
+    const value = inputValue(params, 'Nodes');
+    if (Array.isArray(value)) return value as RubricNodeSnapshot[];
+    if (typeof value === 'string' && value.trim().startsWith('[')) {
+        try {
+            const parsed = JSON.parse(value) as unknown;
+            return Array.isArray(parsed) ? parsed as RubricNodeSnapshot[] : [];
+        } catch {
+            return [];
+        }
+    }
+    return [];
 }
 
 function output(params: RunActionParams, name: string, value: unknown): void {
@@ -144,16 +159,22 @@ export class GetRubricAction extends BaseAction {
  */
 @RegisterClass(BaseAction, 'Create Rubric Draft')
 export class CreateRubricDraftAction extends BaseAction {
-    public async Invoke(engine: RubricEngine, input: { rubricId: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: 'Draft' }> {
-        return engine.createDraft(input);
+    public async Invoke(engine: RubricEngine, input: { rubricId: string; nodes?: RubricNodeSnapshot[]; matrix?: string; description?: string }): Promise<{ id: string; status: 'Draft' }> {
+        const nodes = input.matrix
+            ? nodesFromMatrix(input.matrix)
+            : input.description
+                ? nodesFromDescription(input.description)
+                : input.nodes ?? [];
+        return engine.createDraft({ rubricId: input.rubricId, nodes });
     }
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            const nodes = inputValue(params, 'Nodes');
             const draft = await this.Invoke(engineForAction(params), {
                 rubricId: textValue(params, 'RubricID') ?? '',
-                nodes: Array.isArray(nodes) ? nodes as RubricNodeSnapshot[] : [],
+                nodes: nodeInput(params),
+                matrix: textValue(params, 'Matrix'),
+                description: textValue(params, 'Description'),
             });
             output(params, 'ID', draft.id);
             output(params, 'Status', draft.status);
