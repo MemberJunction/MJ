@@ -2735,6 +2735,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
 
         this.recordAccess(fingerprint);
+        this.indexSlotThisProcessDidNotWrite(fingerprint);
         this._stats.hits++;
         const results = parsed.results || [];
         const result: CachedRunViewResult = {
@@ -2751,6 +2752,35 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             result.aggregateResults = parsed.aggregateResults;
         }
         return result;
+    }
+
+    /**
+     * Records a slot this process READ, so a later save can still find it once it has expired.
+     *
+     * An engine loads its rows once and never reads its slot again — that is the design, not a
+     * defect: the slot is a boot shortcut and a propagation channel, and correctness comes from
+     * events. Giving slots a finite expiry opened a window those events could not cross. When a
+     * slot expires under running replicas, a save finds nothing to rewrite and publishes nothing,
+     * so every peer engine keeps serving what it loaded (plan F9).
+     *
+     * F9's fix — invalidate a slot that cannot be maintained, which publishes `removed` — only
+     * fires if the saving process still holds the fingerprint, and only the process that WROTE the
+     * slot did. A server that booted warm read it instead, and a read indexed nothing; behind a
+     * load balancer, which server takes the save is arbitrary. A warm read is the only trace such a
+     * process has of that slot, so it is indexed too.
+     *
+     * Gated on the provider exposing a shared per-entity index, which is exactly the case
+     * {@link resolveFingerprintsForEntity} answers from that index — with no category-scan
+     * fallback. On a process-local store there is nothing to gain (no peers to notify, and every
+     * slot in it was written by this process, so it is already indexed) and something to lose: a
+     * non-empty index SUPPRESSES that fallback scan, which is what finds persisted slots the index
+     * does not know about. Plan §25.5.
+     * @internal
+     */
+    private indexSlotThisProcessDidNotWrite(fingerprint: string): void {
+        if (this._storageProvider?.GetIndexGroupKeys) {
+            this.addToEntityIndex(fingerprint);
+        }
     }
 
     /**
