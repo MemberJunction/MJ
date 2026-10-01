@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { driftDeltas, keepSample, sampleBucket, selectSampledRuns } from '../sampling.js';
+import { EvaluateSampledAgentRuns, driftDeltas, keepSample, sampleBucket, selectSampledRuns } from '../sampling.js';
 
 describe('production sampling', () => {
     it('keeps the same run for the same rate', () => {
@@ -17,6 +17,11 @@ describe('production sampling', () => {
             evaluated: [{ runId: 'done', rubricId: 'rubric' }],
         });
         expect(chosen.map(row => row.runId)).toEqual(['open']);
+        expect(new EvaluateSampledAgentRuns().plan({
+            links: [{ agentId: 'agent', rubricId: 'rubric', sampleRate: 1, status: 'Active' }],
+            runs: [{ id: 'open', agentId: 'agent' }],
+            evaluated: [],
+        }).map(row => row.runId)).toEqual(['open']);
     });
 
     it('alerts when the current mean drops past the threshold', () => {

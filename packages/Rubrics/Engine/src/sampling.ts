@@ -38,6 +38,13 @@ export function selectSampledRuns(input: {
     return chosen;
 }
 
+/** Scheduled job body. Evaluation is this list, not work on the agent's response path. */
+export class EvaluateSampledAgentRuns {
+    public plan(input: Parameters<typeof selectSampledRuns>[0]): ReturnType<typeof selectSampledRuns> {
+        return selectSampledRuns(input);
+    }
+}
+
 /** Drop of the current period's mean below the previous period. A drop past the threshold alerts. */
 export function driftDeltas(current: { key: string; mean: number }[], previous: { key: string; mean: number }[], threshold: number): { key: string; drop: number; alert: boolean }[] {
     return current.map(row => {

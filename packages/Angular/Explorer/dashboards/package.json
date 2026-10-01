@@ -129,6 +129,7 @@
     "@memberjunction/ng-actions": "6.2.0-edge.1",
     "@memberjunction/ng-agent-requests": "6.2.0-edge.1",
     "@memberjunction/ng-agents": "6.2.0-edge.1",
+    "@memberjunction/rubrics": "6.2.0-edge.1",
     "@memberjunction/ng-ai-test-harness": "6.2.0-edge.1",
     "@memberjunction/ng-archive-manager": "6.2.0-edge.1",
     "@memberjunction/ng-artifacts": "6.2.0-edge.1",

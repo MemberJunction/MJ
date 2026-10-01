@@ -1,4 +1,10 @@
 {
   "entity": "MJ: Rubrics",
-  "filePattern": "**/.*.json"
+  "filePattern": "**/.*.json",
+  "relatedEntities": {
+    "MJ: Rubric Versions": {
+      "entity": "MJ: Rubric Versions",
+      "foreignKey": "RubricID"
+    }
+  }
 }

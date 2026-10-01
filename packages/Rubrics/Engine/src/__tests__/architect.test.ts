@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { critiqueRubric, importMatrix } from '../architect.js';
+import { critiqueRubric, draftFromImport, importMatrix, publishImportedDraft } from '../architect.js';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 
 describe('rubric architect', () => {
@@ -17,6 +17,14 @@ describe('rubric architect', () => {
             }],
             scales: [], bands: [],
         };
+        const inherited: RubricVersionSnapshot = {
+            ...version,
+            notApplicablePolicy: 'NotAllowed',
+            nodes: [{ ...version.nodes[0], name: 'Accuracy', notApplicablePolicy: null }],
+        };
+        expect(critiqueRubric(inherited).some(note => note.includes('not-applicable'))).toBe(false);
+        expect(draftFromImport('Imported', '1,Accuracy,1,yes').status).toBe('Draft');
+        expect(publishImportedDraft().ok).toBe(false);
         expect(critiqueRubric(version)).toEqual([
             'ok: the name is too vague.',
             'ok: no anchors.',

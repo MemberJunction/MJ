@@ -16,6 +16,7 @@ import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 import { MJButtonDirective, MJClickableDirective, MJComboboxComponent, MJDropdownComponent, MJSwitchComponent, MJPageHeaderComponent, MJPageLayoutComponent, MJPageBodyComponent, MJPageHeaderInteriorComponent, MJPageBodyInteriorComponent, MJFilterPopoverComponent, MJPageSearchComponent, MJFilterPanelComponent, MJFilterFieldComponent, MJFilterChipComponent, MJTabNavComponent, MJViewToggleComponent, MJStatBadgeComponent, MJRefreshButtonComponent, MJLeftNavComponent, MJLeftNavContentComponent, MJDialogComponent, MJDialogActionsComponent, MJEmptyStateComponent, MJAlertComponent, MJAccordionModule, MjSlidePanelComponent } from '@memberjunction/ng-ui-components';
 
 // AI Components
+import { RubricDriftResourceComponent } from './AI/components/rubric-drift.component';
 import { ModelManagementComponent } from './AI/components/models/model-management.component';
 import { PromptManagementComponent } from './AI/components/prompts/prompt-management.component';
 import { AgentConfigurationComponent } from './AI/components/agents/agent-configuration.component';
@@ -170,6 +171,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
   ],
   imports: [
     CommonModule,
+    RubricDriftResourceComponent,
     FormsModule,
     ReactiveFormsModule,
     AngularSplitModule,

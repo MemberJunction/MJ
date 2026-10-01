@@ -7,6 +7,7 @@ export { getAgreement, getConsensus, getDiagnostics, krippendorffAlpha, quadrati
 export { LLMRubricEvaluator, renderRubricEvaluatorPrompt, type LLMDecision, type LLMRubricResult, type RubricPromptMode, type RubricPromptRunner } from './LLMRubricEvaluator.js';
 export { AIRubricEvaluator, AIRubricEvaluator as AgentRubricEvaluator, type AgentCriterionResult, type AgentScaleView, type RubricAgent, type RubricEvaluatorConfig } from './AIRubricEvaluator.js';
 export { critiqueRubric, importMatrix, type ImportedCriterion } from './architect.js';
-export { driftDeltas, keepSample, sampleBucket, selectSampledRuns, type SamplingLink } from './sampling.js';
+export { EvaluateSampledAgentRuns, driftDeltas, keepSample, sampleBucket, selectSampledRuns, type SamplingLink } from './sampling.js';
+export { draftFromImport, publishImportedDraft } from './architect.js';
 export { HumanRubricEvaluator, type DraftEvaluationInput, type EvaluationDraftStore, type RubricTaskStore } from './HumanRubricEvaluator.js';
 export { RubricEvaluator, type EvidenceRef, type RubricCandidate, type RubricEvaluatorOutput, type RubricEvaluatorRequest } from './RubricEvaluator.js';

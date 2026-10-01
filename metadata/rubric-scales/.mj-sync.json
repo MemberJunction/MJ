@@ -1,4 +1,10 @@
 {
   "entity": "MJ: Rubric Scales",
-  "filePattern": "**/.*.json"
+  "filePattern": "**/.*.json",
+  "relatedEntities": {
+    "MJ: Rubric Scale Levels": {
+      "entity": "MJ: Rubric Scale Levels",
+      "foreignKey": "ScaleID"
+    }
+  }
 }

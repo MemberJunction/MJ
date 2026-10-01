@@ -36,13 +36,23 @@ export function critiqueRubric(version: RubricVersionSnapshot): string[] {
         names.set(node.name.trim().toLowerCase(), (names.get(node.name.trim().toLowerCase()) ?? 0) + 1);
         if (node.name.trim().length < 4) notes.push(`${node.key}: the name is too vague.`);
         if (!node.anchors || node.anchors.length === 0) notes.push(`${node.key}: no anchors.`);
-        if (node.isGate && node.notApplicablePolicy !== 'NotAllowed') notes.push(`${node.key}: a gate should not allow not-applicable.`);
+        const policy = node.notApplicablePolicy ?? version.notApplicablePolicy;
+        if (node.isGate && policy !== 'NotAllowed') notes.push(`${node.key}: a gate should not allow not-applicable.`);
         if (max > 0 && node.weight > 0 && max / node.weight >= 10) notes.push(`${node.key}: the weights are unbalanced.`);
     }
     for (const [name, count] of names) {
         if (count > 1) notes.push(`"${name}" is used by more than one criterion.`);
     }
     return notes;
+}
+
+/** The imported tree is a Draft. This path does not publish. */
+export function draftFromImport(name: string, csv: string): { name: string; status: 'Draft'; nodes: ImportedCriterion[] } {
+    return { name, status: 'Draft', nodes: importMatrix(csv) };
+}
+
+export function publishImportedDraft(): { ok: false; message: string } {
+    return { ok: false, message: 'The architect does not publish.' };
 }
 
 function slug(value: string): string {
