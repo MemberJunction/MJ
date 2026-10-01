@@ -196,6 +196,12 @@ describe('MJRecordChangeEntityServer — creating a record change', () => {
         }
     });
 
+    it('refuses an Internal Create record change written with other padding or casing', () => {
+        for (const [source, type] of [['internal', 'Create'], ['Internal ', 'Create'], ['Internal', 'create'], ['Internal', 'Create '], [' INTERNAL', ' CREATE']]) {
+            expect(newChange(uiUser, source, type).CheckPermissions(EntityPermissionType.Create, false)).toBe(false);
+        }
+    });
+
     it('leaves an Internal Snapshot record change, as version labels write, to the role permission', () => {
         expect(newChange(uiUser, 'Internal', 'Snapshot').CheckPermissions(EntityPermissionType.Create, false)).toBe(true);
     });

@@ -236,7 +236,9 @@ function storedComponentView(componentID: string): RunViewParams {
  * The other components a lookup by this name finds. The name is compared trimmed and lower-cased,
  * as `ComponentMetadataEngineServer.FindComponent` compares it, so stored padding or a
  * case-sensitive database cannot hide a match. It is matched in any namespace, because a lookup
- * may be made without one.
+ * may be made without one. The new name is trimmed of all whitespace, as the lookup trims it; SQL
+ * `LTRIM`/`RTRIM` remove only spaces from the stored name, so a stored name padded with a tab or a
+ * line break is not matched.
  */
 function sameNameView(name: unknown, excludeID: string | null): RunViewParams {
     const nameFilter = `LOWER(LTRIM(RTRIM(Name)))=LOWER('${EscapeSQLString(String(name ?? '').trim())}')`;
