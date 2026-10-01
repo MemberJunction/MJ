@@ -101,10 +101,11 @@ describe('MJ-DISC-16 — a first-discovered object is sampled in the same run', 
  * WithTimeout does not CANCEL the attempt it abandons, so retrying stacks a second full page on a
  * source already too slow to finish the first.
  *
- * So it is a DIVERGENCE, not a missing fix, and it stays in the patch. Porting it here breaks
+ * So the inversion itself is a DIVERGENCE, not a missing fix. Porting it here breaks
  * GovernedFetch.test.ts and IntegrationEngine.fetch-timeout.test.ts, which is exactly the signal
- * that told us so. The fix that satisfies both sides — suspend the object, resume from its keyset
- * — is owed and belongs upstream.
+ * that told us so. What satisfies both sides IS in source: a keyset scan whose page times out is
+ * suspended and resumes from its persisted key next run, where the page is retried — pinned in
+ * IntegrationEngine.fetch-timeout.test.ts.
  */
 
 describe('MJ-RUN-4 — an abandoned object reaches the run, not just the event stream', () => {

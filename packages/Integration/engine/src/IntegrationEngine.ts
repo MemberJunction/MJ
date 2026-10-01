@@ -2467,11 +2467,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // a source already too slow to finish the first. A transport error IS retryable — a
                 // reset socket is worth another go.
                 //
-                // The fleet carries a patch (MJ-MEM-2) that inverts this, because the same rule
-                // abandoned sixteen NetSuite objects for a whole run on ACR dev. That divergence
-                // stays IN THE PATCH and must not be ported here — it contradicts this decision and
-                // the two tests that pin it. The fix that satisfies both is to SUSPEND a timed-out
-                // object and resume from its persisted keyset next run, which neither side has yet.
+                // The fleet carried a patch (MJ-MEM-2) that inverted this, because the same rule
+                // abandoned sixteen NetSuite objects for a whole run. That inversion must not be
+                // ported here — it contradicts this decision and the two tests that pin it. What
+                // satisfies both is in ProcessPullSync's fetch-error handler: a KEYSET scan whose page
+                // times out is SUSPENDED and resumes from its persisted key next run, where the page
+                // is retried without stacking on the abandoned attempt.
                 (err) => !(err instanceof OperationTimeoutError) && IsRetryableError(ClassifyError(err).Code),
                 (attempt, err, delayMs) => {
                     // Report a throttle NOW, not after the retries are spent. ReportThrottle
@@ -2672,6 +2673,46 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // Keep the in-memory map coherent with what was just persisted, so a later decision in this
         // same run reads the value that is actually stored.
         entityMap.Configuration = configurationJSON;
+    }
+
+    /**
+     * Reports a keyset scan suspended by a page timeout: a warning that says where the next run
+     * resumes, a Warning-severity entry in the run's queryable error log, and the object on the
+     * run's incomplete list (MJ-RUN-4). Warning severity keeps Status='Success' — nothing failed,
+     * and the position is held exactly — but the run must not read as a clean, complete one.
+     */
+    private reportKeysetSuspension(
+        entityMap: ICompanyIntegrationEntityMap,
+        batchIndex: number,
+        recordsApplied: number,
+        resumeAfterKey: string | undefined,
+        errMsg: string,
+        result: SyncResult,
+        logger?: SyncLogger,
+    ): void {
+        const objectName = entityMap.ExternalObjectName ?? entityMap.ID;
+        const resumesFrom = resumeAfterKey
+            ? `resumes from ordering key '${resumeAfterKey}'`
+            : 'restarts from the beginning of the scan (no page had completed)';
+        const message =
+            `Fetch for '${objectName}' timed out at batch ${batchIndex} and is suspended for the rest of this ` +
+            `run: the page is not re-requested while the abandoned request may still be running. ` +
+            `${recordsApplied} record(s) were applied before it. The scan ${resumesFrom} next run, where ` +
+            `this page is retried. Error: ${errMsg}`;
+        logger?.warning(objectName, 'FETCH_SUSPENDED_TIMEOUT', message, {
+            batchIndex,
+            recordsAppliedBeforeTimeout: recordsApplied,
+            resumeAfterKey: resumeAfterKey ?? null,
+            error: errMsg,
+        });
+        result.Errors.push({
+            ExternalID: '',
+            ChangeType: 'Skip',
+            ErrorMessage: message,
+            ErrorCode: 'CONNECTOR_ERROR',
+            Severity: 'Warning',
+        });
+        (result.IncompleteObjects ??= []).push(objectName);
     }
 
     /**
@@ -3043,6 +3084,18 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     batchIndex: batchCount,
                     error: errMsg,
                 });
+                // A KEYSET scan whose page hit our own timeout is SUSPENDED, not skipped. The timed-out
+                // attempt is still running (WithTimeout cannot cancel it), so any further request now
+                // stacks on a source already too slow to finish the first — and the page-skip below
+                // would be exactly that: advancing an offset skips nothing in a seek, so the "next"
+                // page re-requests the SAME key. A keyset scan knows its place (the last key whose
+                // batch was applied), so it stops here, the post-loop save persists that key, and the
+                // next run seeks from it: the timed-out page is retried THERE, never stacked.
+                if (fetchErr instanceof OperationTimeoutError && isKeysetConnector) {
+                    fetchCompletedCleanly = false;
+                    this.reportKeysetSuspension(entityMap, batchCount, recordsInMap, currentAfterKey, errMsg, result, logger);
+                    break;
+                }
                 // Resilience: a persistent fetch failure on ONE page shouldn't abandon the whole object.
                 // POSITION-based paging (offset/page) can step past the failed page and keep going; we mark
                 // the fetch incomplete (so the watermark is HELD below + the orphan/partition sweep is skipped)
