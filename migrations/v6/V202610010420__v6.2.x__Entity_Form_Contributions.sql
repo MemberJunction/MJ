@@ -176,22 +176,6 @@ EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Free-form auth
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EntityFormContribution', @level2type = N'COLUMN', @level2name = N'Notes';
 GO
 
--- The stock UI role may create and update MJ: Components, so a user can write their own panels
--- through the actions and turn them on, off or to draft in the form's Manage drawer. Delete stays
--- off. MJComponentEntityServer refuses a change to a component that a Role, Global or other user's
--- form or panel uses, unless the rule allows it. Matched on the natural key; a second run changes
--- nothing.
-UPDATE ${flyway:defaultSchema}.EntityPermission
-   SET CanRead        = 1,
-       CanCreate      = 1,
-       CanUpdate      = 1,
-       __mj_UpdatedAt = GETUTCDATE()
- WHERE EntityID = (SELECT ID FROM ${flyway:defaultSchema}.Entity WHERE Name = 'MJ: Components')
-   AND RoleID   = (SELECT ID FROM ${flyway:defaultSchema}.Role WHERE Name = 'UI')
-   AND Type     = 'Allow'
-   AND (CanRead = 0 OR CanCreate = 0 OR CanUpdate = 0);
-GO
-
 
 
 
