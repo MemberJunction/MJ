@@ -11,10 +11,12 @@ import {
     AGENT_TAB_DESIGNER,
     AGENT_TAB_DETAILS,
     AGENT_TAB_INVOCATIONS,
+    AGENT_TAB_RUBRICS,
     BuildAgentFormTabs,
     DesignerTabLabel,
     HasDesignerTab,
     ResolveActiveTab,
+    sortAgentRubrics,
     type AgentFormTabContext,
 } from '../lib/custom/AIAgents/agent-form-tabs';
 
@@ -26,11 +28,11 @@ const keys = (c: AgentFormTabContext, stored: string | null = null) =>
 
 describe('which tabs exist', () => {
     it('a Flow agent gets the designer, Details and Invocations — designer first', () => {
-        expect(keys(flow)).toEqual([AGENT_TAB_DESIGNER, AGENT_TAB_DETAILS, AGENT_TAB_INVOCATIONS]);
+        expect(keys(flow)).toEqual([AGENT_TAB_DESIGNER, AGENT_TAB_DETAILS, AGENT_TAB_INVOCATIONS, AGENT_TAB_RUBRICS]);
     });
 
     it('a Loop agent gets no designer, because its type ships none', () => {
-        expect(keys(loop)).toEqual([AGENT_TAB_DETAILS, AGENT_TAB_INVOCATIONS]);
+        expect(keys(loop)).toEqual([AGENT_TAB_DETAILS, AGENT_TAB_INVOCATIONS, AGENT_TAB_RUBRICS]);
     });
 
     it('an unsaved record gets Details only', () => {
@@ -64,6 +66,17 @@ describe('which tabs exist', () => {
         const swarmTab = BuildAgentFormTabs({ ...flow, AgentTypeName: 'Swarm' }, null).Tabs[0];
         expect(flowTab.icon).toContain('diagram-project');
         expect(swarmTab.icon).not.toContain('diagram-project');
+    });
+});
+
+describe('rubric link order', () => {
+    it('puts the default Evaluation link first', () => {
+        const ordered = sortAgentRubrics([
+            { Purpose: 'SelfCheck', IsDefault: true, Sequence: 0, Rubric: 'Check' },
+            { Purpose: 'Evaluation', IsDefault: false, Sequence: 0, Rubric: 'Other' },
+            { Purpose: 'Evaluation', IsDefault: true, Sequence: 1, Rubric: 'Judge' },
+        ]);
+        expect(ordered.map(row => row.Rubric)).toEqual(['Judge', 'Check', 'Other']);
     });
 });
 

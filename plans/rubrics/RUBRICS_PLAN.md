@@ -854,7 +854,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 - [x] **T10** `TestRubric` deprecation and README corrections (§10.11).
 
 **A — agents**
-- [ ] **A1** Agent rubric links: metadata support, agent form Rubrics tab (§11.1).
+- [x] **A1** Agent rubric links: metadata support, agent form Rubrics tab (§11.1).
 - [x] **A2** Default Evaluation rubric in resolution (§11.2) — the last source in T2.
 - [ ] **A3** Self-check in `BaseAgent` (§11.3) with tests for pass, retry-then-pass,
       exhausted-attempts and Flow-agent paths.
