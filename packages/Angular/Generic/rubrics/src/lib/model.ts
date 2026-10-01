@@ -377,7 +377,7 @@ export interface DiffRow {
     key: string;
     left: string | null;
     right: string | null;
-    marks: string[];
+    marks: VersionChange[];
 }
 
 /** Criterion keys, plus one row for each change that is not a criterion (version, band, or scale). */
@@ -399,7 +399,7 @@ export function VersionRows(base: RubricVersionSnapshot, draft: RubricVersionSna
         key,
         left: base.nodes.find(node => node.key === key)?.name ?? null,
         right: draft.nodes.find(node => node.key === key)?.name ?? null,
-        marks: diff.changes.filter(change => change.subject === key).map(mark),
+        marks: diff.changes.filter(change => change.subject === key),
     }));
     const extras = new Map<string, VersionChange[]>();
     for (const change of diff.changes) {
@@ -413,7 +413,7 @@ export function VersionRows(base: RubricVersionSnapshot, draft: RubricVersionSna
             key: subject,
             left: sideText(base, subject),
             right: sideText(draft, subject),
-            marks: changes.map(mark),
+            marks: changes,
         });
     }
     return rows;
@@ -424,9 +424,7 @@ export function versionRows(base: RubricVersionSnapshot, draft: RubricVersionSna
     return VersionRows(base, draft);
 }
 
-function mark(change: VersionChange): string {
-    return `${change.property} (${change.bump})`;
-}
+
 
 function sideText(version: RubricVersionSnapshot, subject: string): string | null {
     if (subject === 'version') return version.instructions ?? null;

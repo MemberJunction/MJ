@@ -28,7 +28,7 @@ describe('rubric form hosts', () => {
         const base = HostSnapshot(version, [criterion], [scale], [level], []);
         const shifted = HostSnapshot(version, [criterion], [scale], [{ ...level, NormalizedValue: 0.5 }], []);
         const rows = VersionRows(base, shifted);
-        expect(rows.some(row => row.key === 'scale' && row.marks.some(mark => mark.includes('NormalizedValue')))).toBe(true);
+        expect(rows.some(row => row.key === 'scale' && row.marks.some(mark => mark.property === 'NormalizedValue'))).toBe(true);
     });
 
     it('freezes a level only when a published version uses its scale', () => {

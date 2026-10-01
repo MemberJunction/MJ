@@ -1,6 +1,6 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
+import type { RubricVersionSnapshot, VersionChange } from '@memberjunction/rubrics-base';
 import { publishPreview, VersionRows, type DiffRow } from './model.js';
 
 /** Base on the left, draft on the right, one row per criterion key. */
@@ -44,7 +44,7 @@ export class RubricVersionDiffComponent {
         return `Published ${version.majorVersion}.${version.minorVersion ?? 0}.${version.patchVersion ?? 0}`;
     }
 
-    public get CriterionRows(): { key: string; name: string; baseWeight: string; draftWeight: string; baseGate: string; draftGate: string; baseScale: string; draftScale: string; marks: string[] }[] {
+    public get CriterionRows(): { key: string; name: string; baseWeight: string; draftWeight: string; baseGate: string; draftGate: string; baseScale: string; draftScale: string; marks: VersionChange[] }[] {
         const keys = new Set([...(this.Base?.nodes ?? []), ...(this.Draft?.nodes ?? [])].filter(node => node.nodeType === 'Criterion').map(node => node.key));
         return [...keys].map(key => {
             const base = this.Base?.nodes.find(node => node.key === key);
@@ -63,7 +63,7 @@ export class RubricVersionDiffComponent {
         });
     }
 
-    public Sentence(mark: string): string {
+    public Sentence(mark: VersionChange): string {
         const words: Record<string, string> = {
             Weight: 'The weight changed',
             IsGate: 'The gate changed',
@@ -72,8 +72,7 @@ export class RubricVersionDiffComponent {
             Descriptor: 'An anchor changed',
             Name: 'The name changed',
         };
-        const bare = mark.replace(/\s*\([^)]*\)/, '');
-        return words[bare] ?? bare;
+        return words[mark.property] ?? mark.property;
     }
 
     public get RemovedBands(): { label: string; min: number; max: number }[] {

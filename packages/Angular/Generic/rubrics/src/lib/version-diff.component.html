@@ -23,7 +23,7 @@
           <p>Weight {{ row.draftWeight }}</p>
           <p>Quality gate {{ row.draftGate }}</p>
           <p>Scale {{ row.draftScale }}</p>
-          @for (mark of row.marks; track mark) {
+          @for (mark of row.marks; track mark.property + mark.subject + mark.bump) {
             <p class="mark">{{ Sentence(mark) }}</p>
           }
         </div>

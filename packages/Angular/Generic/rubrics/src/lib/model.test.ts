@@ -166,9 +166,9 @@ describe('publish, diff, and comparison', () => {
         expect(rows.find(row => row.key === 'sourcing')?.left).toBeNull();
         expect(rows.find(row => row.key === 'clarity')?.right).toBe('clarity');
         const wording = VersionRows(base, draft).find(row => row.key === 'version');
-        expect(wording?.marks.join(' ')).toMatch(/Instructions/);
+        expect(wording?.marks.some(mark => mark.property === 'Instructions')).toBe(true);
         const widened = VersionRows(base, { ...draft, bands: [{ id: 'band', label: 'High', minScore: 0.5, maxScore: 1, displayTone: 'Success', sequence: 0 }] });
-        expect(widened.find(row => row.key === 'High')?.marks.join(' ')).toMatch(/added|MinScore|range/i);
+        expect(widened.find(row => row.key === 'High')?.marks.some(mark => mark.property === 'band added')).toBe(true);
     });
 
     it('shows Initial for a first publish', () => {
