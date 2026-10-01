@@ -14,6 +14,7 @@ import {
     FormScopeReplayRefusal,
     type GuardedFormScopeRow,
 } from './FormScopeGuard';
+import { FormRowComponentGuardRefusal, type GuardedFormComponentRow } from './FormComponentGuard';
 
 /**
  * Server-side `MJ: Entity Form Overrides` entity, enforcing who may write a full custom form at which scope.
@@ -27,6 +28,11 @@ import {
  * `Validate()` runs inside every normal `Save()`; `Save()` is overridden because a `ReplayOnly`
  * save skips `Validate()` while still writing; and `Delete()` never calls `Validate()` at all.
  * Anything less leaves a path around the rule.
+ *
+ * `Save()` also checks the component the row points at, on create or when `ComponentID` changes
+ * (`FormRowComponentGuardRefusal`): a component another user's personal row uses is refused for
+ * everyone, and one a `Role` or `Global` row uses needs the grant. That check needs a query, so it
+ * runs in `Save()` rather than `Validate()`.
  */
 @RegisterClass(BaseEntity, 'MJ: Entity Form Overrides')
 export class MJEntityFormOverrideEntityServer extends MJEntityFormOverrideEntity {
@@ -37,7 +43,8 @@ export class MJEntityFormOverrideEntityServer extends MJEntityFormOverrideEntity
     }
 
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
-        const refusal = FormScopeReplayRefusal(this.scopeRow, this.scopeProvider, options);
+        const refusal = FormScopeReplayRefusal(this.scopeRow, this.scopeProvider, options)
+            ?? await FormRowComponentGuardRefusal(this.componentRow);
         if (refusal) {
             this.RegisterResultHistoryEntry(FormScopeRefusalResult(this.IsSaved ? 'update' : 'create', refusal));
             return false;
@@ -65,6 +72,19 @@ export class MJEntityFormOverrideEntityServer extends MJEntityFormOverrideEntity
             Scope: this.Scope,
             UserID: this.UserID,
             GetFieldByName: (name: string) => this.GetFieldByName(name),
+        };
+    }
+
+    /** This row as the component check reads it. */
+    private get componentRow(): GuardedFormComponentRow {
+        return {
+            IsSaved: this.IsSaved,
+            ActiveUser: this.ActiveUser,
+            ID: this.ID,
+            ComponentID: this.ComponentID,
+            GetFieldByName: (name: string) => this.GetFieldByName(name),
+            RunViewProvider: this.RunViewProviderToUse,
+            MetadataProvider: this.scopeProvider,
         };
     }
 

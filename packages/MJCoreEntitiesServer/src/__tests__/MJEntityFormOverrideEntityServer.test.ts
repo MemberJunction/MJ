@@ -9,6 +9,10 @@
  * checked against the row as it was loaded. The rule itself is tested as a matrix in
  * `@memberjunction/core-entities`.
  *
+ * `Save()` also checks the component a row points at when the row is created or its
+ * `ComponentID` changes: the other rows that use that component are read (here from a stand-in
+ * `RunView`) and checked with `FormRowComponentRefusal`.
+ *
  * The generated bases are mocked to a settable stub with per-field OldValue state, matching the
  * approach in MJUserRoleEntityServer.test.ts.
  */
@@ -25,6 +29,39 @@ interface StubCaller {
     Type: string;
 }
 
+/** A form or panel row that uses a component, as the stand-in `RunView` serves it. */
+interface StoredUse {
+    ID: string;
+    ComponentID: string;
+    Scope: string;
+    UserID: string | null;
+}
+
+const { views } = vi.hoisted(() => ({
+    views: { uses: [] as StoredUse[], failing: false, calls: 0 },
+}));
+
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
+    class StubRunView {
+        public async RunViews(
+            params: Array<{ EntityName: string; ExtraFilter: string }>,
+        ): Promise<Array<{ Success: boolean; Results: StoredUse[]; ErrorMessage?: string }>> {
+            views.calls++;
+            return params.map((p) => {
+                if (views.failing) return { Success: false, Results: [], ErrorMessage: 'cannot read' };
+                const componentID = /ComponentID='([^']*)'/.exec(p.ExtraFilter)?.[1];
+                // Both entities share the stand-in rows; the contributions view serves them all.
+                const rows = p.EntityName === 'MJ: Entity Form Contributions'
+                    ? views.uses.filter((u) => u.ComponentID === componentID)
+                    : [];
+                return { Success: true, Results: rows };
+            });
+        }
+    }
+    return { ...actual, RunView: StubRunView, LogError: vi.fn() };
+});
+
 // `vi.mock` factories are hoisted above every top-level declaration, so the stub class is
 // declared inside the factory. The real rule and grant check stay in place.
 vi.mock('@memberjunction/core-entities', async (importOriginal) => {
@@ -32,6 +69,8 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
 
     /** Minimal stand-in for the generated form override / contribution entity. */
     class StubScopedFormEntity {
+        public ID = 'ROW-SELF';
+        public ComponentID = 'COMP-1';
         public Scope = 'User';
         public UserID: string | null = null;
         public IsSaved = true;
@@ -54,6 +93,10 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         /** BaseEntity exposes this as a protected getter; the guard reads it. */
         protected get ActiveUser(): StubCaller | null {
             return this.ContextCurrentUser;
+        }
+
+        public get RunViewProviderToUse(): unknown {
+            return this.ProviderToUse;
         }
 
         public Validate(): { Success: boolean; Errors: unknown[] } {
@@ -93,6 +136,7 @@ const OWNER: StubCaller = { ID: '11111111-1111-1111-1111-111111111111', Type: 'O
 
 /** The stub's extra members, which are not on the real entity's type. */
 interface StubHooks {
+    ComponentID: string;
     Scope: string;
     UserID: string | null;
     IsSaved: boolean;
@@ -111,7 +155,12 @@ describe.each<[string, GuardedClass]>([
     ['MJEntityFormOverrideEntityServer', MJEntityFormOverrideEntityServer as unknown as GuardedClass],
     ['MJEntityFormContributionEntityServer', MJEntityFormContributionEntityServer as unknown as GuardedClass],
 ])('%s — form scope guard', (_name, Guarded) => {
-    beforeEach(() => vi.clearAllMocks());
+    beforeEach(() => {
+        vi.clearAllMocks();
+        views.uses = [];
+        views.failing = false;
+        views.calls = 0;
+    });
 
     function make(init: { IsSaved: boolean; Scope: string; UserID: string | null; Caller: StubCaller | null }): StubHooks {
         const e = new Guarded() as unknown as StubHooks;
@@ -192,6 +241,69 @@ describe.each<[string, GuardedClass]>([
             const e = make({ IsSaved: true, Scope: 'Role', UserID: null, Caller: OWNER });
             expect(await e.Save({ ReplayOnly: true })).toBe(true);
             expect(e.SuperSaveCalled).toBe(true);
+        });
+    });
+
+    describe('Save() — the component the row points at', () => {
+        /** A row that uses COMP-1. */
+        function used(scope: string, userID: string | null): void {
+            views.uses.push({ ID: `USE-${views.uses.length + 1}`, ComponentID: 'COMP-1', Scope: scope, UserID: userID });
+        }
+
+        it("refuses a new row aimed at a component another user's personal row uses, a holder included", async () => {
+            used('User', BOB.ID);
+            for (const caller of [ALICE, OWNER]) {
+                const e = make({ IsSaved: false, Scope: 'User', UserID: caller.ID, Caller: caller });
+                expect(await e.Save()).toBe(false);
+                expect(e.SuperSaveCalled).toBe(false);
+            }
+        });
+
+        it('refuses a new personal row aimed at a component a shared row uses, without the grant', async () => {
+            used('Global', null);
+            const e = make({ IsSaved: false, Scope: 'User', UserID: ALICE.ID, Caller: ALICE });
+            expect(await e.Save()).toBe(false);
+            expect(e.SuperSaveCalled).toBe(false);
+        });
+
+        it('allows a holder to aim a row at a component a shared row uses', async () => {
+            used('Role', null);
+            expect(await make({ IsSaved: false, Scope: 'Global', UserID: null, Caller: OWNER }).Save()).toBe(true);
+        });
+
+        it('lets the caller aim a new row at a component only their own rows use, or no row uses', async () => {
+            used('User', ALICE.ID);
+            expect(await make({ IsSaved: false, Scope: 'User', UserID: ALICE.ID, Caller: ALICE }).Save()).toBe(true);
+            views.uses = [];
+            expect(await make({ IsSaved: false, Scope: 'User', UserID: ALICE.ID, Caller: ALICE }).Save()).toBe(true);
+        });
+
+        it('does not read anything when an update leaves ComponentID alone', async () => {
+            used('User', BOB.ID);
+            const e = make({ IsSaved: true, Scope: 'User', UserID: ALICE.ID, Caller: ALICE });
+            expect(await e.Save()).toBe(true);
+            expect(views.calls).toBe(0);
+        });
+
+        it('checks an update that changes ComponentID, compared with the value as loaded', async () => {
+            used('User', BOB.ID);
+            const e = make({ IsSaved: true, Scope: 'User', UserID: ALICE.ID, Caller: ALICE });
+            e.SetOldValue('ComponentID', 'COMP-OLD');
+            expect(await e.Save()).toBe(false);
+            expect(views.calls).toBe(1);
+        });
+
+        it('refuses the save when the rows cannot be read', async () => {
+            views.failing = true;
+            const e = make({ IsSaved: false, Scope: 'User', UserID: ALICE.ID, Caller: ALICE });
+            expect(await e.Save()).toBe(false);
+            expect(e.SuperSaveCalled).toBe(false);
+        });
+
+        it('does not check a save with no caller', async () => {
+            used('User', BOB.ID);
+            expect(await make({ IsSaved: false, Scope: 'User', UserID: BOB.ID, Caller: null }).Save()).toBe(true);
+            expect(views.calls).toBe(0);
         });
     });
 
