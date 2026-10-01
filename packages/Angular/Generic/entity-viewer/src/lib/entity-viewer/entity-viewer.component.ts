@@ -1211,6 +1211,9 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   private _loadSequence = 0;
   // Flag: a reload was requested while a load was already in progress
   private _pendingReload = false;
+  // Whether that pending reload keeps the user's page: only when every request behind it was
+  // RefreshInPlace (a change made elsewhere); any other reload starts again at page 1.
+  private _pendingReloadKeepsPage = false;
 
   /**
    * Fetches the FULL result set for the current entity/view (up to {@link EXPORT_MAX_RECORDS}),
@@ -1294,6 +1297,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     // fire while isLoading is still true, causing an infinite loop.
     if (this.IsLoading) {
       this._pendingReload = true;
+      this._pendingReloadKeepsPage = false;
       return;
     }
 
@@ -1418,8 +1422,10 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       // If a reload was requested while we were loading, trigger it now.
       // isLoading is false at this point so loadData() won't re-enter the pending path.
       if (this._pendingReload) {
+        const keepPage = this._pendingReloadKeepsPage;
         this._pendingReload = false;
-        this.resetPaginationState();
+        this._pendingReloadKeepsPage = false;
+        if (!keepPage) this.resetPaginationState();
         this.LoadData();
       }
     }
@@ -1443,6 +1449,22 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       this.resetPaginationState(false);
       this.LoadData();
     }
+  }
+
+  /**
+   * Re-loads the page the user is on, with the same sort and filters, keeping the rows visible
+   * meanwhile. For refreshes the user didn't ask for (another tab or the server changed rows):
+   * unlike {@link Refresh}, it doesn't send them back to page 1.
+   */
+  public RefreshInPlace(): void {
+    if (this.Records) return;
+    if (this.IsLoading) {
+      // Reload when the current load finishes, still on this page (unless another reload also waits).
+      if (!this._pendingReload) this._pendingReloadKeepsPage = true;
+      this._pendingReload = true;
+      return;
+    }
+    this.LoadData();
   }
 
   // ========================================
