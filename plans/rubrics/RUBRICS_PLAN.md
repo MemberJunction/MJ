@@ -850,7 +850,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 - [x] **T6** Human per-criterion review in the feedback dialog (§10.6).
 - [x] **T7** Testing UI: run detail, Review disagreement queue, analytics, rubric pickers (§10.7).
 - [x] **T8** Judge calibration test type + driver (§10.8).
-- [ ] **T9** Repeats/flaky per-criterion spread (§10.9); CLI (§10.10).
+- [~] **T9** Per-criterion spread on `--flaky-check` (§10.9). CLI (§10.10) is still open.
 - [ ] **T10** `TestRubric` deprecation and README corrections (§10.11).
 
 **A — agents**

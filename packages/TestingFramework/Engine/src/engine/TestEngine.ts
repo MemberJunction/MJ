@@ -1106,6 +1106,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
 
         this.log(`Running test ${repeatCount} times for statistical analysis`, options.verbose);
 
+        // Each iteration creates its own test run, so a rubric oracle records a separate evaluation.
         for (let iteration = 1; iteration <= repeatCount; iteration++) {
             this.log(`Running iteration ${iteration} of ${repeatCount}`, options.verbose);
 
