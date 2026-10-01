@@ -3,6 +3,7 @@
 "@memberjunction/global": patch
 "@memberjunction/rubrics-base": minor
 "@memberjunction/rubrics": minor
+"@memberjunction/ng-rubrics": minor
 "@memberjunction/core-entities-server": minor
 ---
 

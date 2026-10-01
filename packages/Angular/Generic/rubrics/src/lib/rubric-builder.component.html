@@ -1,0 +1,25 @@
+<section class="rubric-panel" aria-label="Rubric author">
+  <ol class="rubric-list">
+    @for (node of Nodes; track node.id) {
+      <li>
+        <span>{{ node.name }}</span>
+        <span>{{ Share(node.id) }}% of its group</span>
+        <label>
+          Weight
+          <input type="number" min="0" step="0.1" [value]="node.weight" (change)="OnWeight(node, $event)" />
+        </label>
+      </li>
+    }
+  </ol>
+  <button type="button" (click)="OnAdd()">Add criterion</button>
+  @if (Problems.length) {
+    <ul>
+      @for (problem of Problems; track problem) {
+        <li>{{ problem }}</li>
+      }
+    </ul>
+  }
+  @if (Preview) {
+    <p>Preview {{ Preview.normalizedScore }} {{ Preview.outcome }}</p>
+  }
+</section>

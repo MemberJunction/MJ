@@ -1,0 +1,33 @@
+<form class="rubric-panel" aria-label="Rubric answers" (submit)="$event.preventDefault(); OnSubmit()">
+  @for (node of Leaves; track node.id) {
+    <fieldset (keydown)="OnKey(node, $event)">
+      <legend>{{ node.name }}</legend>
+      @for (level of Scale(node)?.levels ?? []; track level.id; let index = $index) {
+        <button type="button" [attr.aria-pressed]="Selected(node, level.id)" (click)="OnLevel(node, level.id)">
+          {{ index + 1 }}. {{ level.label }}
+        </button>
+      }
+      <button type="button" [attr.aria-pressed]="IsNotApplicable(node)" (click)="OnNotApplicable(node)">N/A</button>
+      @if (node.rationaleRequired) {
+        <label>
+          Rationale
+          <textarea (change)="OnText(node, 'rationale', $event)"></textarea>
+        </label>
+      }
+      @if (node.evidenceRequired) {
+        <label>
+          Evidence
+          <textarea (change)="OnText(node, 'evidence', $event)"></textarea>
+        </label>
+      }
+    </fieldset>
+  }
+  @if (Problems.length) {
+    <ul>
+      @for (problem of Problems; track problem) {
+        <li>{{ problem }}</li>
+      }
+    </ul>
+  }
+  <button type="submit" [disabled]="!CanSubmit">Submit</button>
+</form>

@@ -113,6 +113,7 @@ If you're about to start work in one of the areas below, **read the guide first*
   - How the auto-generated lazy config is produced by `mj codegen manifest --lazy-config`
   - Troubleshooting lazy loading issues
 - **[Navigation and Routing Guide](NAVIGATION_AND_ROUTING_GUIDE.md)** — How the shell owns URL state, back/forward navigation, adding URL-synced sub-navigation to a component.
+- **[Rubrics Guide](RUBRICS_GUIDE.md)** — The core rubric primitive: weighted criteria, published versions, evaluations, and consensus. Covers scoring, version bumps, the author / answer form / result widgets, and six worked examples (agent evaluation, peer review, awards, procurement, accreditation, hiring).
 - **[UI Layering Guide](UI_LAYERING_GUIDE.md)** — 🚨 **The standard for every MJ repo and every app built on MJ.** The four-layer UX architecture that makes components reusable instead of copy-pasted: **L0** pure-TS domain runtime → **L1** presentational widgets (props in, events out, no data access) → **L2** composite widgets (may read data, but only through `ProviderToUse`; never navigate) → **L3** Explorer surfaces (entity forms + resource/dashboard components, the only layer allowed to touch `NavigationService`). Covers:
   - The two hard boundaries — no Router/Explorer imports below L3, no domain logic at L3 — and the "which layer is this?" decision table
   - The `Before*` / `After*` **cancelable event contract** (`Cancel` + `CancelReason`, `After*` suppressed on the canceled path), naming conventions, and why `Before*` handlers must be synchronous

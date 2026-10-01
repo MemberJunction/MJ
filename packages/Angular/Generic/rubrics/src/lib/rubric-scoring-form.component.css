@@ -1,0 +1,19 @@
+.rubric-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-4, 1rem);
+  color: var(--mj-text-primary);
+}
+
+fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mj-space-2, 0.5rem);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md, 0.5rem);
+  padding: var(--mj-space-3, 0.75rem);
+}
+
+button[aria-pressed='true'] {
+  outline: 2px solid var(--mj-text-primary);
+}

@@ -1,0 +1,18 @@
+<section class="rubric-panel" aria-label="Rubric result">
+  @if (Result) {
+    <p>{{ Shown }} <span>{{ Result.outcome }}</span></p>
+    @if (BandLabel) {
+      <p>Band {{ BandLabel }}</p>
+    }
+    <p>Completeness {{ Result.completeness }}</p>
+    <ul class="rubric-list">
+      @for (node of Result.nodes; track node.id) {
+        <li>
+          <span>{{ node.key }}</span>
+          <span class="rubric-bar" [style.width.%]="Bar(node.normalizedScore)"></span>
+          <span>{{ Bar(node.normalizedScore) }}%</span>
+        </li>
+      }
+    </ul>
+  }
+</section>

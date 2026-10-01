@@ -1,0 +1,26 @@
+.rubric-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-3, 0.75rem);
+  padding: var(--mj-space-4, 1rem);
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md, 0.5rem);
+}
+
+.rubric-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-2, 0.5rem);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rubric-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mj-space-3, 0.75rem);
+  align-items: center;
+}

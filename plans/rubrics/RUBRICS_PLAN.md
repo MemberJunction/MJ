@@ -861,9 +861,11 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 - [ ] **A6** Rubric Architect agent: draft, import, critique, improve-from-data (§11.5).
 
 **U — UI and docs**
-- [ ] **U1** `@memberjunction/ng-rubrics` widgets (§12).
+- [~] **U1** `@memberjunction/ng-rubrics` widgets (§12). The author, the answer form, and the
+      read-only result are in. The publish dialog, version diff, and comparison matrix are not.
 - [ ] **U2** Explorer forms and nav (§12).
-- [ ] **U3** `guides/RUBRICS_GUIDE.md` with the six worked examples; READMEs (§13).
+- [~] **U3** `guides/RUBRICS_GUIDE.md` with the six worked examples; the ng-rubrics README.
+      The TestingFramework and Engine README updates are not in this pass.
 - [ ] **U4** Example rubrics under `metadata/rubrics/` matching the guide's examples.
 
 **Definition of done** (repo `CLAUDE.md`): every touched package builds and its unit tests pass;
