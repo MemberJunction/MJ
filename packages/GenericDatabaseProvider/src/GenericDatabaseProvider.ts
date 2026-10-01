@@ -18,6 +18,7 @@
 
 import {
     BaseEntity,
+    SerializeCloneChangeContext,
     DatabaseProviderBase,
     EntityInfo,
     EntityFieldInfo,
@@ -722,6 +723,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 entity.PrimaryKey.Values(),
                 user?.ID ?? '',
                 options.ISAActiveChildEntityName,
+                undefined,
+                entity.CloneContext ? 'Clone' : 'Internal',
+                entity.CloneContext ? SerializeCloneChangeContext(entity.CloneContext) : null,
             )
             : null;
 
@@ -1379,6 +1383,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 user,
                 entity.RestoreContext,
                 "'",
+                entity.CloneContext,
             );
             if (payload) {
                 saveSQL = this.WrapSaveCallWithRecordChange(saveSQL, binding, payload, entity);
@@ -5151,9 +5156,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * work, so it must never land on a transaction's connection beside its COMMIT (#4514). Every
      * other dataset keeps joining the ambient transaction: a caller that writes and then loads a
      * dataset inside one transaction expects to see its own rows.
+     *
+     * {@link ProviderBase.RefreshWithinTransaction} is the exception: the caller owns the
+     * transaction and is waiting for the reload, so the metadata reads join that transaction and
+     * see the caller's uncommitted rows (MJ#4836).
      */
     protected datasetReadsOnPool(datasetName: string): boolean {
-        return datasetName === GenericDatabaseProvider._mjMetadataDatasetName;
+        return datasetName === GenericDatabaseProvider._mjMetadataDatasetName
+            && !this.MetadataReadsJoinTransaction;
     }
 
     /**
@@ -5477,8 +5487,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             `INNER JOIN ${provider.QuoteSchemaAndView(schema, 'vwEntities')} e ON di.${provider.QuoteIdentifier('EntityID')} = e.${provider.QuoteIdentifier('ID')} ` +
             `WHERE d.${provider.QuoteIdentifier('Name')} = ${provider.BuildParameterPlaceholder(0)}`;
 
+        const readOptions: ExecuteSQLOptions = { ignoreAmbientTransaction: this.datasetReadsOnPool(datasetName) };
         const items = await provider.ExecuteSQL<Record<string, unknown>>(
-            sSQL, [datasetName], { ignoreAmbientTransaction: this.datasetReadsOnPool(datasetName) }, contextUser,
+            sSQL, [datasetName], readOptions, contextUser,
         );
 
         if (!items || items.length === 0) {
@@ -5546,7 +5557,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
         let batchResults: Record<string, unknown>[][] = [];
         try {
-            batchResults = await provider.ExecuteSQLBatch(queries, undefined, undefined, contextUser);
+            batchResults = await provider.ExecuteSQLBatch(
+                queries, undefined, { ignoreAmbientTransaction: readOptions.ignoreAmbientTransaction }, contextUser,
+            );
         } catch (err) {
             LogError(`GetDatasetStatusByName: Batch execution failed: ${err instanceof Error ? err.message : String(err)}`);
         }

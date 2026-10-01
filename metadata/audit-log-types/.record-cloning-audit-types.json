@@ -1,0 +1,13 @@
+[
+  {
+    "fields": {
+      "Name": "Record Cloned",
+      "Description": "A record clone was executed or refused: one row per Execute (Success or Failed), written when the entity's clone authorization has UseAuditLog=1, as every shipped one does.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "677DBD60-153D-492D-AAD9-A8C70B91A22B"
+    }
+  }
+]

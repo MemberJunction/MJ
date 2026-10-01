@@ -96,10 +96,39 @@ export class ActionableCommandsComponent {
   }
 
   /**
+   * Recipients to show BESIDE a compose:email button, or null for any other command.
+   *
+   * SECURITY, not decoration. The button renders only the agent-authored `label`, so without this
+   * the user cannot see who a draft is addressed to until their mail client is already open and
+   * populated. An agent influenced by injected content in retrieved material could pair a benign
+   * label ("Open draft in Mail") with an attacker's address and the conversation's context as the
+   * body; showing the address is what lets the user notice before they send from their real
+   * mailbox. Empty recipients read as "no recipient" rather than rendering nothing, so an address
+   * the agent never supplied cannot be mistaken for one it did.
+   */
+  public ComposeEmailRecipients(command: ActionableCommand): string | null {
+    if (command.type !== 'compose:email') {
+      return null;
+    }
+    const to = (command.to ?? []).map((r) => r.trim()).filter((r) => r.length > 0);
+    const cc = (command.cc ?? []).map((r) => r.trim()).filter((r) => r.length > 0);
+    const bcc = (command.bcc ?? []).map((r) => r.trim()).filter((r) => r.length > 0);
+    if (to.length === 0 && cc.length === 0 && bcc.length === 0) {
+      return 'no recipient — you\'ll add one';
+    }
+    const parts: string[] = [];
+    if (to.length > 0) parts.push(`To ${to.join(', ')}`);
+    if (cc.length > 0) parts.push(`Cc ${cc.join(', ')}`);
+    if (bcc.length > 0) parts.push(`Bcc ${bcc.join(', ')}`);
+    return parts.join(' · ');
+  }
+
+  /**
    * Get button variant based on command type
    */
   public GetButtonVariant(command: ActionableCommand): 'primary' | 'secondary' | 'outline' | 'flat' {
-    if (command.type === 'open:resource') {
+    // A drafted email leads the turn the same way an opened resource does.
+    if (command.type === 'open:resource' || command.type === 'compose:email') {
       return 'primary';
     } else if (command.type === 'open:url') {
       return 'outline';

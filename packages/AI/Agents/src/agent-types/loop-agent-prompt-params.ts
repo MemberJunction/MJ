@@ -97,6 +97,21 @@ export interface ResponseTypeInclusionRules {
     pipeline?: boolean;
 
     /**
+     * Include decisions field in the response interface.
+     * Auto-aligns with includeDecisionsDocs unless explicitly set.
+     * @default true
+     */
+    decisions?: boolean;
+
+    /**
+     * Include finishIf field in the nextStep response interface.
+     * Auto-aligns with includeFinishIfDocs unless explicitly set, and so is off whenever
+     * `finishIfMode` is `'off'`, the default.
+     * @default true
+     */
+    finishIf?: boolean;
+
+    /**
      * Include `'Tasks'` in the nextStep.type union and the `tasks` property.
      * Auto-aligns with `enableTaskGraphs` unless explicitly set.
      *
@@ -120,6 +135,8 @@ export const DEFAULT_RESPONSE_TYPE_INCLUSION_RULES: Required<ResponseTypeInclusi
     scratchpad: true,
     artifactToolCalls: true,
     pipeline: true,
+    decisions: true,
+    finishIf: true,
     // The one section that defaults OFF — see `enableTaskGraphs` (D3).
     tasks: false
 };
@@ -179,6 +196,78 @@ export const DEFAULT_RESPONSE_TYPE_INCLUSION_RULES: Required<ResponseTypeInclusi
  * };
  * ```
  */
+/**
+ * Where the agent's specialization (its child prompt) is placed.
+ *
+ * Background: the loop agent's per-iteration ("volatile") state — current date/time, Scratchpad
+ * State, and the Payload — is never rendered in the system prompt. It is delivered as a single
+ * framework-authored `user`-role message appended as the **final** message of the request, wrapped
+ * in `<mj-runtime-state>` tags, with a static pointer in the system prompt telling the model where
+ * to find it. This is not configurable: provider prompt caching is a prefix match over
+ * `tools → system → messages`, and anything volatile in `system` renders ahead of the entire
+ * message history, so the whole (growing) history would miss the cache on every iteration.
+ * Measured on Sage, 2026-09-14: cache reads plateaued at ~21.5K tokens while uncached input grew
+ * to 73K per call. Moving the volatile tail after the history lets the history cache incrementally.
+ *
+ * - `'auto'` (default): relocate the specialization into the trailing message ONLY if its template
+ *   references a volatile placeholder (`_CURRENT_DATE*`, `_CURRENT_TIME*`, `_CURRENT_PAYLOAD`,
+ *   `_SCRATCHPAD_*`). A static child prompt stays in the cached system prompt.
+ * - `'systemPrompt'`: never relocate.
+ * - `'trailingMessage'`: always relocate.
+ *
+ * Why: the OS prompt cannot control what an agent designer puts in a child prompt. Six active
+ * Loop agents embed a volatile placeholder in theirs, which mutates the system prompt every
+ * iteration from a position ahead of the catalogs and the whole history — moving the runtime-state
+ * tail does nothing for them. Measured (Gemini 2.5 Flash, volatile specialization): keeping it in
+ * the system prompt caches 19%; relocating it caches 70%. For a STATIC child prompt, relocation
+ * costs ≈3,100 uncached tokens per call for nothing, hence `'auto'`. Decided once per run so the
+ * layout never flips mid-run. Resolved through {@link ResolveSpecializationPlacement}.
+ */
+export type SpecializationPlacement = 'auto' | 'systemPrompt' | 'trailingMessage';
+
+/**
+ * How the trailing runtime-state message is carried across loop iterations.
+ *
+ * Background: the fragment described under {@link SpecializationPlacement} is rebuilt every
+ * iteration. Providers with block-level or sliding prefix caches (Anthropic, Gemini, Cerebras) are
+ * happiest when the previous iteration's fragment is REPLACED, so the history stays compact.
+ * OpenAI's automatic cache is different: it reuses a prior request only when that request's
+ * entire prompt is a byte prefix of the new one, so replacing the fragment breaks the prefix
+ * right after the system prompt and caps the cached share at the system prompt (~22% measured).
+ * Retaining prior fragments and APPENDING the new one makes each request an exact prefix
+ * extension of the last (~93% measured).
+ *
+ * - `'auto'` (default): append-only when the model catalog says the serving path's cache is a
+ *   byte-prefix cache — the `PrefixPromptCache` flag in `ModelConfiguration.LLM`, resolved
+ *   through the catalog cascade (Model Types < Models < Vendors' `Configuration.ModelDefaults` <
+ *   Model Vendors: the vendor's defaults beat the model's own bag and the inference provider's
+ *   model-vendor row is the tie-breaker) is `true` — otherwise replace-in-place. Nothing about a
+ *   provider is hard-coded: a new host, or one model on a host that caches differently from the
+ *   rest, is a metadata change. The answer is taken from a runtime model override, else the FIRST
+ *   iteration's model selection, and then frozen for the rest of the run so a failover cannot flip
+ *   the layout mid-run. On turn 1, before any selection is known, the layout is replace-in-place;
+ *   if turn 2 resolves to append-only, turn 1's fragment is restored at the turn-1 boundary, so
+ *   deferring loses nothing. The prompt's bound models are deliberately not consulted: prompts
+ *   commonly bind several vendors for failover.
+ * - `'appendOnly'`: always retain prior fragments. Use this for a serving path whose catalog rows
+ *   carry no flag yet — an OpenAI-compatible gateway, say — until its metadata is filled in.
+ * - `'replace'`: always replace. Use this to keep context compact on a run whose catalog rows say
+ *   `true` but where context growth matters more than cache hits.
+ *
+ * Resolved by `BaseAgent.shouldUseAppendOnlyTrailingState` via `BaseAgent.resolvePrefixPromptCache`.
+ */
+export type TrailingStateMode = 'auto' | 'appendOnly' | 'replace';
+
+/**
+ * How a loop agent treats `finishIf` gates.
+ * - `'off'`: the model is not taught `finishIf`, and a gate it writes anyway is ignored.
+ * - `'shadow'`: the model is taught `finishIf`, and every gate is evaluated and recorded as a
+ *   `Finish check` step, but it never ends the run: the model always gets its next turn. This
+ *   measures an agent's gates on its real traffic at the cost of one decision call per gate.
+ * - `'on'`: a passing gate ends the run with the model's pre-written message.
+ */
+export type FinishIfMode = 'off' | 'shadow' | 'on';
+
 export interface LoopAgentTypePromptParams {
     // === Section Inclusion Flags ===
 
@@ -275,6 +364,22 @@ export interface LoopAgentTypePromptParams {
     includeScratchpadDocs?: boolean;
 
     /**
+     * Where the child prompt goes: `'auto'` relocates it into the trailing runtime-state message only
+     * when its template is volatile; `'systemPrompt'` never; `'trailingMessage'` always.
+     * See {@link SpecializationPlacement}.
+     * @default 'auto'
+     */
+    specializationPlacement?: SpecializationPlacement;
+
+    /**
+     * How the trailing runtime-state message is carried across iterations: `'auto'` appends for
+     * OpenAI and replaces otherwise; `'appendOnly'` and `'replace'` force one behaviour.
+     * See {@link TrailingStateMode}.
+     * @default 'auto'
+     */
+    trailingStateMode?: TrailingStateMode;
+
+    /**
      * Maximum number of tasks allowed in the scratchpad task list.
      * When exceeded, completed tasks are auto-pruned oldest first.
      * @default 50
@@ -308,6 +413,76 @@ export interface LoopAgentTypePromptParams {
     includePipelineDocs?: boolean;
 
     /**
+     * Include decision-making documentation in the prompt.
+     * Disable for agents that should never request inline decisions.
+     * @default true
+     */
+    includeDecisionsDocs?: boolean;
+
+    /**
+     * Maximum number of items to process when `forEachItemIn` is used.
+     * Items beyond this limit are truncated.
+     * @default 100
+     */
+    decisionsMaxItems?: number;
+
+    /**
+     * Maximum number of decision requests answered from one agent turn. Requests beyond this
+     * limit are not run; each gets a failed result saying why.
+     * @default MAX_DECISION_REQUESTS_PER_TURN (8)
+     */
+    decisionsMaxRequests?: number;
+
+    /**
+     * Name of the decision prompt used for evaluating decisions.
+     * @default 'Default Decision'
+     */
+    decisionPromptName?: string;
+
+    /**
+     * Whether this agent writes finishIf gates, and whether they act. See {@link FinishIfMode}.
+     *
+     * **Defaults to `'off'`: gates are opt-in per agent.** A replay of recorded action rounds (plan
+     * Task 4.6) found that a gate at the 0.9 threshold would have ended 22% of the rounds where the
+     * agent went on to act, and neither a stricter threshold nor calibration fixed that. Use
+     * `'shadow'` to measure an agent's own gates on real traffic before turning them `'on'`.
+     * @default 'off'
+     */
+    finishIfMode?: FinishIfMode;
+
+    /**
+     * Include conditional completion (finishIf) documentation in the prompt. Takes effect only when
+     * `finishIfMode` is `'shadow'` or `'on'`; with `'off'` the documentation is always omitted.
+     * Set false to keep the documentation out even then.
+     * @default true
+     */
+    includeFinishIfDocs?: boolean;
+
+    /**
+     * Probability threshold (0.0 to 1.0) required for each finishIf question to pass.
+     * If all questions evaluate to a probability >= this threshold, the agent completes immediately.
+     * @default 0.9
+     */
+    finishIfThreshold?: number;
+
+    /**
+     * Check the agent's own payload changes that the payload analyzer flags as needing feedback
+     * (large truncations, removed keys, type changes). Each flagged change becomes one Likelihood
+     * ("was this change intended?"), all asked in one decision call with the `decisionPromptName`
+     * prompt and recorded as a `Payload change check` Decision step. The changes judged unintended
+     * are listed on the agent's next turn, which asks it to confirm or restore them.
+     *
+     * A change is never reverted or blocked automatically: the agent decides. When the decision
+     * fails or takes longer than 30 seconds, every change is accepted, as it is when this is off. A
+     * step that ends the run (`Success`, `Chat`, or any step that terminates) is not checked, since
+     * no turn would read the result.
+     *
+     * Off by default: each check costs an extra decision call.
+     * @default false
+     */
+    payloadFeedbackCheck?: boolean;
+
+    /**
      * Allow this agent to emit durable task graphs (`nextStep.type === 'Tasks'`).
      *
      * **Defaults to false, unlike every other flag here, and is enforced rather than advisory.**
@@ -329,30 +504,74 @@ export interface LoopAgentTypePromptParams {
     // === Content Limiting ===
 
     /**
-     * Maximum number of sub-agents to include in prompt details.
-     * -1 = include all (default)
-     * 0 = include none (hide sub-agent capabilities)
-     * N = include first N sub-agents
-     * Useful for agents with many sub-agents where only a few are commonly used.
+     * Catalog narrowing for sub-agents (plan Task 3.7).
+     * -1 or 0 = include all (default: narrowing is off)
+     * N = when the agent has more than N sub-agents, describe the N most useful for the run's opening
+     *     request, judged once per run by one decision call, plus any with MinExecutionsPerRun set.
+     *     The list starts with a line naming the sub-agents it hides.
+     * Narrowing only hides: every permitted sub-agent can still be called by name, `subAgentCount`
+     * still counts them all, and a failed decision shows them all.
+     * Narrowing is prose-only: it shortens the described list, never the native tool set. With native
+     * tool calling under implicit control flow, every sub-agent is still declared as a
+     * `delegate_to_` tool, since a call to an undeclared tool is refused.
      * @default -1
      */
     maxSubAgentsInPrompt?: number;
 
     /**
-     * Maximum number of actions to include in prompt details.
-     * -1 = include all (default)
-     * 0 = include none (hide action capabilities)
-     * N = include first N actions
-     * Useful for agents with many actions where only a few are commonly used.
+     * Catalog narrowing for actions and skills (plan Task 3.7).
+     * -1 or 0 = include all (default: narrowing is off)
+     * N = when the agent has more than N actions (or skills), describe the N most useful for the
+     *     run's opening request, judged once per run by one decision call, plus any action with
+     *     MinExecutionsPerRun set and Find Candidate Actions / Find Candidate Agents. Each narrowed
+     *     list starts with a line saying how many it hides and how to reach them: hidden skills are
+     *     named, and hidden actions are found with Find Candidate Actions, so actions are narrowed
+     *     only when the agent has that action (skills still are).
+     * Narrowing only hides: every permitted action can still be called, `actionCount` and
+     * `skillCount` still count them all, and a failed decision shows them all.
+     * Narrowing is prose-only: it shortens the described list, never the native tool set. With native
+     * tool calling, every action is still declared as a tool, since a call to an undeclared tool is
+     * refused and that mode has no `Actions` step to fall back on.
      * @default -1
      */
     maxActionsInPrompt?: number;
+
+    /**
+     * Decision discovery (plan Task 3.1): suggest the agent to delegate to before the first prompt.
+     * When true, and the run answers its conversation's opening request (its messages hold one user
+     * message) without @mentioning an agent, one decision call runs once per run, in parallel with the
+     * rest of pre-execution. It asks which of the agents the user may run (the Find Candidate Agents
+     * set, minus this agent, and only those the host's `ALL_AVAILABLE_AGENTS` allows when it sends
+     * one) should handle the request, and whether the request needs a specialist at all. When both
+     * answers are confident it adds a `<suggested_agent>` system message to the first prompt, so the
+     * agent can delegate in its first turn instead of calling Find Candidate Agents first. Otherwise,
+     * and on any error, timeout or cancellation, the prompt is unchanged. A follow-up turn is never
+     * asked about, so a suggestion never pulls the agent away from one it has already engaged, and
+     * fewer than three candidate agents ask nothing.
+     * @default false
+     */
+    decisionDiscovery?: boolean;
 }
+
+/**
+ * The most decision requests answered from one agent turn, unless `decisionsMaxRequests` overrides
+ * it. Each request can itself make up to `decisionsMaxItems` calls through `forEachItemIn`, so this
+ * bounds how many decision calls one turn can start.
+ */
+export const MAX_DECISION_REQUESTS_PER_TURN = 8;
 
 /**
  * Default values for LoopAgentTypePromptParams.
  * All section flags default to true (include), limits default to -1 (include all).
  */
+/** Every {@link FinishIfMode}, for validation. */
+export const FINISH_IF_MODES: readonly FinishIfMode[] = ['off', 'shadow', 'on'];
+
+/** The mode a prompt-param value names; anything else, an absent value included, is `'off'`. */
+export function ResolveFinishIfMode(value: unknown): FinishIfMode {
+    return value === 'shadow' || value === 'on' ? value : 'off';
+}
+
 export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParams> = {
     includeResponseTypeDefinition: { ...DEFAULT_RESPONSE_TYPE_INCLUSION_RULES },
     includeForEachDocs: true,
@@ -364,12 +583,24 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     includePayloadInPrompt: true,
     includeDateTimeInPrompt: true,
     includeScratchpadDocs: true,
+    specializationPlacement: 'auto',
+    trailingStateMode: 'auto',
     scratchpadMaxTasks: 50,
     includeArtifactToolsDocs: true,
     includeConversationToolsDocs: true,
     includePipelineDocs: true,
+    includeDecisionsDocs: true,
+    decisionsMaxItems: 100,
+    decisionsMaxRequests: MAX_DECISION_REQUESTS_PER_TURN,
+    decisionPromptName: 'Default Decision',
+    finishIfMode: 'off',
+    includeFinishIfDocs: true,
+    finishIfThreshold: 0.9,
+    // Off: an opt-in check that costs a decision call per flagged payload change.
+    payloadFeedbackCheck: false,
     // Deliberately false — a capability gate, not a token-savings flag (D3).
     enableTaskGraphs: false,
     maxSubAgentsInPrompt: -1,
-    maxActionsInPrompt: -1
+    maxActionsInPrompt: -1,
+    decisionDiscovery: false
 };
