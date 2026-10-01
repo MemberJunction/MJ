@@ -16,9 +16,8 @@
  * the chat model for `LLM Decision`). An answer from any other pair has no calibration, and the
  * consumer treats it as unsure.
  *
- * Shared by every consumer that acts on a calibrated threshold. Conversation routing uses it here
- * (`ROUTING_CONTINUES_CALIBRATION`); agent discovery in `@memberjunction/ai-agents` can key its table
- * the same way.
+ * Shared by every consumer that acts on a calibrated threshold. Duplicate detection's Decision modes
+ * in `@memberjunction/ai-vector-dupe` key their table this way (`DUPLICATE_DECISION_CALIBRATION`).
  *
  * @module @memberjunction/ai-core-plus
  */

@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { Metadata, IMetadataProvider, RunView } from '@memberjunction/core';
-import { GraphQLDataProvider, GraphQLAIClient, type RunDecisionParams, type RunDecisionResult } from '@memberjunction/graphql-dataprovider';
+import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { ExecuteAgentResult, AgentExecutionProgressCallback, coerceFailedExecuteAgentResult } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
@@ -634,36 +634,6 @@ ${compactHistory}${artifactContext}
   }
 
   /**
-   * Runs a typed decision on the server in one round trip, through
-   * {@link GraphQLAIClient.RunDecision}. Decision routing (`EnableDecisionRouting`) asks its
-   * routing questions here.
-   *
-   * Never throws: without an AI client, or on any failure, it resolves with `Success: false` and
-   * no answers.
-   */
-  public async RunDecision(params: RunDecisionParams): Promise<RunDecisionResult> {
-    if (!this._aiClient) {
-      return { Success: false, ErrorMessage: 'AI Client not initialized', Answers: {} };
-    }
-    return this._aiClient.RunDecision(params);
-  }
-
-  /**
-   * Every artifact this agent produced in this conversation, newest version first, for decision
-   * routing's artifact question. Resolved by query, as {@link findAllAgentArtifacts} explains.
-   *
-   * @param historyFrom The chat's history floor. When set, only artifacts on replies written at or
-   *   after it count, as with {@link FindLatestAgentOutputVersion}.
-   */
-  public async FindAgentArtifacts(
-    conversationId: string,
-    agentId: string,
-    historyFrom?: Date | null
-  ): Promise<AgentArtifactSummary[]> {
-    return this.findAllAgentArtifacts(conversationId, agentId, historyFrom);
-  }
-
-  /**
    * Every artifact this agent produced in this conversation, newest version first — resolved
    * by QUERY, not by scanning the display array.
    *
@@ -681,20 +651,17 @@ ${compactHistory}${artifactContext}
    *
    * Two reads, not the four the old shape would have needed — see
    * {@link AgentArtifactSummary} for why dropping `runId` removes the join back to agent runs.
-   *
-   * @param historyFrom The chat's history floor, when set (see {@link FindAgentArtifacts}).
    */
   private async findAllAgentArtifacts(
     conversationId: string,
-    agentId: string,
-    historyFrom?: Date | null
+    agentId: string
   ): Promise<AgentArtifactSummary[]> {
     type VersionRow = Pick<MJArtifactVersionEntity, 'ID' | 'ArtifactID' | 'VersionNumber' | 'Name'>;
 
     const rv = RunView.FromMetadataProvider(this.Provider);
     const versionResult = await rv.RunView<VersionRow>({
       EntityName: 'MJ: Artifact Versions',
-      ExtraFilter: this.agentOutputVersionFilter(conversationId, agentId, historyFrom),
+      ExtraFilter: this.agentOutputVersionFilter(conversationId, agentId),
       OrderBy: '__mj_CreatedAt DESC',
       MaxRows: MAX_AGENT_ARTIFACT_VERSIONS,
       Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Name'],

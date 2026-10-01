@@ -6,7 +6,7 @@
  * @module @memberjunction/ng-conversations
  */
 
-import { IsAgentAllowed } from '@memberjunction/ai-core-plus';
+import { UUIDsEqual } from '@memberjunction/global';
 import type { AgentReplyMode, AgentTurnRoute, AgentTurnTarget } from '../models/agent-turn.model';
 
 /** The agent each route would use for one message, before the host's rules are applied. */
@@ -15,11 +15,6 @@ export interface AgentTurnCandidates {
     MentionedAgentIds: readonly string[];
     /** The last agent that answered in the conversation, other than the conversation manager. */
     ContinuityAgentId: string | null;
-    /**
-     * True when a routing decision put `ContinuityAgentId` there in place of the last agent that
-     * answered. The turn is then labelled `DecisionRouted` instead of `Continuity`.
-     */
-    ContinuityDecisionRouted?: boolean;
     /** The agent pinned on the conversation. */
     ConversationDefaultAgentId: string | null;
     /** The host's `DefaultAgentId` input. */
@@ -37,12 +32,28 @@ export interface AgentTurnRules {
 }
 
 /**
+ * True when the agent may take a turn. A null or undefined list allows every agent; an empty
+ * list allows none.
+ */
+export function IsAgentAllowed(
+    agentId: string | null | undefined,
+    allowedAgentIDs: readonly string[] | null | undefined
+): boolean {
+    if (!agentId) {
+        return false;
+    }
+    if (allowedAgentIDs == null) {
+        return true;
+    }
+    return allowedAgentIDs.some(id => UUIDsEqual(id, agentId));
+}
+
+/**
  * Picks the agent and route for one message, or null when no turn starts.
  *
  * The order is MJ's: the first tagged agent the host allows, then (under `Always` only) the last
  * agent that answered, the conversation's pinned agent, the host's default agent, and the
- * conversation manager. A candidate the host doesn't allow is skipped. A continuity candidate that
- * a routing decision chose (`ContinuityDecisionRouted`) takes the `DecisionRouted` label.
+ * conversation manager. A candidate the host doesn't allow is skipped.
  *
  * A continuity or default candidate that `isKnownAgent` doesn't recognise falls back to the
  * conversation manager, as MJ always has, rather than to the next route. A tagged agent is taken
@@ -66,7 +77,7 @@ export function ResolveAgentTurn(
     }
 
     const implicitRoutes: ReadonlyArray<[AgentTurnRoute, string | null]> = [
-        [candidates.ContinuityDecisionRouted ? 'DecisionRouted' : 'Continuity', candidates.ContinuityAgentId],
+        ['Continuity', candidates.ContinuityAgentId],
         ['ConversationDefault', candidates.ConversationDefaultAgentId],
         ['HostDefault', candidates.HostDefaultAgentId],
     ];
