@@ -1,4 +1,21 @@
-:host { display: block; color: var(--mj-color-neutral-800); color-scheme: light; }
+:host { display: block; color: var(--mj-color-neutral-800); color-scheme: light; background: var(--mj-color-neutral-100); padding: var(--mj-space-4, 1rem); border-radius: var(--mj-radius-lg, 8px); }
+
+.scale-card, .level-row {
+  background: var(--mj-color-neutral-0);
+  border: 1px solid var(--mj-color-neutral-200);
+  border-radius: var(--mj-radius-lg, 8px);
+  box-shadow: var(--mj-shadow-sm);
+}
+.scale-card { padding: var(--mj-space-4, 1rem); margin-bottom: var(--mj-space-4, 1rem); }
+.scale-card h2 { margin: 0 0 0.75rem; font-size: 1.15rem; }
+.scale-card h2 i { color: var(--mj-color-brand-500); margin-right: 0.35rem; }
+.callout {
+  background: var(--mj-color-warning-100);
+  color: var(--mj-color-warning-700);
+  border: 1px solid var(--mj-color-warning-100);
+  border-radius: var(--mj-radius-md, 6px);
+  padding: 0.75rem 1rem;
+}
 
 input,
 select,
@@ -14,12 +31,7 @@ textarea {
   color-scheme: light;
 }
 
-.scale-sheet {
-  background: var(--mj-color-neutral-0);
-  border: 1px solid var(--mj-color-neutral-200);
-  border-radius: var(--mj-radius-lg, 8px);
-  padding: var(--mj-space-4, 1rem);
-}
+.scale-sheet { display: flex; flex-direction: column; gap: var(--mj-space-3, 0.75rem); }
 
 .scale-sheet h3 { margin: 1rem 0 0.5rem; }
 

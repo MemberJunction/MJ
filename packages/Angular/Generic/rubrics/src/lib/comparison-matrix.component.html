@@ -1,20 +1,18 @@
-<section class="rubric-panel" aria-label="Comparison matrix">
-  <h3>Evaluator comparison</h3>
-  <div class="rubric-columns">
-    <div>
-      <p>Criterion</p>
-      @for (row of Model.rows; track row.key) {
-        <p><strong>{{ row.key }}</strong></p>
-      }
-    </div>
+<section class="card" aria-label="Comparison matrix">
+  <h3><i class="fa-solid fa-columns"></i> Evaluator comparison</h3>
+  <div class="matrix">
+    <div class="matrix-head">Criterion</div>
     @for (column of Shown; track column.id) {
-      <div class="rubric-stack">
-        <p>{{ column.name }}</p>
-        @for (row of Model.rows; track row.key) {
-          <p>{{ ScoreText(column, row.key) }}</p>
-          <p>{{ RationaleText(column, row.key) }}</p>
-        }
-      </div>
+      <div class="matrix-head">{{ column.name }}</div>
+    }
+    @for (row of Model.rows; track row.key) {
+      <div class="matrix-cell"><strong>{{ row.key }}</strong></div>
+      @for (column of Shown; track column.id) {
+        <div class="matrix-cell" [class.matrix-empty]="ScoreText(column, row.key) === 'No score yet' || ScoreText(column, row.key) === 'Disabled'">
+          <strong>{{ ScoreText(column, row.key) }}</strong>
+          @if (RationaleText(column, row.key)) { <p>{{ RationaleText(column, row.key) }}</p> }
+        </div>
+      }
     }
   </div>
 </section>

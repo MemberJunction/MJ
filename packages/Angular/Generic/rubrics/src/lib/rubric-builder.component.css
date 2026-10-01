@@ -154,8 +154,8 @@
 .rubric-split { display: grid; grid-template-columns: 1fr 1fr; gap: var(--mj-space-3, 0.75rem); }
 .anchor { border: 1px solid var(--mj-color-neutral-200); border-radius: var(--mj-radius-sm, 4px); padding: 0.55rem 0.7rem; background: var(--mj-color-neutral-0); }
 .anchor-meet { color: var(--mj-color-success-700); }
-.anchor:not(.anchor-meet) { color: var(--mj-color-error-700); }
-.anchor.filled { border-color: var(--mj-color-brand-500); }
+.anchor-miss { color: var(--mj-color-error-700); }
+.anchor.filled { border-color: var(--mj-color-brand-500); color: var(--mj-color-brand-700); }
 
 .removed {
   background: var(--mj-color-error-50);
@@ -255,3 +255,34 @@ input[type='checkbox'] { width: 1rem; height: 1rem; accent-color: var(--mj-color
 .rubric-track { display: block; height: 0.45rem; background: var(--mj-color-neutral-200); border-radius: var(--mj-radius-full); overflow: hidden; }
 .rubric-bar { display: block; height: 100%; background: var(--mj-color-brand-500); }
 .stack-field { margin-top: 0; }
+
+.matrix { display: grid; grid-template-columns: 1.1fr repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
+.matrix-head, .matrix-cell {
+  border: 1px solid var(--mj-color-neutral-200);
+  border-radius: var(--mj-radius-sm, 4px);
+  padding: 0.65rem 0.75rem;
+  background: var(--mj-color-neutral-0);
+}
+.matrix-head { font-size: 0.75rem; font-weight: 700; background: var(--mj-color-neutral-50); }
+.matrix-empty { background: var(--mj-color-neutral-50); color: var(--mj-color-neutral-500); }
+.diff-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--mj-space-3, 0.75rem); }
+.diff-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  border: 1px solid var(--mj-color-neutral-200);
+  border-radius: var(--mj-radius-md, 6px);
+  padding: 0.75rem;
+  background: var(--mj-color-neutral-50);
+}
+.diff-draft { background: var(--mj-color-neutral-0); }
+.mark {
+  margin: 0;
+  background: var(--mj-color-warning-100);
+  color: var(--mj-color-warning-700);
+  border-radius: var(--mj-radius-sm, 4px);
+  padding: 0.35rem 0.5rem;
+}
+@media (max-width: 520px) {
+  .matrix, .diff-grid { grid-template-columns: 1fr; }
+}

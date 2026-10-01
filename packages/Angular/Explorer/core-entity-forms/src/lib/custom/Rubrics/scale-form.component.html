@@ -9,15 +9,17 @@
         <mj-loading text="Loading scale..."></mj-loading>
     } @else {
         <section class="scale-sheet">
-            <h2>{{ record.Name }}</h2>
             @if (Frozen) {
                 <p class="callout">This scale is used by a published rubric. Level values stay locked. Labels and descriptions stay editable.</p>
             }
-            <div class="property-row">
-                <div><span>Name</span><strong>{{ record.Name }}</strong></div>
-                <div><span>Type</span><strong>{{ record.ScaleType }}</strong></div>
-                <div><span>Direction</span><strong>{{ record.HigherIsBetter ? 'Higher is better' : 'Lower is better' }}</strong></div>
-                <div><span>Range</span><strong>{{ RangeMin }} to {{ RangeMax }}</strong></div>
+            <div class="scale-card">
+              <h2><i class="fa-solid fa-sliders"></i> {{ record.Name }}</h2>
+              <div class="property-row">
+                  <div><span>Name</span><strong>{{ record.Name }}</strong></div>
+                  <div><span>Type</span><strong>{{ record.ScaleType }}</strong></div>
+                  <div><span>Direction</span><strong>{{ record.HigherIsBetter ? 'Higher is better' : 'Lower is better' }}</strong></div>
+                  <div><span>Range</span><strong>{{ RangeMin }} to {{ RangeMax }}</strong></div>
+              </div>
             </div>
             <h3>Levels</h3>
             <ul class="level-list">

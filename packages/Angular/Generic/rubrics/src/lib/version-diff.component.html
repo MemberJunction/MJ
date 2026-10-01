@@ -1,46 +1,46 @@
-<section class="rubric-panel" aria-label="Version diff">
-  <header class="rubric-stack">
-    <p>Rubric version diff</p>
+<section class="author" aria-label="Version diff">
+  <div class="card cockpit">
+    <span class="eyebrow">Rubric version diff</span>
     <h2>Draft vs {{ BaseLabel }}</h2>
     @if (Bump) {
-      <p>Computed bump: {{ Bump }} → {{ NextVersion }}</p>
+      <span class="pill-major"><i class="fa-solid fa-triangle-exclamation"></i> {{ Bump }} → {{ NextVersion }}</span>
     }
-  </header>
+  </div>
   @for (row of CriterionRows; track row.key) {
-    <article class="rubric-stack">
-      <h3>Criterion: {{ row.name }}</h3>
-      <div class="rubric-split">
-        <div class="rubric-stack">
-          <p>Base: {{ BaseLabel }}</p>
-          <p>Weight: {{ row.baseWeight }}</p>
-          <p>Quality gate: {{ row.baseGate }}</p>
-          <p>Scale: {{ row.baseScale }}</p>
+    <article class="card">
+      <h3><i class="fa-solid fa-scale-balanced"></i> Criterion: {{ row.name }}</h3>
+      <div class="diff-grid">
+        <div class="diff-side">
+          <span class="eyebrow">Base {{ BaseLabel }}</span>
+          <p>Weight {{ row.baseWeight }}</p>
+          <p>Quality gate {{ row.baseGate }}</p>
+          <p>Scale {{ row.baseScale }}</p>
         </div>
-        <div class="rubric-stack">
-          <p>Draft: next {{ NextVersion }}</p>
-          <p>Weight: {{ row.draftWeight }}</p>
-          <p>Quality gate: {{ row.draftGate }}</p>
-          <p>Scale: {{ row.draftScale }}</p>
+        <div class="diff-side diff-draft">
+          <span class="eyebrow">Draft next {{ NextVersion }}</span>
+          <p>Weight {{ row.draftWeight }}</p>
+          <p>Quality gate {{ row.draftGate }}</p>
+          <p>Scale {{ row.draftScale }}</p>
+          @for (mark of row.marks; track mark) {
+            <p class="mark">{{ Sentence(mark) }}</p>
+          }
         </div>
       </div>
-      @if (row.marks.length) {
-        <ul>
-          @for (mark of row.marks; track mark) {
-            <li>{{ Sentence(mark) }}</li>
-          }
-        </ul>
-      }
     </article>
   }
   @for (band of RemovedBands; track band.label) {
-    <article class="rubric-split">
-      <div>
-        <p>Band: {{ band.label }}</p>
-        <p>Range: {{ band.min }}–{{ band.max }}</p>
-      </div>
-      <div>
-        <p>Band removed</p>
-        <p>{{ band.label }} is not on the draft.</p>
+    <article class="card">
+      <h3><i class="fa-solid fa-layer-group"></i> Rating bands</h3>
+      <div class="diff-grid">
+        <div class="diff-side">
+          <span class="eyebrow">Base</span>
+          <p><strong>Band {{ band.label }}</strong></p>
+          <p>Range {{ band.min }}–{{ band.max }}</p>
+        </div>
+        <div class="removed">
+          <span>Removed in draft</span>
+          {{ band.label }} is not on the draft.
+        </div>
       </div>
     </article>
   }

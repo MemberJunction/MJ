@@ -35,6 +35,11 @@ export class RubricResultComponent {
         return Math.round(score * 100);
     }
 
+    public NodeName(id: string): string {
+        const node = this.Version?.nodes.find(item => item.id === id || item.key === id);
+        return node?.name || id;
+    }
+
     public Weight(id: string): string {
         const node = this.Version?.nodes.find(item => item.id === id || item.key === id);
         return node ? String(node.weight) : '';

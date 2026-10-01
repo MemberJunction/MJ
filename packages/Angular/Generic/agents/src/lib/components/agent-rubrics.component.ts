@@ -6,20 +6,29 @@ import { disableLink, makeDefaultLink, sortAgentRubrics, type AgentRubricLink } 
 @Component({
     standalone: false,
     selector: 'mj-agent-rubrics',
+    styleUrls: ['./agent-rubrics.component.css'],
     template: `
-      @if (Error) { <p>{{ Error }}</p> }
-      @if (Links.length === 0 && !IsLoading) { <p>This agent has no rubrics.</p> }
-      @for (link of Links; track link.ID) {
-        <p>
-          {{ link.Purpose }} — {{ link.Rubric }} — {{ link.Status }}{{ link.IsDefault && link.Status !== 'Disabled' ? ' (default)' : '' }}
-          @if (link.Status !== 'Disabled') {
-            <button type="button" (click)="TurnOff(link)">Turn off</button>
-          } @else {
-            <button type="button" (click)="Enable(link)">Enable</button>
-          }
-        </p>
-      }
-      <form (submit)="Add($event)">
+      <section class="links" aria-label="Linked rubrics">
+        <h3><i class="fa-solid fa-link"></i> Linked rubrics</h3>
+        @if (Error) { <p class="problem">{{ Error }}</p> }
+        @if (Links.length === 0 && !IsLoading) { <p class="empty">This agent has no rubrics.</p> }
+        @for (link of Links; track link.ID) {
+          <article class="link" [class.link-off]="link.Status === 'Disabled'">
+            <div>
+              <span class="purpose">{{ link.Purpose }}</span>
+              <strong>{{ link.Rubric }}</strong>
+              <span class="state">{{ link.Status }}{{ link.IsDefault && link.Status !== 'Disabled' ? ' · Default' : '' }}</span>
+            </div>
+            @if (link.Status !== 'Disabled') {
+              <button type="button" (click)="TurnOff(link)">Turn off</button>
+            } @else {
+              <button type="button" class="enable" (click)="Enable(link)">Enable</button>
+            }
+          </article>
+        }
+      </section>
+      <form class="add" (submit)="Add($event)">
+        <h3><i class="fa-solid fa-plus"></i> Link a rubric</h3>
         <label>Purpose
           <select [(ngModel)]="Purpose" name="purpose">
             <option>Evaluation</option>
@@ -34,7 +43,7 @@ import { disableLink, makeDefaultLink, sortAgentRubrics, type AgentRubricLink } 
             }
           </select>
         </label>
-        <label><input type="checkbox" [(ngModel)]="IsDefault" name="default"> Default</label>
+        <label class="check"><input type="checkbox" [(ngModel)]="IsDefault" name="default"> Default</label>
         <button type="submit" [disabled]="!RubricID">Add rubric</button>
       </form>
     `,

@@ -91,7 +91,7 @@
                   <div class="box-title">Scale anchors</div>
                   <div class="rubric-split">
                     @for (level of Levels(node); track level.id; let first = $first) {
-                      <label class="anchor" [class.anchor-meet]="first" [class.filled]="Anchor(node, level.id)">
+                      <label class="anchor" [class.anchor-meet]="first" [class.anchor-miss]="!first" [class.filled]="Anchor(node, level.id)">
                         <span>{{ level.label }}</span>
                         <input type="text" [value]="Anchor(node, level.id)" (input)="OnAnchor(node, level.id, $event)" />
                       </label>

@@ -12,6 +12,7 @@ import { MJRubricEvaluationFormComponent } from '../../generated/Entities/MJRubr
     standalone: false,
     selector: 'mj-rubric-evaluation-form',
     templateUrl: './evaluation-form.component.html',
+    styleUrls: ['./evaluation-form.component.css'],
 })
 export class MJRubricEvaluationFormComponentExtended extends MJRubricEvaluationFormComponent {
     public override record!: MJRubricEvaluationEntity;
