@@ -25,4 +25,26 @@ describe('inline rubric', () => {
         expect(details.inline).toBe(true);
         expect(details.Criteria[0]).toMatchObject({ Name: 'Accurate', Rationale: 'The figure matches.' });
     });
+
+    it('weights a met leaf of 2 against an unmet leaf of 1 as two thirds, and drops weight 0', () => {
+        const weighted = scoreInline(
+            [{ text: 'Light', weight: 1 }, { text: 'Heavy', weight: 2 }],
+            [{ index: 0, met: false }, { index: 1, met: true }],
+            { passThreshold: 0.7 },
+        );
+        expect(weighted.normalizedScore).toBeCloseTo(2 / 3, 6);
+        const silent = scoreInline(
+            [{ text: 'Heavy', weight: 2 }, { text: 'Silent', weight: 0 }],
+            [{ index: 0, met: true }, { index: 1, met: false }],
+            { passThreshold: 0.7 },
+        );
+        expect(silent.normalizedScore).toBe(1);
+    });
+
+    it('leaves an omitted leaf unanswered', () => {
+        const omitted = scoreInline(['First', 'Second'], [{ index: 0, met: true }], { passThreshold: 0.7 });
+        expect(omitted.normalizedScore).toBe(1);
+        expect(omitted.completeness).toBe(0.5);
+        expect(omitted.nodes[1].normalizedScore).toBeNull();
+    });
 });

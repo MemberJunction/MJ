@@ -1,8 +1,16 @@
 import { RubricScoring, type RubricScoreResult, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import type { OracleResult } from '../types';
 
-/** A binary inline rubric. Every string is a leaf, Met = 1 and Not met = 0, equal weight. There is no version row. */
-export function inlineVersion(criteria: string[], strict: boolean, passThreshold: number): RubricVersionSnapshot {
+/** One binary leaf. Weight defaults to 1. A weight of 0 is kept and does not enter the weighted mean. */
+export type InlineCriterion = { text: string; weight?: number };
+
+function inlineLeaves(criteria: Array<string | InlineCriterion>): { text: string; weight: number }[] {
+    return criteria.map(item => typeof item === 'string' ? { text: item, weight: 1 } : { text: item.text, weight: item.weight ?? 1 });
+}
+
+/** A binary inline rubric. Met = 1 and Not met = 0. There is no version row. */
+export function inlineVersion(criteria: Array<string | InlineCriterion>, strict: boolean, passThreshold: number): RubricVersionSnapshot {
+    const leaves = inlineLeaves(criteria);
     return {
         id: 'inline',
         rubricId: 'inline',
@@ -10,13 +18,13 @@ export function inlineVersion(criteria: string[], strict: boolean, passThreshold
         passThreshold,
         scoreDisplayMin: 0,
         scoreDisplayMax: 1,
-        nodes: criteria.map((text, index) => ({
+        nodes: leaves.map((leaf, index) => ({
             id: `c${index}`,
             key: `c${index}`,
-            name: text,
+            name: leaf.text,
             nodeType: 'Criterion' as const,
             scaleId: 'met',
-            weight: 1,
+            weight: leaf.weight,
             isAdvisory: false,
             isGate: strict,
             gateMinimumScore: strict ? 1 : null,
@@ -37,7 +45,7 @@ export function inlineVersion(criteria: string[], strict: boolean, passThreshold
     };
 }
 
-export function scoreInline(criteria: string[], answers: { index: number; met: boolean; rationale?: string }[], options: { strict?: boolean; passThreshold?: number }): RubricScoreResult {
+export function scoreInline(criteria: Array<string | InlineCriterion>, answers: { index: number; met: boolean; rationale?: string }[], options: { strict?: boolean; passThreshold?: number }): RubricScoreResult {
     const version = inlineVersion(criteria, options.strict === true, options.passThreshold ?? 0.7);
     return RubricScoring.compute({
         version,

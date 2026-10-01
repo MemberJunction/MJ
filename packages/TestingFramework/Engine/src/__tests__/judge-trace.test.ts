@@ -199,14 +199,36 @@ describe('LLMJudgeOracle.evaluate — the prompt data it sends', () => {
         expect(sentData()?.actual).toBe(JSON.stringify({ reply: 'pong' }, null, 2));
         expect(executePrompt.mock.calls[0][0].systemPromptOverride).toContain('Is polite');
         expect(executePrompt.mock.calls[0][0].prompt?.Name).toBe('Rubric Evaluator');
-        expect(executePrompt.mock.calls[0][0].conversationMessages?.[0]?.content).toContain('Is polite');
+        const shown = String(executePrompt.mock.calls[0][0].conversationMessages?.[0]?.content);
+        expect(shown).toContain('Is polite');
+        expect(shown).toContain('"note": "x"');
+        expect(shown).toContain('"reply": "pong"');
     });
 
     it('sends the text of each criterion in a mixed list of strings and weighted criteria', async () => {
+        executePrompt.mockResolvedValue(judgeRun({
+            decisions: [
+                { key: 'c0', level: 'Not met' },
+                { key: 'c1', level: 'Met' },
+            ],
+        }));
         const expected = { judgeValidationCriteria: ['Is polite', { criterion: 'Answers the question', weight: 2 }] };
-        await new LLMJudgeOracle().evaluate(oracleInput(null, expected, 'out'), {});
+        const result = await new LLMJudgeOracle().evaluate(oracleInput(null, expected, 'out'), {});
 
         expect(sentData()?.criteria).toEqual(['Is polite', 'Answers the question']);
+        expect(result.score).toBeCloseTo(2 / 3, 6);
+    });
+
+    it('leaves a criterion the model omitted unanswered instead of scoring it Not met', async () => {
+        executePrompt.mockResolvedValue(judgeRun({ decisions: [{ key: 'c0', level: 'Met' }] }));
+        const result = await new LLMJudgeOracle().evaluate(
+            oracleInput(null, { judgeValidationCriteria: ['First', 'Second'] }, 'out'),
+            {},
+        );
+
+        expect(result.score).toBe(1);
+        const details = result.details as { Criteria: { NormalizedScore: number | null }[] };
+        expect(details.Criteria[1].NormalizedScore).toBeNull();
     });
 
     it('fails without calling the model when a criterion is malformed', async () => {

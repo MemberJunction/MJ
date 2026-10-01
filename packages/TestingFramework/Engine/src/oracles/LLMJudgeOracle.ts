@@ -22,8 +22,9 @@ const RUBRIC_EVALUATOR_PROMPT = 'Rubric Evaluator';
  * Provides semantic evaluation beyond deterministic checks.
  *
  * Criteria come from `expectedOutput.judgeValidationCriteria`, or else from `config.criteria`. Each is
- * a string or `{ "criterion": "...", "weight": 2 }`, as for {@link DecisionJudgeOracle}; this judge
- * sends each criterion's text and ignores its weight. Malformed criteria fail the oracle without a call.
+ * a string or `{ "criterion": "...", "weight": 2 }`, as for {@link DecisionJudgeOracle}. The weight
+ * is the leaf weight. A criterion the model does not answer stays unanswered. Malformed criteria fail
+ * the oracle without a call.
  *
  * Configuration:
  * - criteria: Array of validation criteria (required)
@@ -57,12 +58,20 @@ function answersFromModel(raw: unknown, criteria: string[]): { index: number; me
     const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw as { decisions?: { key?: string; criterion?: string; level?: string; met?: boolean; rationale?: string }[]; criteriaScores?: { criterion?: string; score?: number; explanation?: string }[] };
     const decisions = parsed?.decisions ?? [];
     const scores = parsed?.criteriaScores ?? [];
-    return criteria.map((text, index) => {
+    const answers: { index: number; met: boolean; rationale?: string }[] = [];
+    criteria.forEach((text, index) => {
         const decision = decisions.find((item: { key?: string; criterion?: string }) => item.key === `c${index}` || item.criterion === text);
         const scored = scores.find((item: { criterion?: string }) => item.criterion === text);
+        if (!decision && !scored) return;
         const met = decision?.level === 'Met' || decision?.met === true || (typeof scored?.score === 'number' && scored.score >= 1);
-        return { index, met, rationale: decision?.rationale ?? scored?.explanation };
+        answers.push({ index, met, rationale: decision?.rationale ?? scored?.explanation });
     });
+    return answers;
+}
+
+/** Input, expected output, and actual output, inside the template's one untrusted fence. */
+function judgeSubject(trace: { Input?: string; Expected?: string; Actual?: string }): string {
+    return ['Input:', trace.Input ?? '', '', 'Expected:', trace.Expected ?? '', '', 'Actual:', trace.Actual ?? ''].join('\n');
 }
 
 export class LLMJudgeOracle implements IOracle {
@@ -123,11 +132,12 @@ Respond in JSON format:
             }
 
             const trace = BuildJudgeTrace(input);
-            const texts = criteria.Value.map(item => item.Criterion);
+            const leaves = criteria.Value.map(item => ({ text: item.Criterion, weight: item.Weight }));
+            const texts = leaves.map(leaf => leaf.text);
             const strict = config.strictMode === true;
             const passThreshold = typeof config.passThreshold === 'number' ? config.passThreshold : 0.7;
-            const version = inlineVersion(texts, strict, passThreshold);
-            const rendered = renderRubricEvaluatorPrompt(version, { text: `${trace.Input}\n${trace.Actual}` }, 'SinglePass');
+            const version = inlineVersion(leaves, strict, passThreshold);
+            const rendered = renderRubricEvaluatorPrompt(version, { text: judgeSubject(trace) }, 'SinglePass');
 
             await AIEngine.Instance.Config(false, input.contextUser);
             const prompt = AIEngine.Instance.Prompts.find(item => item.Name === RUBRIC_EVALUATOR_PROMPT);
@@ -161,8 +171,10 @@ Respond in JSON format:
             }
 
             const answers = answersFromModel(result.result, texts);
-            const scored = scoreInline(texts, answers, { strict, passThreshold });
-            const report = inlineOracleResult(texts, scored, answers.map(answer => answer.rationale));
+            const scored = scoreInline(leaves, answers, { strict, passThreshold });
+            const evidence: (string | undefined)[] = [];
+            for (const answer of answers) evidence[answer.index] = answer.rationale;
+            const report = inlineOracleResult(texts, scored, evidence);
             report.details = { ...(report.details as object), llmModel: config.model || 'default', llmCost: result.cost };
             return report;
 
