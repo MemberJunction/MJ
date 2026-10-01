@@ -1,4 +1,4 @@
-import { ApplicationRef, Injectable, ViewContainerRef, inject } from '@angular/core';
+import { Injectable, ViewContainerRef } from '@angular/core';
 import { LogError, Metadata, ResolveFormLayout, type EntityInfo, type IMetadataProvider } from '@memberjunction/core';
 import type { FormPanelSlot } from '../panel-slot/base-form-panel';
 import { MjEntityFormHostComponent } from '../host/entity-form-host.component';
@@ -48,8 +48,6 @@ export interface ProbedFormShape {
  */
 @Injectable({ providedIn: 'root' })
 export class FormSlotProbeService {
-    private readonly appRef = inject(ApplicationRef);
-
     /** Entity name (lowercased) → what its form contains. */
     private readonly cache = new Map<string, ProbedFormShape>();
 
@@ -83,10 +81,13 @@ export class FormSlotProbeService {
                 return EMPTY_SHAPE;
             })
             .then((shape) => {
-                // A form with no slots at all did not render; that is a failure to answer,
-                // not an answer, so it is not cached and a later attempt can still succeed.
-                if (shape.Slots.length > 0) this.cache.set(key, shape);
+                // A probe that a Forget overtook may have read the form before the change, so
+                // it is not cached. A form with no slots at all did not render; that is a failure
+                // to answer, not an answer, so it is not cached and a later attempt can succeed.
+                const current = this.inflight.get(key) === probe;
+                if (!current) return shape;
                 this.inflight.delete(key);
+                if (shape.Slots.length > 0) this.cache.set(key, shape);
                 return shape;
             });
 
@@ -101,10 +102,19 @@ export class FormSlotProbeService {
             .filter((key) => key.length > 0);
     }
 
-    /** Drops the memo for one entity, or all of them. For a form that changed underneath. */
+    /**
+     * Drops the memo for one entity, or all of them. For a form that changed underneath: the
+     * Manage drawer and the apply flow call it after each write to the entity's panels.
+     */
     public Forget(entityName?: string): void {
-        if (entityName) this.cache.delete(entityName.trim().toLowerCase());
-        else this.cache.clear();
+        if (entityName) {
+            const key = entityName.trim().toLowerCase();
+            this.cache.delete(key);
+            this.inflight.delete(key);
+            return;
+        }
+        this.cache.clear();
+        this.inflight.clear();
     }
 
     private async render(host: ViewContainerRef, entityName: string, provider: IMetadataProvider | undefined): Promise<ProbedFormShape> {
