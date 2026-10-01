@@ -486,8 +486,9 @@ query fails. Compiled panels exist only in the browser, so it does not list them
 row while the kill switch below is off. A generated panel may propose its placement in
 `formContribution` (slot, a section key, field names, a related entity, or a section to sit
 inside). The apply dialog starts from every claim the open form can honour and from its default for
-the rest; the user confirms placement. The dialog never reads a proposed `contributionKey`: a key
-that matches an installed panel would read as replacing that panel.
+the rest; the user confirms placement. The dialog never reads a proposed `contributionKey` or
+`sortKey`: a key that matches an installed panel would read as replacing that panel, and the order
+among the panels in one position is the host's.
 
 **Two safety properties worth knowing.** Shared forms and panels do not render on identity,
 permission and form-metadata entities: on the 11 entities in `RESTRICTED_FORM_ENTITIES`
