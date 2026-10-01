@@ -58,16 +58,9 @@ import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, Lo
 import { getSystemUser, validateAuthProvidersRegistered } from './auth/index.js';
 import { createAuthProviderCatalogRouter, AUTH_CATALOG_MOUNT_PATH } from './auth/AuthProviderCatalogRouter.js';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
-import { CacheManagerConfigFromSettings, CreateSharedCacheFromEnvironment, StartEngineSweeper, StartMetadataSweep, StartUserCacheChecks, WarmupLeaseMsFromSettings, WireSharedCacheEvents } from './sharedCache.js';
-// Type-only: the provider itself is built in ./sharedCache.ts; this file only hands it to the push-status fan-out.
-import type { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
+import { CacheManagerConfigFromSettings, CreateSharedCacheFromEnvironment, StartEngineSweeper, StartMetadataSweep, StartUserCacheChecks, WarmupLeaseMsFromSettings, WirePushStatusFanOut, WireSharedCacheEvents } from './sharedCache.js';
 import { PubSubManager } from './generic/PubSubManager.js';
 import { ReconcileOrphanedConversationDetails } from './generic/OrphanedConversationDetailReconciler.js';
-import {
-  PUSH_STATUS_UPDATES_TOPIC,
-  SetPushStatusPublishHook,
-  ParseReplicatedStatusUpdate,
-} from './generic/PushStatusResolver.js';
 import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
@@ -305,58 +298,6 @@ function resolveServerVersion(): string | undefined {
 /** How often to re-check for conversation details left behind by finished runs. */
 const ORPHAN_DETAIL_SWEEP_INTERVAL_MS = 5 * 60_000;
 
-/** Redis channel carrying replicated push-status updates between server instances. */
-const PUSH_STATUS_FANOUT_CHANNEL = 'push-status-updates';
-
-/**
- * Replicate push-status updates across server instances over Redis (MJ #4222).
- *
- * Outbound: every locally-published update is forwarded on a shared channel. Inbound: a message
- * from another instance is republished onto THIS instance's local topic, where the normal
- * subscription filter decides who receives it — so the identity gate (`ownerUserId` vs. the
- * connection's authenticated user) still applies to a replicated message exactly as it does to a
- * local one. The replica has no say in who sees what.
- *
- * Republishing goes straight to `PubSubManager`, never back through `publishStatusUpdate`, so an
- * inbound message cannot be re-broadcast and loop. `SourceServerId` guards the remaining case: a
- * publisher also receives its own message from Redis.
- */
-async function wirePushStatusFanOut(redisProvider: RedisLocalStorageProvider, startupLog: StartupLogger): Promise<void> {
-  try {
-    await redisProvider.SubscribeToChannel(PUSH_STATUS_FANOUT_CHANNEL, (raw: string) => {
-      try {
-        const payload = ParseReplicatedStatusUpdate(raw, MJGlobal.Instance.ProcessUUID);
-        if (!payload) {
-          return;
-        }
-        // Rebuilt as a plain record: the topic's publish signature takes an index-signature type,
-        // and listing the fields keeps the wire shape explicit at the one place it crosses hosts.
-        PubSubManager.Instance.Publish(PUSH_STATUS_UPDATES_TOPIC, {
-          sessionId: payload.sessionId,
-          ownerUserId: payload.ownerUserId,
-          message: payload.message,
-          SourceServerId: payload.SourceServerId,
-        });
-      } catch {
-        // A malformed message on a shared channel must not take down the subscriber.
-      }
-    });
-
-    SetPushStatusPublishHook((payload) => {
-      redisProvider.PublishMessage(PUSH_STATUS_FANOUT_CHANNEL, JSON.stringify(payload));
-    });
-
-    // Printed unconditionally, not verbose-gated. "Is fan-out actually on?" is the first question
-    // anyone debugging a hung conversation behind a load balancer asks, and a silent default left
-    // no way to answer it.
-    console.log('[MJAPI] Push-status updates: cross-instance fan-out enabled via Redis');
-  } catch (err) {
-    // Single-instance delivery still works, and the durable tail query covers the rest. Degraded,
-    // not broken — so this must not stop the server from starting.
-    console.warn(`Push-status fan-out unavailable: ${(err as Error).message}`);
-  }
-}
-
 // Bind MJStorage as the conversation-attachment blob store. The attachment service itself no longer
 // imports `@memberjunction/storage` — that dependency made it unusable from any browser or React
 // Native client, which is why the same attachment rules had been reimplemented three times.
@@ -406,7 +347,7 @@ const setupComplete$ = new ReplaySubject(1);
   if (sharedCache) {
     await WireSharedCacheEvents(sharedCache, () => (Metadata.Provider instanceof ProviderBase ? Metadata.Provider : undefined)); // global-provider-ok: bootstrap
     // Fan push-status updates across server instances (MJ #4222) on the same connection.
-    await wirePushStatusFanOut(sharedCache, startupLog);
+    await WirePushStatusFanOut(sharedCache);
     startupLog.LogIf('verbose', `Redis cache provider connected: ${process.env.REDIS_URL}`);
   }
   const cacheManagerConfig = CacheManagerConfigFromSettings(configInfo.cacheSettings);

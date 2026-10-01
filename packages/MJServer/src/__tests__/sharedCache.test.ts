@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 /**
  * Routing of shared-cache events in MJAPI (plan F11): metadata notices trigger a metadata check,
  * everything reaches LocalCacheManager, and only RunView slot changes reach browsers.
@@ -35,7 +36,11 @@ import {
     StartEngineSweeper,
     StartUserCacheChecks,
     StartMetadataSweep,
+    WirePushStatusFanOut,
 } from '../sharedCache.js';
+import { MJGlobal } from '@memberjunction/global';
+import type { PubSubEngine } from 'type-graphql';
+import { PublishStatusUpdate, SetPushStatusPublishHook } from '../generic/PushStatusResolver.js';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import type { CacheSettingsConfig } from '../config.js';
 
@@ -184,5 +189,122 @@ describe('StartMetadataSweep', () => {
         await vi.advanceTimersByTimeAsync(10_000 + 100);
 
         expect(sweep).toHaveBeenCalled();
+    });
+});
+
+/**
+ * The push-status fan-out's WIRING (MJ #4222).
+ *
+ * `pushStatusFanOut.test.ts` covers the pieces — what is worth replicating, that every publish is
+ * stamped with the publishing instance, and every branch of `ParseReplicatedStatusUpdate`. What
+ * nothing covered is the wiring that joins them to Redis, which is the code that moved into this
+ * module: that a channel is actually subscribed, that inbound traffic is parsed against THIS
+ * process's id and handed to `PubSubManager`, that a local publish is forwarded on the same
+ * channel, and that a Redis failure degrades the feature instead of stopping the server.
+ *
+ * The parser and the publisher here are the real ones; mocking them would make these tests of the
+ * mock rather than of the wiring.
+ */
+describe('push-status fan-out wiring', () => {
+    /** A stand-in for the shared cache provider, capturing what the fan-out does to it. */
+    class FakeSharedCache {
+        public SubscribedChannel: string | undefined;
+        public Published: Array<{ channel: string; payload: string }> = [];
+        private inboundHandler: ((raw: string) => void) | undefined;
+        constructor(private subscribeFails = false) {}
+
+        public SubscribeToChannel = vi.fn(async (channel: string, handler: (raw: string) => void) => {
+            if (this.subscribeFails) {
+                throw new Error('redis is down');
+            }
+            this.SubscribedChannel = channel;
+            this.inboundHandler = handler;
+            return () => undefined;
+        });
+
+        public PublishMessage = vi.fn((channel: string, payload: string) => {
+            this.Published.push({ channel, payload });
+        });
+
+        /** Simulates Redis delivering a message on the subscribed channel. */
+        public Deliver(raw: string): void {
+            this.inboundHandler?.(raw);
+        }
+
+        public AsProvider(): RedisLocalStorageProvider {
+            return this as unknown as RedisLocalStorageProvider;
+        }
+    }
+
+    /** A PubSubEngine the real publisher can publish locally on, which these tests ignore. */
+    function localTopic(): PubSubEngine {
+        return { publish: vi.fn(async () => undefined) } as unknown as PubSubEngine;
+    }
+
+    beforeEach(() => {
+        publish.mockReset();
+        SetPushStatusPublishHook(undefined);
+    });
+    afterEach(() => {
+        SetPushStatusPublishHook(undefined);
+    });
+
+    it('subscribes to the push-status channel on the shared connection', async () => {
+        const redis = new FakeSharedCache();
+        await WirePushStatusFanOut(redis.AsProvider());
+
+        expect(redis.SubscribeToChannel).toHaveBeenCalledTimes(1);
+        expect(redis.SubscribedChannel).toBe('push-status-updates');
+    });
+
+    it("hands a PEER's update to this process's local topic, identity fields intact", async () => {
+        const redis = new FakeSharedCache();
+        await WirePushStatusFanOut(redis.AsProvider());
+
+        redis.Deliver(JSON.stringify({
+            sessionId: 'session-1', ownerUserId: 'user-1', message: 'done', SourceServerId: 'some-other-replica',
+        }));
+
+        expect(publish).toHaveBeenCalledTimes(1);
+        expect(publish).toHaveBeenCalledWith('PUSH_STATUS_UPDATES', {
+            sessionId: 'session-1', ownerUserId: 'user-1', message: 'done', SourceServerId: 'some-other-replica',
+        });
+    });
+
+    it("drops this process's own update echoed back, so a push is not delivered twice", async () => {
+        // The parser owns the comparison; this pins that the wiring gives it THIS process's id.
+        const redis = new FakeSharedCache();
+        await WirePushStatusFanOut(redis.AsProvider());
+
+        redis.Deliver(JSON.stringify({
+            sessionId: 'session-1', ownerUserId: 'user-1', message: 'done',
+            SourceServerId: MJGlobal.Instance.ProcessUUID,
+        }));
+
+        expect(publish).not.toHaveBeenCalled();
+    });
+
+    it('forwards a real local publish onto the same channel', async () => {
+        const redis = new FakeSharedCache();
+        await WirePushStatusFanOut(redis.AsProvider());
+
+        PublishStatusUpdate(localTopic(), { sessionId: 'session-9', ownerUserId: 'user-9', message: 'agent finished' });
+
+        expect(redis.Published).toHaveLength(1);
+        expect(redis.Published[0].channel).toBe('push-status-updates');
+        expect(JSON.parse(redis.Published[0].payload)).toEqual({
+            sessionId: 'session-9', ownerUserId: 'user-9', message: 'agent finished',
+            SourceServerId: MJGlobal.Instance.ProcessUUID,
+        });
+    });
+
+    it('degrades instead of stopping the server when Redis cannot subscribe', async () => {
+        const redis = new FakeSharedCache(true);
+
+        await expect(WirePushStatusFanOut(redis.AsProvider())).resolves.toBeUndefined();
+
+        // No hook may be left pointing at a connection it could not subscribe on.
+        PublishStatusUpdate(localTopic(), { sessionId: 's', ownerUserId: 'u', message: 'x' });
+        expect(redis.PublishMessage).not.toHaveBeenCalled();
     });
 });

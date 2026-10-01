@@ -5653,7 +5653,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
     }
 
-    /** One refresh check: fetch remote timestamps, arm the throttle only on success, compare. */
+    /**
+     * One refresh check: fetch the remote timestamps, arm the throttle only on success, bring the
+     * in-memory snapshot up to the stored one, then compare. The third step is what makes the
+     * answer correct in a fleet — a peer may have written a newer snapshot to the shared store
+     * since this process last loaded — and {@link syncLocalMetadataFromStorage} keeps it cheap by
+     * reading the whole snapshot only when the stored timestamps say it could have changed.
+     */
     private async runRefreshCheck(providerToUse?: IMetadataProvider): Promise<boolean> {
         const gotTimestamps = await this.RefreshRemoteMetadataTimestamps(providerToUse);
         if (gotTimestamps) {
