@@ -1,0 +1,160 @@
+{
+  "fields": {
+    "Name": "Generated code",
+    "Status": "Active",
+    "Description": "The code does the transformation that was asked for Gate minimum 0.6. Pass threshold 0.7. Scale Meets / Partial / Miss."
+  },
+  "primaryKey": {
+    "ID": "4EA0F004-8818-4846-9268-6A8519471D2C"
+  },
+  "relatedEntities": {
+    "MJ: Rubric Versions": [
+      {
+        "fields": {
+          "RubricID": "@parent:ID",
+          "Status": "Published",
+          "MajorVersion": 1,
+          "MinorVersion": 0,
+          "PatchVersion": 0,
+          "AppliedBump": "Initial",
+          "PassThreshold": 0.7,
+          "NotApplicablePolicy": "NotAllowed",
+          "ScoreDisplayMin": 0,
+          "ScoreDisplayMax": 1,
+          "ContentHash": "c19dcb5edd1c93abffc633f2a575362a02cf8e62a11a2814c990f6bc1fefac8f",
+          "ScoringHash": "88621b6001fc1241af5f4e1f5cff7964d3a8fb738621c1264e0ca39ee27b3730",
+          "PublishedAt": "2026-10-01T16:00:00.000Z",
+          "ChangeSummary": "Initial publish."
+        },
+        "primaryKey": {
+          "ID": "081A1865-795E-4113-A7D0-9C959EAED7EA"
+        },
+        "relatedEntities": {
+          "MJ: Rubric Criteria": [
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "the-code-does-the-transformation-that-was-asked-",
+                "Name": "The code does the transformation that was asked for",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": true,
+                "GateMinimumScore": 0.6,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 0,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+              },
+              "primaryKey": {
+                "ID": "DFE323A1-67AF-4DC0-B471-2C7DFB265F2A"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "The code does the transformation that was asked for"
+                    },
+                    "primaryKey": {
+                      "ID": "252AAB3F-E2D8-42C3-8E58-7CD6183022D4"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "Does not meet: The code does the transformation that was asked for"
+                    },
+                    "primaryKey": {
+                      "ID": "2B129F18-262D-4025-9EE1-ABAF0B205B52"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "stays-inside-the-requested-libraries-and-inputs",
+                "Name": "Stays inside the requested libraries and inputs",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 1,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+              },
+              "primaryKey": {
+                "ID": "F4C61466-4218-43B9-A497-181465F9BD62"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "Stays inside the requested libraries and inputs"
+                    },
+                    "primaryKey": {
+                      "ID": "46B8AAFA-63D1-4E68-BC74-BD2096A84A4B"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "Does not meet: Stays inside the requested libraries and inputs"
+                    },
+                    "primaryKey": {
+                      "ID": "6CC59BE0-4AC6-47BD-98CD-35827CB5485B"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "says-what-it-could-not-do-instead-of-pretending-",
+                "Name": "Says what it could not do instead of pretending it ran",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 2,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+              },
+              "primaryKey": {
+                "ID": "BA3FD778-412C-4144-A7A8-93EE63A3E143"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "Says what it could not do instead of pretending it ran"
+                    },
+                    "primaryKey": {
+                      "ID": "E359B511-3453-4786-81FD-4E9F53ED9263"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "Does not meet: Says what it could not do instead of pretending it ran"
+                    },
+                    "primaryKey": {
+                      "ID": "0CC0EC68-D539-4753-981D-5B4475770D52"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

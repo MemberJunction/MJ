@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Core agent rubrics - Research Agent",
+    "Description": "Answers from the run itself. Scored by the Research Agent Evaluation rubric, not an inline judge.",
+    "InputDefinition": {
+      "userMessage": "Using only this note: the harbor opens at dawn. When does the harbor open?"
+    },
+    "ExpectedOutcomes": {},
+    "Configuration": {
+      "agentId": "@lookup:MJ: AI Agents.Name=Research Agent",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "22569173-BB32-4977-8180-05C40DB1CD7C"
+  }
+}

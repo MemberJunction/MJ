@@ -143,3 +143,7 @@ An answer with no citation cannot be submitted. The team's 0.5 is the cohort mea
 | Transcript | AI | structure 5, evidence 3 | 0.75 | Scored |
 
 Both use the same major, so the comparison is 0.75 against 0.75, not a mix with an older rubric. The anchors are what the interviewer reads while choosing the level.
+
+## Shipped agent rubrics
+
+Seven rubrics ship as Published 1.0.0 on Meets / Partial / Miss, with pass threshold 0.7 and a gate minimum of 0.6. Partial fails that gate. They are Research answer, Query answer, Generated code, Schema proposal, Catalog contract, Picture from the data, and Duplicate decision. The examples in this guide stay Draft and stay unbound. A test that already has an `llm-judge` oracle keeps that judge. The agent's Evaluation rubric is not added beside it.

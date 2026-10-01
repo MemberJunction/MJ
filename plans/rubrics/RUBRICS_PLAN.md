@@ -870,6 +870,9 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 - [x] **U3** `guides/RUBRICS_GUIDE.md` has the six worked examples. The ng-rubrics README lists the presentational widgets.
       The TestingFramework and Engine README updates are not in this pass.
 - [x] **U4** Shipped scales and the six guide-example rubrics under `metadata/`. Versions are Draft. Percentage is numeric 0–100 with `Step` 1 and no level rows.
+- [ ] **S1** Ship the seven agent rubrics in §18 as Published 1.0.0, bind them, and add the
+      Core agent rubrics suite. Marketing is not in this set. An existing `llm-judge` oracle
+      stays; it is not replaced by the agent's Evaluation rubric.
 
 **Definition of done** (repo `CLAUDE.md`): every touched package builds and its unit tests pass;
 `pnpm run test:integration` passes with the new bundle; `npm run check:codegen-tail`,
@@ -956,10 +959,44 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 
 ## 17. Open questions
 
-1. **Nav home for Rubrics.** Proposed: the AI application. Alternative: its own application, if
-   non-AI consumers (reviews, procurement) become the main users.
+1. **Nav home for Rubrics.** Decided 2026-10-01: its own application, Catalog / Scales / Drift.
+   The AI application no longer carries those nav items. The agent form Rubrics tab stays.
 2. **Cross-major consensus.** Cohorts stop at the major-version boundary by design. If a consumer
    needs to compare across majors, the answer is per-criterion comparison by `Key` with a clear
    "not comparable overall" label — to be designed when a consumer asks.
 3. **Evidence storage for large media.** Evidence references files and media spans; nothing is
    copied. Revisit if a consumer needs immutable evidence snapshots.
+
+---
+
+## 18. Shipped agent rubrics (approved 2026-10-01)
+
+Marketing is a demo agent and is not in this set. The six guide-example rubrics stay Draft and
+stay unbound. These seven ship as Published 1.0.0 on the scale Meets / Partial / Miss. The gate
+minimum is 0.6, so Partial fails the gate. Pass threshold is 0.7.
+
+An Evaluation link is the default rubric for that agent. Self-check is one retry on the
+orchestrator's final answer. Sampling is off the response path.
+
+| Rubric | Gate | Also scored | Evaluation | Self-check | Sample rate |
+| --- | --- | --- | --- | --- | --- |
+| Research answer | Answers the question that was asked | Cites only sources the run retrieved. Separates a retrieved fact from an inference. Stays inside those sources. | Research Agent, Web Research Agent, Database Research Agent, File Research Agent, Research Report Writer, Knowledge Base Research Agent | Research Agent only | Research Agent 0.05 |
+| Query answer | The stated result matches the rows the run returned | Answers the business question in the user's terms. Does not describe columns that are not in the result. | Query Builder, Query Strategist | None. Payload validation already retries. | Query Builder 0.02 |
+| Generated code | The code does the transformation that was asked for | Stays inside the requested libraries and inputs. Says what it could not do instead of pretending it ran. | Codesmith Agent | None. The code loop already retries. | None |
+| Schema proposal | Every column the person asked for is in the proposal | Relationships are named. The reply is a proposal, not a migration that already ran. | Database Designer | None. | None |
+| Catalog contract | Names the capability, the inputs, and the outputs | Says what it will not do. Names an existing catalog overlap when there is one. | SkillSmith, ActionSmith | Both, one attempt | None |
+| Picture from the data | The title matches the request | Every series is one the person supplied. Labels or a legend name those series. | Infographic Agent | One attempt | None |
+| Duplicate decision | Says merge or keep | Names the fields that agree and the fields that conflict. Refuses a merge when a conflicting unique field is present. | Duplicate Resolution Agent | One attempt | 0.10 |
+
+`ensureImplicitRubricOracle` currently removes an `llm-judge` oracle once a version resolves.
+That would drop the scenario criteria on the two Research Agent tests. The approved rule is the
+other way: a test that already has `llm-judge` keeps that oracle, and the agent's Evaluation
+rubric is not added. Tests with no `llm-judge` and no `Test.RubricID` still receive the agent's
+Evaluation rubric.
+
+New suite **Core agent rubrics**: one Agent Eval per orchestrator in the table, `trace-no-errors`
+only, no `llm-judge`, no `Test.RubricID`.
+
+Leave unbound: Sage, Workflow Planner, Form Builder, Realtime Co-Agent, Memory Manager, Memory
+Cleanup, User Onboarding, the schema builder, Betty, the demo and workflow-demo agents, Rubric
+Evaluation Agent, Rubric Architect, and Marketing Agent.

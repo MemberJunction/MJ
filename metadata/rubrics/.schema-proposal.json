@@ -1,0 +1,160 @@
+{
+  "fields": {
+    "Name": "Schema proposal",
+    "Status": "Active",
+    "Description": "Every column the person asked for is in the proposal Gate minimum 0.6. Pass threshold 0.7. Scale Meets / Partial / Miss."
+  },
+  "primaryKey": {
+    "ID": "30B5EF00-379B-4174-8BB6-F0256F7C23EE"
+  },
+  "relatedEntities": {
+    "MJ: Rubric Versions": [
+      {
+        "fields": {
+          "RubricID": "@parent:ID",
+          "Status": "Published",
+          "MajorVersion": 1,
+          "MinorVersion": 0,
+          "PatchVersion": 0,
+          "AppliedBump": "Initial",
+          "PassThreshold": 0.7,
+          "NotApplicablePolicy": "NotAllowed",
+          "ScoreDisplayMin": 0,
+          "ScoreDisplayMax": 1,
+          "ContentHash": "b3c796a58e6930fc5b56cf0cccec1e4b580860912df3c358a53e847b8d5e36c1",
+          "ScoringHash": "ea8e6381cb8f6919e032c9b10224c4ac470dbe72f2a41861c0757c7c38735cfe",
+          "PublishedAt": "2026-10-01T16:00:00.000Z",
+          "ChangeSummary": "Initial publish."
+        },
+        "primaryKey": {
+          "ID": "8DA16A0A-8124-4203-9BD8-D94BF8908B71"
+        },
+        "relatedEntities": {
+          "MJ: Rubric Criteria": [
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "every-column-the-person-asked-for-is-in-the-prop",
+                "Name": "Every column the person asked for is in the proposal",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": true,
+                "GateMinimumScore": 0.6,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 0,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+              },
+              "primaryKey": {
+                "ID": "1E532C3A-BCCC-4939-B387-CF584BE97227"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "Every column the person asked for is in the proposal"
+                    },
+                    "primaryKey": {
+                      "ID": "64BB14A9-5763-4B14-8F38-05114AD34811"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "Does not meet: Every column the person asked for is in the proposal"
+                    },
+                    "primaryKey": {
+                      "ID": "0B4A6CED-B3D1-4F1D-A0D6-6091F6D3778C"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "relationships-are-named",
+                "Name": "Relationships are named",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 1,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+              },
+              "primaryKey": {
+                "ID": "1CAF23CB-6063-421D-902F-55E633B6850E"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "Relationships are named"
+                    },
+                    "primaryKey": {
+                      "ID": "E128C83D-0AE1-4A4D-ABD5-9E939040616B"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "Does not meet: Relationships are named"
+                    },
+                    "primaryKey": {
+                      "ID": "0C7BA1DB-335A-4FAF-A852-38B262BAA297"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "the-reply-is-a-proposal-not-a-migration-that-alr",
+                "Name": "The reply is a proposal, not a migration that already ran",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 2,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+              },
+              "primaryKey": {
+                "ID": "1872B9D9-A55A-4190-8A06-27F83F4C801D"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "The reply is a proposal, not a migration that already ran"
+                    },
+                    "primaryKey": {
+                      "ID": "8BCD7A48-F7ED-4EFD-B498-F08E275F94FF"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "Does not meet: The reply is a proposal, not a migration that already ran"
+                    },
+                    "primaryKey": {
+                      "ID": "A5072129-63A8-4FFB-9AEE-6FDB41339A94"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

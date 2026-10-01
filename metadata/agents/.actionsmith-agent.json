@@ -1,7 +1,7 @@
 [
   {
     "_comments": [
-      "ActionSmith — top-level Runtime-action-builder agent.",
+      "ActionSmith \u2014 top-level Runtime-action-builder agent.",
       "ExposeAsAction=true so it's invokable from the action catalog.",
       "Linked to Agent Manager via MJ: AI Agent Sub-Agents (the referenced-sub-agent",
       "relationship, NOT ParentID, because ParentID+ExposeAsAction are mutually exclusive).",
@@ -113,7 +113,7 @@
           }
         },
         {
-          "_comment": "Cached metadata enumeration — Name/Schema/Description for every entity. Used by ActionSmith at design time to pick which entities the new Runtime action will touch and to scope `permissions.allowedEntities` to real entity names that exist in this system.",
+          "_comment": "Cached metadata enumeration \u2014 Name/Schema/Description for every entity. Used by ActionSmith at design time to pick which entities the new Runtime action will touch and to scope `permissions.allowedEntities` to real entity names that exist in this system.",
           "fields": {
             "AgentID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=Get Entity List",
@@ -128,7 +128,7 @@
           }
         },
         {
-          "_comment": "Deep-dive on a single entity — fields, types, descriptions, relationships, plus top 3 rows of real data. ActionSmith calls this after picking candidate entities from Get Entity List to understand field shape before drafting the code contract.",
+          "_comment": "Deep-dive on a single entity \u2014 fields, types, descriptions, relationships, plus top 3 rows of real data. ActionSmith calls this after picking candidate entities from Get Entity List to understand field shape before drafting the code contract.",
           "fields": {
             "AgentID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=Get Entity Details",
@@ -145,7 +145,7 @@
       ],
       "MJ: AI Agent Relationships": [
         {
-          "_comment": "Codesmith is a referenced sub-agent — it remains a top-level agent with its own ExposeAsAction=true, while also being callable from ActionSmith for delegated code generation. SubAgentOutputMapping pulls Codesmith's top-level `code` field directly into ActionSmith's payload under `code` — without this, ActionSmith has to manually re-read the Codesmith response text across multiple LLM iterations to extract the code, wasting tokens and iterations.",
+          "_comment": "Codesmith is a referenced sub-agent \u2014 it remains a top-level agent with its own ExposeAsAction=true, while also being callable from ActionSmith for delegated code generation. SubAgentOutputMapping pulls Codesmith's top-level `code` field directly into ActionSmith's payload under `code` \u2014 without this, ActionSmith has to manually re-read the Codesmith response text across multiple LLM iterations to extract the code, wasting tokens and iterations.",
           "fields": {
             "AgentID": "@parent:ID",
             "SubAgentID": "@lookup:MJ: AI Agents.Name=Codesmith Agent",
@@ -161,7 +161,7 @@
           }
         },
         {
-          "_comment": "Database Research Agent — escalation path for when the user's request is vague about which entities/fields are involved. ActionSmith should call this ONLY when Get Entity List + Get Entity Details aren't enough (e.g., 'build an action that analyzes customer revenue' when revenue could live on Orders, Invoices, LineItems, or a view). DRA runs open-ended SQL exploration and returns a synthesized schema summary. SubAgentOutputMapping pulls its findings into ActionSmith's payload under `schemaResearch` so ActionSmith can reference them when defining the contract.",
+          "_comment": "Database Research Agent \u2014 escalation path for when the user's request is vague about which entities/fields are involved. ActionSmith should call this ONLY when Get Entity List + Get Entity Details aren't enough (e.g., 'build an action that analyzes customer revenue' when revenue could live on Orders, Invoices, LineItems, or a view). DRA runs open-ended SQL exploration and returns a synthesized schema summary. SubAgentOutputMapping pulls its findings into ActionSmith's payload under `schemaResearch` so ActionSmith can reference them when defining the contract.",
           "fields": {
             "AgentID": "@parent:ID",
             "SubAgentID": "@lookup:MJ: AI Agents.Name=Database Research Agent",
@@ -174,6 +174,33 @@
           "sync": {
             "lastModified": "2026-04-23T21:33:34.831Z",
             "checksum": "913cc4254ee7a0a969b5bf5a069060aac35b7e18418b002360513066aaad2e17"
+          }
+        }
+      ],
+      "MJ: AI Agent Rubrics": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RubricID": "@lookup:MJ: Rubrics.Name=Catalog contract",
+            "Purpose": "Evaluation",
+            "IsDefault": true,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "74F68F51-FDDB-4268-8240-DA19715F5545"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RubricID": "@lookup:MJ: Rubrics.Name=Catalog contract",
+            "Purpose": "SelfCheck",
+            "IsDefault": true,
+            "Status": "Active",
+            "MaxSelfCheckAttempts": 1
+          },
+          "primaryKey": {
+            "ID": "4B435F6F-4193-4968-BE50-A35F98E55E99"
           }
         }
       ]

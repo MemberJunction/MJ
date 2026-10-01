@@ -224,7 +224,7 @@
             "ParentID": "@parent:ID",
             "Name": "Database Schema Builder",
             "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Platform Management",
-            "Description": "Code-based agent that executes the SchemaEngine → RuntimeSchemaManager pipeline to materialise a validated TableDefinition as a live MemberJunction entity. Runs migrations, triggers CodeGen, and persists provenance settings.",
+            "Description": "Code-based agent that executes the SchemaEngine \u2192 RuntimeSchemaManager pipeline to materialise a validated TableDefinition as a live MemberJunction entity. Runs migrations, triggers CodeGen, and persists provenance settings.",
             "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
             "Status": "Active",
             "ExecutionOrder": 4,
@@ -244,6 +244,20 @@
           "sync": {
             "lastModified": "2026-04-20T17:13:55.769Z",
             "checksum": "a7e59cf163c03ae0eab02918f49d6f680370a91c6e3e1ce2773554d03d8a6aa5"
+          }
+        }
+      ],
+      "MJ: AI Agent Rubrics": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RubricID": "@lookup:MJ: Rubrics.Name=Schema proposal",
+            "Purpose": "Evaluation",
+            "IsDefault": true,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F0D66E1B-4FB8-44F5-9B23-A1673361A489"
           }
         }
       ]

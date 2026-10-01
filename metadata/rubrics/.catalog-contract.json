@@ -1,0 +1,160 @@
+{
+  "fields": {
+    "Name": "Catalog contract",
+    "Status": "Active",
+    "Description": "Names the capability, the inputs, and the outputs Gate minimum 0.6. Pass threshold 0.7. Scale Meets / Partial / Miss."
+  },
+  "primaryKey": {
+    "ID": "6B769CDD-EB96-45DE-8280-0336C8C73EA8"
+  },
+  "relatedEntities": {
+    "MJ: Rubric Versions": [
+      {
+        "fields": {
+          "RubricID": "@parent:ID",
+          "Status": "Published",
+          "MajorVersion": 1,
+          "MinorVersion": 0,
+          "PatchVersion": 0,
+          "AppliedBump": "Initial",
+          "PassThreshold": 0.7,
+          "NotApplicablePolicy": "NotAllowed",
+          "ScoreDisplayMin": 0,
+          "ScoreDisplayMax": 1,
+          "ContentHash": "9fc950e887e27618b2817a25eda52fc02afe0243baed56c899ccf9074b5badb4",
+          "ScoringHash": "5322a00cf08ca6fc116495d2dd5b03cfa6fd730d29e78ff2d80a658b1a2455c2",
+          "PublishedAt": "2026-10-01T16:00:00.000Z",
+          "ChangeSummary": "Initial publish."
+        },
+        "primaryKey": {
+          "ID": "8CFBCCE3-7C26-4B17-8A14-9D03FE184E4F"
+        },
+        "relatedEntities": {
+          "MJ: Rubric Criteria": [
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "names-the-capability-the-inputs-and-the-outputs",
+                "Name": "Names the capability, the inputs, and the outputs",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": true,
+                "GateMinimumScore": 0.6,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 0,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+              },
+              "primaryKey": {
+                "ID": "8653901B-6693-46ED-A3C2-74728D86FB7A"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "Names the capability, the inputs, and the outputs"
+                    },
+                    "primaryKey": {
+                      "ID": "BFDCCD0E-DD5F-488D-AA3C-82B8C0BEB5B1"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "Does not meet: Names the capability, the inputs, and the outputs"
+                    },
+                    "primaryKey": {
+                      "ID": "2CE83D6A-A433-4DF1-AF56-E05FC33D5611"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "says-what-it-will-not-do",
+                "Name": "Says what it will not do",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 1,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+              },
+              "primaryKey": {
+                "ID": "4E28D162-52EB-4104-8B92-8070E516D9F7"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "Says what it will not do"
+                    },
+                    "primaryKey": {
+                      "ID": "D3486FB5-E6D7-4A05-80A2-F504FC81EA44"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "Does not meet: Says what it will not do"
+                    },
+                    "primaryKey": {
+                      "ID": "E4F2632A-BEE5-46B5-B4C7-794697C5A342"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "names-an-existing-catalog-overlap-when-there-is-",
+                "Name": "Names an existing catalog overlap when there is one",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 2,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+              },
+              "primaryKey": {
+                "ID": "3E919617-2796-45BC-84DF-5B44BDBB5BDC"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "Names an existing catalog overlap when there is one"
+                    },
+                    "primaryKey": {
+                      "ID": "D2E47C67-474A-4B49-8808-5809FB9426FA"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "Does not meet: Names an existing catalog overlap when there is one"
+                    },
+                    "primaryKey": {
+                      "ID": "26C2ADD9-574B-45BA-85C6-C1EAA0562588"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

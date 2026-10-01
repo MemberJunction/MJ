@@ -1,0 +1,160 @@
+{
+  "fields": {
+    "Name": "Query answer",
+    "Status": "Active",
+    "Description": "The stated result matches the rows the run returned Gate minimum 0.6. Pass threshold 0.7. Scale Meets / Partial / Miss."
+  },
+  "primaryKey": {
+    "ID": "27A57EB1-C1DF-48BD-8F19-48C462FAC793"
+  },
+  "relatedEntities": {
+    "MJ: Rubric Versions": [
+      {
+        "fields": {
+          "RubricID": "@parent:ID",
+          "Status": "Published",
+          "MajorVersion": 1,
+          "MinorVersion": 0,
+          "PatchVersion": 0,
+          "AppliedBump": "Initial",
+          "PassThreshold": 0.7,
+          "NotApplicablePolicy": "NotAllowed",
+          "ScoreDisplayMin": 0,
+          "ScoreDisplayMax": 1,
+          "ContentHash": "0f357c67f4d45d81f3f38e705ac1064799ac7a0358e725b7da820b31243b3986",
+          "ScoringHash": "16a046b47e0bf61d75c306682ee778445e330e4e135b3fc5091b522731a53a87",
+          "PublishedAt": "2026-10-01T16:00:00.000Z",
+          "ChangeSummary": "Initial publish."
+        },
+        "primaryKey": {
+          "ID": "F4170574-7536-481B-87AA-7C9B4C2DD763"
+        },
+        "relatedEntities": {
+          "MJ: Rubric Criteria": [
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "the-stated-result-matches-the-rows-the-run-retur",
+                "Name": "The stated result matches the rows the run returned",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": true,
+                "GateMinimumScore": 0.6,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 0,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+              },
+              "primaryKey": {
+                "ID": "1190FF55-6661-4F51-ADE0-AC133C16E69C"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "The stated result matches the rows the run returned"
+                    },
+                    "primaryKey": {
+                      "ID": "EEDF48A4-C28C-42CE-A3FF-49A86C9259A7"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "Does not meet: The stated result matches the rows the run returned"
+                    },
+                    "primaryKey": {
+                      "ID": "3403C328-C042-4302-BB07-1BA86DF713CE"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "answers-the-business-question-in-the-user-s-term",
+                "Name": "Answers the business question in the user's terms",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 1,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+              },
+              "primaryKey": {
+                "ID": "B44A51F3-EDBE-4C44-A0D3-7C0141FA7724"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "Answers the business question in the user's terms"
+                    },
+                    "primaryKey": {
+                      "ID": "50D74D2F-BE93-4346-AE18-6D813D66A1D5"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "Does not meet: Answers the business question in the user's terms"
+                    },
+                    "primaryKey": {
+                      "ID": "B15BEBB8-0623-472F-9EC8-8F588180D4F2"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "does-not-describe-columns-that-are-not-in-the-re",
+                "Name": "Does not describe columns that are not in the result",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 2,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+              },
+              "primaryKey": {
+                "ID": "5B3076ED-695D-493E-9F3F-549C7D25DE19"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "Does not describe columns that are not in the result"
+                    },
+                    "primaryKey": {
+                      "ID": "12CF4C9A-3761-461C-B599-EC96C4AC5967"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "Does not meet: Does not describe columns that are not in the result"
+                    },
+                    "primaryKey": {
+                      "ID": "0BB79780-B98F-46CE-881A-A4572C74C5D5"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

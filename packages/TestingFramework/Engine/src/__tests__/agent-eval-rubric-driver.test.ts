@@ -97,7 +97,7 @@ describe('agent eval rubric driver', () => {
         expect(resolved.oracles.map(oracle => oracle.type)).toEqual(['llm-judge']);
     });
 
-    it('drops the inline judge once the resolved rubric has a published version', async () => {
+    it('keeps an existing llm-judge and does not add the agent rubric', async () => {
         const driver = new SuiteProbe();
         const context = {
             test: { ID: 'test', RubricID: 'published-rubric' },
@@ -110,7 +110,6 @@ describe('agent eval rubric driver', () => {
             agentId: 'agent',
             oracles: [{ type: 'llm-judge', config: { criteria: ['Accurate'] } }, { type: 'trace-no-errors' }],
         }, context);
-        expect(resolved.oracles.map(oracle => oracle.type)).toEqual(['trace-no-errors', 'rubric']);
-        expect(resolved.oracles[1].config).toMatchObject({ rubricId: 'published-rubric', rubricVersionId: 'version-4' });
+        expect(resolved.oracles.map(oracle => oracle.type)).toEqual(['llm-judge', 'trace-no-errors']);
     });
 });

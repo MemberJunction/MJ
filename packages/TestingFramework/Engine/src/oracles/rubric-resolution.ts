@@ -77,22 +77,21 @@ export interface OracleConfigLike {
 }
 
 /**
- * Adds a rubric oracle when a rubric was resolved and a version can be scored.
- * No published version, and no explicit version, leaves the list alone so the inline
- * judge still runs. Once a version is available, the inline llm-judge is removed so
- * the same criteria are not scored twice.
+ * Adds the agent's Evaluation rubric when the test did not already judge itself.
+ * A test that has an llm-judge keeps that oracle list, and the rubric is not added.
+ * A test with no llm-judge and no rubric oracle gets the resolved version.
  */
 export function ensureImplicitRubricOracle(oracles: OracleConfigLike[] | undefined, choice: RubricChoice, versionId?: string, versionLabel?: string): OracleConfigLike[] {
     const list = oracles ?? [];
+    if (list.some(oracle => oracle.type === 'llm-judge')) return list;
     if (!choice.rubricId || !versionId) return list;
     const pinned = { rubricVersionId: versionId, versionLabel };
-    const withoutJudge = list.filter(oracle => oracle.type !== 'llm-judge');
-    if (withoutJudge.some(oracle => oracle.type === 'rubric')) {
-        return withoutJudge.map(oracle => oracle.type === 'rubric'
+    if (list.some(oracle => oracle.type === 'rubric')) {
+        return list.map(oracle => oracle.type === 'rubric'
             ? { ...oracle, config: { ...pinned, ...oracle.config, versionLabel: oracle.config?.versionLabel ?? versionLabel } }
             : oracle);
     }
-    return [...withoutJudge, { type: 'rubric', config: { rubricId: choice.rubricId, ...pinned } }];
+    return [...list, { type: 'rubric', config: { rubricId: choice.rubricId, ...pinned } }];
 }
 
 /**

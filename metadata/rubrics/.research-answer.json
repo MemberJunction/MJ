@@ -1,0 +1,200 @@
+{
+  "fields": {
+    "Name": "Research answer",
+    "Status": "Active",
+    "Description": "Answers the question that was asked Gate minimum 0.6. Pass threshold 0.7. Scale Meets / Partial / Miss."
+  },
+  "primaryKey": {
+    "ID": "3EAEAEC4-E878-411E-8BE5-7C39A74FCD7C"
+  },
+  "relatedEntities": {
+    "MJ: Rubric Versions": [
+      {
+        "fields": {
+          "RubricID": "@parent:ID",
+          "Status": "Published",
+          "MajorVersion": 1,
+          "MinorVersion": 0,
+          "PatchVersion": 0,
+          "AppliedBump": "Initial",
+          "PassThreshold": 0.7,
+          "NotApplicablePolicy": "NotAllowed",
+          "ScoreDisplayMin": 0,
+          "ScoreDisplayMax": 1,
+          "ContentHash": "dfa3706c547955232d8037b4730dda9a1be6f6ec323cfdb1e9d437471b95a13b",
+          "ScoringHash": "698767b0283a67139aa8af03fa9a225a2bf593e4552ecede42f839360f1fd3bc",
+          "PublishedAt": "2026-10-01T16:00:00.000Z",
+          "ChangeSummary": "Initial publish."
+        },
+        "primaryKey": {
+          "ID": "30E4C0E3-1824-4DA5-ABFF-C9C8320762E4"
+        },
+        "relatedEntities": {
+          "MJ: Rubric Criteria": [
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "answers-the-question-that-was-asked",
+                "Name": "Answers the question that was asked",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": true,
+                "GateMinimumScore": 0.6,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 0,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+              },
+              "primaryKey": {
+                "ID": "14763546-CDAF-46CF-9B00-6D5BC3454001"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "Answers the question that was asked"
+                    },
+                    "primaryKey": {
+                      "ID": "1BB7FB27-EA3B-4A5A-A1E2-0762E25BB0DB"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "Does not meet: Answers the question that was asked"
+                    },
+                    "primaryKey": {
+                      "ID": "F8F7A187-CD10-46FF-8222-F3CF44F074CF"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "cites-only-sources-the-run-retrieved",
+                "Name": "Cites only sources the run retrieved",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 1,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+              },
+              "primaryKey": {
+                "ID": "C2D43C7F-F331-48F0-B233-402417839406"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "Cites only sources the run retrieved"
+                    },
+                    "primaryKey": {
+                      "ID": "2670CD35-CA68-4BED-9196-0ACB72233886"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "Does not meet: Cites only sources the run retrieved"
+                    },
+                    "primaryKey": {
+                      "ID": "4B1B1B8D-C088-44E9-B29C-3D25AE813374"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "separates-a-retrieved-fact-from-an-inference",
+                "Name": "Separates a retrieved fact from an inference",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 2,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+              },
+              "primaryKey": {
+                "ID": "237EE595-8401-4C9B-923F-353038E977EB"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "Separates a retrieved fact from an inference"
+                    },
+                    "primaryKey": {
+                      "ID": "7E972F54-C5C0-4EC8-9EEF-701BF28487F3"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "Does not meet: Separates a retrieved fact from an inference"
+                    },
+                    "primaryKey": {
+                      "ID": "96CBF1EC-A3F2-45A7-8243-0AA4E3F14EDD"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "stays-inside-those-sources",
+                "Name": "Stays inside those sources",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 3,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+              },
+              "primaryKey": {
+                "ID": "F544714C-6296-43E4-8465-5AEAE784D4B9"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "Stays inside those sources"
+                    },
+                    "primaryKey": {
+                      "ID": "5FD23E62-1317-4F6C-B1F8-44414D3FECF4"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "Does not meet: Stays inside those sources"
+                    },
+                    "primaryKey": {
+                      "ID": "D394D13F-942F-48C4-BD9B-143A63FD5541"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

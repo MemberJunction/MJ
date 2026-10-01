@@ -53,13 +53,11 @@ describe('rubric resolution', () => {
         expect(weightsForImplicitRubric({ trace: 1 }, true)).toEqual({ trace: 1 });
     });
 
-    it('keeps the inline judge until a published version exists, then lets the rubric oracle replace it', () => {
+    it('keeps an existing llm-judge and does not add the agent rubric', () => {
         const choice = resolveRubric({ testRubricId: 'rubric' });
-        const inline = [{ type: 'llm-judge', config: { criteria: ['Accurate'] } }];
-        expect(ensureImplicitRubricOracle(inline, choice).map(oracle => oracle.type)).toEqual(['llm-judge']);
+        const inline = [{ type: 'llm-judge', config: { criteria: ['Accurate'] } }, { type: 'trace-no-errors' }];
         const published = ensureImplicitRubricOracle(inline, choice, 'v1', '1.0.0');
-        expect(published.map(oracle => oracle.type)).toEqual(['rubric']);
-        expect(published[0].config).toMatchObject({ rubricId: 'rubric', rubricVersionId: 'v1', versionLabel: '1.0.0' });
+        expect(published).toEqual(inline);
     });
 
     it('calls the engine with the test run as the subject and the test as the context', async () => {
