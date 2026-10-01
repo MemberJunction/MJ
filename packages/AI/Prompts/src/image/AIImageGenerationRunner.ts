@@ -5,9 +5,7 @@
  */
 
 import { MJGlobal, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
-import { LogStatus } from '@memberjunction/core';
 import { AIEngine } from '@memberjunction/aiengine';
-import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
   AIErrorType,
   BaseImageGenerator,
@@ -382,7 +380,7 @@ export class AIImageGenerationRunner extends BaseModelRunner {
   ): Promise<void> {
     await this.FinalizeRunRecord(promptRun, imageResult.success, endTime, executionTimeMS, run => {
       run.Result = this.describeImages(imageResult);
-      this.applyUsage(run, this.usageToRecord(imageResult));
+      this.ApplyUsageToRunRecord(run, this.usageToRecord(imageResult));
       if (!imageResult.success && imageResult.errorMessage) {
         run.ErrorMessage = imageResult.errorMessage;
       }
@@ -404,70 +402,9 @@ export class AIImageGenerationRunner extends BaseModelRunner {
    * is kept. A call that returned no images records nothing.
    */
   private usageToRecord(result: ImageGenerationResult): ModelUsage | undefined {
-    const reported = result.usage;
     const imageCount = result.images?.length ?? 0;
-    if (this.reportsQuantity(reported) || imageCount === 0) {
-      return reported;
-    }
-    const counted = ModelUsage.ForMedia('Images', 0, imageCount);
-    if (reported?.cost !== undefined) {
-      counted.cost = reported.cost;
-      counted.costCurrency = reported.costCurrency;
-    }
-    return counted;
-  }
-
-  /** Whether the driver's usage names any quantity: tokens, or units in a measure. */
-  private reportsQuantity(usage: ModelUsage | undefined): boolean {
-    if (!usage) {
-      return false;
-    }
-    const tokens = (usage.promptTokens ?? 0) + (usage.completionTokens ?? 0);
-    const hasMeasure = usage.unitKind !== undefined && usage.unitKind !== 'Tokens';
-    const units = hasMeasure ? (usage.inputUnits ?? 0) + (usage.outputUnits ?? 0) : 0;
-    return tokens > 0 || units > 0;
-  }
-
-  /**
-   * Records the usage: tokens, units in the measure it names, and a cost only when the driver gave
-   * one. With no usage nothing is recorded, so the cost stays empty.
-   */
-  private applyUsage(run: MJAIPromptRunEntityExtended, usage: ModelUsage | undefined): void {
-    if (!usage) {
-      return;
-    }
-    const promptTokens = usage.promptTokens ?? 0;
-    const completionTokens = usage.completionTokens ?? 0;
-    if (promptTokens + completionTokens > 0) {
-      run.TokensPrompt = promptTokens;
-      run.TokensCompletion = completionTokens;
-      run.TokensUsed = promptTokens + completionTokens;
-    }
-    if (usage.unitKind && usage.unitKind !== 'Tokens') {
-      this.applyUnitUsage(run, usage);
-    }
-    if (usage.cost !== undefined) {
-      run.Cost = usage.cost;
-    }
-    if (usage.costCurrency !== undefined) {
-      run.CostCurrency = usage.costCurrency;
-    }
-  }
-
-  /**
-   * Records continuous units (images, seconds) with the usage type that names their measure. Units
-   * without a resolvable usage type would be read as tokens, so they are skipped with a log line.
-   */
-  private applyUnitUsage(run: MJAIPromptRunEntityExtended, usage: ModelUsage): void {
-    const kind = usage.unitKind?.toLowerCase();
-    const usageType = AIEngineBase.Instance.UsageTypes.find(ut => ut.Name?.trim().toLowerCase() === kind);
-    if (!usageType) {
-      LogStatus(`AIImageGenerationRunner: usage type '${usage.unitKind}' is not loaded; units not recorded on run ${run.ID}`);
-      return;
-    }
-    run.UsageTypeID = usageType.ID;
-    run.InputUnitsUsed = usage.inputUnits ?? null;
-    run.OutputUnitsUsed = usage.outputUnits ?? null;
+    const counted = imageCount > 0 ? ModelUsage.ForMedia('Images', 0, imageCount) : undefined;
+    return this.ResolveUsageToRecord(result.usage, counted);
   }
 
   /** Builds the caller's result from the driver's, naming the candidate that answered. */
