@@ -407,6 +407,11 @@ export interface FormPlacementState {
      */
     SortKey: number | null;
     ActivateNow: boolean;
+    /**
+     * Keeps a panel that is off, off, rather than saving it as a draft. Only an edit of a panel
+     * that is off offers it, and it is false whenever {@link ActivateNow} is true.
+     */
+    KeepOff: boolean;
 }
 
 /** The answers, in the shape the write path consumes. */
@@ -415,6 +420,8 @@ export interface FormPlacementDecision {
     Contribution: FormContributionSpec;
     /** False leaves the row Pending — stored, rendering for nobody. */
     ActivateNow: boolean;
+    /** True leaves a row that is off, off, rather than Pending. */
+    KeepOff?: boolean;
 }
 
 /** One position a panel can take, named twice: for the reader and for the record. */
@@ -499,6 +506,7 @@ export function InitialPlacementState(
         ReplaceContributionIndex: 0,
         SortKey: null,
         ActivateNow: !context.FullCustomForm,
+        KeepOff: false,
     };
 }
 
@@ -509,11 +517,15 @@ export function InitialPlacementState(
  * the proposal's placement because the placement is the user's to choose and a component
  * author should not preselect it. Here the placement being read back IS the user's own
  * earlier choice, so discarding it would make every edit start from scratch.
+ *
+ * @param activeNow Whether the panel is on now, so the edit keeps it on.
+ * @param keepOff Whether the panel is off now, so the edit keeps it off rather than making it a draft.
  */
 export function PlacementStateFromContribution(
     spec: FormContributionSpec,
     context: FormPlacementContext,
     activeNow: boolean,
+    keepOff = false,
 ): FormPlacementState {
     const railKey = (spec.replacesSectionKey ?? '').trim();
     const listed = (spec.replacesSectionKeys ?? []).map((k) => k.trim()).filter((k) => k.length > 0);
@@ -566,6 +578,7 @@ export function PlacementStateFromContribution(
         ReplaceContributionIndex: contributionIndex >= 0 ? contributionIndex : 0,
         SortKey: spec.sortKey ?? null,
         ActivateNow: activeNow,
+        KeepOff: !activeNow && keepOff,
     };
 }
 
@@ -668,7 +681,7 @@ export function ResolvePlacementDecision(
         contribution.sectionPosition = state.SectionPosition;
     }
 
-    return { Contribution: contribution, ActivateNow: state.ActivateNow };
+    return { Contribution: contribution, ActivateNow: state.ActivateNow, KeepOff: !state.ActivateNow && state.KeepOff };
 }
 
 /** Section titles joined for a sentence: "A and B", "A, B and C". */
@@ -692,12 +705,29 @@ export function DescribeFieldList(labels: readonly string[]): string {
 }
 
 /**
+ * Who sees a panel, as the end of "visible to …": the caller alone, a named role, or everyone.
+ * A panel added from a conversation is always the caller's own; one edited from the Manage
+ * drawer keeps the audience it has.
+ */
+export function DescribeVisibleTo(scope: string | null | undefined, roleName?: string | null): string {
+    if (scope === 'Global') return 'everyone';
+    if (scope === 'Role') return roleName ? `the ${roleName} role` : 'a role';
+    return 'you only';
+}
+
+/**
  * One sentence saying what pressing Apply does, in the same terms the user just chose.
  *
  * It is the only place the separate answers are stated together, so a contradiction the
  * form allows — a panel that is active but invisible behind a full form — reads plainly.
+ *
+ * @param visibleTo Who sees the panel, from {@link DescribeVisibleTo}.
  */
-export function SummarizePlacement(state: FormPlacementState, context: FormPlacementContext): string {
+export function SummarizePlacement(
+    state: FormPlacementState,
+    context: FormPlacementContext,
+    visibleTo = DescribeVisibleTo('User'),
+): string {
     const what = state.Presentation === 'bare' ? 'a bare strip' : 'a panel';
     const inSection = state.ReplaceMode === 'none'
         ? context.Sections.find((s) => s.Key === state.InSectionKey.trim()) ?? null
@@ -745,8 +775,8 @@ export function SummarizePlacement(state: FormPlacementState, context: FormPlace
             : 'as a tab of its own');
     }
 
-    parts.push('visible to you only');
-    parts.push(state.ActivateNow ? 'starting now' : 'saved as a draft');
+    parts.push(`visible to ${visibleTo}`);
+    parts.push(state.ActivateNow ? 'starting now' : state.KeepOff ? 'kept off' : 'saved as a draft');
 
     let sentence = `${parts.join(', ')}.`;
     if (state.ReplaceMode === 'field') {
@@ -839,9 +869,9 @@ function placedPosition(state: FormPlacementState, context: FormPlacementContext
 function existingPosition(existing: FormPlacementExisting, context: FormPlacementContext): string | null {
     const replaced = (existing.SectionKeys ?? []).map((key) => key.trim()).filter((key) => key.length > 0);
     if (replaced.length > 0) {
-        const drawn = context.Sections.length > 0
-            ? context.Sections.map((s) => s.Key).filter((key) => replaced.includes(key))
-            : replaced;
+        const drawn = TargetsUnread(context)
+            ? replaced
+            : context.Sections.map((s) => s.Key).filter((key) => replaced.includes(key));
         return blockPosition(drawn, context);
     }
     if (existing.ReplacesPlace) return null;

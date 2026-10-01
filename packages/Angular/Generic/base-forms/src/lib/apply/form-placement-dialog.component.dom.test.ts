@@ -1039,4 +1039,102 @@ describe('MjFormPlacementDialogComponent (DOM) — editing a saved row', () => {
             expect(mounted.dialog.State.Title).toBe('Who they are');
         });
     });
+
+    /** A form can emit its slots and draw no field group; only a section claim depends on one. */
+    describe('when the form it reads draws no field groups', () => {
+        const noGroups: ProbedFormShape = {
+            Slots: ['before-fields', 'after-fields', 'after-related', 'after-everything'],
+            Sections: [], Panels: [], Groups: [], Layout: 'accordion',
+        };
+        const withGrid: FormPlacementContext = { ...DRAWER_CONTEXT, Related: CONTEXT.Related };
+
+        async function read(mounted: ReturnType<typeof mount>): Promise<void> {
+            mounted.probe.answer(noGroups);
+            await mounted.fixture.whenStable();
+            mounted.fixture.detectChanges();
+        }
+
+        it('keeps a grid claim, and writes it on Apply', async () => {
+            const mounted = mount(withGrid, GRID_ROW);
+            await read(mounted);
+            expect(mounted.dialog.State.ReplaceMode).toBe('related');
+            mounted.dialog.OnApply();
+            expect(mounted.fixture.componentInstance.Decision!.Contribution).toMatchObject({
+                relatedEntity: 'MoreCheese: Course Enrollments', relatedJoinField: 'CourseID',
+            });
+        });
+
+        it('keeps a claim on another panel', async () => {
+            const panelRow: FormContributionSpec = { slot: 'after-fields', presentation: 'panel', title: 'P', contributionKey: 'skip:health' };
+            const mounted = mount({ ...DRAWER_CONTEXT, Existing: CONTEXT.Existing }, panelRow);
+            await read(mounted);
+            expect(mounted.dialog.State.ReplaceMode).toBe('contribution');
+        });
+
+        it('drops a section claim, which has no section left to stand in for', async () => {
+            const sectionRow: FormContributionSpec = { slot: 'before-fields', presentation: 'panel', title: 'S', replacesSectionKey: 'details' };
+            const mounted = mount(DRAWER_CONTEXT, sectionRow);
+            expect(mounted.dialog.State.ReplaceMode).toBe('section');
+            await read(mounted);
+            expect(mounted.dialog.State.ReplaceMode).toBe('none');
+        });
+    });
+});
+
+/**
+ * The dialog states who will see the panel. An edit from the Manage drawer keeps the panel's own
+ * audience and, for a panel that is off, offers keeping it off rather than making it a draft.
+ */
+describe('MjFormPlacementDialogComponent (DOM) — audience and start', () => {
+    function renderWith(inputs: Record<string, unknown>) {
+        const f = renderComponentFixture(MjFormPlacementDialogComponent, {
+            imports: [CommonModule, FormsModule, AlertStub, ButtonStub, MjIconPickerComponent],
+            declarations: [MjFormPlacementDialogComponent],
+            inputs: { ProbeForm: false, Context: CONTEXT, Proposal: PROPOSAL, ComponentName: 'Cohort Analytics', ...inputs },
+        });
+        f.detectChanges();
+        return f;
+    }
+
+    it('says the panel is for the user alone unless told otherwise', () => {
+        const f = renderWith({});
+        expect(text(f)).toContain('visible to you only');
+        expect(f.componentInstance.Summary).toContain('visible to you only');
+    });
+
+    it('states the audience it is given', () => {
+        const f = renderWith({ VisibleTo: 'the Sales role' });
+        expect(text(f)).toContain('every record of this entity, visible to the Sales role');
+        expect(f.componentInstance.Summary).toContain('visible to the Sales role');
+        expect(text(f)).not.toContain('visible to you only');
+    });
+
+    it('offers only now and draft for a panel that is not off', () => {
+        const f = renderWith({});
+        const values = Array.from((f.nativeElement as HTMLElement).querySelectorAll<HTMLInputElement>('input[name="mj-status"]'))
+            .map((r) => r.value);
+        expect(values).toEqual(['now', 'draft']);
+    });
+
+    it('offers keeping a panel off, and emits that answer', () => {
+        const f = renderWith({ OfferKeepOff: true });
+        const off = (f.nativeElement as HTMLElement).querySelector<HTMLInputElement>('input[name="mj-status"][value="off"]');
+        expect(off).not.toBeNull();
+        off!.click();
+        f.detectChanges();
+        expect(f.componentInstance.State.ActivateNow).toBe(false);
+        expect(f.componentInstance.State.KeepOff).toBe(true);
+        expect(f.componentInstance.Summary).toContain('kept off');
+        let emitted: FormPlacementDecision | null = null;
+        f.componentInstance.Applied.subscribe((d: FormPlacementDecision) => { emitted = d; });
+        f.componentInstance.OnApply();
+        expect(emitted!).toMatchObject({ ActivateNow: false, KeepOff: true });
+    });
+
+    it('turns the panel on when the user picks right away after keeping it off', () => {
+        const f = renderWith({ OfferKeepOff: true });
+        f.componentInstance.StartChoice = 'off';
+        f.componentInstance.StartChoice = 'now';
+        expect(f.componentInstance.State).toMatchObject({ ActivateNow: true, KeepOff: false });
+    });
 });

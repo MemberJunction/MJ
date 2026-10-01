@@ -26,6 +26,7 @@ import {
     MovedSortKey,
     ChosenSectionKeys,
     KeepEditedRowKey,
+    DescribeVisibleTo,
     PLACEMENT_ORDER_STEP,
     type FormPlacementContext,
     type PlacementOrderItem,
@@ -1003,5 +1004,56 @@ describe('Section claims', () => {
     it('names every block in the summary', () => {
         expect(SummarizePlacement({ ...base(), ReplaceMode: 'section', ReplaceSectionKeys: ['identity', 'account'] }, threeSections))
             .toContain('standing in for the Identity and Account sections');
+    });
+});
+
+/**
+ * The summary states who sees the panel and what it starts as. A panel added from a conversation
+ * is the caller's own; one edited from the Manage drawer keeps its audience, and one that is off
+ * can stay off.
+ */
+describe('Audience and start', () => {
+    it('names each audience as the end of "visible to …"', () => {
+        expect(DescribeVisibleTo('User')).toBe('you only');
+        expect(DescribeVisibleTo('Global')).toBe('everyone');
+        expect(DescribeVisibleTo('Role', 'Sales')).toBe('the Sales role');
+        expect(DescribeVisibleTo('Role', null)).toBe('a role');
+        expect(DescribeVisibleTo(null)).toBe('you only');
+    });
+
+    it('says the audience it is given rather than "you only"', () => {
+        const text = SummarizePlacement(InitialPlacementState(null, CONTEXT), CONTEXT, DescribeVisibleTo('Global'));
+        expect(text).toContain('visible to everyone');
+        expect(text).not.toContain('visible to you only');
+    });
+
+    it('starts a new panel neither on hold nor kept off', () => {
+        expect(InitialPlacementState(PROPOSAL, CONTEXT).KeepOff).toBe(false);
+    });
+
+    it('reads a panel that is off back as kept off, and says so', () => {
+        const state = PlacementStateFromContribution({ slot: 'after-fields', presentation: 'panel', title: 'P' }, CONTEXT, false, true);
+        expect(state).toMatchObject({ ActivateNow: false, KeepOff: true });
+        expect(SummarizePlacement(state, CONTEXT)).toContain('kept off');
+        expect(ResolvePlacementDecision(state, CONTEXT, null)).toMatchObject({ ActivateNow: false, KeepOff: true });
+    });
+
+    it('never keeps off a panel that is turned on', () => {
+        const on = PlacementStateFromContribution({ slot: 'after-fields', presentation: 'panel', title: 'P' }, CONTEXT, true, true);
+        expect(on.KeepOff).toBe(false);
+        const state = { ...InitialPlacementState(null, CONTEXT), ActivateNow: true, KeepOff: true };
+        expect(ResolvePlacementDecision(state, CONTEXT, null).KeepOff).toBe(false);
+    });
+});
+
+/** Before the form is read, a stored block claim is ordered by its keys as stored, the way the placed panel's is. */
+describe('Order in a position — before the form has been read', () => {
+    it('lists a stored block claim with a new claim on the same block', () => {
+        const unread: FormPlacementContext = {
+            ...CONTEXT, Sections: [], TargetsVerified: false,
+            Existing: [{ Key: 'stored', Slot: 'before-fields', Title: 'Stored', SectionKeys: ['identity'], ReplacesPlace: true, SortKey: 5 }],
+        };
+        const state = { ...InitialPlacementState(null, unread), ReplaceMode: 'section' as const, ReplaceSectionKey: 'identity' };
+        expect(PanelsInPosition(state, unread, 'New').map((i) => (i.IsThis ? 'THIS' : i.Title))).toEqual(['Stored', 'THIS']);
     });
 });

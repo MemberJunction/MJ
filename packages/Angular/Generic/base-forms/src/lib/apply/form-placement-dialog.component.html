@@ -258,7 +258,7 @@
         <div class="mj-placement-label">Applies to</div>
         <div class="mj-placement-entity">
           <strong>{{ Context.EntityName }}</strong>
-          <span>&middot; every record of this entity, visible to you only</span>
+          <span>&middot; every record of this entity, visible to {{ VisibleTo }}</span>
         </div>
       </section>
 
@@ -448,14 +448,20 @@
       <section>
         <div class="mj-placement-label">When it starts</div>
         <div class="mj-placement-stack">
-          <label class="mj-placement-row" [class.is-on]="State.ActivateNow">
-            <input type="radio" name="mj-status" [value]="true" [(ngModel)]="State.ActivateNow">
+          <label class="mj-placement-row" [class.is-on]="StartChoice === 'now'">
+            <input type="radio" name="mj-status" value="now" [(ngModel)]="StartChoice">
             <span class="mj-placement-row-text">Right away</span>
           </label>
-          <label class="mj-placement-row" [class.is-on]="!State.ActivateNow">
-            <input type="radio" name="mj-status" [value]="false" [(ngModel)]="State.ActivateNow">
+          <label class="mj-placement-row" [class.is-on]="StartChoice === 'draft'">
+            <input type="radio" name="mj-status" value="draft" [(ngModel)]="StartChoice">
             <span class="mj-placement-row-text">Save as a draft</span>
           </label>
+          @if (OfferKeepOff) {
+            <label class="mj-placement-row" [class.is-on]="StartChoice === 'off'">
+              <input type="radio" name="mj-status" value="off" [(ngModel)]="StartChoice">
+              <span class="mj-placement-row-text">Keep it off</span>
+            </label>
+          }
         </div>
         <p class="mj-placement-hint">A draft is stored but rendered for nobody until you turn it on.</p>
       </section>

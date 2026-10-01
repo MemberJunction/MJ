@@ -11,6 +11,7 @@ import {
     ChosenFieldNames,
     DefaultFieldSectionKey,
     DescribeFieldList,
+    DescribeVisibleTo,
     FieldsInSection,
     ReplacedPreviewKeys,
     SectionsWithFields,
@@ -47,7 +48,8 @@ import type { ComponentSpec } from '@memberjunction/interactive-component-types'
  *
  * Scope is not a control here. The create path clamps every contribution to the calling
  * user, deliberately — an agent must not be able to change another person's form — so the
- * dialog states that rather than offering a choice it cannot honour.
+ * dialog states the audience rather than offering a choice it cannot honour. An edit from the
+ * Manage drawer keeps the panel's own audience, which the host states through {@link VisibleTo}.
  */
 @Component({
     standalone: false,
@@ -115,6 +117,12 @@ export class MjFormPlacementDialogComponent extends BaseAngularComponent {
 
     /** The saved component of the panel being edited, for the same reason. */
     @Input() PanelComponentID: string | null = null;
+
+    /** Who sees the panel, as the end of "visible to …". The caller alone unless the host says otherwise. */
+    @Input() VisibleTo = DescribeVisibleTo('User');
+
+    /** Offers keeping the panel off, for an edit of a panel that is off now. */
+    @Input() OfferKeepOff = false;
 
     /** The user pressed Apply. */
     @Output() Applied = new EventEmitter<FormPlacementDecision>();
@@ -186,7 +194,17 @@ export class MjFormPlacementDialogComponent extends BaseAngularComponent {
     }
 
     public get Summary(): string {
-        return SummarizePlacement(this.State, this._context);
+        return SummarizePlacement(this.State, this._context, this.VisibleTo);
+    }
+
+    /** When the panel starts: right away, as a draft, or, for a panel that is off, still off. */
+    public get StartChoice(): 'now' | 'draft' | 'off' {
+        if (this.State.ActivateNow) return 'now';
+        return this.State.KeepOff && this.OfferKeepOff ? 'off' : 'draft';
+    }
+    public set StartChoice(value: 'now' | 'draft' | 'off') {
+        this.State.ActivateNow = value === 'now';
+        this.State.KeepOff = value === 'off';
     }
 
     /** Whether this form draws a side rail, so tabs are a thing the user can see. */
@@ -459,12 +477,14 @@ export class MjFormPlacementDialogComponent extends BaseAngularComponent {
                 ReplaceSectionKeys: this.State.ReplaceSectionKeys.filter((k) => drawn.has(k)),
                 InSectionKey: drawn.has(this.State.InSectionKey) ? this.State.InSectionKey : '',
             };
-            // The previously selected section may not be one the form draws.
+            // The previously selected section may not be one the form draws. Only a section claim
+            // depends on it; a grid, panel or tab claim stands as it is.
             if (!this._context.Sections.some((s) => s.Key === this.State.ReplaceSectionKey)) {
+                const dropsSectionClaim = this.State.ReplaceMode === 'section' && this._context.Sections.length === 0;
                 this.State = {
                     ...this.State,
                     ReplaceSectionKey: this._context.Sections[0]?.Key ?? '',
-                    ReplaceMode: this._context.Sections.length > 0 ? this.State.ReplaceMode : 'none',
+                    ReplaceMode: dropsSectionClaim ? 'none' : this.State.ReplaceMode,
                 };
             }
         } finally {
