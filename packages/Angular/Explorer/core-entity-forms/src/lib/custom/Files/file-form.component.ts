@@ -6,7 +6,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJFileFormComponent } from '../../generated/Entities/MJFile/mjfile.form.component';
-import { DescribeFileSize, MediaLoadsByElement, type FileMediaType } from './file-form.logic';
+import { ClassifyFileMediaType, DescribeFileSize, MediaLoadsByElement, type FileMediaType } from './file-form.logic';
 import { z } from 'zod';
 
 const CreateMediaAccessTokenMutation = gql`
@@ -155,7 +155,7 @@ export class MJFileFormComponentExtended extends MJFileFormComponent implements 
           this.IsMediaLoaded = true;
         } else if (!MediaLoadsByElement(mediaType)) {
           // No element will fire `load` for this type: the fallback card is the view, so it is loaded now.
-          // Without this the overlay stayed on "Loading…" for every .docx, .xlsx, .zip and the like (MJ#4947).
+          // Without this the overlay stayed on "Loading…" for every .zip and the like (MJ#4947).
           this.IsMediaLoaded = true;
         }
       } else {
@@ -178,27 +178,9 @@ export class MJFileFormComponentExtended extends MJFileFormComponent implements 
     }, 350);
   }
 
-  /**
-   * Determines media type category based on MIME type or file extension.
-   */
+  /** The viewer's category for the file, from its MIME type or its name (`ClassifyFileMediaType`). */
   public get MediaType(): FileMediaType {
-    const mime = (this.record?.ContentType || '').toLowerCase();
-    const name = (this.record?.Name || '').toLowerCase();
-
-    if (mime.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg|ico|bmp|avif)$/.test(name)) return 'image';
-    if (mime === 'application/pdf' || name.endsWith('.pdf')) return 'pdf';
-    if (mime.startsWith('video/') || /\.(mp4|webm|ogg|mov|mkv|avi)$/.test(name)) return 'video';
-    if (mime.startsWith('audio/') || /\.(mp3|wav|ogg|aac|m4a|flac)$/.test(name)) return 'audio';
-    if (
-      mime.startsWith('text/') ||
-      mime.includes('json') ||
-      mime.includes('xml') ||
-      mime.includes('javascript') ||
-      /\.(txt|md|csv|json|xml|yaml|yml|js|ts|html|css|sql|sh|log)$/.test(name)
-    ) {
-      return 'text';
-    }
-    return 'other';
+    return ClassifyFileMediaType(this.record?.ContentType, this.record?.Name);
   }
 
   public get FileIconClass(): string {
@@ -208,6 +190,8 @@ export class MJFileFormComponentExtended extends MJFileFormComponent implements 
       case 'video': return 'fa-solid fa-file-video mj-file-color-video';
       case 'audio': return 'fa-solid fa-file-audio mj-file-color-audio';
       case 'text': return 'fa-solid fa-file-lines mj-file-color-text';
+      case 'docx': return 'fa-solid fa-file-word mj-file-color-word';
+      case 'xlsx': return 'fa-solid fa-file-excel mj-file-color-excel';
       default: return 'fa-solid fa-file mj-file-color-generic';
     }
   }

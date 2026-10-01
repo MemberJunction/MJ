@@ -109,6 +109,32 @@
               <pre><code>{{ TextContent || 'Loading text content...' }}</code></pre>
             </div>
           }
+          @case ('docx') {
+            @if (MediaUrl) {
+              <div class="mj-file-media-office-box" [class.mj-file-media--hidden]="!IsMediaLoaded">
+                <mj-docx-preview [url]="MediaUrl" (loaded)="OnMediaElementLoaded()" (failed)="OnMediaElementLoaded()"></mj-docx-preview>
+              </div>
+            } @else {
+              <div class="mj-file-viewer-fallback">
+                <i class="fa-solid fa-file-word mj-file-fallback-icon"></i>
+                <h3>{{ record.Name }}</h3>
+                <p>Document preview could not be loaded.</p>
+              </div>
+            }
+          }
+          @case ('xlsx') {
+            @if (MediaUrl) {
+              <div class="mj-file-media-office-box" [class.mj-file-media--hidden]="!IsMediaLoaded">
+                <mj-xlsx-preview [url]="MediaUrl" (loaded)="OnMediaElementLoaded()" (failed)="OnMediaElementLoaded()"></mj-xlsx-preview>
+              </div>
+            } @else {
+              <div class="mj-file-viewer-fallback">
+                <i class="fa-solid fa-file-excel mj-file-fallback-icon"></i>
+                <h3>{{ record.Name }}</h3>
+                <p>Workbook preview could not be loaded.</p>
+              </div>
+            }
+          }
           @default {
             <div class="mj-file-viewer-fallback">
               <i [class]="FileIconClass" class="mj-file-fallback-icon"></i>

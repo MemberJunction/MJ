@@ -1,5 +1,5 @@
-import { Component, OnInit, ChangeDetectorRef, SecurityContext } from '@angular/core';
-import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import { SafeHtml } from '@angular/platform-browser';
 import { RegisterClass } from '@memberjunction/global';
 import { DataSnapshot } from '@memberjunction/core';
 import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
@@ -8,8 +8,8 @@ import { ArtifactFileService } from '../../services/artifact-file.service';
 /**
  * Viewer plugin for Word (DOCX) artifact versions stored in MJStorage.
  *
- * Downloads the binary file, converts it to HTML using mammoth.js, then
- * sanitizes the HTML before binding it with [innerHTML].
+ * Downloads the binary file and hands the bytes to `mj-docx-preview`, Explorer's one Word renderer (mammoth to
+ * sanitized HTML), which the Files form shares.
  *
  * Printing opens the sanitized content in a child window so the browser's
  * native print dialog renders the Word document faithfully.
@@ -29,7 +29,7 @@ import { ArtifactFileService } from '../../services/artifact-file.service';
       </mj-file-artifact-toolbar>
 
       <div class="docx-viewer__body">
-        @if (isLoading) {
+        @if (!arrayBuffer && !errorMessage) {
           <div class="docx-viewer__state">
             <i class="fas fa-spinner fa-spin"></i>
             <span>Loading document…</span>
@@ -40,7 +40,7 @@ import { ArtifactFileService } from '../../services/artifact-file.service';
             <span>{{ errorMessage }}</span>
           </div>
         } @else {
-          <div class="docx-viewer__content" [innerHTML]="safeHtml"></div>
+          <mj-docx-preview [arrayBuffer]="arrayBuffer" (loaded)="OnPreviewLoaded($event)" (failed)="showError($event)"></mj-docx-preview>
         }
       </div>
     </div>
@@ -74,47 +74,6 @@ import { ArtifactFileService } from '../../services/artifact-file.service';
       .docx-viewer__state--error {
         color: var(--mj-status-error-text);
       }
-
-      .docx-viewer__content {
-        padding: 32px 48px;
-        max-width: 900px;
-        margin: 0 auto;
-        color: var(--mj-text-primary);
-        font-size: 14px;
-        line-height: 1.7;
-      }
-
-      /* Normalize headings produced by mammoth */
-      .docx-viewer__content :is(h1, h2, h3, h4, h5, h6) {
-        color: var(--mj-text-primary);
-        margin-top: 1.5em;
-        margin-bottom: 0.5em;
-      }
-
-      .docx-viewer__content table {
-        border-collapse: collapse;
-        width: 100%;
-        margin: 1em 0;
-      }
-
-      .docx-viewer__content :is(td, th) {
-        border: 1px solid var(--mj-border-default);
-        padding: 6px 10px;
-      }
-
-      .docx-viewer__content th {
-        background: var(--mj-bg-surface-card);
-        font-weight: 600;
-      }
-
-      .docx-viewer__content a {
-        color: var(--mj-text-link);
-      }
-
-      .docx-viewer__content img {
-        max-width: 100%;
-        height: auto;
-      }
     `,
   ],
 })
@@ -143,13 +102,14 @@ export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     this.SafeHtml = value;
   }
 
-  /** Raw HTML produced by mammoth — kept for print. */
+  /** Raw HTML produced by mammoth — kept for print. Set when the preview reports it loaded. */
   private rawHtml = '';
   private downloadUrl = '';
+  /** The document's bytes, handed to the shared preview once downloaded. */
+  public arrayBuffer: ArrayBuffer | null = null;
 
   constructor(
     private fileService: ArtifactFileService,
-    private sanitizer: DomSanitizer,
     private cdr: ChangeDetectorRef,
   ) {
     super();
@@ -224,25 +184,19 @@ export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         );
       }
 
-      const html = await this.convertDocxToHtml(arrayBuffer);
-      this.rawHtml = html;
-      const sanitized = this.sanitizer.sanitize(SecurityContext.HTML, html) ?? '';
-      this.SafeHtml = sanitized;
-      this.isLoading = false;
+      this.arrayBuffer = arrayBuffer;
       this.cdr.markForCheck();
     } catch (err) {
       this.showError(`Could not load document: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
-  private async convertDocxToHtml(arrayBuffer: ArrayBuffer): Promise<string> {
-    const mammoth = await import('mammoth');
-    const result = await mammoth.convertToHtml({ arrayBuffer });
-    if (result.messages?.length) {
-      // Log warnings from mammoth (e.g. unsupported features) without breaking display
-      result.messages.forEach((m) => console.warn('[DocxViewer] mammoth:', m.message));
-    }
-    return result.value;
+  /** The shared preview has drawn the document: keep its HTML for print and clear the loading state. */
+  public OnPreviewLoaded(html: string): void {
+    this.rawHtml = html;
+    this.SafeHtml = html;
+    this.isLoading = false;
+    this.cdr.markForCheck();
   }
 
   private async fetchAsArrayBuffer(url: string): Promise<ArrayBuffer> {
@@ -283,7 +237,7 @@ export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     printWindow.close();
   }
 
-  private showError(message: string): void {
+  public showError(message: string): void {
     this.isLoading = false;
     this.errorMessage = message;
     this.cdr.markForCheck();
