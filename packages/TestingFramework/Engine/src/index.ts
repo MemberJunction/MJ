@@ -23,6 +23,7 @@ export * from './oracles/TraceSubAgentValidatorOracle';
 export * from './oracles/AgentDecisionOracle';
 export * from './oracles/LLMJudgeOracle';
 export * from './oracles/inline-rubric';
+export * from './oracles/promote-criteria';
 export * from './oracles/DecisionJudgeOracle';
 export * from './oracles/ExactMatchOracle';
 export * from './oracles/SQLValidatorOracle';

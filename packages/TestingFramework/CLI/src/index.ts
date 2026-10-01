@@ -14,6 +14,7 @@ export { ReportCommand } from './commands/report';
 export { HistoryCommand } from './commands/history';
 export { CompareCommand } from './commands/compare';
 export { ScriptsCommand } from './commands/scripts';
+export { PromoteCriteriaCommand } from './commands/promote-criteria';
 
 // Utilities
 export { OutputFormatter } from './utils/output-formatter';
