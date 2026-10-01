@@ -471,8 +471,9 @@ component is the caller's own (`IsCallersOwnComponent`): used by at least one ro
 caller's own personal rows, or used by no row and created by the caller. The creator is read from
 the component's `Create` record in `MJ: Record Changes` with `Source` 'Internal'; `MJ: Components`
 tracks record changes, so the platform writes one with every component it creates, and
-`MJRecordChangeEntityServer` refuses a caller who tries to create an Internal record change through
-the API.
+`MJRecordChangeEntityServer` refuses a caller who tries to create an Internal `Create` record change
+through the API. A component created by clone or restore carries a `Clone` or `Restore` record
+change instead, so it is not its creator's own until a row of theirs uses it.
 
 1. **Changing a component** (`ComponentWriteRefusal`, in `MJComponentEntityServer`): a delete, or a
    change to its specification, status, name, namespace or type.
