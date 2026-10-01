@@ -3136,3 +3136,46 @@ should be checked **before** the lease is taken.
 40 AI Model descriptions restored from the captured originals, the test model's description restored,
 `TrustServerCacheCompletely` back to 1, no duplicate `UserRole` pairs, the test-3e `ViewType` row clean,
 and the owner's `Integration` role intact.
+
+## 29. The timer §26 missed (2026-10-01)
+
+§26 gated the engine sweep and `UserCache.RefreshIfChangedInDatabase`, and claimed that a default
+install "issues no database queries at all". **That claim was false**, and the manual session found
+why: `UserCache.Refresh(provider, autoRefreshIntervalMS)` schedules a self-rescheduling `setTimeout`
+that calls `LoadUsers` — an unconditional full reload of every user and role — and
+`SQLServerDataProvider`'s config hands it `CheckRefreshIntervalSeconds * 1000`, which comes from
+`databaseSettings.metadataCacheRefreshInterval`, **default 180 000 ms**. So every MJAPI has been
+reading two tables from the database every three minutes, for the life of the process, regardless of
+any flag. On Azure SQL serverless that alone prevents auto-pause — exactly the cost §26 set out to
+remove.
+
+**Demonstrated on the live pair, not inferred.** With the interval shortened to 20 s, a role revoked
+by **raw SQL** — no event, no stamp, no cache clear, and the conditional check gated off because
+`MJ: Users` is trusted — was enforced about 20 s later: the owner's save in Explorer was refused.
+Nothing else could have done that. The timer works exactly as its name suggests; it is also the
+"180s timer" in #4247's title.
+
+**Fixed the same way as everything else in §26.** `scheduleAutoRefresh` reads the database only when
+`MJ: Users` or `MJ: User Roles` declares `TrustServerCacheCompletely = false`. The timer keeps
+ticking regardless — a tick that finds nothing declared costs one in-memory lookup and no query — so
+an entity marked later is honoured on the next tick without a restart. `metadataCacheRefreshInterval:
+0` still disables it outright. It also now replaces its own timer instead of stacking: `Refresh` can
+be called more than once (bootstrap, then host configuration) and each call used to start another
+self-rescheduling chain.
+
+Three tests, the first two verified against the un-gated code (`expected [ …(6) ] to have a length of
++0 but got 6` over three intervals): no reads while trusted, reads when declared, and the timer still
+ticking so a later declaration takes effect. One pre-existing re-arm test now declares drift in its
+fixture, which is what it always meant.
+
+**A second correction.** §28 said a hand-edited entity flag is picked up by a metadata poller within
+three minutes. There is no such poller: metadata staleness is checked on a peer notice, on a
+`BaseEntity` write to a member entity, or at boot — never on a timer. `metadataCacheRefreshInterval`
+drives only the user cache. So a metadata change made outside MJ is not picked up at all until one of
+those happens, and the guide now says so.
+
+**On whether to add a metadata sweeper** (the owner's question): not for this branch. It would be a
+new recurring query, which is what §26 just removed; the entities involved are trusted by default, so
+the §26 gate would make it dead on arrival; and the declared paths (`mj sync push`, `mj cache clear`,
+any `BaseEntity` write) already notify. The real gap is that hand-editing metadata in SSMS looks like
+it works and does not — which is documentation, now written.

@@ -353,7 +353,12 @@ describe('UserCache', () => {
         });
 
         it('should re-arm with the same provider after the interval elapses', async () => {
-            const stub = makeProviderStub({ users: [{ ID: 'id1', Name: 'Alice' }], roles: [] });
+            // The periodic reload reads the database only for entities that declare they can change
+            // without an event, so this re-arm fixture declares it (plan §26 / §29).
+            const stub = makeProviderStub({ users: [{ ID: 'id1', Name: 'Alice' }], roles: [], entities: [
+                { Name: 'MJ: Users', SchemaName: '__mj', BaseView: 'vwUsers', TrustServerCacheCompletely: false },
+                { Name: 'MJ: User Roles', SchemaName: '__mj', BaseView: 'vwUserRoles', TrustServerCacheCompletely: false },
+            ] });
 
             await UserCache.Instance.Refresh(stub.Provider, 1000);
             expect(stub.Queries).toHaveLength(2); // users + roles, one pass (the staleness probe is separate)
@@ -693,6 +698,64 @@ describe('UserCache', () => {
     // -----------------------------------------------------------------
     // The periodic safety net
     // -----------------------------------------------------------------
+    describe('the auto-refresh timer', () => {
+        beforeEach(() => { vi.useFakeTimers(); });
+        afterEach(() => { vi.useRealTimers(); });
+
+        const TRUSTED = [
+            { Name: 'MJ: Users', SchemaName: '__mj', BaseView: 'vwUsers', TrustServerCacheCompletely: true },
+            { Name: 'MJ: User Roles', SchemaName: '__mj', BaseView: 'vwUserRoles', TrustServerCacheCompletely: true },
+        ];
+        const DECLARES_RAW_SQL = [
+            { Name: 'MJ: Users', SchemaName: '__mj', BaseView: 'vwUsers', TrustServerCacheCompletely: false },
+            { Name: 'MJ: User Roles', SchemaName: '__mj', BaseView: 'vwUserRoles', TrustServerCacheCompletely: false },
+        ];
+
+        it('does NOT read the database on its timer when both entities trust their cache', async () => {
+            // This timer reloads every user and role unconditionally, every interval, forever. On
+            // Azure SQL serverless that alone prevents auto-pause — the cost §26 exists to remove.
+            // When nothing declares out-of-band writes there is nothing for it to discover: saves
+            // raise events, a peer's save publishes the stamp, and FindUser falls back to an
+            // authoritative read on a miss.
+            const stub = makeProviderStub({ users: [{ ID: 'id1', Name: 'Alice' }], roles: [], entities: TRUSTED });
+            await UserCache.Instance.Refresh(stub.Provider, 20_000);
+            stub.Queries.length = 0;
+
+            await vi.advanceTimersByTimeAsync(20_000 * 3 + 100);
+
+            expect(stub.Queries).toHaveLength(0);
+        });
+
+        it('still reloads on its timer when an entity declares out-of-band writes', async () => {
+            const stub = makeProviderStub({ users: [{ ID: 'id1', Name: 'Alice' }], roles: [], entities: DECLARES_RAW_SQL });
+            await UserCache.Instance.Refresh(stub.Provider, 20_000);
+            stub.Queries.length = 0;
+
+            await vi.advanceTimersByTimeAsync(20_000 + 100);
+
+            expect(stub.Queries.length).toBeGreaterThan(0);
+        });
+
+        it('keeps ticking while nothing is declared, so a later declaration takes effect', async () => {
+            // The timer must not switch itself off: an operator can mark the entity at any time, and
+            // the next tick should start honouring it without a restart.
+            const entities = [
+                { Name: 'MJ: Users', SchemaName: '__mj', BaseView: 'vwUsers', TrustServerCacheCompletely: true },
+                { Name: 'MJ: User Roles', SchemaName: '__mj', BaseView: 'vwUserRoles', TrustServerCacheCompletely: true },
+            ];
+            const stub = makeProviderStub({ users: [{ ID: 'id1', Name: 'Alice' }], roles: [], entities });
+            await UserCache.Instance.Refresh(stub.Provider, 20_000);
+            stub.Queries.length = 0;
+            await vi.advanceTimersByTimeAsync(20_000 * 2 + 100);
+            expect(stub.Queries).toHaveLength(0);
+
+            entities[0].TrustServerCacheCompletely = false; // an operator marks the entity
+            await vi.advanceTimersByTimeAsync(20_000 + 100);
+
+            expect(stub.Queries.length).toBeGreaterThan(0);
+        });
+    });
+
     describe('RefreshIfChangedInDatabase', () => {
         /**
          * Entity metadata declaring that these rows CAN change without an event — which is the only
