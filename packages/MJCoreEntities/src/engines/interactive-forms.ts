@@ -29,10 +29,11 @@ import type { InstanceConfigEngine } from "./InstanceConfigEngine";
  *      JSON across non-form types (Skip artifacts, dashboards, etc.).
  *
  * This engine threads the needle: it loads `Type='Form'` Components (small
- * dataset — a few dozen per typical deployment, ~5MB max), **all**
+ * dataset — a few dozen per typical deployment, ~5MB max), the
  * `EntityFormOverride` rows (tiny) and, unless metadata contributions are
- * switched off, the `MJ: Entity Form Contributions` rows (in the browser, the
- * shared ones and the signed-in user's own). Specification is included because
+ * switched off, the `MJ: Entity Form Contributions` rows. In the browser it
+ * loads the shared overrides and contributions and the signed-in user's own;
+ * on a server it loads every row. Specification is included because
  * the cockpit + Skip rendering both need it. Loaded as `entity_object` so
  * callers can call `.Save()` / `.Delete()` on the cached instances directly.
  *
@@ -157,6 +158,14 @@ export class InteractiveFormsEngine extends BaseEngine<InteractiveFormsEngine> {
         provider?: IMetadataProvider,
     ): Promise<void> {
         const contributionsEnabled = InteractiveFormsEngine.MetadataContributionsEnabled;
+        const personalRowsFilter = InteractiveFormsEngine.personalRowsLoadFilter(provider ?? this.ProviderToUse, contextUser);
+        const overrides: Partial<BaseEnginePropertyConfig> = {
+            Type: 'entity',
+            EntityName: 'MJ: Entity Form Overrides',
+            PropertyName: '_overrides',
+            CacheLocal: true,
+        };
+        if (personalRowsFilter) overrides.Filter = personalRowsFilter;
         const c: Partial<BaseEnginePropertyConfig>[] = [
             {
                 Type: 'entity',
@@ -176,12 +185,7 @@ export class InteractiveFormsEngine extends BaseEngine<InteractiveFormsEngine> {
                 Filter: "Type='Form'",
                 CacheLocal: true,
             },
-            {
-                Type: 'entity',
-                EntityName: 'MJ: Entity Form Overrides',
-                PropertyName: '_overrides',
-                CacheLocal: true,
-            },
+            overrides,
         ];
         if (contributionsEnabled) {
             const contributions: Partial<BaseEnginePropertyConfig> = {
@@ -190,22 +194,21 @@ export class InteractiveFormsEngine extends BaseEngine<InteractiveFormsEngine> {
                 PropertyName: '_contributions',
                 CacheLocal: true,
             };
-            const filter = InteractiveFormsEngine.contributionLoadFilter(provider ?? this.ProviderToUse, contextUser);
-            if (filter) contributions.Filter = filter;
+            if (personalRowsFilter) contributions.Filter = personalRowsFilter;
             c.push(contributions);
         }
         await this.Load(c, provider, forceRefresh, contextUser);
     }
 
     /**
-     * The filter for the contribution load: in the browser, every shared row plus the signed-in
-     * user's own personal rows; on a server, none.
+     * The filter for the override and contribution loads: in the browser, every shared row plus
+     * the signed-in user's own personal rows; on a server, none.
      *
      * A browser cache holds one user's view, so other users' personal rows (with their Notes and
      * Configuration) stay on the server. A server cache is shared by every user of the process,
      * so it holds every row and each reader filters what it serves.
      */
-    private static contributionLoadFilter(
+    private static personalRowsLoadFilter(
         provider: IMetadataProvider | null | undefined,
         contextUser: UserInfo | undefined,
     ): string | null {

@@ -201,7 +201,10 @@ export class FormPanelAdminService {
         return UserCanManageFormDefaults(md?.CurrentUser, md);
     }
 
-    /** Every full custom form registered on this entity, whatever its audience or status. */
+    /**
+     * The full custom forms the engine holds for this entity, in every status: every shared form
+     * and the signed-in user's own.
+     */
     public OverridesForEntity(entity: EntityInfo | null | undefined): FormOverrideRow[] {
         if (!entity?.ID) return [];
         try {

@@ -204,8 +204,8 @@ describe('InteractiveFormsEngine.ApplyInstanceConfiguration', () => {
 });
 
 /**
- * A browser cache holds one user's view, so other users' personal rows — with their Notes and
- * Configuration — are not loaded into it. A server cache is shared by every user of the process,
+ * A browser cache holds one user's view, so other users' personal rows (contributions and full
+ * custom forms, with their Notes and Configuration) are not loaded into it. A server cache is shared by every user of the process,
  * so it holds every row and each reader filters what it serves.
  */
 describe('InteractiveFormsEngine contribution load', () => {
@@ -215,6 +215,7 @@ describe('InteractiveFormsEngine contribution load', () => {
     });
 
     const contributionConfig = () => loadedConfigs.find(c => c.EntityName === 'MJ: Entity Form Contributions');
+    const overrideConfig = () => loadedConfigs.find(c => c.EntityName === 'MJ: Entity Form Overrides');
 
     it('loads shared rows and only the signed-in user\'s personal rows in the browser', async () => {
         const browser = { ProviderType: 'Network', CurrentUser: { ID: USER } };
@@ -233,6 +234,31 @@ describe('InteractiveFormsEngine contribution load', () => {
         await InteractiveFormsEngine.Instance.Config(true, { ID: USER } as never, server as never);
         expect(contributionConfig()).toBeDefined();
         expect(contributionConfig()?.Filter).toBeUndefined();
+    });
+
+    it('loads shared full custom forms and only the signed-in user\'s own in the browser', async () => {
+        const browser = { ProviderType: 'Network', CurrentUser: { ID: USER } };
+        await InteractiveFormsEngine.Instance.Config(true, undefined, browser as never);
+        expect(overrideConfig()?.Filter).toBe(`Scope <> 'User' OR UserID = '${USER}'`);
+    });
+
+    it('loads every full custom form on a server', async () => {
+        const server = { ProviderType: 'Database', CurrentUser: { ID: USER } };
+        await InteractiveFormsEngine.Instance.Config(true, { ID: USER } as never, server as never);
+        expect(overrideConfig()).toBeDefined();
+        expect(overrideConfig()?.Filter).toBeUndefined();
+    });
+
+    it('still loads full custom forms, filtered the same way, with contributions switched off', async () => {
+        InteractiveFormsEngine.MetadataContributionsEnabled = false;
+        try {
+            const browser = { ProviderType: 'Network', CurrentUser: { ID: USER } };
+            await InteractiveFormsEngine.Instance.Config(true, undefined, browser as never);
+            expect(contributionConfig()).toBeUndefined();
+            expect(overrideConfig()?.Filter).toBe(`Scope <> 'User' OR UserID = '${USER}'`);
+        } finally {
+            InteractiveFormsEngine.MetadataContributionsEnabled = true;
+        }
     });
 });
 
