@@ -41,10 +41,13 @@ const OFFLINE_CATALOG: DecisionEvalAgentCatalog = {
     ConversationManager: { ID: '00000000-0000-4000-8000-000000000000', Name: 'Sage', Description: null }
 };
 
+/** A cell's label: it becomes the bracketed part of every record's name, so it holds no brackets. */
+export const DecisionEvalCellLabelSchema = z.string().min(1).refine(label => !/[[\]]/.test(label), 'must not contain [ or ]');
+
 /** One matrix cell: the conditions every point is observed under. */
 export const DecisionEvalMatrixCellSchema = z.object({
     /** Names the cell. It becomes the bracketed part of every record's name. */
-    label: z.string().min(1).refine(label => !/[[\]]/.test(label), 'must not contain [ or ]'),
+    label: DecisionEvalCellLabelSchema,
     stateLayout: z.enum(DECISION_EVAL_STATE_LAYOUTS),
     promptName: z.string().min(1).optional(),
     modelId: z.string().uuid().optional(),
@@ -94,13 +97,29 @@ export interface DecisionEvalRunEstimate {
  * @param source The file's name, for messages.
  */
 export function ParseDecisionEvalMatrix(text: string, source: string): DecisionEvalMatrix {
+    return ParseEvalMatrixFile(text, source, DecisionEvalMatrixSchema);
+}
+
+/**
+ * Parses and validates a matrix file against a decision's matrix schema. Throws naming the
+ * problem, and names a repeated cell label. Shared by the routing and discovery matrices.
+ *
+ * @param text The file's text.
+ * @param source The file's name, for messages.
+ * @param schema The decision's matrix schema.
+ */
+export function ParseEvalMatrixFile<TMatrix extends { cells: ReadonlyArray<{ label: string }> }>(
+    text: string,
+    source: string,
+    schema: { safeParse(value: unknown): { success: true; data: TMatrix } | { success: false; error: z.ZodError } }
+): TMatrix {
     let json: unknown;
     try {
         json = JSON.parse(text);
     } catch (error) {
         throw new Error(`${source}: not valid JSON (${error instanceof Error ? error.message : String(error)})`);
     }
-    const result = DecisionEvalMatrixSchema.safeParse(json);
+    const result = schema.safeParse(json);
     if (!result.success) {
         throw new Error(`${source}: ${DescribeZodError(result.error)}`);
     }

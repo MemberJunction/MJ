@@ -11,6 +11,25 @@ import type { DecisionAnswer } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIDecisionParams, AIDecisionRunner, type AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import {
+    BuildDecisionDiscoveryOptionSet,
+    BuildDecisionDiscoveryQuestions,
+    CanSearchEntities,
+    DECISION_DISCOVERY_MIN_CONFIDENCE,
+    DECISION_DISCOVERY_MIN_OPTIONS,
+    DECISION_DISCOVERY_TIMEOUT_MS,
+    DecisionDiscoveryAgentSearch,
+    DecisionDiscoveryCatalog,
+    DecisionDiscoveryFromResult,
+    DecisionDiscoveryRunnableAgents,
+    DecisionPromptOptionCap,
+    JudgeDecisionDiscovery,
+    MentionsAgent,
+    type DecisionDiscoveryAgent,
+    type DecisionDiscoveryOption,
+    type DecisionDiscoveryOptionSet,
+    type DecisionDiscoverySearch
+} from '@memberjunction/ai-agents';
+import {
     BuildRoutingQuestions,
     BuildRoutingState,
     BuildRoutingStateStructured,
@@ -31,15 +50,30 @@ import { BaseTestDriver } from './BaseTestDriver';
 import { PinnedDecisionRunner } from './PinnedDecisionRunner';
 import { DriverExecutionContext, DriverExecutionResult, OracleInput, OracleResult, ValidationResult } from '../types';
 import { MapPointToRoutingInput, type DecisionEvalAgentCatalog } from '../decision-eval/point-mapping';
+import { DiscoveryDecisionState } from '../decision-eval/discovery-mapping';
+import { FIND_CANDIDATE_AGENTS_TOP_K, RankSemanticSearchBaseline } from '../decision-eval/discovery-baseline';
+import {
+    DiscoveryEvalConfigSchema,
+    DiscoveryEvalExpectedSchema,
+    DiscoveryEvalInputSchema,
+    type DiscoveryBaselineRecord,
+    type DiscoveryEvalActualOutput,
+    type DiscoveryEvalConfig,
+    type DiscoveryEvalExpected,
+    type DiscoveryEvalInput,
+    type DiscoveryOptionsRecord
+} from '../decision-eval/discovery-types';
 import {
     DEFAULT_DECISION_PROMPT_NAME,
     DecisionEvalConfigSchema,
     DecisionEvalExpectedSchema,
     DecisionEvalInputSchema,
+    DecisionEvalKindSchema,
     DescribeZodError,
     type DecisionEvalActualOutput,
     type DecisionEvalAnswerSummary,
     type DecisionEvalConfig,
+    type DecisionEvalDecision,
     type DecisionEvalExpected,
     type DecisionEvalInput,
     type DecisionEvalModelRecord,
@@ -75,8 +109,57 @@ export interface DecisionEvalCall {
     LatencyMs: number;
 }
 
-/** The conversation manager the routing decision offers as "someone else". */
-const CONVERSATION_MANAGER_NAME = 'Sage';
+/** A discovery test's three JSON columns, validated. */
+export interface ParsedDiscoveryEvalTest {
+    Config: DiscoveryEvalConfig;
+    Input: DiscoveryEvalInput;
+    Expected: DiscoveryEvalExpected;
+}
+
+/**
+ * What one discovery run needs from the environment, loaded the way production's discovery loads
+ * it: the agents the run's user may run, the conversation manager that runs discovery, the
+ * decision prompt's option cap, and the semantic search.
+ */
+export interface DiscoveryEvalEnvironment {
+    /** The decision prompt, from `AIEngine`. Null for a baseline cell, which makes no call. */
+    Prompt: MJAIPromptEntityExtended | null;
+    /** The conversation manager (Sage): never an option, and the agent whose @mention does not count. */
+    ConversationManager: { ID: string; Name: string | null };
+    /** Every agent in the engine's catalog: what an @mention may name. */
+    AllAgents: ReadonlyArray<{ ID: string; Name: string | null }>;
+    /** The agents the run's user may run (`DecisionDiscoveryRunnableAgents`). */
+    RunnableAgents: ReadonlyArray<DecisionDiscoveryAgent>;
+    /** The decision prompt's option cap (`DecisionPromptOptionCap`), when one is declared. */
+    DeclaredCap?: number;
+    /** The semantic search for a request (`DecisionDiscoveryAgentSearch`), or undefined when the provider cannot run it. */
+    SearchFor?: (request: string) => DecisionDiscoverySearch;
+}
+
+/** One discovery decision call and what came back. */
+export interface DiscoveryEvalCall {
+    /** The options the call offered, and how they were reached. */
+    OptionSet: DecisionDiscoveryOptionSet;
+    /** The runner's result. */
+    Result: AIDecisionRunResult;
+    /** Wall-clock time of the call, in milliseconds. It includes writing the prompt-run row. */
+    LatencyMs: number;
+    /**
+     * Wall-clock time from building the options, the semantic search included, through the call, in
+     * milliseconds: the span production's discovery timeout ({@link DECISION_DISCOVERY_TIMEOUT_MS}) bounds.
+     */
+    DiscoveryLatencyMs: number;
+}
+
+/** What the shared result helpers read from either decision's parsed test. */
+interface EvalTestParts {
+    Config: { oracles: DecisionEvalConfig['oracles'] };
+    Input: object;
+    Expected: object;
+}
+
+/** The conversation manager the routing decision offers as "someone else", and the agent that runs discovery. */
+export const CONVERSATION_MANAGER_NAME = 'Sage';
 
 /**
  * Why a requested temperature or seed does not reach the model: say it plainly rather than fake it.
@@ -101,17 +184,33 @@ const SAMPLING_NOT_APPLIED = 'The decision path has no sampling parameters: AIDe
  * **Sampling.** `temperature` and `seed` are recorded but do not reach the model: the decision path
  * has no parameter for them (see {@link SAMPLING_NOT_APPLIED}).
  *
+ * **Agent discovery.** A test whose `Configuration.decision` is `agent-discovery` asks production's
+ * discovery decision instead (plan Task 3.1): the options come from `BuildDecisionDiscoveryOptionSet`
+ * over the agents the run's user may run, with the real semantic search, and the questions from
+ * `BuildDecisionDiscoveryQuestions`, both from `@memberjunction/ai-agents`, the code `BaseAgent`
+ * runs. Production gives up after {@link DECISION_DISCOVERY_TIMEOUT_MS}, counted from building the
+ * options, so the driver times the same span and records an answer that came later as not injected.
+ * The call itself runs to the end, so the late answer is still recorded. A `semantic-search`
+ * baseline cell makes no decision call: it records what `Find Candidate Agents` would have listed
+ * first.
+ *
  * **Never throws.** A bad test, a missing prompt and a failed decision come back as an `Error` run
- * with the reason. A point with nothing to decide is `Skipped`: production makes no call there.
+ * with the reason. A point or request with nothing to decide is `Skipped`: production makes no call there.
  */
 @RegisterClass(BaseTestDriver, 'DecisionEvalDriver')
 export class DecisionEvalDriver extends BaseTestDriver {
     public async Execute(context: DriverExecutionContext): Promise<DriverExecutionResult> {
         const startedAt = Date.now();
-        let test: ParsedDecisionEvalTest | null = null;
+        let test: ParsedDecisionEvalTest | ParsedDiscoveryEvalTest | null = null;
         try {
-            test = ParseDecisionEvalTest(context.test);
-            return await this.evaluateTest(test, context, startedAt);
+            if (ReadDecisionEvalKind(context.test) === 'agent-discovery') {
+                const discovery = ParseDiscoveryEvalTest(context.test);
+                test = discovery;
+                return await this.evaluateDiscoveryTest(discovery, context, startedAt);
+            }
+            const routing = ParseDecisionEvalTest(context.test);
+            test = routing;
+            return await this.evaluateTest(routing, context, startedAt);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             this.logToTestRun(context, 'error', `Decision evaluation failed: ${message}`);
@@ -125,7 +224,11 @@ export class DecisionEvalDriver extends BaseTestDriver {
             return base;
         }
         try {
-            ParseDecisionEvalTest(test);
+            if (ReadDecisionEvalKind(test) === 'agent-discovery') {
+                ParseDiscoveryEvalTest(test);
+            } else {
+                ParseDecisionEvalTest(test);
+            }
             return base;
         } catch (error) {
             return {
@@ -143,11 +246,7 @@ export class DecisionEvalDriver extends BaseTestDriver {
      */
     protected async LoadEnvironment(config: DecisionEvalConfig, context: DriverExecutionContext): Promise<DecisionEvalEnvironment> {
         await AIEngine.Instance.Config(false, context.contextUser);
-        const promptName = config.promptName ?? DEFAULT_DECISION_PROMPT_NAME;
-        const prompt = AIEngine.Instance.Prompts.find(p => p.Name?.trim().toLowerCase() === promptName.trim().toLowerCase());
-        if (!prompt) {
-            throw new Error(`Decision prompt '${promptName}' not found in AIEngine metadata`);
-        }
+        const prompt = this.findDecisionPrompt(config.promptName ?? DEFAULT_DECISION_PROMPT_NAME);
         const agents = AIEngine.Instance.Agents;
         const manager = agents.find(a => a.Name?.trim().toLowerCase() === CONVERSATION_MANAGER_NAME.toLowerCase());
         return {
@@ -160,6 +259,33 @@ export class DecisionEvalDriver extends BaseTestDriver {
     }
 
     /**
+     * Loads what one discovery run needs, the way production's discovery loads it: `AIEngine`, the
+     * decision prompt by name (not for a baseline cell, which makes no call), the conversation
+     * manager, the agents the run's user may run, the prompt's option cap, and the semantic search
+     * when the provider can run it. Throws when the prompt or the conversation manager is missing.
+     * Overridable, so a test can run the driver without an engine or a provider.
+     */
+    protected async LoadDiscoveryEnvironment(config: DiscoveryEvalConfig, context: DriverExecutionContext): Promise<DiscoveryEvalEnvironment> {
+        await AIEngine.Instance.Config(false, context.contextUser);
+        const promptName = config.promptName ?? DEFAULT_DECISION_PROMPT_NAME;
+        const agents = AIEngine.Instance.Agents;
+        const manager = agents.find(a => a.Name?.trim().toLowerCase() === CONVERSATION_MANAGER_NAME.toLowerCase());
+        if (!manager) {
+            throw new Error(`The conversation manager '${CONVERSATION_MANAGER_NAME}' is not in AIEngine metadata, and discovery runs as it`);
+        }
+        const provider = this.Provider;
+        const searcher = CanSearchEntities(provider) ? provider : undefined;
+        return {
+            Prompt: config.baseline ? null : this.findDecisionPrompt(promptName),
+            ConversationManager: manager,
+            AllAgents: agents,
+            RunnableAgents: await DecisionDiscoveryRunnableAgents(agents, context.contextUser),
+            DeclaredCap: DecisionPromptOptionCap(AIEngine.Instance, promptName),
+            SearchFor: searcher ? (request: string) => DecisionDiscoveryAgentSearch(searcher, request, context.contextUser) : undefined
+        };
+    }
+
+    /**
      * The runner for one call: failover as the prompt configures it, or none. Overridable, so a
      * test can supply a fake runner.
      *
@@ -167,6 +293,99 @@ export class DecisionEvalDriver extends BaseTestDriver {
      */
     protected CreateRunner(failoverAllowed: boolean): DecisionEvalRunner {
         return failoverAllowed ? new AIDecisionRunner() : new PinnedDecisionRunner();
+    }
+
+    /** The decision prompt by name, from the loaded `AIEngine`. Throws when it is missing. */
+    private findDecisionPrompt(promptName: string): MJAIPromptEntityExtended {
+        const prompt = AIEngine.Instance.Prompts.find(p => p.Name?.trim().toLowerCase() === promptName.trim().toLowerCase());
+        if (!prompt) {
+            throw new Error(`Decision prompt '${promptName}' not found in AIEngine metadata`);
+        }
+        return prompt;
+    }
+
+    /**
+     * Maps the request to production's state, then runs the `semantic-search` baseline, or builds
+     * the options and runs the one decision, and scores it. A request production would ask nothing
+     * about is Skipped, including one with fewer than {@link DECISION_DISCOVERY_MIN_OPTIONS} options;
+     * options that cannot be built are an Error. Every corpus request is a conversation's opening
+     * request, the only turn production's discovery asks about.
+     */
+    private async evaluateDiscoveryTest(test: ParsedDiscoveryEvalTest, context: DriverExecutionContext, startedAt: number): Promise<DriverExecutionResult> {
+        const environment = await this.LoadDiscoveryEnvironment(test.Config, context);
+        const request = DiscoveryDecisionState(test.Input.request);
+        const skip = DiscoverySkipReason(request, environment);
+        if (skip) {
+            return { ...this.errorResult(skip, test, null, [], startedAt), status: 'Skipped' };
+        }
+        if (test.Config.baseline) {
+            const baseline = await this.runSemanticSearchBaseline(test, environment, request);
+            return this.completedResult(test, baseline, await this.runOracles(test, baseline, undefined, context), undefined, context, startedAt);
+        }
+        // Production's timeout covers the options (and their semantic search) as well as the call.
+        const discoveryStarted = Date.now();
+        const optionSet = await BuildDecisionDiscoveryOptionSet({
+            Agents: environment.RunnableAgents,
+            RunningAgentID: environment.ConversationManager.ID,
+            DeclaredCap: environment.DeclaredCap,
+            Search: environment.SearchFor?.(request)
+        });
+        if (optionSet.Error) {
+            throw new Error(`The options could not be built: ${optionSet.Error}`);
+        }
+        if (optionSet.Options.length < DECISION_DISCOVERY_MIN_OPTIONS) {
+            const reason = `There are ${optionSet.Options.length} agents to choose from, fewer than the ${DECISION_DISCOVERY_MIN_OPTIONS} production's `
+                + 'discovery needs, so production asks nothing.';
+            return { ...this.errorResult(reason, test, null, [], startedAt), status: 'Skipped' };
+        }
+        this.logToTestRun(context, 'info', `Asking agent discovery with '${environment.Prompt?.Name}' over ${optionSet.Options.length} option(s)`);
+        const call = await this.callDiscoveryDecision(test.Config, request, optionSet, environment.Prompt, context, discoveryStarted);
+        const actual = BuildDiscoveryEvalActualOutput(test.Config, environment.Prompt?.Name ?? DEFAULT_DECISION_PROMPT_NAME, call, test.Expected);
+        return this.completedResult(test, actual, await this.runOracles(test, actual, call.Result, context), call.Result, context, startedAt);
+    }
+
+    /**
+     * Builds the discovery decision's parameters and makes the one call, waiting for the prompt run to
+     * be saved. `discoveryStarted` is when building the options began, where production's timeout starts.
+     */
+    private async callDiscoveryDecision(
+        config: DiscoveryEvalConfig,
+        request: string,
+        optionSet: DecisionDiscoveryOptionSet,
+        prompt: MJAIPromptEntityExtended | null,
+        context: DriverExecutionContext,
+        discoveryStarted: number
+    ): Promise<DiscoveryEvalCall> {
+        if (!prompt) {
+            throw new Error('No decision prompt was loaded for a decision cell');
+        }
+        const params = BuildDiscoveryDecisionParams(config, request, optionSet.Options, prompt, context, this.getEffectiveTimeout(context.test));
+        const runner = this.CreateRunner(IsFailoverAllowed(config));
+        const callStarted = Date.now();
+        const result = await runner.ExecuteDecision(params);
+        const callEnded = Date.now();
+        // Prompt-run persistence is fire-and-forget: settle it before the run links to the row.
+        await runner.WaitForPendingPromptRunSaves();
+        return { OptionSet: optionSet, Result: result, LatencyMs: callEnded - callStarted, DiscoveryLatencyMs: callEnded - discoveryStarted };
+    }
+
+    /**
+     * The `semantic-search` baseline: no decision call. The search `Find Candidate Agents` runs, over
+     * the request, read as the action reads it. Throws when the provider cannot run the search.
+     */
+    private async runSemanticSearchBaseline(
+        test: ParsedDiscoveryEvalTest,
+        environment: DiscoveryEvalEnvironment,
+        request: string
+    ): Promise<DiscoveryEvalActualOutput> {
+        if (!environment.SearchFor) {
+            throw new Error('The provider cannot run the semantic search the baseline measures');
+        }
+        const candidates = DecisionDiscoveryCatalog(environment.RunnableAgents, environment.ConversationManager.ID);
+        const searchStarted = Date.now();
+        const results = await environment.SearchFor(request)(FIND_CANDIDATE_AGENTS_TOP_K);
+        const latencyMs = Date.now() - searchStarted;
+        return BuildBaselineEvalActualOutput(test.Config, RankSemanticSearchBaseline(results, candidates), latencyMs, test.Expected, candidates);
     }
 
     /** Maps the point, runs the one decision, and scores it. */
@@ -211,9 +430,9 @@ export class DecisionEvalDriver extends BaseTestDriver {
      * a weighted check that cannot run is a failure of the test, not an absence of one.
      */
     private async runOracles(
-        test: ParsedDecisionEvalTest,
-        actual: DecisionEvalActualOutput,
-        result: AIDecisionRunResult,
+        test: EvalTestParts,
+        actual: DecisionEvalActualOutput | DiscoveryEvalActualOutput,
+        result: AIDecisionRunResult | undefined,
         context: DriverExecutionContext
     ): Promise<OracleResult[]> {
         const results: OracleResult[] = [];
@@ -227,7 +446,7 @@ export class DecisionEvalDriver extends BaseTestDriver {
                 test: context.test,
                 expectedOutput: test.Expected,
                 actualOutput: actual,
-                targetEntity: result.promptRun,
+                targetEntity: result?.promptRun,
                 contextUser: context.contextUser
             };
             try {
@@ -239,12 +458,12 @@ export class DecisionEvalDriver extends BaseTestDriver {
         return results;
     }
 
-    /** The result of a run that reached the model. */
+    /** The result of a run that reached the model (or, for a baseline, the search). */
     private completedResult(
-        test: ParsedDecisionEvalTest,
-        actual: DecisionEvalActualOutput,
+        test: EvalTestParts,
+        actual: DecisionEvalActualOutput | DiscoveryEvalActualOutput,
         oracleResults: OracleResult[],
-        result: AIDecisionRunResult,
+        result: AIDecisionRunResult | undefined,
         context: DriverExecutionContext,
         startedAt: number
     ): DriverExecutionResult {
@@ -272,16 +491,17 @@ export class DecisionEvalDriver extends BaseTestDriver {
         };
     }
 
-    /** Why a run that reached the model is still not an observation, or null. */
-    private runProblem(actual: DecisionEvalActualOutput): string | null {
+    /** Why a run that reached the model is still not an observation, or null. A baseline run has no model. */
+    private runProblem(actual: { Error: string | null; Model: DecisionEvalModelRecord | null }): string | null {
         if (actual.Error) {
             return `The decision failed: ${actual.Error}`;
         }
-        if (actual.Model.FailedOver && !actual.Model.FailoverAllowed) {
-            return `Answered by ${actual.Model.AnsweredModelName ?? actual.Model.AnsweredModelId ?? 'another model'}`
-                + `${actual.Model.AnsweredVendorName ? ` via ${actual.Model.AnsweredVendorName}` : ''}, not the pinned `
-                + `${actual.Model.PinnedModelId ? `model ${actual.Model.PinnedModelId}` : ''}`
-                + `${actual.Model.PinnedVendorId ? ` vendor ${actual.Model.PinnedVendorId}` : ''}, with failover off`;
+        const model = actual.Model;
+        if (model && model.FailedOver && !model.FailoverAllowed) {
+            return `Answered by ${model.AnsweredModelName ?? model.AnsweredModelId ?? 'another model'}`
+                + `${model.AnsweredVendorName ? ` via ${model.AnsweredVendorName}` : ''}, not the pinned `
+                + `${model.PinnedModelId ? `model ${model.PinnedModelId}` : ''}`
+                + `${model.PinnedVendorId ? ` vendor ${model.PinnedVendorId}` : ''}, with failover off`;
         }
         return null;
     }
@@ -289,8 +509,8 @@ export class DecisionEvalDriver extends BaseTestDriver {
     /** A run that produced no observation: status `Error`, with the reason. */
     private errorResult(
         message: string,
-        test: ParsedDecisionEvalTest | null,
-        actual: DecisionEvalActualOutput | null,
+        test: EvalTestParts | null,
+        actual: DecisionEvalActualOutput | DiscoveryEvalActualOutput | null,
         oracleResults: OracleResult[],
         startedAt: number,
         result?: AIDecisionRunResult
@@ -342,7 +562,7 @@ export function ParseDecisionEvalTest(test: MJTestEntity): ParsedDecisionEvalTes
  *
  * @param config The cell's configuration.
  */
-export function IsFailoverAllowed(config: DecisionEvalConfig): boolean {
+export function IsFailoverAllowed(config: Pick<DecisionEvalConfig, 'failover' | 'modelId' | 'vendorId'>): boolean {
     return config.failover ?? !(config.modelId || config.vendorId);
 }
 
@@ -454,8 +674,208 @@ export function SummarizeDecisionEvalAnswers(answers: Record<string, DecisionAns
     return summary;
 }
 
+/**
+ * Which decision a test asks, from its `Configuration`. Throws naming the column when the
+ * configuration is missing, is not JSON, or names no known decision.
+ *
+ * @param test The test.
+ */
+export function ReadDecisionEvalKind(test: Pick<MJTestEntity, 'Configuration'>): DecisionEvalDecision {
+    return parseColumn('Configuration', test.Configuration, DecisionEvalKindSchema).decision;
+}
+
+/**
+ * Validates a discovery test's `Configuration`, `InputDefinition` and `ExpectedOutcomes`. Throws
+ * naming the column and the first problem.
+ *
+ * @param test The test.
+ */
+export function ParseDiscoveryEvalTest(test: MJTestEntity): ParsedDiscoveryEvalTest {
+    return {
+        Config: parseColumn('Configuration', test.Configuration, DiscoveryEvalConfigSchema),
+        Input: parseColumn('InputDefinition', test.InputDefinition, DiscoveryEvalInputSchema),
+        Expected: parseColumn('ExpectedOutcomes', test.ExpectedOutcomes, DiscoveryEvalExpectedSchema)
+    };
+}
+
+/**
+ * Why production's discovery would ask nothing about a request, or null when it would ask:
+ * the request is empty, or it @mentions an agent other than the conversation manager
+ * (`MentionsAgent`, as `BaseAgent` checks it).
+ *
+ * @param state The request as production reads it (`DiscoveryDecisionState`).
+ * @param environment The catalog and the conversation manager.
+ */
+export function DiscoverySkipReason(state: string, environment: Pick<DiscoveryEvalEnvironment, 'AllAgents' | 'ConversationManager'>): string | null {
+    if (!state) {
+        return 'The request is empty, so production asks nothing.';
+    }
+    if (MentionsAgent(state, environment.AllAgents, environment.ConversationManager.ID)) {
+        return 'The request @mentions an agent, so production asks nothing: the user has already chosen.';
+    }
+    return null;
+}
+
+/**
+ * The runner's parameters for one discovery call: the prompt, the context user, the request as the
+ * state, production's questions over the options, a time bound, and the cell's pinning as
+ * `override`. The prompt run is not attributed to the conversation manager (production sets
+ * `agentId`, which only labels the row), so eval runs stay out of its analytics.
+ *
+ * @param config The cell's configuration.
+ * @param state The request as production reads it (`DiscoveryDecisionState`).
+ * @param options The Choice's options (`BuildDecisionDiscoveryOptionSet`).
+ * @param prompt The decision prompt.
+ * @param context The run's context, for its user.
+ * @param timeoutMS Bounds the model call.
+ */
+export function BuildDiscoveryDecisionParams(
+    config: DiscoveryEvalConfig,
+    state: string,
+    options: ReadonlyArray<DecisionDiscoveryOption>,
+    prompt: MJAIPromptEntityExtended,
+    context: Pick<DriverExecutionContext, 'contextUser'>,
+    timeoutMS: number
+): AIDecisionParams {
+    const params = new AIDecisionParams();
+    params.prompt = prompt;
+    // Explicit, never the provider's CurrentUser, which is null on the CLI (#3251).
+    params.contextUser = context.contextUser;
+    params.State = state;
+    params.Questions = BuildDecisionDiscoveryQuestions(options);
+    params.timeoutMS = timeoutMS;
+    if (config.modelId || config.vendorId) {
+        params.override = { modelId: config.modelId ?? undefined, vendorId: config.vendorId ?? undefined };
+    }
+    return params;
+}
+
+/**
+ * What a discovery decision run records as its `ActualOutput`: the options, the summarized answers,
+ * the chosen agent with its raw confidence, the raw `anyApplies` probability, production's own
+ * verdict (`DecisionDiscoveryFromResult`: calibrated for the answering model, at production's
+ * threshold), whether the labelled agent was an option, the model and sampling records, the call's
+ * latency and the whole discovery's, the prompt run and its cost, and the error when there are no
+ * answers.
+ *
+ * A discovery that took longer than {@link DECISION_DISCOVERY_TIMEOUT_MS} is recorded as not
+ * injected, with a "timed out" reason, whatever its answer: production would have given up by then.
+ *
+ * @param config The cell's configuration.
+ * @param promptName The decision prompt's name.
+ * @param call The call, its options and its result.
+ * @param expected The request's label.
+ */
+export function BuildDiscoveryEvalActualOutput(
+    config: DiscoveryEvalConfig,
+    promptName: string,
+    call: DiscoveryEvalCall,
+    expected: DiscoveryEvalExpected
+): DiscoveryEvalActualOutput {
+    const { Result: result, OptionSet: optionSet } = call;
+    const answers = result.success ? result.Answers : {};
+    // The raw answers are recorded, because calibration is fitted on them; whether production would
+    // inject, and why not, come from production's own calibrated path.
+    const verdict = result.success ? JudgeDecisionDiscovery(answers, optionSet.Options, DECISION_DISCOVERY_MIN_CONFIDENCE) : null;
+    const answer = verdict?.Answer;
+    const production = answer ? DecisionDiscoveryFromResult(result, optionSet.Options, DECISION_DISCOVERY_MIN_CONFIDENCE) : null;
+    const onTime = call.DiscoveryLatencyMs <= DECISION_DISCOVERY_TIMEOUT_MS;
+    return {
+        Decision: 'agent-discovery',
+        Arm: 'decision',
+        PromptName: promptName,
+        Options: optionsRecord(optionSet),
+        LabelledAgentOffered: expected.label === 'agent' ? optionSet.Options.some(o => UUIDsEqual(o.ID, expected.agentId)) : null,
+        Answers: SummarizeDecisionEvalAnswers(answers),
+        ChosenAgentId: answer?.Agent.ID ?? null,
+        ChosenAgentName: answer?.Agent.Name ?? null,
+        Confidence: answer?.Confidence ?? null,
+        AnyApplies: answer?.AnyApplies ?? null,
+        WouldInject: production ? production.Injected && onTime : null,
+        MinConfidence: DECISION_DISCOVERY_MIN_CONFIDENCE,
+        VerdictReason: production && !onTime
+            ? DiscoveryTimedOutReason(call.DiscoveryLatencyMs)
+            : production ? production.Reason ?? null : verdict?.Reason ?? null,
+        Baseline: null,
+        Model: modelRecord(config, result),
+        Sampling: samplingRecord(config),
+        LatencyMs: call.LatencyMs,
+        DiscoveryLatencyMs: call.DiscoveryLatencyMs,
+        WithinProductionTimeout: result.success ? onTime : null,
+        PromptRunId: result.promptRun?.ID ?? null,
+        CostUSD: result.promptRun?.TotalCost ?? result.promptRun?.Cost ?? result.cost ?? null,
+        Error: result.success ? null : (result.errorMessage || 'the decision failed with no message')
+    };
+}
+
+/**
+ * What a `semantic-search` baseline run records as its `ActualOutput`: the ranking, the action's
+ * first row as the chosen agent, and whether it lists anything at all as `WouldInject`. It has no
+ * answers, no model and no cost.
+ *
+ * @param config The cell's configuration.
+ * @param baseline The ranking (`RankSemanticSearchBaseline`).
+ * @param latencyMs Wall-clock time of the search.
+ * @param expected The request's label.
+ * @param candidates The agents the action may list.
+ */
+export function BuildBaselineEvalActualOutput(
+    config: DiscoveryEvalConfig,
+    baseline: DiscoveryBaselineRecord,
+    latencyMs: number,
+    expected: DiscoveryEvalExpected,
+    candidates: ReadonlyArray<{ ID: string }>
+): DiscoveryEvalActualOutput {
+    return {
+        Decision: 'agent-discovery',
+        Arm: 'semantic-search',
+        PromptName: null,
+        Options: null,
+        LabelledAgentOffered: expected.label === 'agent' ? candidates.some(c => UUIDsEqual(c.ID, expected.agentId)) : null,
+        Answers: {},
+        ChosenAgentId: baseline.TopMatch?.AgentId ?? null,
+        ChosenAgentName: baseline.TopMatch?.AgentName ?? null,
+        Confidence: null,
+        AnyApplies: null,
+        WouldInject: baseline.TopMatch !== null,
+        MinConfidence: null,
+        VerdictReason: baseline.TopMatch ? null : `no candidate reaches the similarity floor of ${baseline.Floor}`,
+        Baseline: baseline,
+        Model: null,
+        Sampling: samplingRecord(config),
+        LatencyMs: latencyMs,
+        DiscoveryLatencyMs: null,
+        WithinProductionTimeout: null,
+        PromptRunId: null,
+        CostUSD: null,
+        Error: null
+    };
+}
+
+/**
+ * Why a discovery that answered too late injects nothing: production had given up.
+ *
+ * @param discoveryLatencyMs How long the discovery took, options and call.
+ */
+export function DiscoveryTimedOutReason(discoveryLatencyMs: number): string {
+    return `timed out: the discovery took ${Math.round(discoveryLatencyMs)} ms, past production's ${DECISION_DISCOVERY_TIMEOUT_MS} ms limit, `
+        + 'so production would have given up and injected nothing';
+}
+
+/** How the options were reached, for the record. */
+function optionsRecord(optionSet: DecisionDiscoveryOptionSet): DiscoveryOptionsRecord {
+    return {
+        Count: optionSet.Options.length,
+        Limit: optionSet.OptionLimit,
+        CatalogSize: optionSet.CatalogSize,
+        WithoutDescription: optionSet.WithoutDescription.length,
+        DeclaredCap: optionSet.DeclaredOptionCap ?? null,
+        NarrowedFrom: optionSet.NarrowedFrom ?? null
+    };
+}
+
 /** Which model was pinned, which answered (or, for a failed call, was selected), and whether they match. */
-function modelRecord(config: DecisionEvalConfig, result: AIDecisionRunResult): DecisionEvalModelRecord {
+function modelRecord(config: Pick<DecisionEvalConfig, 'failover' | 'modelId' | 'vendorId'>, result: AIDecisionRunResult): DecisionEvalModelRecord {
     const pinnedModel = config.modelId ?? null;
     const pinnedVendor = config.vendorId ?? null;
     const answered = result.modelInfo;
@@ -478,7 +898,7 @@ function modelRecord(config: DecisionEvalConfig, result: AIDecisionRunResult): D
 }
 
 /** The sampling the cell asked for, recorded as not applied. */
-function samplingRecord(config: DecisionEvalConfig): DecisionEvalSampling {
+function samplingRecord(config: Pick<DecisionEvalConfig, 'temperature' | 'seed'>): DecisionEvalSampling {
     const requested = config.temperature != null || config.seed != null;
     return {
         RequestedTemperature: config.temperature ?? null,
@@ -489,7 +909,7 @@ function samplingRecord(config: DecisionEvalConfig): DecisionEvalSampling {
 }
 
 /** Each oracle's weight by type, defaulting to 1. */
-function oracleWeights(config: DecisionEvalConfig): Record<string, number> {
+function oracleWeights(config: EvalTestParts['Config']): Record<string, number> {
     return Object.fromEntries(config.oracles.map(o => [o.type, o.weight ?? 1]));
 }
 
