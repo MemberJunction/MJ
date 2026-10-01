@@ -57,6 +57,12 @@ export * from './engines/QueryMatchResult';
 export * from './engines/ComponentMetadataEngineServer';
 export * from './engines/IdentityClaimEngineServer';
 export * from './custom/MJRemoteOperationEntityServer.server';
-export * from './custom/FormScopeGuard';
+export {
+    ApplyFormScopeValidation,
+    FormScopeDeleteRefusal,
+    FormScopeRefusalResult,
+    FormScopeReplayRefusal,
+    type GuardedFormScopeRow,
+} from './custom/FormScopeGuard';
 export * from './custom/MJEntityFormOverrideEntityServer.server';
 export * from './custom/MJEntityFormContributionEntityServer.server';
