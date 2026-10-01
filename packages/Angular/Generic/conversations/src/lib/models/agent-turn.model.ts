@@ -27,6 +27,8 @@ export type AgentReplyMode = 'Always' | 'MentionOnly';
  * - `Mention`: the message tags the agent.
  * - `Continuity`: the last agent that answered in the conversation, other than the
  *   conversation manager.
+ * - `DecisionRouted`: another agent in the conversation, which a confident routing decision chose
+ *   in continuity's place. Only with the chat's `EnableDecisionRouting` on.
  * - `ConversationDefault`: the agent pinned on the conversation (`Conversation.DefaultAgentID`).
  * - `HostDefault`: the host's `DefaultAgentId` input.
  * - `ConversationManager`: MJ's conversation manager agent (Sage unless configured otherwise),
@@ -36,6 +38,7 @@ export type AgentReplyMode = 'Always' | 'MentionOnly';
 export type AgentTurnRoute =
     | 'Mention'
     | 'Continuity'
+    | 'DecisionRouted'
     | 'ConversationDefault'
     | 'HostDefault'
     | 'ConversationManager'
@@ -89,6 +92,12 @@ export interface AgentTurnRequest {
     RequestedSkillIDs: string[];
     /** Whether Plan Mode is on for the conversation. */
     PlanMode: boolean;
+    /**
+     * The artifact version (`MJ: Artifact Versions.ID`) the message modifies, when the chat's
+     * routing decision (`EnableDecisionRouting`) confidently named one this agent produced. MJ's
+     * own path continues from that version instead of the agent's latest output. Null otherwise.
+     */
+    TargetArtifactVersionId: string | null;
 }
 
 /** What an {@link AgentTurnHandler} reports back to the chat area. */
@@ -100,7 +109,9 @@ export interface AgentTurnResult {
     /**
      * The rows the host wrote for the turn, oldest first: the agent's reply and any status rows.
      * The chat area loads and shows them. A row still `In-Progress` is followed like any other
-     * in-progress reply.
+     * in-progress reply. The host reports that row's live status through `AgentRunStatusPublisher`
+     * (`@memberjunction/server`) on the caller's session: significant-step progress, streamed text,
+     * the partial result, and the completion. The completion's `conversationDetailId` is the reply row.
      */
     ReplyDetailIds?: string[];
     /** The agent run, when the host has one. Carried on `AfterAgentTurn`. */

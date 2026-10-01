@@ -650,6 +650,47 @@ export interface RestoreContext {
 }
 
 /**
+ * Context describing an in-progress clone operation on a BaseEntity.
+ *
+ * When set on an entity instance via {@link BaseEntity.SetCloneContext}
+ * prior to calling Save(), the data provider will write the resulting
+ * RecordChange row with `Source='Clone'` and the structured JSON
+ * `ChangeContext` column populated.
+ *
+ * @see plans/record-cloning/README.md §10.3
+ */
+export interface CloneContext {
+    /** ID of the RecordCloneLog row coordinating this clone operation. */
+    CloneLogID: string;
+    /** Entity name of the record being cloned. */
+    SourceEntityName: string;
+    /** Compact URL segment of the source key (bare value for single-column keys). */
+    SourceRecordID: string;
+    /** Entity name of the root record of the clone graph. */
+    RootEntityName: string;
+    /** Source key of the root record. */
+    RootSourceRecordID: string;
+    /** Target key of the root record after insertion. */
+    RootTargetRecordID: string;
+    /** Depth within the record graph (0 for root). */
+    Depth: number;
+    /** Relationship route traversed to reach this record. */
+    Route: 'RootSave' | 'Collection' | 'Embedded' | 'IsAChain' | 'Sidecar';
+    /** Kinds and field names only. Values are already in FullRecordJSON. */
+    FieldChangeSummary: Array<{ Kind: string; Fields: string[] }>;
+    /** Optional explanation entered at clone time. */
+    Reason?: string | null;
+}
+
+/**
+ * The `ChangeContext` JSON a clone writes on its Record Change rows (`IRecordChangeContext`,
+ * Kind 'Clone'). The one serializer every provider path uses, so the shape can't drift.
+ */
+export function SerializeCloneChangeContext(context: CloneContext): string {
+    return JSON.stringify({ Version: 1, Kind: 'Clone', Clone: context });
+}
+
+/**
  * Discriminator for the `Source` column of a RecordChange row.
  *
  * - `Internal`: produced by an ordinary BaseEntity Save() / Delete() call
@@ -657,8 +698,10 @@ export interface RestoreContext {
  *   (records the platform discovers via direct SQL changes)
  * - `Restore`: produced by a user-initiated restore — paired with
  *   `RestoredFromID` and optional `RestoreReason` lineage columns
+ * - `Clone`: produced by a record clone operation — paired with
+ *   structured `ChangeContext` JSON provenance
  */
-export type RecordChangeSource = 'Internal' | 'External' | 'Restore';
+export type RecordChangeSource = 'Internal' | 'External' | 'Restore' | 'Clone';
 
 /**
  * Dialect-agnostic payload for a RecordChange row.
@@ -716,6 +759,11 @@ export interface RecordChangePayload {
      * not enter one.
      */
     restoreReason: string | null;
+    /**
+     * When `source === 'Clone'`, serialized JSON bag carrying structured provenance
+     * (shape = `IRecordChangeContext`). Null otherwise.
+     */
+    changeContext: string | null;
 }
 
 export class DataObjectRelatedEntityParam {
@@ -1426,10 +1474,28 @@ export abstract class BaseEntity<T = unknown> {
             parentEntityInfo.Name,
             this._contextCurrentUser
         );
+        // A chain loaded through the parent is linked the other way too, so the parent's
+        // LeafEntity (and its save hooks) see this child (MJ#4870).
+        this.linkParentBackToThisChild();
         // Recursive: the parent's InitializeParentEntity() was called by GetEntityObject()
 
         // Cache the parent field names for O(1) routing lookups
         this._parentEntityFieldNames = this.EntityInfo.ParentEntityFieldNames;
+    }
+
+    /**
+     * Points this child's disjoint parent back at this instance (`parent._childEntity = this`).
+     *
+     * Same gate as {@link InitializeParentEntity}: a parent that allows several subtypes keeps no
+     * single child. `NewRecord()` sets `_childEntity` to null, so this has to run AFTER the
+     * parent's `NewRecord()` — calling it before is wiped out.
+     */
+    private linkParentBackToThisChild(): void {
+        const parentEntityInfo = this.EntityInfo?.ParentEntityInfo;
+        if (!this._parentEntity || !parentEntityInfo || parentEntityInfo.AllowMultipleSubtypes) {
+            return;
+        }
+        this._parentEntity._childEntity = this;
     }
 
     /**
@@ -1512,8 +1578,9 @@ export abstract class BaseEntity<T = unknown> {
         if (!loaded) {
             // Restore the fresh chain the failed load destroyed: re-seed the parent chain, then put
             // the ORIGINAL minted key back (Set routes to the root), so the record the caller holds
-            // is bit-for-bit the fresh record they built.
+            // is bit-for-bit the fresh record they built. Re-seed nulls the parent's back-link.
             this._parentEntity.NewRecord();
+            this.linkParentBackToThisChild();
             for (const pk of freshPkValues) {
                 if (pk.value != null) {
                     this._parentEntity.Set(pk.name, pk.value);
@@ -2090,16 +2157,7 @@ export abstract class BaseEntity<T = unknown> {
             this._childEntity = childEntity;
 
             const dirtySnapshots = this.captureChainDirtyState();
-
-            if (this.PrimaryKey && this.PrimaryKey.HasValue) {
-                const loaded = await childEntity.InnerLoad(this.PrimaryKey);
-                if (!loaded) {
-                    this.mirrorSharedKeysToChild(childEntity);
-                }
-            } else {
-                this.mirrorSharedKeysToChild(childEntity);
-            }
-
+            await this.loadOrMirrorChildRow(childEntity);
             this.restoreChainDirtyState(dirtySnapshots);
 
             // Recursively discover grandchildren if the child is also a parent type
@@ -2125,16 +2183,7 @@ export abstract class BaseEntity<T = unknown> {
             this.replaceChildParentChain(childEntity);
 
             const dirtySnapshots = this.captureChainDirtyState();
-
-            if (this.PrimaryKey && this.PrimaryKey.HasValue) {
-                const loaded = await childEntity.InnerLoad(this.PrimaryKey);
-                if (!loaded) {
-                    this.mirrorSharedKeysToChild(childEntity);
-                }
-            } else {
-                this.mirrorSharedKeysToChild(childEntity);
-            }
-
+            await this.loadOrMirrorChildRow(childEntity);
             this.restoreChainDirtyState(dirtySnapshots);
 
             if (childEntity.EntityInfo.IsParentType) {
@@ -2142,6 +2191,33 @@ export abstract class BaseEntity<T = unknown> {
             }
 
             return childEntity;
+        }
+    }
+
+    /**
+     * A new parent's child is new too: there is no row to read, so copy the parent's keys.
+     * A saved parent still reads (promotion's usual answer is "no row"), and that miss is not
+     * an error — the same way a subtype-hint probe treats an empty read (MJ#4859).
+     */
+    private async loadOrMirrorChildRow(childEntity: BaseEntity): Promise<void> {
+        if (this.IsSaved && this.PrimaryKey?.HasValue) {
+            const loaded = await this.loadChildRowQuietly(childEntity);
+            if (!loaded) {
+                this.mirrorSharedKeysToChild(childEntity);
+            }
+            return;
+        }
+        this.mirrorSharedKeysToChild(childEntity);
+    }
+
+    /** Loads the child by the shared key. An empty result is an answer, not a logged error. */
+    private async loadChildRowQuietly(childEntity: BaseEntity): Promise<boolean> {
+        const probe: SubtypeHintProbe = { RowReadFailed: false };
+        childEntity._subtypeHintProbe = probe;
+        try {
+            return await childEntity.InnerLoad(this.PrimaryKey);
+        } finally {
+            childEntity._subtypeHintProbe = null;
         }
     }
 
@@ -2610,6 +2686,23 @@ export abstract class BaseEntity<T = unknown> {
         options: RelatedRecordCollectionOptions,
     ): RelatedRecordCollection<TChild> {
         return this.RegisterCompanion(new RelatedRecordCollection<TChild>(this, options));
+    }
+
+    /**
+     * Dynamically registers a database-sourced child collection companion on this entity instance.
+     * Used by generic composite persistence engines (Record Cloning, Metadata Sync) when a relationship
+     * has no static collection companion declared on the generated entity class.
+     *
+     * Refuses duplicate names or re-registering an already existing companion.
+     *
+     * @typeParam TChild - The child entity type.
+     * @param options - The collection declaration options.
+     * @returns The registered collection companion.
+     */
+    public DeclareRelatedRecordsDynamic<TChild extends BaseEntity = BaseEntity>(
+        options: RelatedRecordCollectionOptions,
+    ): RelatedRecordCollection<TChild> {
+        return this.DeclareRelatedRecords<TChild>(options);
     }
 
     /**
@@ -4424,6 +4517,8 @@ export abstract class BaseEntity<T = unknown> {
         // when setting keys.
         if (this._parentEntity) {
             this._parentEntity.NewRecord();
+            // The parent's NewRecord() just nulled its back-link. Put this child back.
+            this.linkParentBackToThisChild();
             for (const pk of this.EntityInfo.PrimaryKeys) {
                 const parentValue = this._parentEntity.Get(pk.Name);
                 if (parentValue != null) {
@@ -4553,6 +4648,47 @@ export abstract class BaseEntity<T = unknown> {
      */
     public ClearRestoreContext(): void {
         this._restoreContext = null;
+    }
+
+    private _cloneContext: CloneContext | null = null;
+
+    /**
+     * Returns the active clone context for the next save, if any.
+     *
+     * Read by the data provider when generating the RecordChange SQL: when
+     * non-null, the resulting RecordChange row is written with
+     * `Source='Clone'` and `ChangeContext` populated with structured JSON provenance.
+     * Returns null for ordinary saves.
+     */
+    public get CloneContext(): CloneContext | null {
+        return this._cloneContext;
+    }
+
+    /**
+     * Marks the next Save() as part of a record clone operation.
+     *
+     * The provider will write a new RecordChange entry with `Source='Clone'`
+     * and `ChangeContext` populated with structured JSON provenance.
+     *
+     * The context persists on the entity until either (a) overwritten by a
+     * subsequent SetCloneContext() call or (b) explicitly cleared via
+     * ClearCloneContext(). It is NOT auto-cleared inside Save() because
+     * TransactionGroup execution is deferred.
+     *
+     * @param context Structured clone context. Throws if missing required fields.
+     */
+    public SetCloneContext(context: CloneContext): void {
+        if (!context || !context.CloneLogID || !context.SourceRecordID || !context.RootEntityName) {
+            throw new Error('BaseEntity.SetCloneContext: context is required with CloneLogID, SourceRecordID, and RootEntityName');
+        }
+        this._cloneContext = context;
+    }
+
+    /**
+     * Clears any pending clone context. Safe to call when no context is set.
+     */
+    public ClearCloneContext(): void {
+        this._cloneContext = null;
     }
 
 
@@ -5794,6 +5930,13 @@ export abstract class BaseEntity<T = unknown> {
             if (plan.NodeCount > 1) {
                 return this.deleteGraph(plan, options);
             }
+        }
+
+        // IS-A parent chain deletes bypass the debounce, as parent chain saves do: the leaf's
+        // call back up the chain would otherwise wait on the pending delete that handed the
+        // delete to the leaf, and Delete() would never return (MJ#4850).
+        if (options?.IsParentEntityDelete) {
+            return this._innerDelete(options);
         }
 
         // If a delete is already in progress, return its promise.
