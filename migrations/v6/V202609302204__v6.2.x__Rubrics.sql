@@ -45,10 +45,12 @@
 
     LAYERED BASE VIEWS. RubricEvaluation and RubricEvaluationScore expose cheap, on-demand
     consensus (cohort mean / spread / human-vs-AI) through application-owned wrapper views over
-    CodeGen's generated views. That takes two FURTHER migrations, forced by ordering:
-      V202609302205  sets the layering flags on the Entity rows THIS migration's CodeGen capture
-                     creates, and carries the capture that generates the inner vw*Generated views
-      V202609302206  creates the wrapper views, then the capture that registers their columns
+    CodeGen's generated views. The layering flags and the Label name-field pins are metadata
+    (metadata/entities/.layered-base-views.json and .rubric-label-name-fields.json), applied
+    with mj sync push. They are not updated from a migration. Two further files, forced by
+    ordering:
+      V202609302205  the captured inner vw*Generated views (no Entity or EntityField DML)
+      V202609302206  the wrapper views, then the capture that registers their columns
     See the plan, section "Layered base views: the migration sequence".
 
     TestRubric is DEPRECATED alongside this migration, through metadata rather than DDL:

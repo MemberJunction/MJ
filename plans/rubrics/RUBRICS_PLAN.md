@@ -3,9 +3,10 @@
 > **Status:** schema and CodeGen tails are in the branch. Engine, testing-framework, agent, and UI
 > work (R2 onward, T, A, U) has not started. `guides/RUBRICS_GUIDE.md` is still owed.
 > **Schema:** `migrations/v6/V202609302204__v6.2.x__Rubrics.sql`, `…2205…`, and `…2206…`.
-> Hand-written DDL is the tables, the layering-flag and name-field updates, and the consensus
-> wrapper views. The same layering flags are also in `metadata/entities/.layered-base-views.json`
-> so a metadata push cannot flip them off. CodeGen tails are appended (§9, task R0).
+> Hand-written DDL is the tables and the consensus wrapper views. Layering flags live in
+> `metadata/entities/.layered-base-views.json`. Label name-field pins live in
+> `metadata/entities/.rubric-label-name-fields.json`. Neither is an `UPDATE` in a migration.
+> `V202609302205` is the captured inner views only. CodeGen tails are appended (§9, task R0).
 > **Scope of this plan:** the core primitive, the testing framework integration, and the agent
 > integration. All three ship from this plan.
 >
@@ -485,23 +486,25 @@ public base views `vwRubricEvaluations` / `vwRubricEvaluationScores`, which do `
 consensus columns. (Mechanism: `packages/CodeGenLib/CLAUDE.md` § "Base views: generated, custom,
 or LAYERED".)
 
-### 9.1 Three migrations
+### 9.1 Three files, flags in metadata
 
-`mj migrate` does not run `mj sync push`. A database built from this branch — CI, a customer
-install, `bootstrap-clean-db` — never sees `metadata/entities` unless something pushes it
-afterwards. The layering flags therefore ship in `V202609302205`, which runs after 2204's
-CodeGen has inserted the entity rows. The same values stay in
-`metadata/entities/.layered-base-views.json` so a later push cannot turn them back off.
+Entity and EntityField values are declarative JSON under `metadata/entities/`, applied with
+`mj sync push`. A feature migration does not `UPDATE` or `INSERT` those rows. The release
+build turns the folder into one metadata migration. A migration that updates them drifts
+from the folder, gets checksum-locked, and skips the sync engine.
 
-`V202609302205` also pins `Label` as the name field on `MJ: Rubric Scale Levels` and
-`MJ: Rubric Bands` (`IsNameField = 1`, `AutoUpdateIsNameField = 0`). CodeGen only auto-flags
-a column literally named `Name`, and the inner score view joins the chosen level only when
-that flag is set before the view is generated.
+`metadata/entities/.layered-base-views.json` is the source for `BaseViewGenerated` and
+`GeneratedBaseViewName` on `MJ: Rubric Evaluations` and `MJ: Rubric Evaluation Scores`.
+`metadata/entities/.rubric-label-name-fields.json` pins `Label` as the name field on
+`MJ: Rubric Scale Levels` and `MJ: Rubric Bands` (`IsNameField: true`,
+`AutoUpdateIsNameField: false`). CodeGen only auto-flags a column literally named `Name`,
+and the inner score view joins the chosen level only when that flag is set before the
+view is generated.
 
 | File | Hand-written section | CodeGen section (appended) | Why it is its own file |
 |---|---|---|---|
 | `V202609302204__v6.2.x__Rubrics.sql` | tables, constraints, triggers, descriptions | entity registration (public views, procs, fields) | — |
-| `V202609302205__v6.2.x__Rubrics_Layered_Base_View_Flags.sql` | `UPDATE Entity` for the two layering flags, and `UPDATE EntityField` pinning `Label` as the name field on scale levels and bands | the two **inner** views | The entity rows do not exist until 2204's capture runs. |
+| `V202609302205__v6.2.x__Rubrics_Layered_Base_View_Flags.sql` | none — no Entity or EntityField DML | the two **inner** views | The inner views cannot be created until 2204's capture has registered the entities, and they cannot live below that capture because it is replaced wholesale. |
 | `V202609302206__v6.2.x__Rubrics_Consensus_Views.sql` | `CREATE OR ALTER VIEW` for the two public wrappers | virtual EntityFields for the wrapper columns, and CRUD that returns them | A view cannot be created before the view it selects from, and hand-written SQL cannot live below a CodeGen section that is replaced wholesale. |
 
 `BaseViewGenerated` is set to false in the same metadata record as `GeneratedBaseViewName`.
@@ -515,12 +518,11 @@ The three files in §9.1 are the capture targets. Inner views go in **2205**, no
 
 ```bash
 # Private DB only: one database per agent (migrations/CLAUDE.md).
-# Park 2205 and 2206 until the rows they update or the views they wrap exist.
+# Park 2205 and 2206 until the entities exist and the inner views exist, respectively.
 mj migrate                                   # 2204 hand DDL only.
 mj codegen --skipfiles --no-ai               # PASS 1 — entity rows, public views, procs.
 #   → append to 2204, below 50 blank lines and the banner.
-# Apply 2205's hand UPDATEs (layering flags and Label name fields). Do not sync metadata
-# as a substitute: an install never runs mj sync push.
+mj sync push --dir=metadata --include=entities
 # PASS 2 — flipping the flags is not an entity modification, so a plain run CREATEs the
 # inner views in the database but OMITS them from the SQL log. Temporarily, in mj.config.cjs:
 #   forceRegeneration: { enabled: true, baseViews: true,
@@ -541,9 +543,11 @@ Checks before committing:
 - `npm run check:codegen-tail` — every new table has its generated entity.
 - In pass 3's capture, confirm **no DDL targets `vwRubricEvaluations` / `vwRubricEvaluationScores`**
   (CodeGen must only refresh/grant them, guarded by existence) — the pilot's banner explains why.
-- **From zero:** build a clean database and run all three migrations, then `mj codegen --skipfiles`
-  with no metadata sync. `vwRubricEvaluations` must still select `CohortMeanScore`. This is the
-  check that catches a capture that was complete on the capture database and incomplete on a fresh one.
+- **From zero:** build a clean database, run all three migrations, then
+  `mj sync push --dir=metadata --include=entities`, then `mj codegen --skipfiles`.
+  `vwRubricEvaluations` must still select `CohortMeanScore`. Do not put the layering flags
+  back into a migration to make a no-sync CodeGen pass. That was the wrong gate: those
+  columns are metadata, and the release build is what emits their migration.
 
 ### 9.3 What the wrapper columns are
 
@@ -867,6 +871,11 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 
 ## 16. Progress log
 
+- **2026-10-01** — Correction: the three hand-written `UPDATE`s in `V202609302205` are removed.
+  Layering flags stay only in `.layered-base-views.json`. Label name-field pins are
+  `.rubric-label-name-fields.json` (Entity Field lookups, no sync block, no hand-written UUID).
+  The CodeGen section of 2205 — the inner views — stays. A no-sync CodeGen run is not the gate
+  for these columns.
 - **2026-10-01** — Review of `552e976a`. Draft delete is `INSTEAD OF DELETE`: a second
   cascade on `FK_RubricCriterion_Parent` is illegal (multiple cascade paths), so the trigger
   clears anchors, then parent links, then criteria, then bands. `GeneratePluralName` pluralizes

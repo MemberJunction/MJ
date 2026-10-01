@@ -1,70 +1,26 @@
 /*
-    Rubrics, step 2 of 3 — hand CodeGen a PRIVATE name for two base views, and pin the
-    name field on the two entities whose label is not a column called Name.
+    Rubrics, step 2 of 3 — the generated inner views only.
 
-    RubricEvaluation and RubricEvaluationScore use MJ's LAYERED base views: CodeGen owns a
-    generated inner view under GeneratedBaseViewName, and MJ owns the public BaseView as a thin
-    wrapper that adds on-demand consensus columns (cohort mean, spread, human-vs-AI means). This
-    file sets the flags and carries the regenerated inner views; the NEXT file creates the wrappers.
+    There is no hand-written DML in this file. BaseViewGenerated, GeneratedBaseViewName, and
+    the Label name-field pins are metadata, not SQL:
 
-    WHY THIS IS A SEPARATE MIGRATION FROM V202609302204. The flags live on __mj.Entity rows that
-    do not exist until V202609302204's own CodeGen capture inserts them. An UPDATE placed anywhere
-    in that file's hand-written section runs BEFORE the capture and is a silent no-op.
+      metadata/entities/.layered-base-views.json
+      metadata/entities/.rubric-label-name-fields.json
 
-    WHY THE WRAPPERS ARE NOT HERE EITHER. A view cannot be created before the view it selects FROM
-    (SQL Server resolves names at CREATE VIEW time, unlike procedure bodies), and the inner views
-    only exist once THIS file's capture has run. So the wrappers are the third file.
+    A feature migration does not UPDATE __mj.Entity or __mj.EntityField. mj sync push applies
+    the folder. The release build is what turns that folder into a metadata migration.
 
-    WHY THE FLAGS SHIP AS A MIGRATION rather than only as metadata. An install runs migrations and
-    nothing else. If the flags arrived only via a later metadata sync, the first CodeGen run on a
-    fresh environment would see BaseViewGenerated = 1, resolve the target to the PUBLIC name, and
-    DROP/CREATE vwRubricEvaluations as a plain generated view, destroying the wrapper. The same
-    values are ALSO declared in metadata/entities/.layered-base-views.json so a metadata push can
-    never flip them back.
+    This file is separate from V202609302204 because the inner views cannot be created until
+    that file's CodeGen section has registered the entities, and hand-written SQL cannot sit
+    below a CodeGen section that is replaced wholesale. V202609302206 creates the wrappers
+    after these inner views exist.
 
-    Label is the name field on Rubric Scale Levels and Rubric Bands. CodeGen only auto-flags a
-    column literally named Name, so without this UPDATE the inner score view never joins the
-    level a person picked. AutoUpdateIsNameField = 0 pins the choice: a later smart-field pass
-    will not clear it. Keyed by entity name and field name, and skipped when the row is absent.
-
-    Keyed by entity NAME: both flag UPDATEs skip cleanly when the row is absent.
-
-    CAPTURING THE CODEGEN SECTION BELOW (see plans/rubrics/RUBRICS_PLAN.md, "Layered base views:
-    the migration sequence"). Flipping BaseViewGenerated does not count as an entity MODIFICATION
-    to CodeGen, so a plain run CREATEs vwRubricEvaluationsGenerated / vwRubricEvaluationScoresGenerated
-    in the database but OMITS them from its SQL output. Capture with forceRegeneration.baseViews
-    enabled and entityWhereClause scoped to these two entities, then confirm BY NAME that both
-    *Generated views are present in the appended section before committing. The score view must
-    left-join RubricScaleLevel.
+    The section below the banner was captured after mj sync push --dir=metadata --include=entities
+    set the flags and the name fields. Do not paste those values back in as UPDATE statements.
+    Flipping the flags is not an entity modification, so the capture used forceRegeneration
+    scoped to MJ: Rubric Evaluations and MJ: Rubric Evaluation Scores. The score view
+    LEFT OUTER JOINs RubricScaleLevel.
 */
-
-UPDATE [${flyway:defaultSchema}].[Entity]
-   SET [BaseViewGenerated] = 0,
-       [GeneratedBaseViewName] = 'vwRubricEvaluationsGenerated'
- WHERE [Name] = 'MJ: Rubric Evaluations'
-   AND ([BaseViewGenerated] <> 0
-        OR [GeneratedBaseViewName] IS NULL
-        OR [GeneratedBaseViewName] <> 'vwRubricEvaluationsGenerated');
-GO
-
-UPDATE [${flyway:defaultSchema}].[Entity]
-   SET [BaseViewGenerated] = 0,
-       [GeneratedBaseViewName] = 'vwRubricEvaluationScoresGenerated'
- WHERE [Name] = 'MJ: Rubric Evaluation Scores'
-   AND ([BaseViewGenerated] <> 0
-        OR [GeneratedBaseViewName] IS NULL
-        OR [GeneratedBaseViewName] <> 'vwRubricEvaluationScoresGenerated');
-GO
-
-UPDATE ef
-   SET ef.[IsNameField] = 1,
-       ef.[AutoUpdateIsNameField] = 0
-  FROM [${flyway:defaultSchema}].[EntityField] ef
-  INNER JOIN [${flyway:defaultSchema}].[Entity] e ON e.[ID] = ef.[EntityID]
- WHERE e.[Name] IN (N'MJ: Rubric Scale Levels', N'MJ: Rubric Bands')
-   AND ef.[Name] = N'Label'
-   AND (ef.[IsNameField] = 0 OR ef.[AutoUpdateIsNameField] = 1);
-GO
 
 
 
@@ -170,7 +126,8 @@ GO
 -- =====================================================================================
 -- =====================================================================================
 -- ==  EVERYTHING BELOW THIS BANNER WAS GENERATED BY THE MEMBERJUNCTION CODEGEN TOOL  ==
--- ==  Pass 2 inner views after the flag and name-field UPDATEs. Score view LEFT OUTER JOINs RubricScaleLevel.
+-- ==  Pass 2 inner views, captured after mj sync push of metadata/entities.             ==
+-- ==  Score view LEFT OUTER JOINs RubricScaleLevel.                                   ==
 -- ==  DO NOT EDIT BY HAND. Replace this section wholesale on the next capture.      ==
 -- =====================================================================================
 -- =====================================================================================
