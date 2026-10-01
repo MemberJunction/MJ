@@ -8,6 +8,38 @@ export interface DisagreementItem {
     gap: number;
 }
 
+const AI_EVALUATORS = new Set(['AIPrompt', 'Agent']);
+
+/**
+ * Means of submitted human scores and submitted AI scores for one criterion,
+ * within one subject and version. A criterion with only one side is left out.
+ */
+export function disagreementFromScores(input: {
+    evaluations: { id: string; subjectId: string; versionId: string; evaluatorType: string; status: string }[];
+    scores: { evaluationId: string; key: string; name?: string | null; normalizedScore: number | null }[];
+}): DisagreementItem[] {
+    const evaluations = new Map(input.evaluations.filter(row => row.status === 'Submitted').map(row => [row.id, row]));
+    const groups = new Map<string, { key: string; name: string; human: number[]; ai: number[] }>();
+    for (const score of input.scores) {
+        if (score.normalizedScore == null || !score.key) continue;
+        const evaluation = evaluations.get(score.evaluationId);
+        if (!evaluation) continue;
+        const side = evaluation.evaluatorType === 'Human' ? 'human' : AI_EVALUATORS.has(evaluation.evaluatorType) ? 'ai' : null;
+        if (!side) continue;
+        const id = `${evaluation.subjectId}|${evaluation.versionId}|${score.key}`;
+        const group = groups.get(id) ?? { key: score.key, name: score.name || score.key, human: [], ai: [] };
+        if (score.name) group.name = score.name;
+        group[side].push(score.normalizedScore);
+        groups.set(id, group);
+    }
+    return disagreementQueue([...groups.values()].map(group => ({
+        key: group.key,
+        name: group.name,
+        humanMean: group.human.length ? group.human.reduce((sum, score) => sum + score, 0) / group.human.length : null,
+        aiMean: group.ai.length ? group.ai.reduce((sum, score) => sum + score, 0) / group.ai.length : null,
+    })));
+}
+
 /** Largest |human mean − AI mean| first. A criterion with either mean missing is left out. */
 export function disagreementQueue(rows: { key: string; name?: string | null; humanMean: number | null; aiMean: number | null }[]): DisagreementItem[] {
     return rows
@@ -30,14 +62,15 @@ export function scoreTrend(runs: { at: string | Date; score: number | null; scop
         .sort((left, right) => left.at.localeCompare(right.at));
 }
 
-/** Share of scored leaves that failed a gate or scored below 1. Unscored leaves are left out. */
-export function criterionFailureRates(scores: { key: string; normalizedScore: number | null; gateFailed?: boolean }[]): { key: string; rate: number; count: number }[] {
+/** A leaf fails when its gate failed, or when its score is below that version's pass threshold. */
+export function criterionFailureRates(scores: { key: string; normalizedScore: number | null; gateFailed?: boolean; passThreshold?: number | null }[]): { key: string; rate: number; count: number }[] {
     const buckets = new Map<string, { failed: number; total: number }>();
     for (const score of scores) {
         if (score.normalizedScore == null && !score.gateFailed) continue;
         const bucket = buckets.get(score.key) ?? { failed: 0, total: 0 };
         bucket.total += 1;
-        if (score.gateFailed || (score.normalizedScore != null && score.normalizedScore < 1)) bucket.failed += 1;
+        const belowThreshold = score.normalizedScore != null && score.passThreshold != null && score.normalizedScore < score.passThreshold;
+        if (score.gateFailed || belowThreshold) bucket.failed += 1;
         buckets.set(score.key, bucket);
     }
     return [...buckets.entries()]
@@ -75,13 +108,13 @@ export function rubricRunView(oracleResults: { oracleType?: string; type?: strin
             key,
             name: String(item.Name ?? item.name ?? key),
             normalizedScore: numberOrNull(item.NormalizedScore ?? item.normalizedScore),
+            weight: numberOrNull(item.Weight ?? item.weight) ?? 1,
             gateFailed: item.GateFailed === true || item.gateFailed === true,
             rationale: text(item.Rationale ?? item.rationale),
             evidence: text(item.Evidence ?? item.evidence),
         };
     });
-    const scored = nodes.map(node => node.normalizedScore).filter((score): score is number => score != null);
-    const normalizedScore = numberOrNull(details?.NormalizedScore) ?? (scored.length ? scored.reduce((sum, score) => sum + score, 0) / scored.length : null);
+    const normalizedScore = numberOrNull(details?.NormalizedScore);
     return {
         version: {
             id: 'run',
@@ -90,7 +123,7 @@ export function rubricRunView(oracleResults: { oracleType?: string; type?: strin
             scoreDisplayMin: 0,
             scoreDisplayMax: 1,
             nodes: nodes.map(node => ({
-                id: node.id, key: node.key, name: node.name, nodeType: 'Criterion' as const, weight: 1,
+                id: node.id, key: node.key, name: node.name, nodeType: 'Criterion' as const, weight: node.weight,
                 isAdvisory: false, isGate: false, evidenceRequired: false, rationaleRequired: false, sequence: 0,
             })),
             scales: [],
@@ -107,7 +140,7 @@ export function rubricRunView(oracleResults: { oracleType?: string; type?: strin
             confidence: null,
             scoringEngineVersion: '1.0',
             nodes: nodes.map(node => ({
-                id: node.id, key: node.key, normalizedScore: node.normalizedScore, effectiveWeight: 1,
+                id: node.id, key: node.key, normalizedScore: node.normalizedScore, effectiveWeight: node.weight,
                 overallContribution: node.normalizedScore, gateFailed: node.gateFailed, isNotApplicable: false, isAdvisory: false,
             })),
         },

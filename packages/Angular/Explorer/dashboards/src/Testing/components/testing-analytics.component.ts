@@ -876,12 +876,21 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
       }));
       const scopes = [...new Set(points.map(point => point.scopeId).filter(id => id.length > 0))];
       this.RubricTrend = scopes.map(scope => scoreTrend(points, scope)).sort((left, right) => right.length - left.length)[0] ?? [];
-      const scores = await view.RunView({ EntityName: 'MJ: Rubric Evaluation Scores', ExtraFilter: 'NormalizedScore IS NOT NULL OR GateFailed = 1', ResultType: 'simple', MaxRows: 500 });
-      this.FailureRates = criterionFailureRates(((scores.Results ?? []) as Record<string, unknown>[]).map(row => ({
-        key: String(row.CriterionKey ?? row.Key ?? row.CriterionID ?? ''),
-        normalizedScore: row.NormalizedScore == null ? null : Number(row.NormalizedScore),
-        gateFailed: row.GateFailed === true || row.GateFailed === 1,
-      })).filter(row => row.key.length > 0));
+      const scores = await view.RunView({ EntityName: 'MJ: Rubric Evaluation Scores', ExtraFilter: 'NormalizedScore IS NOT NULL', ResultType: 'simple', MaxRows: 1000 });
+      const evaluations = await view.RunView({ EntityName: 'MJ: Rubric Evaluations', ExtraFilter: `Status='Submitted'`, ResultType: 'simple', MaxRows: 500 });
+      const versions = await view.RunView({ EntityName: 'MJ: Rubric Versions', ResultType: 'simple', MaxRows: 500 });
+      const evaluationById = new Map(((evaluations.Results ?? []) as Record<string, unknown>[]).map(row => [String(row.ID), row]));
+      const thresholdByVersion = new Map(((versions.Results ?? []) as Record<string, unknown>[]).map(row => [String(row.ID), row.PassThreshold == null ? null : Number(row.PassThreshold)]));
+      this.FailureRates = criterionFailureRates(((scores.Results ?? []) as Record<string, unknown>[]).map(row => {
+        const evaluation = evaluationById.get(String(row.EvaluationID ?? ''));
+        const versionId = evaluation ? String(evaluation.RubricVersionID ?? '') : '';
+        return {
+          key: String(row.CriterionKey ?? ''),
+          normalizedScore: row.NormalizedScore == null ? null : Number(row.NormalizedScore),
+          gateFailed: row.GateFailed === true || row.GateFailed === 1,
+          passThreshold: thresholdByVersion.get(versionId) ?? null,
+        };
+      }).filter(row => row.key.length > 0));
       this.cdr.markForCheck();
     } catch {
       this.RubricTrend = [];

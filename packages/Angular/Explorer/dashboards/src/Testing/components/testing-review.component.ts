@@ -19,7 +19,7 @@ import {
 } from '../services/testing-instrumentation.service';
 import { UUIDsEqual } from '@memberjunction/global';
 import { Metadata, RunView } from '@memberjunction/core';
-import { disagreementQueue, type DisagreementItem } from '@memberjunction/ng-testing';
+import { disagreementFromScores, type DisagreementItem } from '@memberjunction/ng-testing';
 
 type ViewMode = 'queue' | 'history';
 type HistorySort = 'date' | 'rating' | 'test-name';
@@ -1180,18 +1180,34 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
       const provider = Metadata.Provider;
       if (!provider) return;
       const view = RunView.FromMetadataProvider(provider);
-      const result = await view.RunView({
-        EntityName: 'MJ: Rubric Evaluation Scores',
-        ExtraFilter: 'CriterionCohortHumanMeanScore IS NOT NULL AND CriterionCohortAIMeanScore IS NOT NULL',
+      const evaluations = await view.RunView({
+        EntityName: 'MJ: Rubric Evaluations',
+        ExtraFilter: `Status='Submitted'`,
         ResultType: 'simple',
-        MaxRows: 200,
+        MaxRows: 500,
       });
-      this.Disagreement = disagreementQueue(((result.Results ?? []) as Record<string, unknown>[]).map(row => ({
-        key: String(row.CriterionKey ?? row.Key ?? row.ID ?? ''),
-        name: row.Criterion == null ? null : String(row.Criterion),
-        humanMean: row.CriterionCohortHumanMeanScore == null ? null : Number(row.CriterionCohortHumanMeanScore),
-        aiMean: row.CriterionCohortAIMeanScore == null ? null : Number(row.CriterionCohortAIMeanScore),
-      })));
+      const scores = await view.RunView({
+        EntityName: 'MJ: Rubric Evaluation Scores',
+        ExtraFilter: 'NormalizedScore IS NOT NULL',
+        ResultType: 'simple',
+        MaxRows: 1000,
+      });
+      const evaluationRows = (evaluations.Results ?? []) as Record<string, unknown>[];
+      this.Disagreement = disagreementFromScores({
+        evaluations: evaluationRows.map(row => ({
+          id: String(row.ID ?? ''),
+          subjectId: String(row.SubjectRecordID ?? ''),
+          versionId: String(row.RubricVersionID ?? ''),
+          evaluatorType: String(row.EvaluatorType ?? ''),
+          status: String(row.Status ?? ''),
+        })),
+        scores: ((scores.Results ?? []) as Record<string, unknown>[]).map(row => ({
+          evaluationId: String(row.EvaluationID ?? ''),
+          key: String(row.CriterionKey ?? ''),
+          name: row.Criterion == null ? null : String(row.Criterion),
+          normalizedScore: row.NormalizedScore == null ? null : Number(row.NormalizedScore),
+        })),
+      });
       this.cdr.markForCheck();
     } catch {
       this.Disagreement = [];
