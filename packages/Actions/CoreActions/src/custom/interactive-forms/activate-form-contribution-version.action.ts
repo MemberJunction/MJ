@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { BaseAction } from "@memberjunction/actions";
 import { Metadata, LogError, RunView, RunInEntityTransaction } from "@memberjunction/core";
 import { EscapeSQLString, RegisterClass } from "@memberjunction/global";
-import type { MJEntityFormContributionEntity } from "@memberjunction/core-entities";
+import { ActiveContributionSiblings, type FormScopedRow, type MJEntityFormContributionEntity } from "@memberjunction/core-entities";
 import { CONTRIBUTION_KEY_PATTERN } from "@memberjunction/interactive-component-types/forms";
 import {
     AddOutput,
@@ -16,8 +16,7 @@ import {
 } from "./_shared";
 
 /** A prior Active sibling this activation will demote. */
-interface PriorActive {
-    ID: string;
+interface PriorActive extends FormScopedRow {
     ComponentID: string;
 }
 
@@ -125,7 +124,10 @@ export class ActivateFormContributionVersionAction extends BaseAction {
         }
     }
 
-    /** The owner's Active rows sharing the target's key. Empty for a keyless row. */
+    /**
+     * The Active rows sharing the target's key and audience, which `ActiveContributionSiblings`
+     * decides, as the Manage drawer does. Empty for a keyless row.
+     */
     private async findPriorActive(
         params: RunActionParams,
         target: MJEntityFormContributionEntity,
@@ -141,14 +143,15 @@ export class ActivateFormContributionVersionAction extends BaseAction {
         const rv = RunView.FromMetadataProvider(params.Provider ?? Metadata.Provider);
         const result = await rv.RunView<PriorActive>({
             EntityName: "MJ: Entity Form Contributions",
-            ExtraFilter: `EntityID='${EscapeSQLString(target.EntityID)}' AND ContributionKey='${EscapeSQLString(target.ContributionKey)}' AND Scope='User' AND UserID='${EscapeSQLString(target.UserID ?? '')}' AND Status='Active' AND ID <> '${EscapeSQLString(target.ID)}'`,
-            Fields: ['ID', 'ComponentID'], ResultType: 'simple',
+            ExtraFilter: `EntityID='${EscapeSQLString(target.EntityID)}' AND ContributionKey='${EscapeSQLString(target.ContributionKey)}' AND Status='Active'`,
+            Fields: ['ID', 'EntityID', 'Status', 'Scope', 'UserID', 'RoleID', 'ContributionKey', 'ComponentID'],
+            ResultType: 'simple',
         }, params.ContextUser);
         if (!result.Success) {
             return { error: Failure("QUERY_FAILED",
                 `Prior-active lookup failed: ${result.ErrorMessage ?? 'unknown error'}`) };
         }
-        return { rows: result.Results ?? [] };
+        return { rows: ActiveContributionSiblings(result.Results ?? [], target) };
     }
 }
 

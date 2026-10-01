@@ -12,6 +12,7 @@ import {
     ContributionClaimRefusal,
     ContributionSpecColumns,
     type ContributionRowOptions,
+    FormLifecycleComponentStatus,
     FormScopeWriteRefusal,
     type FormScope,
     MJComponentEntity,
@@ -341,11 +342,7 @@ export async function WriteAtomically<T extends object>(
  */
 export type FormLifecycle = 'Active' | 'Pending' | 'Inactive';
 export function MapToComponentStatus(lifecycle: FormLifecycle): 'Published' | 'Draft' | 'Deprecated' {
-    switch (lifecycle) {
-        case 'Active':   return 'Published';
-        case 'Pending':  return 'Draft';
-        case 'Inactive': return 'Deprecated';
-    }
+    return FormLifecycleComponentStatus(lifecycle);
 }
 
 /** @deprecated Use {@link MapToComponentStatus}. */

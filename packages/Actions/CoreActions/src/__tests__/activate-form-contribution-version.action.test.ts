@@ -12,7 +12,8 @@ const { hoisted } = vi.hoisted(() => ({
     hoisted: {
         /** Every contribution and component row this test file can load, by ID. */
         rows: new Map<string, Row>(),
-        priorRows: [] as Array<{ ID: string; ComponentID: string }>,
+        /** What the sibling query returns: every Active row on the entity under the target's key. */
+        priorRows: [] as Array<Record<string, unknown>>,
         runViewSucceeds: true,
         filters: [] as string[],
     },
@@ -73,6 +74,14 @@ async function run(p: RunActionParams): Promise<ActionResultSimple> {
     }).InternalRunAction(p);
 }
 
+/** An Active row under the target's key, as the sibling query returns it. */
+function live(over: Record<string, unknown>): Record<string, unknown> {
+    return {
+        EntityID: 'ENT-PEOPLE', Status: 'Active', Scope: 'User', UserID: 'USER-1', RoleID: null,
+        ContributionKey: 'skip:person-ltv', ...over,
+    };
+}
+
 function seedTarget(over: Record<string, unknown> = {}): void {
     hoisted.rows.set('ROW-2', row({
         ID: 'ROW-2', EntityID: 'ENT-PEOPLE', ComponentID: 'COMP-2', ContributionKey: 'skip:person-ltv',
@@ -103,7 +112,7 @@ describe('ActivateFormContributionVersionAction', () => {
     it('demotes the prior Active sibling sharing the key', async () => {
         hoisted.rows.set('ROW-1', row({ ID: 'ROW-1', ComponentID: 'COMP-1', Status: 'Active' }));
         hoisted.rows.set('COMP-1', row({ ID: 'COMP-1', Status: 'Published' }));
-        hoisted.priorRows = [{ ID: 'ROW-1', ComponentID: 'COMP-1' }];
+        hoisted.priorRows = [live({ ID: 'ROW-1', ComponentID: 'COMP-1' })];
         const result = await run(params());
         expect(hoisted.rows.get('ROW-1')!.Status).toBe('Inactive');
         expect(hoisted.rows.get('COMP-1')!.Status).toBe('Deprecated');
@@ -112,11 +121,24 @@ describe('ActivateFormContributionVersionAction', () => {
         });
     });
 
-    it('scopes the sibling search to the owning user and excludes the target', async () => {
-        await run(params());
-        expect(hoisted.filters[0]).toContain("Scope='User' AND UserID='USER-1'");
-        expect(hoisted.filters[0]).toContain("ID <> 'ROW-2'");
+    it('demotes only the owner\'s row, never another audience\'s or the target itself', async () => {
+        for (const id of ['ROW-1', 'ROW-G', 'ROW-X']) {
+            hoisted.rows.set(id, row({ ID: id, ComponentID: `COMP-${id}`, Status: 'Active' }));
+        }
+        hoisted.priorRows = [
+            live({ ID: 'ROW-1', ComponentID: 'COMP-ROW-1' }),
+            live({ ID: 'ROW-G', ComponentID: 'COMP-ROW-G', Scope: 'Global', UserID: null }),
+            live({ ID: 'ROW-X', ComponentID: 'COMP-ROW-X', UserID: 'SOMEONE-ELSE' }),
+            live({ ID: 'ROW-2', ComponentID: 'COMP-2' }),
+        ];
+        const result = await run(params());
+        expect(hoisted.filters[0]).toContain("ContributionKey='skip:person-ltv'");
         expect(hoisted.filters[0]).toContain("Status='Active'");
+        expect(hoisted.rows.get('ROW-1')!.Status).toBe('Inactive');
+        expect(hoisted.rows.get('ROW-G')!.Status).toBe('Active');
+        expect(hoisted.rows.get('ROW-X')!.Status).toBe('Active');
+        expect(hoisted.rows.get('ROW-2')!.Status).toBe('Active');
+        expect(JSON.parse(result.Message ?? '{}')).toMatchObject({ DemotedCount: 1 });
     });
 
     it('skips the sibling search for a keyless contribution', async () => {
