@@ -146,8 +146,9 @@ import {
     MiniMaxLLM,
 } from '@memberjunction/ai-minimax';
 
-// @memberjunction/ai-openrouter (1 classes)
+// @memberjunction/ai-openrouter (2 classes)
 import {
+    OpenRouterDecision,
     OpenRouterLLM,
 } from '@memberjunction/ai-openrouter';
 
@@ -922,8 +923,9 @@ import {
     TemplateRunServerOperation,
 } from '@memberjunction/templates';
 
-// @memberjunction/ai-prompts (1 classes)
+// @memberjunction/ai-prompts (2 classes)
 import {
+    LLMDecision,
     ParallelExecutionCoordinator,
 } from '@memberjunction/ai-prompts';
 
@@ -1104,7 +1106,7 @@ import {
     MJVectorIndexEntityServer,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (150 classes)
+// @memberjunction/core-actions (151 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1222,6 +1224,7 @@ import {
     RevokeListInvitationAction,
     RunAdhocQueryAction,
     RunClusterAnalysisAction,
+    RunDecisionAction,
     RunRecordProcessAction,
     RunStoredQueryAction,
     ScheduledGeocodingAction,
@@ -1322,6 +1325,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     InceptionLLM,
     LlamaCppLLM,
     MiniMaxLLM,
+    OpenRouterDecision,
     OpenRouterLLM,
     SiliconFlowLLM,
     VertexLLM,
@@ -1482,11 +1486,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJComponentEntity,
     MJComponentEntityExtended,
     MJComponentLibraryEntity,
-    MJComponentLibraryLinkEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJComponentLibraryLinkEntity,
     MJComponentRegistryEntity,
     MJContentFileTypeEntity,
     MJContentItemAttributeEntity,
@@ -1686,11 +1690,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSchemaInfoEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
-    MJSearchExecutionLogEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSearchExecutionLogEntity,
     MJSearchProviderEntity,
     MJSearchScopeEntity,
     MJSearchScopeEntityEntity,
@@ -1890,11 +1894,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     FacebookSearchPostsAction,
     GetAccountAnalyticsAction,
     GetCommentsAction,
-    GetTrendingHashtagsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetTrendingHashtagsAction,
     GetUserVideosAction,
     GetVideoAnalyticsAction,
     HootSuiteBulkSchedulePostsAction,
@@ -1974,6 +1978,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AIPromptExtension,
     TemplateEmbedExtension,
     TemplateRunServerOperation,
+    LLMDecision,
     ParallelExecutionCoordinator,
     LLMReranker,
     PromptReasoningProvider,
@@ -2093,12 +2098,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJMaterializedResultEntityServer,
     MJQueryEntityServer,
     MJQuerySQLEntityServer,
-    MJRecordChangeEntityServer,
-    MJRecordProcessEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    MJRecordChangeEntityServer,
+    MJRecordProcessEntityServer,
     MJRemoteOperationEntityServer,
     MJRoleEntityServer,
     MJRowLevelSecurityFilterEntityServer,
@@ -2228,6 +2233,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     RevokeListInvitationAction,
     RunAdhocQueryAction,
     RunClusterAnalysisAction,
+    RunDecisionAction,
     RunRecordProcessAction,
     RunStoredQueryAction,
     ScheduledGeocodingAction,
@@ -2285,7 +2291,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 971;
+export const CLASS_REGISTRATIONS_COUNT = 974;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
