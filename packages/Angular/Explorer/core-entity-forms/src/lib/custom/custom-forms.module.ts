@@ -106,6 +106,7 @@ import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissio
 import { MLModelFormComponentExtended, LoadMLModelFormComponentExtended } from "./MLModels/ml-model-form.component";
 import { RubricsModule } from "@memberjunction/ng-rubrics";
 import { MJRubricFormComponentExtended } from "./Rubrics/rubric-form.component";
+import { RubricAuthorPanel, RubricDiffPanel, RubricPublishPanel } from "./Rubrics/rubric-form.panels";
 import { MJRubricEvaluationFormComponentExtended } from "./Rubrics/evaluation-form.component";
 import { MJRubricScaleFormComponentExtended } from "./Rubrics/scale-form.component";
 import { MJAIAgentRubricFormComponentExtended, MJRubricBandFormComponentExtended, MJRubricCategoryFormComponentExtended, MJRubricCriterionFormComponentExtended, MJRubricEvaluationScoreFormComponentExtended, MJRubricScaleLevelFormComponentExtended, MJRubricVersionFormComponentExtended } from "./Rubrics/record-forms.component";
@@ -188,6 +189,9 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
     imports: [
         CommonModule,
         RubricsModule,
+        RubricAuthorPanel,
+        RubricDiffPanel,
+        RubricPublishPanel,
         FormsModule,
         ReactiveFormsModule,
         DragDropModule,

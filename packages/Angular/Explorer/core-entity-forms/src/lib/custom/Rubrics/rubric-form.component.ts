@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { CompositeKey, RunView } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import { RegisterClass, RegisterClassEx } from '@memberjunction/global';
+import { BaseFormComponent, BaseFormPolicy, type FormChromeContext, type FormChromeSpec } from '@memberjunction/ng-base-forms';
 import { bandFromRow, nodeFromRow, planBandSave, planNodeSave, publishPreview, scaleFromRow, type RubricBandSnapshot, type RubricNodeSnapshot, type RubricScaleSnapshot, type RubricVersionSnapshot } from '@memberjunction/ng-rubrics';
 import { MJRubricEntity } from '@memberjunction/core-entities';
 import { MJRubricFormComponent } from '../../generated/Entities/MJRubric/mjrubric.form.component';
@@ -14,8 +14,7 @@ import { MJRubricFormComponent } from '../../generated/Entities/MJRubric/mjrubri
 @Component({
     standalone: false,
     selector: 'mj-rubric-form',
-    templateUrl: './rubric-form.component.html',
-    styleUrls: ['./rubric-form.component.css'],
+    templateUrl: '../../generated/Entities/MJRubric/mjrubric.form.component.html',
 })
 export class MJRubricFormComponentExtended extends MJRubricFormComponent {
     public override record!: MJRubricEntity;
@@ -197,5 +196,13 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
         const view = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await view.RunView({ EntityName: entityName, ExtraFilter: filter, ResultType: 'simple', MaxRows: 500 }, this.ProviderToUse.CurrentUser);
         return (result.Results ?? []) as Record<string, unknown>[];
+    }
+}
+
+/** The rubric record uses the left-nav rail. Each contribution is one item. */
+@RegisterClassEx(BaseFormPolicy, { key: 'MJ: Rubrics', metadata: { entity: 'MJ: Rubrics' } })
+export class RubricFormPolicy extends BaseFormPolicy {
+    public override DecorateChrome(spec: FormChromeSpec, _ctx: FormChromeContext): FormChromeSpec {
+        return { ...spec, Layout: 'left-nav' };
     }
 }
