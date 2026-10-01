@@ -925,8 +925,10 @@ import {
     LLMReranker,
 } from '@memberjunction/ai-reranker';
 
-// @memberjunction/ai-vector-dupe (1 classes)
+// @memberjunction/ai-vector-dupe (3 classes)
 import {
+    DecisionReasoningProvider,
+    DecisionThenPromptReasoningProvider,
     PromptReasoningProvider,
 } from '@memberjunction/ai-vector-dupe';
 
@@ -1990,6 +1992,8 @@ const CLASS_REGISTRATIONS_3: any[] = [
     LLMDecision,
     ParallelExecutionCoordinator,
     LLMReranker,
+    DecisionReasoningProvider,
+    DecisionThenPromptReasoningProvider,
     PromptReasoningProvider,
     AzureAISearchProvider,
     BGEReRanker,

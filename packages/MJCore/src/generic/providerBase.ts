@@ -303,11 +303,38 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Minimum interval (ms) between metadata refresh checks to prevent
      * redundant network calls when Config()/RefreshIfNeeded() fire in
      * quick succession (e.g., multiple engines during startup).
+     * The throttle is armed only by a check whose status request succeeded — a check
+     * that threw or got no timestamps proved nothing, so the next caller checks again.
+     * A caller arriving while a check is in flight is told no refresh is needed, as the
+     * in-flight owner acts on the answer (see {@link CheckToSeeIfRefreshNeeded}).
      * Does NOT affect forced Refresh() calls. Default: 30 000 ms.
      */
     public static MinRefreshCheckIntervalMs: number = 30000;
 
+    /** When the last SUCCESSFUL refresh check's status request completed; 0 = never. */
     private _lastRefreshCheckAt: number = 0;
+    /**
+     * The check currently running in {@link CheckToSeeIfRefreshNeeded}; null when none is. While
+     * set, a non-bypassing caller is answered `false` without a request — the owner of this check
+     * acts on its answer. Held as the promise (not a flag) so only its owner clears it.
+     */
+    private _refreshCheckInFlight: Promise<boolean> | null = null;
+    /**
+     * Set when Config() adopts a snapshot it loaded from the server (which fetched the current user
+     * with it); consumed by the next {@link preValidateAndRefresh}, which then has nothing to check.
+     */
+    private _configLoadedFromServer = false;
+    private _lastMetadataLoadError: Error | null = null;
+
+    /**
+     * Why the most recent metadata download ({@link GetAllMetadata}) failed; null when it succeeded
+     * or none has run. GetAllMetadata logs and returns undefined on failure so a background refresh
+     * keeps the last good graph; a boot that ends with no metadata reads this to report the cause
+     * (e.g. a user with no roles cannot read `MJ: User Roles`) instead of a generic "nothing loaded".
+     */
+    public get LastMetadataLoadError(): Error | null {
+        return this._lastMetadataLoadError;
+    }
 
     // ── Server-Side Auto-Cache ────────────────────────────────────────
     /**
@@ -4635,6 +4662,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     public async Config(data: ProviderConfigDataBase, providerToUse?: IMetadataProvider): Promise<boolean> {
         this._ConfigData = data;
+        // Describes THIS Config only: a flag left by an earlier Refresh() must not make the
+        // pre-validation that follows a Config which loaded nothing skip its check.
+        this._configLoadedFromServer = false;
 
         // Initialize LocalCacheManager early so dataset loading can use the cache.
         // Initialize() is idempotent — subsequent calls (e.g. from StartupManager) are no-ops.
@@ -4687,7 +4717,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
         }
 
-        if (hardRefresh || await this.CheckToSeeIfRefreshNeeded(providerToUse)) {
+        // An empty graph has nothing to throttle: the throttle exists to stop redundant checks of a
+        // snapshot we already hold. After a status check succeeded but the download that followed
+        // failed, the throttle is armed and a non-bypassing retry would read "current" and load
+        // nothing for the whole window (#4887).
+        const graphIsEmpty = !this._localMetadata?.AllEntities?.length;
+        if (hardRefresh || await this.CheckToSeeIfRefreshNeeded(providerToUse, graphIsEmpty)) {
             // either a hard refresh flag was set within Refresh(), or LocalMetadata is Obsolete
 
             // first, make sure we reset the flag to false so that if another call to this function happens
@@ -4730,13 +4765,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     const end = new Date().getTime();
                     LogStatusEx({ message: `GetAllMetadata() took ${end - start} ms`, verboseOnly: true });
                     if (res) {
-                        // Atomic swap via UpdateLocalMetadata: single property assignment is atomic in JavaScript
-                        // Readers now see new metadata instead of old
-                        // Uses UpdateLocalMetadata() to maintain consistency with LoadLocalMetadataFromStorage()
-                        // and allow potential subclass overrides for extensibility
-                        this.UpdateLocalMetadata(res);
-                        this._latestLocalMetadataTimestamps = this._latestRemoteMetadataTimestamps // update this since we just used server to get all the stuff
-                        await this.SaveLocalMetadataToStorage();
+                        await this.adoptServerMetadata(res);
+                        this._configLoadedFromServer = true;
                     }
                     else {
                         // GetAllMetadata failed - log error but keep existing metadata
@@ -4759,6 +4789,20 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
+     * Adopts a metadata snapshot just loaded from the server: swaps it in, records that the
+     * local copy now matches the server's timestamps, and persists it to local storage.
+     *
+     * The swap goes through UpdateLocalMetadata — a single property assignment, atomic in
+     * JavaScript, so readers see the old snapshot until the new one is complete — which keeps
+     * it consistent with LoadLocalMetadataFromStorage() and lets subclasses override it.
+     */
+    private async adoptServerMetadata(res: AllMetadata): Promise<void> {
+        this.UpdateLocalMetadata(res);
+        this._latestLocalMetadataTimestamps = this._latestRemoteMetadataTimestamps; // we just used the server to get all the stuff
+        await this.SaveLocalMetadataToStorage();
+    }
+
+    /**
      * Background validation for the stale-while-revalidate fast-start pattern.
      * Checks if local metadata is still current; if stale, fetches fresh metadata
      * and atomically swaps it in. The app continues operating on cached data
@@ -4773,9 +4817,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 const res = await this.GetAllMetadata(providerToUse, false);
                 const elapsed = Date.now() - start;
                 if (res) {
-                    this.UpdateLocalMetadata(res);
-                    this._latestLocalMetadataTimestamps = this._latestRemoteMetadataTimestamps;
-                    await this.SaveLocalMetadataToStorage();
+                    await this.adoptServerMetadata(res);
                     LogStatusEx({ message: `⚡ [Metadata Cache] Background refresh complete (${elapsed}ms) — metadata updated in place`, verboseOnly: false });
                 }
             } else {
@@ -4805,9 +4847,22 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * on RTT). On the warm-stale path we additionally pay the full metadata fetch but
      * avoid serving stale data to the UI in the first place.
      *
+     * On a cold boot, where Config() just loaded the graph (and the current user) from the
+     * server, the first call after that load returns immediately — no check, no current-user
+     * re-fetch. Later calls, and calls after a background refresh, check as usual.
+     *
      * Caller contract: invoke this before `StartupManager.Startup()`.
      */
     public async preValidateAndRefresh(providerToUse?: IMetadataProvider): Promise<void> {
+        // The snapshot Config just loaded from the server (a cold boot) is current by construction,
+        // and GetAllMetadata fetched CurrentUser with it. Checking again would hit the refresh
+        // throttle, read "current", and re-fetch the same user serially (#4887). One-shot: only the
+        // first pre-validation after that load skips.
+        if (this._configLoadedFromServer) {
+            this._configLoadedFromServer = false;
+            LogStatusEx({ message: `⚡ [Metadata Cache] Pre-validation: metadata was just loaded from the server — skipping`, verboseOnly: true });
+            return;
+        }
         try {
             const needsRefresh = await this.CheckToSeeIfRefreshNeeded(providerToUse);
             if (needsRefresh) {
@@ -4816,9 +4871,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 const res = await this.GetAllMetadata(providerToUse, false);
                 const elapsed = Date.now() - start;
                 if (res) {
-                    this.UpdateLocalMetadata(res);
-                    this._latestLocalMetadataTimestamps = this._latestRemoteMetadataTimestamps;
-                    await this.SaveLocalMetadataToStorage();
+                    await this.adoptServerMetadata(res);
                     LogStatusEx({ message: `⚡ [Metadata Cache] Pre-validation refresh complete (${elapsed}ms)`, verboseOnly: false });
                 }
             } else {
@@ -4990,7 +5043,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const entitiesItem = d?.Success ? d.Results?.find(r => r.Code === 'Entities') : undefined;
             const hasEntities = Array.isArray(entitiesItem?.Results) && entitiesItem.Results.length > 0;
             if (d && d.Success && !hasEntities) {
-                LogError(`GetAllMetadata() - the ${ProviderBase._mjMetadataDatasetName} dataset returned no entities; keeping the metadata already loaded`);
+                this.recordMetadataLoadFailure(new Error(`GetAllMetadata() - the ${ProviderBase._mjMetadataDatasetName} dataset returned no entities; keeping the metadata already loaded`));
             }
             else if (d && d.Success) {
                 // cache the dataset for anyone who wants to use it
@@ -5025,15 +5078,23 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 const returnMetadata = MetadataFromSimpleObjectWithoutUser(simpleMetadata, this);
                 returnMetadata.CurrentUser = await this.GetCurrentUser();
 
+                this._lastMetadataLoadError = null;
                 return returnMetadata;
             }
             else {
-                LogError ('GetAllMetadata() - Error getting metadata from server' + (d ? ': ' + d.Status : ''));
+                this.recordMetadataLoadFailure(new Error('GetAllMetadata() - Error getting metadata from server' + (d ? ': ' + d.Status : '')));
             }
         }
         catch (e) {
             LogError(e);
+            this._lastMetadataLoadError = e instanceof Error ? e : new Error(String(e));
         }
+    }
+
+    /** Logs a failed metadata download and keeps it for {@link LastMetadataLoadError}. */
+    private recordMetadataLoadFailure(error: Error): void {
+        LogError(error.message);
+        this._lastMetadataLoadError = error;
     }
     
 
@@ -5369,11 +5430,28 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * throttle. Event-driven callers pass true: they hold positive evidence that a metadata
      * member entity was just written, and the throttle otherwise answers "fresh" for any check
      * arriving within the window of the previous one — which would silently drop the second of
-     * two permission changes made less than the window apart.
+     * two permission changes made less than the window apart. For the same reason a bypassing
+     * caller always runs its own check, even while another is in flight: that check may have
+     * started before the write.
+     *
+     * The throttle is armed only when the status request succeeded (returned timestamps). A
+     * check that throws or returns no timestamps leaves it unarmed, so a retried boot inside
+     * the window really checks instead of reading "current" and loading nothing (#4887).
+     * A non-bypassing caller arriving while a check is in flight is told no refresh is needed,
+     * as the in-flight owner acts on the answer; that keeps N engines starting together down to
+     * one request. It must not share the owner's answer: a shared `true` would send every caller
+     * into its own full metadata reload (preValidateAndRefresh / backgroundValidateAndRefresh /
+     * RefreshIfNeeded load outside Config's reload single-flight). For the same reason it gets
+     * `false`, not the owner's rejection, when the owner's check throws.
      * @returns True if refresh is needed, false otherwise
      */
     public async CheckToSeeIfRefreshNeeded(providerToUse?: IMetadataProvider, bypassMinCheckInterval?: boolean): Promise<boolean> {
         if (!this.AllowRefresh) return false;
+
+        if (!bypassMinCheckInterval && this._refreshCheckInFlight) {
+            LogStatusEx({ message: `[RefreshCheck] Skipped — a check is already in flight; its caller acts on the answer`, verboseOnly: true });
+            return false;
+        }
 
         const now = Date.now();
         if (!bypassMinCheckInterval && (now - this._lastRefreshCheckAt) < ProviderBase.MinRefreshCheckIntervalMs) {
@@ -5383,9 +5461,27 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             });
             return false;
         }
-        this._lastRefreshCheckAt = now;
 
-        await this.RefreshRemoteMetadataTimestamps(providerToUse);
+        const check = this.runRefreshCheck(providerToUse);
+        this._refreshCheckInFlight = check;
+        try {
+            return await check;
+        }
+        finally {
+            // A bypassing caller may have replaced the slot with its own newer check while this
+            // one ran; only the check that still owns the slot clears it.
+            if (this._refreshCheckInFlight === check) {
+                this._refreshCheckInFlight = null;
+            }
+        }
+    }
+
+    /** One refresh check: fetch remote timestamps, arm the throttle only on success, compare. */
+    private async runRefreshCheck(providerToUse?: IMetadataProvider): Promise<boolean> {
+        const gotTimestamps = await this.RefreshRemoteMetadataTimestamps(providerToUse);
+        if (gotTimestamps) {
+            this._lastRefreshCheckAt = Date.now();
+        }
         await this.LoadLocalMetadataFromStorage();
         return this.LocalMetadataObsolete();
     }
