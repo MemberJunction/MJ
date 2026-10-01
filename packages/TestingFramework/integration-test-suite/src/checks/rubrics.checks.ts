@@ -25,7 +25,8 @@
  *        score is counted separately rather than inside that mean.
  */
 import type { ConnectionPool, Transaction } from 'mssql';
-import { MJRubricBandEntity, MJRubricCriterionLevelEntity, MJRubricEvaluationEntity, MJRubricEvaluationScoreEntity } from '@memberjunction/core-entities';
+import type { BaseEntity } from '@memberjunction/core';
+import { MJAIAgentEntity, MJAIAgentRubricEntity, MJRubricBandEntity, MJRubricCategoryEntity, MJRubricCriterionEntity, MJRubricCriterionLevelEntity, MJRubricEntity, MJRubricEvaluationEntity, MJRubricEvaluationScoreEntity, MJRubricScaleEntity, MJRubricScaleLevelEntity, MJRubricVersionEntity, MJTestEntity } from '@memberjunction/core-entities';
 import { RubricScoring, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { getConsensus } from '@memberjunction/rubrics';
 import { Assert } from '@memberjunction/testing-integration';
@@ -83,63 +84,25 @@ function publishedVersionSql(s: string, tag: string): string {
     `;
 }
 
-interface RubricRow {
-    NewRecord(): void;
-    Save(): Promise<boolean>;
-    Load(id: string): Promise<boolean>;
-    LatestResult?: { Message?: string };
-    ID: string;
-    Name?: string;
-    Status?: string;
-    RubricID?: string;
-    BasedOnVersionID?: string | null;
-    ScaleID?: string;
-    Weight?: number;
-    IsGate?: boolean;
-    GateMinimumScore?: number | null;
-    NotApplicablePolicy?: string;
-    PassThreshold?: number | null;
-    Key?: string;
-    NodeType?: string;
-    Label?: string;
-    Value?: number;
-    NormalizedValue?: number;
-    Sequence?: number;
-    ScaleType?: string;
-    RubricVersionID?: string;
-    SubjectEntityID?: string;
-    SubjectRecordID?: string;
-    EvaluatorType?: string;
-    EvaluatorUserID?: string | null;
-    CategoryID?: string | null;
-    Description?: string | null;
-    TypeID?: string;
-    Configuration?: string | null;
-    ExpectedOutcomes?: string | null;
-    InputDefinition?: string | null;
-    Purpose?: string;
-    IsDefault?: boolean;
-    AgentID?: string;
-    Rationale?: string | null;
-    EvaluationID?: string;
-    CriterionID?: string;
-    ScaleLevelID?: string | null;
-    SupersedesEvaluationID?: string | null;
-    MajorVersion?: number | null;
-    MinorVersion?: number | null;
-    PatchVersion?: number | null;
-    AppliedBump?: string | null;
-    NormalizedScore?: number | null;
-    Outcome?: string | null;
-}
-
-async function rubricRow(ctx: IntegrationCheckContext, entityName: string): Promise<RubricRow> {
-    const created = await ctx.Provider.GetEntityObject(entityName, ctx.User) as unknown as RubricRow;
+async function rubricRow(ctx: IntegrationCheckContext, entityName: 'MJ: Rubric Categories'): Promise<MJRubricCategoryEntity>;
+async function rubricRow(ctx: IntegrationCheckContext, entityName: 'MJ: Rubrics'): Promise<MJRubricEntity>;
+async function rubricRow(ctx: IntegrationCheckContext, entityName: 'MJ: AI Agents'): Promise<MJAIAgentEntity>;
+async function rubricRow(ctx: IntegrationCheckContext, entityName: 'MJ: AI Agent Rubrics'): Promise<MJAIAgentRubricEntity>;
+async function rubricRow(ctx: IntegrationCheckContext, entityName: 'MJ: Tests'): Promise<MJTestEntity>;
+async function rubricRow(ctx: IntegrationCheckContext, entityName: 'MJ: Rubric Evaluations'): Promise<MJRubricEvaluationEntity>;
+async function rubricRow(ctx: IntegrationCheckContext, entityName: 'MJ: Rubric Evaluation Scores'): Promise<MJRubricEvaluationScoreEntity>;
+async function rubricRow(ctx: IntegrationCheckContext, entityName: 'MJ: Rubric Scales'): Promise<MJRubricScaleEntity>;
+async function rubricRow(ctx: IntegrationCheckContext, entityName: 'MJ: Rubric Scale Levels'): Promise<MJRubricScaleLevelEntity>;
+async function rubricRow(ctx: IntegrationCheckContext, entityName: 'MJ: Rubric Versions'): Promise<MJRubricVersionEntity>;
+async function rubricRow(ctx: IntegrationCheckContext, entityName: 'MJ: Rubric Criteria'): Promise<MJRubricCriterionEntity>;
+async function rubricRow(ctx: IntegrationCheckContext, entityName: string): Promise<BaseEntity> {
+    const created = await ctx.Provider.GetEntityObject(entityName, ctx.User);
+    if (!created) throw new Error(`${entityName} could not be created.`);
     created.NewRecord();
     return created;
 }
 
-async function saveRow(record: RubricRow): Promise<void> {
+async function saveRow(record: { Save(): Promise<boolean>; LatestResult?: { Message?: string } }): Promise<void> {
     const ok = await record.Save();
     Assert(ok === true, record.LatestResult?.Message || 'Save returned false');
 }
@@ -232,7 +195,7 @@ async function ensureItWorld(ctx: IntegrationCheckContext): Promise<void> {
 
     const type = await pool.request().query(`SELECT TOP 1 CONVERT(nvarchar(36), [ID]) AS ID FROM [${s}].[TestType] WHERE [Name] = N'Agent Eval'`);
     const typeId = type.recordset[0]?.ID as string | undefined;
-    Assert(!!typeId, 'the Agent Eval test type exists');
+    if (!typeId) throw new Error('the Agent Eval test type exists');
     const expected = JSON.stringify({ semanticGoals: ['The answer names the source.'] });
     const configuration = JSON.stringify({ agentId: reviewedAgentId, oracles: [{ type: 'trace-no-errors', weight: 1 }] });
     let testId = await idByName(ctx, 'Test', IT_WORLD.test);
@@ -895,7 +858,8 @@ export const RubricsChecks: NamedCheck[] = [
                 await saveRow(secondScore);
                 second.Status = 'Submitted';
                 await saveRow(second);
-                const prior = await ctx.Provider.GetEntityObject('MJ: Rubric Evaluations', ctx.User) as unknown as RubricRow;
+                const prior = await ctx.Provider.GetEntityObject<MJRubricEvaluationEntity>('MJ: Rubric Evaluations', ctx.User);
+                if (!prior) throw new Error('The superseded evaluation was not found.');
                 await prior.Load(first.ID);
                 Assert(prior.Status === 'Superseded', `the first evaluation was ${prior.Status}`);
                 Assert(second.Status === 'Submitted', `the replacement was ${second.Status}`);
