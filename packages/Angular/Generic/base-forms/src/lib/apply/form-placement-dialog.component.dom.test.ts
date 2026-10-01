@@ -1064,6 +1064,16 @@ describe('MjFormPlacementDialogComponent (DOM) — editing a saved row', () => {
             });
         });
 
+        it('keeps a claim on a whole tab, and writes it on Apply', async () => {
+            const tabRow: FormContributionSpec = { slot: 'before-fields', presentation: 'panel', title: 'T', replacesSectionKey: '__mj_form_details' };
+            const mounted = mount(DRAWER_CONTEXT, tabRow);
+            expect(mounted.dialog.State.ReplaceMode).toBe('rail-tab');
+            await read(mounted);
+            expect(mounted.dialog.State.ReplaceMode).toBe('rail-tab');
+            mounted.dialog.OnApply();
+            expect(mounted.fixture.componentInstance.Decision!.Contribution.replacesSectionKey).toBe('__mj_form_details');
+        });
+
         it('keeps a claim on another panel', async () => {
             const panelRow: FormContributionSpec = { slot: 'after-fields', presentation: 'panel', title: 'P', contributionKey: 'skip:health' };
             const mounted = mount({ ...DRAWER_CONTEXT, Existing: CONTEXT.Existing }, panelRow);
@@ -1129,6 +1139,17 @@ describe('MjFormPlacementDialogComponent (DOM) — audience and start', () => {
         f.componentInstance.Applied.subscribe((d: FormPlacementDecision) => { emitted = d; });
         f.componentInstance.OnApply();
         expect(emitted!).toMatchObject({ ActivateNow: false, KeepOff: true });
+    });
+
+    it('never emits keeping a panel off where that is not offered', () => {
+        const f = renderWith({ OfferKeepOff: false });
+        f.componentInstance.State = { ...f.componentInstance.State, ActivateNow: false, KeepOff: true };
+        expect(f.componentInstance.StartChoice).toBe('draft');
+        expect(f.componentInstance.Summary).toContain('saved as a draft');
+        let emitted: FormPlacementDecision | null = null;
+        f.componentInstance.Applied.subscribe((d: FormPlacementDecision) => { emitted = d; });
+        f.componentInstance.OnApply();
+        expect(emitted!).toMatchObject({ ActivateNow: false, KeepOff: false });
     });
 
     it('turns the panel on when the user picks right away after keeping it off', () => {

@@ -194,7 +194,12 @@ export class MjFormPlacementDialogComponent extends BaseAngularComponent {
     }
 
     public get Summary(): string {
-        return SummarizePlacement(this.State, this._context, this.VisibleTo);
+        return SummarizePlacement(this.answers, this._context, this.VisibleTo);
+    }
+
+    /** The answers as they are applied: keeping a panel off counts only where it is offered. */
+    private get answers(): FormPlacementState {
+        return this.State.KeepOff && !this.OfferKeepOff ? { ...this.State, KeepOff: false } : this.State;
     }
 
     /** When the panel starts: right away, as a draft, or, for a panel that is off, still off. */
@@ -410,7 +415,7 @@ export class MjFormPlacementDialogComponent extends BaseAngularComponent {
     }
 
     public OnApply(): void {
-        this.Applied.emit(ResolvePlacementDecision(this.State, this._context, this._proposal));
+        this.Applied.emit(ResolvePlacementDecision(this.answers, this._context, this._proposal));
     }
 
     public OnCancel(): void {
