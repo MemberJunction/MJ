@@ -51,6 +51,7 @@ import { DuplicateReasoningProvider } from "./reasoning/DuplicateReasoningProvid
 import {
     DuplicateReasoningInput,
     DuplicateReasoningOutput,
+    DuplicateReasoningCandidateVerdict,
     ReasoningCandidate,
     ReasoningFieldDelta,
 } from "./reasoning/DuplicateReasoningTypes";
@@ -1397,7 +1398,8 @@ export class DuplicateRecordDetector extends VectorBase {
      * independently), so a false-positive candidate reads NotDuplicate even when another candidate
      * in the same set is a confident Merge. Falls back to the set-level summary only when the
      * reasoner returned no per-candidate verdict for this record. The proposed survivor + field
-     * map stay set-level (they describe the merge of the set's true duplicates).
+     * map stay set-level (they describe the merge of the set's true duplicates). The run id is
+     * the set's, unless this candidate's verdict came from a run of its own.
      *
      * @param candidateRecordID this candidate's record id (matches the input candidate RecordID)
      */
@@ -1406,7 +1408,7 @@ export class DuplicateRecordDetector extends VectorBase {
         reasoning: DuplicateReasoningOutput,
         candidateRecordID: string
     ): void {
-        const verdict = reasoning.CandidateVerdicts.find(v => this.recordIdMatches(v.RecordID, candidateRecordID));
+        const verdict = this.findCandidateVerdict(reasoning, candidateRecordID);
         match.LLMRecommendation = verdict ? verdict.Recommendation : reasoning.Recommendation;
         match.LLMConfidence = verdict ? verdict.Confidence : reasoning.Confidence;
         match.LLMReasoning = (verdict?.Reasoning || reasoning.Reasoning) || null;
@@ -1414,8 +1416,33 @@ export class DuplicateRecordDetector extends VectorBase {
         match.LLMProposedFieldMap = reasoning.FieldChoices.length > 0
             ? JSON.stringify(reasoning.FieldChoices)
             : null;
+        this.applyRunIDsToMatch(match, reasoning, verdict);
+    }
+
+    /**
+     * Point the match row at the run that produced its verdict: the verdict's own prompt run when
+     * it carries one (a candidate `DecisionThenPrompt`'s decision dropped), else the set's run.
+     */
+    private applyRunIDsToMatch(
+        match: MJDuplicateRunDetailMatchEntity,
+        reasoning: DuplicateReasoningOutput,
+        verdict: DuplicateReasoningCandidateVerdict | undefined
+    ): void {
+        if (verdict?.AIPromptRunID) {
+            match.AIPromptRunID = verdict.AIPromptRunID;
+            match.AIAgentRunID = null;
+            return;
+        }
         match.AIPromptRunID = reasoning.AIPromptRunID ?? null;
         match.AIAgentRunID = reasoning.AIAgentRunID ?? null;
+    }
+
+    /** This candidate's own verdict, matched by record id, or undefined when the reasoner returned none for it. */
+    private findCandidateVerdict(
+        reasoning: DuplicateReasoningOutput,
+        candidateRecordID: string
+    ): DuplicateReasoningCandidateVerdict | undefined {
+        return reasoning.CandidateVerdicts.find(v => this.recordIdMatches(v.RecordID, candidateRecordID));
     }
 
     // ─────────────────────────────────────────────
@@ -1618,11 +1645,12 @@ export class DuplicateRecordDetector extends VectorBase {
     }
 
     /**
-     * Carry the set-level verdict + resolved survivor field map onto the result so the
-     * auto-merge step (AutoMergeAboveAbsolute) can consult the recommendation and apply the
-     * literal {FieldName, Value} overrides via {@link RecordMergeRequest.FieldMap}. The UI
-     * still reads the persisted per-row {@link MJDuplicateRunDetailMatchEntity.LLMProposedFieldMap}
-     * (the raw choices) and lets the reviewer override before a manual merge.
+     * Carry the set-level verdict + resolved survivor field map onto the result, and each
+     * candidate's own verdict onto its {@link PotentialDuplicate}, so the auto-merge step
+     * (AutoMergeAboveAbsolute) can consult both recommendations and apply the literal
+     * {FieldName, Value} overrides via {@link RecordMergeRequest.FieldMap}. The UI still reads
+     * the persisted per-row {@link MJDuplicateRunDetailMatchEntity.LLMProposedFieldMap} (the raw
+     * choices) and lets the reviewer override before a manual merge.
      */
     protected applyReasoningToResult(
         result: PotentialDuplicateResult,
@@ -1635,6 +1663,9 @@ export class DuplicateRecordDetector extends VectorBase {
         result.ReasoningRecommendation = output.Recommendation;
         result.ReasoningFieldMap = fieldMap.length > 0 ? fieldMap : undefined;
         result.ReasoningText = output.Reasoning?.trim() ? output.Reasoning : undefined;
+        for (const dupe of result.Duplicates) {
+            dupe.ReasoningRecommendation = this.findCandidateVerdict(output, dupe.Values())?.Recommendation;
+        }
     }
 
     // ─────────────────────────────────────────────
@@ -1679,7 +1710,9 @@ export class DuplicateRecordDetector extends VectorBase {
      * Reasoning path (EnableLLMReasoning = true): `AutomationLevel` governs.
      *   - ReviewAll / LLMGated → never auto-merge (everything goes to human review).
      *   - AutoMergeAboveAbsolute → at/above the absolute threshold AND the set's LLM
-     *     recommendation is 'Merge'.
+     *     recommendation is 'Merge' AND this candidate's own verdict is 'Merge'. A set-level
+     *     'Merge' only says that SOME candidate is a duplicate, so it never merges a candidate
+     *     the reasoner judged otherwise, or returned no verdict for.
      */
     protected IsAutoMergeEligible(
         dupe: PotentialDuplicate,
@@ -1694,7 +1727,9 @@ export class DuplicateRecordDetector extends VectorBase {
         if (entityDocument.AutomationLevel !== 'AutoMergeAboveAbsolute') {
             return false;
         }
-        return aboveAbsolute && dupeResult.ReasoningRecommendation === 'Merge';
+        return aboveAbsolute
+            && dupeResult.ReasoningRecommendation === 'Merge'
+            && dupe.ReasoningRecommendation === 'Merge';
     }
 
     /**

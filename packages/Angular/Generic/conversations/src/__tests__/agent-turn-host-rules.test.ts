@@ -452,6 +452,7 @@ describe('MessageInputComponent — host rules for an agent turn', () => {
                 AgentHistoryFrom: FLOOR,
                 ConfigurationPresetId: 'preset-high',
                 PlanMode: false,
+                TargetArtifactVersionId: null,
             });
             expect(h.created).toHaveLength(0);
             expect(h.processMessage).not.toHaveBeenCalled();

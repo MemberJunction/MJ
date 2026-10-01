@@ -818,14 +818,15 @@ export class TaskClaimStore {
      * small — the dispatcher polls every few seconds.
      *
      * `expectedStatus` is a parameter because two verbs need it: editing the brief of a step that
-     * has not started (`Pending`) and correcting the brief of one that failed, on the way into a
-     * retry (`Failed`).
+     * has not started (`Pending`) and correcting the brief of one on the way into a retry — a step
+     * that `Failed`, or a Decision step that is `Complete` but holding an answer below its
+     * `minConfidence`.
      */
     public async TryUpdateInputPayload(
         provider: IMetadataProvider,
         taskID: string,
         inputPayload: string | null,
-        expectedStatus: 'Pending' | 'Failed',
+        expectedStatus: 'Pending' | 'Failed' | 'Complete',
         workflowTaskTypeID: string,
         contextUser: UserInfo,
     ): Promise<boolean> {
