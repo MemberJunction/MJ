@@ -54,6 +54,18 @@ export function ApplyContributionSpecToRow(
     row.ContributionKey = ResolveContributionWriteKey(spec, opts.relatedEntityName, opts.componentName);
 }
 
+/** The columns a spec decides, on a new object, for checking a spec before any row is written. */
+export function ContributionSpecColumns(spec: FormContributionSpec, opts: ContributionRowOptions): FormContributionSpecColumns {
+    const row: FormContributionSpecColumns = {
+        Slot: DEFAULT_FORM_CONTRIBUTION_SLOT, SortKey: 0, Presentation: 'panel', Title: null, Icon: null,
+        Configuration: null, Inclusion: null, ChromeGroup: null, RelatedEntityID: null, RelatedJoinField: null,
+        ReplacesSectionKey: null, ReplacesSectionKeys: null, ReplacesFieldNames: null, InSectionKey: null,
+        SectionPosition: null, ContributionKey: null,
+    };
+    ApplyContributionSpecToRow(row, spec, opts);
+    return row;
+}
+
 /** The names in a `ReplacesFieldNames` or `ReplacesSectionKeys` cell. Empty for a cell that is not a JSON array. */
 export function ParseClaimedFieldNames(raw: string | null | undefined): string[] {
     if (!raw || raw.trim().length === 0) return [];
