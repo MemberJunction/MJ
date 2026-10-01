@@ -1,17 +1,16 @@
 /**
  * @fileoverview The placement decision — what the user answers before a panel is written.
  *
- * A generated panel arrives carrying a `formContribution` block. Historically every field
- * in it was applied as written, so the author of the component also chose where it went,
- * what it hid, and how it ranked against panels it could not see.
- *
- * The block now splits in two. **Identity** — `presentation`, `title`, `icon` — describes
- * what the component is, and only its author knows it, so it seeds the dialog. **Placement**
- * — slot, claims, ordering, key — is the user's, and is seeded from a fixed default rather
- * than from the block, so the same request produces the same starting point every time.
+ * A generated panel arrives carrying a `formContribution` block. Its **identity** —
+ * `presentation`, `title`, `icon` — describes what the component is, and only its author knows
+ * it, so it seeds the dialog. Its **placement** — slot, claims, ordering, key — is the user's,
+ * and is seeded from a fixed default rather than from the block, so the same request produces
+ * the same starting point every time.
  *
  * Everything here is pure. The component holds a {@link FormPlacementState} and renders it;
- * these functions decide what that state means.
+ * these functions decide what that state means. The sentences that describe a state are in
+ * `form-placement-text.ts`, and the order of panels in one position is in
+ * `form-placement-order.ts`.
  */
 
 import {
@@ -23,6 +22,7 @@ import {
     type FormContributionSlot,
     type FormContributionSpec,
 } from '@memberjunction/interactive-component-types/forms';
+import { DETAILS_SECTION_KEY, ReplacedSectionChromeGroup, SlotChromeGroup } from '../chrome/form-chrome';
 
 /** One input inside a field section, which a panel may stand in for. */
 export interface FormPlacementField {
@@ -132,19 +132,6 @@ export interface FormPlacementContext {
 export type FormPlacementReplaceMode = 'none' | 'rail-tab' | 'section' | 'field' | 'related' | 'contribution';
 
 /**
- * The key of the rail tab the chrome layer builds from the field sections.
- *
- * Byte-identical to `DETAILS_SECTION_KEY` in the chrome layer. It is named here only
- * because it is the tab a panel most often stands in for and the one the dialog defaults
- * to — a contribution may name any rail tab's key, and the chrome layer expands whichever
- * it is given. Nothing downstream treats this one specially.
- */
-export const DETAILS_TAB_KEY = '__mj_form_details';
-
-/** What the chrome layer titles that tab. Matches the literal in `resolve-form-chrome`. */
-export const DETAILS_TAB_TITLE = 'Details';
-
-/**
  * Whether the form bundles its field sections into a Details tab.
  *
  * Only a rail layout does. An accordion shows every section in place, so there is no tab
@@ -153,9 +140,6 @@ export const DETAILS_TAB_TITLE = 'Details';
 export function HasDetailsTab(context: FormPlacementContext): boolean {
     return context.Layout === 'left-nav' && context.Sections.length > 0;
 }
-
-/** The rail key of the More tab, as the chrome layer names it. */
-export const MORE_TAB_KEY = '__mj_form_more';
 
 /**
  * Whether the form shows a side rail, so there are tabs a user can point at.
@@ -167,21 +151,6 @@ export const MORE_TAB_KEY = '__mj_form_more';
  */
 export function ShowsRail(context: FormPlacementContext): boolean {
     return context.Layout === 'left-nav' && context.Rail.length > 0;
-}
-
-/**
- * Whether a panel standing in for this tab has to be filed into it.
- *
- * Details and More are assembled from the panels filed under them, so a panel replacing
- * their contents has to join the tab or the tab is left empty. Every other rail tab is
- * named after the panels it holds, so replacing all of them dissolves the tab and the
- * panel becomes a tab in its own right.
- */
-export function RailKeyChromeGroup(railKey: string): 'details' | 'more' | null {
-    const key = (railKey ?? '').trim();
-    if (key === DETAILS_TAB_KEY) return 'details';
-    if (key === MORE_TAB_KEY) return 'more';
-    return null;
 }
 
 /**
@@ -220,38 +189,6 @@ export function ChosenSectionKeys(state: FormPlacementState, context: FormPlacem
     const keys = wanted.map((key) => key.trim()).filter((key) => key.length > 0);
     if (TargetsUnread(context)) return keys;
     return context.Sections.map((s) => s.Key).filter((key) => keys.includes(key));
-}
-
-/** One field on offer, named together with the section that draws it. */
-export interface FormPlacementFieldChoice {
-    Name: string;
-    Label: string;
-    SectionKey: string;
-    SectionTitle: string;
-}
-
-/**
- * Every field a panel could stand in for, in form order.
- *
- * Only fields read off a real form are offered. A section list derived from entity
- * metadata says which fields the entity HAS, not which ones this form draws, and a claim
- * on a field the form does not draw hides nothing while still looking applied.
- */
-export function ReplaceableFields(context: FormPlacementContext): FormPlacementFieldChoice[] {
-    if (!context.TargetsVerified) return [];
-    const out: FormPlacementFieldChoice[] = [];
-    for (const section of context.Sections) {
-        for (const field of section.Fields ?? []) {
-            if (!field.Name) continue;
-            out.push({
-                Name: field.Name,
-                Label: field.Label || field.Name,
-                SectionKey: section.Key,
-                SectionTitle: section.Title,
-            });
-        }
-    }
-    return out;
 }
 
 /** The section drawing this field, or null when no section on the form does. */
@@ -306,7 +243,7 @@ export function ReplaceableRailTabs(context: FormPlacementContext): readonly For
 /** The tab the dialog starts on: Details when the form has one, else the first. */
 export function DefaultRailKeyFor(context: FormPlacementContext): string {
     const tabs = ReplaceableRailTabs(context);
-    if (tabs.some((item) => item.Key === DETAILS_TAB_KEY)) return DETAILS_TAB_KEY;
+    if (tabs.some((item) => item.Key === DETAILS_SECTION_KEY)) return DETAILS_SECTION_KEY;
     return tabs[0]?.Key ?? '';
 }
 
@@ -343,37 +280,10 @@ export function TargetRailItem(
     }
     // Claiming nothing, the slot decides: a position among the field sections puts the
     // panel in the tab those sections make up.
-    if (SlotJoinsDetailsTab(state.Slot)) {
-        return context.Rail.find((item) => item.Key === DETAILS_TAB_KEY) ?? null;
+    if (SlotChromeGroup(state.Slot) === 'details') {
+        return context.Rail.find((item) => item.Key === DETAILS_SECTION_KEY) ?? null;
     }
     return null;
-}
-
-/**
- * Whether a panel at this slot joins the Details tab rather than taking one of its own.
- *
- * Byte-identical to `SlotChromeGroup` in the chrome layer, which is what actually files
- * the panel. Duplicated rather than imported so the pure placement model stays free of
- * the chrome layer; the two must agree or the dialog promises a tab the form will not use.
- */
-export function SlotJoinsDetailsTab(slot: FormContributionSlot): boolean {
-    return slot === 'before-fields' || slot === 'after-fields';
-}
-
-/**
- * How one section reads in the list, told apart from the tab that contains it.
- *
- * CodeGen names a generated field section "Details" whenever the entity has fields it
- * files nowhere else, and the rail then folds that section — with every other field
- * section — into a tab it also calls "Details". Two different targets under one name,
- * one of them a part of the other, so the section is qualified.
- */
-export function SectionOptionLabel(section: FormPlacementSection, context: FormPlacementContext): string {
-    const title = section.Title.trim() || section.Key;
-    if (HasDetailsTab(context) && title.toLowerCase() === DETAILS_TAB_TITLE.toLowerCase()) {
-        return `${title} (the field group, not the tab)`;
-    }
-    return title;
 }
 
 /** The editable answers. One field per control in the dialog. */
@@ -531,7 +441,7 @@ export function PlacementStateFromContribution(
     const listed = (spec.replacesSectionKeys ?? []).map((k) => k.trim()).filter((k) => k.length > 0);
     // A claim that cannot be checked is kept as stored: Details and More are tabs, any other key a section.
     const unread = TargetsUnread(context);
-    const unreadTab = unread && RailKeyChromeGroup(railKey) !== null;
+    const unreadTab = unread && railKeyChromeGroup(railKey) !== null;
     const sectionKey = context.Sections.some((s) => s.Key === railKey)
         ? railKey
         : listed[0] ?? (unread && !unreadTab ? railKey : '');
@@ -580,6 +490,15 @@ export function PlacementStateFromContribution(
         ActivateNow: activeNow,
         KeepOff: !activeNow && keepOff,
     };
+}
+
+/**
+ * Whether a panel standing in for this tab has to be filed into it: `details` or `more` for the
+ * two tabs the chrome layer assembles from their members, null for any other tab, which is named
+ * after the panels it holds and dissolves when they are all replaced.
+ */
+function railKeyChromeGroup(railKey: string): 'details' | 'more' | null {
+    return ReplacedSectionChromeGroup(railKey, null);
 }
 
 /**
@@ -653,7 +572,7 @@ export function ResolvePlacementDecision(
             // for one has to join it or the emptied tab is left behind. Every other tab
             // IS its members, so emptying it leaves the panel to become the tab itself.
             // A bare strip is never a rail item, so it joins nothing.
-            const group = RailKeyChromeGroup(key);
+            const group = railKeyChromeGroup(key);
             if (group && state.Presentation !== 'bare') contribution.chromeGroup = group;
         }
     } else if (state.ReplaceMode === 'section') {
@@ -684,116 +603,6 @@ export function ResolvePlacementDecision(
     return { Contribution: contribution, ActivateNow: state.ActivateNow, KeepOff: !state.ActivateNow && state.KeepOff };
 }
 
-/** Section titles joined for a sentence: "A and B", "A, B and C". */
-export function DescribeSectionList(titles: readonly string[]): string {
-    if (titles.length <= 1) return titles[0] ?? '';
-    return `${titles.slice(0, -1).join(', ')} and ${titles[titles.length - 1]}`;
-}
-
-/**
- * A readable list of field labels: one name, two joined by "and", the rest counted.
- *
- * Counted past three because the sentence is one line beside the buttons, and a panel
- * standing in for eight fields would push the rest of it off the end.
- */
-export function DescribeFieldList(labels: readonly string[]): string {
-    if (labels.length === 0) return 'nothing';
-    if (labels.length === 1) return `the ${labels[0]} field`;
-    if (labels.length === 2) return `the ${labels[0]} and ${labels[1]} fields`;
-    if (labels.length === 3) return `the ${labels[0]}, ${labels[1]} and ${labels[2]} fields`;
-    return `${labels.length} fields, starting with ${labels[0]}`;
-}
-
-/**
- * Who sees a panel, as the end of "visible to …": the caller alone, a named role, or everyone.
- * A panel added from a conversation is always the caller's own; one edited from the Manage
- * drawer keeps the audience it has.
- */
-export function DescribeVisibleTo(scope: string | null | undefined, roleName?: string | null): string {
-    if (scope === 'Global') return 'everyone';
-    if (scope === 'Role') return roleName ? `the ${roleName} role` : 'a role';
-    return 'you only';
-}
-
-/**
- * One sentence saying what pressing Apply does, in the same terms the user just chose.
- *
- * It is the only place the separate answers are stated together, so a contradiction the
- * form allows — a panel that is active but invisible behind a full form — reads plainly.
- *
- * @param visibleTo Who sees the panel, from {@link DescribeVisibleTo}.
- */
-export function SummarizePlacement(
-    state: FormPlacementState,
-    context: FormPlacementContext,
-    visibleTo = DescribeVisibleTo('User'),
-): string {
-    const what = state.Presentation === 'bare' ? 'a bare strip' : 'a panel';
-    const inSection = state.ReplaceMode === 'none'
-        ? context.Sections.find((s) => s.Key === state.InSectionKey.trim()) ?? null
-        : null;
-    const where = state.ReplaceMode === 'field' ? ''
-        : inSection ? ` ${state.SectionPosition === 'end' ? 'at the bottom' : 'at the top'} of the ${inSection.Title} section`
-        : ` at ${state.Slot}`;
-    const parts = [`Adds ${what}${where} on every ${context.EntityName} record`];
-
-    if (state.ReplaceMode === 'rail-tab') {
-        const tab = context.Rail.find((item) => item.Key === state.ReplaceRailKey);
-        parts.push(tab
-            ? `taking the place of the whole ${tab.Title} tab, leaving the other tabs alone`
-            : 'taking the place of a whole tab, leaving the other tabs alone');
-    } else if (state.ReplaceMode === 'section' && ChosenSectionKeys(state, context).length > 1) {
-        const titles = ChosenSectionKeys(state, context)
-            .map((key) => context.Sections.find((s) => s.Key === key)?.Title ?? key);
-        parts.push(`standing in for the ${DescribeSectionList(titles)} sections, in the place of the first`);
-    } else if (state.ReplaceMode === 'section') {
-        const section = context.Sections.find((s) => s.Key === ChosenSectionKeys(state, context)[0]);
-        if (section && HasDetailsTab(context)) {
-            parts.push(`standing in for the ${section.Title} section, one of ${context.Sections.length} inside the Details tab`);
-        } else if (section) {
-            parts.push(`standing in for the ${section.Title} section`);
-        }
-    } else if (state.ReplaceMode === 'field') {
-        const names = ChosenFieldNames(state, context);
-        const section = context.Sections.find((s) => s.Key === state.ReplaceFieldSectionKey);
-        const labels = names
-            .map((name) => (section?.Fields ?? []).find((f) => f.Name === name)?.Label || name);
-        parts.push(labels.length > 0 && section
-            ? `standing in for ${DescribeFieldList(labels)} at the ${state.SectionPosition === 'end' ? 'bottom' : 'top'} of the ${section.Title} section`
-            : 'standing in for no field yet — pick at least one');
-    } else if (state.ReplaceMode === 'related') {
-        const related = context.Related[state.ReplaceRelatedIndex];
-        if (related) parts.push(`taking over the ${related.DisplayName} grid`);
-    } else if (state.ReplaceMode === 'contribution') {
-        const existing = context.Existing[state.ReplaceContributionIndex];
-        if (existing) parts.push(`replacing the ${existing.Title} panel`);
-    }
-
-    if (state.ReplaceMode === 'none' && !inSection && state.Presentation === 'panel' && ShowsRail(context)) {
-        parts.push(SlotJoinsDetailsTab(state.Slot)
-            ? 'inside the Details tab'
-            : 'as a tab of its own');
-    }
-
-    parts.push(`visible to ${visibleTo}`);
-    parts.push(state.ActivateNow ? 'starting now' : state.KeepOff ? 'kept off' : 'saved as a draft');
-
-    let sentence = `${parts.join(', ')}.`;
-    if (state.ReplaceMode === 'field') {
-        sentence += ' The chosen position does not apply: a panel standing in for a field renders inside that field\'s section.';
-    }
-    if (state.ReplaceMode !== 'field' && !inSection && context.SlotsVerified && !SlotIsOnForm(context, state.Slot)) {
-        sentence += ` This form does not emit ${state.Slot}, so the panel renders at the bottom instead.`;
-    }
-    if (state.ReplaceMode === 'section' && !context.TargetsVerified) {
-        sentence += ' The section list comes from entity metadata, not from the form itself, so a section may not match.';
-    }
-    if (context.FullCustomForm && state.ActivateNow) {
-        sentence += ' A full custom form is rendering this entity, so it will not appear until that form is turned off.';
-    }
-    return sentence;
-}
-
 /**
  * The proposal merged onto the spec the write path sends.
  *
@@ -805,117 +614,4 @@ export function ApplyDecisionToSpec<T extends { formContribution?: FormContribut
     decision: FormPlacementDecision,
 ): T {
     return { ...spec, formContribution: decision.Contribution };
-}
-
-/** One panel in the order list of a position. */
-export interface PlacementOrderItem {
-    Key: string;
-    Title: string;
-    SortKey: number;
-    /** The panel being placed. */
-    IsThis: boolean;
-}
-
-/** The key the placed panel is listed under in its own order list. */
-export const PLACEMENT_ORDER_THIS_KEY = '__this__';
-
-/** How far apart a panel is put from its neighbour when it moves to either end of the list. */
-export const PLACEMENT_ORDER_STEP = 10;
-
-/**
- * The panels in the chosen position, top to bottom, the one being placed among them.
- *
- * Higher `SortKey` draws first, as the slot and section hosts sort. The placed panel is listed
- * after any panel it ties with: a new row loads after the rows already there, and moving the
- * panel gives it a number of its own. A position is a slot, the top or bottom of a section —
- * where field claims draw too — or the place of a block that panels stand in for. Empty when the
- * panel stands in for a tab, grid or panel, since it then draws alone in that thing's place.
- */
-export function PanelsInPosition(
-    state: FormPlacementState,
-    context: FormPlacementContext,
-    title: string,
-): PlacementOrderItem[] {
-    const here = placedPosition(state, context);
-    if (!here) return [];
-    const others: PlacementOrderItem[] = context.Existing
-        .filter((e) => existingPosition(e, context) === here)
-        .map((e) => ({ Key: e.Key, Title: e.Title, SortKey: e.SortKey ?? 0, IsThis: false }));
-    const self: PlacementOrderItem = { Key: PLACEMENT_ORDER_THIS_KEY, Title: title, SortKey: state.SortKey ?? 0, IsThis: true };
-    const items = [...others, self];
-    return items
-        .map((item, index) => ({ item, index }))
-        .sort((a, b) => b.item.SortKey - a.item.SortKey
-            || (a.item.IsThis ? 1 : b.item.IsThis ? -1 : a.index - b.index))
-        .map((entry) => entry.item);
-}
-
-/**
- * Where the placed panel draws, as a key shared by every panel drawing in the same place: a slot
- * name, `in:<section>:<start|end>` for the top or bottom of a section, or `at:<section>` for the
- * place of a block that panels stand in for. Null when it stands in for a tab, grid or panel.
- */
-function placedPosition(state: FormPlacementState, context: FormPlacementContext): string | null {
-    if (state.ReplaceMode === 'field') {
-        return state.ReplaceFieldSectionKey ? `in:${state.ReplaceFieldSectionKey}:${state.SectionPosition}` : null;
-    }
-    if (state.ReplaceMode === 'section') return blockPosition(ChosenSectionKeys(state, context), context);
-    if (state.ReplaceMode !== 'none') return null;
-    const inSection = state.InSectionKey.trim();
-    return inSection ? `in:${inSection}:${state.SectionPosition}` : state.Slot;
-}
-
-/** The same key for a panel already on the form. */
-function existingPosition(existing: FormPlacementExisting, context: FormPlacementContext): string | null {
-    const replaced = (existing.SectionKeys ?? []).map((key) => key.trim()).filter((key) => key.length > 0);
-    if (replaced.length > 0) {
-        const drawn = TargetsUnread(context)
-            ? replaced
-            : context.Sections.map((s) => s.Key).filter((key) => replaced.includes(key));
-        return blockPosition(drawn, context);
-    }
-    if (existing.ReplacesPlace) return null;
-    const position = existing.SectionPosition === 'end' ? 'end' : 'start';
-    const inSection = existing.InSectionKey?.trim();
-    if (inSection) return `in:${inSection}:${position}`;
-    const firstField = (existing.FieldNames ?? []).find((name) => name.trim().length > 0);
-    if (firstField) {
-        const section = SectionHoldingField(context, firstField);
-        return section ? `in:${section.Key}:${position}` : null;
-    }
-    return existing.Slot;
-}
-
-/**
- * The key for panels standing in for `keys`, in form order: the place of the first. The first
- * block on the form is also where the before-fields slot draws, so the two share one key.
- */
-function blockPosition(keys: readonly string[], context: FormPlacementContext): string | null {
-    const first = keys[0];
-    if (!first) return null;
-    return first === context.Sections[0]?.Key ? 'before-fields' : `at:${first}`;
-}
-
-/**
- * The order number that puts the placed panel one step up or down, or null when it cannot move.
- *
- * The number has to fall strictly between its new neighbours, since equal numbers do not say
- * which draws first. At either end of the list it goes a step past the last one. Between two
- * panels whose numbers are adjacent or equal there is no number to give, so the move is refused
- * rather than landing somewhere the list does not show.
- */
-export function MovedSortKey(items: readonly PlacementOrderItem[], direction: 'up' | 'down'): number | null {
-    const at = items.findIndex((item) => item.IsThis);
-    if (at < 0) return null;
-    const target = direction === 'up' ? at - 1 : at + 1;
-    if (target < 0 || target >= items.length) return null;
-    // Its neighbours after the move, read from the list without it: it lands at `target`.
-    const rest = items.filter((item) => !item.IsThis);
-    const above = rest[target - 1] ?? null;
-    const below = rest[target] ?? null;
-    if (!above && below) return below.SortKey + PLACEMENT_ORDER_STEP;
-    if (above && !below) return above.SortKey - PLACEMENT_ORDER_STEP;
-    if (!above || !below) return null;
-    if (above.SortKey - below.SortKey < 2) return null;
-    return Math.floor((above.SortKey + below.SortKey) / 2);
 }

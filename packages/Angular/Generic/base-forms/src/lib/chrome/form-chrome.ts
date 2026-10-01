@@ -11,6 +11,9 @@ export const MORE_SECTION_KEY = '__mj_form_more';
 /** Field panels (default / inherited) collapse into this one left-nav item. */
 export const DETAILS_SECTION_KEY = '__mj_form_details';
 
+/** The title of the left-nav item {@link DETAILS_SECTION_KEY} names. */
+export const DETAILS_SECTION_TITLE = 'Details';
+
 export const SYSTEM_METADATA_SECTION_KEY = 'systemMetadata';
 
 /**

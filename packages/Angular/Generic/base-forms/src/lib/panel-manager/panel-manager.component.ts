@@ -25,7 +25,6 @@ import {
   type FormPanelStockGridRow,
 } from './form-panel-inventory';
 import {
-  DescribeVisibleTo,
   KeepEditedRowKey,
   PlacementStateFromContribution,
   type FormPlacementContext,
@@ -33,6 +32,7 @@ import {
   type FormPlacementRelated,
   type FormPlacementState,
 } from '../apply/form-placement';
+import { DescribeVisibleTo } from '../apply/form-placement-text';
 
 /**
  * "Manage this form" — the one place to manage what is on an entity's form.

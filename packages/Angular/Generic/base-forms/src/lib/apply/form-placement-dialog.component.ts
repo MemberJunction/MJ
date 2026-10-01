@@ -4,14 +4,11 @@ import {
     FORM_PLACEMENT_SLOTS,
     DefaultSlotFor,
     HasDetailsTab,
-    SectionOptionLabel,
     TargetRailItem,
     ReplaceableRailTabs,
     DefaultRailKeyFor,
     ChosenFieldNames,
     DefaultFieldSectionKey,
-    DescribeFieldList,
-    DescribeVisibleTo,
     FieldsInSection,
     ReplacedPreviewKeys,
     SectionsWithFields,
@@ -19,11 +16,7 @@ import {
     SlotIsOnForm,
     InitialPlacementState,
     ChosenSectionKeys,
-    DescribeSectionList,
-    MovedSortKey,
-    PanelsInPosition,
     ResolvePlacementDecision,
-    SummarizePlacement,
     type FormPlacementContext,
     type FormPlacementDecision,
     type FormPlacementSection,
@@ -32,8 +25,15 @@ import {
     type FormPlacementReplaceMode,
     type FormPlacementSlotChoice,
     type FormPlacementState,
-    type PlacementOrderItem,
 } from './form-placement';
+import {
+    DescribeChosenFields,
+    DescribePlacementLine,
+    DescribeVisibleTo,
+    SectionOptionLabel,
+    SummarizePlacement,
+} from './form-placement-text';
+import { MovedSortKey, PanelsInPosition, type PlacementOrderItem } from './form-placement-order';
 import { FormSlotProbeService } from './form-slot-probe.service';
 import { CompositeKey } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -297,10 +297,7 @@ export class MjFormPlacementDialogComponent extends BaseAngularComponent {
 
     /** The chosen fields named in a line, for the note beside the choice. */
     public get ChosenFieldSummary(): string {
-        const section = this._context.Sections.find((s) => s.Key === this.State.ReplaceFieldSectionKey);
-        const labels = this.ChosenFields
-            .map((name) => (section?.Fields ?? []).find((f) => f.Name === name)?.Label || name);
-        return DescribeFieldList(labels);
+        return DescribeChosenFields(this.State, this._context);
     }
 
     /** A field claim that names no field claims nothing, so Apply would be a lie. */
@@ -538,39 +535,7 @@ export class MjFormPlacementDialogComponent extends BaseAngularComponent {
 
     /** One line saying where the panel goes and what it replaces. */
     public get PlacementLine(): string {
-        const slot = FORM_PLACEMENT_SLOTS.find((s) => s.Slot === this.State.Slot)?.Name ?? this.State.Slot;
-        switch (this.State.ReplaceMode) {
-            case 'section': {
-                const titles = ChosenSectionKeys(this.State, this._context)
-                    .map((key) => this._context.Sections.find((s) => s.Key === key)?.Title ?? key);
-                return titles.length > 1
-                    ? `In place of the ${DescribeSectionList(titles)} sections`
-                    : `In place of the ${titles[0] ?? 'chosen'} section`;
-            }
-            case 'field': {
-                const section = this._context.Sections.find((s) => s.Key === this.State.ReplaceFieldSectionKey);
-                const fields = this.ChosenFields.length > 0 ? this.ChosenFieldSummary : 'the fields you pick';
-                const end = this.State.SectionPosition === 'end' ? 'bottom' : 'top';
-                return `At the ${end} of ${section?.Title ?? 'the section'}, in place of ${fields}`;
-            }
-            case 'related': {
-                const related = this._context.Related[Number(this.State.ReplaceRelatedIndex)];
-                return `In place of the ${related?.DisplayName ?? 'related'} grid`;
-            }
-            case 'contribution': {
-                const item = this._context.Existing[Number(this.State.ReplaceContributionIndex)];
-                return `In place of the ${item?.Title ?? 'existing'} panel`;
-            }
-            case 'rail-tab': {
-                const tab = this.RailTabs.find((t) => t.Key === this.State.ReplaceRailKey);
-                return `In place of the whole ${tab?.Title ?? this.State.ReplaceRailKey} tab`;
-            }
-            default: {
-                const inside = this._context.Sections.find((s) => s.Key === this.State.InSectionKey.trim());
-                if (inside) return `At the ${this.State.SectionPosition === 'end' ? 'bottom' : 'top'} of the ${inside.Title} section`;
-                return slot;
-            }
-        }
+        return DescribePlacementLine(this.State, this._context);
     }
 
     /**

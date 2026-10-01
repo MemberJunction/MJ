@@ -2,35 +2,38 @@ import { describe, it, expect } from 'vitest';
 import type { FormContributionSpec } from '@memberjunction/interactive-component-types/forms';
 import {
     ApplyDecisionToSpec,
-    DETAILS_TAB_KEY,
-    MORE_TAB_KEY,
     DefaultSlotFor,
     SlotIsOnForm,
     InitialPlacementState,
     ResolvePlacementDecision,
-    SummarizePlacement,
     HasDetailsTab,
-    SectionOptionLabel,
-    SlotJoinsDetailsTab,
     PlacementStateFromContribution,
     ShowsRail,
     ReplaceableRailTabs,
     DefaultRailKeyFor,
     TargetRailItem,
     ChosenFieldNames,
-    DescribeFieldList,
     FieldsInSection,
     SectionHoldingField,
     SectionsWithFields,
-    PanelsInPosition,
-    MovedSortKey,
     ChosenSectionKeys,
     KeepEditedRowKey,
-    DescribeVisibleTo,
-    PLACEMENT_ORDER_STEP,
     type FormPlacementContext,
-    type PlacementOrderItem,
 } from '../form-placement';
+import {
+    DescribeFieldList,
+    DescribePlacementLine,
+    DescribeVisibleTo,
+    SectionOptionLabel,
+    SummarizePlacement,
+} from '../form-placement-text';
+import {
+    MovedSortKey,
+    PanelsInPosition,
+    PLACEMENT_ORDER_STEP,
+    type PlacementOrderItem,
+} from '../form-placement-order';
+import { DETAILS_SECTION_KEY, MORE_SECTION_KEY } from '../../chrome/form-chrome';
 
 /**
  * The placement rules decide what a generated panel is allowed to settle for itself.
@@ -349,11 +352,11 @@ describe('ResolvePlacementDecision — standing in for a whole rail tab', () => 
         ...CONTEXT,
         Layout: 'left-nav',
         Rail: [
-            { Key: DETAILS_TAB_KEY, Title: 'Details', Icon: 'fa fa-id-card',
+            { Key: DETAILS_SECTION_KEY, Title: 'Details', Icon: 'fa fa-id-card',
               SectionKeys: ['details', 'scheduleCapacity'], IsMore: false },
             { Key: 'courseEnrollments', Title: 'Course Enrollments', Icon: 'fa fa-table',
               SectionKeys: ['courseEnrollments'], IsMore: false },
-            { Key: MORE_TAB_KEY, Title: 'More', Icon: 'fa fa-folder',
+            { Key: MORE_SECTION_KEY, Title: 'More', Icon: 'fa fa-folder',
               SectionKeys: ['systemMetadata'], IsMore: true },
         ],
     };
@@ -361,14 +364,14 @@ describe('ResolvePlacementDecision — standing in for a whole rail tab', () => 
     const tab = (key: string) => ({ ...base(), ReplaceMode: 'rail-tab' as const, ReplaceRailKey: key });
 
     it('names whichever tab key was chosen, for the chrome layer to expand', () => {
-        expect(ResolvePlacementDecision(tab(DETAILS_TAB_KEY), railed, PROPOSAL).Contribution.replacesSectionKey)
-            .toBe(DETAILS_TAB_KEY);
+        expect(ResolvePlacementDecision(tab(DETAILS_SECTION_KEY), railed, PROPOSAL).Contribution.replacesSectionKey)
+            .toBe(DETAILS_SECTION_KEY);
         expect(ResolvePlacementDecision(tab('courseEnrollments'), railed, PROPOSAL).Contribution.replacesSectionKey)
             .toBe('courseEnrollments');
     });
 
     it('defaults to Details when the form has one, without hardcoding it as the only choice', () => {
-        expect(base().ReplaceRailKey).toBe(DETAILS_TAB_KEY);
+        expect(base().ReplaceRailKey).toBe(DETAILS_SECTION_KEY);
         expect(InitialPlacementState(PROPOSAL, { ...railed, Rail: railed.Rail.slice(1) }).ReplaceRailKey)
             .toBe('courseEnrollments');
     });
@@ -377,28 +380,28 @@ describe('ResolvePlacementDecision — standing in for a whole rail tab', () => 
     // the emptied tab is left behind. Every other tab IS its members.
     it('joins a tab that would otherwise be left empty, and only such a tab', () => {
         const panelTab = (key: string) => ({ ...tab(key), Presentation: 'panel' as const });
-        expect(ResolvePlacementDecision(panelTab(DETAILS_TAB_KEY), railed, PROPOSAL).Contribution.chromeGroup).toBe('details');
-        expect(ResolvePlacementDecision(panelTab(MORE_TAB_KEY), railed, PROPOSAL).Contribution.chromeGroup).toBe('more');
+        expect(ResolvePlacementDecision(panelTab(DETAILS_SECTION_KEY), railed, PROPOSAL).Contribution.chromeGroup).toBe('details');
+        expect(ResolvePlacementDecision(panelTab(MORE_SECTION_KEY), railed, PROPOSAL).Contribution.chromeGroup).toBe('more');
         expect(ResolvePlacementDecision(panelTab('courseEnrollments'), railed, PROPOSAL).Contribution.chromeGroup).toBeUndefined();
     });
 
     // A bare strip is never a rail item, and the database refuses a bare row with a chrome group.
     it('gives a bare strip standing in for a tab no chrome group', () => {
-        expect(tab(DETAILS_TAB_KEY).Presentation).toBe('bare');
-        const out = ResolvePlacementDecision(tab(DETAILS_TAB_KEY), railed, PROPOSAL).Contribution;
-        expect(out.replacesSectionKey).toBe(DETAILS_TAB_KEY);
+        expect(tab(DETAILS_SECTION_KEY).Presentation).toBe('bare');
+        const out = ResolvePlacementDecision(tab(DETAILS_SECTION_KEY), railed, PROPOSAL).Contribution;
+        expect(out.replacesSectionKey).toBe(DETAILS_SECTION_KEY);
         expect(out.chromeGroup).toBeUndefined();
         expect(out.inclusion).toBeUndefined();
     });
 
     it('claims no single section and no grid', () => {
-        const out = ResolvePlacementDecision(tab(DETAILS_TAB_KEY), railed, PROPOSAL).Contribution;
+        const out = ResolvePlacementDecision(tab(DETAILS_SECTION_KEY), railed, PROPOSAL).Contribution;
         expect(out.relatedEntity).toBeUndefined();
         expect(out.contributionKey).toBeUndefined();
     });
 
     it('names the tab it stands in for, so it is not mistaken for a full form', () => {
-        expect(SummarizePlacement(tab(DETAILS_TAB_KEY), railed))
+        expect(SummarizePlacement(tab(DETAILS_SECTION_KEY), railed))
             .toContain('taking the place of the whole Details tab, leaving the other tabs alone');
         expect(SummarizePlacement(tab('courseEnrollments'), railed))
             .toContain('taking the place of the whole Course Enrollments tab');
@@ -454,24 +457,15 @@ describe('SectionOptionLabel — the section named Details inside the tab named 
 
 
 /**
- * The dialog predicts where the panel lands; the chrome layer puts it there. They are
- * separate implementations — the placement model stays free of the chrome layer — so they
- * have to be checked against each other, or the dialog promises a tab the form will not use.
+ * The dialog predicts where the panel lands with the chrome layer's own rule, so it never
+ * promises a tab the form will not use.
  */
-describe('SlotJoinsDetailsTab', () => {
-    it('agrees with the chrome layer about which slots join the Details tab', () => {
-        expect(SlotJoinsDetailsTab('before-fields')).toBe(true);
-        expect(SlotJoinsDetailsTab('after-fields')).toBe(true);
-        expect(SlotJoinsDetailsTab('top-area')).toBe(false);
-        expect(SlotJoinsDetailsTab('after-related')).toBe(false);
-        expect(SlotJoinsDetailsTab('after-everything')).toBe(false);
-    });
-
+describe('A panel claiming nothing and the Details tab', () => {
     it('says which of the two a panel claiming nothing will get', () => {
         const railed: FormPlacementContext = {
             ...CONTEXT,
             Layout: 'left-nav',
-            Rail: [{ Key: DETAILS_TAB_KEY, Title: 'Details', Icon: 'fa fa-id-card',
+            Rail: [{ Key: DETAILS_SECTION_KEY, Title: 'Details', Icon: 'fa fa-id-card',
                      SectionKeys: ['details'], IsMore: false }],
         };
         // A bare strip carries no chrome and so joins no tab; this is about panels.
@@ -500,11 +494,11 @@ describe('ShowsRail — a form with rail groups but no rail', () => {
             { Key: 'configuration', Title: 'Configuration' },
         ],
         Rail: [
-            { Key: DETAILS_TAB_KEY, Title: 'Details', Icon: 'fa fa-id-card',
+            { Key: DETAILS_SECTION_KEY, Title: 'Details', Icon: 'fa fa-id-card',
               SectionKeys: ['certificationDetails', 'configuration'], IsMore: false },
             { Key: 'moreCheeseMemberCertifications', Title: 'Member Certifications', Icon: 'fa fa-table',
               SectionKeys: ['moreCheeseMemberCertifications'], IsMore: false },
-            { Key: MORE_TAB_KEY, Title: 'More', Icon: 'fa fa-folder',
+            { Key: MORE_SECTION_KEY, Title: 'More', Icon: 'fa fa-folder',
               SectionKeys: ['systemMetadata'], IsMore: true },
         ],
     };
@@ -523,7 +517,7 @@ describe('ShowsRail — a form with rail groups but no rail', () => {
 
     it('starts on no tab, so nothing is preselected that cannot be chosen', () => {
         expect(DefaultRailKeyFor(accordion)).toBe('');
-        expect(DefaultRailKeyFor(railed)).toBe(DETAILS_TAB_KEY);
+        expect(DefaultRailKeyFor(railed)).toBe(DETAILS_SECTION_KEY);
     });
 
     it('names no tab for the panel to join', () => {
@@ -559,7 +553,7 @@ describe('PlacementStateFromContribution', () => {
         ...CONTEXT,
         Layout: 'left-nav',
         Rail: [
-            { Key: DETAILS_TAB_KEY, Title: 'Details', Icon: 'fa fa-id-card',
+            { Key: DETAILS_SECTION_KEY, Title: 'Details', Icon: 'fa fa-id-card',
               SectionKeys: ['details', 'scheduleCapacity'], IsMore: false },
             { Key: 'courseEnrollments', Title: 'Course Enrollments', Icon: 'fa fa-table',
               SectionKeys: ['courseEnrollments'], IsMore: false },
@@ -674,8 +668,8 @@ describe('PlacementStateFromContribution — before the form has been read', () 
     });
 
     it('keeps a claim on the Details tab, with the chrome group it joins', () => {
-        const out = roundTrip(spec({ replacesSectionKey: DETAILS_TAB_KEY }));
-        expect(out.replacesSectionKey).toBe(DETAILS_TAB_KEY);
+        const out = roundTrip(spec({ replacesSectionKey: DETAILS_SECTION_KEY }));
+        expect(out.replacesSectionKey).toBe(DETAILS_SECTION_KEY);
         expect(out.chromeGroup).toBe('details');
     });
 
@@ -1055,5 +1049,45 @@ describe('Order in a position — before the form has been read', () => {
         };
         const state = { ...InitialPlacementState(null, unread), ReplaceMode: 'section' as const, ReplaceSectionKey: 'identity' };
         expect(PanelsInPosition(state, unread, 'New').map((i) => (i.IsThis ? 'THIS' : i.Title))).toEqual(['Stored', 'THIS']);
+    });
+});
+
+/**
+ * The line under "Where it goes" and the summary beside Apply describe one answer. They read
+ * the same lookup, so they name the same grid, panel, tab or fields.
+ */
+describe('DescribePlacementLine', () => {
+    const base = () => InitialPlacementState(PROPOSAL, CONTEXT);
+
+    it('names the slot in plain words when the panel replaces nothing', () => {
+        expect(DescribePlacementLine(base(), CONTEXT)).toBe('After the fields');
+    });
+
+    it('names the grid, the panel or the tab it takes the place of', () => {
+        expect(DescribePlacementLine({ ...base(), ReplaceMode: 'related', ReplaceRelatedIndex: 0 }, CONTEXT))
+            .toBe('In place of the Course Enrollments grid');
+        expect(DescribePlacementLine({ ...base(), ReplaceMode: 'contribution', ReplaceContributionIndex: 0 }, CONTEXT))
+            .toBe('In place of the Course Health Strip panel');
+        const railed: FormPlacementContext = {
+            ...CONTEXT,
+            Layout: 'left-nav',
+            Rail: [{ Key: DETAILS_SECTION_KEY, Title: 'Details', Icon: 'fa fa-id-card', SectionKeys: ['details'], IsMore: false }],
+        };
+        expect(DescribePlacementLine({ ...base(), ReplaceMode: 'rail-tab', ReplaceRailKey: DETAILS_SECTION_KEY }, railed))
+            .toBe('In place of the whole Details tab');
+    });
+
+    it('names the same fields the summary names', () => {
+        const state = {
+            ...base(), ReplaceMode: 'field' as const,
+            ReplaceFieldSectionKey: 'details', ReplaceFieldNames: ['Name', 'Description'],
+        };
+        expect(DescribePlacementLine(state, CONTEXT)).toBe('At the top of Details, in place of the Name and Description fields');
+        expect(SummarizePlacement(state, CONTEXT)).toContain('standing in for the Name and Description fields at the top of the Details section');
+    });
+
+    it('says what is still to be picked when a field claim names no field', () => {
+        const state = { ...base(), ReplaceMode: 'field' as const, ReplaceFieldSectionKey: 'details', ReplaceFieldNames: [] };
+        expect(DescribePlacementLine(state, CONTEXT)).toBe('At the top of Details, in place of the fields you pick');
     });
 });

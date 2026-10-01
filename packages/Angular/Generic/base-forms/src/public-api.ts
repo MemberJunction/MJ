@@ -98,12 +98,34 @@ export * from './lib/interactive-form/interactive-form-panel.component';
 export * from './lib/interactive-form/form-panel-host-props.builder';
 export * from './lib/chrome/form-composition-snapshot';
 export * from './lib/chrome/form-composition-registry';
-export * from './lib/apply/form-placement';
+
+// Placing a panel: the dialog, its form preview and the form probe, with the types a host
+// passes in and gets back. The placement rules behind them stay internal.
+export {
+    ApplyDecisionToSpec,
+    type FormPlacementContext,
+    type FormPlacementDecision,
+    type FormPlacementExisting,
+    type FormPlacementField,
+    type FormPlacementRailItem,
+    type FormPlacementRelated,
+    type FormPlacementReplaceMode,
+    type FormPlacementSection,
+    type FormPlacementState,
+} from './lib/apply/form-placement';
 export * from './lib/apply/form-placement-dialog.component';
 export * from './lib/apply/form-placement-preview.component';
 export * from './lib/apply/form-slot-probe.service';
 
-export * from './lib/panel-manager/form-panel-inventory';
+// Managing a form: the drawer and the service it writes through, with the types of their
+// inputs and results. The inventory and audience rules behind them stay internal.
+export type { FormAudience } from './lib/panel-manager/form-audience';
+export type {
+    FormOverrideRow,
+    FormPanelCompiledRow,
+    FormPanelContributionRow,
+    FormPanelRendering,
+    FormPanelStockGridRow,
+} from './lib/panel-manager/form-panel-inventory';
 export * from './lib/panel-manager/form-panel-admin.service';
-export * from './lib/panel-manager/form-audience';
 export * from './lib/panel-manager/panel-manager.component';

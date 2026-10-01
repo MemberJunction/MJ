@@ -9,6 +9,8 @@
  * Everything here is pure. The service loads and writes; this decides what the list says.
  */
 
+import { DETAILS_SECTION_KEY, MORE_SECTION_KEY } from '../chrome/form-chrome';
+
 /** Where an item came from, which decides what can be done to it. */
 export type FormPanelOrigin = 'contribution' | 'compiled' | 'stock-grid';
 
@@ -168,11 +170,6 @@ export interface FormPanelInventoryInput {
     Rendering?: FormPanelRendering;
 }
 
-/** The rail key the chrome layer builds from the field sections. */
-const DETAILS_TAB_KEY = '__mj_form_details';
-/** The rail key for the leftovers tab. */
-const MORE_TAB_KEY = '__mj_form_more';
-
 /**
  * What a contribution stands in for, named the way the user chose it.
  *
@@ -200,8 +197,8 @@ export function DescribeReplacement(
 
     const key = (row.ReplacesSectionKey ?? '').trim();
     if (!key) return '';
-    if (key === DETAILS_TAB_KEY) return 'the whole Details tab';
-    if (key === MORE_TAB_KEY) return 'the whole More tab';
+    if (key === DETAILS_SECTION_KEY) return 'the whole Details tab';
+    if (key === MORE_SECTION_KEY) return 'the whole More tab';
     const title = titleByKey?.get(key);
     return title ? `the ${title} section` : `the "${key}" section`;
 }

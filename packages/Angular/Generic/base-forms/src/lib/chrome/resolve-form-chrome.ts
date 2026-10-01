@@ -19,6 +19,7 @@ import { CreateRelatedEntitySectionKeyResolver } from '../panel-slot/form-contri
 import { BaseFormPolicy, type FormChromeContext } from './base-form-policy';
 import {
     DETAILS_SECTION_KEY,
+    DETAILS_SECTION_TITLE,
     MORE_SECTION_KEY,
     HumanizeEntityTitle,
     IsAlwaysMoreSection,
@@ -402,7 +403,7 @@ export function BuildDefaultChromeSpec(
         const firstField = panels.find((p) => p.SectionKey === fieldKeys[0]);
         groups.push({
             Key: DETAILS_SECTION_KEY,
-            Title: 'Details',
+            Title: DETAILS_SECTION_TITLE,
             Icon: firstField?.Icon?.trim() || 'fa-solid fa-id-card',
             SectionKeys: fieldKeys,
             IsMore: false,
