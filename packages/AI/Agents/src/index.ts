@@ -13,9 +13,6 @@ export * from './agent-types/base-agent-type';
 export * from './agent-types/loop-agent-response-type';
 export * from './agent-types/loop-agent-prompt-params';
 export * from './base-agent';
-export * from './decision-discovery';
-// The opening request, as discovery and catalog narrowing read it: the Decision Eval harness builds its state the same way.
-export { OpeningRequestText, CATALOG_NARROWING_REQUEST_MAX_CHARS } from './catalog-narrowing';
 export * from './prior-turn-tool-result-cache';
 export * from './tool-result-format';
 export * from './prompt-component-resolver';

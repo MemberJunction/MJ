@@ -188,8 +188,7 @@ export class AIAgentPermissionHelper {
      * `includeInactive`. Keeps the input order.
      *
      * This is the filter the Find Best Agent / Find Candidate Agents actions apply to their search
-     * results, and the one agent decision discovery applies to the whole catalog, so both offer the
-     * same agents.
+     * results.
      * @param agents - The agents to filter, e.g. search results or the whole catalog
      * @param user - The user who would run them
      * @param includeInactive - Keep agents whose Status is not 'Active'. Default false.

@@ -23,7 +23,7 @@ import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@me
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
-import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString, IsPlainObject } from '@memberjunction/global';
+import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
 import { CrushJSON, DescribeCrush, PartitionStablePrefix, type JsonValue } from '@memberjunction/context-crush';
 // AST-aware code reduction (CodeCompressor-inspired) — opt-in per agent type
@@ -155,26 +155,6 @@ import {
     ResolveCatalogNarrowingLimits,
     SelectCatalogNarrowing,
 } from './catalog-narrowing';
-import {
-    BuildDecisionDiscoveryOptionSet,
-    BuildDecisionDiscoveryQuestions,
-    CanSearchEntities,
-    DECISION_DISCOVERY_MAX_RECORDED_IDS,
-    DECISION_DISCOVERY_MIN_CONFIDENCE,
-    DECISION_DISCOVERY_MIN_OPTIONS,
-    DECISION_DISCOVERY_TIMEOUT_MS,
-    DecisionDiscoveryAgentSearch,
-    DecisionDiscoveryFromResult,
-    DecisionDiscoveryOptionSet,
-    DecisionDiscoveryOutcome,
-    DecisionDiscoveryRunnableAgents,
-    DecisionPromptOptionCap,
-    FailedDecisionDiscovery,
-    HostAllowedAgentIDs,
-    IsDecisionDiscoveryOn,
-    IsOpeningTurn,
-    MentionsAgent,
-} from './decision-discovery';
 import {
     PipelineExecutor,
     PipelineToolRegistry,
@@ -1470,13 +1450,6 @@ export class BaseAgent {
      */
     private _openingRequest: string = '';
 
-    /**
-     * Whether the run answers its conversation's opening request ({@link IsOpeningTurn}), read from
-     * the messages it started with. Decision discovery asks about no other turn.
-     * @private
-     */
-    private _isOpeningTurn: boolean = false;
-
     /** The longest the catalog narrowing decision may take before the run shows the full catalog. */
     private static readonly CATALOG_NARROWING_TIMEOUT_MS = 30000;
 
@@ -2102,7 +2075,6 @@ export class BaseAgent {
             this._messageLifecycleCallback = params.onMessageLifecycle;
             this._catalogNarrowing = undefined;
             this._openingRequest = OpeningRequestText(params.conversationMessages);
-            this._isOpeningTurn = IsOpeningTurn(params.conversationMessages);
 
             // Resolve storage account for file artifacts
             this._resolvedStorageAccountId = await this.getStorageAccountID(wrappedParams);
@@ -2191,10 +2163,7 @@ export class BaseAgent {
                 // Carry the previous turn's tool results forward (no-op without a
                 // conversationId). Runs here so the results are in the messages before
                 // the pre-turn compaction check and the first prompt.
-                this.injectPriorTurnToolResults(wrappedParams),
-                // Decision discovery (plan Task 3.1), off unless the decisionDiscovery prompt param is
-                // true: may add a <suggested_agent> system message, within DECISION_DISCOVERY_TIMEOUT_MS.
-                this.InjectDecisionDiscovery(params.agent, params.contextUser, wrappedParams.conversationMessages, params.data)
+                this.injectPriorTurnToolResults(wrappedParams)
             ]);
 
             // Inject scope-resolved prompt parts (role-faithful) for this agent's prompt, alongside
@@ -3840,325 +3809,6 @@ export class BaseAgent {
         // Store for inclusion in result (externally observable behavior preserved)
         this._injectedRAG = result;
         return result;
-    }
-
-    /**
-     * Decision discovery (plan Task 3.1): suggests the agent to delegate to before the first prompt.
-     *
-     * Runs in parallel with the rest of Phase 2 of `Execute()`, and only when the merged agent-type
-     * prompt params set `decisionDiscovery: true`, the run answers its conversation's opening request
-     * ({@link IsOpeningTurn}), and that request @mentions no agent. A follow-up turn is never asked
-     * about: it may be continuing work with an agent already engaged, and a suggestion must not pull
-     * the agent away from it. One decision asks which of the agents the user may run (and the host
-     * allows) should handle the request, and whether a specialist should. When both answers are
-     * confident, a `<suggested_agent>` system message is unshifted onto `conversationMessages`, the
-     * way pre-execution RAG adds `<retrieved_context>`. Each discovery is recorded as one
-     * `Agent discovery` Decision step.
-     *
-     * Fails safe: an error, a timeout, a cancelled run, an unusable answer or an unsure one adds
-     * nothing, so the agent behaves as it would without discovery. So do fewer than
-     * {@link DECISION_DISCOVERY_MIN_OPTIONS} options. Never delays the first prompt by more than
-     * {@link DECISION_DISCOVERY_TIMEOUT_MS}, and never throws.
-     *
-     * The any-applies question does not name the options, so the decision cannot say that none of
-     * them fits: see {@link DECISION_DISCOVERY_APPLIES_INSTRUCTIONS} for why it stays that way for now.
-     *
-     * @param agent - The agent being executed.
-     * @param contextUser - The user whose run permission decides the options.
-     * @param conversationMessages - The mutated message array that flows to the LLM (the suggestion is unshifted here).
-     * @param data - The run's `ExecuteAgentParams.data`. Its `__agentTypePromptParams` overrides the agent's prompt
-     *   params, and its `ALL_AVAILABLE_AGENTS`, when an array, is the host's allow-list: no other agent is suggested.
-     */
-    protected async InjectDecisionDiscovery(
-        agent: MJAIAgentEntityExtended,
-        contextUser: UserInfo | undefined,
-        conversationMessages: ChatMessage[] | undefined,
-        data: Record<string, unknown> | undefined
-    ): Promise<void> {
-        try {
-            const override = data?.__agentTypePromptParams;
-            const overrides = IsPlainObject(override) ? override : undefined;
-            if (!this.isDecisionDiscoveryOnFor(agent, overrides) || !conversationMessages) {
-                return;
-            }
-            if (!this._openingRequest || !contextUser) {
-                this.logStatus(`Decision discovery skipped for '${agent.Name}': the run has no ${contextUser ? 'user message' : 'context user'}`, true);
-                return;
-            }
-            if (!this._isOpeningTurn) {
-                this.logStatus(`Decision discovery skipped for '${agent.Name}': a follow-up turn, which may continue with an agent already engaged`, true);
-                return;
-            }
-            if (MentionsAgent(this._openingRequest, AIEngine.Instance.Agents, agent.ID)) {
-                this.logStatus(`Decision discovery skipped for '${agent.Name}': the request @mentions an agent`, true);
-                return;
-            }
-            const promptParams = this.decisionDiscoveryPromptParams(agent, overrides);
-            const outcome = await this.runDecisionDiscovery(agent, contextUser, promptParams, HostAllowedAgentIDs(data));
-            if (outcome.Injected && outcome.Message) {
-                conversationMessages.unshift({ role: 'system', content: outcome.Message });
-                this.logStatus(`Decision discovery suggested '${outcome.Answer?.Agent.Name}' to '${agent.Name}'`, true);
-            }
-        } catch (error) {
-            this.warnDecisionDiscovery(agent, error instanceof Error ? error.message : String(error));
-        }
-    }
-
-    /**
-     * Whether discovery is on for this run, read without rebuilding the merged prompt params, since it
-     * is asked on every run of every agent: the per-run override's `decisionDiscovery` when it sets
-     * one, otherwise the agent's base params, cached on AIEngine with its base catalog. Only a cold
-     * cache builds them.
-     */
-    private isDecisionDiscoveryOnFor(agent: MJAIAgentEntityExtended, overrides: Record<string, unknown> | undefined): boolean {
-        if (overrides && 'decisionDiscovery' in overrides) {
-            return IsDecisionDiscoveryOn(overrides);
-        }
-        return IsDecisionDiscoveryOn(this.cachedBasePromptParams(agent) ?? this.buildDecisionDiscoveryPromptParams(agent, undefined));
-    }
-
-    /**
-     * The run's merged agent-type prompt params (schema defaults < agent < per-run overrides), once
-     * discovery is on: the cached base params when there is no override, otherwise built.
-     */
-    private decisionDiscoveryPromptParams(agent: MJAIAgentEntityExtended, overrides: Record<string, unknown> | undefined): Record<string, unknown> {
-        const cached = overrides ? undefined : this.cachedBasePromptParams(agent);
-        return cached ?? this.buildDecisionDiscoveryPromptParams(agent, overrides);
-    }
-
-    /** The agent's base prompt params (no per-run overrides), from the base catalog AIEngine caches, when it holds one. */
-    private cachedBasePromptParams(agent: MJAIAgentEntityExtended): Record<string, unknown> | undefined {
-        return AIEngine.Instance.GetAgentBaseCatalog<AgentBaseCatalog>(agent.ID)?.baseAgentTypePromptParams;
-    }
-
-    /** Builds the merged prompt params, as `gatherPromptTemplateData` does. */
-    private buildDecisionDiscoveryPromptParams(agent: MJAIAgentEntityExtended, overrides: Record<string, unknown> | undefined): Record<string, unknown> {
-        const agentType = AIEngine.Instance.AgentTypes.find(at => UUIDsEqual(at.ID, agent.TypeID));
-        return this.buildAgentTypePromptParams(agentType, agent, overrides);
-    }
-
-    /**
-     * Records one `Agent discovery` step around a bounded discovery, and returns what it found. A
-     * failed discovery is logged as a warning; an unsure one only in verbose logs, except that an
-     * answer from a model with no discovery calibration is warned about once per model, because
-     * then discovery can never suggest anything.
-     */
-    private async runDecisionDiscovery(
-        agent: MJAIAgentEntityExtended,
-        contextUser: UserInfo,
-        promptParams: Record<string, unknown>,
-        hostAllowedIDs: string[] | undefined
-    ): Promise<DecisionDiscoveryOutcome> {
-        const promptName = typeof promptParams.decisionPromptName === 'string'
-            ? promptParams.decisionPromptName
-            : AgentDecisionService.DEFAULT_PROMPT_NAME;
-        const step = await this.startDecisionDiscoveryStep(contextUser, promptName);
-        const outcome = await this.boundDecisionDiscovery(signal => this.discoverAgent(agent, contextUser, promptName, hostAllowedIDs, signal), step);
-        await this.finishDecisionDiscoveryStep(step, outcome);
-        if (!outcome.Succeeded) {
-            this.warnDecisionDiscovery(agent, outcome.Reason ?? 'unknown error');
-        } else if (!outcome.Injected) {
-            if (outcome.UncalibratedModel) {
-                BaseAgent.warnUncalibratedDiscoveryModel(outcome.UncalibratedModel);
-            }
-            this.logStatus(`Decision discovery for '${agent.Name}' suggested no agent: ${outcome.Reason}`, true);
-        }
-        return outcome;
-    }
-
-    /** The answering models already warned about as having no discovery calibration, so each is warned about once per process. */
-    private static readonly _uncalibratedDiscoveryModelsWarned = new Set<string>();
-
-    /**
-     * Warns, once per model, that discovery answered by a model with no discovery calibration
-     * suggests nothing. That happens when a decision model is added or renamed, when a vendor model
-     * moves to another version (Jev's `APIName`), or when LLM Decision answers through a chat model
-     * other than the one its calibration was fitted on; without the warning the only trace is each
-     * `Agent discovery` step's reason.
-     */
-    private static warnUncalibratedDiscoveryModel(model: string): void {
-        if (BaseAgent._uncalibratedDiscoveryModelsWarned.has(model)) {
-            return;
-        }
-        BaseAgent._uncalibratedDiscoveryModelsWarned.add(model);
-        LogErrorEx({
-            message: `Decision discovery answered by ${model} suggests nothing: the model has no discovery calibration `
-                + '(DECISION_DISCOVERY_CALIBRATION), so its answers are treated as unsure. Fit one with the agent-discovery '
-                + 'Decision Eval, or check that the model was not renamed or moved to another version.',
-            severity: 'warning',
-            category: 'DecisionDiscovery',
-        });
-    }
-
-    /**
-     * Runs `discover` until it finishes, {@link DECISION_DISCOVERY_TIMEOUT_MS} passes, or the run is
-     * cancelled. A timeout or a cancellation aborts the signal `discover` was given, which aborts the
-     * decision call, and returns a failed discovery at once. What `discover` returns after that
-     * suggests nothing, but the prompt run of its decision call is still linked to `step` once it
-     * settles ({@link linkLateDecisionPromptRun}), so the run counts the call's cost.
-     */
-    private async boundDecisionDiscovery(
-        discover: (signal: AbortSignal) => Promise<DecisionDiscoveryOutcome>,
-        step?: MJAIAgentRunStepEntityExtended
-    ): Promise<DecisionDiscoveryOutcome> {
-        const controller = new AbortController();
-        let stoppedOutcome: DecisionDiscoveryOutcome | undefined;
-        const stopped = new Promise<DecisionDiscoveryOutcome>(resolve => controller.signal.addEventListener('abort', () => {
-            stoppedOutcome = FailedDecisionDiscovery(String(controller.signal.reason));
-            resolve(stoppedOutcome);
-        }, { once: true }));
-        const runToken = this._executeParams?.cancellationToken;
-        const relayRunAbort = (): void => controller.abort('the run was cancelled');
-        if (runToken?.aborted) {
-            relayRunAbort();
-        } else {
-            runToken?.addEventListener('abort', relayRunAbort, { once: true });
-        }
-        const timeoutMS = DECISION_DISCOVERY_TIMEOUT_MS;
-        const timer = setTimeout(() => controller.abort(`the decision timed out after ${timeoutMS}ms`), timeoutMS);
-        try {
-            const discovering = discover(controller.signal);
-            const outcome = await Promise.race([discovering, stopped]);
-            if (outcome === stoppedOutcome) {
-                this.linkLateDecisionPromptRun(step, discovering.then(late => late.Result));
-            }
-            return outcome;
-        } catch (error) {
-            return FailedDecisionDiscovery(error instanceof Error ? error.message : String(error));
-        } finally {
-            clearTimeout(timer);
-            runToken?.removeEventListener('abort', relayRunAbort);
-        }
-    }
-
-    /**
-     * The discovery itself: the options, rebuilt from the permitted catalog, then one decision about
-     * the opening request, and what its answer means. Never throws.
-     */
-    private async discoverAgent(
-        agent: MJAIAgentEntityExtended,
-        contextUser: UserInfo,
-        promptName: string,
-        hostAllowedIDs: string[] | undefined,
-        signal: AbortSignal
-    ): Promise<DecisionDiscoveryOutcome> {
-        try {
-            const { Options: options, Error: optionsError, ...rest } = await this.decisionDiscoveryOptionSet(agent, contextUser, promptName, hostAllowedIDs);
-            const sizes = { ...rest, OptionCount: options.length };
-            if (optionsError) {
-                return { ...FailedDecisionDiscovery(optionsError), ...sizes };
-            }
-            if (options.length < DECISION_DISCOVERY_MIN_OPTIONS) {
-                return { Injected: false, Succeeded: true, Reason: `there are ${options.length} agents to choose from, fewer than the ${DECISION_DISCOVERY_MIN_OPTIONS} a suggestion needs, so nothing was asked`, ...sizes };
-            }
-            if (signal.aborted) {
-                return { ...FailedDecisionDiscovery(String(signal.reason)), ...sizes };
-            }
-            const result = await this._agentDecisionService.Ask({
-                State: this._openingRequest,
-                Questions: BuildDecisionDiscoveryQuestions(options),
-                ContextUser: contextUser,
-                AgentID: agent.ID,
-                PromptName: promptName,
-                CancellationToken: signal,
-            });
-            return { ...DecisionDiscoveryFromResult(result, options, DECISION_DISCOVERY_MIN_CONFIDENCE), ...sizes };
-        } catch (error) {
-            return FailedDecisionDiscovery(error instanceof Error ? error.message : String(error));
-        }
-    }
-
-    /**
-     * The Choice's options, rebuilt on every call and never cached ({@link BuildDecisionDiscoveryOptionSet}):
-     * from AIEngine's current catalog, the agents the user may run, the decision prompt's option cap,
-     * and the semantic search over the opening request when the provider can run it.
-     */
-    private async decisionDiscoveryOptionSet(
-        agent: MJAIAgentEntityExtended,
-        contextUser: UserInfo,
-        promptName: string,
-        hostAllowedIDs: string[] | undefined
-    ): Promise<DecisionDiscoveryOptionSet> {
-        const provider = this.ProviderToUse;
-        return BuildDecisionDiscoveryOptionSet({
-            Agents: await DecisionDiscoveryRunnableAgents(AIEngine.Instance.Agents, contextUser),
-            RunningAgentID: agent.ID,
-            HostAllowedIDs: hostAllowedIDs,
-            DeclaredCap: DecisionPromptOptionCap(AIEngine.Instance, promptName),
-            Search: CanSearchEntities(provider) ? DecisionDiscoveryAgentSearch(provider, this._openingRequest, contextUser) : undefined,
-        });
-    }
-
-    /** Opens the `Agent discovery` Decision step. Without a run there is no step. */
-    private async startDecisionDiscoveryStep(contextUser: UserInfo, promptName: string): Promise<MJAIAgentRunStepEntityExtended | undefined> {
-        if (!this._agentRun) {
-            return undefined;
-        }
-        try {
-            return await this.createStepEntity({
-                stepType: 'Decision',
-                stepName: 'Agent discovery',
-                contextUser,
-                inputData: {
-                    request: this._openingRequest,
-                    promptName,
-                    minConfidence: DECISION_DISCOVERY_MIN_CONFIDENCE,
-                    timeoutMS: DECISION_DISCOVERY_TIMEOUT_MS,
-                },
-            });
-        } catch (error) {
-            LogError(`Could not record the agent discovery step: ${error instanceof Error ? error.message : String(error)}`);
-            return undefined;
-        }
-    }
-
-    /**
-     * Finalizes the `Agent discovery` step: the answer, whether it was injected, the host allow-list,
-     * the agents left out for having no description (at most {@link DECISION_DISCOVERY_MAX_RECORDED_IDS}
-     * IDs), any narrowing, and the call's usage.
-     */
-    private async finishDecisionDiscoveryStep(step: MJAIAgentRunStepEntityExtended | undefined, outcome: DecisionDiscoveryOutcome): Promise<void> {
-        if (!step) {
-            return;
-        }
-        const result = outcome.Result;
-        // Like every decision call, it counts toward the run's cost and tokens through its step
-        if (result) {
-            this.attachDecisionPromptRun(step, result);
-        }
-        const answer = outcome.Answer;
-        const withoutDescription = outcome.WithoutDescription ?? [];
-        await this.finalizeStepEntity(step, outcome.Succeeded, outcome.Succeeded ? undefined : outcome.Reason, {
-            injected: outcome.Injected,
-            reason: outcome.Reason,
-            catalogSize: outcome.CatalogSize,
-            hostAllowList: outcome.HostAllowListSize === undefined ? false : { size: outcome.HostAllowListSize },
-            withoutDescription: { count: withoutDescription.length, agentIds: withoutDescription.slice(0, DECISION_DISCOVERY_MAX_RECORDED_IDS) },
-            options: outcome.OptionCount,
-            optionLimit: outcome.OptionLimit,
-            declaredOptionCap: outcome.DeclaredOptionCap,
-            narrowed: outcome.NarrowedFrom === undefined ? false : { by: 'semantic search', from: outcome.NarrowedFrom, to: outcome.OptionCount },
-            answer: answer ? {
-                agentId: answer.Agent.ID,
-                agent: answer.Agent.Name,
-                confidence: answer.Confidence,
-                anyApplies: answer.AnyApplies,
-                probabilities: answer.Probabilities,
-            } : undefined,
-            executionTimeMS: result?.executionTimeMS,
-            tokensUsed: result?.tokensUsed,
-            model: result?.DecisionResult?.ResolvedModel ?? result?.modelInfo?.modelName,
-            promptRunId: result?.promptRun?.ID,
-        });
-    }
-
-    /** Logs that decision discovery failed, so nothing was suggested. */
-    private warnDecisionDiscovery(agent: MJAIAgentEntityExtended, reason: string): void {
-        LogErrorEx({
-            message: `Decision discovery for '${agent.Name}' failed, so no agent is suggested: ${reason}`,
-            severity: 'warning',
-            category: 'DecisionDiscovery',
-        });
     }
 
     /**

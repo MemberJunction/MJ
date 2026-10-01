@@ -298,8 +298,8 @@ describe('AIAgentPermissionHelper', () => {
         });
     });
 
-    // The filter the Find Best Agent / Find Candidate Agents actions and agent decision discovery
-    // share. It moved here from the actions, and these tests moved with it.
+    // The filter the Find Best Agent / Find Candidate Agents actions share. It moved here from the
+    // actions, and these tests moved with it.
     describe('FilterRunnableAgents', () => {
         /** A user with no roles, built from the mocked UserInfo class. */
         function userWithID(id: string): UserInfo {
