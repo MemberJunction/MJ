@@ -109,6 +109,17 @@ interface RubricRow {
     SubjectEntityID?: string;
     SubjectRecordID?: string;
     EvaluatorType?: string;
+    EvaluatorUserID?: string | null;
+    CategoryID?: string | null;
+    Description?: string | null;
+    TypeID?: string;
+    Configuration?: string | null;
+    ExpectedOutcomes?: string | null;
+    InputDefinition?: string | null;
+    Purpose?: string;
+    IsDefault?: boolean;
+    AgentID?: string;
+    Rationale?: string | null;
     EvaluationID?: string;
     CriterionID?: string;
     ScaleLevelID?: string | null;
@@ -130,6 +141,182 @@ async function rubricRow(ctx: IntegrationCheckContext, entityName: string): Prom
 async function saveRow(record: RubricRow): Promise<void> {
     const ok = await record.Save();
     Assert(ok === true, record.LatestResult?.Message || 'Save returned false');
+}
+
+const IT_WORLD = {
+    category: 'IT World — Agent quality',
+    agent: 'IT World — Reviewed agent',
+    test: 'IT World — Judged test',
+    rubric: 'IT World — Agent evaluation',
+};
+
+function sqlText(value: string): string {
+    return value.replace(/'/g, "''");
+}
+
+async function idByName(ctx: IntegrationCheckContext, table: string, name: string): Promise<string | null> {
+    const found = await poolOf(ctx).request().query(`SELECT TOP 1 CONVERT(nvarchar(36), [ID]) AS ID FROM [${schemaOf(ctx)}].[${table}] WHERE [Name] = N'${sqlText(name)}'`);
+    return (found.recordset[0]?.ID as string | undefined) ?? null;
+}
+
+/**
+ * The durable world a person can open. Creates are provider saves. Reads only
+ * look up the stable names. Product-agent links on this rubric are disabled.
+ */
+async function ensureItWorld(ctx: IntegrationCheckContext): Promise<void> {
+    const pool = poolOf(ctx);
+    const s = schemaOf(ctx);
+    const rubricId = await idByName(ctx, 'Rubric', IT_WORLD.rubric);
+    Assert(rubricId !== null, 'the IT world rubric exists before its attachments');
+
+    let categoryId = await idByName(ctx, 'RubricCategory', IT_WORLD.category);
+    if (!categoryId) {
+        const category = await rubricRow(ctx, 'MJ: Rubric Categories');
+        category.Name = IT_WORLD.category;
+        category.Description = 'Criteria for judging an agent run.';
+        await saveRow(category);
+        categoryId = category.ID;
+    }
+    const rubric = await rubricRow(ctx, 'MJ: Rubrics');
+    await rubric.Load(rubricId);
+    if ((rubric.CategoryID ?? '').toLowerCase() !== categoryId.toLowerCase()) {
+        rubric.CategoryID = categoryId;
+        await saveRow(rubric);
+    }
+
+    let agentId = await idByName(ctx, 'AIAgent', IT_WORLD.agent);
+    if (!agentId) {
+        const agent = await rubricRow(ctx, 'MJ: AI Agents');
+        agent.Name = IT_WORLD.agent;
+        agent.Description = 'The agent the IT world rubric reviews.';
+        agent.Status = 'Active';
+        await saveRow(agent);
+        agentId = agent.ID;
+    }
+
+    const links = await pool.request().query(`
+        SELECT CONVERT(nvarchar(36), ar.[ID]) AS ID, a.[Name] AS AgentName, ar.[Status] AS Status, ar.[IsDefault] AS IsDefault
+        FROM [${s}].[AIAgentRubric] ar
+        INNER JOIN [${s}].[AIAgent] a ON a.[ID] = ar.[AgentID]
+        WHERE ar.[RubricID] = '${rubricId}' AND ar.[Purpose] = N'Evaluation'
+    `);
+    for (const link of links.recordset as { ID: string; AgentName: string; Status: string; IsDefault: boolean | number }[]) {
+        if (link.AgentName === IT_WORLD.agent) continue;
+        if (link.Status === 'Disabled' && !link.IsDefault) continue;
+        const row = await rubricRow(ctx, 'MJ: AI Agent Rubrics');
+        await row.Load(link.ID);
+        row.Status = 'Disabled';
+        row.IsDefault = false;
+        await saveRow(row);
+    }
+    const own = (links.recordset as { ID: string; AgentName: string; Status: string; IsDefault: boolean | number }[]).find(link => link.AgentName === IT_WORLD.agent);
+    if (!own) {
+        const link = await rubricRow(ctx, 'MJ: AI Agent Rubrics');
+        link.AgentID = agentId;
+        link.RubricID = rubricId;
+        link.Purpose = 'Evaluation';
+        link.Status = 'Active';
+        link.IsDefault = true;
+        await saveRow(link);
+    } else if (own.Status !== 'Active' || !own.IsDefault) {
+        const row = await rubricRow(ctx, 'MJ: AI Agent Rubrics');
+        await row.Load(own.ID);
+        row.Status = 'Active';
+        row.IsDefault = true;
+        await saveRow(row);
+    }
+
+    const type = await pool.request().query(`SELECT TOP 1 CONVERT(nvarchar(36), [ID]) AS ID FROM [${s}].[TestType] WHERE [Name] = N'Agent Eval'`);
+    const typeId = type.recordset[0]?.ID as string | undefined;
+    Assert(!!typeId, 'the Agent Eval test type exists');
+    const expected = JSON.stringify({ oracles: [{ type: 'trace-no-errors', weight: 1 }] });
+    const configuration = JSON.stringify({ agentId });
+    let testId = await idByName(ctx, 'Test', IT_WORLD.test);
+    if (!testId) {
+        const test = await rubricRow(ctx, 'MJ: Tests');
+        test.Name = IT_WORLD.test;
+        test.TypeID = typeId;
+        test.Status = 'Active';
+        test.Description = "Judges the IT world agent with that agent's Evaluation rubric.";
+        test.InputDefinition = JSON.stringify({ userMessage: 'Summarize the source and name it.' });
+        test.ExpectedOutcomes = expected;
+        test.Configuration = configuration;
+        test.RubricID = null;
+        await saveRow(test);
+        testId = test.ID;
+    } else {
+        const test = await rubricRow(ctx, 'MJ: Tests');
+        await test.Load(testId);
+        const outcomes = test.ExpectedOutcomes ?? '';
+        if (test.RubricID || outcomes.includes('llm-judge') || !(test.Configuration ?? '').includes(agentId)) {
+            test.RubricID = null;
+            test.TypeID = typeId;
+            test.ExpectedOutcomes = expected;
+            test.Configuration = configuration;
+            await saveRow(test);
+        }
+    }
+
+    const published = await pool.request().query(`
+        SELECT TOP 1 CONVERT(nvarchar(36), [ID]) AS ID
+        FROM [${s}].[RubricVersion]
+        WHERE [RubricID] = '${rubricId}' AND [Status] = N'Published'
+    `);
+    const versionId = published.recordset[0].ID as string;
+    const leaves = await pool.request().query(`
+        SELECT CONVERT(nvarchar(36), [ID]) AS ID, CONVERT(nvarchar(36), [ScaleID]) AS ScaleID
+        FROM [${s}].[RubricCriterion]
+        WHERE [RubricVersionID] = '${versionId}' AND [NodeType] = N'Criterion'
+    `);
+    const subjectEntity = await pool.request().query(`SELECT TOP 1 CONVERT(nvarchar(36), [ID]) AS ID FROM [${s}].[Entity] WHERE [Name] = N'MJ: AI Agents'`);
+    const subjectEntityId = subjectEntity.recordset[0].ID as string;
+    const existing = await pool.request().query(`
+        SELECT TOP 1 CONVERT(nvarchar(36), [ID]) AS ID
+        FROM [${s}].[RubricEvaluation]
+        WHERE [RubricVersionID] = '${versionId}' AND [EvaluatorType] = N'Human' AND [Status] = N'Submitted'
+          AND [SubjectRecordID] = N'${agentId}'
+    `);
+    if (!existing.recordset[0]) {
+        const evaluation = await rubricRow(ctx, 'MJ: Rubric Evaluations');
+        evaluation.RubricVersionID = versionId;
+        evaluation.SubjectEntityID = subjectEntityId;
+        evaluation.SubjectRecordID = agentId;
+        evaluation.EvaluatorType = 'Human';
+        evaluation.EvaluatorUserID = ctx.User.ID;
+        evaluation.Status = 'Draft';
+        await saveRow(evaluation);
+        for (const leaf of leaves.recordset as { ID: string; ScaleID: string }[]) {
+            const met = await pool.request().query(`
+                SELECT TOP 1 CONVERT(nvarchar(36), [ID]) AS ID
+                FROM [${s}].[RubricScaleLevel]
+                WHERE [ScaleID] = '${leaf.ScaleID}' AND [Label] = N'Met'
+            `);
+            Assert(!!met.recordset[0], 'each IT world leaf has a Met level');
+            const score = await rubricRow(ctx, 'MJ: Rubric Evaluation Scores');
+            score.EvaluationID = evaluation.ID;
+            score.CriterionID = leaf.ID;
+            score.ScaleLevelID = met.recordset[0].ID as string;
+            score.Rationale = 'Met.';
+            await saveRow(score);
+        }
+        evaluation.Status = 'Submitted';
+        await saveRow(evaluation);
+        Assert(evaluation.Outcome === 'Passed', `the human evaluation outcome was ${evaluation.Outcome}`);
+    }
+
+    const defaults = await pool.request().query(`
+        SELECT a.[Name] AS AgentName
+        FROM [${s}].[AIAgentRubric] ar
+        INNER JOIN [${s}].[AIAgent] a ON a.[ID] = ar.[AgentID]
+        WHERE ar.[RubricID] = '${rubricId}' AND ar.[Purpose] = N'Evaluation' AND ar.[Status] = N'Active' AND ar.[IsDefault] = 1
+    `);
+    Assert(defaults.recordset.length === 1 && defaults.recordset[0].AgentName === IT_WORLD.agent, 'one Active default Evaluation link, on the IT agent');
+    const judged = await pool.request().query(`SELECT [RubricID] AS RubricID, [ExpectedOutcomes] AS ExpectedOutcomes, [Configuration] AS Configuration FROM [${s}].[Test] WHERE [ID] = '${testId}'`);
+    Assert(judged.recordset[0].RubricID == null, 'the judged test does not pin Test.RubricID');
+    Assert(!String(judged.recordset[0].ExpectedOutcomes ?? '').includes('llm-judge'), 'the judged test has no llm-judge oracle');
+    Assert(String(judged.recordset[0].Configuration ?? '').includes(agentId), 'the judged test aims at the IT agent');
+    const category = await pool.request().query(`SELECT [CategoryID] AS CategoryID FROM [${s}].[Rubric] WHERE [ID] = '${rubricId}'`);
+    Assert(String(category.recordset[0].CategoryID).toLowerCase() === categoryId.toLowerCase(), 'the IT world rubric is in IT World — Agent quality');
 }
 
 async function withProviderRollback(ctx: IntegrationCheckContext, body: () => Promise<void>): Promise<void> {
@@ -748,6 +935,7 @@ export const RubricsChecks: NamedCheck[] = [
                 WHERE r.[Name] = N'${name}' AND v.[Status] = N'Draft'
             `);
             Assert(Number(draft.recordset[0].Drafts) === 1, 'the IT world rubric keeps one draft');
+            await ensureItWorld(ctx);
         },
     },
 ];
