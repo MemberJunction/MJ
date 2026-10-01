@@ -161,28 +161,35 @@ import {
     SelectCatalogNarrowing,
 } from './catalog-narrowing';
 import {
-    AgentsWithoutDescription,
+    BuildDecisionDiscoveryOptionSet,
     BuildDecisionDiscoveryQuestions,
     CanSearchEntities,
     DECISION_DISCOVERY_MAX_RECORDED_IDS,
     DECISION_DISCOVERY_MIN_CONFIDENCE,
     DECISION_DISCOVERY_MIN_OPTIONS,
-    DECISION_DISCOVERY_SEARCH_ENTITY,
     DECISION_DISCOVERY_TIMEOUT_MS,
+    DecisionDiscoveryAgentSearch,
     DecisionDiscoveryFromResult,
-    DecisionDiscoveryOptions,
     DecisionDiscoveryOptionSet,
     DecisionDiscoveryOutcome,
-    DecisionOptionLimit,
+    DecisionDiscoveryRunnableAgents,
+    DecisionPromptOptionCap,
     FailedDecisionDiscovery,
     HostAllowedAgentIDs,
     IsDecisionDiscoveryOn,
     IsOpeningTurn,
-    KeepHostAllowedAgents,
     MentionsAgent,
-    RankOptionsBySearch,
-    SmallestOptionCap,
 } from './decision-discovery';
+import {
+    BuildFinishIfQuestions,
+    CapFinishIfState,
+    FINISH_IF_STATE_EXCERPT,
+    FormatActionForFinishIf,
+    FormatSubAgentForFinishIf,
+    JudgeFinishIf,
+    type FinishIfOutcome,
+    type SubAgentStepResult
+} from './finish-if-state';
 import {
     PipelineExecutor,
     PipelineToolRegistry,
@@ -477,59 +484,6 @@ interface FinishIfSettings {
     Mode: FinishIfMode;
     Threshold: number;
     PromptName: string;
-}
-
-/** The outcome of a finishIf gate. */
-interface FinishIfOutcome {
-    Passed: boolean;
-    Probabilities: Record<string, number>;
-    Reason: string;
-}
-
-/**
- * A Sub-Agent step's result. The child and related paths spread the sub-agent's own
- * `ExecuteAgentResult` into it, so its final message and returned payload are there too.
- */
-type SubAgentStepResult<P> = BaseAgentNextStep<P> & Partial<Pick<ExecuteAgentResult, 'agentRun' | 'payload'>>;
-
-/** The most text of a step's results the finishIf gate sends to the decision model. */
-const FINISH_IF_STATE_MAX = 16000;
-
-/** How much of the finishIf state the `Finish check` step records. */
-const FINISH_IF_STATE_EXCERPT = 2000;
-
-function capFinishIfState(text: string): string {
-    return text.length > FINISH_IF_STATE_MAX ? text.slice(0, FINISH_IF_STATE_MAX) : text;
-}
-
-function jsonExcerpt(value: unknown, max: number): string {
-    let text: string;
-    try {
-        text = typeof value === 'string' ? value : JSON.stringify(value) ?? '';
-    } catch {
-        text = String(value);
-    }
-    return text.slice(0, max);
-}
-
-/** One action's result as finishIf text: its name, outcome, message and sanitized output params. */
-function formatActionForFinishIf(summary: ActionResultSummary): string {
-    const lines = [`Action: ${summary.actionName}`, `Message: ${String(summary.message ?? '').slice(0, 1000)}`];
-    for (const param of summary.params ?? []) {
-        lines.push(`Output ${param.Name}: ${jsonExcerpt(param.Value, 2000)}`);
-    }
-    return lines.join('\n');
-}
-
-/** A sub-agent's result as finishIf text: its final message and the payload it returned. */
-function formatSubAgentForFinishIf<P>(result: SubAgentStepResult<P>): string {
-    const message = result.agentRun?.Message ?? result.message ?? '';
-    const payload = result.payload ?? result.newPayload;
-    const lines = [`Final message: ${String(message).slice(0, 4000)}`];
-    if (payload !== undefined && payload !== null) {
-        lines.push(`Payload: ${jsonExcerpt(payload, 4000)}`);
-    }
-    return capFinishIfState(lines.join('\n\n'));
 }
 
 /** The top-level `reasoning` and `message` of a prompt's JSON response, when it has them. */
@@ -4067,7 +4021,9 @@ export class BaseAgent {
 
     /**
      * Records one `Agent discovery` step around a bounded discovery, and returns what it found. A
-     * failed discovery is logged as a warning; an unsure one only in verbose logs.
+     * failed discovery is logged as a warning; an unsure one only in verbose logs, except that an
+     * answer from a model with no discovery calibration is warned about once per model, because
+     * then discovery can never suggest anything.
      */
     private async runDecisionDiscovery(
         agent: MJAIAgentEntityExtended,
@@ -4084,9 +4040,36 @@ export class BaseAgent {
         if (!outcome.Succeeded) {
             this.warnDecisionDiscovery(agent, outcome.Reason ?? 'unknown error');
         } else if (!outcome.Injected) {
+            if (outcome.UncalibratedModel) {
+                BaseAgent.warnUncalibratedDiscoveryModel(outcome.UncalibratedModel);
+            }
             this.logStatus(`Decision discovery for '${agent.Name}' suggested no agent: ${outcome.Reason}`, true);
         }
         return outcome;
+    }
+
+    /** The answering models already warned about as having no discovery calibration, so each is warned about once per process. */
+    private static readonly _uncalibratedDiscoveryModelsWarned = new Set<string>();
+
+    /**
+     * Warns, once per model, that discovery answered by a model with no discovery calibration
+     * suggests nothing. That happens when a decision model is added or renamed, when a vendor model
+     * moves to another version (Jev's `APIName`), or when LLM Decision answers through a chat model
+     * other than the one its calibration was fitted on; without the warning the only trace is each
+     * `Agent discovery` step's reason.
+     */
+    private static warnUncalibratedDiscoveryModel(model: string): void {
+        if (BaseAgent._uncalibratedDiscoveryModelsWarned.has(model)) {
+            return;
+        }
+        BaseAgent._uncalibratedDiscoveryModelsWarned.add(model);
+        LogErrorEx({
+            message: `Decision discovery answered by ${model} suggests nothing: the model has no discovery calibration `
+                + '(DECISION_DISCOVERY_CALIBRATION), so its answers are treated as unsure. Fit one with the agent-discovery '
+                + 'Decision Eval, or check that the model was not renamed or moved to another version.',
+            severity: 'warning',
+            category: 'DecisionDiscovery',
+        });
     }
 
     /**
@@ -4168,10 +4151,9 @@ export class BaseAgent {
     }
 
     /**
-     * The Choice's options, rebuilt on every call and never cached: the agents in the permitted
-     * catalog that the host allows and that have a description. There are never more than
-     * {@link DecisionOptionLimit}: when there are, the semantic search narrows them first; if it
-     * cannot, `Error` says why.
+     * The Choice's options, rebuilt on every call and never cached ({@link BuildDecisionDiscoveryOptionSet}):
+     * from AIEngine's current catalog, the agents the user may run, the decision prompt's option cap,
+     * and the semantic search over the opening request when the provider can run it.
      */
     private async decisionDiscoveryOptionSet(
         agent: MJAIAgentEntityExtended,
@@ -4179,67 +4161,14 @@ export class BaseAgent {
         promptName: string,
         hostAllowedIDs: string[] | undefined
     ): Promise<DecisionDiscoveryOptionSet> {
-        const catalog = KeepHostAllowedAgents(await this.decisionDiscoveryCatalog(agent, contextUser), hostAllowedIDs);
-        const options = DecisionDiscoveryOptions(catalog);
-        const declaredCap = this.decisionOptionCap(promptName);
-        const limit = DecisionOptionLimit(declaredCap);
-        const set: DecisionDiscoveryOptionSet = {
-            Options: options,
-            CatalogSize: catalog.length,
-            HostAllowListSize: hostAllowedIDs?.length,
-            WithoutDescription: AgentsWithoutDescription(catalog),
-            OptionLimit: limit,
-            DeclaredOptionCap: declaredCap,
-        };
-        if (options.length <= limit) {
-            return set;
-        }
         const provider = this.ProviderToUse;
-        if (!CanSearchEntities(provider)) {
-            return { ...set, Options: [], NarrowedFrom: options.length,
-                Error: `${options.length} agents exceed the limit of ${limit} options, and the provider cannot run the semantic search that narrows them` };
-        }
-        // The search Find Candidate Agents runs: hybrid over MJ: AI Agents, over-fetching threefold for
-        // the permission filter. Its similarity floor is not applied: the decision judges fit.
-        const results = await provider.SearchEntity({
-            entityName: DECISION_DISCOVERY_SEARCH_ENTITY,
-            searchText: this._openingRequest,
-            options: { mode: 'hybrid', topK: limit * 3, minScore: 0, contextUser },
+        return BuildDecisionDiscoveryOptionSet({
+            Agents: await DecisionDiscoveryRunnableAgents(AIEngine.Instance.Agents, contextUser),
+            RunningAgentID: agent.ID,
+            HostAllowedIDs: hostAllowedIDs,
+            DeclaredCap: DecisionPromptOptionCap(AIEngine.Instance, promptName),
+            Search: CanSearchEntities(provider) ? DecisionDiscoveryAgentSearch(provider, this._openingRequest, contextUser) : undefined,
         });
-        return { ...set, Options: RankOptionsBySearch(options, results.map(r => r.recordId), limit), NarrowedFrom: options.length };
-    }
-
-    /**
-     * The agents this run may suggest, from AIEngine's current catalog: the ones the user may run and
-     * that can be discovered directly (the set Find Candidate Agents offers, through the same
-     * {@link AIAgentPermissionHelper} filter), minus the running agent itself.
-     */
-    private async decisionDiscoveryCatalog(agent: MJAIAgentEntityExtended, contextUser: UserInfo): Promise<MJAIAgentEntityExtended[]> {
-        const runnable = await AIAgentPermissionHelper.FilterRunnableAgents(AIEngine.Instance.Agents, contextUser);
-        return runnable.filter(a => AIAgentPermissionHelper.IsDirectlyDiscoverable(a) && !UUIDsEqual(a.ID, agent.ID));
-    }
-
-    /**
-     * The decision model's option cap: the smallest `Decision.MaxChoiceOptions` in the effective model
-     * configuration of the models the decision prompt is bound to, the setting `AIDecisionRunner`
-     * checks before its call. `undefined` when none declares one, or the prompt is not found.
-     */
-    private decisionOptionCap(promptName: string): number | undefined {
-        const engine = AIEngine.Instance;
-        const target = promptName.trim().toLowerCase();
-        const prompt = engine.Prompts.find(p => (p.Name ?? '').trim().toLowerCase() === target);
-        if (!prompt) {
-            return undefined;
-        }
-        const caps = engine.PromptModels
-            .filter(pm => UUIDsEqual(pm.PromptID, prompt.ID) && (pm.Status === 'Active' || pm.Status === 'Preview'))
-            .map(pm => {
-                const modelVendor = pm.VendorID
-                    ? engine.ModelVendors.find(mv => UUIDsEqual(mv.ModelID, pm.ModelID) && UUIDsEqual(mv.VendorID, pm.VendorID))
-                    : undefined;
-                return engine.GetEffectiveModelConfiguration(pm.ModelID, modelVendor?.ID)?.Decision?.MaxChoiceOptions;
-            });
-        return SmallestOptionCap(caps);
     }
 
     /** Opens the `Agent discovery` Decision step. Without a run there is no step. */
@@ -8738,7 +8667,7 @@ The context is now within limits. Please retry your request with the recovered c
      * Links a decision call's prompt run to its step, as the Prompt step links its own, so the run's
      * cost and token totals and its `MaxCostPerRun` / `MaxTokensPerRun` checks count the call.
      */
-    private attachDecisionPromptRun(step: MJAIAgentRunStepEntityExtended, result: AIDecisionRunResult): void {
+    protected attachDecisionPromptRun(step: MJAIAgentRunStepEntityExtended, result: AIDecisionRunResult): void {
         if (result.promptRun?.ID) {
             step.TargetLogID = result.promptRun.ID;
             step.PromptRun = result.promptRun; // transient related object (not a persisted field)
@@ -9800,7 +9729,7 @@ The context is now within limits. Please retry your request with the recovered c
             this.logStatus(`[finishIf] Gate skipped: ${withDirectives.join(', ')} returned AIDirectives, which the model must see on its next turn`, false, params);
             return undefined;
         }
-        const state = capFinishIfState(actionSummaries.map(formatActionForFinishIf).join('\n\n'));
+        const state = CapFinishIfState(actionSummaries.map(FormatActionForFinishIf).join('\n\n'));
         const outcome = await this.evaluateFinishIf(finishIf, state, params, decision, payload, parentStepId);
         return this.gateEndsRun(outcome, params)
             ? { ...this.finishIfSuccessStep(finishIf, decision, payload), priorStepResult: actionSummaries }
@@ -9820,7 +9749,7 @@ The context is now within limits. Please retry your request with the recovered c
         if (!finishIf || result.terminate || result.step !== 'Success' || !this.finishIfSettings().Enabled) {
             return undefined;
         }
-        const outcome = await this.evaluateFinishIf(finishIf, formatSubAgentForFinishIf(result), params, decision, result.newPayload);
+        const outcome = await this.evaluateFinishIf(finishIf, FormatSubAgentForFinishIf(result), params, decision, result.newPayload);
         return this.gateEndsRun(outcome, params) ? { ...result, terminate: true, message: finishIf.message } : undefined;
     }
 
@@ -9874,10 +9803,7 @@ The context is now within limits. Please retry your request with the recovered c
         params: ExecuteAgentParams,
         step: MJAIAgentRunStepEntityExtended
     ): Promise<FinishIfOutcome> {
-        const questions: Record<string, DecisionQuestion> = {};
-        finishIf.questions.forEach((question, i) => {
-            questions[`q${i + 1}`] = { Kind: 'Likelihood', Instructions: question };
-        });
+        const questions = BuildFinishIfQuestions(finishIf);
         const result = await this._agentDecisionService.Ask({
             State: state,
             Questions: questions,
@@ -9890,23 +9816,7 @@ The context is now within limits. Please retry your request with the recovered c
         if (!result.success) {
             return { Passed: false, Probabilities: {}, Reason: `The decision call failed: ${result.errorMessage ?? 'no error message'}` };
         }
-        const probabilities: Record<string, number> = {};
-        const failures: string[] = [];
-        for (const key of Object.keys(questions)) {
-            const answer = result.Answers[key];
-            if (answer?.Kind !== 'Likelihood') {
-                failures.push(`${key} has no answer`);
-                continue;
-            }
-            probabilities[key] = answer.Probability;
-            // Written so that a non-numeric probability fails too.
-            if (!(answer.Probability >= settings.Threshold)) {
-                failures.push(`${key} is ${answer.Probability}`);
-            }
-        }
-        return failures.length === 0
-            ? { Passed: true, Probabilities: probabilities, Reason: `Every question reached ${settings.Threshold}` }
-            : { Passed: false, Probabilities: probabilities, Reason: `Below the threshold of ${settings.Threshold}: ${failures.join('; ')}` };
+        return JudgeFinishIf(result.Answers, questions, settings.Threshold);
     }
 
     /**
