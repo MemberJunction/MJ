@@ -3025,3 +3025,114 @@ figures are the honest headline either way — **1 handler call and 1 rebuild in
    `MJ: AI Models` by raw SQL and that entity trusts its cache by default. That is the gate working,
    not a regression — but it reads like one. The phase now documents the precondition and prints it
    at run time, and the measurement above was taken with the flag set to 0 and restored afterwards.
+
+## 28. Manual two-server session (2026-10-01)
+
+Eight tests across two real MJAPI processes — the owner's (API-A, port 4001, MJExplorer attached) and
+mine (API-B, port 14100) — sharing one Redis keyspace (`mjmanual`, port 16390) and one database
+(`mj_test_2`). The plan is `plans/engine-cache-manual-test-plan.md`; the live state and cleanup ledger
+is `plans/engine-cache-manual-test-session-state.md`. The point of the exercise was the seams no
+automated tier can reach: a change crossing between servers, and a change reaching a browser.
+
+| Test | Result |
+|---|---|
+| 1 Cross-server propagation, both directions | **PASS** |
+| 1b The browser leg | **GAP → issue #4952** |
+| 2 User cache (#4247) | **PASS** |
+| 3 CLI clear policy, five cases | **PASS** (one of my expectations was wrong, not the code) |
+| 4 Bulk write is one notification | **FAIL → evidence on #4250** |
+| 5 Sweep gating (§26), both halves | **PASS** (+ a metadata-staleness finding) |
+| 6 Category expiry and ordering | **PASS** |
+| 7 Warm start | **PASS**, observed four times |
+| 8 F9: an expired slot still notifies (§25.5) | **PASS** |
+
+### What passed, and the evidence that mattered
+
+**Propagation (1).** A save on A left the shared slot holding the new row with the save's own
+`maxUpdatedAt`, and B applied it from the payload with **no database read**. The unfiltered engine slot
+took a `set` (236 rows maintained in place); each filtered slot took a `removed` — the designed split,
+visible on the wire. The reverse direction behaved identically.
+
+**User cache (2).** The strongest result of the session, because it is behavioural rather than
+instrumented. A role revoked **through API-B** was enforced by **API-A** within seconds: the owner's
+save in Explorer was refused with a permission error. Re-granting restored it just as fast. One small
+stamp notice crossed the wire — no user rows. That is #4247 closed from the opposite direction: the
+scenario that used to take 180 s, and never worked at all on PostgreSQL.
+
+**Clear policy (3).** A dry run moved nothing and published nothing (389 keys before and after). A real
+clear removed 190 + 10 keys and both servers reacted, with the snapshot removals arriving
+**`_Timestamps` last** — the write-order invariant, observed rather than argued. A successful push with
+no changes still cleared. And the case the policy was rewritten for: **a push that wrote 48 rows, failed,
+and rolled back cleanly published nothing at all**, with the database verified unchanged afterwards.
+
+**Sweep gating (5).** A raw SQL change to a trusted entity was ignored across 2.5 sweep intervals — zero
+messages, slot unchanged — which is the §26 behaviour working. After declaring
+`TrustServerCacheCompletely = 0`, the same change was swept in **~12 s** against a 15 s interval.
+
+**Expiry and ordering (6).** Dataset blobs at TTL 3586 with their `_date` proxies at 3286 (the proxy dies
+first, by 300 s), snapshot keys at −1, an ordinary RunView slot at 3188. §25.1 and §16.3, confirmed in a
+running system.
+
+**F9 (8), the subtlest fix on the branch.** Set up so API-B could only ever have *read* the slot: API-A
+filled an empty cache, then API-B booted warm — `metadata 0.4s`, and the slot's TTL went 45 → 25 rather
+than resetting to 60, proving a read and not a write. The slot then expired (`exists=0`) and the shared
+index group emptied (`SCARD` 0), so nothing in Redis knew it had existed. A save on **API-B** published
+`removed` for that slot. The only possible source of that fingerprint was the warm read — which is
+exactly what §25.5 added.
+
+**§26 and §25.5 interlock, and the session proved why both were needed.** Narrowing the sweep to
+declared-drift entities is only safe because the event path now works for readers as well as fillers.
+Had we shipped §26 without §25.5, an expired slot on a trusted entity would have had no notifier and no
+backstop.
+
+### The three findings
+
+**#4952 (new) — a peer's change never reaches an open or reattached entity record form.** The server
+side relays correctly: API-A publishes `CACHE_INVALIDATION` with the entity name, and
+`GraphQLDataProvider` raises `remote-invalidate`, which drives `BaseEngine` caches. But a form holds a
+`BaseEntity` it loaded itself, and nothing re-reads it; worse, Explorer's `CustomReuseStrategy`
+reattaches the stored component on return, so the obvious workaround — navigate away and back — does
+not work either. Only a full page reload shows the change. **Not a regression**: `sharedCache.ts` is new
+on this branch, and before it a peer's change reached a browser never. We closed the server half.
+
+**#4250 (evidence added) — the entity-event batch does not cover `TransactionGroup`.** 40 rows in one
+`ExecuteTransactionGroup` produced **40 messages and 11.4 MB**, each carrying the whole 236-row slot.
+`SQLServerTransactionGroup.HandleSubmit` opens its transaction directly on the connection pool
+(`new sql.Transaction(pool)`), never through the provider, so the N11 batch never engages. The
+changeset claim has been corrected: it now says the batch covers `BeginEntityTransaction`,
+`RunInEntityTransaction` and raw `provider.BeginTransaction()`, and explicitly not
+`TransactionGroup.Submit()`. That path is the one the Explorer forms use, so the fix is worth doing —
+in its own PR, since it changes behaviour for every TransactionGroup caller.
+
+**Metadata staleness defeats a hand-edited entity flag.** Test 5B failed twice before I understood it:
+servers read `TrustServerCacheCompletely` from the entity metadata they hold, and a warm-booting server
+reads that from the shared snapshot. A raw SQL flag change leaves the snapshot stale, so **restarting is
+not enough** — the restarted server adopts the old snapshot and keeps ignoring the entity. It swept ~12 s
+after the snapshot was dropped. `mj sync push` and `mj cache clear` both drop it, which is why the normal
+paths work; the hand-edit-in-SSMS path is the trap. Now documented in the caching guide beside the
+gating explanation.
+
+### Corrections to my own claims
+
+- **`mj migrate` never has a "nothing applied" run.** `R__RefreshMetadata.sql` deliberately injects
+  `${flyway:timestamp}` so its checksum always changes and the metadata refresh always re-runs. So
+  migrate always clears. The policy is right — that script does recompile views and re-sync metadata —
+  but the changeset's "a run that applied no migrations no longer disturbs the fleet" describes a case
+  that, for `mj migrate`, essentially never arises.
+- **The fleet rig was broken and I had not noticed** (§27): three template literals still referenced the
+  `Replica` members the naming gate renamed. Fixed there.
+- **`DatasetCache` reports 0 keys in every clear** — dry run, real clear, and the push report. The known
+  `default`/`DatasetCache` asymmetry, now observed in three places in a running system. Already handed to
+  the `dataset-cache-category` worktree.
+
+### Still unfixed, noted
+
+The sweeper takes ~21 `engine-sweep` leases per interval and then finds nothing to sweep on a default
+install. No database queries, so §26's purpose holds, but it is pointless Redis churn: sweepability
+should be checked **before** the lease is taken.
+
+### Database left as found
+
+40 AI Model descriptions restored from the captured originals, the test model's description restored,
+`TrustServerCacheCompletely` back to 1, no duplicate `UserRole` pairs, the test-3e `ViewType` row clean,
+and the owner's `Integration` role intact.
