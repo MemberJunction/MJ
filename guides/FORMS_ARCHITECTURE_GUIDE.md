@@ -461,18 +461,16 @@ Builder, and needs the `Manage Form Defaults` authorization.
 
 A panel's component is an `MJ: Components` row. The stock `UI` role can create and update that
 entity (not delete), and a form can also load a component by name, so the server checks every
-change to what a component draws. A delete, or a change to a component's specification, status,
-name, namespace or type, is checked against every contribution and full custom form row that uses
-the component (`ComponentWriteRefusal`): without `Manage Form Defaults` it is allowed only when at
-least one row uses the component and every such row is the caller's own personal row, so a
-component no row uses is read-only; with the grant it is allowed unless another user's personal
-row uses the component. A row created or re-pointed at a component is refused when another user's
-personal row uses that component, or when a `Role` or `Global` row uses it and the caller lacks the
-grant (`FormRowComponentRefusal`). Without the grant, a component also may not take a name another
-component already has unless that component is the caller's own (`ComponentNameCollisionRefusal`).
-The reads run as the caller, the changed columns come from the stored row, and a failed read
-refuses the write. Any user can therefore author their own panel through the actions and turn it
-on, off or to a draft in the drawer.
+change to what a component draws. Without `Manage Form Defaults`, the component must be the caller's
+own (`IsCallersOwnComponent`): used by at least one row and only by the caller's own personal rows,
+or used by no row and created by the caller, as its `Create` record in `MJ: Record Changes` shows.
+That applies to a delete or a change to its specification, status, name, namespace or type
+(`ComponentWriteRefusal`), to a row created or re-pointed at it (`FormRowComponentRefusal`), and to
+giving another component its name (`ComponentNameCollisionRefusal`). With the grant, every change
+is allowed except to a component another user's personal row uses, which is refused for everyone.
+The reads run as the caller in one batch, the changed columns come from the stored row, and a
+failed read refuses the write. Any user can therefore author their own panel through the actions
+and turn it on, off or to a draft in the drawer.
 
 **Form context for agents.** Each record form publishes its composition snapshot (sections, related
 grids, contributions, rail, slots) to `FormCompositionRegistry` in `@memberjunction/ng-base-forms`;

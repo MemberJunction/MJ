@@ -466,34 +466,39 @@ it and it does not render. A set-aside personal form stays in its owner's form p
 and update that entity, but not delete from it. A form or panel draws the component its row points
 at, and a form's spec can also load a component by name, so the server checks three things (the
 rules are in `@memberjunction/core-entities`; the server side is `FormComponentGuard` in
-`@memberjunction/core-entities-server`):
+`@memberjunction/core-entities-server`). Without `Manage Form Defaults`, each check asks whether the
+component is the caller's own (`IsCallersOwnComponent`): used by at least one row and only by the
+caller's own personal rows, or used by no row and created by the caller. The creator is read from
+the component's `Create` record in `MJ: Record Changes`; `MJ: Components` tracks record changes, so
+every component created through the platform has one.
 
 1. **Changing a component** (`ComponentWriteRefusal`, in `MJComponentEntityServer`): a delete, or a
    change to its specification, status, name, namespace or type.
 
-   | Rows that use the component | Without `Manage Form Defaults` | With it |
+   | The component | Without `Manage Form Defaults` | With it |
    |---|---|---|
-   | Only the caller's own personal rows | Allowed | Allowed |
-   | A `Role` or `Global` row | Refused | Allowed |
-   | Another user's personal row | Refused | Refused |
-   | No row | Refused | Allowed |
+   | Used only by the caller's own personal rows | Allowed | Allowed |
+   | Used by a `Role` or `Global` row | Refused | Allowed |
+   | Used by another user's personal row | Refused | Refused |
+   | Used by no row, created by the caller | Allowed | Allowed |
+   | Used by no row, created by someone else | Refused | Allowed |
 
 2. **Pointing a row at a component** (`FormRowComponentRefusal`, in both form entity subclasses), on
-   create or when `ComponentID` changes: refused when another user's personal row uses the
-   component (for everyone, an Owner included), or when a `Role` or `Global` row uses it and the
-   caller does not hold the grant. The caller's own rows may share a component.
+   create or when `ComponentID` changes: without the grant, the component must be the caller's own.
+   With the grant, a component another user's personal row uses is still refused (for everyone, an
+   Owner included); anything else is allowed. The caller's own rows may share a component.
 3. **A component's name** (`ComponentNameCollisionRefusal`): without the grant, a created or renamed
    component may not take a name another component already has, unless every such component is
-   the caller's own (used by at least one row, and only by the caller's own personal rows). The
-   match is the `Name` filter `ComponentMetadataEngine.FindComponent` uses, in any namespace. A
-   holder is not restricted.
+   the caller's own. The match is the `Name` filter `ComponentMetadataEngine.FindComponent` uses,
+   in any namespace. A holder is not restricted.
 
 A create is otherwise not checked, nor is a change to any other column or a write with no caller
-(a trusted server context). The rows and the stored columns are read as the caller, and the
-changed columns come from the stored row, not from the values as loaded; when a read fails, the
-write is refused. So any user can author their own panel through the actions (a new component,
-then their own row pointing at it, then changes to it) and turn it on, off or to a draft in the
-drawer.
+(a trusted server context). The rows, the stored columns and the creator are read in one batch as
+the caller, and the changed columns come from the stored row, not from the values as loaded; when a
+read fails, the write is refused. The `Create` record change is written in the same batch as the
+component insert, so a row saved after it in the same transaction sees it. So any user can author
+their own panel through the actions (a new component, then their own row pointing at it, then
+changes to it) and turn it on, off or to a draft in the drawer.
 
 On identity, permission and form-metadata entities (`RESTRICTED_FORM_ENTITIES` in
 `@memberjunction/core-entities`, 11 entities) only `User` rows and forms render, whatever wrote the
