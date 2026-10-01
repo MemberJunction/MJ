@@ -827,8 +827,8 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 - [~] **R4** `@memberjunction/rubrics`: `RubricEngine` evaluates, records a failure,
       and starts a human draft. Deterministic evaluator, content providers, and
       consensus/agreement/diagnostics are in, with hand-computed kappa and alpha.
-      The prompt evaluator (R5) is not started.
-- [ ] **R5** "Rubric Evaluator" prompt + `LLMRubricEvaluator` (SinglePass, PerCriterion via
+      The prompt evaluator is R5.
+- [~] **R5** "Rubric Evaluator" prompt + `LLMRubricEvaluator` (SinglePass, PerCriterion via
       `AIDecisionRunner`, samples, evidence verification).
 - [ ] **R6** Actions (§8.6).
 - [ ] **R7** Integration bundle **"Rubrics"** (deterministic tier, client-first): publish +
