@@ -147,5 +147,6 @@ describe('agreement and consensus', () => {
             { key: 'b', scores: [0, 0, 1, 1], notApplicable: 0 },
         ]);
         expect(flags.filter(flag => flag.flag === 'NoDiscrimination').map(flag => flag.criterionKey)).toEqual(['noise']);
+        expect(flags.filter(flag => flag.flag === 'HighCorrelation').map(flag => `${flag.criterionKey}:${flag.otherKey}`).sort()).toEqual(['a:b', 'b:a']);
     });
 });
