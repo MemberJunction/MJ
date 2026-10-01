@@ -3,6 +3,8 @@ import {
     FALLBACK_ICONS,
     FilterIcons,
     GlyphFromContent,
+    ICON_RESULT_LIMIT,
+    MatchIcons,
     IconNameOf,
     NormalizeIconClass,
     ProbeIconStyleFonts,
@@ -104,6 +106,30 @@ describe('FilterIcons', () => {
     it('caps the result, because the grid renders every one it is given', () => {
         expect(FilterIcons(icons, '', 2)).toHaveLength(2);
     });
+
+    it('caps at the grid limit by default', () => {
+        const lots = Array.from({ length: ICON_RESULT_LIMIT + 5 }, (_, i) => ({ Name: `n${i}`, Style: 'fa-solid' }));
+        expect(FilterIcons(lots, '')).toHaveLength(ICON_RESULT_LIMIT);
+    });
+
+    it('finds an icon by an alias as well as by its name', () => {
+        const house = { Name: 'house', Style: 'fa-solid', Aliases: ['home', 'home-alt'] };
+        expect(FilterIcons([...icons, house], 'home').map((i) => i.Name)).toEqual(['house']);
+    });
+});
+
+describe('MatchIcons', () => {
+    it('counts every match, past any limit the grid applies', () => {
+        const lots = Array.from({ length: ICON_RESULT_LIMIT + 5 }, (_, i) => ({ Name: `chart-${i}`, Style: 'fa-solid' }));
+        expect(MatchIcons(lots, 'chart')).toHaveLength(ICON_RESULT_LIMIT + 5);
+    });
+
+    it('returns a copy, so a caller cannot change the catalogue', () => {
+        const all = [{ Name: 'user', Style: 'fa-solid' }];
+        const matched = MatchIcons(all, '');
+        matched.pop();
+        expect(all).toHaveLength(1);
+    });
 });
 
 /**
@@ -194,6 +220,20 @@ describe('ResolveIconStyles', () => {
 
     it('resolves nothing when no style is loaded', () => {
         expect(ResolveIconStyles(rules, [], hasGlyph)).toEqual([]);
+    });
+
+    /** Font Awesome gives one glyph several names (`house`, `home`); the grid shows it once. */
+    it('reports names that draw the same glyph in the same style as one icon, with aliases', () => {
+        const aliased = [
+            { Name: 'house', Glyph: 'A' },
+            { Name: 'home', Glyph: 'A' },
+            { Name: 'github', Glyph: 'B' },
+            { Name: 'home-alt', Glyph: 'A' },
+        ];
+        expect(ResolveIconStyles(aliased, [SOLID, BRANDS], hasGlyph)).toEqual([
+            { Name: 'house', Style: 'fa-solid', Aliases: ['home', 'home-alt'] },
+            { Name: 'github', Style: 'fa-brands' },
+        ]);
     });
 });
 

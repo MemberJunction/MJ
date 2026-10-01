@@ -1,8 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderComponentFixture, query, click } from '@memberjunction/ng-test-utils';
 import { MjIconPickerComponent } from './icon-picker.component';
 import { IconCatalogueService } from './icon-catalogue.service';
-import type { FontAwesomeIcon } from './font-awesome-icons';
+import { ICON_RESULT_LIMIT, type FontAwesomeIcon } from './font-awesome-icons';
 
 /**
  * A catalogue the test controls, so the assertions do not depend on which Font Awesome
@@ -14,9 +14,14 @@ const ICONS: FontAwesomeIcon[] = [
   { Name: 'star', Style: 'fa-regular' },
 ];
 
+/** What the stub catalogue serves. A test may swap it before rendering. */
+let catalogue: FontAwesomeIcon[] = ICONS;
+
+beforeEach(() => { catalogue = ICONS; });
+
 class StubCatalogue {
-  public async Load(): Promise<readonly FontAwesomeIcon[]> { return ICONS; }
-  public Icons(): readonly FontAwesomeIcon[] { return ICONS; }
+  public async Load(): Promise<readonly FontAwesomeIcon[]> { return catalogue; }
+  public Icons(): readonly FontAwesomeIcon[] { return catalogue; }
   public IsFallback(): boolean { return false; }
   public Forget(): void { /* nothing memoized */ }
 }
@@ -139,5 +144,74 @@ describe('MjIconPickerComponent (DOM)', () => {
     const selected = cells().filter((b) => b.classList.contains('is-on'))
       .map((b) => b.getAttribute('aria-label'));
     expect(selected).toContain('star');
+  });
+
+  it('marks the current icon when it was stored under one of its aliases', () => {
+    catalogue = [{ Name: 'house', Style: 'fa-solid', Aliases: ['home'] }];
+    const f = render({ Value: 'fa-solid fa-home' });
+    f.componentInstance.Toggle();
+    f.detectChanges();
+    const selected = cells().filter((b) => b.classList.contains('is-on'))
+      .map((b) => b.getAttribute('aria-label'));
+    expect(selected).toEqual(['house']);
+  });
+});
+
+/**
+ * The grid draws a limited number of icons. Without saying so, a user who scrolls to the end
+ * of the grid concludes the icon they want does not exist.
+ */
+describe('MjIconPickerComponent (DOM) — more matches than the grid draws', () => {
+  const many = (count: number): FontAwesomeIcon[] =>
+    Array.from({ length: count }, (_, i) => ({ Name: `icon-${i}`, Style: 'fa-solid' }));
+
+  it('says how many icons match and that typing narrows them', () => {
+    catalogue = many(ICON_RESULT_LIMIT + 60);
+    const f = render({ Value: '' });
+    f.componentInstance.Toggle();
+    f.detectChanges();
+    expect(cells()).toHaveLength(ICON_RESULT_LIMIT);
+    const note = overlay()?.querySelector('[role="status"]')?.textContent ?? '';
+    expect(note).toContain(`Showing ${ICON_RESULT_LIMIT} of ${ICON_RESULT_LIMIT + 60} icons`);
+    expect(note).toContain('Type to narrow');
+  });
+
+  it('says nothing about a limit once the matches fit', () => {
+    catalogue = many(ICON_RESULT_LIMIT + 60);
+    const f = render({ Value: '' });
+    f.componentInstance.Toggle();
+    f.componentInstance.Search = 'icon-29';
+    f.detectChanges();
+    expect(f.componentInstance.IsCapped).toBe(false);
+    expect(overlay()?.querySelector('[role="status"]')).toBeNull();
+  });
+});
+
+describe('MjIconPickerComponent (DOM) — touched state and focus', () => {
+  it('marks the control touched when an icon is chosen from the grid', () => {
+    const f = render({ Value: '' });
+    const touched = vi.fn();
+    f.componentInstance.registerOnTouched(touched);
+    f.componentInstance.Toggle();
+    f.detectChanges();
+    f.componentInstance.Choose({ Name: 'star', Style: 'fa-regular' });
+    expect(touched).toHaveBeenCalledTimes(1);
+  });
+
+  it('puts focus back on the browse button when an icon is chosen', () => {
+    const f = render({ Value: '' });
+    click(f, '.mj-iconpick-browse');
+    f.detectChanges();
+    f.componentInstance.Choose({ Name: 'star', Style: 'fa-regular' });
+    expect(document.activeElement).toBe(query(f, '.mj-iconpick-browse'));
+  });
+
+  it('puts focus back on the browse button when the grid closes without a choice', () => {
+    const f = render({ Value: '' });
+    click(f, '.mj-iconpick-browse');
+    f.detectChanges();
+    (overlay()?.querySelector('.mj-iconpick-search') as HTMLInputElement).focus();
+    f.componentInstance.Close();
+    expect(document.activeElement).toBe(query(f, '.mj-iconpick-browse'));
   });
 });

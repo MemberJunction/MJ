@@ -58,6 +58,8 @@ export interface FontAwesomeIcon {
     Name: string;
     /** The style class that has the glyph, e.g. `fa-solid`. */
     Style: string;
+    /** Other names the stylesheet gives the same glyph in the same style, e.g. `home` for `house`. */
+    Aliases?: readonly string[];
 }
 
 /** An icon name and the character its stylesheet rule assigns it. */
@@ -231,6 +233,10 @@ export type GlyphPresenceTest = (glyph: string, font: IconStyleFont) => boolean;
  * the icons are broken". Styles are tried in order, so an icon present in several is
  * reported under the first, and an icon no loaded font has is dropped rather than offered
  * as a blank square.
+ *
+ * Names that draw the same glyph in the same style are one icon: the first name in `rules`
+ * order is kept and the rest become its {@link FontAwesomeIcon.Aliases}, so the grid shows
+ * each glyph once and a search for any of its names finds it.
  */
 export function ResolveIconStyles(
     rules: readonly IconGlyphRule[],
@@ -239,22 +245,45 @@ export function ResolveIconStyles(
 ): FontAwesomeIcon[] {
     if (fonts.length === 0) return [];
     const out: FontAwesomeIcon[] = [];
+    const byGlyph = new Map<string, FontAwesomeIcon>();
     for (const rule of rules) {
         const font = fonts.find((f) => hasGlyph(rule.Glyph, f));
-        if (font) out.push({ Name: rule.Name, Style: font.Style });
+        if (!font) continue;
+        const key = `${font.Style}|${rule.Glyph}`;
+        const kept = byGlyph.get(key);
+        if (kept) {
+            kept.Aliases = [...(kept.Aliases ?? []), rule.Name];
+            continue;
+        }
+        const icon: FontAwesomeIcon = { Name: rule.Name, Style: font.Style };
+        byGlyph.set(key, icon);
+        out.push(icon);
     }
     return out;
 }
 
-/** Icons matching a search, most-relevant first. An empty search returns them all. */
-export function FilterIcons(icons: readonly FontAwesomeIcon[], search: string, limit = 240): FontAwesomeIcon[] {
+/** How many icons the picker's grid draws at most; the rest are reached by searching. */
+export const ICON_RESULT_LIMIT = 240;
+
+/**
+ * Every icon matching a search, most relevant first: names that start with it, then names
+ * that contain it. An icon matches by its name or by any of its aliases. An empty search
+ * matches every icon.
+ */
+export function MatchIcons(icons: readonly FontAwesomeIcon[], search: string): FontAwesomeIcon[] {
     const needle = search.trim().toLowerCase().replace(/^fa-/, '');
-    if (needle.length === 0) return icons.slice(0, limit);
+    if (needle.length === 0) return [...icons];
     const starts: FontAwesomeIcon[] = [];
     const contains: FontAwesomeIcon[] = [];
     for (const icon of icons) {
-        if (icon.Name.startsWith(needle)) starts.push(icon);
-        else if (icon.Name.includes(needle)) contains.push(icon);
+        const names = [icon.Name, ...(icon.Aliases ?? [])];
+        if (names.some((name) => name.startsWith(needle))) starts.push(icon);
+        else if (names.some((name) => name.includes(needle))) contains.push(icon);
     }
-    return [...starts, ...contains].slice(0, limit);
+    return [...starts, ...contains];
+}
+
+/** The first `limit` icons {@link MatchIcons} finds for a search. */
+export function FilterIcons(icons: readonly FontAwesomeIcon[], search: string, limit = ICON_RESULT_LIMIT): FontAwesomeIcon[] {
+    return MatchIcons(icons, search).slice(0, limit);
 }

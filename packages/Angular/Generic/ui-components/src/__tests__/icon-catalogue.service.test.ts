@@ -122,6 +122,18 @@ describe('IconCatalogueService', () => {
         expect(service.IsFallback()).toBe(true);
     });
 
+    it('falls back when reading the page fails outright, and builds again after Forget', async () => {
+        const service = new IconCatalogueService();
+        const broken = { get styleSheets(): never { throw new Error('unreadable'); } } as unknown as Document;
+        expect(await service.Load(broken)).toEqual(FALLBACK_ICONS);
+        expect(service.IsFallback()).toBe(true);
+        expect(service.Icons()).toEqual(FALLBACK_ICONS);
+        service.Forget();
+        const icons = await service.Load(fakeDocument({ rules: [['fa-user', USER]] }));
+        expect(icons.map((i) => i.Name)).toEqual(['user']);
+        expect(service.IsFallback()).toBe(false);
+    });
+
     it('reports nothing before the fonts are in, rather than a list it will replace', () => {
         expect(new IconCatalogueService().Icons()).toEqual([]);
     });

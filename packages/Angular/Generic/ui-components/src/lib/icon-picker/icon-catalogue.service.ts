@@ -30,12 +30,17 @@ export class IconCatalogueService {
      * icon as missing, which is most of the catalogue.
      *
      * Falls back to a short built-in list when the stylesheets cannot be read — a
-     * cross-origin sheet without CORS headers throws on `cssRules` — so the picker always
-     * has something to show.
+     * cross-origin sheet without CORS headers throws on `cssRules` — or when reading them
+     * fails in any other way, so the picker always has something to show.
      */
     public async Load(doc: Document = document): Promise<readonly FontAwesomeIcon[]> {
         if (this.catalogue) return this.catalogue;
-        if (!this.loading) this.loading = this.build(doc);
+        if (!this.loading) {
+            this.loading = this.build(doc).catch(() => {
+                this.loading = null;
+                return this.useFallback();
+            });
+        }
         return this.loading;
     }
 
@@ -68,8 +73,16 @@ export class IconCatalogueService {
         const ready = await this.fetchFonts(doc, fonts);
         const measure = ready.length > 0 ? this.glyphTest(doc) : null;
         const resolved = measure ? ResolveIconStyles(rules, fonts, measure) : [];
-        this.fallback = resolved.length === 0;
-        this.catalogue = this.fallback ? [...FALLBACK_ICONS] : resolved;
+        if (resolved.length === 0) return this.useFallback();
+        this.fallback = false;
+        this.catalogue = resolved;
+        return this.catalogue;
+    }
+
+    /** Keeps the short built-in list as the catalogue. */
+    private useFallback(): readonly FontAwesomeIcon[] {
+        this.fallback = true;
+        this.catalogue = [...FALLBACK_ICONS];
         return this.catalogue;
     }
 

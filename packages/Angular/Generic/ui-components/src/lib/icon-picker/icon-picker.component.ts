@@ -14,8 +14,9 @@ import { NG_VALUE_ACCESSOR, ControlValueAccessor } from '@angular/forms';
 import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
 import {
     DEFAULT_ICON_STYLE,
-    FilterIcons,
+    ICON_RESULT_LIMIT,
     IconNameOf,
+    MatchIcons,
     NormalizeIconClass,
     type FontAwesomeIcon,
 } from './font-awesome-icons';
@@ -78,6 +79,7 @@ export class MjIconPickerComponent implements ControlValueAccessor {
     private readonly catalogue = inject(IconCatalogueService);
 
     @ViewChild('search') private searchBox?: ElementRef<HTMLInputElement>;
+    @ViewChild('browse') private browseButton?: ElementRef<HTMLButtonElement>;
 
     /** What is in the text box, which may not yet be a complete class string. */
     public Text = '';
@@ -121,9 +123,36 @@ export class MjIconPickerComponent implements ControlValueAccessor {
         return IconNameOf(this.Preview);
     }
 
-    /** The icons to show, narrowed by the grid's search box. */
+    /** The icons to show, narrowed by the grid's search box: at most {@link ICON_RESULT_LIMIT}. */
     public get Results(): FontAwesomeIcon[] {
-        return FilterIcons(this.Icons, this.search);
+        return this.matches().slice(0, ICON_RESULT_LIMIT);
+    }
+
+    /** How many icons match the search, including the ones past the grid's limit. */
+    public get MatchCount(): number {
+        return this.matches().length;
+    }
+
+    /** True when more icons match than the grid draws, so the user is told to narrow the search. */
+    public get IsCapped(): boolean {
+        return this.MatchCount > ICON_RESULT_LIMIT;
+    }
+
+    private matchMemo: { Icons: readonly FontAwesomeIcon[]; Search: string; Matches: FontAwesomeIcon[] } | null = null;
+
+    /** Every icon matching the search, worked out once per catalogue and search. */
+    private matches(): FontAwesomeIcon[] {
+        const icons = this.Icons;
+        if (this.matchMemo?.Icons !== icons || this.matchMemo.Search !== this.search) {
+            this.matchMemo = { Icons: icons, Search: this.search, Matches: MatchIcons(icons, this.search) };
+        }
+        return this.matchMemo.Matches;
+    }
+
+    /** Whether a grid cell is the current icon, under its own name or one of its aliases. */
+    public IsSelected(icon: FontAwesomeIcon): boolean {
+        const name = this.SelectedName;
+        return !!name && (icon.Name === name || (icon.Aliases ?? []).includes(name));
     }
 
     /** Every icon on offer, each with the style that actually draws it. */
@@ -180,10 +209,12 @@ export class MjIconPickerComponent implements ControlValueAccessor {
         }
     }
 
+    /** Closes the grid and puts focus back on the browse button. */
     public Close(): void {
         if (!this.IsOpen) return;
         this.IsOpen = false;
         this.cdr.markForCheck();
+        this.browseButton?.nativeElement.focus();
     }
 
     /** Typed text is normalized on the way out, so a bare name still renders. */
@@ -198,6 +229,7 @@ export class MjIconPickerComponent implements ControlValueAccessor {
         const value = this.ClassFor(icon);
         this.Text = value;
         this.commit(value);
+        this.onTouched();
         this.Close();
     }
 
