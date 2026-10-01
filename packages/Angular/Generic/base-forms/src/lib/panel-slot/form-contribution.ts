@@ -315,6 +315,15 @@ function sourceRank(reg: { Source?: FormContributionRegistrationSource; Scope?: 
     return reg.Source === 'metadata' ? ContributionScopeRank(reg.Scope) : Number.POSITIVE_INFINITY;
 }
 
+/** The fields the collapse ranks a registration by. */
+type RankedRegistration = Pick<FormContributionRegistration, 'Priority' | 'Source' | 'Scope'>;
+
+/** Whether `reg` beats `incumbent`: higher Priority, then {@link sourceRank}. */
+function outranks(reg: RankedRegistration, incumbent: RankedRegistration): boolean {
+    return reg.Priority > incumbent.Priority
+        || (reg.Priority === incumbent.Priority && sourceRank(reg) > sourceRank(incumbent));
+}
+
 /**
  * Collapse by key ({@link ResolveContributionKey}, compared exactly). Highest Priority wins; on a
  * tie the compiled registration wins, and between rows the narrower scope. Registrations without
@@ -336,10 +345,7 @@ export function CollapseFormPanelRegistrations<T extends {
     for (const reg of registrations) {
         const key = ResolveContributionKey(reg.Metadata) || `__unique:${uniqueIndex++}`;
         const incumbent = winners.get(key);
-        const beats = !incumbent
-            || reg.Priority > incumbent.Priority
-            || (reg.Priority === incumbent.Priority && sourceRank(reg) > sourceRank(incumbent));
-        if (beats) {
+        if (!incumbent || outranks(reg, incumbent)) {
             winners.set(key, reg);
         }
     }
@@ -355,7 +361,8 @@ export interface ResolvedFormContributions {
     readonly Winners: readonly FormContributionRegistration[];
     /**
      * The winners the rail files, by {@link ContributionSectionKey}: they name the entity rather
-     * than the wildcard, draw a section rather than a bare strip, and have a section key.
+     * than the wildcard, draw a section rather than a bare strip, and have a section key. Two
+     * winners filed under one section key keep the one that ranks higher in the collapse.
      */
     readonly RailItems: ReadonlyMap<string, FormContributionRegistration>;
 }
@@ -385,7 +392,8 @@ export function ResolveFormContributionWinners(
         const meta = reg.Metadata;
         if (meta.entity !== entityName || reg.Presentation === 'bare' || meta.presentation === 'bare') continue;
         const key = ContributionSectionKey(reg);
-        if (key) railItems.set(key, reg);
+        const filed = key ? railItems.get(key) : undefined;
+        if (key && (!filed || outranks(reg, filed))) railItems.set(key, reg);
     }
     const resolved: ResolvedFormContributions = { Winners: winners, RailItems: railItems };
     if (!byEntity) {

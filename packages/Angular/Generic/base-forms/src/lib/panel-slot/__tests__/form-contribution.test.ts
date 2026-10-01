@@ -520,6 +520,18 @@ describe('ResolveFormContributionWinners', () => {
         expect([...resolved.RailItems.keys()]).toEqual([ContributionSectionKey(row), ContributionSectionKey(compiled)]);
     });
 
+    // A compiled grid panel files under `contactMethods`; a row keyed `contactMethods` files there too.
+    it('keeps the higher-ranked of two winners filed under one section key, whatever the order', () => {
+        const compiledGrid = reg({ entity: PEOPLE, slot: 'after-related', relatedEntity: 'Acme: Contact Methods', relatedJoinField: 'PersonID' });
+        const row: FormContributionRegistration = {
+            Priority: 5, Source: 'metadata', Scope: 'User', RowID: 'row-cm',
+            Metadata: { entity: PEOPLE, slot: 'after-related', contributionKey: 'contactMethods' },
+        };
+        expect(ContributionSectionKey(compiledGrid)).toBe(ContributionSectionKey(row));
+        expect(ResolveFormContributionWinners(PEOPLE, [compiledGrid, row]).RailItems.get('contactMethods')).toBe(row);
+        expect(ResolveFormContributionWinners(PEOPLE, [row, compiledGrid]).RailItems.get('contactMethods')).toBe(row);
+    });
+
     it('returns the same value for the same list, so a form resolves it once', () => {
         const list = [compiledK, rowK];
         expect(ResolveFormContributionWinners(PEOPLE, list)).toBe(ResolveFormContributionWinners(PEOPLE, list));
