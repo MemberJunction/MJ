@@ -18,6 +18,7 @@ import {
     CompositeKey,
     RunView,
     type IEntityConfiguration,
+    type IEntityCloneConfiguration,
     type IEntityFormConfiguration,
     type RelatedFormRoleCandidate,
 } from '@memberjunction/core';
@@ -1008,6 +1009,38 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
             ...current,
             UI: { ...(current.UI ?? {}), Form: form },
         };
+        this.cdr.markForCheck();
+    }
+
+    /** The entity's `Configuration.Clone` bag, edited by the Record cloning settings panel. */
+    public get CloneConfig(): IEntityCloneConfiguration | null {
+        return this.record?.ConfigurationObject?.Clone ?? null;
+    }
+
+    public IsSavingCloneConfig = false;
+    public CloneConfigSaveError = '';
+
+    /** Saves the entity record (and with it the clone configuration) and leaves edit mode. */
+    public async SaveCloneConfig(): Promise<void> {
+        this.IsSavingCloneConfig = true;
+        this.CloneConfigSaveError = '';
+        this.cdr.markForCheck();
+        try {
+            const saved = await this.SaveRecord(true);
+            if (!saved) {
+                this.CloneConfigSaveError = this.record?.LatestResult?.CompleteMessage || 'The configuration could not be saved.';
+            }
+        } finally {
+            this.IsSavingCloneConfig = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    public OnCloneConfigChange(clone: IEntityCloneConfiguration | null): void {
+        if (!this.record) return;
+        const next: IEntityConfiguration = { ...(this.record.ConfigurationObject ?? {}) };
+        if (clone) next.Clone = clone; else delete next.Clone;
+        this.record.ConfigurationObject = Object.keys(next).length > 0 ? next : null;
         this.cdr.markForCheck();
     }
 
