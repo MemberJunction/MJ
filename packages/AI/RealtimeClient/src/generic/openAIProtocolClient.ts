@@ -419,19 +419,6 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
     }
 
     /**
-     * Triggers ONE short spoken update with the given instructions. Marks the upcoming
-     * response as `'narration'` (flag consumed by the next `response.created`) so its
-     * transcripts are emitted with `Kind: 'narration'` — ephemeral by contract. Sets
-     * {@link responseActive} eagerly so a tool result landing mid-narration queues instead of
-     * colliding.
-     *
-     * **Skips when busy** (base-contract collision rule — drivers MUST queue or skip): a
-     * `response.create` sent while a response is in flight would be rejected/garbled by the
-     * provider, and narration is disposable by contract, so the update is dropped with a debug
-     * log rather than queued to come out late and stale. Hosts SHOULD still gate on
-     * {@link IsBusy} / {@link IsAudioPlaying} for timing quality.
-     */
-    /**
      * The instructions the session was configured with, or null. Each transport holds its session
      * config in its own field, so each answers for itself.
      */
@@ -450,6 +437,19 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
         return session ? `${session}\n\n${directive}` : directive;
     }
 
+    /**
+     * Triggers ONE short spoken update with the given instructions. Marks the upcoming
+     * response as `'narration'` (flag consumed by the next `response.created`) so its
+     * transcripts are emitted with `Kind: 'narration'` — ephemeral by contract. Sets
+     * {@link responseActive} eagerly so a tool result landing mid-narration queues instead of
+     * colliding.
+     *
+     * **Skips when busy** (base-contract collision rule — drivers MUST queue or skip): a
+     * `response.create` sent while a response is in flight would be rejected/garbled by the
+     * provider, and narration is disposable by contract, so the update is dropped with a debug
+     * log rather than queued to come out late and stale. Hosts SHOULD still gate on
+     * {@link IsBusy} / {@link IsAudioPlaying} for timing quality.
+     */
     public RequestSpokenUpdate(instructions: string): void {
         if (!this.canSendEvents()) {
             return;
@@ -868,12 +868,15 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
 
     /** Opens the provider socket for this connection (drivers own URL/auth specifics). */
     protected abstract openProviderSocket(config: ClientRealtimeSessionConfig): IOpenAIProtocolClientSocket;
-    /** Extracts the wire-shaped `session` object from the server pact. Default: the pact itself. */
+    /** @inheritdoc — the instructions in the wire-shaped session object applied at connect. */
     protected override currentSessionInstructions(): string | null {
         const instructions = this.sessionObject['instructions'];
         return typeof instructions === 'string' ? instructions : null;
     }
-
+    /**
+     * Extracts the wire-shaped `session` object from the server pact. Default: the pact minus the
+     * client-only hints ({@link ToProviderSessionConfig}).
+     */
     protected resolveSessionObject(config: ClientRealtimeSessionConfig): JSONObject {
         return ToProviderSessionConfig(config.SessionConfig ?? {});
     }

@@ -338,17 +338,18 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
         await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
     }
 
+    /** @inheritdoc — the instructions in the session config applied via `session.update`. */
+    protected override currentSessionInstructions(): string | null {
+        const instructions = this.sessionConfig?.['instructions'];
+        return typeof instructions === 'string' ? instructions : null;
+    }
+
     /**
      * Sends the server-controlled session config (instructions + tools) as a
      * `session.update` so the co-agent's identity and tool set apply. Skipped when the
      * host supplied no config (e.g. it failed to parse the server payload — the host
      * already logged that; sending an EMPTY `session.update` would be wrong).
      */
-    protected override currentSessionInstructions(): string | null {
-        const instructions = this.sessionConfig?.['instructions'];
-        return typeof instructions === 'string' ? instructions : null;
-    }
-
     private applySessionConfig(channel: IRealtimeDataChannel): void {
         if (!this.sessionConfig || Object.keys(this.sessionConfig).length === 0) {
             return;
