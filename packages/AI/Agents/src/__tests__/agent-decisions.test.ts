@@ -131,13 +131,14 @@ function seedDecisionRun(agent: TestAgent, createdSteps: MockStepEntity[]): void
 
 describe('Agent Decisions', () => {
     describe('1. Schema and defaults', () => {
-        it('declares both opt-in switches off in the Loop agent type metadata, the defaults that apply at runtime once synced', () => {
+        it('declares the master switch and both opt-in switches off in the Loop agent type metadata, the defaults that apply at runtime once synced', () => {
             // src/__tests__/ → repo root is 5 levels up (Agents → AI → packages → root).
             const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../../..');
             const agentTypes: Array<{ fields: { Name: string; PromptParamsSchema?: { properties?: Record<string, { default?: string | boolean }> } } }> =
                 JSON.parse(readFileSync(join(repoRoot, 'metadata/agent-types/.agent-types.json'), 'utf8'));
             const loop = agentTypes.find((t) => t.fields.Name === 'Loop');
             const properties = loop?.fields.PromptParamsSchema?.properties;
+            expect(properties?.decisionsEnabled?.default).toBe(false);
             expect(properties?.includeDecisionsDocs?.default).toBe(false);
             expect(properties?.finishIfMode?.default).toBe('off');
         });
@@ -147,6 +148,7 @@ describe('Agent Decisions', () => {
         });
 
         it('has expected decision defaults in DEFAULT_LOOP_AGENT_PROMPT_PARAMS', () => {
+            expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.decisionsEnabled).toBe(false);
             expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.includeDecisionsDocs).toBe(false);
             expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.decisionsMaxItems).toBe(100);
             expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.decisionPromptName).toBe('Default Decision');
@@ -162,7 +164,7 @@ describe('Agent Decisions', () => {
         });
 
         it('leaves decisions out when includeDecisionsDocs is unset, since decisions are opt-in', () => {
-            const params: Record<string, unknown> = {};
+            const params: Record<string, unknown> = { decisionsEnabled: true };
             agent.testApplyResponseTypeAutoAlignment(params);
             const rules = params.includeResponseTypeDefinition as Record<string, unknown>;
             expect(params.includeDecisionsDocs).toBe(false);
@@ -173,7 +175,7 @@ describe('Agent Decisions', () => {
             ['a string', 'true'],
             ['a number', 1],
         ])('treats includeDecisionsDocs set to %s as off, since only true opts in', (_label, value) => {
-            const params: Record<string, unknown> = { includeDecisionsDocs: value };
+            const params: Record<string, unknown> = { decisionsEnabled: true, includeDecisionsDocs: value };
             agent.testApplyResponseTypeAutoAlignment(params);
             const rules = params.includeResponseTypeDefinition as Record<string, unknown>;
             expect(params.includeDecisionsDocs).toBe(false);
@@ -182,6 +184,7 @@ describe('Agent Decisions', () => {
 
         it('keeps an explicit includeResponseTypeDefinition.decisions = true when includeDecisionsDocs is unset', () => {
             const params: Record<string, unknown> = {
+                decisionsEnabled: true,
                 includeResponseTypeDefinition: {
                     decisions: true,
                 },
@@ -194,6 +197,7 @@ describe('Agent Decisions', () => {
 
         it('flips includeResponseTypeDefinition.decisions to false when includeDecisionsDocs is false', () => {
             const params: Record<string, unknown> = {
+                decisionsEnabled: true,
                 includeDecisionsDocs: false,
             };
             agent.testApplyResponseTypeAutoAlignment(params);
@@ -203,6 +207,7 @@ describe('Agent Decisions', () => {
 
         it('preserves explicit includeResponseTypeDefinition.decisions = true when includeDecisionsDocs is false', () => {
             const params: Record<string, unknown> = {
+                decisionsEnabled: true,
                 includeDecisionsDocs: false,
                 includeResponseTypeDefinition: {
                     decisions: true,
@@ -215,6 +220,7 @@ describe('Agent Decisions', () => {
 
         it('includes decisions when the agent opts in with includeDecisionsDocs = true', () => {
             const params: Record<string, unknown> = {
+                decisionsEnabled: true,
                 includeDecisionsDocs: true,
             };
             agent.testApplyResponseTypeAutoAlignment(params);
