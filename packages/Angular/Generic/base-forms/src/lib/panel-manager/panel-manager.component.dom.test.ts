@@ -83,8 +83,10 @@ beforeEach(() => {
     probe.Forget.mockReset();
 });
 
-/** The placement dialog is covered by its own spec; here it only has to exist. */
-/** Its read-only form preview is inert, as the real dialog's is. */
+/**
+ * The placement dialog is covered by its own spec; here it only has to exist. Its read-only form
+ * preview is inert, as the real dialog's is.
+ */
 @Component({
     standalone: true,
     selector: 'mj-form-placement-dialog',
@@ -755,5 +757,128 @@ describe('MjPanelManagerComponent (DOM) — keyboard', () => {
         await f.componentInstance.OnRemove(f.componentInstance.Items[0]);
         f.detectChanges();
         expect(remove().classList.contains('mj-btn--danger')).toBe(true);
+    });
+});
+
+/**
+ * A write or a hide can take away the focused button: Remove deletes its row, Hide redraws it,
+ * and Publish disables it while the write runs. Focus then falls to the page, and the drawer
+ * still has to answer Escape and Tab and get focus back.
+ */
+describe('MjPanelManagerComponent (DOM) — keyboard after the focused button goes', () => {
+    const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const root = (f: ReturnType<typeof render>) => f.nativeElement as HTMLElement;
+    const drawer = (f: ReturnType<typeof render>) => root(f).querySelector('.mj-pm-drawer') as HTMLElement;
+    const action = (f: ReturnType<typeof render>, label: string) =>
+        Array.from(root(f).querySelectorAll<HTMLElement>('.mj-pm-action')).find((b) => b.textContent?.includes(label))!;
+    const press = (target: EventTarget, init: KeyboardEventInit): KeyboardEvent => {
+        const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
+        target.dispatchEvent(event);
+        return event;
+    };
+    const settle = async (f: ReturnType<typeof render>) => {
+        f.detectChanges();
+        await f.whenStable();
+        await tick();
+        f.detectChanges();
+    };
+
+    it('still closes on Escape after removing the focused row', async () => {
+        admin.Remove.mockImplementation(async () => {
+            admin.RowsForEntity.mockReturnValue([]);
+            return { Success: true };
+        });
+        const f = render();
+        await settle(f);
+        let closed = 0;
+        f.componentInstance.Closed.subscribe(() => closed++);
+        action(f, 'Remove').focus();
+        action(f, 'Remove').click();
+        await settle(f);
+        action(f, 'remove?').click();
+        await settle(f);
+        expect(root(f).querySelector('.mj-pm-row')).toBeNull();
+        press(document.activeElement ?? document.body, { key: 'Escape' });
+        expect(closed).toBe(1);
+    });
+
+    it('puts focus back in the drawer after the focused row is redrawn, and Tab stays inside', async () => {
+        const shared = row({ ID: 'ROW-G', Scope: 'Global', UserID: null, ContributionKey: 'panel:Health', Title: 'Health' });
+        admin.RowsForEntity.mockReturnValue([shared]);
+        admin.Hide.mockImplementation(() => {
+            admin.RowsForEntity.mockReturnValue([{ ...shared, ID: 'ROW-G2' }]);
+        });
+        const f = render();
+        await settle(f);
+        action(f, 'Hide for me').focus();
+        action(f, 'Hide for me').click();
+        await settle(f);
+        expect(drawer(f).contains(document.activeElement)).toBe(true);
+        (document.activeElement as HTMLElement).blur();
+        expect(document.activeElement).toBe(document.body);
+        const tab = press(document.body, { key: 'Tab' });
+        expect(tab.defaultPrevented).toBe(true);
+        expect(drawer(f).contains(document.activeElement)).toBe(true);
+    });
+
+    it('keeps focus in the drawer while a publish runs, then gives it back to Publish', async () => {
+        admin.CanPublish.mockReturnValue(true);
+        let finish: (r: { Success: boolean }) => void = () => undefined;
+        admin.PublishContribution.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+        const f = render();
+        await settle(f);
+        action(f, 'Publish').focus();
+        action(f, 'Publish').click();
+        await settle(f);
+        f.componentInstance.Publishing!.Scope = 'Global';
+        const saving = f.componentInstance.ConfirmAudience();
+        await settle(f);
+        expect(document.activeElement).toBe(drawer(f));
+        finish({ Success: true });
+        await saving;
+        await settle(f);
+        expect(document.activeElement).toBe(action(f, 'Publish'));
+    });
+
+    it('treats a radio group as one stop, so Shift+Tab from the checked radio wraps', async () => {
+        admin.CanPublish.mockReturnValue(true);
+        const f = render();
+        action(f, 'Publish').click();
+        await settle(f);
+        const radios = Array.from(root(f).querySelectorAll<HTMLInputElement>('input[name="mj-pm-audience"]'));
+        const everyone = radios.find((r) => r.parentElement?.textContent?.includes('Everyone'))!;
+        everyone.click();
+        await settle(f);
+        expect(radios.filter((r) => r.checked)).toEqual([everyone]);
+        expect(everyone).not.toBe(radios[0]);
+        everyone.focus();
+        const back = press(everyone, { key: 'Tab', shiftKey: true });
+        expect(back.defaultPrevented).toBe(true);
+        expect(document.activeElement?.textContent?.trim()).toBe('Cancel');
+    });
+
+    it('leaves keys alone in an overlay outside the drawer, such as the icon picker grid', () => {
+        const f = render();
+        let closed = 0;
+        f.componentInstance.Closed.subscribe(() => closed++);
+        const overlay = document.createElement('div');
+        overlay.className = 'cdk-overlay-container';
+        const search = document.createElement('input');
+        overlay.appendChild(search);
+        document.body.appendChild(overlay);
+        search.focus();
+        press(search, { key: 'Escape' });
+        expect(closed).toBe(0);
+        expect(document.activeElement).toBe(search);
+        overlay.remove();
+    });
+
+    it('takes no keys while it is hidden on a tab in the background', () => {
+        const f = render();
+        let closed = 0;
+        f.componentInstance.Closed.subscribe(() => closed++);
+        (drawer(f) as HTMLElement & { checkVisibility: () => boolean }).checkVisibility = () => false;
+        press(document.body, { key: 'Escape' });
+        expect(closed).toBe(0);
     });
 });

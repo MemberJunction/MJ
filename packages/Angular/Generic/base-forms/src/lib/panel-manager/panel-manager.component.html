@@ -1,5 +1,5 @@
 @if (Visible) {
-  <div class="mj-pm-overlay" (click)="OnOverlayClick($event)" (keydown)="OnKeydown($event)">
+  <div class="mj-pm-overlay" (click)="OnOverlayClick($event)">
     <div class="mj-pm-drawer" (click)="$event.stopPropagation()" role="dialog" aria-modal="true"
          aria-label="Manage this form" tabindex="-1">
 
@@ -123,7 +123,6 @@
                       @if (item.CanRemove) {
                         <button type="button" mjButton Size="sm" class="mj-pm-action"
                                 [Variant]="RemoveVariant(item)"
-                                [class.is-confirming]="Confirming === item.ID"
                                 [disabled]="Busy === item.ID"
                                 (click)="OnRemove(item)">{{ RemoveLabel(item) }}</button>
                       }
@@ -141,7 +140,7 @@
       </div>
 
       @if (Publishing; as target) {
-        <div class="mj-pm-audience" role="dialog" aria-label="Who sees this">
+        <div class="mj-pm-audience" role="dialog" aria-modal="true" aria-label="Who sees this">
           <div class="mj-pm-eyebrow">Who sees it</div>
           <p class="mj-pm-audience-title">{{ target.Title }}</p>
           <div class="mj-pm-stack" role="radiogroup" aria-label="Audience">
@@ -175,7 +174,7 @@
       }
 
       @if (Editing && EditContext) {
-        <div class="mj-pm-edit" role="dialog" aria-label="Change where this panel goes"
+        <div class="mj-pm-edit" role="dialog" aria-modal="true" aria-label="Change where this panel goes"
              (click)="OnEditScrimClick($event)">
           <mj-form-placement-dialog
             [Provider]="Provider"

@@ -1,5 +1,5 @@
 import {
-  Component, Input, Output, EventEmitter, ElementRef,
+  Component, Input, Output, EventEmitter, ElementRef, HostListener,
   ChangeDetectionStrategy, ChangeDetectorRef, inject,
   OnChanges, SimpleChanges,
 } from '@angular/core';
@@ -63,6 +63,8 @@ export class MjPanelManagerComponent implements OnChanges {
   private drawerOpener: HTMLElement | null = null;
   /** What held focus before the placement dialog or the audience chooser opened over the list. */
   private layerOpener: HTMLElement | null = null;
+  /** True while the drawer is open and holds the keyboard. Off before focus goes back out on close. */
+  private trapping = false;
 
   @Input() Visible = false;
 
@@ -149,9 +151,11 @@ export class MjPanelManagerComponent implements OnChanges {
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['Visible'] && this.Visible) {
       this.drawerOpener = this.focusedElement();
+      this.trapping = true;
       this.Refresh();
       this.focusLater('.mj-pm-close');
     } else if (changes['Visible'] && !changes['Visible'].firstChange) {
+      this.trapping = false;
       this.restoreFocus('drawer');
     } else if (changes['Entity'] || changes['Compiled'] || changes['StockGrids'] || changes['FullCustomForm']
       || changes['Variants'] || changes['CurrentFormID']) {
@@ -447,15 +451,22 @@ export class MjPanelManagerComponent implements OnChanges {
     return !!this.Publishing && (this.Publishing.Scope !== 'Role' || !!this.Publishing.RoleID);
   }
 
+  /**
+   * Publishes with the chosen audience. The Publish button that opened the chooser is disabled
+   * while the write runs, so focus waits on the drawer and goes back to the button afterwards,
+   * when it is still there and enabled.
+   */
   public async ConfirmAudience(): Promise<void> {
     const target = this.Publishing;
     if (!target || !this.CanConfirmAudience) return;
     this.Publishing = null;
-    this.restoreFocus('layer');
+    const opener = this.layerOpener;
+    this.layerOpener = null;
+    this.drawerElement()?.focus();
     const audience: FormAudience = { Scope: target.Scope, RoleID: target.RoleID };
     await this.run(target.ID, () => target.Kind === 'form'
       ? this.admin.PublishOverride(target.ID, audience, this.Provider)
-      : this.admin.PublishContribution(target.ID, audience, this.Provider));
+      : this.admin.PublishContribution(target.ID, audience, this.Provider), opener);
   }
 
   public CancelAudience(): void {
@@ -475,6 +486,7 @@ export class MjPanelManagerComponent implements OnChanges {
     this.Error = '';
     this.CloseEdit();
     this.layerOpener = null;
+    this.trapping = false;
     this.restoreFocus('drawer');
     this.Closed.emit();
   }
@@ -484,13 +496,15 @@ export class MjPanelManagerComponent implements OnChanges {
   }
 
   /**
-   * Keys pressed inside the drawer. Escape closes the top layer: the placement dialog, then the
-   * audience chooser, then the drawer. Tab and Shift+Tab wrap at the ends of that layer, so focus
-   * stays in it. Keys pressed in an overlay that renders outside the drawer, such as the icon
-   * picker's grid, do not reach here.
+   * Keys pressed anywhere while the drawer is open, so they still reach it when the focused
+   * button was removed or disabled and focus fell to the page. Escape closes the top layer: the
+   * placement dialog, then the audience chooser, then the drawer. Tab and Shift+Tab wrap at the
+   * ends of that layer and bring focus back into it. Keys pressed in another overlay or modal,
+   * such as the icon picker's grid, are left to it.
    */
+  @HostListener('document:keydown', ['$event'])
   public OnKeydown(event: KeyboardEvent): void {
-    if (event.defaultPrevented) return;
+    if (!this.trapping || event.defaultPrevented || !this.drawerShown() || this.belongsElsewhere(event.target)) return;
     if (event.key === 'Escape') {
       event.preventDefault();
       if (this.Editing) this.CloseEdit();
@@ -499,6 +513,23 @@ export class MjPanelManagerComponent implements OnChanges {
       return;
     }
     if (event.key === 'Tab' && !event.altKey && !event.ctrlKey && !event.metaKey) this.keepFocusInside(event);
+  }
+
+  /** Focus that moves to the page behind the drawer is brought back into it. */
+  @HostListener('document:focusin', ['$event'])
+  public OnFocusIn(event: FocusEvent): void {
+    if (!this.trapping || !this.drawerShown() || this.belongsElsewhere(event.target)) return;
+    if (event.target instanceof Node && this.host.nativeElement.contains(event.target)) return;
+    this.focusTopLayer();
+  }
+
+  /**
+   * True for an element outside the drawer that another overlay or modal owns: a CDK overlay
+   * (the icon picker's grid) or a dialog marked `aria-modal`. Those handle their own keys and focus.
+   */
+  private belongsElsewhere(target: EventTarget | null): boolean {
+    if (!(target instanceof Element) || this.host.nativeElement.contains(target)) return false;
+    return !!target.closest('.cdk-overlay-container, [aria-modal="true"]');
   }
 
   /** Wraps Tab at the first and last stop of the top layer, and brings focus back into it. */
@@ -514,16 +545,61 @@ export class MjPanelManagerComponent implements OnChanges {
     }
     const first = stops[0];
     const last = stops[stops.length - 1];
+    const current = active ? stopOf(active, stops) : null;
     if (!active || !layer.contains(active)) {
       event.preventDefault();
       (event.shiftKey ? last : first).focus();
-    } else if (event.shiftKey && (active === first || active === layer)) {
+    } else if (event.shiftKey && (current === first || active === layer)) {
       event.preventDefault();
       last.focus();
-    } else if (!event.shiftKey && active === last) {
+    } else if (!event.shiftKey && current === last) {
       event.preventDefault();
       first.focus();
     }
+  }
+
+  /**
+   * Puts focus back inside the drawer when it is not there: on the drawer itself, or on the first
+   * stop of the placement dialog or audience chooser when one is open.
+   */
+  private focusTopLayer(): void {
+    const layer = this.topLayer();
+    if (!layer) return;
+    const target = layer.hasAttribute('tabindex') ? layer : tabStops(layer)[0] ?? null;
+    target?.focus();
+  }
+
+  /**
+   * After the list redraws, keeps focus in the drawer. A write or a hide can remove or disable
+   * the focused button, which drops focus to the page. `preferred` gets focus back when it is
+   * still there and enabled.
+   */
+  private refocusAfterRender(preferred: HTMLElement | null = null): void {
+    setTimeout(() => {
+      if (!this.trapping) return;
+      if (preferred?.isConnected && !isDisabled(preferred)) {
+        preferred.focus();
+        return;
+      }
+      const active = this.focusedElement();
+      if (active && this.host.nativeElement.contains(active) && !isDisabled(active)) return;
+      if (this.belongsElsewhere(active)) return;
+      this.focusTopLayer();
+    }, 0);
+  }
+
+  private drawerElement(): HTMLElement | null {
+    return this.host.nativeElement.querySelector<HTMLElement>('.mj-pm-drawer');
+  }
+
+  /**
+   * Whether the drawer is on screen. A drawer left open on a tab that is now in the background
+   * is still in the page, hidden, and must not take keys or focus from the tab in front.
+   */
+  private drawerShown(): boolean {
+    const drawer = this.drawerElement();
+    if (!drawer) return false;
+    return typeof drawer.checkVisibility === 'function' ? drawer.checkVisibility() : true;
   }
 
   /** The layer that holds focus: the placement dialog, else the audience chooser, else the drawer. */
@@ -557,7 +633,15 @@ export class MjPanelManagerComponent implements OnChanges {
     return active instanceof HTMLElement ? active : null;
   }
 
-  private async run(id: string, act: () => Promise<{ Success: boolean; Message?: string }>): Promise<void> {
+  /**
+   * Runs one write on a row, with only that row's buttons quiet meanwhile, then keeps focus in
+   * the drawer, on `focusAfter` when it is still there and enabled.
+   */
+  private async run(
+    id: string,
+    act: () => Promise<{ Success: boolean; Message?: string }>,
+    focusAfter: HTMLElement | null = null,
+  ): Promise<void> {
     this.Busy = id;
     this.Error = '';
     this.cdr.markForCheck();
@@ -571,17 +655,19 @@ export class MjPanelManagerComponent implements OnChanges {
     } finally {
       this.Busy = null;
       this.cdr.markForCheck();
+      this.refocusAfterRender(focusAfter);
     }
   }
 
   /**
    * After a change to what is on the form: drop the placement dialog's reading of it, rebuild
-   * the list, and tell the form to resolve again.
+   * the list, tell the form to resolve again, and keep focus in the drawer.
    */
   private afterChange(): void {
     if (this.EntityName) this.probe.Forget(this.EntityName);
     this.Refresh();
     this.Changed.emit();
+    this.refocusAfterRender();
   }
 }
 
@@ -592,10 +678,32 @@ const TAB_STOPS = 'a[href], button:not([disabled]), input:not([disabled]), selec
 /**
  * The elements Tab stops on inside `root`, in document order. Leaves out anything inside an
  * `inert` or `hidden` subtree, such as the placement dialog's read-only form preview, which
- * cannot take focus.
+ * cannot take focus. A named radio group is one stop: its checked radio, else its first.
  */
 function tabStops(root: HTMLElement): HTMLElement[] {
-  return Array.from(root.querySelectorAll<HTMLElement>(TAB_STOPS)).filter((el) => !el.closest('[inert], [hidden]'));
+  const candidates = Array.from(root.querySelectorAll<HTMLElement>(TAB_STOPS)).filter((el) => !el.closest('[inert], [hidden]'));
+  const groupStops = new Map<string, HTMLInputElement>();
+  for (const el of candidates) {
+    if (!isNamedRadio(el)) continue;
+    const kept = groupStops.get(el.name);
+    if (!kept || (!kept.checked && el.checked)) groupStops.set(el.name, el);
+  }
+  return candidates.filter((el) => !isNamedRadio(el) || groupStops.get(el.name) === el);
+}
+
+/** The stop that stands for `el`: the group's stop for a radio in a named group, else `el`. */
+function stopOf(el: HTMLElement, stops: readonly HTMLElement[]): HTMLElement {
+  if (!isNamedRadio(el)) return el;
+  return stops.find((stop) => isNamedRadio(stop) && stop.name === el.name) ?? el;
+}
+
+function isNamedRadio(el: Element): el is HTMLInputElement {
+  return el instanceof HTMLInputElement && el.type === 'radio' && el.name.length > 0;
+}
+
+function isDisabled(el: Element): boolean {
+  return (el instanceof HTMLButtonElement || el instanceof HTMLInputElement
+    || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement) && el.disabled;
 }
 
 /** A row's status as a lifecycle status. Anything unknown reads as off. */
