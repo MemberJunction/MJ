@@ -1281,6 +1281,22 @@ function getSingularForm(word: string): string | null {
  * ```
  */
 export function GeneratePluralName(singularName: string, options? : { capitalizeFirstLetterOnly?: boolean, capitalizeEntireWord?: boolean }): string {
+    // A multi-word name pluralizes its LAST word. The irregular map is keyed by a single
+    // word ("criterion" → "criteria"), so looking up "Rubric Criterion" misses and the
+    // whole string used to become "Rubric Criterions".
+    const parts = singularName.trim().split(/\s+/).filter(part => part.length > 0);
+    if (parts.length > 1) {
+        const head = parts.slice(0, -1).join(' ');
+        const pluralLast = pluralizeOneWord(parts[parts.length - 1], options);
+        if (options?.capitalizeEntireWord) {
+            return `${head} ${pluralLast}`.toUpperCase();
+        }
+        return `${head} ${pluralLast}`;
+    }
+    return pluralizeOneWord(singularName, options);
+}
+
+function pluralizeOneWord(singularName: string, options? : { capitalizeFirstLetterOnly?: boolean, capitalizeEntireWord?: boolean }): string {
     // Check if it's already plural
     const detectedSingular = getSingularForm(singularName);
     if (!detectedSingular) {

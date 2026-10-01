@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT96 - Rubric Immutability Triggers",
+    "Description": "Deterministic server-side proof of the rubric immutability triggers. R1 changing PassThreshold on a published version throws 51102 (the version has no Weight column; PassThreshold is the frozen scoring input). R2 Published may move to Retired. R3 inserting a criterion on a published version throws 51103. R4 updating a score after submit throws 51110. R5 deleting a draft version deletes its criteria. Fixtures are rolled back. Requires RUN_MUTATION_TESTS because every check writes.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "51102, 51103 and 51110 fire; Published to Retired is allowed; a draft version delete removes its criteria."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "rubrics"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "328EBC01-BE33-4B62-AD2E-D24BFAAACC69"
+  }
+}

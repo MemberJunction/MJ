@@ -17,8 +17,8 @@ export class MJRubricScaleFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
-            { sectionKey: 'mJRubricScaleLevels', sectionName: 'Rubric Scale Levels', isExpanded: false },
-            { sectionKey: 'mJRubricCriterions', sectionName: 'Rubric Criterions', isExpanded: false }
+            { sectionKey: 'mJRubricCriteria', sectionName: 'Rubric Criteria', isExpanded: false },
+            { sectionKey: 'mJRubricScaleLevels', sectionName: 'Rubric Scale Levels', isExpanded: false }
         ]);
     }
 }

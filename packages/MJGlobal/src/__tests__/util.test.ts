@@ -496,6 +496,12 @@ describe('generatePluralName', () => {
   it('should handle capitalizeEntireWord option', () => {
     expect(GeneratePluralName('dog', { capitalizeEntireWord: true })).toBe('DOGS');
   });
+
+  it('should pluralize the last word of a multi-word name', () => {
+    expect(GeneratePluralName('Rubric Criterion', { capitalizeFirstLetterOnly: true })).toBe('Rubric Criteria');
+    expect(GeneratePluralName('Rubric Category', { capitalizeFirstLetterOnly: true })).toBe('Rubric Categories');
+    expect(GeneratePluralName('criterion')).toBe('criteria');
+  });
 });
 
 describe('getIrregularPlural', () => {

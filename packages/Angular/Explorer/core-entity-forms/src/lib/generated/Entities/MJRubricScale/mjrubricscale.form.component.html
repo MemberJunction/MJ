@@ -106,6 +106,31 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
+    <!-- Rubric Criteria Section -->
+    <mj-collapsible-panel
+        SectionKey="mJRubricCriteria"
+        SectionName="Rubric Criteria"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJRubricCriteria')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Rubric Criteria','ScaleID')"
+                [NewRecordValues]="NewRecordValues('MJ: Rubric Criteria','ScaleID')"
+                [AllowLoad]="IsSectionExpanded('mJRubricCriteria')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJRubricCriteria', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Rubric Scale Levels Section -->
     <mj-collapsible-panel
         SectionKey="mJRubricScaleLevels"
@@ -125,31 +150,6 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJRubricScaleLevels', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Rubric Criterions Section -->
-    <mj-collapsible-panel
-        SectionKey="mJRubricCriterions"
-        SectionName="Rubric Criterions"
-        Icon="fa fa-table"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJRubricCriterions')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Rubric Criterions','ScaleID')"
-                [NewRecordValues]="NewRecordValues('MJ: Rubric Criterions','ScaleID')"
-                [AllowLoad]="IsSectionExpanded('mJRubricCriterions')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJRubricCriterions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

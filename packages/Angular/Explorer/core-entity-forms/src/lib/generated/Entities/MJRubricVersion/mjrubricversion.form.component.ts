@@ -17,10 +17,10 @@ export class MJRubricVersionFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
-            { sectionKey: 'mJRubricBands', sectionName: 'Rubric Bands', isExpanded: false },
-            { sectionKey: 'mJRubricCriterions', sectionName: 'Rubric Criterions', isExpanded: false },
+            { sectionKey: 'mJRubricCriteria', sectionName: 'Rubric Criteria', isExpanded: false },
             { sectionKey: 'mJRubricEvaluations', sectionName: 'Rubric Evaluations', isExpanded: false },
-            { sectionKey: 'mJRubricVersions', sectionName: 'Rubric Versions', isExpanded: false }
+            { sectionKey: 'mJRubricVersions', sectionName: 'Rubric Versions', isExpanded: false },
+            { sectionKey: 'mJRubricBands', sectionName: 'Rubric Bands', isExpanded: false }
         ]);
     }
 }

@@ -205,7 +205,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (418 classes)
+// @memberjunction/core-entities (429 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -240,6 +240,7 @@ import {
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
     MJAIAgentRequestTypeEntity,
+    MJAIAgentRubricEntity,
     MJAIAgentRunEntity,
     MJAIAgentRunMediaEntity,
     MJAIAgentRunStepEntity,
@@ -544,6 +545,16 @@ import {
     MJResourceTypeEntity,
     MJRoleEntity,
     MJRowLevelSecurityFilterEntity,
+    MJRubricBandEntity,
+    MJRubricCategoryEntity,
+    MJRubricCriterionEntity,
+    MJRubricCriterionLevelEntity,
+    MJRubricEntity,
+    MJRubricEvaluationEntity,
+    MJRubricEvaluationScoreEntity,
+    MJRubricScaleEntity,
+    MJRubricScaleLevelEntity,
+    MJRubricVersionEntity,
     MJSQLDialectEntity,
     MJScheduledJobEntity,
     MJScheduledJobRunEntity,
@@ -1360,6 +1371,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
     MJAIAgentRequestTypeEntity,
+    MJAIAgentRubricEntity,
     MJAIAgentRunEntity,
     MJAIAgentRunMediaEntity,
     MJAIAgentRunStepEntity,
@@ -1472,11 +1484,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJComponentDependencyEntity,
     MJComponentEntity,
     MJComponentEntityExtended,
-    MJComponentLibraryEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJComponentLibraryEntity,
     MJComponentLibraryLinkEntity,
     MJComponentRegistryEntity,
     MJContentFileTypeEntity,
@@ -1668,6 +1680,20 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJResourceTypeEntity,
     MJRoleEntity,
     MJRowLevelSecurityFilterEntity,
+    MJRubricBandEntity,
+    MJRubricCategoryEntity,
+    MJRubricCriterionEntity,
+    MJRubricCriterionLevelEntity,
+    MJRubricEntity,
+    MJRubricEvaluationEntity,
+    MJRubricEvaluationScoreEntity,
+    MJRubricScaleEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
+    MJRubricScaleLevelEntity,
+    MJRubricVersionEntity,
     MJSQLDialectEntity,
     MJScheduledJobEntity,
     MJScheduledJobRunEntity,
@@ -1677,10 +1703,6 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
     MJSearchProviderEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJSearchScopeEntity,
     MJSearchScopeEntityEntity,
     MJSearchScopeExternalIndexEntity,
@@ -1870,6 +1892,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     CreateVideoPostAction,
     FacebookBoostPostAction,
     FacebookCreateAlbumAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     FacebookCreatePostAction,
     FacebookGetPageInsightsAction,
     FacebookGetPagePostsAction,
@@ -1881,10 +1907,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetCommentsAction,
     GetTrendingHashtagsAction,
     GetUserVideosAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     GetVideoAnalyticsAction,
     HootSuiteBulkSchedulePostsAction,
     HootSuiteCreateScheduledPostAction,
@@ -2074,6 +2096,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
     MJListDetailEntityServer,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
     MJMaterializedResultEntityServer,
@@ -2085,10 +2111,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJRowLevelSecurityFilterEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     MJTagScopeEntityServer,
     MJTemplateContentEntityServer,
     MJUserEntityServer,
@@ -2269,7 +2291,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 965;
+export const CLASS_REGISTRATIONS_COUNT = 976;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

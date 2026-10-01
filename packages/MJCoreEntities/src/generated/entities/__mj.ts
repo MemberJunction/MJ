@@ -28849,55 +28849,7 @@ export const MJRubricCategorySchema = z.object({
 export type MJRubricCategoryEntityType = z.infer<typeof MJRubricCategorySchema>;
 
 /**
- * zod schema definition for the entity MJ: Rubric Criterion Levels
- */
-export const MJRubricCriterionLevelSchema = z.object({
-    ID: z.string().describe(`
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()`),
-    CriterionID: z.string().describe(`
-        * * Field Name: CriterionID
-        * * Display Name: Criterion ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Rubric Criterions (vwRubricCriterions.ID)`),
-    ScaleLevelID: z.string().nullable().describe(`
-        * * Field Name: ScaleLevelID
-        * * Display Name: Scale Level ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Rubric Scale Levels (vwRubricScaleLevels.ID)
-        * * Description: The Levels-scale level this anchor describes. Exactly one of ScaleLevelID and AnchorValue is set.`),
-    AnchorValue: z.number().nullable().describe(`
-        * * Field Name: AnchorValue
-        * * Display Name: Anchor Value
-        * * SQL Data Type: decimal(18, 6)
-        * * Description: For a Numeric scale: the value this anchor describes (e.g. 0, 50, 100).`),
-    Descriptor: z.string().describe(`
-        * * Field Name: Descriptor
-        * * Display Name: Descriptor
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: The anchor text shown to evaluators and given to AI judges.`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    Criterion: z.string().describe(`
-        * * Field Name: Criterion
-        * * Display Name: Criterion
-        * * SQL Data Type: nvarchar(255)`),
-});
-
-export type MJRubricCriterionLevelEntityType = z.infer<typeof MJRubricCriterionLevelSchema>;
-
-/**
- * zod schema definition for the entity MJ: Rubric Criterions
+ * zod schema definition for the entity MJ: Rubric Criteria
  */
 export const MJRubricCriterionSchema = z.object({
     ID: z.string().describe(`
@@ -28914,7 +28866,7 @@ export const MJRubricCriterionSchema = z.object({
         * * Field Name: ParentID
         * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Rubric Criterions (vwRubricCriterions.ID)
+        * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriterions.ID)
         * * Description: Parent group node. NULL = a top-level node of the rubric.`),
     Key: z.string().describe(`
         * * Field Name: Key
@@ -29041,6 +28993,58 @@ export const MJRubricCriterionSchema = z.object({
 export type MJRubricCriterionEntityType = z.infer<typeof MJRubricCriterionSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Rubric Criterion Levels
+ */
+export const MJRubricCriterionLevelSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    CriterionID: z.string().describe(`
+        * * Field Name: CriterionID
+        * * Display Name: Criterion ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriterions.ID)`),
+    ScaleLevelID: z.string().nullable().describe(`
+        * * Field Name: ScaleLevelID
+        * * Display Name: Scale Level ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Rubric Scale Levels (vwRubricScaleLevels.ID)
+        * * Description: The Levels-scale level this anchor describes. Exactly one of ScaleLevelID and AnchorValue is set.`),
+    AnchorValue: z.number().nullable().describe(`
+        * * Field Name: AnchorValue
+        * * Display Name: Anchor Value
+        * * SQL Data Type: decimal(18, 6)
+        * * Description: For a Numeric scale: the value this anchor describes (e.g. 0, 50, 100).`),
+    Descriptor: z.string().describe(`
+        * * Field Name: Descriptor
+        * * Display Name: Descriptor
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The anchor text shown to evaluators and given to AI judges.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Criterion: z.string().describe(`
+        * * Field Name: Criterion
+        * * Display Name: Criterion
+        * * SQL Data Type: nvarchar(255)`),
+    ScaleLevel: z.string().nullable().describe(`
+        * * Field Name: ScaleLevel
+        * * Display Name: Scale Level
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJRubricCriterionLevelEntityType = z.infer<typeof MJRubricCriterionLevelSchema>;
+
+/**
  * zod schema definition for the entity MJ: Rubric Evaluation Scores
  */
 export const MJRubricEvaluationScoreSchema = z.object({
@@ -29058,7 +29062,7 @@ export const MJRubricEvaluationScoreSchema = z.object({
         * * Field Name: CriterionID
         * * Display Name: Criterion ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Rubric Criterions (vwRubricCriterions.ID)`),
+        * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriterions.ID)`),
     ScaleLevelID: z.string().nullable().describe(`
         * * Field Name: ScaleLevelID
         * * Display Name: Scale Level ID
@@ -29137,6 +29141,10 @@ export const MJRubricEvaluationScoreSchema = z.object({
         * * Field Name: Criterion
         * * Display Name: Criterion
         * * SQL Data Type: nvarchar(255)`),
+    ScaleLevel: z.string().nullable().describe(`
+        * * Field Name: ScaleLevel
+        * * Display Name: Scale Level
+        * * SQL Data Type: nvarchar(100)`),
     CriterionKey: z.string().describe(`
         * * Field Name: CriterionKey
         * * Display Name: Criterion Key
@@ -29428,6 +29436,10 @@ export const MJRubricEvaluationSchema = z.object({
         * * Field Name: AIAgentRun
         * * Display Name: AI Agent Run
         * * SQL Data Type: nvarchar(255)`),
+    Band: z.string().nullable().describe(`
+        * * Field Name: Band
+        * * Display Name: Band
+        * * SQL Data Type: nvarchar(100)`),
     RubricID: z.string().describe(`
         * * Field Name: RubricID
         * * Display Name: Rubric ID
@@ -29492,6 +29504,10 @@ export const MJRubricEvaluationSchema = z.object({
         * * Field Name: SelfAssessmentScore
         * * Display Name: Self Assessment Score
         * * SQL Data Type: decimal(9, 6)`),
+    SelfAssessmentCount: z.number().nullable().describe(`
+        * * Field Name: SelfAssessmentCount
+        * * Display Name: Self Assessment Count
+        * * SQL Data Type: int`),
     DeviationFromCohortMean: z.number().nullable().describe(`
         * * Field Name: DeviationFromCohortMean
         * * Display Name: Deviation From Cohort Mean
@@ -33740,7 +33756,7 @@ export const MJTestSuiteRunSchema = z.object({
     Score: z.number().nullable().describe(`
         * * Field Name: Score
         * * Display Name: Score
-        * * SQL Data Type: decimal(5, 4)
+        * * SQL Data Type: decimal(9, 6)
         * * Description: Suite-level score (0..1): the mean score of the suite's executed (non-skipped) test runs.`),
     Suite: z.string().describe(`
         * * Field Name: Suite
@@ -114717,134 +114733,7 @@ export class MJRubricCategoryEntity extends BaseEntity<MJRubricCategoryEntityTyp
 
 
 /**
- * MJ: Rubric Criterion Levels - strongly typed entity sub-class
- * * Schema: __mj
- * * Base Table: RubricCriterionLevel
- * * Base View: vwRubricCriterionLevels
- * * @description Criterion-specific anchor text: what a given level (or numeric value) looks like for THIS criterion, e.g. what "4 - Strong" means for Methodology.
- * * Primary Key: ID
- * @extends {BaseEntity}
- * @class
- * @public
- */
-@RegisterClass(BaseEntity, 'MJ: Rubric Criterion Levels')
-export class MJRubricCriterionLevelEntity extends BaseEntity<MJRubricCriterionLevelEntityType> {
-    /**
-    * Loads the MJ: Rubric Criterion Levels record from the database
-    * @param ID: string - primary key value to load the MJ: Rubric Criterion Levels record.
-    * @param EntityRelationshipsToLoad - (optional) the relationships to load
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    * @public
-    * @async
-    * @memberof MJRubricCriterionLevelEntity
-    * @method
-    * @override
-    */
-    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * * Field Name: ID
-    * * Display Name: ID
-    * * SQL Data Type: uniqueidentifier
-    * * Default Value: newsequentialid()
-    */
-    get ID(): string {
-        return this.Get('ID');
-    }
-    set ID(value: string) {
-        this.Set('ID', value);
-    }
-
-    /**
-    * * Field Name: CriterionID
-    * * Display Name: Criterion ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Rubric Criterions (vwRubricCriterions.ID)
-    */
-    get CriterionID(): string {
-        return this.Get('CriterionID');
-    }
-    set CriterionID(value: string) {
-        this.Set('CriterionID', value);
-    }
-
-    /**
-    * * Field Name: ScaleLevelID
-    * * Display Name: Scale Level ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Rubric Scale Levels (vwRubricScaleLevels.ID)
-    * * Description: The Levels-scale level this anchor describes. Exactly one of ScaleLevelID and AnchorValue is set.
-    */
-    get ScaleLevelID(): string | null {
-        return this.Get('ScaleLevelID');
-    }
-    set ScaleLevelID(value: string | null) {
-        this.Set('ScaleLevelID', value);
-    }
-
-    /**
-    * * Field Name: AnchorValue
-    * * Display Name: Anchor Value
-    * * SQL Data Type: decimal(18, 6)
-    * * Description: For a Numeric scale: the value this anchor describes (e.g. 0, 50, 100).
-    */
-    get AnchorValue(): number | null {
-        return this.Get('AnchorValue');
-    }
-    set AnchorValue(value: number | null) {
-        this.Set('AnchorValue', value);
-    }
-
-    /**
-    * * Field Name: Descriptor
-    * * Display Name: Descriptor
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: The anchor text shown to evaluators and given to AI judges.
-    */
-    get Descriptor(): string {
-        return this.Get('Descriptor');
-    }
-    set Descriptor(value: string) {
-        this.Set('Descriptor', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: Criterion
-    * * Display Name: Criterion
-    * * SQL Data Type: nvarchar(255)
-    */
-    get Criterion(): string {
-        return this.Get('Criterion');
-    }
-}
-
-
-/**
- * MJ: Rubric Criterions - strongly typed entity sub-class
+ * MJ: Rubric Criteria - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: RubricCriterion
  * * Base View: vwRubricCriterions
@@ -114854,11 +114743,11 @@ export class MJRubricCriterionLevelEntity extends BaseEntity<MJRubricCriterionLe
  * @class
  * @public
  */
-@RegisterClass(BaseEntity, 'MJ: Rubric Criterions')
+@RegisterClass(BaseEntity, 'MJ: Rubric Criteria')
 export class MJRubricCriterionEntity extends BaseEntity<MJRubricCriterionEntityType> {
     /**
-    * Loads the MJ: Rubric Criterions record from the database
-    * @param ID: string - primary key value to load the MJ: Rubric Criterions record.
+    * Loads the MJ: Rubric Criteria record from the database
+    * @param ID: string - primary key value to load the MJ: Rubric Criteria record.
     * @param EntityRelationshipsToLoad - (optional) the relationships to load
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
@@ -114903,7 +114792,7 @@ export class MJRubricCriterionEntity extends BaseEntity<MJRubricCriterionEntityT
     * * Field Name: ParentID
     * * Display Name: Parent ID
     * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Rubric Criterions (vwRubricCriterions.ID)
+    * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriterions.ID)
     * * Description: Parent group node. NULL = a top-level node of the rubric.
     */
     get ParentID(): string | null {
@@ -115184,6 +115073,142 @@ export class MJRubricCriterionEntity extends BaseEntity<MJRubricCriterionEntityT
 
 
 /**
+ * MJ: Rubric Criterion Levels - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RubricCriterionLevel
+ * * Base View: vwRubricCriterionLevels
+ * * @description Criterion-specific anchor text: what a given level (or numeric value) looks like for THIS criterion, e.g. what "4 - Strong" means for Methodology.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Rubric Criterion Levels')
+export class MJRubricCriterionLevelEntity extends BaseEntity<MJRubricCriterionLevelEntityType> {
+    /**
+    * Loads the MJ: Rubric Criterion Levels record from the database
+    * @param ID: string - primary key value to load the MJ: Rubric Criterion Levels record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRubricCriterionLevelEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CriterionID
+    * * Display Name: Criterion ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriterions.ID)
+    */
+    get CriterionID(): string {
+        return this.Get('CriterionID');
+    }
+    set CriterionID(value: string) {
+        this.Set('CriterionID', value);
+    }
+
+    /**
+    * * Field Name: ScaleLevelID
+    * * Display Name: Scale Level ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Rubric Scale Levels (vwRubricScaleLevels.ID)
+    * * Description: The Levels-scale level this anchor describes. Exactly one of ScaleLevelID and AnchorValue is set.
+    */
+    get ScaleLevelID(): string | null {
+        return this.Get('ScaleLevelID');
+    }
+    set ScaleLevelID(value: string | null) {
+        this.Set('ScaleLevelID', value);
+    }
+
+    /**
+    * * Field Name: AnchorValue
+    * * Display Name: Anchor Value
+    * * SQL Data Type: decimal(18, 6)
+    * * Description: For a Numeric scale: the value this anchor describes (e.g. 0, 50, 100).
+    */
+    get AnchorValue(): number | null {
+        return this.Get('AnchorValue');
+    }
+    set AnchorValue(value: number | null) {
+        this.Set('AnchorValue', value);
+    }
+
+    /**
+    * * Field Name: Descriptor
+    * * Display Name: Descriptor
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The anchor text shown to evaluators and given to AI judges.
+    */
+    get Descriptor(): string {
+        return this.Get('Descriptor');
+    }
+    set Descriptor(value: string) {
+        this.Set('Descriptor', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Criterion
+    * * Display Name: Criterion
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Criterion(): string {
+        return this.Get('Criterion');
+    }
+
+    /**
+    * * Field Name: ScaleLevel
+    * * Display Name: Scale Level
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ScaleLevel(): string | null {
+        return this.Get('ScaleLevel');
+    }
+}
+
+
+/**
  * MJ: Rubric Evaluation Scores - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: RubricEvaluationScore
@@ -115243,7 +115268,7 @@ export class MJRubricEvaluationScoreEntity extends BaseEntity<MJRubricEvaluation
     * * Field Name: CriterionID
     * * Display Name: Criterion ID
     * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Rubric Criterions (vwRubricCriterions.ID)
+    * * Related Entity/Foreign Key: MJ: Rubric Criteria (vwRubricCriterions.ID)
     */
     get CriterionID(): string {
         return this.Get('CriterionID');
@@ -115439,6 +115464,15 @@ export class MJRubricEvaluationScoreEntity extends BaseEntity<MJRubricEvaluation
     */
     get Criterion(): string {
         return this.Get('Criterion');
+    }
+
+    /**
+    * * Field Name: ScaleLevel
+    * * Display Name: Scale Level
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ScaleLevel(): string | null {
+        return this.Get('ScaleLevel');
     }
 
     /**
@@ -116119,6 +116153,15 @@ export class MJRubricEvaluationEntity extends BaseEntity<MJRubricEvaluationEntit
     }
 
     /**
+    * * Field Name: Band
+    * * Display Name: Band
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Band(): string | null {
+        return this.Get('Band');
+    }
+
+    /**
     * * Field Name: RubricID
     * * Display Name: Rubric ID
     * * SQL Data Type: uniqueidentifier
@@ -116260,6 +116303,15 @@ export class MJRubricEvaluationEntity extends BaseEntity<MJRubricEvaluationEntit
     */
     get SelfAssessmentScore(): number | null {
         return this.Get('SelfAssessmentScore');
+    }
+
+    /**
+    * * Field Name: SelfAssessmentCount
+    * * Display Name: Self Assessment Count
+    * * SQL Data Type: int
+    */
+    get SelfAssessmentCount(): number | null {
+        return this.Get('SelfAssessmentCount');
     }
 
     /**
@@ -125997,12 +126049,11 @@ export class MJTemplateEntity extends BaseEntity<MJTemplateEntityType> {
  * * Schema: __mj
  * * Base Table: TestRubric
  * * Base View: vwTestRubrics
- * * @description DEPRECATED: superseded by MJ: Rubrics (Rubric, RubricVersion, RubricCriterion). This entity was never read by the test engine, links to nothing and has no seed rows; it is scheduled for removal in the next major version. Assign a rubric to a test with Test.RubricID or TestSuite.RubricID instead. See plans/rubrics/RUBRICS_PLAN.md.
+ * * @description Reusable evaluation criteria (rubrics) for consistent scoring across tests. Rubrics define structured evaluation dimensions and can include LLM prompts for automated judgment. Particularly useful for LLM-as-judge patterns where consistent evaluation criteria are critical.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
  * @public
- * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'MJ: Test Rubrics')
 export class MJTestRubricEntity extends BaseEntity<MJTestRubricEntityType> {
@@ -127624,7 +127675,7 @@ export class MJTestSuiteRunEntity extends BaseEntity<MJTestSuiteRunEntityType> {
     /**
     * * Field Name: Score
     * * Display Name: Score
-    * * SQL Data Type: decimal(5, 4)
+    * * SQL Data Type: decimal(9, 6)
     * * Description: Suite-level score (0..1): the mean score of the suite's executed (non-skipped) test runs.
     */
     get Score(): number | null {

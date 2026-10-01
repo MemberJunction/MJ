@@ -4,7 +4,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import {  } from "@memberjunction/ng-entity-viewer"
 
-@RegisterClass(BaseFormComponent, 'MJ: Rubric Criterions') // Tell MemberJunction about this class
+@RegisterClass(BaseFormComponent, 'MJ: Rubric Criteria') // Tell MemberJunction about this class
 @Component({
     standalone: false,
     selector: 'gen-mjrubriccriterion-form',
@@ -17,8 +17,8 @@ export class MJRubricCriterionFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
+            { sectionKey: 'mJRubricCriteria', sectionName: 'Rubric Criteria', isExpanded: false },
             { sectionKey: 'mJRubricEvaluationScores', sectionName: 'Rubric Evaluation Scores', isExpanded: false },
-            { sectionKey: 'mJRubricCriterions', sectionName: 'Rubric Criterions', isExpanded: false },
             { sectionKey: 'mJRubricCriterionLevels', sectionName: 'Rubric Criterion Levels', isExpanded: false }
         ]);
     }

@@ -1,10 +1,11 @@
 # Rubrics — a first-class MemberJunction primitive
 
-> **Status:** design agreed, schema authored, implementation not started.
-> **Schema:** `migrations/v6/V202609302204__v6.2.x__Rubrics.sql` and `…2206…`. Hand-written DDL is
-> the tables and the consensus wrapper views. Layered-base-view flags are metadata
-> (`metadata/entities/.layered-base-views.json`), not a migration. CodeGen tails are appended
-> by the implementing agent (§9, task R0).
+> **Status:** schema and CodeGen tails are in the branch. Engine, testing-framework, agent, and UI
+> work (R2 onward, T, A, U) has not started. `guides/RUBRICS_GUIDE.md` is still owed.
+> **Schema:** `migrations/v6/V202609302204__v6.2.x__Rubrics.sql`, `…2205…`, and `…2206…`.
+> Hand-written DDL is the tables, the layering-flag and name-field updates, and the consensus
+> wrapper views. The same layering flags are also in `metadata/entities/.layered-base-views.json`
+> so a metadata push cannot flip them off. CodeGen tails are appended (§9, task R0).
 > **Scope of this plan:** the core primitive, the testing framework integration, and the agent
 > integration. All three ship from this plan.
 >
@@ -484,17 +485,23 @@ public base views `vwRubricEvaluations` / `vwRubricEvaluationScores`, which do `
 consensus columns. (Mechanism: `packages/CodeGenLib/CLAUDE.md` § "Base views: generated, custom,
 or LAYERED".)
 
-### 9.1 Two migrations, flags in metadata
+### 9.1 Three migrations
 
-Entity rows are not updated from a migration. `BaseViewGenerated` and `GeneratedBaseViewName`
-are set in `metadata/entities/.layered-base-views.json` and applied with `mj sync push`, the
-same way `MJ: Version Installations` and `MJ: User View Run Details` are adopted. A build
-branch does not ship an `UPDATE Entity` script. The release build is what turns metadata
-into a migration.
+`mj migrate` does not run `mj sync push`. A database built from this branch — CI, a customer
+install, `bootstrap-clean-db` — never sees `metadata/entities` unless something pushes it
+afterwards. The layering flags therefore ship in `V202609302205`, which runs after 2204's
+CodeGen has inserted the entity rows. The same values stay in
+`metadata/entities/.layered-base-views.json` so a later push cannot turn them back off.
+
+`V202609302205` also pins `Label` as the name field on `MJ: Rubric Scale Levels` and
+`MJ: Rubric Bands` (`IsNameField = 1`, `AutoUpdateIsNameField = 0`). CodeGen only auto-flags
+a column literally named `Name`, and the inner score view joins the chosen level only when
+that flag is set before the view is generated.
 
 | File | Hand-written section | CodeGen section (appended) | Why it is its own file |
 |---|---|---|---|
-| `V202609302204__v6.2.x__Rubrics.sql` | tables, constraints, triggers, descriptions | entity registration, then the two **inner** views (`vwRubricEvaluationsGenerated`, `vwRubricEvaluationScoresGenerated`) captured after the metadata push | — |
+| `V202609302204__v6.2.x__Rubrics.sql` | tables, constraints, triggers, descriptions | entity registration (public views, procs, fields) | — |
+| `V202609302205__v6.2.x__Rubrics_Layered_Base_View_Flags.sql` | `UPDATE Entity` for the two layering flags, and `UPDATE EntityField` pinning `Label` as the name field on scale levels and bands | the two **inner** views | The entity rows do not exist until 2204's capture runs. |
 | `V202609302206__v6.2.x__Rubrics_Consensus_Views.sql` | `CREATE OR ALTER VIEW` for the two public wrappers | virtual EntityFields for the wrapper columns, and CRUD that returns them | A view cannot be created before the view it selects from, and hand-written SQL cannot live below a CodeGen section that is replaced wholesale. |
 
 `BaseViewGenerated` is set to false in the same metadata record as `GeneratedBaseViewName`.
@@ -539,8 +546,14 @@ Checks before committing:
 `vwRubricEvaluations` adds `RubricID`, `Rubric`, `RubricMajorVersion`, `RubricVersionLabel`, and the
 cohort statistics `CohortEvaluationCount`, `CohortScoredCount`, `CohortPassedCount`,
 `CohortMeanScore`, `CohortMinScore`, `CohortMaxScore`, `CohortScoreStdDev`, `CohortHumanCount`,
-`CohortHumanMeanScore`, `CohortAICount`, `CohortAIMeanScore`, `SelfAssessmentScore`,
+`CohortHumanMeanScore`, `CohortAICount`, `CohortAIMeanScore`, `SelfAssessmentScore`, `SelfAssessmentCount`,
 `DeviationFromCohortMean`.
+
+`SelfAssessmentScore` is the maximum `NormalizedScore` among Submitted `Self` rows in the cohort.
+A second submitted self-assessment is not rejected: supersede already has a `Superseded` status,
+and a unique constraint would have to reach through `RubricVersion.MajorVersion`. `SelfAssessmentCount`
+sits beside the max so a collapsed second score is visible. The count is the number of Submitted
+`Self` rows in that same cohort, including ones whose score is still null.
 
 `vwRubricEvaluationScores` adds `CriterionKey`, `CriterionNodeType`, `CriterionParentID`,
 `EvaluationStatus`, `EvaluatorType`, `EvaluatorUserID`, subject/context columns, `RubricID`,
@@ -850,6 +863,17 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 
 ## 16. Progress log
 
+- **2026-09-30** — Review of `9c8a8611`. Restored `V202609302205`: migrate does not sync metadata,
+  so the layering flags have to be in the migration or the next CodeGen replaces the wrappers.
+  The metadata file stays. `GeneratePluralName` pluralizes the last word (`Rubric Criterion` →
+  `Rubric Criteria`). `TestSuiteRun.Score` is `DECIMAL(9,6)`. `Label` is pinned as the name field
+  on scale levels and bands before the inner-view capture. `SelfAssessmentCount` is beside the
+  max. Immutability triggers are the `rubrics` integration bundle (IT96). Proof:
+  `MJ_6_2_CLEAN_pr4937_proof` applied 105 migrations, then `mj codegen --skipfiles --no-ai`
+  with no metadata sync. `vwRubricEvaluations` still selects `CohortMeanScore` and
+  `SelfAssessmentCount` from `vwRubricEvaluationsGenerated`. The entity is
+  `MJ: Rubric Criteria`. `TestSuiteRun.Score` is `decimal(9,6)`. Updating `PassThreshold`
+  on a published version threw 51102.
 - **2026-09-30** — CodeGen tail captured. Pass 1 registers the entities. Pass 2, after
   `mj sync push` of `.layered-base-views.json`, appends the inner views to `V202609302204`.
   Pass 3 appends the wrapper virtual fields to `V202609302206`. Generated entity classes,

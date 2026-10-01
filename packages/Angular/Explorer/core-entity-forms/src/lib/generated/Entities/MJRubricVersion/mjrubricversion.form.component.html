@@ -221,50 +221,25 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Rubric Bands Section -->
+    <!-- Rubric Criteria Section -->
     <mj-collapsible-panel
-        SectionKey="mJRubricBands"
-        SectionName="Rubric Bands"
+        SectionKey="mJRubricCriteria"
+        SectionName="Rubric Criteria"
         Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJRubricBands')"
+        [BadgeCount]="GetSectionRowCount('mJRubricCriteria')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Rubric Bands','RubricVersionID')"
-                [NewRecordValues]="NewRecordValues('MJ: Rubric Bands','RubricVersionID')"
-                [AllowLoad]="IsSectionExpanded('mJRubricBands')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Rubric Criteria','RubricVersionID')"
+                [NewRecordValues]="NewRecordValues('MJ: Rubric Criteria','RubricVersionID')"
+                [AllowLoad]="IsSectionExpanded('mJRubricCriteria')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJRubricBands', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Rubric Criterions Section -->
-    <mj-collapsible-panel
-        SectionKey="mJRubricCriterions"
-        SectionName="Rubric Criterions"
-        Icon="fa fa-table"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJRubricCriterions')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Rubric Criterions','RubricVersionID')"
-                [NewRecordValues]="NewRecordValues('MJ: Rubric Criterions','RubricVersionID')"
-                [AllowLoad]="IsSectionExpanded('mJRubricCriterions')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJRubricCriterions', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJRubricCriteria', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -315,6 +290,31 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJRubricVersions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Rubric Bands Section -->
+    <mj-collapsible-panel
+        SectionKey="mJRubricBands"
+        SectionName="Rubric Bands"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJRubricBands')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Rubric Bands','RubricVersionID')"
+                [NewRecordValues]="NewRecordValues('MJ: Rubric Bands','RubricVersionID')"
+                [AllowLoad]="IsSectionExpanded('mJRubricBands')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJRubricBands', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
