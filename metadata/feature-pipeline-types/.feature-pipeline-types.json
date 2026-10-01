@@ -9,5 +9,16 @@
     "primaryKey": {
       "ID": "91BD48FA-4BD7-4378-AF4F-0F61734627CB"
     }
+  },
+  {
+    "fields": {
+      "Name": "Decision",
+      "Description": "Runs the pipeline's prompt on a typed decision model for each record, answering Likelihood, Choice, and Score questions together in one call. Produces calibrated per-output confidence scores for field targets, without model reasoning.",
+      "DriverClass": "DecisionFeaturePipelineDriver",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "F67FFBFD-94AA-47CF-9867-C3BDF36F30F9"
+    }
   }
 ]

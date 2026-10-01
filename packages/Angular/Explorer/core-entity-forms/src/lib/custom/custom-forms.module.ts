@@ -102,6 +102,8 @@ import { ModelPredictionPanel } from "../panels/model-predictions/model-predicti
 import { AISkillSharingPanel } from "../panels/ai-skill-sharing/ai-skill-sharing-panel.component";
 import { EntityFormChromeEditorComponent } from "../panels/form-chrome/entity-form-chrome-editor.component";
 import { EntityRelationshipFormRolePanel } from "../panels/form-chrome/entity-relationship-form-role.panel";
+import { EntityCloneConfigEditorComponent } from "../panels/record-clone/entity-clone-config-editor.component";
+import { ClonePlanTreeComponent } from "@memberjunction/ng-record-clone";
 import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissions";
 import { MLModelFormComponentExtended, LoadMLModelFormComponentExtended } from "./MLModels/ml-model-form.component";
 import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
@@ -167,6 +169,7 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         RecordProcessFormComponentExtended,
         EntityFormChromeEditorComponent,
         EntityRelationshipFormRolePanel,
+        EntityCloneConfigEditorComponent,
         MJFileFormComponentExtended,
         MLModelFormComponentExtended,
     ],
@@ -195,6 +198,7 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         LinkDirectivesModule,
         JoinGridModule,
         BaseFormsModule,
+        ClonePlanTreeComponent,
         MJTabStripModule,
         CodeEditorModule,
         DeepDiffModule,
