@@ -7,6 +7,7 @@ export default defineConfig({
     projects: [
       // Core infrastructure
       'packages/MJGlobal',
+      'packages/Rubrics/Base',
       'packages/MJCore',
       'packages/MJServer',
       'packages/MJStorage',

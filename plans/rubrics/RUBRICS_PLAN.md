@@ -818,7 +818,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
       in `metadata/entities`; `IsHierarchy` config on `RubricCriterion.ParentID` and
       `RubricCategory.ParentID` (see `guides/RECURSIVE_FOREIGN_KEYS_AND_HIERARCHIES_GUIDE.md`);
       shipped scales (§11.6).
-- [ ] **R2** `@memberjunction/rubrics-base`: `RubricScoring` (§6) and `RubricVersionDiff` (§5.2) as
+- [~] **R2** `@memberjunction/rubrics-base`: `RubricScoring` (§6) and `RubricVersionDiff` (§5.2) as
       pure functions with exhaustive unit tests — every N/A policy, rollup, gate edge case, the
       all-zero-weight fallback, completeness, outcome precedence, rounding; property tests for the
       ScoringHash/major invariant. Then `RubricEngineBase`.
@@ -871,6 +871,10 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 
 ## 16. Progress log
 
+- **2026-10-01** — R2 started. `@memberjunction/rubrics-base` has `RubricScoring` and
+  `RubricVersionDiff` with unit tests for every N/A policy, both rollups, the zero-weight
+  fallback, gates, completeness, outcome order, six-place rounding, bump classification,
+  and the ScoringHash invariant. `RubricEngineBase` is not in this commit.
 - **2026-10-01** — Correction: the three hand-written `UPDATE`s in `V202609302205` are removed.
   Layering flags stay only in `.layered-base-views.json`. Label name-field pins are
   `.rubric-label-name-fields.json` (Entity Field lookups, no sync block, no hand-written UUID).

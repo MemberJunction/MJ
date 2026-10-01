@@ -1,0 +1,129 @@
+import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricVersionSnapshot } from './types.js';
+
+/** Fixed-precision decimal so 0.1 and 0.1000000 hash the same. */
+export function canonicalNumber(value: number): string {
+    return value.toFixed(6);
+}
+
+function parentKey(version: RubricVersionSnapshot, node: RubricNodeSnapshot): string | null {
+    if (!node.parentId) return null;
+    return version.nodes.find(item => item.id === node.parentId)?.key ?? null;
+}
+
+function scaleSignature(scale: RubricScaleSnapshot | undefined): unknown {
+    if (!scale) return null;
+    return {
+        higherIsBetter: scale.higherIsBetter,
+        maxValue: scale.maxValue ?? null,
+        minValue: scale.minValue ?? null,
+        scaleType: scale.scaleType,
+        step: scale.step ?? null,
+        levels: [...scale.levels]
+            .sort((a, b) => a.sequence - b.sequence || a.normalizedValue - b.normalizedValue)
+            .map(level => ({
+                normalizedValue: canonicalNumber(level.normalizedValue),
+                value: canonicalNumber(level.value),
+            })),
+    };
+}
+
+/**
+ * Major-row properties plus scale levels, for non-advisory nodes only.
+ * Equal projections mean identical scores from identical answers. Adding or
+ * editing an advisory node does not change it. Wording, thresholds, and bands do not.
+ */
+export function scoringProjection(version: RubricVersionSnapshot): unknown {
+    const scales = new Map(version.scales.map(scale => [scale.id, scale]));
+    const nodes = version.nodes
+        .filter(node => !node.isAdvisory)
+        .sort((a, b) => a.key.localeCompare(b.key))
+        .map(node => ({
+            evaluatorConfig: node.evaluatorConfig ?? null,
+            gateMinimumScore: node.gateMinimumScore ?? null,
+            isGate: node.isGate,
+            key: node.key,
+            nodeType: node.nodeType,
+            notApplicablePolicy: node.notApplicablePolicy ?? null,
+            parentKey: parentKey(version, node),
+            rollupMethod: node.rollupMethod ?? null,
+            scale: scaleSignature(node.scaleId ? scales.get(node.scaleId) : undefined),
+            weight: canonicalNumber(node.weight),
+        }));
+    return {
+        nodes,
+        notApplicablePolicy: version.notApplicablePolicy,
+    };
+}
+
+/** Everything, including wording. Nodes sorted by key, properties sorted by the JSON serializer below. */
+export function contentProjection(version: RubricVersionSnapshot): unknown {
+    const scales = new Map(version.scales.map(scale => [scale.id, scale]));
+    return {
+        bands: [...version.bands]
+            .sort((a, b) => a.sequence - b.sequence || a.label.localeCompare(b.label))
+            .map(band => ({
+                description: band.description ?? null,
+                displayTone: band.displayTone,
+                label: band.label,
+                maxScore: canonicalNumber(band.maxScore),
+                minScore: canonicalNumber(band.minScore),
+                sequence: band.sequence,
+            })),
+        instructions: version.instructions ?? null,
+        minimumCompleteness: version.minimumCompleteness ?? null,
+        nodes: [...version.nodes]
+            .sort((a, b) => a.key.localeCompare(b.key))
+            .map(node => ({
+                anchors: [...(node.anchors ?? [])]
+                    .sort((a, b) => (a.scaleLevelId ?? '').localeCompare(b.scaleLevelId ?? '') || (a.anchorValue ?? 0) - (b.anchorValue ?? 0))
+                    .map(anchor => ({
+                        anchorValue: anchor.anchorValue ?? null,
+                        descriptor: anchor.descriptor,
+                        scaleLevelId: anchor.scaleLevelId ?? null,
+                    })),
+                description: node.description ?? null,
+                evidenceRequired: node.evidenceRequired,
+                evaluatorConfig: node.evaluatorConfig ?? null,
+                gateMinimumScore: node.gateMinimumScore ?? null,
+                guidance: node.guidance ?? null,
+                isAdvisory: node.isAdvisory,
+                isGate: node.isGate,
+                key: node.key,
+                name: node.name,
+                nodeType: node.nodeType,
+                notApplicablePolicy: node.notApplicablePolicy ?? null,
+                parentKey: parentKey(version, node),
+                rationaleRequired: node.rationaleRequired,
+                rollupMethod: node.rollupMethod ?? null,
+                scale: scaleSignature(node.scaleId ? scales.get(node.scaleId) : undefined),
+                sequence: node.sequence,
+                weight: canonicalNumber(node.weight),
+            })),
+        notApplicablePolicy: version.notApplicablePolicy,
+        passThreshold: version.passThreshold ?? null,
+        scoreDisplayMax: canonicalNumber(version.scoreDisplayMax),
+        scoreDisplayMin: canonicalNumber(version.scoreDisplayMin),
+    };
+}
+
+/** Stable JSON: object keys sorted, no undefined. */
+export function canonicalJson(value: unknown): string {
+    return JSON.stringify(sortValue(value));
+}
+
+function sortValue(value: unknown): unknown {
+    if (Array.isArray(value)) return value.map(sortValue);
+    if (value && typeof value === 'object') {
+        const entries = Object.entries(value as Record<string, unknown>)
+            .filter(([, item]) => item !== undefined)
+            .sort(([a], [b]) => a.localeCompare(b));
+        return Object.fromEntries(entries.map(([key, item]) => [key, sortValue(item)]));
+    }
+    return value;
+}
+
+/** SHA-256 hex of a canonical projection. Available in browsers and Node. */
+export async function sha256Hex(text: string): Promise<string> {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+}

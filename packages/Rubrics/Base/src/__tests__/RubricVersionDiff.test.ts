@@ -1,0 +1,137 @@
+import { describe, expect, it } from 'vitest';
+import { RubricVersionDiff } from '../RubricVersionDiff.js';
+import { sha256Hex } from '../canonical.js';
+import type { RubricNodeSnapshot, RubricVersionSnapshot } from '../types.js';
+
+function node(partial: Partial<RubricNodeSnapshot> & Pick<RubricNodeSnapshot, 'key'>): RubricNodeSnapshot {
+    return {
+        id: partial.key,
+        name: partial.key,
+        nodeType: 'Criterion',
+        weight: 1,
+        isAdvisory: false,
+        isGate: false,
+        evidenceRequired: false,
+        rationaleRequired: false,
+        sequence: 0,
+        scaleId: 'scale',
+        ...partial,
+    };
+}
+
+function snapshot(nodes: RubricNodeSnapshot[], extra: Partial<RubricVersionSnapshot> = {}): RubricVersionSnapshot {
+    return {
+        id: 'v',
+        rubricId: 'r',
+        majorVersion: 1,
+        minorVersion: 2,
+        patchVersion: 3,
+        notApplicablePolicy: 'ExcludeAndRedistribute',
+        passThreshold: 0.6,
+        scoreDisplayMin: 0,
+        scoreDisplayMax: 100,
+        nodes,
+        scales: [{
+            id: 'scale',
+            scaleType: 'Levels',
+            higherIsBetter: true,
+            levels: [{ id: 'high', label: 'High', value: 1, normalizedValue: 1, description: 'wording', sequence: 0 }],
+        }],
+        bands: [{ id: 'band', label: 'Pass', description: 'ok', minScore: 0.6, maxScore: 1, displayTone: 'Success', sequence: 0 }],
+        ...extra,
+    };
+}
+
+async function scoringHash(version: RubricVersionSnapshot): Promise<string> {
+    return sha256Hex(RubricVersionDiff.scoringCanonical(version));
+}
+
+describe('RubricVersionDiff', () => {
+    const base = snapshot([node({ key: 'clarity' })]);
+
+    it('publishes the first version as 1.0.0 Initial', () => {
+        const result = RubricVersionDiff.diff(null, base);
+        expect(result.appliedBump).toBe('Initial');
+        expect(result.nextVersion).toEqual({ major: 1, minor: 0, patch: 0 });
+    });
+
+    it('refuses a draft identical to its base', () => {
+        const result = RubricVersionDiff.diff(base, snapshot([node({ key: 'clarity' })]));
+        expect(result.computedBump).toBeNull();
+        expect(result.nextVersion).toBeNull();
+    });
+
+    it('classifies wording as Patch, a threshold as Minor, and a weight as Major', () => {
+        expect(RubricVersionDiff.diff(base, snapshot([node({ key: 'clarity', name: 'Clarity' })])).computedBump).toBe('Patch');
+        expect(RubricVersionDiff.diff(base, snapshot([node({ key: 'clarity' })], { passThreshold: 0.8 })).computedBump).toBe('Minor');
+        expect(RubricVersionDiff.diff(base, snapshot([node({ key: 'clarity', weight: 2 })])).computedBump).toBe('Major');
+    });
+
+    it('treats an advisory add as Minor and a non-advisory add as Major', () => {
+        const advisory = RubricVersionDiff.diff(base, snapshot([
+            node({ key: 'clarity' }),
+            node({ key: 'note', isAdvisory: true }),
+        ]));
+        expect(advisory.computedBump).toBe('Minor');
+        const structural = RubricVersionDiff.diff(base, snapshot([
+            node({ key: 'clarity' }),
+            node({ key: 'accuracy' }),
+        ]));
+        expect(structural.computedBump).toBe('Major');
+    });
+
+    it('compares parent links by key, so a clone with new ids is not a major bump', () => {
+        const parented = snapshot([
+            node({ id: 'old-group', key: 'group', nodeType: 'Group', scaleId: null }),
+            node({ id: 'old-child', key: 'clarity', parentId: 'old-group' }),
+        ]);
+        const clone = snapshot([
+            node({ id: 'new-group', key: 'group', nodeType: 'Group', scaleId: null }),
+            node({ id: 'new-child', key: 'clarity', parentId: 'new-group' }),
+        ]);
+        expect(RubricVersionDiff.diff(parented, clone).computedBump).toBeNull();
+    });
+
+    it('lets the author bump higher and not lower, and numbers the next version from the base', () => {
+        const patch = RubricVersionDiff.diff(base, snapshot([node({ key: 'clarity', guidance: 'more' })]), 'Major');
+        expect(patch.appliedBump).toBe('Major');
+        expect(patch.nextVersion).toEqual({ major: 2, minor: 0, patch: 0 });
+        const cannotLower = RubricVersionDiff.diff(base, snapshot([node({ key: 'clarity', weight: 4 })]), 'Patch');
+        expect(cannotLower.appliedBump).toBe('Major');
+        expect(cannotLower.nextVersion).toEqual({ major: 2, minor: 0, patch: 0 });
+        const minor = RubricVersionDiff.diff(base, snapshot([node({ key: 'clarity' })], { passThreshold: 0.9 }));
+        expect(minor.nextVersion).toEqual({ major: 1, minor: 3, patch: 0 });
+    });
+
+    it('keeps ScoringHash inside one major and changes it on a major bump', async () => {
+        const wording = snapshot([node({ key: 'clarity', name: 'Renamed', description: 'x' })], { passThreshold: 0.2 });
+        const advisory = snapshot([
+            node({ key: 'clarity' }),
+            node({ key: 'aside', isAdvisory: true, weight: 9 }),
+        ]);
+        const heavier = snapshot([node({ key: 'clarity', weight: 3 })]);
+        const baseHash = await scoringHash(base);
+        expect(await scoringHash(wording)).toBe(baseHash);
+        expect(await scoringHash(advisory)).toBe(baseHash);
+        expect(await scoringHash(heavier)).not.toBe(baseHash);
+
+        for (let i = 0; i < 20; i++) {
+            const patch = snapshot([node({
+                key: 'clarity',
+                name: `name-${i}`,
+                description: `desc-${i}`,
+                guidance: i % 2 === 0 ? 'g' : null,
+                sequence: i,
+            })], {
+                instructions: `note ${i}`,
+                scoreDisplayMax: 100 + i,
+            });
+            expect(RubricVersionDiff.diff(base, patch).computedBump).toBe('Patch');
+            expect(await scoringHash(patch)).toBe(baseHash);
+
+            const major = snapshot([node({ key: 'clarity', weight: 1 + (i + 1) / 10 })]);
+            expect(RubricVersionDiff.diff(base, major).computedBump).toBe('Major');
+            expect(await scoringHash(major)).not.toBe(baseHash);
+        }
+    });
+});
