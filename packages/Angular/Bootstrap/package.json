@@ -43,6 +43,7 @@
     "@memberjunction/core": "6.2.0-edge.1",
     "@memberjunction/core-entities": "6.2.0-edge.1",
     "@memberjunction/entity-communications-base": "6.2.0-edge.1",
+    "@memberjunction/feature-pipelines": "6.2.0-edge.1",
     "@memberjunction/graphql-dataprovider": "6.2.0-edge.1",
     "@memberjunction/ng-artifacts": "6.2.0-edge.1",
     "@memberjunction/ng-auth-services": "6.2.0-edge.1",

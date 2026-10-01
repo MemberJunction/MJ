@@ -56,7 +56,7 @@ import { ResolveRecordingStorageAccountID, StoreRealtimeRecording } from './real
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
-import { AgentMemoryContextBuilder } from './agent-memory-context-builder';
+import { AgentMemoryContextBuilder, AgentMemoryObservability } from './agent-memory-context-builder';
 import { ConversationCompactionManager, CompactionOutcome, EffectiveContextBudget } from './ConversationCompactionManager';
 import { ConversationToolManager, ConversationToolCall, ConversationToolExecutionResult, ConversationToolSummaryHost, ConversationToolNames, MAX_CONVERSATION_TOOL_CALLS_PER_TURN } from './ConversationToolManager';
 import { FormatToolResultSection, FormatToolErrorSection, RenderToolResultData, ToolResultSectionParts, CarryForwardToolFamily, CarryForwardToolStepOutput, CarryForwardStepRecord } from './tool-result-format';
@@ -3771,6 +3771,26 @@ export class BaseAgent {
     }
 
     /**
+     * The observability context memory injection runs under for an agent run: the run's ID, the next
+     * step number, and a callback that adds each rerank step to the run's steps. A rerank step carries
+     * the rerank's prompt run, whose cost and token rollups include a prompt-backed reranker's own
+     * prompt runs, so the run's totals and its `MaxCostPerRun` / `MaxTokensPerRun` guardrails count
+     * them. Undefined when there is no run.
+     *
+     * @param run - The current agent run, or null before one exists
+     */
+    protected MemoryObservability(run: MJAIAgentRunEntityExtended | null): AgentMemoryObservability | undefined {
+        if (!run) {
+            return undefined;
+        }
+        return {
+            agentRunID: run.ID,
+            stepNumber: (run.Steps?.length || 0) + 1,
+            OnStepCreated: step => run.Steps.push(step),
+        };
+    }
+
+    /**
      * Inject notes and examples into agent context memory.
      * Called automatically before agent execution if injection is enabled on the agent.
      * Injects memory context directly into conversation messages array.
@@ -3802,9 +3822,7 @@ export class BaseAgent {
         // Delegate the orchestration to the shared, reusable builder so both BaseAgent and the
         // Realtime agent type inject memory identically. The observability context and verbose
         // status logging are derived from this instance and passed through.
-        const observability = this._agentRun
-            ? { agentRunID: this._agentRun.ID, stepNumber: (this._agentRun.Steps?.length || 0) + 1 }
-            : undefined;
+        const observability = this.MemoryObservability(this._agentRun);
 
         const result = await new AgentMemoryContextBuilder().InjectContextMemory(
             input,
