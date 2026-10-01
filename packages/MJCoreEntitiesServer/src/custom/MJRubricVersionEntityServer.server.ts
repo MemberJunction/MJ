@@ -1,8 +1,8 @@
-import { BaseEntity } from '@memberjunction/core';
+import { BaseEntity, type EntitySaveOptions } from '@memberjunction/core';
 import { MJRubricVersionEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { cloneVersionNodes, publishRubricVersion, type PublishResult } from './rubrics/versionPublish.js';
+import { cloneVersionNodes, loadDraftForPublish, publishRubricVersion, type PublishResult } from './rubrics/versionPublish.js';
 
 /**
  * Draft, publish, and hash a rubric version.
@@ -42,6 +42,25 @@ export class MJRubricVersionEntityServer extends MJRubricVersionEntity {
         this.ContentHash = result.contentHash;
         this.ScoringHash = result.scoringHash;
         this.ChangeDetails = JSON.stringify(result.changeDetails);
+        this.PublishedAt = result.publishedAt;
         return result;
+    }
+
+    /**
+     * When Status moves Draft → Published, loads the draft tree and its base
+     * version and calls {@link publish}. Setting Status and saving is enough.
+     * Refuses the cases documented on the class. Writes PublishedAt with the
+     * status, which the published-version check constraint requires.
+     */
+    public override async Save(options?: EntitySaveOptions): Promise<boolean> {
+        const status = this.GetFieldByName('Status');
+        if (status?.Dirty && status.OldValue === 'Draft' && this.Status === 'Published') {
+            const provider = this.ProviderToUse as { RunView?: (params: { EntityName: string; ExtraFilter: string }, user?: unknown) => Promise<{ Success: boolean; Results?: unknown[] }> };
+            if (!provider?.RunView) throw new Error('Publishing a rubric version requires a provider that can load the draft tree.');
+            const run = (entityName: string, filter: string) => provider.RunView!({ EntityName: entityName, ExtraFilter: filter }, this.ContextCurrentUser);
+            const loaded = await loadDraftForPublish(run, this.ID, this.RubricID, this.BasedOnVersionID);
+            await this.publish(loaded.base, loaded.draft);
+        }
+        return super.Save(options);
     }
 }

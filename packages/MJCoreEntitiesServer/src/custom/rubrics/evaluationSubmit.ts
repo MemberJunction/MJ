@@ -1,5 +1,34 @@
 import { RubricScoring, type RubricAnswer, type RubricScoreResult, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 
+export interface SupersedeTarget {
+    status: string;
+    subjectEntityId: string;
+    subjectRecordId: string;
+    contextEntityId?: string | null;
+    contextRecordId?: string | null;
+    rubricId: string;
+}
+
+/**
+ * Refuses a supersede target that is not Submitted, or whose subject, context,
+ * or rubric differs from the evaluation replacing it. The caller then sets
+ * Status to Superseded in the same transaction as the submit.
+ */
+export function assertCanSupersede(target: SupersedeTarget, current: SupersedeTarget): void {
+    if (target.status !== 'Submitted') {
+        throw new RubricEvaluationError('Only a Submitted evaluation can be superseded.');
+    }
+    if (target.subjectEntityId !== current.subjectEntityId || target.subjectRecordId !== current.subjectRecordId) {
+        throw new RubricEvaluationError('A supersede must be the same subject.');
+    }
+    if ((target.contextEntityId ?? null) !== (current.contextEntityId ?? null) || (target.contextRecordId ?? null) !== (current.contextRecordId ?? null)) {
+        throw new RubricEvaluationError('A supersede must be the same context.');
+    }
+    if (target.rubricId !== current.rubricId) {
+        throw new RubricEvaluationError('A supersede must be the same rubric.');
+    }
+}
+
 export class RubricEvaluationError extends Error {
     public constructor(message: string) {
         super(message);
@@ -48,6 +77,7 @@ export interface PersistedEvaluation {
     confidence: number | null;
     scoringEngineVersion: '1.0';
     status: 'Submitted';
+    submittedAt: Date;
 }
 
 /**
@@ -119,6 +149,7 @@ export function submitEvaluation(input: SubmitEvaluationInput): { evaluation: Pe
             confidence: result.confidence,
             scoringEngineVersion: result.scoringEngineVersion,
             status: 'Submitted',
+            submittedAt: new Date(),
         },
         scores: result.nodes.map(node => ({
             criterionId: node.id,

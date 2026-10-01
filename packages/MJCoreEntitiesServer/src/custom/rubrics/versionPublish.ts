@@ -24,6 +24,7 @@ export interface PublishResult {
     contentHash: string;
     scoringHash: string;
     warnings: PublishWarning[];
+    publishedAt: Date;
 }
 
 /**
@@ -42,6 +43,9 @@ export function validateRubricTree(version: RubricVersionSnapshot): { errors: st
         keys.add(node.key);
         if (node.parentId && !byId.has(node.parentId)) errors.push(`${node.key} points at a missing parent.`);
         if (node.nodeType === 'Criterion' && !node.scaleId) errors.push(`${node.key} is a criterion with no scale.`);
+        if (node.scaleId && !version.scales.some(scale => scale.id === node.scaleId)) {
+            errors.push(`${node.key} names a scale that is not on this version.`);
+        }
         if (node.isGate && (node.gateMinimumScore === undefined || node.gateMinimumScore === null)) {
             errors.push(`${node.key} is a gate with no minimum score.`);
         }
@@ -87,6 +91,7 @@ export async function publishRubricVersion(
         contentHash: await sha256Hex(RubricVersionDiff.contentCanonical(draft)),
         scoringHash: await sha256Hex(RubricVersionDiff.scoringCanonical(draft)),
         warnings: validation.warnings,
+        publishedAt: new Date(),
     };
 }
 
@@ -98,6 +103,95 @@ export function cloneVersionNodes(nodes: RubricNodeSnapshot[]): RubricNodeSnapsh
         id: ids.get(node.id) as string,
         parentId: node.parentId ? ids.get(node.parentId) ?? null : null,
     }));
+}
+
+type RowRun = (entityName: string, filter: string) => Promise<{ Success: boolean; Results?: unknown[] }>;
+
+function read(row: unknown, name: string): unknown {
+    const record = row as Record<string, unknown> & { Get?: (field: string) => unknown };
+    if (record && typeof record.Get === 'function' && record[name] === undefined) return record.Get(name);
+    return record?.[name];
+}
+
+/** Loads the draft tree and the base version so Save can publish without a separate call. */
+export async function loadDraftForPublish(run: RowRun, versionId: string, rubricId: string, basedOnVersionId: string | null): Promise<{ base: RubricVersionSnapshot | null; draft: RubricVersionSnapshot }> {
+    const draft = await loadSnapshot(run, versionId, rubricId);
+    const base = basedOnVersionId ? await loadSnapshot(run, basedOnVersionId, rubricId) : null;
+    return { base, draft };
+}
+
+async function loadSnapshot(run: RowRun, versionId: string, rubricId: string): Promise<RubricVersionSnapshot> {
+    const versions = await rows(run, 'MJ: Rubric Versions', `ID='${versionId}'`);
+    const version = versions[0];
+    if (!version) throw new RubricPublishError([`Version ${versionId} was not found.`]);
+    const criteria = await rows(run, 'MJ: Rubric Criteria', `RubricVersionID='${versionId}'`);
+    const bands = await rows(run, 'MJ: Rubric Bands', `RubricVersionID='${versionId}'`);
+    const scaleIds = [...new Set(criteria.map(row => read(row, 'ScaleID')).filter((id): id is string => typeof id === 'string'))];
+    const scales = [];
+    for (const scaleId of scaleIds) {
+        const scaleRows = await rows(run, 'MJ: Rubric Scales', `ID='${scaleId}'`);
+        const levelRows = await rows(run, 'MJ: Rubric Scale Levels', `ScaleID='${scaleId}'`);
+        const scale = scaleRows[0];
+        if (!scale) continue;
+        scales.push({
+            id: scaleId,
+            scaleType: read(scale, 'ScaleType') as 'Levels' | 'Numeric',
+            minValue: read(scale, 'MinValue') as number | null,
+            maxValue: read(scale, 'MaxValue') as number | null,
+            step: read(scale, 'Step') as number | null,
+            higherIsBetter: Boolean(read(scale, 'HigherIsBetter')),
+            levels: levelRows.map(level => ({
+                id: String(read(level, 'ID')),
+                label: String(read(level, 'Label') ?? ''),
+                value: Number(read(level, 'Value')),
+                normalizedValue: Number(read(level, 'NormalizedValue')),
+                description: read(level, 'Description') as string | null,
+                sequence: Number(read(level, 'Sequence') ?? 0),
+            })),
+        });
+    }
+    return {
+        id: versionId,
+        rubricId,
+        notApplicablePolicy: read(version, 'NotApplicablePolicy') as RubricVersionSnapshot['notApplicablePolicy'],
+        passThreshold: read(version, 'PassThreshold') as number | null,
+        minimumCompleteness: read(version, 'MinimumCompleteness') as number | null,
+        instructions: read(version, 'Instructions') as string | null,
+        scoreDisplayMin: Number(read(version, 'ScoreDisplayMin') ?? 0),
+        scoreDisplayMax: Number(read(version, 'ScoreDisplayMax') ?? 100),
+        nodes: criteria.map(row => ({
+            id: String(read(row, 'ID')),
+            key: String(read(row, 'Key')),
+            parentId: read(row, 'ParentID') as string | null,
+            name: String(read(row, 'Name') ?? read(row, 'Key')),
+            nodeType: read(row, 'NodeType') as 'Group' | 'Criterion',
+            scaleId: read(row, 'ScaleID') as string | null,
+            weight: Number(read(row, 'Weight') ?? 0),
+            isAdvisory: Boolean(read(row, 'IsAdvisory')),
+            isGate: Boolean(read(row, 'IsGate')),
+            gateMinimumScore: read(row, 'GateMinimumScore') as number | null,
+            notApplicablePolicy: read(row, 'NotApplicablePolicy') as RubricVersionSnapshot['notApplicablePolicy'] | null,
+            evidenceRequired: Boolean(read(row, 'EvidenceRequired')),
+            rationaleRequired: Boolean(read(row, 'RationaleRequired')),
+            sequence: Number(read(row, 'Sequence') ?? 0),
+        })),
+        scales,
+        bands: bands.map(row => ({
+            id: String(read(row, 'ID')),
+            label: String(read(row, 'Label')),
+            description: read(row, 'Description') as string | null,
+            minScore: Number(read(row, 'MinScore')),
+            maxScore: Number(read(row, 'MaxScore')),
+            displayTone: String(read(row, 'DisplayTone') ?? ''),
+            sequence: Number(read(row, 'Sequence') ?? 0),
+        })),
+    };
+}
+
+async function rows(run: RowRun, entityName: string, filter: string): Promise<unknown[]> {
+    const result = await run(entityName, filter);
+    if (!result.Success) throw new RubricPublishError([`Could not load ${entityName}.`]);
+    return result.Results ?? [];
 }
 
 function hasCycle(nodes: RubricNodeSnapshot[]): boolean {

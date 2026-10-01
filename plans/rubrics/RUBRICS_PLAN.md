@@ -871,6 +871,10 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 
 ## 16. Progress log
 
+- **2026-10-01** — Evaluation and version `Save` run the publish and submit path when
+  Status changes. SubmittedAt and PublishedAt are set with the status. A supersede
+  moves the prior Submitted row to Superseded, or refuses a different subject.
+  A criterion whose scale is not on the version cannot be published.
 - **2026-10-01** — R3 started. Version publish validates the tree, refuses an identical
   draft, and writes the bump plus ContentHash and ScoringHash. Clone keeps keys and
   rewrites parent ids. Submit calls `RubricScoring.compute` and returns that result.

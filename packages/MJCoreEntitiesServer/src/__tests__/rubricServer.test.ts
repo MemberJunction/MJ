@@ -43,6 +43,7 @@ describe('rubric version publish', () => {
                 { id: 'g', key: 'g', name: 'G', nodeType: 'Group', weight: 1, isAdvisory: false, isGate: true, evidenceRequired: false, rationaleRequired: false, sequence: 0 },
                 { id: 'a', key: 'clarity', name: 'Clarity', nodeType: 'Criterion', parentId: 'missing', weight: 1, isAdvisory: false, isGate: false, evidenceRequired: false, rationaleRequired: false, sequence: 1 },
                 { id: 'b', key: 'clarity', name: 'Dup', nodeType: 'Criterion', scaleId: 'scale', parentId: 'b', weight: 1, isAdvisory: false, isGate: false, evidenceRequired: false, rationaleRequired: false, sequence: 2 },
+                { id: 'c', key: 'missing-scale', name: 'Missing', nodeType: 'Criterion', scaleId: 'not-on-version', weight: 1, isAdvisory: false, isGate: false, evidenceRequired: false, rationaleRequired: false, sequence: 3 },
             ],
         });
         const errors = validateRubricTree(draft).errors.join(' ');
@@ -51,6 +52,7 @@ describe('rubric version publish', () => {
         expect(errors).toMatch(/no minimum/);
         expect(errors).toMatch(/cycle/);
         expect(errors).toMatch(/Duplicate key/);
+        expect(errors).toMatch(/not on this version/);
     });
 
     it('refuses an identical draft and publishes a weight change as major with hashes', async () => {
@@ -63,6 +65,7 @@ describe('rubric version publish', () => {
         expect(published.scoringHash).toHaveLength(64);
         expect(published.contentHash).toHaveLength(64);
         expect(published.scoringHash).not.toBe(published.contentHash);
+        expect(published.publishedAt).toBeInstanceOf(Date);
     });
 
     it('clones keys and rewrites parent ids', () => {
@@ -112,6 +115,7 @@ describe('rubric evaluation submit', () => {
         expect(scored.evaluation.status).toBe('Submitted');
         expect(scored.evaluation.scoringEngineVersion).toBe('1.0');
         expect(scored.scores[0].normalizedScore).toBe(direct.nodes[0].normalizedScore);
+        expect(scored.evaluation.submittedAt).toBeInstanceOf(Date);
     });
 
     it('allows Retired only when superseding', () => {
@@ -123,6 +127,16 @@ describe('rubric evaluation submit', () => {
             scores: [{ criterionId: 'a', scaleLevelId: 'high' }],
         });
         expect(scored.evaluation.status).toBe('Submitted');
+    });
+});
+
+describe('supersede', () => {
+    it('refuses a different subject and accepts a matching Submitted row', async () => {
+        const { assertCanSupersede } = await import('../custom/rubrics/evaluationSubmit.js');
+        const current = { status: 'Submitted', subjectEntityId: 'e', subjectRecordId: 'r', contextEntityId: null, contextRecordId: null, rubricId: 'rubric' };
+        expect(() => assertCanSupersede({ ...current, subjectRecordId: 'other' }, current)).toThrow(/subject/);
+        expect(() => assertCanSupersede({ ...current, status: 'Draft' }, current)).toThrow(/Submitted/);
+        expect(() => assertCanSupersede(current, current)).not.toThrow();
     });
 });
 
