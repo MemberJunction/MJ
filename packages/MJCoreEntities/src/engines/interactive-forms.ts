@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, ProviderType, RunView, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, ProviderType, RunView, UserInfo, type BaseEntityEvent } from "@memberjunction/core";
 import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from "@memberjunction/global";
 import type { Observable } from "rxjs";
 import type { MJComponentEntity, MJEntityFormContributionEntity, MJEntityFormOverrideEntity } from "../generated/entity_subclasses";
@@ -41,8 +41,8 @@ import type { InstanceConfigEngine } from "./InstanceConfigEngine";
  * adoption, and this cache is written to client local storage on every boot.
  * The widget a contribution renders is fetched by ID on first use
  * ({@link InteractiveFormsEngine.GetComponentByID}) and kept in memory until any
- * `MJ: Components` row changes, so each distinct panel component costs one
- * query, not one per mount.
+ * `MJ: Components` row is saved, deleted or changed on another server, so each
+ * distinct panel component costs one query, not one per mount.
  *
  * ## Reactivity for free
  *
@@ -163,11 +163,10 @@ export class InteractiveFormsEngine extends BaseEngine<InteractiveFormsEngine> {
                 // written to client local storage on every boot.
                 //
                 // A contribution's panel Component (Type='Widget') is therefore NOT in this
-                // cache; `GetComponentByID` fetches it by ID on first use. An earlier version
-                // scoped this filter with a subquery over `vwEntityFormContributions`, which is
-                // worse in every way that matters: the view name resolves against the
+                // cache; `GetComponentByID` fetches it by ID on first use. The filter takes no
+                // subquery over `vwEntityFormContributions`: a view name resolves against the
                 // connecting user's default schema rather than the core schema, and a filter
-                // that fails takes the WHOLE engine down with it — every form then waits on a
+                // that fails takes the WHOLE engine down with it, so every form would wait on a
                 // cache that never loads. Fetching exactly the components that render, lazily,
                 // needs no cross-schema SQL at all.
                 Filter: "Type='Form'",
@@ -334,7 +333,7 @@ export class InteractiveFormsEngine extends BaseEngine<InteractiveFormsEngine> {
      * Any Component by ID: a whole form from the loaded forms, otherwise one query by ID, kept in
      * memory for the next caller. Panels that ask at the same time share one query. A failed or
      * empty lookup is not kept, so the next caller tries again. Every kept component is dropped
-     * when any `MJ: Components` row changes.
+     * when any `MJ: Components` row is saved, deleted or changed on another server.
      *
      * @returns The component, or null when it does not exist or the lookup failed.
      */
@@ -392,15 +391,33 @@ export class InteractiveFormsEngine extends BaseEngine<InteractiveFormsEngine> {
     }
 
     /**
-     * Any save, delete or remote change to an `MJ: Components` row refreshes the forms array, a
-     * widget included (it is not in the array), so that emission is the signal to drop what
-     * {@link GetComponentByID} kept. Subscribed before anything is kept, so the replay on
-     * subscribe clears nothing.
+     * A save of any `MJ: Components` row, and a change to one on another server, refreshes the
+     * forms array (a widget is not in it, so the save is not applied in place), and that emission
+     * drops what {@link GetComponentByID} kept. A delete of a row outside the array changes no
+     * array; {@link HandleIndividualBaseEntityEvent} covers it. Subscribed before anything is
+     * kept, so the replay on subscribe clears nothing.
      */
     private subscribeComponentInvalidation(): void {
         if (this._componentInvalidationSubscribed) return;
         this._componentInvalidationSubscribed = true;
         this.Forms$.subscribe(() => this.ClearComponentCache());
+    }
+
+    /**
+     * Drops what {@link GetComponentByID} kept when an `MJ: Components` row is deleted, here or on
+     * another server, then handles the event as every engine does. BaseEngine ignores a delete of a
+     * row that is not in a loaded array, which a fetched widget never is.
+     */
+    protected override async HandleIndividualBaseEntityEvent(event: BaseEntityEvent): Promise<boolean> {
+        if (InteractiveFormsEngine.isComponentDelete(event)) this.ClearComponentCache();
+        return super.HandleIndividualBaseEntityEvent(event);
+    }
+
+    private static isComponentDelete(event: BaseEntityEvent): boolean {
+        const entityName = (event.baseEntity?.EntityInfo?.Name ?? event.entityName ?? '').trim().toLowerCase();
+        if (entityName !== 'mj: components') return false;
+        if (event.type === 'delete') return true;
+        return event.type === 'remote-invalidate' && (event.payload as { action?: string } | null | undefined)?.action === 'delete';
     }
 
 

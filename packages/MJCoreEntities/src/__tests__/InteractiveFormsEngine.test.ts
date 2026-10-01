@@ -39,6 +39,7 @@ vi.mock('@memberjunction/core', () => ({
             };
         }
         get ProviderToUse() { return { CurrentUser: null }; }
+        async HandleIndividualBaseEntityEvent(): Promise<boolean> { return true; }
     },
     RunView: {
         FromMetadataProvider: () => ({
@@ -279,9 +280,9 @@ describe('InteractiveFormsEngine.GetActiveOverrideForEntity on a restricted enti
 });
 
 /**
- * A panel's component is a Widget, which the engine does not load with the forms. Each mounted
- * panel used to run its own query for it; the engine now fetches a component once by ID and
- * serves it from memory until a component changes.
+ * A panel's component is a Widget, which the engine does not load with the forms. The engine
+ * fetches a component once by ID and serves it from memory until a component is saved, deleted
+ * or changed on another server.
  */
 describe('InteractiveFormsEngine.GetComponentByID', () => {
     const WIDGET = '44444444-4444-4444-4444-444444444444';
@@ -340,6 +341,26 @@ describe('InteractiveFormsEngine.GetComponentByID', () => {
         for (const notify of propertySubscribers.get('_forms') ?? []) notify();
         expect((await InteractiveFormsEngine.Instance.GetComponentByID(WIDGET, undefined, provider))?.Name).toBe('LTV strip v2');
         expect(componentQueries).toHaveLength(2);
+    });
+
+    it('fetches again after a component is deleted, here or on another server', async () => {
+        type EventHandler = { HandleIndividualBaseEntityEvent(event: unknown): Promise<boolean> };
+        const engine = InteractiveFormsEngine.Instance as unknown as EventHandler;
+        await InteractiveFormsEngine.Instance.GetComponentByID(WIDGET, undefined, provider);
+        await engine.HandleIndividualBaseEntityEvent({ type: 'delete', baseEntity: { EntityInfo: { Name: 'MJ: Components' } }, payload: null });
+        await InteractiveFormsEngine.Instance.GetComponentByID(WIDGET, undefined, provider);
+        await engine.HandleIndividualBaseEntityEvent({ type: 'remote-invalidate', baseEntity: null, entityName: 'MJ: Components', payload: { action: 'delete' } });
+        await InteractiveFormsEngine.Instance.GetComponentByID(WIDGET, undefined, provider);
+        expect(componentQueries).toHaveLength(3);
+    });
+
+    it('keeps its widgets when another entity\'s row is deleted', async () => {
+        type EventHandler = { HandleIndividualBaseEntityEvent(event: unknown): Promise<boolean> };
+        await InteractiveFormsEngine.Instance.GetComponentByID(WIDGET, undefined, provider);
+        await (InteractiveFormsEngine.Instance as unknown as EventHandler)
+            .HandleIndividualBaseEntityEvent({ type: 'delete', baseEntity: { EntityInfo: { Name: 'MJ: Entity Form Overrides' } }, payload: null });
+        await InteractiveFormsEngine.Instance.GetComponentByID(WIDGET, undefined, provider);
+        expect(componentQueries).toHaveLength(1);
     });
 
     it('returns null for a blank id without a query', async () => {
