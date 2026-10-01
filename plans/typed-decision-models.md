@@ -125,6 +125,33 @@ Removing those paths is a next-major-version job.
 `FailoverStrategy`). Model metadata also names `GeminiAudioGenerator` and `VertexAudioGenerator`
 driver classes that don't exist in the repo.
 
+### 0.0 Shipping in two phases (decided 2026-10-01)
+
+The whole train merged into `next` on 2026-10-01; none of it has been released. After the
+with-and-without-Jev tests on Sage, Amith decided to keep the decision model but not wire it into
+the Loop agent architecture yet, and to ship in two phases.
+
+- **Phase 1, shipping now: decisions a person or a flow asks for explicitly.**
+  - The `Decision` model type, `BaseDecision`, `AIDecisionRunner`, LLM Decision and the Jev driver,
+    per-model calibration, the `Run Decision` action and client `RunDecision`.
+  - The task-graph `Decision` node and the Flow agent `Decision` step, with editor and Agent
+    Manager support.
+  - Consumers a user turns on: the Feature Pipeline `Decision` type, duplicate detection's Decision
+    modes, `DecisionReranker`, the decision judge oracle.
+- **Phase 2, later: the agent framework using decisions on its own.**
+  - Loop `decisions`, `finishIf`, decision discovery, catalog narrowing, the payload-change check,
+    the memory-note gate and conversation routing.
+  - All of it was off by default. It is removed from `next` before the release and kept on
+    `park/decision-agent-framework` (`next` at `705ab4e7d5`).
+- **Why the line falls there.** Measured on Sage:
+  - Explicit decisions held up: Jev at 0.928 balanced accuracy against 0.861 for LLM Decision, and
+    missed urgent tickets cut from 16.7% to 5.2% on the 120-ticket triage.
+  - The automatic uses were mixed:
+    - Routing was right 11/12 against 6/12, but its 350 ms deadline is too tight.
+    - Discovery named the right agent but rarely cleared its 0.85 bar.
+    - `finishIf` never fired.
+    - Loop decisions cost 2.6–4.6× when used and were never used unprompted.
+
 ### 0.2 The wrap-up milestone (2026-09-28)
 
 Amith asked for the Jev work to be finished first. The milestone is **"MJ agents can call Jev"**,
