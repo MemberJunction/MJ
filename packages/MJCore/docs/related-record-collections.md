@@ -78,6 +78,36 @@ export class OrderEntity extends mjBizAppsOrdersOrderEntity {
 `ClassFactory` priority auto-increments by load order, so a server-only subclass extending this one
 still wins server-side with no configuration — and the browser keeps the collection.
 
+### At runtime — `DeclareRelatedRecordsDynamic` (generic engines only)
+
+`DeclareRelatedRecords` is protected, so only the class itself can call it. Engines that work on
+*any* entity need to attach a collection from outside, to a relationship the class never declared.
+`DeclareRelatedRecordsDynamic(options)` is the public entry point for that. It takes the same
+`RelatedRecordCollectionOptions` and returns the same `RelatedRecordCollection`:
+
+```typescript
+// Record Cloning's materializer, when the parent has no writable collection for this relationship
+const lines = parent.DeclareRelatedRecordsDynamic({
+    Name: '_mj_clone_Order_Lines_OrderHeaderID',
+    RelatedEntity: 'MJ_BizApps_Orders: Order Lines',
+    RelatedEntityJoinField: 'OrderHeaderID',
+    Source: 'database',
+    ReadOnly: false,
+});
+```
+
+- It registers the collection on **that instance only**. Other instances, and the other tier,
+  don't get it.
+- It throws if a companion with that name is already registered. Look for an existing declared
+  collection first. The cloning materializer reuses a writable collection that matches the child
+  entity and join field.
+- Once registered, the collection behaves like any other. `Save()` includes its rows in the
+  parent's save plan.
+- Current callers: `CloneMaterializer` (`@memberjunction/record-cloning`) and `mj sync push`, which
+  resolves a record's `collections` key to a relationship and declares a collection when the class has none.
+
+In entity code, don't use it. Declare the collection in metadata or on a shared subclass (above).
+
 ---
 
 ## 2. What happens on `Save()` — the local flow

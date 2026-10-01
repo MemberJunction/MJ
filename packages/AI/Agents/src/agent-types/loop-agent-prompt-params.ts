@@ -98,7 +98,8 @@ export interface ResponseTypeInclusionRules {
 
     /**
      * Include decisions field in the response interface.
-     * Auto-aligns with includeDecisionsDocs unless explicitly set.
+     * Auto-aligns with includeDecisionsDocs unless explicitly set, and so is off unless the agent
+     * opts in with `includeDecisionsDocs: true`.
      * @default true
      */
     decisions?: boolean;
@@ -141,61 +142,6 @@ export const DEFAULT_RESPONSE_TYPE_INCLUSION_RULES: Required<ResponseTypeInclusi
     tasks: false
 };
 
-/**
- * Configuration parameters for Loop Agent Type.
- *
- * Controls prompt content (which sections are included), client tool availability,
- * and content limits. Stored in `AIAgent.AgentTypePromptParams` as JSON.
- *
- * All boolean prompt-inclusion properties default to true (include section).
- * Set to false to exclude a section from the prompt and save tokens.
- *
- * These parameters are configured at three levels with merge precedence:
- * 1. Schema defaults (from AIAgentType.PromptParamsSchema) - lowest priority
- * 2. Agent config (from AIAgent.AgentTypePromptParams) - medium priority
- * 3. Runtime override (from ExecuteAgentParams.data.__agentTypePromptParams) - highest priority
- *
- * @example
- * ```typescript
- * // Agent configuration to disable unused features
- * const agentConfig: LoopAgentTypePromptParams = {
- *     includeForEachDocs: false,      // Agent never iterates collections
- *     includeWhileDocs: false,        // Agent never polls/retries
- *     includeResponseFormDocs: false, // Agent never collects user input
- *     includeCommandDocs: false       // Agent doesn't trigger UI actions
- * };
- * ```
- *
- * @example
- * ```typescript
- * // Runtime override to enable a feature for a specific execution
- * const result = await agent.Execute({
- *     agent: myAgent,
- *     conversationMessages: messages,
- *     data: {
- *         __agentTypePromptParams: {
- *             includeForEachDocs: true  // Enable for this run only
- *         }
- *     }
- * });
- * ```
- *
- * @example
- * ```typescript
- * // Minimal response type with granular control
- * const minimalConfig: LoopAgentTypePromptParams = {
- *     includeResponseTypeDefinition: {
- *         payload: true,        // Keep payload in type
- *         responseForms: false, // Exclude responseForm from type
- *         commands: false,      // Exclude commands from type
- *         forEach: false,       // Exclude ForEach from nextStep.type
- *         while: false          // Exclude While from nextStep.type
- *     },
- *     includeForEachDocs: false,
- *     includeWhileDocs: false
- * };
- * ```
- */
 /**
  * Where the agent's specialization (its child prompt) is placed.
  *
@@ -268,6 +214,61 @@ export type TrailingStateMode = 'auto' | 'appendOnly' | 'replace';
  */
 export type FinishIfMode = 'off' | 'shadow' | 'on';
 
+/**
+ * Configuration parameters for Loop Agent Type.
+ *
+ * Controls prompt content (which sections are included), client tool availability,
+ * and content limits. Stored in `AIAgent.AgentTypePromptParams` as JSON.
+ *
+ * All boolean prompt-inclusion properties default to true (include section).
+ * Set to false to exclude a section from the prompt and save tokens.
+ *
+ * These parameters are configured at three levels with merge precedence:
+ * 1. Schema defaults (from AIAgentType.PromptParamsSchema) - lowest priority
+ * 2. Agent config (from AIAgent.AgentTypePromptParams) - medium priority
+ * 3. Runtime override (from ExecuteAgentParams.data.__agentTypePromptParams) - highest priority
+ *
+ * @example
+ * ```typescript
+ * // Agent configuration to disable unused features
+ * const agentConfig: LoopAgentTypePromptParams = {
+ *     includeForEachDocs: false,      // Agent never iterates collections
+ *     includeWhileDocs: false,        // Agent never polls/retries
+ *     includeResponseFormDocs: false, // Agent never collects user input
+ *     includeCommandDocs: false       // Agent doesn't trigger UI actions
+ * };
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Runtime override to enable a feature for a specific execution
+ * const result = await agent.Execute({
+ *     agent: myAgent,
+ *     conversationMessages: messages,
+ *     data: {
+ *         __agentTypePromptParams: {
+ *             includeForEachDocs: true  // Enable for this run only
+ *         }
+ *     }
+ * });
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Minimal response type with granular control
+ * const minimalConfig: LoopAgentTypePromptParams = {
+ *     includeResponseTypeDefinition: {
+ *         payload: true,        // Keep payload in type
+ *         responseForms: false, // Exclude responseForm from type
+ *         commands: false,      // Exclude commands from type
+ *         forEach: false,       // Exclude ForEach from nextStep.type
+ *         while: false          // Exclude While from nextStep.type
+ *     },
+ *     includeForEachDocs: false,
+ *     includeWhileDocs: false
+ * };
+ * ```
+ */
 export interface LoopAgentTypePromptParams {
     // === Section Inclusion Flags ===
 
@@ -413,15 +414,16 @@ export interface LoopAgentTypePromptParams {
     includePipelineDocs?: boolean;
 
     /**
-     * Include decision-making documentation in the prompt.
-     * Disable for agents that should never request inline decisions.
-     * @default true
+     * Teach the model to request inline decisions: the `decisions` docs, and the field in the
+     * response type. Opt-in: anything but `true` leaves both out. They add about 1,200 tokens to every
+     * turn, and on the Prompt Eval corpus no model used them (typed-decision plan, Task 4.7).
+     * @default false
      */
     includeDecisionsDocs?: boolean;
 
     /**
      * Maximum number of items to process when `forEachItemIn` is used.
-     * Items beyond this limit are truncated.
+     * Items beyond this limit are truncated. `decisionsMaxCallsPerTurn` can cut a request shorter.
      * @default 100
      */
     decisionsMaxItems?: number;
@@ -432,6 +434,17 @@ export interface LoopAgentTypePromptParams {
      * @default MAX_DECISION_REQUESTS_PER_TURN (8)
      */
     decisionsMaxRequests?: number;
+
+    /**
+     * Maximum number of decision calls one agent turn's requests make in total, counting every
+     * `forEachItemIn` item. The budget is handed out in request order before any call is made. A
+     * `forEachItemIn` request it cuts short asks its first items and reports the rest in
+     * `skippedCount`. A request it leaves no calls for is not run, and gets a failed result saying why.
+     * 0 turns decision calls off: every request gets a failed result that says so, and does not
+     * invite the agent to ask again.
+     * @default MAX_DECISION_CALLS_PER_TURN (100)
+     */
+    decisionsMaxCallsPerTurn?: number;
 
     /**
      * Name of the decision prompt used for evaluating decisions.
@@ -466,6 +479,23 @@ export interface LoopAgentTypePromptParams {
     finishIfThreshold?: number;
 
     /**
+     * Check the agent's own payload changes that the payload analyzer flags as needing feedback
+     * (large truncations, removed keys, type changes). Each flagged change becomes one Likelihood
+     * ("was this change intended?"), all asked in one decision call with the `decisionPromptName`
+     * prompt and recorded as a `Payload change check` Decision step. The changes judged unintended
+     * are listed on the agent's next turn, which asks it to confirm or restore them.
+     *
+     * A change is never reverted or blocked automatically: the agent decides. When the decision
+     * fails or takes longer than 30 seconds, every change is accepted, as it is when this is off. A
+     * step that ends the run (`Success`, `Chat`, or any step that terminates) is not checked, since
+     * no turn would read the result.
+     *
+     * Off by default: each check costs an extra decision call.
+     * @default false
+     */
+    payloadFeedbackCheck?: boolean;
+
+    /**
      * Allow this agent to emit durable task graphs (`nextStep.type === 'Tasks'`).
      *
      * **Defaults to false, unlike every other flag here, and is enforced rather than advisory.**
@@ -487,45 +517,94 @@ export interface LoopAgentTypePromptParams {
     // === Content Limiting ===
 
     /**
-     * Maximum number of sub-agents to include in prompt details.
-     * -1 = include all (default)
-     * 0 = include none (hide sub-agent capabilities)
-     * N = include first N sub-agents
-     * Useful for agents with many sub-agents where only a few are commonly used.
+     * Catalog narrowing for sub-agents (plan Task 3.7).
+     * -1 or 0 = include all (default: narrowing is off)
+     * N = when the agent has more than N sub-agents, describe the N most useful for the run's opening
+     *     request, judged once per run by one decision call, plus any with MinExecutionsPerRun set.
+     *     The list starts with a line naming the sub-agents it hides.
+     * Narrowing only hides: every permitted sub-agent can still be called by name, `subAgentCount`
+     * still counts them all, and a failed decision shows them all.
+     * Narrowing is prose-only: it shortens the described list, never the native tool set. With native
+     * tool calling under implicit control flow, every sub-agent is still declared as a
+     * `delegate_to_` tool, since a call to an undeclared tool is refused.
      * @default -1
      */
     maxSubAgentsInPrompt?: number;
 
     /**
-     * Maximum number of actions to include in prompt details.
-     * -1 = include all (default)
-     * 0 = include none (hide action capabilities)
-     * N = include first N actions
-     * Useful for agents with many actions where only a few are commonly used.
+     * Catalog narrowing for actions and skills (plan Task 3.7).
+     * -1 or 0 = include all (default: narrowing is off)
+     * N = when the agent has more than N actions (or skills), describe the N most useful for the
+     *     run's opening request, judged once per run by one decision call, plus any action with
+     *     MinExecutionsPerRun set and Find Candidate Actions / Find Candidate Agents. Each narrowed
+     *     list starts with a line saying how many it hides and how to reach them: hidden skills are
+     *     named, and hidden actions are found with Find Candidate Actions, so actions are narrowed
+     *     only when the agent has that action (skills still are).
+     * Narrowing only hides: every permitted action can still be called, `actionCount` and
+     * `skillCount` still count them all, and a failed decision shows them all.
+     * Narrowing is prose-only: it shortens the described list, never the native tool set. With native
+     * tool calling, every action is still declared as a tool, since a call to an undeclared tool is
+     * refused and that mode has no `Actions` step to fall back on.
      * @default -1
      */
     maxActionsInPrompt?: number;
+
+    /**
+     * Decision discovery (plan Task 3.1): suggest the agent to delegate to before the first prompt.
+     * When true, and the run answers its conversation's opening request (its messages hold one user
+     * message) without @mentioning an agent, one decision call runs once per run, in parallel with the
+     * rest of pre-execution. It asks which of the agents the user may run (the Find Candidate Agents
+     * set, minus this agent, and only those the host's `ALL_AVAILABLE_AGENTS` allows when it sends
+     * one) should handle the request, and whether the request needs a specialist at all. When both
+     * answers are confident it adds a `<suggested_agent>` system message to the first prompt, so the
+     * agent can delegate in its first turn instead of calling Find Candidate Agents first. Otherwise,
+     * and on any error, timeout or cancellation, the prompt is unchanged. A follow-up turn is never
+     * asked about, so a suggestion never pulls the agent away from one it has already engaged, and
+     * fewer than three candidate agents ask nothing.
+     * @default false
+     */
+    decisionDiscovery?: boolean;
 }
 
 /**
  * The most decision requests answered from one agent turn, unless `decisionsMaxRequests` overrides
- * it. Each request can itself make up to `decisionsMaxItems` calls through `forEachItemIn`, so this
- * bounds how many decision calls one turn can start.
+ * it. Each request can itself make up to `decisionsMaxItems` calls through `forEachItemIn`, so the
+ * total number of calls is bounded separately, by {@link MAX_DECISION_CALLS_PER_TURN}.
  */
 export const MAX_DECISION_REQUESTS_PER_TURN = 8;
 
 /**
- * Default values for LoopAgentTypePromptParams.
- * All section flags default to true (include), limits default to -1 (include all).
+ * The most decision calls one agent turn's requests make in total, counting every `forEachItemIn`
+ * item, unless `decisionsMaxCallsPerTurn` overrides it. Without it, 8 requests of 100 items each
+ * could send 800 calls, each with its own step and prompt run, before the run's cost guardrails
+ * (checked between steps) could stop them.
  */
-/** Every {@link FinishIfMode}, for validation. */
+export const MAX_DECISION_CALLS_PER_TURN = 100;
+
+/** Every {@link FinishIfMode}, for validation. Mode names are case-sensitive. */
 export const FINISH_IF_MODES: readonly FinishIfMode[] = ['off', 'shadow', 'on'];
 
-/** The mode a prompt-param value names; anything else, an absent value included, is `'off'`. */
-export function ResolveFinishIfMode(value: unknown): FinishIfMode {
-    return value === 'shadow' || value === 'on' ? value : 'off';
+/**
+ * Whether a prompt-param value is one of the {@link FINISH_IF_MODES}. The check is exact, so `'On'`
+ * and `'true'` are not modes.
+ */
+export function IsFinishIfMode(value: unknown): value is FinishIfMode {
+    return FINISH_IF_MODES.some(mode => mode === value);
 }
 
+/**
+ * The mode a prompt-param value names. Anything else, an absent value included, is `'off'`.
+ * `BaseAgent` warns once per agent and value when a value is set but is not a mode.
+ */
+export function ResolveFinishIfMode(value: unknown): FinishIfMode {
+    return IsFinishIfMode(value) ? value : 'off';
+}
+
+/**
+ * Default values for LoopAgentTypePromptParams.
+ * Section flags default to true (include) and the prompt-content limits to -1 (include all); the
+ * TSDoc on each property gives its own default.
+ */
 export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParams> = {
     includeResponseTypeDefinition: { ...DEFAULT_RESPONSE_TYPE_INCLUSION_RULES },
     includeForEachDocs: true,
@@ -543,15 +622,19 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     includeArtifactToolsDocs: true,
     includeConversationToolsDocs: true,
     includePipelineDocs: true,
-    includeDecisionsDocs: true,
+    includeDecisionsDocs: false,
     decisionsMaxItems: 100,
     decisionsMaxRequests: MAX_DECISION_REQUESTS_PER_TURN,
+    decisionsMaxCallsPerTurn: MAX_DECISION_CALLS_PER_TURN,
     decisionPromptName: 'Default Decision',
     finishIfMode: 'off',
     includeFinishIfDocs: true,
     finishIfThreshold: 0.9,
+    // Off: an opt-in check that costs a decision call per flagged payload change.
+    payloadFeedbackCheck: false,
     // Deliberately false — a capability gate, not a token-savings flag (D3).
     enableTaskGraphs: false,
     maxSubAgentsInPrompt: -1,
-    maxActionsInPrompt: -1
+    maxActionsInPrompt: -1,
+    decisionDiscovery: false
 };

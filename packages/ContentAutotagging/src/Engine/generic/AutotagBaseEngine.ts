@@ -24,7 +24,7 @@ import * as cheerio from 'cheerio'
 import crypto from 'crypto'
 import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai'
 import { AIEngine } from '@memberjunction/aiengine'
-import { AIPromptRunner, AIModelRunner } from '@memberjunction/ai-prompts'
+import { AIPromptRunner, AIEmbeddingRunner } from '@memberjunction/ai-prompts'
 import type { EmbeddingRunResult } from '@memberjunction/ai-prompts'
 import { AIPromptParams } from '@memberjunction/ai-core-plus'
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus'
@@ -44,11 +44,19 @@ import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities'
  * Items sharing the same pair are batched together for efficient processing.
  */
 export interface ResolvedVectorInfrastructure {
-    embedding: BaseEmbeddings;
+    /**
+     * @deprecated Embedding goes through AIEmbeddingRunner, pinned to {@link embeddingModelID}. For
+     * older callers this is still a working driver, built on first read with the legacy
+     * environment-variable key.
+     */
+    embedding?: BaseEmbeddings;
     vectorDB: VectorDBBase;
     indexName: string;
     embeddingModelName: string;
-    /** The AI model ID for the embedding model (UUID), used by AIModelRunner for tracking */
+    /**
+     * The embedding model (`MJ: AI Models.ID`). Every embedding call for this index pins it as
+     * `ModelID`, so the index only ever holds vectors from this model.
+     */
     embeddingModelID: string;
     /**
      * Reduced embedding dimensions from `MJ: Vector Indexes.Dimensions`, when set. Passed to the
@@ -335,6 +343,10 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             buffer = [];
             batchNum++;
             anyItemsProcessed = true;
+
+            // The source's classification config and the type's model / tag limits are read from the
+            // KnowledgeHub cache per item; catch a source or type created after it loaded.
+            await this.ensureItemMetadataCached(batch, contextUser);
 
             // Rate limit before each batch of parallel LLM calls.
             await this.LLMRateLimiter.Acquire();
@@ -1714,7 +1726,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * (first active VectorIndex). Each group is processed in configurable batches with
      * parallel upserts within each batch.
      *
-     * Uses AIModelRunner to create AIPromptRun records for each embedding batch,
+     * Uses AIEmbeddingRunner to create AIPromptRun records for each embedding batch,
      * enabling token/cost tracking and linking to ContentProcessRunDetail records.
      *
      * @param items - content items to vectorize
@@ -1771,14 +1783,14 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
     /**
      * Process a single infrastructure group: embed texts in batches and upsert to vector DB.
-     * Uses AIModelRunner for each embedding batch to create AIPromptRun records with
+     * Uses AIEmbeddingRunner for each embedding batch to create AIPromptRun records with
      * token/cost tracking. Upserts within each batch run in parallel for throughput.
      *
      * @param items - content items in this infrastructure group
      * @param infra - resolved embedding + vector DB infrastructure
      * @param tagMap - pre-loaded tags for metadata enrichment
      * @param batchSize - number of items per embedding batch
-     * @param contextUser - current user for AIModelRunner tracking
+     * @param contextUser - current user for AIEmbeddingRunner tracking
      * @param onBatchComplete - callback invoked after each batch with item count
      * @returns count of vectorized items and collected AIPromptRun IDs
      */
@@ -1793,7 +1805,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     ): Promise<{ vectorized: number; promptRunIDs: string[] }> {
         let vectorized = 0;
         const promptRunIDs: string[] = [];
-        const modelRunner = new AIModelRunner();
+        const embeddingRunner = new AIEmbeddingRunner();
 
         // Provider directives are built for every item BEFORE any embedding spend. A driver may
         // reject a record from BuildProviderDirectives (e.g. a mandatory routing value its config
@@ -1830,8 +1842,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             // Rate limit embedding API call
             await this.EmbeddingRateLimiter.Acquire(texts.reduce((sum, t) => sum + Math.ceil(t.length / 4), 0));
 
-            // Use AIModelRunner to embed texts with AIPromptRun tracking
-            const runResult = await modelRunner.RunEmbedding({
+            // Use AIEmbeddingRunner to embed texts with AIPromptRun tracking
+            const runResult = await embeddingRunner.RunEmbedding({
                 Texts: texts,
                 ModelID: infra.embeddingModelID,
                 PromptID: embeddingPromptID,
@@ -1872,9 +1884,9 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     /**
-     * Resolve the "Content Embedding" prompt ID from AIEngine for AIModelRunner tracking.
-     * Returns undefined if the prompt is not found (AIModelRunner will fall back to
-     * the first active Embedding-type prompt).
+     * Resolve the "Content Embedding" prompt ID from AIEngine for AIEmbeddingRunner tracking.
+     * Returns undefined if the prompt is not found (AIEmbeddingRunner then uses the first
+     * active Embedding-type prompt).
      */
     private resolveEmbeddingPromptID(): string | undefined {
         const prompt = AIEngine.Instance.Prompts.find(
@@ -1883,8 +1895,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         if (prompt) {
             return prompt.ID;
         }
-        // Fall back: let AIModelRunner find the first active Embedding prompt
-        LogStatus('[Autotag] "Content Embedding" prompt not found — AIModelRunner will use default embedding prompt');
+        // Fall back: let AIEmbeddingRunner find the first active Embedding prompt
+        LogStatus('[Autotag] "Content Embedding" prompt not found — AIEmbeddingRunner will use default embedding prompt');
         return undefined;
     }
 
@@ -2626,7 +2638,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const texts = embeddable.map(e => e.chunk.text);
         await this.EmbeddingRateLimiter.Acquire(texts.reduce((sum, t) => sum + Math.ceil(t.length / 4), 0));
 
-        const runResult = await new AIModelRunner().RunEmbedding({
+        const runResult = await new AIEmbeddingRunner().RunEmbedding({
             Texts: texts,
             ModelID: infra.embeddingModelID,
             PromptID: this.resolveEmbeddingPromptID(),
@@ -2710,14 +2722,22 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     /**
      * Load content source and content type records for all unique source/type IDs
      * referenced by the given items. Returns maps keyed by normalized ID.
+     *
+     * Every vectorization entry point (VectorizeContentItems, PurgeDeletedChunks,
+     * EmbedPendingChunks, vector dedup) builds its maps here, so this is where a stale
+     * KnowledgeHub cache is caught — see {@link ensureItemMetadataCached}. The per-item storage
+     * config ({@link resolveItemVectorStorageConfig}) reads the same cache later in the pass, so
+     * it sees the reloaded rows too.
      */
     private async loadContentSourceAndTypeMaps(
         items: MJContentItemEntity[],
-        _contextUser: UserInfo
+        contextUser: UserInfo
     ): Promise<{
         sourceMap: Map<string, Record<string, unknown>>;
         typeMap: Map<string, Record<string, unknown>>;
     }> {
+        await this.ensureItemMetadataCached(items, contextUser);
+
         const sourceIdSet = new Set(items.map(i => NormalizeUUID(i.ContentSourceID)));
         const typeIdSet = new Set(items.map(i => NormalizeUUID(i.ContentTypeID)));
 
@@ -2737,6 +2757,59 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         }
 
         return { sourceMap, typeMap };
+    }
+
+    /**
+     * Make sure the KnowledgeHub cache holds every content source and content type these items
+     * reference, reloading it ONCE when it does not.
+     *
+     * ── A MISS HERE MEANS THE CACHE IS STALE ────────────────────────────────────────────────────
+     * Both ids are required foreign keys on the item, so the rows exist; a miss means the cache
+     * loaded before they did. That is the normal state of a long-running worker: unless Redis
+     * cross-server cache sync is configured, nothing tells this process about a source another
+     * process created after it booted. And the source row is not decoration. It carries the item's
+     * routing (its EmbeddingModelID / VectorIndexID override) and its storage config
+     * (VectorIDStrategy, ChunkTextStorage, VectorMetadata, VectorEntityName). Read from a stale
+     * cache, every one of those silently falls back to the content type's values or the hard-coded
+     * defaults, so the item is embedded into the wrong index with the wrong vector ids until the
+     * worker restarts, and its later re-runs then write different ids.
+     *
+     * One `Config(true)` reloads all six KnowledgeHub sets in a single batched, cache-bypassing
+     * round trip. It runs only on a miss, so a warm cache costs nothing beyond the set lookups, and
+     * at most once per call however many items miss.
+     *
+     * Never makes things worse: a failed reload is logged and the pass continues on whatever the
+     * cache holds, which is exactly the pre-reload behavior (content type → default cascade).
+     */
+    private async ensureItemMetadataCached(items: MJContentItemEntity[], contextUser: UserInfo): Promise<void> {
+        const uncached = this.findUncachedItemMetadata(items);
+        if (uncached.length === 0) return;
+
+        LogStatus(`[Autotag] KnowledgeHub cache is missing ${uncached.length} row(s) these items reference (created after it loaded) — reloading it once: ${uncached.join(', ')}`);
+        try {
+            await this.khEngine.Config(true, contextUser, this.ProviderToUse);
+        } catch (e) {
+            LogError(`[Autotag] KnowledgeHub cache reload failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+
+        const stillUncached = this.findUncachedItemMetadata(items);
+        if (stillUncached.length > 0) {
+            LogError(`[Autotag] ${stillUncached.length} row(s) still absent from the KnowledgeHub cache after a reload: ${stillUncached.join(', ')} — items referencing them fall back to their content type / default configuration`);
+        }
+    }
+
+    /** The distinct content source / content type ids these items reference that the KnowledgeHub cache does not hold. */
+    private findUncachedItemMetadata(items: MJContentItemEntity[]): string[] {
+        const uncached = new Set<string>();
+        for (const item of items) {
+            if (item.ContentSourceID && !this.khEngine.GetContentSourceByID(item.ContentSourceID)) {
+                uncached.add(`content source ${NormalizeUUID(item.ContentSourceID)}`);
+            }
+            if (item.ContentTypeID && !this.khEngine.GetContentTypeByID(item.ContentTypeID)) {
+                uncached.add(`content type ${NormalizeUUID(item.ContentTypeID)}`);
+            }
+        }
+        return [...uncached];
     }
 
     /**
@@ -2870,11 +2943,13 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const externalIndexName = vectorIndex.ExternalID?.trim() || vectorIndex.Name;
         LogStatus(`VectorizeContentItems: USING embedding model "${aiModel.Name}" (${driverClass}), vector DB "${vectorDBClassKey}", index "${externalIndexName}" (Vector Index "${vectorIndex.Name}")`);
 
-        const embedding = this.createEmbeddingInstance(driverClass);
         const vectorDB = this.createVectorDBInstance(vectorDBClassKey);
+        const legacyEmbedding = this.legacyEmbeddingAccessor(driverClass);
 
         return {
-            embedding,
+            get embedding(): BaseEmbeddings | undefined {
+                return legacyEmbedding();
+            },
             vectorDB,
             indexName: externalIndexName,
             embeddingModelName,
@@ -2914,19 +2989,19 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         return aiModel;
     }
 
-    /** Create a BaseEmbeddings instance for a given driver class */
-    private createEmbeddingInstance(driverClass: string): BaseEmbeddings {
-        // No pre-flight key check, deliberately — the same call the EntityDocument pipeline already
-        // makes (`entityVectorSync.ts`), for the reason documented there: an empty key is legitimate
-        // for local-only drivers (LocalEmbedding runs ONNX in-process and does `super(apiKey || 'local')`),
-        // and for a cloud driver that genuinely needs one the constructor or the first inference call
-        // raises a real provider-level auth error, which is more actionable than a guard here.
-        // Gating up front made local embedding models unusable from this pipeline without inventing a
-        // meaningless AI_VENDOR_API_KEY__LocalEmbedding.
-        const apiKey = GetAIAPIKey(driverClass);
-        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(BaseEmbeddings, driverClass, apiKey || '');
-        if (!instance) throw new Error(`Failed to create embedding instance for ${driverClass}`);
-        return instance;
+    /**
+     * Backs the deprecated `ResolvedVectorInfrastructure.embedding`: builds the driver the way this
+     * engine did before AIEmbeddingRunner, on first read only. Nothing in MJ reads it, so normally
+     * nothing is built. An empty key is fine for keyless drivers such as LocalEmbedding.
+     */
+    private legacyEmbeddingAccessor(driverClass: string): () => BaseEmbeddings | undefined {
+        let driver: BaseEmbeddings | undefined;
+        return () => {
+            driver ??= MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
+                BaseEmbeddings, driverClass, GetAIAPIKey(driverClass) || ''
+            ) ?? undefined;
+            return driver;
+        };
     }
 
     /**
@@ -3641,9 +3716,9 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
         await this.EmbeddingRateLimiter.Acquire(Math.ceil(truncated.length / 4));
 
-        const modelRunner = new AIModelRunner();
+        const embeddingRunner = new AIEmbeddingRunner();
         const embeddingPromptID = this.resolveEmbeddingPromptID();
-        const runResult = await modelRunner.RunEmbedding({
+        const runResult = await embeddingRunner.RunEmbedding({
             ModelID: infra.embeddingModelID,
             Texts: [truncated],
             PromptID: embeddingPromptID ?? undefined,

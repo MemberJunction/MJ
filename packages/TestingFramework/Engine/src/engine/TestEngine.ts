@@ -29,7 +29,10 @@ import { SchemaValidatorOracle } from '../oracles/SchemaValidatorOracle';
 import { TraceValidatorOracle } from '../oracles/TraceValidatorOracle';
 import { TraceSubAgentValidatorOracle } from '../oracles/TraceSubAgentValidatorOracle';
 import { AgentDecisionOracle, ResponseWellFormedOracle } from '../oracles/AgentDecisionOracle';
+import { DecisionLabelMatchOracle } from '../oracles/DecisionLabelMatchOracle';
+import { DiscoveryLabelMatchOracle } from '../oracles/DiscoveryLabelMatchOracle';
 import { LLMJudgeOracle } from '../oracles/LLMJudgeOracle';
+import { DecisionJudgeOracle } from '../oracles/DecisionJudgeOracle';
 import { ExactMatchOracle } from '../oracles/ExactMatchOracle';
 import { SQLValidatorOracle } from '../oracles/SQLValidatorOracle';
 import {
@@ -656,7 +659,10 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         this.RegisterOracle(new TraceSubAgentValidatorOracle());
         this.RegisterOracle(new AgentDecisionOracle());
         this.RegisterOracle(new ResponseWellFormedOracle());
+        this.RegisterOracle(new DecisionLabelMatchOracle());
+        this.RegisterOracle(new DiscoveryLabelMatchOracle());
         this.RegisterOracle(new LLMJudgeOracle());
+        this.RegisterOracle(new DecisionJudgeOracle());
         this.RegisterOracle(new ExactMatchOracle());
         this.RegisterOracle(new SQLValidatorOracle());
     }
@@ -927,7 +933,8 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         testRun.FailedChecks = result.failedChecks;
         testRun.TotalChecks = result.totalChecks;
         testRun.TargetType = result.targetType;
-        testRun.TargetLogID = result.targetLogId;
+        // A driver with no target (nothing ran) returns an empty string; the column is a nullable FK
+        testRun.TargetLogID = result.targetLogId || null;
         // Set the proper Entity FK for target linkage
         if (result.targetLogEntityId) {
             testRun.TargetLogEntityID = result.targetLogEntityId;
