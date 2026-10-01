@@ -3222,6 +3222,16 @@ drift; the sweep runs when one does.
 Verified: full build 0 TS errors; MJCore 2,873; MJServer 1,411; GenericDatabaseProvider 1,193;
 `check:naming` 0 errors.
 
-**Still outstanding from §28:** the *engine* sweeper still takes its ~21 leases before discovering it
-has nothing to sweep. The metadata sweep now shows the shape of the fix — check the declaration first,
-then take the lease — and the same change belongs in `BaseEngineSweeper.SweepOnce`.
+### 30.1 The engine sweeper's lease ordering
+
+Closed the same day. `BaseEngineSweeper.SweepOnce` took a per-engine cross-process lease *before*
+asking whether the engine had anything to sweep, so on a stock installation it claimed a lease per
+loaded engine per interval and then found nothing — the 21 lease keys observed in §28. It now asks
+first, through a new `BaseEngine.HasSweepableConfigs()` (an in-memory check over the same
+`sweepableConfigs()` the sweep itself uses), and claims nothing when the answer is no.
+
+Three tests, all three verified to fail with the check removed (`expected [ 'engine-sweep:AlsoTrusting',
+…(1) ] to deeply equal []`). Precisely what is saved is the **lease**, not a database query:
+`SweepAgainstDatabase` already returned early with no configs. So the gain is Redis traffic and the
+clarity of not claiming a fleet-wide lock to do nothing — stated that way in the test rather than
+overclaimed.
