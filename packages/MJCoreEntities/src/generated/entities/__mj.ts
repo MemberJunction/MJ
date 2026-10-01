@@ -88984,6 +88984,10 @@ export class MJEntityFormContributionEntity extends BaseEntity<MJEntityFormContr
     * * ReplacesFieldNames: If Replaces Field Names is provided, it must be a valid, non-empty JSON array of field names.
     * * ReplacesSectionKeys: If Replaces Section Keys is provided, it must be a valid JSON array containing at least one element. It cannot be empty or just an empty array structure.
     * * Table-Level: Only one of the following fields can be set at a time: Replaces Section Key, Related Entity ID, Replaces Field Names, Replaces Section Keys, or In Section Key. This prevents conflicting configuration definitions.
+    * * Table-Level: If the presentation style is set to 'bare', then both Inclusion and ChromeGroup must be left empty.
+    * * Table-Level: If a Related Join Field is specified, a Related Entity must also be provided to ensure the join field has a valid target entity.
+    * * Table-Level: Ensures that the assigned User or Role matches the selected Scope. A 'User' scope requires a User ID and no Role ID, a 'Role' scope requires a Role ID and no User ID, and a 'Global' scope requires both User ID and Role ID to be empty.
+    * * Table-Level: If a Section Position is specified, either the Replaces Field Names or the In Section Key must also be provided to define the context of the position.
     * @public
     * @method
     * @override
@@ -88993,6 +88997,10 @@ export class MJEntityFormContributionEntity extends BaseEntity<MJEntityFormContr
         this.ValidateReplacesFieldNamesIsNonEmptyJsonArray(result);
         this.ValidateReplacesSectionKeysIsNonEmptyJsonArray(result);
         this.ValidateMutuallyExclusiveReplacementAndRelationshipFields(result);
+        this.ValidatePresentationBareInclusionAndChromeGroup(result);
+        this.ValidateRelatedJoinFieldRequiresRelatedEntityID(result);
+        this.ValidateScopeAssociations(result);
+        this.ValidateSectionPositionDependencies(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -89114,6 +89122,121 @@ export class MJEntityFormContributionEntity extends BaseEntity<MJEntityFormContr
     		if (this.InSectionKey != null) {
     			result.Errors.push(new ValidationErrorInfo("InSectionKey", message, this.InSectionKey, ValidationErrorType.Failure));
     		}
+    	}
+    }
+
+    /**
+    * If the presentation style is set to 'bare', then both Inclusion and ChromeGroup must be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePresentationBareInclusionAndChromeGroup(result: ValidationResult) {
+    	if (this.Presentation === "bare") {
+    		if (this.Inclusion != null || this.ChromeGroup != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"Presentation",
+    				"When Presentation is set to 'bare', both Inclusion and ChromeGroup must be empty.",
+    				this.Presentation,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
+    * If a Related Join Field is specified, a Related Entity must also be provided to ensure the join field has a valid target entity.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRelatedJoinFieldRequiresRelatedEntityID(result: ValidationResult) {
+    	if (this.RelatedJoinField != null && this.RelatedJoinField.trim() !== "" && this.RelatedEntityID == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RelatedEntityID",
+    			"A Related Entity must be specified when a Related Join Field is provided.",
+    			this.RelatedEntityID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Ensures that the assigned User or Role matches the selected Scope. A 'User' scope requires a User ID and no Role ID, a 'Role' scope requires a Role ID and no User ID, and a 'Global' scope requires both User ID and Role ID to be empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateScopeAssociations(result: ValidationResult) {
+    	if (this.Scope === 'User') {
+    		if (this.UserID == null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"UserID",
+    				"A User must be specified when the Scope is set to 'User'.",
+    				this.UserID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		if (this.RoleID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"RoleID",
+    				"Role cannot be specified when the Scope is set to 'User'.",
+    				this.RoleID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else if (this.Scope === 'Role') {
+    		if (this.RoleID == null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"RoleID",
+    				"A Role must be specified when the Scope is set to 'Role'.",
+    				this.RoleID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		if (this.UserID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"UserID",
+    				"User cannot be specified when the Scope is set to 'Role'.",
+    				this.UserID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else if (this.Scope === 'Global') {
+    		if (this.UserID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"UserID",
+    				"User cannot be specified when the Scope is set to 'Global'.",
+    				this.UserID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		if (this.RoleID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"RoleID",
+    				"Role cannot be specified when the Scope is set to 'Global'.",
+    				this.RoleID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
+    * If a Section Position is specified, either the Replaces Field Names or the In Section Key must also be provided to define the context of the position.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateSectionPositionDependencies(result: ValidationResult) {
+    	// If SectionPosition is provided, at least one of ReplacesFieldNames or InSectionKey must also be provided
+    	if (this.SectionPosition != null && this.ReplacesFieldNames == null && this.InSectionKey == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"SectionPosition",
+    			"When Section Position is specified, you must also provide either Replaces Field Names or In Section Key.",
+    			this.SectionPosition,
+    			ValidationErrorType.Failure
+    		));
     	}
     }
 

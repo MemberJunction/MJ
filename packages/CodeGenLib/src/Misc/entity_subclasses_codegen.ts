@@ -1380,7 +1380,9 @@ ${fields}
             const linkedRecordPK = f ? f.ID : entity.ID;
             const newGeneratedCodeId = uuidv4();
             v.generatedCodeId = newGeneratedCodeId;
-            const checkQuery = `SELECT 1 FROM ${generatedCodeTbl} WHERE ${qi('CategoryID')} = ${validatorCodeCategoryID} AND ${qi('LinkedEntityID')} = ${lit(linkedEntityID ?? '')} AND ${qi('LinkedRecordPrimaryKey')} = ${lit(linkedRecordPK)}`;
+            // Every table-level validator links to the entity row, so its guard also names the validator.
+            const nameMatch = f ? '' : ` AND ${qi('Name')} = ${lit(v.functionName)}`;
+            const checkQuery = `SELECT 1 FROM ${generatedCodeTbl} WHERE ${qi('CategoryID')} = ${validatorCodeCategoryID} AND ${qi('LinkedEntityID')} = ${lit(linkedEntityID ?? '')} AND ${qi('LinkedRecordPrimaryKey')} = ${lit(linkedRecordPK)}${nameMatch}`;
             const insertSQL = `INSERT INTO ${generatedCodeTbl} (${qi('ID')}, ${qi('CategoryID')}, ${qi('GeneratedByModelID')}, ${qi('GeneratedAt')}, ${qi('Language')}, ${qi('Status')}, ${qi('Source')}, ${qi('Code')}, ${qi('Description')}, ${qi('Name')}, ${qi('LinkedEntityID')}, ${qi('LinkedRecordPrimaryKey')})
 VALUES (${lit(newGeneratedCodeId)}, ${validatorCodeCategoryID}, ${lit(v.aiModelID)}, ${utcNow}, ${lit('TypeScript')}, ${lit('Approved')}, ${lit(v.sourceCheckConstraint)}, ${lit(v.functionText)}, ${lit(v.functionDescription)}, ${lit(v.functionName)}, ${lit(linkedEntityID ?? '')}, ${lit(linkedRecordPK)})`;
             sSQL += `${provider.conditionalInsertSQL(checkQuery, insertSQL)};\n\n`;
