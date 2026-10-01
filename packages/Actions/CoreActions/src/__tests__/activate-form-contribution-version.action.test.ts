@@ -35,6 +35,8 @@ function row(seed: Record<string, unknown>): Row {
 }
 
 const provider = {
+    /** No authorization metadata: only an `Owner`-type caller holds the Manage Form Defaults grant. */
+    Authorizations: [],
     EntityByName: () => undefined,
     GetEntityObject: async <T>(): Promise<T> => row({ ID: 'unset' }) as unknown as T,
 };
@@ -140,6 +142,28 @@ describe('ActivateFormContributionVersionAction', () => {
         seedTarget({ UserID: 'SOMEONE-ELSE' });
         expect((await run(params())).ResultCode).toBe('FORBIDDEN');
     });
+
+    /**
+     * Agents activate their own personal panels only. Shared panels are managed by people, from
+     * the form's Manage drawer or Form Builder, so a Role or Global row is refused for every
+     * caller, a grant holder included, before anything is written.
+     */
+    for (const [label, seed] of [
+        ['a Role row', { Scope: 'Role', UserID: null, RoleID: 'ROLE-1' }],
+        ['a Global row', { Scope: 'Global', UserID: null, RoleID: null }],
+    ] as const) {
+        it(`refuses ${label} before writing anything, even for a holder`, async () => {
+            seedTarget(seed);
+            const p = params();
+            p.ContextUser = { ...user, Type: 'Owner', UserRoles: [{ RoleID: 'ROLE-1' }] } as unknown as RunActionParams['ContextUser'];
+            const result = await run(p);
+            expect(result.ResultCode).toBe('FORBIDDEN');
+            expect(result.Message).toMatch(/Manage drawer|Form Builder/);
+            expect(hoisted.rows.get('COMP-2')!.saved).toBe(false);
+            expect(hoisted.rows.get('ROW-2')!.Status).toBe('Pending');
+            expect(hoisted.filters).toHaveLength(0);
+        });
+    }
 
     it('refuses a stored key that is not a legal key', async () => {
         seedTarget({ ContributionKey: "skip:'; DROP--" });

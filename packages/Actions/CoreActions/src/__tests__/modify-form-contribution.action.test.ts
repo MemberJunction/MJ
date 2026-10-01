@@ -6,7 +6,7 @@ vi.mock('@memberjunction/global', async () => {
     return { ...actual, RegisterClass: () => (target: unknown) => target };
 });
 
-type LoadedEntity = Record<string, unknown> & { entityName: string; saved: boolean; ID: string };
+type LoadedEntity = Record<string, unknown> & { entityName: string; saved: boolean; saveOutcome: boolean; ID: string };
 type CreatedEntity = { entityName: string; fields: Record<string, unknown>; ID: string };
 
 const { hoisted } = vi.hoisted(() => ({
@@ -15,15 +15,33 @@ const { hoisted } = vi.hoisted(() => ({
         /** First GetEntityObject per entity name returns the pre-loaded row; later ones are new. */
         loaded: new Map<string, LoadedEntity>(),
         served: new Set<string>(),
+        /** Save outcome for new rows, by entity name. Defaults to success. */
+        newSaveOutcome: new Map<string, boolean>(),
+        /**
+         * A stand-in transaction: while one is open, saves are pending and reach `committed` only
+         * on Commit. Without one (the provider does not support transactions) every save commits.
+         */
+        tx: { supported: false, open: false, pending: [] as string[], committed: [] as string[], rolledBack: 0 },
     },
 }));
 
+/** Records a successful save as committed, or as pending while a transaction is open. */
+function recordWrite(label: string): void {
+    if (hoisted.tx.open) hoisted.tx.pending.push(label);
+    else hoisted.tx.committed.push(label);
+}
+
 function loadedEntity(entityName: string, seed: Record<string, unknown>): LoadedEntity {
     const target: LoadedEntity = {
-        entityName, saved: false, ID: seed.ID as string, ...seed,
+        entityName, saved: false, saveOutcome: true, ID: seed.ID as string, ...seed,
         LatestResult: { CompleteMessage: 'mock' },
         async Load() { return true; },
-        async Save() { target.saved = true; return true; },
+        async Save() {
+            if (!target.saveOutcome) return false;
+            target.saved = true;
+            recordWrite(`${entityName}:${target.ID}`);
+            return true;
+        },
         NewRecord() { /* no-op */ },
     };
     return target;
@@ -34,7 +52,11 @@ function newEntity(entityName: string) {
         entityName, fields: {}, ID: `${entityName}-new-${hoisted.created.length}`,
         LatestResult: { CompleteMessage: 'mock' },
         NewRecord() { /* no-op */ },
-        async Save() { return true; },
+        async Save() {
+            if (hoisted.newSaveOutcome.get(entityName) === false) return false;
+            recordWrite(`${entityName}:new`);
+            return true;
+        },
     };
     hoisted.created.push(target);
     return new Proxy(target, {
@@ -51,6 +73,17 @@ function newEntity(entityName: string) {
 }
 
 const provider = {
+    get SupportsEntityTransactions() { return hoisted.tx.supported; },
+    async BeginEntityTransaction() {
+        hoisted.tx.open = true;
+        return {
+            IsNested: false,
+            async Commit() { hoisted.tx.committed.push(...hoisted.tx.pending); hoisted.tx.pending = []; hoisted.tx.open = false; },
+            async Rollback() { hoisted.tx.pending = []; hoisted.tx.open = false; hoisted.tx.rolledBack++; },
+        };
+    },
+    /** No authorization metadata: only an `Owner`-type caller holds the Manage Form Defaults grant. */
+    Authorizations: [],
     EntityByName: (name: string) => ({
         'mj_bizapps_common: people': { ID: 'ENT-PEOPLE', Name: 'MJ_BizApps_Common: People' },
         'mj_bizapps_orders: event order lines': { ID: 'ENT-TICKETS', Name: 'MJ_BizApps_Orders: Event Order Lines' },
@@ -109,6 +142,8 @@ let loadedComponent: LoadedEntity;
 beforeEach(() => {
     hoisted.created = [];
     hoisted.served = new Set();
+    hoisted.newSaveOutcome = new Map();
+    hoisted.tx = { supported: false, open: false, pending: [], committed: [], rolledBack: 0 };
     loadedRow = loadedEntity('MJ: Entity Form Contributions', {
         ID: 'ROW-1', EntityID: 'ENT-PEOPLE', ComponentID: 'COMP-1', Name: 'LTV strip', Description: null, Notes: null,
         Slot: 'before-fields', SortKey: 0, ContributionKey: 'skip:person-ltv', RelatedEntityID: null, RelatedJoinField: null,
@@ -273,23 +308,129 @@ describe('ModifyFormContributionAction', () => {
         expect(loadedRow).toMatchObject({ RelatedEntityID: null, RelatedJoinField: null, ReplacesFieldNames: '["Email"]' });
     });
 
-    describe('precedence of the new-version row', () => {
+    describe('precedence', () => {
+        it('keeps the precedence of the personal row it versions', async () => {
+            Object.assign(loadedRow, { Status: 'Active', Precedence: 3 });
+            await run(params());
+            expect(createdRow().fields.Precedence).toBe(3);
+        });
+
+        // The apply flow confirms "Replace an installed contribution?" and then calls Modify;
+        // the row must be able to outrank the panel it replaces.
+        it('writes a supplied Precedence on the new-version row', async () => {
+            Object.assign(loadedRow, { Status: 'Active', Precedence: 0 });
+            await run(params({ Precedence: '6' }));
+            expect(createdRow().fields.Precedence).toBe(6);
+        });
+
+        it('writes a supplied Precedence on the row modified in place', async () => {
+            const result = await run(params({ Precedence: 4 }));
+            expect(result.Success).toBe(true);
+            expect(loadedRow.Precedence).toBe(4);
+        });
+
+        it('keeps the row\'s precedence when the supplied one is not a non-negative number', async () => {
+            loadedRow.Precedence = 2;
+            await run(params({ Precedence: '-3' }));
+            expect(loadedRow.Precedence).toBe(2);
+        });
+    });
+
+    /**
+     * Agents change their own personal panels only. Shared panels are managed by people, from the
+     * form's Manage drawer or Form Builder, so a Role or Global row is refused for every caller,
+     * a grant holder included, before anything is written.
+     */
+    describe('a row that is not the caller\'s own personal row', () => {
         function asOwner(p: RunActionParams): RunActionParams {
             p.ContextUser = { ...user, Type: 'Owner' } as unknown as RunActionParams['ContextUser'];
             return p;
         }
 
-        it('ranks a personal copy of a Global row above the row it copies', async () => {
-            Object.assign(loadedRow, { Scope: 'Global', UserID: null, Status: 'Active', Precedence: 4 });
-            const result = await run(asOwner(params()));
-            expect(result.Success).toBe(true);
-            expect(createdRow().fields).toMatchObject({ Scope: 'User', UserID: 'USER-1', Precedence: 5 });
+        const shared: Array<[string, Record<string, unknown>]> = [
+            ['a Role row', { Scope: 'Role', UserID: null, RoleID: 'ROLE-1' }],
+            ['a Global row', { Scope: 'Global', UserID: null, RoleID: null }],
+        ];
+
+        for (const [label, seed] of shared) {
+            for (const status of ['Pending', 'Active'] as const) {
+                it(`refuses ${label} (${status}) before writing the component, even for a holder`, async () => {
+                    Object.assign(loadedRow, seed, { Status: status });
+                    const p = asOwner(params());
+                    (p.ContextUser as unknown as { UserRoles: { RoleID: string }[] }).UserRoles = [{ RoleID: 'ROLE-1' }];
+                    const result = await run(p);
+                    expect(result.ResultCode).toBe('FORBIDDEN');
+                    expect(result.Message).toMatch(/Manage drawer|Form Builder/);
+                    expect(loadedComponent.saved).toBe(false);
+                    expect(loadedRow.saved).toBe(false);
+                    expect(hoisted.created).toHaveLength(0);
+                });
+            }
+        }
+
+        it('accepts the caller\'s own row when the stored ID differs only in casing', async () => {
+            loadedRow.UserID = 'user-1';
+            expect((await run(params())).Success).toBe(true);
+        });
+    });
+
+    describe('a spec whose claim the database would refuse', () => {
+        const twoClaims = {
+            ...spec,
+            formContribution: {
+                ...spec.formContribution, presentation: 'panel',
+                relatedEntity: 'MJ_BizApps_Orders: Event Order Lines', replacesFieldNames: ['Email'],
+            },
+        };
+
+        it('returns INVALID_CLAIM before any write, in place', async () => {
+            const result = await run(params({ Spec: twoClaims }));
+            expect(result.ResultCode).toBe('INVALID_CLAIM');
+            expect(result.Message).toMatch(/one claim/i);
+            expect(loadedComponent.saved).toBe(false);
+            expect(loadedRow.saved).toBe(false);
         });
 
-        it('keeps the precedence of the personal row it versions', async () => {
-            Object.assign(loadedRow, { Status: 'Active', Precedence: 3 });
-            await run(params());
-            expect(createdRow().fields.Precedence).toBe(3);
+        it('returns INVALID_CLAIM before any write, for a new version', async () => {
+            loadedRow.Status = 'Active';
+            const result = await run(params({ Spec: twoClaims }));
+            expect(result.ResultCode).toBe('INVALID_CLAIM');
+            expect(hoisted.created).toHaveLength(0);
+        });
+    });
+
+    /** The component and the row are written together or not at all. */
+    describe('a refused row save', () => {
+        beforeEach(() => { hoisted.tx.supported = true; });
+
+        it('rolls back the component update made in place', async () => {
+            loadedRow.saveOutcome = false;
+            const result = await run(params());
+            expect(result.ResultCode).toBe('PERSIST_FAILED');
+            expect(hoisted.tx.rolledBack).toBe(1);
+            expect(hoisted.tx.committed).toEqual([]);
+        });
+
+        it('rolls back the new component when the new-version row is refused', async () => {
+            loadedRow.Status = 'Active';
+            hoisted.newSaveOutcome.set('MJ: Entity Form Contributions', false);
+            const result = await run(params());
+            expect(result.ResultCode).toBe('PERSIST_FAILED');
+            expect(hoisted.tx.rolledBack).toBe(1);
+            expect(hoisted.tx.committed).toEqual([]);
+        });
+
+        it('rolls back everything when the superseded source cannot be saved', async () => {
+            loadedRow.saveOutcome = false;
+            const result = await run(params({ VersionBumpKind: 'minor' }));
+            expect(result.ResultCode).toBe('PERSIST_FAILED');
+            expect(hoisted.tx.committed).toEqual([]);
+        });
+
+        it('commits the component and the row together on success', async () => {
+            const result = await run(params());
+            expect(result.Success).toBe(true);
+            expect(hoisted.tx.committed).toEqual(['MJ: Components:COMP-1', 'MJ: Entity Form Contributions:ROW-1']);
         });
     });
 });

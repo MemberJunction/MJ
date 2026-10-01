@@ -6,13 +6,14 @@ import type { ComponentSpec } from "@memberjunction/interactive-component-types"
 import {
     AddOutput,
     Failure,
-    GetNumberParam,
+    GetPrecedenceParam,
     GetStringParam,
     InsertComponent,
     InsertContribution,
     LintFormPanelSpec,
     ParseSpecParam,
     ResolveContributionRegistration,
+    WriteAtomically,
 } from "./_shared";
 
 /**
@@ -32,9 +33,9 @@ import {
  * the user confirms replacing an installed contribution). It only ever affects the
  * calling user's own form, so it is not clamped.
  *
- * **Atomicity.** If the contribution insert fails after the Component insert succeeded,
- * PERSIST_FAILED names the orphan Component. Orphan Components render nowhere until a
- * row points at them, so a retry is safe.
+ * **Atomicity.** The spec's claim is checked (INVALID_CLAIM) before anything is written, and
+ * the Component and row inserts run in one entity transaction, so a refused row leaves no
+ * Component behind.
  */
 @RegisterClass(BaseAction, "__CreateFormContribution")
 export class CreateFormContributionAction extends BaseAction {
@@ -70,29 +71,29 @@ export class CreateFormContributionAction extends BaseAction {
                 : null;
             if (keyCheck) return keyCheck;
 
-            const componentInsert = await InsertComponent({
-                provider, user, spec: inputs.Spec, fallbackName: inputs.Name, description: inputs.Description,
-                version: "1.0.0", versionSequence: 1, componentStatus: 'Pending', componentType: 'Widget',
+            const written = await WriteAtomically(provider, async () => {
+                const componentInsert = await InsertComponent({
+                    provider, user, spec: inputs.Spec, fallbackName: inputs.Name, description: inputs.Description,
+                    version: "1.0.0", versionSequence: 1, componentStatus: 'Pending', componentType: 'Widget',
+                });
+                if ('error' in componentInsert) return componentInsert;
+                const rowInsert = await InsertContribution({
+                    provider, user, entityID: entityInfo.ID, componentID: componentInsert.id,
+                    name: inputs.Name, description: inputs.Description, notes: inputs.Notes,
+                    registration, status: 'Pending', precedence: inputs.Precedence,
+                });
+                if ('error' in rowInsert) return rowInsert;
+                return { componentID: componentInsert.id, contributionID: rowInsert.id };
             });
-            if ('error' in componentInsert) return componentInsert.error;
+            if ('error' in written) return written.error;
 
-            const rowInsert = await InsertContribution({
-                provider, user, entityID: entityInfo.ID, componentID: componentInsert.id,
-                name: inputs.Name, description: inputs.Description, notes: inputs.Notes,
-                registration, status: 'Pending', precedence: inputs.Precedence,
-            });
-            if ('error' in rowInsert) {
-                return Failure("PERSIST_FAILED",
-                    `${rowInsert.error.Message} (Component ${componentInsert.id} was persisted but has no contribution row yet.)`);
-            }
-
-            AddOutput(params, "ContributionID", rowInsert.id);
-            AddOutput(params, "ComponentID", componentInsert.id);
+            AddOutput(params, "ContributionID", written.contributionID);
+            AddOutput(params, "ComponentID", written.componentID);
             AddOutput(params, "Version", "1.0.0");
             return {
                 Success: true, ResultCode: "SUCCESS",
                 Message: JSON.stringify({
-                    ContributionID: rowInsert.id, ComponentID: componentInsert.id, EntityName: entityInfo.Name,
+                    ContributionID: written.contributionID, ComponentID: written.componentID, EntityName: entityInfo.Name,
                     ContributionKey: writeKey, Slot: registration.Contribution.slot,
                     Scope: "User", Status: "Pending", Version: "1.0.0",
                 }),
@@ -145,11 +146,10 @@ export class CreateFormContributionAction extends BaseAction {
         if (specRaw == null) return { error: Failure("MISSING_PARAMETER", "Parameter 'Spec' is required.") };
         const parsed = ParseSpecParam(specRaw);
         if ('error' in parsed) return { error: Failure("LINT_FAILED", `Spec is not valid JSON: ${parsed.error}`) };
-        const precedence = GetNumberParam(params, "Precedence");
         return {
             EntityName: entityName, Spec: parsed, Name: name,
             Description: GetStringParam(params, "Description"), Notes: GetStringParam(params, "Notes"),
-            Precedence: precedence != null && precedence >= 0 ? Math.floor(precedence) : 0,
+            Precedence: GetPrecedenceParam(params) ?? 0,
         };
     }
 }

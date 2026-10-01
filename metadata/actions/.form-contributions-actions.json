@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Create Form Contribution",
-      "Description": "Persists a net-new form contribution: lints the ComponentSpec (must declare componentRole='form-panel' and a formContribution block), inserts a Type='Widget' Component v1.0.0, and creates a Pending, User-scoped MJ: Entity Form Contributions row at the declared slot with any related-grid claim or replacesSectionKey. Returns ALREADY_EXISTS when the caller already has an Active or Pending row with the same ContributionKey — use 'Modify Form Contribution' then. Scope is always clamped to User.",
+      "Description": "Persists a net-new form contribution: lints the ComponentSpec (must declare componentRole='form-panel' and a formContribution block), inserts a Type='Widget' Component v1.0.0, and creates a Pending, User-scoped MJ: Entity Form Contributions row at the declared slot with any related-grid claim or replacesSectionKey. Returns ALREADY_EXISTS when the caller already has an Active or Pending row with the same ContributionKey — use 'Modify Form Contribution' then. Returns INVALID_CLAIM, before writing anything, when the spec's claim breaks a rule the database enforces (more than one claim). The Component and the row are written in one transaction, so a refused row leaves no Component behind. Scope is always clamped to User.",
       "DriverClass": "__CreateFormContribution",
       "Type": "Custom",
       "Status": "Active",
@@ -222,8 +222,18 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_CLAIM",
+            "Description": "The spec's formContribution claim would be refused by the database (more than one of relatedEntity, replacesSectionKey, replacesSectionKeys, replacesFieldNames, inSectionKey). Nothing was written."
+          },
+          "primaryKey": {
+            "ID": "89E4FF5E-8B3E-40D8-8543-95BFE0CB98B0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "ResultCode": "PERSIST_FAILED",
-            "Description": "Component or contribution insert failed."
+            "Description": "Component or contribution insert failed; the transaction was rolled back, so nothing was written."
           },
           "primaryKey": {
             "ID": "5E427A9F-587A-4814-9D64-8EC45A4D67BE"
@@ -268,7 +278,7 @@
   {
     "fields": {
       "Name": "Modify Form Contribution",
-      "Description": "Refines an existing form contribution. Pending source + in-place (default) overwrites the draft; Active source (default minor) or any explicit patch/minor/major bump inserts a new Pending Component + row and leaves the source alone (a Pending source being bumped is demoted to Inactive). Refreshes the row's slot/key/claims/title from the spec's formContribution block. Always writes User scope. Caller must own the source row.",
+      "Description": "Refines an existing form contribution. Pending source + in-place (default) overwrites the draft; Active source (default minor) or any explicit patch/minor/major bump inserts a new Pending Component + row and leaves the source alone (a Pending source being bumped is demoted to Inactive). Refreshes the row's slot/key/claims/title from the spec's formContribution block; an optional Precedence replaces the row's precedence. Acts only on the caller's own User-scope rows: a Role or Global row, or another user's row, returns FORBIDDEN, because shared panels are managed from the form's Manage drawer or Form Builder. Any new row is User scope. Returns INVALID_CLAIM, before writing anything, when the spec's claim breaks a rule the database enforces; the Component and row writes run in one transaction.",
       "DriverClass": "__ModifyFormContribution",
       "Type": "Custom",
       "Status": "Active",
@@ -335,6 +345,20 @@
           },
           "primaryKey": {
             "ID": "1FC1DCA3-5BC2-4A91-9A67-EE935E7FD3EE"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Precedence",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional last-wins precedence for the modified or new row, against a compiled contribution with the same key. The apply flow passes incumbent + 1 after the user confirms replacing an installed contribution. Default: the source row's precedence.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2FA9294C-9739-420D-8652-62BFBEEE184A"
           }
         },
         {
@@ -494,8 +518,18 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_CLAIM",
+            "Description": "The spec's formContribution claim would be refused by the database (more than one of relatedEntity, replacesSectionKey, replacesSectionKeys, replacesFieldNames, inSectionKey). Nothing was written."
+          },
+          "primaryKey": {
+            "ID": "D14E84D6-60B4-41F2-B8C3-CD3CF393AE89"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "ResultCode": "FORBIDDEN",
-            "Description": "Caller does not own the row."
+            "Description": "The row is not one of the caller's own User-scope rows (a Role or Global row, or another user's). Shared panels are managed from the form's Manage drawer or Form Builder."
           },
           "primaryKey": {
             "ID": "D8E56214-283B-4267-B697-50A02728E384"
@@ -598,7 +632,7 @@
   {
     "fields": {
       "Name": "Activate Form Contribution Version",
-      "Description": "Promotes a Pending form contribution to Active and demotes the Active sibling sharing its EntityID, ContributionKey and scope tuple (Component statuses follow: Published / Deprecated). Idempotent on an Active row; NOT_PENDING on an Inactive row. Caller must own the row.",
+      "Description": "Promotes one of the caller's Pending form contributions to Active and demotes the caller's Active row sharing its EntityID and ContributionKey (Component statuses follow: Published / Deprecated). Idempotent on an Active row; NOT_PENDING on an Inactive row. Acts only on the caller's own User-scope rows: a Role or Global row, or another user's row, returns FORBIDDEN, because shared panels are managed from the form's Manage drawer or Form Builder.",
       "DriverClass": "__ActivateFormContributionVersion",
       "Type": "Custom",
       "Status": "Active",
@@ -737,7 +771,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "ResultCode": "FORBIDDEN",
-            "Description": "Caller does not own the row."
+            "Description": "The row is not one of the caller's own User-scope rows (a Role or Global row, or another user's). Shared panels are managed from the form's Manage drawer or Form Builder."
           },
           "primaryKey": {
             "ID": "605104B9-02D6-401E-938D-002E5CB63ED1"

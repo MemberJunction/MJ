@@ -6,16 +6,14 @@ import type { MJEntityFormContributionEntity } from "@memberjunction/core-entiti
 import { CONTRIBUTION_KEY_PATTERN } from "@memberjunction/interactive-component-types/forms";
 import {
     AddOutput,
-    CheckScopedOwnership,
+    CheckOwnContributionWrite,
     Failure,
     GetStringParam,
     LoadComponent,
     LoadContribution,
     MapToComponentStatus,
+    type TransactableProvider,
 } from "./_shared";
-
-/** The shape `RunInEntityTransaction` needs; providers that lack it run the work untransacted. */
-type TransactableProvider = Parameters<typeof RunInEntityTransaction>[0];
 
 /** A prior Active sibling this activation will demote. */
 interface PriorActive {
@@ -24,10 +22,12 @@ interface PriorActive {
 }
 
 /**
- * Promote a Pending contribution to Active and demote the sibling that shares its
- * (EntityID, ContributionKey, scope) tuple.
+ * Promote one of the caller's own Pending contributions to Active and demote the caller's Active
+ * row that shares its EntityID and ContributionKey.
  *
- * A row with no ContributionKey is unique by construction and has no sibling to demote.
+ * Only the caller's own User-scope rows can be activated; a Role or Global row, or another user's
+ * row, returns `FORBIDDEN` (shared panels are managed from the form's Manage drawer or Form
+ * Builder). A row with no ContributionKey is unique by construction and has no sibling to demote.
  * Activating a row that is already Active is a no-op success, so the apply flow can retry
  * safely. An Inactive row returns `NOT_PENDING` — branch a new Pending version from it
  * with `Modify Form Contribution` first.
@@ -46,7 +46,7 @@ export class ActivateFormContributionVersionAction extends BaseAction {
 
             const target = await LoadContribution(provider, user, contributionID);
             if (!target) return Failure("CONTRIBUTION_NOT_FOUND", `Contribution '${contributionID}' not found.`);
-            const forbidden = CheckScopedOwnership(target, user, 'Contribution');
+            const forbidden = CheckOwnContributionWrite(target, user, provider);
             if (forbidden) return forbidden;
 
             if (target.Status === 'Active') {
@@ -125,7 +125,7 @@ export class ActivateFormContributionVersionAction extends BaseAction {
         }
     }
 
-    /** Active rows sharing the target's key and scope. Empty for a keyless row. */
+    /** The owner's Active rows sharing the target's key. Empty for a keyless row. */
     private async findPriorActive(
         params: RunActionParams,
         target: MJEntityFormContributionEntity,
@@ -138,15 +138,10 @@ export class ActivateFormContributionVersionAction extends BaseAction {
             return { error: Failure("INVALID_CONTRIBUTION_KEY",
                 `Stored contribution key '${target.ContributionKey}' is not a legal key.`) };
         }
-        const scopeClause = target.Scope === 'User'
-            ? `Scope='User' AND UserID='${EscapeSQLString(target.UserID ?? '')}'`
-            : target.Scope === 'Role'
-                ? `Scope='Role' AND RoleID='${EscapeSQLString(target.RoleID ?? '')}'`
-                : `Scope='Global' AND UserID IS NULL AND RoleID IS NULL`;
         const rv = RunView.FromMetadataProvider(params.Provider ?? Metadata.Provider);
         const result = await rv.RunView<PriorActive>({
             EntityName: "MJ: Entity Form Contributions",
-            ExtraFilter: `EntityID='${EscapeSQLString(target.EntityID)}' AND ContributionKey='${EscapeSQLString(target.ContributionKey)}' AND ${scopeClause} AND Status='Active' AND ID <> '${EscapeSQLString(target.ID)}'`,
+            ExtraFilter: `EntityID='${EscapeSQLString(target.EntityID)}' AND ContributionKey='${EscapeSQLString(target.ContributionKey)}' AND Scope='User' AND UserID='${EscapeSQLString(target.UserID ?? '')}' AND Status='Active' AND ID <> '${EscapeSQLString(target.ID)}'`,
             Fields: ['ID', 'ComponentID'], ResultType: 'simple',
         }, params.ContextUser);
         if (!result.Success) {

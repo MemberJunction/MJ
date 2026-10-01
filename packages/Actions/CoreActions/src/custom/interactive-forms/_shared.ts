@@ -5,14 +5,18 @@
  * extracting here keeps each action thin.
  */
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
-import { IMetadataProvider, UserInfo } from "@memberjunction/core";
+import { IMetadataProvider, RunInEntityTransaction, UserInfo } from "@memberjunction/core";
 import { EscapeSQLString, UUIDsEqual } from "@memberjunction/global";
 import {
     ApplyContributionSpecToRow,
+    ContributionClaimRefusal,
+    ContributionSpecColumns,
     type ContributionRowOptions,
+    FormScopeWriteRefusal,
     MJComponentEntity,
     MJEntityFormContributionEntity,
     MJEntityFormOverrideEntity,
+    UserCanManageFormDefaults,
 } from "@memberjunction/core-entities";
 import type { ComponentSpec } from "@memberjunction/interactive-component-types";
 import {
@@ -56,6 +60,12 @@ export function GetNumberParam(params: RunActionParams, name: string): number | 
     if (v == null) return null;
     const n = typeof v === 'number' ? v : Number(String(v));
     return Number.isFinite(n) ? n : null;
+}
+
+/** The `Precedence` input as a whole number of zero or more, or null when absent or not one. */
+export function GetPrecedenceParam(params: RunActionParams): number | null {
+    const precedence = GetNumberParam(params, "Precedence");
+    return precedence != null && precedence >= 0 ? Math.floor(precedence) : null;
 }
 
 /** @deprecated Use {@link GetNumberParam}. */
@@ -256,36 +266,34 @@ export function ContributionScopeFilter(entityID: string, user: NonNullable<RunA
     return `EntityID='${EscapeSQLString(entityID)}' AND ((Scope='User' AND UserID='${EscapeSQLString(user.ID)}') OR ${roleClause} OR Scope='Global')`;
 }
 
-/** Row shape both override and contribution ownership checks read. */
-export interface ScopedRow {
-    ID: string;
-    Scope: 'User' | 'Role' | 'Global' | string;
-    UserID: string | null;
-    RoleID: string | null;
-}
-
 /**
- * Ownership rules shared by every mutation action.
+ * Defense-in-depth ownership check for the override-mutation actions
+ * (Modify / Activate / Revert).
  *
- * `Create` is naturally self-scoped — it always emits a fresh User-scope row owned
- * by the caller. The mutation actions take a row ID from the caller and operate on
- * it; without this guard a user could mutate another user's User-scope row by
- * guessing the ID. Row-level security may catch some of this, but we don't rely on it.
+ * `Create` is naturally self-scoped — it always emits a fresh User-scope
+ * row owned by the caller. The mutation actions, however, take an
+ * `OverrideID` from the caller and operate on it; without this guard a
+ * user could mutate another user's User-scope override by guessing the ID.
+ * Row-level security may catch some of this, but we don't rely on it.
  *
+ * Rules:
  *   - `Scope='User'`   → caller must be the owning user.
- *   - `Scope='Role'`   → caller must be a member of the row's role.
- *   - `Scope='Global'` → caller must be a system admin (`UserInfo.Type === 'Owner'`,
- *     MJ's canonical admin marker — see packages/MJCore/src/userInfo.ts).
+ *   - `Scope='Role'`   → caller must be a member of the override's role.
+ *   - `Scope='Global'` → caller must be a system admin (`UserInfo.Type==='Owner'`).
  *
  * Returns `null` on success; a `FORBIDDEN` failure result on rejection.
  */
-export function CheckScopedOwnership(row: ScopedRow, user: UserInfo, label: string): ActionResultSimple | null {
-    switch (row.Scope) {
+export function CheckOverrideOwnership(
+    override: Pick<MJEntityFormOverrideEntity, 'ID' | 'Scope' | 'UserID' | 'RoleID'>,
+    user: UserInfo,
+): ActionResultSimple | null {
+    const ID = override.ID;
+    switch (override.Scope) {
         case 'User': {
-            if (!UUIDsEqual(row.UserID, user.ID)) {
+            if (!UUIDsEqual(override.UserID, user.ID)) {
                 return Failure(
                     "FORBIDDEN",
-                    `${label} ${row.ID} is User-scoped to a different user. Only the owning user can mutate it.`,
+                    `Override ${ID} is User-scoped to a different user. Only the owning user can mutate it.`,
                 );
             }
             return null;
@@ -293,20 +301,24 @@ export function CheckScopedOwnership(row: ScopedRow, user: UserInfo, label: stri
         case 'Role': {
             const userRoleIds = ((user as { UserRoles?: { RoleID?: string }[] }).UserRoles ?? [])
                 .map(r => r.RoleID).filter((x): x is string => !!x);
-            if (!row.RoleID || !userRoleIds.includes(row.RoleID)) {
+            if (!override.RoleID || !userRoleIds.some(id => UUIDsEqual(id, override.RoleID))) {
                 return Failure(
                     "FORBIDDEN",
-                    `${label} ${row.ID} is Role-scoped (${row.RoleID}). Only members of that role can mutate it.`,
+                    `Override ${ID} is Role-scoped (${override.RoleID}). Only members of that role can mutate it.`,
                 );
             }
             return null;
         }
         case 'Global': {
+            // `UserInfo.Type === 'Owner'` is MJ's canonical admin marker —
+            // see packages/MJCore/src/userInfo.ts (Type is a Pick from the
+            // generated entity field). Owners can manage Global overrides;
+            // everyone else is rejected.
             const isOwner = ((user as { Type?: string }).Type ?? '').toLowerCase() === 'owner';
             if (!isOwner) {
                 return Failure(
                     "FORBIDDEN",
-                    `${label} ${row.ID} is Global. Only Owner-type users can mutate Global rows; promote / demote them via Component Studio with appropriate privileges.`,
+                    `Override ${ID} is Global. Only Owner-type users can mutate Global overrides; promote / demote them via Component Studio with appropriate privileges.`,
                 );
             }
             return null;
@@ -314,17 +326,69 @@ export function CheckScopedOwnership(row: ScopedRow, user: UserInfo, label: stri
         default:
             return Failure(
                 "FORBIDDEN",
-                `${label} ${row.ID} has an unrecognized Scope ('${row.Scope}').`,
+                `Override ${ID} has an unrecognized Scope ('${override.Scope}').`,
             );
     }
 }
 
-/** Ownership check for the override-mutation actions (Modify / Activate / Revert). */
-export function CheckOverrideOwnership(
-    override: Pick<MJEntityFormOverrideEntity, 'ID' | 'Scope' | 'UserID' | 'RoleID'>,
+/**
+ * Why an action may not change this contribution, as a `FORBIDDEN` result, or null.
+ *
+ * Actions change the caller's own personal panels only. A row whose Scope is not `User`, or that
+ * belongs to someone else, is refused for every caller, a Manage Form Defaults holder included:
+ * shared panels are managed by people, from the form's Manage drawer or Form Builder. The caller's
+ * own row is then checked with `FormScopeWriteRefusal`, the rule the server entity applies on
+ * save, so the action never accepts a write the save would refuse.
+ */
+export function CheckOwnContributionWrite(
+    row: Pick<MJEntityFormContributionEntity, 'ID' | 'Scope' | 'UserID'>,
     user: UserInfo,
+    provider: IMetadataProvider,
 ): ActionResultSimple | null {
-    return CheckScopedOwnership(override, user, 'Override');
+    if (row.Scope !== 'User' || !UUIDsEqual(row.UserID, user.ID)) {
+        return Failure("FORBIDDEN",
+            `Contribution ${row.ID} is not one of your personal panels (Scope '${row.Scope}'). Actions change ` +
+            `personal panels only; shared panels are managed from the form's Manage drawer or Form Builder.`);
+    }
+    const refusal = FormScopeWriteRefusal({
+        Operation: 'update',
+        PriorScope: row.Scope, PriorUserID: row.UserID,
+        NextScope: row.Scope, NextUserID: row.UserID,
+        CallerID: user.ID,
+        CallerHoldsGrant: UserCanManageFormDefaults(user, provider),
+    });
+    return refusal ? Failure("FORBIDDEN", refusal) : null;
+}
+
+/** The provider shape `RunInEntityTransaction` reads. */
+export type TransactableProvider = Parameters<typeof RunInEntityTransaction>[0];
+
+/** Carries a failed write step out of the transaction, so the transaction rolls back. */
+class RolledBackWrite extends Error {
+    constructor(public readonly Outcome: { error: ActionResultSimple }) {
+        super(Outcome.error.Message);
+    }
+}
+
+/**
+ * Runs `work` in one entity transaction. When `work` returns an `{ error }` result, every write
+ * it made is rolled back and that result is returned; anything `work` throws also rolls back and
+ * is rethrown. A provider without entity transactions runs `work` without one.
+ */
+export async function WriteAtomically<T extends object>(
+    provider: IMetadataProvider,
+    work: () => Promise<T | { error: ActionResultSimple }>,
+): Promise<T | { error: ActionResultSimple }> {
+    try {
+        return await RunInEntityTransaction(provider as TransactableProvider, async () => {
+            const outcome = await work();
+            if ('error' in outcome) throw new RolledBackWrite(outcome);
+            return outcome;
+        });
+    } catch (err) {
+        if (err instanceof RolledBackWrite) return err.Outcome;
+        throw err;
+    }
 }
 
 /** @deprecated Use {@link CheckOverrideOwnership}. */
@@ -614,8 +678,9 @@ export interface ContributionRegistration {
  * `ResolveContributionWriteKey`, seeding a panel key from `spec.name`.
  *
  * Fails with `LINT_FAILED` when the block cannot be read, `RELATED_ENTITY_NOT_FOUND` when the
- * related entity is not registered, and `INVALID_CONTRIBUTION_KEY` when the key does not match
- * `CONTRIBUTION_KEY_PATTERN`.
+ * related entity is not registered, `INVALID_CLAIM` when the row the spec maps to breaks a claim
+ * rule the database enforces (`ContributionClaimRefusal`), and `INVALID_CONTRIBUTION_KEY` when the
+ * key does not match `CONTRIBUTION_KEY_PATTERN`. Callers run it before any write.
  *
  * @param currentKey The key of the row being modified; omit for a new row. When the spec names
  * no key and claims no grid, a panel key here is kept, so renaming the component does not change
@@ -646,16 +711,15 @@ export function ResolveContributionRegistration(
         contribution.contributionKey = currentKey;
     }
     const componentName = spec.name?.trim() || null;
+    const rowOptions: ContributionRowOptions = { relatedEntityID, relatedEntityName, componentName };
+    const claimRefusal = ContributionClaimRefusal(ContributionSpecColumns(contribution, rowOptions));
+    if (claimRefusal) return { error: Failure("INVALID_CLAIM", claimRefusal) };
     const writeKey = ResolveContributionWriteKey(contribution, relatedEntityName, componentName);
     if (writeKey && !CONTRIBUTION_KEY_PATTERN.test(writeKey)) {
         return { error: Failure("INVALID_CONTRIBUTION_KEY",
             `Contribution key '${writeKey}' must match ${CONTRIBUTION_KEY_PATTERN.source}.`) };
     }
-    return {
-        Contribution: contribution,
-        RowOptions: { relatedEntityID, relatedEntityName, componentName },
-        WriteKey: writeKey,
-    };
+    return { Contribution: contribution, RowOptions: rowOptions, WriteKey: writeKey };
 }
 
 /**

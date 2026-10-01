@@ -17,6 +17,10 @@ const { hoisted } = vi.hoisted(() => ({
         dupRows: [] as Array<{ ID: string; Status: string }>,
         dupQueryFails: false,
         lintViolations: [] as Array<{ severity: string; rule: string; message: string }>,
+        /** Entity names whose new rows fail to save. */
+        failingSaves: new Set<string>(),
+        /** While a transaction is open, saves are pending and reach `committed` only on Commit. */
+        tx: { supported: false, open: false, pending: [] as string[], committed: [] as string[], rolledBack: 0 },
     },
 }));
 
@@ -37,7 +41,12 @@ function makeEntity(entityName: string): MockEntity {
         saveOutcome: true,
         ID: `${entityName}-id`,
         NewRecord() { /* no-op */ },
-        async Save() { return target.saveOutcome; },
+        async Save() {
+            if (!target.saveOutcome || hoisted.failingSaves.has(entityName)) return false;
+            if (hoisted.tx.open) hoisted.tx.pending.push(entityName);
+            else hoisted.tx.committed.push(entityName);
+            return true;
+        },
         LatestResult: { CompleteMessage: 'mock' },
     };
     hoisted.entities.push(target);
@@ -61,6 +70,15 @@ const entitiesByName: Record<string, { ID: string; Name: string }> = {
 };
 
 const provider = {
+    get SupportsEntityTransactions() { return hoisted.tx.supported; },
+    async BeginEntityTransaction() {
+        hoisted.tx.open = true;
+        return {
+            IsNested: false,
+            async Commit() { hoisted.tx.committed.push(...hoisted.tx.pending); hoisted.tx.pending = []; hoisted.tx.open = false; },
+            async Rollback() { hoisted.tx.pending = []; hoisted.tx.open = false; hoisted.tx.rolledBack++; },
+        };
+    },
     EntityByName: (name: string) => entitiesByName[name.trim().toLowerCase()],
     GetEntityObject: async <T>(entityName: string): Promise<T> => makeEntity(entityName) as unknown as T,
 };
@@ -121,7 +139,11 @@ async function run(p: RunActionParams): Promise<ActionResultSimple> {
 const componentRow = () => hoisted.entities.find(e => e.entityName === 'MJ: Components')!;
 const contributionRow = () => hoisted.entities.find(e => e.entityName === 'MJ: Entity Form Contributions')!;
 
-beforeEach(() => { hoisted.entities = []; hoisted.dupRows = []; hoisted.dupQueryFails = false; hoisted.lintViolations = []; });
+beforeEach(() => {
+    hoisted.entities = []; hoisted.dupRows = []; hoisted.dupQueryFails = false; hoisted.lintViolations = [];
+    hoisted.failingSaves = new Set();
+    hoisted.tx = { supported: false, open: false, pending: [], committed: [], rolledBack: 0 };
+});
 
 describe('CreateFormContributionAction', () => {
     it('inserts a Widget component and a Pending User-scope contribution row from the spec block', async () => {
@@ -239,6 +261,34 @@ describe('CreateFormContributionAction', () => {
         expect((await run(params({ EntityName: undefined }))).ResultCode).toBe('MISSING_PARAMETER');
         expect((await run(params({ Name: undefined }))).ResultCode).toBe('MISSING_PARAMETER');
         expect((await run(params({ Spec: undefined }))).ResultCode).toBe('MISSING_PARAMETER');
+    });
+
+    it('returns INVALID_CLAIM for a spec that makes two claims, and writes nothing', async () => {
+        const formContribution = {
+            ...panelSpec.formContribution, presentation: 'panel',
+            relatedEntity: 'MJ_BizApps_Orders: Event Order Lines', inSectionKey: 'contact',
+        };
+        const result = await run(params({ Spec: { ...panelSpec, formContribution } }));
+        expect(result.ResultCode).toBe('INVALID_CLAIM');
+        expect(result.Message).toContain('relatedEntity');
+        expect(result.Message).toContain('inSectionKey');
+        expect(hoisted.entities).toHaveLength(0);
+    });
+
+    /** The component and the row are written together or not at all. */
+    it('rolls back the component when the contribution row is refused', async () => {
+        hoisted.tx.supported = true;
+        hoisted.failingSaves.add('MJ: Entity Form Contributions');
+        const result = await run(params());
+        expect(result.ResultCode).toBe('PERSIST_FAILED');
+        expect(hoisted.tx.rolledBack).toBe(1);
+        expect(hoisted.tx.committed).toEqual([]);
+    });
+
+    it('commits the component and the row together', async () => {
+        hoisted.tx.supported = true;
+        expect((await run(params())).Success).toBe(true);
+        expect(hoisted.tx.committed).toEqual(['MJ: Components', 'MJ: Entity Form Contributions']);
     });
 
     it('reports ENTITY_NOT_FOUND for an unregistered entity', async () => {
