@@ -1,3 +1,58 @@
+import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
+
+/** A version snapshot that includes the scales, levels, and bands the diff widget reads. */
+export function hostSnapshot(
+    version: Record<string, unknown>,
+    criteria: Record<string, unknown>[],
+    scales: Record<string, unknown>[],
+    levels: Record<string, unknown>[],
+    bands: Record<string, unknown>[],
+): RubricVersionSnapshot {
+    return {
+        id: String(version.ID),
+        rubricId: String(version.RubricID),
+        notApplicablePolicy: (version.NotApplicablePolicy as RubricVersionSnapshot['notApplicablePolicy']) ?? 'ExcludeAndRedistribute',
+        passThreshold: version.PassThreshold == null ? null : Number(version.PassThreshold),
+        scoreDisplayMin: version.ScoreDisplayMin == null ? 0 : Number(version.ScoreDisplayMin),
+        scoreDisplayMax: version.ScoreDisplayMax == null ? 100 : Number(version.ScoreDisplayMax),
+        nodes: criteria.map(row => ({
+            id: String(row.ID),
+            key: String(row.Key),
+            parentId: row.ParentID == null || row.ParentID === '' ? null : String(row.ParentID),
+            name: String(row.Name ?? row.Key),
+            nodeType: row.NodeType === 'Group' ? 'Group' as const : 'Criterion' as const,
+            scaleId: row.ScaleID == null || row.ScaleID === '' ? null : String(row.ScaleID),
+            weight: Number(row.Weight ?? 1),
+            isAdvisory: row.IsAdvisory === true || row.IsAdvisory === 1,
+            isGate: row.IsGate === true || row.IsGate === 1,
+            gateMinimumScore: row.GateMinimumScore == null ? null : Number(row.GateMinimumScore),
+            evidenceRequired: false,
+            rationaleRequired: false,
+            sequence: Number(row.Sequence ?? 0),
+        })),
+        scales: scales.map(scale => ({
+            id: String(scale.ID),
+            scaleType: scale.ScaleType === 'Numeric' ? 'Numeric' as const : 'Levels' as const,
+            higherIsBetter: scale.HigherIsBetter !== false && scale.HigherIsBetter !== 0,
+            levels: levels.filter(level => String(level.ScaleID) === String(scale.ID)).map(level => ({
+                id: String(level.ID),
+                label: String(level.Label ?? ''),
+                value: Number(level.Value ?? 0),
+                normalizedValue: Number(level.NormalizedValue ?? 0),
+                sequence: Number(level.Sequence ?? 0),
+            })),
+        })),
+        bands: bands.map(band => ({
+            id: String(band.ID),
+            label: String(band.Label ?? ''),
+            minScore: Number(band.MinScore ?? 0),
+            maxScore: Number(band.MaxScore ?? 1),
+            displayTone: String(band.DisplayTone ?? 'Neutral'),
+            sequence: Number(band.Sequence ?? 0),
+        })),
+    };
+}
+
 export interface VersionRow {
     id: string;
     status: string;

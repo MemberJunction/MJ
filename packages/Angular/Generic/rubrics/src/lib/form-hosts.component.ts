@@ -1,8 +1,7 @@
 import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core';
 import { CompositeKey, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { categoryParentChoices, priorPublishedVersion, scaleIsFrozen } from './form-hosts.model';
-import { nodeFromRow } from './model';
+import { categoryParentChoices, hostSnapshot, priorPublishedVersion, scaleIsFrozen } from './form-hosts.model';
 import { RubricCategoryEditorComponent, RubricCriterionEditorComponent, RubricScaleLevelEditorComponent } from './record-editors.component';
 import { RubricVersionDiffComponent } from './version-diff.component';
 
@@ -202,17 +201,11 @@ async function rows(provider: IMetadataProvider, entityName: string, filter: str
 async function snapshot(provider: IMetadataProvider, version: Row | undefined): Promise<RubricVersionSnapshot | null> {
     if (!version) return null;
     const criteria = await rows(provider, 'MJ: Rubric Criteria', `RubricVersionID='${quote(String(version.ID))}'`);
-    return {
-        id: String(version.ID),
-        rubricId: String(version.RubricID),
-        notApplicablePolicy: (version.NotApplicablePolicy as RubricVersionSnapshot['notApplicablePolicy']) ?? 'ExcludeAndRedistribute',
-        passThreshold: version.PassThreshold == null ? null : Number(version.PassThreshold),
-        scoreDisplayMin: version.ScoreDisplayMin == null ? 0 : Number(version.ScoreDisplayMin),
-        scoreDisplayMax: version.ScoreDisplayMax == null ? 100 : Number(version.ScoreDisplayMax),
-        nodes: criteria.map(row => nodeFromRow(row)),
-        scales: [],
-        bands: [],
-    };
+    const scaleIds = [...new Set(criteria.map(row => row.ScaleID).filter(id => id != null && id !== '').map(id => `'${quote(String(id))}'`))];
+    const scales = scaleIds.length === 0 ? [] : await rows(provider, 'MJ: Rubric Scales', `ID IN (${scaleIds.join(', ')})`);
+    const levels = scaleIds.length === 0 ? [] : await rows(provider, 'MJ: Rubric Scale Levels', `ScaleID IN (${scaleIds.join(', ')})`);
+    const bands = await rows(provider, 'MJ: Rubric Bands', `RubricVersionID='${quote(String(version.ID))}'`);
+    return hostSnapshot(version, criteria, scales, levels, bands);
 }
 
 function quote(value: string): string {
