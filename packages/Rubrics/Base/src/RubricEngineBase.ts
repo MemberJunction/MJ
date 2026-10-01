@@ -1,4 +1,4 @@
-import type { RubricBandSnapshot, RubricNodeSnapshot } from './types.js';
+import type { NotApplicablePolicy, RubricBandSnapshot, RubricNodeSnapshot } from './types.js';
 
 export interface RubricCategoryRecord {
     id: string;
@@ -44,6 +44,13 @@ export interface RubricVersionRecord {
     majorVersion?: number | null;
     minorVersion?: number | null;
     patchVersion?: number | null;
+    /** Default when a criterion does not set its own. The scorer reads this off the version. */
+    notApplicablePolicy: NotApplicablePolicy;
+    passThreshold?: number | null;
+    minimumCompleteness?: number | null;
+    instructions?: string | null;
+    scoreDisplayMin: number;
+    scoreDisplayMax: number;
     nodes: RubricNodeSnapshot[];
     bands: RubricBandSnapshot[];
 }
@@ -67,13 +74,24 @@ export interface RubricCacheSnapshot {
     agentRubrics: AgentRubricRecord[];
 }
 
-/** A published version plus the criteria, anchors, bands, and scales that score it. */
+/**
+ * A published version plus the criteria, anchors, bands, and scales that score it.
+ * The policy, threshold, completeness minimum, instructions, and display range are
+ * the version fields RubricScoring reads, so a caller with only this cache can build
+ * a RubricVersionSnapshot.
+ */
 export interface CachedPublishedVersion {
     id: string;
     rubricId: string;
     majorVersion: number;
     minorVersion: number;
     patchVersion: number;
+    notApplicablePolicy: NotApplicablePolicy;
+    passThreshold: number | null;
+    minimumCompleteness: number | null;
+    instructions: string | null;
+    scoreDisplayMin: number;
+    scoreDisplayMax: number;
     nodes: RubricNodeSnapshot[];
     bands: RubricBandSnapshot[];
     scales: RubricScaleRecord[];
@@ -114,6 +132,12 @@ export class RubricEngineBase {
                 majorVersion: version.majorVersion ?? 0,
                 minorVersion: version.minorVersion ?? 0,
                 patchVersion: version.patchVersion ?? 0,
+                notApplicablePolicy: version.notApplicablePolicy,
+                passThreshold: version.passThreshold ?? null,
+                minimumCompleteness: version.minimumCompleteness ?? null,
+                instructions: version.instructions ?? null,
+                scoreDisplayMin: version.scoreDisplayMin,
+                scoreDisplayMax: version.scoreDisplayMax,
                 nodes: version.nodes,
                 bands: version.bands,
                 scales: [...scaleIds].map(id => this.scales.get(id)).filter((scale): scale is RubricScaleRecord => !!scale),

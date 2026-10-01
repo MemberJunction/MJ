@@ -7,6 +7,12 @@ function version(partial: Partial<RubricVersionRecord> & Pick<RubricVersionRecor
         majorVersion: 1,
         minorVersion: 0,
         patchVersion: 0,
+        notApplicablePolicy: 'ExcludeAndRedistribute',
+        passThreshold: null,
+        minimumCompleteness: null,
+        instructions: null,
+        scoreDisplayMin: 0,
+        scoreDisplayMax: 100,
         nodes: [],
         bands: [],
         ...partial,
@@ -30,6 +36,12 @@ const snapshot: RubricCacheSnapshot = {
             majorVersion: 1,
             minorVersion: 2,
             patchVersion: 0,
+            notApplicablePolicy: 'CountAsZero',
+            passThreshold: 0.6,
+            minimumCompleteness: 0.8,
+            instructions: 'Score the writing.',
+            scoreDisplayMin: 0,
+            scoreDisplayMax: 100,
             nodes: [{
                 id: 'criterion',
                 key: 'clarity',
@@ -82,6 +94,12 @@ describe('RubricEngineBase', () => {
         expect(published?.bands[0].label).toBe('Pass');
         expect(published?.scales).toHaveLength(1);
         expect(published?.scales[0].levels[0].normalizedValue).toBe(1);
+        expect(published?.notApplicablePolicy).toBe('CountAsZero');
+        expect(published?.passThreshold).toBe(0.6);
+        expect(published?.minimumCompleteness).toBe(0.8);
+        expect(published?.instructions).toBe('Score the writing.');
+        expect(published?.scoreDisplayMin).toBe(0);
+        expect(published?.scoreDisplayMax).toBe(100);
 
         expect(engine.getPublishedVersion('draft')).toBeNull();
         expect(engine.getPublishedVersions('rubric').map(item => item.id)).toEqual(['published', 'older']);
