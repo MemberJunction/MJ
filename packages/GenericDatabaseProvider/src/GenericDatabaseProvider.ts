@@ -2242,13 +2242,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * All-`count_only` batch: every view runs the normal per-view path (so every
      * security gate applies per view), but their COUNT queries are executed as ONE
      * `UNION ALL` statement — one database round trip for, e.g., every related-section
-     * badge on a form. A view that fails keeps its own `Success:false` result.
+     * badge on a form. A view that fails keeps its own `Success:false` result; a connection
+     * failure is thrown, as on the per-view path.
      */
     protected async RunCoalescedCountBatch<T = unknown>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
         const batch = new CountOnlyBatchCoalescer(
             params.length,
             (sql) => this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, contextUser),
             (name) => this.QuoteIdentifier(name),
+            (error) => this.isConnectionError(error),
         );
         return Promise.all(params.map((p, index) =>
             this.RunViewCore<T>(p, contextUser, (countSQL) => batch.Execute(index, countSQL))

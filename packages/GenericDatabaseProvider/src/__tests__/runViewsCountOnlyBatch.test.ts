@@ -36,6 +36,7 @@ function fakeProvider(executeSQL: (sql: string) => Promise<Record<string, unknow
             return { Success: true, Results: [], RowCount: rows[0].TotalRowCount, TotalRowCount: rows[0].TotalRowCount } as unknown as RunViewResult;
         }),
         RunCoalescedCountBatch: proto.RunCoalescedCountBatch,
+        isConnectionError: (e: unknown) => (e as { code?: string }).code === 'POOL_CLOSED',
     };
     const internalRunViews = (params: RunViewParams[]) => (proto.InternalRunViews as Function).call(self, params) as Promise<RunViewResult[]>;
     return { self, internalRunViews };
@@ -68,6 +69,16 @@ describe('GenericDatabaseProvider.InternalRunViews — count_only coalescing', (
         // Only one survivor → run directly, no UNION ALL.
         expect(self.ExecuteSQL).toHaveBeenCalledTimes(1);
         expect(self.ExecuteSQL.mock.calls[0][0]).not.toContain('UNION ALL');
+    });
+
+    it('surfaces a connection error on the combined statement without re-running each count', async () => {
+        const poolClosed = Object.assign(new Error('Pool is closed'), { code: 'POOL_CLOSED' });
+        const { self, internalRunViews } = fakeProvider(async () => { throw poolClosed; });
+        await expect(internalRunViews([
+            { EntityName: 'A', ResultType: 'count_only' },
+            { EntityName: 'B', ResultType: 'count_only' },
+        ])).rejects.toBe(poolClosed);
+        expect(self.ExecuteSQL).toHaveBeenCalledTimes(1);
     });
 
     it('leaves mixed and single-item batches on the per-view path', async () => {

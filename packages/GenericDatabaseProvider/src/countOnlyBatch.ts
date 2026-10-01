@@ -19,7 +19,8 @@
  *
  * and resolves each waiting view with its own row. If the combined statement
  * fails (one branch with a bad filter must not blank every count), each count
- * is re-run individually so failures stay per-view.
+ * is re-run individually so failures stay per-view. A connection failure is not
+ * re-run: every waiting view is rejected with it.
  *
  * Framework-free and database-free so it can be unit tested with a fake
  * executor.
@@ -49,11 +50,13 @@ export class CountOnlyBatchCoalescer {
      * @param size          number of views in the batch
      * @param execute       runs one SQL statement
      * @param quoteIdentifier dialect-correct identifier quoting (PG folds unquoted case)
+     * @param isConnectionError true for a failure of the connection rather than of the query
      */
     constructor(
         private readonly size: number,
         private readonly execute: CountSQLExecutor,
         private readonly quoteIdentifier: (name: string) => string,
+        private readonly isConnectionError: (error: unknown) => boolean = () => false,
     ) {
         if (size < 1) throw new Error('CountOnlyBatchCoalescer: size must be >= 1');
     }
@@ -111,7 +114,12 @@ export class CountOnlyBatchCoalescer {
         let rows: Record<string, unknown>[];
         try {
             rows = await this.execute(this.BuildCombinedSQL(items));
-        } catch {
+        } catch (error) {
+            if (this.isConnectionError(error)) {
+                // The database is unreachable, not one branch bad: every view gets the error.
+                for (const item of items) item.reject(error);
+                return;
+            }
             // One bad branch fails the whole UNION ALL — re-run each count on its
             // own so every other view still gets its number and the failing one
             // gets its own error (surfaced by InternalRunView as Success:false).

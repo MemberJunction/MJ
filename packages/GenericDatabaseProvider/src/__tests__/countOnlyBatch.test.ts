@@ -78,6 +78,19 @@ describe('CountOnlyBatchCoalescer', () => {
         expect(calls.slice(1).sort()).toEqual(['A', 'BAD', 'C']);
     });
 
+    it('rejects every view with a connection error from the combined statement and does not retry them one by one', async () => {
+        const connectionError = Object.assign(new Error('Connection lost'), { code: 'ESOCKET' });
+        const exec = vi.fn<CountSQLExecutor>().mockRejectedValue(connectionError);
+        const isConnectionError = (error: unknown) => (error as { code?: string }).code === 'ESOCKET';
+        const batch = new CountOnlyBatchCoalescer(3, exec, quote, isConnectionError);
+        const results = [batch.Execute(0, 'A'), batch.Execute(1, 'B'), batch.Execute(2, 'C')];
+        for (const result of results) {
+            await expect(result).rejects.toBe(connectionError);
+        }
+        expect(exec).toHaveBeenCalledTimes(1);
+        expect(exec.mock.calls[0][0]).toContain('UNION ALL');
+    });
+
     it('coerces string counts (PostgreSQL bigint) to numbers', async () => {
         const exec = vi.fn<CountSQLExecutor>().mockResolvedValue([
             { BatchIndex: '0', TotalRowCount: '7' },
