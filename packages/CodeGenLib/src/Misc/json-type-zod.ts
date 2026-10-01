@@ -4,7 +4,7 @@
  * Emitted per declared interface / type alias `X` of a definition prefixed with `P`:
  *
  * ```ts
- * const P_XSchema: z.ZodType<P_X> = z.lazy(() => z.object({ ... }));
+ * const P_XSchema = z.lazy(() => z.object({ ... })) as z.ZodType<P_X>;
  * ```
  *
  * Every local type is wrapped in `z.lazy`, so references between declarations — including
@@ -33,8 +33,10 @@ import {
 
 /** Result of converting a definition. */
 export interface JSONZodResult {
-    /** Source of every `const P_XSchema: ... = ...;` line, one per declaration, blank-line separated (exported, so consumers can `z.infer`/`safeParse` the object shape). */
+    /** Source of every `const P_XSchema = ...;` line, one per declaration, blank-line separated (exported, so consumers can `z.infer`/`safeParse` the object shape). */
     Source: string;
+    /** The same lines keyed by const name, so a caller combining several definitions can emit each const once. */
+    Consts: Map<string, string>;
     /** Constructs that were downgraded to `z.custom<T>()`, for the caller to report. */
     Warnings: string[];
 }
@@ -47,11 +49,11 @@ export function JSONSchemaConstName(prefix: string, declaredName: string): strin
 /** Converts an opted-in model to Zod source. */
 export function GenerateJSONTypeZod(model: JSONTypeModel, prefix: string): JSONZodResult {
     const converter = new ZodConverter(model, prefix);
-    const lines: string[] = [];
+    const consts = new Map<string, string>();
     for (const decl of GetReachableDeclarations(model)) {
-        lines.push(converter.EmitDeclaration(decl.Name));
+        consts.set(JSONSchemaConstName(prefix, decl.Name), converter.EmitDeclaration(decl.Name));
     }
-    return { Source: lines.join('\n\n'), Warnings: converter.Warnings };
+    return { Source: Array.from(consts.values()).join('\n\n'), Consts: consts, Warnings: converter.Warnings };
 }
 
 function hasTag(tags: JSONDocTag[], name: string): boolean {
@@ -89,7 +91,10 @@ class ZodConverter {
             this.warn(`${name}: has required members typed unknown/any/undefined; Zod always infers those as optional, so this schema is typed loosely (z.ZodTypeAny) and its inferred type is any`);
             return `export const ${constName}: z.ZodTypeAny = z.lazy(() => ${body});`;
         }
-        return `export const ${constName}: z.ZodType<${typeName}> = z.lazy(() => ${body});`;
+        // An assertion, not an annotation: without strictNullChecks (MJCoreEntities builds that way) Zod
+        // infers every object key as optional, so `: z.ZodType<T>` fails with TS2322. An assertion only
+        // needs the two types to be comparable, which still rejects a schema whose members disagree.
+        return `export const ${constName} = z.lazy(() => ${body}) as z.ZodType<${typeName}>;`;
     }
 
     /**
@@ -113,6 +118,17 @@ class ZodConverter {
 
     private warn(message: string): void {
         this.Warnings.push(message);
+    }
+
+    /** An invalid `@pattern` is reported here and ignored, instead of throwing from Validate() at Save time. */
+    private isValidPattern(pattern: string, where: string): boolean {
+        try {
+            new RegExp(pattern);
+            return true;
+        } catch (error) {
+            this.warn(`${where}: @pattern '${pattern}' is not a valid regular expression (${error instanceof Error ? error.message : String(error)}); ignored`);
+            return false;
+        }
     }
 
     /**
@@ -339,7 +355,7 @@ class ZodConverter {
             out += `.max(${max})`;
         }
         const pattern = tags.find((t) => t.Name === 'pattern');
-        if (pattern && pattern.Text.length > 0) {
+        if (pattern && pattern.Text.length > 0 && this.isValidPattern(pattern.Text, where)) {
             out += `.regex(new RegExp(${JSON.stringify(pattern.Text)}))`;
         }
         const format = tags.find((t) => t.Name === 'format');

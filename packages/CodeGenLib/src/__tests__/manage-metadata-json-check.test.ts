@@ -10,6 +10,7 @@ import { SQLLogging } from '../Misc/sql_logging';
 import { ManageMetadataBase } from '../Database/manage-metadata';
 import type { CodeGenConnection, CodeGenDatabaseProvider } from '../Database/codeGenDatabaseProvider';
 import type { JSONCheckTranslator } from '../Database/json-check-validators';
+import { BuildJSONCheckKey, CollectJSONCheckRules, ParseJSONTypeDefinition } from '../Misc/json-type-model';
 
 /**
  * `ManageMetadataBase.manageJSONCheckValidators`: the database-facing half of SQL `@CHECK` on JSONTypes.
@@ -24,7 +25,10 @@ export interface IConfig {
     Pct: number;
 }`;
 const FIELDS = [{ Entity: 'A', Name: 'Config', JSONType: 'IConfig', JSONTypeDefinition: DEFINITION, Type: 'nvarchar', AllowsNull: true }];
-const KEY = 'IConfig|IConfig.Pct|(Pct >= 0 AND Pct <= 100)';
+const KEY = (() => {
+    const model = ParseJSONTypeDefinition(DEFINITION, 'IConfig')!;
+    return BuildJSONCheckKey(model, CollectJSONCheckRules(model)[0], 'A');
+})();
 
 class TestMM extends ManageMetadataBase {
     public Translator: JSONCheckTranslator = {
@@ -67,6 +71,7 @@ const logged = () => vi.mocked(SQLLogging.LogSQLAndExecute).mock.calls.map((c) =
 beforeEach(() => {
     vi.clearAllMocks();
     (ManageMetadataBase as unknown as { _generatedJSONValidators: unknown[] })._generatedJSONValidators = [];
+    (ManageMetadataBase as unknown as { _entitiesWithNewJSONValidators: string[] })._entitiesWithNewJSONValidators = [];
 });
 
 describe('manageJSONCheckValidators', () => {
@@ -94,12 +99,22 @@ describe('manageJSONCheckValidators', () => {
         expect(sql).toHaveLength(1);
         expect(sql[0]).toContain('IF NOT EXISTS (SELECT 1 FROM [__mj].[GeneratedCode]');
         expect(sql[0]).toContain(`[Source] = '${KEY}'`);
+        // Same Approved scope as LoadCached: a non-Approved row with this key must not suppress the insert.
+        expect(sql[0]).toMatch(/\[Source\] = '[^']*' AND \[Status\]='Approved'\)/);
         expect(sql[0]).toContain(`INSERT INTO [__mj].[GeneratedCode]`);
         expect(sql[0]).toContain("'TypeScript', 'Approved'");
         expect(sql[0]).toContain("Percentage isn''t out of range"); // quotes doubled
         expect(sql[0]).toContain("// isn''t");
         expect(sql[0]).not.toMatch(/LinkedEntityID/); // keyed on the type, deliberately not on an entity field
         expect(ManageMetadataBase.GeneratedJSONValidators[0].GeneratedCodeID).toMatch(/^[0-9a-f-]{36}$/);
+    });
+
+    it('a newly generated validator marks its entity for file regen; a cached one does not', async () => {
+        const mm = new TestMM();
+        await mm.Run(pool({ cached: [{ ID: 'g1', Source: KEY, Name: 'Stored', Code: 'return true;', Description: 'd' }] }), true);
+        expect(ManageMetadataBase.EntitiesWithNewJSONValidators).toEqual([]);
+        await mm.Run(pool(), true);
+        expect(ManageMetadataBase.EntitiesWithNewJSONValidators).toEqual(['A']);
     });
 
     it('does not generate when generateNewCode is false, even if the feature is on', async () => {

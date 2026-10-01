@@ -150,14 +150,17 @@ plus a CodeGen warning — CodeGen never fails the run over it. Output is determ
 Repeatable. Two forms:
 
 * `@CHECK ts:(<TypeScript boolean expression>)` — compiled as written, no model involved. `value` is
-  the object the tag is scoped to; `row` is the owning entity (read only). `ts:` expressions are taken
-  literally: null handling is yours.
+  the object the tag is scoped to (see **Scope** below: on a scalar property that is the *enclosing*
+  object, so write `value.EndHour >= 0`, not `value >= 0`); `row` is the owning entity (read only).
+  `ts:` expressions are taken literally: null handling is yours. Each expression is type-checked
+  against its value type at CodeGen time; one that does not compile is skipped with a CodeGen error.
 * `@CHECK (<SQL boolean expression>)` — translated to TypeScript by the `CodeGen: JSON Check Parser`
   prompt exactly the way table CHECK constraints are, then cached (below). The model must also return
-  `TestCases` (`{ Value, Row?, Expected }`); CodeGen **executes them** against the compiled body in an
-  isolated `vm` context with a time limit and discards a translation that fails any, that returns none,
+  `TestCases` (`{ Value, Row?, Expected }`); CodeGen **executes them** against the compiled body in a
+  separate `vm` context with a time limit (microtasks included) and discards a translation that fails any, that returns none,
   or — when the value type has optional/nullable members — that has no case with such a member absent
-  or null.
+  or null. The `vm` context is a correctness guard, **not a security boundary**: the same body is
+  emitted into the entity class and runs in-process there, so review it like any generated code.
 
 **Scope** mirrors SQL: on a **property**, names resolve against the enclosing object (like a column
 CHECK); on an **interface**, the rule is object-level (like a table CHECK); on an **array-typed
@@ -175,7 +178,7 @@ export interface IWindow {
     /**
      * @minimum 0
      * @maximum 23
-     * @CHECK ts:(value >= 0)
+     * @CHECK ts:(value.EndHour >= value.StartHour)
      */
     EndHour: number;
     Days?: string[];
@@ -191,11 +194,23 @@ export interface ISlot {
 }
 ```
 
+### Regenerating after a definition change
+
+A JSONType definition lives in metadata, so editing it (members, `@mjValidate`, tags) changes no
+database column. After `mj sync push`, run **`mj codegen --skipdb`** to re-emit the entity classes: a
+full `mj codegen` only rebuilds schemas whose entities changed in its database phase (see
+[CodeGen large-schema guide § dirty-schema scoped regen](CODEGEN_LARGE_SCHEMA_GUIDE.md)). The one
+exception it handles itself: when a full run newly translates a SQL `@CHECK`, the entities bound to that
+type are rebuilt in the same run.
+
 ### SQL `@CHECK` caching
 
 Translations are stored in `__mj.GeneratedCode` under the category **`CodeGen: JSON Validators`**,
-keyed by `JSONType name | property path | normalized check text` — **not** by entity field. A shared
-interface generates once; editing the tag text (not merely re-flowing whitespace) regenerates. Reads
+keyed by `JSONType name | property path | normalized check text | hash of the value's shape` (its
+members' names, optionality and types) — **not** by entity field. A shared interface generates once;
+editing the tag text (not merely re-flowing whitespace) or the members the rule sees regenerates, and two
+entities declaring a same-named type differently get separate translations. A rule that reads
+`row.<Column>` is also keyed by the owning entity, since its columns differ per entity. Reads
 are unconditional, so `--no-ai` runs preserve committed validators; only *generation* is gated by the
 `ParseCheckConstraints` feature. LLM output is emitted only after it passes a compile check (parses,
 returns a value, no `${` placeholders, type-checks against the interface); otherwise the rule is

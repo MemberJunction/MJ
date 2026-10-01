@@ -6,8 +6,8 @@
  * Differences from the table path, all deliberate:
  *
  * - **Keyed on text, not on a field.** A cache entry is identified by
- *   `JSONType name | property path | normalized check text`
- *   (see {@link BuildJSONCheckKey}). A shared interface bound to several entity fields therefore
+ *   `JSONType name | property path | normalized check text | value-shape hash` (plus the entity for
+ *   a rule that reads `row.`; see {@link BuildJSONCheckKey}). A shared interface bound to several entity fields therefore
  *   generates once, and editing the tag text — but not re-flowing its whitespace — is detected as a
  *   new key and regenerates.
  * - **Reads are unconditional.** Cached translations are returned whether or not AI is enabled, so a
@@ -121,7 +121,7 @@ interface JSONTypeUse {
     JSONTypeName: string;
     Definition: string;
     Model: JSONTypeModel;
-    /** First entity (by name, for determinism) binding this definition. */
+    /** The entity binding this definition (supplies the `row` columns and, for row-reading rules, the key). */
     Entity: string;
 }
 
@@ -134,7 +134,9 @@ function collectOptedInTypes(fields: ReadonlyArray<JSONFieldRow>): JSONTypeUse[]
         if (!name || !definition) {
             continue;
         }
-        const id = `${name}\u0000${definition}`;
+        // One use per binding ENTITY: a rule reading `row.` is keyed and translated per entity (its
+        // columns differ); rules that do not collapse back to one key in ResolveJSONCheckValidators.
+        const id = `${name}\u0000${definition}\u0000${field.Entity.trim().toLowerCase()}`;
         if (uses.has(id)) {
             continue;
         }
@@ -256,7 +258,7 @@ export async function ResolveJSONCheckValidators(options: ResolveJSONCheckOption
     const seen = new Set<string>();
     for (const use of collectOptedInTypes(options.Fields)) {
         for (const rule of CollectJSONCheckRules(use.Model).filter((r) => r.Kind === 'sql')) {
-            const key = BuildJSONCheckKey(use.JSONTypeName, rule);
+            const key = BuildJSONCheckKey(use.Model, rule, use.Entity);
             if (!seen.has(key)) {
                 seen.add(key);
                 wanted.push({ Use: use, Rule: rule, Key: key });

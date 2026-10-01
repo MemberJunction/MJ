@@ -17,7 +17,7 @@ import { logError, LogMessage, logStatus, LogWarning, StartSpinner, UpdateSpinne
 import { SQLUtilityBase } from "./sql";
 import { ApplyIncludeSchemaScope } from "./schema-scope";
 import { BuildHealSchemaRoutineParams, GetAuthoredExcludeSchemas, SnapshotAuthoredExcludeSchemas } from "./heal-schema-params";
-import { JSON_VALIDATOR_CATEGORY_NAME, JSONCheckStore, JSONCheckTranslator, JSONValidatorResult, ResolveJSONCheckValidators } from "./json-check-validators";
+import { JSON_VALIDATOR_CATEGORY_NAME, JSONCheckStore, JSONCheckTranslator, JSONFieldRow, JSONValidatorResult, ResolveJSONCheckValidators } from "./json-check-validators";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult, IsPlausibleEntityName } from "../Misc/advanced_generation";
 import { CodeGenReporter } from "../Misc/codegen-reporter";
 import {
@@ -762,6 +762,15 @@ export class ManageMetadataBase {
     */
    public static get GeneratedJSONValidators(): JSONValidatorResult[] {
       return this._generatedJSONValidators;
+   }
+   private static _entitiesWithNewJSONValidators: string[] = [];
+   /**
+    * Entities bound to a JSONType whose SQL `@CHECK` translation was newly generated this run. Their
+    * generated files must be rebuilt even though no column changed, or a full run pays for the
+    * translation and then skips emitting it (dirty-schema scoped emit only sees schema changes).
+    */
+   public static get EntitiesWithNewJSONValidators(): string[] {
+      return this._entitiesWithNewJSONValidators;
    }
    /**
     * Globally scoped list of validators that have been generated during the metadata management process.
@@ -5769,7 +5778,7 @@ export class ManageMetadataBase {
     * Failures are logged and never fail the run: a missing translation only means that one rule is
     * not emitted, which the emitter reports.
     */
-   protected async manageJSONCheckValidators(pool: CodeGenConnection, allEntityFields: any[], currentUser: UserInfo, generateNewCode: boolean): Promise<void> {
+   protected async manageJSONCheckValidators(pool: CodeGenConnection, allEntityFields: ReadonlyArray<JSONFieldRow>, currentUser: UserInfo, generateNewCode: boolean): Promise<void> {
       try {
          const store = this.buildJSONCheckStore(pool);
          const resolved = await ResolveJSONCheckValidators({
@@ -5781,6 +5790,9 @@ export class ManageMetadataBase {
             ReportError: (message) => logError(message),
             ReportWarning: (message) => LogWarning(message),
          });
+         const newTypes = new Set(resolved.filter((r) => r.WasGenerated).map((r) => r.JSONTypeName));
+         const newEntities = allEntityFields.filter((f) => f.JSONType && newTypes.has(f.JSONType.trim())).map((f) => f.Entity);
+         ManageMetadataBase._entitiesWithNewJSONValidators = [...new Set([...ManageMetadataBase._entitiesWithNewJSONValidators, ...newEntities])];
          const resolvedKeys = new Set(resolved.map((r) => r.Key));
          ManageMetadataBase._generatedJSONValidators = [
             ...ManageMetadataBase._generatedJSONValidators.filter((r) => !resolvedKeys.has(r.Key)),
@@ -5818,7 +5830,9 @@ export class ManageMetadataBase {
                return;
             }
             entry.GeneratedCodeID = uuidv4();
-            const checkQuery = `SELECT 1 FROM ${codes} WHERE ${this.qi('CategoryID')} = ${categoryLookup} AND ${this.qi('Source')} = ${lit(entry.Key)}`;
+            // Scoped to Approved exactly like LoadCached: otherwise a non-Approved row with this key makes
+            // every run regenerate (LoadCached misses it) and then skip the insert (this check hits it).
+            const checkQuery = `SELECT 1 FROM ${codes} WHERE ${this.qi('CategoryID')} = ${categoryLookup} AND ${this.qi('Source')} = ${lit(entry.Key)} AND ${this.qi('Status')}=${lit('Approved')}`;
             const insertSQL = `INSERT INTO ${codes} (${['ID', 'CategoryID', 'GeneratedByModelID', 'GeneratedAt', 'Language', 'Status', 'Source', 'Code', 'Description', 'Name'].map((c) => this.qi(c)).join(', ')})
 VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)}, ${this.utcNow()}, ${lit('TypeScript')}, ${lit('Approved')}, ${lit(entry.Key)}, ${lit(entry.FunctionText)}, ${lit(entry.FunctionDescription)}, ${lit(entry.FunctionName)})`;
             await this.logSQLAndExecute(pool, `${this.dbProvider.conditionalInsertSQL(checkQuery, insertSQL)};`, `Generated JSON @CHECK validator ${entry.Key}`);

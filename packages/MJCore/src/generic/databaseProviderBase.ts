@@ -1541,6 +1541,20 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      */
     public async Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions): Promise<{}> {
         const entityResult = new BaseEntityResult();
+        // Each suspend is matched by exactly one resume, whichever path (success, transaction
+        // callback, or catch) gets there first: providers count suspensions, so a stray resume
+        // would re-enable refresh while another save is still running.
+        let refreshSuspended = false;
+        const suspendRefresh = (): void => {
+            refreshSuspended = true;
+            this.OnSuspendRefresh();
+        };
+        const resumeRefresh = (): void => {
+            if (refreshSuspended) {
+                refreshSuspended = false;
+                this.OnResumeRefresh();
+            }
+        };
         try {
             entity.RegisterTransactionPreprocessing();
 
@@ -1664,7 +1678,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 if (entity.TransactionGroup && !bReplay) {
                     // ---- Transaction Group path ----
                     entity.RaiseReadyForTransaction();
-                    this.OnSuspendRefresh();
+                    suspendRefresh();
 
                     const extraData = this.GetTransactionExtraData(entity);
                     if (sqlDetails.simpleSQL) {
@@ -1680,7 +1694,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                             sqlDetails.parameters ?? null,
                             extraData,
                             (transactionResult: Record<string, unknown>, success: boolean) => {
-                                this.OnResumeRefresh();
+                                resumeRefresh();
                                 entityResult.EndedAt = new Date();
                                 if (success && transactionResult) {
                                     this.OnAfterSaveExecute(entity, user, options, saveContext);
@@ -1696,7 +1710,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     return true;
                 } else {
                     // ---- Direct execution path ----
-                    this.OnSuspendRefresh();
+                    suspendRefresh();
 
                     let result: Record<string, unknown>[];
                     if (bReplay) {
@@ -1712,7 +1726,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                         result = await this.PostProcessRows(rawResult, entity.EntityInfo, user);
                     }
 
-                    this.OnResumeRefresh();
+                    resumeRefresh();
                     entityResult.EndedAt = new Date();
 
                     if (result && result.length > 0) {
@@ -1739,7 +1753,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 return entity.GetAll(); // nothing to save
             }
         } catch (e) {
-            this.OnResumeRefresh();
+            resumeRefresh();
             entityResult.EndedAt = new Date();
             entityResult.Message = (e as Error).message;
             LogError(e);

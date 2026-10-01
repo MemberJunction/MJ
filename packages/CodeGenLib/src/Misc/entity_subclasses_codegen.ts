@@ -426,7 +426,11 @@ ${loadModule}
   /** Prefixes a definition's type names with the entity class name (see {@link CollectJSONTypeBlock}). */
   protected static PrefixJSONTypeDefinition(definition: string, jsonType: string | null, sClassName: string): string {
       const model = jsonType && jsonType.trim().length > 0 ? ParseJSONTypeDefinition(definition, jsonType.trim()) : null;
-      if (model?.OptedIn) {
+      // AST rewrite whenever ANY declaration opts in, not only the bound root: the same definition can be
+      // bound to an opted-in root on one field and an untagged root on another, and both bindings must
+      // produce identical text so the block emits the declarations once.
+      const anyOptIn = model !== null && Array.from(model.Declarations.values()).some((d) => d.Tags.some((t) => t.Name === 'mjValidate'));
+      if (anyOptIn) {
           return RewriteJSONTypeDefinition(definition, sClassName);
       }
       // Historical rewrite: every top-level declared name, `\b`-matched over the whole text.
@@ -1463,7 +1467,7 @@ VALUES (${lit(newGeneratedCodeId)}, ${validatorCodeCategoryID}, ${lit(v.aiModelI
         continue;
       }
       const isArray = field.JSONTypeIsArray === true;
-      const ruleSet = BuildJSONRuleSet(model, prefix, prefix, isArray, translations);
+      const ruleSet = BuildJSONRuleSet(model, prefix, prefix, isArray, translations, entity.Name);
       ruleSet.Errors.forEach((message) => logError(`[JSONType] ${entity.Name}.${field.Name}: ${message}`));
       ruleSet.Missing.forEach((rule) => LogWarning(`[JSONType] ${entity.Name}.${field.Name}: SQL @CHECK on ${rule.Path} ('${rule.NormalizedText}') has no generated validator and is not emitted`));
       const root = JSONSchemaConstName(prefix, model.RootName);
@@ -1561,10 +1565,11 @@ ${validationFunctions.length > 0 ? '\n' + validationFunctions : ''}`
    * consumers that want to `z.infer` / `safeParse` the object shape; the field's own column entry in
    * `<Entity>Schema` stays `z.any()` because the column's value everywhere (Get, GetAll, LoadFromData,
    * GraphQL, raw rows) is JSON TEXT, and the typed object view is the `<Field>Object` accessor. `consts`
-   * is a Set so a definition shared by two fields is emitted once. Constructs Zod cannot express are
-   * reported here as warnings and become unchecked sub-trees; they never fail the run.
+   * is keyed by const name, so a declaration reached from several fields or definitions is emitted
+   * once. Constructs Zod cannot express are reported here as warnings and become unchecked sub-trees;
+   * they never fail the run.
    */
-  protected collectStructuralJSONSchema(entity: EntityInfo, field: EntityFieldInfo, consts: Set<string>): void {
+  protected collectStructuralJSONSchema(entity: EntityInfo, field: EntityFieldInfo, consts: Map<string, string>): void {
     const model = EntitySubClassGeneratorBase.GetOptedInJSONModel(field, entity.Name);
     if (!model) {
       return;
@@ -1577,7 +1582,15 @@ ${validationFunctions.length > 0 ? '\n' + validationFunctions : ''}`
     for (const orphan of FindUnattachedTagComments(model)) {
       LogWarning(`[JSONType] ${entity.Name}.${field.Name}: a comment carrying tags is attached to nothing and its tags are ignored — start the comment on its own line, not on the line of the opening '{' (${orphan})`);
     }
-    consts.add(converted.Source);
+    for (const [name, source] of converted.Consts) {
+      const existing = consts.get(name);
+      if (existing === undefined) {
+        consts.set(name, source);
+      } else if (existing !== source) {
+        // Same prefixed name, different shape: two definitions on this entity declare the type differently.
+        logError(`[JSONType] ${entity.Name}.${field.Name}: '${name}' is declared differently by another JSONType definition on this entity; the first declaration's schema is used. Give the types distinct names.`);
+      }
+    }
   }
 
   public GenerateSchemaAndType(entity: EntityInfo): string {
@@ -1588,7 +1601,7 @@ ${validationFunctions.length > 0 ? '\n' + validationFunctions : ''}`
       // Sort fields by Sequence, then by __mj_CreatedAt for consistent ordering
       const sortedFields = SortBySequenceAndCreatedAt(entity.Fields);
       
-      const jsonSchemaConsts = new Set<string>();
+      const jsonSchemaConsts = new Map<string, string>();
       const fields: string = sortedFields.map((e) => {
         let values: string = '';
         let valueList: string = '';
@@ -1634,7 +1647,7 @@ ${validationFunctions.length > 0 ? '\n' + validationFunctions : ''}`
       }).join('\n');
 
       const schemaName: string = `${entity.ClassName}Schema`;
-      const jsonSchemaBlock = jsonSchemaConsts.size > 0 ? `\n${Array.from(jsonSchemaConsts).join('\n\n')}\n` : '';
+      const jsonSchemaBlock = jsonSchemaConsts.size > 0 ? `\n${Array.from(jsonSchemaConsts.values()).join('\n\n')}\n` : '';
       content = `${jsonSchemaBlock}
 /**
  * zod schema definition for the entity ${entity.Name}

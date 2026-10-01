@@ -291,6 +291,14 @@ describe('string -> object re-parse', () => {
         expect(rec.ConfigObject!.Pct).toBe(77);
     });
 
+    it('a write through a held reference after a string Set, with no re-read in between, throws instead of clobbering the Set', async () => {
+        const rec = await loaded(ConfigEntity, JSON.stringify(BASE));
+        const stale = rec.ConfigObject!;
+        rec.Config = JSON.stringify({ Pct: 77, Items: [] });
+        expect(() => { stale.Pct = 1; }).toThrow(/stale|reloaded/);
+        expect(JSON.parse(rec.Config!).Pct).toBe(77);
+    });
+
     it('re-parses after LoadFromData', async () => {
         const rec = await loaded(ConfigEntity, JSON.stringify(BASE));
         const stale = rec.ConfigObject!;

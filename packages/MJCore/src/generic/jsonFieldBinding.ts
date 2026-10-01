@@ -353,6 +353,12 @@ export class JSONFieldBinding<T = unknown> {
      * stale reference fails loudly instead.
      */
     private assertAttached(tree: JSONTree): void {
+        // The raw text may have been replaced (`rec.Field = '...'`, `SetMany`) since the last read.
+        // Re-sync first: a formatting-only change keeps this tree; a real change starts a new tree,
+        // so this write is refused instead of overwriting the newer text.
+        if (tree === this._tree) {
+            this.refresh();
+        }
         if (tree !== this._tree) {
             throw new Error(
                 `JSON field '${this.FieldName}' was reloaded, reverted or replaced after this object was obtained; ` +

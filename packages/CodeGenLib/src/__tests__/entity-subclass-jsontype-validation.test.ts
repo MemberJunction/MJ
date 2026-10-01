@@ -55,7 +55,7 @@ import { LogWarning, logError } from '../Misc/status_logging';
 import { ManageMetadataBase } from '../Database/manage-metadata';
 import { ParseJSONTypeDefinition, RewriteJSONTypeDefinition, CollectJSONCheckRules, BuildJSONCheckKey, ReadJSDocTags, FindUnattachedTagComments } from '../Misc/json-type-model';
 import { GenerateJSONTypeZod } from '../Misc/json-type-zod';
-import { BuildJSONRuleSet, CompileCheckJSONRuleBody, CheckTSExpressionSyntax } from '../Misc/json-type-rules';
+import { BuildJSONRuleSet, CompileCheckJSONRuleBody, CheckTSExpressionSyntax, RunJSONRuleTestCases } from '../Misc/json-type-rules';
 import {
     CachedJSONValidator, JSONCheckStore, JSONCheckTranslator, JSONFieldRow, JSONValidatorResult, ResolveJSONCheckValidators,
 } from '../Database/json-check-validators';
@@ -78,10 +78,19 @@ beforeEach(() => {
  * ---------------------------------------------------------------------------------------------- */
 
 /** Type-checks `source` (which may `import { z } from 'zod'`) with the real compiler. Returns messages. */
+/**
+ * Type-checks emitted source under BOTH strict and non-strict settings: generated code lands in
+ * packages that build either way (MJCoreEntities is non-strict), and Zod's inference differs between
+ * them (without strictNullChecks every object key is inferred optional).
+ */
 function typeCheck(source: string): string[] {
+    return [...typeCheckWith(source, true), ...typeCheckWith(source, false)];
+}
+
+function typeCheckWith(source: string, strict: boolean): string[] {
     const fileName = path.join(__dirname, '__virtual_emitted__.ts');
     const options: ts.CompilerOptions = {
-        noEmit: true, strict: true, target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.ESNext,
+        noEmit: true, strict, target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.ESNext,
         moduleResolution: ts.ModuleResolutionKind.Bundler, skipLibCheck: true, types: [],
     };
     const host = ts.createCompilerHost(options);
@@ -218,8 +227,8 @@ function optedInEntity(definition = OPTED_IN, extra: Plain = {}): Plain {
 describe('opted-in JSONType emission', () => {
     it('emits one lazy schema const per reachable declaration, and uses the root in the entity schema', () => {
         const out = schemaOf(optedInEntity());
-        expect(out).toContain('export const TestEntityEntity_IRangeSchema: z.ZodType<TestEntityEntity_IRange> = z.lazy(() =>');
-        expect(out).toContain('export const TestEntityEntity_IWindowSchema: z.ZodType<TestEntityEntity_IWindow> = z.lazy(() =>');
+        expect(out).toContain('export const TestEntityEntity_IRangeSchema = z.lazy(() =>');
+        expect(out).toContain('export const TestEntityEntity_IWindowSchema = z.lazy(() =>');
         // The COLUMN entry stays exactly what an untagged field emits: the column's value is JSON TEXT
         // everywhere (Get/GetAll/LoadFromData/GraphQL), so typing it as the interface would be a lie.
         expect(out).toContain('Range: z.any().nullable().describe(');
@@ -307,9 +316,34 @@ describe('opted-in JSONType emission', () => {
             makeField({ Name: 'B', CodeName: 'B', JSONType: 'IRange', JSONTypeDefinition: OPTED_IN }),
         ]);
         const out = schemaOf(entity);
-        expect(out.match(/export const TestEntityEntity_IRangeSchema:/g)).toHaveLength(1);
+        expect(out.match(/export const TestEntityEntity_IRangeSchema =/g)).toHaveLength(1);
         expect(out).toContain('A: z.any().nullable()');
         expect(out).toContain('B: z.any().nullable()');
+    });
+
+    it('one definition bound to an opted-in root AND an untagged root emits its declarations once', async () => {
+        const def = `/** @mjValidate */\nexport interface IA { N: number }\ninterface IB { S: string }`;
+        const entity = makeEntity([
+            makePrimaryKeyField(),
+            makeField({ Name: 'A', CodeName: 'A', JSONType: 'IA', JSONTypeDefinition: def }),
+            makeField({ Name: 'B', CodeName: 'B', JSONType: 'IB', JSONTypeDefinition: def }),
+        ]);
+        const out = await gen(entity);
+        expect(out.match(/interface TestEntityEntity_IB\b/g)).toHaveLength(1);
+        expect(out.match(/interface TestEntityEntity_IA\b/g)).toHaveLength(1);
+    });
+
+    it('a helper type reached from two different opted-in definitions emits its schema const once', () => {
+        const shared = 'export interface IShared { N: number }';
+        const entity = makeEntity([
+            makePrimaryKeyField(),
+            makeField({ Name: 'A', CodeName: 'A', JSONType: 'IA', JSONTypeDefinition: `/** @mjValidate */\nexport interface IA { S: IShared }\n${shared}` }),
+            makeField({ Name: 'B', CodeName: 'B', JSONType: 'IB', JSONTypeDefinition: `/** @mjValidate */\nexport interface IB { T: IShared[] }\n${shared}` }),
+        ]);
+        const out = schemaOf(entity);
+        expect(out.match(/export const TestEntityEntity_ISharedSchema =/g)).toHaveLength(1);
+        expect(out).toContain('export const TestEntityEntity_IASchema =');
+        expect(out).toContain('export const TestEntityEntity_IBSchema =');
     });
 
     it('the emitted schema section and class compile against real zod (whole-file type check)', async () => {
@@ -392,10 +426,10 @@ export interface IDerived extends IChild { Extra: number }
     it('a definition without required unknown members converts with no warnings at all', () => {
         const clean = DEFINITION.replace('    Anything: unknown;\n', '').replace('    AnyThing: any;\n', '');
         expect(zodModule(clean, 'IRoot').Warnings).toEqual([]);
-        expect(zodModule(clean, 'IRoot').Source).toContain('const P_IRootSchema: z.ZodType<P_IRoot> = z.lazy(');
+        expect(zodModule(clean, 'IRoot').Source).toMatch(/const P_IRootSchema = z\.lazy\(.*\) as z\.ZodType<P_IRoot>;/s);
     });
 
-    it('the emitted code type-checks against real zod (annotation z.ZodType<Interface> holds for every construct)', () => {
+    it('the emitted code type-checks against real zod (z.ZodType<Interface> assertion holds for every construct, strict and non-strict)', () => {
         expect(typeCheck(zodModule(DEFINITION, 'IRoot').Module)).toEqual([]);
     });
 
@@ -459,6 +493,21 @@ export interface IDerived extends IChild { Extra: number }
 
     it('output for a definition depends only on its text (deterministic)', () => {
         expect(zodModule(DEFINITION, 'IRoot').Source).toBe(zodModule(DEFINITION, 'IRoot').Source);
+    });
+
+    it('an enum referenced by an opted-in type is spelled with its prefixed name (type-checks)', () => {
+        const def = `/** @mjValidate */\nexport interface IRoot { C: Color; K?: Color.Red; Cs?: Color[] }\nexport enum Color { Red = 'r', Blue = 'b' }`;
+        const m = zodModule(def, 'IRoot');
+        expect(m.Source).not.toMatch(/z\.custom<Color/);
+        expect(typeCheck(m.Module)).toEqual([]);
+    });
+
+    it('an invalid @pattern is reported and ignored at CodeGen time, never emitted', () => {
+        const def = `/** @mjValidate */\nexport interface IRoot {\n  /** @pattern ^[a-z(+$ */\n  S: string;\n}`;
+        const m = zodModule(def, 'IRoot');
+        expect(m.Source).not.toContain('.regex(');
+        expect(m.Warnings.some((w) => /@pattern .* is not a valid regular expression/.test(w))).toBe(true);
+        expect(rootSchema(m).safeParse({ S: 'anything' }).success).toBe(true);
     });
 
     it('mutually recursive declarations need no ordering', () => {
@@ -655,7 +704,7 @@ describe('@CHECK ts:(...) rules', () => {
     });
 
     it('emit a rule set: interface-, property- and nested-scoped, with the graph to reach nested rules', () => {
-        const built = BuildJSONRuleSet(model(), 'TestEntityEntity', 'TestEntityEntity', false, new Map());
+        const built = BuildJSONRuleSet(model(), 'TestEntityEntity', 'TestEntityEntity', false, new Map(), 'E');
         expect(built.Errors).toEqual([]);
         expect(built.Missing).toEqual([]);
         expect(built.Source).toContain('RootType: "IRange"');
@@ -665,7 +714,7 @@ describe('@CHECK ts:(...) rules', () => {
     });
 
     it('the emitted rule set runs: values in scope are checked, with element-level scoping', () => {
-        const set = evalRuleSet(BuildJSONRuleSet(model(), 'P', 'E', false, new Map()).Source!);
+        const set = evalRuleSet(BuildJSONRuleSet(model(), 'P', 'E', false, new Map(), 'E').Source!);
         expect(set.Rules).toHaveLength(3);
         const [interfaceRule, tagsRule, windowRule] = set.Rules;
         expect(interfaceRule.Test({ Low: 1, High: 2 }, {})).toBe(true);
@@ -678,23 +727,55 @@ describe('@CHECK ts:(...) rules', () => {
     });
 
     it('a rule on an array-typed property is per-element and its value type is the element type', () => {
-        const built = BuildJSONRuleSet(ParseJSONTypeDefinition(`/** @mjValidate */\nexport interface I {\n  /** @CHECK ts:(value.length > 0) */\n  Names: string[];\n}`, 'I')!, 'P', 'E', false, new Map());
+        const built = BuildJSONRuleSet(ParseJSONTypeDefinition(`/** @mjValidate */\nexport interface I {\n  /** @CHECK ts:(value.length > 0) */\n  Names: string[];\n}`, 'I')!, 'P', 'E', false, new Map(), 'E');
         expect(built.Source).toContain('PerElement: true');
         expect(built.Source).toContain('Test(value: string, row: E): boolean {');
     });
 
     it('a rule on a base interface is attached to every local interface that extends it', () => {
         const def = `/** @mjValidate */\nexport interface IRoot { Items: IDerived[] }\n/** @CHECK ts:(value.N > 0) */\nexport interface IBase { N: number }\nexport interface IDerived extends IBase { M: number }`;
-        const built = BuildJSONRuleSet(ParseJSONTypeDefinition(def, 'IRoot')!, 'P', 'E', false, new Map());
+        const built = BuildJSONRuleSet(ParseJSONTypeDefinition(def, 'IRoot')!, 'P', 'E', false, new Map(), 'E');
         expect(built.Source).toContain('Type: "IDerived"');
         expect(built.Source).toContain('"IRoot": [{ Property: "Items", Type: "IDerived", Shape: "array" }]');
     });
 
     it('a syntactically broken ts: expression is skipped with an error, never emitted', () => {
         const def = `/** @mjValidate\n * @CHECK ts:(value.a >> ) */\nexport interface I { a: number }`;
-        const built = BuildJSONRuleSet(ParseJSONTypeDefinition(def, 'I')!, 'P', 'E', false, new Map());
+        const built = BuildJSONRuleSet(ParseJSONTypeDefinition(def, 'I')!, 'P', 'E', false, new Map(), 'E');
         expect(built.Source).toBeNull();
         expect(built.Errors[0]).toContain('skipped');
+    });
+
+    it('a ts: expression that does not type-check against its value type is skipped with an error, never emitted', () => {
+        // On a scalar property `value` is the ENCLOSING object, so `value.length` on a string member is a type error.
+        const def = `/** @mjValidate */\nexport interface I {\n  /** @CHECK ts:(value.length <= 128) */\n  Name: string;\n}`;
+        const built = BuildJSONRuleSet(ParseJSONTypeDefinition(def, 'I')!, 'P', 'E', false, new Map(), 'E');
+        expect(built.Source).toBeNull();
+        expect(built.Errors[0]).toMatch(/skipped — type error: Property 'length' does not exist/);
+    });
+
+    it('a ts: expression on a scalar property sees the enclosing object as value', () => {
+        const def = `/** @mjValidate */\nexport interface I {\n  /** @CHECK ts:(value.Name.length <= 3) */\n  Name: string;\n}`;
+        const built = BuildJSONRuleSet(ParseJSONTypeDefinition(def, 'I')!, 'P', 'E', false, new Map(), 'E');
+        expect(built.Errors).toEqual([]);
+        const rule = evalRuleSet(built.Source!).Rules[0];
+        expect(rule.Test({ Name: 'abc' }, {})).toBe(true);
+        expect(rule.Test({ Name: 'abcd' }, {})).toBe(false);
+    });
+
+    it('RunJSONRuleTestCases rejects a body that disagrees with its own cases', () => {
+        const cases = [{ Value: { N: 1 }, Expected: true }, { Value: { N: -1 }, Expected: false }];
+        expect(RunJSONRuleTestCases('return value.N > 0;', cases, false, [])).toBeNull();
+        expect(RunJSONRuleTestCases('return true;', cases, false, [])).toMatch(/expected false/);
+    });
+
+    it('RunJSONRuleTestCases times out a synchronous infinite loop', () => {
+        expect(RunJSONRuleTestCases('while (true) {} return true;', [{ Value: {}, Expected: true }], false, [])).toMatch(/threw/);
+    });
+
+    it('RunJSONRuleTestCases times out an infinite loop queued as a microtask instead of hanging CodeGen', () => {
+        const body = 'Promise.resolve().then(() => { while (true) {} }); return true;';
+        expect(RunJSONRuleTestCases(body, [{ Value: {}, Expected: true }], false, [])).toMatch(/threw/);
     });
 
     it('CheckTSExpressionSyntax accepts real expressions and rejects fragments', () => {
@@ -711,7 +792,7 @@ describe('@CHECK ts:(...) rules', () => {
 
     it('row.<Column> is available to ts: rules', () => {
         const def = `/** @mjValidate\n * @CHECK ts:(value.Limit <= row.MaxLimit) */\nexport interface I { Limit: number }`;
-        const built = BuildJSONRuleSet(ParseJSONTypeDefinition(def, 'I')!, 'P', 'E', false, new Map());
+        const built = BuildJSONRuleSet(ParseJSONTypeDefinition(def, 'I')!, 'P', 'E', false, new Map(), 'E');
         const rule = evalRuleSet(built.Source!).Rules[0];
         expect(rule.Test({ Limit: 3 }, { MaxLimit: 5 })).toBe(true);
         expect(rule.Test({ Limit: 9 }, { MaxLimit: 5 })).toBe(false);
@@ -720,7 +801,7 @@ describe('@CHECK ts:(...) rules', () => {
     it('the whole generated rule type-checks against the real interfaces (typed value and row)', async () => {
         const entity = optedInEntity();
         const definition = RewriteJSONTypeDefinition(OPTED_IN, 'TestEntityEntity');
-        const built = BuildJSONRuleSet(model(), 'TestEntityEntity', 'TestEntityEntity', false, new Map());
+        const built = BuildJSONRuleSet(model(), 'TestEntityEntity', 'TestEntityEntity', false, new Map(), 'E');
         const file = `${definition}\ndeclare class TestEntityEntity { Range: string | null }\ninterface Rules { RootType: string; RootIsArray: boolean; Graph: Record<string, Array<{ Property: string; Type: string; Shape: 'object' | 'array' | 'record' }>>; Rules: Array<{ Type: string; Property?: string; PerElement?: boolean; Description: string; Test(value: unknown, row: unknown): boolean }> }\nconst rules: Rules = ${built.Source};\nexport { rules };`;
         expect(typeCheck(file)).toEqual([]);
         void entity;
@@ -823,18 +904,25 @@ function harness(cached: CachedJSONValidator[] = []): Harness {
     };
 }
 
+/** The cache key a rule of the default harness field (entity A, SQL_DEFINITION) resolves to. */
+const keyFor = (jsonType: string, path: string, text: string, definition = SQL_DEFINITION, entity = 'A'): string => {
+    const model = ParseJSONTypeDefinition(definition, jsonType)!;
+    const rule = CollectJSONCheckRules(model).find((r) => r.Path === path && r.NormalizedText === text)!;
+    return BuildJSONCheckKey(model, rule, entity);
+};
+
 const cachedFor = (jsonType: string, path: string, text: string, code: string): CachedJSONValidator => ({
-    ID: `cached-${path}`, Source: `${jsonType}|${path}|${text}`, Name: `Cached_${path}`, Code: code, Description: `cached ${path}`,
+    ID: `cached-${path}`, Source: keyFor(jsonType, path, text), Name: `Cached_${path}`, Code: code, Description: `cached ${path}`,
 });
 
 describe('SQL @CHECK on a JSONType', () => {
-    it('cache MISS: calls the model once per distinct rule, compile-checks, persists, and keys on JSONType|path|text', async () => {
+    it('cache MISS: calls the model once per distinct rule, compile-checks, persists, and keys on JSONType|path|text|shape', async () => {
         const h = harness();
         const results = await h.Run({ GenerateNew: true });
         expect(h.Translator.Calls).toEqual(['(Pct >= 0 AND Pct <= 100)', '(Rate IS NULL OR Rate >= 0)']);
         expect(results.map((r) => r.Key)).toEqual([
-            'IConfig|IConfig.Pct|(Pct >= 0 AND Pct <= 100)',
-            'IConfig|IItem.Rate|(Rate IS NULL OR Rate >= 0)',
+            keyFor('IConfig', 'IConfig.Pct', '(Pct >= 0 AND Pct <= 100)'),
+            keyFor('IConfig', 'IItem.Rate', '(Rate IS NULL OR Rate >= 0)'),
         ]);
         expect(results.every((r) => r.WasGenerated && r.AIModelID === 'model-1')).toBe(true);
         expect(h.Store.Persisted).toHaveLength(2);
@@ -887,6 +975,35 @@ describe('SQL @CHECK on a JSONType', () => {
         const h = harness([cachedFor('IConfig', 'IConfig.Pct', '(Pct >= 0 AND Pct <= 100)', 'return true;'), cachedFor('IConfig', 'IItem.Rate', '(Rate IS NULL OR Rate >= 0)', 'return true;')]);
         await h.Run({ GenerateNew: true, Fields: [{ Entity: 'A', Name: 'Config', JSONType: 'IConfig', JSONTypeDefinition: reflowed, Type: 'nvarchar', AllowsNull: true }] });
         expect(h.Translator.Calls).toEqual([]);
+    });
+
+    it('a same-named type with DIFFERENT members on two entities translates separately', async () => {
+        const h = harness();
+        const other = `/** @mjValidate */\nexport interface IConfig {\n  /** @CHECK (Pct >= 0 AND Pct <= 100) */\n  Pct: number;\n  Label?: string;\n}`;
+        const results = await h.Run({
+            GenerateNew: true,
+            Fields: [
+                { Entity: 'A', Name: 'Config', JSONType: 'IConfig', JSONTypeDefinition: `/** @mjValidate */\nexport interface IConfig {\n  /** @CHECK (Pct >= 0 AND Pct <= 100) */\n  Pct: number;\n}` },
+                { Entity: 'B', Name: 'Config', JSONType: 'IConfig', JSONTypeDefinition: other },
+            ],
+        });
+        expect(h.Translator.Calls).toHaveLength(2);
+        expect(new Set(results.map((r) => r.Key)).size).toBe(2);
+    });
+
+    it('a rule reading row.<Column> is translated per entity; one that does not is shared', async () => {
+        const h = harness();
+        h.Translator.Next = () => ({ Description: 'd', Code: 'return true;', MethodName: 'M', ModelID: 'm', TestCases: [{ Value: {}, Expected: true }] });
+        const def = `/** @mjValidate */\nexport interface IQ {\n  /** @CHECK (Limit <= row.MaxLimit) */\n  Limit: number;\n  /** @CHECK (Other >= 0) */\n  Other: number;\n}`;
+        await h.Run({
+            GenerateNew: true,
+            Fields: [
+                { Entity: 'A', Name: 'Q', JSONType: 'IQ', JSONTypeDefinition: def },
+                { Entity: 'B', Name: 'Q', JSONType: 'IQ', JSONTypeDefinition: def },
+            ],
+        });
+        expect(h.Translator.Calls.filter((c) => c.includes('row.MaxLimit'))).toHaveLength(2);
+        expect(h.Translator.Calls.filter((c) => c.includes('Other'))).toHaveLength(1);
     });
 
     it('a shared interface bound to several entity fields generates once', async () => {
@@ -1040,7 +1157,7 @@ describe('SQL @CHECK emission into the entity class', () => {
     const sqlEntity = () => makeEntity([makePrimaryKeyField(), makeField({ Name: 'Config', CodeName: 'Config', JSONType: 'IConfig', JSONTypeDefinition: SQL_DEFINITION })]);
     const translation = (path: string, text: string, body: string, description: string) => {
         const r = new JSONValidatorResult();
-        r.JSONTypeName = 'IConfig'; r.Path = path; r.NormalizedText = text; r.Key = BuildJSONCheckKey('IConfig', { Path: path, NormalizedText: text });
+        r.JSONTypeName = 'IConfig'; r.Path = path; r.NormalizedText = text; r.Key = keyFor('IConfig', path, text, SQL_DEFINITION, 'Test Entity');
         r.FunctionName = 'Rule'; r.FunctionDescription = description; r.FunctionText = body;
         return r;
     };

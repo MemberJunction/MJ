@@ -19,6 +19,7 @@
  * @module Misc/json-type-model
  */
 
+import * as crypto from 'crypto';
 import ts from 'typescript';
 
 /** Severity a validation result is reported at. `@mjValidate warn` selects `'Warning'`. */
@@ -287,10 +288,13 @@ export function ResolveLocalTarget(model: JSONTypeModel, node: ts.TypeNode): { N
 export function PrefixedTypeText(model: JSONTypeModel, node: ts.TypeNode, prefix: string): string {
     const source = model.SourceFile.text;
     const start = node.getStart(model.SourceFile);
+    // Every top-level declared name, not just `Declarations`: enums and classes are prefixed by
+    // RewriteJSONTypeDefinition too, so a reference to one must be spelled with the prefix here.
+    const declared = topLevelTypeNames(model.SourceFile);
     const edits: Array<{ Start: number; End: number; Text: string }> = [];
     const visit = (n: ts.Node): void => {
-        if (ts.isTypeReferenceNode(n) && ts.isIdentifier(n.typeName) && model.Declarations.has(n.typeName.text)) {
-            edits.push({ Start: n.typeName.getStart(model.SourceFile), End: n.typeName.getEnd(), Text: `${prefix}_${n.typeName.text}` });
+        if (ts.isIdentifier(n) && declared.has(n.text) && isTypeNameReference(n)) {
+            edits.push({ Start: n.getStart(model.SourceFile), End: n.getEnd(), Text: `${prefix}_${n.text}` });
         }
         n.forEachChild(visit);
     };
@@ -300,6 +304,30 @@ export function PrefixedTypeText(model: JSONTypeModel, node: ts.TypeNode, prefix
         text = text.slice(0, edit.Start - start) + edit.Text + text.slice(edit.End - start);
     }
     return text;
+}
+
+function isTopLevelTypeDeclaration(node: ts.Node): node is ts.InterfaceDeclaration | ts.TypeAliasDeclaration | ts.EnumDeclaration | ts.ClassDeclaration {
+    return ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node) || ts.isEnumDeclaration(node) || ts.isClassDeclaration(node);
+}
+
+/** Names of the definition's top-level interfaces, type aliases, enums and classes — the names the prefix rewrite renames. */
+function topLevelTypeNames(sourceFile: ts.SourceFile): Set<string> {
+    const declared = new Set<string>();
+    sourceFile.forEachChild((node) => {
+        if (isTopLevelTypeDeclaration(node) && node.name) {
+            declared.add(node.name.text);
+        }
+    });
+    return declared;
+}
+
+/** True when the identifier names a type (a type reference, `extends`, `typeof`, or the left of `A.B`) rather than a member. */
+function isTypeNameReference(id: ts.Identifier): boolean {
+    const parent = id.parent;
+    return (ts.isTypeReferenceNode(parent) && parent.typeName === id)
+        || (ts.isExpressionWithTypeArguments(parent) && parent.expression === id)
+        || (ts.isTypeQueryNode(parent) && parent.exprName === id)
+        || (ts.isQualifiedName(parent) && parent.left === id);
 }
 
 /* ------------------------------------------------------------------------------------------------
@@ -314,18 +342,13 @@ export function PrefixedTypeText(model: JSONTypeModel, node: ts.TypeNode, prefix
  */
 export function RewriteJSONTypeDefinition(definition: string, prefix: string): string {
     const sourceFile = ts.createSourceFile('jsontype-rewrite.ts', definition, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-    const declared = new Set<string>();
-    sourceFile.forEachChild((node) => {
-        if ((ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node) || ts.isEnumDeclaration(node) || ts.isClassDeclaration(node)) && node.name) {
-            declared.add(node.name.text);
-        }
-    });
+    const declared = topLevelTypeNames(sourceFile);
     const edits: Array<{ Start: number; End: number; Insert?: string }> = [];
     // Opted-in declarations are always exported: the generated, exported structural schema consts
     // (`z.ZodType<Prefixed_X>`) name them, and an exported const may not use a private type name
     // when the package emits declarations.
     sourceFile.forEachChild((node) => {
-        const isDeclaration = ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node) || ts.isEnumDeclaration(node) || ts.isClassDeclaration(node);
+        const isDeclaration = isTopLevelTypeDeclaration(node);
         const exported = ts.canHaveModifiers(node) && (ts.getModifiers(node) ?? []).some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
         if (isDeclaration && !exported) {
             const start = node.getStart(sourceFile);
@@ -334,17 +357,10 @@ export function RewriteJSONTypeDefinition(definition: string, prefix: string): s
     });
     const isDeclarationName = (id: ts.Identifier): boolean => {
         const parent = id.parent;
-        return (ts.isInterfaceDeclaration(parent) || ts.isTypeAliasDeclaration(parent) || ts.isEnumDeclaration(parent) || ts.isClassDeclaration(parent)) && parent.name === id;
-    };
-    const isReference = (id: ts.Identifier): boolean => {
-        const parent = id.parent;
-        return (ts.isTypeReferenceNode(parent) && parent.typeName === id)
-            || (ts.isExpressionWithTypeArguments(parent) && parent.expression === id)
-            || (ts.isTypeQueryNode(parent) && parent.exprName === id)
-            || (ts.isQualifiedName(parent) && parent.left === id);
+        return isTopLevelTypeDeclaration(parent) && parent.name === id;
     };
     const visit = (node: ts.Node): void => {
-        if (ts.isIdentifier(node) && declared.has(node.text) && (isDeclarationName(node) || isReference(node))) {
+        if (ts.isIdentifier(node) && declared.has(node.text) && (isDeclarationName(node) || isTypeNameReference(node))) {
             edits.push({ Start: node.getStart(sourceFile), End: node.getEnd() });
         }
         node.forEachChild(visit);
@@ -387,9 +403,35 @@ export function NormalizeCheckText(text: string): string {
     return text.replace(/\s+/g, ' ').trim();
 }
 
-/** Cache key of a SQL `@CHECK`: JSONType name + path + normalized text. Deliberately NOT the entity field. */
-export function BuildJSONCheckKey(jsonTypeName: string, rule: Pick<JSONCheckRule, 'Path' | 'NormalizedText'>): string {
-    return `${jsonTypeName}|${rule.Path}|${rule.NormalizedText}`;
+/**
+ * Cache key of a SQL `@CHECK`: JSONType name + path + normalized text + a hash of the SHAPE of the
+ * rule's `value` (its members' names, optionality and types). A type shared by several fields or
+ * entities translates once, and editing an unrelated member, a comment or whitespace does not
+ * regenerate; but two entities that declare a same-named type with different members do not share a
+ * translation compiled against the other's shape. A rule that reads `row.<Column>` also keys on the
+ * owning entity, whose columns it depends on.
+ */
+export function BuildJSONCheckKey(model: JSONTypeModel, rule: JSONCheckRule, entityName: string): string {
+    const shapeHash = crypto.createHash('sha256').update(JSONCheckValueShape(model, rule)).digest('hex').slice(0, 12);
+    const key = `${model.RootName}|${rule.Path}|${rule.NormalizedText}|${shapeHash}`;
+    return JSONCheckReadsRow(rule) ? `${key}|${entityName}` : key;
+}
+
+/** Canonical text of the members a rule's `value` has (or of its type, when it is not a local object type). */
+export function JSONCheckValueShape(model: JSONTypeModel, rule: JSONCheckRule): string {
+    const target = rule.ValueTypeNode ? ResolveLocalTarget(model, rule.ValueTypeNode)?.Name : rule.DeclarationName;
+    const decl = target ? model.Declarations.get(target) : undefined;
+    if (!decl) {
+        return NormalizeCheckText(rule.ValueTypeNode ? rule.ValueTypeNode.getText(model.SourceFile) : rule.DeclarationName);
+    }
+    return GetAllMembers(model, decl)
+        .map((m) => `${m.Name}${m.Optional ? '?' : ''}:${NormalizeCheckText(m.TypeNode.getText(model.SourceFile))}`)
+        .join(';');
+}
+
+/** True when a rule's text references the owning record (`row.<Column>`). */
+export function JSONCheckReadsRow(rule: Pick<JSONCheckRule, 'NormalizedText'>): boolean {
+    return /\brow\s*\./i.test(rule.NormalizedText);
 }
 
 function parseCheckTag(text: string): { Kind: 'ts' | 'sql'; Expression: string } | null {

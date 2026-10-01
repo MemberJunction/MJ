@@ -105,8 +105,10 @@ export interface JSONRuleTestCase {
 const RULE_TEST_TIMEOUT_MS = 250;
 
 /**
- * Executes a translated rule body against the model's own test cases, in an isolated `vm` context
- * with no globals and a time limit. This is a self-consistency guard, not proof of equivalence with
+ * Executes a translated rule body against the model's own test cases, in a separate `vm` context
+ * with no host globals and a time limit (microtasks included). `vm` is NOT a security boundary — the
+ * same body is emitted into the generated entity class and runs in-process there anyway, so this
+ * guards correctness, not trust. This is a self-consistency guard, not proof of equivalence with
  * the SQL: it catches a body that does not do what its own author says it does — most usefully
  * the NULL-passes rule, because `requireAbsentCase` demands at least one case in which an
  * optional/nullable member is absent or null.
@@ -150,7 +152,12 @@ function isAbsentCase(value: unknown, optionalMembers: ReadonlyArray<string>): b
 
 function runOneCase(js: string, testCase: JSONRuleTestCase): string | null {
     try {
-        const context = vm.createContext({ input: JSON.stringify({ value: testCase.Value, row: testCase.Row ?? {} }) });
+        // afterEvaluate: microtasks the body queues run inside runInContext, under the same timeout,
+        // instead of on the host's queue where an infinite `.then()` would hang CodeGen.
+        const context = vm.createContext(
+            { input: JSON.stringify({ value: testCase.Value, row: testCase.Row ?? {} }) },
+            { microtaskMode: 'afterEvaluate' },
+        );
         const script = new vm.Script(`const args = JSON.parse(input);\n${js.trim().replace(/;$/, '')}(args.value, args.row)`);
         const actual: unknown = script.runInContext(context, { timeout: RULE_TEST_TIMEOUT_MS });
         return actual === testCase.Expected ? null : `expected ${testCase.Expected} but the body returned ${String(actual)}`;
@@ -187,8 +194,9 @@ export function RuleValueTypeText(model: JSONTypeModel, rule: JSONCheckRule): st
 /** Declared types that transitively contain a rule-bearing type (rule-bearing types included). */
 function typesReachingRules(model: JSONTypeModel, bearing: Set<string>): Set<string> {
     const reaching = new Set(bearing);
+    // Each pass adds at least one declaration or stops, so Declarations.size passes always suffice.
     let changed = true;
-    while (changed) {
+    for (let pass = 0; changed && pass <= model.Declarations.size; pass++) {
         changed = false;
         for (const decl of model.Declarations.values()) {
             if (reaching.has(decl.Name)) {
@@ -251,6 +259,7 @@ function cleanStoredCode(code: string): string {
  * @param entityClassName - the owning entity class, the type of `row`
  * @param isArray - true when the field holds an array of the root type
  * @param translations - SQL check key → translation, for the SQL rules that have one
+ * @param entityName - the owning entity's name (part of the key of a rule that reads `row.`)
  */
 export function BuildJSONRuleSet(
     model: JSONTypeModel,
@@ -258,6 +267,7 @@ export function BuildJSONRuleSet(
     entityClassName: string,
     isArray: boolean,
     translations: ReadonlyMap<string, JSONCheckTranslation>,
+    entityName: string,
 ): JSONRuleSetResult {
     const collected = CollectJSONCheckRules(model);
     const bearing = new Set(collected.map((r) => r.DeclarationName));
@@ -270,7 +280,7 @@ export function BuildJSONRuleSet(
     const result: JSONRuleSetResult = { Source: null, Missing: [], Errors: [], SqlRules: rules.filter((r) => r.Kind === 'sql') };
     const emitted: string[] = [];
     for (const rule of rules) {
-        const entry = renderRule(model, prefix, entityClassName, rule, translations, result);
+        const entry = renderRule(model, prefix, entityClassName, entityName, rule, translations, result);
         if (entry) {
             emitted.push(entry);
         }
@@ -297,6 +307,7 @@ function renderRule(
     model: JSONTypeModel,
     prefix: string,
     entityClassName: string,
+    entityName: string,
     rule: JSONCheckRule,
     translations: ReadonlyMap<string, JSONCheckTranslation>,
     result: JSONRuleSetResult,
@@ -305,15 +316,18 @@ function renderRule(
     let description: string;
     let body: string;
     if (rule.Kind === 'ts') {
-        const problem = CheckTSExpressionSyntax(rule.Expression);
+        body = `return (\n${indent(rule.Expression, 4)}\n);`;
+        // Type-checked, not just parsed: an expression that does not compile against its value type
+        // would otherwise break the generated package's build.
+        const problem = CheckTSExpressionSyntax(rule.Expression)
+            ?? CompileCheckJSONRuleBody(model.SourceFile.text, RuleValueTypeText(model, rule), body);
         if (problem) {
             result.Errors.push(`${where} ts: expression skipped — ${problem}`);
             return null;
         }
         description = `Must satisfy: ${rule.NormalizedText}`;
-        body = `return (\n${indent(rule.Expression, 4)}\n);`;
     } else {
-        const translation = translations.get(BuildJSONCheckKey(model.RootName, rule));
+        const translation = translations.get(BuildJSONCheckKey(model, rule, entityName));
         if (!translation) {
             result.Missing.push(rule);
             return null;
