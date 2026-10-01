@@ -399,6 +399,13 @@ the `Create` / `Modify` / `Activate Form Contribution Version` actions. See
 [Forms Architecture §7c Scenario I](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md) for the full
 picture.
 
+**Turning rows off.** One switch turns every row off and leaves compiled panels as they are. In
+Explorer, set the instance configuration `Forms.MetadataContributions.Enabled` to `false`; the shell
+applies it when Explorer starts, before any form opens. On a Node host (MJAPI, actions, the CLI), set
+`MJ_FORMS_METADATA_CONTRIBUTIONS=false`. Each setting covers only its own side. Another browser host
+calls `InteractiveFormsEngine.ApplyInstanceConfiguration(InstanceConfigEngine.Instance)` before the
+first form loads.
+
 ## Who sees a panel
 
 A contribution row, and a full custom form (`MJ: Entity Form Overrides`), is for one of three

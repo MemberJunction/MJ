@@ -440,10 +440,18 @@ apply flow sets only after the user confirms.
 **Two safety properties worth knowing.** Contributions on identity and authorization surfaces
 (`MJ: Users`, `MJ: Roles`, `MJ: User Roles`, `MJ: Authorizations`, `MJ: Authorization Roles`) are
 dropped at `Global` or `Role` scope when the form resolves them — whatever wrote the row, including
-`mj sync` and direct SQL. And an instance flag
-(`MJ_FORMS_METADATA_CONTRIBUTIONS=false`, or `InteractiveFormsEngine.MetadataContributionsEnabled`)
-turns the whole source off in a running process: the engine loads nothing, the collector returns
-compiled registrations only, and forms render exactly as they did before the feature existed.
+`mj sync` and direct SQL. And a kill switch turns the whole source off: the engine loads nothing,
+the collector returns compiled registrations only, and forms render exactly as they did before the
+feature existed. The switch has two settings, because the browser has no process environment:
+
+- **Node hosts** (MJAPI, actions, the CLI): set `MJ_FORMS_METADATA_CONTRIBUTIONS=false`.
+- **Explorer**: set the instance configuration `Forms.MetadataContributions.Enabled` to `false`. The
+  shell applies it when Explorer starts, before any form opens. Another browser host calls
+  `InteractiveFormsEngine.ApplyInstanceConfiguration(InstanceConfigEngine.Instance)`, or sets
+  `InteractiveFormsEngine.MetadataContributionsEnabled`, before the first form loads.
+
+Each setting covers only its own side: the server variable does not reach the browser, and the
+instance configuration is not read by Node hosts.
 
 L3 `MJ: Form Chrome Rules` still suppresses any of them by `ContributionKey`.
 

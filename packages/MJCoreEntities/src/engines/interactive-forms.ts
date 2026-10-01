@@ -2,6 +2,7 @@ import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, ProviderType, 
 import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from "@memberjunction/global";
 import type { Observable } from "rxjs";
 import type { MJComponentEntity, MJEntityFormContributionEntity, MJEntityFormOverrideEntity } from "../generated/entity_subclasses";
+import type { InstanceConfigEngine } from "./InstanceConfigEngine";
 
 /**
  * Cache of MemberJunction interactive-form metadata: the form-role
@@ -92,15 +93,31 @@ export class InteractiveFormsEngine extends BaseEngine<InteractiveFormsEngine> {
      * misbehaving panel — no migration, no deployment of a code change.
      *
      * Seeded from `MJ_FORMS_METADATA_CONTRIBUTIONS=false` where an environment exists
-     * (server, CLI); a browser host can set it directly before the first `Config()`.
+     * (server, CLI). The browser has no environment: the Explorer shell calls
+     * {@link ApplyInstanceConfiguration} after Instance Config loads and before any form opens, and
+     * another browser host can do the same or set this directly before the first `Config()`.
      */
     private static _metadataContributionsEnabled: boolean = InteractiveFormsEngine.readContributionsFlag();
+
+    /** The `MJ: Instance Configurations` key that turns metadata contributions off in the browser. */
+    public static readonly MetadataContributionsConfigKey = 'Forms.MetadataContributions.Enabled';
 
     public static get MetadataContributionsEnabled(): boolean {
         return InteractiveFormsEngine._metadataContributionsEnabled;
     }
     public static set MetadataContributionsEnabled(value: boolean) {
         InteractiveFormsEngine._metadataContributionsEnabled = value;
+    }
+
+    /**
+     * Turns metadata contributions off when the instance configuration
+     * ({@link MetadataContributionsConfigKey}) is `false`. A missing key leaves the switch as it is,
+     * and a `true` never turns back on a switch that is already off.
+     */
+    public static ApplyInstanceConfiguration(config: Pick<InstanceConfigEngine, 'GetBoolean'>): void {
+        if (!config.GetBoolean(InteractiveFormsEngine.MetadataContributionsConfigKey, true)) {
+            InteractiveFormsEngine.MetadataContributionsEnabled = false;
+        }
     }
 
     private static readContributionsFlag(): boolean {

@@ -140,6 +140,40 @@ describe('InteractiveFormsEngine kill switch', () => {
 });
 
 /**
+ * The browser has no process environment, so Instance Config is how an administrator reaches the
+ * switch there. The Explorer shell applies it before any form opens.
+ */
+describe('InteractiveFormsEngine.ApplyInstanceConfiguration', () => {
+    /** A stand-in for `InstanceConfigEngine`: answers from `values`, else the caller's default. */
+    function instanceConfig(values: Record<string, boolean>) {
+        return { GetBoolean: (key: string, defaultValue: boolean = true) => values[key] ?? defaultValue };
+    }
+
+    beforeEach(() => {
+        backing = {};
+        InteractiveFormsEngine.MetadataContributionsEnabled = true;
+    });
+
+    it('turns the switch off when Forms.MetadataContributions.Enabled is false', () => {
+        backing._contributions = [row({ ID: 'loaded' })];
+        InteractiveFormsEngine.ApplyInstanceConfiguration(instanceConfig({ 'Forms.MetadataContributions.Enabled': false }));
+        expect(InteractiveFormsEngine.MetadataContributionsEnabled).toBe(false);
+        expect(InteractiveFormsEngine.Instance.Contributions).toEqual([]);
+    });
+
+    it('leaves the switch on when the key is missing', () => {
+        InteractiveFormsEngine.ApplyInstanceConfiguration(instanceConfig({}));
+        expect(InteractiveFormsEngine.MetadataContributionsEnabled).toBe(true);
+    });
+
+    it('does not turn back on a switch that is already off', () => {
+        InteractiveFormsEngine.MetadataContributionsEnabled = false;
+        InteractiveFormsEngine.ApplyInstanceConfiguration(instanceConfig({ 'Forms.MetadataContributions.Enabled': true }));
+        expect(InteractiveFormsEngine.MetadataContributionsEnabled).toBe(false);
+    });
+});
+
+/**
  * A browser cache holds one user's view, so other users' personal rows — with their Notes and
  * Configuration — are not loaded into it. A server cache is shared by every user of the process,
  * so it holds every row and each reader filters what it serves.
