@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { UserCanManageFormDefaults } from '@memberjunction/core-entities';
 import type {
     ActiveContributionSiblings, ApplyContributionSpecToRow, FormLifecycleComponentStatus, ParseClaimedFieldNames,
     SameFormAudience,
@@ -442,6 +443,49 @@ describe('FormPanelAdminService.SetActive', () => {
         const result = await new FormPanelAdminService().SetActive('gone', true);
         expect(result).toMatchObject({ Success: false, Message: 'That panel is no longer registered.' });
         expect(saves).toEqual([]);
+    });
+});
+
+/**
+ * The stock UI role may update `MJ: Components`, and the server refuses a component change only
+ * when a shared or another user's panel uses the component. So a user without Manage Form
+ * Defaults turns their own panel on, off or to a draft, and the component's save goes in the
+ * same transaction as the row's.
+ */
+describe('FormPanelAdminService — a user without Manage Form Defaults, on their own panel', () => {
+    const mine = (over: Partial<StoredRow> & { ID: string }) => panel({ Scope: 'User', UserID: ME, ...over });
+    const P = { slot: 'after-fields' as const, presentation: 'panel' as const, title: 'P' };
+
+    beforeEach(() => { vi.mocked(UserCanManageFormDefaults).mockReturnValue(false); });
+    afterEach(() => { vi.mocked(UserCanManageFormDefaults).mockReturnValue(true); });
+
+    it('holds no grant', () => {
+        expect(new FormPanelAdminService().CanPublish()).toBe(false);
+    });
+
+    it('turns it off and saves its component', async () => {
+        contributions = [mine({ ID: 'mine', ComponentID: 'c-1' })];
+        components = [{ ID: 'c-1', Status: 'Published' }];
+        const result = await new FormPanelAdminService().SetActive('mine', false);
+        expect(result.Success).toBe(true);
+        expect(componentSaves).toEqual([{ ID: 'c-1', Status: 'Deprecated' }]);
+        expect(submit).toHaveBeenCalledTimes(1);
+    });
+
+    it('turns it on and saves its component', async () => {
+        contributions = [mine({ ID: 'mine', Status: 'Inactive', ComponentID: 'c-1' })];
+        components = [{ ID: 'c-1', Status: 'Deprecated' }];
+        const result = await new FormPanelAdminService().SetActive('mine', true);
+        expect(result.Success).toBe(true);
+        expect(componentSaves).toEqual([{ ID: 'c-1', Status: 'Published' }]);
+    });
+
+    it('saves it as a draft and saves its component', async () => {
+        contributions = [mine({ ID: 'mine', ComponentID: 'c-1' })];
+        components = [{ ID: 'c-1', Status: 'Published' }];
+        const result = await new FormPanelAdminService().SetPlacement('mine', P, 'Pending');
+        expect(result.Success).toBe(true);
+        expect(componentSaves).toEqual([{ ID: 'c-1', Status: 'Draft' }]);
     });
 });
 
