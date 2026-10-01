@@ -37,6 +37,7 @@
     "@memberjunction/doc-utils": "6.2.0-edge.1",
     "@memberjunction/generic-database-provider": "6.2.0-edge.1",
     "@memberjunction/global": "6.2.0-edge.1",
+    "@memberjunction/rubrics-base": "6.2.0-edge.1",
     "@memberjunction/integration-engine": "6.2.0-edge.1",
     "@memberjunction/integration-pk-classifier": "6.2.0-edge.1",
     "@memberjunction/scheduling-engine": "6.2.0-edge.1",

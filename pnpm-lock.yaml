@@ -11685,6 +11685,9 @@ importers:
       '@memberjunction/predictive-studio-core':
         specifier: 6.2.0-edge.1
         version: link:../AI/PredictiveStudio/Core
+      '@memberjunction/rubrics-base':
+        specifier: 6.2.0-edge.1
+        version: link:../Rubrics/Base
       '@memberjunction/scheduling-engine':
         specifier: 6.2.0-edge.1
         version: link:../Scheduling/engine

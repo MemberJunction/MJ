@@ -822,7 +822,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
       pure functions with exhaustive unit tests — every N/A policy, rollup, gate edge case, the
       all-zero-weight fallback, completeness, outcome precedence, rounding; property tests for the
       ScoringHash/major invariant. Then `RubricEngineBase`.
-- [ ] **R3** Entity server subclasses: version clone/validate/publish (tree rules, bump, hashes);
+- [~] **R3** Entity server subclasses: version clone/validate/publish (tree rules, bump, hashes);
       scale freeze; evaluation creation rules and submit (§7); score validation. Unit tests with mocks.
 - [ ] **R4** `@memberjunction/rubrics`: `RubricEngine`, evaluator seam, content providers,
       deterministic evaluator, consensus/agreement/diagnostics statistics (unit-tested against
@@ -871,6 +871,11 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 
 ## 16. Progress log
 
+- **2026-10-01** — R3 started. Version publish validates the tree, refuses an identical
+  draft, and writes the bump plus ContentHash and ScoringHash. Clone keeps keys and
+  rewrites parent ids. Submit calls `RubricScoring.compute` and returns that result.
+  A scale used by a published version refuses structural edits. Tests are mocks, not a
+  live database. Save does not yet wrap the submit transaction.
 - **2026-10-01** — `RubricEngineBase` caches categories, scales with levels, rubrics, agent
   rubric links, and published versions with their criteria, anchors, bands, and scales.
   Drafts are not cached. The class holds no database; the server engine will load rows
