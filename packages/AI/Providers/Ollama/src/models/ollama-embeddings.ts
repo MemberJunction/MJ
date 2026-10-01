@@ -18,6 +18,14 @@ export class OllamaEmbedding extends BaseEmbeddings {
     }
 
     /**
+     * Talks to an Ollama server and never sends the key, so it needs none. Lets credential checks
+     * (e.g. `AIEmbeddingRunner`) accept an Ollama embedding model with no key configured.
+     */
+    public override get RequiresAPIKey(): boolean {
+        return false;
+    }
+
+    /**
      * Read only getter method to get the Ollama client instance
      */
     public get OllamaClient(): Ollama {

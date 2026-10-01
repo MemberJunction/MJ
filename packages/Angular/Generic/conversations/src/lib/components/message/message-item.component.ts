@@ -2496,12 +2496,13 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    */
   public async OnCommandExecuted(command: ActionableCommand): Promise<void> {
     try {
-      await this.uiCommandHandler.executeActionableCommand(command, {
+      await this.uiCommandHandler.ExecuteActionableCommand(command, {
         conversationId: this.message.ConversationID,
         conversationDetailId: this.message.ID
       });
     } catch (error) {
-      console.error('Failed to execute command:', command, error);
+      // compose:email by TYPE ONLY: its body and recipients are the user's correspondence.
+      console.error('Failed to execute command:', command.type === 'compose:email' ? command.type : command, error);
     }
   }
 

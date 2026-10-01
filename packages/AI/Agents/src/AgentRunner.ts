@@ -11,7 +11,7 @@
  */
 
 import { createHash } from 'crypto';
-import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, RunQuery, UserInfo, IMetadataProvider, DatabaseProviderBase, ProviderType } from '@memberjunction/core';
+import { BaseEntity, LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, RunQuery, UserInfo, IMetadataProvider, DatabaseProviderBase, ProviderType } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual, IsValidUUID, EscapeSQLString } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, InputArtifact, ArtifactDirective, ResolvePromptRunUserID } from '@memberjunction/ai-core-plus';
@@ -91,6 +91,16 @@ export function selectPrimaryArtifact(
  * ```
  */
 export class AgentRunner {
+    /**
+     * Why a conversation-detail `Save()` returned false, for an error or log line. The owner gate in
+     * `MJConversationDetailEntityExtended` refuses a non-owner's write (e.g. the elevated System user
+     * on a widget guest's conversation) and records the reason ONLY on `LatestResult` — it logs
+     * nothing itself — so a caller that reports a fixed string loses it (MJ#4791).
+     */
+    private static saveFailureReason(entity: BaseEntity): string {
+        return entity.LatestResult?.CompleteMessage?.trim() || 'no failure detail recorded';
+    }
+
     /** Fallback artifact type for agent payloads when the agent declares no DefaultArtifactTypeID. */
     private static readonly JSON_ARTIFACT_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
 
@@ -375,7 +385,7 @@ export class AgentRunner {
                 }
 
                 if (!(await userMessageDetail.Save())) {
-                    throw new Error('Failed to create user message conversation detail');
+                    throw new Error(`Failed to create user message conversation detail: ${AgentRunner.saveFailureReason(userMessageDetail)}`);
                 }
 
                 userMessageDetailId = userMessageDetail.ID;
@@ -401,7 +411,7 @@ export class AgentRunner {
                 }
 
                 if (!(await agentResponseDetail.Save())) {
-                    throw new Error('Failed to create agent response conversation detail');
+                    throw new Error(`Failed to create agent response conversation detail: ${AgentRunner.saveFailureReason(agentResponseDetail)}`);
                 }
 
                 agentResponseDetailId = agentResponseDetail.ID;
@@ -434,7 +444,7 @@ export class AgentRunner {
                         agentResponseDetail.Message = progress.message;
                         const saved = await agentResponseDetail.Save();
                         if (!saved) {
-                            LogError('Failed to save agent response detail progress update');
+                            LogError(`Failed to save agent response detail progress update: ${AgentRunner.saveFailureReason(agentResponseDetail)}`);
                         }
                     }
                     // Call original callback if provided
@@ -534,7 +544,7 @@ export class AgentRunner {
 
                     const saved = await agentResponseDetail.Save();
                     if (!saved) {
-                        LogError(`Failed to save agent response detail ${agentResponseDetailId} with final status`);
+                        LogError(`Failed to save agent response detail ${agentResponseDetailId} with final status: ${AgentRunner.saveFailureReason(agentResponseDetail)}`);
                     }
                     LogStatus(`Updated agent response detail ${agentResponseDetailId} with final status: ${agentResponseDetail.Status}`);
                 }
@@ -678,7 +688,9 @@ export class AgentRunner {
                     agentResponseDetail.Status = 'Error';
                     agentResponseDetail.Message = errorMessage;
                     agentResponseDetail.Error = errorMessage;
-                    await agentResponseDetail.Save();
+                    if (!(await agentResponseDetail.Save())) {
+                        LogError(`Failed to persist Error on conversation detail ${agentResponseDetail.ID}: ${AgentRunner.saveFailureReason(agentResponseDetail)}`);
+                    }
                 } catch (persistError) {
                     LogError(`Failed to persist Error on conversation detail after agent crash: ${persistError}`, undefined, persistError);
                 }
