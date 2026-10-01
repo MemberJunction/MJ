@@ -70,14 +70,15 @@ export class RubricCriterionEditorComponent {
 @Component({
     standalone: true,
     selector: 'mj-rubric-score-editor',
-    template: `
+    styleUrls: ['./rubric-builder.component.css'],
+    template: `<section class="rubric-facts">
       @for (level of Levels; track level.id) {
         <button type="button" (click)="ScaleLevelIdChange.emit(level.id)">{{ level.label }} {{ level.normalizedValue }} — {{ level.anchor }}</button>
       }
       <label><input type="checkbox" [checked]="IsNotApplicable" [disabled]="NotApplicablePolicy === 'NotAllowed'" (change)="IsNotApplicableChange.emit(checked($event))"> Not applicable</label>
       <label>Rationale <textarea required [value]="Rationale ?? ''" (change)="RationaleChange.emit(valueOf($event))"></textarea></label>
       <label>Evidence <textarea [value]="Evidence ?? ''" (change)="EvidenceChange.emit(valueOf($event))"></textarea></label>
-    `,
+    </section>`,
 })
 export class RubricScoreEditorComponent {
     @Input() ScaleLevelId: string | null = null;

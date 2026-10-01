@@ -76,6 +76,7 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
     }
 
     public async OnNodes(nodes: RubricNodeSnapshot[]): Promise<void> {
+        if (this.Viewing === 'published') return;
         this.Nodes = nodes;
         if (!this.DraftId) return;
         const saved = await this.rows('MJ: Rubric Criteria', `RubricVersionID='${this.DraftId}'`);
@@ -93,6 +94,7 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
     }
 
     public async OnBands(bands: RubricBandSnapshot[]): Promise<void> {
+        if (this.Viewing === 'published') return;
         this.Bands = bands;
         if (!this.DraftId) return;
         const saved = await this.rows('MJ: Rubric Bands', `RubricVersionID='${this.DraftId}'`);

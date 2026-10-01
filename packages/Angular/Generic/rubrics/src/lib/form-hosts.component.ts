@@ -95,17 +95,19 @@ export class RubricScaleLevelHostComponent implements OnChanges {
     selector: 'mj-rubric-category-host',
     imports: [RubricCategoryEditorComponent],
     template: `
-      <mj-rubric-category-editor [Name]="Name" [ParentId]="ParentId" [Parents]="Parents"
-        (NameChange)="NameChange.emit($event)" (ParentIdChange)="ParentIdChange.emit($event)">
+      <mj-rubric-category-editor [Name]="Name" [Description]="Description" [ParentId]="ParentId" [Parents]="Parents"
+        (NameChange)="NameChange.emit($event)" (DescriptionChange)="DescriptionChange.emit($event)" (ParentIdChange)="ParentIdChange.emit($event)">
       </mj-rubric-category-editor>
     `,
 })
 export class RubricCategoryHostComponent implements OnChanges {
     @Input() CategoryId: string | null = null;
     @Input() Name = '';
+    @Input() Description = '';
     @Input() ParentId: string | null = null;
     @Input() Provider: IMetadataProvider | null = null;
     @Output() NameChange = new EventEmitter<string>();
+    @Output() DescriptionChange = new EventEmitter<string>();
     @Output() ParentIdChange = new EventEmitter<string | null>();
     public Parents: { id: string; name: string }[] = [];
     public ngOnChanges(): void { void this.load(); }
@@ -127,7 +129,7 @@ export class RubricCategoryHostComponent implements OnChanges {
     imports: [RubricCriterionEditorComponent],
     template: `
       <mj-rubric-criterion-editor
-        [ParentId]="ParentId" [Parents]="Parents" [Weight]="Weight" [ScaleId]="ScaleId" [Scales]="Scales" [Anchors]="Anchors"
+        [ParentId]="ParentId" [Parents]="Parents" [Weight]="Weight" [Share]="Share" [ScaleId]="ScaleId" [Scales]="Scales" [Anchors]="Anchors"
         [GateMinimumScore]="GateMinimumScore" [NotApplicablePolicy]="NotApplicablePolicy"
         (ParentIdChange)="ParentIdChange.emit($event)" (WeightChange)="WeightChange.emit($event)" (ScaleIdChange)="ScaleIdChange.emit($event)"
         (AnchorsChange)="SaveAnchors($event)" (GateMinimumScoreChange)="GateMinimumScoreChange.emit($event)"
@@ -151,6 +153,7 @@ export class RubricCriterionHostComponent implements OnChanges {
     @Output() GateMinimumScoreChange = new EventEmitter<number | null>();
     @Output() NotApplicablePolicyChange = new EventEmitter<string | null>();
     public Parents: { id: string; name: string }[] = [];
+    public Share = 100;
     public Scales: { id: string; name: string; levels: { id: string; label: string }[] }[] = [];
     public Anchors: { scaleLevelId: string | null; descriptor: string }[] = [];
     public ngOnChanges(): void { void this.load(); }
@@ -189,6 +192,9 @@ export class RubricCriterionHostComponent implements OnChanges {
                 name: String(row.Name ?? row.Key ?? ''),
                 parentId: row.ParentID == null ? null : String(row.ParentID),
             })), this.CriterionId ?? '');
+            const group = siblings.filter(row => (row.ParentID == null ? '' : String(row.ParentID)) === (this.ParentId ?? ''));
+            const total = group.reduce((sum, row) => sum + Number(row.Weight ?? 0), 0);
+            this.Share = total > 0 ? Math.round((this.Weight / total) * 100) : 100;
         }
         if (this.CriterionId) {
             const anchors = await rows(this.Provider, 'MJ: Rubric Criterion Levels', `CriterionID='${quote(this.CriterionId)}'`);

@@ -9,7 +9,7 @@ import { bandFor, displayScore, type RubricFormAnswer } from './model.js';
     selector: 'mj-rubric-result',
     imports: [CommonModule],
     templateUrl: './rubric-result.component.html',
-    styleUrls: ['./rubric-result.component.css'],
+    styleUrls: ['./rubric-result.component.css', './rubric-builder.component.css'],
 })
 export class RubricResultComponent {
     @Input() Version: RubricVersionSnapshot | null = null;
@@ -42,8 +42,8 @@ export class RubricResultComponent {
 
     public Gate(id: string): string {
         const node = this.Version?.nodes.find(item => item.id === id || item.key === id);
-        if (!node?.isGate) return 'Not a gate';
-        return `Gate ≥ ${node.gateMinimumScore ?? ''}`;
+        if (!node?.isGate) return 'off';
+        return `≥ ${node.gateMinimumScore ?? ''}`;
     }
 
     public ScaleName(id: string): string {

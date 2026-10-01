@@ -48,9 +48,16 @@ export class MJRubricScaleFormComponentExtended extends MJRubricScaleFormCompone
                 EntityName: 'MJ: Rubric Criteria',
                 ExtraFilter: `ScaleID='${this.record.ID}'`,
                 ResultType: 'simple',
+                MaxRows: 50,
+            }, this.ProviderToUse.CurrentUser);
+            const versionIds = [...new Set(((used.Results ?? []) as { RubricVersionID?: string }[]).map(row => row.RubricVersionID).filter((id): id is string => !!id))];
+            const published = versionIds.length === 0 ? { Results: [] } : await view.RunView({
+                EntityName: 'MJ: Rubric Versions',
+                ExtraFilter: `Status='Published' AND ID IN (${versionIds.map(id => `'${id}'`).join(',')})`,
+                ResultType: 'simple',
                 MaxRows: 1,
             }, this.ProviderToUse.CurrentUser);
-            this.Frozen = (used.Results ?? []).length > 0;
+            this.Frozen = (published.Results ?? []).length > 0;
         } finally {
             this.Loading = false;
         }

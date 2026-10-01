@@ -1,4 +1,5 @@
 import { Component } from '@angular/core';
+import { RunView } from '@memberjunction/core';
 import { MJAIAgentRubricEntity, MJRubricBandEntity, MJRubricCategoryEntity, MJRubricCriterionEntity, MJRubricEvaluationScoreEntity, MJRubricScaleLevelEntity, MJRubricVersionEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
@@ -36,11 +37,35 @@ export class MJRubricCriterionFormComponentExtended extends MJRubricCriterionFor
 @Component({
     standalone: false,
     selector: 'mj-rubric-score-form',
-    template: `@if (record) { <mj-record-form-container [Record]="record" [FormComponent]="this" (Navigate)="OnFormNavigate($event)" (DeleteRequested)="OnDeleteRequested()" (FavoriteToggled)="OnFavoriteToggled()" (HistoryRequested)="OnHistoryRequested()" (ListManagementRequested)="OnListManagementRequested()"><mj-rubric-score-editor [ScaleLevelId]="record.ScaleLevelID" [RawValue]="record.RawValue" [IsNotApplicable]="record.IsNotApplicable" [Rationale]="record.Rationale" [Evidence]="record.Evidence" (ScaleLevelIdChange)="record.ScaleLevelID = $event" (RawValueChange)="record.RawValue = $event" (IsNotApplicableChange)="record.IsNotApplicable = $event" (RationaleChange)="record.Rationale = $event" (EvidenceChange)="record.Evidence = $event"></mj-rubric-score-editor></mj-record-form-container> }`,
+    template: `@if (record) { <mj-record-form-container [Record]="record" [FormComponent]="this" (Navigate)="OnFormNavigate($event)" (DeleteRequested)="OnDeleteRequested()" (FavoriteToggled)="OnFavoriteToggled()" (HistoryRequested)="OnHistoryRequested()" (ListManagementRequested)="OnListManagementRequested()"><mj-rubric-score-editor [ScaleLevelId]="record.ScaleLevelID" [Levels]="Levels" [NotApplicablePolicy]="Policy" [IsNotApplicable]="record.IsNotApplicable" [Rationale]="record.Rationale" [Evidence]="record.Evidence" (ScaleLevelIdChange)="record.ScaleLevelID = $event" (IsNotApplicableChange)="record.IsNotApplicable = $event" (RationaleChange)="record.Rationale = $event" (EvidenceChange)="record.Evidence = $event"></mj-rubric-score-editor></mj-record-form-container> }`,
 })
 @RegisterClass(BaseFormComponent, 'MJ: Rubric Evaluation Scores')
 export class MJRubricEvaluationScoreFormComponentExtended extends MJRubricEvaluationScoreFormComponent {
     public override record!: MJRubricEvaluationScoreEntity;
+    public Levels: { id: string; label: string; normalizedValue: number; anchor: string }[] = [];
+    public Policy: string | null = null;
+
+    public override async ngOnInit(): Promise<void> {
+        await super.ngOnInit();
+        const view = RunView.FromMetadataProvider(this.ProviderToUse);
+        const user = this.ProviderToUse.CurrentUser;
+        const criteria = await view.RunView({ EntityName: 'MJ: Rubric Criteria', ExtraFilter: `ID='${this.record.CriterionID}'`, ResultType: 'simple', MaxRows: 1 }, user);
+        const criterion = (criteria.Results ?? [])[0] as Record<string, unknown> | undefined;
+        if (!criterion) return;
+        const versions = await view.RunView({ EntityName: 'MJ: Rubric Versions', ExtraFilter: `ID='${criterion.RubricVersionID}'`, ResultType: 'simple', MaxRows: 1 }, user);
+        const version = (versions.Results ?? [])[0] as Record<string, unknown> | undefined;
+        this.Policy = String(criterion.NotApplicablePolicy || version?.NotApplicablePolicy || '');
+        if (!criterion.ScaleID) return;
+        const levels = await view.RunView({ EntityName: 'MJ: Rubric Scale Levels', ExtraFilter: `ScaleID='${criterion.ScaleID}'`, ResultType: 'simple', MaxRows: 20 }, user);
+        const anchors = await view.RunView({ EntityName: 'MJ: Rubric Criterion Levels', ExtraFilter: `CriterionID='${criterion.ID}'`, ResultType: 'simple', MaxRows: 20 }, user);
+        const anchorRows = (anchors.Results ?? []) as Record<string, unknown>[];
+        this.Levels = ((levels.Results ?? []) as Record<string, unknown>[]).map(level => ({
+            id: String(level.ID),
+            label: String(level.Label ?? ''),
+            normalizedValue: Number(level.NormalizedValue ?? 0),
+            anchor: String(anchorRows.find(anchor => String(anchor.ScaleLevelID) === String(level.ID))?.Descriptor ?? ''),
+        }));
+    }
 }
 
 @Component({
@@ -66,7 +91,7 @@ export class MJRubricBandFormComponentExtended extends MJRubricBandFormComponent
 @Component({
     standalone: false,
     selector: 'mj-rubric-category-form',
-    template: `@if (record) { <mj-record-form-container [Record]="record" [FormComponent]="this" (Navigate)="OnFormNavigate($event)" (DeleteRequested)="OnDeleteRequested()" (FavoriteToggled)="OnFavoriteToggled()" (HistoryRequested)="OnHistoryRequested()" (ListManagementRequested)="OnListManagementRequested()"><mj-rubric-category-host [CategoryId]="record.ID" [Name]="record.Name" [ParentId]="record.ParentID" [Provider]="ProviderToUse" (NameChange)="record.Name = $event" (ParentIdChange)="record.ParentID = $event"></mj-rubric-category-host></mj-record-form-container> }`,
+    template: `@if (record) { <mj-record-form-container [Record]="record" [FormComponent]="this" (Navigate)="OnFormNavigate($event)" (DeleteRequested)="OnDeleteRequested()" (FavoriteToggled)="OnFavoriteToggled()" (HistoryRequested)="OnHistoryRequested()" (ListManagementRequested)="OnListManagementRequested()"><mj-rubric-category-host [CategoryId]="record.ID" [Name]="record.Name" [Description]="record.Description" [ParentId]="record.ParentID" [Provider]="ProviderToUse" (NameChange)="record.Name = $event" (DescriptionChange)="record.Description = $event" (ParentIdChange)="record.ParentID = $event"></mj-rubric-category-host></mj-record-form-container> }`,
 })
 @RegisterClass(BaseFormComponent, 'MJ: Rubric Categories')
 export class MJRubricCategoryFormComponentExtended extends MJRubricCategoryFormComponent {
