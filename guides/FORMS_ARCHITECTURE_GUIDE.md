@@ -459,11 +459,14 @@ Form Version` set the prior version aside after that transaction; if Activate ca
 `Precedence`. Sharing with a role or everyone is a human act in the form's Manage drawer or in Form
 Builder, and needs the `Manage Form Defaults` authorization.
 
-A panel's component is an `MJ: Components` row, and the stock `UI` role can only read that entity.
-So creating or changing a panel through the actions, and turning a panel on or off or saving it as
-a draft in the drawer, currently need Developer-level component rights (the `Developer` and
-`Integration` roles). Hiding and removing a panel work for any user, because they write only the
-user setting or the row.
+A panel's component is an `MJ: Components` row. The stock `UI` role can create and update that
+entity (not delete), so any user can create or change their own panel through the actions and turn
+it on, off or to a draft in the drawer. `MJComponentEntityServer` checks a delete, and a change to a
+component's specification, status, name or type, against every contribution and full custom form
+row that uses the component (`ComponentWriteRefusal`): a `Role` or `Global` row needs
+`Manage Form Defaults`, another user's personal row refuses everyone else, and the caller's own row
+passes. A component no row uses follows the entity permission alone. The rows are read as the
+caller, and when they cannot be read the write is refused.
 
 **Form context for agents.** Each record form publishes its composition snapshot (sections, related
 grids, contributions, rail, slots) to `FormCompositionRegistry` in `@memberjunction/ng-base-forms`;
