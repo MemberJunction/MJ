@@ -405,6 +405,319 @@ export interface PredictiveStudioTrainModelOutput {
     status: string;
 }
 
+/** A single primary-key field/value pair identifying a record. */
+export interface RecordCloneKeyValuePair {
+    /** Primary-key field name (e.g. "ID"). */
+    FieldName: string;
+    /** Primary-key value as a string. */
+    Value: string;
+}
+
+/** Record key expressed as composite key-value pairs. */
+export interface RecordCloneKey {
+    KeyValuePairs: RecordCloneKeyValuePair[];
+}
+
+/** Input for `RecordClone.Describe`. */
+export interface RecordCloneDescribeInput {
+    /** Registered entity name to inspect for cloning capabilities. */
+    EntityName: string;
+    /** Optional specific record key to inspect. */
+    Key?: RecordCloneKey;
+}
+
+/** Relationship clone policy and status. */
+export interface RecordCloneDescribeRelationship {
+    /** Relationship display name or target entity. */
+    Name: string;
+    /** Related entity name. */
+    RelatedEntity: string;
+    /** Default clone policy applied to this relationship. */
+    DefaultPolicy: 'Deep' | 'Reference' | 'Skip';
+    /** Whether policy changes are locked by configuration or database constraint. */
+    Locked: boolean;
+    /** Optional count of child records for the specified record. */
+    ChildCount?: number;
+}
+
+/** Output for `RecordClone.Describe`. */
+export interface RecordCloneDescribeOutput {
+    /** Whether the entity can be cloned. */
+    CanClone: boolean;
+    /** Optional explanation if cloning is disabled or blocked. */
+    Reason?: string;
+    /** Presets configured on the entity. */
+    Presets?: string[];
+    /** Granularity of user editing allowed. */
+    UserEditable?: 'none' | 'fields' | 'scope' | 'all';
+    /** Direct relationships and their clone policies. */
+    Relationships: RecordCloneDescribeRelationship[];
+    /** Authorization check result for the calling user. */
+    Authorization?: {
+        Name: string;
+        Granted: boolean;
+    };
+    /** Whether the calling user holds `Clone Records: Fire Hooks`, so the UI may offer the Fire Entity Actions toggle. */
+    CanFireHooks?: boolean;
+    /** Whether the calling user holds `Clone Records: Override Scope`, so the UI may offer scope overrides beyond the entity's configuration. */
+    CanOverrideScope?: boolean;
+}
+
+/** Options controlling clone execution. */
+export interface RecordCloneExecuteOptions {
+    /** Plan and validate only: returns the plan in `Plan` and writes nothing. */
+    DryRun?: boolean;
+    Preset?: string;
+    MaxDepth?: number;
+    MaxRecords?: number;
+    Subtypes?: 'include' | 'exclude';
+    Hierarchy?: 'subtree' | 'node';
+    SoftLinks?: 'skip' | 'include';
+    /** Whether Entity Actions run on the cloned rows. Default from the entity's `Hooks` (else 'fire'); changing it needs `Clone Records: Fire Hooks`. */
+    EntityActions?: 'suppress' | 'fire';
+    /** Whether Entity AI Actions run. Default from the entity's `Hooks` (else 'suppress'); changing it needs `Clone Records: Fire Hooks`. */
+    AIActions?: 'suppress' | 'fire';
+    Embeddings?: 'copy' | 'regenerate';
+    FieldOverrides?: Record<string, string | number | boolean | null>;
+    PromptedValues?: Record<string, string | number | boolean | null>;
+    /** Point foreign keys on the root at other records. Only fields listed in the entity's `Clone.UI.RetargetFields` apply. */
+    Retarget?: Array<{ EntityName: string; Field: string; Value: string }>;
+    NamingTemplate?: string;
+    NamingStrategy?: 'suffix' | 'increment' | 'prompt' | 'none';
+    Naming?: {
+        Template?: string;
+        Strategy?: 'suffix' | 'increment' | 'prompt' | 'none';
+    };
+    Reason?: string;
+}
+
+/** Per-edge policy override. */
+export interface RecordCloneEdgeOverride {
+    RelationshipID?: string;
+    Policy: 'Deep' | 'Reference' | 'Skip';
+}
+
+/** Input for `RecordClone.Execute`. */
+export interface RecordCloneExecuteInput {
+    EntityName?: string;
+    SourceRecordKey?: RecordCloneKey;
+    Roots?: Array<{ EntityName: string; Key: RecordCloneKey }>;
+    Options?: RecordCloneExecuteOptions;
+    EdgeOverrides?: RecordCloneEdgeOverride[];
+    ExpectedPlanHash?: string;
+}
+
+// RecordClonePlanDetails is declared in record-clone-plan.output.ts. CodeGen concatenates every
+// operation type file into one generated module, so no import is needed (or allowed) here.
+/** Record mapping result from clone execution. */
+export interface RecordCloneRecordMapping {
+    EntityName: string;
+    SourceKey: string;
+    TargetKey: string;
+    Depth?: number;
+}
+
+/** Record skipped during clone execution. */
+export interface RecordCloneSkippedRecord {
+    EntityName: string;
+    SourceKey: string;
+    Reason: string;
+}
+
+/** Warning or execution issue. */
+export interface RecordCloneExecuteWarning {
+    Code: string;
+    Severity: 'Info' | 'Warning' | 'Error';
+    NodeKey?: string;
+    Field?: string;
+    Message: string;
+}
+
+/** Output for `RecordClone.Execute`. */
+export interface RecordCloneExecuteOutput {
+    /** Whether the clone succeeded. */
+    Success: boolean;
+    /** Outcome code. */
+    ResultCode: 'SUCCESS' | 'PLAN_CHANGED' | 'BLOCKED' | 'FORBIDDEN' | 'EXECUTION_ERROR';
+    /** ID of the created MJ: Record Clone Logs header row, if written. */
+    CloneLogID: string | null;
+    /** Mappings for the root records. */
+    Roots: RecordCloneRecordMapping[];
+    /** Mappings for all successfully created records. */
+    Created: RecordCloneRecordMapping[];
+    /** Records that were skipped. */
+    Skipped: RecordCloneSkippedRecord[];
+    /** Aggregate counts. */
+    Counts: {
+        ByEntity: Record<string, { Create: number; Reference: number; Skip: number }>;
+        Create: number;
+        Total: number;
+    };
+    /** Warnings emitted during planning or execution. */
+    Warnings: RecordCloneExecuteWarning[];
+    /** Updated plan returned on PLAN_CHANGED or BLOCKED. */
+    Plan?: RecordClonePlanDetails;
+    /** Error message on failure. */
+    ErrorMessage?: string;
+}
+
+/** Input for `RecordClone.GetLineage`. */
+export interface RecordCloneGetLineageInput {
+    /** Registered entity name. */
+    EntityName: string;
+    /** Composite key of the record whose clone lineage is being queried. */
+    Key: RecordCloneKey;
+    /** Direction of traversal: ancestors ('up'), descendants ('down'), or both ('both'). Defaults to 'both'. */
+    Direction?: 'up' | 'down' | 'both';
+}
+
+/** Single item in a record's clone lineage. */
+export interface RecordCloneLineageItem {
+    /** Entity name of the record. */
+    EntityName: string;
+    /** Primary key of the record. */
+    RecordID: string;
+    /** Human-readable display name of the record. */
+    DisplayName?: string;
+    /** ID of the MJ: Record Clone Logs header row that produced this clone, if known. */
+    CloneLogID?: string;
+    /** ISO timestamp when the clone occurred, if known. */
+    ClonedAt?: string;
+    /** User ID or display name who initiated the clone, if known. */
+    ClonedBy?: string;
+}
+
+/** Output for `RecordClone.GetLineage`. */
+export interface RecordCloneGetLineageOutput {
+    /** Chain of ancestor records cloned from, ordered oldest to immediate parent. */
+    Ancestors: RecordCloneLineageItem[];
+    /** Direct descendant records cloned from this record. */
+    Clones: RecordCloneLineageItem[];
+    /** Total count of direct descendant clones. */
+    TotalClones: number;
+}
+
+/** Options controlling plan generation. */
+export interface RecordClonePlanOptions {
+    DryRun?: boolean;
+    Preset?: string;
+    MaxDepth?: number;
+    MaxRecords?: number;
+    Subtypes?: 'include' | 'exclude';
+    Hierarchy?: 'subtree' | 'node';
+    SoftLinks?: 'skip' | 'include';
+    /** Whether Entity Actions run on the cloned rows. Default from the entity's `Hooks` (else 'fire'); changing it needs `Clone Records: Fire Hooks`. */
+    EntityActions?: 'suppress' | 'fire';
+    /** Whether Entity AI Actions run. Default from the entity's `Hooks` (else 'suppress'); changing it needs `Clone Records: Fire Hooks`. */
+    AIActions?: 'suppress' | 'fire';
+    Embeddings?: 'copy' | 'regenerate';
+    FieldOverrides?: Record<string, string | number | boolean | null>;
+    PromptedValues?: Record<string, string | number | boolean | null>;
+    /** Point foreign keys on the root at other records. Only fields listed in the entity's `Clone.UI.RetargetFields` apply. */
+    Retarget?: Array<{ EntityName: string; Field: string; Value: string }>;
+    NamingTemplate?: string;
+    NamingStrategy?: 'suffix' | 'increment' | 'prompt' | 'none';
+    Naming?: {
+        Template?: string;
+        Strategy?: 'suffix' | 'increment' | 'prompt' | 'none';
+    };
+    Reason?: string;
+}
+
+/** Input for `RecordClone.Plan`. */
+export interface RecordClonePlanInput {
+    EntityName?: string;
+    SourceRecordKey?: RecordCloneKey;
+    Roots?: Array<{ EntityName: string; Key: RecordCloneKey }>;
+    Options?: RecordClonePlanOptions;
+    EdgeOverrides?: RecordCloneEdgeOverride[];
+    ExpectedPlanHash?: string;
+}
+
+/** A single field change in the planned record clone. */
+export interface RecordClonePlanFieldChange {
+    Field: string;
+    Kind: string;
+    OldValue: string | number | boolean | null;
+    NewValue: string | number | boolean | null;
+    Reason: string;
+}
+
+/** Warning or validation issue identified during planning. */
+export interface RecordClonePlanWarning {
+    Code: string;
+    Severity: 'Info' | 'Warning' | 'Error';
+    NodeKey?: string;
+    Field?: string;
+    Message: string;
+}
+
+/** Node in the planned record clone graph. */
+export interface RecordClonePlanNode {
+    Key: string;
+    EntityName: string;
+    SourceKey: string;
+    TargetKey: string | null;
+    Action: 'Create' | 'Reference' | 'Skip' | 'Blocked';
+    Reason: string;
+    Depth: number;
+    ParentKey: string | null;
+    DisplayName: string;
+    IsSubtypeRow?: boolean;
+    FieldChanges: RecordClonePlanFieldChange[];
+    Warnings: RecordClonePlanWarning[];
+    Route: string;
+}
+
+/** Relationship edge in the planned record clone graph. */
+export interface RecordClonePlanEdge {
+    FromKey: string;
+    ToKey: string;
+    Kind: string;
+    RelatedEntityName: string;
+    JoinField: string;
+    RelationshipID?: string;
+    CollectionName?: string;
+    IsSoftLink?: boolean;
+    Policy: 'Deep' | 'Reference' | 'Skip';
+    Locked: boolean;
+    PolicySource: string;
+}
+
+/** Execution options effectively applied to the plan. */
+export interface RecordClonePlanEffectiveOptions {
+    MaxDepth: number;
+    MaxRecords: number;
+    Subtypes: 'include' | 'exclude';
+    Hierarchy: 'subtree' | 'node';
+    SoftLinks: 'skip' | 'include';
+    EntityActions: 'suppress' | 'fire';
+    AIActions: 'suppress' | 'fire';
+    Embeddings: 'copy' | 'regenerate';
+}
+
+/** Complete clone plan returned by RecordClone.Plan. */
+export interface RecordClonePlanDetails {
+    PlanVersion: 1;
+    Hash: string;
+    Roots: string[];
+    Nodes: RecordClonePlanNode[];
+    Edges: RecordClonePlanEdge[];
+    Counts: {
+        ByEntity: Record<string, { Create: number; Reference: number; Skip: number }>;
+        Create: number;
+        Total: number;
+    };
+    Warnings: RecordClonePlanWarning[];
+    Blocked: boolean;
+    EffectiveOptions: RecordClonePlanEffectiveOptions;
+}
+
+/** Output for `RecordClone.Plan`. */
+export interface RecordClonePlanOutput {
+    Plan: RecordClonePlanDetails;
+}
+
 /** A single primary-key field/value pair identifying a record to compare. */
 export interface RecordComparisonKeyValuePair {
     /** Primary-key field name (e.g. "ID"). */
@@ -1086,6 +1399,70 @@ export class PredictiveStudioTrainModelOperation extends BaseRemotableOperation<
     public readonly OperationKey = "PredictiveStudio.TrainModel";
     public readonly ExecutionMode = 'LongRunning' as const;
     public readonly RequiredScope = "predictive:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// RecordClone.Describe — Describe Record Clone
+// ============================================================
+/**
+ * Describe Record Clone
+ * Inspect an entity or specific record for clone capability, policies, relationship policies, and authorization. Implemented by RecordCloneDescribeServerOperation in @memberjunction/record-cloning.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'RecordClone.Describe'. This generated base provides the typed contract only (client-safe).
+ */
+export class RecordCloneDescribeOperation extends BaseRemotableOperation<RecordCloneDescribeInput, RecordCloneDescribeOutput> {
+    public readonly OperationKey = "RecordClone.Describe";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "recordclone:read";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// RecordClone.Execute — Execute Record Clone
+// ============================================================
+/**
+ * Execute Record Clone
+ * Execute an entity record clone plan within an entity transaction, staging entities and writing clone logs and links. Implemented by RecordCloneExecuteServerOperation in @memberjunction/record-cloning.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'RecordClone.Execute'. This generated base provides the typed contract only (client-safe).
+ */
+export class RecordCloneExecuteOperation extends BaseRemotableOperation<RecordCloneExecuteInput, RecordCloneExecuteOutput> {
+    public readonly OperationKey = "RecordClone.Execute";
+    public readonly ExecutionMode = 'LongRunning' as const;
+    public readonly RequiredScope = "recordclone:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// RecordClone.GetLineage — Get Record Clone Lineage
+// ============================================================
+/**
+ * Get Record Clone Lineage
+ * Traverse record links and clone logs to return clone ancestors and descendants for a record. Implemented by RecordCloneGetLineageServerOperation in @memberjunction/record-cloning.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'RecordClone.GetLineage'. This generated base provides the typed contract only (client-safe).
+ */
+export class RecordCloneGetLineageOperation extends BaseRemotableOperation<RecordCloneGetLineageInput, RecordCloneGetLineageOutput> {
+    public readonly OperationKey = "RecordClone.GetLineage";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "recordclone:read";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// RecordClone.Plan — Plan Record Clone
+// ============================================================
+/**
+ * Plan Record Clone
+ * Plan a deterministic record clone graph traversal with pre-minted target keys and field transformations. Implemented by RecordClonePlanServerOperation in @memberjunction/record-cloning.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'RecordClone.Plan'. This generated base provides the typed contract only (client-safe).
+ */
+export class RecordClonePlanOperation extends BaseRemotableOperation<RecordClonePlanInput, RecordClonePlanOutput> {
+    public readonly OperationKey = "RecordClone.Plan";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "recordclone:read";
     public readonly RequiresSystemUser = false;
 }
 

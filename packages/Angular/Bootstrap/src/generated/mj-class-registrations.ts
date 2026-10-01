@@ -33,7 +33,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (419 classes)
+// @memberjunction/core-entities (421 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -358,6 +358,8 @@ import {
     MJRecommendationRunEntity,
     MJRecordChangeEntity,
     MJRecordChangeReplayRunEntity,
+    MJRecordCloneLogEntity,
+    MJRecordCloneLogItemEntity,
     MJRecordGeoCodeEntity,
     MJRecordLinkEntity,
     MJRecordMergeDeletionLogEntity,
@@ -1118,6 +1120,8 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecommendationRunEntity,
     MJRecordChangeEntity,
     MJRecordChangeReplayRunEntity,
+    MJRecordCloneLogEntity,
+    MJRecordCloneLogItemEntity,
     MJRecordGeoCodeEntity,
     MJRecordLinkEntity,
     MJRecordMergeDeletionLogEntity,
@@ -1183,12 +1187,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJTestSuiteRunEntity,
     MJTestSuiteTestEntity,
     MJTestTypeEntity,
-    MJThemeEntity,
-    MJUserApplicationEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJThemeEntity,
+    MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
     MJUserFavoriteEntity,
@@ -1387,12 +1391,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     EventMonitorComponent,
     FeaturePipelinesResourceComponent,
     FormBuilderResourceComponent,
-    GraphQLConsoleComponent,
-    GridWidthLabComponent,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GraphQLConsoleComponent,
+    GridWidthLabComponent,
     HomeApplication,
     HomeDashboardComponent,
     KnowledgeConfigResourceComponent,
@@ -1476,7 +1480,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 669;
+export const CLASS_REGISTRATIONS_COUNT = 671;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
