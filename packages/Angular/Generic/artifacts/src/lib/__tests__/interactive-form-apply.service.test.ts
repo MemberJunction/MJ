@@ -540,6 +540,7 @@ describe('InteractiveFormApplyService — form-panel specs', () => {
     function snapshot(over: Record<string, unknown> = {}) {
         const opened = {
             Entity: ENTITY, Layout: 'accordion',
+            FormChoice: { FullCustomForm: false, OverrideID: null, Label: 'Default form' },
             Sections: [{ Key: 'details', Title: 'Details', Variant: 'default', Group: null, Hidden: false }],
             Related: [], Contributions: [], SlotsPresent: ['before-fields'], ChromeRuleCount: 0,
             ...over,
@@ -692,6 +693,20 @@ describe('InteractiveFormApplyService — form-panel specs', () => {
         expect(hoisted.placementContext).toMatchObject({ FullCustomForm: true });
     });
 
+    it('reads a full custom form from the open form\'s form choice, not from its slots', async () => {
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot({
+            FormChoice: { FullCustomForm: true, OverrideID: 'OV-1', Label: 'My form' }, SlotsPresent: ['before-fields'],
+        }));
+        expect(hoisted.placementContext).toMatchObject({ FullCustomForm: true });
+    });
+
+    it('does not take an open standard form with no slots for a full custom form', async () => {
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot({ SlotsPresent: [] }));
+        expect(hoisted.placementContext).toMatchObject({ FullCustomForm: false });
+    });
+
     it('saves a draft without activating when the user did not turn it on', async () => {
         hoisted.placement.activateNow = false;
         const svc = new InteractiveFormApplyService();
@@ -723,6 +738,27 @@ describe('InteractiveFormApplyService — form-panel specs', () => {
         const modify = hoisted.actionCalls.find(c => c.id === 'Modify Form Contribution')!;
         const bump = (modify.params as Array<{ Name: string; Value: string }>).find(p => p.Name === 'VersionBumpKind');
         expect(bump?.Value).toBe('in-place');
+    });
+
+    // Create's duplicate check compares keys the way SQL Server does, ignoring case and padding.
+    it('routes to Modify when the caller\'s row key differs only by case or padding', async () => {
+        hoisted.placement.contribution = {
+            slot: 'after-fields', presentation: 'panel', title: 'Lifetime value', contributionKey: 'header',
+        };
+        hoisted.actionResponses.set('Get Form Contributions For Entity', {
+            Success: true,
+            Message: JSON.stringify({ EntityName: ENTITY, Contributions: [
+                { ContributionID: 'ROW-9', ContributionKey: ' Header ', Status: 'Pending', Scope: 'User', ComponentName: 'OldName' },
+            ] }),
+        });
+        hoisted.actionResponses.set('Modify Form Contribution', {
+            Success: true, Message: JSON.stringify({ ContributionID: 'ROW-9', ComponentID: 'COMP-9', Version: '1.0.0', Mode: 'in-place' }),
+        });
+        const svc = new InteractiveFormApplyService();
+        await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+        const ids = hoisted.actionCalls.map(c => c.id);
+        expect(ids).toContain('Modify Form Contribution');
+        expect(ids).not.toContain('Create Form Contribution');
     });
 
     it('bumps a minor version when the existing row is Active', async () => {
@@ -1125,6 +1161,7 @@ describe('InteractiveFormApplyService — slot availability reaches the dialog',
     it('carries the slots the open form reported', async () => {
         const snapshot = {
             Entity: ENTITY, Layout: 'accordion', Sections: [], Related: [], Contributions: [],
+            FormChoice: { FullCustomForm: false, OverrideID: null, Label: 'Default form' },
             SlotsPresent: ['before-fields', 'after-fields', 'after-related'], ChromeRuleCount: 0,
         } as never;
         registry.current!.Publish({}, snapshot);

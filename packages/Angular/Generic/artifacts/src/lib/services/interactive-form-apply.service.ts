@@ -348,7 +348,7 @@ export class InteractiveFormApplyService {
                     Key: r.Key, Title: r.Title, Icon: r.Icon,
                     SectionKeys: r.SectionKeys, IsMore: r.IsMore,
                 })),
-                FullCustomForm: snapshot.SlotsPresent.length === 0,
+                FullCustomForm: snapshot.FormChoice.FullCustomForm,
                 // The form reported these, so every key is one it really renders.
                 TargetsVerified: true,
             };
@@ -599,9 +599,10 @@ export class InteractiveFormApplyService {
      * The caller's own live row for this panel, or undefined when there is none.
      *
      * Matched by the key the write path derives, which for a panel that claims no other
-     * panel and no grid is `panel:<component name>`. Such a panel is also matched by its
-     * component name on a row that carries a panel key, because Modify keeps a panel's key
-     * when it renames the component.
+     * panel and no grid is `panel:<component name>`. Keys are compared trimmed and ignoring
+     * case, as Create's duplicate check and the unique index compare them on SQL Server. Such a
+     * panel is also matched by its component name on a row that carries a panel key, because
+     * Modify keeps a panel's key when it renames the component.
      */
     private findExistingContribution(
         rows: ParsedContribution[],
@@ -612,7 +613,8 @@ export class InteractiveFormApplyService {
         if (!key) return undefined;
         const mine = rows.filter(c =>
             c.Scope === 'User' && (c.Status === 'Active' || c.Status === 'Pending'));
-        const byKey = mine.find(c => c.ContributionKey === key);
+        const wanted = key.trim().toLowerCase();
+        const byKey = mine.find(c => (c.ContributionKey ?? '').trim().toLowerCase() === wanted);
         const keyless = !placed.contributionKey?.trim() && !placed.relatedEntity?.trim();
         const name = componentName?.trim();
         if (byKey || !keyless || !name) return byKey;
