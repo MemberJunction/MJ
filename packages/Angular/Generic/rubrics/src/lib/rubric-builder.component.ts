@@ -2,7 +2,7 @@ import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core
 import { CommonModule } from '@angular/common';
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricScoreResult, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import type { NotApplicablePolicy, RubricBandSnapshot } from '@memberjunction/rubrics-base';
-import { addBand, addNode, draftProblems, moveNode, previewScore, setAnchor, setGate, setPolicy, setScale, setWeight, updateBand, weightShares, type RubricFormAnswer } from './model.js';
+import { addBand, addNode, draftProblems, moveNode, moveProblem, previewScore, setAnchor, setGate, setPolicy, setScale, setWeight, updateBand, weightShares, type RubricFormAnswer } from './model.js';
 
 /**
  * Draft author. Edits the tree the host passes in and emits the new tree.
@@ -27,6 +27,7 @@ export class RubricBuilderComponent implements OnChanges {
 
     public Shares = new Map<string, number>();
     public Problems: string[] = [];
+    public MoveProblem: string | null = null;
     public Preview: RubricScoreResult | null = null;
 
     ngOnChanges(): void {
@@ -40,7 +41,7 @@ export class RubricBuilderComponent implements OnChanges {
     }
 
     public Parents(node: RubricNodeSnapshot): RubricNodeSnapshot[] {
-        return this.Nodes.filter(item => item.id !== node.id && item.nodeType === 'Group');
+        return this.Nodes.filter(item => item.nodeType === 'Group' && item.id !== node.id && !moveProblem(this.Nodes, node.id, item.id));
     }
 
     public Levels(node: RubricNodeSnapshot): { id: string; label: string }[] {
@@ -61,7 +62,10 @@ export class RubricBuilderComponent implements OnChanges {
 
     public OnParent(node: RubricNodeSnapshot, event: Event): void {
         const value = (event.target as HTMLSelectElement).value;
-        this.NodesChange.emit(moveNode(this.Nodes, node.id, value === '' ? null : value));
+        const parentId = value === '' ? null : value;
+        const problem = moveProblem(this.Nodes, node.id, parentId);
+        this.MoveProblem = problem;
+        if (!problem) this.NodesChange.emit(moveNode(this.Nodes, node.id, parentId));
     }
 
     public OnScale(node: RubricNodeSnapshot, event: Event): void {

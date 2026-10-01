@@ -42,6 +42,7 @@ export function draftProblems(nodes: RubricNodeSnapshot[], scales: RubricScaleSn
         if (keys.has(node.key)) problems.push(`Duplicate key ${node.key}.`);
         keys.add(node.key);
         if (node.parentId && !ids.has(node.parentId)) problems.push(`${node.key} points at a missing parent.`);
+        if (isAncestor(nodes, node.id, node.parentId ?? null)) problems.push(`${node.key} is inside its own descendant.`);
         if (node.nodeType === 'Criterion' && !node.scaleId) problems.push(`${node.key} needs a scale.`);
         if (node.scaleId && !scales.some(scale => scale.id === node.scaleId)) problems.push(`${node.key} names a missing scale.`);
         if (node.isGate && (node.gateMinimumScore === undefined || node.gateMinimumScore === null)) {
@@ -75,11 +76,21 @@ export function addCriterion(nodes: RubricNodeSnapshot[], name: string, scaleId:
     return addNode(nodes, name, 'Criterion', scaleId, null);
 }
 
-/** Moving sets the parent and puts the node at the end of that parent's children. */
+/**
+ * Moving sets the parent and puts the node at the end of that parent's children.
+ * A move under the node's own descendant leaves the tree unchanged.
+ */
 export function moveNode(nodes: RubricNodeSnapshot[], id: string, parentId: string | null): RubricNodeSnapshot[] {
-    if (parentId === id) return nodes;
+    if (parentId === id || isAncestor(nodes, id, parentId)) return nodes;
     const sequence = nodes.filter(node => node.id !== id && (node.parentId ?? null) === parentId).length;
     return nodes.map(node => node.id === id ? { ...node, parentId, sequence } : node);
+}
+
+/** Names the key when the new parent is the node or one of its descendants. */
+export function moveProblem(nodes: RubricNodeSnapshot[], id: string, parentId: string | null): string | null {
+    if (parentId !== id && !isAncestor(nodes, id, parentId)) return null;
+    const node = nodes.find(item => item.id === id);
+    return `${node?.key ?? id} cannot be moved under its own descendant.`;
 }
 
 export function setWeight(nodes: RubricNodeSnapshot[], id: string, weight: number): RubricNodeSnapshot[] {
@@ -194,6 +205,20 @@ export function bandFor(normalized: number | null, bands: RubricBandSnapshot[]):
         if (normalized >= band.minScore && (normalized < band.maxScore || top)) return band;
     }
     return null;
+}
+
+/** True when `ancestorId` sits on the parent chain of `nodeId`, including a cycle back to itself. */
+function isAncestor(nodes: RubricNodeSnapshot[], ancestorId: string, nodeId: string | null): boolean {
+    const byId = new Map(nodes.map(node => [node.id, node]));
+    const seen = new Set<string>();
+    let current = nodeId;
+    while (current) {
+        if (current === ancestorId) return true;
+        if (seen.has(current)) return false;
+        seen.add(current);
+        current = byId.get(current)?.parentId ?? null;
+    }
+    return false;
 }
 
 function slug(name: string): string {

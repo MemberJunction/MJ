@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { addCriterion, addNode, answerLevel, bandFor, canSubmit, displayScore, draftProblems, incompleteAnswers, moveNode, previewScore, setAnchor, setGate, setScale, setWeight, weightShares } from './model.js';
+import { addCriterion, addNode, answerLevel, bandFor, canSubmit, displayScore, draftProblems, incompleteAnswers, moveNode, moveProblem, previewScore, setAnchor, setGate, setScale, setWeight, weightShares } from './model.js';
 
 const scale: RubricScaleSnapshot = {
     id: 'scale',
@@ -69,6 +69,18 @@ describe('rubric author', () => {
         expect(built?.parentId).toBe(parent.id);
         expect(built?.sequence).toBe(0);
         expect(draftProblems(nodes, [scale])).toEqual([]);
+    });
+
+    it('does not parent a group under its own child', () => {
+        let nodes = addNode([], 'Quality', 'Group', null);
+        const parent = nodes[0];
+        nodes = addNode(nodes, 'Clarity', 'Criterion', 'scale', parent.id);
+        const child = nodes[1];
+        const kept = moveNode(nodes, parent.id, child.id);
+        expect(kept.find(node => node.id === parent.id)?.parentId ?? null).toBeNull();
+        expect(moveProblem(nodes, parent.id, child.id)).toMatch(/quality/);
+        const cycled = kept.map(node => node.id === parent.id ? { ...node, parentId: child.id } : node);
+        expect(draftProblems(cycled, [scale]).join(' ')).toMatch(/quality/);
     });
 });
 
