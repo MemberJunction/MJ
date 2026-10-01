@@ -8,7 +8,7 @@ import {
   TestRunSummary,
   VersionMetrics
 } from '../services/testing-instrumentation.service';
-import { Metadata, RunView } from '@memberjunction/core';
+import { RunView } from '@memberjunction/core';
 import { criterionFailureRates, criterionIdentity, scoreTrend } from '@memberjunction/ng-testing';
 
 // ---------------------------------------------------------------------------
@@ -865,7 +865,7 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
   /** Score trend for the suite with the most scored runs, and per-criterion failure rates. */
   async LoadRubricAnalytics(): Promise<void> {
     try {
-      const provider = Metadata.Provider;
+      const provider = this.instrumentationService.Provider;
       if (!provider) return;
       const view = RunView.FromMetadataProvider(provider);
       const runs = await view.RunView({ EntityName: 'MJ: Test Suite Runs', ExtraFilter: 'Score IS NOT NULL', ResultType: 'simple', MaxRows: 200 });

@@ -18,7 +18,7 @@ import {
   EvaluationSummaryMetrics
 } from '../services/testing-instrumentation.service';
 import { UUIDsEqual } from '@memberjunction/global';
-import { Metadata, RunView } from '@memberjunction/core';
+import { RunView } from '@memberjunction/core';
 import { criterionIdentity, disagreementFromScores, type DisagreementItem } from '@memberjunction/ng-testing';
 
 type ViewMode = 'queue' | 'history';
@@ -1177,7 +1177,7 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
   /** Per-criterion human–AI gap, largest first. An empty result leaves the section hidden. */
   async LoadDisagreement(): Promise<void> {
     try {
-      const provider = Metadata.Provider;
+      const provider = this.instrumentationService.Provider;
       if (!provider) return;
       const view = RunView.FromMetadataProvider(provider);
       const evaluations = await view.RunView({

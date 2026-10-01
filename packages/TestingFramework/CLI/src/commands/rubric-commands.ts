@@ -1,5 +1,5 @@
 import { readFileSync } from 'fs';
-import { Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import { RubricVersionDiff, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { providerRubricEngine } from '@memberjunction/rubrics';
 import { FormatVersionDiff, ParseRubricRef, SnapshotFromRows, ValidateSnapshot } from './rubric-cli';
@@ -7,7 +7,7 @@ import { FormatVersionDiff, ParseRubricRef, SnapshotFromRows, ValidateSnapshot }
 /** Thin database operations behind `mj rubric`. */
 export class RubricCommands {
     async List(): Promise<void> {
-        const user = await this.context();
+        const { user } = await this.context();
         const rows = await this.rows('MJ: Rubrics', undefined, user);
         if (rows.length === 0) {
             console.log('No rubrics.');
@@ -17,7 +17,7 @@ export class RubricCommands {
     }
 
     async Show(ref: string): Promise<void> {
-        const user = await this.context();
+        const { user } = await this.context();
         const { rubric, version } = await this.version(ref, user);
         console.log(`${rubric.Name}  ${version.MajorVersion}.${version.MinorVersion}.${version.PatchVersion}  ${version.Status}`);
         const criteria = await this.rows('MJ: Rubric Criteria', `RubricVersionID='${String(version.ID).replace(/'/g, "''")}'`, user);
@@ -25,7 +25,7 @@ export class RubricCommands {
     }
 
     async Diff(ref: string, from: string, to: string): Promise<void> {
-        const user = await this.context();
+        const { user } = await this.context();
         const parsed = ParseRubricRef(ref);
         const left = await this.snapshot(parsed.rubric, from, user);
         const right = await this.snapshot(parsed.rubric, to, user);
@@ -44,10 +44,10 @@ export class RubricCommands {
     }
 
     async Evaluate(ref: string, entity: string, record: string, evaluator: string | undefined): Promise<void> {
-        const user = await this.context();
+        const { user, provider } = await this.context();
         const { rubric, version } = await this.version(ref, user);
-        const engine = providerRubricEngine(Metadata.Provider, user);
-        const result = await engine.evaluateRecord({
+        const engine = providerRubricEngine(provider, user);
+        const result = await engine.EvaluateRecord({
             rubricId: String(rubric.ID),
             versionId: String(version.ID),
             subjectEntityName: entity,
@@ -83,10 +83,10 @@ export class RubricCommands {
         return SnapshotFromRows(version, criteria, scales, levels, bands);
     }
 
-    private async context(): Promise<UserInfo> {
-        const { InitializeMJProvider, GetContextUser } = await import('../lib/mj-provider');
+    private async context(): Promise<{ user: UserInfo; provider: IMetadataProvider }> {
+        const { InitializeMJProvider, GetContextUser, GetMJProvider } = await import('../lib/mj-provider');
         await InitializeMJProvider();
-        return GetContextUser();
+        return { user: await GetContextUser(), provider: GetMJProvider() };
     }
 
     private async rows(entityName: string, filter: string | undefined, user: UserInfo): Promise<Record<string, unknown>[]> {
