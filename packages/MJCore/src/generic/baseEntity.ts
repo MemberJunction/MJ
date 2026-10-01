@@ -1427,10 +1427,28 @@ export abstract class BaseEntity<T = unknown> {
             parentEntityInfo.Name,
             this._contextCurrentUser
         );
+        // A chain loaded through the parent is linked the other way too, so the parent's
+        // LeafEntity (and its save hooks) see this child (MJ#4870).
+        this.linkParentBackToThisChild();
         // Recursive: the parent's InitializeParentEntity() was called by GetEntityObject()
 
         // Cache the parent field names for O(1) routing lookups
         this._parentEntityFieldNames = this.EntityInfo.ParentEntityFieldNames;
+    }
+
+    /**
+     * Points this child's disjoint parent back at this instance (`parent._childEntity = this`).
+     *
+     * Same gate as {@link InitializeParentEntity}: a parent that allows several subtypes keeps no
+     * single child. `NewRecord()` sets `_childEntity` to null, so this has to run AFTER the
+     * parent's `NewRecord()` — calling it before is wiped out.
+     */
+    private linkParentBackToThisChild(): void {
+        const parentEntityInfo = this.EntityInfo?.ParentEntityInfo;
+        if (!this._parentEntity || !parentEntityInfo || parentEntityInfo.AllowMultipleSubtypes) {
+            return;
+        }
+        this._parentEntity._childEntity = this;
     }
 
     /**
@@ -1513,8 +1531,9 @@ export abstract class BaseEntity<T = unknown> {
         if (!loaded) {
             // Restore the fresh chain the failed load destroyed: re-seed the parent chain, then put
             // the ORIGINAL minted key back (Set routes to the root), so the record the caller holds
-            // is bit-for-bit the fresh record they built.
+            // is bit-for-bit the fresh record they built. Re-seed nulls the parent's back-link.
             this._parentEntity.NewRecord();
+            this.linkParentBackToThisChild();
             for (const pk of freshPkValues) {
                 if (pk.value != null) {
                     this._parentEntity.Set(pk.name, pk.value);
@@ -2091,16 +2110,7 @@ export abstract class BaseEntity<T = unknown> {
             this._childEntity = childEntity;
 
             const dirtySnapshots = this.captureChainDirtyState();
-
-            if (this.PrimaryKey && this.PrimaryKey.HasValue) {
-                const loaded = await childEntity.InnerLoad(this.PrimaryKey);
-                if (!loaded) {
-                    this.mirrorSharedKeysToChild(childEntity);
-                }
-            } else {
-                this.mirrorSharedKeysToChild(childEntity);
-            }
-
+            await this.loadOrMirrorChildRow(childEntity);
             this.restoreChainDirtyState(dirtySnapshots);
 
             // Recursively discover grandchildren if the child is also a parent type
@@ -2126,16 +2136,7 @@ export abstract class BaseEntity<T = unknown> {
             this.replaceChildParentChain(childEntity);
 
             const dirtySnapshots = this.captureChainDirtyState();
-
-            if (this.PrimaryKey && this.PrimaryKey.HasValue) {
-                const loaded = await childEntity.InnerLoad(this.PrimaryKey);
-                if (!loaded) {
-                    this.mirrorSharedKeysToChild(childEntity);
-                }
-            } else {
-                this.mirrorSharedKeysToChild(childEntity);
-            }
-
+            await this.loadOrMirrorChildRow(childEntity);
             this.restoreChainDirtyState(dirtySnapshots);
 
             if (childEntity.EntityInfo.IsParentType) {
@@ -2143,6 +2144,33 @@ export abstract class BaseEntity<T = unknown> {
             }
 
             return childEntity;
+        }
+    }
+
+    /**
+     * A new parent's child is new too: there is no row to read, so copy the parent's keys.
+     * A saved parent still reads (promotion's usual answer is "no row"), and that miss is not
+     * an error — the same way a subtype-hint probe treats an empty read (MJ#4859).
+     */
+    private async loadOrMirrorChildRow(childEntity: BaseEntity): Promise<void> {
+        if (this.IsSaved && this.PrimaryKey?.HasValue) {
+            const loaded = await this.loadChildRowQuietly(childEntity);
+            if (!loaded) {
+                this.mirrorSharedKeysToChild(childEntity);
+            }
+            return;
+        }
+        this.mirrorSharedKeysToChild(childEntity);
+    }
+
+    /** Loads the child by the shared key. An empty result is an answer, not a logged error. */
+    private async loadChildRowQuietly(childEntity: BaseEntity): Promise<boolean> {
+        const probe: SubtypeHintProbe = { RowReadFailed: false };
+        childEntity._subtypeHintProbe = probe;
+        try {
+            return await childEntity.InnerLoad(this.PrimaryKey);
+        } finally {
+            childEntity._subtypeHintProbe = null;
         }
     }
 
@@ -4427,6 +4455,8 @@ export abstract class BaseEntity<T = unknown> {
         // when setting keys.
         if (this._parentEntity) {
             this._parentEntity.NewRecord();
+            // The parent's NewRecord() just nulled its back-link. Put this child back.
+            this.linkParentBackToThisChild();
             for (const pk of this.EntityInfo.PrimaryKeys) {
                 const parentValue = this._parentEntity.Get(pk.Name);
                 if (parentValue != null) {
@@ -5915,6 +5945,13 @@ export abstract class BaseEntity<T = unknown> {
             if (plan.NodeCount > 1) {
                 return this.deleteGraph(plan, options);
             }
+        }
+
+        // IS-A parent chain deletes bypass the debounce, as parent chain saves do: the leaf's
+        // call back up the chain would otherwise wait on the pending delete that handed the
+        // delete to the leaf, and Delete() would never return (MJ#4850).
+        if (options?.IsParentEntityDelete) {
+            return this._innerDelete(options);
         }
 
         // If a delete is already in progress, return its promise.

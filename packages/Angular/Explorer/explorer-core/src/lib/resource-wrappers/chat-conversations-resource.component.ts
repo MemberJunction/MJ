@@ -5,10 +5,12 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { ResolveDeepLinkParam } from './chat-deeplink-params.js';
 import { ResolveChatSearchRoute } from './chat-search-routing.js';
-import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService, SearchResult } from '@memberjunction/ng-conversations';
+import { ResolveComposeEmailDraft, BuildComposeEmailFallbackNotice } from './compose-email-fallback.js';
+import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService, SearchResult, ActionableCommandRequest } from '@memberjunction/ng-conversations';
 import { PendingAttachment } from '@memberjunction/ng-composer';
 import { MentionAutocompleteService } from '@memberjunction/ng-conversations';
-import { ActionableCommand, OpenResourceCommand } from '@memberjunction/ai-core-plus';
+import { ComposeEmailCommand, OpenResourceCommand } from '@memberjunction/ai-core-plus';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { Subject, takeUntil } from 'rxjs';
@@ -565,9 +567,9 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
     // Subscribe to actionable commands (open:resource) from the UI command handler service.
     // open:url commands are handled directly by the service; open:resource needs NavigationService.
-    this.uiCommandHandler.actionableCommandRequested
+    this.uiCommandHandler.ActionableCommandRequested
       .pipe(takeUntil(this.destroy$))
-      .subscribe(request => this.handleActionableCommand(request.command));
+      .subscribe(request => this.handleActionableCommand(request));
 
     // Subscribe to bridge switch events so the overlay can hand off a conversation to this workspace
     this.bridge.SwitchEvent$
@@ -1506,10 +1508,12 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   }
 
   /**
-   * Handle actionable commands that require app-specific navigation (open:resource).
-   * open:url commands are already handled directly by UICommandHandlerService.
+   * Handle actionable commands that require app-specific navigation (open:resource, and the
+   * compose:email over-length fallback). open:url commands are already handled directly by
+   * UICommandHandlerService.
    */
-  private handleActionableCommand(command: ActionableCommand): void {
+  private handleActionableCommand(request: ActionableCommandRequest): void {
+    const command = request.command;
     if (command.type === 'open:resource') {
       const resourceCommand = command as OpenResourceCommand;
       if (resourceCommand.resourceType === 'Record') {
@@ -1521,7 +1525,32 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
         // Find the most recent artifact in the active conversation and open it.
         this.openMostRecentArtifact();
       }
+    } else if (command.type === 'compose:email') {
+      // The service handles compose:email directly whenever the draft fits in a mailto: URL, so
+      // reaching here means it did NOT fit. Opening the mail client would hand the user a draft
+      // with the body silently truncated, so the service declined and handed it to us instead —
+      // our job is to show the full draft, which lives in the artifact.
+      this.openComposeEmailDraft(command, request.DraftCopiedToClipboard === true);
     }
+  }
+
+  /**
+   * The compose:email over-length fallback: open the draft artifact and tell the user why their
+   * mail client did not open.
+   *
+   * With no artifactId (it is optional) the conversation's latest artifact opens, since for a
+   * single-artifact turn that IS the draft. A stated artifactId that is not loaded opens nothing:
+   * a different artifact would be passed off as the draft. Every outcome, including "nothing to
+   * open", ends in one notification, so the button never does nothing visible.
+   */
+  private openComposeEmailDraft(command: ComposeEmailCommand, copiedToClipboard: boolean): void {
+    const target = ResolveComposeEmailDraft(this.ChatArea?.ArtifactsByDetailId.values() ?? [], command.artifactId);
+    if (this.ChatArea && (target.Kind === 'stated' || target.Kind === 'most-recent')) {
+      void this.ChatArea.OnArtifactClicked({ artifactId: target.Artifact.ArtifactId, versionId: target.Artifact.ArtifactVersionId });
+    }
+    const notice = BuildComposeEmailFallbackNotice(target, copiedToClipboard);
+    // Longer than the default: the notice is two sentences and explains a changed clipboard.
+    MJNotificationService.Instance?.CreateSimpleNotification(notice.Message, notice.Style, 7000);
   }
 
   /**

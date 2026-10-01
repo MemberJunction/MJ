@@ -53,3 +53,7 @@ export {
     LLMReranker,
     CreateLLMReranker, createLLMReranker
 } from './LLMReranker';
+
+// Runner
+export { AIRerankerRunner } from './AIRerankerRunner';
+export type { AIRerankParams, AIRerankRunResult } from './rerank-runner.types';

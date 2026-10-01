@@ -2535,8 +2535,8 @@ export const MJAIAgentRunSchema = z.object({
     TotalCost: z.number().nullable().describe(`
         * * Field Name: TotalCost
         * * Display Name: Total Cost
-        * * SQL Data Type: decimal(18, 6)
-        * * Default Value: 0.000000
+        * * SQL Data Type: decimal(19, 8)
+        * * Default Value: 0.00000000
         * * Description: Total estimated cost for all AI model usage during this agent run`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -3506,19 +3506,20 @@ export const MJAIAgentStepSchema = z.object({
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    StepType: z.union([z.literal('Action'), z.literal('ForEach'), z.literal('Human'), z.literal('Prompt'), z.literal('Sub-Agent'), z.literal('While')]).describe(`
+    StepType: z.union([z.literal('Action'), z.literal('Decision'), z.literal('ForEach'), z.literal('Human'), z.literal('Prompt'), z.literal('Sub-Agent'), z.literal('While')]).describe(`
         * * Field Name: StepType
         * * Display Name: Step Type
         * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
     *   * Action
+    *   * Decision
     *   * ForEach
     *   * Human
     *   * Prompt
     *   * Sub-Agent
     *   * While
-        * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), or Prompt (run an AI prompt)`),
+        * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), Prompt (run an AI prompt), Decision (one typed decision call whose answers the outgoing paths route on), Human (ask a person), or ForEach / While (a loop).`),
     StartingStep: z.boolean().describe(`
         * * Field Name: StartingStep
         * * Display Name: Starting Step
@@ -3625,7 +3626,7 @@ export const MJAIAgentStepSchema = z.object({
         * * Field Name: Configuration
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON configuration object for step-specific settings. For loop steps: { type: "ForEach"|"While", collectionPath?, itemVariable?, indexVariable?, maxIterations?, continueOnError?, condition? }. For other step types: reserved for future use.`),
+        * * Description: JSON configuration object for step-specific settings. For loop steps: { type: "ForEach"|"While", collectionPath?, itemVariable?, indexVariable?, maxIterations?, continueOnError?, condition? }. For Decision steps: { key, state?, questions }, where key names the step in path conditions (decisions.<key>.<question>), state is "payload" or "payload.<path>", and questions are Likelihood, Choice or Score questions. For Human steps: { assignToUserID?, expiresInHours? }.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -6407,7 +6408,7 @@ export const MJAIPromptRunSchema = z.object({
     TotalCost: z.number().nullable().describe(`
         * * Field Name: TotalCost
         * * Display Name: Total Cost
-        * * SQL Data Type: decimal(18, 6)
+        * * SQL Data Type: decimal(19, 8)
         * * Description: Total cost of this prompt run including its own cost plus all descendant costs. Calculated as Cost + DescendantCost. This value is stored (not computed) for query performance. Currency is specified in CostCurrency field.`),
     Success: z.boolean().describe(`
         * * Field Name: Success
@@ -6536,7 +6537,7 @@ export const MJAIPromptRunSchema = z.object({
     DescendantCost: z.number().nullable().describe(`
         * * Field Name: DescendantCost
         * * Display Name: Descendant Cost
-        * * SQL Data Type: decimal(18, 6)
+        * * SQL Data Type: decimal(19, 8)
         * * Description: The total cost of all descendant (child and grandchild) prompt runs, excluding this run's own cost. For leaf nodes (no children), this is 0. Updated when child costs change.`),
     ValidationAttemptCount: z.number().nullable().describe(`
         * * Field Name: ValidationAttemptCount
@@ -6833,6 +6834,12 @@ export const MJAIPromptRunSchema = z.object({
     *   * NativeFallback
     *   * NativeImplicit
         * * Description: Which tool-calling path this run actually took. 'Native' = Actions declared as tools, control flow in the JSON envelope (the hybrid). 'NativeImplicit' = Actions, sub-agents, payload_change_request and ask_user declared as tools; a tool call continues the loop and plain text ends the turn. 'Envelope' = no tools declared — the vendor-agnostic JSON-envelope path, including a prompt that asked for native mode on a model/vendor without the capability (also logs a warning). 'NativeFallback' = a native attempt failed in a tools-specific way and completed via a single envelope retry. NULL = pre-feature rows or a run that never reached a model call.`),
+    UserID: z.string().nullable().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The user on whose behalf this prompt was executed, written when the run is created. NULL for automated/unauthenticated runs and for runs that pre-date this column. For an agent-driven run the agent run's user is also reachable through AIAgentRunStep.TargetLogID, which vwAIUsageFacts falls back to.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -6881,6 +6888,10 @@ export const MJAIPromptRunSchema = z.object({
         * * Field Name: UsageType
         * * Display Name: Usage Type
         * * SQL Data Type: nvarchar(50)`),
+    User: z.string().nullable().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent
@@ -8073,6 +8084,12 @@ export const MJAIVendorSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Credential Types (vwCredentialTypes.ID)
         * * Description: Reference to the type of credential this vendor expects (e.g., API Key, GCP Service Account, Azure Service Principal). Used for type-based default credential resolution when no explicit binding exists, and for UI guidance when creating credentials.`),
+    Configuration: z.any().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIVendorEntity_IAIVendorConfiguration
+        * * Description: Vendor configuration bag (JSON, IAIVendorConfiguration shape). Its ModelDefaults key is an IAIModelConfiguration bag (LLM / Realtime / Vision / Audio sections) that forms the default model configuration for every model this vendor serves: the vendor layer of the ModelConfiguration cascade, above AIModelType and AIModel and below AIModelVendor, which may override it per key. NULL = contributes nothing.`),
     CredentialType: z.string().nullable().describe(`
         * * Field Name: CredentialType
         * * Display Name: Credential Type
@@ -18501,7 +18518,7 @@ export const MJEntityDocumentSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Master switch for the LLM reasoning layer on this entity. When 0 (default), duplicate detection runs the existing vector-only path unchanged and the reasoning columns/AutomationLevel are ignored. When 1, candidates above ReasoningThreshold are reasoned over.`),
-    ReasoningMode: z.union([z.literal('Agent'), z.literal('Prompt')]).describe(`
+    ReasoningMode: z.union([z.literal('Agent'), z.literal('Decision'), z.literal('DecisionThenPrompt'), z.literal('Prompt')]).describe(`
         * * Field Name: ReasoningMode
         * * Display Name: Reasoning Mode
         * * SQL Data Type: nvarchar(20)
@@ -18509,6 +18526,8 @@ export const MJEntityDocumentSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Agent
+    *   * Decision
+    *   * DecisionThenPrompt
     *   * Prompt
         * * Description: Which reasoning provider runs for this entity. Prompt (default) = a single-shot AI Prompt (cheap/fast); Agent = an AI Agent with memory + context-exploration tools (for heavy entities needing deeper reasoning). Both consume one shared core instruction set.`),
     ReasoningThreshold: z.number().nullable().describe(`
@@ -20606,6 +20625,54 @@ export const MJExternalDataSourceSchema = z.object({
 });
 
 export type MJExternalDataSourceEntityType = z.infer<typeof MJExternalDataSourceSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Feature Pipeline Types
+ */
+export const MJFeaturePipelineTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: The type's name, as a pipeline spec refers to it in PipelineType (for example LLM or Decision). Unique.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What the type does, and what it can and cannot produce, for pipeline authors choosing a type.`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The registered class name of the type's BaseFeaturePipelineDriver subclass, which the ClassFactory resolves to compute each record's outputs.`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+        * * Description: Active types can be chosen for a pipeline. A Disabled type is hidden from the builder, and a pipeline that names it fails validation.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJFeaturePipelineTypeEntityType = z.infer<typeof MJFeaturePipelineTypeSchema>;
 
 /**
  * zod schema definition for the entity MJ: Feature Value Caches
@@ -31434,7 +31501,7 @@ export const MJTaskSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)
         * * Description: The Action this task executes, when the node is action-assigned rather than agent-assigned or awaiting a person. Mutually exclusive with UserID and AgentID (CK_Task_Assignment). Set by durable entity-action dispatch, where a single-node graph carries one action to run with restart recovery.`),
-    StepType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('External'), z.literal('ForEach'), z.literal('Human'), z.literal('Prompt'), z.literal('While')]).nullable().describe(`
+    StepType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('Decision'), z.literal('External'), z.literal('ForEach'), z.literal('Human'), z.literal('Prompt'), z.literal('While')]).nullable().describe(`
         * * Field Name: StepType
         * * Display Name: Step Type
         * * SQL Data Type: nvarchar(20)
@@ -31442,6 +31509,7 @@ export const MJTaskSchema = z.object({
     * * Possible Values 
     *   * Action
     *   * Agent
+    *   * Decision
     *   * External
     *   * ForEach
     *   * Human
@@ -42095,8 +42163,8 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
     /**
     * * Field Name: TotalCost
     * * Display Name: Total Cost
-    * * SQL Data Type: decimal(18, 6)
-    * * Default Value: 0.000000
+    * * SQL Data Type: decimal(19, 8)
+    * * Default Value: 0.00000000
     * * Description: Total estimated cost for all AI model usage during this agent run
     */
     get TotalCost(): number | null {
@@ -44581,17 +44649,18 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     * * Value List Type: List
     * * Possible Values 
     *   * Action
+    *   * Decision
     *   * ForEach
     *   * Human
     *   * Prompt
     *   * Sub-Agent
     *   * While
-    * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), or Prompt (run an AI prompt)
+    * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), Prompt (run an AI prompt), Decision (one typed decision call whose answers the outgoing paths route on), Human (ask a person), or ForEach / While (a loop).
     */
-    get StepType(): 'Action' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'While' {
+    get StepType(): 'Action' | 'Decision' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'While' {
         return this.Get('StepType');
     }
-    set StepType(value: 'Action' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'While') {
+    set StepType(value: 'Action' | 'Decision' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'While') {
         this.Set('StepType', value);
     }
 
@@ -44831,7 +44900,7 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     * * Field Name: Configuration
     * * Display Name: Configuration
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON configuration object for step-specific settings. For loop steps: { type: "ForEach"|"While", collectionPath?, itemVariable?, indexVariable?, maxIterations?, continueOnError?, condition? }. For other step types: reserved for future use.
+    * * Description: JSON configuration object for step-specific settings. For loop steps: { type: "ForEach"|"While", collectionPath?, itemVariable?, indexVariable?, maxIterations?, continueOnError?, condition? }. For Decision steps: { key, state?, questions }, where key names the step in path conditions (decisions.<key>.<question>), state is "payload" or "payload.<path>", and questions are Likelihood, Choice or Score questions. For Human steps: { assignToUserID?, expiresInHours? }.
     */
     get Configuration(): string | null {
         return this.Get('Configuration');
@@ -50281,7 +50350,8 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIModelTypeEntity_LLMConfigurationSettings`, `MJAIModelTypeEntity_RealtimeConfigurationSettings`,
- *    `MJAIModelTypeEntity_VisionConfigurationSettings`, `MJAIModelTypeEntity_AudioConfigurationSettings`) — what "the LLM configuration"
+ *    `MJAIModelTypeEntity_VisionConfigurationSettings`, `MJAIModelTypeEntity_AudioConfigurationSettings`, `MJAIModelTypeEntity_DecisionConfigurationSettings`) —
+ *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIModelTypeEntity_IAIModelConfiguration`, `MJAIModelTypeEntity_IAIPromptConfiguration`,
  *    `MJAIModelTypeEntity_IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
@@ -50290,7 +50360,8 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
  *   < MJ: AI Models . ModelConfiguration      (per-model)
- *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *     < MJ: AI Vendors . Configuration.ModelDefaults   (host-wide default for every model this vendor serves)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the tie-breaker, wins)
  *
  * MJ: AI Prompts . PromptConfiguration        (per-prompt)
  *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
@@ -50377,6 +50448,19 @@ export interface MJAIModelTypeEntity_LLMConfigurationSettings {
      * only when the gate resolves native.
      */
     NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
+     * it reuses a prior request only when that request's entire prompt is a prefix of the new one
+     * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
+     * replaced. Absent or `false` means a block or segment cache (Anthropic breakpoints, Gemini
+     * implicit cache, Cerebras sliding cache), where a trailing per-iteration message can be replaced
+     * in place — the safe default. Set `true` under `Configuration.ModelDefaults` on the VENDOR row of a prefix-cache provider so
+     * every model it serves inherits it (the vendor default beats the model's own bag); a MODEL-VENDOR
+     * row overrides it for one model on that host.
+     * Consumed by the loop agent's trailing runtime-state layout.
+     */
+    PrefixPromptCache?: boolean | null;
 }
 
 /**
@@ -50448,6 +50532,25 @@ export interface MJAIModelTypeEntity_AudioConfigurationSettings {
     [key: string]: unknown;
 }
 
+/**
+ * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
+ * model accepts, so an oversized request can be refused with a clear message before the call,
+ * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
+ * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
+ * declared. A decision always needs at least two Choice options or Score levels; that minimum
+ * belongs to `BaseDecision`, not to this bag.
+ */
+export interface MJAIModelTypeEntity_DecisionConfigurationSettings {
+    /** The most questions one call may carry. */
+    MaxQuestionsPerCall?: number | null;
+    /** The most options one Choice question may list. */
+    MaxChoiceOptions?: number | null;
+    /** The most levels one Score question may list. */
+    MaxScoreLevels?: number | null;
+    /** The largest state the model reads, in tokens. */
+    MaxStateTokens?: number | null;
+}
+
 // =============================================================================
 // Per-table outer types — one per JSONType, composing the sections above
 // =============================================================================
@@ -50466,6 +50569,8 @@ export interface MJAIModelTypeEntity_IAIModelConfiguration {
     Vision?: MJAIModelTypeEntity_VisionConfigurationSettings | null;
     /** Audio (TTS/STT) knobs. Reserved. */
     Audio?: MJAIModelTypeEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Honored at the catalog layers. */
+    Decision?: MJAIModelTypeEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -50484,6 +50589,8 @@ export interface MJAIModelTypeEntity_IAIPromptConfiguration {
     Vision?: MJAIModelTypeEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIModelTypeEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIModelTypeEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -50499,6 +50606,26 @@ export interface MJAIModelTypeEntity_IAIPromptModelConfiguration {
     Vision?: MJAIModelTypeEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIModelTypeEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIModelTypeEntity_DecisionConfigurationSettings | null;
+}
+
+/**
+ * `MJ: AI Vendors . Configuration` — the vendor's own configuration bag. General-purpose: a vendor
+ * row carries settings that describe how this host serves models, of which the first key is
+ * `ModelDefaults`. Add further vendor-level sections here as they arise; do not add capability
+ * columns to AIVendor per knob.
+ */
+export interface MJAIModelTypeEntity_IAIVendorConfiguration {
+    /**
+     * The default model configuration for EVERY model this vendor serves — the vendor layer of the
+     * model-configuration cascade. Resolved ABOVE the model's own bag and BELOW the model-vendor row:
+     * a host's statement about how it serves models beats the model's generic description, and the
+     * model-vendor row is the tie-breaker where a host diverges for one model. The merge is per key,
+     * so a default here only touches the keys it actually sets. First use: `LLM.PrefixPromptCache`
+     * on OpenAI and x.ai, inherited by every model they serve.
+     */
+    ModelDefaults?: MJAIModelTypeEntity_IAIModelConfiguration | null;
 }
 
 /**
@@ -50698,7 +50825,8 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIModelVendorEntity_LLMConfigurationSettings`, `MJAIModelVendorEntity_RealtimeConfigurationSettings`,
- *    `MJAIModelVendorEntity_VisionConfigurationSettings`, `MJAIModelVendorEntity_AudioConfigurationSettings`) — what "the LLM configuration"
+ *    `MJAIModelVendorEntity_VisionConfigurationSettings`, `MJAIModelVendorEntity_AudioConfigurationSettings`, `MJAIModelVendorEntity_DecisionConfigurationSettings`) —
+ *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIModelVendorEntity_IAIModelConfiguration`, `MJAIModelVendorEntity_IAIPromptConfiguration`,
  *    `MJAIModelVendorEntity_IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
@@ -50707,7 +50835,8 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
  *   < MJ: AI Models . ModelConfiguration      (per-model)
- *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *     < MJ: AI Vendors . Configuration.ModelDefaults   (host-wide default for every model this vendor serves)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the tie-breaker, wins)
  *
  * MJ: AI Prompts . PromptConfiguration        (per-prompt)
  *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
@@ -50794,6 +50923,19 @@ export interface MJAIModelVendorEntity_LLMConfigurationSettings {
      * only when the gate resolves native.
      */
     NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
+     * it reuses a prior request only when that request's entire prompt is a prefix of the new one
+     * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
+     * replaced. Absent or `false` means a block or segment cache (Anthropic breakpoints, Gemini
+     * implicit cache, Cerebras sliding cache), where a trailing per-iteration message can be replaced
+     * in place — the safe default. Set `true` under `Configuration.ModelDefaults` on the VENDOR row of a prefix-cache provider so
+     * every model it serves inherits it (the vendor default beats the model's own bag); a MODEL-VENDOR
+     * row overrides it for one model on that host.
+     * Consumed by the loop agent's trailing runtime-state layout.
+     */
+    PrefixPromptCache?: boolean | null;
 }
 
 /**
@@ -50865,6 +51007,25 @@ export interface MJAIModelVendorEntity_AudioConfigurationSettings {
     [key: string]: unknown;
 }
 
+/**
+ * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
+ * model accepts, so an oversized request can be refused with a clear message before the call,
+ * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
+ * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
+ * declared. A decision always needs at least two Choice options or Score levels; that minimum
+ * belongs to `BaseDecision`, not to this bag.
+ */
+export interface MJAIModelVendorEntity_DecisionConfigurationSettings {
+    /** The most questions one call may carry. */
+    MaxQuestionsPerCall?: number | null;
+    /** The most options one Choice question may list. */
+    MaxChoiceOptions?: number | null;
+    /** The most levels one Score question may list. */
+    MaxScoreLevels?: number | null;
+    /** The largest state the model reads, in tokens. */
+    MaxStateTokens?: number | null;
+}
+
 // =============================================================================
 // Per-table outer types — one per JSONType, composing the sections above
 // =============================================================================
@@ -50883,6 +51044,8 @@ export interface MJAIModelVendorEntity_IAIModelConfiguration {
     Vision?: MJAIModelVendorEntity_VisionConfigurationSettings | null;
     /** Audio (TTS/STT) knobs. Reserved. */
     Audio?: MJAIModelVendorEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Honored at the catalog layers. */
+    Decision?: MJAIModelVendorEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -50901,6 +51064,8 @@ export interface MJAIModelVendorEntity_IAIPromptConfiguration {
     Vision?: MJAIModelVendorEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIModelVendorEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIModelVendorEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -50916,6 +51081,26 @@ export interface MJAIModelVendorEntity_IAIPromptModelConfiguration {
     Vision?: MJAIModelVendorEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIModelVendorEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIModelVendorEntity_DecisionConfigurationSettings | null;
+}
+
+/**
+ * `MJ: AI Vendors . Configuration` — the vendor's own configuration bag. General-purpose: a vendor
+ * row carries settings that describe how this host serves models, of which the first key is
+ * `ModelDefaults`. Add further vendor-level sections here as they arise; do not add capability
+ * columns to AIVendor per knob.
+ */
+export interface MJAIModelVendorEntity_IAIVendorConfiguration {
+    /**
+     * The default model configuration for EVERY model this vendor serves — the vendor layer of the
+     * model-configuration cascade. Resolved ABOVE the model's own bag and BELOW the model-vendor row:
+     * a host's statement about how it serves models beats the model's generic description, and the
+     * model-vendor row is the tie-breaker where a host diverges for one model. The merge is per key,
+     * so a default here only touches the keys it actually sets. First use: `LLM.PrefixPromptCache`
+     * on OpenAI and x.ai, inherited by every model they serve.
+     */
+    ModelDefaults?: MJAIModelVendorEntity_IAIModelConfiguration | null;
 }
 
 /**
@@ -51307,7 +51492,8 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIModelEntity_LLMConfigurationSettings`, `MJAIModelEntity_RealtimeConfigurationSettings`,
- *    `MJAIModelEntity_VisionConfigurationSettings`, `MJAIModelEntity_AudioConfigurationSettings`) — what "the LLM configuration"
+ *    `MJAIModelEntity_VisionConfigurationSettings`, `MJAIModelEntity_AudioConfigurationSettings`, `MJAIModelEntity_DecisionConfigurationSettings`) —
+ *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIModelEntity_IAIModelConfiguration`, `MJAIModelEntity_IAIPromptConfiguration`,
  *    `MJAIModelEntity_IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
@@ -51316,7 +51502,8 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
  *   < MJ: AI Models . ModelConfiguration      (per-model)
- *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *     < MJ: AI Vendors . Configuration.ModelDefaults   (host-wide default for every model this vendor serves)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the tie-breaker, wins)
  *
  * MJ: AI Prompts . PromptConfiguration        (per-prompt)
  *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
@@ -51403,6 +51590,19 @@ export interface MJAIModelEntity_LLMConfigurationSettings {
      * only when the gate resolves native.
      */
     NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
+     * it reuses a prior request only when that request's entire prompt is a prefix of the new one
+     * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
+     * replaced. Absent or `false` means a block or segment cache (Anthropic breakpoints, Gemini
+     * implicit cache, Cerebras sliding cache), where a trailing per-iteration message can be replaced
+     * in place — the safe default. Set `true` under `Configuration.ModelDefaults` on the VENDOR row of a prefix-cache provider so
+     * every model it serves inherits it (the vendor default beats the model's own bag); a MODEL-VENDOR
+     * row overrides it for one model on that host.
+     * Consumed by the loop agent's trailing runtime-state layout.
+     */
+    PrefixPromptCache?: boolean | null;
 }
 
 /**
@@ -51474,6 +51674,25 @@ export interface MJAIModelEntity_AudioConfigurationSettings {
     [key: string]: unknown;
 }
 
+/**
+ * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
+ * model accepts, so an oversized request can be refused with a clear message before the call,
+ * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
+ * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
+ * declared. A decision always needs at least two Choice options or Score levels; that minimum
+ * belongs to `BaseDecision`, not to this bag.
+ */
+export interface MJAIModelEntity_DecisionConfigurationSettings {
+    /** The most questions one call may carry. */
+    MaxQuestionsPerCall?: number | null;
+    /** The most options one Choice question may list. */
+    MaxChoiceOptions?: number | null;
+    /** The most levels one Score question may list. */
+    MaxScoreLevels?: number | null;
+    /** The largest state the model reads, in tokens. */
+    MaxStateTokens?: number | null;
+}
+
 // =============================================================================
 // Per-table outer types — one per JSONType, composing the sections above
 // =============================================================================
@@ -51492,6 +51711,8 @@ export interface MJAIModelEntity_IAIModelConfiguration {
     Vision?: MJAIModelEntity_VisionConfigurationSettings | null;
     /** Audio (TTS/STT) knobs. Reserved. */
     Audio?: MJAIModelEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Honored at the catalog layers. */
+    Decision?: MJAIModelEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -51510,6 +51731,8 @@ export interface MJAIModelEntity_IAIPromptConfiguration {
     Vision?: MJAIModelEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIModelEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIModelEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -51525,6 +51748,26 @@ export interface MJAIModelEntity_IAIPromptModelConfiguration {
     Vision?: MJAIModelEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIModelEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIModelEntity_DecisionConfigurationSettings | null;
+}
+
+/**
+ * `MJ: AI Vendors . Configuration` — the vendor's own configuration bag. General-purpose: a vendor
+ * row carries settings that describe how this host serves models, of which the first key is
+ * `ModelDefaults`. Add further vendor-level sections here as they arise; do not add capability
+ * columns to AIVendor per knob.
+ */
+export interface MJAIModelEntity_IAIVendorConfiguration {
+    /**
+     * The default model configuration for EVERY model this vendor serves — the vendor layer of the
+     * model-configuration cascade. Resolved ABOVE the model's own bag and BELOW the model-vendor row:
+     * a host's statement about how it serves models beats the model's generic description, and the
+     * model-vendor row is the tie-breaker where a host diverges for one model. The merge is per key,
+     * so a default here only touches the keys it actually sets. First use: `LLM.PrefixPromptCache`
+     * on OpenAI and x.ai, inherited by every model they serve.
+     */
+    ModelDefaults?: MJAIModelEntity_IAIModelConfiguration | null;
 }
 
 /**
@@ -52608,7 +52851,8 @@ export class MJAIPromptCategoryEntity extends BaseEntity<MJAIPromptCategoryEntit
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIPromptModelEntity_LLMConfigurationSettings`, `MJAIPromptModelEntity_RealtimeConfigurationSettings`,
- *    `MJAIPromptModelEntity_VisionConfigurationSettings`, `MJAIPromptModelEntity_AudioConfigurationSettings`) — what "the LLM configuration"
+ *    `MJAIPromptModelEntity_VisionConfigurationSettings`, `MJAIPromptModelEntity_AudioConfigurationSettings`, `MJAIPromptModelEntity_DecisionConfigurationSettings`) —
+ *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIPromptModelEntity_IAIModelConfiguration`, `MJAIPromptModelEntity_IAIPromptConfiguration`,
  *    `MJAIPromptModelEntity_IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
@@ -52617,7 +52861,8 @@ export class MJAIPromptCategoryEntity extends BaseEntity<MJAIPromptCategoryEntit
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
  *   < MJ: AI Models . ModelConfiguration      (per-model)
- *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *     < MJ: AI Vendors . Configuration.ModelDefaults   (host-wide default for every model this vendor serves)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the tie-breaker, wins)
  *
  * MJ: AI Prompts . PromptConfiguration        (per-prompt)
  *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
@@ -52704,6 +52949,19 @@ export interface MJAIPromptModelEntity_LLMConfigurationSettings {
      * only when the gate resolves native.
      */
     NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
+     * it reuses a prior request only when that request's entire prompt is a prefix of the new one
+     * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
+     * replaced. Absent or `false` means a block or segment cache (Anthropic breakpoints, Gemini
+     * implicit cache, Cerebras sliding cache), where a trailing per-iteration message can be replaced
+     * in place — the safe default. Set `true` under `Configuration.ModelDefaults` on the VENDOR row of a prefix-cache provider so
+     * every model it serves inherits it (the vendor default beats the model's own bag); a MODEL-VENDOR
+     * row overrides it for one model on that host.
+     * Consumed by the loop agent's trailing runtime-state layout.
+     */
+    PrefixPromptCache?: boolean | null;
 }
 
 /**
@@ -52775,6 +53033,25 @@ export interface MJAIPromptModelEntity_AudioConfigurationSettings {
     [key: string]: unknown;
 }
 
+/**
+ * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
+ * model accepts, so an oversized request can be refused with a clear message before the call,
+ * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
+ * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
+ * declared. A decision always needs at least two Choice options or Score levels; that minimum
+ * belongs to `BaseDecision`, not to this bag.
+ */
+export interface MJAIPromptModelEntity_DecisionConfigurationSettings {
+    /** The most questions one call may carry. */
+    MaxQuestionsPerCall?: number | null;
+    /** The most options one Choice question may list. */
+    MaxChoiceOptions?: number | null;
+    /** The most levels one Score question may list. */
+    MaxScoreLevels?: number | null;
+    /** The largest state the model reads, in tokens. */
+    MaxStateTokens?: number | null;
+}
+
 // =============================================================================
 // Per-table outer types — one per JSONType, composing the sections above
 // =============================================================================
@@ -52793,6 +53070,8 @@ export interface MJAIPromptModelEntity_IAIModelConfiguration {
     Vision?: MJAIPromptModelEntity_VisionConfigurationSettings | null;
     /** Audio (TTS/STT) knobs. Reserved. */
     Audio?: MJAIPromptModelEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Honored at the catalog layers. */
+    Decision?: MJAIPromptModelEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -52811,6 +53090,8 @@ export interface MJAIPromptModelEntity_IAIPromptConfiguration {
     Vision?: MJAIPromptModelEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIPromptModelEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIPromptModelEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -52826,6 +53107,26 @@ export interface MJAIPromptModelEntity_IAIPromptModelConfiguration {
     Vision?: MJAIPromptModelEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIPromptModelEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIPromptModelEntity_DecisionConfigurationSettings | null;
+}
+
+/**
+ * `MJ: AI Vendors . Configuration` — the vendor's own configuration bag. General-purpose: a vendor
+ * row carries settings that describe how this host serves models, of which the first key is
+ * `ModelDefaults`. Add further vendor-level sections here as they arise; do not add capability
+ * columns to AIVendor per knob.
+ */
+export interface MJAIPromptModelEntity_IAIVendorConfiguration {
+    /**
+     * The default model configuration for EVERY model this vendor serves — the vendor layer of the
+     * model-configuration cascade. Resolved ABOVE the model's own bag and BELOW the model-vendor row:
+     * a host's statement about how it serves models beats the model's generic description, and the
+     * model-vendor row is the tie-breaker where a host diverges for one model. The merge is per key,
+     * so a default here only touches the keys it actually sets. First use: `LLM.PrefixPromptCache`
+     * on OpenAI and x.ai, inherited by every model they serve.
+     */
+    ModelDefaults?: MJAIPromptModelEntity_IAIModelConfiguration | null;
 }
 
 /**
@@ -53846,7 +54147,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     /**
     * * Field Name: TotalCost
     * * Display Name: Total Cost
-    * * SQL Data Type: decimal(18, 6)
+    * * SQL Data Type: decimal(19, 8)
     * * Description: Total cost of this prompt run including its own cost plus all descendant costs. Calculated as Cost + DescendantCost. This value is stored (not computed) for query performance. Currency is specified in CostCurrency field.
     */
     get TotalCost(): number | null {
@@ -54161,7 +54462,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     /**
     * * Field Name: DescendantCost
     * * Display Name: Descendant Cost
-    * * SQL Data Type: decimal(18, 6)
+    * * SQL Data Type: decimal(19, 8)
     * * Description: The total cost of all descendant (child and grandchild) prompt runs, excluding this run's own cost. For leaf nodes (no children), this is 0. Updated when child costs change.
     */
     get DescendantCost(): number | null {
@@ -54891,6 +55192,20 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     }
 
     /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The user on whose behalf this prompt was executed, written when the run is created. NULL for automated/unauthenticated runs and for runs that pre-date this column. For an agent-driven run the agent run's user is also reachable through AIAgentRunStep.TargetLogID, which vwAIUsageFacts falls back to.
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
     * * Field Name: Prompt
     * * Display Name: Prompt
     * * SQL Data Type: nvarchar(255)
@@ -54996,6 +55311,15 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     */
     get UsageType(): string | null {
         return this.Get('UsageType');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
     }
 
     /**
@@ -55140,7 +55464,8 @@ export class MJAIPromptTypeEntity extends BaseEntity<MJAIPromptTypeEntityType> {
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIPromptEntity_LLMConfigurationSettings`, `MJAIPromptEntity_RealtimeConfigurationSettings`,
- *    `MJAIPromptEntity_VisionConfigurationSettings`, `MJAIPromptEntity_AudioConfigurationSettings`) — what "the LLM configuration"
+ *    `MJAIPromptEntity_VisionConfigurationSettings`, `MJAIPromptEntity_AudioConfigurationSettings`, `MJAIPromptEntity_DecisionConfigurationSettings`) —
+ *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIPromptEntity_IAIModelConfiguration`, `MJAIPromptEntity_IAIPromptConfiguration`,
  *    `MJAIPromptEntity_IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
@@ -55149,7 +55474,8 @@ export class MJAIPromptTypeEntity extends BaseEntity<MJAIPromptTypeEntityType> {
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
  *   < MJ: AI Models . ModelConfiguration      (per-model)
- *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *     < MJ: AI Vendors . Configuration.ModelDefaults   (host-wide default for every model this vendor serves)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the tie-breaker, wins)
  *
  * MJ: AI Prompts . PromptConfiguration        (per-prompt)
  *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
@@ -55236,6 +55562,19 @@ export interface MJAIPromptEntity_LLMConfigurationSettings {
      * only when the gate resolves native.
      */
     NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
+     * it reuses a prior request only when that request's entire prompt is a prefix of the new one
+     * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
+     * replaced. Absent or `false` means a block or segment cache (Anthropic breakpoints, Gemini
+     * implicit cache, Cerebras sliding cache), where a trailing per-iteration message can be replaced
+     * in place — the safe default. Set `true` under `Configuration.ModelDefaults` on the VENDOR row of a prefix-cache provider so
+     * every model it serves inherits it (the vendor default beats the model's own bag); a MODEL-VENDOR
+     * row overrides it for one model on that host.
+     * Consumed by the loop agent's trailing runtime-state layout.
+     */
+    PrefixPromptCache?: boolean | null;
 }
 
 /**
@@ -55307,6 +55646,25 @@ export interface MJAIPromptEntity_AudioConfigurationSettings {
     [key: string]: unknown;
 }
 
+/**
+ * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
+ * model accepts, so an oversized request can be refused with a clear message before the call,
+ * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
+ * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
+ * declared. A decision always needs at least two Choice options or Score levels; that minimum
+ * belongs to `BaseDecision`, not to this bag.
+ */
+export interface MJAIPromptEntity_DecisionConfigurationSettings {
+    /** The most questions one call may carry. */
+    MaxQuestionsPerCall?: number | null;
+    /** The most options one Choice question may list. */
+    MaxChoiceOptions?: number | null;
+    /** The most levels one Score question may list. */
+    MaxScoreLevels?: number | null;
+    /** The largest state the model reads, in tokens. */
+    MaxStateTokens?: number | null;
+}
+
 // =============================================================================
 // Per-table outer types — one per JSONType, composing the sections above
 // =============================================================================
@@ -55325,6 +55683,8 @@ export interface MJAIPromptEntity_IAIModelConfiguration {
     Vision?: MJAIPromptEntity_VisionConfigurationSettings | null;
     /** Audio (TTS/STT) knobs. Reserved. */
     Audio?: MJAIPromptEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Honored at the catalog layers. */
+    Decision?: MJAIPromptEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -55343,6 +55703,8 @@ export interface MJAIPromptEntity_IAIPromptConfiguration {
     Vision?: MJAIPromptEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIPromptEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIPromptEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -55358,6 +55720,26 @@ export interface MJAIPromptEntity_IAIPromptModelConfiguration {
     Vision?: MJAIPromptEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIPromptEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIPromptEntity_DecisionConfigurationSettings | null;
+}
+
+/**
+ * `MJ: AI Vendors . Configuration` — the vendor's own configuration bag. General-purpose: a vendor
+ * row carries settings that describe how this host serves models, of which the first key is
+ * `ModelDefaults`. Add further vendor-level sections here as they arise; do not add capability
+ * columns to AIVendor per knob.
+ */
+export interface MJAIPromptEntity_IAIVendorConfiguration {
+    /**
+     * The default model configuration for EVERY model this vendor serves — the vendor layer of the
+     * model-configuration cascade. Resolved ABOVE the model's own bag and BELOW the model-vendor row:
+     * a host's statement about how it serves models beats the model's generic description, and the
+     * model-vendor row is the tie-breaker where a host diverges for one model. The merge is per key,
+     * so a default here only touches the keys it actually sets. First use: `LLM.PrefixPromptCache`
+     * on OpenAI and x.ai, inherited by every model they serve.
+     */
+    ModelDefaults?: MJAIPromptEntity_IAIModelConfiguration | null;
 }
 
 /**
@@ -58255,6 +58637,290 @@ export class MJAIVendorTypeEntity extends BaseEntity<MJAIVendorTypeEntityType> {
 
 
 /**
+ * The AI stack's per-modality configuration bags — ONE source of truth for every layer.
+ *
+ * Two kinds of type live here, and the distinction is the whole point of the file:
+ *
+ * 1. **Shared modality sections** (`MJAIVendorEntity_LLMConfigurationSettings`, `MJAIVendorEntity_RealtimeConfigurationSettings`,
+ *    `MJAIVendorEntity_VisionConfigurationSettings`, `MJAIVendorEntity_AudioConfigurationSettings`, `MJAIVendorEntity_DecisionConfigurationSettings`) —
+ *    what "the LLM configuration"
+ *    MEANS, defined once and reused by every layer that carries a configuration bag.
+ * 2. **Per-table outer types** (`MJAIVendorEntity_IAIModelConfiguration`, `MJAIVendorEntity_IAIPromptConfiguration`,
+ *    `MJAIVendorEntity_IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
+ *    though they compose the same sections.
+ *
+ * ```
+ * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
+ *   < MJ: AI Models . ModelConfiguration      (per-model)
+ *     < MJ: AI Vendors . Configuration.ModelDefaults   (host-wide default for every model this vendor serves)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the tie-breaker, wins)
+ *
+ * MJ: AI Prompts . PromptConfiguration        (per-prompt)
+ *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
+ * ```
+ *
+ * The catalog cascade is resolved base-first with per-key deep merge by
+ * `ResolveEffectiveModelConfiguration` in `@memberjunction/ai`; the prompt cascade is resolved by
+ * the prompt runner, which layers the prompt bags ON TOP of the catalog result.
+ *
+ * **Why one file**: `EntityField.JSONTypeDefinition` stores this text VERBATIM, and CodeGen emits
+ * it inline above each entity class with every top-level name prefixed (`MJAIModelEntity_…`). It
+ * therefore has to be self-contained — a definition cannot `import` a sibling, and `@file:`
+ * substitutes a whole file rather than splicing one into another. Keeping every AI configuration
+ * type in ONE file is what makes a shared section possible at all; the cost is that each of the
+ * five entities emits the full (prefixed) set, including outer types it does not use.
+ *
+ * **Lockstep contract**: this file is the JSONType SOURCE; its package-side mirror is
+ * `packages/AI/Core/src/generic/modelConfiguration.ts` in `@memberjunction/ai`, which runtime code
+ * compiles against. Keep the two in step when adding a section or property — the same pact
+ * `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
+ *
+ * **Boundary rule**: anything the engine filters, sorts, or joins on stays a COLUMN (`PowerRank`,
+ * `IsActive`, `Priority`, `Status` — SQL cannot cheaply predicate into this bag); anything a driver
+ * or runner consumes at call time belongs HERE. New capability knobs go in the bag — do not add a
+ * capability column per knob. A knob graduates to a real column when it needs a foreign key or
+ * becomes a first-class thing the platform reasons about.
+ */
+
+// =============================================================================
+// Shared modality sections — defined once, composed by every outer type below
+// =============================================================================
+
+/**
+ * Text-generation knobs, consumed by the LLM drivers and the prompt runner at call time.
+ *
+ * Every flag is TRI-STATE (`boolean | null | absent`) and the three differ: the cascade REPLACES on
+ * any explicit value (including `null`) and only skips a layer that OMITS the property. So absent
+ * means "inherit", while an explicit value at a higher layer overrides a lower one even when false.
+ *
+ * Properties are marked with the layers that HONOR them. A property set at a layer that does not
+ * honor it is inert, not an error — that tolerance is deliberate, so a knob can move between layers
+ * without a schema change.
+ */
+export interface MJAIVendorEntity_LLMConfigurationSettings {
+    /**
+     * **Catalog layers only** (model type / model / model vendor). Whether this model — or this
+     * vendor's serving of it — supports native tool/function calling.
+     *
+     * CAPABILITY flag, and a hard gate: no policy or preference at any layer can force tools onto a
+     * (model, vendor) whose resolved value is not true. Set `false` only for a model or serving path
+     * verified NOT to support tools; leave absent when support is unknown, because absent is the
+     * honest value and it inherits.
+     */
+    SupportsNativeToolCalling?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether prompts run against this model default to native tool calling
+     * when they express no preference of their own. POLICY flag — subordinate to
+     * {@link MJAIVendorEntity_LLMConfigurationSettings.SupportsNativeToolCalling}.
+     */
+    DefaultToNativeToolCalling?: boolean | null;
+
+    /**
+     * **Prompt layers only** (prompt / prompt model). Whether THIS prompt asks for native tool
+     * calling. PREFERENCE — it outranks the catalog's `DefaultToNativeToolCalling`, and is still
+     * subordinate to the capability gate. Absent means "no preference; fall through to the model's
+     * default".
+     */
+    UseNativeToolCalling?: boolean | null;
+
+    /**
+     * **Catalog layers only.** How control flow is expressed when a request resolves to native tool
+     * calling. `'envelope'` (the default when absent) is the hybrid: Actions are tools, everything
+     * else — completion, chat, delegation, payload changes — is the JSON envelope. `'implicit'` is the
+     * implicit protocol: sub-agents, `payload_change_request` and `ask_user` are tools too, a tool call
+     * continues the loop, and plain text with no call ends the turn as task completion. Consulted only
+     * when the gate resolves native; subordinate to {@link MJAIVendorEntity_LLMConfigurationSettings.SupportsNativeToolCalling}.
+     */
+    NativeControlFlow?: 'envelope' | 'implicit' | null;
+
+    /**
+     * **Catalog layers only.** Whether action results are returned to the model as native tool-result
+     * turns instead of a markdown "Action results" user message. Absent means `false`. Consulted
+     * only when the gate resolves native.
+     */
+    NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
+     * it reuses a prior request only when that request's entire prompt is a prefix of the new one
+     * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
+     * replaced. Absent or `false` means a block or segment cache (Anthropic breakpoints, Gemini
+     * implicit cache, Cerebras sliding cache), where a trailing per-iteration message can be replaced
+     * in place — the safe default. Set `true` under `Configuration.ModelDefaults` on the VENDOR row of a prefix-cache provider so
+     * every model it serves inherits it (the vendor default beats the model's own bag); a MODEL-VENDOR
+     * row overrides it for one model on that host.
+     * Consumed by the loop agent's trailing runtime-state layout.
+     */
+    PrefixPromptCache?: boolean | null;
+}
+
+/**
+ * MJ-normalized turn-detection settings for realtime (speech-to-speech) models. Every field is
+ * optional; absent fields contribute nothing. Provider profiles translate this vocabulary to their
+ * native wire block, and an unsupported value is diagnostic-logged and falls back to the profile
+ * default — a wrong inherited value degrades safely, it never rejects a session.
+ */
+export interface MJAIVendorEntity_RealtimeTurnDetectionSettings {
+    /**
+     * - `'default'` — let the provider profile decide (today's behavior).
+     * - `'serverVad'` — classic silence-based server VAD.
+     * - `'semanticVad'` — semantic end-of-utterance detection (OpenAI `semantic_vad`).
+     * - `'native'` — this model's smartest documented turn/duplex mode, whatever the profile maps it
+     *   to; the forward slot for full-duplex reasoning voice models.
+     */
+    Mode?: 'default' | 'serverVad' | 'semanticVad' | 'native' | null;
+    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    Eagerness?: 'low' | 'auto' | 'high' | null;
+    /** Server-VAD activation threshold (0–1); ignored without a mapping. */
+    Threshold?: number | null;
+    /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
+    SilenceDurationMs?: number | null;
+}
+
+/**
+ * Reasoning-plane settings for realtime models — dual delegation configuration. Absent defaults to
+ * `'local'`.
+ */
+export interface MJAIVendorEntity_RealtimeReasoningSettings {
+    /**
+     * Which plane handles reasoning:
+     * - `'local'` — application/agent loop (default).
+     * - `'remote'` — delegated to remote model or hosted agent.
+     */
+    Plane?: 'local' | 'remote' | null;
+    /** Remote reasoning target configuration. */
+    Remote?: {
+        Kind?: 'model' | 'hostedAgent' | null;
+        Ref?: string | null;
+        Effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null;
+        MaxOutputTokens?: number | null;
+    } | null;
+}
+
+/** Realtime (speech-to-speech) knobs. */
+export interface MJAIVendorEntity_RealtimeConfigurationSettings {
+    /**
+     * Catalog-level turn-detection default for this model. Folded into the realtime session Config
+     * bag as the `turnDetection` key BELOW the agent/app config cascade
+     * (`realtime.session.turnDetection`) and the runtime override — the catalog supplies the
+     * default, agents/apps/callers refine it.
+     */
+    TurnDetection?: MJAIVendorEntity_RealtimeTurnDetectionSettings | null;
+
+    /**
+     * Reasoning plane settings — dual delegation configuration. Absent defaults to `'local'`.
+     */
+    Reasoning?: MJAIVendorEntity_RealtimeReasoningSettings | null;
+}
+
+/** Vision knobs. Reserved — no consumers yet. */
+export interface MJAIVendorEntity_VisionConfigurationSettings {
+    [key: string]: unknown;
+}
+
+/** Audio (TTS/STT) knobs. Reserved — no consumers yet. */
+export interface MJAIVendorEntity_AudioConfigurationSettings {
+    [key: string]: unknown;
+}
+
+/**
+ * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
+ * model accepts, so an oversized request can be refused with a clear message before the call,
+ * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
+ * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
+ * declared. A decision always needs at least two Choice options or Score levels; that minimum
+ * belongs to `BaseDecision`, not to this bag.
+ */
+export interface MJAIVendorEntity_DecisionConfigurationSettings {
+    /** The most questions one call may carry. */
+    MaxQuestionsPerCall?: number | null;
+    /** The most options one Choice question may list. */
+    MaxChoiceOptions?: number | null;
+    /** The most levels one Score question may list. */
+    MaxScoreLevels?: number | null;
+    /** The largest state the model reads, in tokens. */
+    MaxStateTokens?: number | null;
+}
+
+// =============================================================================
+// Per-table outer types — one per JSONType, composing the sections above
+// =============================================================================
+
+/**
+ * The `ModelConfiguration` column on the three MODEL-CATALOG entities (`MJ: AI Model Types`,
+ * `MJ: AI Models`, `MJ: AI Model Vendors`), which form an inherit-with-override cascade. Sections
+ * are per-modality so one catalog row can configure everything its model does.
+ */
+export interface MJAIVendorEntity_IAIModelConfiguration {
+    /** Text-generation knobs. Honors the catalog-layer properties. */
+    LLM?: MJAIVendorEntity_LLMConfigurationSettings | null;
+    /** Realtime (speech-to-speech) knobs. */
+    Realtime?: MJAIVendorEntity_RealtimeConfigurationSettings | null;
+    /** Vision knobs. Reserved. */
+    Vision?: MJAIVendorEntity_VisionConfigurationSettings | null;
+    /** Audio (TTS/STT) knobs. Reserved. */
+    Audio?: MJAIVendorEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Honored at the catalog layers. */
+    Decision?: MJAIVendorEntity_DecisionConfigurationSettings | null;
+}
+
+/**
+ * The `PromptConfiguration` column on `MJ: AI Prompts` — per-prompt call-time knobs, layered ON TOP of the
+ * resolved model-catalog configuration by the prompt runner.
+ *
+ * The same anti-widening argument that produced `ModelConfiguration` applies here with more force:
+ * `AIPrompt` already carries fifty-odd columns. New per-prompt call-time knobs land here.
+ */
+export interface MJAIVendorEntity_IAIPromptConfiguration {
+    /** Text-generation knobs. Honors the prompt-layer properties. */
+    LLM?: MJAIVendorEntity_LLMConfigurationSettings | null;
+    /** Realtime knobs. Reserved at this layer. */
+    Realtime?: MJAIVendorEntity_RealtimeConfigurationSettings | null;
+    /** Vision knobs. Reserved. */
+    Vision?: MJAIVendorEntity_VisionConfigurationSettings | null;
+    /** Audio knobs. Reserved. */
+    Audio?: MJAIVendorEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIVendorEntity_DecisionConfigurationSettings | null;
+}
+
+/**
+ * The `PromptConfiguration` column on `MJ: AI Prompt Models` — the most specific layer, overriding both
+ * the prompt's own bag and the model catalog for this one (prompt, model) pairing.
+ */
+export interface MJAIVendorEntity_IAIPromptModelConfiguration {
+    /** Text-generation knobs. Honors the prompt-layer properties. */
+    LLM?: MJAIVendorEntity_LLMConfigurationSettings | null;
+    /** Realtime knobs. Reserved at this layer. */
+    Realtime?: MJAIVendorEntity_RealtimeConfigurationSettings | null;
+    /** Vision knobs. Reserved. */
+    Vision?: MJAIVendorEntity_VisionConfigurationSettings | null;
+    /** Audio knobs. Reserved. */
+    Audio?: MJAIVendorEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIVendorEntity_DecisionConfigurationSettings | null;
+}
+
+/**
+ * `MJ: AI Vendors . Configuration` — the vendor's own configuration bag. General-purpose: a vendor
+ * row carries settings that describe how this host serves models, of which the first key is
+ * `ModelDefaults`. Add further vendor-level sections here as they arise; do not add capability
+ * columns to AIVendor per knob.
+ */
+export interface MJAIVendorEntity_IAIVendorConfiguration {
+    /**
+     * The default model configuration for EVERY model this vendor serves — the vendor layer of the
+     * model-configuration cascade. Resolved ABOVE the model's own bag and BELOW the model-vendor row:
+     * a host's statement about how it serves models beats the model's generic description, and the
+     * model-vendor row is the tie-breaker where a host diverges for one model. The merge is per key,
+     * so a default here only touches the keys it actually sets. First use: `LLM.PrefixPromptCache`
+     * on OpenAI and x.ai, inherited by every model they serve.
+     */
+    ModelDefaults?: MJAIVendorEntity_IAIModelConfiguration | null;
+}
+
+/**
  * MJ: AI Vendors - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIVendor
@@ -58355,6 +59021,41 @@ export class MJAIVendorEntity extends BaseEntity<MJAIVendorEntityType> {
     }
     set CredentialTypeID(value: string | null) {
         this.Set('CredentialTypeID', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIVendorEntity_IAIVendorConfiguration
+    * * Description: Vendor configuration bag (JSON, IAIVendorConfiguration shape). Its ModelDefaults key is an IAIModelConfiguration bag (LLM / Realtime / Vision / Audio sections) that forms the default model configuration for every model this vendor serves: the vendor layer of the ModelConfiguration cascade, above AIModelType and AIModel and below AIModelVendor, which may override it per key. NULL = contributes nothing.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    private _ConfigurationObject_cached: MJAIVendorEntity_IAIVendorConfiguration | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for Configuration — returns parsed JSON as MJAIVendorEntity_IAIVendorConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ConfigurationObject(): MJAIVendorEntity_IAIVendorConfiguration | null {
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
+    }
+    set ConfigurationObject(value: MJAIVendorEntity_IAIVendorConfiguration | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -86207,13 +86908,15 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     * * Value List Type: List
     * * Possible Values 
     *   * Agent
+    *   * Decision
+    *   * DecisionThenPrompt
     *   * Prompt
     * * Description: Which reasoning provider runs for this entity. Prompt (default) = a single-shot AI Prompt (cheap/fast); Agent = an AI Agent with memory + context-exploration tools (for heavy entities needing deeper reasoning). Both consume one shared core instruction set.
     */
-    get ReasoningMode(): 'Agent' | 'Prompt' {
+    get ReasoningMode(): 'Agent' | 'Decision' | 'DecisionThenPrompt' | 'Prompt' {
         return this.Get('ReasoningMode');
     }
-    set ReasoningMode(value: 'Agent' | 'Prompt') {
+    set ReasoningMode(value: 'Agent' | 'Decision' | 'DecisionThenPrompt' | 'Prompt') {
         this.Set('ReasoningMode', value);
     }
 
@@ -91712,6 +92415,128 @@ export class MJExternalDataSourceEntity extends BaseEntity<MJExternalDataSourceE
     */
     get Credential(): string | null {
         return this.Get('Credential');
+    }
+}
+
+
+/**
+ * MJ: Feature Pipeline Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: FeaturePipelineType
+ * * Base View: vwFeaturePipelineTypes
+ * * @description The catalog of Feature Pipeline types. Each type names the driver that turns one record's context into its output values: LLM runs a prompt, and further types (such as Decision) run other kinds of model. A pipeline names its type in DataFeatureSpec.PipelineType, and a spec without one is an LLM pipeline.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Feature Pipeline Types')
+export class MJFeaturePipelineTypeEntity extends BaseEntity<MJFeaturePipelineTypeEntityType> {
+    /**
+    * Loads the MJ: Feature Pipeline Types record from the database
+    * @param ID: string - primary key value to load the MJ: Feature Pipeline Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJFeaturePipelineTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: The type's name, as a pipeline spec refers to it in PipelineType (for example LLM or Decision). Unique.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What the type does, and what it can and cannot produce, for pipeline authors choosing a type.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The registered class name of the type's BaseFeaturePipelineDriver subclass, which the ClassFactory resolves to compute each record's outputs.
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    * * Description: Active types can be chosen for a pipeline. A Disabled type is hidden from the builder, and a pipeline that names it fails validation.
+    */
+    get Status(): 'Active' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }
 
@@ -119887,6 +120712,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     * * Possible Values 
     *   * Action
     *   * Agent
+    *   * Decision
     *   * External
     *   * ForEach
     *   * Human
@@ -119894,10 +120720,10 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     *   * While
     * * Description: Which kind of workflow step this task represents. NULL for a task that is not part of a workflow, such as a hand-authored to-do. Determines which of AgentID/ActionID/PromptID/UserID is meaningful and how Configuration is read. This is the executable vocabulary and is deliberately not the same value list as AIAgentStep.StepType, which describes a step at design time.
     */
-    get StepType(): 'Action' | 'Agent' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'While' | null {
+    get StepType(): 'Action' | 'Agent' | 'Decision' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'While' | null {
         return this.Get('StepType');
     }
-    set StepType(value: 'Action' | 'Agent' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'While' | null) {
+    set StepType(value: 'Action' | 'Agent' | 'Decision' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'While' | null) {
         this.Set('StepType', value);
     }
 

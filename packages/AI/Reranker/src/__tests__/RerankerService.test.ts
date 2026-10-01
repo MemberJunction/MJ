@@ -48,6 +48,14 @@ vi.mock('@memberjunction/core-entities', () => ({
     MJAIAgentRunStepEntity: class {}
 }));
 
+// RerankNotes reranks through AIRerankerRunner; AIRerankerRunner.test.ts covers the runner itself.
+const mockRunRerank = vi.fn();
+vi.mock('../AIRerankerRunner', () => ({
+    AIRerankerRunner: class {
+        RunRerank = (...args: unknown[]) => mockRunRerank(...args);
+    }
+}));
+
 import { RerankerService, RerankObservabilityOptions } from '../RerankerService';
 import { RerankerConfiguration } from '../config.types';
 import { GetGlobalObjectStore } from '@memberjunction/global';
@@ -211,41 +219,37 @@ describe('RerankerService', () => {
             expect(result.notes).toHaveLength(0);
         });
 
-        it('should throw when reranker is not available', async () => {
+        it('should throw when reranker is not available and fallbackOnError is false', async () => {
+            mockRunRerank.mockResolvedValue({ Success: false, ErrorMessage: 'Reranker not available for model ID: nonexistent', ExecutionTimeMS: 1 });
             const note = { note: { ID: 'n1', Note: 'text', Type: 'G', Get: vi.fn() }, similarity: 0.8 };
             await expect(
-                RerankerService.Instance.rerankNotes([note as never], 'query', makeConfig({ rerankerModelId: 'nonexistent' }), mockUser)
+                RerankerService.Instance.rerankNotes([note as never], 'query', makeConfig({ rerankerModelId: 'nonexistent', fallbackOnError: false }), mockUser)
             ).rejects.toThrow('Reranker not available');
         });
 
-        it('should throw when Rerank fails', async () => {
-            mockModels.push({ ID: 'model-1', Name: 'T', IsActive: true, APIName: 'x' });
-            mockModelVendors.push({ ModelID: 'model-1', Status: 'Active', Priority: 1, DriverClass: 'TD', APIName: 'x' });
-            process.env['AI_VENDOR_API_KEY__TD'] = 'k';
-            mockCreateInstance.mockReturnValue({ Rerank: vi.fn().mockResolvedValue({ success: false, errorMessage: 'Err', results: [] }) });
+        it('should throw when Rerank fails and fallbackOnError is false', async () => {
+            mockRunRerank.mockResolvedValue({ Success: false, ErrorMessage: 'Err', Response: { success: false, errorMessage: 'Err', results: [], durationMs: 1 }, ExecutionTimeMS: 1 });
 
             const note = { note: { ID: 'n1', Note: 'text', Type: 'G', Get: vi.fn() }, similarity: 0.8 };
             await expect(
-                RerankerService.Instance.rerankNotes([note as never], 'query', makeConfig(), mockUser)
+                RerankerService.Instance.rerankNotes([note as never], 'query', makeConfig({ fallbackOnError: false }), mockUser)
             ).rejects.toThrow('Err');
-            delete process.env['AI_VENDOR_API_KEY__TD'];
         });
 
         it('should filter results below threshold', async () => {
-            mockModels.push({ ID: 'model-1', Name: 'T', IsActive: true, APIName: 'x' });
-            mockModelVendors.push({ ModelID: 'model-1', Status: 'Active', Priority: 1, DriverClass: 'TD', APIName: 'x' });
-            process.env['AI_VENDOR_API_KEY__TD'] = 'k';
-
             const ne1 = { ID: 'n1', Note: 'Good', Type: 'G', Get: vi.fn() };
             const ne2 = { ID: 'n2', Note: 'Bad', Type: 'G', Get: vi.fn() };
-            mockCreateInstance.mockReturnValue({
-                Rerank: vi.fn().mockResolvedValue({
+            mockRunRerank.mockResolvedValue({
+                Success: true,
+                ExecutionTimeMS: 1,
+                Response: {
                     success: true,
+                    durationMs: 1,
                     results: [
                         { id: 'n1', relevanceScore: 0.9, document: { id: 'n1', text: 'Good', metadata: { noteEntity: ne1 } }, rank: 0 },
                         { id: 'n2', relevanceScore: 0.3, document: { id: 'n2', text: 'Bad', metadata: { noteEntity: ne2 } }, rank: 1 }
                     ]
-                })
+                }
             });
 
             const result = await RerankerService.Instance.rerankNotes(
@@ -256,20 +260,18 @@ describe('RerankerService', () => {
             expect(result.success).toBe(true);
             expect(result.notes).toHaveLength(1);
             expect(result.notes[0].similarity).toBe(0.9);
-            delete process.env['AI_VENDOR_API_KEY__TD'];
         });
 
         it('should include runStepID with observability options', async () => {
-            mockModels.push({ ID: 'model-1', Name: 'T', IsActive: true, APIName: 'x' });
-            mockModelVendors.push({ ModelID: 'model-1', Status: 'Active', Priority: 1, DriverClass: 'TD', APIName: 'x' });
-            process.env['AI_VENDOR_API_KEY__TD'] = 'k';
-
             const ne = { ID: 'n1', Note: 'note', Type: 'G', Get: vi.fn() };
-            mockCreateInstance.mockReturnValue({
-                Rerank: vi.fn().mockResolvedValue({
+            mockRunRerank.mockResolvedValue({
+                Success: true,
+                ExecutionTimeMS: 1,
+                Response: {
                     success: true,
+                    durationMs: 1,
                     results: [{ id: 'n1', relevanceScore: 0.8, document: { id: 'n1', text: 'note', metadata: { noteEntity: ne } }, rank: 0 }]
-                })
+                }
             });
 
             const opts: RerankObservabilityOptions = { agentRunID: 'run-1', parentStepID: 'parent-1', stepNumber: 3 };
@@ -280,7 +282,6 @@ describe('RerankerService', () => {
 
             expect(result.success).toBe(true);
             expect(result.runStepID).toBe('step-123');
-            delete process.env['AI_VENDOR_API_KEY__TD'];
         });
     });
 

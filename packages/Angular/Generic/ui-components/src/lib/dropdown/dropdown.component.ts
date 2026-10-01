@@ -403,6 +403,14 @@ export class MJDropdownComponent extends MJNamedControlBase implements ControlVa
         else if (!this.IsOpen) this.Open();
         break;
       case 'Escape': event.preventDefault(); this.Close(); break;
+      case 'Tab':
+        // The panel lives in the overlay, outside a parent dialog. Hand focus back to this
+        // field and do not prevent the key, so the browser moves on from the field.
+        if (this.IsOpen) {
+          this.triggerEl?.nativeElement.focus();
+          this.Close();
+        }
+        break;
       case 'Home': if (this.IsOpen) { event.preventDefault(); this.HighlightedIndex = 0; } break;
       case 'End': if (this.IsOpen) { event.preventDefault(); this.HighlightedIndex = items.length - 1; } break;
     }
