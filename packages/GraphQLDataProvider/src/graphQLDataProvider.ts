@@ -421,7 +421,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * their own GraphQL calls. After it resolves, {@link ExecuteGQL} works. No metadata is fetched,
      * so entity metadata (`Entities`, `EntityByName`, `RunView`, `GetEntityObject`) is NOT available
      * until the full boot runs (`SetupGraphQLClient`, or {@link Config}) on this same instance.
-     * Always uses the shared singleton connection. A later Connect/Config with a different URL,
+     * Uses the shared singleton connection (a secondary instance keeps its own). A later Connect/Config with a different URL,
      * token or API key rebuilds that connection's client (keeping the session id).
      */
     public async Connect(configData: GraphQLProviderConfigData): Promise<void> {
@@ -430,8 +430,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
     /**
      * The connection half of {@link Config}: stores the config, resolves the session id and creates the
-     * GraphQL client (this instance's own client when separateConnection is true, otherwise the shared
-     * singleton client, which is reused unless the credentials changed). Loads no metadata.
+     * GraphQL client (this instance's own client when separateConnection is true or this is not the
+     * global singleton, otherwise the shared singleton client, which is reused unless the credentials
+     * changed). Loads no metadata.
      */
     private async connectClient(configData: GraphQLProviderConfigData, separateConnection?: boolean, forceRefreshSessionId?: boolean): Promise<void> {
         // Enhanced logging to diagnose token issues
@@ -447,7 +448,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         // This ensures BuildDatasetFilterFromConfig() can access ConfigData.IncludeSchemas
         this._configData = configData;
 
-        if (separateConnection) {
+        // An instance that is not the global singleton (built while the global-store slot was
+        // parked) owns its own connection, even when a re-entry path omits the flag:
+        // ProviderBase.Refresh() re-runs Config(this._ConfigData) without separateConnection.
+        // Taking the shared branch from such an instance would hand the global provider this
+        // instance's credentials, and every global call would then run as its user (#4887).
+        if (separateConnection || GraphQLDataProvider.Instance !== this) {
             // Get UUID after setting the configData, so that it can be used to get any stored session ID
             this._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
 

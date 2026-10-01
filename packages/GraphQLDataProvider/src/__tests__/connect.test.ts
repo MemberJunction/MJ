@@ -1,8 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { AllMetadata, EntityInfo } from '@memberjunction/core';
+import { AllMetadata, EntityInfo, ProviderBase } from '@memberjunction/core';
+import { GetGlobalObjectStore } from '@memberjunction/global';
 import { GraphQLDataProvider, GraphQLProviderConfigData } from '../graphQLDataProvider';
 import { ConnectGraphQLClient } from '../config';
 import { ResetGraphQLProviderSingleton } from './support/wireTestHarness';
+
+/** GraphQLDataProvider's global-store key; a second instance exists only while this slot is parked. */
+const GRAPHQL_PROVIDER_SINGLETON_KEY = '___SINGLETON__GraphQLDataProvider';
 
 // Exercises the REAL GraphQLDataProvider (no module mocks): Connect must authenticate and
 // register the provider without touching metadata, and must not break a later full boot.
@@ -107,5 +111,54 @@ describe('ConnectGraphQLClient (real provider)', () => {
         await provider.Connect(makeConfig(undefined, 'user-token'));
 
         expect(provider.sessionId).toBe(sessionId);
+    });
+});
+
+describe('a separate-connection provider refreshed later (#4887)', () => {
+    let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+        ResetGraphQLProviderSingleton();
+        fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected fetch'));
+        // The metadata half of Config is not under test: record the config the way ProviderBase
+        // does (Refresh re-reads it) and load nothing.
+        vi.spyOn(ProviderBase.prototype, 'Config').mockImplementation(async function (this: ProviderBase, data) {
+            this['_ConfigData'] = data;
+            return true;
+        });
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+        ResetGraphQLProviderSingleton();
+    });
+
+    /** A second instance, built the way callers that need one do: with the global slot parked. */
+    function newSecondaryProvider(): GraphQLDataProvider {
+        const store = GetGlobalObjectStore();
+        const singleton = store[GRAPHQL_PROVIDER_SINGLETON_KEY];
+        delete store[GRAPHQL_PROVIDER_SINGLETON_KEY];
+        try {
+            return new GraphQLDataProvider();
+        } finally {
+            store[GRAPHQL_PROVIDER_SINGLETON_KEY] = singleton;
+        }
+    }
+
+    it("does not hand the global provider the secondary's credentials when the secondary refreshes", async () => {
+        const globalConfig = makeConfig(undefined, 'global-token');
+        const global = await ConnectGraphQLClient(globalConfig);
+        const secondary = newSecondaryProvider();
+        await secondary.Config(makeConfig(undefined, 'secondary-token'), undefined, true);
+
+        // ProviderBase.Refresh re-runs Config(this._ConfigData) WITHOUT separateConnection.
+        await secondary.Refresh();
+        fetchSpy.mockResolvedValueOnce(okResponse()).mockResolvedValueOnce(okResponse());
+        await global.ExecuteGQL('query { Ok }', null);
+        await secondary.ExecuteGQL('query { Ok }', null);
+
+        expect(authorizationOfCall(fetchSpy, 0)).toBe('Bearer global-token');
+        expect(authorizationOfCall(fetchSpy, 1)).toBe('Bearer secondary-token');
+        expect(GraphQLDataProvider.Instance.ConfigData).toBe(globalConfig);
     });
 });
