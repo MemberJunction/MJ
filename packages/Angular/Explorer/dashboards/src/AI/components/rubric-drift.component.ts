@@ -66,6 +66,8 @@ export class RubricDriftResourceComponent extends BaseResourceComponent implemen
         const evaluations = await this.readByIds(view, user, 'MJ: Rubric Evaluations', evaluationIds);
         const runIds = uniqueIds(evaluations.map(row => row.SubjectRecordID));
         const runs = await this.readByIds(view, user, 'MJ: AI Agent Runs', runIds);
+        const versionIds = uniqueIds(evaluations.map(row => row.RubricVersionID));
+        const versions = await this.readByIds(view, user, 'MJ: Rubric Versions', versionIds);
         const now = new Date();
         const currentStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
         const previousStart = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000).toISOString();
@@ -78,10 +80,11 @@ export class RubricDriftResourceComponent extends BaseResourceComponent implemen
             evaluations: evaluations.map(row => ({
                 id: String(row.ID ?? ''),
                 subjectRecordId: String(row.SubjectRecordID ?? ''),
-                rubricId: String(row.RubricID ?? ''),
+                rubricVersionId: String(row.RubricVersionID ?? ''),
                 at: String(row.SubmittedAt ?? row.__mj_CreatedAt ?? ''),
             })),
             runs: runs.map(row => ({ id: String(row.ID ?? ''), agentId: String(row.AgentID ?? '') })),
+            versions: versions.map(row => ({ id: String(row.ID ?? ''), rubricId: String(row.RubricID ?? '') })),
         });
         return {
             current: periodMeans(rows, currentStart, now.toISOString()),

@@ -4,6 +4,12 @@ import type { ProductionSamplingCatalog } from './sampling.js';
 /**
  * Reads Active agent-rubric links, completed agent runs, and evaluations whose
  * subject is an agent run. Purpose filtering stays in productionSamplingLinks.
+ *
+ * `vwRubricEvaluations` exposes `SubjectEntityID` (the stored uuid) and
+ * `SubjectEntity` (`Entity.Name` from `vwRubricEvaluationsGenerated`). The
+ * filter uses `SubjectEntityID`. The evaluation stores `RubricVersionID`;
+ * `RubricID` on that view is the version's rubric, so the catalog reads the
+ * version row instead.
  */
 export function providerProductionCatalog(provider: unknown, user: unknown): ProductionSamplingCatalog {
     const read = async (entityName: string, filter: string): Promise<Record<string, unknown>[]> => {
@@ -37,9 +43,19 @@ export function providerProductionCatalog(provider: unknown, user: unknown): Pro
             }));
         },
         async evaluated() {
-            const rows = await read('MJ: Rubric Evaluations', "SubjectEntity = 'MJ: AI Agent Runs'");
+            const entities = await read('MJ: Entities', "Name = 'MJ: AI Agent Runs'");
+            const entityId = String(entities[0]?.ID ?? '');
+            if (!/^[0-9A-Fa-f-]{36}$/.test(entityId)) throw new Error('MJ: AI Agent Runs has no entity id.');
+            const rows = await read('MJ: Rubric Evaluations', `SubjectEntityID = '${entityId}'`);
             return rows.map(row => ({
                 runId: String(row.SubjectRecordID ?? ''),
+                rubricVersionId: String(row.RubricVersionID ?? ''),
+            }));
+        },
+        async versions() {
+            const rows = await read('MJ: Rubric Versions', 'RubricID IS NOT NULL');
+            return rows.map(row => ({
+                id: String(row.ID ?? ''),
                 rubricId: String(row.RubricID ?? ''),
             }));
         },

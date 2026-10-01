@@ -88,7 +88,25 @@ export interface AgentRunRow {
 export interface ProductionSamplingCatalog {
     links(): Promise<AgentRubricLinkRow[]>;
     runs(): Promise<AgentRunRow[]>;
-    evaluated(): Promise<{ runId: string; rubricId: string }[]>;
+    /** Evaluations point at a version. They do not store a rubric id. */
+    evaluated(): Promise<{ runId: string; rubricVersionId: string }[]>;
+    versions(): Promise<{ id: string; rubricId: string }[]>;
+}
+
+/** Rubric id stored on the version. An unknown version resolves to an empty string. */
+export function rubricIdFromVersion(versionId: string, versions: { id: string; rubricId: string }[]): string {
+    return versions.find(row => row.id === versionId)?.rubricId ?? '';
+}
+
+/** Pairs each evaluation's run with the rubric that owns its version. */
+export function evaluatedRubricRuns(
+    evaluations: { runId: string; rubricVersionId: string }[],
+    versions: { id: string; rubricId: string }[],
+): { runId: string; rubricId: string }[] {
+    return evaluations.flatMap(row => {
+        const rubricId = rubricIdFromVersion(row.rubricVersionId, versions);
+        return rubricId ? [{ runId: row.runId, rubricId }] : [];
+    });
 }
 
 /** Active links whose purpose is ProductionSampling. Evaluation and SelfCheck are not sampled. */
@@ -105,7 +123,8 @@ export function productionSamplingLoader(catalog: ProductionSamplingCatalog): Sa
             const runs = (await catalog.runs())
                 .filter(run => run.status === 'Completed')
                 .map(run => ({ id: run.id, agentId: run.agentId }));
-            return { links: productionSamplingLinks(await catalog.links()), runs, evaluated: await catalog.evaluated() };
+            const evaluated = evaluatedRubricRuns(await catalog.evaluated(), await catalog.versions());
+            return { links: productionSamplingLinks(await catalog.links()), runs, evaluated };
         },
     };
 }
@@ -124,7 +143,8 @@ export interface DriftScoreRow {
 export interface DriftEvaluationRow {
     id: string;
     subjectRecordId: string;
-    rubricId: string;
+    /** The evaluation stores a version id. The rubric id comes from that version. */
+    rubricVersionId: string;
     at: string;
 }
 
@@ -137,7 +157,12 @@ export interface DriftRunRow {
  * Joins a score to its evaluation and that evaluation's agent run.
  * The key is agent, rubric, and criterion. A score with no matching run is left out.
  */
-export function driftSeries(input: { scores: DriftScoreRow[]; evaluations: DriftEvaluationRow[]; runs: DriftRunRow[] }): { key: string; score: number; at: string }[] {
+export function driftSeries(input: {
+    scores: DriftScoreRow[];
+    evaluations: DriftEvaluationRow[];
+    runs: DriftRunRow[];
+    versions: { id: string; rubricId: string }[];
+}): { key: string; score: number; at: string }[] {
     const evaluations = new Map(input.evaluations.map(row => [row.id, row]));
     const agents = new Map(input.runs.map(row => [row.id, row.agentId]));
     const rows: { key: string; score: number; at: string }[] = [];
@@ -145,8 +170,9 @@ export function driftSeries(input: { scores: DriftScoreRow[]; evaluations: Drift
         const evaluation = evaluations.get(score.evaluationId);
         if (!evaluation || !Number.isFinite(score.normalizedScore)) continue;
         const agentId = agents.get(evaluation.subjectRecordId);
-        if (!agentId || !evaluation.rubricId || !score.criterionId) continue;
-        rows.push({ key: `${agentId}|${evaluation.rubricId}|${score.criterionId}`, score: score.normalizedScore, at: evaluation.at });
+        const rubricId = rubricIdFromVersion(evaluation.rubricVersionId, input.versions);
+        if (!agentId || !rubricId || !score.criterionId) continue;
+        rows.push({ key: `${agentId}|${rubricId}|${score.criterionId}`, score: score.normalizedScore, at: evaluation.at });
     }
     return rows;
 }

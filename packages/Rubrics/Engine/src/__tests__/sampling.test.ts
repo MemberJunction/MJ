@@ -51,11 +51,34 @@ describe('production sampling', () => {
                 return [{ id: 'open', agentId: 'agent', status: 'Completed' }, { id: 'live', agentId: 'agent', status: 'Running' }];
             },
             async evaluated() { return []; },
+            async versions() { return []; },
         }, {
             async evaluateRecord(input) { evaluated.push(input); },
         });
         expect((await job.run()).map(row => row.rubricId)).toEqual(['sample-rubric']);
         expect(evaluated).toEqual([{ rubricId: 'sample-rubric', subjectRecordId: 'open', subjectEntityName: AGENT_RUN_SUBJECT }]);
+    });
+
+    it('skips a run whose evaluation points at the rubric only through RubricVersionID', async () => {
+        const evaluated: unknown[] = [];
+        const job = productionSamplingJob({
+            async links() {
+                return [{ agentId: 'agent', rubricId: 'rubric', sampleRate: 1, status: 'Active', purpose: 'ProductionSampling' }];
+            },
+            async runs() {
+                return [{ id: 'open', agentId: 'agent', status: 'Completed' }];
+            },
+            async evaluated() {
+                return [{ runId: 'open', rubricVersionId: 'version-1' }];
+            },
+            async versions() {
+                return [{ id: 'version-1', rubricId: 'rubric' }];
+            },
+        }, {
+            async evaluateRecord(input) { evaluated.push(input); },
+        });
+        expect(await job.run()).toEqual([]);
+        expect(evaluated).toEqual([]);
     });
 
     it('keeps two agents that scored the same criterion as two series', () => {
@@ -66,13 +89,14 @@ describe('production sampling', () => {
                 { evaluationId: 'e2', criterionId: 'facts', normalizedScore: 0.8 },
             ],
             evaluations: [
-                { id: 'e1', subjectRecordId: 'run-a', rubricId: 'rubric', at },
-                { id: 'e2', subjectRecordId: 'run-b', rubricId: 'rubric', at },
+                { id: 'e1', subjectRecordId: 'run-a', rubricVersionId: 'version-1', at },
+                { id: 'e2', subjectRecordId: 'run-b', rubricVersionId: 'version-1', at },
             ],
             runs: [
                 { id: 'run-a', agentId: 'agent-a' },
                 { id: 'run-b', agentId: 'agent-b' },
             ],
+            versions: [{ id: 'version-1', rubricId: 'rubric' }],
         });
         const means = periodMeans(rows, '2026-09-01T00:00:00.000Z', '2026-10-02T00:00:00.000Z');
         expect(means.map(row => row.key).sort()).toEqual(['agent-a|rubric|facts', 'agent-b|rubric|facts']);
