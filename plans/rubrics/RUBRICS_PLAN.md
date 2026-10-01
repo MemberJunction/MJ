@@ -811,20 +811,20 @@ by their evaluator and by roles the consumer grants.
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (say why in §16).
 
 **R — core**
-- [ ] **R0** Run the §9.2 procedure: CodeGen captures appended to 2204 and 2206, generated
+- [x] **R0** Run the §9.2 procedure: CodeGen captures appended to 2204 and 2206, generated
       entities committed, from-zero build green. Add `packages/Rubrics/*` to workspace globs.
       Layered flags stay in `metadata/entities/.layered-base-views.json` — no Entity UPDATE migration.
-- [ ] **R1** Metadata: JSONType interfaces + bridge records (§4.1); layered flags + `CascadeDeletes`
+- [x] **R1** Metadata: JSONType interfaces + bridge records (§4.1); layered flags + `CascadeDeletes`
       in `metadata/entities`; `IsHierarchy` config on `RubricCriterion.ParentID` and
       `RubricCategory.ParentID` (see `guides/RECURSIVE_FOREIGN_KEYS_AND_HIERARCHIES_GUIDE.md`);
       shipped scales (§11.6).
-- [~] **R2** `@memberjunction/rubrics-base`: `RubricScoring` (§6) and `RubricVersionDiff` (§5.2) as
+- [x] **R2** `@memberjunction/rubrics-base`: `RubricScoring` (§6) and `RubricVersionDiff` (§5.2) as
       pure functions with exhaustive unit tests — every N/A policy, rollup, gate edge case, the
       all-zero-weight fallback, completeness, outcome precedence, rounding; property tests for the
       ScoringHash/major invariant. Then `RubricEngineBase`.
-- [~] **R3** Entity server subclasses: version clone/validate/publish (tree rules, bump, hashes);
+- [x] **R3** Entity server subclasses: version clone/validate/publish (tree rules, bump, hashes);
       scale freeze; evaluation creation rules and submit (§7); score validation. Unit tests with mocks.
-- [~] **R4** `@memberjunction/rubrics`: `RubricEngine` evaluates, records a failure,
+- [x] **R4** `@memberjunction/rubrics`: `RubricEngine` evaluates, records a failure,
       and starts a human draft. Deterministic evaluator, content providers, and
       consensus/agreement/diagnostics are in, with hand-computed kappa and alpha.
       The prompt evaluator is R5.
@@ -870,7 +870,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 - [x] **U3** `guides/RUBRICS_GUIDE.md` has the six worked examples. The ng-rubrics README lists the presentational widgets.
       The TestingFramework and Engine README updates are not in this pass.
 - [x] **U4** Shipped scales and the six guide-example rubrics under `metadata/`. Versions are Draft. Percentage is numeric 0–100 with `Step` 1 and no level rows.
-- [ ] **S1** Ship the seven agent rubrics in §18 as Published 1.0.0, bind them, and add the
+- [x] **S1** Ship the seven agent rubrics in §18 as Published 1.0.0, bind them, and add the
       Core agent rubrics suite. Marketing is not in this set. An existing `llm-judge` oracle
       stays; it is not replaced by the agent's Evaluation rubric.
 
