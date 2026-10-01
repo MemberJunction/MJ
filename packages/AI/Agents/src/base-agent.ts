@@ -20,10 +20,10 @@ import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptE
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
-import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion } from '@memberjunction/ai';
+import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
-import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString, IsPlainObject } from '@memberjunction/global';
+import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString, IsPlainObject, CleanAndParseJSON } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
 import { CrushJSON, DescribeCrush, PartitionStablePrefix, type JsonValue } from '@memberjunction/context-crush';
 // AST-aware code reduction (CodeCompressor-inspired) — opt-in per agent type
@@ -56,7 +56,7 @@ import { ResolveRecordingStorageAccountID, StoreRealtimeRecording } from './real
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
-import { AgentMemoryContextBuilder } from './agent-memory-context-builder';
+import { AgentMemoryContextBuilder, AgentMemoryObservability } from './agent-memory-context-builder';
 import { ConversationCompactionManager, CompactionOutcome, EffectiveContextBudget } from './ConversationCompactionManager';
 import { ConversationToolManager, ConversationToolCall, ConversationToolExecutionResult, ConversationToolSummaryHost, ConversationToolNames, MAX_CONVERSATION_TOOL_CALLS_PER_TURN } from './ConversationToolManager';
 import { FormatToolResultSection, FormatToolErrorSection, RenderToolResultData, ToolResultSectionParts, CarryForwardToolFamily, CarryForwardToolStepOutput, CarryForwardStepRecord } from './tool-result-format';
@@ -115,6 +115,7 @@ import {
     AgentDecisionResult,
     AgentDecisionAnswerSummary,
     AgentFinishIf,
+    SummarizeDecisionAnswers,
     SystemPlaceholderManager
 } from '@memberjunction/ai-core-plus';
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver, RunActionParams } from '@memberjunction/actions-base';
@@ -137,6 +138,8 @@ import { ScratchpadManager } from './ScratchpadManager';
 import { ArtifactToolManager, ArtifactToolCall, StoredToolResult } from './ArtifactToolManager';
 import { MemoryWriteManager, MemoryWriteRequest, MemoryWriteResult } from './MemoryWriteManager';
 import { AgentDecisionService, DecisionQuestionMapping } from './AgentDecisionService';
+import { PayloadFeedbackManager, PayloadFeedbackContext, PayloadFeedbackQuestion, PayloadFeedbackResponse } from './PayloadFeedbackManager';
+import { PayloadAnalysisResult } from './PayloadChangeAnalyzer';
 import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS, MAX_DECISION_REQUESTS_PER_TURN, ResolveFinishIfMode, type FinishIfMode } from './agent-types/loop-agent-prompt-params';
 import {
     ApplyCatalogNarrowing,
@@ -524,6 +527,27 @@ function formatSubAgentForFinishIf<P>(result: SubAgentStepResult<P>): string {
     }
     return capFinishIfState(lines.join('\n\n'));
 }
+
+/** The top-level `reasoning` and `message` of a prompt's JSON response, when it has them. */
+function responseReasoningAndMessage(result: unknown): { Reasoning?: string; Message?: string } {
+    const parsed: unknown = typeof result === 'string' ? CleanAndParseJSON<unknown>(result) : result;
+    if (typeof parsed !== 'object' || parsed === null) {
+        return {};
+    }
+    const reasoning = 'reasoning' in parsed ? parsed.reasoning : undefined;
+    const message = 'message' in parsed ? parsed.message : undefined;
+    return {
+        Reasoning: typeof reasoning === 'string' ? reasoning : undefined,
+        Message: typeof message === 'string' ? message : undefined
+    };
+}
+
+/**
+ * Turns one decision call's typed answers into what its reader gets. A loop turn's model reads
+ * `AgentDecisionService.SummarizeAnswers`; an agent type that routes on the answers reads
+ * `SummarizeDecisionAnswers`, which keeps each distribution.
+ */
+type DecisionAnswerSummarizer = (answers: Record<string, DecisionAnswer>) => Record<string, AgentDecisionAnswerSummary>;
 
 /** The outcome of one decision request: its answers, or why it has none. */
 type DecisionOutcome =
@@ -3744,6 +3768,26 @@ export class BaseAgent {
     }
 
     /**
+     * The observability context memory injection runs under for an agent run: the run's ID, the next
+     * step number, and a callback that adds each rerank step to the run's steps. A rerank step carries
+     * the rerank's prompt run, whose cost and token rollups include a prompt-backed reranker's own
+     * prompt runs, so the run's totals and its `MaxCostPerRun` / `MaxTokensPerRun` guardrails count
+     * them. Undefined when there is no run.
+     *
+     * @param run - The current agent run, or null before one exists
+     */
+    protected MemoryObservability(run: MJAIAgentRunEntityExtended | null): AgentMemoryObservability | undefined {
+        if (!run) {
+            return undefined;
+        }
+        return {
+            agentRunID: run.ID,
+            stepNumber: (run.Steps?.length || 0) + 1,
+            OnStepCreated: step => run.Steps.push(step),
+        };
+    }
+
+    /**
      * Inject notes and examples into agent context memory.
      * Called automatically before agent execution if injection is enabled on the agent.
      * Injects memory context directly into conversation messages array.
@@ -3775,9 +3819,7 @@ export class BaseAgent {
         // Delegate the orchestration to the shared, reusable builder so both BaseAgent and the
         // Realtime agent type inject memory identically. The observability context and verbose
         // status logging are derived from this instance and passed through.
-        const observability = this._agentRun
-            ? { agentRunID: this._agentRun.ID, stepNumber: (this._agentRun.Steps?.length || 0) + 1 }
-            : undefined;
+        const observability = this.MemoryObservability(this._agentRun);
 
         const result = await new AgentMemoryContextBuilder().InjectContextMemory(
             input,
@@ -8333,11 +8375,42 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Runs a `'Decision'` next step: an agent type's decision requests, answered with no LLM turn.
+     *
+     * Each request goes through the same path a loop turn's decisions take
+     * ({@link executeSingleDecisionRequestAsStep}), so it gets the same prompt default, state
+     * resolution and error handling, and is logged as a `Decision` run step. Where a loop turn's
+     * results go into the conversation, these come back to the agent type on the returned `'Retry'`
+     * (`decisionResults`), because it routes on them. So each answer keeps its whole distribution
+     * (`SummarizeDecisionAnswers`), which a path condition may read. A failed request is a result
+     * with `success: false`, never a failed run: what a failure means is the agent type's call.
+     *
+     * @since 6.2.0
+     */
+    protected async executeDecisionStep<P>(
+        params: ExecuteAgentParams,
+        decision: BaseAgentNextStep<P>
+    ): Promise<BaseAgentNextStep<P>> {
+        const payload = decision.newPayload ?? decision.previousPayload;
+        const promptParams = decision.decisionPromptName ? { decisionPromptName: decision.decisionPromptName } : undefined;
+        const results = await this.runWithConcurrencyLimit(decision.decisions ?? [], BaseAgent.DECISION_CONCURRENCY,
+            request => this.executeSingleDecisionRequestAsStep(request, payload, promptParams, params, SummarizeDecisionAnswers),
+            (error, request, index): AgentDecisionResult => ({
+                id: this.decisionRequestId(request, index),
+                success: false,
+                error: `The decision request failed: ${error instanceof Error ? error.message : String(error)}`,
+            }));
+        return { step: 'Retry', terminate: false, decisionResults: results, previousPayload: payload, newPayload: payload };
+    }
+
+    /**
      * Answers one decision request, either once against its `state` or once per item of its
      * `forEachItemIn` array, and records it as a Decision step. The request is unchecked model
      * output, so any error finishes the step as failed rather than escaping: this never throws
      * once the step exists.
      *
+     * @param summarize how the typed answers are summarised for whoever reads them next; defaults
+     *                  to the loop turn's model-facing summary
      * @since 2.132.0
      */
     protected async executeSingleDecisionRequestAsStep(
@@ -8345,6 +8418,7 @@ The context is now within limits. Please retry your request with the recovered c
         finalPayload: unknown,
         agentTypePromptParams: Record<string, unknown> | undefined,
         params: ExecuteAgentParams,
+        summarize: DecisionAnswerSummarizer = AgentDecisionService.SummarizeAnswers,
     ): Promise<AgentDecisionResult> {
         const step = await this.createStepEntity({
             stepType: 'Decision',
@@ -8367,8 +8441,8 @@ The context is now within limits. Please retry your request with the recovered c
             }
             const ask = this.decisionAsker(mapping.Questions, agentTypePromptParams, params);
             const outcome = request.forEachItemIn
-                ? await this.askForEachItem(request, finalPayload, agentTypePromptParams, params, step, ask)
-                : await this.askOnce(request, finalPayload, step, ask);
+                ? await this.askForEachItem(request, finalPayload, agentTypePromptParams, params, step, ask, summarize)
+                : await this.askOnce(request, finalPayload, step, ask, summarize);
             return await this.finishDecisionStep(step, request, outcome, mapping.Invalid);
         } catch (error) {
             const message = `The decision request failed: ${error instanceof Error ? error.message : String(error)}`;
@@ -8400,7 +8474,8 @@ The context is now within limits. Please retry your request with the recovered c
         request: AgentDecisionRequest,
         finalPayload: unknown,
         step: MJAIAgentRunStepEntityExtended,
-        ask: (state: string) => Promise<AIDecisionRunResult>
+        ask: (state: string) => Promise<AIDecisionRunResult>,
+        summarize: DecisionAnswerSummarizer
     ): Promise<DecisionOutcome> {
         const state = this.resolveDecisionState(request.state, finalPayload);
         if ('Error' in state) {
@@ -8411,7 +8486,7 @@ The context is now within limits. Please retry your request with the recovered c
         if (!result.success) {
             return { Error: result.errorMessage || 'Decision evaluation failed' };
         }
-        return { Answers: AgentDecisionService.SummarizeAnswers(result.Answers), Results: [result] };
+        return { Answers: summarize(result.Answers), Results: [result] };
     }
 
     /**
@@ -8425,7 +8500,8 @@ The context is now within limits. Please retry your request with the recovered c
         agentTypePromptParams: Record<string, unknown> | undefined,
         params: ExecuteAgentParams,
         step: MJAIAgentRunStepEntityExtended,
-        ask: (state: string) => Promise<AIDecisionRunResult>
+        ask: (state: string) => Promise<AIDecisionRunResult>,
+        summarize: DecisionAnswerSummarizer
     ): Promise<DecisionOutcome> {
         const target = this.resolvePayloadPath(request.forEachItemIn ?? '', finalPayload);
         if (!Array.isArray(target)) {
@@ -8444,7 +8520,7 @@ The context is now within limits. Please retry your request with the recovered c
         if (failedIndex >= 0) {
             return { Error: `Item ${failedIndex}: ${results[failedIndex].errorMessage || 'decision evaluation failed'}` };
         }
-        return { Answers: results.map(r => AgentDecisionService.SummarizeAnswers(r.Answers)), Results: results, SkippedCount: skippedCount };
+        return { Answers: results.map(r => summarize(r.Answers)), Results: results, SkippedCount: skippedCount };
     }
 
     /** Asks about one item of a `forEachItemIn` request, recorded as a child step of the request's step. */
@@ -8513,12 +8589,15 @@ The context is now within limits. Please retry your request with the recovered c
         });
     }
 
-    /** A literal state, or a value read from the payload by a `payload.` path. */
+    /**
+     * A literal state, or a value read from the payload: the whole payload for `payload`, one value
+     * for a `payload.` path.
+     */
     private resolveDecisionState(state: string | undefined, finalPayload: unknown): { State: string } | { Error: string } {
         if (typeof state !== 'string') {
             return { Error: 'Either state or forEachItemIn is required' };
         }
-        if (!state.startsWith('payload.')) {
+        if (state.trim() !== 'payload' && !state.startsWith('payload.')) {
             return { State: state };
         }
         const value = this.resolvePayloadPath(state, finalPayload);
@@ -9664,6 +9743,134 @@ The context is now within limits. Please retry your request with the recovered c
         } catch (error) {
             LogError(`Could not save the finishIf step: ${error instanceof Error ? error.message : String(error)}`);
         }
+    }
+
+    /**
+     * Whether the merged agent-type prompt params turn the payload change check on. It is off unless
+     * `payloadFeedbackCheck` is `true`.
+     */
+    private isPayloadFeedbackCheckOn(agentTypePromptParams: Record<string, unknown> | undefined): boolean {
+        return agentTypePromptParams?.payloadFeedbackCheck === true;
+    }
+
+    /**
+     * Whether the step ends the run, so no turn would read the payload change check's message: it
+     * terminates, or it is a `Success` or `Chat` step, which hand the run back to the caller.
+     */
+    private stepEndsRun(step: BaseAgentNextStep): boolean {
+        return step.terminate === true || step.step === 'Success' || step.step === 'Chat';
+    }
+
+    /**
+     * The payload change check. Asks whether each change the analyzer flagged was intended, as one
+     * Likelihood per change in one decision call, and records it as a `Payload change check`
+     * Decision step. The changes judged unintended are listed in a message for the agent's next
+     * turn, which asks it to confirm or restore them.
+     *
+     * It never reverts or blocks a change: the agent decides. When the decision cannot answer,
+     * every change is accepted, as it is with the check off. Never throws.
+     */
+    private async checkPayloadChanges(
+        analysis: PayloadAnalysisResult | undefined,
+        nextStep: BaseAgentNextStep,
+        promptResult: AIPromptRunResult,
+        agentTypePromptParams: Record<string, unknown> | undefined,
+        params: ExecuteAgentParams
+    ): Promise<void> {
+        const promptName = agentTypePromptParams?.decisionPromptName;
+        const manager = new PayloadFeedbackManager(
+            { decisionPromptName: typeof promptName === 'string' ? promptName : undefined },
+            this._agentDecisionService
+        );
+        const questions = manager.GenerateQuestions(analysis?.warnings ?? []);
+        if (questions.length === 0) {
+            return;
+        }
+        let step: MJAIAgentRunStepEntityExtended | undefined;
+        try {
+            step = await this.createStepEntity({
+                stepType: 'Decision',
+                stepName: 'Payload change check',
+                contextUser: params.contextUser,
+                inputData: {
+                    questions: questions.map(q => ({ id: q.id, path: q.warning.path, type: q.warning.type, change: manager.DescribeChange(q.warning) }))
+                }
+            });
+            const responses = await manager.QueryAgent(questions, this.payloadFeedbackContext(nextStep, promptResult, params), params.contextUser);
+            // Like every decision call, it counts toward the run's cost and tokens through its step
+            if (manager.LastDecisionResult) {
+                this.attachDecisionPromptRun(step, manager.LastDecisionResult);
+            }
+            await this.finalizePayloadCheckStep(step, questions, responses, manager.IntendedThreshold);
+            const message = manager.BuildUnintendedChangesMessage(questions, responses);
+            if (message) {
+                this.injectPayloadCheckMessage(params, message);
+            }
+        } catch (error) {
+            const reason = error instanceof Error ? error.message : String(error);
+            LogError(`The payload change check failed, so every change stands: ${reason}`);
+            if (step) {
+                await this.finalizeStepEntity(step, false, reason);
+            }
+        }
+    }
+
+    /**
+     * What the payload change check's decision reads: the agent's own reasoning for the step (from its
+     * response, else from the step), its message, and the reasoning it gave with the change. The check
+     * never runs on a `Chat` or `Success` step, so the message comes from the response alone.
+     */
+    private payloadFeedbackContext(nextStep: BaseAgentNextStep, promptResult: AIPromptRunResult, params: ExecuteAgentParams): PayloadFeedbackContext {
+        const response = responseReasoningAndMessage(promptResult?.result);
+        return {
+            Reasoning: response.Reasoning ?? nextStep.reasoning,
+            ChangeReasoning: nextStep.payloadChangeRequest?.reasoning,
+            Message: response.Message,
+            AgentID: params.agent?.ID ?? this._agentRun?.AgentID,
+            CancellationToken: params.cancellationToken
+        };
+    }
+
+    /**
+     * Finalizes the `Payload change check` step with each change's probability and outcome. The step
+     * fails when no decision answered, and its error says why. A failure to save it never affects the run.
+     */
+    private async finalizePayloadCheckStep(
+        step: MJAIAgentRunStepEntityExtended,
+        questions: PayloadFeedbackQuestion[],
+        responses: PayloadFeedbackResponse[],
+        threshold: number
+    ): Promise<void> {
+        const answered = responses.filter(r => typeof r.probability === 'number');
+        const unintended = responses.filter(r => !r.intended).map(r => questions.find(q => q.id === r.questionId)?.warning.path);
+        try {
+            await this.finalizeStepEntity(step, answered.length > 0, answered.length > 0 ? undefined : responses[0]?.explanation, {
+                threshold,
+                probabilities: Object.fromEntries(answered.map(r => [r.questionId, r.probability])),
+                responses,
+                unintendedPaths: unintended
+            });
+        } catch (error) {
+            LogError(`Could not save the payload change check step: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /** Adds the payload change check's message to the conversation, for the agent's next turn. */
+    private injectPayloadCheckMessage(params: ExecuteAgentParams, content: string): void {
+        const message: AgentChatMessage = {
+            role: 'user',
+            content,
+            metadata: {
+                turnAdded: this._promptTurnCount,
+                messageType: 'tool-result',
+                expirationTurns: 3,
+                expirationMode: 'Compact',
+                compactMode: 'First N Chars',
+                compactLength: 500,
+                compactPromptId: '',
+            },
+        };
+        params.conversationMessages.push(message);
     }
 
     /**
@@ -11640,6 +11847,11 @@ The context is now within limits. Please retry your request with the recovered c
             // step union — LoopAgentType.DetermineNextStep() emits it when the LLM chooses client tools.
             case 'ClientTools' as typeof previousDecision.step:
                 return await this.executeClientToolsStep(params, config, previousDecision, stepCount);
+            // Type assertion required because 'Decision' is not part of the BaseAgentNextStep step
+            // union — FlowAgentType emits it for a Decision step, which is one decision call and no
+            // LLM turn. executeDecisionStep returns a 'Retry' carrying the answers.
+            case 'Decision' as typeof previousDecision.step:
+                return await this.executeDecisionStep(params, previousDecision);
             case 'Chat':
                 return await this.executeChatStep(params, previousDecision);
             case 'Success':
@@ -12046,6 +12258,18 @@ The context is now within limits. Please retry your request with the recovered c
 
                 // Set the final payload - the changeResult already respects the allowed paths
                 finalPayload = changeResult.result;
+
+                // Opt-in payload change check: asks whether the flagged changes were intended. It never
+                // reverts or blocks a change; the agent reads the result on its next turn, so a step
+                // that ends the run skips it (no call to pay for, no message left in the conversation).
+                const payloadCheckParams = promptParams.data?.__agentTypePromptParams as Record<string, unknown> | undefined;
+                if (changeResult.requiresFeedback && this.isPayloadFeedbackCheckOn(payloadCheckParams)) {
+                    if (this.stepEndsRun(initialNextStep)) {
+                        this.logStatus(`[Payload check] Skipped: the ${initialNextStep.step} step ends the run, so no turn would read the result`, true, params);
+                    } else {
+                        await this.checkPayloadChanges(changeResult.analysis, initialNextStep, promptResult, payloadCheckParams, params);
+                    }
+                }
             }
 
             // Apply scratchpad changes if provided (zero turn cost — processed inline)

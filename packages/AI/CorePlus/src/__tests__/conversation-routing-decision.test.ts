@@ -140,10 +140,31 @@ describe('conversation routing decision', () => {
 
     describe('the thread likelihood is calibrated per exact model', () => {
         it('maps a raw probability through the answering model\'s Platt calibration', () => {
-            // Jev's raw 0.5 means about a 3% chance the thread continues
+            // At the corpus's mix (127 continuations to 174 switches, so 42% continue), Jev's raw 0.5
+            // is a calibrated 0.03. A chat continues far more often; see the next test.
             expect(CalibratedContinuesProbability(0.5, JEV)).toBeCloseTo(0.0339, 4);
             expect(CalibratedContinuesProbability(0.5, LLM_DECISION)).toBeCloseTo(0.0516, 4);
             expect(CalibratedContinuesProbability(0.5, { ModelName: '  Jev ', ResolvedModel: ' typesafe/jev-1.13-20260917 ' })).toBeCloseTo(0.0339, 4);
+        });
+
+        it('is calibrated at the corpus\'s mix, and the documented chat-mix figures follow from the fits', () => {
+            // Platt's B absorbs the corpus's base rate. A 90%-continue prior, closer to a chat, adds
+            // ln(9 × 174/127) to the calibrated logit.
+            const chatPriorShift = Math.log(9 * 174 / 127);
+            expect(chatPriorShift).toBeCloseTo(2.51, 2);
+            const atChatMix = (calibrated: number): number =>
+                1 / (1 + Math.exp(-(Math.log(calibrated / (1 - calibrated)) + chatPriorShift)));
+            const leaveBar = 1 - DECISION_ROUTING_MIN_CONFIDENCE;
+
+            // Jev's raw 0.5 is about 0.30 at a chat's mix, not 0.03
+            expect(atChatMix(CalibratedContinuesProbability(0.5, JEV) ?? Number.NaN)).toBeCloseTo(0.30, 2);
+            // The leave bar, a calibrated 0.30 at the corpus's mix, is about an 84% chance of continuing
+            expect(atChatMix(leaveBar)).toBeCloseTo(0.84, 2);
+            // In raw terms, routing leaves at Jev's raw 0.80 or below, and LLM Decision's 0.77 or below
+            expect(CalibratedContinuesProbability(0.80, JEV)).toBeLessThanOrEqual(leaveBar);
+            expect(CalibratedContinuesProbability(0.81, JEV)).toBeGreaterThan(leaveBar);
+            expect(CalibratedContinuesProbability(0.77, LLM_DECISION)).toBeLessThanOrEqual(leaveBar);
+            expect(CalibratedContinuesProbability(0.78, LLM_DECISION)).toBeGreaterThan(leaveBar);
         });
 
         it('has no calibrated probability for a model it was not fitted on', () => {

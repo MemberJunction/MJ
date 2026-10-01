@@ -8,6 +8,7 @@
       "Status": "Active",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Reranker",
       "SelectionStrategy": "Specific",
+      "RequireSpecificModels": true,
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
       "ResponseFormat": "Any",

@@ -827,6 +827,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * (250 ms). False (the default)
    * changes nothing: no decision call, and today's routing. See
    * `MessageInputComponent.EnableDecisionRouting`.
+   *
+   * Turning it on sends conversation text to the model behind the `Default Decision` prompt, which
+   * can be a different vendor from the agents' own: the first 1,000 characters of the new message,
+   * the last 6 turns (150 characters each), each participant's name, description and last reply,
+   * and the names of their artifact versions. Each call writes an `MJ: AI Prompt Runs` row, even
+   * when the answer comes too late to be used.
    */
   @Input() EnableDecisionRouting: boolean = false;
 
