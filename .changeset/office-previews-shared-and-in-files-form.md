@@ -1,6 +1,6 @@
 ---
-"@memberjunction/ng-artifacts": minor
-"@memberjunction/ng-core-entity-forms": minor
+"@memberjunction/ng-artifacts": patch
+"@memberjunction/ng-core-entity-forms": patch
 ---
 
 Word and Excel files preview inline in the Files form, through the renderers the Artifacts viewer already had (MJ#4957).
