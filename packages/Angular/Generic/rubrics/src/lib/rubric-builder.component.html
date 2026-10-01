@@ -1,4 +1,16 @@
 <section class="rubric-panel" aria-label="Rubric author">
+  @if (PublishedLabel || NextVersion) {
+    <div class="rubric-row">
+      <span>Select version</span>
+      <div class="segmented">
+        @if (PublishedLabel) {
+          <button type="button" [attr.aria-pressed]="Viewing === 'published'" (click)="ViewingChange.emit('published')">Published {{ PublishedLabel }}</button>
+        }
+        <button type="button" [attr.aria-pressed]="Viewing === 'draft'" (click)="ViewingChange.emit('draft')">Draft (next {{ NextVersion }})</button>
+      </div>
+      @if (ComputedBump) { <span class="pill pill-major">{{ ComputedBump }}</span> }
+    </div>
+  }
   <ol class="rubric-list">
     @for (node of Nodes; track node.id) {
       <li class="criterion-card">
@@ -13,60 +25,64 @@
           }
         </div>
         @if (!ReadOnly) {
-        <div class="editor-grid">
-        <label>
-          Parent
-          <select [value]="node.parentId ?? ''" (change)="OnParent(node, $event)">
-            <option value="">Top</option>
-            @for (parent of Parents(node); track parent.id) {
-              <option [value]="parent.id">{{ parent.name }}</option>
+          <div class="editor-grid">
+            <label>
+              Parent
+              <select [value]="node.parentId ?? ''" (change)="OnParent(node, $event)">
+                <option value="">Top</option>
+                @for (parent of Parents(node); track parent.id) {
+                  <option [value]="parent.id">{{ parent.name }}</option>
+                }
+              </select>
+            </label>
+            <label>
+              Weight
+              <input type="number" min="0" step="0.1" [value]="node.weight" (change)="OnWeight(node, $event)" />
+            </label>
+            @if (node.nodeType === 'Criterion') {
+              <label>
+                Scale
+                <select [value]="node.scaleId ?? ''" (change)="OnScale(node, $event)">
+                  <option value="">None</option>
+                  @for (scale of Scales; track scale.id) {
+                    <option [value]="scale.id" [selected]="scale.id.toLowerCase() === (node.scaleId ?? '').toLowerCase()">{{ scale.name || scale.id }}</option>
+                  }
+                </select>
+              </label>
             }
-          </select>
-        </label>
-        <label>
-          Weight
-          <input type="number" min="0" step="0.1" [value]="node.weight" (change)="OnWeight(node, $event)" />
-        </label>
-        @if (node.nodeType === 'Criterion') {
-          <label>
-            Scale
-            <select [value]="node.scaleId ?? ''" (change)="OnScale(node, $event)">
-              <option value="">None</option>
-              @for (scale of Scales; track scale.id) {
-                <option [value]="scale.id" [selected]="scale.id.toLowerCase() === (node.scaleId ?? '').toLowerCase()">{{ scale.name || scale.id }}</option>
+          </div>
+          @if (node.nodeType === 'Criterion') {
+            <div class="rubric-split">
+              @for (level of Levels(node); track level.id) {
+                <label class="anchor" [class.filled]="Anchor(node, level.id)">
+                  {{ level.label }}
+                  <input type="text" [value]="Anchor(node, level.id)" (input)="OnAnchor(node, level.id, $event)" />
+                </label>
               }
+            </div>
+            <div class="rubric-row gate-row">
+              <label>
+                Gate
+                <input type="checkbox" [checked]="node.isGate" (change)="OnGate(node, $event)" />
+              </label>
+              @if (node.isGate) {
+                <label>
+                  Minimum
+                  <input type="number" min="0" max="1" step="0.1" [value]="node.gateMinimumScore ?? ''" (change)="OnMinimum(node, $event)" />
+                </label>
+              }
+            </div>
+          }
+          <label>
+            Not applicable
+            <select [value]="node.notApplicablePolicy ?? ''" (change)="OnPolicy(node, $event)">
+              <option value="">Version default</option>
+              <option value="ExcludeAndRedistribute">Exclude and redistribute</option>
+              <option value="CountAsZero">Count as zero</option>
+              <option value="FailEvaluation">Fail the evaluation</option>
+              <option value="NotAllowed">Not allowed</option>
             </select>
           </label>
-          <div class="rubric-split">
-          @for (level of Levels(node); track level.id) {
-            <label class="anchor" [class.filled]="Anchor(node, level.id)">
-              {{ level.label }}
-              <input type="text" [value]="Anchor(node, level.id)" (input)="OnAnchor(node, level.id, $event)" />
-            </label>
-          }
-          </div>
-          <label>
-            Gate
-            <input type="checkbox" [checked]="node.isGate" (change)="OnGate(node, $event)" />
-          </label>
-          @if (node.isGate) {
-            <label>
-              Minimum
-              <input type="number" min="0" max="1" step="0.1" [value]="node.gateMinimumScore ?? ''" (change)="OnMinimum(node, $event)" />
-            </label>
-          }
-        }
-        <label>
-          Not applicable
-          <select [value]="node.notApplicablePolicy ?? ''" (change)="OnPolicy(node, $event)">
-            <option value="">Version default</option>
-            <option value="ExcludeAndRedistribute">Exclude and redistribute</option>
-            <option value="CountAsZero">Count as zero</option>
-            <option value="FailEvaluation">Fail the evaluation</option>
-            <option value="NotAllowed">Not allowed</option>
-          </select>
-        </label>
-        </div>
         }
       </li>
     }

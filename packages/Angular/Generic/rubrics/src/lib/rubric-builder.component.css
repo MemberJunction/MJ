@@ -62,7 +62,8 @@
 .rubric-stack { display: flex; flex-direction: column; gap: 0.35rem; }
 .rubric-facts span { display: block; }
 
-.rubric-split { display: grid; grid-template-columns: 1fr 1fr; gap: var(--mj-space-4, 1rem); }
+.rubric-split { display: grid; grid-template-columns: 1fr 1fr; gap: var(--mj-space-4, 1rem); margin-top: var(--mj-space-3, 0.75rem); }
+.gate-row { margin-top: var(--mj-space-3, 0.75rem); }
 .rubric-columns { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--mj-space-3, 0.75rem); }
 
 .anchor {

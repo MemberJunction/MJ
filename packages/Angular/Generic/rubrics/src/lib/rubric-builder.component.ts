@@ -25,6 +25,11 @@ export class RubricBuilderComponent implements OnChanges {
     @Input() SampleAnswers: RubricFormAnswer[] = [];
     @Input() BaseBands: RubricBandSnapshot[] = [];
     @Input() ReadOnly = false;
+    @Input() PublishedLabel = '';
+    @Input() NextVersion = '';
+    @Input() ComputedBump: string | null = null;
+    @Input() Viewing: 'draft' | 'published' = 'draft';
+    @Output() ViewingChange = new EventEmitter<'draft' | 'published'>();
     @Output() NodesChange = new EventEmitter<RubricNodeSnapshot[]>();
     @Output() BandsChange = new EventEmitter<RubricBandSnapshot[]>();
 
