@@ -411,6 +411,10 @@ What a panel author should know:
   `LastKnownValidation()`, so a panel that validates asynchronously should override it to return
   its last result.
 
+A generated panel may propose its placement in `formContribution` (slot, a section key, field names,
+a related entity, or a section to sit inside). The apply dialog starts from every claim the open
+form can honour and from its default for the rest; the user confirms placement.
+
 Rows are authored by an OpenApp under `metadata/entity-form-contributions/`, or by an agent through
 the `Create` / `Modify` / `Activate Form Contribution Version` actions. The actions change only the
 caller's own `User` rows; a `Role` or `Global` row returns `FORBIDDEN`. See
