@@ -1,4 +1,4 @@
-import { BaseEntity, CompositeKey, DatabaseProviderBase, IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, DatabaseProviderBase, IMetadataProvider, LogError, RunView, RunViewParams, UserInfo } from '@memberjunction/core';
 import type { MJIntegrationObjectEntity, MJIntegrationObjectFieldEntity } from '@memberjunction/core-entities';
 import {
     CATALOG_FIELD_COLUMNS,
@@ -212,6 +212,12 @@ function lit(value: string): string {
     return value.replace(/'/g, "''");
 }
 
+/** Telemetry note on every catalog read below: each deliberately reads around the query cache. */
+const CATALOG_READ_TELEMETRY: RunViewParams['Telemetry'] = {
+    Exempt: true,
+    Reason: 'Catalog read inside a discovery run; a cached answer predates the write it must observe',
+};
+
 async function newRow<T>(
     md: IMetadataProvider, entityName: string, contextUser: UserInfo,
     guard: readonly string[] | null, aliases: Readonly<Record<string, string>> | null
@@ -242,8 +248,18 @@ async function viewRows<T>(
     // narrower IMetadataProvider we are handed does not declare it. Same narrowing, and the same
     // reason, as IntegrationEngine's own RunView construction in this package.
     const rv = new RunView(provider as DatabaseProviderBase | undefined);
+    // BypassCache is MANDATORY here, not an optimisation. The query-result cache is keyed on the
+    // query TEXT and, where it is shared and external to the process, survives a restart. Introspect
+    // reads each object's fields BEFORE Persist writes them, so on a first discovery the cache holds
+    // EMPTY; the classify stage then replays the byte-identical query and is served that empty list,
+    // reporting every object keyless while the rows plainly exist. Observed 2026-09-27: the baseline
+    // filter returned 0 rows while the same filter with an extra space before '=' returned 8,
+    // unchanged across a confirmed restart. Bypassing in the catalog STORE alone changed nothing: the
+    // writer is the read on that path. With it here, fields created 207 -> 0 and updated 0 -> 76, and
+    // unresolved objects 34 -> 4 — the 4 that genuinely carry no key.
     const res = await rv.RunView<BaseEntity>(
-        { EntityName: entityName, ExtraFilter: filter, ResultType: 'entity_object' }, contextUser);
+        { EntityName: entityName, ExtraFilter: filter, ResultType: 'entity_object', BypassCache: true, Telemetry: CATALOG_READ_TELEMETRY },
+        contextUser);
     // A failed read is an ERROR, never an empty catalog. Returning [] here was read by every
     // consumer as "this object has no fields": the classifier then reported every object
     // keyless, the schema builder skipped them all, and the run completed green having done
@@ -273,8 +289,13 @@ async function keyedOwnerIDs(
         if (slice.length === 0) continue;
         const list = slice.map(id => `'${lit(String(id))}'`).join(',');
         const rv = new RunView(provider as DatabaseProviderBase | undefined);
+        // Bypasses the query cache for the reason viewRows does: this runs straight after Persist,
+        // and the same objects produce byte-identical text on every re-discovery.
         const res = await rv.RunView<Record<string, unknown>>(
-            { EntityName: entityName, ExtraFilter: `${ownerColumn} IN (${list})`, Fields: [ownerColumn, 'IsPrimaryKey'], ResultType: 'simple' },
+            {
+                EntityName: entityName, ExtraFilter: `${ownerColumn} IN (${list})`, Fields: [ownerColumn, 'IsPrimaryKey'],
+                ResultType: 'simple', BypassCache: true, Telemetry: CATALOG_READ_TELEMETRY,
+            },
             contextUser);
         if (!res?.Success) {
             throw new CompanyIntegrationCatalogReadFailed(entityName, `${ownerColumn} IN (${slice.length} ids)`, res?.ErrorMessage ?? 'RunView returned no result');
