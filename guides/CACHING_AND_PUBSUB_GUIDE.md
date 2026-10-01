@@ -2405,6 +2405,26 @@ entity:
   default 300 s) compares each loaded engine config's row count and newest `__mj_UpdatedAt` with the
   database and reloads only what differs — the safety net for changes made outside MJ. It writes a
   refreshed slot under the slot's cross-process lock, so it cannot clobber a peer's in-flight update.
+  One process in the fleet does it per engine per interval, via a lease.
+
+  **It visits only entities that declare they can drift.** `Entity.TrustServerCacheCompletely` is
+  that declaration: `true` (the default) means every mutation flows through `BaseEntity.Save()` and
+  fires an invalidation event, so there is nothing for a sweep to discover; `false` is set for
+  entities whose rows appear by raw SQL. The flag also subsumes `AllowDirectSQLInsert`/`Update`/
+  `Delete`, since a database CHECK requires it to be `false` whenever one of those is set.
+
+  This matters for cost, not just tidiness. A periodic query is never free, and on **Azure SQL
+  serverless it prevents auto-pause outright** — auto-pause needs sustained inactivity, so a longer
+  interval is no better than a shorter one; only not running is. Gating on the declaration makes the
+  cost proportional to the declared risk: an install where nothing writes out of band sweeps nothing,
+  issues no queries, and lets the database sleep, with no setting to discover. Mark the entities you
+  do write out of band — which you must do anyway for the cache to be correct — and the backstop
+  applies exactly there. `engineSweepIntervalSeconds: 0` still turns the timer off entirely.
+
+  **The user-cache staleness check (`userCacheCheckIntervalSeconds`) is gated the same way**, for the
+  same reason. Nothing is lost for the case that motivated it: a save raises an event, a save on
+  another server publishes the shared stamp, and `FindUser` falls back to an authoritative read on a
+  miss — so even a user inserted by raw SQL can authenticate without the poll.
 
 ## Categories and expiry
 
