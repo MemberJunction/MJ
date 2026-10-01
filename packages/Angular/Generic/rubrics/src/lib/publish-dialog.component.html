@@ -23,6 +23,9 @@
       Change summary
       <textarea [value]="Summary" (input)="OnSummary($event)"></textarea>
     </label>
-    <button type="button" [disabled]="Preview.identical" (click)="OnConfirm()">Publish</button>
+    <div class="rubric-actions">
+      <button type="button" [disabled]="Preview.identical" (click)="OnConfirm()">Publish</button>
+      <ng-content></ng-content>
+    </div>
   }
 </section>

@@ -339,7 +339,7 @@ function meanOf(columns: MatrixColumn[]): number | null {
 }
 
 /** A criterion row from MJ: Rubric Criteria, as the author widget expects it. */
-export function nodeFromRow(row: Record<string, unknown>): RubricNodeSnapshot {
+export function nodeFromRow(row: Record<string, unknown>, anchors: RubricNodeSnapshot['anchors'] = []): RubricNodeSnapshot {
     return {
         id: String(row.ID ?? ''),
         key: String(row.Key ?? ''),
@@ -355,7 +355,76 @@ export function nodeFromRow(row: Record<string, unknown>): RubricNodeSnapshot {
         evidenceRequired: row.EvidenceRequired === true || row.EvidenceRequired === 1,
         rationaleRequired: row.RationaleRequired === true || row.RationaleRequired === 1,
         sequence: Number(row.Sequence ?? 0),
+        anchors,
     };
+}
+
+/** Writes include the client id, so a new row is stored under the id the form already holds. Removed ids are deleted children first. */
+export function planNodeSave(existing: { id: string; parentId: string | null }[], nodes: RubricNodeSnapshot[]): { upserts: { id: string; isNew: boolean; fields: Record<string, unknown> }[]; removedIds: string[] } {
+    const known = new Set(existing.map(row => row.id));
+    const kept = new Set(nodes.map(node => node.id));
+    const removed = new Set(existing.filter(row => !kept.has(row.id)).map(row => row.id));
+    return {
+        upserts: nodes.map(node => ({ id: node.id, isNew: !known.has(node.id), fields: { ...nodeFields(node), ID: node.id } })),
+        removedIds: deleteChildrenFirst(existing, removed),
+    };
+}
+
+export function scaleFromRow(row: Record<string, unknown>, levels: Record<string, unknown>[]): RubricScaleSnapshot {
+    return {
+        id: String(row.ID ?? ''),
+        scaleType: row.ScaleType === 'Numeric' ? 'Numeric' : 'Levels',
+        higherIsBetter: row.HigherIsBetter !== false && row.HigherIsBetter !== 0,
+        minValue: row.MinValue == null || row.MinValue === '' ? null : Number(row.MinValue),
+        maxValue: row.MaxValue == null || row.MaxValue === '' ? null : Number(row.MaxValue),
+        step: row.Step == null || row.Step === '' ? null : Number(row.Step),
+        levels: levels.map(level => ({
+            id: String(level.ID ?? ''),
+            label: String(level.Label ?? ''),
+            value: Number(level.Value ?? 0),
+            normalizedValue: Number(level.NormalizedValue ?? 0),
+            description: level.Description == null ? null : String(level.Description),
+            sequence: Number(level.Sequence ?? 0),
+        })),
+    };
+}
+
+export function bandFromRow(row: Record<string, unknown>): RubricBandSnapshot {
+    return {
+        id: String(row.ID ?? ''),
+        label: String(row.Label ?? ''),
+        description: row.Description == null ? null : String(row.Description),
+        minScore: Number(row.MinScore ?? 0),
+        maxScore: Number(row.MaxScore ?? 0),
+        displayTone: String(row.DisplayTone ?? 'Neutral'),
+        sequence: Number(row.Sequence ?? 0),
+    };
+}
+
+/** New bands keep the client id. Bands missing from the emit are removed. */
+export function planBandSave(existingIds: string[], bands: RubricBandSnapshot[]): { upserts: { id: string; isNew: boolean; fields: Record<string, unknown> }[]; removedIds: string[] } {
+    const known = new Set(existingIds);
+    const kept = new Set(bands.map(band => band.id));
+    return {
+        upserts: bands.map(band => ({
+            id: band.id,
+            isNew: !known.has(band.id),
+            fields: { ID: band.id, Label: band.label, Description: band.description ?? null, MinScore: band.minScore, MaxScore: band.maxScore, DisplayTone: band.displayTone, Sequence: band.sequence },
+        })),
+        removedIds: existingIds.filter(id => !kept.has(id)),
+    };
+}
+
+function deleteChildrenFirst(rows: { id: string; parentId: string | null }[], removed: Set<string>): string[] {
+    const ordered: string[] = [];
+    const visit = (id: string): void => {
+        for (const row of rows) {
+            if (row.parentId === id && removed.has(row.id)) visit(row.id);
+        }
+        if (removed.has(id) && !ordered.includes(id)) ordered.push(id);
+    };
+    for (const id of removed) visit(id);
+    return ordered;
 }
 
 /** Fields the Explorer form writes back when the author emits a node. */

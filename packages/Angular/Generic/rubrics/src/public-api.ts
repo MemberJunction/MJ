@@ -1,4 +1,4 @@
-export type { RubricNodeSnapshot, RubricScaleSnapshot, RubricScoreResult, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
+export type { RubricBandSnapshot, RubricNodeSnapshot, RubricScaleSnapshot, RubricScoreResult, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 export * from './lib/model.js';
 export * from './lib/rubric-builder.component.js';
 export * from './lib/rubric-scoring-form.component.js';

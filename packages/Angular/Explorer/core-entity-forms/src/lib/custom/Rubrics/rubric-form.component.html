@@ -15,16 +15,15 @@
                     <li>{{ version.Status }} {{ version.MajorVersion }}.{{ version.MinorVersion }}.{{ version.PatchVersion }}</li>
                 }
             </ul>
-            <mj-rubric-builder [Nodes]="Nodes" [Scales]="Scales" [Version]="DraftVersion" (NodesChange)="OnNodes($event)"></mj-rubric-builder>
+            <mj-rubric-builder [Nodes]="Nodes" [Scales]="Scales" [Bands]="Bands" [Version]="DraftVersion" (NodesChange)="OnNodes($event)" (BandsChange)="OnBands($event)"></mj-rubric-builder>
             @if (BaseVersion && DraftVersion) {
                 <mj-rubric-version-diff [Base]="BaseVersion" [Draft]="DraftVersion"></mj-rubric-version-diff>
             }
             @if (DraftVersion) {
-                <div class="rubric-actions">
-                    <mj-rubric-publish-dialog [Base]="BaseVersion" [Draft]="DraftVersion" [RequestedBump]="RequestedBump" [Summary]="Summary"
-                        (RequestedBumpChange)="RequestedBump = $event" (SummaryChange)="Summary = $event" (Confirm)="OnPublish($event)"></mj-rubric-publish-dialog>
-                    <button type="button" (click)="RequestedBump = null; Summary = ''">Cancel</button>
-                </div>
+                <mj-rubric-publish-dialog [Base]="BaseVersion" [Draft]="DraftVersion" [RequestedBump]="RequestedBump" [Summary]="Summary"
+                    (RequestedBumpChange)="RequestedBump = $event" (SummaryChange)="Summary = $event" (Confirm)="OnPublish($event)">
+                    <button type="button" (click)="OnCancel()">Cancel</button>
+                </mj-rubric-publish-dialog>
             }
             @if (Message) {
                 <p>{{ Message }}</p>

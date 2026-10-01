@@ -8,7 +8,7 @@
     @if (Loading) {
         <mj-loading text="Loading evaluation..."></mj-loading>
     } @else {
-        <mj-rubric-result [Result]="Result" [Answers]="Answers"></mj-rubric-result>
+        <mj-rubric-result [Version]="Version" [Result]="Result" [Answers]="Answers"></mj-rubric-result>
         <mj-rubric-comparison-matrix [Keys]="Keys" [Columns]="Columns"></mj-rubric-comparison-matrix>
     }
 </mj-record-form-container>

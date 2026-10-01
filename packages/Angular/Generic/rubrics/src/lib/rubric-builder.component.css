@@ -24,3 +24,10 @@
   gap: var(--mj-space-3, 0.75rem);
   align-items: center;
 }
+
+.rubric-actions {
+  display: flex;
+  flex-direction: row;
+  gap: var(--mj-space-3, 0.75rem);
+  align-items: center;
+}

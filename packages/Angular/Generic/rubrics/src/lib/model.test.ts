@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { addCriterion, addNode, answerLevel, bandFor, canSubmit, comparisonMatrix, displayScore, draftProblems, incompleteAnswers, moveNode, moveProblem, nodeFields, nodeFromRow, previewScore, publishPreview, setAnchor, setGate, setScale, setWeight, versionRows, weightShares } from './model.js';
+import { addCriterion, addNode, answerLevel, bandFor, canSubmit, comparisonMatrix, displayScore, draftProblems, incompleteAnswers, moveNode, moveProblem, nodeFields, nodeFromRow, planBandSave, planNodeSave, previewScore, publishPreview, scaleFromRow, setAnchor, setGate, setScale, setWeight, versionRows, weightShares } from './model.js';
 
 const scale: RubricScaleSnapshot = {
     id: 'scale',
@@ -176,6 +176,28 @@ describe('explorer row mapping', () => {
         expect(node.parentId).toBe('group');
         expect(node.isGate).toBe(true);
         expect(nodeFields(node)).toMatchObject({ Key: 'clarity', ParentID: 'group', Weight: 2, IsGate: true, GateMinimumScore: 0.6 });
+    });
+
+    it('saves a new criterion under its client id and deletes a removed child first', () => {
+        const plan = planNodeSave(
+            [{ id: 'parent', parentId: null }, { id: 'old-child', parentId: 'parent' }],
+            [{ id: 'parent', key: 'quality', name: 'Quality', parentId: null, nodeType: 'Group', weight: 1, isAdvisory: false, isGate: false, evidenceRequired: false, rationaleRequired: false, sequence: 0 }, { id: 'client-child', key: 'clarity', name: 'Clarity', parentId: 'parent', nodeType: 'Criterion', scaleId: 'scale', weight: 1, isAdvisory: false, isGate: false, evidenceRequired: false, rationaleRequired: false, sequence: 0 }],
+        );
+        expect(plan.upserts.find(row => row.id === 'client-child')).toMatchObject({ isNew: true, fields: { ID: 'client-child', ParentID: 'parent' } });
+        expect(plan.removedIds).toEqual(['old-child']);
+    });
+
+    it('keeps a numeric scale and its levels', () => {
+        const scale = scaleFromRow(
+            { ID: 'scale', ScaleType: 'Numeric', HigherIsBetter: 0, MinValue: 0, MaxValue: 10, Step: 1 },
+            [{ ID: 'level', Label: 'High', Value: 10, NormalizedValue: 1, Sequence: 0 }],
+        );
+        expect(scale.scaleType).toBe('Numeric');
+        expect(scale.higherIsBetter).toBe(false);
+        expect(scale.levels[0].label).toBe('High');
+        const bands = planBandSave(['old'], [{ id: 'client-band', label: 'High', minScore: 0.5, maxScore: 1, displayTone: 'Success', sequence: 0 }]);
+        expect(bands.upserts[0].fields.ID).toBe('client-band');
+        expect(bands.removedIds).toEqual(['old']);
     });
 });
 
