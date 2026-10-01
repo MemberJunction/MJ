@@ -1,7 +1,32 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseCliHarnessAdapter, HarnessCliRawEvent } from './BaseCliHarnessAdapter.js';
 import { BaseHarnessAdapter } from './BaseHarnessAdapter.js';
-import { HarnessCapabilities, HarnessTurnEvent } from '../types.js';
+import { HarnessCapabilities, HarnessPermissionPolicy, HarnessPosture, HarnessTurnEvent } from '../types.js';
+
+/** Gemini CLI's `--approval-mode` values (verified against `@google/gemini-cli` 0.62.0's option table). */
+type GeminiApprovalMode = 'default' | 'auto_edit' | 'yolo';
+
+/**
+ * Maps MJ's posture onto Gemini CLI's approval modes.
+ *
+ * Same shape as the Claude Code mapping and for the same reasons:
+ * - `strict` -> `default`: Gemini prompts before any mutating tool, and headless there is nobody to
+ *   answer, so mutation is denied. Observably useless beats quietly permissive.
+ * - `auto` -> `auto_edit`: edit tools proceed, everything else still gates. Not `yolo`, which would
+ *   make `auto` and `dangerous` one setting under two names.
+ * - `dangerous` -> `yolo`: no gating. Only defensible inside a contained sandbox.
+ */
+export function GeminiApprovalModeForPosture(posture: HarnessPosture): GeminiApprovalMode {
+    switch (posture) {
+        case 'auto':
+            return 'auto_edit';
+        case 'dangerous':
+            return 'yolo';
+        case 'strict':
+        default:
+            return 'default';
+    }
+}
 
 /**
  * Drives Google's Gemini CLI (`@google/gemini-cli`).
@@ -18,6 +43,30 @@ import { HarnessCapabilities, HarnessTurnEvent } from '../types.js';
 @RegisterClass(BaseHarnessAdapter, 'GeminiCliAdapter')
 export class GeminiCliAdapter extends BaseCliHarnessAdapter {
     private executable = 'gemini';
+    /**
+     * Defaults to the SAFE mode. The adapter used to hard-code `--yolo`, which meant a strict agent
+     * silently ran with every tool auto-approved; if `ApplyPermissionPolicy` is somehow never called
+     * the fallback must not be that.
+     */
+    private approvalMode: GeminiApprovalMode = 'default';
+
+    /**
+     * Applies the policy's POSTURE. Allow/deny tool lists are deliberately not translated.
+     *
+     * Gemini CLI can take an allowlist (`--allowed-tools`, deprecated in favour of its Policy Engine)
+     * but has no deny flag, and an allow-without-deny translation would WIDEN a policy such as
+     * "allow `Bash(git:*)`, deny `Bash(git push:*)`" to permit the push — the exact failure the
+     * Claude Code adapter's prefix-literal note describes. So lists are left unenforced and
+     * {@link PartialPolicyEnforcement} says so, which is why `PermissionPolicy` stays false.
+     */
+    public override ApplyPermissionPolicy(policy: HarnessPermissionPolicy): void {
+        this.approvalMode = GeminiApprovalModeForPosture(policy.Posture);
+    }
+
+    /** @inheritdoc */
+    public override get PartialPolicyEnforcement(): string {
+        return "posture is applied through Gemini CLI's --approval-mode; allowed/disallowed tool lists are not translated";
+    }
 
     protected get ExecutablePath(): string {
         return this.executable;
@@ -30,12 +79,12 @@ export class GeminiCliAdapter extends BaseCliHarnessAdapter {
             SessionResume: false,
             StructuredOutput: false,
             UsageReporting: true,
-            // FALSE: this adapter does not translate MJ's permission policy into harness flags, so a
-            // configured posture is INERT here and the runtime warns about it. Not an oversight —
-            // Gemini CLI's permission flags could not be verified against a real install, and
-            // guessing them produces the exact failure this flag exists to surface: a policy that
-            // looks applied and is not. Verify against the CLI, then implement
-            // ApplyPermissionPolicy and flip this to true.
+            // FALSE, deliberately: the POSTURE is translated (see ApplyPermissionPolicy) but the
+            // allow/deny tool lists are not — Gemini CLI has no deny flag, and an allow-only
+            // translation would widen a policy. This flag means "the whole policy is enforced", and
+            // it must agree with the AIAgentHarness.CapabilitySettings row in metadata (integration
+            // check AEH5), so it stays false until the lists can be honoured too. The runtime reads
+            // PartialPolicyEnforcement to log the accurate "posture yes, lists no" message.
             PermissionPolicy: false,
             PermissionHooks: false,
             McpClient: true,
@@ -46,7 +95,7 @@ export class GeminiCliAdapter extends BaseCliHarnessAdapter {
 
     protected BuildTurnArgs(input: string, _isFirstTurn: boolean): string[] {
         // No resume flag: every turn is a fresh invocation carrying replayed context in `input`.
-        const args = ['--output-format', 'json', '--yolo'];
+        const args = ['--output-format', 'json', '--approval-mode', this.approvalMode];
         if (this.config?.Model) {
             args.push('--model', this.config.Model);
         }

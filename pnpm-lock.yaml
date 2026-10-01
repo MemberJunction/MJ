@@ -396,6 +396,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.2.0-edge.1
         version: link:../../MJCoreEntities
+      '@memberjunction/credentials':
+        specifier: 6.2.0-edge.1
+        version: link:../../Credentials/Engine
       '@memberjunction/global':
         specifier: 6.2.0-edge.1
         version: link:../../MJGlobal

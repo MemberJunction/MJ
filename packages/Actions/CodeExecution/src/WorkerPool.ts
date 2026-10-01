@@ -64,6 +64,60 @@ interface Worker {
     stderrTail: string;
 }
 
+/**
+ * Host environment variables a worker process is allowed to inherit.
+ *
+ * Deliberately an ALLOWLIST. `fork()` with no `env` option hands the child the parent's entire
+ * `process.env`, and the parent here is MJAPI — which holds database credentials, vendor API keys
+ * and signing secrets. The worker runs code an AI agent wrote moments ago; even though that code
+ * runs inside an isolated-vm isolate with no `process` object, the worker process itself (the
+ * thing hosting the isolate) is one memory-corruption bug away from exposing its own environment.
+ * A worker that was never given a secret cannot leak one.
+ *
+ * What is on the list and why:
+ *  - `PATH`: lets Node resolve helpers it may spawn (none today, but cheap and non-sensitive).
+ *  - `NODE_ENV`: some bundled libraries branch on it.
+ *  - `NODE_OPTIONS`: operator-chosen V8/Node flags (e.g. `--max-old-space-size`) should keep applying
+ *    to workers. By convention it carries flags, not secrets.
+ *  - `TZ`, `LANG`, `LC_ALL`: so date-fns / Intl formatting inside the sandbox matches the host.
+ *  - `TMPDIR`, `TEMP`, `TMP`, `SystemRoot`, `WINDIR`: Node itself needs these on some platforms
+ *    (Windows will not start a child without `SystemRoot`).
+ *
+ * Nothing the sandboxed code runs needs anything else: isolated-vm is a native addon loaded by path
+ * and the bundled libraries are inlined source.
+ */
+export const WORKER_ENV_ALLOWLIST: readonly string[] = [
+    'PATH',
+    'NODE_ENV',
+    'NODE_OPTIONS',
+    'TZ',
+    'LANG',
+    'LC_ALL',
+    'TMPDIR',
+    'TEMP',
+    'TMP',
+    'SystemRoot',
+    'WINDIR'
+];
+
+/**
+ * Builds the minimal environment a code-execution worker is forked with.
+ *
+ * Pure so it can be tested without forking; see {@link WORKER_ENV_ALLOWLIST} for the policy.
+ *
+ * @param parentEnv - The environment to filter. Defaults to the host's `process.env`.
+ */
+export function BuildWorkerEnvironment(parentEnv: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+    const env: NodeJS.ProcessEnv = {};
+    for (const name of WORKER_ENV_ALLOWLIST) {
+        const value = parentEnv[name];
+        if (value !== undefined) {
+            env[name] = value;
+        }
+    }
+    return env;
+}
+
 /** Max bytes of stderr we keep per worker for crash diagnostics. 64KB is
  *  big enough for a full V8 fatal-error banner + stack trace, small
  *  enough that the host can't be starved by pathological output. */
@@ -127,8 +181,12 @@ export class WorkerPool {
         // stdout 'inherit' so debug logs still reach MJAPI's console.
         // stderr 'pipe' so we can capture a rolling tail for crash diagnostics
         // AND still forward it to MJAPI's stderr — we listen below and echo.
+        //
+        // `env` is an explicit minimal allowlist — without it the worker inherits MJAPI's entire
+        // environment, including DB credentials and vendor API keys. See WORKER_ENV_ALLOWLIST.
         const childProcess = fork(workerPath, [], {
-            stdio: ['ignore', 'inherit', 'pipe', 'ipc']
+            stdio: ['ignore', 'inherit', 'pipe', 'ipc'],
+            env: BuildWorkerEnvironment()
         });
 
         const worker: Worker = {

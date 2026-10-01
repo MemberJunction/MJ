@@ -57,6 +57,9 @@ export class ExecuteCodeAction extends BaseAction {
             const code = this.getStringParam(params, "code");
             const language = this.getStringParam(params, "language", "javascript") as 'javascript';
             const inputDataStr = this.getStringParam(params, "inputData");
+            // Passed through as-is: CodeExecutionService clamps both to its policy ceiling
+            // (see CODE_EXECUTION_LIMITS), so the action stays a thin shell and every other caller
+            // of the service gets the same protection.
             const timeout = this.getNumericParam(params, "timeout", 30);
             const memoryLimit = this.getNumericParam(params, "memoryLimit", 128);
 

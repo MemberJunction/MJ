@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { WorkerPool, WorkerPoolOptions } from '../WorkerPool';
+import { WorkerPool, WorkerPoolOptions, BuildWorkerEnvironment, WORKER_ENV_ALLOWLIST } from '../WorkerPool';
 import { CodeExecutionParams } from '../types';
 import { EventEmitter } from 'events';
 
@@ -130,6 +130,33 @@ describe('WorkerPool', () => {
           stdio: ['ignore', 'inherit', 'pipe', 'ipc']
         })
       );
+    });
+
+    it('should fork workers with an explicit minimal env, never the host process.env', async () => {
+      const original = { ...process.env };
+      process.env.MJ_TEST_DB_PASSWORD = 'super-secret-db-password';
+      process.env.MJ_TEST_VENDOR_API_KEY = 'sk-should-never-reach-a-worker';
+      process.env.PATH = process.env.PATH ?? '/usr/bin';
+      try {
+        pool = new WorkerPool({ poolSize: 1 });
+        await pool.initialize();
+
+        const options = mockedFork.mock.calls[0][2] as { env?: NodeJS.ProcessEnv };
+        expect(options.env).toBeDefined();
+        expect(options.env).not.toBe(process.env);
+        expect(options.env).not.toHaveProperty('MJ_TEST_DB_PASSWORD');
+        expect(options.env).not.toHaveProperty('MJ_TEST_VENDOR_API_KEY');
+        // Nothing outside the allowlist may be present.
+        for (const key of Object.keys(options.env ?? {})) {
+          expect(WORKER_ENV_ALLOWLIST).toContain(key);
+        }
+        // ...and the worker still gets PATH so it can start.
+        expect(options.env?.PATH).toBe(process.env.PATH);
+      } finally {
+        delete process.env.MJ_TEST_DB_PASSWORD;
+        delete process.env.MJ_TEST_VENDOR_API_KEY;
+        process.env.PATH = original.PATH;
+      }
     });
 
     it('should wait for ready message from each worker', async () => {
@@ -414,5 +441,32 @@ describe('WorkerPool', () => {
       // Should have tried to create a new worker
       expect(mockedFork.mock.calls.length).toBeGreaterThan(initialForkCount);
     });
+  });
+});
+
+describe('BuildWorkerEnvironment', () => {
+  it('copies only allowlisted variables', () => {
+    const env = BuildWorkerEnvironment({
+      PATH: '/usr/bin',
+      NODE_ENV: 'production',
+      TZ: 'UTC',
+      DB_PASSWORD: 'hunter2',
+      OPENAI_API_KEY: 'sk-abc',
+      AWS_SECRET_ACCESS_KEY: 'shh'
+    });
+    expect(env).toEqual({ PATH: '/usr/bin', NODE_ENV: 'production', TZ: 'UTC' });
+  });
+
+  it('omits allowlisted variables that are unset rather than writing undefined', () => {
+    const env = BuildWorkerEnvironment({ PATH: '/bin' });
+    expect(Object.keys(env)).toEqual(['PATH']);
+  });
+
+  it('never includes anything that looks like a credential, whatever the host holds', () => {
+    const hostile: NodeJS.ProcessEnv = {};
+    for (const name of ['DB_PASSWORD', 'API_KEY', 'TOKEN', 'SECRET', 'MJ_API_KEY', 'AI_VENDOR_API_KEY__OPENAILLM']) {
+      hostile[name] = 'x';
+    }
+    expect(BuildWorkerEnvironment(hostile)).toEqual({});
   });
 });

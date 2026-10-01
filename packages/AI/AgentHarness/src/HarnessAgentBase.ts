@@ -4,22 +4,25 @@ import { BaseAgent } from '@memberjunction/ai-agents';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { AIPromptParams, AIPromptRunResult, MJAIPromptRunEntityExtended, ResolvePromptRunUserID } from '@memberjunction/ai-core-plus';
 import { ChatResult, ModelUsage } from '@memberjunction/ai';
-import {
-    MJAIAgentHarnessEntity,
-    MJAIAgentCredentialEntity,
-    MJCredentialEntity,
-} from '@memberjunction/core-entities';
+import { MJAIAgentHarnessEntity, MJAIAgentCredentialEntity } from '@memberjunction/core-entities';
+import { CredentialEngine } from '@memberjunction/credentials';
 import { BaseHarnessAdapter } from './adapters/BaseHarnessAdapter.js';
 import { ISandboxProvider, SandboxHandle, WorkspaceKey } from './sandbox/ISandboxProvider.js';
-import { LocalDirectorySandboxProvider } from './sandbox/LocalDirectorySandboxProvider.js';
-import { DockerSandboxProvider } from './sandbox/DockerSandboxProvider.js';
+import { BaseSandboxProvider } from './sandbox/BaseSandboxProvider.js';
+import { ExtractCredentialSecret } from './CredentialSecret.js';
 import {
     HarnessTurnResult,
     HarnessWorkspaceScope,
-    HarnessNetworkPolicy,
     HarnessPosture,
     HarnessPermissionPolicy,
+    HarnessSandboxSettings,
 } from './types.js';
+
+/** The sandbox provider used when `sandbox.provider` is not set. */
+const DEFAULT_SANDBOX_PROVIDER = 'local';
+
+/** Subsystem name recorded in the credential access audit log for harness credential reads. */
+const CREDENTIAL_AUDIT_SUBSYSTEM = 'AgentHarness';
 
 /**
  * Conventional environment variable each harness reads its own credential from.
@@ -53,12 +56,7 @@ const TURN_END_CONTRACT = [
 /** Shape of the harness block inside `AIAgent.TypeConfiguration`. */
 interface HarnessAgentConfig {
     harnessName?: string;
-    sandbox?: {
-        provider?: 'local' | 'docker';
-        image?: string;
-        workspaceScope?: HarnessWorkspaceScope;
-        networkPolicy?: HarnessNetworkPolicy;
-    };
+    sandbox?: HarnessSandboxSettings;
     posture?: HarnessPosture;
     permissions?: { allowedTools?: string[]; disallowedTools?: string[] };
     limits?: { maxWallClockSeconds?: number };
@@ -149,6 +147,7 @@ export class HarnessAgentBase extends BaseAgent {
         this.sandboxHandle = await this.sandboxProvider.Provision(key, {
             NetworkPolicy: config.sandbox?.networkPolicy ?? 'mcp-only',
             Image: config.sandbox?.image,
+            AllowedHosts: config.sandbox?.allowedHosts,
         });
 
         const environment = await this.resolveGrantedEnvironment(contextUser);
@@ -215,6 +214,22 @@ export class HarnessAgentBase extends BaseAgent {
             (policy.DisallowedTools?.length ?? 0) > 0;
 
         if (!capabilities?.PermissionPolicy) {
+            const partial = this.adapter?.PartialPolicyEnforcement;
+            if (partial) {
+                // Posture (or part of the policy) IS applied; saying the whole policy is ignored
+                // would be as misleading as the original silence. Only the lists, if configured,
+                // are the serious gap.
+                const listsConfigured = (policy.AllowedTools?.length ?? 0) > 0 || (policy.DisallowedTools?.length ?? 0) > 0;
+                const message =
+                    `Harness '${harnessName}': MJ permission policy is only PARTLY enforced — ${partial}.` +
+                    (listsConfigured ? ' This agent configures allow/deny lists, which are being ignored.' : '');
+                if (listsConfigured) {
+                    LogError(message);
+                } else {
+                    LogStatus(message);
+                }
+                return;
+            }
             LogError(
                 `Harness '${harnessName}': its adapter does not apply MJ permission policies ` +
                     `(CapabilitySettings.PermissionPolicy is not true), so the ` +
@@ -557,15 +572,24 @@ export class HarnessAgentBase extends BaseAgent {
             }
 
             const rows = grants.Success ? (grants.Results ?? []) : [];
+            let anyGrantRejected = false;
             for (const grant of rows) {
                 if (!grant.EnvVariableName) {
                     // No variable name means the adapter decides how to surface it; nothing to
                     // inject generically.
                     continue;
                 }
-                const secret = await this.loadCredentialValue(grant.CredentialID, contextUser);
-                if (secret) {
-                    environment[grant.EnvVariableName] = secret;
+                const outcome = await this.loadCredentialValue(grant.CredentialID, grant.EnvVariableName, contextUser);
+                if (outcome.Status === 'resolved') {
+                    environment[grant.EnvVariableName] = outcome.Secret;
+                    continue;
+                }
+                if (outcome.Status === 'rejected') {
+                    // The credential was found and is unusable (inactive, expired, ambiguous). Do NOT
+                    // substitute the server's own value of the same variable: the operator granted a
+                    // specific credential, and quietly handing the harness whatever the MJAPI process
+                    // holds is precisely the over-granting the credential model exists to prevent.
+                    anyGrantRejected = true;
                     continue;
                 }
                 const fromEnv = process.env[grant.EnvVariableName];
@@ -578,7 +602,10 @@ export class HarnessAgentBase extends BaseAgent {
                 }
             }
 
-            if (Object.keys(environment).length === 0) {
+            // The zero-config vendor-key path is for agents with no usable grants. If a grant was
+            // rejected the agent HAS a grant that is broken — fail visibly (the harness will report an
+            // auth error) rather than papering over it with the server's key.
+            if (Object.keys(environment).length === 0 && !anyGrantRejected) {
                 this.applyVendorKeyFallback(environment);
             }
         } catch (e) {
@@ -622,23 +649,87 @@ export class HarnessAgentBase extends BaseAgent {
     }
 
     /**
-     * Reads a credential's value.
+     * Resolves ONE secret from a granted credential, through {@link CredentialEngine}.
      *
-     * Custody stays in `MJ: Credentials` — this only reads what the agent was granted, and does not
-     * cache it beyond the session.
+     * ## Why through the engine
+     *
+     * `CredentialEngine` is the sanctioned path to a credential's plaintext: it decrypts field-level
+     * encryption, records the access in the credential audit log (with this agent's subsystem tag),
+     * and bumps `LastUsedAt`. Loading `MJ: Credentials` directly skips all three — the secret is read
+     * and nothing records that it was. Expiry is not enforced by the engine itself, so it is checked
+     * here: an expired credential must not be handed to a harness.
+     *
+     * ## One credential, one variable
+     *
+     * A credential's `Values` is a JSON object of all of its fields; a grant maps a single variable
+     * name to it. {@link ExtractCredentialSecret} picks the one field to inject, and a credential for
+     * which that is ambiguous is REJECTED rather than injected whole — see that function for why.
+     *
+     * Custody stays in `MJ: Credentials`; nothing is cached beyond the engine's own cache.
+     *
+     * @returns `resolved` with the secret; `rejected` when the credential exists but must not be used
+     *          (already logged, with the credential and agent named); `unavailable` when it could not
+     *          be read at all, which the caller treats as "try the server environment".
      */
-    private async loadCredentialValue(credentialId: string, contextUser?: UserInfo): Promise<string | null> {
+    private async loadCredentialValue(
+        credentialId: string,
+        envVariableName: string,
+        contextUser?: UserInfo,
+    ): Promise<CredentialLoadOutcome> {
         try {
-            const md = this.ProviderToUse;
-            const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
-            if (!(await credential.Load(credentialId))) {
-                return null;
+            const engine = CredentialEngine.Instance;
+            await engine.Config(false, contextUser, this.ProviderToUse);
+            let credential = engine.GetCredentialById(credentialId);
+            if (!credential) {
+                // It may have been created after the engine cached its rows; refresh once, as the
+                // MCP client does, before concluding it does not exist.
+                await engine.Config(true, contextUser, this.ProviderToUse);
+                credential = engine.GetCredentialById(credentialId);
             }
-            return credential.Values ?? null;
+            if (!credential) {
+                LogError(`Harness grant for ${envVariableName}: credential ${credentialId} was not found.`);
+                return { Status: 'unavailable' };
+            }
+
+            const problem = this.describeUnusableCredential(credential);
+            if (problem) {
+                return this.rejectCredential(credential.Name, envVariableName, problem);
+            }
+
+            const resolved = await engine.GetCredential(credential.Name, {
+                contextUser,
+                credentialId,
+                subsystem: CREDENTIAL_AUDIT_SUBSYSTEM,
+            });
+            const extracted = ExtractCredentialSecret(resolved.values);
+            if (!extracted.Success || extracted.Secret === undefined) {
+                return this.rejectCredential(credential.Name, envVariableName, extracted.Reason ?? 'no secret could be chosen');
+            }
+            return { Status: 'resolved', Secret: extracted.Secret };
         } catch (e) {
-            LogError(`Failed to load credential ${credentialId}: ${describeError(e)}`);
-            return null;
+            LogError(`Failed to resolve credential ${credentialId} for ${envVariableName}: ${describeError(e)}`);
+            return { Status: 'unavailable' };
         }
+    }
+
+    /** Why a loaded credential must not be used, or null when it is usable. */
+    private describeUnusableCredential(credential: { IsActive: boolean; ExpiresAt: Date | null }): string | null {
+        if (!credential.IsActive) {
+            return 'the credential is inactive';
+        }
+        if (credential.ExpiresAt && new Date(credential.ExpiresAt).getTime() <= Date.now()) {
+            return `the credential expired at ${new Date(credential.ExpiresAt).toISOString()}`;
+        }
+        return null;
+    }
+
+    /** Logs, naming the credential and the agent (never the secret), and reports the rejection. */
+    private rejectCredential(credentialName: string, envVariableName: string, reason: string): CredentialLoadOutcome {
+        LogError(
+            `Harness agent ${this._agentRunAgentId()}: credential '${credentialName}' granted as ` +
+                `${envVariableName} was NOT injected because ${reason}.`,
+        );
+        return { Status: 'rejected' };
     }
 
     /** Loads the harness registry row this agent selected by name. */
@@ -687,11 +778,32 @@ export class HarnessAgentBase extends BaseAgent {
         return instance;
     }
 
-    /** Chooses a sandbox provider from the agent's configuration. */
+    /**
+     * Resolves the sandbox provider named by `sandbox.provider` (default `local`) through the class
+     * factory and hands it the agent's sandbox settings.
+     *
+     * `TryCreateInstance`, not `CreateInstance`: the latter falls back to instantiating the abstract
+     * base when a key is unregistered, which would yield a hollow provider that fails later and far
+     * from the typo. An unknown key is a configuration error and is reported as one, with the keys
+     * that ARE registered.
+     */
     private createSandboxProvider(config: HarnessAgentConfig): ISandboxProvider {
-        return config.sandbox?.provider === 'docker'
-            ? new DockerSandboxProvider({ defaultImage: config.sandbox?.image })
-            : new LocalDirectorySandboxProvider();
+        const key = (config.sandbox?.provider ?? DEFAULT_SANDBOX_PROVIDER).trim();
+        const classFactory = MJGlobal.Instance.ClassFactory;
+        const resolution = classFactory.TryCreateInstance<BaseSandboxProvider>(BaseSandboxProvider, key);
+        if (!resolution.Resolved || !resolution.Instance) {
+            const registered = classFactory
+                .GetAllRegistrations(BaseSandboxProvider)
+                .map((r) => r.Key)
+                .filter((k): k is string => !!k)
+                .join(', ');
+            throw new Error(
+                `Unknown sandbox provider '${key}' in TypeConfiguration sandbox.provider. ` +
+                    `Registered providers: ${registered || '(none — ensure the harness package is loaded, see LoadAgentHarnessSandboxProviders)'}.`,
+            );
+        }
+        resolution.Instance.Initialize(config.sandbox ?? {});
+        return resolution.Instance;
     }
 
     /** Reads and parses the harness block from the agent's TypeConfiguration. */
@@ -945,6 +1057,12 @@ export class HarnessAgentBase extends BaseAgent {
         })._executeParams;
     }
 }
+
+/** What came of trying to resolve one granted credential. See {@link HarnessAgentBase} `loadCredentialValue`. */
+type CredentialLoadOutcome =
+    | { Status: 'resolved'; Secret: string }
+    | { Status: 'rejected' }
+    | { Status: 'unavailable' };
 
 function describeError(e: unknown): string {
     return e instanceof Error ? e.message : String(e);

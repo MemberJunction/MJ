@@ -23,6 +23,11 @@ export interface SandboxConfig {
     Image?: string;
     /** How to handle two runs wanting the same durable workspace. */
     Concurrency?: 'queue' | 'fail' | 'fork';
+    /**
+     * Hosts reachable under the `allowlist` and `mcp-only` policies (`host` or `host:port`).
+     * Providers that cannot enforce egress ignore it — and should say so.
+     */
+    AllowedHosts?: string[];
 }
 
 /** A provisioned workspace, and the means of running commands inside it. */

@@ -1168,14 +1168,17 @@ import {
     DefaultRuntimeActionBridgeBuilder,
 } from '@memberjunction/action-runtime-host';
 
-// @memberjunction/ai-agent-harness (8 classes)
+// @memberjunction/ai-agent-harness (11 classes)
 import {
     ClaudeCodeCliAdapter,
     CodexAdapter,
+    DockerSandboxProvider,
     GeminiCliAdapter,
     HarnessAgentBase,
     HarnessAgentType,
+    LocalDirectorySandboxProvider,
     OpenCodeAdapter,
+    OpenShellSandboxProvider,
     PiAdapter,
     StdioJsonAdapter,
 } from '@memberjunction/ai-agent-harness';
@@ -2344,10 +2347,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     DefaultRuntimeActionBridgeBuilder,
     ClaudeCodeCliAdapter,
     CodexAdapter,
+    DockerSandboxProvider,
     GeminiCliAdapter,
     HarnessAgentBase,
     HarnessAgentType,
+    LocalDirectorySandboxProvider,
     OpenCodeAdapter,
+    OpenShellSandboxProvider,
     PiAdapter,
     StdioJsonAdapter,
     AgentArchitectAgent,
@@ -2366,13 +2372,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ListMyEntitiesAction,
     ModifyEntityAction,
     ValidateEntitySchemaAction,
-    DecisionFeaturePipelineDriver,
-    LLMFeaturePipelineDriver,
-    RecordProcessCancelRunServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    DecisionFeaturePipelineDriver,
+    LLMFeaturePipelineDriver,
+    RecordProcessCancelRunServerOperation,
     RecordProcessGetRunStatusServerOperation,
     RecordProcessPauseRunServerOperation,
     RecordProcessResumeRunServerOperation,
@@ -2570,13 +2576,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     GetUploadUrlAction,
     GetWeatherAction,
     Get_AI_Model_Cost_Action,
-    GoogleCustomSearchAction,
-    GraphQLQueryAction,
-    HTTPRequestAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    GoogleCustomSearchAction,
+    GraphQLQueryAction,
+    HTTPRequestAction,
     IPGeolocationAction,
     IntegrationActionExecutor,
     InviteToListAction,
@@ -2666,7 +2672,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1073;
+export const CLASS_REGISTRATIONS_COUNT = 1076;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

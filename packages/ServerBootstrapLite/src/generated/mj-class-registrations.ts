@@ -974,14 +974,17 @@ import {
     WhiteboardChannelServer,
 } from '@memberjunction/ai-agents';
 
-// @memberjunction/ai-agent-harness (8 classes)
+// @memberjunction/ai-agent-harness (11 classes)
 import {
     ClaudeCodeCliAdapter,
     CodexAdapter,
+    DockerSandboxProvider,
     GeminiCliAdapter,
     HarnessAgentBase,
     HarnessAgentType,
+    LocalDirectorySandboxProvider,
     OpenCodeAdapter,
+    OpenShellSandboxProvider,
     PiAdapter,
     StdioJsonAdapter,
 } from '@memberjunction/ai-agent-harness';
@@ -2023,10 +2026,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     WhiteboardChannelServer,
     ClaudeCodeCliAdapter,
     CodexAdapter,
+    DockerSandboxProvider,
     GeminiCliAdapter,
     HarnessAgentBase,
     HarnessAgentType,
+    LocalDirectorySandboxProvider,
     OpenCodeAdapter,
+    OpenShellSandboxProvider,
     PiAdapter,
     StdioJsonAdapter,
     AgentArchitectAgent,
@@ -2107,13 +2113,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
-    MJDuplicateRunEntityServer,
-    MJEntityDocumentEntityServer,
-    MJEntityEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    MJDuplicateRunEntityServer,
+    MJEntityDocumentEntityServer,
+    MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
@@ -2311,7 +2317,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 982;
+export const CLASS_REGISTRATIONS_COUNT = 985;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

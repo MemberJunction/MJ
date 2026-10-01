@@ -89,10 +89,10 @@ flowchart LR
 
 | Layer | Mechanism | Protects Against |
 |-------|-----------|-----------------|
-| Process Isolation | Workers run in separate OS processes via `child_process.fork()` | V8 catastrophic failures crashing the main app |
+| Process Isolation | Workers run in separate OS processes via `child_process.fork()`, with a minimal allowlisted environment (`WORKER_ENV_ALLOWLIST`: `PATH`, `NODE_ENV`, `NODE_OPTIONS`, `TZ`, `LANG`, `LC_ALL` and OS temp/system variables) rather than the host's `process.env` | V8 catastrophic failures crashing the main app; a compromised worker reading the host's DB credentials and API keys |
 | V8 Isolates | Each execution runs in an isolated V8 context (`isolated-vm`) | Sandbox escape, cross-execution data leakage |
 | Module Blocking | Dangerous Node.js modules blocked (`fs`, `http`, `child_process`, etc.) | Filesystem access, network requests, process spawning |
-| Resource Limits | Configurable timeout and memory limits per execution | Denial-of-service via infinite loops or memory exhaustion |
+| Resource Limits | Configurable timeout and memory limits per execution, clamped to a service-level ceiling (120 s / 512 MB) | Denial-of-service via infinite loops or memory exhaustion |
 | Library Allowlist | Only pre-vetted libraries available via `require()` | Supply chain attacks, unsafe library usage |
 
 ### Internal Module Structure
@@ -227,10 +227,21 @@ interface CodeExecutionParams {
   code: string;              // JavaScript code to execute
   language: 'javascript';    // Currently only 'javascript' supported
   inputData?: unknown;       // Data available as the 'input' variable in sandbox
-  timeoutSeconds?: number;   // Max execution time in seconds (default: 30)
-  memoryLimitMB?: number;    // Memory limit per execution in MB (default: 128)
+  timeoutSeconds?: number;   // Max execution time in seconds (default: 30, allowed 1-120)
+  memoryLimitMB?: number;    // Memory limit per execution in MB (default: 128, allowed 8-512)
 }
 ```
+
+#### Limit ceilings
+
+`timeoutSeconds` and `memoryLimitMB` are usually supplied by an AI agent (via the "Execute Code" action), so `CodeExecutionService` clamps them to a policy range before they reach a worker. The range is exported as `CODE_EXECUTION_LIMITS`:
+
+| Parameter | Default | Minimum | Maximum |
+|-----------|---------|---------|---------|
+| `timeoutSeconds` | 30 | 1 | 120 |
+| `memoryLimitMB` | 128 | 8 | 512 |
+
+A value above the maximum (including `Infinity`) is lowered to the maximum, a value below the minimum is raised to it, and a value that is not a positive number (`0`, negative, `NaN`, a string) is replaced by the default. Every adjustment is logged. Omitted values are left to the worker's own default. `ResolveExecutionLimits()` exposes the same policy as a pure function.
 
 ### CodeExecutionResult
 
@@ -281,7 +292,7 @@ Manages the pool of worker processes. Typically used through `CodeExecutionServi
 - Make network requests (`http`, `https`, `net`, `axios` blocked; `fetch()` API disabled)
 - Spawn processes (`child_process`, `cluster` blocked)
 - Access system information (`os`, `process` blocked)
-- Access environment variables
+- Access environment variables (and the worker process itself is forked with a minimal allowlisted environment — see below — so the host's secrets are not even present in it)
 - Use `eval()` or `Function` constructor (within user code scope)
 - Run indefinitely (timeout enforced)
 - Exceed memory limits (per-isolate enforcement)

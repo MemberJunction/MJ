@@ -17,8 +17,10 @@
  * @module @memberjunction/code-execution
  */
 
+import { LogStatus } from '@memberjunction/core';
 import { CodeExecutionParams, CodeExecutionResult } from './types';
 import { WorkerPool, WorkerPoolOptions } from './WorkerPool';
+import { ResolveExecutionLimits } from './limits';
 
 /**
  * Service for executing JavaScript code in a secure sandbox
@@ -90,8 +92,36 @@ export class CodeExecutionService {
             };
         }
 
-        // Execute in worker pool
-        return this.workerPool.execute(params);
+        // Execute in worker pool, with caller-supplied limits clamped to the policy in limits.ts so
+        // that no caller (an agent filling in action params, a runtime action) can monopolise a
+        // worker with an enormous timeout or heap.
+        return this.workerPool.execute(this.applyLimitPolicy(params));
+    }
+
+    /**
+     * Returns `params` with `timeoutSeconds` / `memoryLimitMB` clamped to the policy, logging any
+     * change. Returns the same object untouched when nothing needed adjusting, so the common case
+     * allocates nothing.
+     */
+    private applyLimitPolicy(params: CodeExecutionParams): CodeExecutionParams {
+        const limits = ResolveExecutionLimits(params);
+        if (limits.Adjustments.length === 0) {
+            return params;
+        }
+        for (const adjustment of limits.Adjustments) {
+            LogStatus(
+                `CodeExecutionService: ${adjustment.Parameter}=${String(adjustment.Requested)} is ` +
+                    `${adjustment.Reason}; using ${adjustment.Applied}.`
+            );
+        }
+        const adjusted: CodeExecutionParams = { ...params };
+        if (limits.TimeoutSeconds !== undefined) {
+            adjusted.timeoutSeconds = limits.TimeoutSeconds;
+        }
+        if (limits.MemoryLimitMB !== undefined) {
+            adjusted.memoryLimitMB = limits.MemoryLimitMB;
+        }
+        return adjusted;
     }
 
     /** @deprecated Use {@link Execute}. */

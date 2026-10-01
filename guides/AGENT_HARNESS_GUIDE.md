@@ -70,7 +70,7 @@ Set the agent's `TypeID` to `Harness` and its `TypeConfiguration`:
 {
   "harnessName": "Claude Code",       // must match a row Name exactly — it is a lookup key
   "sandbox": {
-    "provider": "local",              // local | docker
+    "provider": "local",              // local | docker | openshell (experimental)
     "workspaceScope": "agent-user",   // run | agent | agent-user
     "networkPolicy": "mcp-only"
   }
@@ -118,10 +118,16 @@ extra tokens are budgeted against the run's guardrails instead of quietly absorb
 **Adapters never call `spawn`.** They run everything through `SandboxExecutor`, obtained from the
 handle the provider returns. Process placement is the provider's decision.
 
-| Provider | Execution | Isolation | Use |
-|---|---|---|---|
-| `LocalDirectorySandboxProvider` | direct spawn | **none** | dev only |
-| `DockerSandboxProvider` | `docker exec`, container per run | real FS boundary | shared / prod |
+| Provider key | Class | Execution | Isolation | Use |
+|---|---|---|---|---|
+| `local` (default) | `LocalDirectorySandboxProvider` | direct spawn | **none** | dev only |
+| `docker` | `DockerSandboxProvider` | `docker exec`, container per run | hardened container, real FS boundary | shared / prod |
+| `openshell` | `OpenShellSandboxProvider` | `openshell sandbox exec` | Landlock + seccomp + enforced egress allowlist | **experimental** |
+
+Providers are pluggable: a `BaseSandboxProvider` subclass registered with
+`@RegisterClass(BaseSandboxProvider, '<key>')` is selected by `sandbox.provider`, receives the
+agent's `sandbox` block through `Initialize()` before `Provision()`, and an unknown key is an error,
+not a fallback.
 
 > ⚠️ The local provider scopes a **directory**, not a **process**. `networkPolicy` is advisory there.
 > Believing `'none'` is enforced locally is worse than knowing the boundary is soft.
@@ -135,7 +141,50 @@ autonomous agent's shell commands.
 Ladder: dedicated **sandbox image** (versioned separately from MJAPI) → Docker provider, container
 per run → ECS/Fargate `RunTask` or Azure Container Instances for multi-tenant scale.
 
-`networkPolicy: 'mcp-only'` only becomes truthful at the container stage.
+`networkPolicy: 'mcp-only'` only becomes truthful at the container stage — and, today, only with a
+provider that can filter egress. Docker cannot (it logs a warning saying so); OpenShell can.
+
+### Docker hardening
+
+Containers start with all capabilities dropped, `no-new-privileges`, an init process, and `--pids-limit`
+/ `--memory` / `--cpus` ceilings (defaults `512` / `4g` / `2`; override under `sandbox.limits`). They run
+as the MJAPI process's uid:gid (override with `sandbox.docker.user`; not applied on Windows or when MJAPI
+is root), with `HOME` pointing into the mounted workspace. Granted secrets are passed by name
+(`--env NAME`) with the values in the docker CLI's own, minimal environment — never on a command line,
+and never alongside MJAPI's unrelated variables.
+
+### OpenShell (experimental)
+
+[NVIDIA OpenShell](https://github.com/NVIDIA/OpenShell) is a gateway + CLI for policy-governed
+sandboxes with deny-by-default egress and credential providers that keep real keys out of the sandbox.
+`OpenShellSandboxProvider` drives its CLI. It is **pre-1.0 and not yet run end-to-end against a live gateway** (written
+from OpenShell's source at `0e8d9e5`; its commands and generated policies were checked against the real
+v0.1.2 CLI and policy parser; targeting CLI `>=0.1.0 <0.2.0`), is never the default, and should be
+expected to change.
+
+```jsonc
+{
+  "harnessName": "Claude Code",
+  "sandbox": {
+    "provider": "openshell",
+    "workspaceScope": "run",
+    "networkPolicy": "mcp-only",
+    "image": "registry.example.com/me/claude-agent:1",
+    "allowedHosts": ["api.anthropic.com", "statsig.anthropic.com"],
+    "openshell": {
+      "providers": ["anthropic"],                    // pre-registered on the gateway
+      "providerManagedEnv": ["ANTHROPIC_API_KEY"],   // granted vars the provider supplies instead
+      "mcpEndpoint": "http://host.openshell.internal:4000/mcp"
+    }
+  }
+}
+```
+
+Limitations: `run` scope only (so no session resume); `networkPolicy: 'open'` is rejected; attached
+providers contribute their own egress rules, so `none` means "no MJ-added egress"; granted variables
+*not* listed in `providerManagedEnv` go through `exec --env K=V` and so appear on the local `openshell`
+command line. Full config reference, the generated policy, and a step-by-step **local test procedure**
+are in the package README (`packages/AI/AgentHarness/README.md`, "OpenShell").
 
 ### `WorkspacePath` means "as the harness sees it"
 
@@ -154,10 +203,17 @@ process does.
 Resolution order — mirroring how MJ's AI layer already resolves vendor keys, so operators do not
 learn a second scheme:
 
-1. **`MJ: AI Agent Credentials`** grants for this agent, read from `MJ: Credentials`. Governed:
-   auditable, revocable, per-agent.
+1. **`MJ: AI Agent Credentials`** grants for this agent, resolved through `CredentialEngine`.
+   Governed: auditable (the read lands in the credential audit log, subsystem `AgentHarness`),
+   revocable, per-agent.
 2. **`process.env[EnvVariableName]`** — the server's own value for the variable the grant names.
 3. **`AI_VENDOR_API_KEY__<DRIVERCLASS>`** when the agent has no grants at all — the zero-config path.
+
+A credential holds every field of its type, but a grant maps one variable to one secret. Exactly one
+field is injected — the only field, else the first of `apiKey`, `api_key`, `token`, `accessToken`,
+`access_token`, `authToken`, `secret`, `value`. An ambiguous credential (AWS IAM, basic auth), an
+inactive one, or an expired one is skipped and logged by credential and agent name; the blob is never
+injected and the server's same-named variable is not substituted for it.
 
 Preferring credentials matters: env vars are process-wide, so falling back means the agent gets
 whatever the *server* holds rather than only what it was *granted*. Fine for dev and single-tenant.
@@ -226,6 +282,10 @@ Stated plainly so nobody designs around a guarantee that does not exist yet:
 - **`PermissionHooks: false` everywhere.** The `strict` posture needs an MCP permission-prompt tool
   that does not exist. Until it does, strict cannot be enforced adapter-side.
 - **`networkPolicy` `mcp-only` / `allowlist` are not packet-enforced** under Docker. Only `'none'` is.
+  The experimental `openshell` provider enforces them.
+- **Gemini CLI: posture yes, tool lists no.** `strict`/`auto`/`dangerous` map to `--approval-mode`
+  `default`/`auto_edit`/`yolo`; allow/deny lists are not translated (Gemini has no deny flag), so
+  `PermissionPolicy` stays `false`.
 - **MCP loopback is not wired.** `HarnessSessionConfig` carries the fields; the server and per-run
   scoped credential are still to come. Harness agents can *act* (turn-end actions and sub-agents) but
   cannot *read* MJ data mid-turn.

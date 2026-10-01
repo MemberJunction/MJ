@@ -5,5 +5,6 @@
 
 export * from './CodeExecutionService';
 export * from './WorkerPool';
+export * from './limits';
 export * from './types';
 export * from './libraries';
