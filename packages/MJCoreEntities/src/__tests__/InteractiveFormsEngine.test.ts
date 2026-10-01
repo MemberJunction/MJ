@@ -205,3 +205,45 @@ describe('InteractiveFormsEngine contribution load', () => {
         expect(contributionConfig()?.Filter).toBeUndefined();
     });
 });
+/**
+ * The identity and permission surfaces take only the user's own forms and panels. A full custom
+ * form published to a role or to everyone would replace the whole body of the Users form for
+ * other people, so overrides follow the same rule as contributions.
+ */
+describe('InteractiveFormsEngine.GetActiveOverrideForEntity on a restricted entity', () => {
+    beforeEach(() => { backing = {}; });
+
+    function override(over: Record<string, unknown>) {
+        return { ID: 'o', EntityID: ENTITY, Scope: 'Global', UserID: null, RoleID: null, Status: 'Active', Priority: 0, ...over };
+    }
+
+    it('ignores a Global or Role full custom form on MJ: Users', () => {
+        backing._overrides = [
+            override({ ID: 'global', Entity: 'MJ: Users' }),
+            override({ ID: 'role', Scope: 'Role', RoleID: ROLE, Entity: 'MJ: Users' }),
+        ];
+        expect(InteractiveFormsEngine.Instance.GetActiveOverrideForEntity(ENTITY, USER, [ROLE])).toBeNull();
+    });
+
+    it('still returns the user\'s own form there', () => {
+        backing._overrides = [
+            override({ ID: 'global', Entity: 'MJ: Users' }),
+            override({ ID: 'mine', Scope: 'User', UserID: USER, Entity: 'MJ: Users' }),
+        ];
+        expect(InteractiveFormsEngine.Instance.GetActiveOverrideForEntity(ENTITY, USER, [ROLE])?.ID).toBe('mine');
+    });
+
+    it('returns a Global form on an ordinary entity', () => {
+        backing._overrides = [override({ ID: 'global', Entity: 'MJ: Applications' })];
+        expect(InteractiveFormsEngine.Instance.GetActiveOverrideForEntity(ENTITY, USER, [ROLE])?.ID).toBe('global');
+    });
+
+    it('covers the permission and form-metadata entities too', () => {
+        for (const name of ['MJ: API Keys', 'MJ: Entity Permissions', 'MJ: Row Level Security Filters', 'MJ: Entity Field Permissions', 'MJ: Entity Form Overrides', 'MJ: Entity Form Contributions']) {
+            backing._overrides = [override({ ID: 'global', Entity: name })];
+            backing._contributions = [row({ ID: 'global', Entity: name })];
+            expect(InteractiveFormsEngine.Instance.GetActiveOverrideForEntity(ENTITY, USER, [ROLE])).toBeNull();
+            expect(InteractiveFormsEngine.Instance.GetApplicableContributions(ENTITY, USER, [ROLE])).toEqual([]);
+        }
+    });
+});

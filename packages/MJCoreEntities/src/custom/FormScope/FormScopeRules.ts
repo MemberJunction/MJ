@@ -102,6 +102,39 @@ export function ContributionScopeRank(scope: FormScope | null | undefined): numb
 }
 
 /**
+ * Entities whose forms show only the user's own full custom forms and panels, lowercased.
+ *
+ * A full custom form or a panel runs a React spec the runtime interprets. On an identity,
+ * permission or form-metadata surface, one published to a role or to everyone would change what
+ * other people see where it matters most, so only `User`-scope items render there.
+ */
+export const RESTRICTED_FORM_ENTITIES: ReadonlySet<string> = new Set([
+    'mj: users',
+    'mj: roles',
+    'mj: user roles',
+    'mj: authorizations',
+    'mj: authorization roles',
+    'mj: entity permissions',
+    'mj: row level security filters',
+    'mj: api keys',
+    'mj: entity field permissions',
+    'mj: entity form overrides',
+    'mj: entity form contributions',
+]);
+
+/**
+ * Whether a full custom form or panel at this scope may render on this entity's form.
+ *
+ * Always for `User`. Any other scope only off {@link RESTRICTED_FORM_ENTITIES}; the name is
+ * matched trimmed and case-folded. Applied where rows are read, so it holds however a row was
+ * written, `mj sync` and direct SQL included.
+ */
+export function FormScopeAllowedOnEntity(entityName: string | null | undefined, scope: string | null | undefined): boolean {
+    if (scope === 'User') return true;
+    return !RESTRICTED_FORM_ENTITIES.has((entityName ?? '').trim().toLowerCase());
+}
+
+/**
  * Whether this user may publish forms and panels to a role or to everyone.
  *
  * An `Owner`-type user counts as holding it: they are the platform's top authority and must never

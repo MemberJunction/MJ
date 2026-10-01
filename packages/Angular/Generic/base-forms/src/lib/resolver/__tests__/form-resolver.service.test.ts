@@ -18,7 +18,11 @@ const hoisted = vi.hoisted(() => ({
     deleted: [] as string[],
 }));
 
-vi.mock('@memberjunction/core-entities', () => ({
+vi.mock('@memberjunction/core-entities', async () => ({
+    // The scope rule is pure, so the real one decides. Loads from core-entities' dist, so that
+    // package must be built first.
+    FormScopeAllowedOnEntity: (await vi.importActual<{ FormScopeAllowedOnEntity: unknown }>(
+        '@memberjunction/core-entities/dist/custom/FormScope/FormScopeRules.js')).FormScopeAllowedOnEntity,
     InteractiveFormsEngine: {
         Instance: {
             Config: async () => undefined,
@@ -49,8 +53,8 @@ function form(over: Partial<OverrideRow> & { ID: string }): OverrideRow {
     };
 }
 
-async function resolvedID(): Promise<string | null> {
-    const resolution = await new FormResolverService().ResolveFormForEntity(ENTITY, USER, PROVIDER);
+async function resolvedID(entity: EntityInfo = ENTITY): Promise<string | null> {
+    const resolution = await new FormResolverService().ResolveFormForEntity(entity, USER, PROVIDER);
     return resolution.kind === 'interactive' ? resolution.override.ID : null;
 }
 
@@ -79,5 +83,32 @@ describe('FormResolverService — a stored choice of a set-aside form', () => {
         hoisted.overrides = [form({ ID: 'retracted', Scope: 'Role', RoleID: 'role-sales', Status: 'Inactive' })];
         hoisted.stored = 'retracted';
         expect(await resolvedID()).toBeNull();
+    });
+});
+
+/**
+ * A full custom form replaces the whole body. On an identity or permission entity, one published
+ * to a role or to everyone would replace the Users form for other people, so only the user's own
+ * forms apply there.
+ */
+describe('FormResolverService — an identity entity', () => {
+    const USERS = { ID: 'ent-1', Name: 'MJ: Users' } as unknown as EntityInfo;
+
+    it('does not render or offer a Global or Role form on MJ: Users', async () => {
+        hoisted.overrides = [form({ ID: 'global' }), form({ ID: 'role', Scope: 'Role', RoleID: 'role-sales' })];
+        expect(await resolvedID(USERS)).toBeNull();
+        expect(await new FormResolverService().ListVariantsForEntity(USERS, USER, PROVIDER)).toEqual([]);
+    });
+
+    it('renders the user\'s own form there', async () => {
+        hoisted.overrides = [form({ ID: 'global' }), form({ ID: 'mine', Scope: 'User', UserID: 'user-me' })];
+        expect(await resolvedID(USERS)).toBe('mine');
+    });
+
+    it('drops a stored choice that names a shared form there', async () => {
+        hoisted.overrides = [form({ ID: 'global' })];
+        hoisted.stored = 'global';
+        expect(await resolvedID(USERS)).toBeNull();
+        expect(hoisted.deleted).toEqual(['mj.formVariant.mj: users']);
     });
 });

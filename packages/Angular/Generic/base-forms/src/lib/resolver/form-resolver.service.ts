@@ -1,6 +1,6 @@
 import { Injectable, Type } from '@angular/core';
 import { IMetadataProvider, UserInfo, EntityInfo, LogError } from '@memberjunction/core';
-import { InteractiveFormsEngine } from '@memberjunction/core-entities';
+import { FormScopeAllowedOnEntity, InteractiveFormsEngine } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { BaseFormComponent } from '../base-form-component';
 import { UserInfoEngine } from '@memberjunction/core-entities';
@@ -214,8 +214,10 @@ export class FormResolverService {
         // Includes Active + Pending + Inactive; the variant picker and
         // pickActive() keep the ones IsSelectableOverride allows. Replaces
         // a per-LoadForm RunView with an in-memory predicate — sub-ms.
+        // An identity or permission entity takes only the user's own forms.
         const applicable = InteractiveFormsEngine.Instance.Overrides.filter(o => {
             if (!o.EntityID || !UUIDsEqual(o.EntityID, entity.ID)) return false;
+            if (!FormScopeAllowedOnEntity(entity.Name, o.Scope)) return false;
             if (o.Scope === 'User')   return !!o.UserID && o.UserID.toLowerCase() === user.ID.toLowerCase();
             if (o.Scope === 'Role')   return !!o.RoleID && userRoleIds.has(o.RoleID);
             if (o.Scope === 'Global') return true;

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AuthorizationInfo, AuthorizationRoleInfo, Metadata, UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import {
     ContributionScopeRank,
+    FormScopeAllowedOnEntity,
     FormScopeWriteRefusal,
     IsCanonicalFormScope,
     MANAGE_FORM_DEFAULTS_AUTHORIZATION,
@@ -325,5 +326,38 @@ describe('UserCanManageFormDefaults', () => {
     it('finds the authorization whatever its casing', () => {
         const lower = new AuthorizationInfo({ ID: GRANT_ID, Name: 'manage form defaults', ParentID: null, IsActive: true });
         expect(UserCanManageFormDefaults(user([DEVELOPER]), provider([lower]))).toBe(true);
+    });
+});
+
+/**
+ * The identity, permission and form-metadata surfaces take only the user's own forms and panels:
+ * one published to a role or to everyone would change what other people see where it matters most.
+ */
+describe('FormScopeAllowedOnEntity', () => {
+    const RESTRICTED = [
+        'MJ: Users', 'MJ: Roles', 'MJ: User Roles', 'MJ: Authorizations', 'MJ: Authorization Roles',
+        'MJ: Entity Permissions', 'MJ: Row Level Security Filters', 'MJ: API Keys',
+        'MJ: Entity Field Permissions', 'MJ: Entity Form Overrides', 'MJ: Entity Form Contributions',
+    ];
+
+    it.each(RESTRICTED)('allows only User items on %s', (name) => {
+        expect(FormScopeAllowedOnEntity(name, 'User')).toBe(true);
+        expect(FormScopeAllowedOnEntity(name, 'Role')).toBe(false);
+        expect(FormScopeAllowedOnEntity(name, 'Global')).toBe(false);
+    });
+
+    it('allows every scope on an ordinary entity', () => {
+        for (const scope of ['User', 'Role', 'Global']) {
+            expect(FormScopeAllowedOnEntity('MJ: Applications', scope)).toBe(true);
+        }
+    });
+
+    it('matches the name whatever its casing or padding', () => {
+        expect(FormScopeAllowedOnEntity('  mj: api keys ', 'Global')).toBe(false);
+    });
+
+    it('treats an unknown or blank scope as shared', () => {
+        expect(FormScopeAllowedOnEntity('MJ: Users', null)).toBe(false);
+        expect(FormScopeAllowedOnEntity('MJ: Users', ' user')).toBe(false);
     });
 });

@@ -2,6 +2,7 @@ import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, ProviderType, 
 import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from "@memberjunction/global";
 import type { Observable } from "rxjs";
 import type { MJComponentEntity, MJEntityFormContributionEntity, MJEntityFormOverrideEntity } from "../generated/entity_subclasses";
+import { FormScopeAllowedOnEntity } from "../custom/FormScope/FormScopeRules";
 import type { InstanceConfigEngine } from "./InstanceConfigEngine";
 
 /**
@@ -278,34 +279,14 @@ export class InteractiveFormsEngine extends BaseEngine<InteractiveFormsEngine> {
     }
 
     /**
-     * Entities whose forms never carry a Global or Role contribution, whatever wrote the row.
-     *
-     * A contribution places a runtime-interpreted React spec on a form; on an identity or
-     * authorization surface that is the one place it must not happen silently for other
-     * people. A user may still place a `User`-scope contribution on their own form.
-     */
-    private static readonly RESTRICTED_CONTRIBUTION_ENTITIES: ReadonlySet<string> = new Set([
-        'mj: users', 'mj: roles', 'mj: user roles', 'mj: authorizations', 'mj: authorization roles',
-    ]);
-
-    /**
-     * The clamp is applied here, on the read path, rather than at the write paths.
-     * The action family already forces `Scope='User'` on every write, so a check there can
-     * never fire, and `mj sync` — the path an OpenApp actually uses — bypasses actions
-     * altogether. Filtering where the rows are consumed covers every writer, including
-     * direct SQL, and cannot be routed around.
-     */
-    private static scopeAllowedOnEntity(entityName: string | null, scope: string): boolean {
-        if (scope === 'User') return true;
-        const name = (entityName ?? '').trim().toLowerCase();
-        return !InteractiveFormsEngine.RESTRICTED_CONTRIBUTION_ENTITIES.has(name);
-    }
-
-    /**
      * Active contribution rows that apply to (entity, user, roles): User rows for this
      * user, Role rows for any of the user's roles, and Global rows. Sorted by
      * `Precedence` DESC then `SortKey` DESC. Last-wins collapse against compiled
      * registrations happens in ng-base-forms, not here.
+     *
+     * On an identity or permission entity only the user's own rows apply
+     * ({@link FormScopeAllowedOnEntity}). The clamp is applied here, on the read path, because
+     * `mj sync` — the path an OpenApp actually uses — and direct SQL bypass the actions.
      */
     public GetApplicableContributions(
         entityID: string,
@@ -316,7 +297,7 @@ export class InteractiveFormsEngine extends BaseEngine<InteractiveFormsEngine> {
         const rows = this.Contributions.filter(c =>
             c.EntityID && UUIDsEqual(c.EntityID, entityID)
             && c.Status === 'Active'
-            && InteractiveFormsEngine.scopeAllowedOnEntity(c.Entity, c.Scope)
+            && FormScopeAllowedOnEntity(c.Entity, c.Scope)
             && (
                 (c.Scope === 'User'   && !!c.UserID && !!userID && UUIDsEqual(c.UserID, userID)) ||
                 (c.Scope === 'Role'   && !!c.RoleID && roleIDs.some(r => UUIDsEqual(r, c.RoleID as string))) ||
@@ -344,7 +325,9 @@ export class InteractiveFormsEngine extends BaseEngine<InteractiveFormsEngine> {
      * priority: User > Role > Global. Returns the highest-priority
      * Active override for the given (entity, user, roles) tuple, or null
      * if none match. Within the same scope, lower `Priority` wins (the
-     * resolver convention — Priority is sort key, not boost).
+     * resolver convention — Priority is sort key, not boost). On an identity
+     * or permission entity only the user's own forms count
+     * ({@link FormScopeAllowedOnEntity}).
      *
      * @param entityID The target `MJ: Entities.ID`.
      * @param userID The current user's `MJ: Users.ID`.
@@ -359,6 +342,7 @@ export class InteractiveFormsEngine extends BaseEngine<InteractiveFormsEngine> {
         const candidates = this.Overrides.filter(o =>
             o.EntityID && UUIDsEqual(o.EntityID, entityID)
             && o.Status === 'Active'
+            && FormScopeAllowedOnEntity(o.Entity, o.Scope)
             && (
                 (o.Scope === 'User'   && o.UserID && userID && UUIDsEqual(o.UserID, userID)) ||
                 (o.Scope === 'Role'   && o.RoleID && roleIDs.some(r => UUIDsEqual(r, o.RoleID!))) ||
