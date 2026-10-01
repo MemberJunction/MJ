@@ -338,6 +338,45 @@ function meanOf(columns: MatrixColumn[]): number | null {
     return scores.reduce((sum, score) => sum + score, 0) / scores.length;
 }
 
+/** A criterion row from MJ: Rubric Criteria, as the author widget expects it. */
+export function nodeFromRow(row: Record<string, unknown>): RubricNodeSnapshot {
+    return {
+        id: String(row.ID ?? ''),
+        key: String(row.Key ?? ''),
+        name: String(row.Name ?? ''),
+        parentId: row.ParentID == null || row.ParentID === '' ? null : String(row.ParentID),
+        nodeType: row.NodeType === 'Group' ? 'Group' : 'Criterion',
+        scaleId: row.ScaleID == null || row.ScaleID === '' ? null : String(row.ScaleID),
+        weight: Number(row.Weight ?? 1),
+        isAdvisory: row.IsAdvisory === true || row.IsAdvisory === 1,
+        isGate: row.IsGate === true || row.IsGate === 1,
+        gateMinimumScore: row.GateMinimumScore == null || row.GateMinimumScore === '' ? null : Number(row.GateMinimumScore),
+        notApplicablePolicy: (row.NotApplicablePolicy as NotApplicablePolicy | null) ?? null,
+        evidenceRequired: row.EvidenceRequired === true || row.EvidenceRequired === 1,
+        rationaleRequired: row.RationaleRequired === true || row.RationaleRequired === 1,
+        sequence: Number(row.Sequence ?? 0),
+    };
+}
+
+/** Fields the Explorer form writes back when the author emits a node. */
+export function nodeFields(node: RubricNodeSnapshot): Record<string, unknown> {
+    return {
+        Key: node.key,
+        Name: node.name,
+        ParentID: node.parentId ?? null,
+        NodeType: node.nodeType,
+        ScaleID: node.scaleId ?? null,
+        Weight: node.weight,
+        IsAdvisory: node.isAdvisory,
+        IsGate: node.isGate,
+        GateMinimumScore: node.gateMinimumScore ?? null,
+        NotApplicablePolicy: node.notApplicablePolicy ?? null,
+        EvidenceRequired: node.evidenceRequired,
+        RationaleRequired: node.rationaleRequired,
+        Sequence: node.sequence,
+    };
+}
+
 function slug(name: string): string {
     const key = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     return key.length > 0 ? key : 'criterion';

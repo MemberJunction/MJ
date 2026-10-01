@@ -104,6 +104,10 @@ import { EntityFormChromeEditorComponent } from "../panels/form-chrome/entity-fo
 import { EntityRelationshipFormRolePanel } from "../panels/form-chrome/entity-relationship-form-role.panel";
 import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissions";
 import { MLModelFormComponentExtended, LoadMLModelFormComponentExtended } from "./MLModels/ml-model-form.component";
+import { RubricsModule } from "@memberjunction/ng-rubrics";
+import { MJRubricFormComponentExtended } from "./Rubrics/rubric-form.component";
+import { MJRubricEvaluationFormComponentExtended } from "./Rubrics/evaluation-form.component";
+import { MJRubricScaleFormComponentExtended } from "./Rubrics/scale-form.component";
 import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
 
 @NgModule({
@@ -150,6 +154,9 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         MJTestRubricFormComponentExtended,
         EntityLinkPillComponent,
         MJListFormComponentExtended,
+        MJRubricFormComponentExtended,
+        MJRubricEvaluationFormComponentExtended,
+        MJRubricScaleFormComponentExtended,
         // ContentSource-specific BaseFormPanel slot components (no custom form override).
         TagPipelineConfigurationPanel,
         WebsiteCrawlerSettingsPanel,
@@ -172,6 +179,7 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
     ],
     imports: [
         CommonModule,
+        RubricsModule,
         FormsModule,
         ReactiveFormsModule,
         DragDropModule,

@@ -60,6 +60,7 @@
     "@memberjunction/ng-markdown": "6.2.0-edge.1",
     "@memberjunction/ng-notifications": "6.2.0-edge.1",
     "@memberjunction/ng-record-process-studio": "6.2.0-edge.1",
+    "@memberjunction/ng-rubrics": "6.2.0-edge.1",
     "@memberjunction/ng-resource-permissions": "6.2.0-edge.1",
     "@memberjunction/ng-search": "6.2.0-edge.1",
     "@memberjunction/ng-shared": "6.2.0-edge.1",

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { addCriterion, addNode, answerLevel, bandFor, canSubmit, comparisonMatrix, displayScore, draftProblems, incompleteAnswers, moveNode, moveProblem, previewScore, publishPreview, setAnchor, setGate, setScale, setWeight, versionRows, weightShares } from './model.js';
+import { addCriterion, addNode, answerLevel, bandFor, canSubmit, comparisonMatrix, displayScore, draftProblems, incompleteAnswers, moveNode, moveProblem, nodeFields, nodeFromRow, previewScore, publishPreview, setAnchor, setGate, setScale, setWeight, versionRows, weightShares } from './model.js';
 
 const scale: RubricScaleSnapshot = {
     id: 'scale',
@@ -164,6 +164,18 @@ describe('publish, diff, and comparison', () => {
         expect(matrix.humanMean).toBe(0.5);
         expect(matrix.aiMean).toBe(1);
         expect(matrix.selfScore).toBe(0);
+    });
+});
+
+describe('explorer row mapping', () => {
+    it('reads a criterion row and writes the same fields back', () => {
+        const node = nodeFromRow({
+            ID: 'c1', Key: 'clarity', Name: 'Clarity', ParentID: 'group', NodeType: 'Criterion',
+            ScaleID: 'scale', Weight: 2, IsGate: 1, GateMinimumScore: 0.6, Sequence: 1,
+        });
+        expect(node.parentId).toBe('group');
+        expect(node.isGate).toBe(true);
+        expect(nodeFields(node)).toMatchObject({ Key: 'clarity', ParentID: 'group', Weight: 2, IsGate: true, GateMinimumScore: 0.6 });
     });
 });
 

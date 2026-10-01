@@ -1,0 +1,26 @@
+@if (record) {
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
+    @if (Loading) {
+        <mj-loading text="Loading scale..."></mj-loading>
+    } @else {
+        <section>
+            <h2>{{ record.Name }}</h2>
+            <ul>
+                @for (level of Levels; track level.ID) {
+                    <li>
+                        <label>
+                            {{ level.Value }}
+                            <input type="text" [value]="level.Label" (change)="OnLabel(level, $event)" />
+                        </label>
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+</mj-record-form-container>
+}

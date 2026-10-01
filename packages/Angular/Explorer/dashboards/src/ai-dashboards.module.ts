@@ -68,6 +68,7 @@ import { AnalyticsRealtimeTranscriptsComponent, LoadAnalyticsRealtimeTranscripts
 
 // AI Overview Hub
 import { AIOverviewHubComponent, LoadAIOverviewHub } from './AI/components/overview/ai-overview-hub.component';
+import { RubricsResourceComponent } from './Rubrics/rubrics-resource.component';
 
 // Knowledge Hub components
 import {
@@ -164,7 +165,8 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     AnalyticsRealtimeSessionsComponent,
     RealtimeManagementComponent,
     AnalyticsRealtimeTranscriptsComponent,
-    AIOverviewHubComponent
+    AIOverviewHubComponent,
+    RubricsResourceComponent
   ],
   imports: [
     CommonModule,

@@ -1,0 +1,19 @@
+.rubrics-home {
+    display: flex;
+    flex-direction: column;
+    gap: var(--mj-space-4, 1rem);
+    padding: var(--mj-space-4, 1rem);
+    color: var(--mj-text-primary);
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}

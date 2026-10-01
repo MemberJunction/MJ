@@ -59,7 +59,8 @@ export class MJRubricVersionEntityServer extends MJRubricVersionEntity {
             if (!provider?.RunView) throw new Error('Publishing a rubric version requires a provider that can load the draft tree.');
             const run = (entityName: string, filter: string) => provider.RunView!({ EntityName: entityName, ExtraFilter: filter }, this.ContextCurrentUser);
             const loaded = await loadDraftForPublish(run, this.ID, this.RubricID, this.BasedOnVersionID);
-            await this.publish(loaded.base, loaded.draft);
+            const requested = (this as { RequestedBump?: 'Major' | 'Minor' | 'Patch' | null }).RequestedBump ?? null;
+            await this.publish(loaded.base, loaded.draft, requested);
         }
         return super.Save(options);
     }

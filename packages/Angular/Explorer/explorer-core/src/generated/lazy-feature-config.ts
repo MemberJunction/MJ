@@ -152,6 +152,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::AIModelsResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::AIMonitorResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::AIPromptsResource': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::RubricsResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::AnalyticsResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::AutotaggingPipelineResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::ClusterVisualizationResource': loadNgDashboardsAiDashboardsModule,

@@ -1,0 +1,35 @@
+@if (record) {
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
+    @if (Loading) {
+        <mj-loading text="Loading rubric..."></mj-loading>
+    } @else {
+        <section class="rubric-form">
+            <h2>{{ record.Name }}</h2>
+            <ul>
+                @for (version of Versions; track version.ID) {
+                    <li>{{ version.Status }} {{ version.MajorVersion }}.{{ version.MinorVersion }}.{{ version.PatchVersion }}</li>
+                }
+            </ul>
+            <mj-rubric-builder [Nodes]="Nodes" [Scales]="Scales" [Version]="DraftVersion" (NodesChange)="OnNodes($event)"></mj-rubric-builder>
+            @if (BaseVersion && DraftVersion) {
+                <mj-rubric-version-diff [Base]="BaseVersion" [Draft]="DraftVersion"></mj-rubric-version-diff>
+            }
+            @if (DraftVersion) {
+                <div class="rubric-actions">
+                    <mj-rubric-publish-dialog [Base]="BaseVersion" [Draft]="DraftVersion" [RequestedBump]="RequestedBump" [Summary]="Summary"
+                        (RequestedBumpChange)="RequestedBump = $event" (SummaryChange)="Summary = $event" (Confirm)="OnPublish($event)"></mj-rubric-publish-dialog>
+                    <button type="button" (click)="RequestedBump = null; Summary = ''">Cancel</button>
+                </div>
+            }
+            @if (Message) {
+                <p>{{ Message }}</p>
+            }
+        </section>
+    }
+</mj-record-form-container>
+}

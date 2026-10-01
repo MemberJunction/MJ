@@ -863,7 +863,9 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 **U — UI and docs**
 - [x] **U1** `@memberjunction/ng-rubrics` widgets (§12). Author, answer form, result, publish
       dialog, version diff, and comparison matrix. Explorer forms are U2.
-- [ ] **U2** Explorer forms and nav (§12).
+- [x] **U2** Explorer forms and nav (§12). The rubric form loads the draft and saves the
+      author and publish. The evaluation form loads the result and the cohort matrix. The scale
+      form loads levels and saves a label. Rubrics is a nav item in the AI application.
 - [~] **U3** `guides/RUBRICS_GUIDE.md` with the six worked examples; the ng-rubrics README.
       The TestingFramework and Engine README updates are not in this pass.
 - [ ] **U4** Example rubrics under `metadata/rubrics/` matching the guide's examples.

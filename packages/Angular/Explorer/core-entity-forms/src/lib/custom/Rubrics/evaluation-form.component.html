@@ -1,0 +1,15 @@
+@if (record) {
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
+    @if (Loading) {
+        <mj-loading text="Loading evaluation..."></mj-loading>
+    } @else {
+        <mj-rubric-result [Result]="Result" [Answers]="Answers"></mj-rubric-result>
+        <mj-rubric-comparison-matrix [Keys]="Keys" [Columns]="Columns"></mj-rubric-comparison-matrix>
+    }
+</mj-record-form-container>
+}
