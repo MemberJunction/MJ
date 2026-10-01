@@ -1,15 +1,15 @@
 <section class="rubric-panel" aria-label="Rubric author">
   <ol class="rubric-list">
     @for (node of Nodes; track node.id) {
-      <li>
-        <div class="rubric-facts">
-          <span>Name: {{ node.name }}</span>
-          <span>Key: {{ node.key }}</span>
-          <span>Weight: {{ node.weight }} ({{ Share(node.id) }}% of its group)</span>
+      <li class="criterion-card">
+        <div class="rubric-row">
+          <strong>{{ node.name }}</strong>
+          <span class="pill pill-key">{{ node.key }}</span>
+          <span class="pill">Weight {{ node.weight }}</span>
+          <span class="pill">{{ Share(node.id) }}%</span>
           @if (node.nodeType === 'Criterion') {
-            <span>Scale: {{ ScaleLabel(node) }}</span>
-            <span>Gate: {{ node.isGate ? '≥ ' + node.gateMinimumScore : 'off' }}</span>
-            <span>Not applicable: {{ node.notApplicablePolicy || 'Version default' }}</span>
+            <span class="pill">{{ ScaleLabel(node) }}</span>
+            <span class="pill">{{ node.isGate ? 'Gate ≥ ' + node.gateMinimumScore : 'Gate off' }}</span>
           }
         </div>
         @if (!ReadOnly) {
@@ -36,12 +36,14 @@
               }
             </select>
           </label>
+          <div class="rubric-split">
           @for (level of Levels(node); track level.id) {
-            <label>
-              Anchor for {{ level.label }}
+            <label class="anchor" [class.filled]="Anchor(node, level.id)">
+              {{ level.label }}
               <input type="text" [value]="Anchor(node, level.id)" (input)="OnAnchor(node, level.id, $event)" />
             </label>
           }
+          </div>
           <label>
             Gate
             <input type="checkbox" [checked]="node.isGate" (change)="OnGate(node, $event)" />
@@ -68,8 +70,8 @@
     }
   </ol>
   @if (!ReadOnly) {
-  <button type="button" (click)="OnAdd('Group')">Add group</button>
-  <button type="button" (click)="OnAdd('Criterion')">Add criterion</button>
+  <button mjButton variant="outline" size="sm" type="button" (click)="OnAdd('Group')">Add group</button>
+  <button mjButton variant="outline" size="sm" type="button" (click)="OnAdd('Criterion')">Add criterion</button>
   }
   <h2>Bands</h2>
   <ul class="rubric-list">
@@ -89,11 +91,18 @@
     <button type="button" (click)="OnAddBand()">Add band</button>
   }
   @for (band of Removed; track band.label) {
-    <p>Removed in draft: Band {{ band.label }} ({{ band.minScore }}–{{ band.maxScore }})</p>
+    <p class="callout">Removed in draft: Band {{ band.label }} ({{ band.minScore }}–{{ band.maxScore }})</p>
   }
-  <h2>Live scoring</h2>
-  <button type="button" (click)="Simulate(true)">Simulate Meets</button>
-  <button type="button" (click)="Simulate(false)">Simulate Miss</button>
+  <section class="rubric-card">
+    <h2>Live scoring</h2>
+    @if (Preview) {
+      <p class="score-block"><strong>{{ Preview.normalizedScore }}</strong> <span>{{ Preview.outcome }}</span></p>
+    }
+    <div class="rubric-actions">
+      <button mjButton variant="secondary" type="button" (click)="Simulate(true)">Simulate Meets</button>
+      <button mjButton variant="outline" type="button" (click)="Simulate(false)">Simulate Miss</button>
+    </div>
+  </section>
   @if (MoveProblem) {
     <p>{{ MoveProblem }}</p>
   }
@@ -103,8 +112,5 @@
         <li>{{ problem }}</li>
       }
     </ul>
-  }
-  @if (Preview) {
-    <p>Preview {{ Preview.normalizedScore }} {{ Preview.outcome }}</p>
   }
 </section>

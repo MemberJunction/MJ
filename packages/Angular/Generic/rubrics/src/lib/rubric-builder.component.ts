@@ -2,6 +2,7 @@ import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core
 import { CommonModule } from '@angular/common';
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricScoreResult, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import type { NotApplicablePolicy, RubricBandSnapshot } from '@memberjunction/rubrics-base';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { addBand, addNode, draftProblems, moveNode, moveProblem, previewScore, sampleMatchesTree, setAnchor, setGate, setPolicy, setScale, setWeight, updateBand, weightShares, type RubricFormAnswer } from './model.js';
 
 /**
@@ -12,7 +13,7 @@ import { addBand, addNode, draftProblems, moveNode, moveProblem, previewScore, s
 @Component({
     standalone: true,
     selector: 'mj-rubric-builder',
-    imports: [CommonModule],
+    imports: [CommonModule, MJButtonDirective],
     templateUrl: './rubric-builder.component.html',
     styleUrls: ['./rubric-builder.component.css'],
 })

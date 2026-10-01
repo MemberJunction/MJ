@@ -1,14 +1,15 @@
 <section class="rubric-panel" aria-label="Rubric result">
   @if (Result) {
-    <header class="rubric-stack">
-      <p>{{ Shown }} {{ Result.outcome }}</p>
-      <p>Band {{ BandLabel ?? '—' }}</p>
-      <p>Completeness {{ Result.completeness }}</p>
-      <p>Quality gate: {{ Result.gateFailed ? 'Not met' : 'Met' }}</p>
+    <header class="rubric-card score-block">
+      <strong>{{ Shown }}</strong>
+      <span>{{ Result.outcome }}</span>
+      <span class="pill">Band {{ BandLabel ?? '—' }}</span>
+      <span class="pill">Completeness {{ Result.completeness }}</span>
+      <span class="pill">Gate {{ Result.gateFailed ? 'not met' : 'met' }}</span>
     </header>
     <ul class="rubric-list">
       @for (node of Result.nodes; track node.id) {
-        <li class="rubric-facts">
+        <li class="criterion-card rubric-facts">
           <strong>Name: {{ node.key }}</strong>
           <span>Weight: {{ Weight(node.id) }}</span>
           <span>Gate: {{ Gate(node.id) }}</span>

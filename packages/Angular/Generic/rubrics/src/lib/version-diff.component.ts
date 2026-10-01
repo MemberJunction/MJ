@@ -52,6 +52,18 @@ export class RubricVersionDiffComponent {
         });
     }
 
+    public Words(marks: string[]): string {
+        const words: Record<string, string> = {
+            Weight: 'the weight changed',
+            IsGate: 'the gate changed',
+            GateMinimumScore: 'the gate minimum changed',
+            Sequence: 'the order changed',
+            Descriptor: 'an anchor changed',
+            Name: 'the name changed',
+        };
+        return marks.map(mark => words[mark.replace(/\s*\([^)]*\)/, '')] ?? mark).join('. ');
+    }
+
     public get RemovedBands(): { label: string; min: number; max: number }[] {
         const draftLabels = new Set((this.Draft?.bands ?? []).map(band => band.label));
         return (this.Base?.bands ?? []).filter(band => !draftLabels.has(band.label)).map(band => ({ label: band.label, min: band.minScore, max: band.maxScore }));
