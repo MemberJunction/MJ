@@ -3,6 +3,7 @@ import { AuthorizationInfo, AuthorizationRoleInfo, Metadata, UserInfo, type IMet
 import {
     ContributionScopeRank,
     FormScopeWriteRefusal,
+    IsCanonicalFormScope,
     MANAGE_FORM_DEFAULTS_AUTHORIZATION,
     UserCanManageFormDefaults,
     type FormScope,
@@ -190,6 +191,64 @@ describe('the refusal', () => {
     it('compares ids case-insensitively, as SQL Server and PostgreSQL return them differently', () => {
         const w = write({ PriorUserID: ME.toUpperCase(), NextUserID: ` ${ME.toUpperCase()} ` });
         expect(allowed(w)).toBe(true);
+    });
+});
+
+/**
+ * A Scope can reach the database in a form the rule did not expect: BaseEntity's value-list
+ * check trims and case-folds, and SQL Server ignores trailing spaces in the CHECK. The rule reads
+ * a scope the way the database does, and anything that is not exactly `User` needs the grant.
+ */
+describe('a scope that is not written exactly', () => {
+    const notExact = ['Global ', 'global', '', 'Team', ' ROLE'];
+
+    for (const scope of notExact) {
+        it(`treats '${scope}' as shared, so a non-holder may not create it`, () => {
+            const w = write({
+                Operation: 'create', PriorScope: null, PriorUserID: null,
+                NextScope: scope as FormScope, NextUserID: null,
+            });
+            expect(FormScopeWriteRefusal(w)).toContain('Manage Form Defaults');
+        });
+
+        it(`treats a prior '${scope}' as shared, so a non-holder may not demote it to their own`, () => {
+            const w = write({ PriorScope: scope as FormScope, PriorUserID: null, NextScope: 'User', NextUserID: ME });
+            expect(allowed(w)).toBe(false);
+        });
+    }
+
+    it('reads a padded, lower-cased User as personal, so a holder may not write someone else\'s', () => {
+        const w = write({
+            PriorScope: 'user ' as FormScope, PriorUserID: SOMEONE, NextScope: 'user ' as FormScope,
+            NextUserID: SOMEONE, CallerHoldsGrant: true,
+        });
+        expect(FormScopeWriteRefusal(w)).toMatch(/your own/i);
+    });
+
+    it('needs the grant for a User scope in the wrong casing, even from its owner', () => {
+        const w = write({ PriorScope: 'user' as FormScope, NextScope: 'user' as FormScope });
+        expect(allowed(w)).toBe(false);
+    });
+
+    it('refuses a holder writing an exact User row that belongs to someone else', () => {
+        expect(allowed(write({ PriorUserID: SOMEONE, NextUserID: SOMEONE, CallerHoldsGrant: true }))).toBe(false);
+    });
+
+    it('treats a missing prior scope on an update as shared', () => {
+        expect(allowed(write({ PriorScope: null, PriorUserID: null }))).toBe(false);
+        expect(allowed(write({ PriorScope: null, PriorUserID: null, CallerHoldsGrant: true }))).toBe(true);
+    });
+});
+
+describe('IsCanonicalFormScope', () => {
+    it('accepts the three scopes exactly as stored', () => {
+        expect(['User', 'Role', 'Global'].every(IsCanonicalFormScope)).toBe(true);
+    });
+
+    it('refuses padding, other casing, blanks and unknown values', () => {
+        for (const value of ['Global ', 'global', ' User', '', 'Team', null, undefined]) {
+            expect(IsCanonicalFormScope(value)).toBe(false);
+        }
     });
 });
 

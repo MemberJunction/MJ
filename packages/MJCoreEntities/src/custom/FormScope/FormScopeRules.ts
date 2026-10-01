@@ -20,6 +20,14 @@ export const MANAGE_FORM_DEFAULTS_AUTHORIZATION = 'Manage Form Defaults';
 /** Who a form or panel is for. Derived from the entity so it tracks the column's value list. */
 export type FormScope = MJEntityFormContributionEntity['Scope'];
 
+/** The scopes as stored. Keyed by {@link FormScope}, so it stays in step with the value list. */
+const CANONICAL_FORM_SCOPES: Readonly<Record<FormScope, true>> = { User: true, Role: true, Global: true };
+
+/** True when `value` is exactly `User`, `Role` or `Global`: no padding, this casing. */
+export function IsCanonicalFormScope(value: unknown): value is FormScope {
+    return typeof value === 'string' && Object.prototype.hasOwnProperty.call(CANONICAL_FORM_SCOPES, value);
+}
+
 export type FormScopeOperation = 'create' | 'update' | 'delete';
 
 /** One write to a form or panel, as the rule needs to see it. */
@@ -52,24 +60,31 @@ const OWNERSHIP_REFUSAL =
  * Both sides of the write are checked. A personal side must belong to the caller; a shared side
  * needs the grant. Checking only the new side would let a user demote a shared item to their own
  * and take it over; checking only the old side would let them promote their own to everyone.
+ *
+ * A scope is read the way the database reads it: a side is personal when its scope is `User`
+ * after trimming and case-folding. Any side whose scope is not exactly `User` (`Role`, `Global`,
+ * a padded or re-cased value, a blank, an unknown value) counts as shared and needs the grant.
  */
 export function FormScopeWriteRefusal(write: FormScopeWrite): string | null {
-    const sides: Array<{ Scope: FormScope | null; UserID: string | null }> = [
-        { Scope: write.PriorScope, UserID: write.PriorUserID },
-        { Scope: write.NextScope, UserID: write.NextUserID },
-    ];
+    const next = { Scope: write.NextScope, UserID: write.NextUserID };
+    const sides = write.Operation === 'create'
+        ? [next]
+        : [{ Scope: write.PriorScope, UserID: write.PriorUserID }, next];
     // Ownership first: it is the stricter rule, and a holder is refused by it too.
     for (const side of sides) {
-        if (side.Scope === 'User' && !UUIDsEqual(side.UserID ?? '', write.CallerID)) {
+        if (readsAsPersonal(side.Scope) && !UUIDsEqual(side.UserID ?? '', write.CallerID)) {
             return OWNERSHIP_REFUSAL;
         }
     }
-    for (const side of sides) {
-        if ((side.Scope === 'Role' || side.Scope === 'Global') && !write.CallerHoldsGrant) {
-            return GRANT_REFUSAL;
-        }
+    if (!write.CallerHoldsGrant && sides.some((side) => side.Scope !== 'User')) {
+        return GRANT_REFUSAL;
     }
     return null;
+}
+
+/** True when a scope is `User` once trimmed and case-folded, as the database compares it. */
+function readsAsPersonal(scope: string | null): boolean {
+    return (scope ?? '').trim().toLowerCase() === 'user';
 }
 
 /**
