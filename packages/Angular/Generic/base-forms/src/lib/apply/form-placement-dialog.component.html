@@ -425,7 +425,7 @@
             <select class="mj-placement-select" aria-label="Which related grid to take over"
                     [disabled]="State.ReplaceMode !== 'related'" [(ngModel)]="State.ReplaceRelatedIndex" name="mj-related">
               @for (related of Context.Related; track related.Entity + related.JoinField; let i = $index) {
-                <option [value]="i">{{ related.DisplayName }} via {{ related.JoinField }}</option>
+                <option [ngValue]="i">{{ related.DisplayName }} via {{ related.JoinField }}</option>
               }
             </select>
           </label>
@@ -438,7 +438,7 @@
             <select class="mj-placement-select" aria-label="Which panel to replace"
                     [disabled]="State.ReplaceMode !== 'contribution'" [(ngModel)]="State.ReplaceContributionIndex" name="mj-existing">
               @for (item of Context.Existing; track item.Key; let i = $index) {
-                <option [value]="i">{{ item.Title }}</option>
+                <option [ngValue]="i">{{ item.Title }}</option>
               }
             </select>
           </label>

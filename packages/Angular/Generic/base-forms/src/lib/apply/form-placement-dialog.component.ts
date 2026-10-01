@@ -341,7 +341,7 @@ export class MjFormPlacementDialogComponent extends BaseAngularComponent {
 
     /** Whether the related grid at this position will be taken over. */
     public IsRelatedReplaced(index: number): boolean {
-        return this.State.ReplaceMode === 'related' && Number(this.State.ReplaceRelatedIndex) === index;
+        return this.State.ReplaceMode === 'related' && this.State.ReplaceRelatedIndex === index;
     }
 
     /** Whether every field group in the Details tab is going, so the tab itself is marked. */

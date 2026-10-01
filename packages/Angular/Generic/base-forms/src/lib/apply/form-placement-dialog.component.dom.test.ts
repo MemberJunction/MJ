@@ -1159,3 +1159,59 @@ describe('MjFormPlacementDialogComponent (DOM) — audience and start', () => {
         expect(f.componentInstance.State).toMatchObject({ ActivateNow: true, KeepOff: false });
     });
 });
+
+/** The grid and panel lists hold indexes, which the decision reads as numbers. */
+describe('MjFormPlacementDialogComponent (DOM) — choosing a grid or a panel to replace', () => {
+    const TWO: FormPlacementContext = {
+        ...CONTEXT,
+        Related: [
+            ...CONTEXT.Related,
+            { Entity: 'MoreCheese: Course Sessions', JoinField: 'CourseID', DisplayName: 'Course Sessions' },
+        ],
+        Existing: [
+            ...CONTEXT.Existing,
+            { Key: 'skip:roster', Slot: 'after-fields', Title: 'Roster Strip' },
+        ],
+    };
+
+    /** Chooses a replace mode by its radio, the way the user does. */
+    async function chooseMode(f: ReturnType<typeof render>, mode: string): Promise<void> {
+        (f.nativeElement as HTMLElement).querySelector<HTMLInputElement>(`input[name="mj-replace"][value="${mode}"]`)!.click();
+        f.detectChanges();
+        await f.whenStable();
+        f.detectChanges();
+    }
+
+    /** Picks the option at `index` in a select, the way the browser does. */
+    async function pick(f: ReturnType<typeof render>, name: string, index: number): Promise<void> {
+        const select = (f.nativeElement as HTMLElement).querySelector(`select[name="${name}"]`) as HTMLSelectElement;
+        select.selectedIndex = index;
+        select.dispatchEvent(new Event('change'));
+        f.detectChanges();
+        await f.whenStable();
+    }
+
+    it('stores the chosen grid as a number and takes over that grid', async () => {
+        const f = render(TWO);
+        await chooseMode(f, 'related');
+        await pick(f, 'mj-related', 1);
+        expect(f.componentInstance.State.ReplaceRelatedIndex).toBe(1);
+        expect(f.componentInstance.IsRelatedReplaced(1)).toBe(true);
+        let emitted: FormPlacementDecision | null = null;
+        f.componentInstance.Applied.subscribe((d: FormPlacementDecision) => { emitted = d; });
+        f.componentInstance.OnApply();
+        expect(emitted!.Contribution.relatedEntity).toBe('MoreCheese: Course Sessions');
+    });
+
+    it('stores the chosen panel as a number and replaces that panel', async () => {
+        const f = render(TWO);
+        await chooseMode(f, 'contribution');
+        await pick(f, 'mj-existing', 1);
+        expect(f.componentInstance.State.ReplaceContributionIndex).toBe(1);
+        expect(f.componentInstance.PlacementLine).toBe('In place of the Roster Strip panel');
+        let emitted: FormPlacementDecision | null = null;
+        f.componentInstance.Applied.subscribe((d: FormPlacementDecision) => { emitted = d; });
+        f.componentInstance.OnApply();
+        expect(emitted!.Contribution.contributionKey).toBe('skip:roster');
+    });
+});
