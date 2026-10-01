@@ -56,7 +56,6 @@ export * from './agent-context-injector';
 export * from './agent-memory-context-builder';
 export * from './agent-pre-execution-rag';
 export * from './memory-manager-agent';
-export * from './memory-note-gate';
 export * from './query-builder-agent';
 export * from './MJAIAgentRequestEntityServer';
 export * from './KnowledgeAgent';
