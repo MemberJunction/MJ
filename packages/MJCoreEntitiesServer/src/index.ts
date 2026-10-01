@@ -57,6 +57,7 @@ export * from './engines/QueryMatchResult';
 export * from './engines/ComponentMetadataEngineServer';
 export * from './engines/IdentityClaimEngineServer';
 export * from './custom/MJRemoteOperationEntityServer.server';
+export * from './custom/MJRecordChangeEntityServer.server';
 export * from './custom/MJRubricVersionEntityServer.server';
 export * from './custom/MJRubricCriterionEntityServer.server';
 export * from './custom/MJRubricEvaluationEntityServer.server';

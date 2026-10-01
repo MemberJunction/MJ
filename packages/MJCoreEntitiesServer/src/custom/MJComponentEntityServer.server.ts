@@ -1,11 +1,11 @@
-import { BaseEntity, SimpleEmbeddingResult } from "@memberjunction/core";
+import { BaseEntity, EntitySaveOptions, SimpleEmbeddingResult } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { MJComponentEntityExtended } from "@memberjunction/core-entities";
 import { EmbedTextLocalHelper } from "./util";
 
 @RegisterClass(BaseEntity, 'MJ: Components')
 export class MJComponentEntityServer extends MJComponentEntityExtended  {
-    public async Save(): Promise<boolean> {
+    public override async Save(options?: EntitySaveOptions): Promise<boolean> {
         await this.GenerateEmbeddingsByFieldName([
             { 
                 fieldName: "FunctionalRequirements", 
@@ -18,7 +18,7 @@ export class MJComponentEntityServer extends MJComponentEntityExtended  {
                 modelFieldName: "TechnicalDesignVectorEmbeddingModelID" 
             }
         ]);
-        const saveResult: boolean = await super.Save();
+        const saveResult: boolean = await super.Save(options);
         return saveResult;
     }
  

@@ -20,6 +20,8 @@ export * from './custom/crud/write-entity-fields.action';
 
 // Data processing
 export * from './custom/data/run-record-process.action';
+export * from './custom/record-cloning/clone-record.action';
+export * from './custom/record-cloning/clone-records.action';
 
 // Demo Actions
 export * from './custom/demo/get-weather.action';

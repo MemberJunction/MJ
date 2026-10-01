@@ -63,6 +63,7 @@ export * from './checks/entity-server-invariants.checks';
 export * from './checks/entity-graph.checks';
 export * from './checks/entity-embedded.checks';
 export * from './checks/entity-graph-client.checks';
+export * from './checks/record-cloning.checks';
 export * from './checks/scheduling-concurrency.checks';
 export * from './checks/communication.checks';
 export * from './checks/ai-cost.checks';
