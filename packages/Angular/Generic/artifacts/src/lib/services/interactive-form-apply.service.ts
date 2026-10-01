@@ -21,6 +21,7 @@ import {
     CompositeKey, Metadata, LogError, RunView,
     type EntityInfo, type IMetadataProvider, type UserInfo,
 } from '@memberjunction/core';
+import { InteractiveFormsEngine } from '@memberjunction/core-entities';
 import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJDialogService } from '@memberjunction/ng-ui-components';
@@ -31,8 +32,8 @@ import {
 } from '@memberjunction/interactive-component-types/forms';
 import {
     ApplyDecisionToSpec, CollectFormContributionRegistrations,
-    FieldGroupsInDetails, HumanizeEntityTitle, MjFormPlacementDialogComponent, ResolveContributionKey,
-    ResolveFormContributionWinners,
+    FieldGroupsInDetails, FormSlotProbeService, HumanizeEntityTitle, MjFormPlacementDialogComponent,
+    ResolveContributionKey, ResolveFormContributionWinners,
     type FormCompositionSnapshot, type FormPlacementContext, type FormPlacementDecision,
 } from '@memberjunction/ng-base-forms';
 
@@ -60,14 +61,25 @@ interface ParsedContribution {
     ContributionKey: string | null;
     Status: string;
     Scope: string;
+    Precedence?: number;
     Name?: string;
     ComponentName?: string | null;
+}
+
+/** The subset of a `Get Active Form For Entity` override this service reads. */
+interface ParsedOverride {
+    OverrideID?: string;
+    ComponentVersion?: string;
+    ComponentName?: string;
+    Status?: string;
+    Scope?: string;
 }
 
 @Injectable({ providedIn: 'root' })
 export class InteractiveFormApplyService {
     private readonly dialog = inject(MJDialogService);
     private readonly notifications = inject(MJNotificationService);
+    private readonly probe = inject(FormSlotProbeService);
 
     /**
      * Confirm with the user and apply the spec. Routes to Create / Modify
@@ -112,9 +124,10 @@ export class InteractiveFormApplyService {
             return this.fail(`Could not check for existing override: ${activeResult.Message ?? 'unknown error'}`);
         }
         const payload = this.parseActiveResult(activeResult.Message);
-        const existingOverride = payload?.Active
-            ?? payload?.Variants?.find(v => v.Status === 'Pending')
-            ?? null;
+        // Only the user's own form can be modified. A form shared with them is left as it is,
+        // and applying creates their own, which outranks it for them alone.
+        const existingOverride = this.ownOverride(payload);
+        const sharedOverride = existingOverride ? null : this.sharedOverride(payload);
         const hasExistingOverride = !!existingOverride?.OverrideID;
 
         // Step 2: confirm with the user. A form carrying the incumbent's own name is a
@@ -124,7 +137,7 @@ export class InteractiveFormApplyService {
         const isNewVersion = hasExistingOverride && !!existingOverride!.ComponentName
             && existingOverride!.ComponentName === formName;
         const proceed = await this.confirm(
-            hasExistingOverride, isNewVersion, entityName, existingOverride?.ComponentVersion);
+            hasExistingOverride, isNewVersion, entityName, existingOverride?.ComponentVersion, !!sharedOverride);
         if (!proceed) {
             return { Success: false, Kind: 'form', Message: 'Cancelled by user.' };
         }
@@ -156,6 +169,7 @@ export class InteractiveFormApplyService {
             const modifyActivated = modifyResult.Success
                 ? await this.activateCreatedOverride(client, modifyResult.Message, p)
                 : false;
+            if (modifyResult.Success) this.probe.Forget(entityName);
             return this.summarize(modifyResult, 'modify', user, modifyActivated);
         }
         const createResult = await this.runActionByName(client, 'Create Interactive Form', [
@@ -171,7 +185,24 @@ export class InteractiveFormApplyService {
         const activated = createResult.Success
             ? await this.activateCreatedOverride(client, createResult.Message, p)
             : false;
+        if (createResult.Success) this.probe.Forget(entityName);
         return this.summarize(createResult, 'create', user, activated);
+    }
+
+    /**
+     * The user's own form for the entity: their live one, else their draft. Null when they have
+     * none, whatever is shared with them. A form that names no scope is taken as their own.
+     */
+    private ownOverride(payload: ReturnType<InteractiveFormApplyService['parseActiveResult']>): ParsedOverride | null {
+        const own = (form: ParsedOverride): boolean => !!form.OverrideID && (form.Scope ?? 'User') === 'User';
+        if (payload?.Active && own(payload.Active)) return payload.Active;
+        return payload?.Variants?.find(v => v.Status === 'Pending' && own(v)) ?? null;
+    }
+
+    /** The live form shared with the user — a Role or Global one they cannot change. */
+    private sharedOverride(payload: ReturnType<InteractiveFormApplyService['parseActiveResult']>): ParsedOverride | null {
+        const active = payload?.Active;
+        return active?.OverrideID && (active.Scope ?? 'User') !== 'User' ? active : null;
     }
 
     // ── form-panel contributions ─────────────────────────────────────────
@@ -190,6 +221,10 @@ export class InteractiveFormApplyService {
      *  - **An installed compiled contribution holding the same key.** Compiled wins
      *    ties by design, so replacing one is never implicit: on confirmation the new
      *    row takes `incumbent + 1`.
+     *
+     * Only the user's own row is modified. When the live row for the key is shared with
+     * them (Role or Global), a row of their own is created above it instead, which
+     * outranks it for them alone.
      */
     private async applyContribution(
         spec: ComponentSpec,
@@ -229,13 +264,15 @@ export class InteractiveFormApplyService {
         if (!existingResult.Success) {
             return this.fail(`Could not check existing contributions: ${existingResult.Message ?? 'unknown error'}`);
         }
-        const existing = this.findExistingContribution(
-            this.parseContributions(existingResult.Message), key, placed, spec.name);
+        const rows = this.parseContributions(existingResult.Message);
+        const existing = this.findExistingContribution(rows, key, placed, spec.name);
+        const shared = this.sharedIncumbent(rows, key);
+        const needed = shared ? Math.max(precedence, (shared.Precedence ?? 0) + 1) : precedence;
 
         const specToSend: ComponentSpec = ApplyDecisionToSpec(spec, decision);
         const { result, mode } = existing
-            ? await this.modifyContribution(client, provider, specToSend, existing)
-            : await this.createContribution(client, provider, specToSend, entityName, placed, precedence);
+            ? await this.modifyContribution(client, provider, specToSend, existing, needed)
+            : await this.createContribution(client, provider, specToSend, entityName, placed, needed);
 
         if (!result.Success) {
             this.notifications.CreateSimpleNotification(
@@ -243,6 +280,7 @@ export class InteractiveFormApplyService {
             return { Success: false, Kind: 'contribution', Message: result.Message };
         }
 
+        this.probe.Forget(entityName);
         let payload: { ContributionID?: string; ComponentID?: string; Version?: string } = {};
         try { payload = JSON.parse(result.Message ?? '{}'); } catch { /* best effort */ }
 
@@ -448,6 +486,9 @@ export class InteractiveFormApplyService {
         entity: EntityInfo,
         provider: IMetadataProvider,
     ): Promise<number | null> {
+        // Without the open form, the incumbent is found among the registrations, whose rows the
+        // engine holds, so it has to have loaded them.
+        if (key && !snapshot) await InteractiveFormsEngine.Instance.Config(false, provider.CurrentUser, provider);
         const incumbent = key ? this.compiledIncumbent(key, snapshot, entity, provider) : null;
         if (!incumbent) return 0;
         const replace = await this.ask(
@@ -502,21 +543,30 @@ export class InteractiveFormApplyService {
         return { result, mode: 'create' };
     }
 
+    /**
+     * Modifies the user's own row. `precedence` is written only when it is above the row's own,
+     * so the row outranks the incumbent the user agreed to replace or a shared row above it.
+     */
     private async modifyContribution(
         client: GraphQLActionClient,
         provider: IMetadataProvider,
         spec: ComponentSpec,
         existing: ParsedContribution,
+        precedence: number,
     ): Promise<{ result: { Success: boolean; Message?: string; ResultCode?: string }; mode: InteractiveFormApplyResult['Mode'] }> {
         // Modify operates on a Component lineage keyed by Name, same as the whole-form path.
         if (existing.ComponentName) this.alignSpecToLineage(spec, existing.ComponentName);
         const isPending = existing.Status === 'Pending';
-        const result = await this.runActionByName(client, 'Modify Form Contribution', [
+        const params: Array<{ Name: string; Value: string; Type: 'Input' }> = [
             { Name: 'ContributionID', Value: existing.ContributionID, Type: 'Input' },
             { Name: 'Spec', Value: JSON.stringify(spec), Type: 'Input' },
             { Name: 'Notes', Value: `Applied from chat artifact at ${new Date().toISOString()}`, Type: 'Input' },
             { Name: 'VersionBumpKind', Value: isPending ? 'in-place' : 'minor', Type: 'Input' },
-        ], provider);
+        ];
+        if (precedence > (existing.Precedence ?? 0)) {
+            params.push({ Name: 'Precedence', Value: String(precedence), Type: 'Input' });
+        }
+        const result = await this.runActionByName(client, 'Modify Form Contribution', params, provider);
         return { result, mode: isPending ? 'modify-in-place' : 'modify-new-version' };
     }
 
@@ -560,6 +610,17 @@ export class InteractiveFormApplyService {
         const name = componentName?.trim();
         if (byKey || !keyless || !name) return byKey;
         return mine.find(c => IsPanelContributionKey(c.ContributionKey) && c.ComponentName?.trim() === name);
+    }
+
+    /**
+     * The live row shared with the user (Role or Global) that holds this key, the highest ranked
+     * when there are several. The user cannot change it, so their own row is written above it.
+     */
+    private sharedIncumbent(rows: ParsedContribution[], key: string | null): ParsedContribution | undefined {
+        if (!key) return undefined;
+        return rows
+            .filter(c => c.Scope !== 'User' && c.Status === 'Active' && c.ContributionKey === key)
+            .sort((a, b) => (b.Precedence ?? 0) - (a.Precedence ?? 0))[0];
     }
 
     private parseContributions(message: string | undefined): ParsedContribution[] {
@@ -686,11 +747,14 @@ export class InteractiveFormApplyService {
         isNewVersion: boolean,
         entityName: string,
         currentVersion: string | null | undefined,
+        sharedWithUser = false,
     ): Promise<boolean> {
         // The dialog renders string content as plain text (not innerHTML), so use
         // plain text here — HTML tags would show raw.
         let content: string;
-        if (isNewVersion) {
+        if (sharedWithUser && !hasExistingActive) {
+            content = `"${entityName}" shows a custom form shared with you. Applying this creates your own form and makes it live for you only; everyone else keeps the shared form.`;
+        } else if (isNewVersion) {
             content = `This is a new version of the custom form you already use for "${entityName}" (v${currentVersion ?? '?'}). Applying it makes the new version your active form; the previous version is preserved and can be restored.`;
         } else if (hasExistingActive) {
             content = `You already have a custom form for "${entityName}". This is a different form, so applying it makes this one live and puts the other aside — nothing is merged. Switch between them from the form picker in the toolbar.`;
@@ -723,16 +787,10 @@ export class InteractiveFormApplyService {
         });
     }
 
-    private parseActiveResult(message: string | undefined): {
-        Active?: { OverrideID?: string; ComponentVersion?: string; ComponentName?: string; Status?: string };
-        Variants?: Array<{ OverrideID?: string; ComponentVersion?: string; ComponentName?: string; Status?: string }>;
-    } | null {
+    private parseActiveResult(message: string | undefined): { Active?: ParsedOverride | null; Variants?: ParsedOverride[] } | null {
         if (!message) return null;
         try {
-            return JSON.parse(message) as {
-                Active?: { OverrideID?: string; ComponentVersion?: string; ComponentName?: string; Status?: string };
-                Variants?: Array<{ OverrideID?: string; ComponentVersion?: string; ComponentName?: string; Status?: string }>;
-            };
+            return JSON.parse(message) as { Active?: ParsedOverride | null; Variants?: ParsedOverride[] };
         } catch {
             return null;
         }

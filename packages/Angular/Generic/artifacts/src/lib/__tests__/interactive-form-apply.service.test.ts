@@ -52,6 +52,12 @@ const hoisted = vi.hoisted(() => ({
     registrations: [] as Array<{ Priority: number; Source: 'class' | 'metadata'; Title?: string; Metadata: Record<string, unknown> }>,
     /** Registrations the collector reports only when asked for the ones the user hid. */
     hiddenRegistrations: [] as Array<{ Priority: number; Source: 'class' | 'metadata'; Title?: string; Metadata: Record<string, unknown> }>,
+    /** What happened, in order: the forms engine loading and the collector being read. */
+    events: [] as string[],
+    /** The text of each yes/no confirm the service showed. */
+    confirmTexts: [] as string[],
+    /** Entities whose probed form shape the service dropped. */
+    forgotten: [] as string[],
 }));
 
 // ─── Module mocks ────────────────────────────────────────────────────────
@@ -76,6 +82,7 @@ vi.mock('@angular/core', () => ({
         const name = (token as { name?: string }).name ?? '';
         if (name === 'MJDialogService') return mockDialog;
         if (name === 'MJNotificationService') return mockNotifications;
+        if (name === 'FormSlotProbeService') return mockProbe;
         return {};
     },
 }));
@@ -108,6 +115,7 @@ const mockDialog = {
             };
             return { Content: { instance }, Result: { subscribe: () => { /* closed via the outputs */ } }, Close: () => { /* no DOM */ } };
         }
+        if (typeof settings?.content === 'string') hoisted.confirmTexts.push(settings.content);
         return {
         // The real MJDialogRef.Result emits the clicked MJDialogAction object
         // ({ text, primary }) — the service detects intent via `action.primary`.
@@ -149,10 +157,27 @@ vi.mock('@memberjunction/ng-base-forms', async () => {
         HumanizeEntityTitle: chrome.HumanizeEntityTitle,
         ResolveContributionKey: keys.ResolveContributionKey,
         ResolveFormContributionWinners: keys.ResolveFormContributionWinners,
-        CollectFormContributionRegistrations: (_entity: unknown, _provider: unknown, options?: { IncludeHidden?: boolean }) =>
-            options?.IncludeHidden ? [...hoisted.registrations, ...hoisted.hiddenRegistrations] : hoisted.registrations,
+        CollectFormContributionRegistrations: (_entity: unknown, _provider: unknown, options?: { IncludeHidden?: boolean }) => {
+            hoisted.events.push('collect');
+            return options?.IncludeHidden ? [...hoisted.registrations, ...hoisted.hiddenRegistrations] : hoisted.registrations;
+        },
+        FormSlotProbeService: class FormSlotProbeService {},
     };
 });
+
+/** The rows the collector reads come from the forms engine, which has to be loaded first. */
+vi.mock('@memberjunction/core-entities', () => ({
+    InteractiveFormsEngine: {
+        Instance: {
+            Config: async () => { hoisted.events.push('engine'); },
+        },
+    },
+}));
+
+/** Records which entities' probed form shapes the service dropped. */
+const mockProbe = {
+    Forget: (entityName: string) => { hoisted.forgotten.push(entityName); },
+};
 
 const mockNotifications = {
     CreateSimpleNotification: (message: string, type: string) => {
@@ -218,6 +243,9 @@ beforeEach(() => {
     hoisted.placementRecordKey = null;
     hoisted.registrations = [];
     hoisted.hiddenRegistrations = [];
+    hoisted.events = [];
+    hoisted.confirmTexts = [];
+    hoisted.forgotten = [];
     hoisted.actionResponses.clear();
     hoisted.actionCalls.length = 0;
     hoisted.runViewResponses.length = 0;
@@ -370,6 +398,70 @@ describe('InteractiveFormApplyService', () => {
         expect(result.OverrideID).toBe('NEW-OVER');
         // The incoming spec keeps its own name — nothing was aligned onto the incumbent.
         expect(hoisted.actionCalls.map(c => c.id)).not.toContain('ACT-MODIFY');
+    });
+
+    /**
+     * Modify refuses a Role or Global form, so a form shared with the user is never modified: the
+     * user gets a form of their own, which outranks the shared one for them alone.
+     */
+    describe('a form shared with the user', () => {
+        const sharedForm = { OverrideID: 'OVER-G', ComponentID: 'COMP-G', ComponentName: 'Form', ComponentVersion: '2.0.0', Status: 'Active', Scope: 'Global' };
+
+        beforeEach(() => {
+            hoisted.resolveActionIdsByName = true;
+            hoisted.actionResponses.set('Create Interactive Form', {
+                Success: true, Message: JSON.stringify({ ComponentID: 'NEW-COMP', OverrideID: 'NEW-OVER', Version: '1.0.0' }),
+            });
+            hoisted.actionResponses.set('Activate Interactive Form Version', { Success: true, Message: '{}' });
+            hoisted.actionResponses.set('Modify Interactive Form', {
+                Success: true, Message: JSON.stringify({ Mode: 'in-place', ComponentID: 'COMP-MINE', OverrideID: 'OVER-MINE', Version: '1.0.0' }),
+            });
+        });
+
+        it('creates the user\'s own form, even under the shared form\'s name, and never modifies the shared one', async () => {
+            hoisted.actionResponses.set('Get Active Form For Entity', {
+                Success: true, Message: JSON.stringify({ Active: sharedForm, Variants: [sharedForm] }),
+            });
+            const svc = new InteractiveFormApplyService();
+            const result = await svc.ConfirmAndApply(spec(), 'MJ: Apps', mockProvider());
+            expect(result).toMatchObject({ Success: true, Mode: 'create', OverrideID: 'NEW-OVER' });
+            expect(hoisted.actionCalls.map(c => c.id)).toEqual([
+                'Get Active Form For Entity', 'Create Interactive Form', 'Activate Interactive Form Version',
+            ]);
+            expect(hoisted.confirmTexts[0]).toContain('shared with you');
+        });
+
+        it('versions the user\'s own draft in place while the shared form is live', async () => {
+            const myDraft = { OverrideID: 'OVER-MINE', ComponentID: 'COMP-MINE', ComponentName: 'Form', Status: 'Pending', Scope: 'User' };
+            hoisted.actionResponses.set('Get Active Form For Entity', {
+                Success: true, Message: JSON.stringify({ Active: sharedForm, Variants: [myDraft, sharedForm] }),
+            });
+            const svc = new InteractiveFormApplyService();
+            const result = await svc.ConfirmAndApply(spec(), 'MJ: Apps', mockProvider());
+            expect(result.Mode).toBe('modify-in-place');
+            const modify = hoisted.actionCalls.find(c => c.id === 'Modify Interactive Form')!;
+            expect((modify.params as Array<{ Name: string; Value: string }>).find(p => p.Name === 'OverrideID')?.Value).toBe('OVER-MINE');
+        });
+
+        it('never modifies a shared draft', async () => {
+            const sharedDraft = { ...sharedForm, OverrideID: 'OVER-GD', Status: 'Pending' };
+            hoisted.actionResponses.set('Get Active Form For Entity', {
+                Success: true, Message: JSON.stringify({ Active: null, Variants: [sharedDraft] }),
+            });
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(spec(), 'MJ: Apps', mockProvider());
+            expect(hoisted.actionCalls.map(c => c.id)).not.toContain('Modify Interactive Form');
+            expect(hoisted.actionCalls.map(c => c.id)).toContain('Create Interactive Form');
+        });
+
+        it('drops the placement dialog\'s reading of the form once the form is written', async () => {
+            hoisted.actionResponses.set('Get Active Form For Entity', {
+                Success: true, Message: JSON.stringify({ Active: sharedForm, Variants: [sharedForm] }),
+            });
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(spec(), 'MJ: Apps', mockProvider());
+            expect(hoisted.forgotten).toEqual(['MJ: Apps']);
+        });
     });
 
     it('Get Active failure short-circuits with an error', async () => {
@@ -867,6 +959,94 @@ describe('InteractiveFormApplyService — form-panel specs', () => {
             const result = await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
             expect(result).toMatchObject({ Success: false, Message: 'Cancelled by user.' });
             expect(hoisted.actionCalls.map(c => c.id)).not.toContain('Create Form Contribution');
+        });
+
+        it('loads the forms engine before it looks for the incumbent', async () => {
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), null);
+            expect(hoisted.events.slice(0, 2)).toEqual(['engine', 'collect']);
+        });
+
+        it('reads the open form instead, with no need for the engine', async () => {
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+            expect(hoisted.events).toEqual([]);
+        });
+    });
+
+    /**
+     * Modify refuses a Role or Global row, so a panel shared with the user is never modified. The
+     * user's own row is created above it instead, and outranks it for them alone.
+     */
+    describe('a panel shared with the user holds the key', () => {
+        const params = (id: string) => (hoisted.actionCalls.find(c => c.id === id)?.params ?? []) as Array<{ Name: string; Value: string }>;
+        const rows = (contributions: Array<Record<string, unknown>>) => hoisted.actionResponses.set('Get Form Contributions For Entity', {
+            Success: true, Message: JSON.stringify({ EntityName: ENTITY, Contributions: contributions }),
+        });
+
+        beforeEach(() => {
+            hoisted.placement.contribution = {
+                slot: 'after-fields', presentation: 'panel', title: 'Lifetime value', contributionKey: 'header',
+            };
+            hoisted.actionResponses.set('Modify Form Contribution', {
+                Success: true, Message: JSON.stringify({ ContributionID: 'ROW-NEXT', ComponentID: 'C', Version: '1.1.0', Mode: 'new-version' }),
+            });
+        });
+
+        it('creates the user\'s own row one above the shared row, rather than modifying it', async () => {
+            rows([{ ContributionID: 'ROW-G', ContributionKey: 'header', Status: 'Active', Scope: 'Global', Precedence: 3, ComponentName: 'PersonLtvStrip' }]);
+            const svc = new InteractiveFormApplyService();
+            const result = await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+            expect(result.Success).toBe(true);
+            const ids = hoisted.actionCalls.map(c => c.id);
+            expect(ids).toContain('Create Form Contribution');
+            expect(ids).not.toContain('Modify Form Contribution');
+            expect(params('Create Form Contribution').find(p => p.Name === 'Precedence')?.Value).toBe('4');
+        });
+
+        it('ranks above the highest of several shared rows', async () => {
+            rows([
+                { ContributionID: 'ROW-R', ContributionKey: 'header', Status: 'Active', Scope: 'Role', Precedence: 6 },
+                { ContributionID: 'ROW-G', ContributionKey: 'header', Status: 'Active', Scope: 'Global', Precedence: 2 },
+                { ContributionID: 'ROW-OFF', ContributionKey: 'header', Status: 'Inactive', Scope: 'Global', Precedence: 50 },
+            ]);
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+            expect(params('Create Form Contribution').find(p => p.Name === 'Precedence')?.Value).toBe('7');
+        });
+
+        it('lifts the user\'s own row above a shared row that outranks it', async () => {
+            rows([
+                { ContributionID: 'ROW-MINE', ContributionKey: 'header', Status: 'Active', Scope: 'User', Precedence: 0, ComponentName: 'PersonLtvStrip' },
+                { ContributionID: 'ROW-G', ContributionKey: 'header', Status: 'Active', Scope: 'Global', Precedence: 3 },
+            ]);
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+            expect(params('Modify Form Contribution').find(p => p.Name === 'ContributionID')?.Value).toBe('ROW-MINE');
+            expect(params('Modify Form Contribution').find(p => p.Name === 'Precedence')?.Value).toBe('4');
+        });
+
+        it('leaves the user\'s own row\'s rank alone when nothing outranks it', async () => {
+            rows([{ ContributionID: 'ROW-MINE', ContributionKey: 'header', Status: 'Active', Scope: 'User', Precedence: 5, ComponentName: 'PersonLtvStrip' }]);
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+            expect(params('Modify Form Contribution').find(p => p.Name === 'Precedence')).toBeUndefined();
+        });
+    });
+
+    /** The placement dialog reads the form once per entity, so a write drops that reading. */
+    describe('the placement dialog\'s reading of the form', () => {
+        it('is dropped after the panel is written', async () => {
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+            expect(hoisted.forgotten).toEqual([ENTITY]);
+        });
+
+        it('is kept when the write fails', async () => {
+            hoisted.actionResponses.set('Create Form Contribution', { Success: false, Message: 'boom' });
+            const svc = new InteractiveFormApplyService();
+            await svc.ConfirmAndApply(panelSpec(), ENTITY, provider(), snapshot());
+            expect(hoisted.forgotten).toEqual([]);
         });
     });
 });
