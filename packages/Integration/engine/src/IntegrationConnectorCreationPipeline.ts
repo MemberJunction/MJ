@@ -161,11 +161,13 @@ export class IntegrationConnectorCreationPipeline {
      */
     private static readonly IN_FLIGHT_MAX_AGE_MS = 20 * 60_000;
     /**
-     * Default whole-run ceiling. Deliberately far above any healthy run — the reference Totara run
-     * completes in under four minutes and a large Salesforce-backed catalog in tens — so this only ever
-     * fires on work that has genuinely stopped, never on work that is merely big.
+     * Default whole-run ceiling, deliberately enormous: it exists ONLY to release a run that has hung
+     * forever, never to bound work that is merely big. At 45 minutes it did the latter — an 888-object
+     * catalog was failed at object 336, and because the failure precedes Persist, everything
+     * introspected up to then was discarded. A connection that wants a tighter bound sets
+     * `Configuration.runDeadlineMs`; the environment can set `MJ_INTEGRATION_RUN_DEADLINE_MS`.
      */
-    private static readonly DEFAULT_RUN_DEADLINE_MS = 45 * 60_000;
+    private static readonly DEFAULT_RUN_DEADLINE_MS = 12 * 60 * 60_000;
 
     /**
      * Resolves the whole-run ceiling: explicit argument → the connection's `Configuration.runDeadlineMs`
