@@ -889,14 +889,6 @@ import {
     RecordComparisonCompareServerOperation,
 } from '@memberjunction/record-comparison';
 
-// @memberjunction/rubrics (4 classes)
-import {
-    CreateRubricDraftAction,
-    EvaluateRecordAgainstRubricAction,
-    GetRubricAction,
-    GetRubricConsensusAction,
-} from '@memberjunction/rubrics';
-
 // @memberjunction/scheduling-engine-base (1 classes)
 import {
     MJScheduledJobEntityExtended,
@@ -931,6 +923,14 @@ import {
     DecisionThenPromptReasoningProvider,
     PromptReasoningProvider,
 } from '@memberjunction/ai-vector-dupe';
+
+// @memberjunction/rubrics (4 classes)
+import {
+    CreateRubricDraftAction,
+    EvaluateRecordAgainstRubricAction,
+    GetRubricAction,
+    GetRubricConsensusAction,
+} from '@memberjunction/rubrics';
 
 // @memberjunction/search-engine (15 classes)
 import {
@@ -1980,10 +1980,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     HereGeocodingProvider,
     DatabaseWellKnownUserSource,
     RecordComparisonCompareServerOperation,
-    CreateRubricDraftAction,
-    EvaluateRecordAgainstRubricAction,
-    GetRubricAction,
-    GetRubricConsensusAction,
     MJScheduledJobEntityExtended,
     TagEngineBase,
     AIPromptExtension,
@@ -1995,6 +1991,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     DecisionReasoningProvider,
     DecisionThenPromptReasoningProvider,
     PromptReasoningProvider,
+    CreateRubricDraftAction,
+    EvaluateRecordAgainstRubricAction,
+    GetRubricAction,
+    GetRubricConsensusAction,
     AzureAISearchProvider,
     BGEReRanker,
     CohereReRanker,
@@ -2114,12 +2114,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJApplicationEntityServer,
     MJArtifactVersionEntityServer,
     MJCompanyIntegrationEntityServer,
-    MJComponentEntityServer,
-    MJConversationDetailAttachmentEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    MJComponentEntityServer,
+    MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
     MJDuplicateRunEntityServer,
     MJEntityDocumentEntityServer,
@@ -2323,7 +2323,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 988;
+export const CLASS_REGISTRATIONS_COUNT = 990;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
@@ -2380,13 +2380,13 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/geo-core',
     '@memberjunction/generic-database-provider',
     '@memberjunction/record-comparison',
-    '@memberjunction/rubrics',
     '@memberjunction/scheduling-engine-base',
     '@memberjunction/tag-engine-base',
     '@memberjunction/templates',
     '@memberjunction/ai-prompts',
     '@memberjunction/ai-reranker',
     '@memberjunction/ai-vector-dupe',
+    '@memberjunction/rubrics',
     '@memberjunction/search-engine',
     '@memberjunction/ai-agents',
     '@memberjunction/ai-agent-harness',

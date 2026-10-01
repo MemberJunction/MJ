@@ -565,7 +565,7 @@ import {
     ClusterViewType,
 } from '@memberjunction/ng-clustering';
 
-// @memberjunction/ng-core-entity-forms (50 classes)
+// @memberjunction/ng-core-entity-forms (53 classes)
 import {
     AIAgentCategoryHeaderPanel,
     AIAgentCategoryHierarchyPanel,
@@ -596,6 +596,9 @@ import {
     MJFileFormComponentExtended,
     MJListFormComponentExtended,
     MJQueryFormComponentExtended,
+    MJRubricEvaluationFormComponentExtended,
+    MJRubricFormComponentExtended,
+    MJRubricScaleFormComponentExtended,
     MJTemplateFormComponentExtended,
     MJTestFormComponentExtended,
     MJTestRubricFormComponentExtended,
@@ -1318,6 +1321,9 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJFileFormComponentExtended,
     MJListFormComponentExtended,
     MJQueryFormComponentExtended,
+    MJRubricEvaluationFormComponentExtended,
+    MJRubricFormComponentExtended,
+    MJRubricScaleFormComponentExtended,
     MJTemplateFormComponentExtended,
     MJTestFormComponentExtended,
     MJTestRubricFormComponentExtended,
@@ -1392,13 +1398,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     CredentialsDashboardComponent,
     CredentialsListResourceComponent,
     CredentialsOverviewResourceComponent,
-    CredentialsTypesResourceComponent,
-    DashboardBrowserResourceComponent,
-    DataExplorerDashboardComponent,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    CredentialsTypesResourceComponent,
+    DashboardBrowserResourceComponent,
+    DataExplorerDashboardComponent,
     DataExplorerResourceComponent,
     DatabaseDesignerDashboardComponent,
     DuplicateDetectionResourceComponent,
@@ -1492,7 +1498,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 679;
+export const CLASS_REGISTRATIONS_COUNT = 682;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

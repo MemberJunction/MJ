@@ -1033,14 +1033,6 @@ import {
     RemoteBrowserChannel,
 } from '@memberjunction/remote-browser-server';
 
-// @memberjunction/rubrics (4 classes)
-import {
-    CreateRubricDraftAction,
-    EvaluateRecordAgainstRubricAction,
-    GetRubricAction,
-    GetRubricConsensusAction,
-} from '@memberjunction/rubrics';
-
 // @memberjunction/scheduling-engine-base (1 classes)
 import {
     MJScheduledJobEntityExtended,
@@ -1120,6 +1112,14 @@ import {
     AutotagRSSFeed,
     AutotagWebsite,
 } from '@memberjunction/content-autotagging';
+
+// @memberjunction/rubrics (4 classes)
+import {
+    CreateRubricDraftAction,
+    EvaluateRecordAgainstRubricAction,
+    GetRubricAction,
+    GetRubricConsensusAction,
+} from '@memberjunction/rubrics';
 
 // @memberjunction/search-engine (15 classes)
 import {
@@ -2275,10 +2275,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     RecordComparisonCompareServerOperation,
     SelfHostRemoteBrowser,
     RemoteBrowserChannel,
-    CreateRubricDraftAction,
-    EvaluateRecordAgainstRubricAction,
-    GetRubricAction,
-    GetRubricConsensusAction,
     MJScheduledJobEntityExtended,
     AWSFileStorage,
     AzureFileStorage,
@@ -2315,6 +2311,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AutotagLocalFileSystem,
     AutotagRSSFeed,
     AutotagWebsite,
+    CreateRubricDraftAction,
+    EvaluateRecordAgainstRubricAction,
+    GetRubricAction,
+    GetRubricConsensusAction,
     AzureAISearchProvider,
     BGEReRanker,
     CohereReRanker,
@@ -2373,12 +2373,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     DatabaseDesignerSchemaDesigner,
     DatabaseDesignerSchemaValidator,
     CreateEntityAction,
-    DescribeEntityAction,
-    ListMyEntitiesAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    DescribeEntityAction,
+    ListMyEntitiesAction,
     ModifyEntityAction,
     ValidateEntitySchemaAction,
     LLMFeaturePipelineDriver,
@@ -2577,12 +2577,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     GetRecordAction,
     GetRecordListMembershipAction,
     GetRecordsAction,
-    GetSignatureStatusAction,
-    GetStockPriceAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    GetSignatureStatusAction,
+    GetStockPriceAction,
     GetUploadUrlAction,
     GetWeatherAction,
     Get_AI_Model_Cost_Action,
@@ -2678,7 +2678,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1079;
+export const CLASS_REGISTRATIONS_COUNT = 1081;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
@@ -2762,7 +2762,6 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/record-comparison',
     '@memberjunction/remote-browser-selfhost',
     '@memberjunction/remote-browser-server',
-    '@memberjunction/rubrics',
     '@memberjunction/scheduling-engine-base',
     '@memberjunction/storage',
     '@memberjunction/archiving-engine',
@@ -2774,6 +2773,7 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-segmentation',
     '@memberjunction/ai-vector-dupe',
     '@memberjunction/content-autotagging',
+    '@memberjunction/rubrics',
     '@memberjunction/search-engine',
     '@memberjunction/ai-agents',
     '@memberjunction/action-runtime-host',
