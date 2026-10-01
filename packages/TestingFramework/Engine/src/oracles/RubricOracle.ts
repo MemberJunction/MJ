@@ -1,3 +1,4 @@
+import { RunView } from '@memberjunction/core';
 import { providerRubricEngine } from '@memberjunction/rubrics';
 import type { OracleConfig, OracleInput, OracleResult } from '../types';
 import type { IOracle } from './IOracle';
@@ -32,7 +33,8 @@ export class RubricOracle implements IOracle {
 
     public async evaluate(input: OracleInput, config: OracleConfig): Promise<OracleResult> {
         const settings = config as { rubricId?: string; rubricVersionId?: string; passThreshold?: number; versionLabel?: string };
-        const engine = this.engine ?? (input.provider ? providerRubricEngine(input.provider, input.contextUser) : undefined);
+        const provider = input.provider ?? (RunView.Provider as OracleInput['provider']);
+        const engine = this.engine ?? (provider ? providerRubricEngine(provider, input.contextUser) : undefined);
         if (!engine) {
             return { oracleType: this.type, passed: false, score: 0, message: 'No rubric engine is configured.' };
         }

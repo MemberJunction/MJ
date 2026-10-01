@@ -77,10 +77,16 @@ export interface OracleConfigLike {
 }
 
 /** Adds a rubric oracle when a rubric was resolved and the test did not already name one. */
-export function ensureImplicitRubricOracle(oracles: OracleConfigLike[] | undefined, choice: RubricChoice, versionId?: string): OracleConfigLike[] {
+export function ensureImplicitRubricOracle(oracles: OracleConfigLike[] | undefined, choice: RubricChoice, versionId?: string, versionLabel?: string): OracleConfigLike[] {
     const list = oracles ?? [];
-    if (!choice.rubricId || list.some(oracle => oracle.type === 'rubric')) return list;
-    return [...list, { type: 'rubric', config: { rubricId: choice.rubricId, rubricVersionId: versionId } }];
+    const pinned = { rubricVersionId: versionId, versionLabel };
+    if (!choice.rubricId) return list;
+    if (list.some(oracle => oracle.type === 'rubric')) {
+        return list.map(oracle => oracle.type === 'rubric'
+            ? { ...oracle, config: { ...pinned, ...oracle.config, versionLabel: oracle.config?.versionLabel ?? versionLabel } }
+            : oracle);
+    }
+    return [...list, { type: 'rubric', config: { rubricId: choice.rubricId, ...pinned } }];
 }
 
 /**

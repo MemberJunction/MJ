@@ -1,4 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+const evaluateRecord = vi.hoisted(() => vi.fn(async () => ({
+    evaluationId: 'eval-1', score: 0.75, displayScore: 75, outcome: 'Passed', criteria: [],
+})));
+vi.mock('@memberjunction/rubrics', () => ({
+    providerRubricEngine: () => ({ evaluateRecord }),
+}));
+
 import { PublishedVersionPin, ensureImplicitRubricOracle, resolveRubric, weightsForImplicitRubric } from '../oracles/rubric-resolution.js';
 import { RubricOracle } from '../oracles/RubricOracle.js';
 
@@ -70,5 +78,17 @@ describe('rubric resolution', () => {
         expect(result.passed).toBe(true);
         expect(result.message).toBe('rubric v1.0.0: Passed (75)');
         expect(result.details).toMatchObject({ RubricEvaluationID: 'eval-1', Criteria: [{ Key: 'clarity', Rationale: 'Clear.' }] });
+    });
+
+    it('builds the engine from the input provider when none was injected', async () => {
+        evaluateRecord.mockClear();
+        const provider = { name: 'fake-provider' };
+        const oracle = new RubricOracle();
+        await oracle.evaluate(
+            { test: { ID: 'test-1' } as never, testRunId: 'run-1', contextUser: {} as never, provider: provider as never },
+            { rubricId: 'rubric', rubricVersionId: 'v1', versionLabel: '1.0.0' } as never,
+        );
+        expect(evaluateRecord).toHaveBeenCalledTimes(1);
+        expect(evaluateRecord.mock.calls[0][0]).toMatchObject({ versionId: 'v1', rubricId: 'rubric' });
     });
 });

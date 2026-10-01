@@ -19,8 +19,8 @@ class SuiteProbe extends AgentEvalDriver {
         return undefined;
     }
 
-    protected override async lookupLatestPublished(): Promise<string | undefined> {
-        return 'version-4';
+    protected override async lookupLatestPublished(): Promise<{ id: string; label: string } | undefined> {
+        return { id: 'version-4', label: '1.2.0' };
     }
 }
 
@@ -36,6 +36,6 @@ describe('agent eval rubric driver', () => {
             oracleRegistry: new Map(),
         } as unknown as DriverExecutionContext;
         const resolved = await driver.resolve(config, context);
-        expect(resolved.oracles).toEqual([{ type: 'rubric', config: { rubricId: 'parent-rubric', rubricVersionId: 'version-4' } }]);
+        expect(resolved.oracles).toEqual([{ type: 'rubric', config: { rubricId: 'parent-rubric', rubricVersionId: 'version-4', versionLabel: '1.2.0' } }]);
     });
 });

@@ -841,6 +841,7 @@ export class AgentEvalDriver extends BaseTestDriver {
      * @private
      */
     private readonly versionPins = new PublishedVersionPin();
+    private readonly versionLabels = new Map<string, string>();
 
     protected async withResolvedRubric(config: AgentEvalConfig, context: DriverExecutionContext): Promise<AgentEvalConfig> {
         const named = config.oracles?.find(oracle => oracle.type === 'rubric')?.config as { rubricId?: string; rubricVersionId?: string } | undefined;
@@ -855,10 +856,15 @@ export class AgentEvalDriver extends BaseTestDriver {
         });
         const hadRubric = (config.oracles ?? []).some(oracle => oracle.type === 'rubric');
         const suiteRunId = (context.testRun as { TestSuiteRunID?: string }).TestSuiteRunID || context.testRun.ID;
+        const labelKey = choice.rubricId ? `${suiteRunId}:${choice.rubricId}` : '';
         const versionId = choice.rubricId
-            ? await this.versionPins.remember(suiteRunId, choice.rubricId, choice.explicitVersion ? choice.versionId : undefined, () => this.lookupLatestPublished(context, choice.rubricId!))
+            ? await this.versionPins.remember(suiteRunId, choice.rubricId, choice.explicitVersion ? choice.versionId : undefined, async () => {
+                const found = await this.lookupLatestPublished(context, choice.rubricId!);
+                if (found) this.versionLabels.set(labelKey, found.label);
+                return found?.id;
+            })
             : undefined;
-        const oracles = ensureImplicitRubricOracle(config.oracles, choice, versionId);
+        const oracles = ensureImplicitRubricOracle(config.oracles, choice, versionId, choice.rubricId ? this.versionLabels.get(labelKey) : undefined);
         return { ...config, oracles, scoringWeights: weightsForImplicitRubric(config.scoringWeights, oracles.length > (config.oracles?.length ?? 0) && !hadRubric) };
     }
 
@@ -891,10 +897,11 @@ export class AgentEvalDriver extends BaseTestDriver {
     }
 
     /** Latest Published version of the chosen rubric. The suite pin stores the first answer. */
-    protected async lookupLatestPublished(context: DriverExecutionContext, rubricId: string): Promise<string | undefined> {
+    protected async lookupLatestPublished(context: DriverExecutionContext, rubricId: string): Promise<{ id: string; label: string } | undefined> {
         const rows = await this.readMany(context, 'MJ: Rubric Versions', `RubricID='${rubricId}' AND Status='Published'`);
         const best = [...rows].sort((a, b) => Number(b.MajorVersion ?? 0) - Number(a.MajorVersion ?? 0) || Number(b.MinorVersion ?? 0) - Number(a.MinorVersion ?? 0) || Number(b.PatchVersion ?? 0) - Number(a.PatchVersion ?? 0))[0];
-        return best ? String(best.ID) : undefined;
+        if (!best) return undefined;
+        return { id: String(best.ID), label: `${best.MajorVersion ?? 0}.${best.MinorVersion ?? 0}.${best.PatchVersion ?? 0}` };
     }
 
     private async readOne(context: DriverExecutionContext, entityName: string, filter: string): Promise<Record<string, unknown> | undefined> {
@@ -1025,6 +1032,7 @@ export class AgentEvalDriver extends BaseTestDriver {
                     targetEntity: turnResults[turnResults.length - 1].agentRun,
                     contextUser: context.contextUser,
                     testRunId: context.testRun.ID,
+                    provider: RunView.Provider as OracleInput['provider'],
                 };
 
                 const result = await oracle.evaluate(oracleInput, oracleConfig.config || {});
@@ -1078,6 +1086,7 @@ export class AgentEvalDriver extends BaseTestDriver {
                     targetEntity: turnResult.agentRun,
                     contextUser: context.contextUser,
                     testRunId: context.testRun.ID,
+                    provider: RunView.Provider as OracleInput['provider'],
                 };
 
                 const result = await oracle.evaluate(oracleInput, oracleConfig.config || {});
