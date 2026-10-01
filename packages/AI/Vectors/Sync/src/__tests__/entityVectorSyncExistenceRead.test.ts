@@ -43,6 +43,16 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 
 vi.mock('@memberjunction/core-entities', () => ({}));
 vi.mock('@memberjunction/ai', () => ({}));
+// Stubbed for the same reason the sibling suites stub it: the real module reaches
+// @memberjunction/ai-core-plus, which imports a NAMED export from @memberjunction/core-entities —
+// stubbed empty just above — so loading it fails collection before a single test runs.
+vi.mock('@memberjunction/ai-prompts', () => ({
+  AIEmbeddingRunner: class {
+    async RunEmbedding() {
+      return { Success: true, Vectors: [] };
+    }
+  },
+}));
 vi.mock('@memberjunction/ai-vectordb', () => ({
   VectorDBBase: class { constructor(_k: string) {} },
 }));
