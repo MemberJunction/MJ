@@ -5,6 +5,7 @@ import { RealtimeToolDefinition } from '@memberjunction/ai';
 import { RealtimeChannelFocusEvent } from '@memberjunction/realtime-runtime';
 import { RealtimeSessionService } from '../lib/services/realtime-session.service';
 import { BaseRealtimeChannelClient, RealtimeChannelContext } from '@memberjunction/realtime-runtime';
+import { IMetadataProvider } from '@memberjunction/core';
 
 /**
  * INTERACTIVE-CHANNEL plumbing in the session service — the registry-driven plugin path:
@@ -93,6 +94,16 @@ class TestEchoChannel extends BaseRealtimeChannelClient<FakeSurface> {
 }
 
 /**
+ * A booted provider, as Explorer always has. The runtime skips the channel registry on a
+ * provider with no entity metadata (a connect-only embed boot), so without this the tests
+ * would run against the unset global `Metadata.Provider` and never reach the stubbed engine.
+ * Only `Entities` is read before the engine takes over.
+ */
+function bootedProvider(): IMetadataProvider {
+  return { Entities: [{ Name: 'MJ: AI Agent Channels' }] } as unknown as IMetadataProvider;
+}
+
+/**
  * Stubs the provider-scoped AIEngineBase whose cached `AgentChannels` the service reads
  * (rows default to ACTIVE; pass `IsActive: false` to exercise the active-only filter).
  * `success = false` makes the engine load reject — the registry-failure degradation path.
@@ -121,6 +132,7 @@ describe('RealtimeSessionService — interactive-channel registry resolution', (
 
   beforeEach(() => {
     service = new RealtimeSessionService();
+    service.Provider = bootedProvider();
   });
 
   afterEach(() => {
@@ -214,6 +226,7 @@ describe('RealtimeSessionService — per-plugin tool routing + host context', ()
 
   beforeEach(async () => {
     service = new RealtimeSessionService();
+    service.Provider = bootedProvider();
     fakeClient = new FakeRealtimeClient();
     internals(service).client = fakeClient;
     mockChannelRegistry([{ ID: 'c1', Name: 'Echo', ClientPluginClass: 'TestEchoChannel' }]);
@@ -278,6 +291,7 @@ describe('RealtimeSessionService — debounced channel saves + teardown flush/di
   beforeEach(async () => {
     vi.useFakeTimers();
     service = new RealtimeSessionService();
+    service.Provider = bootedProvider();
     internals(service).agentSessionId = 'session-123';
     saveSpy = vi.spyOn(service, 'SaveChannelState').mockResolvedValue(true);
     mockChannelRegistry([{ ID: 'c1', Name: 'Echo', ClientPluginClass: 'TestEchoChannel' }]);

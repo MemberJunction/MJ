@@ -38,6 +38,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BaseAgent } from '../base-agent';
 import { AgentDecisionService } from '../AgentDecisionService';
+import { AgentContextInjector } from '../agent-context-injector';
 import { ClientToolRequestManager } from '../ClientToolRequestManager';
 import { BaseAgentType } from '../agent-types/base-agent-type';
 // Bare side-effect import: the REAL LoopAgentType must register itself with the ClassFactory
@@ -46,12 +47,16 @@ import { BaseAgentType } from '../agent-types/base-agent-type';
 import '../agent-types/loop-agent-type';
 import type { LoopAgentResponse } from '../agent-types/loop-agent-response-type';
 import type { AgentPreExecutionRAGResult } from '../agent-pre-execution-rag';
-import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended, AgentDecisionRequest, AgentFinishIf, BaseAgentNextStep } from '@memberjunction/ai-core-plus';
+import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended, MJAIAgentRunStepEntityExtended, AgentDecisionRequest, AgentFinishIf, BaseAgentNextStep, AgentChatMessage } from '@memberjunction/ai-core-plus';
 import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { RecordToolCallingDecision } from '@memberjunction/ai-prompts';
 import { SanitizeToolName } from '../native-tools/action-tool-builder';
 import { LogStatus } from '@memberjunction/core';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { MJActionEntityExtended } from '@memberjunction/actions-base';
+import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
+import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS } from '../agent-types/loop-agent-prompt-params';
+import { PayloadFeedbackManager } from '../PayloadFeedbackManager';
 
 // ============================================================================
 // Module mocks (boundaries only)
@@ -438,6 +443,11 @@ let harness: LoopHarness;
 class HarnessAgent extends BaseAgent {
     protected override async InjectPreExecutionRAG(): Promise<AgentPreExecutionRAGResult | null> {
         return null;
+    }
+
+    /** The decision service this agent asks through, so a test can spy on this agent's calls alone. */
+    public get DecisionService(): AgentDecisionService {
+        return this._agentDecisionService;
     }
 }
 
@@ -1081,6 +1091,318 @@ describe('BaseAgent.Execute — a While whose condition cannot be evaluated', ()
     });
 });
 
+describe('BaseAgent.Execute — the payload change check (opt-in with payloadFeedbackCheck)', () => {
+    /** Over 100 characters, so the analyzer measures its truncation. It must never reach the decision. */
+    const LONG_SUMMARY = 'The quarterly report covers revenue, churn and hiring across every region in detail. '.repeat(3);
+    const SHORT_SUMMARY = 'Short.';
+    const REASONING = 'The user asked for a one-line summary, so I am shortening it.';
+    const CHANGE_REASONING = 'Replace the long summary with one line.';
+    const CHECK_ON = JSON.stringify({ payloadFeedbackCheck: true });
+
+    const contentOf = (m: { content: unknown }): string => (typeof m.content === 'string' ? m.content : '');
+
+    function likelihood(probability: number): AIDecisionRunResult {
+        return { success: true, Answers: { change_1: { Kind: 'Likelihood', Probability: probability } } };
+    }
+
+    /**
+     * Turn 1 cuts the summary to one line (a change the analyzer flags for feedback) and runs the
+     * action; turn 2 finishes. Each turn records the conversation it was sent.
+     */
+    function truncatingScript(turns: string[][], changeRequest: LoopAgentResponse['payloadChangeRequest'] = {
+        updateElements: { summary: SHORT_SUMMARY },
+        reasoning: CHANGE_REASONING,
+    }): Array<(params: AIPromptParams) => AIPromptRunResult> {
+        // The trailing runtime-state fragment (metadata.volatileState) is rebuilt on every request; it
+        // is framework state, not a message the loop added, so it is left out of each recorded turn.
+        const realMessages = (p: AIPromptParams): string[] =>
+            (p.conversationMessages ?? [])
+                .filter((m) => (m as { metadata?: { volatileState?: boolean } }).metadata?.volatileState !== true)
+                .map(contentOf);
+        return [
+            (p) => { turns.push(realMessages(p)); return llmEnvelope(actionsEnvelope({ reasoning: REASONING, payloadChangeRequest: changeRequest })); },
+            (p) => { turns.push(realMessages(p)); return llmEnvelope(successEnvelope()); },
+        ];
+    }
+
+    /** The messages the loop added between turn 1 and turn 2. */
+    function addedBeforeTurn2(turns: string[][]): string[] {
+        return turns[1].slice(turns[0].length);
+    }
+
+    function outputOf(step: MockStepEntity): Record<string, unknown> {
+        return JSON.parse(step.OutputData ?? '{}');
+    }
+
+    it('defaults to off', () => {
+        expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.payloadFeedbackCheck).toBe(false);
+    });
+
+    it.each([
+        ['the agent does not set it', null],
+        ['the agent sets it to false', JSON.stringify({ payloadFeedbackCheck: false })],
+    ])('when %s, a flagged change behaves exactly as today: no decision, no message, no extra step', async (_label, promptParams) => {
+        harness.agent = makeAgentRow({ AgentTypePromptParams: promptParams });
+        const turns: string[][] = [];
+        const { agent, runner } = makeAgent(truncatingScript(turns));
+        const ask = vi.spyOn(agent.DecisionService, 'Ask');
+
+        const result = await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY } }));
+
+        expect(result.success).toBe(true);
+        expect(ask).not.toHaveBeenCalled();
+        // The analyzer still flags the change, and that still goes to telemetry only.
+        const payloadChangeResult = outputOf(harness.steps[1]).payloadChangeResult as { requiresFeedback: boolean };
+        expect(payloadChangeResult.requiresFeedback).toBe(true);
+        // Today's steps, and today's turn-2 additions: the action's invocation and its results.
+        expect(harness.steps.map((s) => s.StepType)).toEqual(['Validation', 'Prompt', 'Actions', 'Prompt']);
+        const added = addedBeforeTurn2(turns);
+        expect(added).toHaveLength(2);
+        expect(added[0]).toContain(`You invoked the **${ACTION_NAME}** action`);
+        expect(added[1]).toMatch(/^Action results:/);
+        // The change stands.
+        expect(injectedPayload(runner.Calls[1])).toEqual({ summary: SHORT_SUMMARY });
+        expect(result.payload).toEqual({ summary: SHORT_SUMMARY });
+    });
+
+    describe('when the agent turns it on', () => {
+        beforeEach(() => {
+            harness.agent = makeAgentRow({ AgentTypePromptParams: CHECK_ON });
+        });
+
+        afterEach(() => {
+            vi.restoreAllMocks();
+        });
+
+        it('asks one Likelihood per flagged change, in one call, about the reasoning and never the payload', async () => {
+            const turns: string[][] = [];
+            const { agent } = makeAgent(truncatingScript(turns));
+            const ask = vi.spyOn(agent.DecisionService, 'Ask').mockResolvedValueOnce(likelihood(0.9));
+
+            await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY } }));
+
+            expect(ask).toHaveBeenCalledTimes(1);
+            const asked = ask.mock.calls[0][0];
+            expect(Object.keys(asked.Questions)).toEqual(['change_1']);
+            expect(asked.Questions.change_1).toEqual({
+                Kind: 'Likelihood',
+                Instructions: expect.stringMatching(/^Given the agent's stated reasoning, this change was intended: Content reduced by .* at "summary"$/),
+            });
+            const state = String(asked.State);
+            expect(state).toContain(REASONING);
+            expect(state).toContain(CHANGE_REASONING);
+            expect(state).toContain(`from ${LONG_SUMMARY.length} to ${SHORT_SUMMARY.length} characters`);
+            expect(state).not.toContain(LONG_SUMMARY.slice(0, 40));
+            expect(asked.ContextUser?.ID).toBe(USER_ID);
+            expect(asked.AgentID).toBe(AGENT_ID);
+        });
+
+        it('uses the agent\'s decisionPromptName', async () => {
+            harness.agent = makeAgentRow({ AgentTypePromptParams: JSON.stringify({ payloadFeedbackCheck: true, decisionPromptName: 'Custom Decision' }) });
+            const { agent } = makeAgent(truncatingScript([]));
+            const ask = vi.spyOn(agent.DecisionService, 'Ask').mockResolvedValueOnce(likelihood(0.9));
+
+            await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY } }));
+
+            expect(ask.mock.calls[0][0].PromptName).toBe('Custom Decision');
+        });
+
+        it('lists a change judged unintended on the next turn, and never reverts it', async () => {
+            const turns: string[][] = [];
+            const { agent, runner } = makeAgent(truncatingScript(turns));
+            vi.spyOn(agent.DecisionService, 'Ask').mockResolvedValueOnce(likelihood(0.1));
+
+            const result = await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY } }));
+
+            expect(result.success).toBe(true);
+            const added = addedBeforeTurn2(turns);
+            expect(added).toHaveLength(3);
+            expect(added[0]).toMatch(/^Payload change check: these changes to the payload may not have been intended\./);
+            expect(added[0]).toContain('at "summary" (probability it was intended: 0.10)');
+            expect(added[0]).toContain('Nothing was reverted.');
+            // Never reverted: the agent's next turn, and the run, keep the change.
+            expect(injectedPayload(runner.Calls[1])).toEqual({ summary: SHORT_SUMMARY });
+            expect(result.payload).toEqual({ summary: SHORT_SUMMARY });
+            expect(JSON.parse(harness.run.FinalPayload ?? 'null')).toEqual({ summary: SHORT_SUMMARY });
+        });
+
+        it('adds its message as a tool result that expires after three turns, like other results', async () => {
+            const { agent } = makeAgent(truncatingScript([]));
+            vi.spyOn(agent.DecisionService, 'Ask').mockResolvedValueOnce(likelihood(0.1));
+            const params = makeParams({ payload: { summary: LONG_SUMMARY } });
+
+            await agent.Execute(params);
+
+            const message: AgentChatMessage | undefined = params.conversationMessages.find((m) => contentOf(m).startsWith('Payload change check:'));
+            expect(message?.role).toBe('user');
+            expect(message?.metadata).toEqual({
+                turnAdded: 1,
+                messageType: 'tool-result',
+                expirationTurns: 3,
+                expirationMode: 'Compact',
+                compactMode: 'First N Chars',
+                compactLength: 500,
+                compactPromptId: '',
+            });
+        });
+
+        it('never fails the turn: a throw inside the check fails its step, and the turn goes on', async () => {
+            const turns: string[][] = [];
+            const { agent, runner } = makeAgent(truncatingScript(turns));
+            // QueryAgent never throws by contract; this is the guard for anything else in the check that does.
+            vi.spyOn(PayloadFeedbackManager.prototype, 'QueryAgent').mockRejectedValueOnce(new Error('unexpected failure'));
+
+            const result = await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY } }));
+
+            expect(result.success).toBe(true);
+            expect(harness.steps.map((s) => s.StepType)).toEqual(['Validation', 'Prompt', 'Decision', 'Actions', 'Prompt']);
+            expect(harness.steps.map((s) => s.Status)).toEqual(['Completed', 'Completed', 'Failed', 'Completed', 'Completed']);
+            expect(harness.steps[2].ErrorMessage).toBe('unexpected failure');
+            // Turn 2 is exactly what it would be with the check off, and the change stands.
+            expect(addedBeforeTurn2(turns)).toHaveLength(2);
+            expect(runner.Calls).toHaveLength(2);
+            expect(injectedPayload(runner.Calls[1])).toEqual({ summary: SHORT_SUMMARY });
+            expect(result.payload).toEqual({ summary: SHORT_SUMMARY });
+        });
+
+        it('adds nothing to the next turn for a change judged intended', async () => {
+            const turns: string[][] = [];
+            const { agent, runner } = makeAgent(truncatingScript(turns));
+            vi.spyOn(agent.DecisionService, 'Ask').mockResolvedValueOnce(likelihood(0.9));
+
+            await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY } }));
+
+            const added = addedBeforeTurn2(turns);
+            expect(added).toHaveLength(2);
+            expect(added.some((c) => c.includes('Payload change check'))).toBe(false);
+            expect(injectedPayload(runner.Calls[1])).toEqual({ summary: SHORT_SUMMARY });
+        });
+
+        it('records the check as one Decision step, with the questions and the probabilities', async () => {
+            const { agent } = makeAgent(truncatingScript([]));
+            vi.spyOn(agent.DecisionService, 'Ask').mockResolvedValueOnce(likelihood(0.1));
+
+            await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY } }));
+
+            expect(harness.steps.map((s) => s.StepType)).toEqual(['Validation', 'Prompt', 'Decision', 'Actions', 'Prompt']);
+            const check = harness.steps[2];
+            expect(check.StepName).toContain('Payload change check');
+            expect(check.Status).toBe('Completed');
+            const input = JSON.parse(check.InputData ?? '{}') as { questions: Array<{ id: string; path: string; type: string; change: string }> };
+            expect(input.questions).toEqual([
+                { id: expect.any(String), path: 'summary', type: 'content_truncation', change: expect.stringContaining('at "summary"') },
+            ]);
+            const output = outputOf(check);
+            expect(output.threshold).toBe(0.5);
+            expect(output.probabilities).toEqual({ [input.questions[0].id]: 0.1 });
+            expect(output.unintendedPaths).toEqual(['summary']);
+        });
+
+        it('counts the check toward the run\'s tokens and cost: its step carries the decision\'s prompt run', async () => {
+            const CHECK_RUN = {
+                ID: 'aaaaaaaa-6666-4000-8000-000000000002',
+                TokensUsedRollup: 90,
+                TokensPromptRollup: 80,
+                TokensCompletionRollup: 10,
+                TokensCacheReadRollup: 0,
+                TokensCacheWriteRollup: 0,
+                TotalCost: 0.0031,
+            } satisfies Pick<MJAIPromptRunEntity, 'ID' | 'TokensUsedRollup' | 'TokensPromptRollup' | 'TokensCompletionRollup' | 'TokensCacheReadRollup' | 'TokensCacheWriteRollup' | 'TotalCost'>;
+            const { agent } = makeAgent(truncatingScript([]));
+            vi.spyOn(agent.DecisionService, 'Ask').mockResolvedValueOnce({ ...likelihood(0.9), promptRun: CHECK_RUN as MJAIPromptRunEntity });
+
+            await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY } }));
+
+            const check = harness.steps[2];
+            expect(check.StepName).toBe('Payload change check');
+            // The persisted link to the prompt run.
+            expect(check.TargetLogID).toBe(CHECK_RUN.ID);
+            // The run's totals read each Decision step's PromptRun. The scripted prompts carry none, so
+            // the check is the run's whole spend.
+            expect(harness.run.TotalCost).toBe(CHECK_RUN.TotalCost);
+            expect(harness.run.TotalTokensUsed).toBe(CHECK_RUN.TokensUsedRollup);
+            expect(harness.run.TotalPromptTokensUsed).toBe(CHECK_RUN.TokensPromptRollup);
+            expect(harness.run.TotalCompletionTokensUsed).toBe(CHECK_RUN.TokensCompletionRollup);
+        });
+
+        it('accepts every change, adds nothing, and records why, when decisions are unavailable', async () => {
+            // No spy: the harness has no 'Default Decision' prompt, so the real Ask fails.
+            const turns: string[][] = [];
+            const { agent, runner } = makeAgent(truncatingScript(turns));
+
+            const result = await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY } }));
+
+            expect(result.success).toBe(true);
+            expect(addedBeforeTurn2(turns)).toHaveLength(2);
+            expect(injectedPayload(runner.Calls[1])).toEqual({ summary: SHORT_SUMMARY });
+            const check = harness.steps[2];
+            expect(check.StepType).toBe('Decision');
+            expect(check.Status).toBe('Failed');
+            expect(check.ErrorMessage).toBe('Accepted by default (the decision call failed: Decision prompt "Default Decision" not found)');
+        });
+
+        it('asks nothing when the analyzer flags nothing', async () => {
+            const turns: string[][] = [];
+            const { agent } = makeAgent(truncatingScript(turns, { newElements: { note: 'added' } }));
+            const ask = vi.spyOn(agent.DecisionService, 'Ask');
+
+            await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY } }));
+
+            expect(ask).not.toHaveBeenCalled();
+            expect(harness.steps.map((s) => s.StepType)).toEqual(['Validation', 'Prompt', 'Actions', 'Prompt']);
+            expect(addedBeforeTurn2(turns)).toHaveLength(2);
+        });
+
+        describe('on a step that ends the run, where no turn would read its message', () => {
+            const CHANGE: LoopAgentResponse['payloadChangeRequest'] = { updateElements: { summary: SHORT_SUMMARY }, reasoning: CHANGE_REASONING };
+
+            it.each<[string, LoopAgentResponse]>([
+                ['a Success step', successEnvelope({ reasoning: REASONING, payloadChangeRequest: CHANGE })],
+                ['a Chat step', { taskComplete: false, message: 'Which region should the summary cover?', nextStep: { type: 'Chat' }, reasoning: REASONING, payloadChangeRequest: CHANGE }],
+                [
+                    'a step that terminates (client tools sent with taskComplete)',
+                    { taskComplete: true, message: 'I opened the record.', nextStep: { type: 'ClientTools', clientTools: [{ name: 'OpenRecord', params: {} }] }, reasoning: REASONING, payloadChangeRequest: CHANGE },
+                ],
+            ])('skips it on %s: no decision call, no step, and nothing added to the caller\'s conversation', async (_label, envelope) => {
+                vi.spyOn(ClientToolRequestManager.Instance, 'RequestClientTool').mockResolvedValue({ RequestID: 'ct-1', Success: true, Result: 'opened' });
+                const { agent, runner } = makeAgent([() => llmEnvelope(envelope), () => llmEnvelope(successEnvelope())]);
+                // Answered "unintended", so a check that ran would add its message.
+                const ask = vi.spyOn(agent.DecisionService, 'Ask').mockResolvedValue(likelihood(0.1));
+                const params = makeParams({ payload: { summary: LONG_SUMMARY }, sessionID: 'session-1' });
+
+                const result = await agent.Execute(params);
+
+                expect(result.success).toBe(true);
+                expect(runner.Calls).toHaveLength(1);
+                expect(ask).not.toHaveBeenCalled();
+                expect(harness.steps.some((s) => s.StepType === 'Decision')).toBe(false);
+                // The analyzer still flagged the change, so the check was on and skipped.
+                const payloadChangeResult = outputOf(harness.steps[1]).payloadChangeResult as { requiresFeedback: boolean };
+                expect(payloadChangeResult.requiresFeedback).toBe(true);
+                // params.conversationMessages is the caller's own array, so nothing may be left in it.
+                expect(params.conversationMessages.map(contentOf).some((c) => c.includes('Payload change check'))).toBe(false);
+            });
+
+            it('still runs on client tools sent without taskComplete: the prompt after the tools reads it', async () => {
+                vi.spyOn(ClientToolRequestManager.Instance, 'RequestClientTool').mockResolvedValue({ RequestID: 'ct-1', Success: true, Result: 'opened' });
+                const clientTools: LoopAgentResponse = {
+                    taskComplete: false,
+                    nextStep: { type: 'ClientTools', clientTools: [{ name: 'OpenRecord', params: {} }] },
+                    reasoning: REASONING,
+                    payloadChangeRequest: CHANGE,
+                };
+                const { agent, runner } = makeAgent([() => llmEnvelope(clientTools), () => llmEnvelope(successEnvelope())]);
+                const ask = vi.spyOn(agent.DecisionService, 'Ask').mockResolvedValue(likelihood(0.1));
+
+                await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY }, sessionID: 'session-1' }));
+
+                expect(ask).toHaveBeenCalledOnce();
+                expect(runner.Calls[1].conversationMessages?.map(contentOf).some((c) => c.startsWith('Payload change check:'))).toBe(true);
+            });
+        });
+    });
+});
+
 describe('BaseAgent.Execute — decisions on a turn', () => {
     /** The decision call's own prompt run, as AIDecisionRunner returns it once finalized. */
     const DECISION_RUN = {
@@ -1356,5 +1678,92 @@ describe('BaseAgent.Execute — decisions on a turn', () => {
         expect(ask).toHaveBeenCalledOnce();
         expect(harness.steps.map((s) => s.StepType)).toEqual(['Validation', 'Prompt', 'Decision', 'Prompt']);
         expect(runner.Calls[1].conversationMessages?.map(textOf).some((c) => c.startsWith('Decision results:'))).toBe(true);
+    });
+});
+
+describe("BaseAgent.Execute — a memory rerank's cost", () => {
+    /** The rerank's own prompt run, whose rollups hold its decision calls' tokens and cost once it is finalized. */
+    const RERANK_RUN = {
+        ID: 'aaaaaaaa-7777-4000-8000-000000000001',
+        TokensUsedRollup: 420,
+        TokensPromptRollup: 400,
+        TokensCompletionRollup: 20,
+        TokensCacheReadRollup: 0,
+        TokensCacheWriteRollup: 0,
+        TotalCost: 0.004,
+    } satisfies Pick<MJAIPromptRunEntity, 'ID' | 'TokensUsedRollup' | 'TokensPromptRollup' | 'TokensCompletionRollup' | 'TokensCacheReadRollup' | 'TokensCacheWriteRollup' | 'TotalCost'>;
+
+    /** The rerank step fields the run's totals read. */
+    type RerankStepFields = Pick<MJAIAgentRunStepEntityExtended, 'ID' | 'StepType' | 'StepName' | 'Status' | 'PromptRun'>;
+
+    /** The rerank step RerankerService creates, through the seam onto the full step entity. */
+    function rerankStep(): MJAIAgentRunStepEntityExtended {
+        const fields: RerankStepFields = {
+            ID: 'aaaaaaaa-7777-4000-8000-000000000002',
+            StepType: 'Decision',
+            StepName: 'Rerank Notes',
+            Status: 'Completed',
+            PromptRun: RERANK_RUN as MJAIPromptRunEntity,
+        };
+        return fields as MJAIAgentRunStepEntityExtended;
+    }
+
+    /** Stands in for the notes rerank: it reports its step the way RerankerService does, and returns no notes. */
+    function rerankNotesWithCost() {
+        return vi.spyOn(AgentContextInjector.prototype, 'GetNotesForContext').mockImplementation(async params => {
+            params.observability?.OnStepCreated?.(rerankStep());
+            return [];
+        });
+    }
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it("adds the rerank step to the run's steps and counts its prompt run toward the run's tokens and cost", async () => {
+        harness.agent = makeAgentRow({ InjectNotes: true });
+        const getNotes = rerankNotesWithCost();
+        const { agent } = makeAgent([() => llmEnvelope(successEnvelope())]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        expect(getNotes).toHaveBeenCalledOnce();
+        expect(getNotes.mock.calls[0][0].observability?.agentRunID).toBe(harness.run.ID);
+        expect(harness.run.Steps.map(s => s.ID)).toContain(rerankStep().ID);
+        // The scripted prompt carries no prompt run, so the rerank is the run's whole spend.
+        expect(harness.run.TotalCost).toBe(RERANK_RUN.TotalCost);
+        expect(harness.run.TotalTokensUsed).toBe(RERANK_RUN.TokensUsedRollup);
+        expect(harness.run.TotalPromptTokensUsed).toBe(RERANK_RUN.TokensPromptRollup);
+    });
+
+    it('stops the run at MaxCostPerRun when the rerank alone exceeds it', async () => {
+        harness.agent = makeAgentRow({ InjectNotes: true, MaxCostPerRun: 0.001 });
+        rerankNotesWithCost();
+        const { agent } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(false);
+        expect(harness.run.ErrorMessage).toContain('Maximum cost limit of $0.001 exceeded');
+        expect(harness.runActionCalls).toHaveLength(0);
+    });
+
+    it('stops the run at MaxTokensPerRun when the rerank alone exceeds it', async () => {
+        harness.agent = makeAgentRow({ InjectNotes: true, MaxTokensPerRun: 100 });
+        rerankNotesWithCost();
+        const { agent } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(false);
+        expect(harness.run.ErrorMessage).toContain('Maximum token limit of 100 exceeded');
+        expect(harness.runActionCalls).toHaveLength(0);
     });
 });

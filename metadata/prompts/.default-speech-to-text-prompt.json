@@ -1,0 +1,64 @@
+[
+  {
+    "fields": {
+      "Name": "Default Speech To Text",
+      "Description": "The carrier prompt AISpeechToTextRunner uses when no other is named. Its bindings choose the transcription model and its failover settings apply; every call is recorded as an AI Prompt Run. A transcript does not depend on the vendor, so failover may move to the next model (NextBestModel). The audio goes straight to the model and nothing in the template is rendered or sent.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Audio to Text",
+      "TemplateText": "@file:templates/system/default-speech-to-text.template.md",
+      "Status": "Active",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Speech to Text",
+      "SelectionStrategy": "Specific",
+      "RequireSpecificModels": true,
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "ResponseFormat": "Any",
+      "OutputType": "string",
+      "ValidationBehavior": "None",
+      "MaxRetries": 0,
+      "FailoverStrategy": "NextBestModel",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Whisper Large v3 Turbo",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 30
+          },
+          "primaryKey": {
+            "ID": "346BB0C2-83F8-4801-B789-BC19A1461351"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Whisper 1",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 20
+          },
+          "primaryKey": {
+            "ID": "69FB43B7-A2BD-4404-9A3A-0FCDA694D632"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Whisper Large v3",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "836A7DFA-4DBC-483C-857A-34464D6678A8"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "3489FA3D-2716-45F4-93B6-56BD008E8240"
+    }
+  }
+]
