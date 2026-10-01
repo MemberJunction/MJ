@@ -202,10 +202,12 @@ export function FillRubricEvaluatorTemplate(
     const ask = mode === 'SinglePass'
         ? 'Return JSON {"decisions":[{"key","level","value","notApplicable","rationale","evidence":[{"quote"}],"confidence"}]} for every criterion.'
         : `Return JSON {"chosen","probabilities","rationale","evidence":[{"quote"}]} for ${only?.key}. confidence is probabilities[chosen].`;
-    return template
-        .replaceAll('{{instructions}}', [ask, version.instructions ?? ''].filter(part => part.length > 0).join('\n\n'))
-        .replaceAll('{{criteria}}', criteria)
-        .replaceAll('{{content}}', body);
+    const values: Record<string, string> = {
+        '{{instructions}}': [ask, version.instructions ?? ''].filter(part => part.length > 0).join('\n\n'),
+        '{{criteria}}': criteria,
+        '{{content}}': body,
+    };
+    return template.replace(/\{\{(?:instructions|criteria|content)\}\}/g, token => values[token] ?? token);
 }
 
 /** @deprecated Use {@link FillRubricEvaluatorTemplate}. */

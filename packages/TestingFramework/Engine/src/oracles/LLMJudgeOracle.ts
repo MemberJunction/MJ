@@ -78,40 +78,6 @@ export class LLMJudgeOracle implements IOracle {
     readonly type = 'llm-judge';
 
     /**
-     * Default prompt template for LLM judge.
-     * @private
-     */
-    private readonly defaultPromptTemplate = `You are an expert AI evaluator. Your task is to judge whether an AI agent's output meets the specified validation criteria.
-
-**Input:**
-{{input}}
-
-**Expected Output Requirements:**
-{{expected}}
-
-**Actual Output:**
-{{actual}}
-
-**Validation Criteria:**
-{{criteria}}
-
-**Instructions:**
-For each criterion, evaluate whether the actual output satisfies it. Provide:
-1. A score from 0.0 to 1.0 for each criterion
-2. A brief explanation for each score
-3. An overall assessment
-
-Respond in JSON format:
-{
-  "criteriaScores": [
-    { "criterion": "...", "score": 0.0-1.0, "explanation": "..." }
-  ],
-  "overallScore": 0.0-1.0,
-  "overallAssessment": "...",
-  "passed": true/false
-}`;
-
-    /**
      * Evaluate output using LLM judge.
      *
      * @param input - Oracle input with expected criteria and actual output
@@ -186,34 +152,5 @@ Respond in JSON format:
     /** A failed result with this message and a score of 0. */
     private failed(message: string): OracleResult {
         return { oracleType: this.type, passed: false, score: 0, message };
-    }
-
-    /**
-     * Build prompt for LLM judge.
-     * @private
-     */
-    private buildPrompt(
-        input: OracleInput,
-        criteria: string[],
-        customTemplate?: string
-    ): string {
-        const template = customTemplate || this.defaultPromptTemplate;
-
-        // Format input data
-        const inputStr = JSON.stringify(input.test.InputDefinition, null, 2);
-        const expectedStr = JSON.stringify(input.expectedOutput, null, 2);
-        const actualStr = JSON.stringify(input.actualOutput, null, 2);
-        const criteriaStr = criteria.map((c, i) => `${i + 1}. ${c}`).join('\n');
-
-        // Replace placeholders. Function replacements throughout: these are test
-        // inputs, expected values and actual outputs, all of which routinely
-        // contain `$` — and a string replacement would expand `$&`/`` $` ``/`$'`,
-        // silently feeding the judge a prompt that differs from the data under
-        // test. See issue #3171.
-        return template
-            .replace('{{input}}', () => inputStr)
-            .replace('{{expected}}', () => expectedStr)
-            .replace('{{actual}}', () => actualStr)
-            .replace('{{criteria}}', () => criteriaStr);
     }
 }
