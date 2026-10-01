@@ -1165,8 +1165,8 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT96 - Rubric Immutability Triggers",
-            "Sequence": 50,
+            "TestID": "@lookup:MJ: Tests.Name=IT98 - Rubric Immutability Triggers",
+            "Sequence": 49,
             "Status": "Active"
           },
           "primaryKey": {

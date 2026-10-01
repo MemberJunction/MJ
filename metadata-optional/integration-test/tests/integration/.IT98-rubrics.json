@@ -1,8 +1,8 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT96 - Rubric Immutability Triggers",
-    "Description": "Deterministic server-side Rubrics bundle, sequence 50, ahead of the client-transport tests. Raw SQL must throw 51101-51110. Publishing classifies 1.0.0 Initial and a weight change as 2.0.0 Major. Submit stores the RubricScoring result. A second submit supersedes the first, and that evaluation can be withdrawn. The cohort mean matches the engine Mean and leaves Self out. Deleting a draft removes its tree. Fixtures roll back. Requires RUN_MUTATION_TESTS because every check writes.",
+    "Name": "IT98 - Rubric Immutability Triggers",
+    "Description": "Deterministic server-side Rubrics bundle, sequence 49, ahead of the client-transport tests. Raw SQL must throw 51101-51110. Publishing classifies 1.0.0 Initial and a weight change as 2.0.0 Major. Submit stores the RubricScoring result. A second submit supersedes the first, and that evaluation can be withdrawn. The cohort mean matches the engine Mean and leaves Self out. Deleting a draft removes its tree. Fixtures roll back. Requires RUN_MUTATION_TESTS because every check writes.",
     "InputDefinition": {},
     "ExpectedOutcomes": {
       "summary": "51101-51110 fire where a frozen write is attempted; publish classifies Initial then Major; submit matches RubricScoring; supersede and withdraw succeed; the cohort mean matches the engine Mean."
