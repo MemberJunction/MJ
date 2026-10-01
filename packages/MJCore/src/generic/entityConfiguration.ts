@@ -217,9 +217,10 @@ export function ReadRelationshipWhenEmpty(
     relationshipConfig: string | IEntityRelationshipConfiguration | null | undefined,
     parentEntityConfig: string | IEntityConfiguration | null | undefined,
 ): FormWhenEmpty {
-    return asWhenEmpty(ParseEntityRelationshipConfiguration(relationshipConfig)?.UI?.whenEmpty)
-        ?? asWhenEmpty(ParseEntityConfiguration(parentEntityConfig)?.UI?.Form?.RelatedWhenEmpty)
-        ?? 'show';
+    return ResolveContributionWhenEmpty(
+        ParseEntityRelationshipConfiguration(relationshipConfig)?.UI?.whenEmpty,
+        parentEntityConfig,
+    );
 }
 
 /**
@@ -230,16 +231,17 @@ export function ReadRelationshipShowCount(
     relationshipConfig: string | IEntityRelationshipConfiguration | null | undefined,
     parentEntityConfig: string | IEntityConfiguration | null | undefined,
 ): boolean {
-    const own = ParseEntityRelationshipConfiguration(relationshipConfig)?.UI?.showCount;
-    if (typeof own === 'boolean') return own;
-    const inherited = ParseEntityConfiguration(parentEntityConfig)?.UI?.Form?.ShowRelatedCounts;
-    if (typeof inherited === 'boolean') return inherited;
-    return true;
+    return ResolveContributionShowCount(
+        ParseEntityRelationshipConfiguration(relationshipConfig)?.UI?.showCount,
+        parentEntityConfig,
+    );
 }
 
 /**
  * Resolve a form contribution's empty behaviour / count flag: its own
  * registration value wins, then the parent entity default, then the built-in default.
+ * A value that is not one of the allowed ones counts as unset. The relationship
+ * readers above pass the relationship's own value through these.
  */
 export function ResolveContributionWhenEmpty(
     own: FormWhenEmpty | null | undefined,

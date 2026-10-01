@@ -17,6 +17,7 @@ import {
     ResolveFormLayout,
     ResolveRelatedFormRoles,
     ScoreRelatedFormRole,
+    type FormWhenEmpty,
     type RelatedFormRoleCandidate,
 } from '../generic/entityConfiguration';
 
@@ -486,6 +487,48 @@ describe('ReadRelationshipWhenEmpty / ReadRelationshipShowCount', () => {
     });
     it('ignores invalid values', () => {
         expect(ReadRelationshipWhenEmpty('{"UI":{"whenEmpty":"sometimes"}}', '{bad json')).toBe('show');
+    });
+    it('treats an invalid relationship value as unset, so the parent default applies', () => {
+        const entity = { UI: { Form: { RelatedWhenEmpty: 'hide' as const, ShowRelatedCounts: false } } };
+        expect(ReadRelationshipWhenEmpty('{"UI":{"whenEmpty":"sometimes"}}', entity)).toBe('hide');
+        expect(ReadRelationshipShowCount('{"UI":{"showCount":"yes"}}', entity)).toBe(false);
+    });
+});
+
+/**
+ * A related grid and a contribution share one fallback chain. The relationship readers
+ * answer exactly what the contribution resolvers answer for the relationship's own value.
+ */
+describe('relationship readers and contribution resolvers agree', () => {
+    const parents: Array<string | null> = [
+        null,
+        '{bad json',
+        JSON.stringify({ UI: { Form: {} } }),
+        JSON.stringify({ UI: { Form: { RelatedWhenEmpty: 'more', ShowRelatedCounts: false } } }),
+        JSON.stringify({ UI: { Form: { RelatedWhenEmpty: 'hide', ShowRelatedCounts: true } } }),
+        JSON.stringify({ UI: { Form: { RelatedWhenEmpty: 'never', ShowRelatedCounts: 'no' } } }),
+    ];
+    const ownWhenEmpty: Array<string | undefined> = [undefined, 'show', 'hide', 'more', 'sometimes'];
+    const ownShowCount: Array<boolean | string | undefined> = [undefined, true, false, 'yes'];
+
+    it('give the same empty behaviour for every own value and parent default', () => {
+        for (const parent of parents) {
+            for (const own of ownWhenEmpty) {
+                const relationship = JSON.stringify({ UI: { whenEmpty: own } });
+                expect(ReadRelationshipWhenEmpty(relationship, parent))
+                    .toBe(ResolveContributionWhenEmpty(own as FormWhenEmpty | undefined, parent));
+            }
+        }
+    });
+
+    it('give the same count flag for every own value and parent default', () => {
+        for (const parent of parents) {
+            for (const own of ownShowCount) {
+                const relationship = JSON.stringify({ UI: { showCount: own } });
+                expect(ReadRelationshipShowCount(relationship, parent))
+                    .toBe(ResolveContributionShowCount(own as boolean | undefined, parent));
+            }
+        }
     });
 });
 
