@@ -110,6 +110,9 @@ graph LR
 | `SchemaValidatorOracle` | Validates output against a JSON schema |
 | `SQLValidatorOracle` | Validates output by running SQL queries |
 | `TraceValidatorOracle` | Validates execution trace/steps of an agent run |
+| `RubricOracle` | Judges the test run with a rubric. The subject is the test run and the context is the test |
+
+A test run picks one rubric. The first source that names one wins: the run override, the `rubric` oracle's own config, `Test.RubricID`, `TestSuite.RubricID` walking up `ParentID`, then the agent's default Evaluation rubric. The published version is pinned when the suite run starts, so a publish during the run does not split the suite. An explicitly named version is used as given. When a rubric is resolved and the test did not configure a `rubric` oracle, the driver adds one. That oracle always gates status. It contributes to the score when `scoringWeights` is absent or already names `rubric`.
 
 ### Variable Resolution
 

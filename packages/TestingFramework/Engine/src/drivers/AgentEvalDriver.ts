@@ -9,6 +9,7 @@ import { MJAIAgentEntity, MJAIAgentRunEntity, MJTestEntity, MJTestRunEntity } fr
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessage } from '@memberjunction/ai';
 import { BaseTestDriver } from './BaseTestDriver';
+import { ensureImplicitRubricOracle, PublishedVersionPin, resolveRubric, weightsForImplicitRubric } from '../oracles/rubric-resolution';
 import {
     DriverExecutionContext,
     DriverExecutionResult,
@@ -839,6 +840,25 @@ export class AgentEvalDriver extends BaseTestDriver {
      * Run oracles for multi-turn evaluation.
      * @private
      */
+    private readonly versionPins = new PublishedVersionPin();
+
+    private async withResolvedRubric(config: AgentEvalConfig, context: DriverExecutionContext): Promise<AgentEvalConfig> {
+        const named = config.oracles?.find(oracle => oracle.type === 'rubric')?.config as { rubricId?: string; rubricVersionId?: string } | undefined;
+        const choice = resolveRubric({
+            run: context.options.rubricId ? { rubricId: context.options.rubricId, versionId: context.options.rubricVersionId } : undefined,
+            oracle: named,
+            testRubricId: (context.test as { RubricID?: string | null }).RubricID,
+            agentRubricId: context.options.agentEvaluationRubricId,
+        });
+        const hadRubric = (config.oracles ?? []).some(oracle => oracle.type === 'rubric');
+        const suiteRunId = (context.testRun as { TestSuiteRunID?: string }).TestSuiteRunID || context.testRun.ID;
+        const versionId = choice.rubricId
+            ? await this.versionPins.remember(suiteRunId, choice.rubricId, choice.explicitVersion ? choice.versionId : undefined, async () => context.options.publishedRubricVersionId)
+            : undefined;
+        const oracles = ensureImplicitRubricOracle(config.oracles, choice, versionId);
+        return { ...config, oracles, scoringWeights: weightsForImplicitRubric(config.scoringWeights, oracles.length > (config.oracles?.length ?? 0) && !hadRubric) };
+    }
+
     private async runOraclesForMultiTurn(
         config: AgentEvalConfig,
         turns: AgentEvalTurn[],
@@ -846,6 +866,7 @@ export class AgentEvalDriver extends BaseTestDriver {
         expected: AgentEvalExpectedOutcomes,
         context: DriverExecutionContext
     ): Promise<OracleResult[]> {
+        config = await this.withResolvedRubric(config, context);
         const strategy = config.evaluationStrategy || 'final-turn-only';
 
         switch (strategy) {
@@ -953,7 +974,8 @@ export class AgentEvalDriver extends BaseTestDriver {
                         finalOutput: turnResults[turnResults.length - 1].outputPayload
                     },
                     targetEntity: turnResults[turnResults.length - 1].agentRun,
-                    contextUser: context.contextUser
+                    contextUser: context.contextUser,
+                    testRunId: context.testRun.ID,
                 };
 
                 const result = await oracle.evaluate(oracleInput, oracleConfig.config || {});
@@ -1005,7 +1027,8 @@ export class AgentEvalDriver extends BaseTestDriver {
                     expectedOutput: expected,
                     actualOutput: turnResult.outputPayload,
                     targetEntity: turnResult.agentRun,
-                    contextUser: context.contextUser
+                    contextUser: context.contextUser,
+                    testRunId: context.testRun.ID,
                 };
 
                 const result = await oracle.evaluate(oracleInput, oracleConfig.config || {});

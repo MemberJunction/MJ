@@ -101,6 +101,21 @@ export interface TestRunOptions {
   configOverride?: Record<string, unknown>;
 
   /**
+   * Experiment override for the rubric that judges this run.
+   * A version here is explicit and is not replaced by the suite pin.
+   */
+  rubricId?: string;
+
+  /** Explicit rubric version id. When omitted, the suite run pins the latest published version. */
+  rubricVersionId?: string;
+
+  /** Latest published version observed at suite-run start, used to pin the suite. */
+  publishedRubricVersionId?: string;
+
+  /** The target agent's default Evaluation rubric, used when nothing earlier names one. */
+  agentEvaluationRubricId?: string;
+
+  /**
    * Progress callback for real-time updates
    */
   progressCallback?: (progress: TestProgress) => void;

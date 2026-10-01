@@ -33,6 +33,7 @@ import { LLMJudgeOracle } from '../oracles/LLMJudgeOracle';
 import { DecisionJudgeOracle } from '../oracles/DecisionJudgeOracle';
 import { ExactMatchOracle } from '../oracles/ExactMatchOracle';
 import { SQLValidatorOracle } from '../oracles/SQLValidatorOracle';
+import { RubricOracle } from '../oracles/RubricOracle';
 import {
     TestRunOptions,
     SuiteRunOptions,
@@ -661,6 +662,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         this.RegisterOracle(new DecisionJudgeOracle());
         this.RegisterOracle(new ExactMatchOracle());
         this.RegisterOracle(new SQLValidatorOracle());
+        this.RegisterOracle(new RubricOracle());
     }
 
     /**

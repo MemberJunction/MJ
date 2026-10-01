@@ -841,7 +841,8 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 **T — testing framework**
 - [x] **T1** Re-enable Agent Eval oracles (§10.1). Empty oracle results stay Failed.
       The self-check decision retries a loop agent and records a flow-agent failure.
-- [ ] **T2** Rubric resolution + suite-run version pinning (§10.2).
+- [x] **T2** Rubric resolution + suite-run version pinning (§10.2). The implicit rubric
+      oracle is added when the test does not name one (§10.3).
 - [ ] **T3** `RubricOracle` + implicit rubric (§10.3).
 - [ ] **T4** Inline rubric path; rebuild `LLMJudgeOracle`; Computer Use driver reporting;
       `mj test promote-criteria` (§10.4).
@@ -854,7 +855,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 
 **A — agents**
 - [ ] **A1** Agent rubric links: metadata support, agent form Rubrics tab (§11.1).
-- [ ] **A2** Default Evaluation rubric in resolution (§11.2) — lands with T2.
+- [x] **A2** Default Evaluation rubric in resolution (§11.2) — the last source in T2.
 - [ ] **A3** Self-check in `BaseAgent` (§11.3) with tests for pass, retry-then-pass,
       exhausted-attempts and Flow-agent paths.
 - [ ] **A4** Production sampling job + drift view (§11.4).
