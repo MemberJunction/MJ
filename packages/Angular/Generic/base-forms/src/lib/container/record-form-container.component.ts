@@ -67,6 +67,7 @@ import {
   ContributionDrawsInSection,
   ContributionHiddenSectionKeys,
   IsWildcardPlaceClaim,
+  PlacedInSectionKey,
   ReplacedSectionKeys,
   ResolveContributionKey,
   ResolveFormContributionWinners,
@@ -1606,7 +1607,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
         continue;
       }
       const hostSection = ContributionDrawsInSection(meta)
-        ? meta.inSectionKey?.trim() || SectionDrawingAnyField(panels, meta.replacesFieldNames ?? [])
+        ? PlacedInSectionKey(meta) || SectionDrawingAnyField(panels, meta.replacesFieldNames ?? [])
         : undefined;
       const group = this.groupOfReplacedSection(ReplacedSectionKeys(meta)[0])
         ?? this.groupOfReplacedSection(hostSection)
@@ -2721,7 +2722,7 @@ function unhostedSectionClaim(
   drawn: ReadonlySet<string>,
 ): { Claim: string; Missing: string } | null {
   if (!ContributionDrawsInSection(meta)) return null;
-  const placedIn = meta.inSectionKey?.trim();
+  const placedIn = PlacedInSectionKey(meta);
   const claimed = (meta.replacesFieldNames ?? []).map((name) => name.trim()).filter((name) => name.length > 0);
   if (placedIn && sections.has(placedIn)) return null;
   if (claimed.some((name) => drawn.has(name))) return null;

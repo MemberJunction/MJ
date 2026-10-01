@@ -18,6 +18,7 @@ import { FormContext } from '../types/form-types';
 import { BaseFormPanel } from './base-form-panel';
 import {
     ContributionSectionPosition,
+    PlacedInSectionKey,
     ResolveFormContributionWinners,
     type FormContributionRegistration,
 } from './form-contribution';
@@ -136,8 +137,9 @@ export class FormFieldPanelSlotComponent implements OnInit, OnChanges, OnDestroy
     /**
      * The form's winning registrations drawn at this end of this section, highest sort first:
      * those standing in for a field the section draws, and those placed in the section by its
-     * key. The collapse runs once over every registration on the form, so a key a row took from
-     * a compiled panel draws where the row says.
+     * key ({@link PlacedInSectionKey}, which ignores a wildcard's place). The collapse runs once
+     * over every registration on the form, so a key a row took from a compiled panel draws where
+     * the row says.
      */
     private claimsForFields(): FormContributionRegistration[] {
         const fields = new Set(this.FieldNames.filter((name) => !!name));
@@ -151,7 +153,7 @@ export class FormFieldPanelSlotComponent implements OnInit, OnChanges, OnDestroy
         // other fields stayed hidden.
         const matching = ResolveFormContributionWinners(this.Entity, all).Winners.filter((reg) => {
             if (ContributionSectionPosition(reg.Metadata) !== this.Position) return false;
-            if (sectionKey && reg.Metadata.inSectionKey?.trim() === sectionKey) return true;
+            if (sectionKey && PlacedInSectionKey(reg.Metadata) === sectionKey) return true;
             const claimed = reg.Metadata.replacesFieldNames ?? [];
             return claimed.some((name) => fields.has(name.trim()));
         });

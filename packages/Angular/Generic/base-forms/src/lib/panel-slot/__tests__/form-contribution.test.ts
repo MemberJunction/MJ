@@ -20,6 +20,7 @@ import {
     ReplacedSectionKeys,
     ContributionDrawsInSection,
     ContributionSectionPosition,
+    PlacedInSectionKey,
 } from '../form-contribution';
 
 const PEOPLE = 'MJ_BizApps_Common: People';
@@ -696,6 +697,13 @@ describe('Section claims on registrations', () => {
         expect(ContributionDrawsInSection({ inSectionKey: 'profile' })).toBe(true);
         expect(ContributionDrawsInSection({ replacesFieldNames: ['Name'] })).toBe(true);
         expect(ContributionDrawsInSection({})).toBe(false);
+    });
+
+    it('ignores the section a wildcard panel names, so its slot hosts it', () => {
+        expect(PlacedInSectionKey({ entity: PEOPLE, inSectionKey: ' profile ' })).toBe('profile');
+        expect(PlacedInSectionKey({ entity: '*', inSectionKey: 'profile' })).toBe('');
+        expect(ContributionDrawsInSection({ entity: '*', inSectionKey: 'profile' })).toBe(false);
+        expect(ContributionDrawsInSection({ entity: '*', replacesFieldNames: ['Name'] })).toBe(true);
     });
 
     it('draws at the start of its section unless it asks for the end', () => {

@@ -579,14 +579,26 @@ export function ContributionClaimsFields(
 }
 
 /**
+ * The section a registration names to draw in, or '' when it names none. A wildcard
+ * (`entity: '*'`) registration's section is ignored, because it would take that place on every
+ * form, so the panel draws at its slot.
+ */
+export function PlacedInSectionKey(
+    metadata: Partial<Pick<FormPanelRegistrationMetadata, 'entity' | 'inSectionKey'>> | null | undefined,
+): string {
+    if (!metadata || metadata.entity === '*') return '';
+    return metadata.inSectionKey?.trim() ?? '';
+}
+
+/**
  * Whether this registration is drawn inside a section rather than by a slot: it stands in for
- * fields, or it names a section to draw in. The section's own host mounts it, so a slot host
- * must not mount it a second time.
+ * fields, or it names a section to draw in ({@link PlacedInSectionKey}). The section's own host
+ * mounts it, so a slot host must not mount it a second time.
  */
 export function ContributionDrawsInSection(
-    metadata: Pick<FormPanelRegistrationMetadata, 'replacesFieldNames' | 'inSectionKey'> | null | undefined,
+    metadata: Partial<Pick<FormPanelRegistrationMetadata, 'entity' | 'replacesFieldNames' | 'inSectionKey'>> | null | undefined,
 ): boolean {
-    return ContributionClaimsFields(metadata) || !!metadata?.inSectionKey?.trim();
+    return ContributionClaimsFields(metadata) || !!PlacedInSectionKey(metadata);
 }
 
 /** Where inside its section a section-hosted contribution draws. */
