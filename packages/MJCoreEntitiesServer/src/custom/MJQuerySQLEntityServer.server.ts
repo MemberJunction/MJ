@@ -1,9 +1,7 @@
 import {
     BaseEntity,
-    CompositeKey,
     DatabasePlatform,
     EntitySaveOptions,
-    IMetadataProvider,
     LogError,
     LogStatus,
 } from '@memberjunction/core';
@@ -104,16 +102,17 @@ export class MJQuerySQLEntityServer extends MJQuerySQLEntity {
      * connection, that is both wrong (the extraction cannot see the query's authored
      * parameters and duplicates them) and a deadlock risk (it blocks on rows the
      * uncommitted graph holds, while that graph waits on this call). So resolve the parent
-     * through `ProviderToUse`, which is the connection this record is already on.
+     * through `RunViewProviderToUse`, which is the connection this record is already on;
+     * `entity_object` results are bound to the provider that ran the view.
      */
     private async loadParentQuery(): Promise<MJQueryEntityServer | null> {
-        const md = this.ProviderToUse as unknown as IMetadataProvider;
-        const query = await md.GetEntityObject<MJQueryEntityServer>(
-            'MJ: Queries',
-            CompositeKey.FromID(this.QueryID),
-            this.ContextCurrentUser
-        );
-        if (!query || !query.IsSaved) {
+        const result = await this.RunViewProviderToUse.RunView<MJQueryEntityServer>({
+            EntityName: 'MJ: Queries',
+            ExtraFilter: `ID='${this.QueryID}'`,
+            ResultType: 'entity_object'
+        }, this.ContextCurrentUser);
+        const query = result.Success ? result.Results?.[0] : undefined;
+        if (!query) {
             LogError(`[MJQuerySQLEntityServer] Parent query ${this.QueryID} could not be loaded`);
             return null;
         }

@@ -1,4 +1,4 @@
-import { IMetadataProvider, IRunViewProvider, LogError, RunMaybeSerial, UserInfo, DatabasePlatform } from "@memberjunction/core";
+import { IMetadataProvider, IRunViewProvider, LogError, LogStatus, RunMaybeSerial, UserInfo, DatabasePlatform } from "@memberjunction/core";
 import {
     MJQueryParameterEntity,
     MJQueryFieldEntity,
@@ -131,7 +131,7 @@ export async function SyncParameters(
         );
         for (const orphan of paramsToRemove) {
             if (orphan.DetectionMethod === 'Manual') {
-                console.warn(
+                LogError(
                     `Query ${queryID} declares parameter "${orphan.Name}", but its SQL does not reference it. ` +
                     `Removing the declared row — restore the parameter in the SQL, or drop the declaration.`
                 );
@@ -186,7 +186,7 @@ function applyParameterValues(
     if (isObject) {
         console.log(`Parameter "${param.name}" is type "object", storing as "string" (runtime will handle object validation)`);
     } else if (isUnknown) {
-        console.warn(`Unknown parameter type "${param.type}" for parameter "${param.name}", defaulting to "string"`);
+        LogStatus(`Unknown parameter type "${param.type}" for parameter "${param.name}", defaulting to "string"`);
     }
     entity.Type = type;
 

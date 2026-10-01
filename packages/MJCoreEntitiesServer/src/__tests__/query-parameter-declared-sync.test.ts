@@ -195,7 +195,7 @@ describe('SyncParameters — declared parameters are authoritative', () => {
     // with no supplied value, and a caller has no reason to pass a parameter the SQL does
     // not use. So the row goes, loudly.
     it('removes a Manual row the SQL no longer references, and says so', async () => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         const table = new FakeQueryParameterTable();
         table.rows.push(declaredRow());
         const { metadataProvider, runViewProvider } = buildProviders(table);
@@ -205,11 +205,11 @@ describe('SyncParameters — declared parameters are authoritative', () => {
         );
 
         expect(table.Find('CompanyIDs')).toBeUndefined();
-        expect(warn).toHaveBeenCalledWith(expect.stringContaining('CompanyIDs'));
+        expect(logError).toHaveBeenCalledWith(expect.stringContaining('CompanyIDs'));
     });
 
-    it('does not warn when an AI row is removed — only a declaration is noteworthy', async () => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    it('does not log when an AI row is removed — only a declaration is noteworthy', async () => {
+        const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         const table = new FakeQueryParameterTable();
         table.rows.push({ ...declaredRow(), DetectionMethod: 'AI' });
         const { metadataProvider, runViewProvider } = buildProviders(table);
@@ -218,7 +218,7 @@ describe('SyncParameters — declared parameters are authoritative', () => {
             QUERY_ID, [extracted({ name: 'SomethingElse' })], CONTEXT_USER, metadataProvider, runViewProvider, true
         );
 
-        expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('declares parameter'));
+        expect(logError).not.toHaveBeenCalledWith(expect.stringContaining('declares parameter'));
     });
 
     it('still removes an AI row the SQL no longer references', async () => {
@@ -249,7 +249,7 @@ describe('SyncParameters — declared parameters are authoritative', () => {
     // a declared parameter whose token form the parser did not recognise was written by the
     // push and wiped again on the same save, every time, with success reported.
     it('reports the declared rows it removes when extraction finds no parameters at all', async () => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const logError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         const table = new FakeQueryParameterTable();
         table.rows.push(declaredRow());
         const { metadataProvider, runViewProvider } = buildProviders(table);
@@ -257,7 +257,7 @@ describe('SyncParameters — declared parameters are authoritative', () => {
         await SyncParameters(QUERY_ID, [], CONTEXT_USER, metadataProvider, runViewProvider, true);
 
         expect(table.rows).toHaveLength(0);
-        expect(warn).toHaveBeenCalledWith(expect.stringContaining('CompanyIDs'));
+        expect(logError).toHaveBeenCalledWith(expect.stringContaining('CompanyIDs'));
     });
 
     it('creates an extraction-owned row when nothing declares the parameter', async () => {
