@@ -36,7 +36,8 @@ export class MJRubricEvaluationFormComponentExtended extends MJRubricEvaluationF
                 rationale: row.Rationale == null ? undefined : String(row.Rationale),
                 evidence: row.Evidence == null ? undefined : String(row.Evidence),
             }));
-            this.Keys = [...new Set(scores.map(row => String(row.CriterionKey ?? row.CriterionID)))];
+            const criterionLabel = (row: Record<string, unknown>) => String(row.Criterion || row.CriterionKey || row.CriterionID);
+            this.Keys = [...new Set(scores.map(criterionLabel))];
             this.Result = {
                 normalizedScore: this.record.NormalizedScore ?? null,
                 completeness: this.record.Completeness ?? null,
@@ -49,7 +50,7 @@ export class MJRubricEvaluationFormComponentExtended extends MJRubricEvaluationF
                 scoringEngineVersion: '1.0',
                 nodes: scores.map(row => ({
                     id: String(row.CriterionID),
-                    key: String(row.CriterionKey ?? row.CriterionID),
+                    key: criterionLabel(row),
                     normalizedScore: row.NormalizedScore == null ? null : Number(row.NormalizedScore),
                     effectiveWeight: Number(row.EffectiveWeight ?? 0),
                     overallContribution: row.OverallContribution == null ? null : Number(row.OverallContribution),
@@ -83,7 +84,7 @@ export class MJRubricEvaluationFormComponentExtended extends MJRubricEvaluationF
                     name: String(row.EvaluatorType ?? 'Evaluation'),
                     evaluatorType: (row.EvaluatorType ?? 'Human') as MatrixColumn['evaluatorType'],
                     status: String(row.Status ?? ''),
-                    scores: cells.map(cell => ({ key: String(cell.CriterionKey ?? cell.CriterionID), normalizedScore: cell.NormalizedScore == null ? null : Number(cell.NormalizedScore) })),
+                    scores: cells.map(cell => ({ key: criterionLabel(cell), normalizedScore: cell.NormalizedScore == null ? null : Number(cell.NormalizedScore) })),
                 };
             }));
         } finally {
