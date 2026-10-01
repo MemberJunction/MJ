@@ -34,6 +34,17 @@ import { SanitizeGraphQLError, ToSafeGraphQLError } from "./sanitizeGraphQLError
 export type RefreshTokenFunction = () => Promise<string>;
 
 /**
+ * The URL and credentials each GraphQL client was built with (recorded by CreateNewGraphQLClient).
+ * A client's headers are fixed at construction, so a connect bringing different credentials must
+ * build a new client rather than reuse one that would keep sending the old identity (#4887).
+ */
+const clientCredentials = new WeakMap<GraphQLClient, string>();
+
+function credentialsKey(url: string, token: string, mjAPIKey: string, userAPIKey?: string): string {
+    return JSON.stringify([url, token ?? null, mjAPIKey ?? null, userAPIKey ?? null]);
+}
+
+/**
  * State of the provider's graphql-ws WebSocket connection.
  * - 'connected': socket is open and ready
  * - 'disconnected': socket failed after graphql-ws exhausted its retries
@@ -396,53 +407,92 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      */
     public async Config(configData: GraphQLProviderConfigData, providerToUse?: IMetadataProvider, separateConnection?: boolean, forceRefreshSessionId?: boolean): Promise<boolean> {
         try {
-            // Enhanced logging to diagnose token issues
-            // const tokenPreview = configData.Token ? `${configData.Token.substring(0, 20)}...${configData.Token.substring(configData.Token.length - 10)}` : 'NO TOKEN';
-            // console.log('[GraphQL] Config called with token:', {
-            //     tokenPreview,
-            //     tokenLength: configData.Token?.length,
-            //     separateConnection,
-            //     hasRefreshFunction: !!configData.Data?.RefreshTokenFunction
-            // });
-
-            // CRITICAL: Always set this instance's _configData first
-            // This ensures BuildDatasetFilterFromConfig() can access ConfigData.IncludeSchemas
-            this._configData = configData;
-
-            if (separateConnection) {
-                // Get UUID after setting the configData, so that it can be used to get any stored session ID
-                this._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
-
-                this._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, this._sessionId, configData.MJAPIKey, configData.UserAPIKey);
-                // Store the session ID for this connection
-                await this.saveStoredSessionID(this._sessionId);
-            }
-            else {
-                // Update the singleton instance
-                GraphQLDataProvider.Instance._configData = configData;
-
-                if (GraphQLDataProvider.Instance._sessionId === undefined) {
-                    GraphQLDataProvider.Instance._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
-                }
-
-                // now create the new client, if it isn't already created
-                if (!GraphQLDataProvider.Instance._client)
-                    GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId, configData.MJAPIKey, configData.UserAPIKey);
-
-                // Store the session ID for the global instance
-                await GraphQLDataProvider.Instance.saveStoredSessionID(GraphQLDataProvider.Instance._sessionId);
-
-                // CRITICAL: Sync this instance with the singleton
-                // This ensures ExecuteGQL() can use this._client.request()
-                this._sessionId = GraphQLDataProvider.Instance._sessionId;
-                this._client = GraphQLDataProvider.Instance._client;
-            }
+            await this.connectClient(configData, separateConnection, forceRefreshSessionId);
             return super.Config(configData); // now parent class can do it's config
         }
         catch (e) {
             LogError(e);
             throw (e)
         }
+    }
+
+    /**
+     * The authenticate-only half of {@link Config}, for embedded/anonymous surfaces that only make
+     * their own GraphQL calls. After it resolves, {@link ExecuteGQL} works. No metadata is fetched,
+     * so entity metadata (`Entities`, `EntityByName`, `RunView`, `GetEntityObject`) is NOT available
+     * until the full boot runs (`SetupGraphQLClient`, or {@link Config}) on this same instance.
+     * Uses the shared singleton connection (a secondary instance keeps its own). A later Connect/Config with a different URL,
+     * token or API key rebuilds that connection's client (keeping the session id).
+     */
+    public async Connect(configData: GraphQLProviderConfigData): Promise<void> {
+        await this.connectClient(configData, false, false);
+    }
+
+    /**
+     * The connection half of {@link Config}: stores the config, resolves the session id and creates the
+     * GraphQL client (this instance's own client when separateConnection is true or this is not the
+     * global singleton, otherwise the shared singleton client, which is reused unless the credentials
+     * changed). Loads no metadata.
+     */
+    private async connectClient(configData: GraphQLProviderConfigData, separateConnection?: boolean, forceRefreshSessionId?: boolean): Promise<void> {
+        // Enhanced logging to diagnose token issues
+        // const tokenPreview = configData.Token ? `${configData.Token.substring(0, 20)}...${configData.Token.substring(configData.Token.length - 10)}` : 'NO TOKEN';
+        // console.log('[GraphQL] Config called with token:', {
+        //     tokenPreview,
+        //     tokenLength: configData.Token?.length,
+        //     separateConnection,
+        //     hasRefreshFunction: !!configData.Data?.RefreshTokenFunction
+        // });
+
+        // CRITICAL: Always set this instance's _configData first
+        // This ensures BuildDatasetFilterFromConfig() can access ConfigData.IncludeSchemas
+        this._configData = configData;
+
+        // An instance that is not the global singleton (built while the global-store slot was
+        // parked) owns its own connection, even when a re-entry path omits the flag:
+        // ProviderBase.Refresh() re-runs Config(this._ConfigData) without separateConnection.
+        // Taking the shared branch from such an instance would hand the global provider this
+        // instance's credentials, and every global call would then run as its user (#4887).
+        if (separateConnection || GraphQLDataProvider.Instance !== this) {
+            // Get UUID after setting the configData, so that it can be used to get any stored session ID
+            this._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
+
+            this._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, this._sessionId, configData.MJAPIKey, configData.UserAPIKey);
+            // Store the session ID for this connection
+            await this.saveStoredSessionID(this._sessionId);
+        }
+        else {
+            // Update the singleton instance
+            GraphQLDataProvider.Instance._configData = configData;
+
+            if (GraphQLDataProvider.Instance._sessionId === undefined) {
+                GraphQLDataProvider.Instance._sessionId = await this.GetPreferredUUID(forceRefreshSessionId);;
+            }
+
+            // Create the client if there is none, or rebuild it (same session id) when this config
+            // brings different credentials — e.g. an anonymous connect upgraded to a login.
+            const existing = GraphQLDataProvider.Instance._client;
+            if (!existing || this.isBuiltWithOtherCredentials(existing, configData))
+                GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId, configData.MJAPIKey, configData.UserAPIKey);
+
+            // Store the session ID for the global instance
+            await GraphQLDataProvider.Instance.saveStoredSessionID(GraphQLDataProvider.Instance._sessionId);
+
+            // CRITICAL: Sync this instance with the singleton
+            // This ensures ExecuteGQL() can use this._client.request()
+            this._sessionId = GraphQLDataProvider.Instance._sessionId;
+            this._client = GraphQLDataProvider.Instance._client;
+        }
+    }
+
+    /**
+     * True when `client` was built with a URL or credentials other than `configData`'s. A client this
+     * class did not record (a subclass's own CreateNewGraphQLClient, a test harness) is kept as-is.
+     */
+    private isBuiltWithOtherCredentials(client: GraphQLClient, configData: GraphQLProviderConfigData): boolean {
+        const builtWith = clientCredentials.get(client);
+        return builtWith !== undefined &&
+            builtWith !== credentialsKey(configData.URL, configData.Token, configData.MJAPIKey, configData.UserAPIKey);
     }
 
     public get sessionId(): string {
@@ -1511,12 +1561,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     EntityName
                     RelatedEntityName
                     FieldName
-                    CompositeKey {
+                    PrimaryKey {
                         KeyValuePairs {
                             FieldName
                             Value
                         }
                     }
+                    IsSoftLink
+                    EntityIDFieldName
                 }
             }`
 
@@ -1527,7 +1579,31 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             };
             const data = await this.ExecuteGQL(query, vars);
 
-            return data?.GetRecordDependencies; // shape of the result should exactly match the RecordDependency type
+            if (data?.GetRecordDependencies && Array.isArray(data.GetRecordDependencies)) {
+                return data.GetRecordDependencies.map((raw: {
+                    EntityName: string;
+                    RelatedEntityName: string;
+                    FieldName: string;
+                    PrimaryKey?: { KeyValuePairs?: KeyValuePair[] };
+                    IsSoftLink?: boolean | null;
+                    EntityIDFieldName?: string | null;
+                }): RecordDependency => {
+                    const dep = new RecordDependency();
+                    dep.EntityName = raw.EntityName;
+                    dep.RelatedEntityName = raw.RelatedEntityName;
+                    dep.FieldName = raw.FieldName;
+                    const kvps = (raw.PrimaryKey?.KeyValuePairs ?? []).map(kv => new KeyValuePair(kv.FieldName, kv.Value));
+                    const pk = new CompositeKey(kvps);
+                    if (pk.KeyValuePairs.length === 0 && kvps.length > 0) {
+                        pk.KeyValuePairs = kvps;
+                    }
+                    dep.PrimaryKey = pk;
+                    dep.IsSoftLink = raw.IsSoftLink ?? undefined;
+                    dep.EntityIDFieldName = raw.EntityIDFieldName ?? undefined;
+                    return dep;
+                });
+            }
+            return [];
         }
         catch (e) {
             LogError(e);
@@ -3120,6 +3196,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             client.setHeader(key, value);
         }
 
+        clientCredentials.set(client, credentialsKey(url, token, mjAPIKey, userAPIKey));
         return client;
     }
 

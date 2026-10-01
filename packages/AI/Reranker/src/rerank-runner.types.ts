@@ -6,6 +6,7 @@
 
 import type { UserInfo } from '@memberjunction/core';
 import type { RerankParams, RerankResponse } from '@memberjunction/ai';
+import type { MJAIPromptRunEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**
  * Parameters for `AIRerankerRunner.RunRerank`: the driver's own `RerankParams` (query, documents,
@@ -28,8 +29,9 @@ export interface AIRerankParams extends RerankParams {
     PromptID?: string;
 
     /**
-     * The chat prompt an `LLMReranker` candidate runs, in place of the one its model-vendor `APIName`
-     * names. `RerankerService.RerankNotes` passes `RerankerConfiguration.rerankPromptID` here.
+     * The prompt a prompt-backed candidate runs, in place of the one its model-vendor `APIName` names:
+     * the chat prompt of an `LLMReranker`, or the decision prompt of a `DecisionReranker`.
+     * `RerankerService.RerankNotes` passes `RerankerConfiguration.rerankPromptID` here.
      */
     ChatPromptID?: string;
 
@@ -59,6 +61,13 @@ export interface AIRerankRunResult {
 
     /** The `MJ: AI Prompt Runs` row for this call. Absent when the call never reached a model. */
     PromptRunID?: string;
+
+    /**
+     * The run row itself, as the runner holds it. Its `TotalCost` and token rollups include the prompt
+     * runs of a prompt-backed driver once its queued finalize has run, so an agent step can carry it
+     * as its `PromptRun` and the agent run counts the rerank. Absent when `PromptRunID` is.
+     */
+    PromptRun?: MJAIPromptRunEntityExtended;
 
     /** The model that answered after any failover, or the last one tried when the call failed. */
     ModelID?: string;
