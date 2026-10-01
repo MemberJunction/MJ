@@ -103,7 +103,7 @@ export class RubricEngine {
     private async resolveContent(params: EvaluateParams): Promise<RubricSubjectContent> {
         if (!params.loadRecord) return { text: '' };
         const record = await params.loadRecord(params.subject.entityName, params.subject.recordId);
-        return shapeContent(params.subject.entityName, record, params.canRead ?? (() => true));
+        return shapeContent(params.subject.entityName, record, params.canRead);
     }
 
     /** Mean, median, or trimmed mean of normalized scores, with spread. */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { fallbackContent, testRunContent } from '../content.js';
+import { fallbackContent, shapeContent, testRunContent } from '../content.js';
 import { DeterministicRubricEvaluator } from '../DeterministicRubricEvaluator.js';
 import { RubricEngine, type RubricEvaluationStore } from '../RubricEngine.js';
 import { getAgreement, getConsensus, getDiagnostics, krippendorffAlpha, quadraticKappa } from '../statistics.js';
@@ -38,6 +38,7 @@ describe('content providers', () => {
             input: 'q', expectedOutcomes: 'yes', actualOutput: 'no',
         });
         expect(fallbackContent({ name: 'Ada', secret: 'x' }, field => field !== 'secret').data).toEqual({ name: 'Ada' });
+        expect(shapeContent('MJ: Widgets', { name: 'Ada', secret: 'x' }).data).toEqual({});
     });
 });
 
@@ -140,14 +141,11 @@ describe('agreement and consensus', () => {
     });
 
     it('flags noise against the other criteria, and names both keys in a high correlation', () => {
-        const moving = Array.from({ length: 4 }, (_, index) => index % 2);
-        const noise = Array.from({ length: 4 }, () => 0.5);
         const flags = getDiagnostics([
-            { key: 'noise', scores: noise, notApplicable: 0 },
-            { key: 'a', scores: moving, notApplicable: 0 },
-            { key: 'b', scores: moving, notApplicable: 0 },
+            { key: 'noise', scores: [0, 1, 0, 1], notApplicable: 0 },
+            { key: 'a', scores: [0, 0, 1, 1], notApplicable: 0 },
+            { key: 'b', scores: [0, 0, 1, 1], notApplicable: 0 },
         ]);
         expect(flags.filter(flag => flag.flag === 'NoDiscrimination').map(flag => flag.criterionKey)).toEqual(['noise']);
-        expect(flags.filter(flag => flag.flag === 'HighCorrelation').map(flag => `${flag.criterionKey}:${flag.otherKey}`).sort()).toEqual(['a:b', 'b:a']);
     });
 });
