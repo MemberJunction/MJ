@@ -438,6 +438,7 @@ describe('ModifyInteractiveFormAction', () => {
         const guard = vi.fn((componentID: string) => ComponentWriteRefusal({
             Operation: 'update',
             ChangedFields: ['Specification', 'Status'],
+            CreatedByCaller: false,
             References: [...hoisted.overrides.values()]
                 .map((state) => state.record)
                 .filter((row) => row.ComponentID === componentID)

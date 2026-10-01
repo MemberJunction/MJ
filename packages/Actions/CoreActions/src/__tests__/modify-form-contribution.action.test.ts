@@ -393,6 +393,7 @@ describe('ModifyFormContributionAction', () => {
         const guard = vi.fn((componentID: string) => ComponentWriteRefusal({
             Operation: 'update',
             ChangedFields: ['Specification', 'Status'],
+            CreatedByCaller: false,
             References: [loadedRow]
                 .filter((row) => row.ComponentID === componentID)
                 .map((row) => ({ Scope: row.Scope as FormScope, UserID: row.UserID as string | null })),

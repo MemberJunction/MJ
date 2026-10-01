@@ -312,42 +312,72 @@ describe('CreateFormContributionAction', () => {
  * A UI user without Manage Form Defaults authors their own panel: the action creates a component,
  * then their own row pointing at it. The stand-in saves apply the server's rules: a new component
  * may not take a name another user's component has (`ComponentNameCollisionRefusal`), and a row may
- * not point at a component a shared or another user's row uses (`FormRowComponentRefusal`).
+ * point only at a component of the caller's own (`FormRowComponentRefusal`). A component no row uses
+ * is the caller's when they created it; on the server that is the component's `Create` record
+ * change, written in the same batch as the insert, so the row save that follows inside the same
+ * transaction reads it. Here a component counts as created by the caller once its save succeeds,
+ * even while the transaction is still open.
  */
 describe('CreateFormContributionAction — a UI user without the Manage Form Defaults grant', () => {
     /** Components already stored, by name, with the rows that use them. */
     let existing: Array<{ Name: string; References: FormComponentReference[] }>;
     /** Rows already stored that point at a component, by component ID. */
     let uses: Array<FormComponentReference & { ComponentID: string }>;
+    /** Components whose `Create` record change names the caller. */
+    let createdByCaller: Set<string>;
+    /** Whether a new component's `Create` record change can be read back by the row save. */
+    let recordChangeVisible: boolean;
 
     const holdsGrant = () => UserCanManageFormDefaults(user as unknown as UserInfo, provider as never);
 
     beforeEach(() => {
         existing = [];
         uses = [];
-        hoisted.saveGuard = (entityName, fields, id) => entityName === 'MJ: Components'
-            ? ComponentNameCollisionRefusal({
+        createdByCaller = new Set();
+        recordChangeVisible = true;
+        hoisted.saveGuard = (entityName, fields, id) => {
+            if (entityName !== 'MJ: Components') {
+                return FormRowComponentRefusal({
+                    RowID: null,
+                    References: uses.filter((u) => u.ComponentID === fields.ComponentID && u.ID !== id),
+                    CreatedByCaller: createdByCaller.has(String(fields.ComponentID)),
+                    CallerID: user.ID,
+                    CallerHoldsGrant: holdsGrant(),
+                });
+            }
+            const refusal = ComponentNameCollisionRefusal({
                 NamesComponent: true,
-                Collisions: existing.filter((c) => c.Name.toLowerCase() === String(fields.Name).toLowerCase()),
-                CallerID: user.ID,
-                CallerHoldsGrant: holdsGrant(),
-            })
-            : FormRowComponentRefusal({
-                RowID: null,
-                References: uses.filter((u) => u.ComponentID === fields.ComponentID && u.ID !== id),
+                Collisions: existing
+                    .filter((c) => c.Name.toLowerCase() === String(fields.Name).toLowerCase())
+                    .map((c) => ({ References: c.References, CreatedByCaller: false })),
                 CallerID: user.ID,
                 CallerHoldsGrant: holdsGrant(),
             });
+            if (!refusal && recordChangeVisible) createdByCaller.add(id);
+            return refusal;
+        };
     });
 
     it('holds no grant', () => {
         expect(holdsGrant()).toBe(false);
     });
 
-    it('creates the component and their own row pointing at it', async () => {
+    it('creates the component and their own row pointing at it, in one transaction', async () => {
+        hoisted.tx.supported = true;
         const result = await run(params());
         expect(result.Success).toBe(true);
         expect(contributionRow().fields).toMatchObject({ ComponentID: componentRow().ID, Scope: 'User', UserID: 'USER-1' });
+        expect(hoisted.tx.committed).toEqual(['MJ: Components', 'MJ: Entity Form Contributions']);
+    });
+
+    it('rolls the component back when the row cannot confirm the caller created it', async () => {
+        hoisted.tx.supported = true;
+        recordChangeVisible = false;
+        const result = await run(params());
+        expect(result.ResultCode).toBe('PERSIST_FAILED');
+        expect(result.Message).toMatch(/you did not create it/);
+        expect(hoisted.tx.rolledBack).toBe(1);
+        expect(hoisted.tx.committed).toEqual([]);
     });
 
     it('is refused, writing nothing, when another user\'s component already has the name', async () => {
