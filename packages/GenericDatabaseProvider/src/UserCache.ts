@@ -97,6 +97,8 @@ export class UserCache extends BaseSingleton<UserCache> {
      */
     private _announcePending: boolean = false;
     private _stalenessTimer: ReturnType<typeof setInterval> | null = null;
+    /** The periodic full reload. See {@link scheduleAutoRefresh}. */
+    private _autoRefreshTimer: ReturnType<typeof setTimeout> | null = null;
     /** In-flight reload, so a burst of events costs one database read. */
     private _refreshInFlight: Promise<void> | null = null;
     /** What the database reported at the last reload; the staleness check compares against it. */
@@ -171,11 +173,7 @@ export class UserCache extends BaseSingleton<UserCache> {
           this._recentMisses.clear();
           this._lastStamp = await this.readDatabaseStamp(provider);
 
-          // refresh this every interval noted above to ensure we have the latest data
-          if (autoRefreshIntervalMS && autoRefreshIntervalMS > 0)
-            setTimeout(() => {
-              this.Refresh(provider, autoRefreshIntervalMS);
-            }, autoRefreshIntervalMS);
+          this.scheduleAutoRefresh(provider, autoRefreshIntervalMS);
         }
       }
       catch (err) {
@@ -602,6 +600,49 @@ export class UserCache extends BaseSingleton<UserCache> {
         LogError(`UserCache staleness check failed: ${e instanceof Error ? e.message : String(e)}`);
         return false;
       }
+    }
+
+    /**
+     * Re-arms the periodic reload, which reads the database **only when an entity has declared it
+     * can change without firing an event**.
+     *
+     * This timer used to reload every user and role unconditionally, every interval, for the life of
+     * the process. That is a recurring database query, and on Azure SQL serverless a recurring query
+     * prevents auto-pause outright — the cost §26 exists to remove, which that section missed. When
+     * nothing declares out-of-band writes there is nothing for the reload to discover: a save raises
+     * an event, a save on another server publishes the shared stamp, and `FindUser` falls back to an
+     * authoritative read on a miss.
+     *
+     * The timer keeps ticking either way, so an entity marked later starts being honoured on the
+     * next tick without a restart; a tick that finds nothing declared costs one in-memory lookup and
+     * no query. Measured on two live servers before this change: a role revoked by raw SQL was
+     * enforced ~20s later purely by this reload — so it works, and it is exactly what kept the
+     * database awake.
+     *
+     * Also replaces the previous timer rather than stacking on it: `Refresh` can be called more than
+     * once (bootstrap, then host configuration), and each call used to schedule another self-
+     * rescheduling chain.
+     */
+    private scheduleAutoRefresh(provider: DatabaseProviderBase, intervalMs?: number): void {
+      if (this._autoRefreshTimer) {
+        clearTimeout(this._autoRefreshTimer);
+        this._autoRefreshTimer = null;
+      }
+      if (!intervalMs || intervalMs <= 0) {
+        return;
+      }
+      const timer = setTimeout(() => {
+        this._autoRefreshTimer = null;
+        if (this.usersMayChangeWithoutAnEvent()) {
+          void this.Refresh(provider, intervalMs); // reloads, and re-arms from there
+        } else {
+          this.scheduleAutoRefresh(provider, intervalMs); // keep ticking, ask the database nothing
+        }
+      }, intervalMs);
+      if (typeof timer === 'object' && timer !== null && 'unref' in timer) {
+        (timer as { unref(): void }).unref();
+      }
+      this._autoRefreshTimer = timer;
     }
 
     /**

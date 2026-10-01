@@ -2349,6 +2349,17 @@ entity:
   live servers: after a raw SQL flag change the sweep ignored the entity across several intervals,
   and swept it ~12 s after the snapshot was dropped.
 
+  There is **no periodic metadata poller** to fall back on — metadata staleness is checked on a peer
+  notice, on a `BaseEntity` write to a member entity, or at boot, never on a timer. So a metadata
+  change made outside MJ is not picked up at all until one of those happens.
+
+  **The user cache's periodic reload is gated the same way** (`UserCache`'s auto-refresh, fed by
+  `databaseSettings.metadataCacheRefreshInterval`, default 180 s). It used to reload every user and
+  role unconditionally on that timer, which by itself kept the database awake; it now reads only when
+  one of those two entities declares drift. The timer keeps ticking either way, so marking an entity
+  later takes effect on the next tick without a restart, and `metadataCacheRefreshInterval: 0`
+  disables it outright.
+
   **The user-cache staleness check (`userCacheCheckIntervalSeconds`) is gated the same way**, for the
   same reason. Nothing is lost for the case that motivated it: a save raises an event, a save on
   another server publishes the shared stamp, and `FindUser` falls back to an authoritative read on a
