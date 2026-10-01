@@ -110,13 +110,19 @@ export interface FormComponentReference {
     UserID: string | null;
 }
 
+/** A component as the ownership test reads it. */
+export interface OwnedComponentCheck {
+    /** Every `MJ: Entity Form Contributions` and `MJ: Entity Form Overrides` row that uses the component. */
+    References: readonly FormComponentReference[];
+    /** True when the component's `Create` record change names the caller. Read only when no row uses it. */
+    CreatedByCaller: boolean;
+}
+
 /** One write to a `MJ: Components` row, as {@link ComponentWriteRefusal} needs to see it. */
-export interface ComponentWrite {
+export interface ComponentWrite extends OwnedComponentCheck {
     Operation: FormScopeOperation;
     /** The columns whose new value differs from the stored one. Read on update only. */
     ChangedFields: readonly string[];
-    /** Every `MJ: Entity Form Contributions` and `MJ: Entity Form Overrides` row that uses the component. */
-    References: readonly FormComponentReference[];
     /** Null when there is no caller: a trusted server context. */
     CallerID: string | null;
     CallerHoldsGrant: boolean;
@@ -128,8 +134,14 @@ const COMPONENT_REFUSAL_LEAD =
 
 const UNREFERENCED_COMPONENT_REFUSAL =
     'Without the Manage Form Defaults authorization you can change the specification, status, name, ' +
-    'namespace or type of a component, or delete it, only when it is used by your own personal forms ' +
-    'or panels and by nothing else. No form or panel uses this one, and other forms may load it by name.';
+    'namespace or type of a component, or delete it, only when it is your own: used by your own ' +
+    'personal forms or panels and by nothing else, or used by none and created by you. No form or ' +
+    'panel uses this one, you did not create it, and other forms may load it by name.';
+
+const UNCLAIMED_COMPONENT_REFUSAL =
+    'Without the Manage Form Defaults authorization you can point a form or panel only at a component ' +
+    'of your own: one used by your own personal forms and panels and by nothing else, or one used by ' +
+    'none that you created. No form or panel uses this one, and you did not create it.';
 
 const ROW_COMPONENT_REFUSAL_LEAD =
     'Another form or panel already uses this component, and pointing a form or panel at it would ' +
@@ -137,8 +149,8 @@ const ROW_COMPONENT_REFUSAL_LEAD =
 
 const NAME_COLLISION_REFUSAL =
     'Another component already has this name. Forms find components by name, so without the Manage ' +
-    'Form Defaults authorization a component may share its name only with components that are used ' +
-    'by your own personal forms and panels and by nothing else.';
+    'Form Defaults authorization a component may share its name only with components of your own: ' +
+    'used by your own personal forms and panels and by nothing else, or used by none and created by you.';
 
 /**
  * Whether this write must be checked against the forms and panels that use the component: a
@@ -152,29 +164,41 @@ export function ComponentWriteIsGuarded(write: Pick<ComponentWrite, 'Operation' 
 }
 
 /**
+ * Whether a component is the caller's own: used by at least one row and only by the caller's own
+ * personal rows, or used by no row and created by the caller. A row whose scope is not exactly
+ * `User` is not the caller's own, whoever it names.
+ */
+export function IsCallersOwnComponent(component: OwnedComponentCheck, callerID: string): boolean {
+    return component.References.length > 0
+        ? referenceRefusal(component.References, callerID, false) === null
+        : component.CreatedByCaller;
+}
+
+/**
  * Why a guarded write to a component is not allowed, or null when it is.
  *
  * Each row that uses the component is checked with {@link FormScopeWriteRefusal} as if the caller
  * were updating that row in place: a `Role` or `Global` row needs the grant, another user's
  * personal row refuses everyone (a holder included), and the caller's own personal row passes.
  *
- * Without the grant, a component no row uses is read-only: forms can load a component by name,
- * so a component with no row may still be what someone else's form draws. A holder may change it.
- * Personal rows are checked first, so when the grant would not help, the refusal says so.
+ * Without the grant, a component no row uses may be changed only by the user who created it:
+ * forms can load a component by name, so a component with no row may still be what someone
+ * else's form draws. A holder may change it. Personal rows are checked first, so when the grant
+ * would not help, the refusal says so.
  */
 export function ComponentWriteRefusal(write: ComponentWrite): string | null {
     if (!ComponentWriteIsGuarded(write)) return null;
-    if (!write.CallerHoldsGrant && write.References.length === 0) return UNREFERENCED_COMPONENT_REFUSAL;
+    if (!write.CallerHoldsGrant && write.References.length === 0) {
+        return write.CreatedByCaller ? null : UNREFERENCED_COMPONENT_REFUSAL;
+    }
     const refusal = referenceRefusal(write.References, write.CallerID ?? '', write.CallerHoldsGrant);
     return refusal ? `${COMPONENT_REFUSAL_LEAD} ${refusal}` : null;
 }
 
 /** A form or panel row pointed at a component: what the row rule needs to see. */
-export interface FormRowComponentCheck {
+export interface FormRowComponentCheck extends OwnedComponentCheck {
     /** The row being written. Null on create. A reference with this ID is left out. */
     RowID: string | null;
-    /** Every form and panel row that uses the component the row points at. */
-    References: readonly FormComponentReference[];
     /** Null when there is no caller: a trusted server context. */
     CallerID: string | null;
     CallerHoldsGrant: boolean;
@@ -184,16 +208,20 @@ export interface FormRowComponentCheck {
  * Why a form or panel row may not point at this component, or null when it may. Applies when the
  * row is created or its `ComponentID` changes.
  *
- * Every other row that uses the component is checked as {@link ComponentWriteRefusal} checks it:
- * another user's personal row refuses everyone (an Owner included), a `Role` or `Global` row needs
- * the grant, and the caller's own personal rows may share a component freely. Without this, a
- * personal row pointed at someone else's component would make that component the caller's to
- * change, or lock it against everyone else.
+ * Without the grant, the component must be the caller's own ({@link IsCallersOwnComponent}): used
+ * only by the caller's own personal rows, or used by none and created by the caller. With the
+ * grant, every other row that uses it is checked as {@link ComponentWriteRefusal} checks it: a
+ * shared row passes, and another user's personal row refuses everyone, an Owner included. Without
+ * this, a personal row pointed at someone else's component would make that component the
+ * caller's to change, or lock it against everyone else.
  */
 export function FormRowComponentRefusal(check: FormRowComponentCheck): string | null {
     if (check.CallerID == null) return null;
     const others = check.References.filter((reference) =>
         !(check.RowID && reference.ID && UUIDsEqual(reference.ID, check.RowID)));
+    if (!check.CallerHoldsGrant && others.length === 0) {
+        return check.CreatedByCaller ? null : UNCLAIMED_COMPONENT_REFUSAL;
+    }
     const refusal = referenceRefusal(others, check.CallerID, check.CallerHoldsGrant);
     return refusal ? `${ROW_COMPONENT_REFUSAL_LEAD} ${refusal}` : null;
 }
@@ -202,8 +230,8 @@ export function FormRowComponentRefusal(check: FormRowComponentCheck): string | 
 export interface ComponentNameCheck {
     /** True on create, or when an update changes `Name` or `Namespace`. */
     NamesComponent: boolean;
-    /** Every other component a lookup by this name finds, each with the rows that use it. */
-    Collisions: ReadonlyArray<{ References: readonly FormComponentReference[] }>;
+    /** Every other component a lookup by this name finds, as the ownership test reads it. */
+    Collisions: readonly OwnedComponentCheck[];
     /** Null when there is no caller: a trusted server context. */
     CallerID: string | null;
     CallerHoldsGrant: boolean;
@@ -215,14 +243,12 @@ export interface ComponentNameCheck {
  * A form's spec can load a component by name, and the lookup returns whichever match it finds
  * first, so a second component with the same name could stand in for the first. Without the grant,
  * a created or renamed component may share its name only with components that are the caller's
- * own: used by at least one row, and only by the caller's own personal rows. A holder is not
- * restricted, so they can resolve a collision.
+ * own ({@link IsCallersOwnComponent}). A holder is not restricted, so they can resolve a collision.
  */
 export function ComponentNameCollisionRefusal(check: ComponentNameCheck): string | null {
     if (!check.NamesComponent || check.CallerID == null || check.CallerHoldsGrant) return null;
     const callerID = check.CallerID;
-    const foreign = check.Collisions.some((collision) =>
-        collision.References.length === 0 || referenceRefusal(collision.References, callerID, false) !== null);
+    const foreign = check.Collisions.some((collision) => !IsCallersOwnComponent(collision, callerID));
     return foreign ? NAME_COLLISION_REFUSAL : null;
 }
 

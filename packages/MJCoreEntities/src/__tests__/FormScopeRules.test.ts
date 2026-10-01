@@ -6,6 +6,7 @@ import {
     ComponentWriteRefusal,
     ContributionScopeRank,
     FormRowComponentRefusal,
+    IsCallersOwnComponent,
     GUARDED_COMPONENT_FIELDS,
     FormContributionOutranks,
     FormScopeAllowedOnEntity,
@@ -432,6 +433,7 @@ describe('ComponentWriteRefusal', () => {
             Operation: 'update',
             ChangedFields: ['Specification'],
             References: [],
+            CreatedByCaller: false,
             CallerID: ME,
             CallerHoldsGrant: false,
             ...over,
@@ -447,11 +449,22 @@ describe('ComponentWriteRefusal', () => {
             expect(componentAllowed(componentWrite({ Operation: 'delete', ChangedFields: [], References: [ownRow] }))).toBe(true);
         });
 
-        it('refuses a component no row uses, for an update and a delete', () => {
+        it('refuses a component no row uses that someone else created, for an update and a delete', () => {
             for (const operation of ['update', 'delete'] as const) {
                 expect(ComponentWriteRefusal(componentWrite({ Operation: operation, References: [] })))
-                    .toMatch(/No form or panel uses this one/);
+                    .toMatch(/No form or panel uses this one, you did not create it/);
             }
+        });
+
+        it('allows a component no row uses that the caller created, for an update and a delete', () => {
+            for (const operation of ['update', 'delete'] as const) {
+                expect(componentAllowed(componentWrite({ Operation: operation, References: [], CreatedByCaller: true }))).toBe(true);
+            }
+        });
+
+        it('reads the creator only when no row uses the component', () => {
+            expect(componentAllowed(componentWrite({ References: [globalRow], CreatedByCaller: true }))).toBe(false);
+            expect(componentAllowed(componentWrite({ References: [othersRow], CreatedByCaller: true }))).toBe(false);
         });
 
         it('refuses a component a Role or Global row uses, naming the grant', () => {
@@ -537,12 +550,21 @@ describe('ComponentWriteIsGuarded', () => {
  */
 describe('FormRowComponentRefusal', () => {
     function rowCheck(over: Partial<FormRowComponentCheck>): FormRowComponentCheck {
-        return { RowID: null, References: [], CallerID: ME, CallerHoldsGrant: false, ...over };
+        return { RowID: null, References: [], CreatedByCaller: false, CallerID: ME, CallerHoldsGrant: false, ...over };
     }
 
-    it('lets the caller point a row at a component no row uses, or only their own rows use', () => {
-        expect(FormRowComponentRefusal(rowCheck({ References: [] }))).toBeNull();
+    it('lets the caller point a row at a component only their own rows use', () => {
         expect(FormRowComponentRefusal(rowCheck({ References: [ownRow, { Scope: 'User', UserID: ME.toUpperCase() }] }))).toBeNull();
+    });
+
+    it('lets the caller point a row at a component no row uses only when they created it', () => {
+        expect(FormRowComponentRefusal(rowCheck({ References: [], CreatedByCaller: true }))).toBeNull();
+        expect(FormRowComponentRefusal(rowCheck({ References: [], CreatedByCaller: false })))
+            .toMatch(/No form or panel uses this one, and you did not create it/);
+    });
+
+    it('lets a holder point a row at a component no row uses, whoever created it', () => {
+        expect(FormRowComponentRefusal(rowCheck({ References: [], CallerHoldsGrant: true }))).toBeNull();
     });
 
     it("refuses a component another user's personal row uses, for everyone, a holder included", () => {
@@ -565,7 +587,8 @@ describe('FormRowComponentRefusal', () => {
 
     it('leaves the row being written out of its own check', () => {
         const self = { ID: 'ROW-1', Scope: 'Global' as FormScope, UserID: null };
-        expect(FormRowComponentRefusal(rowCheck({ RowID: 'row-1', References: [self] }))).toBeNull();
+        expect(FormRowComponentRefusal(rowCheck({ RowID: 'row-1', References: [self], CreatedByCaller: true }))).toBeNull();
+        expect(FormRowComponentRefusal(rowCheck({ RowID: 'row-1', References: [self, ownRow] }))).toBeNull();
         expect(FormRowComponentRefusal(rowCheck({ RowID: 'row-1', References: [self, roleRow] }))).not.toBeNull();
     });
 
@@ -584,24 +607,46 @@ describe('ComponentNameCollisionRefusal', () => {
         expect(ComponentNameCollisionRefusal(nameCheck({ Collisions: [] }))).toBeNull();
     });
 
-    it('refuses a name another component has without the grant: one no row uses, a shared one, or another user\'s', () => {
+    const collision = (references: FormComponentReference[], createdByCaller = false) =>
+        ({ References: references, CreatedByCaller: createdByCaller });
+
+    it('refuses a name another component has without the grant: one no row uses that someone else created, a shared one, or another user\'s', () => {
         for (const references of [[], [roleRow], [globalRow], [othersRow], [ownRow, globalRow]]) {
-            expect(ComponentNameCollisionRefusal(nameCheck({ Collisions: [{ References: references }] })))
+            expect(ComponentNameCollisionRefusal(nameCheck({ Collisions: [collision(references)] })))
                 .toMatch(/already has this name/);
         }
     });
 
     it('allows a name shared only with components that are the caller\'s own', () => {
-        expect(ComponentNameCollisionRefusal(nameCheck({ Collisions: [{ References: [ownRow] }, { References: [ownRow, ownRow] }] }))).toBeNull();
-        expect(ComponentNameCollisionRefusal(nameCheck({ Collisions: [{ References: [ownRow] }, { References: [] }] }))).not.toBeNull();
+        expect(ComponentNameCollisionRefusal(nameCheck({ Collisions: [collision([ownRow]), collision([ownRow, ownRow])] }))).toBeNull();
+        expect(ComponentNameCollisionRefusal(nameCheck({ Collisions: [collision([ownRow]), collision([], true)] }))).toBeNull();
+        expect(ComponentNameCollisionRefusal(nameCheck({ Collisions: [collision([ownRow]), collision([])] }))).not.toBeNull();
+        expect(ComponentNameCollisionRefusal(nameCheck({ Collisions: [collision([globalRow], true)] }))).not.toBeNull();
     });
 
     it('does not restrict a holder', () => {
-        expect(ComponentNameCollisionRefusal(nameCheck({ Collisions: [{ References: [] }, { References: [othersRow] }], CallerHoldsGrant: true }))).toBeNull();
+        expect(ComponentNameCollisionRefusal(nameCheck({ Collisions: [collision([]), collision([othersRow])], CallerHoldsGrant: true }))).toBeNull();
     });
 
     it('checks only a create or a change of name or namespace, and only for a caller', () => {
-        expect(ComponentNameCollisionRefusal(nameCheck({ NamesComponent: false, Collisions: [{ References: [] }] }))).toBeNull();
-        expect(ComponentNameCollisionRefusal(nameCheck({ CallerID: null, Collisions: [{ References: [] }] }))).toBeNull();
+        expect(ComponentNameCollisionRefusal(nameCheck({ NamesComponent: false, Collisions: [collision([])] }))).toBeNull();
+        expect(ComponentNameCollisionRefusal(nameCheck({ CallerID: null, Collisions: [collision([])] }))).toBeNull();
+    });
+});
+
+describe('IsCallersOwnComponent', () => {
+    it('is true for a component only the caller\'s own personal rows use', () => {
+        expect(IsCallersOwnComponent({ References: [ownRow], CreatedByCaller: false }, ME)).toBe(true);
+    });
+
+    it('is true for a component no row uses that the caller created, and false when someone else did', () => {
+        expect(IsCallersOwnComponent({ References: [], CreatedByCaller: true }, ME)).toBe(true);
+        expect(IsCallersOwnComponent({ References: [], CreatedByCaller: false }, ME)).toBe(false);
+    });
+
+    it('is false when a shared row or another user\'s row uses the component, whoever created it', () => {
+        for (const other of [roleRow, globalRow, othersRow]) {
+            expect(IsCallersOwnComponent({ References: [ownRow, other], CreatedByCaller: true }, ME)).toBe(false);
+        }
     });
 });
