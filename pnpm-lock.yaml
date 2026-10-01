@@ -14077,6 +14077,9 @@ importers:
       '@memberjunction/record-set-processor':
         specifier: 6.2.0-edge.1
         version: link:../../RecordSetProcessor/engine
+      '@memberjunction/rubrics':
+        specifier: 6.2.0-edge.1
+        version: link:../../Rubrics/Engine
       '@memberjunction/scheduling-base-types':
         specifier: 6.2.0-edge.1
         version: link:../base-types

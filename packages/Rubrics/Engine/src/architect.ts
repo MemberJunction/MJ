@@ -47,13 +47,15 @@ export function critiqueRubric(version: RubricVersionSnapshot): string[] {
 }
 
 export interface DraftVersionStore {
-    saveVersion(fields: { name: string; status: 'Draft' }): Promise<string>;
+    saveVersion(fields: { name: string; status: 'Draft'; nodes: ImportedCriterion[] }): Promise<string>;
+    saveCriteria(versionId: string, nodes: ImportedCriterion[]): Promise<void>;
 }
 
-/** Saves the imported tree as a Draft version row. */
+/** Saves the imported tree as a Draft version and creates its criterion rows. */
 export async function saveImportedDraft(store: DraftVersionStore, name: string, csv: string): Promise<{ id: string; status: 'Draft' }> {
     const draft = draftFromImport(name, csv);
-    const id = await store.saveVersion({ name: draft.name, status: draft.status });
+    const id = await store.saveVersion({ name: draft.name, status: draft.status, nodes: draft.nodes });
+    await store.saveCriteria(id, draft.nodes);
     return { id, status: 'Draft' };
 }
 

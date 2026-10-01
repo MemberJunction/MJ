@@ -25,12 +25,19 @@ describe('rubric architect', () => {
         expect(critiqueRubric(inherited).some(note => note.includes('not-applicable'))).toBe(false);
         expect(draftFromImport('Imported', '1,Accuracy,1,yes').status).toBe('Draft');
         expect(publishImportedDraft().ok).toBe(false);
-        const saved: { name: string; status: string }[] = [];
+        const saved: { name: string; status: string; nodes: { key: string; parentKey: string | null; name: string; weight: number; gate: boolean }[] }[] = [];
+        const criteria: { versionId: string; nodes: { name: string; weight: number; gate: boolean; parentKey: string | null }[] }[] = [];
         const result = await saveImportedDraft({
             async saveVersion(fields) { saved.push(fields); return 'version-1'; },
-        }, 'Imported', '1,Accuracy,1,yes');
+            async saveCriteria(versionId, nodes) { criteria.push({ versionId, nodes }); },
+        }, 'Imported', '3,Security,1,no\n3.2,Encryption,2,yes');
         expect(result).toEqual({ id: 'version-1', status: 'Draft' });
-        expect(saved).toEqual([{ name: 'Imported', status: 'Draft' }]);
+        expect(saved[0].status).toBe('Draft');
+        expect(saved[0].nodes).toContainEqual({ key: '3.2', parentKey: '3', name: 'Encryption', weight: 2, gate: true });
+        expect(criteria).toEqual([{
+            versionId: 'version-1',
+            nodes: saved[0].nodes,
+        }]);
         expect(improveFromData([{ criterionKey: 'facts', flag: 'NoDiscrimination' }], { withheld: false, kappa: 0.2 })).toEqual([
             'facts: NoDiscrimination',
             'Agreement kappa 0.2 is low.',

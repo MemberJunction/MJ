@@ -42,8 +42,11 @@ export interface SamplingLoader {
     load(): Promise<Parameters<typeof selectSampledRuns>[0]>;
 }
 
+/** Subject entity for a sampled production run. */
+export const AGENT_RUN_SUBJECT = 'MJ: AI Agent Runs';
+
 export interface SamplingEvaluator {
-    evaluateRecord(input: { rubricId: string; subjectRecordId: string }): Promise<void>;
+    evaluateRecord(input: { rubricId: string; subjectRecordId: string; subjectEntityName: string }): Promise<void>;
 }
 
 /** Scheduled job. Loads links and runs, then evaluates the kept runs off the agent response path. */
@@ -57,10 +60,95 @@ export class EvaluateSampledAgentRuns {
     public async run(): Promise<ReturnType<typeof selectSampledRuns>> {
         const chosen = this.plan(await this.loader.load());
         for (const item of chosen) {
-            await this.engine.evaluateRecord({ rubricId: item.rubricId, subjectRecordId: item.runId });
+            await this.engine.evaluateRecord({
+                rubricId: item.rubricId,
+                subjectRecordId: item.runId,
+                subjectEntityName: AGENT_RUN_SUBJECT,
+            });
         }
         return chosen;
     }
+}
+
+export interface AgentRubricLinkRow {
+    agentId: string;
+    rubricId: string;
+    sampleRate: number;
+    status: string;
+    purpose: string;
+}
+
+export interface AgentRunRow {
+    id: string;
+    agentId: string;
+    status: string;
+}
+
+/** Links, completed runs, and evaluations already stored. The job reads these and does not query itself. */
+export interface ProductionSamplingCatalog {
+    links(): Promise<AgentRubricLinkRow[]>;
+    runs(): Promise<AgentRunRow[]>;
+    evaluated(): Promise<{ runId: string; rubricId: string }[]>;
+}
+
+/** Active links whose purpose is ProductionSampling. Evaluation and SelfCheck are not sampled. */
+export function productionSamplingLinks(links: AgentRubricLinkRow[]): SamplingLink[] {
+    return links
+        .filter(link => link.purpose === 'ProductionSampling' && link.status === 'Active')
+        .map(link => ({ agentId: link.agentId, rubricId: link.rubricId, sampleRate: link.sampleRate, status: link.status }));
+}
+
+/** Loader for the scheduled job. Completed runs only, and only ProductionSampling links. */
+export function productionSamplingLoader(catalog: ProductionSamplingCatalog): SamplingLoader {
+    return {
+        async load() {
+            const runs = (await catalog.runs())
+                .filter(run => run.status === 'Completed')
+                .map(run => ({ id: run.id, agentId: run.agentId }));
+            return { links: productionSamplingLinks(await catalog.links()), runs, evaluated: await catalog.evaluated() };
+        },
+    };
+}
+
+/** The scheduled job, built with a catalog that can see purpose. */
+export function productionSamplingJob(catalog: ProductionSamplingCatalog, engine: SamplingEvaluator): EvaluateSampledAgentRuns {
+    return new EvaluateSampledAgentRuns(productionSamplingLoader(catalog), engine);
+}
+
+export interface DriftScoreRow {
+    evaluationId: string;
+    criterionId: string;
+    normalizedScore: number;
+}
+
+export interface DriftEvaluationRow {
+    id: string;
+    subjectRecordId: string;
+    rubricId: string;
+    at: string;
+}
+
+export interface DriftRunRow {
+    id: string;
+    agentId: string;
+}
+
+/**
+ * Joins a score to its evaluation and that evaluation's agent run.
+ * The key is agent, rubric, and criterion. A score with no matching run is left out.
+ */
+export function driftSeries(input: { scores: DriftScoreRow[]; evaluations: DriftEvaluationRow[]; runs: DriftRunRow[] }): { key: string; score: number; at: string }[] {
+    const evaluations = new Map(input.evaluations.map(row => [row.id, row]));
+    const agents = new Map(input.runs.map(row => [row.id, row.agentId]));
+    const rows: { key: string; score: number; at: string }[] = [];
+    for (const score of input.scores) {
+        const evaluation = evaluations.get(score.evaluationId);
+        if (!evaluation || !Number.isFinite(score.normalizedScore)) continue;
+        const agentId = agents.get(evaluation.subjectRecordId);
+        if (!agentId || !evaluation.rubricId || !score.criterionId) continue;
+        rows.push({ key: `${agentId}|${evaluation.rubricId}|${score.criterionId}`, score: score.normalizedScore, at: evaluation.at });
+    }
+    return rows;
 }
 
 /** Mean score of each key whose timestamp falls in [start, end). */
