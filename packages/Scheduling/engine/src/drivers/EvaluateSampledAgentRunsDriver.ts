@@ -24,9 +24,9 @@ export class EvaluateSampledAgentRunsDriver extends BaseScheduledJob {
         void context.heartbeat?.();
         const engine = providerRubricEngine(provider, context.ContextUser);
         const chosen = await productionSamplingJob(providerProductionCatalog(provider, context.ContextUser), {
-            evaluateRecord: async (input) => {
+            EvaluateRecord: async (input) => {
                 void context.heartbeat?.();
-                await engine.evaluateRecord(input);
+                await engine.EvaluateRecord(input);
             },
         }).run();
         return { Success: true, Details: { Evaluated: chosen.length } };

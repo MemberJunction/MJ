@@ -1,5 +1,6 @@
 import { Component, Input } from '@angular/core';
 import { CompositeKey, RunView } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { DisableLink, MakeDefaultLink, SortAgentRubrics, type AgentRubricLink } from './agent-rubrics.model';
 
@@ -142,7 +143,7 @@ export class AgentRubricsComponent extends BaseAngularComponent {
     private async clearOtherDefaults(purpose: string): Promise<void> {
         const next = MakeDefaultLink([...this.Links, { ID: 'pending', Purpose: purpose, Status: 'Active', IsDefault: false }], 'pending');
         for (const row of this.Links) {
-            const updated = next.find(item => item.ID === row.ID);
+            const updated = next.find(item => UUIDsEqual(item.ID, row.ID));
             if (!row.ID || !updated) continue;
             if ((row.IsDefault === true || row.IsDefault === 1) && updated.IsDefault === false) {
                 await this.saveLink(row.ID, { IsDefault: false });

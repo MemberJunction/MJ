@@ -1,3 +1,5 @@
+import { UUIDsEqual } from '@memberjunction/global';
+
 export interface AgentRubricLink {
     ID?: string;
     Purpose?: string;
@@ -28,10 +30,10 @@ export function sortAgentRubrics<T extends AgentRubricLink>(rows: T[]): T[] {
 
 /** The chosen link becomes the only Active default for its purpose. Disabled links are left alone. */
 export function MakeDefaultLink<T extends AgentRubricLink>(rows: T[], chosenId: string): T[] {
-    const chosen = rows.find(row => row.ID === chosenId);
+    const chosen = rows.find(row => UUIDsEqual(row.ID, chosenId));
     const purpose = chosen?.Purpose;
     return rows.map(row => {
-        if (row.ID === chosenId) return { ...row, IsDefault: true, Status: row.Status === 'Disabled' ? 'Active' : row.Status };
+        if (UUIDsEqual(row.ID, chosenId)) return { ...row, IsDefault: true, Status: row.Status === 'Disabled' ? 'Active' : row.Status };
         if (row.Purpose === purpose && row.Status !== 'Disabled') return { ...row, IsDefault: false };
         return row;
     });

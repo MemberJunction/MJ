@@ -71,7 +71,7 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
                     this.BaseVersion = this.snapshot(base, baseNodes, baseBands);
                 }
             }
-            this.VersionCards = await this.BuildVersionCards(rows);
+            this.VersionCards = await this.buildVersionCards(rows);
         } finally {
             this.Loading = false;
         }
@@ -81,7 +81,7 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
         SharedService.Instance.OpenEntityRecord('MJ: Rubric Versions', CompositeKey.FromID(id));
     }
 
-    private async BuildVersionCards(versions: Record<string, unknown>[]): Promise<RubricVersionCard[]> {
+    private async buildVersionCards(versions: Record<string, unknown>[]): Promise<RubricVersionCard[]> {
         if (versions.length === 0) return [];
         const ids = versions.map(row => `'${String(row.ID).replace(/'/g, "''")}'`).join(', ');
         const criteria = await this.rows('MJ: Rubric Criteria', `RubricVersionID IN (${ids})`);

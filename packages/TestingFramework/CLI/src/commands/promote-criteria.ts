@@ -3,7 +3,7 @@
  * @module @memberjunction/testing-cli
  */
 
-import { Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import { TestEngine, BINARY_SCALE_NAME, BuildPromotedRubric, PromoteInlineCriteria, type PromoteCriteriaStore, type PromotedRubric } from '@memberjunction/testing-engine';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJTestEntity } from '@memberjunction/core-entities';
@@ -65,9 +65,10 @@ export class PromoteCriteriaCommand {
 }
 
 function providerStore(test: MJTestEntity, user: UserInfo): PromoteCriteriaStore {
+    const provider = test.ProviderToUse as unknown as IMetadataProvider;
     return {
         async saveRubric(input) {
-            const row = await Metadata.Provider.GetEntityObject<MJTestEntity>('MJ: Rubrics', user);
+            const row = await provider.GetEntityObject<MJTestEntity>('MJ: Rubrics', user);
             row.NewRecord();
             row.Set('Name', input.name);
             row.Set('Description', input.description);
@@ -76,7 +77,7 @@ function providerStore(test: MJTestEntity, user: UserInfo): PromoteCriteriaStore
             return String(row.Get('ID'));
         },
         async ensureBinaryScale() {
-            const view = new RunView();
+            const view = RunView.FromMetadataProvider(provider);
             const found = await view.RunView({
                 EntityName: 'MJ: Rubric Scales',
                 ExtraFilter: `Name='${BINARY_SCALE_NAME.replace(/'/g, "''")}'`,
@@ -85,7 +86,7 @@ function providerStore(test: MJTestEntity, user: UserInfo): PromoteCriteriaStore
             }, user);
             const existing = found.Results?.[0] as { ID?: string } | undefined;
             if (existing?.ID) return String(existing.ID);
-            const scale = await Metadata.Provider.GetEntityObject<MJTestEntity>('MJ: Rubric Scales', user);
+            const scale = await provider.GetEntityObject<MJTestEntity>('MJ: Rubric Scales', user);
             scale.NewRecord();
             scale.Set('Name', BINARY_SCALE_NAME);
             scale.Set('ScaleType', 'Levels');
@@ -97,7 +98,7 @@ function providerStore(test: MJTestEntity, user: UserInfo): PromoteCriteriaStore
                 { label: 'Not met', value: 0, normalized: 0, sequence: 0 },
                 { label: 'Met', value: 1, normalized: 1, sequence: 1 },
             ]) {
-                const row = await Metadata.Provider.GetEntityObject<MJTestEntity>('MJ: Rubric Scale Levels', user);
+                const row = await provider.GetEntityObject<MJTestEntity>('MJ: Rubric Scale Levels', user);
                 row.NewRecord();
                 row.Set('ScaleID', scaleId);
                 row.Set('Label', level.label);
@@ -109,7 +110,7 @@ function providerStore(test: MJTestEntity, user: UserInfo): PromoteCriteriaStore
             return scaleId;
         },
         async saveDraftVersion(input) {
-            return saveDraft(input, user);
+            return saveDraft(input, user, provider);
         },
         async setTestRubric(_testId, rubricId) {
             test.RubricID = rubricId;
@@ -118,8 +119,8 @@ function providerStore(test: MJTestEntity, user: UserInfo): PromoteCriteriaStore
     };
 }
 
-async function saveDraft(input: PromotedRubric & { rubricId: string; scaleId: string }, user: UserInfo): Promise<string> {
-    const version = await Metadata.Provider.GetEntityObject<MJTestEntity>('MJ: Rubric Versions', user);
+async function saveDraft(input: PromotedRubric & { rubricId: string; scaleId: string }, user: UserInfo, provider: IMetadataProvider): Promise<string> {
+    const version = await provider.GetEntityObject<MJTestEntity>('MJ: Rubric Versions', user);
     version.NewRecord();
     version.Set('RubricID', input.rubricId);
     version.Set('Status', 'Draft');
@@ -130,7 +131,7 @@ async function saveDraft(input: PromotedRubric & { rubricId: string; scaleId: st
     if (!await version.Save()) throw new Error(version.LatestResult?.Message || 'Could not create the draft version.');
     const versionId = String(version.Get('ID'));
     for (const criterion of input.criteria) {
-        const row = await Metadata.Provider.GetEntityObject<MJTestEntity>('MJ: Rubric Criteria', user);
+        const row = await provider.GetEntityObject<MJTestEntity>('MJ: Rubric Criteria', user);
         row.NewRecord();
         row.Set('RubricVersionID', versionId);
         row.Set('Key', criterion.key);

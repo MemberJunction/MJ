@@ -7,7 +7,7 @@
       metadata/entities/.layered-base-views.json
       metadata/entities/.rubric-label-name-fields.json
 
-    A feature migration does not UPDATE __mj.Entity or __mj.EntityField. mj sync push applies
+    A feature migration does not update the Entity or EntityField tables. mj sync push applies
     the folder. The release build is what turns that folder into a metadata migration.
 
     This file is separate from V202609302342 because the inner views cannot be created until
