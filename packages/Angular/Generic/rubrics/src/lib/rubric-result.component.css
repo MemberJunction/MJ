@@ -14,9 +14,16 @@
   list-style: none;
 }
 
-.rubric-bar {
-  display: inline-block;
+.rubric-track {
+  display: block;
   height: 0.5rem;
-  background: var(--mj-text-primary);
-  border-radius: var(--mj-radius-md, 0.5rem);
+  background: var(--mj-color-neutral-200);
+  border-radius: var(--mj-radius-full);
+  overflow: hidden;
+}
+
+.rubric-bar {
+  display: block;
+  height: 100%;
+  background: var(--mj-color-brand-500);
 }

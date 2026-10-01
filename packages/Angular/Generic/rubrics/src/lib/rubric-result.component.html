@@ -14,7 +14,7 @@
           <span>Weight: {{ Weight(node.id) }}</span>
           <span>Gate: {{ Gate(node.id) }}</span>
           <span>Scale: {{ ScaleName(node.id) }}</span>
-          <span class="rubric-bar" [style.width.%]="Bar(node.normalizedScore)"></span>
+          <span class="rubric-track"><span class="rubric-bar" [style.width.%]="Bar(node.normalizedScore)"></span></span>
           <span>{{ Bar(node.normalizedScore) }}%</span>
           @if (Note(node.id, 'rationale')) {
             <p>{{ Note(node.id, 'rationale') }}</p>

@@ -13,6 +13,7 @@
           }
         </div>
         @if (!ReadOnly) {
+        <div class="editor-grid">
         <label>
           Parent
           <select [value]="node.parentId ?? ''" (change)="OnParent(node, $event)">
@@ -65,6 +66,7 @@
             <option value="NotAllowed">Not allowed</option>
           </select>
         </label>
+        </div>
         }
       </li>
     }

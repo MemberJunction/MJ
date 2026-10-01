@@ -52,16 +52,17 @@ export class RubricVersionDiffComponent {
         });
     }
 
-    public Words(marks: string[]): string {
+    public Sentence(mark: string): string {
         const words: Record<string, string> = {
-            Weight: 'the weight changed',
-            IsGate: 'the gate changed',
-            GateMinimumScore: 'the gate minimum changed',
-            Sequence: 'the order changed',
-            Descriptor: 'an anchor changed',
-            Name: 'the name changed',
+            Weight: 'The weight changed',
+            IsGate: 'The gate changed',
+            GateMinimumScore: 'The gate minimum changed',
+            Sequence: 'The order changed',
+            Descriptor: 'An anchor changed',
+            Name: 'The name changed',
         };
-        return marks.map(mark => words[mark.replace(/\s*\([^)]*\)/, '')] ?? mark).join('. ');
+        const bare = mark.replace(/\s*\([^)]*\)/, '');
+        return words[bare] ?? bare;
     }
 
     public get RemovedBands(): { label: string; min: number; max: number }[] {

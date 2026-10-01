@@ -24,7 +24,11 @@
         </div>
       </div>
       @if (row.marks.length) {
-        <p>{{ Words(row.marks) }}</p>
+        <ul>
+          @for (mark of row.marks; track mark) {
+            <li>{{ Sentence(mark) }}</li>
+          }
+        </ul>
       }
     </article>
   }
