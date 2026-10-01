@@ -31,6 +31,7 @@ import { TraceSubAgentValidatorOracle } from '../oracles/TraceSubAgentValidatorO
 import { AgentDecisionOracle, ResponseWellFormedOracle } from '../oracles/AgentDecisionOracle';
 import { DecisionLabelMatchOracle } from '../oracles/DecisionLabelMatchOracle';
 import { LLMJudgeOracle } from '../oracles/LLMJudgeOracle';
+import { DecisionJudgeOracle } from '../oracles/DecisionJudgeOracle';
 import { ExactMatchOracle } from '../oracles/ExactMatchOracle';
 import { SQLValidatorOracle } from '../oracles/SQLValidatorOracle';
 import {
@@ -659,6 +660,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         this.RegisterOracle(new ResponseWellFormedOracle());
         this.RegisterOracle(new DecisionLabelMatchOracle());
         this.RegisterOracle(new LLMJudgeOracle());
+        this.RegisterOracle(new DecisionJudgeOracle());
         this.RegisterOracle(new ExactMatchOracle());
         this.RegisterOracle(new SQLValidatorOracle());
     }
