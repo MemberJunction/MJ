@@ -1,6 +1,7 @@
 import type { RubricScoreResult, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import type { RubricAnswer } from '@memberjunction/rubrics-base';
 import { AIRubricEvaluator, type RubricAgent } from './AIRubricEvaluator.js';
+import { LLMRubricEvaluator, type RubricPromptMode, type RubricPromptRunner } from './LLMRubricEvaluator.js';
 import { shapeContent, type RubricSubjectContent } from './content.js';
 import { DeterministicRubricEvaluator } from './DeterministicRubricEvaluator.js';
 import { HumanRubricEvaluator, type EvaluationDraftStore, type RubricTaskStore } from './HumanRubricEvaluator.js';
@@ -30,8 +31,10 @@ export interface EvaluateParams {
     /** Used when content is omitted. Loads the subject record so the engine can shape it. */
     loadRecord?: (entityName: string, recordId: string) => Promise<Record<string, unknown>>;
     canRead?: (fieldName: string) => boolean;
-    evaluator: 'AI' | 'Deterministic';
+    evaluator: 'AI' | 'Deterministic' | 'LLM';
     agent?: RubricAgent;
+    promptRunner?: RubricPromptRunner;
+    promptMode?: RubricPromptMode;
 }
 
 /**
@@ -51,9 +54,7 @@ export class RubricEngine {
         let draft: RubricEvaluationRecord | null = null;
         try {
             const content = params.content ?? await this.resolveContent(params);
-            const output = params.evaluator === 'AI'
-                ? await new AIRubricEvaluator(requiredAgent(params.agent)).evaluateVersion({ version: params.version, subject: { entityName: params.subject.entityName, recordId: params.subject.recordId }, content })
-                : new DeterministicRubricEvaluator().evaluateData(params.version, content);
+            const output = await this.runEvaluator(params, content);
             draft = await this.evaluations.createDraft({
                 versionId: params.version.id,
                 rubricId: params.version.rubricId,
@@ -98,6 +99,18 @@ export class RubricEngine {
             subjectRecordId: input.subjectRecordId,
             assigneeId: input.assigneeId,
         });
+    }
+
+    private async runEvaluator(params: EvaluateParams, content: RubricSubjectContent): Promise<RubricEvaluatorOutput> {
+        const subject = { entityName: params.subject.entityName, recordId: params.subject.recordId };
+        if (params.evaluator === 'AI') {
+            return new AIRubricEvaluator(requiredAgent(params.agent)).evaluateVersion({ version: params.version, subject, content });
+        }
+        if (params.evaluator === 'LLM') {
+            if (!params.promptRunner) throw new Error('An LLM evaluation requires a prompt runner.');
+            return new LLMRubricEvaluator(params.promptRunner, params.promptMode ?? 'SinglePass').evaluateContent(params.version, content);
+        }
+        return new DeterministicRubricEvaluator().evaluateData(params.version, content);
     }
 
     private async resolveContent(params: EvaluateParams): Promise<RubricSubjectContent> {

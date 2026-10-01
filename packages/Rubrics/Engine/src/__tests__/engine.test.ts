@@ -102,6 +102,29 @@ describe('RubricEngine', () => {
         expect(done.evaluation.errorMessage).toMatch(/agent/);
         expect(failed[0]).toMatch(/eval-2:An AI evaluation requires an agent/);
     });
+
+    it('runs LLM SinglePass once, submits, and returns the scored draft', async () => {
+        const calls: string[] = [];
+        const store: RubricEvaluationStore = {
+            async createDraft() { calls.push('draft'); return { id: 'eval-llm', status: 'Draft' }; },
+            async submit() { calls.push('submit'); return { normalizedScore: 1, completeness: 1, outcome: 'Passed', passed: true, gateFailed: false, passThresholdApplied: 0.5, bandId: null, confidence: null, nodes: [], scoringEngineVersion: '1.0' }; },
+            async fail() { throw new Error('should not fail'); },
+        };
+        const tree = version();
+        tree.nodes = [tree.nodes[0]];
+        const done = await new RubricEngine(store).evaluate({
+            version: tree,
+            subject: { entityName: 'MJ: Documents', recordId: '1', entityId: 'entity' },
+            content: { text: 'Easy to read.' },
+            evaluator: 'LLM',
+            promptMode: 'SinglePass',
+            promptRunner: { async run() { calls.push('prompt'); return JSON.stringify({ decisions: [{ key: 'clarity', level: 'High', rationale: 'Clear.', evidence: [{ quote: 'Easy' }] }] }); } },
+        });
+        expect(calls.filter(call => call === 'prompt')).toHaveLength(1);
+        expect(calls).toContain('submit');
+        expect(done.evaluation.status).toBe('Submitted');
+        expect(done.output?.normalizedScore).toBe(1);
+    });
 });
 
 describe('agreement and consensus', () => {
