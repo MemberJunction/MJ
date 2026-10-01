@@ -105,6 +105,8 @@ export interface RubricAnswer {
     isNotApplicable?: boolean;
     /** 0..1 when the evaluator reported one. Omitted values are left out of the confidence mean. */
     confidence?: number | null;
+    /** The evaluator's reason for this leaf. Copied onto the score row. */
+    rationale?: string;
 }
 
 export interface RubricScoreInput {

@@ -77,7 +77,7 @@ export interface EvaluateRecordResult {
     evaluationId: string;
     score: number | null;
     outcome: RubricScoreResult['outcome'] | null;
-    criteria: { key: string; normalizedScore: number | null }[];
+    criteria: { key: string; normalizedScore: number | null; rationale?: string }[];
 }
 
 /**
@@ -189,11 +189,17 @@ export class RubricEngine {
             },
         });
         const result = done.output?.result;
+        const answers = done.output?.answers ?? [];
         return {
             evaluationId: done.evaluation.id,
             score: result?.normalizedScore ?? null,
             outcome: result?.outcome ?? null,
-            criteria: (result?.nodes ?? []).map(node => ({ key: node.key, normalizedScore: node.normalizedScore })),
+            criteria: (result?.nodes ?? []).map(node => {
+                const rationale = answers.find(answer => answer.criterionId === node.id)?.rationale;
+                return rationale
+                    ? { key: node.key, normalizedScore: node.normalizedScore, rationale }
+                    : { key: node.key, normalizedScore: node.normalizedScore };
+            }),
         };
     }
 

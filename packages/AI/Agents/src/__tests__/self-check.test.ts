@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { RubricEngine, type RubricRecords } from '@memberjunction/rubrics';
+import type { RubricScoreResult } from '@memberjunction/rubrics-base';
 import { decideSelfCheck, executeSelfCheck, type SelfCheckEngine, type SelfCheckValidation } from '../self-check.js';
 
 const link = { purpose: 'SelfCheck', status: 'Active', maxAttempts: 2 };
@@ -56,13 +58,37 @@ describe('agent self-check', () => {
         expect(steps).toEqual([{ stepType: 'Validation', evaluationId: 'eval-pass', passed: true, message: '' }]);
     });
 
-    it('records one failing evaluation and does not call the miss a scoring failure', async () => {
+    it('records one failing evaluation and keeps the rationale from the real engine result', async () => {
         const steps: SelfCheckValidation[] = [];
-        const engine: SelfCheckEngine = {
-            async evaluateRecord() {
-                return { evaluationId: 'eval-fail', outcome: 'GateFailed', criteria: [{ key: 'accuracy', rationale: 'The figure is wrong.' }] };
-            },
+        const score: RubricScoreResult = {
+            normalizedScore: 0, completeness: 1, outcome: 'GateFailed', passed: false, gateFailed: true,
+            passThresholdApplied: 0.6, bandId: null, confidence: null, scoringEngineVersion: '1.0',
+            nodes: [{ id: 'criterion', key: 'accuracy', normalizedScore: 0, effectiveWeight: 1, overallContribution: 0, gateFailed: true, isNotApplicable: false, isAdvisory: false }],
         };
+        const records: RubricRecords = {
+            async rows(entityName, filter) {
+                if (entityName === 'MJ: Rubrics') return [{ ID: 'rubric', Name: 'Writing' }];
+                if (entityName === 'MJ: Rubric Versions' && filter.includes("Status='Published'")) return [{
+                    ID: 'version', RubricID: 'rubric', MajorVersion: 1, MinorVersion: 0, PatchVersion: 0, Status: 'Published',
+                    NotApplicablePolicy: 'ExcludeAndRedistribute', ScoreDisplayMin: 0, ScoreDisplayMax: 100, PassThreshold: 0.6,
+                }];
+                if (entityName === 'MJ: Rubric Criteria') return [{
+                    ID: 'criterion', RubricVersionID: 'version', Key: 'accuracy', Name: 'Accuracy', NodeType: 'Criterion',
+                    ScaleID: 'scale', Weight: 1, IsGate: 1, GateMinimumScore: 0.6, IsAdvisory: 0, Sequence: 0,
+                }];
+                if (entityName === 'MJ: Rubric Scales') return [{ ID: 'scale', ScaleType: 'Levels', HigherIsBetter: 1 }];
+                if (entityName === 'MJ: Rubric Scale Levels') return [{ ID: 'miss', ScaleID: 'scale', Label: 'Miss', Value: 0, NormalizedValue: 0, Sequence: 0 }];
+                if (entityName === 'MJ: Entities') return [{ ID: 'entity', Name: 'MJ: AI Agent Runs' }];
+                if (entityName === 'MJ: AI Agent Runs') return [{ ID: 'run-1' }];
+                return [];
+            },
+            async createDraft() { return { id: 'draft', status: 'Draft' }; },
+        };
+        const engine = new RubricEngine({
+            async createDraft() { return { id: 'eval-fail', status: 'Draft' }; },
+            async submit() { return score; },
+            async fail() { throw new Error('should not fail the draft'); },
+        }, records, { async run() { return JSON.stringify({ decisions: [{ key: 'accuracy', level: 'Miss', rationale: 'The figure is wrong.' }] }); } });
         const done = await executeSelfCheck({
             engine,
             link: { ...link, rubricId: 'rubric', passThreshold: null },
@@ -72,9 +98,8 @@ describe('agent self-check', () => {
             record: step => steps.push(step),
         });
         expect(done.step).toBe('Failed');
-        expect(steps[0].passed).toBe(false);
         expect(steps[0].evaluationId).toBe('eval-fail');
-        expect(steps[0].message).toMatch(/accuracy/);
+        expect(steps[0].message).toBe('accuracy: The figure is wrong.');
         expect(steps[0].message).not.toMatch(/could not score/i);
     });
 });

@@ -53,6 +53,7 @@ export class RubricEvaluator {
             rawValue: candidate.rawValue,
             isNotApplicable: candidate.isNotApplicable,
             confidence: candidate.confidence,
+            rationale: candidate.rationale || undefined,
         }));
         const result = RubricScoring.compute({ version, answers });
         return {
