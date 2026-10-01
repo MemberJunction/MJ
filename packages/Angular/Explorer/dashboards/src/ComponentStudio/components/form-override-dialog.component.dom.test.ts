@@ -91,4 +91,40 @@ describe('FormOverrideDialogComponent (DOM)', () => {
     const fixture = render({ Visible: true, EntityName: 'Members', InitialScope: 'Role', InitialRoleID: 'r2' });
     expect(text(fixture, '.scope-readonly')).toBe('Member role');
   });
+
+  /** Reopening the dialog must not carry the last form's answers into the next one. */
+  it('starts a reopened dialog with no initial scope at Me only, with no role', () => {
+    const fixture = render({
+      Visible: true, EntityName: 'Members', EditMode: true,
+      InitialScope: 'Role', InitialRoleID: 'r2', InitialStatus: 'Active', InitialPriority: 5,
+    });
+    expect(fixture.componentInstance.Scope).toBe('Role');
+    reopen(fixture, { EditMode: false, InitialScope: null, InitialRoleID: undefined, InitialStatus: null, InitialPriority: undefined });
+    expect(fixture.componentInstance.Scope).toBe('User');
+    expect(fixture.componentInstance.RoleID).toBeNull();
+    expect(fixture.componentInstance.Status).toBe('Pending');
+    expect(fixture.componentInstance.Priority).toBe(0);
+    expect(text(fixture, '.scope-readonly')).toBe('Me only');
+  });
+
+  it('decides whether to offer publishing when it opens, not on every check', () => {
+    const user: { Type: string } = { Type: 'Owner' };
+    const provider = createFakeProvider({ roles: ROLES, currentUser: user });
+    const fixture = render({ Visible: true, EntityName: 'Members', Provider: provider });
+    expect(fixture.componentInstance.CanPublish).toBe(true);
+    (provider.CurrentUser as unknown as { Type: string }).Type = 'User';
+    fixture.detectChanges();
+    expect(fixture.componentInstance.CanPublish).toBe(true);
+    reopen(fixture, {});
+    expect(fixture.componentInstance.CanPublish).toBe(false);
+  });
 });
+
+/** Closes the dialog, applies new inputs, and opens it again. */
+function reopen(fixture: ReturnType<typeof render>, inputs: Record<string, unknown>): void {
+  fixture.componentRef.setInput('Visible', false);
+  fixture.detectChanges();
+  for (const [name, value] of Object.entries(inputs)) fixture.componentRef.setInput(name, value);
+  fixture.componentRef.setInput('Visible', true);
+  fixture.detectChanges();
+}

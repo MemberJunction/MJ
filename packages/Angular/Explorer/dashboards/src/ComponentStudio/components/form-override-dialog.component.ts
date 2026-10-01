@@ -285,15 +285,13 @@ export class FormOverrideDialogComponent extends BaseAngularComponent implements
     }
 
     /**
-     * Whether this user may show a form to a role or to everyone.
+     * Whether this user may show a form to a role or to everyone. Read once each time the dialog
+     * opens.
      *
      * Decides only what the dialog offers. The server-side entity subclass enforces the same rule
      * on the save, so a dialog that offered it anyway would still have the write refused.
      */
-    public get CanPublish(): boolean {
-        const provider = this.ProviderToUse;
-        return UserCanManageFormDefaults(provider?.CurrentUser, provider);
-    }
+    public CanPublish = false;
 
     /** The current audience in words, for a user who cannot change it. */
     public get ScopeLabel(): string {
@@ -332,20 +330,20 @@ export class FormOverrideDialogComponent extends BaseAngularComponent implements
     /**
      * Sync editable state from `@Input()`s. Called on first open AND on
      * every subsequent Visible: false → true transition so the dialog
-     * doesn't show stale data from a previous invocation.
+     * doesn't show stale data from a previous invocation. An Initial* input
+     * left unset gives its default: Pending, Me only with no role, priority 0.
      */
     private resetFromInputs(): void {
         this.Name = (this.InitialName?.trim() || this.ComponentName || '').trim();
         this.Description = this.InitialDescription?.trim() || null;
         this.Notes = this.InitialNotes?.trim() || null;
         this.ValidationError = null;
-        // Default Status to Pending — matches the new "create as draft,
-        // activate later" workflow. Edit-mode callers will override via
-        // InitialStatus.
-        if (this.InitialStatus) this.Status = this.InitialStatus;
-        if (this.InitialScope) this.Scope = this.InitialScope;
-        if (this.InitialRoleID !== undefined) this.RoleID = this.InitialRoleID;
-        if (this.InitialPriority !== undefined) this.Priority = this.InitialPriority;
+        this.Status = this.InitialStatus ?? 'Pending';
+        this.Scope = this.InitialScope ?? 'User';
+        this.RoleID = this.Scope === 'Role' ? (this.InitialRoleID ?? null) : null;
+        this.Priority = this.InitialPriority ?? 0;
+        const provider = this.ProviderToUse;
+        this.CanPublish = UserCanManageFormDefaults(provider?.CurrentUser, provider);
         this.cd.markForCheck();
     }
 
