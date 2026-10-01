@@ -14,7 +14,6 @@ import {
     type LLMOneShotCallback,
 } from '@memberjunction/integration-pk-classifier';
 import { BaseIntegrationConnector, type ExternalObjectSchema, type ExternalFieldSchema } from './BaseIntegrationConnector.js';
-import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import { BuildCatalogWriter, ResolveCatalogSource } from './CatalogSource.js';
 import { LoadCatalogScope, RunInCatalogScope } from './CatalogScope.js';
 import { IntegrationSchemaSync, type PersistSchemaResult } from './IntegrationSchemaSync.js';
@@ -847,9 +846,22 @@ export class IntegrationConnectorCreationPipeline {
     }> {
         emitter.stageStart('PKClassify', 'Soft PK classifier for objects still missing a PK');
         const md = opts.Provider ?? Metadata.Provider;
-        const engine = IntegrationEngineBase.Instance;
-        // Refresh from DB so we see what Persist just wrote
-        await engine.Config(true, opts.ContextUser, md);
+        // NO engine reload here (MJ-RUN-42). This stage used to open with
+        //     await IntegrationEngineBase.Instance.Config(true, opts.ContextUser, md);
+        // to "see what Persist just wrote". Config(true) reloads ALL EIGHT engine datasets,
+        // including every IntegrationObject and IntegrationObjectField row Persist has just written,
+        // and then this stage reads none of them: every read below goes through the catalog writer,
+        // which queries per call. So it bought nothing and cost a full second copy of the catalog in
+        // process memory at the exact moment memory peaks, immediately after the run's largest write.
+        // Observed 2026-09-19 (888 objects / 97,414 fields): the run persisted both passes and then
+        // died here with `Ineffective mark-compacts near heap limit`, taking classification with it —
+        // 412 keys instead of the 797 the same catalog produced the day before.
+        //
+        // Safe by ORDERING: this is the LAST stage of Run(), so no later stage can observe a staler
+        // cache; the discovery heal opens its second pass with its own refresh; and the callers that
+        // run this pipeline reload the engine once it returns. RefreshCatalog is no cheaper
+        // substitute: the two arrays it reloads ARE the cost. Do not reintroduce a reload here.
+        //
         // Read through the writer rather than the cache. On the per-connection catalog the cached
         // rows are read-only projections with no Save(), so the classifier's one write — promoting
         // its nominee to primary key — would have had nothing to write to.
