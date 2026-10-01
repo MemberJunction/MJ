@@ -165,6 +165,15 @@ export class DuplicateRecordDetector extends VectorBase {
     /** The Pinecone/pgvector/Qdrant index name resolved from the entity document's VectorIndex */
     private indexName: string;
     /**
+     * The width of the vectors in that index (`MJ: Vector Indexes.Dimensions`), passed as
+     * `Dimensions` to every `RunEmbedding` call (the runner forwards it to the provider's
+     * `EmbedTexts`). Entity vector sync embeds at this width when it fills the index, so the
+     * probe must match it: a 512-wide index probed with 1,536-wide vectors rejects every query,
+     * and the run completes with no matches. Undefined when the index sets no width; the model's
+     * default then applies on both paths.
+     */
+    private embeddingDimensions: number | undefined = undefined;
+    /**
      * The EntityDocumentID for this run. Passed as the vector query `id` for providers that key
      * by EntityDocumentID (the in-process SimpleVectorServiceProvider — see
      * {@link VectorDBBase.QueryKeyIsEntityDocumentID}) instead of the logical index name.
@@ -375,6 +384,7 @@ export class DuplicateRecordDetector extends VectorBase {
         const embedResult = await this.EmbeddingRunner.RunEmbedding({
             Texts: templateTexts,
             ModelID: this.embeddingModelID ?? undefined,
+            Dimensions: this.embeddingDimensions,
             ContextUser: ContextUser,
             Description: `Duplicate detection single record (${entityDocument.Name})`
         });
@@ -478,6 +488,7 @@ export class DuplicateRecordDetector extends VectorBase {
             const subEmbedResult = await this.EmbeddingRunner.RunEmbedding({
                 Texts: subTemplateTexts,
                 ModelID: this.embeddingModelID ?? undefined,
+                Dimensions: this.embeddingDimensions,
                 ContextUser: contextUser,
                 Description: `Duplicate detection batch (${entityDocument.Name})`
             });
@@ -521,6 +532,11 @@ export class DuplicateRecordDetector extends VectorBase {
      * a single-column key (whatever the column is called), `F1|v1||F2|v2` for a composite key —
      * which is the form `MJ: List Details.RecordID` already holds; `CompositeKey.FromURLSegment`
      * rebuilds the real key from it for any entity.
+     *
+     * Every loader reads with `IgnoreMaxRows`. Without it RunView falls back to the entity's
+     * `UserViewMaxRows` (1,000 by default) and returns only the first page of ids. The run then sets
+     * `TotalItemCount` from that page, so it checks a fraction of the records and still reports
+     * itself complete: "1000 of 1000" on a 61,671-record entity.
      */
     protected async LoadRecordIDsToCheck(params: PotentialDuplicateRequest, entityInfo: EntityInfo): Promise<string[]> {
         if (params.ListID) {
@@ -543,6 +559,7 @@ export class DuplicateRecordDetector extends VectorBase {
             ExtraFilter: `ListID = '${sanitizedListID}'`,
             Fields: ['RecordID'],
             ResultType: 'simple',
+            IgnoreMaxRows: true, // every member, not the first UserViewMaxRows (see LoadRecordIDsToCheck)
         }, this.CurrentUser);
 
         if (!viewResults.Success) {
@@ -570,6 +587,7 @@ export class DuplicateRecordDetector extends VectorBase {
             ViewID: viewID,
             Fields: entityInfo.PrimaryKeys.map(pk => pk.Name),
             ResultType: 'simple',
+            IgnoreMaxRows: true, // every row of the view, not the first UserViewMaxRows (see LoadRecordIDsToCheck)
         }, this.CurrentUser);
 
         if (!viewResults.Success) {
@@ -588,6 +606,7 @@ export class DuplicateRecordDetector extends VectorBase {
             ExtraFilter: extraFilter,
             Fields: entityInfo.PrimaryKeys.map(pk => pk.Name),
             ResultType: 'simple',
+            IgnoreMaxRows: true, // every matching row, not the first UserViewMaxRows (see LoadRecordIDsToCheck)
         }, this.CurrentUser);
 
         if (!viewResults.Success) {
@@ -666,6 +685,7 @@ export class DuplicateRecordDetector extends VectorBase {
             const vectorIndex = KnowledgeHubMetadataEngine.Instance.GetVectorIndexByID(entityDocument.VectorIndexID);
             if (vectorIndex) {
                 this.indexName = vectorIndex.Name;
+                this.embeddingDimensions = vectorIndex.Dimensions ?? undefined;
             }
         }
         if (!this.indexName) {
