@@ -694,4 +694,83 @@ describe('IdentityClaimEngineServer', () => {
             expect(redeem).toHaveBeenCalledWith('claim-auto', user, testProvider, undefined, { EmailVerified: true });
         });
     });
+
+    describe('token-only claims and explicit expiry', () => {
+        const tokenOnlyType = () =>
+            createMockClaimType({ Configuration: JSON.stringify({ RequireToken: true, AutoClaim: false }) } as Partial<MJIdentityClaimTypeEntity>);
+
+        it('creates a claim with no email when the type requires a token, and sends no email', async () => {
+            const engine = IdentityClaimEngineServer.Instance;
+            const mockClaim = createMockClaim();
+            vi.spyOn(Metadata.prototype, 'GetEntityObject').mockResolvedValue(mockClaim as unknown as MJIdentityClaimEntity);
+            vi.spyOn(IdentityClaimEngine.Instance, 'GetClaimTypeByName').mockReturnValue(tokenOnlyType());
+            const send = vi.spyOn(engine as unknown as { sendClaimEmail: () => Promise<void> }, 'sendClaimEmail');
+
+            const rawToken = 'caller-held-token-abcdef';
+            await engine.CreateClaim({ ClaimTypeName: 'TestClaim', VerificationToken: rawToken });
+
+            // Stored with an empty address — no account's normalized email can equal it.
+            expect(mockClaim.NormalizedEmail).toBe('');
+            expect(JSON.parse(mockClaim.MetadataJSON!).TokenHash).toBe(
+                crypto.createHash('sha256').update(rawToken).digest('base64url')
+            );
+            expect(send).not.toHaveBeenCalled();
+        });
+
+        it('still requires an email for a type that does not require a token', async () => {
+            const engine = IdentityClaimEngineServer.Instance;
+            vi.spyOn(Metadata.prototype, 'GetEntityObject').mockResolvedValue(createMockClaim() as unknown as MJIdentityClaimEntity);
+            await expect(engine.CreateClaim({ ClaimTypeName: 'TestClaim', SendEmail: false })).rejects.toThrow(/NormalizedEmail is required/);
+            await expect(engine.CreateClaim({ ClaimTypeName: 'TestClaim', NormalizedEmail: '   ', SendEmail: false })).rejects.toThrow(
+                /NormalizedEmail is required/
+            );
+        });
+
+        it('a token-only claim is never offered to an email lookup', async () => {
+            const engine = IdentityClaimEngineServer.Instance;
+            expect(await engine.GetPendingClaimsForEmail('', createMockUser(), testProvider)).toEqual([]);
+        });
+
+        it('redeems a token-only claim with its token', async () => {
+            const engine = IdentityClaimEngineServer.Instance;
+            const rawToken = 'handoff-token-123456';
+            const mockClaim = createMockClaim({
+                NormalizedEmail: '',
+                MetadataJSON: JSON.stringify({ TokenHash: crypto.createHash('sha256').update(rawToken).digest('base64url') })
+            });
+            vi.spyOn(Metadata.prototype, 'GetEntityObject').mockResolvedValue(mockClaim as unknown as MJIdentityClaimEntity);
+            vi.spyOn(IdentityClaimEngine.Instance, 'GetClaimTypeByID').mockReturnValue(tokenOnlyType());
+
+            expect((await engine.RedeemClaim('claim-123', createMockUser(), testProvider)).Success).toBe(false);
+            expect((await engine.RedeemClaim('claim-123', createMockUser(), testProvider, rawToken)).Success).toBe(true);
+        });
+
+        it('honours an explicit ExpiresAt over whole days', async () => {
+            const engine = IdentityClaimEngineServer.Instance;
+            const mockClaim = createMockClaim();
+            vi.spyOn(Metadata.prototype, 'GetEntityObject').mockResolvedValue(mockClaim as unknown as MJIdentityClaimEntity);
+            const tenMinutes = new Date(Date.now() + 10 * 60_000);
+
+            await engine.CreateClaim({
+                ClaimTypeName: 'TestClaim',
+                NormalizedEmail: 'claimant@example.com',
+                ExpiresAt: tenMinutes,
+                ExpiresInDays: 30,
+                SendEmail: false
+            });
+            expect(mockClaim.ExpiresAt?.getTime()).toBe(tenMinutes.getTime());
+        });
+
+        it('refuses an ExpiresAt in the past or invalid, before saving anything', async () => {
+            const engine = IdentityClaimEngineServer.Instance;
+            const mockClaim = createMockClaim();
+            vi.spyOn(Metadata.prototype, 'GetEntityObject').mockResolvedValue(mockClaim as unknown as MJIdentityClaimEntity);
+            for (const bad of [new Date(Date.now() - 1000), new Date('not a date')]) {
+                await expect(
+                    engine.CreateClaim({ ClaimTypeName: 'TestClaim', NormalizedEmail: 'c@example.com', ExpiresAt: bad, SendEmail: false })
+                ).rejects.toThrow(/ExpiresAt must be a valid instant in the future/);
+            }
+            expect(mockClaim.Save).not.toHaveBeenCalled();
+        });
+    });
 });

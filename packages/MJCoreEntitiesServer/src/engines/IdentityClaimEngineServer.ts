@@ -176,10 +176,7 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
      * framework if configured, and executes the driver's OnCreate lifecycle method.
      */
     public async CreateClaim(params: CreateClaimServerParams, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<MJIdentityClaimEntity> {
-        const normalizedEmail = this.NormalizeEmail(params.NormalizedEmail);
-        if (!normalizedEmail) {
-            throw new Error('NormalizedEmail is required to create an IdentityClaim');
-        }
+        const normalizedEmail = this.NormalizeEmail(params.NormalizedEmail ?? '');
 
         let claimType: MJIdentityClaimTypeEntity | undefined;
         if (params.ClaimTypeID) {
@@ -194,6 +191,18 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
         if (!claimType.IsActive) {
             throw new Error(`IdentityClaimType '${claimType.Name}' is inactive and cannot issue new claims`);
         }
+
+        // A claim with no recipient is redeemable by TOKEN only, so only a type that refuses
+        // email-match redemption may issue one. Checked after the type resolves because the
+        // answer depends on the type's Configuration.
+        if (!normalizedEmail && this.GetClaimTypeConfiguration(claimType).RequireToken !== true) {
+            throw new Error(
+                `NormalizedEmail is required to create an IdentityClaim of type '${claimType.Name}' ` +
+                `(only types with RequireToken may issue token-only claims)`
+            );
+        }
+
+        const expiresAt = this.resolveClaimExpiry(params, claimType);
 
         const md = provider ?? this.Provider;
 
@@ -237,9 +246,6 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
         claim.PayloadJSON = params.Payload ? JSON.stringify(params.Payload) : null;
         claim.Status = 'Pending';
 
-        const days = params.ExpiresInDays ?? claimType.DefaultExpirationDays ?? 30;
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + days);
         claim.ExpiresAt = expiresAt;
 
         claim.MagicLinkInviteID = params.MagicLinkInviteID ?? null;
@@ -251,7 +257,8 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
         }
 
         // Send email notification via MJ Communications Framework if enabled
-        if (params.SendEmail !== false) {
+        // A token-only claim has no recipient: the caller holds the token and delivers it.
+        if (params.SendEmail !== false && normalizedEmail) {
             try {
                 await this.sendClaimEmail(claim, claimType, params, rawToken, contextUser);
             } catch (err) {
@@ -272,6 +279,28 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
     /**
      * Sends a claimant email notification using CommunicationEngine and TemplateEngineServer
      */
+    /**
+     * When a new claim expires: an explicit `ExpiresAt` wins, otherwise whole days from
+     * `ExpiresInDays`, the type's `DefaultExpirationDays`, or 30.
+     *
+     * @throws When `ExpiresAt` is not a valid instant in the future — a claim born expired would
+     *         be refused on redemption with no hint that the caller's clock or arithmetic was
+     *         the cause.
+     */
+    private resolveClaimExpiry(params: CreateClaimServerParams, claimType: MJIdentityClaimTypeEntity): Date {
+        if (params.ExpiresAt !== undefined) {
+            const at = params.ExpiresAt instanceof Date ? params.ExpiresAt.getTime() : NaN;
+            if (!Number.isFinite(at) || at <= Date.now()) {
+                throw new Error('ExpiresAt must be a valid instant in the future');
+            }
+            return new Date(at);
+        }
+        const days = params.ExpiresInDays ?? claimType.DefaultExpirationDays ?? 30;
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + days);
+        return expiresAt;
+    }
+
     private async sendClaimEmail(
         claim: MJIdentityClaimEntity,
         claimType: MJIdentityClaimTypeEntity,
