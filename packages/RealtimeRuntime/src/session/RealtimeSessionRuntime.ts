@@ -19,7 +19,8 @@ import {
   RealtimeClientState,
   RealtimeClientToolCall,
   RealtimeClientTranscript,
-  RealtimeClientUsage
+  RealtimeClientUsage,
+  REQUESTED_TRACKS_SESSION_KEY
 } from '@memberjunction/ai-realtime-client';
 import { BuildNarrationInstructions } from '../narration/narration-template';
 import { ParseDelegationResultJson, ParsedDelegationArtifact, FormatToolName } from './delegation-result-parser';
@@ -1524,11 +1525,11 @@ export class RealtimeSessionRuntime {
   }
 
   /**
-   * Reads the ACTIVE `MJ: AI Agent Channels` rows from {@link AIEngineBase}'s cached
-   * `AgentChannels` (provider-scoped engine instance, lazy `Config` — no RunView
-   * round-trip; the engine's BaseEntity-event reactivity keeps the registry fresh).
-   * Failures are logged and degrade to an empty list — channel availability must
-   * never block the voice session.
+   * Reads the ACTIVE `MJ: AI Agent Channels` rows. With entity metadata: from {@link AIEngineBase}'s
+   * cached `AgentChannels` (provider-scoped engine instance, lazy `Config` — no RunView round-trip;
+   * the engine's BaseEntity-event reactivity keeps the registry fresh). On a connect-only provider:
+   * one `RunDynamicView` query ({@link fetchChannelDefinitionsOverGraphQL}). Failures are logged and
+   * degrade to an empty list — channel availability must never block the voice session.
    */
   private async fetchChannelDefinitions(): Promise<RealtimeChannelDefinitionRow[]> {
     // A connect-only provider (ConnectGraphQLClient — anonymous embeds) has no entity metadata,
@@ -1903,20 +1904,20 @@ export class RealtimeSessionRuntime {
 
   /**
    * Builds the client-direct session config the realtime client connects with.
-   * Aggregates tracks sourced by active channels into `requestedTracks` so the driver
+   * Aggregates tracks sourced by active channels under {@link REQUESTED_TRACKS_SESSION_KEY} so the driver
    * can negotiate them (e.g., establishing inbound video streaming for Whiteboard / RemoteBrowser).
    */
   public BuildClientConfig(session: StartRealtimeClientSessionResult): ClientRealtimeSessionConfig {
     const sessionConfig = this.parseSessionConfig(session.SessionConfigJson);
     const channelTracks = this._activeChannels$.value.flatMap((c) => c.GetSourcedTracks());
     if (channelTracks.length > 0) {
-      // `requestedTracks` crosses a JSON boundary — the driver reads it back out of the session
+      // The requested tracks cross a JSON boundary — the driver reads them back out of the session
       // config bag (`GeminiRealtimeClient.parseSessionConfig`). A `RealtimeTrackDescriptor` is NOT
       // structurally a `JSONValue`: it has no index signature and `UsageBasis` is readonly, so the
       // conversion is written out rather than asserted. Dedupe key and precedence are unchanged —
       // audio floor first, then anything the mint supplied, then the channels' own tracks.
-      const existing: readonly JSONValue[] = Array.isArray(sessionConfig['requestedTracks'])
-        ? sessionConfig['requestedTracks']
+      const existing: readonly JSONValue[] = Array.isArray(sessionConfig[REQUESTED_TRACKS_SESSION_KEY])
+        ? sessionConfig[REQUESTED_TRACKS_SESSION_KEY]
         : [];
       const trackMap = new Map<string, JSONValue>();
       for (const t of DEFAULT_REALTIME_AUDIO_TRACKS) {
@@ -1931,7 +1932,7 @@ export class RealtimeSessionRuntime {
       for (const t of channelTracks) {
         trackMap.set(`${t.Direction}:${t.Modality}`, trackDescriptorToJSON(t));
       }
-      sessionConfig['requestedTracks'] = Array.from(trackMap.values());
+      sessionConfig[REQUESTED_TRACKS_SESSION_KEY] = Array.from(trackMap.values());
     }
     return {
       Provider: session.Provider,

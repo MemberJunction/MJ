@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseRealtimeClient } from '@memberjunction/ai-realtime-client';
+import { BaseRealtimeClient, REQUESTED_TRACKS_SESSION_KEY } from '@memberjunction/ai-realtime-client';
 import type { IMetadataProvider } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
@@ -395,5 +397,29 @@ describe('channel registry on a connect-only provider (#4887)', () => {
             spy.mockRestore();
             warn.mockRestore();
         }
+    });
+});
+
+describe('BuildClientConfig: the requested-tracks key has one home', () => {
+    // The drivers read the hint (Gemini) and strip it before the wire (OpenAI-protocol) through
+    // REQUESTED_TRACKS_SESSION_KEY; the writer must use the same constant, or a rename on either
+    // side silently breaks track negotiation and re-leaks the hint into OpenAI's session.update.
+    const session = (SessionConfigJson: string): StartRealtimeClientSessionResult =>
+        ({ AgentSessionId: 's', ConversationId: null, Provider: 'gemini', Model: 'm', EphemeralToken: 't', ExpiresAt: 'x', SessionConfigJson, ModelName: null }) as StartRealtimeClientSessionResult;
+
+    it('writes channel-sourced tracks under REQUESTED_TRACKS_SESSION_KEY, keeping the mint-supplied ones', () => {
+        const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
+        const video = { Direction: 'Inbound', Modality: 'Video' } as const;
+        runtime['_activeChannels$'].next([{ GetSourcedTracks: () => [video] } as never]);
+        const minted = { Direction: 'Outbound', Modality: 'Video' };
+        const config = runtime.BuildClientConfig(session(JSON.stringify({ [REQUESTED_TRACKS_SESSION_KEY]: [minted] })));
+        const tracks = config.SessionConfig?.[REQUESTED_TRACKS_SESSION_KEY] as Array<{ Direction: string; Modality: string }>;
+        expect(tracks).toEqual(expect.arrayContaining([expect.objectContaining(video), expect.objectContaining(minted)]));
+    });
+
+    it('never spells the key as a string literal in the runtime source', () => {
+        const source = readFileSync(fileURLToPath(new URL('../session/RealtimeSessionRuntime.ts', import.meta.url)), 'utf8');
+        expect(source.length).toBeGreaterThan(0);
+        expect(source).not.toMatch(/['"`]requestedTracks['"`]/);
     });
 });
