@@ -20,7 +20,6 @@ import {
     CATALOG_FIELD_COLUMNS,
     CATALOG_OBJECT_COLUMNS,
     ENTITY_COMPANY_INTEGRATION_OBJECTS,
-    ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS,
     IntegrationEngineBase,
 } from '@memberjunction/integration-engine-base';
 

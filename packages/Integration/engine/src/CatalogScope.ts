@@ -59,8 +59,8 @@ const storage = new AsyncLocalStorage<CatalogScopeState>();
 //
 // Three access patterns were being served by one resident copy, which is why it had to be whole:
 //   objects — every consumer walks them; 888 rows, one row each. Cheap. Load them all.
-//   edges   — ONLY the dependency sort needs every field, and only 3 columns of each. Load them as
-//             plain rows, never entities.
+//   edges   — ONLY the dependency sort needs every field that points at another object, and only
+//             3 columns of each. Load those as plain rows, never entities.
 //   fields  — everything else wants ONE object's fields. A row-bounded cache, warmed per object.
 //
 // Measured shape that sets the bound: 888 objects, avg 117 fields, MAX 2,539. A cache counted in
@@ -147,7 +147,10 @@ async function readEdges(objectIDs: readonly string[], user: UserInfo): Promise<
         const list = objectIDs.slice(i, i + EDGE_READ_CHUNK).map(id => `'${lit(id)}'`).join(',');
         const rows = await readRows<CatalogDependencyEdge>({
             EntityName: ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS,
-            ExtraFilter: `CompanyIntegrationObjectID IN (${list})`,
+            // Only fields that point at another object. Every reader of the edge set skips the
+            // rest, and on a wide catalog the rest is nearly all of it — kept for the life of the
+            // process, per connection.
+            ExtraFilter: `CompanyIntegrationObjectID IN (${list}) AND RelatedCompanyIntegrationObjectID IS NOT NULL`,
             Fields: [...CATALOG_EDGE_COLUMNS],
             ResultType: 'simple',
         }, user);
@@ -202,8 +205,9 @@ async function loadCatalogFor(companyIntegrationID: string, contextUser?: UserIn
 /**
  * Load a connection's objects and dependency edges into the scope cache, if they are not already.
  *
- * Every async entry to a catalog scope does this — `WithCatalogScope` at entry, the sync loop at
- * the head of each run — because the getters underneath are synchronous and cannot query.
+ * Every async entry to a catalog scope does this — `WithCatalogScope` at entry, the discovery
+ * pipeline at the start of its run — because the getters underneath are synchronous and cannot
+ * query. The sync loop re-reads instead, with {@link RefreshCatalogScope}.
  */
 export async function LoadCatalogScope(companyIntegrationID: string, contextUser?: UserInfo): Promise<void> {
     if (!companyIntegrationID) return;

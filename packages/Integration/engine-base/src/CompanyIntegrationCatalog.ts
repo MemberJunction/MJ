@@ -64,10 +64,10 @@ export const CATALOG_FIELD_COLUMNS = [
 /**
  * The three columns of a per-connection field row that the dependency walk reads.
  *
- * The walk is the one consumer that needs EVERY field of a connection, and it needs nothing else of
- * them, so these are loaded for the whole connection as plain rows — never entities — while full
- * field rows are loaded one object at a time. Conflating the two is what forced the whole catalog to
- * be resident.
+ * The walk is the one consumer that needs every field of a connection that points at another
+ * object, and it needs nothing else of them, so those are loaded for the whole connection as plain
+ * rows — never entities — while full field rows are loaded one object at a time. Conflating the two
+ * is what forced the whole catalog to be resident.
  */
 export const CATALOG_EDGE_COLUMNS = ['ID', 'CompanyIntegrationObjectID', 'RelatedCompanyIntegrationObjectID'] as const;
 
@@ -95,8 +95,9 @@ export interface CatalogScopeData {
      */
     FieldsByObjectID: ReadonlyMap<string, BaseEntity[]>;
     /**
-     * The connection's dependency edges, one per field. Required whenever a dependency order is
-     * asked for: a missing edge set does not fail, it silently reorders a sync, children first.
+     * The connection's dependency edges: one per field that points at another object. Required
+     * whenever a dependency order is asked for: a missing edge set does not fail, it silently
+     * reorders a sync, children first.
      */
     Edges?: readonly CatalogDependencyEdge[];
     /**

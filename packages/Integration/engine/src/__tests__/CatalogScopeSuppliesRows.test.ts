@@ -142,8 +142,11 @@ describe('a scope loads its connection\'s objects and edges at entry', () => {
         expect(edgeReads()).toHaveLength(1);
         expect(edgeReads()[0].Fields).toEqual([...CATALOG_EDGE_COLUMNS]);
         // The ids come from the rows' VALUES. A loaded row has no `ID` property (no generated
-        // subclass), so reading `row.ID` would put 'undefined' into this filter.
-        expect(edgeReads()[0].ExtraFilter).toBe(`CompanyIntegrationObjectID IN ('${OBJ_A1}','${OBJ_A2}')`);
+        // subclass), so reading `row.ID` would put 'undefined' into this filter. And only fields
+        // that point somewhere: a field with no related object is no edge, and on a wide catalog
+        // nearly every field is one of those.
+        expect(edgeReads()[0].ExtraFilter).toBe(
+            `CompanyIntegrationObjectID IN ('${OBJ_A1}','${OBJ_A2}') AND RelatedCompanyIntegrationObjectID IS NOT NULL`);
         expect(edgeReads()[0].BypassCache).toBe(true);
 
         // Memoised: a second entry for the same connection reads nothing.
