@@ -8,6 +8,14 @@ import type { FormContributionSpec } from '@memberjunction/interactive-component
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { FORM_PLACEMENT_PREVIEW, FormPlacementPreview } from '../panel-slot/placement-preview';
 import type { EntityFormConfig } from '../types/entity-form-config';
+import { FormStateService } from '../form-state.service';
+
+/** A form state of its own for the preview, kept in memory, so the user's real form is untouched. */
+function previewFormState(): FormStateService {
+    const state = new FormStateService();
+    state.Persist = false;
+    return state;
+}
 
 /**
  * The entity's real form, scaled down, with the placement dialog's panel drawn on it.
@@ -17,14 +25,19 @@ import type { EntityFormConfig } from '../types/entity-form-config';
  * hides what it replaces and gives it a rail item.
  *
  * Read-only: the form is `inert` and every answer is made in the dialog's controls. The form
- * shows the rail tab the panel is on; the preview scrolls to it.
+ * shows the rail tab the panel is on; the preview scrolls to it. It has a form state of its own,
+ * held in memory, so opening that tab and its sections changes neither the user's saved form state
+ * nor the real form open behind the dialog.
  */
 @Component({
     standalone: false,
     selector: 'mj-form-placement-preview',
     templateUrl: './form-placement-preview.component.html',
     styleUrls: ['./form-placement-preview.component.css'],
-    providers: [{ provide: FORM_PLACEMENT_PREVIEW, useFactory: () => new FormPlacementPreview() }],
+    providers: [
+        { provide: FORM_PLACEMENT_PREVIEW, useFactory: () => new FormPlacementPreview() },
+        { provide: FormStateService, useFactory: previewFormState },
+    ],
 })
 export class MjFormPlacementPreviewComponent extends BaseAngularComponent implements AfterViewInit, OnDestroy {
     /**
@@ -44,7 +57,7 @@ export class MjFormPlacementPreviewComponent extends BaseAngularComponent implem
         const changed = value !== this._entityName;
         this._entityName = value;
         this.showSpec();
-        if (changed) void this.resolveRecord();
+        if (changed) this.queueResolveRecord();
     }
     get EntityName(): string { return this._entityName; }
 
@@ -55,7 +68,7 @@ export class MjFormPlacementPreviewComponent extends BaseAngularComponent implem
     @Input()
     set RecordKey(value: CompositeKey | null) {
         this._recordKey = value;
-        void this.resolveRecord();
+        this.queueResolveRecord();
     }
 
     /** The panel to draw on the form. */
@@ -106,6 +119,7 @@ export class MjFormPlacementPreviewComponent extends BaseAngularComponent implem
     private _entityName = '';
     private _recordKey: CompositeKey | null = null;
     private resolveRun = 0;
+    private resolveQueued = false;
     private _spec: FormContributionSpec | null = null;
     private _replacesRowID: string | null = null;
     private _componentSpec: ComponentSpec | null = null;
@@ -152,6 +166,19 @@ export class MjFormPlacementPreviewComponent extends BaseAngularComponent implem
 
     public OnLoadError(): void {
         this.Failed.emit();
+    }
+
+    /**
+     * Resolves the record once the current round of input changes is over, so the entity and the
+     * record key arriving together look up a sample record once.
+     */
+    private queueResolveRecord(): void {
+        if (this.resolveQueued) return;
+        this.resolveQueued = true;
+        queueMicrotask(() => {
+            this.resolveQueued = false;
+            void this.resolveRecord();
+        });
     }
 
     /** Settles which record the form shows, then lets the form draw. */

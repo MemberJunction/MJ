@@ -52,6 +52,7 @@
     "src/lib/apply/form-placement-dialog.component.ts",
     "src/lib/apply/form-placement-dialog.component.dom.test.ts",
     "src/lib/apply/form-placement-preview.component.ts",
+    "src/lib/apply/form-placement-preview.component.dom.test.ts",
     "src/lib/apply/form-slot-probe.service.dom.test.ts",
     "src/lib/panel-slot/placement-preview.ts",
     "src/lib/panel-slot/placement-preview-panel.component.ts",
