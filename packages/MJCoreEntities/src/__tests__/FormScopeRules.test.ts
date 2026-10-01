@@ -1,9 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AuthorizationInfo, AuthorizationRoleInfo, Metadata, UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import {
+    ComponentNameCollisionRefusal,
     ComponentWriteIsGuarded,
     ComponentWriteRefusal,
     ContributionScopeRank,
+    FormRowComponentRefusal,
+    GUARDED_COMPONENT_FIELDS,
     FormContributionOutranks,
     FormScopeAllowedOnEntity,
     IsSelectableFormOverride,
@@ -11,7 +14,10 @@ import {
     IsCanonicalFormScope,
     MANAGE_FORM_DEFAULTS_AUTHORIZATION,
     UserCanManageFormDefaults,
+    type ComponentNameCheck,
     type ComponentWrite,
+    type FormComponentReference,
+    type FormRowComponentCheck,
     type FormScope,
     type FormScopeOperation,
     type FormScopeWrite,
@@ -408,17 +414,18 @@ describe('IsSelectableFormOverride', () => {
     });
 });
 
+/** Rows that use a component, as the component rules read them. */
+const ownRow: FormComponentReference = { ID: 'row-own', Scope: 'User', UserID: ME };
+const othersRow: FormComponentReference = { ID: 'row-others', Scope: 'User', UserID: SOMEONE };
+const roleRow: FormComponentReference = { ID: 'row-role', Scope: 'Role', UserID: null };
+const globalRow: FormComponentReference = { ID: 'row-global', Scope: 'Global', UserID: null };
+
 /**
- * A form or panel draws the `MJ: Components` row its form or panel row points at, so changing that
- * component changes the form or panel. The rule treats such a change as a write to every form and
- * panel row that uses the component.
+ * A form or panel draws the `MJ: Components` row its form or panel row points at, and a form's
+ * spec can also load a component by name. So a change to what a component draws is checked
+ * against every row that uses it, and without the grant a component no row uses is read-only.
  */
 describe('ComponentWriteRefusal', () => {
-    const own = { Scope: 'User' as FormScope, UserID: ME };
-    const others = { Scope: 'User' as FormScope, UserID: SOMEONE };
-    const role = { Scope: 'Role' as FormScope, UserID: null };
-    const global = { Scope: 'Global' as FormScope, UserID: null };
-
     /** A change to the component's specification by `ME`, with whatever the case overrides. */
     function componentWrite(over: Partial<ComponentWrite>): ComponentWrite {
         return {
@@ -433,82 +440,86 @@ describe('ComponentWriteRefusal', () => {
 
     const componentAllowed = (w: ComponentWrite): boolean => ComponentWriteRefusal(w) === null;
 
-    it('lets the caller change a component only their own personal row uses', () => {
-        expect(componentAllowed(componentWrite({ References: [own] }))).toBe(true);
-        expect(componentAllowed(componentWrite({ References: [own, { Scope: 'User', UserID: ME.toUpperCase() }] }))).toBe(true);
+    describe('without the grant', () => {
+        it('allows a change when every row that uses the component is the caller\'s own', () => {
+            expect(componentAllowed(componentWrite({ References: [ownRow] }))).toBe(true);
+            expect(componentAllowed(componentWrite({ References: [ownRow, { Scope: 'User', UserID: ME.toUpperCase() }] }))).toBe(true);
+            expect(componentAllowed(componentWrite({ Operation: 'delete', ChangedFields: [], References: [ownRow] }))).toBe(true);
+        });
+
+        it('refuses a component no row uses, for an update and a delete', () => {
+            for (const operation of ['update', 'delete'] as const) {
+                expect(ComponentWriteRefusal(componentWrite({ Operation: operation, References: [] })))
+                    .toMatch(/No form or panel uses this one/);
+            }
+        });
+
+        it('refuses a component a Role or Global row uses, naming the grant', () => {
+            for (const shared of [roleRow, globalRow]) {
+                expect(ComponentWriteRefusal(componentWrite({ References: [ownRow, shared] }))).toMatch(/Manage Form Defaults/);
+            }
+        });
+
+        it("refuses a component another user's personal row uses, naming the ownership rule", () => {
+            expect(ComponentWriteRefusal(componentWrite({ References: [ownRow, othersRow] }))).toMatch(/belongs to someone else/);
+            expect(ComponentWriteRefusal(componentWrite({ References: [roleRow, othersRow] }))).toMatch(/belongs to someone else/);
+        });
+
+        it('reads a padded or re-cased scope the way the database does', () => {
+            expect(componentAllowed(componentWrite({ References: [{ Scope: ' user' as FormScope, UserID: ME }] }))).toBe(false);
+            expect(componentAllowed(componentWrite({ References: [{ Scope: 'Global ' as FormScope, UserID: null }] }))).toBe(false);
+        });
     });
 
-    it("refuses a component another user's personal row uses, a holder included", () => {
-        for (const holds of [false, true]) {
-            const refusal = ComponentWriteRefusal(componentWrite({ References: [others], CallerHoldsGrant: holds }));
-            expect(refusal).toMatch(/belongs to someone else/);
-        }
+    describe('with the grant', () => {
+        it('allows a component a Role or Global row uses, or no row uses', () => {
+            expect(componentAllowed(componentWrite({ References: [roleRow, globalRow, ownRow], CallerHoldsGrant: true }))).toBe(true);
+            expect(componentAllowed(componentWrite({ References: [], CallerHoldsGrant: true }))).toBe(true);
+            expect(componentAllowed(componentWrite({ Operation: 'delete', ChangedFields: [], References: [], CallerHoldsGrant: true }))).toBe(true);
+        });
+
+        it("still refuses a component another user's personal row uses", () => {
+            expect(ComponentWriteRefusal(componentWrite({ References: [globalRow, othersRow], CallerHoldsGrant: true })))
+                .toMatch(/belongs to someone else/);
+            expect(componentAllowed(componentWrite({ References: [{ Scope: ' user' as FormScope, UserID: SOMEONE }], CallerHoldsGrant: true }))).toBe(false);
+        });
     });
 
-    it('refuses a component a Role or Global row uses without the grant, and allows it with the grant', () => {
-        for (const shared of [role, global]) {
-            expect(ComponentWriteRefusal(componentWrite({ References: [shared] }))).toMatch(/Manage Form Defaults/);
-            expect(componentAllowed(componentWrite({ References: [shared], CallerHoldsGrant: true }))).toBe(true);
-        }
-    });
-
-    it('needs every row that uses the component to pass', () => {
-        expect(componentAllowed(componentWrite({ References: [own, role] }))).toBe(false);
-        expect(componentAllowed(componentWrite({ References: [own, role], CallerHoldsGrant: true }))).toBe(true);
-        expect(componentAllowed(componentWrite({ References: [own, role, others], CallerHoldsGrant: true }))).toBe(false);
-    });
-
-    it('names the ownership reason when the grant would not help either', () => {
-        expect(ComponentWriteRefusal(componentWrite({ References: [role, others] }))).toMatch(/belongs to someone else/);
-    });
-
-    it('says the component is used by a form or panel', () => {
-        expect(ComponentWriteRefusal(componentWrite({ References: [global] }))).toMatch(/used by a form or panel/);
-    });
-
-    it('allows a component no form or panel row uses', () => {
-        for (const operation of ['update', 'delete'] as const) {
-            expect(componentAllowed(componentWrite({ Operation: operation, References: [] }))).toBe(true);
-        }
+    it('says the component is used by a form or panel when a row refuses it', () => {
+        expect(ComponentWriteRefusal(componentWrite({ References: [globalRow] }))).toMatch(/used by a form or panel/);
     });
 
     it('allows any write when there is no caller', () => {
         for (const operation of ['update', 'delete'] as const) {
-            expect(componentAllowed(componentWrite({ Operation: operation, References: [others, global], CallerID: null }))).toBe(true);
+            expect(componentAllowed(componentWrite({ Operation: operation, References: [othersRow, globalRow], CallerID: null }))).toBe(true);
+            expect(componentAllowed(componentWrite({ Operation: operation, References: [], CallerID: null }))).toBe(true);
         }
     });
 
-    it('allows a change to a column that does not change what the form or panel draws', () => {
+    it('allows a change to a column that is not guarded', () => {
         for (const field of ['Description', 'Title', 'Version', 'FunctionalRequirements']) {
-            expect(componentAllowed(componentWrite({ ChangedFields: [field], References: [others, global] }))).toBe(true);
+            expect(componentAllowed(componentWrite({ ChangedFields: [field], References: [othersRow, globalRow] }))).toBe(true);
+            expect(componentAllowed(componentWrite({ ChangedFields: [field], References: [] }))).toBe(true);
         }
-        expect(componentAllowed(componentWrite({ ChangedFields: [], References: [global] }))).toBe(true);
+        expect(componentAllowed(componentWrite({ ChangedFields: [], References: [] }))).toBe(true);
     });
 
-    it('guards a change to the specification, status, name or type, however the column name is cased', () => {
-        for (const field of ['Specification', 'Status', 'Name', 'Type', 'status', ' Type ']) {
-            expect(componentAllowed(componentWrite({ ChangedFields: [field], References: [global] }))).toBe(false);
+    it('guards the specification, status, name, namespace and type, however the column name is cased', () => {
+        expect([...GUARDED_COMPONENT_FIELDS]).toEqual(['Specification', 'Status', 'Name', 'Type', 'Namespace']);
+        for (const field of [...GUARDED_COMPONENT_FIELDS, 'status', ' Namespace ']) {
+            expect(componentAllowed(componentWrite({ ChangedFields: [field], References: [globalRow] }))).toBe(false);
         }
-    });
-
-    it('guards a delete whatever columns changed', () => {
-        expect(componentAllowed(componentWrite({ Operation: 'delete', ChangedFields: [], References: [role] }))).toBe(false);
-        expect(componentAllowed(componentWrite({ Operation: 'delete', ChangedFields: [], References: [own] }))).toBe(true);
     });
 
     it('never guards a create', () => {
-        expect(componentAllowed(componentWrite({ Operation: 'create', References: [others, global] }))).toBe(true);
-    });
-
-    it('reads a padded or re-cased scope the way the database does', () => {
-        expect(componentAllowed(componentWrite({ References: [{ Scope: ' user' as FormScope, UserID: SOMEONE }], CallerHoldsGrant: true }))).toBe(false);
-        expect(componentAllowed(componentWrite({ References: [{ Scope: 'Global ' as FormScope, UserID: null }] }))).toBe(false);
+        expect(componentAllowed(componentWrite({ Operation: 'create', References: [] }))).toBe(true);
+        expect(componentAllowed(componentWrite({ Operation: 'create', References: [othersRow, globalRow] }))).toBe(true);
     });
 });
 
 describe('ComponentWriteIsGuarded', () => {
     it('is true for a guarded change or a delete by a caller', () => {
-        expect(ComponentWriteIsGuarded({ Operation: 'update', ChangedFields: ['Status'], CallerID: ME })).toBe(true);
+        expect(ComponentWriteIsGuarded({ Operation: 'update', ChangedFields: ['Namespace'], CallerID: ME })).toBe(true);
         expect(ComponentWriteIsGuarded({ Operation: 'delete', ChangedFields: [], CallerID: ME })).toBe(true);
     });
 
@@ -516,5 +527,81 @@ describe('ComponentWriteIsGuarded', () => {
         expect(ComponentWriteIsGuarded({ Operation: 'create', ChangedFields: ['Specification'], CallerID: ME })).toBe(false);
         expect(ComponentWriteIsGuarded({ Operation: 'update', ChangedFields: ['Description'], CallerID: ME })).toBe(false);
         expect(ComponentWriteIsGuarded({ Operation: 'delete', ChangedFields: [], CallerID: null })).toBe(false);
+    });
+});
+
+/**
+ * Pointing a form or panel row at a component makes the component draw for that row. Without a
+ * check, a personal row aimed at someone else's component would make it the caller's to change,
+ * or lock it against everyone else.
+ */
+describe('FormRowComponentRefusal', () => {
+    function rowCheck(over: Partial<FormRowComponentCheck>): FormRowComponentCheck {
+        return { RowID: null, References: [], CallerID: ME, CallerHoldsGrant: false, ...over };
+    }
+
+    it('lets the caller point a row at a component no row uses, or only their own rows use', () => {
+        expect(FormRowComponentRefusal(rowCheck({ References: [] }))).toBeNull();
+        expect(FormRowComponentRefusal(rowCheck({ References: [ownRow, { Scope: 'User', UserID: ME.toUpperCase() }] }))).toBeNull();
+    });
+
+    it("refuses a component another user's personal row uses, for everyone, a holder included", () => {
+        for (const holds of [false, true]) {
+            expect(FormRowComponentRefusal(rowCheck({ References: [othersRow], CallerHoldsGrant: holds })))
+                .toMatch(/belongs to someone else/);
+        }
+    });
+
+    it('refuses a component a Role or Global row uses without the grant, and allows it with the grant', () => {
+        for (const shared of [roleRow, globalRow]) {
+            expect(FormRowComponentRefusal(rowCheck({ References: [shared] }))).toMatch(/Manage Form Defaults/);
+            expect(FormRowComponentRefusal(rowCheck({ References: [shared, ownRow], CallerHoldsGrant: true }))).toBeNull();
+        }
+    });
+
+    it('says another form or panel already uses the component', () => {
+        expect(FormRowComponentRefusal(rowCheck({ References: [globalRow] }))).toMatch(/already uses this component/);
+    });
+
+    it('leaves the row being written out of its own check', () => {
+        const self = { ID: 'ROW-1', Scope: 'Global' as FormScope, UserID: null };
+        expect(FormRowComponentRefusal(rowCheck({ RowID: 'row-1', References: [self] }))).toBeNull();
+        expect(FormRowComponentRefusal(rowCheck({ RowID: 'row-1', References: [self, roleRow] }))).not.toBeNull();
+    });
+
+    it('allows any row when there is no caller', () => {
+        expect(FormRowComponentRefusal(rowCheck({ References: [othersRow, globalRow], CallerID: null }))).toBeNull();
+    });
+});
+
+/** A form's spec can load a component by name, so a second component with the same name could stand in for the first. */
+describe('ComponentNameCollisionRefusal', () => {
+    function nameCheck(over: Partial<ComponentNameCheck>): ComponentNameCheck {
+        return { NamesComponent: true, Collisions: [], CallerID: ME, CallerHoldsGrant: false, ...over };
+    }
+
+    it('allows a name no other component has', () => {
+        expect(ComponentNameCollisionRefusal(nameCheck({ Collisions: [] }))).toBeNull();
+    });
+
+    it('refuses a name another component has without the grant: one no row uses, a shared one, or another user\'s', () => {
+        for (const references of [[], [roleRow], [globalRow], [othersRow], [ownRow, globalRow]]) {
+            expect(ComponentNameCollisionRefusal(nameCheck({ Collisions: [{ References: references }] })))
+                .toMatch(/already has this name/);
+        }
+    });
+
+    it('allows a name shared only with components that are the caller\'s own', () => {
+        expect(ComponentNameCollisionRefusal(nameCheck({ Collisions: [{ References: [ownRow] }, { References: [ownRow, ownRow] }] }))).toBeNull();
+        expect(ComponentNameCollisionRefusal(nameCheck({ Collisions: [{ References: [ownRow] }, { References: [] }] }))).not.toBeNull();
+    });
+
+    it('does not restrict a holder', () => {
+        expect(ComponentNameCollisionRefusal(nameCheck({ Collisions: [{ References: [] }, { References: [othersRow] }], CallerHoldsGrant: true }))).toBeNull();
+    });
+
+    it('checks only a create or a change of name or namespace, and only for a caller', () => {
+        expect(ComponentNameCollisionRefusal(nameCheck({ NamesComponent: false, Collisions: [{ References: [] }] }))).toBeNull();
+        expect(ComponentNameCollisionRefusal(nameCheck({ CallerID: null, Collisions: [{ References: [] }] }))).toBeNull();
     });
 });
