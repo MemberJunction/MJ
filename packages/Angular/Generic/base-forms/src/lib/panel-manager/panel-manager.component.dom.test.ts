@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import type { EntityInfo, IMetadataProvider } from '@memberjunction/core';
 import { renderComponentFixture, query } from '@memberjunction/ng-test-utils';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { MjPanelManagerComponent } from './panel-manager.component';
 import { FormPanelAdminService } from './form-panel-admin.service';
 import { FormSlotProbeService } from '../apply/form-slot-probe.service';
@@ -102,7 +103,7 @@ class PlacementDialogStub {
 
 function render(inputs: Record<string, unknown> = {}) {
     const f = renderComponentFixture(MjPanelManagerComponent, {
-        imports: [PlacementDialogStub],
+        imports: [PlacementDialogStub, MJButtonDirective],
         declarations: [MjPanelManagerComponent],
         providers: [{ provide: FormPanelAdminService, useValue: admin }, { provide: FormSlotProbeService, useValue: probe }],
         inputs: {
@@ -117,7 +118,7 @@ function render(inputs: Record<string, unknown> = {}) {
 const text = (f: ReturnType<typeof render>) => (f.nativeElement as HTMLElement).textContent ?? '';
 
 const buttons = (f: ReturnType<typeof render>) =>
-    Array.from((f.nativeElement as HTMLElement).querySelectorAll('.mj-pm-btn'))
+    Array.from((f.nativeElement as HTMLElement).querySelectorAll('.mj-pm-action'))
         .map((b) => b.textContent?.trim());
 
 describe('MjPanelManagerComponent (DOM)', () => {
@@ -642,5 +643,104 @@ describe('MjPanelManagerComponent (DOM) — publishing something that is not on'
         f.componentInstance.Publishing!.RoleID = 'role-sales';
         expect(f.componentInstance.AudienceConsequence).toBe(
             `This panel is off. It will go live for everyone in Sales, on every ${ENTITY.Name} record.`);
+    });
+});
+
+/**
+ * The drawer is a modal over the form. Escape closes it one layer at a time, and Tab cannot
+ * leave it for the form behind.
+ */
+describe('MjPanelManagerComponent (DOM) — keyboard', () => {
+    const key = (f: ReturnType<typeof render>, init: KeyboardEventInit): KeyboardEvent => {
+        const target = (document.activeElement && (f.nativeElement as HTMLElement).contains(document.activeElement)
+            ? document.activeElement
+            : (f.nativeElement as HTMLElement).querySelector('.mj-pm-drawer')) as HTMLElement;
+        const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
+        target.dispatchEvent(event);
+        return event;
+    };
+    const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const drawerStops = (f: ReturnType<typeof render>) => Array.from(
+        (f.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('.mj-pm-drawer button:not([disabled]), .mj-pm-drawer input:not([disabled])'));
+
+    it('closes the drawer on Escape', () => {
+        const f = render();
+        let closed = 0;
+        f.componentInstance.Closed.subscribe(() => closed++);
+        key(f, { key: 'Escape' });
+        expect(closed).toBe(1);
+    });
+
+    it('closes only the placement dialog when Escape is pressed inside it', () => {
+        const f = render();
+        let closed = 0;
+        f.componentInstance.Closed.subscribe(() => closed++);
+        f.componentInstance.OnEdit(f.componentInstance.Items[0]);
+        f.detectChanges();
+        ((f.nativeElement as HTMLElement).querySelector('.mj-pm-edit') as HTMLElement)
+            .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        expect(f.componentInstance.Editing).toBeNull();
+        expect(closed).toBe(0);
+    });
+
+    it('closes only the audience chooser when it is open', () => {
+        admin.CanPublish.mockReturnValue(true);
+        const f = render();
+        let closed = 0;
+        f.componentInstance.Closed.subscribe(() => closed++);
+        f.componentInstance.OnPublishPanel(f.componentInstance.Items[0]);
+        f.detectChanges();
+        key(f, { key: 'Escape' });
+        expect(f.componentInstance.Publishing).toBeNull();
+        expect(closed).toBe(0);
+    });
+
+    it('moves focus into the drawer when it opens', async () => {
+        const f = render();
+        await tick();
+        expect(document.activeElement).toBe((f.nativeElement as HTMLElement).querySelector('.mj-pm-close'));
+    });
+
+    it('wraps Tab from the last stop to the first, and Shift+Tab back', async () => {
+        const f = render();
+        await tick();
+        const stops = drawerStops(f);
+        expect(stops.length).toBeGreaterThan(1);
+        stops[stops.length - 1].focus();
+        const forward = key(f, { key: 'Tab' });
+        expect(forward.defaultPrevented).toBe(true);
+        expect(document.activeElement).toBe(stops[0]);
+        const back = key(f, { key: 'Tab', shiftKey: true });
+        expect(back.defaultPrevented).toBe(true);
+        expect(document.activeElement).toBe(stops[stops.length - 1]);
+    });
+
+    it('leaves Tab alone between two stops inside the drawer', async () => {
+        const f = render();
+        await tick();
+        drawerStops(f)[0].focus();
+        expect(key(f, { key: 'Tab' }).defaultPrevented).toBe(false);
+    });
+
+    it('gives focus back to what opened the drawer when it closes', async () => {
+        const opener = document.createElement('button');
+        document.body.appendChild(opener);
+        opener.focus();
+        const f = render();
+        await tick();
+        expect((f.nativeElement as HTMLElement).contains(document.activeElement)).toBe(true);
+        f.componentInstance.OnClose();
+        expect(document.activeElement).toBe(opener);
+        opener.remove();
+    });
+
+    it('turns Remove red while it waits for the second press', async () => {
+        const f = render();
+        const remove = () => Array.from((f.nativeElement as HTMLElement).querySelectorAll('.mj-pm-action'))
+            .find((b) => b.textContent?.includes('emove')) as HTMLElement;
+        expect(remove().classList.contains('mj-btn--danger')).toBe(false);
+        await f.componentInstance.OnRemove(f.componentInstance.Items[0]);
+        f.detectChanges();
+        expect(remove().classList.contains('mj-btn--danger')).toBe(true);
     });
 });

@@ -1,8 +1,9 @@
 import {
-  Component, Input, Output, EventEmitter,
+  Component, Input, Output, EventEmitter, ElementRef,
   ChangeDetectionStrategy, ChangeDetectorRef, inject,
   OnChanges, SimpleChanges,
 } from '@angular/core';
+import type { MjButtonVariant } from '@memberjunction/ng-ui-components';
 import { Metadata, type CompositeKey, type EntityInfo, type IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { FormLifecycleStatus, FormScope } from '@memberjunction/core-entities';
@@ -56,6 +57,12 @@ export class MjPanelManagerComponent implements OnChanges {
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly admin = inject(FormPanelAdminService);
   private readonly probe = inject(FormSlotProbeService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  /** What held focus before the drawer opened, and gets it back when the drawer closes. */
+  private drawerOpener: HTMLElement | null = null;
+  /** What held focus before the placement dialog or the audience chooser opened over the list. */
+  private layerOpener: HTMLElement | null = null;
 
   @Input() Visible = false;
 
@@ -140,8 +147,13 @@ export class MjPanelManagerComponent implements OnChanges {
   public Error = '';
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['Visible'] && this.Visible) this.Refresh();
-    else if (changes['Entity'] || changes['Compiled'] || changes['StockGrids'] || changes['FullCustomForm']
+    if (changes['Visible'] && this.Visible) {
+      this.drawerOpener = this.focusedElement();
+      this.Refresh();
+      this.focusLater('.mj-pm-close');
+    } else if (changes['Visible'] && !changes['Visible'].firstChange) {
+      this.restoreFocus('drawer');
+    } else if (changes['Entity'] || changes['Compiled'] || changes['StockGrids'] || changes['FullCustomForm']
       || changes['Variants'] || changes['CurrentFormID']) {
       this.Refresh();
     }
@@ -252,7 +264,9 @@ export class MjPanelManagerComponent implements OnChanges {
     this.EditVisibleTo = DescribeVisibleTo(row.Scope, row.Role);
     this.EditStatus = lifecycleStatus(row.Status);
     this.Error = '';
+    this.layerOpener = this.focusedElement();
     this.cdr.markForCheck();
+    this.focusLater('.mj-pm-edit');
   }
 
   /**
@@ -306,11 +320,13 @@ export class MjPanelManagerComponent implements OnChanges {
   }
 
   public CloseEdit(): void {
+    const wasOpen = this.Editing !== null;
     this.Editing = null;
     this.EditContext = null;
     this.EditProposal = null;
     this.EditComponentID = null;
     this.cdr.markForCheck();
+    if (wasOpen) this.restoreFocus('layer');
   }
 
   public async OnToggle(item: FormPanelInventoryItem): Promise<void> {
@@ -332,6 +348,11 @@ export class MjPanelManagerComponent implements OnChanges {
     }
     this.Confirming = null;
     await this.run(item.ID, () => this.admin.Remove(item.ID, this.Provider));
+  }
+
+  /** Quiet until the first press; solid red while it waits for the second. */
+  public RemoveVariant(item: FormPanelInventoryItem): MjButtonVariant {
+    return UUIDsEqual(this.Confirming, item.ID) ? 'danger' : 'flat';
   }
 
   public RemoveLabel(item: FormPanelInventoryItem): string {
@@ -384,7 +405,9 @@ export class MjPanelManagerComponent implements OnChanges {
   private openAudience(target: NonNullable<MjPanelManagerComponent['Publishing']>): void {
     this.Publishing = target;
     this.Error = '';
+    this.layerOpener = this.focusedElement();
     this.cdr.markForCheck();
+    this.focusLater('.mj-pm-audience');
   }
 
   /** The roles a holder may publish to. */
@@ -428,6 +451,7 @@ export class MjPanelManagerComponent implements OnChanges {
     const target = this.Publishing;
     if (!target || !this.CanConfirmAudience) return;
     this.Publishing = null;
+    this.restoreFocus('layer');
     const audience: FormAudience = { Scope: target.Scope, RoleID: target.RoleID };
     await this.run(target.ID, () => target.Kind === 'form'
       ? this.admin.PublishOverride(target.ID, audience, this.Provider)
@@ -437,6 +461,7 @@ export class MjPanelManagerComponent implements OnChanges {
   public CancelAudience(): void {
     this.Publishing = null;
     this.cdr.markForCheck();
+    this.restoreFocus('layer');
   }
 
   /** The audience label for a scope, as the chooser's options read it. */
@@ -449,11 +474,87 @@ export class MjPanelManagerComponent implements OnChanges {
     this.Publishing = null;
     this.Error = '';
     this.CloseEdit();
+    this.layerOpener = null;
+    this.restoreFocus('drawer');
     this.Closed.emit();
   }
 
   public OnOverlayClick(event: MouseEvent): void {
     if (event.target === event.currentTarget) this.OnClose();
+  }
+
+  /**
+   * Keys pressed inside the drawer. Escape closes the top layer: the placement dialog, then the
+   * audience chooser, then the drawer. Tab and Shift+Tab wrap at the ends of that layer, so focus
+   * stays in it. Keys pressed in an overlay that renders outside the drawer, such as the icon
+   * picker's grid, do not reach here.
+   */
+  public OnKeydown(event: KeyboardEvent): void {
+    if (event.defaultPrevented) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      if (this.Editing) this.CloseEdit();
+      else if (this.Publishing) this.CancelAudience();
+      else this.OnClose();
+      return;
+    }
+    if (event.key === 'Tab' && !event.altKey && !event.ctrlKey && !event.metaKey) this.keepFocusInside(event);
+  }
+
+  /** Wraps Tab at the first and last stop of the top layer, and brings focus back into it. */
+  private keepFocusInside(event: KeyboardEvent): void {
+    const layer = this.topLayer();
+    if (!layer) return;
+    const stops = Array.from(layer.querySelectorAll<HTMLElement>(TAB_STOPS));
+    const active = this.focusedElement();
+    if (stops.length === 0) {
+      event.preventDefault();
+      layer.focus();
+      return;
+    }
+    const first = stops[0];
+    const last = stops[stops.length - 1];
+    if (!active || !layer.contains(active)) {
+      event.preventDefault();
+      (event.shiftKey ? last : first).focus();
+    } else if (event.shiftKey && (active === first || active === layer)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  /** The layer that holds focus: the placement dialog, else the audience chooser, else the drawer. */
+  private topLayer(): HTMLElement | null {
+    const root = this.host.nativeElement;
+    return root.querySelector<HTMLElement>('.mj-pm-edit')
+      ?? root.querySelector<HTMLElement>('.mj-pm-audience')
+      ?? root.querySelector<HTMLElement>('.mj-pm-drawer');
+  }
+
+  /** Moves focus to the first stop inside `selector` once the view has drawn it. */
+  private focusLater(selector: string): void {
+    setTimeout(() => {
+      const target = this.host.nativeElement.querySelector<HTMLElement>(selector);
+      if (!target) return;
+      const stop = target.matches(TAB_STOPS) ? target : target.querySelector<HTMLElement>(TAB_STOPS);
+      (stop ?? target).focus();
+    }, 0);
+  }
+
+  /** Gives focus back to what held it before the drawer, or one of its layers, opened. */
+  private restoreFocus(which: 'drawer' | 'layer'): void {
+    const opener = which === 'drawer' ? this.drawerOpener : this.layerOpener;
+    if (which === 'drawer') this.drawerOpener = null;
+    else this.layerOpener = null;
+    if (opener?.isConnected) opener.focus();
+  }
+
+  private focusedElement(): HTMLElement | null {
+    const active = this.host.nativeElement.ownerDocument?.activeElement;
+    return active instanceof HTMLElement ? active : null;
   }
 
   private async run(id: string, act: () => Promise<{ Success: boolean; Message?: string }>): Promise<void> {
@@ -483,6 +584,10 @@ export class MjPanelManagerComponent implements OnChanges {
     this.Changed.emit();
   }
 }
+
+/** Elements Tab stops on inside the drawer. */
+const TAB_STOPS = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), '
+  + 'textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /** A row's status as a lifecycle status. Anything unknown reads as off. */
 function lifecycleStatus(status: string): FormLifecycleStatus {

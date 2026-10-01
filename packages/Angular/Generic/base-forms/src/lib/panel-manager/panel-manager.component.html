@@ -1,13 +1,14 @@
 @if (Visible) {
-  <div class="mj-pm-overlay" (click)="OnOverlayClick($event)">
-    <div class="mj-pm-drawer" (click)="$event.stopPropagation()" role="dialog" aria-label="Manage this form">
+  <div class="mj-pm-overlay" (click)="OnOverlayClick($event)" (keydown)="OnKeydown($event)">
+    <div class="mj-pm-drawer" (click)="$event.stopPropagation()" role="dialog" aria-modal="true"
+         aria-label="Manage this form" tabindex="-1">
 
       <div class="mj-pm-header">
         <div class="mj-pm-heading">
           <div class="mj-pm-eyebrow">Manage this form</div>
           <h3 class="mj-pm-title">{{ EntityName }}</h3>
         </div>
-        <button type="button" class="mj-pm-close" (click)="OnClose()" aria-label="Close">
+        <button type="button" mjButton Variant="icon" class="mj-pm-close" (click)="OnClose()" aria-label="Close">
           <i class="fa-solid fa-xmark" aria-hidden="true"></i>
         </button>
       </div>
@@ -45,7 +46,7 @@
                     </span>
                   </label>
                   @if (form.CanPublish || form.CanChangeAudience) {
-                    <button type="button" class="mj-pm-btn"
+                    <button type="button" mjButton Variant="flat" Size="sm" class="mj-pm-action"
                             [disabled]="Busy === form.ID"
                             (click)="OnPublishForm(form)">{{ form.CanPublish ? 'Publish…' : 'Audience…' }}</button>
                   }
@@ -97,30 +98,31 @@
                        || item.CanHide || item.CanShow || item.CanPublish || item.CanChangeAudience) {
                     <div class="mj-pm-row-actions">
                       @if (item.CanShow) {
-                        <button type="button" class="mj-pm-btn mj-pm-btn--primary"
+                        <button type="button" mjButton Variant="outline" Size="sm" class="mj-pm-action"
                                 (click)="OnShow(item)">Show again</button>
                       }
                       @if (item.CanEdit) {
-                        <button type="button" class="mj-pm-btn mj-pm-btn--primary"
+                        <button type="button" mjButton Variant="outline" Size="sm" class="mj-pm-action"
                                 [disabled]="Busy === item.ID"
                                 (click)="OnEdit(item)">Change where it goes</button>
                       }
                       @if (item.CanTurnOn || item.CanTurnOff) {
-                        <button type="button" class="mj-pm-btn"
+                        <button type="button" mjButton Variant="flat" Size="sm" class="mj-pm-action"
                                 [disabled]="Busy === item.ID"
                                 (click)="OnToggle(item)">{{ ToggleLabel(item) }}</button>
                       }
                       @if (item.CanPublish || item.CanChangeAudience) {
-                        <button type="button" class="mj-pm-btn"
+                        <button type="button" mjButton Variant="flat" Size="sm" class="mj-pm-action"
                                 [disabled]="Busy === item.ID"
                                 (click)="OnPublishPanel(item)">{{ item.CanPublish ? 'Publish…' : 'Audience…' }}</button>
                       }
                       @if (item.CanHide) {
-                        <button type="button" class="mj-pm-btn"
+                        <button type="button" mjButton Variant="flat" Size="sm" class="mj-pm-action"
                                 (click)="OnHide(item)">Hide for me</button>
                       }
                       @if (item.CanRemove) {
-                        <button type="button" class="mj-pm-btn mj-pm-btn--danger"
+                        <button type="button" mjButton Size="sm" class="mj-pm-action"
+                                [Variant]="RemoveVariant(item)"
                                 [class.is-confirming]="Confirming === item.ID"
                                 [disabled]="Busy === item.ID"
                                 (click)="OnRemove(item)">{{ RemoveLabel(item) }}</button>
@@ -164,10 +166,10 @@
           }
           <p class="mj-pm-audience-consequence">{{ AudienceConsequence }}</p>
           <div class="mj-pm-audience-actions">
-            <button type="button" class="mj-pm-btn mj-pm-btn--solid"
+            <button type="button" mjButton Variant="primary" Size="sm"
                     [disabled]="!CanConfirmAudience"
                     (click)="ConfirmAudience()">Save audience</button>
-            <button type="button" class="mj-pm-btn" (click)="CancelAudience()">Cancel</button>
+            <button type="button" mjButton Variant="secondary" Size="sm" (click)="CancelAudience()">Cancel</button>
           </div>
         </div>
       }

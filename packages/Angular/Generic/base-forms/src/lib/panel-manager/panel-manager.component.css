@@ -58,23 +58,7 @@
   white-space: nowrap;
 }
 
-.mj-pm-close {
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  border: 0;
-  border-radius: var(--mj-radius-sm);
-  background: transparent;
-  color: var(--mj-text-secondary);
-  cursor: pointer;
-}
-
-.mj-pm-close:hover { background: var(--mj-bg-surface-hover); color: var(--mj-text-primary); }
-
-.mj-pm-close:focus-visible {
-  outline: 2px solid var(--mj-brand-primary);
-  outline-offset: 1px;
-}
+.mj-pm-close { flex-shrink: 0; }
 
 .mj-pm-banner,
 .mj-pm-error {
@@ -254,60 +238,9 @@
   gap: var(--mj-space-1);
 }
 
-/* ---- buttons: quiet by default, one emphasis per row ---- */
+/* ---- buttons: mjButton, quiet by default, one emphasis per row ---- */
 
-.mj-pm-btn {
-  flex-shrink: 0;
-  min-height: 28px;
-  padding: 0 var(--mj-space-2);
-  border: 1px solid transparent;
-  border-radius: var(--mj-radius-sm);
-  background: transparent;
-  font-family: inherit;
-  font-size: var(--mj-text-xs);
-  color: var(--mj-text-secondary);
-  cursor: pointer;
-}
-
-.mj-pm-btn:hover:not([disabled]) { background: var(--mj-bg-surface-hover); color: var(--mj-text-primary); }
-
-.mj-pm-btn:focus-visible {
-  outline: 2px solid var(--mj-brand-primary);
-  outline-offset: 1px;
-}
-
-.mj-pm-btn[disabled] { opacity: 0.5; cursor: default; }
-
-.mj-pm-btn--primary { color: var(--mj-brand-primary); font-weight: var(--mj-font-semibold); }
-.mj-pm-btn--primary:hover:not([disabled]) { color: var(--mj-brand-primary); }
-
-.mj-pm-btn--solid {
-  min-height: 32px;
-  padding: 0 var(--mj-space-3);
-  background: var(--mj-brand-primary);
-  color: var(--mj-text-inverse);
-  font-weight: var(--mj-font-semibold);
-}
-
-.mj-pm-btn--solid:hover:not([disabled]) {
-  background: color-mix(in srgb, var(--mj-brand-primary) 88%, var(--mj-text-primary));
-  color: var(--mj-text-inverse);
-}
-
-.mj-pm-audience-actions .mj-pm-btn:not(.mj-pm-btn--solid) {
-  min-height: 32px;
-  padding: 0 var(--mj-space-3);
-  border-color: var(--mj-border-subtle);
-}
-
-.mj-pm-btn--danger { color: var(--mj-status-error-text); }
-.mj-pm-btn--danger:hover:not([disabled]) { color: var(--mj-status-error-text); background: var(--mj-status-error-bg); }
-
-.mj-pm-btn--danger.is-confirming {
-  border-color: var(--mj-status-error-text);
-  background: var(--mj-status-error-bg);
-  font-weight: var(--mj-font-semibold);
-}
+.mj-pm-action { flex-shrink: 0; }
 
 /* ---- the placement dialog, over the drawer ---- */
 
