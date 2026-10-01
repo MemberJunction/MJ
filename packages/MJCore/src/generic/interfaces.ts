@@ -41,6 +41,15 @@ export class ProviderConfigDataBase<D = any> {
     }
 
     /**
+     * Storage the provider should use from the start, before it loads metadata — typically a
+     * shared (Redis) store on a server fleet. When set, the provider installs it first, so the
+     * metadata load and every engine loaded at startup read and write the shared cache instead of
+     * a process-local one that is swapped out later. Optional; database providers otherwise
+     * default to an in-memory store.
+     */
+    public LocalStorageProvider?: ILocalStorageProvider;
+
+    /**
      * Constructor for ProviderConfigDataBase
      * @param data 
      * @param MJCoreSchemaName 
@@ -580,6 +589,17 @@ export interface ILocalStorageProvider {
     readonly SharesReferences?: boolean;
 
     /**
+     * Whether other processes read and write the same storage — `true` for Redis, where every
+     * server in a fleet shares one keyspace; `false`/omitted for per-process or per-browser
+     * stores (in-memory, IndexedDB, localStorage, MMKV).
+     *
+     * `LocalCacheManager` keeps its registry (per-process eviction accounting) out of shared
+     * storage: persisting it there made every server overwrite one key with its own view and
+     * publish the whole registry to every peer on each write.
+     */
+    readonly SharedAcrossProcesses?: boolean;
+
+    /**
      * Retrieves a value from storage. The implementation is responsible for any
      * deserialization required by the underlying medium:
      *  - **IndexedDB**: returns the value directly via structured clone (Date/Map/Set/typed arrays preserved, no parse needed)
@@ -635,8 +655,9 @@ export interface ILocalStorageProvider {
      * @param key - The key to store under
      * @param value - The value to store
      * @param category - Optional category for key isolation
+     * @param options - Optional expiry and index hints; a provider ignores what it cannot honour.
      */
-    SetItem<T>(key: string, value: T, category?: string): Promise<void>;
+    SetItem<T>(key: string, value: T, category?: string, options?: LocalStorageWriteOptions): Promise<void>;
 
     /**
      * Removes an item from storage.
@@ -657,6 +678,67 @@ export interface ILocalStorageProvider {
      * @param category - The category to list keys from
      */
     GetCategoryKeys?(category: string): Promise<string[]>;
+
+    /**
+     * Gets the keys in a category that were written with the given
+     * {@link LocalStorageWriteOptions.IndexGroup} and still exist.
+     *
+     * Implemented by providers whose storage is shared between processes (Redis): a process
+     * needs it to find entries another process wrote. A process-local provider does not need it,
+     * because the caller's own in-memory index already knows every key it wrote.
+     *
+     * @param category - The category the keys were written to
+     * @param group - The index group (for the RunView cache, the entity name)
+     */
+    GetIndexGroupKeys?(category: string, group: string): Promise<string[]>;
+
+    /**
+     * Runs `work` while holding an exclusive lock on one key across every process that shares this
+     * storage. Implemented by shared providers (Redis): a read-modify-write of one entry from two
+     * servers at once otherwise loses one of the writes. Rejects when the lock cannot be acquired
+     * in time, so the caller can fall back (`LocalCacheManager` invalidates the entry instead).
+     *
+     * @param key - The entry being rewritten
+     * @param category - Its category
+     * @param work - The read-modify-write to run under the lock
+     */
+    WithKeyLock?<T>(key: string, category: string, work: () => Promise<T>): Promise<T>;
+
+    /**
+     * Claims a named lease for `ttlMs` if no other process holds it. The lease is never released
+     * early; it simply expires. Implemented by shared providers (Redis) so one server in a fleet
+     * does a periodic job per interval. A provider that does not implement it is private to its
+     * process, so the caller treats the lease as held.
+     *
+     * @param name - The lease name
+     * @param ttlMs - How long the lease lasts
+     * @returns True when this call claimed the lease
+     */
+    TryAcquireLease?(name: string, ttlMs: number): Promise<boolean>;
+
+    /**
+     * Ends a lease this process claimed with {@link TryAcquireLease} before it expires, so the
+     * next process waiting for it can proceed. Does nothing for a lease held by someone else.
+     */
+    ReleaseLease?(name: string): Promise<void>;
+}
+
+/**
+ * Per-write options for {@link ILocalStorageProvider.SetItem}.
+ */
+export interface LocalStorageWriteOptions {
+    /**
+     * Seconds until the entry expires, overriding the provider's default. `0` stores the entry
+     * without expiry. Omit to use the provider's default.
+     */
+    TTLSeconds?: number;
+
+    /**
+     * A secondary index within the category that this key belongs to. `LocalCacheManager`
+     * passes the entity name for RunView cache entries, so a shared provider can answer
+     * {@link ILocalStorageProvider.GetIndexGroupKeys} without listing the whole category.
+     */
+    IndexGroup?: string;
 }
 
 /**
@@ -1118,6 +1200,16 @@ export type RunViewResult<T = any> = {
  * Supports parameterized view execution with filtering and pagination.
  * Views are the primary way to query entity data in MemberJunction.
  */
+/** What the database reports for one view; see {@link IRunViewProvider.GetRunViewsDatabaseStatus}. */
+export interface RunViewDatabaseStatus {
+    Success: boolean;
+    /** Rows the view returns. */
+    RowCount?: number;
+    /** Newest `__mj_UpdatedAt` among them (ISO), absent when there are none. */
+    MaxUpdatedAt?: string;
+    ErrorMessage?: string;
+}
+
 export interface IRunViewProvider {
     Config(configData: ProviderConfigDataBase): Promise<boolean>
 
@@ -1133,6 +1225,13 @@ export interface IRunViewProvider {
      * @returns Response containing status and fresh data only for stale caches
      */
     RunViewsWithCacheCheck?<T = unknown>(params: RunViewWithCacheCheckParams[], contextUser?: UserInfo): Promise<RunViewsWithCacheCheckResponse<T>>
+
+    /**
+     * Asks the database — never a cache — how many rows each view would return and the newest
+     * `__mj_UpdatedAt` among them. One entry per param, in order. Implemented by database providers;
+     * used by `BaseEngine.SweepAgainstDatabase` to find engine data changed outside MJ.
+     */
+    GetRunViewsDatabaseStatus?(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewDatabaseStatus[]>
 
     /**
      * Performs a full-text search across all entities that have FullTextSearchEnabled=true in their metadata.
@@ -1826,6 +1925,16 @@ export type DatasetStatusResultType = {
     LatestUpdateDate: Date;
     EntityUpdateDates: DatasetStatusEntityUpdateDateType[];
  }
+
+/** What `ProviderBase.SweepMetadataAgainstDatabase` found and did. */
+export type MetadataSweepResult = {
+    /** Metadata member entities that declare they can change without firing an event. */
+    Declared: string[];
+    /** Whether the database was consulted at all (false when nothing declared drift). */
+    Checked: boolean;
+    /** Whether metadata was actually reloaded. */
+    Refreshed: boolean;
+};
 
 /**
  * Update date information for a single entity within a dataset.

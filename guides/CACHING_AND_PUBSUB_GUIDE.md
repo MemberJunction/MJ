@@ -29,6 +29,12 @@ This guide covers the complete caching, pub/sub, and real-time data synchronizat
 19. [Configuration Reference](#configuration-reference)
 20. [Troubleshooting](#troubleshooting)
 21. [Server-Side Dataset Caching](#server-side-dataset-caching)
+22. [The User Cache](#the-user-cache)
+23. [Publish modes, leases and the sweep](#publish-modes-leases-and-the-sweep)
+24. [Categories and expiry](#categories-and-expiry)
+25. [Enabling sweeping (operator runbook)](#enabling-sweeping-operator-runbook)
+26. [Clearing the shared cache from a tool](#clearing-the-shared-cache-from-a-tool)
+27. [Process-local caches: a miss is not a negative fact](#process-local-caches-a-miss-is-not-a-negative-fact)
 
 ---
 
@@ -549,6 +555,39 @@ protected async syncLocalCacheForConfig(
     }
 }
 ```
+
+While an entity-event batch is open for the entity's provider (see below), this method does nothing:
+the batch rewrites every slot indexed for the entity, this config's included.
+
+### Transactions: entity-event batches
+
+`BaseEntity` raises `save` and `delete` while a transaction is still open. Applying each event at once
+rewrote (and on Redis, republished) every cached slot for the entity once per record, and put rows that
+a rollback later undid into the cache. So every `BeginEntityTransaction` on a `DatabaseProviderBase`
+(`RunInEntityTransaction`, IS-A chains, graph saves) opens a **batch** on that provider instance:
+
+- Saves and deletes raised through the provider are recorded with their values at that moment.
+- When the outermost scope **commits**, each affected slot is rewritten once
+  (`LocalCacheManager.ApplyRowChanges`): one write and one publish, however many records changed.
+  Filtered slots that received a save, subset slots and aggregate slots are invalidated once.
+- When any level **rolls back or fails**, the affected slots are invalidated instead, so every server
+  reloads them from the database.
+- While a batch holds changes for an entity, cached reads of that entity **miss** and fills are not
+  stored, so code inside the transaction reads its own writes from the database.
+
+Bulk writers that do not use a transaction can get the same effect explicitly:
+
+```typescript
+await LocalCacheManager.Instance.RunInEntityEventBatch(provider, async () => {
+    for (const row of rows) {
+        await row.Save();   // entities whose ProviderToUse is `provider`
+    }
+});
+```
+
+A batch is keyed by the provider object, which is also where the ambient transaction lives. Saves
+through a different provider instance are not held back. The browser relay in MJServer still sends one
+message per record (#4250).
 
 ---
 
@@ -2003,6 +2042,21 @@ REDIS_URL=redis://localhost:6379
 REDIS_URL=redis://user:password@redis-host:6379
 ```
 
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `REDIS_KEY_PREFIX` (env) | `mj` | Prefix for every key. Processes that must share a cache use the same prefix. |
+| `REDIS_TTL_SECONDS` (env) / `cacheSettings.sharedCacheTTLSeconds` | 3600 | Expiry of shared cache entries. The environment variable wins. `0` stores entries without expiry. |
+
+Event-driven invalidation is still what keeps shared entries fresh; the expiry bounds how long an entry
+written by something that never publishes (direct SQL, another application) can be served, and lets a
+`volatile-*` eviction policy evict at all. Engines hold their rows in memory and do not re-read an entry,
+so an entry can expire under a running engine. When a save then finds that an entry this process
+indexed has gone, `LocalCacheManager` invalidates it, which publishes `removed` and makes peer engines
+reload from the database.
+
+Each RunView entry is also recorded in a per-entity index set (`{prefix}:__group__:RunViewCache:<Entity>`),
+which a save on any server reads to find the entries other servers wrote for that entity.
+
 ### BaseEngine Timing
 
 | Setting | Default | Description |
@@ -2174,6 +2228,298 @@ Dataset caching is active when:
 On the client side (`TrustLocalCacheCompletely = false`), dataset requests pass through to the server without local cache checks.
 
 ---
+
+---
+
+## The User Cache
+
+`UserCache` (`packages/GenericDatabaseProvider/src/UserCache.ts`) holds every user and their roles,
+as `UserInfo` objects, for the lifetime of a server process. It is consulted on the authentication
+path of effectively every request, so it is read synchronously and never queries the database on a
+hit.
+
+It is **not** a `BaseEngine`: it predates that class, it is loaded with two raw `SELECT`s against
+`vwUsers` and `vwUserRoles` (no permission filtering, because it is what resolves the user whose
+permissions would be applied), and its read surface (`UserCache.Instance.Users`) is used across
+about twenty packages. It therefore has its own wiring into this architecture.
+
+### How it stays current
+
+| Trigger | What happens |
+|---|---|
+| A `MJ: Users` or `MJ: User Roles` row is saved or deleted **in this process** | The cache hears the `BaseEntity` event, reloads (bursts are collected into one read), and writes `__MJ_UserCache_Stamp__` to the shared store |
+| Another process wrote that stamp | Each server hears the notice, waits a short random delay, and reloads |
+| A tool cleared the **RunView** category of the shared cache (`mj sync push`, `mj codegen`, `mj migrate`, and `mj cache clear` without `--category`) | That clear reaches the same subscription, so servers reload. A clear scoped to another category alone (`--category DatasetCache`) does **not** — nothing about users lives there |
+| Anything else — raw SQL, another application, a restore | `RefreshIfChangedInDatabase()` compares two row counts and the newest `__mj_UpdatedAt` with the database and reloads only when they differ. MJAPI runs it on `cacheSettings.userCacheCheckIntervalSeconds` (default 300; 0 disables) |
+
+The stamp lives in the `default` category, which MJAPI publishes as a key-only notice, so a user
+change costs one small message per server rather than a payload.
+
+A reload waits for the transaction that made the change to settle: a save raises its event while
+its transaction is still open, so reloading immediately would read a database that does not have
+the row yet — and would tell every other server to reload just as early.
+
+The wait watches **the provider the save was made through** (`baseEntity.ProviderToUse`), which on a
+server is the per-request instance — not the process-wide provider the cache reads through, whose
+depth is always 0. The wait is bounded (`UserCache.MaxTransactionWaits` windows of
+`TransactionWaitMs`, 15 s by default): a unit of work still open after that is stuck, and the
+periodic staleness check is the backstop. A save made outside any transaction reloads at once.
+
+### Reading it
+
+```typescript
+// ✅ On any path that decides whether a request is allowed
+const user = await UserCache.Instance.FindUser({ Email: email });   // or { ID }
+if (!user?.IsActive) return null;
+
+// ⚠️ Fine for diagnostics, listings, "who is the system user"
+const user = UserCache.Instance.Users.find(u => u.ID === someId);
+```
+
+`FindUser` answers from memory on a hit. On a miss it reads the single row from the database, adds
+it to the cache, and remembers a genuine "no such user" for a few seconds so a bad credential cannot
+turn into a query per request.
+
+**Why that matters.** A `Users.find(...)` that returns `undefined` means "this process has not
+loaded that user", which is not the same as "that user does not exist". Reading the second from the
+first is what made a newly created organization's first API key fail as "invalid or expired" until
+the API server was restarted (plan §15): the key was valid, its user was real, and the validating
+process simply had a cache from before the user existed.
+
+---
+
+## Publish modes, leases and the sweep
+
+Three mechanisms sit behind the cross-server behaviour above, none of which is configured per
+entity:
+
+- **Publish modes** (`RedisProviderConfig.publishModes` / `defaultPublishMode`) decide how much a
+  write puts on the wire per category: `'full'` carries the rows (MJAPI uses it for `RunViewCache`,
+  so a peer adopts them without a query), `'notice'` carries only the key (the metadata snapshot and
+  the user-cache stamp), `'none'` publishes nothing. Category clears and group invalidations are
+  always published.
+- **Leases** (`ILocalStorageProvider.TryAcquireLease` / `RenewLease` / `ReleaseLease`, `SET NX PX` on
+  Redis) make a fleet do a periodic job once rather than once per server: the engine sweep takes one
+  per engine per interval, and startup takes a warm-up lease so servers starting together load their
+  engines in turn instead of all querying the database.
+
+  A lease **expires**, which is what makes it safe — a holder that dies does not block the fleet
+  forever. That means a holder still working must **renew**: `StartupManager` renews the warm-up
+  lease on a timer while engines load, so a slow but healthy startup is not overtaken by a peer that
+  assumed it had died. It follows that the waiters' patience must not equal the lease TTL, or a
+  renewed lease would outlast everyone waiting on it; `WarmupWaitLeaseMultiple` (4) sets how much
+  longer a waiter waits than one lease period.
+
+  The warm-up lease is **released before deferred engines load**, not held across them. Deferred
+  engines are by definition not needed to serve traffic, so holding the lease through them would
+  make every other server wait on work that is not on anyone's critical path.
+
+- **The key lock** (`ILocalStorageProvider.WithKeyLock`) serialises a read-modify-write of one cache
+  slot across processes, which a shared store otherwise cannot: two servers updating the same slot
+  from a save would each read, merge and write, and one update would be lost. The lock is held for
+  the work, renewed while it runs, and capped (`KEY_LOCK_MAX_HOLD_MS`, 60 s) so a hung caller
+  eventually releases it. If the lock turns out to have been lost, the write is rejected with
+  `KeyLockLostError` rather than applied on top of a peer's — and when Redis cannot be read at all to
+  check, the answer comes from the clock: a lock cannot outlive its TTL measured from the last
+  renewal that landed.
+- **The engine sweep** (`BaseEngineSweeper`, MJAPI's `cacheSettings.engineSweepIntervalSeconds`,
+  default 300 s) compares each loaded engine config's row count and newest `__mj_UpdatedAt` with the
+  database and reloads only what differs — the safety net for changes made outside MJ. It writes a
+  refreshed slot under the slot's cross-process lock, so it cannot clobber a peer's in-flight update.
+  One process in the fleet does it per engine per interval, via a lease.
+
+  **It visits only entities that declare they can drift.** `Entity.TrustServerCacheCompletely` is
+  that declaration: `true` (the default) means every mutation flows through `BaseEntity.Save()` and
+  fires an invalidation event, so there is nothing for a sweep to discover; `false` is set for
+  entities whose rows appear by raw SQL. The flag also subsumes `AllowDirectSQLInsert`/`Update`/
+  `Delete`, since a database CHECK requires it to be `false` whenever one of those is set.
+
+  This matters for cost, not just tidiness. A periodic query is never free, and on **Azure SQL
+  serverless it prevents auto-pause outright** — auto-pause needs sustained inactivity, so a longer
+  interval is no better than a shorter one; only not running is. Gating on the declaration makes the
+  cost proportional to the declared risk: an install where nothing writes out of band sweeps nothing,
+  issues no queries, and lets the database sleep, with no setting to discover. Mark the entities you
+  do write out of band — which you must do anyway for the cache to be correct — and the backstop
+  applies exactly there. `engineSweepIntervalSeconds: 0` still turns the timer off entirely.
+
+  **Opting an entity in takes effect only once the metadata snapshot is refreshed.** Servers read
+  `TrustServerCacheCompletely` from the entity metadata they hold, and a warm-booting server reads
+  that metadata from the shared snapshot — so setting the flag by hand in SQL and restarting is *not*
+  enough; the restarted server adopts the old snapshot and keeps ignoring the entity. `mj sync push`
+  and `mj cache clear` both remove the snapshot, which is why the normal paths work. Verified on two
+  live servers: after a raw SQL flag change the sweep ignored the entity across several intervals,
+  and swept it ~12 s after the snapshot was dropped.
+
+  **The metadata sweep is the same idea, one level up** (`cacheSettings.metadataSweepIntervalSeconds`,
+  default 300 s, 0 disables). Metadata staleness is otherwise event-driven — a `BaseEntity` write to
+  one of the entities the metadata is built from, a peer's snapshot notice, or a CLI clear — and none
+  of those fire for raw SQL, so metadata edited directly in the database is never noticed by a running
+  process. The sweep covers exactly that case, and only that case: it reads the database **only when a
+  metadata member entity declares `TrustServerCacheCompletely = false`**. On a stock installation none
+  do (all 31 members are trusted), so the timer ticks, costs one in-memory pass, and issues neither a
+  query nor a Redis round trip. One process per interval does the work, via a shared lease, because a
+  process that refreshes publishes a notice the others act on.
+
+  So if you write metadata tables directly — `__mj.Entity`, `__mj.EntityField` and so on — mark those
+  entities as untrusted and the sweep will keep every server converged. If you do not, it stays
+  dormant.
+
+  **The user cache's periodic reload is gated the same way** (`UserCache`'s auto-refresh, fed by
+  `databaseSettings.metadataCacheRefreshInterval`, default 180 s). It used to reload every user and
+  role unconditionally on that timer, which by itself kept the database awake; it now reads only when
+  one of those two entities declares drift. The timer keeps ticking either way, so marking an entity
+  later takes effect on the next tick without a restart, and `metadataCacheRefreshInterval: 0`
+  disables it outright.
+
+  **The user-cache staleness check (`userCacheCheckIntervalSeconds`) is gated the same way**, for the
+  same reason. Nothing is lost for the case that motivated it: a save raises an event, a save on
+  another server publishes the shared stamp, and `FindUser` falls back to an authoritative read on a
+  miss — so even a user inserted by raw SQL can authenticate without the poll.
+
+## Categories and expiry
+
+Every cache entry is written to a **category**, which the store turns into a namespace — a Redis key
+is `{prefix}:{category}:{key}`, browser localStorage is `[mj]:[category]:[key]`, and the in-memory
+and IndexedDB providers keep a map per category. A category is therefore not a label: a read with
+the wrong one finds nothing.
+
+| Category | Holds | Expiry |
+|---|---|---|
+| `RunViewCache` | RunView results, keyed by fingerprint | `sharedCacheTTLSeconds` (default 3600) |
+| `RunQueryCache` | RunQuery results | as above |
+| `DatasetCache` | *(reserved — see the note below)* | as above |
+| `Metadata` | metadata payloads | as above |
+| `default` | the metadata snapshot, the user-cache stamp, dataset blobs | **never expires**, except per entry |
+
+**Why `default` never expires.** It holds **proxy keys**: entries that vouch for other entries. The
+metadata snapshot's timestamps key is written *after* the payload it describes, and a dataset's
+`_date` key *after* its blob, so that a half-written snapshot reads as obsolete rather than as
+current. Under one blanket expiry that ordering inverts — the proxy is written last, so it expires
+last, and a reader finds a freshness claim with nothing behind it. A process booting into that
+window adopted the timestamps and then served empty metadata as current.
+
+So the rule is **a proxy must never outlive its subject**, and the cheapest way to guarantee it is
+for the category not to expire on its own clock. `categoryTTLSeconds` is *merged over* that default
+rather than replacing it, so configuring another category cannot silently switch it back on; naming
+`default` explicitly still overrides it.
+
+**Entries in that category may still carry their own expiry**, and a per-write TTL takes precedence
+over the category. Dataset blobs use this: `ProviderBase.DatasetCacheTTLSeconds` (3600) for the blob
+and `DatasetDateCacheTTLSeconds` (3300) for its `_date` key — deliberately shorter, so the pair
+expires in the safe direction and the cache reads as absent rather than as "fresh, but empty".
+
+> **Known asymmetry.** `CacheDataset` writes dataset blobs to `default`, and `GetCachedDataset`,
+> `IsDatasetCached` and `ClearDatasetCache` read them there — but `GetAndCacheDatasetByName` reads
+> the `DatasetCache` category, so its warm-serve path never hits, and `mj cache clear --category
+> DatasetCache` clears nothing. Dataset keys are in fact removed by the snapshot sweep, which matches
+> them by key marker. This predates the cross-process work and is tracked separately; do not assume
+> `DatasetCache` holds anything today.
+
+**On a shared store, expiry belongs to the store.** A process must not age entries out by its own
+clock: every server would delete the same keys on its own schedule, publish a `removed` for each,
+and make every peer reload — a fleet-wide storm for keys Redis expires by itself. `LocalCacheManager`
+therefore applies its local TTL only to a process-private store, and on a shared one merely *forgets*
+an entry whose own expiry has passed, leaving the key to the store.
+
+## Enabling sweeping (operator runbook)
+
+MJ's periodic checks are **off in effect** on a stock installation: all four tick, and none of them
+reads the database, because every MJ entity ships with `TrustServerCacheCompletely = true` — a
+declaration that every mutation flows through `BaseEntity` and therefore fires an event the caches
+already hear. You enable a sweep by **declaring that an entity can change without one**, not by
+turning a switch on.
+
+### The four periodic checks
+
+| Check | Setting (`cacheSettings` unless noted) | Reads the database when |
+|---|---|---|
+| Engine sweep | `engineSweepIntervalSeconds` (300) | an engine holds a config whose entity declares drift |
+| Metadata sweep | `metadataSweepIntervalSeconds` (300) | a metadata-dataset member entity declares drift |
+| User-cache staleness check | `userCacheCheckIntervalSeconds` (300) | `MJ: Users` or `MJ: User Roles` declares drift |
+| User-cache periodic reload | `databaseSettings.metadataCacheRefreshInterval` (180 s) | as above |
+
+Each takes `0` to stop its timer outright. **If you want the database to idle** — Azure SQL serverless,
+where any recurring query prevents auto-pause — the default already achieves that; set the intervals to
+`0` as well if you want the timers gone entirely.
+
+### Turning a sweep on
+
+1. **Decide which entities you actually write outside MJ.** Bulk loads, ETL, maintenance scripts,
+   another application writing the same tables. Those, and only those.
+2. **Declare it** by setting `TrustServerCacheCompletely = 0` on each. The platform already requires
+   this for `AllowDirectSQLInsert`/`Update`/`Delete`, so entities that sanction direct SQL carry it.
+   Prefer the metadata path — a `metadata/entities/*.json` entry pushed with `mj sync push` — over an
+   ad-hoc `UPDATE`, because the push is versioned *and* invalidates the snapshot for you (step 3).
+3. **Invalidate the metadata snapshot**, or the running servers will not see the declaration. This is
+   the step that surprises people, so it is spelled out below.
+4. **Verify**: with a shared cache, a lease key appears for the engine being swept
+   (`{prefix}:__lease__:engine-sweep:<EngineClass>`, or `…:metadata-sweep`), and a sweep that finds
+   drift logs what it reloaded. No lease key means nothing declared drift.
+
+### Why step 3 exists
+
+Servers read `TrustServerCacheCompletely` from the **entity metadata they hold**, and a warm-booting
+server reads that metadata from the shared snapshot. So a flag you change in the database is invisible
+until the snapshot is replaced:
+
+- **`mj sync push` or `mj cache clear` removes the snapshot**, which makes every server re-check its
+  metadata against the database and adopt the change. These are the normal paths and they work.
+- **Restarting alone is not enough.** A restarted server adopts the existing snapshot and keeps the old
+  flag. Verified on a two-server pair: after a raw SQL flag change the sweep ignored the entity across
+  several intervals and swept it ~12 s after the snapshot was dropped.
+
+There is a pleasing consequence for the metadata sweep in particular: **enabling it is itself a
+metadata change**, so it cannot bootstrap itself — the very staleness it exists to detect hides the
+declaration that switches it on. One explicit `mj cache clear` (or `mj sync push`) breaks that circle,
+and from then on the sweep keeps metadata converged on its own.
+
+### What sweeping does not cover
+
+- **A trusted entity whose event was lost** to a pub/sub outage. The sweep will not look at it, by
+  design. Redis reconnection and recovery reconciliation are tracked separately.
+- **An open browser form.** A sweep converges servers, not a form holding a record it already loaded.
+
+## Clearing the shared cache from a tool
+
+Anything that changes the database without going through a running server leaves every server's
+engines holding rows that no longer match it. The CLI closes that gap when `REDIS_URL` is set
+(prefix `REDIS_KEY_PREFIX`): each cleared category publishes `category_cleared`, so every subscribed
+server drops what it holds and reloads, and removing the metadata snapshot makes each one re-check
+its metadata against the database.
+
+| Command | Clears when |
+|---|---|
+| `mj sync push` | the push succeeded, or it failed **and left rows behind**. Since #4566 an atomic push (the default) rolls its own writes back and says so, and clearing after a clean rollback would cost the fleet a full reload for a run that changed nothing. An outcome the CLI cannot read clears. |
+| `mj codegen` | any run that was not `--skipdb`, including a failed one — CodeGen writes as it goes. |
+| `mj migrate` | migrations were applied; or the run failed or threw **after a migration started**. DDL is not transactional across batches, so a migration that began and failed can still have committed. A run that never started one leaves the fleet alone. |
+| `mj cache clear` | on demand — for direct SQL, another application, or a restore. `--dry-run` reports what it would remove; `--category` (repeatable, case-insensitive) narrows it, and with no `--category` the metadata snapshot goes too. |
+
+Opt out with `--skip-cache-clear` or `MJ_SKIP_SHARED_CACHE_CLEAR=1`. Each category reports its own
+success: a partial failure is reported as one, not swallowed into an overall "done".
+
+## Process-local caches: a miss is not a negative fact
+
+A cache that is filled from the database and then consulted for a decision must not report "I do not
+have it" as "it does not exist". State this as a rule for any such cache:
+
+- **A hit is an answer. A miss is a question.** Fall back to an authoritative read, then cache the
+  result. Bound the fallback (remember a genuine absence briefly) so a miss storm cannot become a
+  query storm.
+- **Absence is never evidence of denial.** A permission check, an authentication check, or a
+  validity check that ends in "not found in my cache" must either read through or fail with a
+  message that says the process could not confirm, not one that blames the caller's input.
+- **The same trap has been hit elsewhere in MJ.** `TaskClaimStore.affectedRows() === 0` meant both
+  "permission denied" and "the guard did not match", and an API key was reported "invalid or
+  expired" when the validator's user cache was simply old. Two different causes rendered as one
+  negative fact, and the message pointed at the wrong thing.
+- **If a fallback is genuinely impossible** (no provider, no connection), say so in the error rather
+  than reporting a negative: "could not verify" is actionable, "invalid key" is not.
+
+Anything that caches database-derived state for the life of a process also needs an invalidation
+path — see [Cross-Server Synchronization (Redis)](#cross-server-synchronization-redis) for the
+mechanisms available (`BaseEngine` property configs, a `LocalCacheManager` change callback, or a
+periodic staleness check). A cache with none of those is stale from the first write on any other
+server, and no amount of testing in one process will show it.
 
 ## Further Reading
 

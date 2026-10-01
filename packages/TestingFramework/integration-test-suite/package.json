@@ -49,6 +49,7 @@
     "@memberjunction/predictive-studio": "6.2.0-edge.1",
     "@memberjunction/predictive-studio-core": "6.2.0-edge.1",
     "@memberjunction/query-processor": "6.2.0-edge.1",
+    "@memberjunction/postgresql-dataprovider": "6.2.0-edge.1",
     "@memberjunction/queue": "6.2.0-edge.1",
     "@memberjunction/record-set-processor": "6.2.0-edge.1",
     "@memberjunction/record-set-processor-base": "6.2.0-edge.1",

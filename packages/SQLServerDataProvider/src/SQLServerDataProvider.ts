@@ -838,8 +838,7 @@ export class SQLServerDataProvider
       // unconditional GetEffectiveBaseView) so a Building/DriftHold/Disabled/never-minted snapshot probes the
       // LIVE base view — mirroring the read path — instead of a held or missing materialized_vw wrapper.
       const effectiveView = await this.resolveEffectiveBaseView(entityInfo, item.params, contextUser);
-      const statusSQL = `SELECT COUNT(*) AS TotalRows, MAX(__mj_UpdatedAt) AS MaxUpdatedAt FROM [${entityInfo.SchemaName}].${effectiveView}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
-      sqlStatements.push(statusSQL);
+      sqlStatements.push(this.BuildCacheStatusSQL(entityInfo, effectiveView, whereSQL));
     }
 
     try {
@@ -863,11 +862,15 @@ export class SQLServerDataProvider
         }
       }
     } catch (e) {
-      // If batch fails, mark all items as failed
-      const errorMessage = e instanceof Error ? e.message : String(e);
-      for (const { index } of items) {
-        results.set(index, { success: false, errorMessage });
-      }
+      // One bad statement fails the WHOLE batch on SQL Server, which used to mark every item
+      // failed — so a single problematic entity blinded the sweep for its entire engine. Fall back
+      // to the per-item path, which runs each probe on its own and fails only what deserves it
+      // (plan §16.3 #10).
+      LogStatusEx({
+        message: `SQLServerDataProvider.getBatchedServerCacheStatus: batched probe failed (${e instanceof Error ? e.message : String(e)}) — retrying ${items.length} probe(s) individually`,
+        verboseOnly: true,
+      });
+      return await super.getBatchedServerCacheStatus(items, contextUser);
     }
 
     return results;
@@ -2657,9 +2660,13 @@ IF ${varName} IS NOT NULL
   /**
    * Override RefreshIfNeeded to skip refresh when a transaction is active
    * This prevents conflicts between metadata refresh operations and active transactions
+   * @param providerToUse - passed through to the base implementation
+   * @param bypassMinCheckInterval - passed through; event-driven callers (a metadata change notice
+   *   from another server) set it so the check throttle cannot drop their check. Dropping the
+   *   arguments here used to discard it.
    * @returns Promise<boolean> - true if refresh was performed, false if skipped or no refresh needed
    */
-  public async RefreshIfNeeded(): Promise<boolean> {
+  public async RefreshIfNeeded(providerToUse?: IMetadataProvider, bypassMinCheckInterval?: boolean): Promise<boolean> {
     // Skip refresh if a transaction is active
     if (this.IsTransactionActive) {
       LogStatus('Skipping metadata refresh - transaction is active');
@@ -2667,7 +2674,7 @@ IF ${varName} IS NOT NULL
     }
 
     // Call parent implementation if no transaction
-    return super.RefreshIfNeeded();
+    return super.RefreshIfNeeded(providerToUse, bypassMinCheckInterval);
   }
 
   override get FileSystemProvider(): IFileSystemProvider {

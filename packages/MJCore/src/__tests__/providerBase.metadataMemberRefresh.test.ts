@@ -445,3 +445,68 @@ describe('ProviderBase - single-flight metadata reload', () => {
         expect(provider.GetAllMetadataCalls).toBe(2); // never a third
     });
 });
+
+// ---------------------------------------------------------------------------
+// Metadata change notices from other servers (plan F11)
+// ---------------------------------------------------------------------------
+describe('ProviderBase — metadata change notices from other servers', () => {
+    class NoticeTestProvider extends MemberRefreshTestProvider {
+        public Checks: Array<boolean | undefined> = [];
+        public override async RefreshIfNeeded(_p?: IMetadataProvider, bypassMinCheckInterval?: boolean): Promise<boolean> {
+            this.Checks.push(bypassMinCheckInterval);
+            return true;
+        }
+    }
+
+    const notice = (overrides: Record<string, unknown> = {}) => ({
+        CacheKey: '___MJCore_Metadata_Timestamps', Category: 'default', Action: 'set' as const,
+        Timestamp: Date.now(), SourceServerId: 'peer', ...overrides,
+    });
+
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    it('recognises only the timestamps key of a saved or removed snapshot', () => {
+        const p = new NoticeTestProvider();
+        expect(p.IsMetadataChangeNotice(notice())).toBe(true);
+        expect(p.IsMetadataChangeNotice(notice({ Category: '' }))).toBe(true);
+        // `mj migrate` / `mj codegen` remove the shared snapshot; servers must re-check too.
+        expect(p.IsMetadataChangeNotice(notice({ Action: 'removed' }))).toBe(true);
+        expect(p.IsMetadataChangeNotice(notice({ CacheKey: '___MJCore_Metadata_AllMetadata' }))).toBe(false);
+        expect(p.IsMetadataChangeNotice(notice({ Category: 'RunViewCache' }))).toBe(false);
+        expect(p.IsMetadataChangeNotice(notice({ Action: 'category_cleared' }))).toBe(false);
+    });
+
+    it('runs one throttle-bypassing staleness check per burst of notices', async () => {
+        const p = new NoticeTestProvider();
+        expect(p.HandlePeerMetadataNotice(notice())).toBe(true);
+        expect(p.HandlePeerMetadataNotice(notice())).toBe(true);
+        expect(p.Checks).toHaveLength(0);
+
+        await vi.advanceTimersByTimeAsync(ProviderBase.MetadataDatasetRefreshDebounceMs + ProviderBase.PeerMetadataNoticeJitterMs);
+
+        expect(p.Checks).toEqual([true]);
+        expect(p.HardRefreshCalls).toBe(0);
+    });
+
+    it('spreads the check over a random delay so a fleet does not re-check in lockstep', async () => {
+        const random = vi.spyOn(Math, 'random').mockReturnValue(0.5);
+        try {
+            const p = new NoticeTestProvider();
+            p.HandlePeerMetadataNotice(notice({ Action: 'removed' }));
+            await vi.advanceTimersByTimeAsync(ProviderBase.MetadataDatasetRefreshDebounceMs + ProviderBase.PeerMetadataNoticeJitterMs / 2 - 1);
+            expect(p.Checks).toHaveLength(0);
+            await vi.advanceTimersByTimeAsync(1);
+            expect(p.Checks).toEqual([true]);
+        } finally {
+            random.mockRestore();
+        }
+    });
+
+    it('ignores other events', async () => {
+        const p = new NoticeTestProvider();
+        expect(p.HandlePeerMetadataNotice(notice({ CacheKey: 'MJ: Users|_|_' , Category: 'RunViewCache' }))).toBe(false);
+        await vi.advanceTimersByTimeAsync(5000);
+        expect(p.Checks).toHaveLength(0);
+    });
+});

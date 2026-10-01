@@ -39,6 +39,7 @@ import { AgentPlanModeChecks } from '../checks/agent-plan-mode.checks';
 import { AgentCompactionE2EChecks } from '../checks/agent-compaction-e2e.checks';
 import { AgentMemoryGuardsChecks } from '../checks/agent-memory-guards.checks';
 import { AgentNoteCacheTypeChecks } from '../checks/agent-note-cache-types.checks';
+import { CacheArchitectureChecks } from '../checks/cache-architecture.checks';
 import { AgentRagSearchChecks } from '../checks/agent-rag-search.checks';
 import { AgentWireCallbackChecks } from '../checks/agent-wire-callback.checks';
 import { ViewSecurityChecks } from '../checks/view-security.checks';
@@ -142,7 +143,8 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['agent-plan-mode', AgentPlanModeChecks, 6],
         ['agent-compaction-e2e', AgentCompactionE2EChecks, 3],
         ['agent-memory-guards', AgentMemoryGuardsChecks, 5],
-        ['agent-note-cache-types', AgentNoteCacheTypeChecks, 3], // NC1-NC3 entity_object cache-event invariant (IT84)
+        ['agent-note-cache-types', AgentNoteCacheTypeChecks, 5], // NC1-NC3 entity_object cache-event invariant, NC4-NC5 identical-payload skip (IT84)
+        ['cache-architecture', CacheArchitectureChecks, 5], // CA1-CA5 engine/cache architecture pins (IT97)
         ['agent-rag-search', AgentRagSearchChecks, 7], // extended-agents suite (live-model, IT53-62)
         ['agent-wire-callback', AgentWireCallbackChecks, 2], // over-the-wire fire-and-forget callback (IT63)
         ['view-security', ViewSecurityChecks, 4], // two-identity V14/V15/V16 + RV17 (IT64)
@@ -224,7 +226,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-loop-standin': 11,
         'prompt-eval-harness': 7,
         'agent-memory-guards': 5,
-        'agent-note-cache-types': 3,
+        'agent-note-cache-types': 5,
         'agent-payload-guards': 9,
         'agent-plan-mode': 6,
         'agent-rag-search': 7,
@@ -241,6 +243,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'app-behavioral': 3,
         'app-wiring': 10,
         'auth-validation': 7,
+        'cache-architecture': 5,
         'cache-gauntlet': 8,
         'cache-immutability': 15,
         'class-resolution': 5,
@@ -334,7 +337,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(96);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(97);
     });
 });
 
@@ -375,6 +378,9 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'actions-pipeline.AP2',
         'app-behavioral.AB1',
         'app-behavioral.AB2',
+        'cache-architecture.CA2',
+        'cache-architecture.CA4',
+        'cache-architecture.CA5',
         'cache-gauntlet.CG1',
         'cache-gauntlet.CG2',
         'cache-gauntlet.CG3',

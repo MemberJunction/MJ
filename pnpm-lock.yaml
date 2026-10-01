@@ -11466,6 +11466,9 @@ importers:
       '@memberjunction/query-gen':
         specifier: 6.2.0-edge.1
         version: link:../QueryGen
+      '@memberjunction/redis-provider':
+        specifier: 6.2.0-edge.1
+        version: link:../RedisProvider
       '@memberjunction/server-bootstrap-lite':
         specifier: 6.2.0-edge.1
         version: link:../ServerBootstrapLite
@@ -15348,6 +15351,9 @@ importers:
       '@memberjunction/open-app-engine':
         specifier: 6.2.0-edge.1
         version: link:../../OpenApp/Engine
+      '@memberjunction/postgresql-dataprovider':
+        specifier: 6.2.0-edge.1
+        version: link:../../PostgreSQLDataProvider
       '@memberjunction/predictive-studio':
         specifier: 6.2.0-edge.1
         version: link:../../AI/PredictiveStudio/Engine
