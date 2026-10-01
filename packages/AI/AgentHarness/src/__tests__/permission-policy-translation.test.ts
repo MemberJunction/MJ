@@ -16,12 +16,12 @@ import { describe, it, expect } from 'vitest';
 import { ClaudeCodeCliAdapter } from '../adapters/ClaudeCodeCliAdapter.js';
 import { PiAdapter } from '../adapters/PiAdapter.js';
 import { CodexAdapter } from '../adapters/CodexAdapter.js';
-import { GeminiCliAdapter } from '../adapters/GeminiCliAdapter.js';
+import { GeminiCliAdapter, GeminiApprovalModeForPosture } from '../adapters/GeminiCliAdapter.js';
 import { OpenCodeAdapter } from '../adapters/OpenCodeAdapter.js';
 import { HarnessPermissionPolicy } from '../types.js';
 
 /** Reaches the protected arg builder, which is where a policy becomes observable. */
-function turnArgs(adapter: ClaudeCodeCliAdapter | PiAdapter, isFirstTurn = true): string[] {
+function turnArgs(adapter: ClaudeCodeCliAdapter | PiAdapter | GeminiCliAdapter, isFirstTurn = true): string[] {
     const internal = adapter as unknown as { BuildTurnArgs(input: string, first: boolean): string[] };
     return internal.BuildTurnArgs('hello', isFirstTurn);
 }
@@ -140,12 +140,90 @@ describe('PiAdapter.ApplyPermissionPolicy', () => {
     });
 });
 
+describe('GeminiCliAdapter.ApplyPermissionPolicy', () => {
+    // Flag vocabulary verified against the @google/gemini-cli 0.62.0 option table: `--approval-mode`
+    // takes default | auto_edit | yolo | plan, and `--yolo` may not be combined with it. The adapter
+    // used to hard-code `--yolo`, so a `strict` agent silently ran with every tool auto-approved.
+    const modeOf = (a: GeminiCliAdapter): string => {
+        const args = turnArgs(a);
+        return args[args.indexOf('--approval-mode') + 1];
+    };
+
+    it('maps strict to default approval', () => {
+        const a = new GeminiCliAdapter();
+        a.ApplyPermissionPolicy(policy({ Posture: 'strict' }));
+        expect(modeOf(a)).toBe('default');
+    });
+
+    it('maps auto to auto_edit, NOT yolo', () => {
+        const a = new GeminiCliAdapter();
+        a.ApplyPermissionPolicy(policy({ Posture: 'auto' }));
+        expect(modeOf(a)).toBe('auto_edit');
+    });
+
+    it('maps dangerous to yolo', () => {
+        const a = new GeminiCliAdapter();
+        a.ApplyPermissionPolicy(policy({ Posture: 'dangerous' }));
+        expect(modeOf(a)).toBe('yolo');
+    });
+
+    it('never passes --yolo, which Gemini rejects alongside --approval-mode', () => {
+        for (const Posture of ['strict', 'auto', 'dangerous'] as const) {
+            const a = new GeminiCliAdapter();
+            a.ApplyPermissionPolicy(policy({ Posture }));
+            expect(turnArgs(a)).not.toContain('--yolo');
+            expect(turnArgs(a)).not.toContain('-y');
+        }
+    });
+
+    it('falls back to the SAFE mode if no policy was ever applied', () => {
+        expect(modeOf(new GeminiCliAdapter())).toBe('default');
+    });
+
+    it('re-applies the posture on every turn (the CLI process dies at turn end)', () => {
+        const a = new GeminiCliAdapter();
+        a.ApplyPermissionPolicy(policy({ Posture: 'auto' }));
+        expect(turnArgs(a, false)).toContain('auto_edit');
+    });
+
+    it('does NOT translate allow/deny lists — an allow-only translation would widen the policy', () => {
+        const a = new GeminiCliAdapter();
+        a.ApplyPermissionPolicy(policy({ AllowedTools: ['Read', 'Bash(git:*)'], DisallowedTools: ['Bash(git push:*)'] }));
+        const args = turnArgs(a);
+        expect(args).not.toContain('--allowed-tools');
+        expect(args).not.toContain('--disallowed-tools');
+        expect(args.join(' ')).not.toContain('git');
+    });
+
+    it('keeps PermissionPolicy false (whole-policy enforcement) and says what IS applied', () => {
+        const a = new GeminiCliAdapter();
+        expect(a.Capabilities.PermissionPolicy).toBe(false);
+        expect(a.PartialPolicyEnforcement).toMatch(/posture.*--approval-mode/);
+    });
+
+    it('GeminiApprovalModeForPosture is total', () => {
+        expect(GeminiApprovalModeForPosture('strict')).toBe('default');
+        expect(GeminiApprovalModeForPosture('auto')).toBe('auto_edit');
+        expect(GeminiApprovalModeForPosture('dangerous')).toBe('yolo');
+    });
+
+    it('keeps the model and prompt on the command line', () => {
+        const a = new GeminiCliAdapter();
+        a.ApplyPermissionPolicy(policy({ Posture: 'auto' }));
+        const args = turnArgs(a);
+        expect(args[args.indexOf('--prompt') + 1]).toBe('hello');
+        expect(args).toContain('--output-format');
+    });
+});
+
 describe('adapters that do not translate a policy declare it', () => {
     // These report false because their CLIs' permission flags were never verified against a real
     // install. The flag is what lets HarnessAgentBase log that a configured policy is inert, rather
     // than the operator assuming `strict` gated something.
     it.each([
         ['CodexAdapter', () => new CodexAdapter().Capabilities],
+        // Gemini now applies the POSTURE but not the allow/deny lists, so it still reports false for
+        // whole-policy enforcement — see the GeminiCliAdapter block above and PartialPolicyEnforcement.
         ['GeminiCliAdapter', () => new GeminiCliAdapter().Capabilities],
         ['OpenCodeAdapter', () => new OpenCodeAdapter().Capabilities],
     ])('%s reports PermissionPolicy false', (_name, get) => {

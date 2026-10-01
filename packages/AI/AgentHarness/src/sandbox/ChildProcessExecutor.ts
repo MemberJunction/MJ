@@ -2,6 +2,7 @@ import { ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
 import { createInterface } from 'node:readline';
 import { HarnessProcess, HarnessProcessSpec, SandboxExecutor } from './SandboxExecutor.js';
+import { BuildHostEnvironment, LOCAL_HARNESS_ENV_ALLOWLIST } from './HostEnvironment.js';
 
 /**
  * Turns a spawned child process into the backend-neutral {@link HarnessProcess} shape.
@@ -75,31 +76,14 @@ export class ChildProcessExecutor implements SandboxExecutor {
 
     /**
      * The host variables a locally-spawned harness inherits, before granted credentials are layered
-     * on top.
+     * on top. The allowlist and its rationale (why `HOME` is on it) live in
+     * {@link LOCAL_HARNESS_ENV_ALLOWLIST}.
      *
-     * Deliberately an ALLOWLIST, not the full process environment: passing everything through would
-     * hand the harness whatever credentials the MJAPI process happens to hold, which is exactly the
-     * over-granting the credential model exists to prevent.
-     *
-     * `HOME` is on the list for a specific reason. Local CLI harnesses keep their own login state
-     * under the user's home directory (Claude Code in `~/.claude`), so a developer who has already
-     * authenticated their CLI can run a harness agent with no credential row and no API key at all —
-     * the "true local" mode. Without HOME the harness cannot find its session and reports "Not
-     * logged in", which reads as a broken integration rather than a stripped variable.
-     *
-     * This applies ONLY to local execution. The Docker executor passes just the granted environment,
-     * because a container has no business inheriting the host developer's identity.
+     * This applies ONLY to local execution. The Docker executor passes just the granted
+     * environment, because a container has no business inheriting the host developer's identity.
      */
     private baseEnvironment(): Record<string, string> {
-        const allowed = ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'LANG', 'TERM'];
-        const env: Record<string, string> = {};
-        for (const key of allowed) {
-            const value = process.env[key];
-            if (value !== undefined) {
-                env[key] = value;
-            }
-        }
-        return env;
+        return BuildHostEnvironment(LOCAL_HARNESS_ENV_ALLOWLIST);
     }
 
     /** @inheritdoc */

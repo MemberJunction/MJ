@@ -1,8 +1,10 @@
 import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { RegisterClass } from '@memberjunction/global';
 import { LogError } from '@memberjunction/core';
-import { ISandboxProvider, SandboxConfig, SandboxHandle, WorkspaceKey } from './ISandboxProvider.js';
+import { BaseSandboxProvider } from './BaseSandboxProvider.js';
+import { SandboxConfig, SandboxHandle, WorkspaceKey } from './ISandboxProvider.js';
 import { ChildProcessExecutor } from './ChildProcessExecutor.js';
 
 /**
@@ -20,7 +22,8 @@ import { ChildProcessExecutor } from './ChildProcessExecutor.js';
  * is enforced by this provider has a false sense of containment, which is worse than knowing the
  * boundary is soft.
  */
-export class LocalDirectorySandboxProvider implements ISandboxProvider {
+@RegisterClass(BaseSandboxProvider, 'local')
+export class LocalDirectorySandboxProvider extends BaseSandboxProvider {
     private readonly rootPath: string;
 
     /**
@@ -29,6 +32,7 @@ export class LocalDirectorySandboxProvider implements ISandboxProvider {
      *                 durable when using `agent` or `agent-user` scopes, since temp dirs get swept.
      */
     public constructor(rootPath?: string) {
+        super();
         this.rootPath = rootPath ?? join(tmpdir(), 'mj-agent-harness');
     }
 

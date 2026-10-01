@@ -2,6 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CodeExecutionService } from '../CodeExecutionService';
 import { CodeExecutionParams, CodeExecutionResult } from '../types';
 import { WorkerPool } from '../WorkerPool';
+import { CODE_EXECUTION_LIMITS } from '../limits';
+import { LogStatus } from '@memberjunction/core';
+
+vi.mock('@memberjunction/core', () => ({
+  LogError: vi.fn(),
+  LogStatus: vi.fn()
+}));
 
 // Mock the WorkerPool to avoid actually forking child processes
 vi.mock('../WorkerPool', () => {
@@ -184,6 +191,78 @@ describe('CodeExecutionService', () => {
 
       await service.execute(params);
       expect(mockPoolInstance.execute).toHaveBeenCalledWith(params);
+    });
+
+    describe('limit policy', () => {
+      const run = async (extra: Partial<CodeExecutionParams>) => {
+        await service.execute({ code: 'output = 1;', language: 'javascript', ...extra });
+        return mockPoolInstance.execute.mock.calls[0][0] as CodeExecutionParams;
+      };
+
+      it('clamps an enormous timeout to the ceiling', async () => {
+        const sent = await run({ timeoutSeconds: 86_400 });
+        expect(sent.timeoutSeconds).toBe(CODE_EXECUTION_LIMITS.Timeout.MaxSeconds);
+      });
+
+      it('clamps an enormous memory limit to the ceiling', async () => {
+        const sent = await run({ memoryLimitMB: 8192 });
+        expect(sent.memoryLimitMB).toBe(CODE_EXECUTION_LIMITS.Memory.MaxMB);
+      });
+
+      it('treats Infinity as above the ceiling rather than "no limit"', async () => {
+        const sent = await run({ timeoutSeconds: Infinity, memoryLimitMB: Infinity });
+        expect(sent.timeoutSeconds).toBe(CODE_EXECUTION_LIMITS.Timeout.MaxSeconds);
+        expect(sent.memoryLimitMB).toBe(CODE_EXECUTION_LIMITS.Memory.MaxMB);
+      });
+
+      it('replaces zero, negative and NaN limits with the default', async () => {
+        const zero = await run({ timeoutSeconds: 0, memoryLimitMB: -5 });
+        expect(zero.timeoutSeconds).toBe(CODE_EXECUTION_LIMITS.Timeout.DefaultSeconds);
+        expect(zero.memoryLimitMB).toBe(CODE_EXECUTION_LIMITS.Memory.DefaultMB);
+
+        mockPoolInstance.execute.mockClear();
+        const nan = await run({ timeoutSeconds: NaN });
+        expect(nan.timeoutSeconds).toBe(CODE_EXECUTION_LIMITS.Timeout.DefaultSeconds);
+      });
+
+      it('raises a below-floor memory limit to the floor', async () => {
+        const sent = await run({ memoryLimitMB: 1 });
+        expect(sent.memoryLimitMB).toBe(CODE_EXECUTION_LIMITS.Memory.MinMB);
+      });
+
+      it('passes in-range limits through unchanged, as the same object', async () => {
+        const params: CodeExecutionParams = {
+          code: 'output = 1;',
+          language: 'javascript',
+          timeoutSeconds: 45,
+          memoryLimitMB: 256
+        };
+        await service.execute(params);
+        expect(mockPoolInstance.execute.mock.calls[0][0]).toBe(params);
+      });
+
+      it('does not invent limits the caller did not supply', async () => {
+        const sent = await run({});
+        expect(sent).not.toHaveProperty('timeoutSeconds');
+        expect(sent).not.toHaveProperty('memoryLimitMB');
+      });
+
+      it('preserves bridge handlers and the abort signal when it clamps', async () => {
+        const handler = vi.fn();
+        const controller = new AbortController();
+        const sent = await run({
+          timeoutSeconds: 99_999,
+          bridgeHandlers: { ping: handler },
+          abortSignal: controller.signal
+        });
+        expect(sent.bridgeHandlers?.ping).toBe(handler);
+        expect(sent.abortSignal).toBe(controller.signal);
+      });
+
+      it('logs when it clamps', async () => {
+        await run({ timeoutSeconds: 99_999 });
+        expect(LogStatus).toHaveBeenCalledWith(expect.stringContaining('timeoutSeconds=99999 is above-maximum'));
+      });
     });
 
     it('should not call execute on worker pool for invalid params', async () => {

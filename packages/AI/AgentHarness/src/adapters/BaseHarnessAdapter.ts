@@ -105,6 +105,19 @@ export abstract class BaseHarnessAdapter {
     }
 
     /**
+     * What this adapter enforces when {@link Capabilities}.PermissionPolicy is false but it still
+     * honours PART of the policy (for example the posture but not the tool lists).
+     *
+     * Undefined — the default — means "nothing is enforced", which is what `PermissionPolicy: false`
+     * normally implies. An adapter that returns text here is saying the policy is partly live, so
+     * the runtime can describe the gap accurately instead of reporting a posture it IS applying as
+     * ignored. Informational only: it never changes what is enforced.
+     */
+    public get PartialPolicyEnforcement(): string | undefined {
+        return undefined;
+    }
+
+    /**
      * Whether this session actually continued {@link HarnessSessionConfig.ResumeSessionId}.
      *
      * Default false: a harness that cannot resume, or one offered no prior session, starts cold and

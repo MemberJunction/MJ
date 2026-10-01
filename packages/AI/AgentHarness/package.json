@@ -21,6 +21,7 @@
     "@memberjunction/ai-core-plus": "6.2.0-edge.1",
     "@memberjunction/core": "6.2.0-edge.1",
     "@memberjunction/core-entities": "6.2.0-edge.1",
+    "@memberjunction/credentials": "6.2.0-edge.1",
     "@memberjunction/global": "6.2.0-edge.1",
     "@memberjunction/templates": "6.2.0-edge.1"
   },

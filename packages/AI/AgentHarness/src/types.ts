@@ -163,3 +163,88 @@ export interface HarnessPermissionPolicy {
     /** Tool patterns the agent must never use. Takes precedence over {@link AllowedTools}. */
     DisallowedTools?: string[];
 }
+
+/**
+ * Resource ceilings for a container-backed sandbox, as written under `sandbox.limits` in an agent's
+ * `TypeConfiguration`.
+ *
+ * Every field is optional; the provider applies a conservative default for anything omitted, so an
+ * agent with no `limits` block is still bounded. Only providers that can enforce a limit read it —
+ * the local provider has no way to and ignores the block.
+ */
+export interface HarnessSandboxLimits {
+    /** Memory ceiling in docker syntax: a number with an optional `b`/`k`/`m`/`g` suffix (`"2g"`). */
+    memory?: string; // case-violation-ok-legacy-back-compat: TypeConfiguration JSON key (camelCase, like harnessName)
+    /** CPU ceiling in cores (`1.5` = one and a half cores). */
+    cpus?: number; // case-violation-ok-legacy-back-compat: TypeConfiguration JSON key (camelCase, like harnessName)
+    /** Maximum number of processes/threads, the guard against fork bombs. */
+    pids?: number; // case-violation-ok-legacy-back-compat: TypeConfiguration JSON key (camelCase, like harnessName)
+}
+
+/** Docker-specific sandbox settings, under `sandbox.docker`. */
+export interface HarnessDockerSettings {
+    /**
+     * `uid[:gid]` (or names) the container runs as. Defaults to the MJAPI process's own uid:gid so
+     * files written to the bind-mounted workspace stay owned by the MJAPI user. Overriding it is
+     * the escape hatch for an image that only works as a particular user.
+     */
+    user?: string; // case-violation-ok-legacy-back-compat: TypeConfiguration JSON key (camelCase, like harnessName)
+}
+
+/**
+ * OpenShell-specific sandbox settings, under `sandbox.openshell`. EXPERIMENTAL — see
+ * `OpenShellSandboxProvider`.
+ */
+export interface HarnessOpenShellSettings {
+    /** Gateway name to use (passed as `--gateway`); defaults to the CLI's active gateway. */
+    gateway?: string; // case-violation-ok-legacy-back-compat: TypeConfiguration JSON key (camelCase, like harnessName)
+    /** Path of the `openshell` binary; defaults to `openshell` on PATH. */
+    cliPath?: string; // case-violation-ok-legacy-back-compat: TypeConfiguration JSON key (camelCase, like harnessName)
+    /**
+     * Names of credential providers the operator registered on the gateway (for example
+     * `anthropic`). They are attached to the sandbox with `--provider`; OpenShell injects their
+     * secrets as placeholders the sandbox never sees in clear.
+     */
+    providers?: string[]; // case-violation-ok-legacy-back-compat: TypeConfiguration JSON key (camelCase, like harnessName)
+    /**
+     * Environment variable names whose real values are supplied by an OpenShell provider. A granted
+     * MJ credential with one of these names is NOT injected — doing so would put the secret in the
+     * sandbox in the clear, defeating the provider.
+     */
+    providerManagedEnv?: string[]; // case-violation-ok-legacy-back-compat: TypeConfiguration JSON key (camelCase, like harnessName)
+    /** URL or `host:port` of the MJ MCP endpoint, allowed under the `mcp-only` network policy. */
+    mcpEndpoint?: string; // case-violation-ok-legacy-back-compat: TypeConfiguration JSON key (camelCase, like harnessName)
+    /**
+     * Executable paths the generated network rules apply to. Defaults to `["/**"]` (any binary) —
+     * OpenShell requires every rule to name binaries, and the host list is already narrow. Tighten
+     * it to the harness binary's real path for a stricter policy.
+     */
+    networkBinaries?: string[]; // case-violation-ok-legacy-back-compat: TypeConfiguration JSON key (camelCase, like harnessName)
+}
+
+/**
+ * The `sandbox` block of an agent's `TypeConfiguration`.
+ *
+ * Parsed from JSON an operator wrote by hand, so providers must treat every field as untrusted and
+ * validate it before it reaches a command line or a policy file.
+ */
+export interface HarnessSandboxSettings {
+    /**
+     * Which sandbox provider to use: the key a `BaseSandboxProvider` subclass registered under.
+     * Built in: `local` (default), `docker`, and the experimental `openshell`.
+     */
+    provider?: string; // case-violation-ok-legacy-back-compat: TypeConfiguration JSON key (camelCase, like harnessName)
+    /** Container image, for providers that have one. */
+    image?: string; // case-violation-ok-legacy-back-compat: TypeConfiguration JSON key (camelCase, like harnessName)
+    workspaceScope?: HarnessWorkspaceScope; // case-violation-ok-legacy-back-compat: TypeConfiguration JSON key (camelCase, like harnessName)
+    networkPolicy?: HarnessNetworkPolicy; // case-violation-ok-legacy-back-compat: TypeConfiguration JSON key (camelCase, like harnessName)
+    /**
+     * Hosts reachable under the `allowlist` and `mcp-only` policies — `host` or `host:port`
+     * (port defaults to 443). Only enforced by providers that can enforce egress (OpenShell);
+     * Docker logs that it cannot.
+     */
+    allowedHosts?: string[]; // case-violation-ok-legacy-back-compat: TypeConfiguration JSON key (camelCase, like harnessName)
+    limits?: HarnessSandboxLimits; // case-violation-ok-legacy-back-compat: TypeConfiguration JSON key (camelCase, like harnessName)
+    docker?: HarnessDockerSettings; // case-violation-ok-legacy-back-compat: TypeConfiguration JSON key (camelCase, like harnessName)
+    openshell?: HarnessOpenShellSettings; // case-violation-ok-legacy-back-compat: TypeConfiguration JSON key (camelCase, like harnessName)
+}

@@ -212,7 +212,7 @@ The credential grant edge — which credentials a given agent carries into its s
 {
   "harnessName": "Claude Code",            // lookup into MJ: AI Agent Harnesses
   "sandbox": {
-    "provider": "local | docker | remote",
+    "provider": "local | docker | openshell | remote",   // any BaseSandboxProvider key
     "image": "ghcr.io/memberjunction/harness-sandbox:latest",   // docker/remote only
     "workspaceScope": "run | agent | agent-user",               // default agent-user (§13.5)
     "workspaceConcurrency": "queue | fail | fork",              // durable scopes only
@@ -295,6 +295,8 @@ The harness process receives exactly two kinds of secrets, both injected at sess
 
 1. **The per-run MJ MCP key** — minted via `@memberjunction/api-keys` with **read-only scopes** derived from the agent's granted surface, narrowed by `mcpLoopback` patterns; expiry = `MaxTimePerRun` + grace; revoked at teardown. Every loopback call executes and is logged **as the run's context user**, so RLS and field permissions apply exactly as if MJ's own loop were reading.
 2. **Purpose-scoped external credentials** from `MJ: AI Agent Credentials` (§6.3) as env vars — the LLM key (with the bindings fallback) and any granted integration tokens. Never DB credentials, never user tokens, never a general MJ API key.
+
+> **Update 2026-10-01 — remote sandbox / network policy.** Sandbox providers are now pluggable (`BaseSandboxProvider`, resolved by `sandbox.provider` through `ClassFactory`; built-ins `local`, `docker`, `openshell`). `docker` was hardened (dropped caps, `no-new-privileges`, pids/memory/cpu ceilings, non-root uid, secrets passed by name rather than argv) but still cannot enforce `mcp-only` / `allowlist`; it now logs that on every provision. An **experimental** `openshell` provider (NVIDIA OpenShell, pre-1.0 — v0.1.0 shipped 2026-09-25 with breaking changes) drives the `openshell` CLI and is the first provider that can enforce `mcp-only` / `allowlist` (deny-by-default egress via a generated per-run policy, credentials via OpenShell providers so the key never enters the sandbox). It supports `run` scope only and rejects `open`; it has been written against OpenShell's source and its commands/policies checked against the real v0.1.2 CLI and policy parser, but not yet run end-to-end against a live gateway. See `packages/AI/AgentHarness/README.md`.
 
 Action/sub-agent/skill authority never enters the sandbox at all — it lives in the turn protocol on the MJ side (§4.1). `networkPolicy: mcp-only` (Docker provider) is the recommended production posture: sandbox reaches the MJ MCP endpoint and the LLM vendor API, nothing else. Third-party MCP tools synced into MJ as actions (via `MCPClientManager.syncActionsForServer`) are available to harness agents **through turn-end action execution**, keeping one authority channel even for external tools.
 
