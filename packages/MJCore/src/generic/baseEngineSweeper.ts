@@ -19,11 +19,15 @@ import type { EngineSweepResult } from './baseEngine';
 interface SweepableEngine {
     readonly Loaded: boolean;
     SweepAgainstDatabase(): Promise<EngineSweepResult>;
+    /** Whether the engine holds any config a sweep could act on. See {@link BaseEngine.HasSweepableConfigs}. */
+    HasSweepableConfigs(): boolean;
 }
 
 function isSweepable(engine: unknown): engine is SweepableEngine {
     const candidate = engine as Partial<SweepableEngine> | null;
-    return typeof candidate?.SweepAgainstDatabase === 'function' && candidate.Loaded === true;
+    return typeof candidate?.SweepAgainstDatabase === 'function'
+        && typeof candidate.HasSweepableConfigs === 'function'
+        && candidate.Loaded === true;
 }
 
 /** Leases end this long before the next tick, so the same server can claim them again. */
@@ -73,6 +77,12 @@ export class BaseEngineSweeper extends BaseSingleton<BaseEngineSweeper> {
         const results: EngineSweepResult[] = [];
         for (const engine of BaseEngineRegistry.Instance.GetAllEngines()) {
             if (!isSweepable(engine)) {
+                continue;
+            }
+            // Ask before paying. The lease is a cross-process round trip and the sweep a database
+            // query, and an engine whose entities all trust their cache has nothing for either to
+            // find — so on a stock installation this loop claims no leases at all (plan §30).
+            if (!engine.HasSweepableConfigs()) {
                 continue;
             }
             if (leaseMs !== undefined && !(await LocalCacheManager.Instance.TryAcquireSharedLease(`engine-sweep:${engine.constructor.name}`, leaseMs))) {

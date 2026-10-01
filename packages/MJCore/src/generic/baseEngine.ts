@@ -2510,6 +2510,19 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         return result;
     }
 
+    /**
+     * Whether this engine holds any config a sweep could act on — an entity config, loaded and
+     * readable, whose entity declares `TrustServerCacheCompletely = false`.
+     *
+     * Exposed so a caller can decide whether the engine is worth the cost of asking. The fleet
+     * sweeper takes a cross-process lease per engine per interval; on an installation where nothing
+     * declares out-of-band writes, every one of those leases would be claimed only to discover there
+     * is nothing to compare. Reading this first is an in-memory check (plan §30).
+     */
+    public HasSweepableConfigs(): boolean {
+        return this.sweepableConfigs().length > 0;
+    }
+
     /** Entity configs holding a successful, readable load whose entity can drift outside MJ. */
     private sweepableConfigs(): BaseEnginePropertyConfig[] {
         return this._metadataConfigs.filter(config => {
