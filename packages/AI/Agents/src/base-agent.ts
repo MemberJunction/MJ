@@ -9588,8 +9588,13 @@ The context is now within limits. Please retry your request with the recovered c
         params: Record<string, unknown>,
         explicitResponseType?: Record<string, unknown>
     ): void {
+        // Align a copy: the object may be the caller's per-run override, which sub-agents inherit with the
+        // run's data. Writing into it would turn a key "explicit" for every later merge of that override.
+        if (IsPlainObject(params.includeResponseTypeDefinition)) {
+            params.includeResponseTypeDefinition = { ...params.includeResponseTypeDefinition };
+        }
         // Ensure includeResponseTypeDefinition is an object
-        if (!params.includeResponseTypeDefinition || typeof params.includeResponseTypeDefinition !== 'object') {
+        else if (!params.includeResponseTypeDefinition || typeof params.includeResponseTypeDefinition !== 'object') {
             params.includeResponseTypeDefinition = {
                 payload: true,
                 responseForms: true,

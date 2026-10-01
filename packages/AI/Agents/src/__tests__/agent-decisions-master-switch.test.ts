@@ -466,5 +466,17 @@ describe('decisionsEnabled, the master switch for decision-model use', () => {
 
             expect(ask).toHaveBeenCalledTimes(1);
         });
+
+        it("keeps a sub-agent's decision fields when its parent, with the switch off, merged the same per-run override first", () => {
+            // A sub-agent's run data spreads its parent's, so both merge the one override object.
+            const override: Record<string, unknown> = { includeResponseTypeDefinition: { payload: false } };
+            const agent = new SwitchAgent();
+
+            agent.MergePromptParams(agentRow(AGENT_ID, 'Switch Agent'), override);
+            const subAgent = agent.MergePromptParams(agentRow(SUB_AGENTS[0].ID, 'Invoice Writer', SWITCH_ON), override);
+
+            expect(override).toEqual({ includeResponseTypeDefinition: { payload: false } });
+            expect(subAgent.includeResponseTypeDefinition).toMatchObject({ payload: false, decisions: true, finishIf: true });
+        });
     });
 });
