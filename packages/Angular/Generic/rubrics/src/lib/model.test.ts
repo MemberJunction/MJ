@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { AddCriterion, AddNode, AnchorsForLevel, AnswerLevel, BandFor, CanSubmit, CatalogRow, ComparisonMatrix, DisplayScore, DraftProblems, IncompleteAnswers, MoveNode, MoveProblem, NodeFields, NodeFromRow, PlanBandSave, PlanNodeSave, PreviewScore, publishPreview, SampleMatchesTree, ScaleFromRow, SetAnchor, SetGate, SetScale, SetWeight, VersionRows, WeightShares } from './model.js';
+import { AddCriterion, AddNode, AnchorsForLevel, AnswerLevel, BandFor, CanSubmit, CatalogRow, ChosenPublishBump, ScoringShortcutApplies, ComparisonMatrix, DisplayScore, DraftProblems, IncompleteAnswers, MoveNode, MoveProblem, NodeFields, NodeFromRow, PlanBandSave, PlanNodeSave, PreviewScore, publishPreview, SampleMatchesTree, ScaleFromRow, SetAnchor, SetGate, SetScale, SetWeight, VersionRows, WeightShares } from './model.js';
 
 const scale: RubricScaleSnapshot = {
     id: 'scale',
@@ -175,6 +175,13 @@ describe('publish, diff, and comparison', () => {
         const preview = publishPreview(null, snap(1, null));
         expect(preview.computedBump).toBeNull();
         expect(preview.appliedBump).toBe('Initial');
+        expect(ChosenPublishBump(null)).toBeNull();
+        expect(ChosenPublishBump('Initial')).toBeNull();
+        expect(ChosenPublishBump('Major')).toBe('Major');
+        expect(ScoringShortcutApplies('input')).toBe(false);
+        expect(ScoringShortcutApplies('TEXTAREA')).toBe(false);
+        expect(ScoringShortcutApplies('select')).toBe(false);
+        expect(ScoringShortcutApplies('fieldset')).toBe(true);
         expect(preview.nextVersion).toBe('1.0.0');
         expect(preview.identical).toBe(false);
     });

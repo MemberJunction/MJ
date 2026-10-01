@@ -146,8 +146,7 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
         const version = await this.ProviderToUse.GetEntityObject('MJ: Rubric Versions', this.ProviderToUse.CurrentUser);
         await version.InnerLoad(CompositeKey.FromID(this.DraftId));
         version.Set('ChangeSummary', event.summary);
-        if (event.bump) version.Set('RequestedBump', event.bump);
-        (version as unknown as { RequestedBump?: string | null }).RequestedBump = event.bump;
+        if (event.bump === 'Major' || event.bump === 'Minor' || event.bump === 'Patch') version.Set('RequestedBump', event.bump);
         version.Set('Status', 'Published');
         const ok = await version.Save();
         this.Message = ok ? 'Published.' : (version.LatestResult?.Message ?? 'Publish failed.');

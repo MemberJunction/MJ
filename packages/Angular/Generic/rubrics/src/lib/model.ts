@@ -358,6 +358,17 @@ export function PublishPreview(base: RubricVersionSnapshot | null, draft: Rubric
 }
 
 /** @deprecated Use {@link PublishPreview}. */
+/** Keyboard shortcuts apply to the criterion card, not to the rationale or level controls. */
+export function ScoringShortcutApplies(tagName: string | undefined): boolean {
+    const tag = tagName?.toLowerCase();
+    return tag !== 'input' && tag !== 'textarea' && tag !== 'select';
+}
+
+/** A requested bump is sent only when the author picked one. Initial is computed, not requested. */
+export function ChosenPublishBump(requested: string | null | undefined): 'Major' | 'Minor' | 'Patch' | null {
+    return requested === 'Major' || requested === 'Minor' || requested === 'Patch' ? requested : null;
+}
+
 export function publishPreview(base: RubricVersionSnapshot | null, draft: RubricVersionSnapshot, requested?: 'Major' | 'Minor' | 'Patch' | null): PublishPreview {
     return PublishPreview(base, draft, requested);
 }

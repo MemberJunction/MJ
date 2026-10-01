@@ -2,6 +2,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import type { NotApplicablePolicy } from '@memberjunction/rubrics-base';
+import { ScoringShortcutApplies } from './model.js';
 import { AnchorsForLevel, AnswerLevel, CanSubmit, EffectivePolicy, IncompleteAnswers, type RubricFormAnswer } from './model.js';
 
 /**
@@ -75,6 +76,7 @@ export class RubricScoringFormComponent {
     }
 
     public OnKey(node: RubricNodeSnapshot, event: KeyboardEvent): void {
+        if (!ScoringShortcutApplies((event.target as HTMLElement | null)?.tagName)) return;
         const scale = this.Scale(node);
         const digit = Number(event.key);
         if (scale && digit >= 1 && digit <= scale.levels.length) {

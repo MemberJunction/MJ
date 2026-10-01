@@ -567,7 +567,7 @@ import {
     TimelineViewType,
 } from '@memberjunction/ng-entity-viewer';
 
-// @memberjunction/ng-core-entity-forms (54 classes)
+// @memberjunction/ng-core-entity-forms (59 classes)
 import {
     AIAgentCategoryHeaderPanel,
     AIAgentCategoryHierarchyPanel,
@@ -615,7 +615,12 @@ import {
     RecordProcessCategoryHierarchyPanel,
     RecordProcessFormComponentExtended,
     RecordProcessFormPolicy,
+    RubricEvaluationComparePanel,
+    RubricEvaluationFormPolicy,
+    RubricEvaluationResultPanel,
     RubricFormPolicy,
+    RubricScaleFormPolicy,
+    RubricScaleLevelsPanel,
     SkillHierarchyPanel,
     TagHierarchyPanel,
     TemplateCategoryHierarchyPanel,
@@ -1218,7 +1223,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RecordProcessCategoryHierarchyPanel,
     RecordProcessFormComponentExtended,
     RecordProcessFormPolicy,
+    RubricEvaluationComparePanel,
+    RubricEvaluationFormPolicy,
+    RubricEvaluationResultPanel,
     RubricFormPolicy,
+    RubricScaleFormPolicy,
+    RubricScaleLevelsPanel,
     SkillHierarchyPanel,
     TagHierarchyPanel,
     TemplateCategoryHierarchyPanel,
@@ -1261,7 +1271,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 572;
+export const CLASS_REGISTRATIONS_COUNT = 577;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -2,7 +2,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { publishPreview, type PublishPreview } from './model.js';
+import { ChosenPublishBump, publishPreview, type PublishPreview } from './model.js';
 
 /** Shows the computed bump, each change, and an optional higher bump. Confirm emits. The widget does not publish. */
 @Component({
@@ -35,7 +35,8 @@ export class RubricPublishDialogComponent {
     }
 
     public OnConfirm(): void {
-        if (this.Preview && !this.Preview.identical) this.Confirm.emit({ bump: this.Preview.appliedBump, summary: this.Summary });
+        if (!this.Preview || this.Preview.identical) return;
+        this.Confirm.emit({ bump: ChosenPublishBump(this.RequestedBump), summary: this.Summary });
     }
 
     public get BumpLabel(): string {

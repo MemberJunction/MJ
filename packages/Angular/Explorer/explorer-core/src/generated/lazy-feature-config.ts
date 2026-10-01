@@ -169,13 +169,6 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::VectorManagementResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::VisualizationResource': loadNgDashboardsAiDashboardsModule,
 
-  // @memberjunction/ng-dashboards → ./rubrics-dashboards.module
-  'BaseDashboard::RubricScalesDashboard': loadNgDashboardsRubricsDashboardsModule,
-  'BaseDashboard::RubricsDashboard': loadNgDashboardsRubricsDashboardsModule,
-  'BaseResourceComponent::RubricDriftResource': loadNgDashboardsRubricsDashboardsModule,
-  'BaseResourceComponent::RubricScalesResource': loadNgDashboardsRubricsDashboardsModule,
-  'BaseResourceComponent::RubricsResource': loadNgDashboardsRubricsDashboardsModule,
-
   // @memberjunction/ng-dashboards → ./archiving-dashboards.module
   'BaseResourceComponent::ArchiveConfigResource': loadNgDashboardsArchivingDashboardsModule,
   'BaseResourceComponent::ArchiveRunsResource': loadNgDashboardsArchivingDashboardsModule,
@@ -274,6 +267,13 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   // @memberjunction/ng-dashboards → ./routines-dashboards.module
   'BaseResourceComponent::UserRoutines': loadNgDashboardsRoutinesDashboardsModule,
 
+  // @memberjunction/ng-dashboards → ./rubrics-dashboards.module
+  'BaseDashboard::RubricScalesDashboard': loadNgDashboardsRubricsDashboardsModule,
+  'BaseDashboard::RubricsDashboard': loadNgDashboardsRubricsDashboardsModule,
+  'BaseResourceComponent::RubricDriftResource': loadNgDashboardsRubricsDashboardsModule,
+  'BaseResourceComponent::RubricScalesResource': loadNgDashboardsRubricsDashboardsModule,
+  'BaseResourceComponent::RubricsResource': loadNgDashboardsRubricsDashboardsModule,
+
   // @memberjunction/ng-dashboards → ./scheduling-dashboards.module
   'BaseDashboard::SchedulingDashboard': loadNgDashboardsSchedulingDashboardsModule,
   'BaseResourceComponent::SchedulingActivityResource': loadNgDashboardsSchedulingDashboardsModule,
@@ -306,4 +306,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 118;
+export const LAZY_FEATURE_CONFIG_COUNT = 122;

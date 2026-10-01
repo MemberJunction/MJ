@@ -3,7 +3,7 @@ import { RunView } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { MJEmptyStateComponent, MJPageBodyComponent, MJPageHeaderComponent, MJPageLayoutComponent, MJRefreshButtonComponent } from '@memberjunction/ng-ui-components';
-import { driftDeltas, driftSeries, periodMeans } from '@memberjunction/rubrics/dist/sampling.js';
+import { driftDeltas, driftSeries, periodMeans } from '@memberjunction/rubrics-base';
 
 /** Rolling mean against the previous period. This is not an alert product. */
 @Component({
