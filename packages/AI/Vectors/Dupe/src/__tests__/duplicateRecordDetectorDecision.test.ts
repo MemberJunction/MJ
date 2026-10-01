@@ -79,7 +79,8 @@ vi.mock('@memberjunction/ai', async (importOriginal) => {
     };
 });
 
-vi.mock('@memberjunction/ai-vectordb', () => ({
+vi.mock('@memberjunction/ai-vectordb', async () => ({
+    ProviderIndexName: (await vi.importActual<typeof import('@memberjunction/ai-vectordb')>('@memberjunction/ai-vectordb')).ProviderIndexName,
     VectorDBBase: vi.fn(),
     BaseResponse: vi.fn(),
 }));

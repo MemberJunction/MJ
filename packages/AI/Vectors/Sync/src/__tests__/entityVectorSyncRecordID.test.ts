@@ -50,7 +50,8 @@ vi.mock('@memberjunction/ai-prompts', () => ({
     }
   },
 }));
-vi.mock('@memberjunction/ai-vectordb', () => ({
+vi.mock('@memberjunction/ai-vectordb', async () => ({
+  ProviderIndexName: (await vi.importActual<typeof import('@memberjunction/ai-vectordb')>('@memberjunction/ai-vectordb')).ProviderIndexName,
   VectorDBBase: class { constructor(_k: string) {} },
 }));
 vi.mock('@memberjunction/ai-vectors', () => ({

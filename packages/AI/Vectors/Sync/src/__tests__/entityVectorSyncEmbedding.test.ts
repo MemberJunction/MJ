@@ -48,7 +48,8 @@ vi.mock('@memberjunction/ai-prompts', () => ({
     RunEmbedding = h.runEmbedding;
   },
 }));
-vi.mock('@memberjunction/ai-vectordb', () => ({
+vi.mock('@memberjunction/ai-vectordb', async () => ({
+  ProviderIndexName: (await vi.importActual<typeof import('@memberjunction/ai-vectordb')>('@memberjunction/ai-vectordb')).ProviderIndexName,
   VectorDBBase: class {},
 }));
 vi.mock('@memberjunction/ai-vectors', () => ({

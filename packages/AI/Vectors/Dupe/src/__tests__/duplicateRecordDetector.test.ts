@@ -199,7 +199,8 @@ vi.mock('@memberjunction/ai', () => ({
     GetAIAPIKey: vi.fn().mockReturnValue('mock-api-key'),
 }));
 
-vi.mock('@memberjunction/ai-vectordb', () => ({
+vi.mock('@memberjunction/ai-vectordb', async () => ({
+    ProviderIndexName: (await vi.importActual<typeof import('@memberjunction/ai-vectordb')>('@memberjunction/ai-vectordb')).ProviderIndexName,
     VectorDBBase: vi.fn(),
     BaseResponse: vi.fn(),
 }));
@@ -547,6 +548,30 @@ describe('DuplicateRecordDetector', () => {
                     Description: expect.stringContaining('Duplicate detection single record'),
                 })
             );
+        });
+
+        it('queries the vector index by its ExternalID, not its MJ display Name', async () => {
+            const { KnowledgeHubMetadataEngine } = await import('@memberjunction/core-entities');
+            vi.mocked(KnowledgeHubMetadataEngine.Instance.GetVectorIndexByID).mockReturnValueOnce({
+                ID: 'vi-1',
+                Name: 'Contacts Index (Pinecone)',
+                ExternalID: 'contacts-index',
+                VectorDatabaseID: 'vdb-1',
+                EmbeddingModelID: 'model-1',
+            } as never);
+            testState.entityDocument = {
+                ID: 'doc-1',
+                Name: 'Contacts Doc',
+                EntityID: 'entity-1',
+                AIModelID: 'model-1',
+                VectorDatabaseID: 'vdb-1',
+                VectorIndexID: 'vi-1',
+                Type: 'Template',
+                TemplateID: 'tmpl-1',
+            };
+            await detector.CheckSingleRecord('doc-1', new CompositeKey(), {}, new UserInfo());
+
+            expect((detector as unknown as { indexName: string }).indexName).toBe('contacts-index');
         });
     });
 

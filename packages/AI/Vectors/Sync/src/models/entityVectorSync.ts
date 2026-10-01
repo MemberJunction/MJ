@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai';
 import { AIEmbeddingRunner, EmbeddingRunResult } from '@memberjunction/ai-prompts';
 import { CredentialEngine } from '@memberjunction/credentials';
-import { BaseResponse, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
+import { BaseResponse, ProviderIndexName, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 import { PageRecordsParams, VectorBase } from '@memberjunction/ai-vectors';
 import { BaseEntity, CompositeKey, EntityField, EntityFieldInfo, EntityInfo, IMetadataProvider, LogError, LogStatus, LogStatusEx, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
 import { MJAIModelEntity, MJEntityDocumentEntity, MJEntityDocumentTypeEntity, MJEntityRecordDocumentEntity, MJTemplateContentEntity,
@@ -157,7 +157,8 @@ export class EntityVectorSyncer extends VectorBase {
     const vectorIndexProviderConfig = this.parseProviderConfig(vectorIndexEntity.ProviderConfig);
 
     const vectorUpserter = this.createVectorUpserter(
-      entityDocument, templateContent, obj.vectorDB, vectorIndexEntity.Name, delayTimeMS,
+      // Address the index by its provider-side name (ExternalID), not the MJ display Name.
+      entityDocument, templateContent, obj.vectorDB, ProviderIndexName(vectorIndexEntity), delayTimeMS,
       params.UpsertBatchCount || pipelineConfig?.upsertBatchSize,
       vectorIndexProviderConfig
     );
