@@ -24,7 +24,11 @@ function provider() {
         async RunView(params: { EntityName: string }) {
             if (params.EntityName === 'MJ: Rubric Criteria') return { Success: true, Results: [{ RubricVersionID: 'version-1' }] };
             if (params.EntityName === 'MJ: Rubric Versions') return { Success: true, Results: [{ ID: 'version-1', Status: 'Published' }] };
-            if (params.EntityName === 'MJ: Rubric Scale Levels') return { Success: true, Results: [{ ID: 'level-1', Value: 1, NormalizedValue: 1, Label: 'High', Description: 'wording' }] };
+            if (params.EntityName === 'MJ: Rubric Scale Levels') {
+            const filter = (params as { ExtraFilter?: string }).ExtraFilter ?? '';
+            if (filter.includes("ID=''")) return { Success: true, Results: [] };
+            return { Success: true, Results: [{ ID: 'level-1', Value: 1, NormalizedValue: 1, Label: 'High', Description: 'wording' }] };
+        }
             if (params.EntityName === 'MJ: Rubric Scales') return { Success: true, Results: [{ ID: 'scale-1', ScaleType: 'Levels', HigherIsBetter: true }] };
             return { Success: true, Results: [] };
         },
@@ -46,5 +50,14 @@ describe('MJRubricScaleLevelEntityServer.ValidateAsync', () => {
         descriptionHost.Description = 'clearer';
         const allowed = await described.ValidateAsync();
         expect(allowed.Success).toBe(true);
+    });
+
+    it('refuses a new level on a scale a published version uses', async () => {
+        const created = new MJRubricScaleLevelEntityServer();
+        const host = created as unknown as { ID: string; ProviderToUse: ReturnType<typeof provider> };
+        host.ID = '';
+        host.ProviderToUse = provider();
+        const refused = await created.ValidateAsync();
+        expect(refused.Success).toBe(false);
     });
 });

@@ -13,6 +13,12 @@ import { validateEvaluationScores, type SubmitEvaluationInput } from './rubrics/
  */
 @RegisterClass(BaseEntity, 'MJ: Rubric Evaluation Scores')
 export class MJRubricEvaluationScoreEntityServer extends MJRubricEvaluationScoreEntity {
+    /**
+     * Set by the evaluation server before it saves a group rollup row.
+     * A client save leaves this false, so IsComputed is refused.
+     */
+    public allowServerComputedWrite = false;
+
     /** Throws RubricEvaluationError when this row is not a legal client write. */
     public assertWritable(input: SubmitEvaluationInput): void {
         validateEvaluationScores(input);
@@ -24,7 +30,7 @@ export class MJRubricEvaluationScoreEntityServer extends MJRubricEvaluationScore
      */
     public override async ValidateAsync(): Promise<ValidationResult> {
         const result = await super.ValidateAsync();
-        if (this.IsComputed) {
+        if (this.IsComputed && !this.allowServerComputedWrite) {
             result.Success = false;
             result.Errors.push({ Message: 'Computed score rows are written by the server.', FieldName: 'IsComputed' } as never);
         }

@@ -33,7 +33,12 @@ export class MJRubricScaleLevelEntityServer extends MJRubricScaleLevelEntity {
         const scales = await provider.RunView({ EntityName: 'MJ: Rubric Scales', ExtraFilter: `ID='${this.ScaleID}'` }, this.ContextCurrentUser);
         const storedLevel = stored.Results?.[0] as Record<string, unknown> | undefined;
         const scale = scales.Results?.[0] as Record<string, unknown> | undefined;
-        if (!storedLevel || !scale) return result;
+        if (!scale) return result;
+        if (!storedLevel) {
+            result.Success = false;
+            result.Errors.push({ Message: 'A scale used by a published version cannot add a level.', FieldName: 'Value' } as never);
+            return result;
+        }
         const shape = (level: { id: string; value: number; normalizedValue: number; label: string; description: string | null }): ScaleShape => ({
             scaleType: String(scale.ScaleType ?? 'Levels'),
             minValue: (scale.MinValue ?? null) as number | null,
