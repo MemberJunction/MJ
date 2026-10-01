@@ -16,6 +16,26 @@ import { InteractiveFormPanelComponent } from '../interactive-form/interactive-f
 import { ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
 import { FormSectionIndicatorCoordinator, type FormSectionIndicatorSource } from '../section-indicators/form-section-indicator-coordinator.service';
 import { ParseValidationSource, SumSectionIndicators, type FormSectionIndicators, type ParsedValidationSource } from '../section-indicators/form-section-indicators';
+import type { CollectFormContributionRegistrations, CollectFormContributionOptions } from '../panel-slot/collect-form-contribution-registrations';
+
+/** Lets a test answer the collector's call; every other test gets the real collector. */
+const collector = vi.hoisted(() => ({
+  answer: null as null | ((options: CollectFormContributionOptions | undefined) => FormContributionRegistration[]),
+  options: [] as Array<CollectFormContributionOptions | undefined>,
+}));
+vi.mock('../panel-slot/collect-form-contribution-registrations', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown> & {
+    CollectFormContributionRegistrations: typeof CollectFormContributionRegistrations;
+  }>();
+  return {
+    ...actual,
+    CollectFormContributionRegistrations: (...args: Parameters<typeof CollectFormContributionRegistrations>) => {
+      if (!collector.answer) return actual.CollectFormContributionRegistrations(...args);
+      collector.options.push(args[2]);
+      return collector.answer(args[2]);
+    },
+  };
+});
 
 /**
  * DOM coverage for <mj-record-form-container> — the form host CodeGen wraps every entity form in
@@ -840,6 +860,37 @@ describe('MjRecordFormContainerComponent (DOM) — the record the snapshot names
   it('names a saved record by its URL segment', () => {
     const key = CompositeKey.FromKeyValuePair('ID', 'acct-7');
     expect(publish({ IsSaved: true, PrimaryKey: key } as Partial<BaseEntity>)).toBe('ID|acct-7');
+  });
+
+  it('lists a compiled panel the user hid, marked hidden, as the apply flow sees it', () => {
+    const summary: FormContributionRegistration = {
+      Priority: 0, Source: 'class', Title: 'Summary',
+      Registration: { Key: 'accounts:summary' } as FormContributionRegistration['Registration'],
+      Metadata: { entity: 'Accounts', slot: 'after-fields', contributionKey: 'summary' },
+    };
+    collector.options = [];
+    collector.answer = (options) => (options?.IncludeHidden ? [summary] : []);
+    vi.spyOn(UserInfoEngine.Instance, 'GetSetting')
+      .mockImplementation((key: string) => (key === 'mj.formPanels.hidden.accounts' ? JSON.stringify(['summary']) : undefined));
+    try {
+      const f = render();
+      const form = {
+        record: { IsSaved: true, PrimaryKey: CompositeKey.FromKeyValuePair('ID', 'acct-7') },
+        EntityInfo: { Name: 'Accounts', RelatedEntities: [], ChildEntities: [] },
+        OwnsEntireFormBody: false,
+        CompositionChanged: { emit: () => undefined },
+        CompositionSnapshot: null as { Contributions: Array<{ Key: string; Source: string; Hidden: boolean }> } | null,
+      };
+      f.componentInstance.FormComponent = form as unknown as BaseFormComponent;
+      (f.componentInstance as unknown as Publishing).publishCompositionSnapshot(SPEC);
+      expect(collector.options.some((options) => options?.IncludeHidden === true)).toBe(true);
+      expect(form.CompositionSnapshot?.Contributions).toEqual([
+        expect.objectContaining({ Key: 'summary', Source: 'class', Hidden: true }),
+      ]);
+    } finally {
+      collector.answer = null;
+      vi.restoreAllMocks();
+    }
   });
 
   it('names no record for one not saved yet', () => {
