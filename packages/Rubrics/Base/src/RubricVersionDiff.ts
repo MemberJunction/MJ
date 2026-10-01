@@ -7,11 +7,17 @@ const RANK: Record<'Patch' | 'Minor' | 'Major', number> = { Patch: 1, Minor: 2, 
  * Classifies a draft against the version it was cloned from.
  *
  * The bump describes whether scores stay comparable, not which rows moved.
- * Major: a non-advisory node was added or removed, or a node's key, parent, type,
- * weight, scale, advisory flag, gate, gate minimum, not-applicable policy, rollup,
- * or evaluator config changed, or the version's not-applicable policy changed.
+ * Major: a non-advisory node was added or removed, or a non-advisory node's parent,
+ * type, weight, scale, gate, gate minimum, not-applicable policy, rollup, or evaluator
+ * config changed, or IsAdvisory flipped, or the version's not-applicable policy changed,
+ * or a scale a non-advisory node uses changed its type, range, step, direction, or a
+ * level's value or normalized value. A node that is advisory on both sides does not
+ * produce a major bump from those scoring fields: they do not change ScoringHash.
  * Minor: the pass threshold or minimum completeness changed, a band's range or tone
- * changed, an advisory node was added or removed, or evidence/rationale requirements changed.
+ * changed, an advisory node was added or removed, an advisory node's scoring fields
+ * changed, or evidence/rationale requirements changed.
+ * Bands match by label, which is unique inside a version, so a clone's new band ids
+ * are not a bump.
  * Patch: wording, sequence, and display range only.
  *
  * The highest change wins. AppliedBump is the max of that and the author's request;
@@ -86,6 +92,7 @@ export class RubricVersionDiff {
             }
         }
         RubricVersionDiff.diffBands(changes, base, draft);
+        RubricVersionDiff.diffScales(changes, base, draft);
         return changes;
     }
 
@@ -101,14 +108,15 @@ export class RubricVersionDiff {
         const parentNow = RubricVersionDiff.parentKey(draft, node);
         RubricVersionDiff.pushScalar(changes, 'Major', subject, 'ParentID', parentWas, parentNow);
         RubricVersionDiff.pushScalar(changes, 'Major', subject, 'NodeType', previous.nodeType, node.nodeType);
-        RubricVersionDiff.pushScalar(changes, 'Major', subject, 'Weight', previous.weight, node.weight);
-        RubricVersionDiff.pushScalar(changes, 'Major', subject, 'ScaleID', previous.scaleId ?? null, node.scaleId ?? null);
+        const scoringBump = previous.isAdvisory && node.isAdvisory ? 'Minor' : 'Major';
+        RubricVersionDiff.pushScalar(changes, scoringBump, subject, 'Weight', previous.weight, node.weight);
+        RubricVersionDiff.pushScalar(changes, scoringBump, subject, 'ScaleID', previous.scaleId ?? null, node.scaleId ?? null);
         RubricVersionDiff.pushScalar(changes, 'Major', subject, 'IsAdvisory', previous.isAdvisory, node.isAdvisory);
-        RubricVersionDiff.pushScalar(changes, 'Major', subject, 'IsGate', previous.isGate, node.isGate);
-        RubricVersionDiff.pushScalar(changes, 'Major', subject, 'GateMinimumScore', previous.gateMinimumScore ?? null, node.gateMinimumScore ?? null);
-        RubricVersionDiff.pushScalar(changes, 'Major', subject, 'NotApplicablePolicy', previous.notApplicablePolicy ?? null, node.notApplicablePolicy ?? null);
-        RubricVersionDiff.pushScalar(changes, 'Major', subject, 'RollupMethod', previous.rollupMethod ?? null, node.rollupMethod ?? null);
-        RubricVersionDiff.pushScalar(changes, 'Major', subject, 'EvaluatorConfig', canonicalJson(previous.evaluatorConfig ?? null), canonicalJson(node.evaluatorConfig ?? null));
+        RubricVersionDiff.pushScalar(changes, scoringBump, subject, 'IsGate', previous.isGate, node.isGate);
+        RubricVersionDiff.pushScalar(changes, scoringBump, subject, 'GateMinimumScore', previous.gateMinimumScore ?? null, node.gateMinimumScore ?? null);
+        RubricVersionDiff.pushScalar(changes, scoringBump, subject, 'NotApplicablePolicy', previous.notApplicablePolicy ?? null, node.notApplicablePolicy ?? null);
+        RubricVersionDiff.pushScalar(changes, scoringBump, subject, 'RollupMethod', previous.rollupMethod ?? null, node.rollupMethod ?? null);
+        RubricVersionDiff.pushScalar(changes, scoringBump, subject, 'EvaluatorConfig', canonicalJson(previous.evaluatorConfig ?? null), canonicalJson(node.evaluatorConfig ?? null));
         RubricVersionDiff.pushScalar(changes, 'Minor', subject, 'EvidenceRequired', previous.evidenceRequired, node.evidenceRequired);
         RubricVersionDiff.pushScalar(changes, 'Minor', subject, 'RationaleRequired', previous.rationaleRequired, node.rationaleRequired);
         RubricVersionDiff.pushScalar(changes, 'Patch', subject, 'Name', previous.name, node.name);
@@ -121,23 +129,58 @@ export class RubricVersionDiff {
     }
 
     private static diffBands(changes: VersionChange[], base: RubricVersionSnapshot, draft: RubricVersionSnapshot): void {
-        const before = new Map(base.bands.map(band => [band.id, band]));
-        const after = new Map(draft.bands.map(band => [band.id, band]));
-        for (const [id, band] of after) {
-            const previous = before.get(id);
+        // Label is unique inside a version. A clone assigns new ids, so matching by id
+        // would mark every unchanged band as removed and added.
+        const before = new Map(base.bands.map(band => [band.label, band]));
+        const after = new Map(draft.bands.map(band => [band.label, band]));
+        for (const [label, band] of after) {
+            const previous = before.get(label);
             if (!previous) {
-                changes.push({ bump: 'Minor', subject: id, property: 'band added' });
+                changes.push({ bump: 'Minor', subject: label, property: 'band added' });
                 continue;
             }
             if (previous.minScore !== band.minScore || previous.maxScore !== band.maxScore || previous.displayTone !== band.displayTone) {
-                changes.push({ bump: 'Minor', subject: id, property: 'band range' });
+                changes.push({ bump: 'Minor', subject: label, property: 'band range' });
             }
-            if (previous.label !== band.label || (previous.description ?? null) !== (band.description ?? null)) {
-                changes.push({ bump: 'Patch', subject: id, property: 'band wording' });
+            if ((previous.description ?? null) !== (band.description ?? null)) {
+                changes.push({ bump: 'Patch', subject: label, property: 'band wording' });
             }
         }
-        for (const [id] of before) {
-            if (!after.has(id)) changes.push({ bump: 'Minor', subject: id, property: 'band removed' });
+        for (const [label] of before) {
+            if (!after.has(label)) changes.push({ bump: 'Minor', subject: label, property: 'band removed' });
+        }
+    }
+
+    private static diffScales(changes: VersionChange[], base: RubricVersionSnapshot, draft: RubricVersionSnapshot): void {
+        const used = new Set<string>();
+        for (const node of [...base.nodes, ...draft.nodes]) {
+            if (!node.isAdvisory && node.scaleId) used.add(node.scaleId);
+        }
+        for (const id of used) {
+            const previous = base.scales.find(scale => scale.id === id);
+            const next = draft.scales.find(scale => scale.id === id);
+            if (!previous || !next) continue;
+            RubricVersionDiff.pushScalar(changes, 'Major', id, 'ScaleType', previous.scaleType, next.scaleType);
+            RubricVersionDiff.pushScalar(changes, 'Major', id, 'MinValue', previous.minValue ?? null, next.minValue ?? null);
+            RubricVersionDiff.pushScalar(changes, 'Major', id, 'MaxValue', previous.maxValue ?? null, next.maxValue ?? null);
+            RubricVersionDiff.pushScalar(changes, 'Major', id, 'Step', previous.step ?? null, next.step ?? null);
+            RubricVersionDiff.pushScalar(changes, 'Major', id, 'HigherIsBetter', previous.higherIsBetter, next.higherIsBetter);
+            const beforeLevels = new Map(previous.levels.map(level => [level.id, level]));
+            const afterLevels = new Map(next.levels.map(level => [level.id, level]));
+            for (const [levelId, level] of afterLevels) {
+                const was = beforeLevels.get(levelId);
+                if (!was) {
+                    changes.push({ bump: 'Major', subject: id, property: 'level added' });
+                    continue;
+                }
+                RubricVersionDiff.pushScalar(changes, 'Major', id, 'Value', was.value, level.value);
+                RubricVersionDiff.pushScalar(changes, 'Major', id, 'NormalizedValue', was.normalizedValue, level.normalizedValue);
+                RubricVersionDiff.pushScalar(changes, 'Patch', id, 'level label', was.label, level.label);
+                RubricVersionDiff.pushScalar(changes, 'Patch', id, 'level description', was.description ?? null, level.description ?? null);
+            }
+            for (const levelId of beforeLevels.keys()) {
+                if (!afterLevels.has(levelId)) changes.push({ bump: 'Major', subject: id, property: 'level removed' });
+            }
         }
     }
 

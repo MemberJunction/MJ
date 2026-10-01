@@ -103,6 +103,39 @@ describe('RubricVersionDiff', () => {
         expect(minor.nextVersion).toEqual({ major: 1, minor: 3, patch: 0 });
     });
 
+    it('treats a level normalizedValue change as Major and changes ScoringHash', async () => {
+        const edited = snapshot([node({ key: 'clarity' })]);
+        edited.scales = [{
+            id: 'scale',
+            scaleType: 'Levels',
+            higherIsBetter: true,
+            levels: [{ id: 'high', label: 'High', value: 1, normalizedValue: 0.4, description: 'wording', sequence: 0 }],
+        }];
+        const result = RubricVersionDiff.diff(base, edited);
+        expect(result.computedBump).toBe('Major');
+        expect(await scoringHash(edited)).not.toBe(await scoringHash(base));
+    });
+
+    it('does not bump when a clone keeps the band label and range and assigns a new id', () => {
+        const cloned = snapshot([node({ key: 'clarity' })]);
+        cloned.bands = [{ id: 'band-clone', label: 'Pass', description: 'ok', minScore: 0.6, maxScore: 1, displayTone: 'Success', sequence: 0 }];
+        expect(RubricVersionDiff.diff(base, cloned).computedBump).toBeNull();
+    });
+
+    it('does not call an advisory weight change Major, and the hash stays', async () => {
+        const light = snapshot([
+            node({ key: 'clarity' }),
+            node({ key: 'aside', isAdvisory: true, weight: 1 }),
+        ]);
+        const heavy = snapshot([
+            node({ key: 'clarity' }),
+            node({ key: 'aside', isAdvisory: true, weight: 9 }),
+        ]);
+        const result = RubricVersionDiff.diff(light, heavy);
+        expect(result.computedBump).not.toBe('Major');
+        expect(await scoringHash(light)).toBe(await scoringHash(heavy));
+    });
+
     it('keeps ScoringHash inside one major and changes it on a major bump', async () => {
         const wording = snapshot([node({ key: 'clarity', name: 'Renamed', description: 'x' })], { passThreshold: 0.2 });
         const advisory = snapshot([

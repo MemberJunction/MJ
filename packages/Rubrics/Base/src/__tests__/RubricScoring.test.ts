@@ -110,6 +110,14 @@ describe('RubricScoring', () => {
         expect(result.completeness).toBe(1);
     });
 
+    it('classifies a rubric whose only leaf is N/A under FailEvaluation as NotApplicableFailure', () => {
+        const nodes = [leaf({ id: 'a', key: 'a', name: 'Clarity', notApplicablePolicy: 'FailEvaluation' })];
+        const result = score(nodes, [{ criterionId: 'a', isNotApplicable: true }]);
+        expect(result.normalizedScore).toBeNull();
+        expect(result.outcome).toBe('NotApplicableFailure');
+        expect(result.passed).toBe(false);
+    });
+
     it('raises NotApplicableFailure and still drops the node from the math', () => {
         const nodes = [
             leaf({ id: 'a', key: 'a', notApplicablePolicy: 'FailEvaluation' }),

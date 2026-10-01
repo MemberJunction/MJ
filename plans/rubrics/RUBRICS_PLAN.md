@@ -871,6 +871,10 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 
 ## 16. Progress log
 
+- **2026-10-01** — Scoring review. A scale value change is Major. Bands match by label.
+  Advisory-to-advisory scoring edits are Minor. FailEvaluation of the only leaf is
+  NotApplicableFailure. Anchors in the content projection match by normalized value,
+  not by level id.
 - **2026-10-01** — R2 started. `@memberjunction/rubrics-base` has `RubricScoring` and
   `RubricVersionDiff` with unit tests for every N/A policy, both rollups, the zero-weight
   fallback, gates, completeness, outcome order, six-place rounding, bump classification,

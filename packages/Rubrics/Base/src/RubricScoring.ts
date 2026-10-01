@@ -54,9 +54,10 @@ interface Calc {
  * completeness. Advisory nodes are stored when they have a score and never enter a
  * rollup, a gate, completeness, or the verdict.
  *
- * Outcome, first match: Incomplete when the overall score is null or completeness is
- * below the minimum; then NotApplicableFailure; then GateFailed; then BelowThreshold
- * or Passed when a threshold applies; otherwise Scored. Passed is true only for
+ * Outcome, first match: Incomplete when completeness is below the minimum; then
+ * NotApplicableFailure, including when that policy is why the overall score is null;
+ * then Incomplete when the overall score is null for any other reason; then GateFailed;
+ * then BelowThreshold or Passed when a threshold applies; otherwise Scored. Passed is true only for
  * Passed. It is null for Scored, and for Incomplete when the version has no threshold
  * and no gate. Otherwise it is false.
  *
@@ -79,7 +80,7 @@ export class RubricScoring {
         RubricScoring.assignContributions(roots, 1, false);
 
         const includedRoots = roots.filter(root => root.included && root.score !== null);
-        const overall = RubricScoring.combine(includedRoots, 'WeightedMean');
+        const overall = includedRoots.length === 0 ? null : RubricScoring.combine(includedRoots, 'WeightedMean');
         const leaves = RubricScoring.flatten(roots).filter(calc => calc.node.nodeType === 'Criterion');
         const applicable = leaves.filter(leaf => leaf.applicable).length;
         const scored = leaves.filter(leaf => leaf.applicable && leaf.scored).length;
@@ -303,8 +304,9 @@ export class RubricScoring {
         gateFailed: boolean,
         threshold: number | null,
     ): RubricScoreResult['outcome'] {
-        if (score === null || (minimum !== null && completeness < minimum)) return 'Incomplete';
+        if (minimum !== null && completeness < minimum) return 'Incomplete';
         if (naFailure) return 'NotApplicableFailure';
+        if (score === null) return 'Incomplete';
         if (gateFailed) return 'GateFailed';
         if (threshold !== null) return score >= threshold ? 'Passed' : 'BelowThreshold';
         return 'Scored';

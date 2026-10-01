@@ -75,12 +75,17 @@ export function contentProjection(version: RubricVersionSnapshot): unknown {
             .sort((a, b) => a.key.localeCompare(b.key))
             .map(node => ({
                 anchors: [...(node.anchors ?? [])]
-                    .sort((a, b) => (a.scaleLevelId ?? '').localeCompare(b.scaleLevelId ?? '') || (a.anchorValue ?? 0) - (b.anchorValue ?? 0))
-                    .map(anchor => ({
-                        anchorValue: anchor.anchorValue ?? null,
-                        descriptor: anchor.descriptor,
-                        scaleLevelId: anchor.scaleLevelId ?? null,
-                    })),
+                    .map(anchor => {
+                        const level = node.scaleId
+                            ? scales.get(node.scaleId)?.levels.find(item => item.id === anchor.scaleLevelId)
+                            : undefined;
+                        return {
+                            anchorValue: anchor.anchorValue ?? null,
+                            descriptor: anchor.descriptor,
+                            normalizedValue: level ? canonicalNumber(level.normalizedValue) : null,
+                        };
+                    })
+                    .sort((a, b) => (a.normalizedValue ?? '').localeCompare(b.normalizedValue ?? '') || (a.anchorValue ?? 0) - (b.anchorValue ?? 0)),
                 description: node.description ?? null,
                 evidenceRequired: node.evidenceRequired,
                 evaluatorConfig: node.evaluatorConfig ?? null,
