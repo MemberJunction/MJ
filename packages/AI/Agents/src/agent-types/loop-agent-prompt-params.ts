@@ -97,14 +97,6 @@ export interface ResponseTypeInclusionRules {
     pipeline?: boolean;
 
     /**
-     * Include decisions field in the response interface.
-     * Auto-aligns with includeDecisionsDocs unless explicitly set, and so is off unless the agent
-     * opts in with `includeDecisionsDocs: true`.
-     * @default true
-     */
-    decisions?: boolean;
-
-    /**
      * Include `'Tasks'` in the nextStep.type union and the `tasks` property.
      * Auto-aligns with `enableTaskGraphs` unless explicitly set.
      *
@@ -128,7 +120,6 @@ export const DEFAULT_RESPONSE_TYPE_INCLUSION_RULES: Required<ResponseTypeInclusi
     scratchpad: true,
     artifactToolCalls: true,
     pipeline: true,
-    decisions: true,
     // The one section that defaults OFF — see `enableTaskGraphs` (D3).
     tasks: false
 };
@@ -395,40 +386,8 @@ export interface LoopAgentTypePromptParams {
     includePipelineDocs?: boolean;
 
     /**
-     * Teach the model to request inline decisions: the `decisions` docs, and the field in the
-     * response type. Opt-in: anything but `true` leaves both out. They add about 1,200 tokens to every
-     * turn, and on the Prompt Eval corpus no model used them (typed-decision plan, Task 4.7).
-     * @default false
-     */
-    includeDecisionsDocs?: boolean;
-
-    /**
-     * Maximum number of items to process when `forEachItemIn` is used.
-     * Items beyond this limit are truncated. `decisionsMaxCallsPerTurn` can cut a request shorter.
-     * @default 100
-     */
-    decisionsMaxItems?: number;
-
-    /**
-     * Maximum number of decision requests answered from one agent turn. Requests beyond this
-     * limit are not run; each gets a failed result saying why.
-     * @default MAX_DECISION_REQUESTS_PER_TURN (8)
-     */
-    decisionsMaxRequests?: number;
-
-    /**
-     * Maximum number of decision calls one agent turn's requests make in total, counting every
-     * `forEachItemIn` item. The budget is handed out in request order before any call is made. A
-     * `forEachItemIn` request it cuts short asks its first items and reports the rest in
-     * `skippedCount`. A request it leaves no calls for is not run, and gets a failed result saying why.
-     * 0 turns decision calls off: every request gets a failed result that says so, and does not
-     * invite the agent to ask again.
-     * @default MAX_DECISION_CALLS_PER_TURN (100)
-     */
-    decisionsMaxCallsPerTurn?: number;
-
-    /**
-     * Name of the decision prompt used for evaluating decisions.
+     * Name of the decision prompt the agent's opt-in decision calls use (the payload change check,
+     * decision discovery and catalog narrowing).
      * @default 'Default Decision'
      */
     decisionPromptName?: string;
@@ -522,21 +481,6 @@ export interface LoopAgentTypePromptParams {
 }
 
 /**
- * The most decision requests answered from one agent turn, unless `decisionsMaxRequests` overrides
- * it. Each request can itself make up to `decisionsMaxItems` calls through `forEachItemIn`, so the
- * total number of calls is bounded separately, by {@link MAX_DECISION_CALLS_PER_TURN}.
- */
-export const MAX_DECISION_REQUESTS_PER_TURN = 8;
-
-/**
- * The most decision calls one agent turn's requests make in total, counting every `forEachItemIn`
- * item, unless `decisionsMaxCallsPerTurn` overrides it. Without it, 8 requests of 100 items each
- * could send 800 calls, each with its own step and prompt run, before the run's cost guardrails
- * (checked between steps) could stop them.
- */
-export const MAX_DECISION_CALLS_PER_TURN = 100;
-
-/**
  * Default values for LoopAgentTypePromptParams.
  * Section flags default to true (include) and the prompt-content limits to -1 (include all); the
  * TSDoc on each property gives its own default.
@@ -558,10 +502,6 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     includeArtifactToolsDocs: true,
     includeConversationToolsDocs: true,
     includePipelineDocs: true,
-    includeDecisionsDocs: false,
-    decisionsMaxItems: 100,
-    decisionsMaxRequests: MAX_DECISION_REQUESTS_PER_TURN,
-    decisionsMaxCallsPerTurn: MAX_DECISION_CALLS_PER_TURN,
     decisionPromptName: 'Default Decision',
     // Off: an opt-in check that costs a decision call per flagged payload change.
     payloadFeedbackCheck: false,

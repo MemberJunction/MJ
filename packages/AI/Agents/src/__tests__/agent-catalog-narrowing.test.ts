@@ -506,8 +506,6 @@ const GOLDEN: Record<string, unknown> = {
     planApproved: false,
     appContext: '',
     __agentTypePromptParams: {
-        // Decisions are opt-in too (includeDecisionsDocs defaults to false), so their docs and type are out.
-        includeDecisionsDocs: false,
         includeResponseTypeDefinition: {
             payload: true,
             responseForms: true,
@@ -515,7 +513,6 @@ const GOLDEN: Record<string, unknown> = {
             forEach: true,
             while: true,
             scratchpad: true,
-            decisions: false,
             artifactToolCalls: true,
             conversationToolCalls: true,
             pipeline: true,

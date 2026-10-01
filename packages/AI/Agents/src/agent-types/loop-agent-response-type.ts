@@ -1,4 +1,4 @@
-import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand, AgentScratchpad, AgentPipelineRequest, TaskGraphSpec, AgentDecisionRequest } from "@memberjunction/ai-core-plus";
+import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand, AgentScratchpad, AgentPipelineRequest, TaskGraphSpec } from "@memberjunction/ai-core-plus";
 import { ArtifactToolCall } from "../ArtifactToolManager";
 import { ConversationToolCall } from "../ConversationToolManager";
 import { MemoryWriteRequest } from "../MemoryWriteManager";
@@ -82,12 +82,6 @@ export interface LoopAgentResponse<P = any> {
      * @since 2.46.0
      */
     scratchpad?: AgentScratchpad;
-
-    /**
-     * Decision requests answered inline on the same turn (zero turn cost)
-     * by a fast decision model. Results arrive on the next turn.
-     */
-    decisions?: AgentDecisionRequest[];
 
     /**
      * Artifact tool invocations — explore input artifacts without

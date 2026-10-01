@@ -1,7 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { readFileSync } from 'fs';
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
 import { AIEngine } from '@memberjunction/aiengine';
 import { UserInfo } from '@memberjunction/core';
 import type { IMetadataProvider } from '@memberjunction/core';
@@ -12,20 +9,13 @@ import {
     AgentDecisionQuestion,
     AgentDecisionRequest,
     AgentDecisionResult,
-    AIPromptRunResult,
+    BaseAgentNextStep,
     ExecuteAgentParams,
     MJAIAgentRunEntityExtended,
     MJAIPromptEntityExtended,
 } from '@memberjunction/ai-core-plus';
 import { AgentDecisionService, AgentDecisionAskParams } from '../AgentDecisionService';
 import { BaseAgent } from '../base-agent';
-import { LoopAgentType } from '../agent-types/loop-agent-type';
-import {
-    DEFAULT_LOOP_AGENT_PROMPT_PARAMS,
-    DEFAULT_RESPONSE_TYPE_INCLUSION_RULES,
-    MAX_DECISION_CALLS_PER_TURN,
-    MAX_DECISION_REQUESTS_PER_TURN,
-} from '../agent-types/loop-agent-prompt-params';
 
 // Quiet logging
 vi.mock('@memberjunction/core', async (importOriginal) => {
@@ -93,24 +83,22 @@ class TestAgent extends BaseAgent {
         this._agentDecisionService = service;
     }
 
-    public async testExecuteDecisionRequestsAsSteps(
+    /** Runs `requests` as a `'Decision'` next step, and returns the results it hands back to the agent type. */
+    public async testExecuteDecisionStep(
         requests: AgentDecisionRequest[],
-        finalPayload: unknown,
-        agentTypePromptParams: Record<string, unknown> | undefined,
+        payload: unknown,
+        promptName: string | undefined,
         params: DecisionStepParams,
     ): Promise<AgentDecisionResult[]> {
-        return this.executeDecisionRequestsAsSteps(requests, finalPayload, agentTypePromptParams, asAgentParams(params));
-    }
-
-    public testInjectDecisionResultsMessage(params: DecisionStepParams, results: AgentDecisionResult[]): void {
-        this.injectDecisionResultsMessage(asAgentParams(params), results);
-    }
-
-    public testApplyResponseTypeAutoAlignment(
-        params: Record<string, unknown>,
-        explicitResponseType?: Record<string, unknown>,
-    ): void {
-        this.applyResponseTypeAutoAlignment(params, explicitResponseType);
+        const decision: BaseAgentNextStep<unknown> = {
+            step: 'Decision' as BaseAgentNextStep['step'],
+            terminate: false,
+            decisions: requests,
+            decisionPromptName: promptName,
+            newPayload: payload,
+        };
+        const next = await this.executeDecisionStep(asAgentParams(params), decision);
+        return next.decisionResults ?? [];
     }
 }
 
@@ -130,100 +118,7 @@ function seedDecisionRun(agent: TestAgent, createdSteps: MockStepEntity[]): void
 }
 
 describe('Agent Decisions', () => {
-    describe('1. Schema and defaults', () => {
-        it('declares both opt-in switches off in the Loop agent type metadata, the defaults that apply at runtime once synced', () => {
-            // src/__tests__/ → repo root is 5 levels up (Agents → AI → packages → root).
-            const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../../..');
-            const agentTypes: Array<{ fields: { Name: string; PromptParamsSchema?: { properties?: Record<string, { default?: string | boolean }> } } }> =
-                JSON.parse(readFileSync(join(repoRoot, 'metadata/agent-types/.agent-types.json'), 'utf8'));
-            const loop = agentTypes.find((t) => t.fields.Name === 'Loop');
-            const properties = loop?.fields.PromptParamsSchema?.properties;
-            expect(properties?.includeDecisionsDocs?.default).toBe(false);
-        });
-
-        it('has decisions enabled by default in DEFAULT_RESPONSE_TYPE_INCLUSION_RULES', () => {
-            expect(DEFAULT_RESPONSE_TYPE_INCLUSION_RULES.decisions).toBe(true);
-        });
-
-        it('has expected decision defaults in DEFAULT_LOOP_AGENT_PROMPT_PARAMS', () => {
-            expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.includeDecisionsDocs).toBe(false);
-            expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.decisionsMaxItems).toBe(100);
-            expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.decisionPromptName).toBe('Default Decision');
-            expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.includeResponseTypeDefinition?.decisions).toBe(true);
-        });
-    });
-
-    describe('2. Auto-alignment', () => {
-        let agent: TestAgent;
-
-        beforeEach(() => {
-            agent = new TestAgent();
-        });
-
-        it('leaves decisions out when includeDecisionsDocs is unset, since decisions are opt-in', () => {
-            const params: Record<string, unknown> = {};
-            agent.testApplyResponseTypeAutoAlignment(params);
-            const rules = params.includeResponseTypeDefinition as Record<string, unknown>;
-            expect(params.includeDecisionsDocs).toBe(false);
-            expect(rules.decisions).toBe(false);
-        });
-
-        it.each([
-            ['a string', 'true'],
-            ['a number', 1],
-        ])('treats includeDecisionsDocs set to %s as off, since only true opts in', (_label, value) => {
-            const params: Record<string, unknown> = { includeDecisionsDocs: value };
-            agent.testApplyResponseTypeAutoAlignment(params);
-            const rules = params.includeResponseTypeDefinition as Record<string, unknown>;
-            expect(params.includeDecisionsDocs).toBe(false);
-            expect(rules.decisions).toBe(false);
-        });
-
-        it('keeps an explicit includeResponseTypeDefinition.decisions = true when includeDecisionsDocs is unset', () => {
-            const params: Record<string, unknown> = {
-                includeResponseTypeDefinition: {
-                    decisions: true,
-                },
-            };
-            agent.testApplyResponseTypeAutoAlignment(params, { decisions: true });
-            const rules = params.includeResponseTypeDefinition as Record<string, unknown>;
-            expect(params.includeDecisionsDocs).toBe(false);
-            expect(rules.decisions).toBe(true);
-        });
-
-        it('flips includeResponseTypeDefinition.decisions to false when includeDecisionsDocs is false', () => {
-            const params: Record<string, unknown> = {
-                includeDecisionsDocs: false,
-            };
-            agent.testApplyResponseTypeAutoAlignment(params);
-            const rules = params.includeResponseTypeDefinition as Record<string, unknown>;
-            expect(rules.decisions).toBe(false);
-        });
-
-        it('preserves explicit includeResponseTypeDefinition.decisions = true when includeDecisionsDocs is false', () => {
-            const params: Record<string, unknown> = {
-                includeDecisionsDocs: false,
-                includeResponseTypeDefinition: {
-                    decisions: true,
-                },
-            };
-            agent.testApplyResponseTypeAutoAlignment(params, { decisions: true });
-            const rules = params.includeResponseTypeDefinition as Record<string, unknown>;
-            expect(rules.decisions).toBe(true);
-        });
-
-        it('includes decisions when the agent opts in with includeDecisionsDocs = true', () => {
-            const params: Record<string, unknown> = {
-                includeDecisionsDocs: true,
-            };
-            agent.testApplyResponseTypeAutoAlignment(params);
-            const rules = params.includeResponseTypeDefinition as Record<string, unknown>;
-            expect(params.includeDecisionsDocs).toBe(true);
-            expect(rules.decisions).toBe(true);
-        });
-    });
-
-    describe('3. ToDecisionQuestions mapping', () => {
+    describe('1. ToDecisionQuestions mapping', () => {
         it('maps Likelihood, Choice, and Score questions from camelCase to PascalCase', () => {
             const input: Record<string, AgentDecisionQuestion> = {
                 likeQ: {
@@ -269,7 +164,7 @@ describe('Agent Decisions', () => {
         });
     });
 
-    describe('4. SummarizeAnswers', () => {
+    describe('2. SummarizeAnswers', () => {
         it('summarizes Likelihood, Choice, and Score answers into LLM-friendly shapes', () => {
             const answers: Record<string, DecisionAnswer> = {
                 likeA: {
@@ -298,7 +193,7 @@ describe('Agent Decisions', () => {
         });
     });
 
-    describe('5. AgentDecisionService.Ask', () => {
+    describe('3. AgentDecisionService.Ask', () => {
         it('returns failed result when decision prompt is not found', async () => {
             const service = new AgentDecisionService();
             const promptsSpy = vi.spyOn(AIEngine.Instance, 'Prompts', 'get').mockReturnValue([]);
@@ -355,7 +250,7 @@ describe('Agent Decisions', () => {
         });
     });
 
-    describe('6. Inline decision execution on BaseAgent', () => {
+    describe('4. Decision step execution on BaseAgent', () => {
         let agent: TestAgent;
         let createdSteps: MockStepEntity[];
         let mockService: AgentDecisionService;
@@ -407,7 +302,7 @@ describe('Agent Decisions', () => {
                 conversationMessages: [],
             };
 
-            const results = await agent.testExecuteDecisionRequestsAsSteps(
+            const results = await agent.testExecuteDecisionStep(
                 requests,
                 {},
                 undefined,
@@ -417,7 +312,7 @@ describe('Agent Decisions', () => {
             expect(results).toHaveLength(1);
             expect(results[0].success).toBe(true);
             expect(results[0].answers).toEqual({
-                triage: { value: 'high', confidence: 0.95 },
+                triage: { value: 'high', confidence: 0.95, probabilities: { high: 0.95, low: 0.05 } },
             });
 
             // Verify step entity
@@ -434,40 +329,9 @@ describe('Agent Decisions', () => {
             expect(outputData.driverClass).toBe('OpenRouterDecision');
         });
 
-        it('injects decision results into conversationMessages with expiration metadata', () => {
-            const params: DecisionStepParams = {
-                contextUser: { ID: 'user-1' } as UserInfo,
-                conversationMessages: [],
-            };
-
-            const results: AgentDecisionResult[] = [
-                {
-                    id: 'req1',
-                    success: true,
-                    answers: { triage: { value: 'high', confidence: 0.95 } },
-                },
-            ];
-
-            agent.testInjectDecisionResultsMessage(params, results);
-
-            expect(params.conversationMessages).toHaveLength(1);
-            const msg = params.conversationMessages[0];
-            expect(msg.role).toBe('user');
-            expect(msg.content).toContain('Decision results:');
-            expect(msg.content).toContain('"triage"');
-            expect(msg.metadata).toEqual({
-                turnAdded: 0,
-                messageType: 'tool-result',
-                expirationTurns: 3,
-                expirationMode: 'Compact',
-                compactMode: 'First N Chars',
-                compactLength: 500,
-                compactPromptId: '',
-            });
-        });
     });
 
-    describe('7. State resolution', () => {
+    describe('5. State resolution', () => {
         let agent: TestAgent;
         let createdSteps: MockStepEntity[];
         let mockService: AgentDecisionService;
@@ -487,7 +351,7 @@ describe('Agent Decisions', () => {
                 Answers: {},
             } as AIDecisionRunResult);
 
-            await agent.testExecuteDecisionRequestsAsSteps(
+            await agent.testExecuteDecisionStep(
                 [
                     {
                         id: 'literal-state',
@@ -510,7 +374,7 @@ describe('Agent Decisions', () => {
                 Answers: {},
             } as AIDecisionRunResult);
 
-            await agent.testExecuteDecisionRequestsAsSteps(
+            await agent.testExecuteDecisionStep(
                 [
                     {
                         id: 'dotted-state',
@@ -534,7 +398,7 @@ describe('Agent Decisions', () => {
             } as AIDecisionRunResult);
 
             const payload = { ticket: { id: 101, title: 'Bug report' } };
-            await agent.testExecuteDecisionRequestsAsSteps(
+            await agent.testExecuteDecisionStep(
                 [
                     {
                         id: 'obj-state',
@@ -554,7 +418,7 @@ describe('Agent Decisions', () => {
         it('fails cleanly when a payload path does not exist without calling runner', async () => {
             const askSpy = vi.spyOn(mockService, 'Ask');
 
-            const results = await agent.testExecuteDecisionRequestsAsSteps(
+            const results = await agent.testExecuteDecisionStep(
                 [
                     {
                         id: 'missing-path',
@@ -581,7 +445,7 @@ describe('Agent Decisions', () => {
             } as AIDecisionRunResult);
 
             const payload = { ticket: { id: 101, title: 'Bug report' } };
-            await agent.testExecuteDecisionRequestsAsSteps(
+            await agent.testExecuteDecisionStep(
                 [
                     {
                         id: 'whole-payload',
@@ -601,7 +465,7 @@ describe('Agent Decisions', () => {
         it('fails cleanly when neither state nor forEachItemIn is provided', async () => {
             const askSpy = vi.spyOn(mockService, 'Ask');
 
-            const results = await agent.testExecuteDecisionRequestsAsSteps(
+            const results = await agent.testExecuteDecisionStep(
                 [
                     {
                         id: 'no-state',
@@ -622,7 +486,7 @@ describe('Agent Decisions', () => {
         it('fails cleanly when questions object is empty', async () => {
             const askSpy = vi.spyOn(mockService, 'Ask');
 
-            const results = await agent.testExecuteDecisionRequestsAsSteps(
+            const results = await agent.testExecuteDecisionStep(
                 [
                     {
                         id: 'empty-questions',
@@ -642,7 +506,7 @@ describe('Agent Decisions', () => {
         });
     });
 
-    describe('8. Array mapping with forEachItemIn', () => {
+    describe('6. Array mapping with forEachItemIn', () => {
         let agent: TestAgent;
         let createdSteps: MockStepEntity[];
         let mockService: AgentDecisionService;
@@ -675,7 +539,7 @@ describe('Agent Decisions', () => {
                 { id: 3, priority: 1 },
             ];
 
-            const results = await agent.testExecuteDecisionRequestsAsSteps(
+            const results = await agent.testExecuteDecisionStep(
                 [
                     {
                         id: 'batch-req',
@@ -692,9 +556,9 @@ describe('Agent Decisions', () => {
             expect(results[0].success).toBe(true);
             const answers = results[0].answers as Array<Record<string, unknown>>;
             expect(answers).toHaveLength(3);
-            expect(answers[0].score).toEqual({ value: 3, confidence: 0.9 });
-            expect(answers[1].score).toEqual({ value: 5, confidence: 0.9 });
-            expect(answers[2].score).toEqual({ value: 1, confidence: 0.9 });
+            expect(answers[0].score).toEqual({ value: 3, confidence: 0.9, probabilities: {} });
+            expect(answers[1].score).toEqual({ value: 5, confidence: 0.9, probabilities: {} });
+            expect(answers[2].score).toEqual({ value: 1, confidence: 0.9, probabilities: {} });
 
             expect(createdSteps[0].Success).toBe(true);
             const stepOutput = typeof createdSteps[0].OutputData === 'string'
@@ -704,15 +568,15 @@ describe('Agent Decisions', () => {
             expect(stepOutput.tokensUsed).toBe(15);
         });
 
-        it('truncates at decisionsMaxItems when input array exceeds cap', async () => {
+        it('asks about at most 100 items of one request, and reports the rest as skipped', async () => {
             const askSpy = vi.spyOn(mockService, 'Ask').mockResolvedValue({
                 success: true,
                 Answers: {},
             } as AIDecisionRunResult);
 
-            const items = Array.from({ length: 15 }, (_, i) => ({ id: i }));
+            const items = Array.from({ length: 105 }, (_, i) => ({ id: i }));
 
-            const results = await agent.testExecuteDecisionRequestsAsSteps(
+            const results = await agent.testExecuteDecisionStep(
                 [
                     {
                         id: 'capped-req',
@@ -721,12 +585,12 @@ describe('Agent Decisions', () => {
                     },
                 ],
                 { items },
-                { decisionsMaxItems: 5 },
+                undefined,
                 { contextUser: {} as UserInfo, conversationMessages: [] },
             );
 
-            expect(askSpy).toHaveBeenCalledTimes(5);
-            expect(results[0].skippedCount).toBe(10);
+            expect(askSpy).toHaveBeenCalledTimes(100);
+            expect(results[0].skippedCount).toBe(5);
         });
 
         it('bounds concurrency to at most 8 in flight', async () => {
@@ -741,7 +605,7 @@ describe('Agent Decisions', () => {
             });
 
             const items = Array.from({ length: 20 }, (_, i) => ({ id: i }));
-            await agent.testExecuteDecisionRequestsAsSteps(
+            await agent.testExecuteDecisionStep(
                 [
                     {
                         id: 'concurrency-req',
@@ -761,7 +625,7 @@ describe('Agent Decisions', () => {
         it('handles empty array by returning answers: [] without calling runner', async () => {
             const askSpy = vi.spyOn(mockService, 'Ask');
 
-            const results = await agent.testExecuteDecisionRequestsAsSteps(
+            const results = await agent.testExecuteDecisionStep(
                 [
                     {
                         id: 'empty-req',
@@ -786,7 +650,7 @@ describe('Agent Decisions', () => {
         it('handles non-array target by failing cleanly without calling runner', async () => {
             const askSpy = vi.spyOn(mockService, 'Ask');
 
-            const results = await agent.testExecuteDecisionRequestsAsSteps(
+            const results = await agent.testExecuteDecisionStep(
                 [
                     {
                         id: 'non-array-req',
@@ -815,7 +679,7 @@ describe('Agent Decisions', () => {
                 Answers: {},
             } as AIDecisionRunResult);
 
-            const results = await agent.testExecuteDecisionRequestsAsSteps(
+            const results = await agent.testExecuteDecisionStep(
                 [
                     {
                         id: 'item-failure-req',
@@ -835,7 +699,7 @@ describe('Agent Decisions', () => {
         });
     });
 
-    describe('9. Single decision runner failure handling', () => {
+    describe('7. Single decision runner failure handling', () => {
         let agent: TestAgent;
         let createdSteps: MockStepEntity[];
         let mockService: AgentDecisionService;
@@ -856,7 +720,7 @@ describe('Agent Decisions', () => {
                 Answers: {},
             } as AIDecisionRunResult);
 
-            const results = await agent.testExecuteDecisionRequestsAsSteps(
+            const results = await agent.testExecuteDecisionStep(
                 [
                     {
                         id: 'fail-single',
@@ -876,151 +740,12 @@ describe('Agent Decisions', () => {
         });
     });
 
-    describe('10. DetermineNextStep carrying and read-tool preemption', () => {
-        let loopAgentType: LoopAgentType;
-
-        beforeEach(() => {
-            loopAgentType = new LoopAgentType();
-        });
-
-        /** A successful prompt run whose result is the loop response, serialized as the model returns it. */
-        const promptResultFor = (response: Record<string, unknown>): AIPromptRunResult => {
-            const run = { success: true, result: JSON.stringify(response) } satisfies Pick<AIPromptRunResult, 'success' | 'result'>;
-            return run as AIPromptRunResult;
-        };
-
-        /** The preemption paths read none of params, payload or agent-type state; they are supplied because the signature requires them. */
-        const determineNextStep = (promptResult: AIPromptRunResult) =>
-            loopAgentType.DetermineNextStep(promptResult, asAgentParams({ contextUser: {} as UserInfo, conversationMessages: [] }), {}, {});
-
-        it('preempts Chat when decisions are present to force a turn to read results', async () => {
-            const promptResult = promptResultFor({
-                message: 'Hello user',
-                nextStep: { type: 'Chat' },
-                decisions: [{ id: 'd1', state: 's', questions: {} }],
-            });
-
-            const nextStep = await determineNextStep(promptResult);
-            expect(nextStep.step).toBe('Retry');
-            expect(nextStep.terminate).toBe(false);
-            expect(nextStep.decisions).toEqual([{ id: 'd1', state: 's', questions: {} }]);
-        });
-
-        it('carries decisions into Chat step after preemption cap is reached', async () => {
-            const promptResult = promptResultFor({
-                message: 'Hello user',
-                nextStep: { type: 'Chat' },
-                decisions: [{ id: 'd1', state: 's', questions: {} }],
-            });
-
-            // Trigger 3 preemptions
-            await determineNextStep(promptResult);
-            await determineNextStep(promptResult);
-            await determineNextStep(promptResult);
-
-            // 4th time honors Chat
-            const nextStep = await determineNextStep(promptResult);
-            expect(nextStep.step).toBe('Chat');
-            expect(nextStep.terminate).toBe(true);
-            expect(nextStep.decisions).toEqual([{ id: 'd1', state: 's', questions: {} }]);
-        });
-
-        it('carries decisions into Pipeline early-return step', async () => {
-            const promptResult = promptResultFor({
-                nextStep: {
-                    type: 'Pipeline',
-                    pipeline: { steps: [{ name: 's1' }] },
-                },
-                decisions: [{ id: 'd1', state: 's', questions: {} }],
-            });
-
-            const nextStep = await determineNextStep(promptResult);
-            expect(nextStep.step).toBe('Retry');
-            expect(nextStep.decisions).toEqual([{ id: 'd1', state: 's', questions: {} }]);
-        });
-
-        it('preempts taskComplete when decisions are present to force a turn to read results', async () => {
-            const promptResult = promptResultFor({
-                taskComplete: true,
-                message: 'Task is complete',
-                decisions: [{ id: 'd1', state: 's', questions: {} }],
-            });
-
-            const nextStep = await determineNextStep(promptResult);
-            expect(nextStep.step).toBe('Retry');
-            expect(nextStep.terminate).toBe(false);
-            expect(nextStep.decisions).toEqual([{ id: 'd1', state: 's', questions: {} }]);
-        });
-
-        it('carries decisions into normal taskComplete step when no preemption after cap', async () => {
-            const promptResult = promptResultFor({
-                taskComplete: true,
-                message: 'All done',
-                decisions: [{ id: 'd1', state: 's', questions: {} }],
-            });
-
-            // Trigger 3 preemptions
-            await determineNextStep(promptResult);
-            await determineNextStep(promptResult);
-            await determineNextStep(promptResult);
-
-            // 4th time honors terminal step
-            const finalStep = await determineNextStep(promptResult);
-            expect(finalStep.step).toBe('Success');
-            expect(finalStep.terminate).toBe(true);
-            expect(finalStep.decisions).toEqual([{ id: 'd1', state: 's', questions: {} }]);
-        });
-
-        it('carries decisions into normal actions/nextStep return branch', async () => {
-            const promptResult = promptResultFor({
-                nextStep: {
-                    type: 'Actions',
-                    actions: [{ actionName: 'Test' }],
-                },
-                decisions: [{ id: 'd1', state: 's', questions: {} }],
-            });
-
-            const nextStep = await determineNextStep(promptResult);
-            expect(nextStep.step).toBe('Actions');
-            expect(nextStep.decisions).toEqual([{ id: 'd1', state: 's', questions: {} }]);
-        });
-    });
-
-    describe('11. Gating enforcement', () => {
-        let agent: TestAgent;
-        let mockService: AgentDecisionService;
-
-        beforeEach(() => {
-            agent = new TestAgent();
-            mockService = new AgentDecisionService();
-            agent.setAgentDecisionService(mockService);
-        });
-
-        it('verifies decisions gate check is honored', () => {
-            const mergedParamsWithDisabled = {
-                includeResponseTypeDefinition: {
-                    decisions: false,
-                },
-            };
-
-            expect(mergedParamsWithDisabled.includeResponseTypeDefinition.decisions !== false).toBe(false);
-
-            const mergedParamsWithEnabled = {
-                includeResponseTypeDefinition: {
-                    decisions: true,
-                },
-            };
-
-            expect(mergedParamsWithEnabled.includeResponseTypeDefinition.decisions !== false).toBe(true);
-        });
-    });
-
-    describe('12. Malformed decision requests never throw away the turn', () => {
+    describe('8. Malformed decision requests never fail the step', () => {
         let agent: TestAgent;
         let createdSteps: MockStepEntity[];
         let mockService: AgentDecisionService;
 
-        /** Decision requests as the loop hands them over: parsed from the model's JSON, their shapes unchecked. */
+        /** Decision requests parsed from JSON, their shapes unchecked. */
         const modelRequests = (json: string): AgentDecisionRequest[] => JSON.parse(json);
         const stepParams = (): DecisionStepParams => ({ contextUser: {} as UserInfo, conversationMessages: [] });
         const answered = (): AIDecisionRunResult => ({ success: true, Answers: { ok: { Kind: 'Likelihood', Probability: 0.7 } } });
@@ -1060,7 +785,7 @@ describe('Agent Decisions', () => {
         it('fails a request with no valid question, giving the reasons, while its siblings still run', async () => {
             const ask = vi.spyOn(mockService, 'Ask').mockResolvedValue(answered());
 
-            const results = await agent.testExecuteDecisionRequestsAsSteps(modelRequests(JSON.stringify([
+            const results = await agent.testExecuteDecisionStep(modelRequests(JSON.stringify([
                 { id: 'broken', state: 's', questions: { bad: null, pick: { kind: 'Choice', instructions: 'Pick one' } } },
                 { id: 'fine', state: 's', questions: { ok: { kind: 'Likelihood', instructions: 'Fine?' } } },
             ])), {}, undefined, stepParams());
@@ -1077,7 +802,7 @@ describe('Agent Decisions', () => {
         it('asks only the valid questions of a request, and records the dropped ones on its step', async () => {
             const ask = vi.spyOn(mockService, 'Ask').mockResolvedValue(answered());
 
-            const results = await agent.testExecuteDecisionRequestsAsSteps(modelRequests(JSON.stringify([
+            const results = await agent.testExecuteDecisionStep(modelRequests(JSON.stringify([
                 { id: 'mixed', state: 's', questions: { ok: { kind: 'Likelihood', instructions: 'Fine?' }, bad: { kind: 'Score', instructions: 'Rate it', levels: [] } } },
             ])), {}, undefined, stepParams());
 
@@ -1095,7 +820,7 @@ describe('Agent Decisions', () => {
                 return answered();
             });
 
-            const results = await agent.testExecuteDecisionRequestsAsSteps([
+            const results = await agent.testExecuteDecisionStep([
                 { id: 'throws', state: 'explodes', questions: { ok: { kind: 'Likelihood', instructions: 'Fine?' } } },
                 { id: 'fine', state: 'calm', questions: { ok: { kind: 'Likelihood', instructions: 'Fine?' } } },
             ], {}, undefined, stepParams());
@@ -1110,7 +835,7 @@ describe('Agent Decisions', () => {
         it('settles a request that cannot even start as a failed result, without rejecting its siblings', async () => {
             vi.spyOn(mockService, 'Ask').mockResolvedValue(answered());
 
-            const results = await agent.testExecuteDecisionRequestsAsSteps(modelRequests(JSON.stringify([
+            const results = await agent.testExecuteDecisionStep(modelRequests(JSON.stringify([
                 null,
                 { id: 'fine', state: 's', questions: { ok: { kind: 'Likelihood', instructions: 'Fine?' } } },
             ])), {}, undefined, stepParams());
@@ -1134,34 +859,9 @@ describe('Agent Decisions', () => {
             }
         });
 
-        it('answers at most MAX_DECISION_REQUESTS_PER_TURN (8) requests per turn; each one over the cap gets a failed result saying why', async () => {
-            const ask = vi.spyOn(mockService, 'Ask').mockResolvedValue(answered());
-            const requests: AgentDecisionRequest[] = Array.from({ length: 10 }, (_, i) => ({ id: `r${i}`, state: 's', questions: { ok: { kind: 'Likelihood', instructions: 'Fine?' } } }));
-
-            const results = await agent.testExecuteDecisionRequestsAsSteps(requests, {}, undefined, stepParams());
-
-            expect(MAX_DECISION_REQUESTS_PER_TURN).toBe(8);
-            expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.decisionsMaxRequests).toBe(MAX_DECISION_REQUESTS_PER_TURN);
-            expect(ask).toHaveBeenCalledTimes(8);
-            expect(createdSteps).toHaveLength(8);
-            expect(results.map(r => r.success)).toEqual([true, true, true, true, true, true, true, true, false, false]);
-            expect(results.slice(8).map(r => r.id)).toEqual(['r8', 'r9']);
-            expect(results[9].error).toContain('at most 8 decision requests');
-        });
-
-        it('reads the per-turn cap from decisionsMaxRequests', async () => {
-            const ask = vi.spyOn(mockService, 'Ask').mockResolvedValue(answered());
-            const requests: AgentDecisionRequest[] = Array.from({ length: 5 }, (_, i) => ({ id: `r${i}`, state: 's', questions: { ok: { kind: 'Likelihood', instructions: 'Fine?' } } }));
-
-            const results = await agent.testExecuteDecisionRequestsAsSteps(requests, {}, { decisionsMaxRequests: 2 }, stepParams());
-
-            expect(ask).toHaveBeenCalledTimes(2);
-            expect(results.filter(r => r.success).map(r => r.id)).toEqual(['r0', 'r1']);
-            expect(results[4].error).toContain('at most 2 decision requests');
-        });
     });
 
-    describe('13. Decision calls link their prompt runs', () => {
+    describe('9. Decision calls link their prompt runs', () => {
         let agent: TestAgent;
         let createdSteps: MockStepEntity[];
         let mockService: AgentDecisionService;
@@ -1182,7 +882,7 @@ describe('Agent Decisions', () => {
         });
 
         it("links a single-state request's prompt run to its Decision step", async () => {
-            await agent.testExecuteDecisionRequestsAsSteps(
+            await agent.testExecuteDecisionStep(
                 [{ id: 'once', state: 'only', questions: { ok: { kind: 'Likelihood', instructions: 'Fine?' } } }],
                 {}, undefined, { contextUser: {} as UserInfo, conversationMessages: [] },
             );
@@ -1193,7 +893,7 @@ describe('Agent Decisions', () => {
         });
 
         it('gives each forEachItemIn item its own child step carrying that call\'s prompt run, and the parent none', async () => {
-            const results = await agent.testExecuteDecisionRequestsAsSteps(
+            const results = await agent.testExecuteDecisionStep(
                 [{ id: 'batch', forEachItemIn: 'payload.items', questions: { ok: { kind: 'Likelihood', instructions: 'Fine?' } } }],
                 { items: ['a', 'b', 'c'] }, undefined, { contextUser: {} as UserInfo, conversationMessages: [] },
             );
@@ -1207,131 +907,6 @@ describe('Agent Decisions', () => {
             expect(items.every(s => s.StepType === 'Decision' && s.ParentID === parent.ID && s.Status === 'Completed')).toBe(true);
             expect(items.map(s => s.TargetLogID).sort()).toEqual(['prun-a', 'prun-b', 'prun-c']);
             expect(items.map(s => s.PromptRun?.ID).sort()).toEqual(['prun-a', 'prun-b', 'prun-c']);
-        });
-    });
-
-    describe('14. Per-turn budget on decision calls', () => {
-        let agent: TestAgent;
-        let createdSteps: MockStepEntity[];
-        let mockService: AgentDecisionService;
-
-        const QUESTIONS: AgentDecisionRequest['questions'] = { ok: { kind: 'Likelihood', instructions: 'Is it fine?' } };
-        const answered = (): AIDecisionRunResult => ({ success: true, Answers: { ok: { Kind: 'Likelihood', Probability: 0.7 } } });
-        const stepParams = (): DecisionStepParams => ({ contextUser: {} as UserInfo, conversationMessages: [] });
-        const itemsOf = (count: number): number[] => Array.from({ length: count }, (_, i) => i);
-        const stepNamed = (name: string): MockStepEntity | undefined => createdSteps.find(s => s.StepName === `Decision: ${name}`);
-
-        beforeEach(() => {
-            agent = new TestAgent();
-            createdSteps = [];
-            seedDecisionRun(agent, createdSteps);
-            mockService = new AgentDecisionService();
-            agent.setAgentDecisionService(mockService);
-        });
-
-        it('bounds the calls one turn makes, forEachItemIn items included, at MAX_DECISION_CALLS_PER_TURN (100) by default', async () => {
-            const ask = vi.spyOn(mockService, 'Ask').mockResolvedValue(answered());
-
-            const results = await agent.testExecuteDecisionRequestsAsSteps([
-                { id: 'first', forEachItemIn: 'payload.first', questions: QUESTIONS },
-                { id: 'second', forEachItemIn: 'payload.second', questions: QUESTIONS },
-                { id: 'third', state: 'One more thing.', questions: QUESTIONS },
-            ], { first: itemsOf(60), second: itemsOf(60) }, undefined, stepParams());
-
-            expect(MAX_DECISION_CALLS_PER_TURN).toBe(100);
-            expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.decisionsMaxCallsPerTurn).toBe(MAX_DECISION_CALLS_PER_TURN);
-            // 121 calls asked for, and each request is well under decisionsMaxItems and the request cap.
-            expect(ask).toHaveBeenCalledTimes(100);
-            // Handed out in request order: the first gets all it wants, the second what is left.
-            expect(results[0]).toMatchObject({ id: 'first', success: true });
-            expect(results[0].answers).toHaveLength(60);
-            expect(results[0].skippedCount).toBeUndefined();
-            expect(results[1]).toMatchObject({ id: 'second', success: true, skippedCount: 20 });
-            expect(results[1].answers).toHaveLength(40);
-            // The third is left nothing, so it is not run and records no step, and its result says why.
-            expect(results[2]).toMatchObject({ id: 'third', success: false });
-            expect(results[2].error).toContain('at most 100 decision calls in total');
-            expect(stepNamed('third')).toBeUndefined();
-        });
-
-        it('reads the budget from decisionsMaxCallsPerTurn, and applies it after decisionsMaxItems', async () => {
-            const ask = vi.spyOn(mockService, 'Ask').mockResolvedValue(answered());
-
-            const results = await agent.testExecuteDecisionRequestsAsSteps([
-                { id: 'once', state: 'First.', questions: QUESTIONS },
-                { id: 'items', forEachItemIn: 'payload.items', questions: QUESTIONS },
-                { id: 'late', state: 'Last.', questions: QUESTIONS },
-            ], { items: itemsOf(10) }, { decisionsMaxCallsPerTurn: 5, decisionsMaxItems: 6 }, stepParams());
-
-            expect(ask).toHaveBeenCalledTimes(5);
-            expect(results.map(r => [r.id, r.success])).toEqual([['once', true], ['items', true], ['late', false]]);
-            // Ten items: decisionsMaxItems allows 6, and the budget left after 'once' allows 4.
-            expect(results[1].answers).toHaveLength(4);
-            expect(results[1].skippedCount).toBe(6);
-            expect(results[2].error).toContain('at most 5 decision calls in total');
-        });
-
-        it('caps what a forEachItemIn request claims from the budget at decisionsMaxItems, so the requests after it still run', async () => {
-            const ask = vi.spyOn(mockService, 'Ask').mockResolvedValue(answered());
-
-            const results = await agent.testExecuteDecisionRequestsAsSteps([
-                { id: 'items', forEachItemIn: 'payload.items', questions: QUESTIONS },
-                { id: 'after', state: 'Something else.', questions: QUESTIONS },
-            ], { items: itemsOf(10) }, { decisionsMaxCallsPerTurn: 5, decisionsMaxItems: 2 }, stepParams());
-
-            // Ten items, but decisionsMaxItems lets the request make only 2 calls, so it claims 2 of
-            // the 5, not all of them, and the single request after it gets its call.
-            expect(ask).toHaveBeenCalledTimes(3);
-            expect(results.map(r => [r.id, r.success])).toEqual([['items', true], ['after', true]]);
-            expect(results[0].answers).toHaveLength(2);
-            expect(results[0].skippedCount).toBe(8);
-            expect(stepNamed('after')).toBeDefined();
-        });
-
-        it('with a budget of 0, makes no call and records no step, and every request says the budget is 0 without inviting a retry', async () => {
-            const ask = vi.spyOn(mockService, 'Ask').mockResolvedValue(answered());
-
-            const results = await agent.testExecuteDecisionRequestsAsSteps([
-                { id: 'single', state: 'Anything.', questions: QUESTIONS },
-                { id: 'batch', forEachItemIn: 'payload.items', questions: QUESTIONS },
-            ], { items: itemsOf(3) }, { decisionsMaxCallsPerTurn: 0 }, stepParams());
-
-            expect(ask).not.toHaveBeenCalled();
-            expect(createdSteps).toHaveLength(0);
-            expect(results.map(r => [r.id, r.success])).toEqual([['single', false], ['batch', false]]);
-            for (const result of results) {
-                expect(result.error).toContain("this agent's decision-call budget is 0");
-                expect(result.error).toContain('no decision calls on any turn');
-                expect(result.error).not.toMatch(/ask again next turn/i);
-                expect(result.error).not.toContain('the requests before this one used them all');
-            }
-        });
-
-        it('with a budget above 0, still invites the request the budget ran out on to ask again next turn', async () => {
-            vi.spyOn(mockService, 'Ask').mockResolvedValue(answered());
-
-            const results = await agent.testExecuteDecisionRequestsAsSteps([
-                { id: 'first', state: 'First.', questions: QUESTIONS },
-                { id: 'second', state: 'Second.', questions: QUESTIONS },
-            ], {}, { decisionsMaxCallsPerTurn: 1 }, stepParams());
-
-            expect(results.map(r => [r.id, r.success])).toEqual([['first', true], ['second', false]]);
-            expect(results[1].error).toContain('at most 1 decision calls in total');
-            expect(results[1].error).toContain('Ask again next turn');
-        });
-
-        it('charges nothing for a request that makes no calls, so it cannot starve the requests after it', async () => {
-            const ask = vi.spyOn(mockService, 'Ask').mockResolvedValue(answered());
-
-            const results = await agent.testExecuteDecisionRequestsAsSteps([
-                { id: 'notArray', forEachItemIn: 'payload.text', questions: QUESTIONS },
-                { id: 'empty', forEachItemIn: 'payload.none', questions: QUESTIONS },
-                { id: 'real', state: 'Something.', questions: QUESTIONS },
-            ], { text: 'not a list', none: [] }, { decisionsMaxCallsPerTurn: 1 }, stepParams());
-
-            expect(ask).toHaveBeenCalledTimes(1);
-            expect(results.map(r => [r.id, r.success])).toEqual([['notArray', false], ['empty', true], ['real', true]]);
-            expect(results[0].error).toContain('is not an array');
         });
     });
 });

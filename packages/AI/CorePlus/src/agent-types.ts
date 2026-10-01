@@ -692,12 +692,8 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      */
     scratchpad?: AgentScratchpad;
     /**
-     * Decision requests from the agent's response.
-     * Processed inline (zero turn cost) alongside payload and scratchpad changes.
-     * Results are injected into the next turn's conversation.
-     *
-     * On a `'Decision'` step these are the step's own requests instead, and their results come back
-     * on {@link decisionResults} rather than into the conversation.
+     * A `'Decision'` step's decision requests, answered with no LLM turn. Their results come back on
+     * {@link decisionResults}.
      */
     decisions?: AgentDecisionRequest[];
     /**

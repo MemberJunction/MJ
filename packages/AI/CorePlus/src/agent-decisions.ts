@@ -1,8 +1,9 @@
 /**
  * @fileoverview Type definitions for agent decision requests and results.
  *
- * Decisions allow agents to ask typed questions evaluated inline by a fast
- * decision model at zero turn cost. Answers arrive on the next turn.
+ * A decision request asks typed questions that a fast decision model answers without an LLM
+ * turn. An agent type sends them on a `'Decision'` next step (a Flow agent's Decision step does),
+ * and BaseAgent hands the results back to it on the `'Retry'` it returns.
  *
  * @module @memberjunction/ai-core-plus
  * @author MemberJunction.com
@@ -15,7 +16,7 @@ export type AgentDecisionQuestion =
   | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }> }    // pick one (2..255 options)
   | { kind: 'Score'; instructions: string; levels: string[] };                                          // ordered rubric, lowest first (2..10 levels), each level a description
 
-/** A request for a decision, answered by a fast decision model without an LLM turn. The answers arrive on the next turn. */
+/** A request for a decision, answered by a fast decision model without an LLM turn. */
 export interface AgentDecisionRequest {
   /** Names this request. The answers come back under it. */
   id: string;
@@ -27,7 +28,7 @@ export interface AgentDecisionRequest {
   questions: Record<string, AgentDecisionQuestion>;
 }
 
-/** The answers to one decision request, as injected on the next turn. */
+/** The answers to one decision request. */
 export interface AgentDecisionResult {
   /** The ID of the decision request these answers correspond to. */
   id: string;
@@ -35,7 +36,7 @@ export interface AgentDecisionResult {
   success: boolean;
   /** Error message if the decision execution failed. */
   error?: string;
-  /** Number of items skipped if forEachItemIn exceeded decisionsMaxItems cap. */
+  /** Number of items skipped when forEachItemIn had more items than one request asks about (100). */
   skippedCount?: number;
   /** Per question: a Likelihood's probability, or a Choice/Score value with its confidence. One entry per item when forEachItemIn was used. */
   answers?: Record<string, AgentDecisionAnswerSummary> | Array<Record<string, AgentDecisionAnswerSummary>>;

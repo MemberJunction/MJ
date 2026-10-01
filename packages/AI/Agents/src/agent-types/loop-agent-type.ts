@@ -106,7 +106,7 @@ export class LoopAgentType extends BaseAgentType {
      * combination could extend a run indefinitely).
      */
     private buildReadToolPreemptionStep<P>(response: LoopAgentResponse, hasClientTools: boolean): BaseAgentNextStep<P> | null {
-        const hasInlineReadTools = (response.artifactToolCalls?.length || 0) + (response.conversationToolCalls?.length || 0) + (response.decisions?.length || 0) > 0;
+        const hasInlineReadTools = (response.artifactToolCalls?.length || 0) + (response.conversationToolCalls?.length || 0) > 0;
         const wantsTerminalStep = response.nextStep?.type === 'Chat' || (response.taskComplete === true && !hasClientTools);
 
         if (!(hasInlineReadTools && wantsTerminalStep)) {
@@ -127,7 +127,6 @@ export class LoopAgentType extends BaseAgentType {
         });
         return this.createNextStep('Retry', {
             terminate: false,
-            decisions: response.decisions,
             artifactToolCalls: response.artifactToolCalls,
             conversationToolCalls: response.conversationToolCalls,
             memoryWrites: response.memoryWrites,
@@ -529,7 +528,6 @@ export class LoopAgentType extends BaseAgentType {
                 return this.createNextStep('Retry', {
                     pipeline: response.nextStep.pipeline,
                     terminate: false,
-                    decisions: response.decisions,
                     scratchpad: response.scratchpad,
                     artifactToolCalls: response.artifactToolCalls,
                     conversationToolCalls: response.conversationToolCalls,
@@ -561,7 +559,6 @@ export class LoopAgentType extends BaseAgentType {
                 return this.createNextStep('Chat', {
                     message: response.message,
                     terminate: true, // Chat always terminates to return to user
-                    decisions: response.decisions,
                     payloadChangeRequest: response.payloadChangeRequest,
                     scratchpad: response.scratchpad,
                     artifactToolCalls: response.artifactToolCalls,
@@ -590,7 +587,6 @@ export class LoopAgentType extends BaseAgentType {
                     message: response.message,
                     reasoning: response.reasoning,
                     confidence: response.confidence,
-                    decisions: response.decisions,
                     payloadChangeRequest: response.payloadChangeRequest,
                     scratchpad: response.scratchpad,
                     artifactToolCalls: response.artifactToolCalls,
@@ -609,7 +605,6 @@ export class LoopAgentType extends BaseAgentType {
 
             // Determine next step based on type
             const retVal: Partial<BaseAgentNextStep<P>> = {
-                decisions: response.decisions,
                 payloadChangeRequest: response.payloadChangeRequest,
                 scratchpad: response.scratchpad,
                 artifactToolCalls: response.artifactToolCalls,

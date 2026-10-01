@@ -29,10 +29,6 @@ interface LoopAgentResponse {
     scratchpad?: AgentScratchpad;
 
 
-    /** Decision requests answered inline on the same turn (zero turn cost) by a fast decision model. Results arrive on the next turn. */
-    decisions?: AgentDecisionRequest[];
-
-
 
 
     /** Internal reasoning for debugging */
@@ -97,9 +93,6 @@ interface LoopAgentResponse {
 
 
 {@include ../../../../packages/AI/CorePlus/generated-for-prompt/agent-scratchpad.ts.generated-for-prompt.md}
-
-
-{@include ../../../../packages/AI/CorePlus/generated-for-prompt/agent-decisions.ts.generated-for-prompt.md}
 
 
 # Execution Pattern
@@ -577,8 +570,6 @@ You have a private scratchpad for internal working memory. Use it to organize yo
 **Task statuses:** `pending`, `in_progress`, `completed`, `blocked`
 **Task IDs:** Use simple sequential IDs (`t1`, `t2`, `t3`).
 **Token efficiency:** Your scratchpad is injected into every turn — keep it lean. Use notes for key reasoning and decisions, not verbose logs. Task notes should be succinct. Everything here costs tokens on every subsequent turn.
-
-
 
 
 # Agent Definition

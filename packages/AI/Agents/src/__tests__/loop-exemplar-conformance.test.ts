@@ -41,7 +41,7 @@ const OUTPUT_DIR = join(REPO_ROOT, 'metadata/prompts/output');
 const TOP_LEVEL_FIELDS = new Set([
     'taskComplete', 'message', 'responseForm', 'actionableCommands', 'automaticCommands',
     'payloadChangeRequest', 'scratchpad', 'artifactToolCalls', 'conversationToolCalls',
-    'memoryWrites', 'reasoning', 'confidence', 'nextStep', 'decisions'
+    'memoryWrites', 'reasoning', 'confidence', 'nextStep'
 ]);
 const NEXT_STEP_FIELDS = new Set([
     'type', 'actions', 'pipeline', 'messageIndex', 'reason', 'subAgent', 'subAgents',
