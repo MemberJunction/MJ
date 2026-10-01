@@ -11,7 +11,7 @@ import {
     ParseHiddenFormPanelKeys,
     type FormScope,
 } from "@memberjunction/core-entities";
-import { AddOutput, Failure, GetStringParam, ContributionScopeFilter } from "./_shared";
+import { AddOutput, Failure, GetStringParam, ContributionScopeFilter, MetadataContributionsOn } from "./_shared";
 import {
     FORM_VARIANT_EXPLICIT_DEFAULT,
     FormSectionCamelCase,
@@ -73,7 +73,9 @@ const FULL_CUSTOM_FORM_NOTE =
  * `Precedence`, then the narrower scope, the browser's collapse rule), the panels the user hid
  * marked `Hidden`, and on an identity or permission entity only the user's own rows
  * ({@link FormScopeAllowedOnEntity}). Any failed query returns `QUERY_FAILED` rather than an
- * answer built from a partial read.
+ * answer built from a partial read. With metadata contributions switched off
+ * ({@link MetadataContributionsOn}) no row is read or listed, and `MetadataContributionsEnabled`
+ * is false.
  *
  * Compiled `BaseFormPanel` registrations live in the browser bundle, so they are absent and
  * the `Note` says so.
@@ -100,6 +102,7 @@ export class GetFormCompositionForEntityAction extends BaseAction {
             if (!entity) return Failure("ENTITY_NOT_FOUND", `Entity '${entityName}' is not registered.`);
 
             const rv = RunView.FromMetadataProvider(provider);
+            const contributionsOn = await MetadataContributionsOn(provider, user);
             const scope = ContributionScopeFilter(entity.ID, user);
             const variantKey = FormVariantSettingKey(entity.Name);
             const hideKey = FormPanelHideSettingKey(entity.Name);
@@ -110,15 +113,17 @@ export class GetFormCompositionForEntityAction extends BaseAction {
                     Fields: ['ID'],
                     ResultType: 'simple',
                 }, user),
-                rv.RunView<ContributionRow>({
-                    EntityName: "MJ: Entity Form Contributions",
-                    ExtraFilter: `${scope} AND Status='Active'`,
-                    Fields: ['ID', 'ContributionKey', 'Scope', 'Slot', 'Title', 'Name', 'Presentation', 'Precedence', 'Inclusion', 'SortKey',
-                        'InSectionKey', 'SectionPosition', 'ReplacesFieldNames', 'ReplacesSectionKey', 'ReplacesSectionKeys',
-                        'RelatedEntityID', 'RelatedEntity', 'RelatedJoinField'],
-                    OrderBy: 'Precedence DESC, SortKey DESC',
-                    ResultType: 'simple',
-                }, user),
+                contributionsOn
+                    ? rv.RunView<ContributionRow>({
+                        EntityName: "MJ: Entity Form Contributions",
+                        ExtraFilter: `${scope} AND Status='Active'`,
+                        Fields: ['ID', 'ContributionKey', 'Scope', 'Slot', 'Title', 'Name', 'Presentation', 'Precedence', 'Inclusion', 'SortKey',
+                            'InSectionKey', 'SectionPosition', 'ReplacesFieldNames', 'ReplacesSectionKey', 'ReplacesSectionKeys',
+                            'RelatedEntityID', 'RelatedEntity', 'RelatedJoinField'],
+                        OrderBy: 'Precedence DESC, SortKey DESC',
+                        ResultType: 'simple',
+                    }, user)
+                    : Promise.resolve(noRows<ContributionRow>()),
                 rv.RunView<OverrideRow>({
                     EntityName: "MJ: Entity Form Overrides",
                     ExtraFilter: `${scope} AND Status<>'Pending'`,
@@ -152,6 +157,7 @@ export class GetFormCompositionForEntityAction extends BaseAction {
                 Entity: entity.Name,
                 Layout: this.readLayout(entity),
                 FullCustomForm: fullCustomForm,
+                MetadataContributionsEnabled: contributionsOn,
                 Sections: fullCustomForm ? [] : this.deriveSections(entity),
                 Related: fullCustomForm ? [] : this.deriveRelated(entity),
                 Contributions: fullCustomForm ? [] : contributionsUserSees(applicable, hidden),
@@ -262,6 +268,11 @@ export class GetFormCompositionForEntityAction extends BaseAction {
         const sharesRelatedEntity = peers.filter(p => UUIDsEqual(p.RelatedEntityID, rel.RelatedEntityID)).length > 1;
         return RelatedGridSectionKey(rel.RelatedEntity, rel.RelatedEntityJoinField, sharesRelatedEntity);
     }
+}
+
+/** An empty, successful result, which stands in for a query that is not run. */
+function noRows<T>(): RunViewResult<T> {
+    return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' };
 }
 
 /** The message for the first failed query, or null when every query succeeded. */

@@ -3,7 +3,7 @@ import { BaseAction } from "@memberjunction/actions";
 import { Metadata, LogError, RunView } from "@memberjunction/core";
 import { EscapeSQLString, RegisterClass } from "@memberjunction/global";
 import { FormScopeAllowedOnEntity, ParseClaimedFieldNames, type MJEntityFormContributionEntity } from "@memberjunction/core-entities";
-import { AddOutput, ContributionScopeFilter, Failure, GetStringParam } from "./_shared";
+import { AddOutput, ContributionScopeFilter, Failure, GetStringParam, MetadataContributionsOn } from "./_shared";
 
 /** One contribution row, flattened for an agent or an apply flow to reason about. */
 export interface FormContributionSummary {
@@ -40,6 +40,9 @@ export interface FormContributionSummary {
  *
  * Sorted Active first, then Pending, then Inactive; within a status, highest `Precedence`
  * then highest `SortKey` — the order the renderer resolves them in.
+ *
+ * With metadata contributions switched off ({@link MetadataContributionsOn}) it lists none and
+ * reports `MetadataContributionsEnabled: false`.
  */
 @RegisterClass(BaseAction, "__GetFormContributionsForEntity")
 export class GetFormContributionsForEntityAction extends BaseAction {
@@ -55,6 +58,12 @@ export class GetFormContributionsForEntityAction extends BaseAction {
             const entity = provider.EntityByName(entityName);
             if (!entity) return Failure("ENTITY_NOT_FOUND", `Entity '${entityName}' is not registered.`);
 
+            if (!(await MetadataContributionsOn(provider, user))) {
+                const off = { EntityName: entity.Name, MetadataContributionsEnabled: false, Contributions: [] };
+                AddOutput(params, "Result", off);
+                return { Success: true, ResultCode: "SUCCESS", Message: JSON.stringify(off) };
+            }
+
             const rv = RunView.FromMetadataProvider(provider);
             const rows = await rv.RunView<MJEntityFormContributionEntity>({
                 EntityName: "MJ: Entity Form Contributions",
@@ -65,7 +74,9 @@ export class GetFormContributionsForEntityAction extends BaseAction {
             if (!rows.Success) return Failure("QUERY_FAILED", rows.ErrorMessage ?? 'Contribution lookup failed.');
 
             const applicable = (rows.Results ?? []).filter(r => FormScopeAllowedOnEntity(entity.Name, r.Scope));
-            const components = await this.loadComponentLabels(rv, applicable, user);
+            const labels = await this.loadComponentLabels(rv, applicable, user);
+            if ('error' in labels) return Failure("QUERY_FAILED", `Component lookup failed: ${labels.error}`);
+            const components = labels.labels;
 
             const statusRank = (s: string): number => (s === 'Active' ? 0 : s === 'Pending' ? 1 : 2);
             const summaries: FormContributionSummary[] = applicable
@@ -87,7 +98,7 @@ export class GetFormContributionsForEntityAction extends BaseAction {
                     };
                 });
 
-            const payload = { EntityName: entity.Name, Contributions: summaries };
+            const payload = { EntityName: entity.Name, MetadataContributionsEnabled: true, Contributions: summaries };
             AddOutput(params, "Result", payload);
             return { Success: true, ResultCode: "SUCCESS", Message: JSON.stringify(payload) };
         } catch (err) {
@@ -97,24 +108,25 @@ export class GetFormContributionsForEntityAction extends BaseAction {
         }
     }
 
-    /** Component name + version for each distinct ComponentID, in one query. */
+    /** Component name + version for each distinct ComponentID, in one query, or the query's error. */
     private async loadComponentLabels(
         rv: RunView,
         rows: readonly MJEntityFormContributionEntity[],
         user: NonNullable<RunActionParams['ContextUser']>,
-    ): Promise<Map<string, { Name: string; Version: string }>> {
+    ): Promise<{ labels: Map<string, { Name: string; Version: string }> } | { error: string }> {
         const components = new Map<string, { Name: string; Version: string }>();
         const componentIDs = [...new Set(rows.map(r => r.ComponentID))];
-        if (componentIDs.length === 0) return components;
+        if (componentIDs.length === 0) return { labels: components };
         const comps = await rv.RunView<{ ID: string; Name: string; Version: string }>({
             EntityName: "MJ: Components",
             ExtraFilter: `ID IN (${componentIDs.map(id => `'${EscapeSQLString(id)}'`).join(',')})`,
             Fields: ['ID', 'Name', 'Version'], ResultType: 'simple',
         }, user);
+        if (!comps.Success) return { error: comps.ErrorMessage || 'unknown error' };
         for (const c of comps.Results ?? []) {
             components.set(c.ID.toLowerCase(), { Name: c.Name, Version: c.Version });
         }
-        return components;
+        return { labels: components };
     }
 }
 

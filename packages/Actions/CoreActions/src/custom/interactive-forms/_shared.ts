@@ -1,11 +1,11 @@
 /**
- * Shared helpers for the Interactive Forms action family. These all touch
- * the same two entities (`MJ: Components`, `MJ: Entity Form Overrides`),
- * lint the same spec shape, and need the same parameter conventions —
- * extracting here keeps each action thin.
+ * Shared helpers for the Interactive Forms action family. These touch the
+ * same entities (`MJ: Components`, `MJ: Entity Form Overrides`,
+ * `MJ: Entity Form Contributions`), lint the same spec shape, and need the
+ * same parameter conventions — extracting here keeps each action thin.
  */
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
-import { IMetadataProvider, RunInEntityTransaction, UserInfo } from "@memberjunction/core";
+import { IMetadataProvider, LogError, RunInEntityTransaction, UserInfo } from "@memberjunction/core";
 import { EscapeSQLString } from "@memberjunction/global";
 import {
     ApplyContributionSpecToRow,
@@ -15,6 +15,8 @@ import {
     FormLifecycleComponentStatus,
     FormScopeWriteRefusal,
     type FormScope,
+    InstanceConfigEngine,
+    InteractiveFormsEngine,
     MJComponentEntity,
     MJEntityFormContributionEntity,
     MJEntityFormOverrideEntity,
@@ -267,6 +269,27 @@ export function ContributionScopeFilter(entityID: string, user: NonNullable<RunA
     return `EntityID='${EscapeSQLString(entityID)}' AND ((Scope='User' AND UserID='${EscapeSQLString(user.ID)}') OR ${roleClause} OR Scope='Global')`;
 }
 
+/**
+ * Whether metadata contributions are on for a server answer.
+ *
+ * Off when the Node switch is off (`MJ_FORMS_METADATA_CONTRIBUTIONS=false`, read into
+ * `InteractiveFormsEngine.MetadataContributionsEnabled`), or when the instance configuration
+ * Explorer reads (`Forms.MetadataContributions.Enabled`) is `false`. The instance configuration
+ * is read on every call, so setting it back to `true` turns the answer back on. When Instance
+ * Config cannot load, only the Node switch counts.
+ */
+export async function MetadataContributionsOn(provider: IMetadataProvider, user: UserInfo): Promise<boolean> {
+    if (!InteractiveFormsEngine.MetadataContributionsEnabled) return false;
+    try {
+        const config = InstanceConfigEngine.Instance;
+        await config.Config(false, user, provider);
+        return config.GetBoolean(InteractiveFormsEngine.MetadataContributionsConfigKey, true);
+    } catch (err) {
+        LogError(`Instance Config did not load, so form contributions stay on: ${err instanceof Error ? err.message : String(err)}`);
+        return true;
+    }
+}
+
 /** What {@link CheckPersonalWrite} reads from a form override or contribution row. */
 export interface ScopedFormRow {
     ID: string;
@@ -425,9 +448,9 @@ export async function insertComponent(opts: {
 }
 
 /**
- * Insert a new EntityFormOverride row. Always User-scoped (security clamp)
- * unless `allowGlobalOrRole` is explicitly true — which is reserved for the
- * future "promote variant" UI path, not the agent.
+ * Insert a new EntityFormOverride row, always User-scoped to the caller. Actions
+ * write personal forms only; sharing a form with a role or everyone is done from
+ * Form Builder or the form's Manage drawer.
  */
 export async function InsertOverride(opts: {
     provider: IMetadataProvider;

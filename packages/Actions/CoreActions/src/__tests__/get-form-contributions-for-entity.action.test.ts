@@ -12,8 +12,26 @@ const { hoisted } = vi.hoisted(() => ({
         components: [] as Array<{ ID: string; Name: string; Version: string }>,
         filters: [] as string[],
         contributionsSucceed: true,
+        componentsSucceed: true,
+        /** The stored `Forms.MetadataContributions.Enabled` value; undefined when the key is missing. */
+        instanceSwitch: undefined as string | undefined,
+        instanceConfigFails: false,
     },
 }));
+
+vi.mock('@memberjunction/core-entities', async (importOriginal) => {
+    const actual = await importOriginal<Record<string, unknown>>();
+    return {
+        ...actual,
+        InstanceConfigEngine: {
+            Instance: {
+                Config: async () => { if (hoisted.instanceConfigFails) throw new Error('Instance Config is down'); },
+                GetBoolean: (_key: string, fallback: boolean) =>
+                    hoisted.instanceSwitch === undefined ? fallback : hoisted.instanceSwitch === 'true',
+            },
+        },
+    };
+});
 
 const provider = {
     EntityByName: (name: string) => {
@@ -31,6 +49,7 @@ vi.mock('@memberjunction/core', async () => {
         async RunView<T>(p: { EntityName: string; ExtraFilter?: string }): Promise<{ Success: boolean; Results: T[]; ErrorMessage?: string }> {
             hoisted.filters.push(p.ExtraFilter ?? '');
             if (p.EntityName === 'MJ: Components') {
+                if (!hoisted.componentsSucceed) return { Success: false, Results: [], ErrorMessage: 'components unavailable' };
                 return { Success: true, Results: hoisted.components as unknown as T[] };
             }
             if (!hoisted.contributionsSucceed) return { Success: false, Results: [], ErrorMessage: 'boom' };
@@ -41,6 +60,7 @@ vi.mock('@memberjunction/core', async () => {
     return { ...actual, Metadata: { Provider: undefined }, RunView: MockRunView, LogError: vi.fn() };
 });
 
+import { InteractiveFormsEngine } from '@memberjunction/core-entities';
 import { GetFormContributionsForEntityAction } from '../custom/interactive-forms/get-form-contributions-for-entity.action';
 
 const user = { ID: 'USER-1', Name: 'Test User', UserRoles: [{ RoleID: 'ROLE-A' }, { RoleID: 'ROLE-B' }] };
@@ -74,6 +94,10 @@ beforeEach(() => {
     hoisted.components = [];
     hoisted.filters = [];
     hoisted.contributionsSucceed = true;
+    hoisted.componentsSucceed = true;
+    hoisted.instanceSwitch = undefined;
+    hoisted.instanceConfigFails = false;
+    InteractiveFormsEngine.MetadataContributionsEnabled = true;
 });
 
 describe('GetFormContributionsForEntityAction', () => {
@@ -132,6 +156,15 @@ describe('GetFormContributionsForEntityAction', () => {
         expect((await run(params())).ResultCode).toBe('QUERY_FAILED');
     });
 
+    it('surfaces a failed component lookup rather than listing rows without their components', async () => {
+        hoisted.contributions = [contribution()];
+        hoisted.componentsSucceed = false;
+        const result = await run(params());
+        expect(result.Success).toBe(false);
+        expect(result.ResultCode).toBe('QUERY_FAILED');
+        expect(result.Message).toContain('components unavailable');
+    });
+
     it('reports ENTITY_NOT_FOUND and MISSING_PARAMETER', async () => {
         expect((await run(params({ EntityName: 'Nope' }))).ResultCode).toBe('ENTITY_NOT_FOUND');
         expect((await run(params({ EntityName: undefined }))).ResultCode).toBe('MISSING_PARAMETER');
@@ -179,5 +212,45 @@ describe('GetFormContributionsForEntityAction — what a row claims, and identit
         hoisted.contributions = [contribution({ ID: 'global', Scope: 'Global' }), contribution({ ID: 'mine', Scope: 'User' })];
         const payload = JSON.parse((await run(params())).Message ?? '{}');
         expect(payload.Contributions).toHaveLength(2);
+    });
+});
+
+/**
+ * The kill switch turns every row off. The server answer follows the Node switch and the instance
+ * configuration Explorer reads, so an agent is not told about panels the form does not draw.
+ */
+describe('GetFormContributionsForEntityAction — kill switch', () => {
+    it('lists nothing, and reads no row, when the Node switch is off', async () => {
+        hoisted.contributions = [contribution()];
+        InteractiveFormsEngine.MetadataContributionsEnabled = false;
+        const result = await run(params());
+        expect(result.Success).toBe(true);
+        const payload = JSON.parse(result.Message ?? '{}');
+        expect(payload).toMatchObject({ MetadataContributionsEnabled: false, Contributions: [] });
+        expect(hoisted.filters).toEqual([]);
+    });
+
+    it('lists nothing when the instance configuration is false', async () => {
+        hoisted.contributions = [contribution()];
+        hoisted.instanceSwitch = 'false';
+        const payload = JSON.parse((await run(params())).Message ?? '{}');
+        expect(payload).toMatchObject({ MetadataContributionsEnabled: false, Contributions: [] });
+    });
+
+    it('lists the rows when the instance configuration is true or missing', async () => {
+        hoisted.contributions = [contribution()];
+        for (const value of ['true', undefined]) {
+            hoisted.instanceSwitch = value;
+            const payload = JSON.parse((await run(params())).Message ?? '{}');
+            expect(payload.MetadataContributionsEnabled).toBe(true);
+            expect(payload.Contributions).toHaveLength(1);
+        }
+    });
+
+    it('keeps the rows on when Instance Config cannot load', async () => {
+        hoisted.contributions = [contribution()];
+        hoisted.instanceConfigFails = true;
+        const payload = JSON.parse((await run(params())).Message ?? '{}');
+        expect(payload.Contributions).toHaveLength(1);
     });
 });

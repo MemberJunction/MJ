@@ -6,7 +6,7 @@ vi.mock('@memberjunction/global', async () => {
     return { ...actual, RegisterClass: () => (target: unknown) => target };
 });
 
-const { entity, usersEntity, provider, runViewResults, capturedFilters, failing } = vi.hoisted(() => {
+const { entity, usersEntity, provider, runViewResults, capturedFilters, failing, instanceSwitch } = vi.hoisted(() => {
 // Configuration is the PARSED object here, matching EntityRelationshipInfo.Configuration's
 // getter — not the raw JSON string stored in the column.
 const entity = {
@@ -43,7 +43,23 @@ const runViewResults: Record<string, unknown[]> = {
 const capturedFilters: Record<string, string | undefined> = {};
 /** Entity names whose query fails. */
 const failing = new Set<string>();
-return { entity, usersEntity, provider, runViewResults, capturedFilters, failing };
+/** The stored `Forms.MetadataContributions.Enabled` value; undefined when the key is missing. */
+const instanceSwitch: { value: string | undefined } = { value: undefined };
+return { entity, usersEntity, provider, runViewResults, capturedFilters, failing, instanceSwitch };
+});
+
+vi.mock('@memberjunction/core-entities', async (importOriginal) => {
+    const actual = await importOriginal<Record<string, unknown>>();
+    return {
+        ...actual,
+        InstanceConfigEngine: {
+            Instance: {
+                Config: async () => undefined,
+                GetBoolean: (_key: string, fallback: boolean) =>
+                    instanceSwitch.value === undefined ? fallback : instanceSwitch.value === 'true',
+            },
+        },
+    };
 });
 
 vi.mock('@memberjunction/core', async () => {
@@ -65,6 +81,7 @@ vi.mock('@memberjunction/core', async () => {
 });
 vi.mock('@memberjunction/actions', () => ({ BaseAction: class BaseAction {} }));
 
+import { InteractiveFormsEngine } from '@memberjunction/core-entities';
 import { GetFormCompositionForEntityAction } from '../custom/interactive-forms/get-form-composition-for-entity.action';
 
 type Internal = { InternalRunAction(p: RunActionParams): Promise<ActionResultSimple> };
@@ -399,4 +416,46 @@ describe('GetFormCompositionForEntityAction — a failed query', () => {
             }
         },
     );
+});
+
+/**
+ * The kill switch turns every row off on the form, so the composition answer lists none. Sections,
+ * grids and the form choice are still reported: the switch leaves the rest of the form alone.
+ */
+describe('GetFormCompositionForEntityAction — kill switch', () => {
+    it('lists no contributions, and reads no row, when the Node switch is off', async () => {
+        delete capturedFilters['MJ: Entity Form Contributions'];
+        InteractiveFormsEngine.MetadataContributionsEnabled = false;
+        try {
+            const payload = JSON.parse((await run()).Message ?? '{}');
+            expect(payload.MetadataContributionsEnabled).toBe(false);
+            expect(payload.Contributions).toEqual([]);
+            expect(payload.Sections.length).toBeGreaterThan(0);
+            expect(capturedFilters['MJ: Entity Form Contributions']).toBeUndefined();
+        } finally {
+            InteractiveFormsEngine.MetadataContributionsEnabled = true;
+        }
+    });
+
+    it('lists no contributions when the instance configuration is false', async () => {
+        instanceSwitch.value = 'false';
+        try {
+            const payload = JSON.parse((await run()).Message ?? '{}');
+            expect(payload.MetadataContributionsEnabled).toBe(false);
+            expect(payload.Contributions).toEqual([]);
+        } finally {
+            instanceSwitch.value = undefined;
+        }
+    });
+
+    it('lists the rows when both switches are on', async () => {
+        instanceSwitch.value = 'true';
+        try {
+            const payload = JSON.parse((await run()).Message ?? '{}');
+            expect(payload.MetadataContributionsEnabled).toBe(true);
+            expect(payload.Contributions).toHaveLength(1);
+        } finally {
+            instanceSwitch.value = undefined;
+        }
+    });
 });
