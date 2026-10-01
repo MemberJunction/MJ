@@ -1,4 +1,18 @@
-:host { display: block; color: var(--mj-color-neutral-800); }
+:host { display: block; color: var(--mj-color-neutral-800); color-scheme: light; }
+
+input,
+select,
+textarea {
+  box-sizing: border-box;
+  width: 100%;
+  background: var(--mj-color-neutral-0);
+  color: var(--mj-color-neutral-800);
+  border: 1px solid var(--mj-color-neutral-300);
+  border-radius: var(--mj-radius-sm, 4px);
+  padding: 0.35rem 0.55rem;
+  font: inherit;
+  color-scheme: light;
+}
 
 .scale-sheet {
   background: var(--mj-color-neutral-0);

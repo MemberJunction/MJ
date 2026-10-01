@@ -137,6 +137,7 @@ export class RubricScoreEditorComponent {
 @Component({
     standalone: true,
     selector: 'mj-rubric-scale-fields',
+    styleUrls: ['./rubric-builder.component.css'],
     template: `
       <label>Type <input [value]="ScaleType" (change)="ScaleTypeChange.emit(text($event))"></label>
       <label>Min <input type="number" [value]="MinValue ?? ''" (change)="MinValueChange.emit(optionalNumber($event))"></label>
@@ -165,6 +166,7 @@ export class RubricScaleFieldsComponent {
 @Component({
     standalone: true,
     selector: 'mj-rubric-scale-level-editor',
+    styleUrls: ['./rubric-builder.component.css'],
     template: `
       <label>Label <input [value]="Label" (change)="LabelChange.emit(text($event))"></label>
       <label>Description <textarea [value]="Description ?? ''" (change)="DescriptionChange.emit(text($event))"></textarea></label>
@@ -190,6 +192,7 @@ export class RubricScaleLevelEditorComponent {
 @Component({
     standalone: true,
     selector: 'mj-rubric-band-editor',
+    styleUrls: ['./rubric-builder.component.css'],
     template: `
       <label>Label <input [value]="Label" (change)="LabelChange.emit(text($event))"></label>
       <label>Range {{ MinScore }}–{{ MaxScore }}

@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--mj-space-3, 0.75rem);
-  color: var(--mj-text-primary);
+  color: var(--mj-color-neutral-800);
 }
 
 .rubric-list {

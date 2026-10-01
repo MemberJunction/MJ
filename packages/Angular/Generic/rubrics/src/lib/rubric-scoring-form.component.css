@@ -1,8 +1,28 @@
+:host { color-scheme: light; color: var(--mj-color-neutral-800); }
+
 .rubric-panel {
   display: flex;
   flex-direction: column;
   gap: var(--mj-space-4, 1rem);
-  color: var(--mj-text-primary);
+  color: var(--mj-color-neutral-800);
+}
+
+input,
+select,
+textarea,
+button {
+  color-scheme: light;
+  font: inherit;
+}
+
+input:not([type='checkbox']),
+select,
+textarea {
+  background: var(--mj-color-neutral-0);
+  color: var(--mj-color-neutral-800);
+  border: 1px solid var(--mj-color-neutral-300);
+  border-radius: var(--mj-radius-sm, 4px);
+  padding: 0.35rem 0.55rem;
 }
 
 fieldset {

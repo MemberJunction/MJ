@@ -1,4 +1,8 @@
-:host { display: block; color: var(--mj-color-neutral-800); }
+:host {
+  display: block;
+  color: var(--mj-color-neutral-800);
+  color-scheme: light;
+}
 
 .rubric-panel,
 .rubric-card {
@@ -26,7 +30,8 @@
 
 .segmented button {
   border: 0;
-  background: transparent;
+  background: var(--mj-color-neutral-0);
+  color: var(--mj-color-neutral-800);
   padding: 0.4rem 0.75rem;
 }
 
@@ -144,4 +149,36 @@ button.anchor.filled { background: var(--mj-color-brand-50); }
 @media (max-width: 520px) {
   .rubric-split,
   .rubric-columns { grid-template-columns: 1fr; }
+}
+
+label { color: var(--mj-color-neutral-800); }
+
+input:not([type='checkbox']):not([type='radio']),
+select,
+textarea {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  background: var(--mj-color-neutral-0);
+  color: var(--mj-color-neutral-800);
+  border: 1px solid var(--mj-color-neutral-300);
+  border-radius: var(--mj-radius-sm, 4px);
+  padding: 0.35rem 0.55rem;
+  font: inherit;
+  font-size: 0.875rem;
+  color-scheme: light;
+}
+
+select { height: 2rem; }
+
+textarea {
+  min-height: 4.5rem;
+  resize: vertical;
+}
+
+input[type='checkbox'] {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--mj-color-brand-600);
+  color-scheme: light;
 }
