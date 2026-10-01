@@ -119,14 +119,18 @@ export class FormPanelAdminService {
 
     /**
      * Which panels on this form draw for the current user: the winner of each key, with the
-     * user's hidden panels left out — the same resolution the form makes.
+     * user's hidden panels left out — the same resolution the form makes. Undefined when that
+     * cannot be resolved, so the list falls back to each item's own status.
      */
-    public RenderingFor(entity: EntityInfo | null | undefined, provider?: IMetadataProvider | null): FormPanelRendering {
-        const rowIDs = new Set<string>();
-        const compiledKeys = new Set<string>();
+    public RenderingFor(
+        entity: EntityInfo | null | undefined,
+        provider?: IMetadataProvider | null,
+    ): FormPanelRendering | undefined {
         const md = provider ?? Metadata.Provider;
-        if (!entity || !md) return { RowIDs: rowIDs, CompiledKeys: compiledKeys };
+        if (!entity || !md) return undefined;
         try {
+            const rowIDs = new Set<string>();
+            const compiledKeys = new Set<string>();
             const registrations = CollectFormContributionRegistrations(entity, md);
             for (const winner of ResolveFormContributionWinners(entity.Name, registrations).Winners) {
                 if (winner.Source === 'metadata') {
@@ -136,10 +140,11 @@ export class FormPanelAdminService {
                 const key = PanelHideKey(winner);
                 if (key) compiledKeys.add(key);
             }
+            return { RowIDs: rowIDs, CompiledKeys: compiledKeys };
         } catch (err: unknown) {
             LogError(`FormPanelAdminService: could not resolve what the form draws: ${this.message(err)}`);
+            return undefined;
         }
-        return { RowIDs: rowIDs, CompiledKeys: compiledKeys };
     }
 
     /**
@@ -235,8 +240,9 @@ export class FormPanelAdminService {
 
     /**
      * Changes who a full custom form is for, and makes it live. Whichever form was live for that
-     * audience is set aside in the same transaction — it stays in the picker, so the two can be
-     * swapped.
+     * audience is set aside in the same transaction. A personal form set aside stays in its
+     * owner's picker, so the two can be swapped back; a role or everyone form set aside is
+     * retracted and no longer offered to anyone.
      */
     public async PublishOverride(
         overrideID: string,
@@ -368,7 +374,10 @@ export class FormPanelAdminService {
         if (!componentID) return null;
         if (status !== 'Active' && this.componentLiveElsewhere(componentID, write.Changing)) return null;
         const component = await write.Provider.GetEntityObject<MJComponentEntity>('MJ: Components');
-        if (!(await component.Load(componentID))) return null;
+        if (!(await component.Load(componentID))) {
+            console.warn(`FormPanelAdminService: component ${componentID} could not be loaded, so its status was left as it is.`);
+            return null;
+        }
         const next = FormLifecycleComponentStatus(status);
         if (component.Status === next) return null;
         component.Status = next;

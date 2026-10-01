@@ -140,11 +140,18 @@ vi.mock('@memberjunction/global', () => ({
     UUIDsEqual: (a: string, b: string) => (a ?? '').toLowerCase() === (b ?? '').toLowerCase(),
     SafeJSONParse: (s: string) => { try { return JSON.parse(s); } catch { return null; } },
 }));
+/** What the form's registration collector reports, or throws. */
+let collect: () => unknown[] = () => [];
 vi.mock('../../panel-slot/collect-form-contribution-registrations', () => ({
     InvalidateFormContributionRegistrationCache: () => undefined,
+    CollectFormContributionRegistrations: () => collect(),
 }));
 const setHidden = vi.fn();
-vi.mock('../../panel-slot/panel-hides', () => ({ SetPanelHidden: (...args: unknown[]) => setHidden(...args) }));
+vi.mock('../../panel-slot/panel-hides', async () => {
+    // The hide key is pure, so the real one names the compiled panels that draw.
+    const actual = await vi.importActual<Record<string, unknown>>('../../panel-slot/panel-hides');
+    return { ...actual, SetPanelHidden: (...args: unknown[]) => setHidden(...args) };
+});
 
 import { FormPanelAdminService } from '../form-panel-admin.service';
 
@@ -161,6 +168,7 @@ beforeEach(() => {
     deletes = [];
     deleteSucceeds = true;
     submit = vi.fn(async () => true);
+    collect = () => [];
     setHidden.mockClear();
 });
 
@@ -485,5 +493,57 @@ describe('FormPanelAdminService.PublishContribution — a draft', () => {
         expect(saves.map((s) => `${s.ID}:${s.Status}:${s.Scope}`)).toEqual(['live:Inactive:Global', 'draft:Active:Global']);
         expect(componentSaves).toEqual([{ ID: 'c-draft', Status: 'Published' }]);
         expect(submit).toHaveBeenCalledTimes(1);
+    });
+});
+
+/**
+ * The drawer marks a panel "not shown" only when the form's own resolution says so. When that
+ * cannot be resolved it falls back to each item's status, rather than calling everything hidden.
+ */
+describe('FormPanelAdminService.RenderingFor', () => {
+    const ENTITY = { ID: 'E1', Name: 'MoreCheese: Courses' } as unknown as Parameters<FormPanelAdminService['RenderingFor']>[0];
+
+    it('names the winning rows and compiled panels', () => {
+        collect = () => [
+            { Priority: 2, Source: 'metadata', Scope: 'User', RowID: 'ROW-A', Metadata: { entity: 'MoreCheese: Courses', slot: 'after-fields', contributionKey: 'k' } },
+            { Priority: 1, Source: 'class', Metadata: { entity: 'MoreCheese: Courses', slot: 'after-fields', contributionKey: 'k' } },
+            { Priority: 0, Source: 'class', Metadata: { entity: 'MoreCheese: Courses', slot: 'top-area', contributionKey: 'skip:health' } },
+        ];
+        const rendering = new FormPanelAdminService().RenderingFor(ENTITY);
+        expect([...rendering!.RowIDs]).toEqual(['row-a']);
+        expect([...rendering!.CompiledKeys]).toEqual(['skip:health']);
+    });
+
+    it('is undefined without an entity', () => {
+        expect(new FormPanelAdminService().RenderingFor(null)).toBeUndefined();
+    });
+
+    it('is undefined when the form cannot be resolved', () => {
+        collect = () => { throw new Error('engine unavailable'); };
+        expect(new FormPanelAdminService().RenderingFor(ENTITY)).toBeUndefined();
+    });
+});
+
+describe('FormPanelAdminService — a component that cannot be loaded', () => {
+    it('warns and still saves the row', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        contributions = [panel({ ID: 'mine', Scope: 'User', UserID: ME, Status: 'Pending', ComponentID: 'c-gone' })];
+        const result = await new FormPanelAdminService().SetActive('mine', true);
+        expect(result.Success).toBe(true);
+        expect(saves.map((s) => `${s.ID}:${s.Status}`)).toEqual(['mine:Active']);
+        expect(componentSaves).toEqual([]);
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining('c-gone'));
+        warn.mockRestore();
+    });
+});
+
+describe('FormPanelAdminService.SetActive — keys that differ only by case', () => {
+    it('retires the live row the unique index would see as the same key', async () => {
+        contributions = [
+            panel({ ID: 'old', Scope: 'User', UserID: ME, ContributionKey: 'PANEL:COHORT' }),
+            panel({ ID: 'new', Scope: 'User', UserID: ME, Status: 'Pending', ContributionKey: 'panel:Cohort' }),
+        ];
+        await new FormPanelAdminService().SetActive('new', true);
+        expect(saves.map((s) => `${s.ID}:${s.Status}`)).toEqual(['old:Inactive', 'new:Active']);
     });
 });
