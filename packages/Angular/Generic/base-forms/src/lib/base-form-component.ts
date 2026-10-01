@@ -14,6 +14,8 @@ import {
 import { DeserializeValidationErrors, MJEventType, MJGlobal, ValidationErrorInfo } from '@memberjunction/global';
 import { FormEditingCompleteEvent, PendingRecordItem, BaseFormComponentEventCodes } from '@memberjunction/ng-base-types';
 import { MJListEntity } from '@memberjunction/core-entities';
+import { GraphQLAIClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import type { DuplicateEntryCandidate, DuplicateEntryCheckResult } from '@memberjunction/graphql-dataprovider';
 
 import { BaseRecordComponent } from './base-record-component';
 import { BaseFormSectionInfo } from './base-form-section-info';
@@ -34,6 +36,7 @@ import { EntityFormConfig } from './types/entity-form-config';
 import { FormToolbarItemConfig, FormToolbarItemKey, FormToolbarItemClickEventArgs } from './types/form-toolbar-item';
 import { CollectFormPanelRegistrations } from './panel-slot/collect-form-panel-registrations';
 import { ContributionHiddenSectionKeys } from './panel-slot/form-contribution';
+import { DuplicateEntryCheckController, type DuplicateEntryCheckValue } from './duplicate-entry-check/duplicate-entry-check';
 
 /**
  * Abstract base class for all entity record forms in MemberJunction.
@@ -317,6 +320,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     if (this.formStateSubscription) {
       this.formStateSubscription.unsubscribe();
     }
+    this._duplicateEntryCheck?.Dispose();
   }
 
   // #region Pending Records
@@ -464,6 +468,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       if (result) {
         this._pendingRecords = [];
         this.clearValidationState();
+        this._duplicateEntryCheck?.RecordSaved();
         if (StopEditModeAfterSave)
           this.EndEditMode();
 
@@ -642,6 +647,79 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   public async Wait(duration: number): Promise<void> {
     return new Promise<void>(resolve => setTimeout(resolve, duration));
+  }
+
+  // #endregion
+
+  // #region Duplicate Entry Check
+
+  private _duplicateEntryCheck: DuplicateEntryCheckController | null = null;
+
+  /**
+   * The entry-time duplicate check. While a person enters a new record it asks the server, after
+   * each pause in editing, whether the values duplicate existing records, and holds the ones to
+   * flag. It only flags: saving is never blocked and nothing is merged. `mj-record-form-container`
+   * shows the notice.
+   */
+  public get DuplicateEntryCheck(): DuplicateEntryCheckController {
+    if (!this._duplicateEntryCheck) {
+      this._duplicateEntryCheck = new DuplicateEntryCheckController(
+        (entityName, values) => this.CheckDuplicateEntry(entityName, values)
+      );
+    }
+    return this._duplicateEntryCheck;
+  }
+
+  /** Whether the possible-duplicate notice shows: a new record with flagged candidates not dismissed. */
+  public get ShowDuplicateEntryNotice(): boolean {
+    return !!this.record && !this.record.IsSaved && (this._duplicateEntryCheck?.IsNoticeVisible ?? false);
+  }
+
+  /**
+   * A person edited a field on this form. For a new record this restarts the entry-time duplicate
+   * check. `mj-record-form-container` calls it for every `mj-form-field` edit; a custom editor that
+   * changes the record some other way can call it too.
+   *
+   * A user who cannot read the entity (one who may only create its records) never starts a check:
+   * the server would refuse it, and a flagged record is one they could not open anyway.
+   */
+  public OnFieldEdited(): void {
+    if (this.record && !this.record.IsSaved && this.UserCanRead) {
+      this.DuplicateEntryCheck.RecordEdited(this.record);
+    }
+  }
+
+  /**
+   * Opens a flagged candidate the way the form opens any record: a `Navigate` event the host
+   * handles, never a router call. It asks for a new tab, so the record being entered is kept.
+   */
+  public OpenDuplicateCandidate(candidate: DuplicateEntryCandidate): void {
+    const entityInfo = this.record?.EntityInfo;
+    if (!entityInfo) return;
+    this.Navigate.emit({
+      Kind: 'record',
+      EntityName: entityInfo.Name,
+      PrimaryKey: CompositeKey.FromURLSegment(entityInfo, candidate.RecordID),
+      OpenInNewTab: true
+    });
+  }
+
+  /** The person dismissed the possible-duplicate notice. */
+  public DismissDuplicateNotice(): void {
+    this._duplicateEntryCheck?.Dismiss();
+  }
+
+  /**
+   * Asks the server whether the values being entered duplicate existing records. A form on a
+   * provider that is not a `GraphQLDataProvider` has no server to ask, so the check reports
+   * `NotConfigured` and stops for the entity. Override to send the check elsewhere.
+   */
+  protected async CheckDuplicateEntry(entityName: string, values: Record<string, DuplicateEntryCheckValue>): Promise<DuplicateEntryCheckResult> {
+    const provider = this.ProviderToUse;
+    if (!(provider instanceof GraphQLDataProvider)) {
+      return { Status: 'NotConfigured', Candidates: [] };
+    }
+    return new GraphQLAIClient(provider).CheckDuplicateEntry({ EntityName: entityName, Values: values });
   }
 
   // #endregion

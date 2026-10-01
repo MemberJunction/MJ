@@ -175,4 +175,14 @@ export interface DuplicateReasoningContext {
     Provider?: IMetadataProvider;
     /** The context user for the run. */
     ContextUser?: UserInfo;
+    /**
+     * Aborts the reasoning call when the caller stops waiting for it. The `Decision` mode passes it
+     * to the decision call as `AIDecisionParams.cancellationToken`; the other modes ignore it.
+     */
+    CancellationToken?: AbortSignal;
+    /**
+     * A bound on the model call, in milliseconds. The `Decision` mode passes it to the decision call
+     * as `AIDecisionParams.timeoutMS`; the other modes ignore it.
+     */
+    TimeoutMS?: number;
 }
