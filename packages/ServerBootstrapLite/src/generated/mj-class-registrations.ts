@@ -2095,12 +2095,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJMaterializedResultEntityServer,
     MJQueryEntityServer,
     MJQuerySQLEntityServer,
-    MJRecordProcessEntityServer,
-    MJRemoteOperationEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    MJRecordProcessEntityServer,
+    MJRemoteOperationEntityServer,
     MJRoleEntityServer,
     MJRowLevelSecurityFilterEntityServer,
     MJSearchScopeEntityServer,
@@ -2285,7 +2285,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 969;
+export const CLASS_REGISTRATIONS_COUNT = 971;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -2354,12 +2354,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MLModelInferenceProcessor,
     MLModelScoreEnricher,
     PredictiveStudioControlExperimentSessionServerOperation,
-    PredictiveStudioCreateScoringProcessServerOperation,
-    PredictiveStudioModelDevAgent,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    PredictiveStudioCreateScoringProcessServerOperation,
+    PredictiveStudioModelDevAgent,
     PredictiveStudioPipelineBuilderAgent,
     PredictiveStudioPromoteModelAction,
     PredictiveStudioPromoteModelServerOperation,
@@ -2558,12 +2558,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     LoopAction,
     MCPToolAction,
     MaterializeListFromViewAction,
-    ModifyDocumentSectionAction,
-    ModifyInteractiveFormAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ModifyDocumentSectionAction,
+    ModifyInteractiveFormAction,
     MoveListMembersAction,
     MoveObjectAction,
     OAuthFlowAction,
@@ -2640,7 +2640,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1060;
+export const CLASS_REGISTRATIONS_COUNT = 1062;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
