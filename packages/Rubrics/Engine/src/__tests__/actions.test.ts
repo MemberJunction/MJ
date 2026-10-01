@@ -118,6 +118,7 @@ describe('rubric actions', () => {
             score: 0.75,
             outcome: 'Passed',
             criteria: [{ key: 'clarity', normalizedScore: 0.75 }],
+            displayScore: 75,
         });
     });
 

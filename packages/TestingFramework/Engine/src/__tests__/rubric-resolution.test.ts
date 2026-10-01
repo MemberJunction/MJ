@@ -50,7 +50,7 @@ describe('rubric resolution', () => {
         const oracle = new RubricOracle({
             async evaluateRecord(request) {
                 seen.push(request);
-                return { evaluationId: 'eval-1', score: 0.75, outcome: 'Passed', criteria: [{ key: 'clarity', normalizedScore: 0.75, rationale: 'Clear.' }] };
+                return { evaluationId: 'eval-1', score: 0.75, displayScore: 75, outcome: 'Passed', criteria: [{ key: 'clarity', normalizedScore: 0.75, rationale: 'Clear.' }] };
             },
         });
         const result = await oracle.evaluate(
@@ -63,11 +63,12 @@ describe('rubric resolution', () => {
             subjectRecordId: 'run-1',
             contextEntityName: 'MJ: Tests',
             contextRecordId: 'test-1',
+            versionId: 'v1',
             passThreshold: null,
             evaluator: 'LLM',
         }]);
         expect(result.passed).toBe(true);
-        expect(result.message).toBe('rubric v1.0.0: Passed (0.75)');
+        expect(result.message).toBe('rubric v1.0.0: Passed (75)');
         expect(result.details).toMatchObject({ RubricEvaluationID: 'eval-1', Criteria: [{ Key: 'clarity', Rationale: 'Clear.' }] });
     });
 });

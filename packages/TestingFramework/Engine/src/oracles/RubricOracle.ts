@@ -1,9 +1,11 @@
+import { providerRubricEngine } from '@memberjunction/rubrics';
 import type { OracleConfig, OracleInput, OracleResult } from '../types';
 import type { IOracle } from './IOracle';
 
 export interface RubricOracleEngine {
     evaluateRecord(input: {
         rubricId?: string;
+        versionId?: string;
         subjectEntityName: string;
         subjectRecordId: string;
         contextEntityName?: string;
@@ -14,6 +16,7 @@ export interface RubricOracleEngine {
         evaluationId: string;
         score: number | null;
         outcome: string | null;
+        displayScore?: number | null;
         criteria: { key: string; normalizedScore: number | null; rationale?: string }[];
     }>;
 }
@@ -29,12 +32,13 @@ export class RubricOracle implements IOracle {
 
     public async evaluate(input: OracleInput, config: OracleConfig): Promise<OracleResult> {
         const settings = config as { rubricId?: string; rubricVersionId?: string; passThreshold?: number; versionLabel?: string };
-        const engine = this.engine;
+        const engine = this.engine ?? (input.provider ? providerRubricEngine(input.provider, input.contextUser) : undefined);
         if (!engine) {
             return { oracleType: this.type, passed: false, score: 0, message: 'No rubric engine is configured.' };
         }
         const result = await engine.evaluateRecord({
             rubricId: settings.rubricId,
+            versionId: settings.rubricVersionId,
             subjectEntityName: 'MJ: Test Runs',
             subjectRecordId: input.testRunId ?? '',
             contextEntityName: 'MJ: Tests',
@@ -44,11 +48,12 @@ export class RubricOracle implements IOracle {
         });
         const passed = result.outcome === 'Passed' || result.outcome === 'Scored';
         const label = settings.versionLabel ?? settings.rubricVersionId ?? 'published';
+        const shown = result.displayScore ?? result.score ?? 0;
         return {
             oracleType: this.type,
             passed,
             score: result.score ?? 0,
-            message: `${settings.rubricId ?? 'rubric'} v${label}: ${result.outcome} (${result.score ?? 0})`,
+            message: `${settings.rubricId ?? 'rubric'} v${label}: ${result.outcome} (${shown})`,
             details: {
                 RubricEvaluationID: result.evaluationId,
                 RubricVersionLabel: label,

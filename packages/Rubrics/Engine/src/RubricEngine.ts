@@ -71,6 +71,8 @@ export interface EvaluateRecordInput {
     contextRecordId?: string;
     evaluator?: EvaluateParams['evaluator'];
     passThreshold?: number | null;
+    /** When set, this version is used instead of the latest Published version. */
+    versionId?: string;
 }
 
 export interface EvaluateRecordResult {
@@ -78,6 +80,8 @@ export interface EvaluateRecordResult {
     score: number | null;
     outcome: RubricScoreResult['outcome'] | null;
     criteria: { key: string; normalizedScore: number | null; rationale?: string }[];
+    /** Score mapped onto the version's display range. Null when the normalized score is null. */
+    displayScore: number | null;
 }
 
 /**
@@ -167,8 +171,10 @@ export class RubricEngine {
      */
     public async evaluateRecord(input: EvaluateRecordInput): Promise<EvaluateRecordResult> {
         if (input.evaluator === 'AI') throw new Error('Evaluator AI is not accepted.');
-        const version = await this.latestPublished(input);
-        if (!version) throw new Error('No published version of that rubric.');
+        const version = input.versionId
+            ? await this.getRubric({ versionId: input.versionId })
+            : await this.latestPublished(input);
+        if (!version) throw new Error(input.versionId ? 'That rubric version was not found.' : 'No published version of that rubric.');
         const scored = input.passThreshold === undefined || input.passThreshold === null
             ? version
             : { ...version, passThreshold: input.passThreshold };
@@ -200,6 +206,7 @@ export class RubricEngine {
                     ? { key: node.key, normalizedScore: node.normalizedScore, rationale }
                     : { key: node.key, normalizedScore: node.normalizedScore };
             }),
+            displayScore: result?.normalizedScore == null ? null : version.scoreDisplayMin + result.normalizedScore * (version.scoreDisplayMax - version.scoreDisplayMin),
         };
     }
 

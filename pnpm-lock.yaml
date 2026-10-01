@@ -15110,6 +15110,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.2.0-edge.1
         version: link:../../MJGlobal
+      '@memberjunction/rubrics':
+        specifier: 6.2.0-edge.1
+        version: link:../../Rubrics/Engine
       '@memberjunction/testing-engine-base':
         specifier: 6.2.0-edge.1
         version: link:../EngineBase
