@@ -66,13 +66,15 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
             };
             const prior = this.SupersedesEvaluationID ? await loadPrior(run, this.SupersedesEvaluationID) : null;
             if (prior) {
+                // RubricID on an evaluation is a view column. A record created in this
+                // session has the pinned version, not that column, until it is reloaded.
                 assertCanSupersede(prior.target, {
                     status: 'Submitted',
                     subjectEntityId: this.SubjectEntityID,
                     subjectRecordId: this.SubjectRecordID,
                     contextEntityId: this.ContextEntityID,
                     contextRecordId: this.ContextRecordID,
-                    rubricId: this.RubricID,
+                    rubricId: String(versionRow.RubricID ?? this.RubricID ?? ''),
                 });
             }
             const result = submitEvaluation(input);
@@ -129,8 +131,14 @@ export class MJRubricEvaluationEntityServer extends MJRubricEvaluationEntity {
 
 async function loadPrior(run: (entityName: string, filter: string) => Promise<{ Success: boolean; Results?: unknown[] }>, id: string): Promise<{ target: { status: string; subjectEntityId: string; subjectRecordId: string; contextEntityId: string | null; contextRecordId: string | null; rubricId: string }; row: { Status?: string; Save: () => Promise<boolean> } }> {
     const priorRows = await run('MJ: Rubric Evaluations', `ID='${id}'`);
-    const prior = priorRows.Results?.[0] as { Status?: string; SubjectEntityID?: string; SubjectRecordID?: string; ContextEntityID?: string | null; ContextRecordID?: string | null; RubricID?: string; Save?: () => Promise<boolean> } | undefined;
+    const prior = priorRows.Results?.[0] as { Status?: string; SubjectEntityID?: string; SubjectRecordID?: string; ContextEntityID?: string | null; ContextRecordID?: string | null; RubricID?: string; RubricVersionID?: string; Save?: () => Promise<boolean> } | undefined;
     if (!prior?.Save) throw new Error('The evaluation being superseded was not found.');
+    let rubricId = prior.RubricID ? String(prior.RubricID) : '';
+    if (!rubricId && prior.RubricVersionID) {
+        const versionRows = await run('MJ: Rubric Versions', `ID='${prior.RubricVersionID}'`);
+        const version = versionRows.Results?.[0] as { RubricID?: string } | undefined;
+        rubricId = version?.RubricID ? String(version.RubricID) : '';
+    }
     return {
         target: {
             status: String(prior.Status),
@@ -138,7 +146,7 @@ async function loadPrior(run: (entityName: string, filter: string) => Promise<{ 
             subjectRecordId: String(prior.SubjectRecordID),
             contextEntityId: prior.ContextEntityID ?? null,
             contextRecordId: prior.ContextRecordID ?? null,
-            rubricId: String(prior.RubricID),
+            rubricId,
         },
         row: prior as { Status?: string; Save: () => Promise<boolean> },
     };
