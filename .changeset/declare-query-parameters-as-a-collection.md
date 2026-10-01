@@ -1,6 +1,7 @@
 ---
 "@memberjunction/core-entities": minor
 "@memberjunction/core-entities-server": minor
+"@memberjunction/metadata-sync": minor
 ---
 
 A query's parameters can now be declared in metadata instead of existing only because extraction inferred them.
@@ -16,5 +17,7 @@ Alongside it, extraction stops asserting over authored values:
 - The no-parameters case routes through `SyncParameters` with an empty list rather than `RemoveAllRecords`, which used to wipe declared rows silently because it was the one path that knew nothing about `DetectionMethod`.
 
 Two long-standing cross-connection bugs in the same pipeline are fixed: `loadExistingRecords` now always reads through the caller's provider instead of trusting `QueryEngine`'s debounced cache, and `MJQuerySQLEntityServer`/`MJQueryEntityServer` resolve the parent query and its `MJ: Query SQLs` records through `ProviderToUse` rather than globally-bound cached entities. Both previously read or wrote over a different connection than the one saving the record, which inside a transaction could neither see its rows nor settle with it.
+
+MetadataSync gains two collection options in `.mj-sync.json`. `matchOn` names a child's natural key, so a declared item adopts a row the server created instead of inserting a duplicate; declared values such as `@lookup:` references are resolved before the comparison. `declaredWhere` limits pull to declared rows, and natural-keyed items are pulled without `primaryKey` or the join field. `metadata/queries` uses `matchOn: ["Name"]` and `declaredWhere: { "DetectionMethod": "Manual" }`. The MetadataSync README describes how to un-declare a parameter.
 
 Fixes #4545.
