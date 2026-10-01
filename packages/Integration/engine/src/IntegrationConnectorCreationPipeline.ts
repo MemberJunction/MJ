@@ -550,8 +550,8 @@ export class IntegrationConnectorCreationPipeline {
         try {
             await withDeadline('ConnectionTest', this.StageConnectionTest(emitter, opts));
             // Introspect + Persist as ONE traversal of the source when the connector can stream;
-            // the old whole-schema persist when it cannot. See StreamIntrospectAndPersist.
-            const persistResult = await this.StreamIntrospectAndPersist(emitter, opts, withDeadline);
+            // the old whole-schema persist when it cannot. See streamIntrospectAndPersist.
+            const persistResult = await this.streamIntrospectAndPersist(emitter, opts, withDeadline);
             const { verdicts, unresolved } = await withDeadline('PKClassify', this.StagePKClassify(emitter, opts));
 
             emitter.stageComplete('Pipeline', {
@@ -1032,7 +1032,7 @@ export class IntegrationConnectorCreationPipeline {
      * with `Streamed` falsy, and the old whole-schema persist runs unchanged — which is what keeps
      * connector overrides in other repositories working untouched.
      */
-    private async StreamIntrospectAndPersist(
+    private async streamIntrospectAndPersist(
         emitter: IntegrationProgressEmitter,
         opts: ConnectorCreationPipelineOptions,
         withDeadline: StageDeadline,
@@ -1084,7 +1084,7 @@ export class IntegrationConnectorCreationPipeline {
             UseTransactionGroup: true,
             // §7 comprehensive-refresh deactivation (objects + fields absent from this discovery).
             DeactivateAbsent: opts.DeactivateAbsent ?? false,
-            // The streaming path drives the two halves separately (see StreamIntrospectAndPersist);
+            // The streaming path drives the two halves separately (see streamIntrospectAndPersist);
             // every other caller leaves them undefined and inherits DeactivateAbsent exactly as before.
             DeactivateAbsentObjects: retirement?.DeactivateAbsentObjects,
             DeactivateAbsentFields: retirement?.DeactivateAbsentFields,
