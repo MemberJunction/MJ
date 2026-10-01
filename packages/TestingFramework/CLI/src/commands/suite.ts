@@ -234,7 +234,7 @@ export class SuiteCommand {
         }
 
         // Compute variance + status mixing per test
-        type FlakyRow = { name: string; scores: number[]; statuses: string[]; variance: number; mixedStatus: boolean; flaky: boolean; criteria: { key: string; scores: number[]; spread: number }[] };
+        type FlakyRow = { name: string; scores: number[]; statuses: string[]; variance: number; mixedStatus: boolean; flaky: boolean; criteria: { Key: string; Scores: number[]; Spread: number }[] };
         const rows: FlakyRow[] = [];
         for (const [, entry] of byTest) {
             // Skip tests that didn't actually run multiple times (e.g. if an iteration errored)
@@ -246,7 +246,7 @@ export class SuiteCommand {
             const uniqueStatuses = new Set(entry.statuses);
             const mixedStatus = uniqueStatuses.size > 1;
             const criteria = CriterionSpreads(entry.oracleResults.map(oracleResults => ({ oracleResults })));
-            const criterionFlaky = criteria.some(criterion => criterion.spread > VARIANCE_THRESHOLD);
+            const criterionFlaky = criteria.some(criterion => criterion.Spread > VARIANCE_THRESHOLD);
             const flaky = variance > VARIANCE_THRESHOLD || mixedStatus || criterionFlaky;
             rows.push({ ...entry, variance, mixedStatus, flaky, criteria });
         }
@@ -276,11 +276,11 @@ export class SuiteCommand {
             if (r.mixedStatus) {
                 reasons.push(`mixed: ${r.statuses.join('/')}`);
             }
-            if (r.criteria.some(criterion => criterion.spread > VARIANCE_THRESHOLD)) {
+            if (r.criteria.some(criterion => criterion.Spread > VARIANCE_THRESHOLD)) {
                 reasons.push('criterion spread');
             }
             const scoresStr = r.scores.map(s => (s * 100).toFixed(0) + '%').join(', ');
-            const criterionLines = r.criteria.map(criterion => `${criterion.key} ${criterion.scores.map(score => (score * 100).toFixed(0) + '%').join(', ')} (spread ${(criterion.spread * 100).toFixed(0)}%)`);
+            const criterionLines = r.criteria.map(criterion => `${criterion.Key} ${criterion.Scores.map(score => (score * 100).toFixed(0) + '%').join(', ')} (spread ${(criterion.Spread * 100).toFixed(0)}%)`);
             lines.push(`  [FLAKY] ${r.name}`);
             lines.push(`          scores: ${scoresStr}  (${reasons.join(', ')})`);
             if (criterionLines.length > 0) lines.push(`          criteria: ${criterionLines.join('; ')}`);
