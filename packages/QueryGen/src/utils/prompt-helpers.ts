@@ -22,7 +22,7 @@ import { QueryGenConfig } from '../cli/config';
  * @param config - QueryGen configuration (for model/vendor overrides)
  * @returns Promise resolving to the prompt result
  */
-export async function executePromptWithOverrides<T>(
+export async function ExecutePromptWithOverrides<T>(
   prompt: MJAIPromptEntityExtended,
   data: Record<string, unknown>,
   contextUser: UserInfo,
@@ -44,6 +44,16 @@ export async function executePromptWithOverrides<T>(
 
   const runner = new AIPromptRunner();
   return await runner.ExecutePrompt<T>(promptParams);
+}
+
+/** @deprecated Use {@link ExecutePromptWithOverrides}. */
+export async function executePromptWithOverrides<T>(
+  prompt: MJAIPromptEntityExtended,
+  data: Record<string, unknown>,
+  contextUser: UserInfo,
+  config: QueryGenConfig
+): Promise<{ success: boolean; result?: T; errorMessage?: string }> {
+  return ExecutePromptWithOverrides(prompt, data, contextUser, config);
 }
 
 /**

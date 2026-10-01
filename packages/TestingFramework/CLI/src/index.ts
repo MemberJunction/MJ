@@ -13,12 +13,13 @@ export { ValidateCommand } from './commands/validate';
 export { ReportCommand } from './commands/report';
 export { HistoryCommand } from './commands/history';
 export { CompareCommand } from './commands/compare';
+export { ScriptsCommand } from './commands/scripts';
 
 // Utilities
 export { OutputFormatter } from './utils/output-formatter';
-export { loadCLIConfig } from './utils/config-loader';
+export { LoadCLIConfig, loadCLIConfig } from './utils/config-loader';
 export { SpinnerManager } from './utils/spinner-manager';
-export { getContextUser } from './lib/mj-provider';
+export { GetContextUser, getContextUser } from './lib/mj-provider';
 
 // Types
 export * from './types';

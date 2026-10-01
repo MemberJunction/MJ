@@ -368,7 +368,7 @@ export function FormatConsoleMessage(message: string, serverity: SeverityType): 
 }
 
 function FormatConsoleMessageInternal(color: ConsoleColor, message: string) {
-    return `\r\x1b[${getAnsiColorCode(ConsoleColor.white)}m${message}\x1b[0m`;
+    return `\r\x1b[${GetAnsiColorCode(ConsoleColor.white)}m${message}\x1b[0m`;
 }
 
 export function FormatFileMessage(message: string, serverity: SeverityType): string {
@@ -420,7 +420,7 @@ type ConsoleColor = typeof ConsoleColor[keyof typeof ConsoleColor];
  * Helper function to get the ANSI color code for the given console color.
  * @param color
  */
-export function getAnsiColorCode(color: ConsoleColor): number {
+export function GetAnsiColorCode(color: ConsoleColor): number {
     switch (color) {
         case ConsoleColor.black: return 30;
         case ConsoleColor.red: return 31;
@@ -436,6 +436,11 @@ export function getAnsiColorCode(color: ConsoleColor): number {
     }
 }
 
+/** @deprecated Use {@link GetAnsiColorCode}. */
+export function getAnsiColorCode(color: ConsoleColor): number {
+  return GetAnsiColorCode(color);
+}
+
 /**
  * Utility function that udpates the current console line with the provided message and color.
  * @param message
@@ -447,7 +452,7 @@ export function UpdateCurrentConsoleLine(message: string, color: ConsoleColor = 
         //console.log(`\r\x1b[${getAnsiColorCode(color)}m${message}\x1b[0m`);
         //process.stdout.write(`\r\x1b[${getAnsiColorCode(color)}m${message}\x1b[0m`);
 //        console.log(`\x1b[2K\r\x1b[${getAnsiColorCode(color)}m${message}\x1b[0m`);
-        console.log(`\x1b[${getAnsiColorCode(color)}m${message}\x1b[0m`);
+        console.log(`\x1b[${GetAnsiColorCode(color)}m${message}\x1b[0m`);
     }
     else {
         // Running in browser environment

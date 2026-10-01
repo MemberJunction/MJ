@@ -267,6 +267,61 @@ describe('ConversationAgentRunner', () => {
             const names = data.ALL_AVAILABLE_AGENTS.map((a: { Name: string }) => a.Name);
             expect(names).toEqual(['Research']);
         });
+
+        it('narrows ALL_AVAILABLE_AGENTS to the host\'s allowed list (case-insensitive IDs)', async () => {
+            const research2 = { ...otherActiveAgent, ID: 'other-2', Name: 'Writer' };
+            withAgents(sageAgent, otherActiveAgent, research2);
+            await runner.processMessage({
+                conversationId: 'c1',
+                message: { ID: 'm1' } as never,
+                conversationDetailId: 'cd1',
+                AllowedAgentIDs: ['SAGE-UUID', 'OTHER-2'],
+            });
+
+            const names = hoisted.sessionRun.mock.calls[0][0].Data.ALL_AVAILABLE_AGENTS.map((a: { Name: string }) => a.Name);
+            expect(names).toEqual(['Writer']);
+        });
+
+        it('an empty allowed list leaves the manager nobody to delegate to', async () => {
+            await runner.processMessage({
+                conversationId: 'c1',
+                message: { ID: 'm1' } as never,
+                conversationDetailId: 'cd1',
+                AllowedAgentIDs: [],
+            });
+
+            expect(hoisted.sessionRun.mock.calls[0][0].Data.ALL_AVAILABLE_AGENTS).toEqual([]);
+        });
+    });
+
+    describe('history floor', () => {
+        beforeEach(() => {
+            withAgents(sageAgent);
+            hoisted.sessionRun.mockResolvedValue({ Success: true, Result: {} });
+        });
+
+        it('sends AgentHistoryFrom when the host sets one', async () => {
+            const floor = new Date('2026-09-01T12:00:00.000Z');
+            await runner.processMessage({
+                conversationId: 'c1',
+                message: { ID: 'm1' } as never,
+                conversationDetailId: 'cd1',
+                AgentHistoryFrom: floor,
+            });
+
+            expect(hoisted.sessionRun.mock.calls[0][0].AgentHistoryFrom).toBe(floor);
+        });
+
+        it('leaves it off otherwise', async () => {
+            await runner.processMessage({
+                conversationId: 'c1',
+                message: { ID: 'm1' } as never,
+                conversationDetailId: 'cd1',
+                AgentHistoryFrom: null,
+            });
+
+            expect(hoisted.sessionRun.mock.calls[0][0]).not.toHaveProperty('AgentHistoryFrom');
+        });
     });
 
     describe('explicit agent ID wins', () => {

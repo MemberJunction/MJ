@@ -1,10 +1,16 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ChangeDetectorRef, Component, ElementRef } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { capture } from '@memberjunction/ng-test-utils';
-import { BaseEntity, BaseEntityResult, EntityInfo } from '@memberjunction/core';
+import { BaseEntity, BaseEntityResult, EntityInfo, LogError } from '@memberjunction/core';
 import { ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
 import { BaseFormComponent } from './base-form-component';
+
+// Only LogError is doubled; every other export (BaseEntity, EntityInfo, …) stays real.
+vi.mock('@memberjunction/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@memberjunction/core')>();
+  return { ...actual, LogError: vi.fn() };
+});
 
 /**
  * How `BaseFormComponent.SaveRecord()` reports a REFUSED save to the fields and the user.
@@ -217,6 +223,53 @@ describe('BaseFormComponent publishes a refused save to the fields', () => {
       expect(toasts[0].Type).toBe('warning');
       expect(toasts[0].Message.startsWith('Validation Errors\n')).toBe(true);
       expect(validationFailed).toHaveLength(1);
+    });
+  });
+
+  /**
+   * golive #255 — every refused save also logged `Could not save record: Record not found`,
+   * because that line sat after the `if (this.record)` block with no `else`. On a CREATE that
+   * failed validation it sent the reader hunting for an ID or routing fault. The refusal is
+   * already reported through the toast and the fields; the console line is for the one case
+   * nothing else can report.
+   */
+  describe('what reaches the console', () => {
+    beforeEach(() => {
+      vi.mocked(LogError).mockClear();
+    });
+
+    it('logs nothing for a local Validate() refusal — the toast and the fields already carry it', async () => {
+      const record = makeRecord();
+      record.Set('Name', null);
+      const form = makeForm(record);
+
+      await form.SaveRecord(false);
+
+      expect(LogError).not.toHaveBeenCalled();
+    });
+
+    it('logs nothing for a server refusal either', async () => {
+      const record = makeRecord();
+      record.refuseWith = [new ValidationErrorInfo('TagID', SERVER_MESSAGE, 'abc')];
+      const form = makeForm(record);
+
+      await form.SaveRecord(false);
+
+      expect(LogError).not.toHaveBeenCalled();
+    });
+
+    it('logs, and returns false, only when the form has no record to save', async () => {
+      const form = makeForm(makeRecord());
+      (form as { record: BaseEntity | null }).record = null;
+      const toasts = capture(form.Notification);
+
+      const ok = await form.SaveRecord(false);
+
+      expect(ok).toBe(false);
+      expect(toasts).toEqual([]);
+      expect(LogError).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(LogError).mock.calls[0][0]).toContain('no record');
+      expect(vi.mocked(LogError).mock.calls[0][0]).not.toContain('Record not found');
     });
   });
 

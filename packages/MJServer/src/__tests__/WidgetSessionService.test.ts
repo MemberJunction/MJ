@@ -21,12 +21,16 @@ vi.mock('../auth/magicLink/MagicLinkService.js', () => ({
   MagicLinkService: class {},
 }));
 vi.mock('../agentSessions/ReturningVisitorRecap.js', () => ({
-  writeReturningVisitorRecap: async () => undefined,
+  WriteReturningVisitorRecap: async () => undefined,
+    get writeReturningVisitorRecap() { return this.WriteReturningVisitorRecap; },
 }));
 vi.mock('../realtimeWidget/visitorIdentity.js', () => ({
-  resolveIdentityByEmail: async () => null,
-  mergeVisitorIdentity: async () => 0,
-  forgetVisitor: async () => ({ notesArchived: 0, conversationsCleared: 0 }),
+  ResolveIdentityByEmail: async () => null,
+    get resolveIdentityByEmail() { return this.ResolveIdentityByEmail; },
+  MergeVisitorIdentity: async () => 0,
+    get mergeVisitorIdentity() { return this.MergeVisitorIdentity; },
+  ForgetVisitor: async () => ({ notesArchived: 0, conversationsCleared: 0 }),
+    get forgetVisitor() { return this.ForgetVisitor; },
 }));
 
 import { WidgetSessionService } from '../realtimeWidget/WidgetSessionService.js';

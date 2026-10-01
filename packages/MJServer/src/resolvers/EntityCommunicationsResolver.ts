@@ -31,10 +31,10 @@ export class CommunicationProviderMessageType {
   AdditionalAttributes: string;
 
   @Field()
-  _mj_CreatedAt: Date;
+  _mj_CreatedAt: Date;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field()
-  _mj_UpdatedAt: Date;
+  _mj_UpdatedAt: Date;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field()
   CommunicationProvider?: string;
@@ -73,10 +73,10 @@ export class TemplateInputType {
   IsActive: boolean;
 
   @Field()
-  _mj_CreatedAt: Date;
+  _mj_CreatedAt: Date;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field()
-  _mj_UpdatedAt: Date;
+  _mj_UpdatedAt: Date;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field({ nullable: true })
   Category?: string;

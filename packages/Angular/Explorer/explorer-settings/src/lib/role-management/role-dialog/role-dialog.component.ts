@@ -23,21 +23,57 @@ export interface RoleDialogResult {
   styleUrls: ['./role-dialog.component.css']
 })
 export class RoleDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy, OnChanges {
-  @Input() data: RoleDialogData | null = null;
-  @Input() visible = false;
-  @Output() result = new EventEmitter<RoleDialogResult>();
+  @Input() Data: RoleDialogData | null = null;
+
+  /** @deprecated Use {@link Data}. */
+  @Input() set data(value: RoleDialogData | null) {
+    this.Data = value;
+  }
+  /** @deprecated Use {@link Data}. */
+  get data(): RoleDialogData | null {
+    return this.Data;
+  }
+  @Input() Visible = false;
+
+  /** @deprecated Use {@link Visible}. */
+  @Input() set visible(value: RoleDialogComponent['Visible']) {
+    this.Visible = value;
+  }
+  /** @deprecated Use {@link Visible}. */
+  get visible(): RoleDialogComponent['Visible'] {
+    return this.Visible;
+  }
+  @Output() Result = new EventEmitter<RoleDialogResult>();
+
+  /**
+   * @deprecated Use {@link Result}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (result) keeps working. Must stay AFTER Result: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() result = this.Result;
 
   private fb = inject(FormBuilder);
   private cdr = inject(ChangeDetectorRef);
   private ngZone = inject(NgZone);
   private get metadata() { return this.ProviderToUse; }
-  public roleForm: FormGroup;
+  public RoleForm: FormGroup;
+
+  /** @deprecated Use {@link RoleForm}. */
+  public get roleForm(): FormGroup {
+    return this.RoleForm;
+  }
+  /** @deprecated Use {@link RoleForm}. */
+  public set roleForm(value: FormGroup) {
+    this.RoleForm = value;
+  }
   public isLoading = false;
   public error: string | null = null;
 
   constructor() {
     super();
-    this.roleForm = this.fb.group({
+    this.RoleForm = this.fb.group({
       name: ['', [Validators.required, Validators.maxLength(50)]],
       description: [''],
       directoryId: ['']
@@ -49,12 +85,12 @@ export class RoleDialogComponent extends BaseAngularComponent implements OnInit,
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['data'] && this.data?.role && this.isEditMode) {
+    if (changes['data'] && this.Data?.role && this.IsEditMode) {
       this.loadRoleData();
     }
     
     // Reset form if switching to create mode or dialog becomes visible
-    if (changes['visible'] && this.visible && !this.isEditMode) {
+    if (changes['visible'] && this.Visible && !this.IsEditMode) {
       this.resetForm();
     }
   }
@@ -64,7 +100,7 @@ export class RoleDialogComponent extends BaseAngularComponent implements OnInit,
   }
 
   private resetForm(): void {
-    this.roleForm.reset({
+    this.RoleForm.reset({
       name: '',
       description: '',
       directoryId: ''
@@ -74,44 +110,59 @@ export class RoleDialogComponent extends BaseAngularComponent implements OnInit,
 
   @HostListener('document:keydown.escape', ['$event'])
   onEscapeKey(event: Event): void {
-    if (this.visible) {
+    if (this.Visible) {
       this.onCancel();
     }
   }
 
+  public get WindowTitle(): string {
+    return this.IsEditMode ? 'Edit Role' : 'Create New Role';
+  }
+
+  /** @deprecated Use {@link WindowTitle}. */
   public get windowTitle(): string {
-    return this.isEditMode ? 'Edit Role' : 'Create New Role';
+    return this.WindowTitle;
   }
 
+  public get IsEditMode(): boolean {
+    return this.Data?.mode === 'edit';
+  }
+
+  /** @deprecated Use {@link IsEditMode}. */
   public get isEditMode(): boolean {
-    return this.data?.mode === 'edit';
+    return this.IsEditMode;
   }
 
-  public get isSystemRole(): boolean {
-    if (!this.data?.role) return false;
+  public get IsSystemRole(): boolean {
+    if (!this.Data?.role) return false;
     const systemRoleNames = ['Administrator', 'User', 'Guest', 'Developer'];
-    return systemRoleNames.includes(this.data.role.Name || '');
+    return systemRoleNames.includes(this.Data.role.Name || '');
+  }
+
+  /** @deprecated Use {@link IsSystemRole}. */
+  public get isSystemRole(): boolean {
+    return this.IsSystemRole;
   }
 
   private loadRoleData(): void {
-    if (!this.data?.role) return;
+    if (!this.Data?.role) return;
 
-    const role = this.data.role;
-    this.roleForm.patchValue({
+    const role = this.Data.role;
+    this.RoleForm.patchValue({
       name: role.Name,
       description: role.Description,
       directoryId: role.DirectoryID
     });
 
     // Disable name editing for system roles
-    if (this.isSystemRole) {
-      this.roleForm.get('name')?.disable();
+    if (this.IsSystemRole) {
+      this.RoleForm.get('name')?.disable();
     }
   }
 
-  public async onSubmit(): Promise<void> {
-    if (this.roleForm.invalid) {
-      this.markFormGroupTouched(this.roleForm);
+  public async OnSubmit(): Promise<void> {
+    if (this.RoleForm.invalid) {
+      this.markFormGroupTouched(this.RoleForm);
       return;
     }
 
@@ -121,9 +172,9 @@ export class RoleDialogComponent extends BaseAngularComponent implements OnInit,
     try {
       let role: MJRoleEntity;
 
-      if (this.isEditMode && this.data?.role) {
+      if (this.IsEditMode && this.Data?.role) {
         // Edit existing role
-        role = this.data.role;
+        role = this.Data.role;
       } else {
         // Create new role
         role = await this.metadata.GetEntityObject<MJRoleEntity>('MJ: Roles');
@@ -131,10 +182,10 @@ export class RoleDialogComponent extends BaseAngularComponent implements OnInit,
       }
 
       // Update role properties
-      const formValue = this.roleForm.value;
+      const formValue = this.RoleForm.value;
       
       // Only update name if not a system role
-      if (!this.isSystemRole) {
+      if (!this.IsSystemRole) {
         role.Name = formValue.name;
       }
       
@@ -147,7 +198,7 @@ export class RoleDialogComponent extends BaseAngularComponent implements OnInit,
         throw new Error(role.LatestResult?.Message || 'Failed to save role');
       }
 
-      this.result.emit({ action: 'save', role });
+      this.Result.emit({ action: 'save', role });
 
     } catch (error: unknown) {
       console.error('Error saving role:', error);
@@ -163,8 +214,13 @@ export class RoleDialogComponent extends BaseAngularComponent implements OnInit,
     }
   }
 
+  /** @deprecated Use {@link OnSubmit}. */
+  public async onSubmit(): Promise<void> {
+    return this.OnSubmit();
+  }
+
   public onCancel(): void {
-    this.result.emit({ action: 'cancel' });
+    this.Result.emit({ action: 'cancel' });
   }
 
   private markFormGroupTouched(formGroup: FormGroup): void {

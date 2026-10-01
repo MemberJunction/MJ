@@ -72,7 +72,7 @@ function requireFixtures(): MaterializedReadFixtures {
  * Fabricate the snapshot + seed its metadata. Skips (no fixtures set → checks skip-as-pass) when there is no
  * mssql pool (PostgreSQL / client transport), since the fabrication is raw T-SQL.
  */
-export async function createMaterializedReadFixtures(ctx: IntegrationCheckContext): Promise<void> {
+export async function CreateMaterializedReadFixtures(ctx: IntegrationCheckContext): Promise<void> {
     if (!ctx.Pool) {
         console.log(`      → materialized-read SKIPPED (no assertions will run): no mssql pool on this run path — snapshot fabrication is T-SQL only`);
         return;
@@ -143,6 +143,11 @@ export async function createMaterializedReadFixtures(ctx: IntegrationCheckContex
     fixtures.Link = link;
 }
 
+/** @deprecated Use {@link CreateMaterializedReadFixtures}. */
+export async function createMaterializedReadFixtures(ctx: IntegrationCheckContext): Promise<void> {
+    return CreateMaterializedReadFixtures(ctx);
+}
+
 /**
  * Guarantee the query carries the `marker` parameter and the ID/Name output QueryFields the read plan needs.
  * Template save normally auto-extracts both; create any missing piece so the bundle is deterministic regardless
@@ -175,7 +180,7 @@ async function ensureQueryMetadata(md: Metadata, user: UserInfo, queryID: string
  * Category would leak on every run). `IsSaved` skips the row MR3 already removed; the per-delete catch handles the
  * join row the subclass deleted out from under the in-memory object.
  */
-export async function teardownMaterializedReadFixtures(ctx: IntegrationCheckContext): Promise<void> {
+export async function TeardownMaterializedReadFixtures(ctx: IntegrationCheckContext): Promise<void> {
     const safeDelete = async (label: string, fn: () => Promise<unknown>): Promise<void> => {
         try { await fn(); } catch (e) { console.error(`materialized-read teardown (${label}): ${e instanceof Error ? e.message : String(e)}`); }
     };
@@ -190,6 +195,11 @@ export async function teardownMaterializedReadFixtures(ctx: IntegrationCheckCont
     } finally {
         fixtures = undefined;
     }
+}
+
+/** @deprecated Use {@link TeardownMaterializedReadFixtures}. */
+export async function teardownMaterializedReadFixtures(ctx: IntegrationCheckContext): Promise<void> {
+    return TeardownMaterializedReadFixtures(ctx);
 }
 
 /** True when a result set contains the sentinel row (matched by its ID). */
@@ -253,6 +263,6 @@ for (const check of MaterializedReadChecks) {
 }
 
 IntegrationCheckRegistry.Instance.RegisterLifecycle('materialized-read', {
-    Setup: async (ctx) => { await createMaterializedReadFixtures(ctx); },
-    Teardown: async (ctx) => { await teardownMaterializedReadFixtures(ctx); },
+    Setup: async (ctx) => { await CreateMaterializedReadFixtures(ctx); },
+    Teardown: async (ctx) => { await TeardownMaterializedReadFixtures(ctx); },
 });

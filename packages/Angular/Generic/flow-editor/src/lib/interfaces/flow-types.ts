@@ -2,6 +2,12 @@
  * Core interfaces for the generic flow editor.
  * These types are entity-agnostic — consumers map their domain data to/from these.
  */
+import type { MJAIPromptEntity } from '@memberjunction/core-entities';
+
+/**
+ * Prompt option shape for flow editor prompt pickers.
+ */
+export type PromptOption = Pick<MJAIPromptEntity, 'ID' | 'Name' | 'AIModelType' | 'AIModelTypeID'>;
 
 // ---------------------------------------------------------------------------
 // Node Types

@@ -58,18 +58,18 @@ export class ArchiveRecovery {
      */
     public async RestoreVersion(archiveRunDetailId: string, contextUser: UserInfo): Promise<RestoreRecordResult> {
         try {
-            const detail = await this.LoadArchiveRunDetail(archiveRunDetailId, contextUser);
+            const detail = await this.loadArchiveRunDetail(archiveRunDetailId, contextUser);
             if (!detail) {
                 return { Success: false, ErrorMessage: `ArchiveRunDetail not found: ${archiveRunDetailId}`, RestoredFields: [] };
             }
 
-            const archiveRun = await this.LoadArchiveRun(detail.Get('ArchiveRunID') as string, contextUser);
+            const archiveRun = await this.loadArchiveRun(detail.Get('ArchiveRunID') as string, contextUser);
             if (!archiveRun) {
                 return { Success: false, ErrorMessage: 'Failed to load parent ArchiveRun', RestoredFields: [] };
             }
 
-            const storageDriver = await this.InitializeStorageDriver(archiveRun, contextUser);
-            const driver = this.ResolveDriver();
+            const storageDriver = await this.initializeStorageDriver(archiveRun, contextUser);
+            const driver = this.resolveDriver();
 
             const restoreContext: RestoreRecordContext = {
                 ArchiveRunDetail: detail,
@@ -94,7 +94,7 @@ export class ArchiveRecovery {
     /**
      * Loads a single ArchiveRunDetail record by ID.
      */
-    private async LoadArchiveRunDetail(detailId: string, contextUser: UserInfo): Promise<BaseEntity | null> {
+    private async loadArchiveRunDetail(detailId: string, contextUser: UserInfo): Promise<BaseEntity | null> {
         const md = this.Provider;
         const detail = await md.GetEntityObject('MJ: Archive Run Details', contextUser);
         const loaded = await detail.InnerLoad(CompositeKey.FromID(detailId));
@@ -104,7 +104,7 @@ export class ArchiveRecovery {
     /**
      * Loads a single ArchiveRun record by ID.
      */
-    private async LoadArchiveRun(archiveRunId: string, contextUser: UserInfo): Promise<BaseEntity | null> {
+    private async loadArchiveRun(archiveRunId: string, contextUser: UserInfo): Promise<BaseEntity | null> {
         const md = this.Provider;
         const run = await md.GetEntityObject('MJ: Archive Runs', contextUser);
         const loaded = await run.InnerLoad(CompositeKey.FromID(archiveRunId));
@@ -114,7 +114,7 @@ export class ArchiveRecovery {
     /**
      * Initializes a storage driver from the ArchiveRun's associated configuration.
      */
-    private async InitializeStorageDriver(archiveRun: BaseEntity, contextUser: UserInfo): Promise<import('@memberjunction/storage').FileStorageBase> {
+    private async initializeStorageDriver(archiveRun: BaseEntity, contextUser: UserInfo): Promise<import('@memberjunction/storage').FileStorageBase> {
         const configId = archiveRun.Get('ArchiveConfigurationID') as string;
 
         const md = this.Provider;
@@ -147,7 +147,7 @@ export class ArchiveRecovery {
      * ArchiveRunDetail does not store the driver class used during archiving;
      * the default driver handles the standard JSON-based restore path.
      */
-    private ResolveDriver(): BaseArchiveDriver {
+    private resolveDriver(): BaseArchiveDriver {
         return new DefaultArchiveDriver();
     }
 }

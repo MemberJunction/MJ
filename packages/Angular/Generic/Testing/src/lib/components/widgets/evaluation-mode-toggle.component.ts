@@ -141,13 +141,31 @@ import { EvaluationPreferences } from '../../models/evaluation.types';
 export class EvaluationModeToggleComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
 
-  preferences: EvaluationPreferences = {
+  Preferences: EvaluationPreferences = {
     showExecution: true,
     showHuman: true,
     showAuto: false
   };
 
-  showHint = false;
+  /** @deprecated Use {@link Preferences}. */
+  get preferences(): EvaluationPreferences {
+    return this.Preferences;
+  }
+  /** @deprecated Use {@link Preferences}. */
+  set preferences(value: EvaluationPreferences) {
+    this.Preferences = value;
+  }
+
+  ShowHint = false;
+
+  /** @deprecated Use {@link ShowHint}. */
+  get showHint() {
+    return this.ShowHint;
+  }
+  /** @deprecated Use {@link ShowHint}. */
+  set showHint(value) {
+    this.ShowHint = value;
+  }
 
   constructor(
     private prefsService: EvaluationPreferencesService,
@@ -158,7 +176,7 @@ export class EvaluationModeToggleComponent implements OnInit, OnDestroy {
     this.prefsService.preferences$
       .pipe(takeUntil(this.destroy$))
       .subscribe(prefs => {
-        this.preferences = prefs;
+        this.Preferences = prefs;
         this.cdr.markForCheck();
       });
   }
@@ -168,21 +186,26 @@ export class EvaluationModeToggleComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
-  async toggle(key: keyof EvaluationPreferences): Promise<void> {
-    const newValue = !this.preferences[key];
+  async Toggle(key: keyof EvaluationPreferences): Promise<void> {
+    const newValue = !this.Preferences[key];
 
     // Check if this would disable all
-    const updated = { ...this.preferences, [key]: newValue };
+    const updated = { ...this.Preferences, [key]: newValue };
     if (!updated.showExecution && !updated.showHuman && !updated.showAuto) {
       // Show hint briefly
-      this.showHint = true;
+      this.ShowHint = true;
       setTimeout(() => {
-        this.showHint = false;
+        this.ShowHint = false;
         this.cdr.markForCheck();
       }, 2000);
       return;
     }
 
     await this.prefsService.toggle(key);
+  }
+
+  /** @deprecated Use {@link Toggle}. */
+  async toggle(key: keyof EvaluationPreferences): Promise<void> {
+    return this.Toggle(key);
   }
 }

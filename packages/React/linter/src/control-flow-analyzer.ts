@@ -41,7 +41,7 @@ export class ControlFlowAnalyzer {
    * @param path - Current path in the AST (should be close to the node's location)
    * @returns true if protected by a ternary guard, false otherwise
    */
-  isProtectedByTernary(node: t.Node, path: NodePath): boolean {
+  IsProtectedByTernary(node: t.Node, path: NodePath): boolean {
     const varName = this.extractVariableName(node);
     if (!varName) return false;
 
@@ -115,6 +115,11 @@ export class ControlFlowAnalyzer {
     return false;
   }
 
+  /** @deprecated Use {@link IsProtectedByTernary}. */
+  isProtectedByTernary(node: t.Node, path: NodePath): boolean {
+    return this.IsProtectedByTernary(node, path);
+  }
+
   /**
    * Check if a variable/property is definitely non-null at this location
    *
@@ -129,7 +134,7 @@ export class ControlFlowAnalyzer {
    * @param path - Current path in the AST
    * @returns true if guaranteed non-null, false otherwise
    */
-  isDefinitelyNonNull(node: t.Node, path: NodePath): boolean {
+  IsDefinitelyNonNull(node: t.Node, path: NodePath): boolean {
     const varName = this.extractVariableName(node);
     if (!varName) return false;
 
@@ -221,6 +226,11 @@ export class ControlFlowAnalyzer {
     return false;
   }
 
+  /** @deprecated Use {@link IsDefinitelyNonNull}. */
+  isDefinitelyNonNull(node: t.Node, path: NodePath): boolean {
+    return this.IsDefinitelyNonNull(node, path);
+  }
+
   /**
    * Check if a variable is narrowed to a specific type at this location
    *
@@ -234,7 +244,7 @@ export class ControlFlowAnalyzer {
    * @param expectedType - The type to check for ('number', 'string', 'Date', etc.)
    * @returns true if narrowed to that type, false otherwise
    */
-  isNarrowedToType(node: t.Node, path: NodePath, expectedType: string): boolean {
+  IsNarrowedToType(node: t.Node, path: NodePath, expectedType: string): boolean {
     const varName = this.extractVariableName(node);
     if (!varName) return false;
 
@@ -288,6 +298,11 @@ export class ControlFlowAnalyzer {
     }
 
     return false;
+  }
+
+  /** @deprecated Use {@link IsNarrowedToType}. */
+  isNarrowedToType(node: t.Node, path: NodePath, expectedType: string): boolean {
+    return this.IsNarrowedToType(node, path, expectedType);
   }
 
   /**
@@ -672,7 +687,7 @@ export class ControlFlowAnalyzer {
    * @param path - Current path in the AST
    * @returns true if access is guaranteed safe, false otherwise
    */
-  isArrayAccessSafe(arrayNode: t.Node, accessIndex: number, path: NodePath): boolean {
+  IsArrayAccessSafe(arrayNode: t.Node, accessIndex: number, path: NodePath): boolean {
     const arrayName = this.extractVariableName(arrayNode);
     if (!arrayName) return false;
 
@@ -784,6 +799,11 @@ export class ControlFlowAnalyzer {
     }
 
     return false;
+  }
+
+  /** @deprecated Use {@link IsArrayAccessSafe}. */
+  isArrayAccessSafe(arrayNode: t.Node, accessIndex: number, path: NodePath): boolean {
+    return this.IsArrayAccessSafe(arrayNode, accessIndex, path);
   }
 
   /**

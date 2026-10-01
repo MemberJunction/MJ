@@ -6,8 +6,9 @@ import { UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJStorageMediaPlayerComponent, MediaTranscriptCue } from '@memberjunction/ng-media-player';
-import { RealtimeConnectionState, RealtimeSessionService } from '../../services/realtime-session.service';
-import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
+import { RealtimeConnectionState } from '@memberjunction/realtime-runtime';
+import { RealtimeSessionService } from '../../services/realtime-session.service';
+import { ParsedDelegationArtifact } from '@memberjunction/realtime-runtime';
 import { BuildReviewThreadItems, RealtimeSessionReview, RealtimeSessionReviewTurn } from '../../services/realtime-session-review.service';
 import { RealtimeSessionState } from './realtime-session-state';
 import { RealtimeAgentBannerComponent } from './realtime-agent-banner.component';
@@ -22,14 +23,14 @@ import {
 } from './realtime-surface-panel-prefs';
 import { RealtimeDisclosureModel, RealtimeUxDensity, SerializeUxMilestones, REALTIME_UX_PREF_KEY } from './realtime-disclosure';
 import {
-  resolveRealtimeUi, DEFAULT_REALTIME_UI_INPUTS, DEFAULT_REALTIME_UI_SIGNALS,
+  ResolveRealtimeUi, DEFAULT_REALTIME_UI_INPUTS, DEFAULT_REALTIME_UI_SIGNALS,
   RealtimeUiInputs, RealtimeUiSignals, ResolvedRealtimeUi,
   RealtimeChromeMode, RealtimeControlId, RealtimeUiConnectionState
 } from './realtime-ui-config';
 import { RealtimeAudioVisualFrame, RealtimeAudioVisualSmoother, RealtimeDirection } from './realtime-audio-visuals';
 import { RealtimeChannelTabRegistration, ShouldRemoveReviewWhiteboardTab } from './realtime-surface-tabs.model';
 import { ShouldRegisterChannelTabUpFront } from './realtime-surface-tab-style';
-import { BaseRealtimeChannelClient } from './channels/base-realtime-channel-client';
+import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 import { RealtimeWhiteboardBoardComponent, WhiteboardState } from '@memberjunction/ng-whiteboard';
 
 /**
@@ -365,7 +366,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /**
    * The latest measured width (px) of the rendered overlay element, fed to the resolver as
-   * {@link RealtimeUiSignals.containerWidthPx}. Maintained by a {@link ResizeObserver}; 0
+   * {@link RealtimeUiSignals.ContainerWidthPx}. Maintained by a {@link ResizeObserver}; 0
    * until the first measurement (the resolver treats 0 as "narrow", i.e. an orb in auto).
    */
   private containerWidthPx = 0;
@@ -385,7 +386,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   // Seed from a dependency-free baseline — this runs as a field initializer, BEFORE the
   // disclosure model / session state / ResizeObserver exist. recomputeUi() produces the real
   // value once dependencies are ready (post-init + on every wired change source).
-  private _ui: ResolvedRealtimeUi = resolveRealtimeUi(DEFAULT_REALTIME_UI_INPUTS, DEFAULT_REALTIME_UI_SIGNALS);
+  private _ui: ResolvedRealtimeUi = ResolveRealtimeUi(DEFAULT_REALTIME_UI_INPUTS, DEFAULT_REALTIME_UI_SIGNALS);
 
   /**
    * The current resolved UI view-model. Every visibility/affordance decision the template
@@ -502,7 +503,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   public ShowCaptions = false;
 
   /** UserInfoEngine key for the persisted captions (text-vs-orb) preference. */
-  private static readonly CaptionsPrefKey = 'mj.realtimeVoice.captions.v1';
+  private static readonly captionsPrefKey = 'mj.realtimeVoice.captions.v1';
 
   /**
    * Whether developer affordances (open-record links) are revealed. Per-session view
@@ -679,24 +680,24 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     }
     const reviewing = this.IsReviewing;
     return {
-      containerWidthPx: this.containerWidthPx ?? 0,
+      ContainerWidthPx: this.containerWidthPx ?? 0,
       // Text intent = the user EXPLICITLY asked to see text this session — i.e. captions are on
       // (the captions toggle, the hero's "Show the conversation", RevealText(), and SetCaptions()
       // all route through ShowCaptions). NOT the disclosure ratchet: a power user still opens to
       // the calm orb until they ask for text, matching the historical ShowHero = !ShowCaptions.
-      textRevealed: this.ShowCaptions,
-      disclosureShowThread: disclosure.ShowThread,
-      disclosureShowComposer: disclosure.ShowComposer,
-      disclosureShowPanel: disclosure.ShowPanel,
-      disclosureShowGear: disclosure.ShowGear,
+      TextRevealed: this.ShowCaptions,
+      DisclosureShowThread: disclosure.ShowThread,
+      DisclosureShowComposer: disclosure.ShowComposer,
+      DisclosureShowPanel: disclosure.ShowPanel,
+      DisclosureShowGear: disclosure.ShowGear,
       // A surface to populate: the on-demand Details peek, or review (always has a surface).
-      surfacePanelEarned: this.DetailsPeek || reviewing,
+      SurfacePanelEarned: this.DetailsPeek || reviewing,
       hasChannels: (this.realtime?.ActiveChannels ?? []).some(c => c.HasSurface()),
-      hasActivity: (this.State?.Cards?.length ?? 0) > 0,
-      devMode: this.DevMode,
-      isReviewing: reviewing,
+      HasActivity: (this.State?.Cards?.length ?? 0) > 0,
+      DevMode: this.DevMode,
+      IsReviewing: reviewing,
       channelFocus: this.ChannelFocusMode,
-      connectionState: this.mapConnectionState(this.currentConnectionState)
+      ConnectionState: this.mapConnectionState(this.currentConnectionState)
     };
   }
 
@@ -707,7 +708,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    * the resolver is pure so redundant calls are cheap. Always marks for check.
    */
   private recomputeUi(): void {
-    const next = resolveRealtimeUi(this.mergedUiInputs, this.buildSignals());
+    const next = ResolveRealtimeUi(this.mergedUiInputs, this.buildSignals());
     const prevChrome = this._ui.chrome;
     this._ui = next;
     if (next.chrome !== prevChrome) {
@@ -1017,7 +1018,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   /** Reads the persisted text-vs-orb preference (tolerant; default = voice-first OFF). */
   private loadCaptionsPref(): void {
     try {
-      this.ShowCaptions = UserInfoEngine.Instance.GetSetting(RealtimeSessionOverlayComponent.CaptionsPrefKey) === 'true';
+      this.ShowCaptions = UserInfoEngine.Instance.GetSetting(RealtimeSessionOverlayComponent.captionsPrefKey) === 'true';
     } catch {
       // UserInfoEngine not configured — voice-first default applies.
     }
@@ -1026,7 +1027,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   /** Persists the text-vs-orb preference (debounced, best-effort). */
   private persistCaptionsPref(): void {
     try {
-      UserInfoEngine.Instance.SetSettingDebounced(RealtimeSessionOverlayComponent.CaptionsPrefKey, String(this.ShowCaptions));
+      UserInfoEngine.Instance.SetSettingDebounced(RealtimeSessionOverlayComponent.captionsPrefKey, String(this.ShowCaptions));
     } catch {
       // engine unavailable — the preference still applies for this session
     }

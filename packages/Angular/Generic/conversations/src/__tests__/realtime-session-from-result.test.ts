@@ -3,12 +3,9 @@ import { IMetadataProvider } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { CHANNEL_INBOUND_VIDEO_TRACK, ClientRealtimeSessionConfig, RealtimeToolDefinition } from '@memberjunction/ai';
 import { BaseRealtimeClient } from '@memberjunction/ai-realtime-client';
-import {
-  RealtimeSessionService,
-  RealtimeConnectionState,
-  StartRealtimeClientSessionResult
-} from '../lib/services/realtime-session.service';
-import { BaseRealtimeChannelClient } from '../lib/components/realtime/channels/base-realtime-channel-client';
+import { RealtimeConnectionState, StartRealtimeClientSessionResult } from '@memberjunction/realtime-runtime';
+import { RealtimeSessionService } from '../lib/services/realtime-session.service';
+import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 
 /**
  * The MINT / RUN split of a session start (issue #3853): `StartRealtimeSession` is now

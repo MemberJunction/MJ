@@ -1,5 +1,399 @@
 # @memberjunction/server-bootstrap
 
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 48f77ea: Add `@memberjunction/ai-betty` — a `BaseLLM` provider for **Betty**, the MJ-native
+  organization-scoped assistant, registered as `BettyLLM`.
+
+  This sits **alongside** `@memberjunction/ai-betty-bot` rather than replacing it. The two target
+  different services with different wire protocols: `BettyBotLLM` exchanges its key for a JWT at
+  `POST /settings` and posts `{ input }` to `POST /response`; `BettyLLM` uses the API key directly as
+  a bearer and posts `{ message, conversationId }` to `POST /messages`.
+
+  **No breaking change.** `@memberjunction/ai-betty-bot` is untouched, so no existing deployment has
+  to move and nobody needs to be contacted or given a deadline. Both can run in one instance;
+  migrating a deployment is repointing one `AIModelVendor.DriverClass` from `BettyBotLLM` to
+  `BettyLLM`, and rolling back is repointing it back.
+
+  A separate driver class rather than a configuration mode on the existing one, because
+  `GetAIAPIKey()` is keyed by driver class — one class serving both protocols would read a single
+  `AI_VENDOR_API_KEY__BETTYBOTLLM` for two unrelated services, and a misconfiguration would silently
+  send a customer's key to the wrong host.
+
+  Configuration: `BETTY_API_BASE_URL` (required, no default — Betty is deployed per customer, so a
+  default risks answering from the wrong tenant) and `AI_VENDOR_API_KEY__BETTYLLM`.
+
+  Notes:
+  - Citations keep the legacy response shape (`choices[1]` formatted, `choices[2]` raw JSON with
+    `finish_reason: 'references_json'`), so anything already parsing `BettyBotLLM` output survives a
+    `DriverClass` repoint.
+  - Multi-turn is handled correctly. The legacy provider uses `messages.find(m => m.role === user)`,
+    which returns the _first_ match and silently discards follow-ups; this provider sends the latest
+    user turn and passes the earlier ones as advisory, non-authorizing `context.text`.
+  - Streaming is not implemented yet (`SupportsStreaming` is `false`). The API does support SSE via
+    `Accept: text/event-stream`, so this is a follow-up rather than a dead end.
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [ddcd666]
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [48f77ea]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [5da3ad2]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [bde8832]
+- Updated dependencies [520bd09]
+- Updated dependencies [520bd09]
+- Updated dependencies [307da67]
+- Updated dependencies [7110019]
+- Updated dependencies [9d4a28a]
+- Updated dependencies [a7da50b]
+- Updated dependencies [1d43161]
+- Updated dependencies [52633b4]
+- Updated dependencies [519d6b2]
+- Updated dependencies [7110019]
+- Updated dependencies [f2a4171]
+- Updated dependencies [e482249]
+- Updated dependencies [37e2f6b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [351ba9f]
+- Updated dependencies [c4993f3]
+  - @memberjunction/ai-elevenlabs@6.2.0-edge.1
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/ai-deepinfra@6.2.0-edge.1
+  - @memberjunction/ai-siliconflow@6.2.0-edge.1
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.1
+  - @memberjunction/ai-agent-harness@6.2.0-edge.1
+  - @memberjunction/ai-agents@6.2.0-edge.1
+  - @memberjunction/ai-core-plus@6.2.0-edge.1
+  - @memberjunction/ai-prompts@6.2.0-edge.1
+  - @memberjunction/core-entities-server@6.2.0-edge.1
+  - @memberjunction/server@6.2.0-edge.1
+  - @memberjunction/ai-betty@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/actions-base@6.2.0-edge.1
+  - @memberjunction/actions@6.2.0-edge.1
+  - @memberjunction/task-graph@6.2.0-edge.1
+  - @memberjunction/storage@6.2.0-edge.1
+  - @memberjunction/auth-providers@6.2.0-edge.1
+  - @memberjunction/ai-anthropic@6.2.0-edge.1
+  - @memberjunction/codegen-lib@6.2.0-edge.1
+  - @memberjunction/action-runtime-host@6.2.0-edge.1
+  - @memberjunction/actions-apollo@6.2.0-edge.1
+  - @memberjunction/actions-bizapps-accounting@6.2.0-edge.1
+  - @memberjunction/actions-bizapps-formbuilders@6.2.0-edge.1
+  - @memberjunction/ai-agent-manager@6.2.0-edge.1
+  - @memberjunction/ai-blackforestlabs@6.2.0-edge.1
+  - @memberjunction/ai-bridge-livekit@6.2.0-edge.1
+  - @memberjunction/ai-bridge-ringcentral@6.2.0-edge.1
+  - @memberjunction/ai-bridge-server@6.2.0-edge.1
+  - @memberjunction/ai-bridge-teams@6.2.0-edge.1
+  - @memberjunction/ai-bridge-twilio@6.2.0-edge.1
+  - @memberjunction/ai-bridge-vonage@6.2.0-edge.1
+  - @memberjunction/ai-cerebras@6.2.0-edge.1
+  - @memberjunction/ai-cohere@6.2.0-edge.1
+  - @memberjunction/ai-groq@6.2.0-edge.1
+  - @memberjunction/ai-lmstudio@6.2.0-edge.1
+  - @memberjunction/ai-local-embeddings@6.2.0-edge.1
+  - @memberjunction/ai-ollama@6.2.0-edge.1
+  - @memberjunction/ai-reranker@6.2.0-edge.1
+  - @memberjunction/ai-vectors-pinecone@6.2.0-edge.1
+  - @memberjunction/communication-ms-graph@6.2.0-edge.1
+  - @memberjunction/communication-types@6.2.0-edge.1
+  - @memberjunction/computer-use-engine@6.2.0-edge.1
+  - @memberjunction/content-autotagging@6.2.0-edge.1
+  - @memberjunction/core-actions@6.2.0-edge.1
+  - @memberjunction/database-designer-core@6.2.0-edge.1
+  - @memberjunction/dynamic-packages@6.2.0-edge.1
+  - @memberjunction/esignature@6.2.0-edge.1
+  - @memberjunction/esignature-docusign@6.2.0-edge.1
+  - @memberjunction/esignature-dropboxsign@6.2.0-edge.1
+  - @memberjunction/esignature-pandadoc@6.2.0-edge.1
+  - @memberjunction/external-data-source-mongodb@6.2.0-edge.1
+  - @memberjunction/external-data-sources@6.2.0-edge.1
+  - @memberjunction/generic-database-provider@6.2.0-edge.1
+  - @memberjunction/integration-engine@6.2.0-edge.1
+  - @memberjunction/messaging-adapters@6.2.0-edge.1
+  - @memberjunction/predictive-studio@6.2.0-edge.1
+  - @memberjunction/react-linter@6.2.0-edge.1
+  - @memberjunction/record-set-processor@6.2.0-edge.1
+  - @memberjunction/remote-browser-server@6.2.0-edge.1
+  - @memberjunction/search-engine@6.2.0-edge.1
+  - @memberjunction/server-extensions-core@6.2.0-edge.1
+  - @memberjunction/tag-engine-base@6.2.0-edge.1
+  - @memberjunction/templates@6.2.0-edge.1
+  - @memberjunction/testing-engine@6.2.0-edge.1
+  - @memberjunction/testing-integration@6.2.0-edge.1
+  - @memberjunction/web-search-engine@6.2.0-edge.1
+  - @memberjunction/ai-form-builder@6.2.0-edge.1
+  - @memberjunction/ai-segmentation@6.2.0-edge.1
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.1
+  - @memberjunction/queue@6.2.0-edge.1
+  - @memberjunction/ai-engine-base@6.2.0-edge.1
+  - @memberjunction/ai-assemblyai@6.2.0-edge.1
+  - @memberjunction/ai-azure@6.2.0-edge.1
+  - @memberjunction/ai-bedrock@6.2.0-edge.1
+  - @memberjunction/ai-betty-bot@6.2.0-edge.1
+  - @memberjunction/ai-fireworks@6.2.0-edge.1
+  - @memberjunction/ai-gemini@6.2.0-edge.1
+  - @memberjunction/ai-heygen@6.2.0-edge.1
+  - @memberjunction/ai-huggingface@6.2.0-edge.1
+  - @memberjunction/ai-inception@6.2.0-edge.1
+  - @memberjunction/ai-inworld@6.2.0-edge.1
+  - @memberjunction/ai-llamacpp@6.2.0-edge.1
+  - @memberjunction/ai-minimax@6.2.0-edge.1
+  - @memberjunction/ai-mistral@6.2.0-edge.1
+  - @memberjunction/ai-openai@6.2.0-edge.1
+  - @memberjunction/ai-openrouter@6.2.0-edge.1
+  - @memberjunction/ai-recommendations-rex@6.2.0-edge.1
+  - @memberjunction/ai-vertex@6.2.0-edge.1
+  - @memberjunction/ai-zhipu@6.2.0-edge.1
+  - @memberjunction/ai-xai@6.2.0-edge.1
+  - @memberjunction/database-designer-actions@6.2.0-edge.1
+  - @memberjunction/actions-bizapps-crm@6.2.0-edge.1
+  - @memberjunction/actions-bizapps-lms@6.2.0-edge.1
+  - @memberjunction/actions-bizapps-social@6.2.0-edge.1
+  - @memberjunction/actions-content-autotag@6.2.0-edge.1
+  - @memberjunction/archiving-engine@6.2.0-edge.1
+  - @memberjunction/entity-communications-base@6.2.0-edge.1
+  - @memberjunction/communication-sendgrid@6.2.0-edge.1
+  - @memberjunction/doc-utils@6.2.0-edge.1
+  - @memberjunction/encryption@6.2.0-edge.1
+  - @memberjunction/external-data-source-databricks@6.2.0-edge.1
+  - @memberjunction/external-data-source-mysql@6.2.0-edge.1
+  - @memberjunction/external-data-source-oracle@6.2.0-edge.1
+  - @memberjunction/external-data-source-postgres@6.2.0-edge.1
+  - @memberjunction/external-data-source-sqlserver@6.2.0-edge.1
+  - @memberjunction/external-data-source-snowflake@6.2.0-edge.1
+  - @memberjunction/integration-actions@6.2.0-edge.1
+  - @memberjunction/record-comparison@6.2.0-edge.1
+  - @memberjunction/scheduling-actions@6.2.0-edge.1
+  - @memberjunction/scheduling-engine-base@6.2.0-edge.1
+  - @memberjunction/scheduling-engine@6.2.0-edge.1
+  - @memberjunction/geo-core@6.2.0-edge.1
+  - @memberjunction/remote-browser-selfhost@6.2.0-edge.1
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.1
+  - @memberjunction/ai-vectors-qdrant@6.2.0-edge.1
+  - @memberjunction/ai-vectors-sqlserver@6.2.0-edge.1
+  - @memberjunction/ai-vectors-pgvector@6.2.0-edge.1
+  - @memberjunction/archiving-action@6.2.0-edge.1
+  - @memberjunction/data-context-server@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [abf8778]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [b518dfa]
+- Updated dependencies [37891d3]
+- Updated dependencies [6ad6434]
+- Updated dependencies [666c4e6]
+- Updated dependencies [ee5c033]
+- Updated dependencies [ce55864]
+- Updated dependencies [662d47e]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [42d701e]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [e3db74f]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [d665a6e]
+- Updated dependencies [6fd16d2]
+- Updated dependencies [5df9486]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [7658d68]
+- Updated dependencies [44faf83]
+- Updated dependencies [58faa68]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [575bfae]
+- Updated dependencies [e6c8f53]
+- Updated dependencies [a17a228]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [2cd8411]
+- Updated dependencies [d61b425]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [7fe994a]
+- Updated dependencies [8d1a373]
+- Updated dependencies [b2a9ba1]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [3d633ed]
+- Updated dependencies [e7a0efe]
+- Updated dependencies [e962151]
+- Updated dependencies [af57e8d]
+- Updated dependencies [2c590b0]
+- Updated dependencies [666c4e6]
+- Updated dependencies [fc3da91]
+  - @memberjunction/ai-agents@6.2.0-edge.0
+  - @memberjunction/core-actions@6.2.0-edge.0
+  - @memberjunction/actions-base@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/ai-prompts@6.2.0-edge.0
+  - @memberjunction/ai-core-plus@6.2.0-edge.0
+  - @memberjunction/server@6.2.0-edge.0
+  - @memberjunction/codegen-lib@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/generic-database-provider@6.2.0-edge.0
+  - @memberjunction/computer-use-engine@6.2.0-edge.0
+  - @memberjunction/testing-engine@6.2.0-edge.0
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.0
+  - @memberjunction/content-autotagging@6.2.0-edge.0
+  - @memberjunction/record-set-processor@6.2.0-edge.0
+  - @memberjunction/ai-gemini@6.2.0-edge.0
+  - @memberjunction/remote-browser-server@6.2.0-edge.0
+  - @memberjunction/ai-openai@6.2.0-edge.0
+  - @memberjunction/predictive-studio@6.2.0-edge.0
+  - @memberjunction/actions@6.2.0-edge.0
+  - @memberjunction/messaging-adapters@6.2.0-edge.0
+  - @memberjunction/ai-engine-base@6.2.0-edge.0
+  - @memberjunction/search-engine@6.2.0-edge.0
+  - @memberjunction/task-graph@6.2.0-edge.0
+  - @memberjunction/web-search-engine@6.2.0-edge.0
+  - @memberjunction/ai-agent-harness@6.2.0-edge.0
+  - @memberjunction/ai-agent-manager@6.2.0-edge.0
+  - @memberjunction/database-designer-core@6.2.0-edge.0
+  - @memberjunction/ai-form-builder@6.2.0-edge.0
+  - @memberjunction/action-runtime-host@6.2.0-edge.0
+  - @memberjunction/scheduling-engine@6.2.0-edge.0
+  - @memberjunction/actions-content-autotag@6.2.0-edge.0
+  - @memberjunction/database-designer-actions@6.2.0-edge.0
+  - @memberjunction/actions-apollo@6.2.0-edge.0
+  - @memberjunction/actions-bizapps-accounting@6.2.0-edge.0
+  - @memberjunction/actions-bizapps-crm@6.2.0-edge.0
+  - @memberjunction/actions-bizapps-formbuilders@6.2.0-edge.0
+  - @memberjunction/actions-bizapps-lms@6.2.0-edge.0
+  - @memberjunction/actions-bizapps-social@6.2.0-edge.0
+  - @memberjunction/archiving-action@6.2.0-edge.0
+  - @memberjunction/encryption@6.2.0-edge.0
+  - @memberjunction/integration-actions@6.2.0-edge.0
+  - @memberjunction/core-entities-server@6.2.0-edge.0
+  - @memberjunction/scheduling-actions@6.2.0-edge.0
+  - @memberjunction/ai-anthropic@6.2.0-edge.0
+  - @memberjunction/ai-assemblyai@6.2.0-edge.0
+  - @memberjunction/ai-azure@6.2.0-edge.0
+  - @memberjunction/ai-bedrock@6.2.0-edge.0
+  - @memberjunction/ai-betty-bot@6.2.0-edge.0
+  - @memberjunction/ai-blackforestlabs@6.2.0-edge.0
+  - @memberjunction/ai-cerebras@6.2.0-edge.0
+  - @memberjunction/ai-cohere@6.2.0-edge.0
+  - @memberjunction/ai-elevenlabs@6.2.0-edge.0
+  - @memberjunction/ai-fireworks@6.2.0-edge.0
+  - @memberjunction/ai-groq@6.2.0-edge.0
+  - @memberjunction/ai-heygen@6.2.0-edge.0
+  - @memberjunction/ai-huggingface@6.2.0-edge.0
+  - @memberjunction/ai-inception@6.2.0-edge.0
+  - @memberjunction/ai-inworld@6.2.0-edge.0
+  - @memberjunction/ai-lmstudio@6.2.0-edge.0
+  - @memberjunction/ai-llamacpp@6.2.0-edge.0
+  - @memberjunction/ai-local-embeddings@6.2.0-edge.0
+  - @memberjunction/ai-minimax@6.2.0-edge.0
+  - @memberjunction/ai-mistral@6.2.0-edge.0
+  - @memberjunction/ai-ollama@6.2.0-edge.0
+  - @memberjunction/ai-openrouter@6.2.0-edge.0
+  - @memberjunction/ai-recommendations-rex@6.2.0-edge.0
+  - @memberjunction/ai-vertex@6.2.0-edge.0
+  - @memberjunction/ai-zhipu@6.2.0-edge.0
+  - @memberjunction/ai-xai@6.2.0-edge.0
+  - @memberjunction/ai-bridge-server@6.2.0-edge.0
+  - @memberjunction/ai-reranker@6.2.0-edge.0
+  - @memberjunction/communication-ms-graph@6.2.0-edge.0
+  - @memberjunction/queue@6.2.0-edge.0
+  - @memberjunction/templates@6.2.0-edge.0
+  - @memberjunction/ai-segmentation@6.2.0-edge.0
+  - @memberjunction/ai-vectors-pinecone@6.2.0-edge.0
+  - @memberjunction/tag-engine-base@6.2.0-edge.0
+  - @memberjunction/ai-bridge-livekit@6.2.0-edge.0
+  - @memberjunction/ai-bridge-ringcentral@6.2.0-edge.0
+  - @memberjunction/ai-bridge-teams@6.2.0-edge.0
+  - @memberjunction/ai-bridge-twilio@6.2.0-edge.0
+  - @memberjunction/ai-bridge-vonage@6.2.0-edge.0
+  - @memberjunction/archiving-engine@6.2.0-edge.0
+  - @memberjunction/communication-types@6.2.0-edge.0
+  - @memberjunction/entity-communications-base@6.2.0-edge.0
+  - @memberjunction/communication-sendgrid@6.2.0-edge.0
+  - @memberjunction/doc-utils@6.2.0-edge.0
+  - @memberjunction/external-data-sources@6.2.0-edge.0
+  - @memberjunction/external-data-source-databricks@6.2.0-edge.0
+  - @memberjunction/external-data-source-mongodb@6.2.0-edge.0
+  - @memberjunction/external-data-source-mysql@6.2.0-edge.0
+  - @memberjunction/external-data-source-oracle@6.2.0-edge.0
+  - @memberjunction/external-data-source-postgres@6.2.0-edge.0
+  - @memberjunction/external-data-source-sqlserver@6.2.0-edge.0
+  - @memberjunction/external-data-source-snowflake@6.2.0-edge.0
+  - @memberjunction/integration-engine@6.2.0-edge.0
+  - @memberjunction/storage@6.2.0-edge.0
+  - @memberjunction/react-linter@6.2.0-edge.0
+  - @memberjunction/record-comparison@6.2.0-edge.0
+  - @memberjunction/scheduling-engine-base@6.2.0-edge.0
+  - @memberjunction/testing-integration@6.2.0-edge.0
+  - @memberjunction/esignature@6.2.0-edge.0
+  - @memberjunction/geo-core@6.2.0-edge.0
+  - @memberjunction/remote-browser-selfhost@6.2.0-edge.0
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.0
+  - @memberjunction/ai-vectors-qdrant@6.2.0-edge.0
+  - @memberjunction/ai-vectors-sqlserver@6.2.0-edge.0
+  - @memberjunction/ai-vectors-pgvector@6.2.0-edge.0
+  - @memberjunction/auth-providers@6.2.0-edge.0
+  - @memberjunction/data-context-server@6.2.0-edge.0
+  - @memberjunction/server-extensions-core@6.2.0-edge.0
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.0
+  - @memberjunction/esignature-docusign@6.2.0-edge.0
+  - @memberjunction/esignature-dropboxsign@6.2.0-edge.0
+  - @memberjunction/esignature-pandadoc@6.2.0-edge.0
+  - @memberjunction/dynamic-packages@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes

@@ -40,7 +40,7 @@
         <i class="fa-solid fa-comment-dots"></i>
         {{ (filteredPrompts$ | async)?.length || 0 }} prompt(s)
       </span>
-      @if (config.multiSelect && selectedPrompts.size > 0) {
+      @if (config.MultiSelect && selectedPrompts.size > 0) {
         <span class="selected-count">
           <i class="fa-solid fa-check-circle"></i>
           {{ selectedPrompts.size }} selected
@@ -115,7 +115,7 @@
   <!-- Dialog Footer -->
   <div class="dialog-footer">
     <div class="footer-left">
-      @if (config.showCreateNew) {
+      @if (config.ShowCreateNew) {
         <button mjButton
                 variant="flat"
                 (click)="createNew()">
@@ -136,7 +136,7 @@
               variant="primary"
               (click)="selectPrompts()"
               [disabled]="selectedPrompts.size === 0">
-        @if (config.multiSelect) {
+        @if (config.MultiSelect) {
           <i class="fa-solid fa-check"></i>
           Add {{ selectedPrompts.size }} Prompt{{ selectedPrompts.size === 1 ? '' : 's' }}
         } @else {

@@ -6,7 +6,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { UUIDsEqual } from '@memberjunction/global';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { moveAndResequence, resequenceItems } from './user-app-config-reorder';
+import { MoveAndResequence, ResequenceItems } from './user-app-config-reorder';
 
 /**
  * Represents an app item in the configuration UI
@@ -136,7 +136,7 @@ export class UserAppConfigContentComponent extends BaseAngularComponent implemen
   }
 
   private moveActiveApp(fromIndex: number, toIndex: number): void {
-    this.ActiveApps = moveAndResequence(this.ActiveApps, fromIndex, toIndex);
+    this.ActiveApps = MoveAndResequence(this.ActiveApps, fromIndex, toIndex);
   }
 
   /**
@@ -430,7 +430,7 @@ export class UserAppConfigContentComponent extends BaseAngularComponent implemen
   }
 
   private resequenceActiveApps(): void {
-    resequenceItems(this.ActiveApps);
+    ResequenceItems(this.ActiveApps);
   }
 
 
