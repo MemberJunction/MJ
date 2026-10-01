@@ -12,7 +12,7 @@ import { LanguageDescription } from '@codemirror/language';
 import { languages } from '@codemirror/language-data';
 import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
-import { TemplateEditorConfig } from '../../shared/components/template-editor.component';
+import { TemplateEditorConfig, TemplateEditorComponent } from '../../shared/components/template-editor.component';
 
 @RegisterClass(BaseFormComponent, 'MJ: Templates') 
 @Component({
@@ -32,6 +32,18 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
 
     /** Custom-layout Template form looks best full-width on first open. */
     public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
+
+    /**
+     * The embedded editor OWNS the template content rows: it loads them, the user edits its
+     * instances, and it saves them. This form delegates to it rather than holding a second copy —
+     * a second, separately loaded copy is what silently discarded edits in MJ#4754.
+     */
+    @ViewChild(TemplateEditorComponent) TemplateEditor: TemplateEditorComponent | undefined;
+
+    /**
+     * Read-only mirror of the editor's rows (fed only by {@link OnSharedTemplateContentChange}),
+     * kept for the count badges and unsaved-changes flag. Never load or save through it.
+     */
     public TemplateContents: MJTemplateContentEntity[] = [];
 
     /** @deprecated Use {@link TemplateContents}. */
@@ -207,12 +219,21 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
     private destroy$ = new Subject<void>();
     private activeTimeouts: number[] = [];
     private confirmService = inject(MJConfirmService);
+    private notificationService = inject(MJNotificationService);
 
     async ngOnInit() {
         await super.ngOnInit();
-        await this.LoadTemplateContents();
+        // Template contents are loaded by the embedded editor (see TemplateEditor), not here.
         await this.LoadCategories();
         this.LoadContentTypes();
+    }
+
+    /** Also discards the content edits held by the editor, so a later Save cannot persist them. */
+    public override CancelEdit(): void {
+        super.CancelEdit();
+        this.TemplateEditor?.RefreshAndDiscardChanges().catch((error: unknown) => {
+            console.error(`Failed to discard template content changes for template ${this.record?.ID}:`, error);
+        });
     }
 
     ngOnDestroy() {
@@ -229,37 +250,13 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
         this.syncEditorValue();
     }
 
+    /**
+     * Reloads the template contents in the embedded editor (discarding unsaved content edits); the
+     * editor's ContentChange then refreshes {@link TemplateContents}. No-op while the editor is not
+     * rendered, since it loads the contents itself when it is.
+     */
     async LoadTemplateContents() {
-        if (this.record && this.record.ID) {
-            try {
-                const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-                const results = await rv.RunView<MJTemplateContentEntity>({
-                    EntityName: 'MJ: Template Contents',
-                    ExtraFilter: `TemplateID='${this.record.ID}'`,
-                    OrderBy: 'Priority ASC, __mj_CreatedAt ASC',
-                    ResultType: 'entity_object'
-                });
-                
-                this.TemplateContents = results.Results;
-                
-                // If we have contents but no selection, select the first one
-                if (this.TemplateContents.length > 0 && this.SelectedContentIndex === 0) {
-                    this.SelectedContentIndex = 0;
-                }
-                
-                // If no template contents exist, create a default one for single-content optimization
-                if (this.TemplateContents.length === 0) {
-                    await this.CreateDefaultTemplateContent();
-                }
-
-                // Entity change tracking is handled automatically by BaseEntity
-                
-                // Sync editor value after loading content
-                this.syncEditorValue();
-            } catch (error) {
-                console.error('Error loading template contents:', error);
-            }
-        }
+        await this.TemplateEditor?.RefreshAndDiscardChanges();
     }
 
     /** @deprecated Use {@link LoadTemplateContents}. */
@@ -625,28 +622,23 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
         });
     }
 
+    /**
+     * Saves the template contents through the embedded editor, which owns the rows the user edited
+     * and reports its own failures.
+     */
     async SaveTemplateContents(): Promise<boolean> {
-        try {
-            // Save all template contents that have changes
-            for (const content of this.TemplateContents) {
-                content.TemplateID = this.record.ID; // Ensure FK is set
-                if (content.Dirty || !content.ID) {
-                    const contentResult = await content.Save();
-                    if (!contentResult) {
-                        console.error('Failed to save template content:', content);
-                        return false;
-                    }
-                }
-            }
-
-            this.IsAddingNewContent = false;
-            this.NewTemplateContent = null;
-            this.updateUnsavedChangesFlag(); // Update based on current entity states
-            return true;
-        } catch (error) {
-            console.error('Error saving template contents:', error);
-            return false;
+        if (this.TemplateEditor) {
+            return this.TemplateEditor.SaveTemplateContents();
         }
+        // No editor rendered means no edits were made through one. Unsaved rows here anyway mean
+        // something outside the editor changed them; saving this mirror is what lost edits before
+        // (MJ#4754), so refuse loudly rather than guess.
+        if (!this.TemplateContents.some(c => c.Dirty || !c.ID)) {
+            return true;
+        }
+        console.error(`Cannot save template contents for template ${this.record?.ID}: the template editor is not rendered, but there are unsaved content rows`);
+        this.notificationService.CreateSimpleNotification('Template contents could not be saved: the template editor is not available. Reload the template and try again.', 'error', 5000);
+        return false;
     }
 
     /** @deprecated Use {@link SaveTemplateContents}. */

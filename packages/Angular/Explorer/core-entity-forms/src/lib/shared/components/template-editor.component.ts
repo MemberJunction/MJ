@@ -8,6 +8,7 @@ import { LanguageDescription } from '@codemirror/language';
 import { languages } from '@codemirror/language-data';
 import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
 import { Subject } from 'rxjs';
+import { EscapeSQLString } from '@memberjunction/global';
 import { DEFAULT_SYSTEM_PLACEHOLDERS, SystemPlaceholder, SYSTEM_PLACEHOLDER_CATEGORIES, SystemPlaceholderCategory } from '@memberjunction/ai-core-plus';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -197,20 +198,31 @@ export class TemplateEditorComponent extends BaseAngularComponent implements OnI
     private destroy$ = new Subject<void>();
     private get _metadata() { return this.ProviderToUse; }
     private activeTimeouts: number[] = [];
-    
+    /**
+     * Incremented by every LoadTemplateContents() call. A load only applies its rows if it is still
+     * the latest one when its awaits resolve, so an older, slower load can never replace the array
+     * the user is editing (MJ#4754: the edited rows and the saved rows diverged that way).
+     */
+    private loadGeneration = 0;
+    /** The Template the most recent load was started for; lets ngOnInit skip a duplicate load. */
+    private loadStartedFor: MJTemplateEntity | null = null;
+
     constructor(private notificationService: MJNotificationService, private confirmService: MJConfirmService) {
     super();}
 
     async ngOnInit() {
         this.LoadContentTypes();
         this.organizePlaceholdersByCategory();
-        if (this.Template) {
+        // ngOnChanges runs first and has usually started the load for this Template already.
+        if (this.Template && this.loadStartedFor !== this.Template) {
             await this.LoadTemplateContents();
         }
     }
 
     async ngOnChanges(changes: SimpleChanges) {
-        if (changes['template']) {
+        // Hosts bind either the Template input or its deprecated `template` alias; Angular reports
+        // the change under whichever name was bound.
+        if (changes['Template'] || changes['template']) {
             // Template input has changed, reload contents
             if (this.Template) {
                 await this.LoadTemplateContents();
@@ -291,47 +303,71 @@ export class TemplateEditorComponent extends BaseAngularComponent implements OnI
         this.syncEditorValue();
     }
 
+    /**
+     * (Re)loads the contents of the bound Template and emits them through {@link ContentChange}.
+     * This editor owns those rows: hosts must save through {@link SaveTemplateContents} rather than
+     * loading and saving a copy of their own. If several loads overlap, only the latest one applies.
+     */
     async LoadTemplateContents() {
-        if (this.Template) {
-            // Reset state first
-            this.TemplateContents = [];
-            this.SelectedContentIndex = 0;
-            this.IsAddingNewContent = false;
-            this.NewTemplateContent = null;
-            this.HasUnsavedChanges = false;
-            
-            if (this.Template.IsSaved && this.Template.ID) {
-                // Load existing template contents for saved templates
-                try {
-                    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-                    const results = await rv.RunView<MJTemplateContentEntity>({
-                        EntityName: 'MJ: Template Contents',
-                        ExtraFilter: `TemplateID='${this.Template.ID}'`,
-                        OrderBy: 'Priority ASC, __mj_CreatedAt ASC',
-                        ResultType: 'entity_object'
-                    });
-                    
-                    this.TemplateContents = results.Results;
-                } catch (error) {
-                    console.error('Error loading template contents:', error);
-                }
-            }
-            
-            // If we have contents but no selection, select the first one
-            if (this.TemplateContents.length > 0) {
-                this.SelectedContentIndex = 0;
-            }
-            
-            // If no template contents exist (either new template or saved template with no content), 
-            // create a default one for single-content optimization
-            if (this.TemplateContents.length === 0) {
-                await this.CreateDefaultTemplateContent();
-            }
-
-            // Sync editor value after loading content
-            this.syncEditorValue();
-            this.ContentChange.emit(this.TemplateContents);
+        const template = this.Template;
+        if (!template) {
+            return;
         }
+        const generation = ++this.loadGeneration;
+        this.loadStartedFor = template;
+        this.TemplateContents = [];
+        this.SelectedContentIndex = 0;
+        this.IsAddingNewContent = false;
+        this.NewTemplateContent = null;
+        this.HasUnsavedChanges = false;
+
+        const loaded = await this.fetchTemplateContents(template);
+        if (generation !== this.loadGeneration) {
+            return; // superseded by a newer load
+        }
+        // A saved template with no rows (or a new template) gets one default row, so the
+        // single-content case needs no "add" click. A FAILED read gets none: that would invite the
+        // user to save a fabricated row over contents we simply could not see.
+        let contents = loaded ?? [];
+        if (loaded && loaded.length === 0) {
+            const defaultContent = await this.buildDefaultTemplateContent(template);
+            if (generation !== this.loadGeneration) {
+                return;
+            }
+            contents = [defaultContent];
+        }
+        this.TemplateContents = contents;
+        this.syncEditorValue();
+        this.ContentChange.emit(this.TemplateContents);
+    }
+
+    /**
+     * Reads the saved contents of a template. Returns [] for a template that is not saved yet, and
+     * null (after reporting it) when the read fails.
+     */
+    private async fetchTemplateContents(template: MJTemplateEntity): Promise<MJTemplateContentEntity[] | null> {
+        if (!template.IsSaved || !template.ID) {
+            return [];
+        }
+        let failure: string;
+        try {
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+            const result = await rv.RunView<MJTemplateContentEntity>({
+                EntityName: 'MJ: Template Contents',
+                ExtraFilter: `TemplateID='${EscapeSQLString(template.ID)}'`,
+                OrderBy: 'Priority ASC, __mj_CreatedAt ASC',
+                ResultType: 'entity_object'
+            });
+            if (result.Success) {
+                return result.Results;
+            }
+            failure = result.ErrorMessage || 'unknown error';
+        } catch (error) {
+            failure = error instanceof Error ? error.message : String(error);
+        }
+        console.error(`Failed to load template contents for template ${template.ID}: ${failure}`);
+        this.notificationService.CreateSimpleNotification(`Failed to load template contents: ${failure}`, 'error', 5000);
+        return null;
     }
 
     /** @deprecated Use {@link LoadTemplateContents}. */
@@ -353,22 +389,29 @@ export class TemplateEditorComponent extends BaseAngularComponent implements OnI
     }
 
     async CreateDefaultTemplateContent() {
+        if (!this.Template) {
+            throw new Error('TemplateEditorComponent.CreateDefaultTemplateContent: no Template is bound');
+        }
+        this.TemplateContents = [await this.buildDefaultTemplateContent(this.Template)];
+        this.SelectedContentIndex = 0;
+
+        // Sync editor value after creating default content
+        this.syncEditorValue();
+    }
+
+    /** Builds (does not save) the single content row a template starts with. */
+    private async buildDefaultTemplateContent(template: MJTemplateEntity): Promise<MJTemplateContentEntity> {
         const defaultContent = await this._metadata.GetEntityObject<MJTemplateContentEntity>('MJ: Template Contents');
-        defaultContent.TemplateID = this.Template!.ID;
+        defaultContent.TemplateID = template.ID;
         defaultContent.Priority = 1;
         defaultContent.IsActive = true;
-        
+
         // Set default to first real content type (skip "Select Type..." if it exists)
-        const validContentTypes = this.ContentTypeOptions.filter(option => option.value !== '');
+        const validContentTypes = this.GetContentTypeOptionsForContent();
         if (validContentTypes.length > 0) {
             defaultContent.TypeID = validContentTypes[0].value;
         }
-        
-        this.TemplateContents = [defaultContent];
-        this.SelectedContentIndex = 0;
-        
-        // Sync editor value after creating default content
-        this.syncEditorValue();
+        return defaultContent;
     }
 
     /** @deprecated Use {@link CreateDefaultTemplateContent}. */
@@ -613,27 +656,27 @@ export class TemplateEditorComponent extends BaseAngularComponent implements OnI
         });
     }
 
+    /**
+     * Persists the new and changed content rows — the same instances the user edited here — in one
+     * transaction. Every failure is logged and shown to the user; the caller gets `false`.
+     */
     async SaveTemplateContents(): Promise<boolean> {
         if (!this.config.allowEdit) return false;
+        const template = this.Template;
+        if (!template) {
+            console.error('TemplateEditorComponent.SaveTemplateContents: no Template is bound, nothing to save the contents against');
+            return false;
+        }
 
         try {
-            // Ensure FK is set on all contents, then persist the dirty/new ones atomically
+            // Ensure FK is set on all contents (a new template only has its ID once it is saved),
+            // then persist the dirty/new ones atomically
             for (const content of this.TemplateContents) {
-                content.TemplateID = this.Template!.ID;
+                content.TemplateID = template.ID;
             }
             const toSave = this.TemplateContents.filter(c => c.Dirty || !c.ID);
-
-            if (toSave.length > 0) {
-                const tg = await this._metadata.CreateTransactionGroup();
-                for (const content of toSave) {
-                    content.TransactionGroup = tg;
-                    await content.Save();
-                }
-                const success = await tg.Submit();
-                if (!success) {
-                    console.error('Failed to save template contents transaction');
-                    return false;
-                }
+            if (toSave.length > 0 && !(await this.submitTemplateContents(template, toSave))) {
+                return false;
             }
 
             this.IsAddingNewContent = false;
@@ -642,9 +685,39 @@ export class TemplateEditorComponent extends BaseAngularComponent implements OnI
             this.ContentChange.emit(this.TemplateContents);
             return true;
         } catch (error) {
-            console.error('Error saving template contents:', error);
+            this.reportSaveFailure(template, error instanceof Error ? error.message : String(error));
             return false;
         }
+    }
+
+    private async submitTemplateContents(template: MJTemplateEntity, toSave: MJTemplateContentEntity[]): Promise<boolean> {
+        const tg = await this._metadata.CreateTransactionGroup();
+        for (const content of toSave) {
+            content.TransactionGroup = tg;
+            // Inside a transaction group Save() only queues the row; false here means it was
+            // refused before queueing (e.g. validation).
+            if (!(await content.Save())) {
+                this.reportSaveFailure(template, this.describeContentFailure(content));
+                return false;
+            }
+        }
+        if (await tg.Submit()) {
+            return true;
+        }
+        const failed = toSave.filter(c => c.LatestResult && !c.LatestResult.Success);
+        this.reportSaveFailure(template, failed.length > 0
+            ? failed.map(c => this.describeContentFailure(c)).join('; ')
+            : 'the transaction was rejected');
+        return false;
+    }
+
+    private describeContentFailure(content: MJTemplateContentEntity): string {
+        return `content ${content.ID || '(new)'}: ${content.LatestResult?.CompleteMessage || 'unknown error'}`;
+    }
+
+    private reportSaveFailure(template: MJTemplateEntity, detail: string): void {
+        console.error(`Failed to save template contents for template ${template.ID}: ${detail}`);
+        this.notificationService.CreateSimpleNotification(`Failed to save template contents: ${detail}`, 'error', 5000);
     }
 
     /** @deprecated Use {@link SaveTemplateContents}. */
