@@ -125,8 +125,9 @@ export class ScriptedDecision extends BaseDecision {
 }
 
 /**
- * Registers `driver` on the real ClassFactory under each of `driverClasses`, above whatever is
- * registered there, so every `CreateInstance(BaseDecision, name, …)` returns that one instance. The
+ * Registers `driver` on the real ClassFactory under each of `driverClasses`, at `priority` or above
+ * whatever is registered there (a real driver an earlier restore put back included), so every
+ * `CreateInstance(BaseDecision, name, …)` returns that one instance. The
  * same technique as `RegisterTestLLM`: a real registration and a real `new`, whose constructor hands
  * back the shared instance.
  *
@@ -149,13 +150,19 @@ export function RegisterScriptedDecision(driver: ScriptedDecision, driverClasses
                 return driver;
             }
         }
-        factory.Register(BaseDecision, ScriptedDecisionRegistrationHandle, name, priority);
+        // At least `priority`, and above everything registered for the name: an earlier restore
+        // re-registered the real driver above its stand-in, and this registration must outrank it.
+        factory.Register(BaseDecision, ScriptedDecisionRegistrationHandle, name, Math.max(priority, highestDecisionPriority(name) + 1));
     }
 
     return () => {
         for (const { name, registration } of previous) {
-            const highest = Math.max(...factory.GetAllRegistrations(BaseDecision, name).map((r) => r.Priority));
-            factory.Register(BaseDecision, registration.SubClass, name, highest + 1);
+            factory.Register(BaseDecision, registration.SubClass, name, highestDecisionPriority(name) + 1);
         }
     };
+}
+
+/** The highest priority registered on BaseDecision for `name`, or 0 when it has none. */
+function highestDecisionPriority(name: string): number {
+    return Math.max(0, ...MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseDecision, name).map((r) => r.Priority));
 }
