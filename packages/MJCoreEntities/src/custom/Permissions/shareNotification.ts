@@ -1,4 +1,5 @@
-import { IMetadataProvider, LogError } from '@memberjunction/core';
+import { EntitySaveOptions, IMetadataProvider, LogError } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 
 import { MJUserEntity, MJUserNotificationEntity } from '../../generated/entity_subclasses';
 import { ResourcePermissionEngine } from '../ResourcePermissions/ResourcePermissionEngine';
@@ -48,6 +49,22 @@ export interface ShareNotificationInput {
      * dispatcher auto-generates a short sentence from `ActionsSummary`.
      */
     Message?: string;
+}
+
+/**
+ * Whether a new approved share tells its grantee. It does not when the save said so
+ * (`EntitySaveOptions.SkipShareNotification`: a grant written as plumbing), when there is
+ * no grantor to name, or when the grantor and the grantee are the same person. Every share
+ * entity's new-grant branch asks this, so the rule is in one place.
+ */
+export function ShareNotificationWanted(input: {
+    options?: Pick<EntitySaveOptions, 'SkipShareNotification'> | null;
+    grantorUserId: string | null | undefined;
+    granteeUserId: string | null | undefined;
+}): boolean {
+    if (input.options?.SkipShareNotification) return false;
+    if (!input.grantorUserId || !input.granteeUserId) return false;
+    return !UUIDsEqual(input.grantorUserId, input.granteeUserId);
 }
 
 /**

@@ -51,7 +51,7 @@ export class MJCollectionPermissionEntityExtended extends MJCollectionPermission
                 ResourceRecordID: this.CollectionID,
                 ActionsSummary: this.actionsSummary(),
                 ExtraConfiguration: { PermissionID: this.ID },
-            }));
+            }), options);
         }
         return saved;
     }

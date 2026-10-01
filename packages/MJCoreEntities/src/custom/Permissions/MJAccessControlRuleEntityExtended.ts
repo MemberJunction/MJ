@@ -51,7 +51,7 @@ export class MJAccessControlRuleEntityExtended extends MJAccessControlRuleEntity
                     ActionsSummary: this.actionsSummary(),
                     ExtraConfiguration: { AccessControlRuleID: this.ID, EntityID: this.EntityID },
                 };
-            });
+            }, options);
         }
         return saved;
     }

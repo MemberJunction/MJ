@@ -59,7 +59,7 @@ export class MJDashboardPermissionEntityExtended extends MJDashboardPermissionEn
                 ResourceRecordID: this.DashboardID,
                 ActionsSummary: this.actionsSummary(),
                 ExtraConfiguration: { PermissionID: this.ID },
-            }));
+            }), options);
         }
         return saved;
     }

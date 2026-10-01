@@ -1,7 +1,7 @@
 import { BaseEntity, BaseEntityResult, EntityPermissionType, EntitySaveOptions, IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 
-import { CreateShareNotification, ShareNotificationInput } from './shareNotification';
+import { CreateShareNotification, ShareNotificationInput, ShareNotificationWanted } from './shareNotification';
 
 /**
  * Shared lifecycle for the four user-grantee sharing permission entities
@@ -91,18 +91,21 @@ export async function DispatchShareNotificationAfterSave(
     entity: BaseEntity,
     isNewShare: boolean,
     grantorUserId: string | null | undefined,
-    payloadBuilder: (provider: IMetadataProvider, grantorId: string) => Promise<ShareNotificationInput | null> | ShareNotificationInput | null
+    payloadBuilder: (provider: IMetadataProvider, grantorId: string) => Promise<ShareNotificationInput | null> | ShareNotificationInput | null,
+    options?: EntitySaveOptions | null
 ): Promise<void> {
     const provider = entity.ProviderToUse as unknown as IMetadataProvider;
     const isServerSide = provider?.ProviderType === 'Database';
     if (!isServerSide || !isNewShare) return;
+    // A grant written as plumbing (options.SkipShareNotification) is silent: nobody shared anything, a gate was satisfied
+    if (options?.SkipShareNotification) return;
 
     const grantorId = grantorUserId ?? entity.ContextCurrentUser?.ID ?? null;
     if (!grantorId) return;
 
     try {
         const input = await payloadBuilder(provider, grantorId);
-        if (input) void CreateShareNotification(input);
+        if (input && ShareNotificationWanted({ options, grantorUserId: input.GrantorUserID, granteeUserId: input.GranteeUserID })) void CreateShareNotification(input);
     } catch {
         // Defensive: payload builder never fails the save.
     }

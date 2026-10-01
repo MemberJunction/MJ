@@ -50,7 +50,7 @@ export class MJArtifactPermissionEntityExtended extends MJArtifactPermissionEnti
                     ActionsSummary: this.actionsSummary(),
                     ExtraConfiguration: { PermissionID: this.ID },
                 };
-            });
+            }, options);
         }
         return saved;
     }

@@ -3,7 +3,7 @@ import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { MJResourcePermissionEntity, MJUserEntity } from "../../generated/entity_subclasses";
 import { ResourcePermissionEngine } from "./ResourcePermissionEngine";
 import { ConversationEngine } from "../../engines/conversations";
-import { CreateShareNotification } from "../Permissions/shareNotification";
+import { CreateShareNotification, ShareNotificationWanted } from "../Permissions/shareNotification";
 import { CheckShareManagePermission } from "../Permissions/BaseShareEntityExtended";
 
 /** `MJ: Resource Types.ID` for Conversations. */
@@ -277,11 +277,12 @@ export class MJResourcePermissionEntityExtended extends MJResourcePermissionEnti
                     }
                     else if (newApprovedUserShare) {
                         const grantorId = this.SharedByUserID ?? this.ContextCurrentUser?.ID ?? recordOwnerID;
-                        if (grantorId && !UUIDsEqual(grantorId, this.UserID!)) {
+                        // A grant written as plumbing (options.SkipShareNotification) is silent, as is one a person gives themself
+                        if (ShareNotificationWanted({ options, grantorUserId: grantorId, granteeUserId: this.UserID })) {
                             void CreateShareNotification({
                                 Provider: p,
                                 ContextUser: this.ContextCurrentUser,
-                                GrantorUserID: grantorId,
+                                GrantorUserID: grantorId!,
                                 GranteeUserID: this.UserID!,
                                 ResourceTypeLabel: this.ResourceType ?? rt?.Name ?? 'resource',
                                 ResourceTypeName: rt?.Name,

@@ -339,6 +339,13 @@ export class EntitySaveOptions {
      * @see BaseEntity.DefaultSkipAsyncValidation
      */
     SkipAsyncValidation?: boolean = undefined;
+    /**
+     * When set to true, a share entity (Resource Permissions, Collection, Artifact, Dashboard and Access Control Rule grants) saves without
+     * sending the grantee the "shared with you" notification it normally sends for a new approved grant. For a grant an application writes
+     * as plumbing, to satisfy a write gate rather than because a person shared something, so the grantee is not told about each row.
+     * Access requests and their approvals keep notifying: those are a person asking and a person answering.
+     */
+    SkipShareNotification?: boolean = false;
 
     /**
      * Optional callback invoked exactly once, *after* all pre-flight checks pass
