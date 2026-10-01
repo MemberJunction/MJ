@@ -1,8 +1,8 @@
 /**
  * @fileoverview CLI harness to measure duplicate record entry check across reasoning arms:
  *  1. Vector threshold arm
- *  2. Decision prompt arm (DecisionReasoningProvider, banded as the entry check bands it)
- *  3. Decision · production arm (PassedThreshold && banded Uncertain)
+ *  2. Decision prompt arm (DecisionReasoningProvider, banded on the calibrated probability as the entry check bands it)
+ *  3. Decision · production arm (PassedThreshold && banded Uncertain on the calibrated probability)
  *  4. Full prompt arm (PromptReasoningProvider)
  *  5. Prompt · production arm (PassedThreshold && (Merge || Uncertain))
  *
@@ -11,8 +11,10 @@
  * PotentialMatchThreshold; the `· production` views filter their verdicts afterwards.
  *
  * The decision arm flags as production's entry check does: a candidate a successful decision gave
- * no answer for is flagged, and a failed decision flags nothing. Each call's success, error (withheld
- * when it quotes record text) and missing answers are recorded, and a failure is logged.
+ * no answer for is flagged, and a failed decision flags nothing, nor does one answered by a model with
+ * no calibration (production logs that once per model; the rig still records its raw probabilities,
+ * which the report's calibration section fits). Each call's success, error (withheld when it quotes
+ * record text) and missing answers are recorded, and a failure is logged.
  *
  * The entry check's latency is timed from building the unsaved record through the decision call:
  * PreparationLatencyMs (record, retrieval, permission narrowing, candidate load) plus the decision.
@@ -21,6 +23,9 @@
  *   npx tsx rigs/dupe-check-measurement.ts --entity "MJ: Actions" --corpus <dir> --out <dir> \
  *     [--reps 1] [--top-k 5] [--arms threshold,decision,prompt] [--decision-prompt "<name>"] \
  *     [--decision-model "<name>"] [--dry-run]
+ *
+ * Each candidate's DecisionProbability is the model's raw probability, which the report's calibration
+ * section fits on; its DecisionFlagged comes from production's calibrated band.
  *
  * OUTPUTS:
  *   - checks.jsonl: observation for each entry check
@@ -50,10 +55,9 @@ import { KnowledgeHubMetadataEngine, MJEntityDocumentEntity } from '@memberjunct
 import { NormalizeUUID } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
-import { AIDecisionParams, AIDecisionRunner } from '@memberjunction/ai-prompts';
+import type { AIDecisionParams } from '@memberjunction/ai-prompts';
 import {
     DecisionReasoningProvider,
-    DuplicateDecisionResult,
     DuplicateReasoningContext,
     DuplicateReasoningInput,
     DuplicateRecordDetector,
@@ -174,7 +178,8 @@ class MeasuringDuplicateRecordDetector extends DuplicateRecordDetector {
 
 /**
  * Subclass extending DecisionReasoningProvider to support custom decision prompt names
- * and pinned decision models (disabling failover).
+ * and pinned decision models (disabling failover). Everything else, including calibration,
+ * is production's `DecideCandidates`.
  */
 export class MeasuringDecisionReasoningProvider extends DecisionReasoningProvider {
     private readonly customPromptName?: string;
@@ -191,59 +196,17 @@ export class MeasuringDecisionReasoningProvider extends DecisionReasoningProvide
         return AIEngine.Instance.Prompts.find(p => (p.Name ?? '').trim().toLowerCase() === target) ?? null;
     }
 
-    public override async DecideCandidates(
+    /** Production's params, with the pinned model, when there is one, as an override. */
+    protected override BuildDecisionParams(
+        prompt: MJAIPromptEntityExtended,
         input: DuplicateReasoningInput,
         context: DuplicateReasoningContext
-    ): Promise<DuplicateDecisionResult> {
-        if (input.Candidates.length === 0) {
-            return { Success: true, Candidates: [], AIPromptRunID: null };
+    ): AIDecisionParams {
+        const params = super.BuildDecisionParams(prompt, input, context);
+        if (this.pinnedModelId) {
+            params.override = { modelId: this.pinnedModelId };
         }
-        try {
-            await AIEngine.Instance.Config(false, context.ContextUser, context.Provider);
-            const prompt = this.ResolveDecisionPrompt();
-            if (!prompt) {
-                return {
-                    Success: false,
-                    ErrorMessage: `Decision prompt "${this.customPromptName ?? DecisionReasoningProvider.DEFAULT_PROMPT_NAME}" not found`,
-                    Candidates: [],
-                    AIPromptRunID: null,
-                };
-            }
-            const params = new AIDecisionParams();
-            params.prompt = prompt;
-            params.contextUser = context.ContextUser;
-            params.State = this.BuildDecisionState(input);
-            params.Questions = this.BuildQuestions(input);
-            if (this.pinnedModelId) {
-                params.override = { modelId: this.pinnedModelId };
-            }
-            const run = await new AIDecisionRunner().ExecuteDecision(params);
-            const runID = run.promptRun?.ID ?? null;
-            if (!run.success) {
-                return {
-                    Success: false,
-                    ErrorMessage: run.errorMessage ?? 'Decision execution failed',
-                    Candidates: [],
-                    AIPromptRunID: runID,
-                };
-            }
-            const candidates = input.Candidates.map((candidate, index) => {
-                const answer = run.Answers[this.QuestionKey(index)];
-                const prob = answer?.Kind === 'Likelihood' ? answer.Probability : null;
-                return {
-                    RecordID: candidate.RecordID,
-                    Probability: prob,
-                };
-            });
-            return { Success: true, Candidates: candidates, AIPromptRunID: runID };
-        } catch (e) {
-            return {
-                Success: false,
-                ErrorMessage: e instanceof Error ? e.message : String(e),
-                Candidates: [],
-                AIPromptRunID: null,
-            };
-        }
+        return params;
     }
 }
 
@@ -526,6 +489,7 @@ async function executeSingleEntryCheck(
                   Success: decision.Reading.Success,
                   ErrorMessage: decision.Reading.ErrorMessage,
                   MissingAnswers: decision.Reading.MissingAnswers,
+                  UncalibratedModel: decision.Reading.UncalibratedModel,
               }
             : undefined,
         PromptResult: prompt
