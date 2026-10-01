@@ -1073,8 +1073,9 @@ import {
     ParallelExecutionCoordinator,
 } from '@memberjunction/ai-prompts';
 
-// @memberjunction/ai-reranker (1 classes)
+// @memberjunction/ai-reranker (2 classes)
 import {
+    DecisionReranker,
     LLMReranker,
 } from '@memberjunction/ai-reranker';
 
@@ -2264,6 +2265,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     TemplateRunServerOperation,
     LLMDecision,
     ParallelExecutionCoordinator,
+    DecisionReranker,
     LLMReranker,
     AdaptiveBoundarySegmenter,
     FixedWindowSegmenter,
@@ -2353,11 +2355,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     RecordProcessRunNowServerOperation,
     MLModelInferenceProcessor,
     MLModelScoreEnricher,
-    PredictiveStudioControlExperimentSessionServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    PredictiveStudioControlExperimentSessionServerOperation,
     PredictiveStudioCreateScoringProcessServerOperation,
     PredictiveStudioModelDevAgent,
     PredictiveStudioPipelineBuilderAgent,
@@ -2557,11 +2559,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     LoadAgentSpecAction,
     LoopAction,
     MCPToolAction,
-    MaterializeListFromViewAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MaterializeListFromViewAction,
     ModifyDocumentSectionAction,
     ModifyInteractiveFormAction,
     MoveListMembersAction,
@@ -2640,7 +2642,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1062;
+export const CLASS_REGISTRATIONS_COUNT = 1063;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
