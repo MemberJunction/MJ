@@ -42,7 +42,7 @@ function stubInstanceConfig(values: Record<string, boolean>): void {
 describe('ShellComponent.InitializeShell — metadata form contributions switch', () => {
   beforeEach(() => {
     InteractiveFormsEngine.MetadataContributionsEnabled = true;
-    vi.spyOn(StartupManager.Instance, 'Startup').mockResolvedValue(undefined as never);
+    vi.spyOn(StartupManager.Instance, 'Startup').mockResolvedValue({ success: true, results: [], totalDurationMs: 0 });
   });
 
   afterEach(() => {
