@@ -23,7 +23,7 @@
             <select [value]="node.scaleId ?? ''" (change)="OnScale(node, $event)">
               <option value="">None</option>
               @for (scale of Scales; track scale.id) {
-                <option [value]="scale.id">{{ scale.id }}</option>
+                <option [value]="scale.id" [selected]="scale.id.toLowerCase() === (node.scaleId ?? '').toLowerCase()">{{ scale.name || scale.id }}</option>
               }
             </select>
           </label>

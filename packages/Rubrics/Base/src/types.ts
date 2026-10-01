@@ -32,6 +32,8 @@ export interface RubricScaleLevelSnapshot {
 
 export interface RubricScaleSnapshot {
     id: string;
+    /** Display name. The author select shows this, not the id. */
+    name?: string;
     scaleType: RubricScaleType;
     minValue?: number | null;
     maxValue?: number | null;

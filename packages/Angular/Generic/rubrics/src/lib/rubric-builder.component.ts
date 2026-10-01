@@ -34,6 +34,22 @@ export class RubricBuilderComponent implements OnChanges {
         this.Shares = weightShares(this.Nodes);
         this.Problems = draftProblems(this.Nodes, this.Scales);
         this.Preview = this.Version ? previewScore({ ...this.Version, nodes: this.Nodes, scales: this.Scales }, this.SampleAnswers) : null;
+        this.selectLoadedScales();
+    }
+
+    /** The select's value is applied before its options exist, so re-apply after render. */
+    private selectLoadedScales(): void {
+        queueMicrotask(() => {
+            const selects = [...document.querySelectorAll('mj-rubric-builder select')].filter(select =>
+                [...select.options].some(option => this.Scales.some(scale => option.value.toLowerCase() === scale.id.toLowerCase())));
+            const criteria = this.Nodes.filter(node => node.nodeType === 'Criterion');
+            selects.forEach((select, index) => {
+                const scaleId = criteria[index]?.scaleId;
+                if (!scaleId) return;
+                const match = [...select.options].find(option => option.value.toLowerCase() === scaleId.toLowerCase());
+                if (match) select.value = match.value;
+            });
+        });
     }
 
     public Share(id: string): number {

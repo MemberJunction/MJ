@@ -4,7 +4,7 @@
       <tr>
         <th>Criterion</th>
         @for (column of Columns; track column.id) {
-          <th>{{ column.name }}@if (column.evaluatorType !== column.name) { <span> {{ column.evaluatorType }}</span> }</th>
+          <th>{{ column.name }}@if (column.evaluatorType.trim().toLowerCase() !== column.name.trim().toLowerCase()) { <span> {{ column.evaluatorType }}</span> }</th>
         }
       </tr>
     </thead>

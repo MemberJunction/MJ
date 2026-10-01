@@ -379,6 +379,7 @@ export function planNodeSave(existing: { id: string; parentId: string | null }[]
 export function scaleFromRow(row: Record<string, unknown>, levels: Record<string, unknown>[]): RubricScaleSnapshot {
     return {
         id: String(row.ID ?? ''),
+        name: String(row.Name ?? ''),
         scaleType: row.ScaleType === 'Numeric' ? 'Numeric' : 'Levels',
         higherIsBetter: row.HigherIsBetter !== false && row.HigherIsBetter !== 0,
         minValue: row.MinValue == null || row.MinValue === '' ? null : Number(row.MinValue),
