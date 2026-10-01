@@ -2421,6 +2421,14 @@ entity:
   do write out of band — which you must do anyway for the cache to be correct — and the backstop
   applies exactly there. `engineSweepIntervalSeconds: 0` still turns the timer off entirely.
 
+  **Opting an entity in takes effect only once the metadata snapshot is refreshed.** Servers read
+  `TrustServerCacheCompletely` from the entity metadata they hold, and a warm-booting server reads
+  that metadata from the shared snapshot — so setting the flag by hand in SQL and restarting is *not*
+  enough; the restarted server adopts the old snapshot and keeps ignoring the entity. `mj sync push`
+  and `mj cache clear` both remove the snapshot, which is why the normal paths work. Verified on two
+  live servers: after a raw SQL flag change the sweep ignored the entity across several intervals,
+  and swept it ~12 s after the snapshot was dropped.
+
   **The user-cache staleness check (`userCacheCheckIntervalSeconds`) is gated the same way**, for the
   same reason. Nothing is lost for the case that motivated it: a save raises an event, a save on
   another server publishes the shared stamp, and `FindUser` falls back to an authoritative read on a
