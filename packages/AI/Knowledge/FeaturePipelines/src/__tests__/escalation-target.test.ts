@@ -21,6 +21,7 @@ describe('escalation-target validation', () => {
             Status: 'Active',
             EntityID: entityID,
             Entity: 'Contacts',
+            PromptID: 'prompt-1',
             ...overrides,
         };
     }
@@ -79,6 +80,12 @@ describe('escalation-target validation', () => {
             expect(FindEscalationTargetRowProblem(row, entityID)).toBe(
                 "is on entity 'Accounts' (99999999-9999-9999-9999-999999999999), not the Decision pipeline's entity (11111111-2222-3333-4444-555555555555)"
             );
+        });
+
+        it('rejects a pipeline with no PromptID, which the engine cannot build', () => {
+            const expected = 'has no PromptID; an Infer pipeline needs a prompt to run';
+            expect(FindEscalationTargetRowProblem(validRow({ PromptID: null }), entityID)).toBe(expected);
+            expect(FindEscalationTargetRowProblem(validRow({ PromptID: '' }), entityID)).toBe(expected);
         });
     });
 

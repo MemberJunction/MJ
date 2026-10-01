@@ -88,9 +88,9 @@ export function ParseConfidenceFloor(raw: string): number {
                 <div class="rpe-grid2">
                     <div class="field">
                         <label>Pipeline Type</label>
-                        <select class="mj-input" [value]="CurrentPipelineTypeName" (change)="OnPipelineTypeSelect($event)">
+                        <select class="mj-input" (change)="OnPipelineTypeSelect($event)">
                             @for (t of AvailablePipelineTypes; track t.Name) {
-                                <option [value]="t.Name">{{ t.DisplayName || t.Name }}</option>
+                                <option [value]="t.Name" [selected]="IsCurrentPipelineType(t.Name)">{{ t.DisplayName || t.Name }}</option>
                             }
                         </select>
                     </div>
@@ -133,10 +133,10 @@ export function ParseConfidenceFloor(raw: string): number {
                     @if (contextMode === 'document') {
                         <div class="field">
                             <label>Entity Document</label>
-                            <select class="mj-input" [value]="spec.Context.EntityDocumentID || ''" (change)="onEntityDocChange($event)">
-                                <option value="" disabled>— Select Entity Document —</option>
+                            <select class="mj-input" (change)="onEntityDocChange($event)">
+                                <option value="" disabled [selected]="!SavedEntityDocListed">— Select Entity Document —</option>
                                 @for (doc of availableDocs; track doc.ID) {
-                                    <option [value]="doc.ID">{{ doc.Name }}</option>
+                                    <option [value]="doc.ID" [selected]="IsSavedEntityDoc(doc)">{{ doc.Name }}</option>
                                 }
                             </select>
                         </div>
@@ -165,10 +165,10 @@ export function ParseConfidenceFloor(raw: string): number {
                 <div class="rpe-grid2">
                     <div class="field">
                         <label>Prompt</label>
-                        <select class="mj-input" [value]="Record?.PromptID || ''" (change)="onPromptChange($event)">
-                            <option value="" disabled>— Select AI Prompt —</option>
+                        <select class="mj-input" (change)="onPromptChange($event)">
+                            <option value="" disabled [selected]="!SavedPromptListed">— Select AI Prompt —</option>
                             @for (p of availablePrompts; track p.ID) {
-                                <option [value]="p.ID">{{ p.Name }}</option>
+                                <option [value]="p.ID" [selected]="IsSavedPrompt(p)">{{ p.Name }}</option>
                             }
                         </select>
                     </div>
@@ -228,9 +228,12 @@ export function ParseConfidenceFloor(raw: string): number {
                                     </div>
                                     <div class="field">
                                         <label>Target Mode</label>
-                                        <select class="mj-input" [value]="output.Target.Mode" (change)="updateTargetMode(outputIndex, $event)">
+                                        <select class="mj-input" (change)="updateTargetMode(outputIndex, $event)">
+                                            @if (!IsTargetModeOffered(output)) {
+                                                <option value="" disabled [selected]="true">— Select Target Mode —</option>
+                                            }
                                             @for (m of AvailableTargetModes; track m.Value) {
-                                                <option [value]="m.Value">{{ m.Label }}</option>
+                                                <option [value]="m.Value" [selected]="m.Value === output.Target.Mode">{{ m.Label }}</option>
                                             }
                                         </select>
                                     </div>
@@ -241,10 +244,10 @@ export function ParseConfidenceFloor(raw: string): number {
                                     @if (output.Target.Mode === 'field') {
                                         <div class="field">
                                             <label>Target Field</label>
-                                            <select class="mj-input" [value]="output.Target.EntityFieldName" (change)="updateFieldTarget(outputIndex, $event)">
-                                                <option value="" disabled>— Select Column —</option>
+                                            <select class="mj-input" (change)="updateFieldTarget(outputIndex, $event)">
+                                                <option value="" disabled [selected]="!IsEntityFieldListed(output.Target.EntityFieldName)">— Select Column —</option>
                                                 @for (f of entityFields; track f.Name) {
-                                                    <option [value]="f.Name">{{ f.DisplayName || f.Name }} ({{ f.TSType }})</option>
+                                                    <option [value]="f.Name" [selected]="f.Name === output.Target.EntityFieldName">{{ f.DisplayName || f.Name }} ({{ f.TSType }})</option>
                                                 }
                                             </select>
                                         </div>
@@ -253,10 +256,10 @@ export function ParseConfidenceFloor(raw: string): number {
                                     @if (output.Target.Mode === 'child') {
                                         <div class="field">
                                             <label>Child Entity</label>
-                                            <select class="mj-input" [value]="output.Target.EntityName" (change)="updateChildTargetEntity(outputIndex, $event)">
-                                                <option value="" disabled>— Select Entity —</option>
+                                            <select class="mj-input" (change)="updateChildTargetEntity(outputIndex, $event)">
+                                                <option value="" disabled [selected]="!IsEntityListed(output.Target.EntityName)">— Select Entity —</option>
                                                 @for (e of availableEntities; track e.ID) {
-                                                    <option [value]="e.Name">{{ e.DisplayName || e.Name }}</option>
+                                                    <option [value]="e.Name" [selected]="e.Name === output.Target.EntityName">{{ e.DisplayName || e.Name }}</option>
                                                 }
                                             </select>
                                         </div>
@@ -265,12 +268,12 @@ export function ParseConfidenceFloor(raw: string): number {
                                     <!-- Constraint details -->
                                     <div class="field">
                                         <label>Constraint Type</label>
-                                        <select class="mj-input" [value]="output.Constraint?.Type || 'none'" (change)="updateConstraintType(outputIndex, $event)">
-                                            @if (!output.Constraint?.Type && IsDecisionPipeline) {
-                                                <option value="none" disabled>— Select Constraint —</option>
+                                        <select class="mj-input" (change)="updateConstraintType(outputIndex, $event)">
+                                            @if (!IsConstraintTypeOffered(output)) {
+                                                <option value="none" disabled [selected]="true">— Select Constraint —</option>
                                             }
                                             @for (t of AvailableConstraintTypes; track t.Value) {
-                                                <option [value]="t.Value">{{ t.Label }}</option>
+                                                <option [value]="t.Value" [selected]="t.Value === SavedConstraintType(output)">{{ t.Label }}</option>
                                             }
                                         </select>
                                     </div>
@@ -425,13 +428,10 @@ export function ParseConfidenceFloor(raw: string): number {
                         <div class="rpe-grid2 rpe-mt">
                             <div class="field">
                                 <label>Target LLM Pipeline</label>
-                                <select
-                                    class="mj-input"
-                                    [value]="spec.Escalation?.PipelineID || ''"
-                                    (change)="OnEscalationTargetChange($event)">
-                                    <option value="" disabled>{{ EscalationTargetsPlaceholder }}</option>
+                                <select class="mj-input" (change)="OnEscalationTargetChange($event)">
+                                    <option value="" disabled [selected]="!SavedEscalationTargetListed">{{ EscalationTargetsPlaceholder }}</option>
                                     @for (target of AvailableEscalationTargets; track target.ID) {
-                                        <option [value]="target.ID" [disabled]="!!GetTargetProblem(target)">
+                                        <option [value]="target.ID" [disabled]="!!GetTargetProblem(target)" [selected]="IsSavedEscalationTarget(target)">
                                             {{ target.Name }}{{ GetTargetProblem(target) ? ' (' + GetTargetProblem(target) + ')' : '' }}
                                         </option>
                                     }
@@ -638,6 +638,16 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         return this.AvailableEscalationTargets.length > 0 ? '— Select LLM Pipeline —' : '— No other Infer pipelines on this entity —';
     }
 
+    /** Whether `target` is the spec's escalation target. IDs compare through UUIDsEqual, as the target check does. */
+    public IsSavedEscalationTarget(target: EscalationTargetCandidate): boolean {
+        return UUIDsEqual(target.ID, this.spec.Escalation?.PipelineID);
+    }
+
+    /** Whether the target picker lists the spec's escalation target. Until the targets load, or when it is not among them, the placeholder shows. */
+    public get SavedEscalationTargetListed(): boolean {
+        return this.AvailableEscalationTargets.some((t) => this.IsSavedEscalationTarget(t));
+    }
+
     /**
      * Whether to offer the Capture Reasoning setting: for a type that produces reasoning, and for any spec
      * that already asks for it, so a pipeline switched to a type without reasoning can turn it off.
@@ -680,6 +690,63 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
             options.push({ Value: 'freetext', Label: 'Free Text' });
         }
         return options;
+    }
+
+    // The pickers mark the saved option with [selected] on each <option>, not [value] on the <select>. A [value]
+    // binding runs before @for creates the options, matches nothing, and does not run again, so the browser shows
+    // the first option. When the saved value is not listed, the placeholder is selected. A placeholder inside @if
+    // binds [selected] instead of carrying the attribute, because on a live type switch the attribute loses to the
+    // option still selected, which is then removed.
+
+    /** Whether `name` is the spec's pipeline type. Names compare case-insensitively, as {@link IsDecisionPipeline} does. */
+    public IsCurrentPipelineType(name: string): boolean {
+        return name.toLowerCase() === this.CurrentPipelineTypeName.toLowerCase();
+    }
+
+    /** The output's saved constraint type as the constraint picker names it: `'none'` when it has none. */
+    public SavedConstraintType(output: DataFeatureOutput): string {
+        return output.Constraint?.Type || 'none';
+    }
+
+    /** Whether the constraint picker lists the output's saved type. A Decision output with no constraint, or one this type cannot produce, is not listed. */
+    public IsConstraintTypeOffered(output: DataFeatureOutput): boolean {
+        const saved = this.SavedConstraintType(output);
+        return this.AvailableConstraintTypes.some((t) => t.Value === saved);
+    }
+
+    /** Whether the target mode picker lists the output's saved mode. */
+    public IsTargetModeOffered(output: DataFeatureOutput): boolean {
+        return this.AvailableTargetModes.some((m) => m.Value === output.Target.Mode);
+    }
+
+    /** Whether the target field picker lists a field named `name`. */
+    public IsEntityFieldListed(name: string | undefined): boolean {
+        return !!name && this.EntityFields.some((f) => f.Name === name);
+    }
+
+    /** Whether the child entity picker lists an entity named `name`. */
+    public IsEntityListed(name: string | undefined): boolean {
+        return !!name && this.AvailableEntities.some((e) => e.Name === name);
+    }
+
+    /** Whether `prompt` is the pipeline's saved prompt. */
+    public IsSavedPrompt(prompt: PromptOption): boolean {
+        return UUIDsEqual(prompt.ID, this.Record ? this.Record.PromptID : this.spec.PromptID);
+    }
+
+    /** Whether the prompt picker lists the pipeline's saved prompt. */
+    public get SavedPromptListed(): boolean {
+        return this.AvailablePrompts.some((p) => this.IsSavedPrompt(p));
+    }
+
+    /** Whether `doc` is the spec's saved entity document. */
+    public IsSavedEntityDoc(doc: EntityDocOption): boolean {
+        return UUIDsEqual(doc.ID, this.spec.Context.EntityDocumentID);
+    }
+
+    /** Whether the entity document picker lists the spec's saved document. */
+    public get SavedEntityDocListed(): boolean {
+        return this.AvailableDocs.some((d) => this.IsSavedEntityDoc(d));
     }
 
     public AvailablePrompts: PromptOption[] = [];
@@ -1006,7 +1073,7 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const res = await rv.RunView<EscalationTargetCandidate>({
                 EntityName: 'MJ: Record Processes',
-                Fields: ['ID', 'Name', 'Description', 'Entity', 'EntityID', 'WorkType', 'Status', 'Configuration'],
+                Fields: ['ID', 'Name', 'Description', 'Entity', 'EntityID', 'WorkType', 'Status', 'PromptID', 'Configuration'],
                 ExtraFilter: `WorkType='Infer' AND EntityID='${EscapeSQLString(entityID)}'`,
                 OrderBy: 'Name',
                 ResultType: 'simple',
@@ -1031,11 +1098,6 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
     private parseTargetSpec(configuration: string | null | undefined): DataFeatureSpec | undefined {
         const parsed = configuration ? SafeJSONParse<DataFeatureSpec>(configuration) : null;
         return parsed && typeof parsed === 'object' ? parsed : undefined;
-    }
-
-    /** @deprecated Use {@link LoadEscalationTargets}. */
-    public async loadEscalationTargets(): Promise<void> {
-        return this.LoadEscalationTargets();
     }
 
     /**
