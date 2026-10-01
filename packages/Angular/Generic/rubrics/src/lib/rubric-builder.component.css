@@ -72,6 +72,26 @@
   padding: 0.5rem 0.75rem;
 }
 .anchor.filled { background: var(--mj-color-brand-50); border-color: var(--mj-color-brand-500); }
+button.anchor {
+  text-align: left;
+  width: 100%;
+  background: var(--mj-color-neutral-0);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+button.anchor.filled { background: var(--mj-color-brand-50); }
+
+.stack-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: var(--mj-space-3, 0.75rem);
+  width: 100%;
+}
+.stack-field input,
+.stack-field textarea,
+.stack-field select { width: 100%; box-sizing: border-box; }
 
 .callout {
   border: 1px solid var(--mj-color-warning-500);

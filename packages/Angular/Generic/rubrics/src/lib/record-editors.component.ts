@@ -1,41 +1,56 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core';
 
 /** One criterion: parent, weight, a named scale, anchors for that scale, gate, and not-applicable policy. */
 @Component({
     standalone: true,
     selector: 'mj-rubric-criterion-editor',
+    styleUrls: ['./rubric-builder.component.css'],
     template: `
-      <label>Parent
-        <select [value]="ParentId ?? ''" (change)="ParentIdChange.emit(valueOf($event) || null)">
-          <option value="">— None —</option>
-          @for (parent of Parents; track parent.id) { <option [value]="parent.id">{{ parent.name }}</option> }
-        </select>
-      </label>
-      <label>Weight <input type="number" [value]="Weight" (change)="WeightChange.emit(numberOf($event))"> <span>{{ Share }}% of its parent</span></label>
-      <label>Scale
-        <select [value]="ScaleId ?? ''" (change)="ScaleIdChange.emit(valueOf($event) || null)">
-          <option value="">— None —</option>
-          @for (scale of Scales; track scale.id) { <option [value]="scale.id">{{ scale.name }}</option> }
-        </select>
-      </label>
-      @for (level of Levels; track level.id) {
-        <label>{{ level.label }}
-          <input [value]="Anchor(level.id)" (change)="SetAnchor(level.id, valueOf($event))">
+      <section class="rubric-panel" aria-label="Criterion">
+        <div class="editor-grid">
+          <label>Parent
+            <select [value]="ParentId ?? ''" (change)="ParentIdChange.emit(valueOf($event) || null)">
+              <option value="">Top</option>
+              @for (parent of Parents; track parent.id) { <option [value]="parent.id">{{ parent.name }}</option> }
+            </select>
+          </label>
+          <label>Weight
+            <input type="number" [value]="Weight" (change)="WeightChange.emit(numberOf($event))">
+            <span>{{ Share }}%</span>
+          </label>
+          <label>Scale
+            <select [value]="ScaleId ?? ''" (change)="ScaleIdChange.emit(valueOf($event) || null)">
+              <option value="">None</option>
+              @for (scale of Scales; track scale.id) { <option [value]="scale.id" [selected]="scale.id.toLowerCase() === (ScaleId ?? '').toLowerCase()">{{ scale.name }}</option> }
+            </select>
+          </label>
+        </div>
+        <div class="rubric-split">
+          @for (level of Levels; track level.id) {
+            <label class="anchor" [class.filled]="Anchor(level.id)">{{ level.label }}
+              <input [value]="Anchor(level.id)" (change)="SetAnchor(level.id, valueOf($event))">
+            </label>
+          }
+        </div>
+        <div class="rubric-row gate-row">
+          <label>Gate <input type="checkbox" [checked]="IsGate" (change)="IsGateChange.emit(checked($event))"></label>
+          @if (IsGate) {
+            <label>Minimum <input type="number" min="0" max="1" step="0.1" [value]="GateMinimumScore ?? ''" (change)="GateMinimumScoreChange.emit(valueOf($event) === '' ? null : numberOf($event))"></label>
+          }
+        </div>
+        <label class="stack-field">Not applicable
+          <select [value]="NotApplicablePolicy ?? ''" (change)="NotApplicablePolicyChange.emit(valueOf($event) || null)">
+            <option value="">Version default</option>
+            <option value="ExcludeAndRedistribute">Exclude and redistribute</option>
+            <option value="CountAsZero">Count as zero</option>
+            <option value="FailEvaluation">Fail the evaluation</option>
+            <option value="NotAllowed">Not allowed</option>
+          </select>
         </label>
-      }
-      <label>Gate minimum <input type="number" [value]="GateMinimumScore ?? ''" (change)="GateMinimumScoreChange.emit(valueOf($event) === '' ? null : numberOf($event))"></label>
-      <label>Not applicable
-        <select [value]="NotApplicablePolicy ?? ''" (change)="NotApplicablePolicyChange.emit(valueOf($event) || null)">
-          <option value="">Version default</option>
-          <option value="ExcludeAndRedistribute">Exclude and redistribute</option>
-          <option value="CountAsZero">Count as zero</option>
-          <option value="FailEvaluation">Fail the evaluation</option>
-          <option value="NotAllowed">Not allowed</option>
-        </select>
-      </label>
+      </section>
     `,
 })
-export class RubricCriterionEditorComponent {
+export class RubricCriterionEditorComponent implements OnChanges {
     @Input() ParentId: string | null = null;
     @Input() Parents: { id: string; name: string }[] = [];
     @Input() Weight = 1;
@@ -43,19 +58,30 @@ export class RubricCriterionEditorComponent {
     @Input() ScaleId: string | null = null;
     @Input() Scales: { id: string; name: string; levels: { id: string; label: string }[] }[] = [];
     @Input() Anchors: { scaleLevelId: string | null; descriptor: string }[] = [];
+    @Input() IsGate = false;
     @Input() GateMinimumScore: number | null = null;
     @Input() NotApplicablePolicy: string | null = null;
     @Output() ParentIdChange = new EventEmitter<string | null>();
+    @Output() IsGateChange = new EventEmitter<boolean>();
     @Output() WeightChange = new EventEmitter<number>();
     @Output() ScaleIdChange = new EventEmitter<string | null>();
     @Output() AnchorsChange = new EventEmitter<{ scaleLevelId: string | null; descriptor: string }[]>();
     @Output() GateMinimumScoreChange = new EventEmitter<number | null>();
     @Output() NotApplicablePolicyChange = new EventEmitter<string | null>();
+    public ngOnChanges(): void {
+        queueMicrotask(() => {
+            const selects = Array.from(document.querySelectorAll('mj-rubric-criterion-editor select')) as HTMLSelectElement[];
+            const scaleSelect = selects.find(select => Array.from(select.options).some(option => this.Scales.some(scale => option.value.toLowerCase() === scale.id.toLowerCase())));
+            if (!scaleSelect || !this.ScaleId) return;
+            const match = Array.from(scaleSelect.options).find(option => option.value.toLowerCase() === this.ScaleId!.toLowerCase());
+            if (match) scaleSelect.value = match.value;
+        });
+    }
     protected get Levels(): { id: string; label: string }[] {
-        return this.Scales.find(scale => scale.id === this.ScaleId)?.levels ?? [];
+        return this.Scales.find(scale => scale.id.toLowerCase() === (this.ScaleId ?? '').toLowerCase())?.levels ?? [];
     }
     protected Anchor(levelId: string): string {
-        return this.Anchors.find(anchor => anchor.scaleLevelId === levelId)?.descriptor ?? '';
+        return this.Anchors.find(anchor => (anchor.scaleLevelId ?? '').toLowerCase() === levelId.toLowerCase())?.descriptor ?? '';
     }
     protected SetAnchor(levelId: string, descriptor: string): void {
         const next = this.Anchors.filter(anchor => anchor.scaleLevelId !== levelId);
@@ -64,6 +90,7 @@ export class RubricCriterionEditorComponent {
     }
     protected valueOf(event: Event): string { return (event.target as HTMLInputElement | HTMLSelectElement).value; }
     protected numberOf(event: Event): number { return Number((event.target as HTMLInputElement).value); }
+    protected checked(event: Event): boolean { return (event.target as HTMLInputElement).checked; }
 }
 
 /** One answer: level or value, not applicable, rationale, and evidence. */
@@ -71,13 +98,22 @@ export class RubricCriterionEditorComponent {
     standalone: true,
     selector: 'mj-rubric-score-editor',
     styleUrls: ['./rubric-builder.component.css'],
-    template: `<section class="rubric-facts">
-      @for (level of Levels; track level.id) {
-        <button type="button" [attr.aria-pressed]="ScaleLevelId === level.id" (click)="ScaleLevelIdChange.emit(level.id)">{{ ScaleLevelId === level.id ? 'Selected ' : '' }}{{ level.label }} {{ level.normalizedValue }} — {{ level.anchor }}</button>
-      }
-      <label><input type="checkbox" [checked]="IsNotApplicable" [disabled]="NotApplicablePolicy === 'NotAllowed'" (change)="IsNotApplicableChange.emit(checked($event))"> Not applicable</label>
-      <label>Rationale <textarea required [value]="Rationale ?? ''" (change)="RationaleChange.emit(valueOf($event))"></textarea></label>
-      <label>Evidence <textarea [value]="Evidence ?? ''" (change)="EvidenceChange.emit(valueOf($event))"></textarea></label>
+    template: `<section class="rubric-panel" aria-label="Score">
+      <div class="rubric-split">
+        @for (level of Levels; track level.id) {
+          <button type="button" class="anchor" [class.filled]="ScaleLevelId === level.id" [attr.aria-pressed]="ScaleLevelId === level.id" (click)="ScaleLevelIdChange.emit(level.id)">
+            <strong>{{ level.label }}</strong>
+            <span>{{ level.normalizedValue }}</span>
+            <span>{{ level.anchor }}</span>
+          </button>
+        }
+      </div>
+      <div class="rubric-row gate-row">
+        <label>Not applicable <input type="checkbox" [checked]="IsNotApplicable" [disabled]="NotApplicablePolicy === 'NotAllowed'" (change)="IsNotApplicableChange.emit(checked($event))"></label>
+        @if (NotApplicablePolicy === 'NotAllowed') { <span class="pill">Not allowed</span> }
+      </div>
+      <label class="stack-field">Rationale <textarea required [value]="Rationale ?? ''" (change)="RationaleChange.emit(valueOf($event))"></textarea></label>
+      <label class="stack-field">Evidence <textarea [value]="Evidence ?? ''" (change)="EvidenceChange.emit(valueOf($event))"></textarea></label>
     </section>`,
 })
 export class RubricScoreEditorComponent {
@@ -181,17 +217,20 @@ export class RubricBandEditorComponent {
 @Component({
     standalone: true,
     selector: 'mj-rubric-category-editor',
+    styleUrls: ['./rubric-builder.component.css'],
     template: `
-      <label>Name <input [value]="Name" (change)="NameChange.emit(text($event))"></label>
-      <label>Description <textarea [value]="Description" (change)="DescriptionChange.emit(text($event))"></textarea></label>
-      <label>Parent
-        <select [value]="ParentId ?? ''" (change)="ParentIdChange.emit(text($event) || null)">
-          <option value="">— None —</option>
-          @for (parent of Parents; track parent.id) {
-            <option [value]="parent.id">{{ parent.name }}</option>
-          }
-        </select>
-      </label>
+      <section class="rubric-stack" aria-label="Category">
+        <label class="stack-field">Name <input [value]="Name" (change)="NameChange.emit(text($event))"></label>
+        <label class="stack-field">Description <textarea [value]="Description" (change)="DescriptionChange.emit(text($event))"></textarea></label>
+        <label class="stack-field">Parent
+          <select [value]="ParentId ?? ''" (change)="ParentIdChange.emit(text($event) || null)">
+            <option value="">None</option>
+            @for (parent of Parents; track parent.id) {
+              <option [value]="parent.id">{{ parent.name }}</option>
+            }
+          </select>
+        </label>
+      </section>
     `,
 })
 export class RubricCategoryEditorComponent {

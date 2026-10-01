@@ -8,21 +8,26 @@
     @if (Loading) {
         <mj-loading text="Loading scale..."></mj-loading>
     } @else {
-        <section class="rubric-stack">
+        <section class="scale-sheet">
             <h2>{{ record.Name }}</h2>
             @if (Frozen) {
-                <p>This scale is used by a published rubric. Level values stay locked. Labels and descriptions stay editable.</p>
+                <p class="callout">This scale is used by a published rubric. Level values stay locked. Labels and descriptions stay editable.</p>
             }
-            <p>Name: {{ record.Name }}</p>
-            <p>Type: {{ record.ScaleType }}</p>
-            <p>Direction: {{ record.HigherIsBetter ? 'Higher is better' : 'Lower is better' }}</p>
-            <p>Range: {{ RangeMin }} to {{ RangeMax }}</p>
+            <div class="property-row">
+                <div><span>Name</span><strong>{{ record.Name }}</strong></div>
+                <div><span>Type</span><strong>{{ record.ScaleType }}</strong></div>
+                <div><span>Direction</span><strong>{{ record.HigherIsBetter ? 'Higher is better' : 'Lower is better' }}</strong></div>
+                <div><span>Range</span><strong>{{ RangeMin }} to {{ RangeMax }}</strong></div>
+            </div>
             <h3>Levels</h3>
-            <ul class="rubric-list">
+            <ul class="level-list">
                 @for (level of Levels; track level.ID) {
-                    <li>
+                    <li class="level-row">
                         <label>Value
-                            <input type="text" [value]="level.Value" [disabled]="Frozen" />
+                            <span class="value-lock">
+                                <input type="text" [value]="level.Value" [disabled]="Frozen" />
+                                @if (Frozen) { <span class="pill">Locked</span> }
+                            </span>
                         </label>
                         <label>Label
                             <input type="text" [value]="level.Label" (change)="OnLabel(level, $event)" />

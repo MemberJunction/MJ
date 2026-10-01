@@ -106,7 +106,7 @@
     }
   </ul>
   @if (!ReadOnly) {
-    <button type="button" (click)="OnAddBand()">Add band</button>
+    <button mjButton variant="outline" size="sm" type="button" (click)="OnAddBand()">Add band</button>
   }
   @for (band of Removed; track band.label) {
     <p class="callout">Removed in draft: Band {{ band.label }} ({{ band.minScore }}–{{ band.maxScore }})</p>

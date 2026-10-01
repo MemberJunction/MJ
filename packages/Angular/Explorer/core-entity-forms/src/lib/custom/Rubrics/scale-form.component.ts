@@ -11,6 +11,7 @@ import { MJRubricScaleFormComponent } from '../../generated/Entities/MJRubricSca
     standalone: false,
     selector: 'mj-rubric-scale-form',
     templateUrl: './scale-form.component.html',
+    styleUrls: ['./scale-form.component.css'],
 })
 export class MJRubricScaleFormComponentExtended extends MJRubricScaleFormComponent {
     public override record!: MJRubricScaleEntity;

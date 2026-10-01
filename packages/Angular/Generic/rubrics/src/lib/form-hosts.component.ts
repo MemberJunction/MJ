@@ -130,9 +130,9 @@ export class RubricCategoryHostComponent implements OnChanges {
     template: `
       <mj-rubric-criterion-editor
         [ParentId]="ParentId" [Parents]="Parents" [Weight]="Weight" [Share]="Share" [ScaleId]="ScaleId" [Scales]="Scales" [Anchors]="Anchors"
-        [GateMinimumScore]="GateMinimumScore" [NotApplicablePolicy]="NotApplicablePolicy"
+        [IsGate]="IsGate" [GateMinimumScore]="GateMinimumScore" [NotApplicablePolicy]="NotApplicablePolicy"
         (ParentIdChange)="ParentIdChange.emit($event)" (WeightChange)="WeightChange.emit($event)" (ScaleIdChange)="ScaleIdChange.emit($event)"
-        (AnchorsChange)="SaveAnchors($event)" (GateMinimumScoreChange)="GateMinimumScoreChange.emit($event)"
+        (AnchorsChange)="SaveAnchors($event)" (IsGateChange)="IsGateChange.emit($event)" (GateMinimumScoreChange)="GateMinimumScoreChange.emit($event)"
         (NotApplicablePolicyChange)="NotApplicablePolicyChange.emit($event)">
       </mj-rubric-criterion-editor>
     `,
@@ -143,10 +143,12 @@ export class RubricCriterionHostComponent implements OnChanges {
     @Input() ParentId: string | null = null;
     @Input() Weight = 1;
     @Input() ScaleId: string | null = null;
+    @Input() IsGate = false;
     @Input() GateMinimumScore: number | null = null;
     @Input() NotApplicablePolicy: string | null = null;
     @Input() Provider: IMetadataProvider | null = null;
     @Output() ParentIdChange = new EventEmitter<string | null>();
+    @Output() IsGateChange = new EventEmitter<boolean>();
     @Output() WeightChange = new EventEmitter<number>();
     @Output() ScaleIdChange = new EventEmitter<string | null>();
     @Output() AnchorsChange = new EventEmitter<{ scaleLevelId: string | null; descriptor: string }[]>();
