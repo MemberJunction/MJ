@@ -1736,7 +1736,7 @@ invalidation. Until the push is fixed, the safe behaviour is a full clear.
     mid-command: 1 check each, no reloads.
   - The metadata restore took 4.2 s, with one reload each.
 - **Follow-up.** Investigate the non-atomic push in a separate session:
-  `plans/metadata-sync-push-atomicity-jumpstart.md`. Once the push is atomic, per-entity
+  `#4566`. Once the push is atomic, per-entity
   invalidation can be reconsidered.
 
 ## 15. The user cache: process-local state the invalidation architecture could not reach (2026-09-17)
@@ -1963,7 +1963,7 @@ blanket TTL breaks two ordering invariants the metadata code depends on. All are
 Right call: scoped invalidation cannot be trusted while a push can commit part of its work, and the record
 proves it can. Two improvements need no atomicity: skip the clear when the command wrote nothing (a boolean
 from the collector that was removed; `mj migrate` already has `MigrationsApplied`), and make the failure
-policy uniform across push, codegen and migrate (#13). Once `plans/metadata-sync-push-atomicity-jumpstart.md`
+policy uniform across push, codegen and migrate (#13). Once `#4566`
 lands, revert to scoped invalidation; the removed `group_invalidated` design was sound and should be the
 target there.
 
@@ -3030,9 +3030,10 @@ figures are the honest headline either way — **1 handler call and 1 rebuild in
 
 Eight tests across two real MJAPI processes — the owner's (API-A, port 4001, MJExplorer attached) and
 mine (API-B, port 14100) — sharing one Redis keyspace (`mjmanual`, port 16390) and one database
-(`mj_test_2`). The plan is `plans/engine-cache-manual-test-plan.md`; the live state and cleanup ledger
-is `plans/engine-cache-manual-test-session-state.md`. The point of the exercise was the seams no
-automated tier can reach: a change crossing between servers, and a change reaching a browser.
+(`mj_test_2`). The point of the exercise was the seams no automated tier can reach: a change crossing between
+servers, and a change reaching a browser. The eight tests were run against two MJAPI processes on one
+Redis keyspace and one database, with the browser attached to one of them; the results are below and
+the database was restored afterwards.
 
 | Test | Result |
 |---|---|
@@ -3243,7 +3244,7 @@ operator declares drift on a metadata entity **and the servers see that declarat
 §28's finding, needs the snapshot invalidated rather than merely a restart. Agreed, and it wants
 documentation rather than code.
 
-`guides/CACHING_AND_PUBSUB_GUIDE.md` now carries an **Enabling sweeping (operator runbook)** section:
+`guides/CACHING_AND_PUBSUB_GUIDE.md` carries an **Enabling sweeping (operator runbook)** section:
 the four periodic checks in one table with their settings and the condition under which each reads the
 database; the four-step procedure (decide which entities you write outside MJ → declare it, preferably
 through `metadata/` so the push versions it *and* invalidates the snapshot → invalidate the snapshot →
