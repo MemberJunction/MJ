@@ -874,7 +874,7 @@
   {
     "fields": {
       "Name": "Get Form Contributions For Entity",
-      "Description": "Read-only. Every MJ: Entity Form Contributions row applicable to the caller (User / Role / Global) for an entity, in every status, with component name and version. Apply flows use it to decide Create vs Modify; agents use it to see what already exists.",
+      "Description": "Read-only. Every MJ: Entity Form Contributions row applicable to the caller (User / Role / Global) for an entity, in every status, with component name and version. On an identity or permission entity (MJ: Users, Roles, Authorizations, API Keys and the like) only the caller's own rows apply, as on the form. Apply flows use it to decide Create vs Modify; agents use it to see what already exists.",
       "DriverClass": "__GetFormContributionsForEntity",
       "Type": "Custom",
       "Status": "Active",
@@ -904,7 +904,7 @@
             "Type": "Output",
             "ValueType": "Other",
             "IsArray": false,
-            "Description": "{ EntityName, Contributions: [{ ContributionID, ComponentID, ComponentName, ComponentVersion, Name, Scope, Status, Precedence, Slot, ContributionKey, RelatedEntity, RelatedJoinField, ReplacesSectionKey, Inclusion, Presentation, Title }] }",
+            "Description": "{ EntityName, Contributions: [{ ContributionID, ComponentID, ComponentName, ComponentVersion, Name, Scope, Status, Precedence, Slot, ContributionKey, RelatedEntity, RelatedJoinField, ReplacesSectionKey, ReplacesSectionKeys[], ReplacesFieldNames[], InSectionKey, SectionPosition, Inclusion, Presentation, Title }] }",
             "IsRequired": false
           },
           "primaryKey": {
@@ -992,7 +992,7 @@
   {
     "fields": {
       "Name": "Get Form Composition For Entity",
-      "Description": "Read-only server-side fallback for agents with no browser snapshot. Returns the metadata-derivable composition of an entity's form: field sections by CodeGen rule, DisplayInForm related grids with L1 inclusion, Active metadata contributions, and the L3 rule count. Compiled BaseFormPanel contributions are browser-only and are NOT included; prefer the client snapshot (AppContext.AdditionalContext.Form) when present.",
+      "Description": "Read-only server-side composition of the entity form the caller sees, for agents with no browser context. Returns whether a full custom form renders for them, field sections by CodeGen rule, DisplayInForm related grids with L1 inclusion, the caller's Active metadata contributions as their form draws them (one per key by Precedence then the narrower scope, panels they hid marked Hidden, only their own on an identity or permission entity), and the L3 rule count. Compiled BaseFormPanel contributions are browser-only and are NOT included. The client form context (AppContext.AdditionalContext.Form) is authoritative for the sections the open form draws when present. Returns QUERY_FAILED when any lookup fails.",
       "DriverClass": "__GetFormCompositionForEntity",
       "Type": "Custom",
       "Status": "Active",
@@ -1026,7 +1026,7 @@
             "Type": "Output",
             "ValueType": "Other",
             "IsArray": false,
-            "Description": "{ Entity, Layout, Sections[], Related[], Contributions[], SlotsPresent[], ChromeRuleCount, Note } — the SkipFormContext shape.",
+            "Description": "{ Entity, Layout, FullCustomForm, Sections[], Related[], Contributions[], SlotsPresent[], ChromeRuleCount, Note }. FullCustomForm is true when a full custom form renders for the caller; Sections, Related, Contributions and SlotsPresent are then empty.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -1079,6 +1079,16 @@
           "sync": {
             "lastModified": "2026-09-18T20:55:42.158Z",
             "checksum": "3b28dc4cfecc3ae33bc45db2cfd038edf449524e2e0190c74767362c7a5a1631"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "QUERY_FAILED",
+            "Description": "A lookup (chrome rules, contributions, overrides or the user's settings) failed, so no composition is returned."
+          },
+          "primaryKey": {
+            "ID": "6DD763DD-244A-4F35-9D9C-F8D56DD7D208"
           }
         },
         {

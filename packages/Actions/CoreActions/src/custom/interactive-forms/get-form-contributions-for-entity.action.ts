@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { BaseAction } from "@memberjunction/actions";
 import { Metadata, LogError, RunView } from "@memberjunction/core";
 import { EscapeSQLString, RegisterClass } from "@memberjunction/global";
-import { ParseClaimedFieldNames, type MJEntityFormContributionEntity } from "@memberjunction/core-entities";
+import { FormScopeAllowedOnEntity, ParseClaimedFieldNames, type MJEntityFormContributionEntity } from "@memberjunction/core-entities";
 import { AddOutput, ContributionScopeFilter, Failure, GetStringParam } from "./_shared";
 
 /** One contribution row, flattened for an agent or an apply flow to reason about. */
@@ -20,7 +20,13 @@ export interface FormContributionSummary {
     RelatedEntity: string | null;
     RelatedJoinField: string | null;
     ReplacesSectionKey: string | null;
+    /** The blocks it stands in for, when it replaces several. */
+    ReplacesSectionKeys: string[];
     ReplacesFieldNames: string[];
+    /** The section it draws inside, replacing nothing. */
+    InSectionKey: string | null;
+    /** Where inside its section it draws. */
+    SectionPosition: 'start' | 'end' | null;
     Inclusion: string | null;
     Presentation: string;
     Title: string | null;
@@ -29,7 +35,8 @@ export interface FormContributionSummary {
 /**
  * Read-only: every `MJ: Entity Form Contributions` row that applies to (entity, caller),
  * in every status, so an apply flow or agent can decide Create vs Modify and see what
- * already exists. Companion of `Get Active Form For Entity`.
+ * already exists. Companion of `Get Active Form For Entity`. On an identity or permission
+ * entity only the caller's own rows apply ({@link FormScopeAllowedOnEntity}), as on the form.
  *
  * Sorted Active first, then Pending, then Inactive; within a status, highest `Precedence`
  * then highest `SortKey` — the order the renderer resolves them in.
@@ -61,7 +68,7 @@ export class GetFormContributionsForEntityAction extends BaseAction {
 
             const statusRank = (s: string): number => (s === 'Active' ? 0 : s === 'Pending' ? 1 : 2);
             const summaries: FormContributionSummary[] = (rows.Results ?? [])
-                .slice()
+                .filter(r => FormScopeAllowedOnEntity(entity.Name, r.Scope))
                 .sort((a, b) => statusRank(a.Status) - statusRank(b.Status) || (b.Precedence ?? 0) - (a.Precedence ?? 0))
                 .map(r => {
                     const component = components.get(r.ComponentID.toLowerCase());
@@ -72,7 +79,9 @@ export class GetFormContributionsForEntityAction extends BaseAction {
                         Name: r.Name, Scope: r.Scope, Status: r.Status, Precedence: r.Precedence ?? 0, Slot: r.Slot,
                         ContributionKey: r.ContributionKey, RelatedEntity: r.RelatedEntity,
                         RelatedJoinField: r.RelatedJoinField, ReplacesSectionKey: r.ReplacesSectionKey,
+                        ReplacesSectionKeys: ParseClaimedFieldNames(r.ReplacesSectionKeys),
                         ReplacesFieldNames: ParseClaimedFieldNames(r.ReplacesFieldNames),
+                        InSectionKey: r.InSectionKey ?? null, SectionPosition: r.SectionPosition ?? null,
                         Inclusion: r.Inclusion, Presentation: r.Presentation, Title: r.Title,
                     };
                 });

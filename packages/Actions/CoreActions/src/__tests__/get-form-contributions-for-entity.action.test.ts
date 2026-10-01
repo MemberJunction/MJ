@@ -16,8 +16,12 @@ const { hoisted } = vi.hoisted(() => ({
 }));
 
 const provider = {
-    EntityByName: (name: string) => (name.trim().toLowerCase() === 'mj_bizapps_common: people'
-        ? { ID: 'ENT-PEOPLE', Name: 'MJ_BizApps_Common: People' } : undefined),
+    EntityByName: (name: string) => {
+        const n = name.trim().toLowerCase();
+        if (n === 'mj_bizapps_common: people') return { ID: 'ENT-PEOPLE', Name: 'MJ_BizApps_Common: People' };
+        if (n === 'mj: users') return { ID: 'ENT-USERS', Name: 'MJ: Users' };
+        return undefined;
+    },
     GetEntityObject: async <T>(): Promise<T> => ({}) as T,
 };
 
@@ -131,5 +135,38 @@ describe('GetFormContributionsForEntityAction', () => {
     it('reports ENTITY_NOT_FOUND and MISSING_PARAMETER', async () => {
         expect((await run(params({ EntityName: 'Nope' }))).ResultCode).toBe('ENTITY_NOT_FOUND');
         expect((await run(params({ EntityName: undefined }))).ResultCode).toBe('MISSING_PARAMETER');
+    });
+});
+
+/**
+ * The claim columns an agent needs to see what a row stands in for and where it draws, and the
+ * identity-entity rule the form itself applies.
+ */
+describe('GetFormContributionsForEntityAction — what a row claims, and identity forms', () => {
+    it('reports the sections a row replaces and where inside a section it draws', async () => {
+        hoisted.contributions = [
+            contribution({ ID: 'many', ReplacesSectionKeys: '["details","personalIdentity"]' }),
+            contribution({ ID: 'placed', InSectionKey: 'details', SectionPosition: 'end' }),
+        ];
+        const payload = JSON.parse((await run(params())).Message ?? '{}');
+        const byID = new Map(payload.Contributions.map((c: { ContributionID: string }) => [c.ContributionID, c]));
+        expect(byID.get('many')).toMatchObject({ ReplacesSectionKeys: ['details', 'personalIdentity'], InSectionKey: null, SectionPosition: null });
+        expect(byID.get('placed')).toMatchObject({ ReplacesSectionKeys: [], InSectionKey: 'details', SectionPosition: 'end' });
+    });
+
+    it('lists only the caller\'s own rows on an identity entity', async () => {
+        hoisted.contributions = [
+            contribution({ ID: 'global', Scope: 'Global' }),
+            contribution({ ID: 'role', Scope: 'Role' }),
+            contribution({ ID: 'mine', Scope: 'User' }),
+        ];
+        const payload = JSON.parse((await run(params({ EntityName: 'MJ: Users' }))).Message ?? '{}');
+        expect(payload.Contributions.map((c: { ContributionID: string }) => c.ContributionID)).toEqual(['mine']);
+    });
+
+    it('lists every scope on an ordinary entity', async () => {
+        hoisted.contributions = [contribution({ ID: 'global', Scope: 'Global' }), contribution({ ID: 'mine', Scope: 'User' })];
+        const payload = JSON.parse((await run(params())).Message ?? '{}');
+        expect(payload.Contributions).toHaveLength(2);
     });
 });

@@ -1,8 +1,15 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
-import { Metadata, LogError, RunView, ReadRelationshipInclusion, type EntityInfo, type EntityRelationshipInfo } from "@memberjunction/core";
+import { Metadata, LogError, RunView, ReadRelationshipInclusion, type EntityInfo, type EntityRelationshipInfo, type RunViewResult } from "@memberjunction/core";
 import { EscapeSQLString, RegisterClass, UUIDsEqual } from "@memberjunction/global";
-import { ParseClaimedFieldNames } from "@memberjunction/core-entities";
+import {
+    ContributionScopeRank,
+    FormPanelHideSettingKey,
+    FormScopeAllowedOnEntity,
+    ParseClaimedFieldNames,
+    ParseHiddenFormPanelKeys,
+    type FormScope,
+} from "@memberjunction/core-entities";
 import { AddOutput, Failure, GetStringParam, ContributionScopeFilter } from "./_shared";
 import {
     FORM_VARIANT_EXPLICIT_DEFAULT,
@@ -10,6 +17,7 @@ import {
     FormVariantSettingKey,
     GENERATED_FORM_CONTRIBUTION_SLOTS,
     RelatedGridSectionKey,
+    ResolveContributionWriteKey,
     StripJoinFieldBrackets,
 } from "@memberjunction/interactive-component-types/forms";
 
@@ -17,6 +25,13 @@ import {
 interface OverrideRow {
     ID: string;
     Status: string;
+    Scope: FormScope;
+}
+
+/** One `MJ: User Settings` row this action reads. */
+interface SettingRow {
+    Setting: string;
+    Value: string | null;
 }
 
 /** One field section as this action derives it, with the inputs it would draw. */
@@ -34,8 +49,8 @@ const SERVER_DERIVATION_NOTE =
     'browser and are not listed. SlotsPresent is what CodeGen emits plus the container terminator; ' +
     'a hand-written custom form can differ. Section keys and field names come from current field ' +
     'metadata, which a ' +
-    'form generated earlier may not match. The client snapshot (AppContext.AdditionalContext.Form) ' +
-    'is authoritative when present.';
+    'form generated earlier may not match. The client form context (AppContext.AdditionalContext.Form), ' +
+    'when present, lists the sections the open form actually draws and is authoritative for those.';
 
 const FULL_CUSTOM_FORM_NOTE =
     'A full custom entity form is the one THIS USER sees for this entity, and it renders the whole ' +
@@ -48,10 +63,16 @@ const FULL_CUSTOM_FORM_NOTE =
 /**
  * Server-side composition of an entity's form, for agents with no browser snapshot.
  *
- * The client snapshot is the better source — it reports what a form actually rendered.
- * This reproduces the part derivable from metadata alone: field sections by CodeGen rule,
- * `DisplayInForm` related grids with their L1 inclusion, the caller's Active metadata
- * contributions, and the L3 rule count.
+ * The client context is the better source for sections — it reports what a form actually
+ * rendered. This reproduces the part derivable from metadata alone: field sections by CodeGen
+ * rule, `DisplayInForm` related grids with their L1 inclusion, the caller's Active metadata
+ * contributions as the caller's form draws them, and the L3 rule count.
+ *
+ * Contributions are reported for the form this user sees: one row per key (highest
+ * `Precedence`, then the narrower scope, the browser's collapse rule), the panels the user hid
+ * marked `Hidden`, and on an identity or permission entity only the user's own rows
+ * ({@link FormScopeAllowedOnEntity}). Any failed query returns `QUERY_FAILED` rather than an
+ * answer built from a partial read.
  *
  * Compiled `BaseFormPanel` registrations live in the browser bundle, so they are absent and
  * the `Note` says so.
@@ -79,7 +100,9 @@ export class GetFormCompositionForEntityAction extends BaseAction {
 
             const rv = RunView.FromMetadataProvider(provider);
             const scope = ContributionScopeFilter(entity.ID, user);
-            const [rules, rows, overrides, preference] = await Promise.all([
+            const variantKey = FormVariantSettingKey(entity.Name);
+            const hideKey = FormPanelHideSettingKey(entity.Name);
+            const [rules, rows, overrides, settings] = await Promise.all([
                 rv.RunView<{ ID: string }>({
                     EntityName: "MJ: Form Chrome Rules",
                     ExtraFilter: `EntityID='${EscapeSQLString(entity.ID)}'`,
@@ -89,31 +112,40 @@ export class GetFormCompositionForEntityAction extends BaseAction {
                 rv.RunView<ContributionRow>({
                     EntityName: "MJ: Entity Form Contributions",
                     ExtraFilter: `${scope} AND Status='Active'`,
-                    Fields: ['ID', 'ContributionKey', 'Slot', 'Title', 'Name', 'Presentation', 'Precedence', 'Inclusion', 'SortKey',
-                        'InSectionKey', 'SectionPosition', 'ReplacesFieldNames', 'ReplacesSectionKey', 'ReplacesSectionKeys', 'RelatedEntityID'],
+                    Fields: ['ID', 'ContributionKey', 'Scope', 'Slot', 'Title', 'Name', 'Presentation', 'Precedence', 'Inclusion', 'SortKey',
+                        'InSectionKey', 'SectionPosition', 'ReplacesFieldNames', 'ReplacesSectionKey', 'ReplacesSectionKeys',
+                        'RelatedEntityID', 'RelatedEntity', 'RelatedJoinField'],
+                    OrderBy: 'Precedence DESC, SortKey DESC',
                     ResultType: 'simple',
                 }, user),
                 rv.RunView<OverrideRow>({
                     EntityName: "MJ: Entity Form Overrides",
                     ExtraFilter: `${scope} AND Status<>'Pending'`,
-                    Fields: ['ID', 'Status'],
+                    Fields: ['ID', 'Status', 'Scope'],
                     ResultType: 'simple',
                 }, user),
-                rv.RunView<{ Value: string | null }>({
+                rv.RunView<SettingRow>({
                     EntityName: "MJ: User Settings",
-                    ExtraFilter: `UserID='${EscapeSQLString(user.ID)}' AND Setting='${EscapeSQLString(FormVariantSettingKey(entity.Name))}'`,
-                    Fields: ['Value'],
+                    ExtraFilter: `UserID='${EscapeSQLString(user.ID)}' AND Setting IN ('${EscapeSQLString(variantKey)}','${EscapeSQLString(hideKey)}')`,
+                    Fields: ['Setting', 'Value'],
                     ResultType: 'simple',
                 }, user),
             ]);
+            const failed = firstFailure([
+                ["MJ: Form Chrome Rules", rules], ["MJ: Entity Form Contributions", rows],
+                ["MJ: Entity Form Overrides", overrides], ["MJ: User Settings", settings],
+            ]);
+            if (failed) return Failure("QUERY_FAILED", failed);
 
             // Which form the CALLER sees, not merely whether a custom one exists. They can
             // pick any form on offer, the generated one included, and that pick is a
             // per-user setting — reading only the override rows answered for a form the
             // user may have switched away from, and refused a panel on the form they were
             // looking at.
-            const fullCustomForm = this.rendersFullCustomForm(
-                overrides.Results ?? [], (preference.Results ?? [])[0]?.Value ?? null);
+            const offered = (overrides.Results ?? []).filter(o => FormScopeAllowedOnEntity(entity.Name, o.Scope));
+            const fullCustomForm = this.rendersFullCustomForm(offered, settingValue(settings.Results ?? [], variantKey));
+            const hidden = new Set(ParseHiddenFormPanelKeys(settingValue(settings.Results ?? [], hideKey)));
+            const applicable = (rows.Results ?? []).filter(r => FormScopeAllowedOnEntity(entity.Name, r.Scope));
 
             const payload = {
                 Entity: entity.Name,
@@ -121,21 +153,7 @@ export class GetFormCompositionForEntityAction extends BaseAction {
                 FullCustomForm: fullCustomForm,
                 Sections: fullCustomForm ? [] : this.deriveSections(entity),
                 Related: fullCustomForm ? [] : this.deriveRelated(entity),
-                Contributions: fullCustomForm ? [] : (rows.Results ?? []).map(r => ({
-                    Key: r.ContributionKey ?? `contribution:${r.ID}`,
-                    Slot: r.Slot,
-                    Source: 'metadata',
-                    Title: r.Title ?? r.Name ?? r.ID,
-                    Presentation: r.Presentation,
-                    Hidden: r.Inclusion === 'None',
-                    Precedence: r.Precedence ?? 0,
-                    SortKey: r.SortKey ?? 0,
-                    InSectionKey: r.InSectionKey ?? undefined,
-                    SectionPosition: r.SectionPosition ?? undefined,
-                    FieldNames: ParseClaimedFieldNames(r.ReplacesFieldNames),
-                    SectionKeys: replacedSectionKeyList(r),
-                    ReplacesPlace: !!(r.ReplacesSectionKey || r.ReplacesSectionKeys || r.RelatedEntityID),
-                })),
+                Contributions: fullCustomForm ? [] : contributionsUserSees(applicable, hidden),
                 SlotsPresent: fullCustomForm ? [] : [...GENERATED_FORM_CONTRIBUTION_SLOTS],
                 ChromeRuleCount: (rules.Results ?? []).length,
                 Note: fullCustomForm ? FULL_CUSTOM_FORM_NOTE : SERVER_DERIVATION_NOTE,
@@ -154,16 +172,17 @@ export class GetFormCompositionForEntityAction extends BaseAction {
      * Whether a full custom form renders for this caller.
      *
      * Mirrors `FormResolverService.pickActive` in the browser, which is what actually
-     * decides. A stored pick wins whatever its status — a form set aside by a later apply
-     * is still a form the user may choose — and the explicit-default sentinel means they
-     * asked for the generated form, so no custom form renders at all. With no pick, or a
-     * pick naming a form that has since gone, the auto-pick rule applies: the first Active
-     * override, if there is one.
+     * decides. A stored pick wins when the user may pick it: an Active form, or their own
+     * form set aside by a later apply (`IsSelectableOverride`). The explicit-default sentinel
+     * means they asked for the generated form, so no custom form renders at all. With no
+     * pick, or a pick naming a form that has gone or cannot be picked, the auto-pick rule
+     * applies: the first Active override, if there is one.
      */
     private rendersFullCustomForm(overrides: readonly OverrideRow[], preference: string | null): boolean {
         const selected = (preference ?? '').trim();
         if (selected === FORM_VARIANT_EXPLICIT_DEFAULT) return false;
-        if (selected && overrides.some(o => o.ID?.toLowerCase() === selected.toLowerCase())) return true;
+        const selectable = (o: OverrideRow) => o.Status === 'Active' || (o.Status === 'Inactive' && o.Scope === 'User');
+        if (selected && overrides.some(o => selectable(o) && UUIDsEqual(o.ID, selected))) return true;
         return overrides.some(o => o.Status === 'Active');
     }
 
@@ -245,6 +264,85 @@ export class GetFormCompositionForEntityAction extends BaseAction {
     }
 }
 
+/** The message for the first failed query, or null when every query succeeded. */
+function firstFailure(results: ReadonlyArray<[string, RunViewResult]>): string | null {
+    const failed = results.find(([, result]) => !result.Success);
+    if (!failed) return null;
+    const [entityName, result] = failed;
+    return `Could not read the form's composition: the ${entityName} lookup failed (${result.ErrorMessage || 'unknown error'}).`;
+}
+
+/** The stored value of one setting. Keys are matched case-insensitively, as the database compares them. */
+function settingValue(rows: readonly SettingRow[], key: string): string | null {
+    return rows.find(r => (r.Setting ?? '').toLowerCase() === key.toLowerCase())?.Value ?? null;
+}
+
+/** The key a row is collapsed and hidden by, as the browser derives it; null for a row with none. */
+function contributionRowKey(row: ContributionRow): string | null {
+    return ResolveContributionWriteKey(
+        { contributionKey: row.ContributionKey ?? undefined, relatedJoinField: row.RelatedJoinField ?? undefined },
+        row.RelatedEntity ?? null,
+    );
+}
+
+/** Whether `row` beats `incumbent` for a key: higher Precedence, then the narrower scope. */
+function outranks(row: ContributionRow, incumbent: ContributionRow): boolean {
+    const precedence = (row.Precedence ?? 0) - (incumbent.Precedence ?? 0);
+    return precedence > 0 || (precedence === 0 && ContributionScopeRank(row.Scope) > ContributionScopeRank(incumbent.Scope));
+}
+
+/** One row per key, the one {@link outranks} picks; rows without a key never collapse. */
+function collapseByKey(rows: readonly ContributionRow[]): ContributionRow[] {
+    const winners = new Map<string, ContributionRow>();
+    let unique = 0;
+    for (const row of rows) {
+        const key = contributionRowKey(row) ?? `__unique:${unique++}`;
+        const incumbent = winners.get(key);
+        if (!incumbent || outranks(row, incumbent)) winners.set(key, row);
+    }
+    return [...winners.values()];
+}
+
+/**
+ * The contributions on the form this user sees.
+ *
+ * A panel the user hid is out of the collapse, so a row it outranked can draw in its place, as
+ * in the browser. The user's own rows are never hidden. A hidden panel whose key nothing else
+ * draws is still listed, marked `Hidden`, because it holds that key.
+ */
+function contributionsUserSees(rows: readonly ContributionRow[], hiddenKeys: ReadonlySet<string>) {
+    const isHidden = (row: ContributionRow): boolean => {
+        if (row.Scope === 'User') return false;
+        const key = contributionRowKey(row);
+        return !!key && hiddenKeys.has(key);
+    };
+    const drawn = collapseByKey(rows.filter(r => !isHidden(r)));
+    const drawnKeys = new Set(drawn.map(contributionRowKey).filter((k): k is string => !!k));
+    const hiddenOnly = collapseByKey(rows.filter(isHidden)).filter(r => !drawnKeys.has(contributionRowKey(r) ?? ''));
+    return [
+        ...drawn.map(r => contributionSummary(r, r.Inclusion === 'None')),
+        ...hiddenOnly.map(r => contributionSummary(r, true)),
+    ];
+}
+
+function contributionSummary(r: ContributionRow, hidden: boolean) {
+    return {
+        Key: contributionRowKey(r) ?? `contribution:${r.ID}`,
+        Slot: r.Slot,
+        Source: 'metadata',
+        Title: r.Title ?? r.Name ?? r.ID,
+        Presentation: r.Presentation,
+        Hidden: hidden,
+        Precedence: r.Precedence ?? 0,
+        SortKey: r.SortKey ?? 0,
+        InSectionKey: r.InSectionKey ?? undefined,
+        SectionPosition: r.SectionPosition ?? undefined,
+        FieldNames: ParseClaimedFieldNames(r.ReplacesFieldNames),
+        SectionKeys: replacedSectionKeyList(r),
+        ReplacesPlace: !!(r.ReplacesSectionKey || r.ReplacesSectionKeys || r.RelatedEntityID),
+    };
+}
+
 /** The blocks a row stands in for: the list when set, else the single key. */
 function replacedSectionKeyList(row: Pick<ContributionRow, 'ReplacesSectionKey' | 'ReplacesSectionKeys'>): string[] {
     const listed = ParseClaimedFieldNames(row.ReplacesSectionKeys);
@@ -257,6 +355,7 @@ function replacedSectionKeyList(row: Pick<ContributionRow, 'ReplacesSectionKey' 
 interface ContributionRow {
     ID: string;
     ContributionKey: string | null;
+    Scope: FormScope;
     Slot: string;
     Title: string | null;
     Name?: string;
@@ -270,6 +369,8 @@ interface ContributionRow {
     ReplacesSectionKey: string | null;
     ReplacesSectionKeys: string | null;
     RelatedEntityID: string | null;
+    RelatedEntity?: string | null;
+    RelatedJoinField?: string | null;
 }
 
 export function LoadGetFormCompositionForEntityAction(): void {

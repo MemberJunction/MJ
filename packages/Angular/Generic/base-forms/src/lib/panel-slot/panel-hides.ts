@@ -1,5 +1,4 @@
-import { UserInfoEngine } from '@memberjunction/core-entities';
-import { SafeJSONParse } from '@memberjunction/global';
+import { FormPanelHideSettingKey, ParseHiddenFormPanelKeys, UserInfoEngine } from '@memberjunction/core-entities';
 import { ResolveContributionKey, type FormContributionRegistration } from './form-contribution';
 
 /**
@@ -7,20 +6,12 @@ import { ResolveContributionKey, type FormContributionRegistration } from './for
  *
  * Anything a user did not add themselves can be hidden — a panel published to their role or to
  * everyone, or one shipped in code — and brought back later. The list is a user setting per
- * entity, the same way the user's choice of full custom form is stored, so it follows them across
- * devices.
+ * entity ({@link FormPanelHideSettingKey}), the same way the user's choice of full custom form is
+ * stored, so it follows them across devices, and the server reads the same key.
  */
-
-/** Prefix of the per-entity setting that lists hidden panels. */
-const HIDE_SETTING_PREFIX = 'mj.formPanels.hidden.';
 
 /** Prefix that marks a hide key taken from a compiled panel's class registration. */
 const CLASS_KEY_PREFIX = 'class:';
-
-/** The setting that lists one entity's hidden panels. Lowercased, so case variants share it. */
-export function PanelHideSettingKey(entityName: string): string {
-    return HIDE_SETTING_PREFIX + (entityName ?? '').trim().toLowerCase();
-}
 
 /**
  * The key a panel is hidden by, or null when it has no stable identity.
@@ -36,24 +27,10 @@ export function PanelHideKey(registration: FormContributionRegistration): string
     return classKey ? CLASS_KEY_PREFIX + classKey : null;
 }
 
-/** The hidden keys in a stored setting. A missing or malformed value hides nothing. */
-export function ParseHiddenPanelKeys(raw: string | null | undefined): string[] {
-    if (!raw) return [];
-    const parsed = SafeJSONParse<unknown>(raw, false);
-    if (!Array.isArray(parsed)) return [];
-    const keys: string[] = [];
-    for (const item of parsed) {
-        if (typeof item !== 'string') continue;
-        const key = item.trim();
-        if (key && !keys.includes(key)) keys.push(key);
-    }
-    return keys;
-}
-
 /** The raw stored value for one entity, which the collector folds into its memo key. */
 export function HiddenPanelsSetting(entityName: string): string {
     try {
-        return UserInfoEngine.Instance.GetSetting(PanelHideSettingKey(entityName)) ?? '';
+        return UserInfoEngine.Instance.GetSetting(FormPanelHideSettingKey(entityName)) ?? '';
     } catch {
         // No user settings in this context — nothing is hidden.
         return '';
@@ -62,7 +39,7 @@ export function HiddenPanelsSetting(entityName: string): string {
 
 /** The panels this user has hidden on one entity's form. */
 export function HiddenPanelKeys(entityName: string): string[] {
-    return ParseHiddenPanelKeys(HiddenPanelsSetting(entityName));
+    return ParseHiddenFormPanelKeys(HiddenPanelsSetting(entityName));
 }
 
 /** Hide a panel for this user, or bring it back. */
@@ -71,7 +48,7 @@ export function SetPanelHidden(entityName: string, key: string, hidden: boolean)
     const next = hidden
         ? (current.includes(key) ? current : [...current, key])
         : current.filter((k) => k !== key);
-    UserInfoEngine.Instance.SetSettingDebounced(PanelHideSettingKey(entityName), JSON.stringify(next));
+    UserInfoEngine.Instance.SetSettingDebounced(FormPanelHideSettingKey(entityName), JSON.stringify(next));
 }
 
 /**

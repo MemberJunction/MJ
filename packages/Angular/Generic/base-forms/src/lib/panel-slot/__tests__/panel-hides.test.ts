@@ -2,8 +2,6 @@ import { describe, it, expect } from 'vitest';
 import type { ClassRegistration } from '@memberjunction/global';
 import {
     PanelHideKey,
-    PanelHideSettingKey,
-    ParseHiddenPanelKeys,
     WithoutHiddenPanels,
 } from '../panel-hides';
 import type { FormContributionRegistration } from '../form-contribution';
@@ -38,28 +36,6 @@ function compiled(registrationKey: string | null, contributionKey?: string): For
         Metadata: { entity: '*', slot: 'after-fields', ...(contributionKey ? { contributionKey } : {}) },
     };
 }
-
-describe('PanelHideSettingKey', () => {
-    it('is one setting per entity, lowercased so case variants share it', () => {
-        expect(PanelHideSettingKey('MoreCheese: Courses')).toBe('mj.formPanels.hidden.morecheese: courses');
-    });
-});
-
-describe('ParseHiddenPanelKeys', () => {
-    it('reads a stored list', () => {
-        expect(ParseHiddenPanelKeys('["panel:A","class:b"]')).toEqual(['panel:A', 'class:b']);
-    });
-
-    it('reads nothing from a missing, malformed or non-list value, rather than throwing', () => {
-        expect(ParseHiddenPanelKeys(undefined)).toEqual([]);
-        expect(ParseHiddenPanelKeys('not json')).toEqual([]);
-        expect(ParseHiddenPanelKeys('{"a":1}')).toEqual([]);
-    });
-
-    it('drops blank and repeated keys', () => {
-        expect(ParseHiddenPanelKeys('["a","", "a", 3]')).toEqual(['a']);
-    });
-});
 
 describe('PanelHideKey', () => {
     it('is the contribution key for a published row', () => {

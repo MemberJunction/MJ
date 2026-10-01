@@ -1,11 +1,11 @@
 // packages/Angular/Generic/base-forms/src/lib/panel-slot/collect-form-contribution-registrations.ts
 import { LogError, type EntityInfo, type IMetadataProvider } from '@memberjunction/core';
-import { InteractiveFormsEngine, ParseClaimedFieldNames, type MJEntityFormContributionEntity } from '@memberjunction/core-entities';
+import { InteractiveFormsEngine, ParseClaimedFieldNames, ParseHiddenFormPanelKeys, type MJEntityFormContributionEntity } from '@memberjunction/core-entities';
 import { MJGlobal, SafeJSONParse } from '@memberjunction/global';
 import type { FormContributionSpec } from '@memberjunction/interactive-component-types/forms';
 import { BaseFormPanel, type FormPanelRegistrationMetadata } from './base-form-panel';
 import { ContributionSpecToRegistration, type FormContributionRegistration } from './form-contribution';
-import { HiddenPanelsSetting, ParseHiddenPanelKeys, WithoutHiddenPanels } from './panel-hides';
+import { HiddenPanelsSetting, WithoutHiddenPanels } from './panel-hides';
 import { WithPlacementPreview, type FormPlacementPreview } from './placement-preview';
 
 /**
@@ -220,7 +220,7 @@ function collectFromSources(
     }
 
     const all = [...classRegs, ...rows.map(MetadataContributionToRegistration)];
-    const merged = includeHidden ? all : WithoutHiddenPanels(all, ParseHiddenPanelKeys(hiddenSetting));
+    const merged = includeHidden ? all : WithoutHiddenPanels(all, ParseHiddenFormPanelKeys(hiddenSetting));
     if (cache.size >= MAX_CACHE_ENTRIES) {
         const oldest = cache.keys().next().value;
         if (oldest !== undefined) cache.delete(oldest);

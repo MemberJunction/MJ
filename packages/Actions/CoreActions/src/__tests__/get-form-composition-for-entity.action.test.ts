@@ -6,7 +6,7 @@ vi.mock('@memberjunction/global', async () => {
     return { ...actual, RegisterClass: () => (target: unknown) => target };
 });
 
-const { entity, provider, runViewResults, capturedFilters } = vi.hoisted(() => {
+const { entity, usersEntity, provider, runViewResults, capturedFilters, failing } = vi.hoisted(() => {
 // Configuration is the PARSED object here, matching EntityRelationshipInfo.Configuration's
 // getter — not the raw JSON string stored in the column.
 const entity = {
@@ -27,7 +27,12 @@ const entity = {
     ConfigurationObject: { UI: { Form: { Layout: 'left-nav' } } },
 };
 
-const provider = { EntityByName: (n: string) => (n === entity.Name ? entity : undefined) };
+/** An identity entity: its form takes only the user's own forms and panels. */
+const usersEntity = { ...entity, ID: 'ENT-USERS', Name: 'MJ: Users', RelatedEntities: [], ConfigurationObject: {} };
+
+const provider = {
+    EntityByName: (n: string) => (n === entity.Name ? entity : n === usersEntity.Name ? usersEntity : undefined),
+};
 
 const runViewResults: Record<string, unknown[]> = {
     'MJ: Form Chrome Rules': [{ ID: 'r1' }],
@@ -36,7 +41,9 @@ const runViewResults: Record<string, unknown[]> = {
     ],
 };
 const capturedFilters: Record<string, string | undefined> = {};
-return { entity, provider, runViewResults, capturedFilters };
+/** Entity names whose query fails. */
+const failing = new Set<string>();
+return { entity, usersEntity, provider, runViewResults, capturedFilters, failing };
 });
 
 vi.mock('@memberjunction/core', async () => {
@@ -49,6 +56,7 @@ vi.mock('@memberjunction/core', async () => {
             FromMetadataProvider: () => ({
                 RunView: async (p: { EntityName: string; ExtraFilter?: string }) => {
                     capturedFilters[p.EntityName] = p.ExtraFilter;
+                    if (failing.has(p.EntityName)) return { Success: false, Results: [], ErrorMessage: `${p.EntityName} is unavailable` };
                     return { Success: true, Results: runViewResults[p.EntityName] ?? [] };
                 },
             }),
@@ -193,10 +201,11 @@ describe('GetFormCompositionForEntityAction — which form the caller actually s
     /** Run with an Active override present and a stored form choice for the caller. */
     async function runWithPreference(value: string | null) {
         runViewResults['MJ: Entity Form Overrides'] = [
-            { ID: 'o1', Status: 'Active' },
-            { ID: 'o2', Status: 'Inactive' },
+            { ID: 'o1', Status: 'Active', Scope: 'Global' },
+            { ID: 'o2', Status: 'Inactive', Scope: 'User' },
+            { ID: 'o3', Status: 'Inactive', Scope: 'Role' },
         ];
-        runViewResults['MJ: User Settings'] = value === null ? [] : [{ Value: value }];
+        runViewResults['MJ: User Settings'] = value === null ? [] : [{ Setting: 'mj.formVariant.mj_bizapps_common: people', Value: value }];
         try {
             return JSON.parse((await run()).Message ?? '{}');
         } finally {
@@ -216,9 +225,20 @@ describe('GetFormCompositionForEntityAction — which form the caller actually s
         expect((await runWithPreference('o1')).FullCustomForm).toBe(true);
     });
 
-    it('honours a pick of a form set aside by a later apply', async () => {
+    it('honours a pick of the user\'s own form set aside by a later apply', async () => {
         // Status Inactive, but the user chose it, and the resolver renders what they chose.
         expect((await runWithPreference('o2')).FullCustomForm).toBe(true);
+    });
+
+    it('drops a pick of a shared form set aside, as the resolver does, and falls back to the first Active form', async () => {
+        runViewResults['MJ: Entity Form Overrides'] = [{ ID: 'o3', Status: 'Inactive', Scope: 'Role' }];
+        runViewResults['MJ: User Settings'] = [{ Setting: 'mj.formVariant.mj_bizapps_common: people', Value: 'o3' }];
+        try {
+            expect(JSON.parse((await run()).Message ?? '{}').FullCustomForm).toBe(false);
+        } finally {
+            delete runViewResults['MJ: Entity Form Overrides'];
+            delete runViewResults['MJ: User Settings'];
+        }
     });
 
     it('falls back to the first Active form when the pick names one that has gone', async () => {
@@ -229,18 +249,153 @@ describe('GetFormCompositionForEntityAction — which form the caller actually s
         expect((await runWithPreference(null)).FullCustomForm).toBe(true);
     });
 
-    it('asks only for this user\'s setting for this entity', async () => {
+    it('asks only for this user\'s settings for this entity: the form choice and the hidden panels', async () => {
         await runWithPreference('__codegen-default__');
         expect(capturedFilters['MJ: User Settings'])
-            .toBe("UserID='U1' AND Setting='mj.formVariant.mj_bizapps_common: people'");
+            .toBe("UserID='U1' AND Setting IN ('mj.formVariant.mj_bizapps_common: people','mj.formPanels.hidden.mj_bizapps_common: people')");
     });
 
     it('leaves a form with no override alone, whatever the setting says', async () => {
-        runViewResults['MJ: User Settings'] = [{ Value: '__codegen-default__' }];
+        runViewResults['MJ: User Settings'] = [{ Setting: 'mj.formVariant.mj_bizapps_common: people', Value: '__codegen-default__' }];
         try {
             expect(JSON.parse((await run()).Message ?? '{}').FullCustomForm).toBe(false);
         } finally {
             delete runViewResults['MJ: User Settings'];
         }
     });
+});
+
+/** One Active contribution row as the action reads it. */
+function contributionRow(over: Record<string, unknown>) {
+    return {
+        ID: 'row', ContributionKey: 'skip:ltv', Slot: 'before-fields', Title: 'LTV', Presentation: 'panel',
+        Precedence: 0, Inclusion: null, SortKey: 0, Scope: 'Global', ...over,
+    };
+}
+
+/** Runs with these contribution rows and settings, then puts the defaults back. */
+async function runWith(
+    rows: unknown[],
+    settings: Array<{ Setting: string; Value: string }> = [],
+    over: Parameters<typeof run>[0] = {},
+) {
+    const saved = runViewResults['MJ: Entity Form Contributions'];
+    runViewResults['MJ: Entity Form Contributions'] = rows;
+    runViewResults['MJ: User Settings'] = settings;
+    try {
+        return await run(over);
+    } finally {
+        runViewResults['MJ: Entity Form Contributions'] = saved;
+        delete runViewResults['MJ: User Settings'];
+    }
+}
+
+const HIDE_PEOPLE = 'mj.formPanels.hidden.mj_bizapps_common: people';
+
+/**
+ * The answer is the form the user sees: the panels they hid are marked hidden, a key held by two
+ * rows shows only the one that draws, and an identity form shows only their own panels.
+ */
+describe('GetFormCompositionForEntityAction — the panels the user sees', () => {
+    it('marks a panel the user hid as hidden', async () => {
+        const result = await runWith([contributionRow({ ID: 'g', ContributionKey: 'skip:ltv' })],
+            [{ Setting: HIDE_PEOPLE, Value: '["skip:ltv"]' }]);
+        expect(JSON.parse(result.Message ?? '{}').Contributions).toEqual([
+            expect.objectContaining({ Key: 'skip:ltv', Hidden: true }),
+        ]);
+    });
+
+    it('never hides the user\'s own panel, which they turn off instead', async () => {
+        const result = await runWith([contributionRow({ ID: 'mine', Scope: 'User' })],
+            [{ Setting: HIDE_PEOPLE, Value: '["skip:ltv"]' }]);
+        expect(JSON.parse(result.Message ?? '{}').Contributions).toEqual([
+            expect.objectContaining({ Key: 'skip:ltv', Hidden: false }),
+        ]);
+    });
+
+    it('hides a keyless grid claim by its related key', async () => {
+        const result = await runWith(
+            [contributionRow({ ID: 'g', ContributionKey: null, RelatedEntity: 'MJ_BizApps_Orders: Order Headers', RelatedJoinField: 'BillToPersonID', RelatedEntityID: 'ENT-ORD' })],
+            [{ Setting: HIDE_PEOPLE, Value: '["related:MJ_BizApps_Orders: Order Headers:BillToPersonID"]' }]);
+        expect(JSON.parse(result.Message ?? '{}').Contributions).toEqual([
+            expect.objectContaining({ Key: 'related:MJ_BizApps_Orders: Order Headers:BillToPersonID', Hidden: true, ReplacesPlace: true }),
+        ]);
+    });
+
+    it('shows one panel per key: the higher precedence wins', async () => {
+        const result = await runWith([
+            contributionRow({ ID: 'role', Scope: 'Role', Precedence: 2, Title: 'Role LTV' }),
+            contributionRow({ ID: 'mine', Scope: 'User', Precedence: 1, Title: 'My LTV' }),
+        ]);
+        const contributions = JSON.parse(result.Message ?? '{}').Contributions;
+        expect(contributions).toHaveLength(1);
+        expect(contributions[0]).toMatchObject({ Title: 'Role LTV', Precedence: 2 });
+    });
+
+    it('breaks a precedence tie by the narrower audience', async () => {
+        const result = await runWith([
+            contributionRow({ ID: 'global', Scope: 'Global', Title: 'Everyone' }),
+            contributionRow({ ID: 'mine', Scope: 'User', Title: 'Mine' }),
+            contributionRow({ ID: 'role', Scope: 'Role', Title: 'Role' }),
+        ]);
+        expect(JSON.parse(result.Message ?? '{}').Contributions.map((c: { Title: string }) => c.Title)).toEqual(['Mine']);
+    });
+
+    it('shows the panel that takes over a key the user hid on another row', async () => {
+        const result = await runWith([
+            contributionRow({ ID: 'global', Scope: 'Global', Precedence: 5, Title: 'Everyone' }),
+            contributionRow({ ID: 'mine', Scope: 'User', Precedence: 0, Title: 'Mine' }),
+        ], [{ Setting: HIDE_PEOPLE, Value: '["skip:ltv"]' }]);
+        expect(JSON.parse(result.Message ?? '{}').Contributions).toEqual([
+            expect.objectContaining({ Title: 'Mine', Hidden: false }),
+        ]);
+    });
+
+    it('keeps panels with different keys apart', async () => {
+        const result = await runWith([
+            contributionRow({ ID: 'a', ContributionKey: 'a' }),
+            contributionRow({ ID: 'b', ContributionKey: 'b' }),
+        ]);
+        expect(JSON.parse(result.Message ?? '{}').Contributions.map((c: { Key: string }) => c.Key)).toEqual(['a', 'b']);
+    });
+
+    it('shows only the user\'s own panels on an identity entity', async () => {
+        const result = await runWith([
+            contributionRow({ ID: 'global', ContributionKey: 'shared' }),
+            contributionRow({ ID: 'role', Scope: 'Role', ContributionKey: 'team' }),
+            contributionRow({ ID: 'mine', Scope: 'User', ContributionKey: 'mine' }),
+        ], [], { entityName: usersEntity.Name });
+        expect(JSON.parse(result.Message ?? '{}').Contributions.map((c: { Key: string }) => c.Key)).toEqual(['mine']);
+    });
+
+    it('ignores a shared full custom form on an identity entity', async () => {
+        runViewResults['MJ: Entity Form Overrides'] = [{ ID: 'o1', Status: 'Active', Scope: 'Global' }];
+        try {
+            const payload = JSON.parse((await run({ entityName: usersEntity.Name })).Message ?? '{}');
+            expect(payload.FullCustomForm).toBe(false);
+        } finally {
+            delete runViewResults['MJ: Entity Form Overrides'];
+        }
+    });
+});
+
+/**
+ * A failed query used to read as an empty result: a failed override lookup said there was no
+ * full custom form, and an agent then designed a panel for a form the user does not see.
+ */
+describe('GetFormCompositionForEntityAction — a failed query', () => {
+    it.each(['MJ: Form Chrome Rules', 'MJ: Entity Form Contributions', 'MJ: Entity Form Overrides', 'MJ: User Settings'])(
+        'returns QUERY_FAILED when the %s lookup fails',
+        async (entityName) => {
+            failing.add(entityName);
+            try {
+                const result = await run();
+                expect(result.Success).toBe(false);
+                expect(result.ResultCode).toBe('QUERY_FAILED');
+                expect(result.Message).toContain(`${entityName} is unavailable`);
+            } finally {
+                failing.delete(entityName);
+            }
+        },
+    );
 });

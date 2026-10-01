@@ -24,7 +24,11 @@ vi.mock('@memberjunction/core-entities', async () => {
     // Loads from core-entities' dist, so that package must be built first.
     const mapper = await vi.importActual<{ ParseClaimedFieldNames: typeof ParseClaimedFieldNames }>(
         '@memberjunction/core-entities/dist/custom/FormScope/FormContributionRow.js');
+    // The hide-setting key and parser are pure too.
+    const hides = await vi.importActual<Record<string, unknown>>(
+        '@memberjunction/core-entities/dist/custom/FormScope/FormPanelHides.js');
     return {
+        ...hides,
         InteractiveFormsEngine: { get Instance() { return engine; } },
         UserInfoEngine: { get Instance() { return userInfo; } },
         ParseClaimedFieldNames: mapper.ParseClaimedFieldNames,
