@@ -62,6 +62,7 @@ import { ResolverBase } from "../generic/ResolverBase.js";
 import { IntegrationCustomColumnPromoter } from "../integration/CustomColumnPromoter.js";
 import { ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, DecideFieldMapReconcile, DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
 import { ComputeInactiveRowWarnings } from "../integration/InactiveRowWarnings.js";
+import { FieldsForBuild, LoadScopedFieldsForBuild, type ScopedBuildFields } from "../integration/ScopedFieldsForBuild.js";
 import { BuildCreateConnectionMessage, BuildDetachedRefreshMessage, BuildReactivateMessage, BuildUpdateConnectionMessage } from "../integration/SchemaRefreshLaunch.js";
 // Type-only: the registered runtime class for 'MJ: Company Integrations'. Lets the create path name the
 // server subclass it actually gets back from GetEntityObject with a real type rather than a cast.
@@ -2367,11 +2368,16 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      *     `IsPrimaryKey=true`.
      *   - Foreign-key relationships are reconstructed from
      *     `RelatedIntegrationObjectID` lookups against the same cache.
+     *   - Under a per-connection catalog the FIELD rows come from `scopedFields`
+     *     (`LoadScopedFieldsForBuild`), never from the engine: a connection's field rows
+     *     are warmed on demand by the sync loop only, so the engine answers `[]` for them
+     *     during an apply and every object would build with no columns.
      */
     private buildSourceSchemaFromPersistedRows(
         integrationID: string,
         requestedNames?: string[],
         warningsOut?: string[],
+        scopedFields?: ScopedBuildFields | null,
     ): SourceSchemaInfo {
         const engine = IntegrationEngineBase.Instance;
         // ACTIVE-only materialization: an object/field a given tenant doesn't expose is marked
@@ -2394,7 +2400,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         for (const io of ios) {
             if (filter && !filter.has(io.Name.toLowerCase())) continue;
             // Active fields only — an inactive (source-absent / deactivated) field is not materialized.
-            const allFields = engine.GetIntegrationObjectFields(io.ID);
+            const allFields = FieldsForBuild(io.ID, scopedFields, engine);
             const iofs = allFields.filter(iof => iof.Status === 'Active');
             // Remember what this object declared, active or not — the caller's warning collector
             // turns the difference into the one message that explains a column that never appeared.
@@ -3438,6 +3444,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 companyIntegration.IntegrationID,
                 Array.from(requestedNames),
                 inactiveWarnings,
+                await LoadScopedFieldsForBuild(companyIntegration.IntegrationID, user),
             );
             if (sourceSchema.Objects.length === 0) {
                 LogError(`[IntegrationApplySchema] Persisted IO cache empty for ${companyIntegration.Integration}; falling back to live introspect.`);
@@ -3618,7 +3625,12 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // (already freshened by the Phase 0 v5.39.x MJCompanyIntegrationEntityServer
             // Save hook on IsActive false→true).  Avoids the duplicate vendor-API
             // introspect that used to fire here.
-            let sourceSchema: SourceSchemaInfo = this.buildSourceSchemaFromPersistedRows(companyIntegration.IntegrationID);
+            let sourceSchema: SourceSchemaInfo = this.buildSourceSchemaFromPersistedRows(
+                companyIntegration.IntegrationID,
+                undefined,
+                undefined,
+                await LoadScopedFieldsForBuild(companyIntegration.IntegrationID, user),
+            );
             if (sourceSchema.Objects.length === 0) {
                 // Fallback: the engine cache is empty (Save hook didn't run, or this
                 // is a direct-API caller bypassing the wizard).  Do a one-time live
@@ -4217,6 +4229,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 companyIntegration.IntegrationID,
                 requestedNamesForReuse,
                 inactiveWarnings,
+                await LoadScopedFieldsForBuild(companyIntegration.IntegrationID, user),
             );
             if (sourceSchema.Objects.length === 0) {
                 LogError(`[buildSchemaForConnector] Persisted IO cache empty for ${companyIntegration.Integration}; falling back to live introspect.`);
@@ -5552,7 +5565,12 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         // persisted rows instead.
                         //
                         // Persist is also skipped here — the Save hook already did it.
-                        sourceSchema = this.buildSourceSchemaFromPersistedRows(companyIntegration.IntegrationID);
+                        sourceSchema = this.buildSourceSchemaFromPersistedRows(
+                            companyIntegration.IntegrationID,
+                            undefined,
+                            undefined,
+                            await LoadScopedFieldsForBuild(companyIntegration.IntegrationID, user),
+                        );
                         if (sourceSchema.Objects.length === 0) {
                             // Defensive fallback: if the engine cache is empty (hook
                             // didn't run, or this is a direct-API caller that bypasses
@@ -6271,7 +6289,12 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
             // Source of truth for the evolution = the PERSISTED post-resolution rows (the refresh in
             // Phase 1 just wrote them via the overlay) — no duplicate vendor introspect.
-            const sourceSchema = this.buildSourceSchemaFromPersistedRows(companyIntegration.IntegrationID);
+            const sourceSchema = this.buildSourceSchemaFromPersistedRows(
+                companyIntegration.IntegrationID,
+                undefined,
+                undefined,
+                await LoadScopedFieldsForBuild(companyIntegration.IntegrationID, user),
+            );
 
             // Normalize names to match source schema casing
             const nameMap = new Map(sourceSchema.Objects.map(o => [o.ExternalName.toLowerCase(), o.ExternalName]));
