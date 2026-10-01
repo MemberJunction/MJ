@@ -463,7 +463,8 @@ A panel's component is an `MJ: Components` row. The stock `UI` role can create a
 entity (not delete), and a form can also load a component by name, so the server checks every
 change to what a component draws. Without `Manage Form Defaults`, the component must be the caller's
 own (`IsCallersOwnComponent`): used by at least one row and only by the caller's own personal rows,
-or used by no row and created by the caller, as its `Create` record in `MJ: Record Changes` shows.
+or used by no row and created by the caller, as its Internal `Create` record in `MJ: Record Changes`
+shows (a caller cannot create an Internal record change through the API).
 That applies to a delete or a change to its specification, status, name, namespace or type
 (`ComponentWriteRefusal`), to a row created or re-pointed at it (`FormRowComponentRefusal`), and to
 giving another component its name (`ComponentNameCollisionRefusal`). With the grant, every change

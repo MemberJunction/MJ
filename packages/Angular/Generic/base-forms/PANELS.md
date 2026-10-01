@@ -469,8 +469,10 @@ rules are in `@memberjunction/core-entities`; the server side is `FormComponentG
 `@memberjunction/core-entities-server`). Without `Manage Form Defaults`, each check asks whether the
 component is the caller's own (`IsCallersOwnComponent`): used by at least one row and only by the
 caller's own personal rows, or used by no row and created by the caller. The creator is read from
-the component's `Create` record in `MJ: Record Changes`; `MJ: Components` tracks record changes, so
-every component created through the platform has one.
+the component's `Create` record in `MJ: Record Changes` with `Source` 'Internal'; `MJ: Components`
+tracks record changes, so the platform writes one with every component it creates, and
+`MJRecordChangeEntityServer` refuses a caller who tries to create an Internal record change through
+the API.
 
 1. **Changing a component** (`ComponentWriteRefusal`, in `MJComponentEntityServer`): a delete, or a
    change to its specification, status, name, namespace or type.
@@ -489,8 +491,9 @@ every component created through the platform has one.
    Owner included); anything else is allowed. The caller's own rows may share a component.
 3. **A component's name** (`ComponentNameCollisionRefusal`): without the grant, a created or renamed
    component may not take a name another component already has, unless every such component is
-   the caller's own. The match is the `Name` filter `ComponentMetadataEngine.FindComponent` uses,
-   in any namespace. A holder is not restricted.
+   the caller's own. Names are compared trimmed and lower-cased, as the server's
+   `ComponentMetadataEngineServer.FindComponent` compares them, in any namespace. A holder is not
+   restricted.
 
 A create is otherwise not checked, nor is a change to any other column or a write with no caller
 (a trusted server context). The rows, the stored columns and the creator are read in one batch as
