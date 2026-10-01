@@ -874,7 +874,7 @@
   {
     "fields": {
       "Name": "Get Form Contributions For Entity",
-      "Description": "Read-only. Every MJ: Entity Form Contributions row applicable to the caller (User / Role / Global) for an entity, in every status, with component name and version. On an identity or permission entity (MJ: Users, Roles, Authorizations, API Keys and the like) only the caller's own rows apply, as on the form. Apply flows use it to decide Create vs Modify; agents use it to see what already exists.",
+      "Description": "Read-only. Every MJ: Entity Form Contributions row applicable to the caller (User / Role / Global) for an entity, in every status, with component name and version. On an identity or permission entity (MJ: Users, Roles, Authorizations, API Keys and the like) only the caller's own rows apply, as on the form. Apply flows use it to decide Create vs Modify; agents use it to see what already exists. Lists no row, with MetadataContributionsEnabled false, when metadata contributions are switched off (MJ_FORMS_METADATA_CONTRIBUTIONS=false on the server, or the instance configuration Forms.MetadataContributions.Enabled set to false).",
       "DriverClass": "__GetFormContributionsForEntity",
       "Type": "Custom",
       "Status": "Active",
@@ -904,7 +904,7 @@
             "Type": "Output",
             "ValueType": "Other",
             "IsArray": false,
-            "Description": "{ EntityName, Contributions: [{ ContributionID, ComponentID, ComponentName, ComponentVersion, Name, Scope, Status, Precedence, Slot, ContributionKey, RelatedEntity, RelatedJoinField, ReplacesSectionKey, ReplacesSectionKeys[], ReplacesFieldNames[], InSectionKey, SectionPosition, Inclusion, Presentation, Title }] }",
+            "Description": "{ EntityName, MetadataContributionsEnabled, Contributions: [{ ContributionID, ComponentID, ComponentName, ComponentVersion, Name, Scope, Status, Precedence, Slot, ContributionKey, RelatedEntity, RelatedJoinField, ReplacesSectionKey, ReplacesSectionKeys[], ReplacesFieldNames[], InSectionKey, SectionPosition, Inclusion, Presentation, Title }] }",
             "IsRequired": false
           },
           "primaryKey": {
@@ -947,7 +947,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "ResultCode": "QUERY_FAILED",
-            "Description": "RunView failed."
+            "Description": "The contribution or component lookup failed."
           },
           "primaryKey": {
             "ID": "FCD62692-EE66-4501-AF5F-E07ACAB1F43D"
@@ -992,7 +992,7 @@
   {
     "fields": {
       "Name": "Get Form Composition For Entity",
-      "Description": "Read-only server-side composition of the entity form the caller sees, for agents with no browser context. Returns whether a full custom form renders for them, field sections by CodeGen rule, DisplayInForm related grids with L1 inclusion, the caller's Active metadata contributions as their form draws them (one per key by Precedence then the narrower scope, panels they hid marked Hidden, only their own on an identity or permission entity), and the L3 rule count. Compiled BaseFormPanel contributions are browser-only and are NOT included. The client form context (AppContext.AdditionalContext.Form) is authoritative for the sections the open form draws when present. Returns QUERY_FAILED when any lookup fails.",
+      "Description": "Read-only server-side composition of the entity form the caller sees, for agents with no browser context. Returns whether a full custom form renders for them, field sections by CodeGen rule, DisplayInForm related grids with L1 inclusion, the caller's Active metadata contributions as their form draws them (one per key by Precedence then the narrower scope, panels they hid marked Hidden, only their own on an identity or permission entity), and the L3 rule count. Compiled BaseFormPanel contributions are browser-only and are NOT included. The client form context (AppContext.AdditionalContext.Form) is authoritative for the sections the open form draws when present. Lists no contribution, with MetadataContributionsEnabled false, when metadata contributions are switched off (MJ_FORMS_METADATA_CONTRIBUTIONS=false on the server, or the instance configuration Forms.MetadataContributions.Enabled set to false). Returns QUERY_FAILED when any lookup fails.",
       "DriverClass": "__GetFormCompositionForEntity",
       "Type": "Custom",
       "Status": "Active",
@@ -1026,7 +1026,7 @@
             "Type": "Output",
             "ValueType": "Other",
             "IsArray": false,
-            "Description": "{ Entity, Layout, FullCustomForm, Sections[], Related[], Contributions[], SlotsPresent[], ChromeRuleCount, Note }. FullCustomForm is true when a full custom form renders for the caller; Sections, Related, Contributions and SlotsPresent are then empty.",
+            "Description": "{ Entity, Layout, FullCustomForm, MetadataContributionsEnabled, Sections[], Related[], Contributions[], SlotsPresent[], ChromeRuleCount, Note }. FullCustomForm is true when a full custom form renders for the caller; Sections, Related, Contributions and SlotsPresent are then empty.",
             "IsRequired": false
           },
           "primaryKey": {

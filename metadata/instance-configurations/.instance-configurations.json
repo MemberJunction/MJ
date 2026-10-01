@@ -258,7 +258,7 @@
       "ValueType": "boolean",
       "Category": "Forms",
       "DisplayName": "Enable Metadata Form Contributions",
-      "Description": "Show form panels defined as MJ: Entity Form Contributions rows in Explorer. Set to false to turn every such row off in the browser; compiled form panels are unaffected. Server processes read the MJ_FORMS_METADATA_CONTRIBUTIONS environment variable instead.",
+      "Description": "Show form panels defined as MJ: Entity Form Contributions rows in Explorer. Set to false to turn every such row off in the browser and in the answers of the Get Form Contributions For Entity and Get Form Composition For Entity actions; compiled form panels are unaffected. The server process's own form cache follows the MJ_FORMS_METADATA_CONTRIBUTIONS environment variable instead.",
       "DefaultValue": "true"
     },
     "primaryKey": {

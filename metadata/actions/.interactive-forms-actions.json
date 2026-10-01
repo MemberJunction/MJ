@@ -234,7 +234,7 @@
   {
     "fields": {
       "Name": "Get Active Form For Entity",
-      "Description": "Read-only action returning the currently-resolved interactive-form override (if any) for the (entity, requesting user) pair plus the full list of applicable variants. Returns null Active + empty Variants when no override exists. Used by the Form Builder agent to decide between Create (no override exists) and Modify (an override already exists).",
+      "Description": "Read-only action returning the currently-resolved interactive-form override (if any) for the (entity, requesting user) pair plus the full list of applicable variants. Returns null Active + empty Variants when no override exists. On an identity or permission entity (MJ: Users, Roles, Authorizations, API Keys and the like) only the caller's own User overrides apply, as on the form. Used by the Form Builder agent to decide between Create (no override exists) and Modify (an override already exists).",
       "DriverClass": "__GetActiveFormForEntity",
       "Type": "Custom",
       "Status": "Active",
@@ -944,7 +944,7 @@
   {
     "fields": {
       "Name": "Activate Interactive Form Version",
-      "Description": "Promote one of the caller's Pending EntityFormOverrides to Active; its Component and override flip in one transaction. Then demotes the caller's other Active override on the entity to Inactive (and its Component). The Pending Override is the one the agent just produced via Modify; activating it makes it the live form. Old Component rows persist forever as immutable history — revertible via 'Revert Interactive Form'. Acts only on the caller's own User-scope overrides: a Role or Global override, or another user's, returns FORBIDDEN, because shared forms are managed from Form Builder or the form's Manage drawer.",
+      "Description": "Promote one of the caller's Pending EntityFormOverrides to Active; its Component and override flip in one transaction. Then, after that transaction, demotes the caller's other Active override on the entity to Inactive (and its Component); if that fails it returns PERSIST_FAILED with the target already Active. The Pending Override is the one the agent just produced via Modify; activating it makes it the live form. Old Component rows persist forever as immutable history — revertible via 'Revert Interactive Form'. Acts only on the caller's own User-scope overrides: a Role or Global override, or another user's, returns FORBIDDEN, because shared forms are managed from Form Builder or the form's Manage drawer.",
       "DriverClass": "__ActivateInteractiveFormVersion",
       "Type": "Custom",
       "Status": "Active",
@@ -1097,7 +1097,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "ResultCode": "PERSIST_FAILED",
-            "Description": "Database write failed; see message."
+            "Description": "A save failed; see message. When setting the prior Active override aside fails, the target is already Active."
           },
           "primaryKey": {
             "ID": "F1738A57-A641-4111-AD8D-CFE7269583B4"

@@ -428,7 +428,8 @@ enforces it.
 chrome layers see **one** list and cannot tell the two sources apart. `<mj-form-panel-slot>` mounts
 a row through `InteractiveFormPanelComponent`, which renders the React component with
 `FormPanelHostProps` inside a collapsible panel — or bare, for a hero. In the browser the engine
-loads the shared rows and the signed-in user's own personal rows only.
+loads the shared rows and the signed-in user's own personal rows only, for contributions and full
+custom forms alike.
 
 **Precedence.** The form collapses the list once per resolve (`ResolveFormContributionWinners`):
 one winner per `contributionKey`. The higher rank wins — a row's `Precedence`, a compiled panel's
@@ -438,8 +439,9 @@ then `Global` (`FormContributionOutranks` in `@memberjunction/core-entities`, wh
 `Get Form Composition For Entity` uses too). A row that deliberately replaces a compiled panel
 carries `Precedence = incumbent + 1`, which the apply flow sets only after the user confirms. A
 user's own row written at the same precedence as a shared row wins by the audience rule. Wildcard
-(`'*'`) registrations take part on every form, but their place claims (a grid, a section, a tab, a
-place in a section) are ignored.
+(`'*'`) registrations take part on every form, but their place claims are ignored: one that claims
+a grid, a section or a tab replaces nothing, and one that names a section to draw in draws at its
+slot. A wildcard field claim still acts on every form that draws the field.
 
 **Where rows come from.** An OpenApp without Angular ships them under
 `metadata/entity-form-contributions/` (its pull filter is `Scope <> 'User'`, so personal rows are
@@ -451,10 +453,17 @@ return `FORBIDDEN` for a `Role` or `Global` row, whoever the caller is. A spec t
 one claim returns `INVALID_CLAIM` before anything is written. The three contribution actions write
 the Component and the row in one transaction, and so do `Modify Interactive Form` and
 `Activate Interactive Form Version` for a full form's Component and override; `Create Interactive
-Form` and `Revert Interactive Form` do not. `Modify Form Contribution` takes an optional
-`Precedence`. Sharing with a
-role or everyone is a human act in the form's Manage drawer or in Form Builder, and needs the
-`Manage Form Defaults` authorization.
+Form` and `Revert Interactive Form` do not. Both `Modify Interactive Form` and `Activate Interactive
+Form Version` set the prior version aside after that transaction; if Activate cannot, it returns
+`PERSIST_FAILED` with the new form already Active. `Modify Form Contribution` takes an optional
+`Precedence`. Sharing with a role or everyone is a human act in the form's Manage drawer or in Form
+Builder, and needs the `Manage Form Defaults` authorization.
+
+A panel's component is an `MJ: Components` row, and the stock `UI` role can only read that entity.
+So creating or changing a panel through the actions, and turning a panel on or off or saving it as
+a draft in the drawer, currently need Developer-level component rights (the `Developer` and
+`Integration` roles). Hiding and removing a panel work for any user, because they write only the
+user setting or the row.
 
 **Form context for agents.** Each record form publishes its composition snapshot (sections, related
 grids, contributions, rail, slots) to `FormCompositionRegistry` in `@memberjunction/ng-base-forms`;
@@ -463,8 +472,10 @@ screen, publishes a compact `FormAgentContext` as `AppContext.AdditionalContext.
 `RecordPrimaryKey` (a `CompositeKey.ToURLSegment()` string, or null for an unsaved record), the form
 choice, and each section's key, title, variant, hidden flag and the contribution that holds it. It
 publishes again when its tab is reattached and never while it is detached. On the server,
-`Get Form Composition For Entity` answers for the form the user sees — hidden panels, the identity
-rule below and the same collapse — and returns `QUERY_FAILED` when a query fails.
+`Get Form Composition For Entity` answers for the form the user sees as far as metadata can tell —
+hidden panels, the identity rule below and the same collapse — and returns `QUERY_FAILED` when a
+query fails. Compiled panels exist only in the browser, so it does not list them, and it lists no
+row while the kill switch below is off.
 
 **Two safety properties worth knowing.** Shared forms and panels do not render on identity,
 permission and form-metadata entities: on the 11 entities in `RESTRICTED_FORM_ENTITIES`
@@ -476,17 +487,21 @@ permission and form-metadata entities: on the 11 entities in `RESTRICTED_FORM_EN
 the collector returns compiled registrations only, and forms render exactly as they did before the
 feature existed. The switch has two settings, because the browser has no process environment:
 
-- **Node hosts** (MJAPI, actions, the CLI): set `MJ_FORMS_METADATA_CONTRIBUTIONS=false`.
+- **Node hosts** (MJAPI, actions, the CLI): set `MJ_FORMS_METADATA_CONTRIBUTIONS=false`. The engine
+  on that process loads no row.
 - **Explorer**: set the `MJ: Instance Configurations` key `Forms.MetadataContributions.Enabled` to
   `false`. The shell applies it after `InstanceConfigEngine.Config()` has finished and before any
   form opens. Another browser host calls
   `InteractiveFormsEngine.ApplyInstanceConfiguration(InstanceConfigEngine.Instance)`, or sets
   `InteractiveFormsEngine.MetadataContributionsEnabled`, at the same point.
 
-The instance configuration can only turn the source off, never back on, and when Instance Config
-fails to load the source stays on. The seed row reaches a database through `mj sync push`. Each
-setting covers only its own side: the server variable does not reach the browser, and the instance
-configuration is not read by Node hosts.
+In the browser the instance configuration can only turn the source off, never back on, and when
+Instance Config fails to load the source stays on. The seed row reaches a database through
+`mj sync push`. `Get Form Contributions For Entity` and `Get Form Composition For Entity` list no
+row when either setting is off (`MetadataContributionsEnabled: false` in their result); they read
+the instance configuration on every call. The write actions still write rows while the switch is
+off. The server variable does not reach the browser, so with only the Node setting off, Explorer
+still draws rows those two actions leave out.
 
 L3 `MJ: Form Chrome Rules` still suppresses any of them by `ContributionKey`.
 

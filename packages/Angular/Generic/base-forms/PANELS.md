@@ -381,7 +381,9 @@ composer and the rail then read. The higher rank wins — a compiled panel's Cla
 a row's `Precedence`. On a tie a compiled registration beats any row, and between two rows the
 narrower audience wins: `User`, then `Role`, then `Global` (`FormContributionOutranks` in
 `@memberjunction/core-entities`). Wildcard (`'*'`) registrations take part on every form, but a
-wildcard's place claim (a grid, a section, a tab, a place in a section) is ignored.
+wildcard's place claim is ignored: one that claims a grid, a section or a tab replaces nothing, and
+one that names a section to draw in (`inSectionKey`) draws at its slot. A wildcard field claim
+(`replacesFieldNames`) still acts on every form that draws the field.
 
 `ResolveFormContributionWinners` remembers its answer per input array and entity name. The collector
 returns the same array until something changes, so the form resolves once. A caller that builds its
@@ -415,14 +417,23 @@ caller's own `User` rows; a `Role` or `Global` row returns `FORBIDDEN`. See
 [Forms Architecture §7c Scenario I](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md) for the full
 picture.
 
-**Turning rows off.** One switch turns every row off and leaves compiled panels as they are. In
-Explorer, set the instance configuration `Forms.MetadataContributions.Enabled` to `false`; the shell
-applies it after `InstanceConfigEngine.Config()` has finished and before any form opens. On a Node
-host (MJAPI, actions, the CLI), set `MJ_FORMS_METADATA_CONTRIBUTIONS=false`. Each setting covers only
-its own side. Another browser host calls
-`InteractiveFormsEngine.ApplyInstanceConfiguration(InstanceConfigEngine.Instance)` at the same point.
-The instance configuration can only turn rows off, and when Instance Config fails to load, rows stay
-on.
+**Turning rows off.** A kill switch turns every row off and leaves compiled panels as they are. It
+has two settings:
+
+- **Explorer:** set the instance configuration `Forms.MetadataContributions.Enabled` to `false`. The
+  shell applies it after `InstanceConfigEngine.Config()` has finished and before any form opens, and
+  no form draws a row. Another browser host calls
+  `InteractiveFormsEngine.ApplyInstanceConfiguration(InstanceConfigEngine.Instance)` at the same
+  point. In the browser it can only turn rows off, and when Instance Config fails to load, rows stay
+  on.
+- **Node hosts** (MJAPI, actions, the CLI): set `MJ_FORMS_METADATA_CONTRIBUTIONS=false`. The engine on
+  that process then loads no row.
+
+`Get Form Contributions For Entity` and `Get Form Composition For Entity` list no row when either
+setting is off, and say so with `MetadataContributionsEnabled: false`. They read the instance
+configuration on every call. The write actions still write rows while the switch is off. The
+environment variable does not reach the browser, so with only the Node setting off, Explorer still
+draws rows that those two actions leave out.
 
 ## Who sees a panel
 
@@ -432,7 +443,7 @@ have no row, so they are for everyone who has the package installed.
 
 | Who | What they can do |
 |---|---|
-| Any user | Add, edit, switch off and remove their own personal items. Hide anything shared with them, for themselves only. |
+| Any user | Remove their own personal items. Hide anything shared with them, for themselves only. Adding or changing a panel through the actions, turning one on or off, and saving one as a draft also need component rights (below). |
 | Holder of `Manage Form Defaults` | Also publish an item to a role or to everyone, change a shared item's audience, and remove it. |
 | Nobody | Write another user's personal item. |
 
@@ -445,12 +456,18 @@ would refuse. The grant goes to `Developer` and `Integration` by default. An `Ow
 **Publishing moves the row, it does not copy it.** The item that was live for that audience under
 the same `contributionKey` is set `Inactive` in the same transaction, so the audience never sees
 two. Turning a panel on in the drawer retires that live sibling the same way, and sets the panel's
-component status to match the row, so it needs update rights on `MJ: Components` too. Keys are
-compared ignoring case, as the database's unique index does. A row with no key has no sibling, so
-two keyless rows can both be live. Publishing a draft, a panel that is off or a set-aside form turns
+component status to match the row. Keys are compared ignoring case, as the database's unique index
+does. A row with no key has no sibling, so two keyless rows can both be live. Publishing a draft, a panel that is off or a set-aside form turns
 it on, and the chooser says so first. A full form has no key, so the form that was live for that
 audience is set aside instead. A set-aside (`Inactive`) shared form is retracted: nobody is offered
 it and it does not render. A set-aside personal form stays in its owner's form picker.
+
+**Component rights.** A panel's component is an `MJ: Components` row, and the stock `UI` role can
+only read that entity. So creating or changing a panel through the actions (they write its
+component), and turning a panel on or off or saving it as a draft in the drawer (that sets the
+component's status), currently need Developer-level component rights: the `Developer` and
+`Integration` roles. Hide and Remove work for any user, because they write only the user setting or
+the row.
 
 On identity, permission and form-metadata entities (`RESTRICTED_FORM_ENTITIES` in
 `@memberjunction/core-entities`, 11 entities) only `User` rows and forms render, whatever wrote the
