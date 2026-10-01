@@ -2,6 +2,7 @@
 "@memberjunction/core-entities": minor
 "@memberjunction/global": patch
 "@memberjunction/rubrics-base": minor
+"@memberjunction/rubrics": minor
 "@memberjunction/core-entities-server": minor
 ---
 

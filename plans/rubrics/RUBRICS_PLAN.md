@@ -824,7 +824,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
       ScoringHash/major invariant. Then `RubricEngineBase`.
 - [~] **R3** Entity server subclasses: version clone/validate/publish (tree rules, bump, hashes);
       scale freeze; evaluation creation rules and submit (§7); score validation. Unit tests with mocks.
-- [ ] **R4** `@memberjunction/rubrics`: `RubricEngine`, evaluator seam, content providers,
+- [~] **R4** `@memberjunction/rubrics`: `RubricEngine`, evaluator seam, content providers,
       deterministic evaluator, consensus/agreement/diagnostics statistics (unit-tested against
       hand-computed fixtures, including kappa and alpha).
 - [ ] **R5** "Rubric Evaluator" prompt + `LLMRubricEvaluator` (SinglePass, PerCriterion via
