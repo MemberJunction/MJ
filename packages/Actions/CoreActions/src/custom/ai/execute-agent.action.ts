@@ -122,7 +122,11 @@ export class ExecuteAgentAction extends BaseAction {
             // ---- Expose outputs for downstream action consumers ----
             this.setOutputParam(params, 'AgentRunID', runResult.agentRun?.ID ?? null);
             this.setOutputParam(params, 'Payload', runResult.payload ?? null);
-            this.setOutputParam(params, 'AgentResult', runResult);
+            // Output params are DATA: a durable (task-graph) run stores them on the Task row as JSON,
+            // and `agentRun` is a live entity whose event plumbing is circular — passing it through
+            // made the task fail after the agent had already started. Its field values carry the same
+            // information; the entity itself stays in-process.
+            this.setOutputParam(params, 'AgentResult', { ...runResult, agentRun: runResult.agentRun?.GetAll() ?? null });
 
             if (runResult.success) {
                 return {
