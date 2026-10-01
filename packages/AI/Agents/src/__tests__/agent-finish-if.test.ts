@@ -397,6 +397,20 @@ describe('finishIf', () => {
             expect(result).toMatchObject({ step: 'Success', terminate: false });
         });
 
+        it('records a passing gate in shadow mode, and returns the sub-agent step unchanged, so the run continues', async () => {
+            internals._agentTypePromptParams = { finishIfMode: 'shadow' };
+            subAgentSucceeded();
+            const ask = vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(likelihoods(0.97));
+
+            const result = await agent.TestExecuteNextStep(makeParams(), subAgentDecision());
+
+            expect(ask).toHaveBeenCalledTimes(1);
+            // The Finish check step records what the mode allows; the step returned is what the loop acts on.
+            expect(result).toMatchObject({ step: 'Success', terminate: false, newPayload: { merged: true } });
+            expect(result.message).not.toBe(FINISH_IF.message);
+            expect(finishChecks).toEqual([expect.objectContaining({ passed: true, mode: 'shadow', endedRun: false })]);
+        });
+
         it('returns the sub-agent step unchanged, rather than throwing out of the loop, when the gate throws', async () => {
             subAgentSucceeded();
             vi.spyOn(decisions, 'Ask').mockRejectedValueOnce(new Error('network down'));
