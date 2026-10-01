@@ -138,6 +138,30 @@ function addPersistResult(total: PersistSchemaResult, part: PersistSchemaResult)
     total.FieldsDeactivated.push(...part.FieldsDeactivated);
 }
 
+/**
+ * A name-only object for the final pass of a streamed persist, which exists to tell the absent-
+ * object retirement which objects the source still has. It must carry NO opinion: the persist
+ * overlay treats any non-empty label or description as the source's, so a stub labelled with its
+ * own name would overwrite every stored DisplayName with the raw object name. An empty label is
+ * silence to the overlay, and a row that is somehow new still gets its name as display name.
+ */
+function nameStub(externalName: string): SourceObjectInfo {
+    return { ExternalName: externalName, ExternalLabel: '', Fields: [], PrimaryKeyFields: [], Relationships: [] };
+}
+
+/**
+ * Runs the work it is handed one item at a time, in arrival order, however many callers hand work
+ * in at once. A failure belongs to the caller that handed it in; it never stalls the next one.
+ */
+function serialQueue(): <T>(work: () => Promise<T>) => Promise<T> {
+    let tail: Promise<void> = Promise.resolve();
+    return <T>(work: () => Promise<T>): Promise<T> => {
+        const run = tail.then(work);
+        tail = run.then(() => undefined, () => undefined);
+        return run;
+    };
+}
+
 /** Options for the creation/refresh pipeline run. */
 export interface ConnectorCreationPipelineOptions {
     /** The connector instance to drive (already constructed by caller). */
@@ -635,11 +659,98 @@ export class IntegrationConnectorCreationPipeline {
                 lastEmitted = scanned;
                 emitter.heartbeat('Introspect', `scanned ${scanned}/${total} objects`, { processed: scanned, totalKnown: total });
             };
+
+            // §7 — a SCOPED introspection asked about a named subset. IntrospectSchema already
+            // honours the filter; DiscoverObjects does not take it, so without this the scoped run
+            // pulled and sampled the whole runtime catalog anyway.
+            const wantedNames = opts.IntrospectOptions?.ObjectNames;
+            const wanted = wantedNames && wantedNames.length > 0
+                ? new Set(wantedNames.map(n => n.toLowerCase()))
+                : null;
+            const inScope = (name: string): boolean => !wanted || wanted.has(name.toLowerCase());
+
+            const declaredNames: string[] = [];
+            const seen = new Set<string>();
+            const sampledDeclared = new Set<string>();
+            let runtimeAdded = 0;
+            let unsampledForTime = 0;
+            let unsampledForMemory = 0;
+
+            // Per-object progress. Everything below this point is the expensive half of discovery —
+            // one read-path sample per object — and it emitted nothing, so a consumer watching a
+            // 23-object source saw the same silence as a 5-object one for however long it ran.
+            // The denominator is the union BOTH passes will sample (in-scope runtime objects plus
+            // in-scope declared ones) rather than either loop's own length, so the total is fixed
+            // before the first sample instead of revising upward when the second pass starts. (A
+            // STREAMED declared catalog is the exception: its size is unknown until the stream
+            // ends, so the denominator grows as it arrives.)
+            const sampleUniverse = new Set<string>();
+            // Keyed, not counted: a name the connector surfaces twice is sampled twice by the loop
+            // below, and a bare counter would then report "24 of 23".
+            const announced = new Set<string>();
+            const announceSample = (name: string): void => {
+                const k = name.toLowerCase();
+                if (announced.has(k)) return;
+                announced.add(k);
+                emitter.heartbeat('Introspect', `Sampling "${name}" (${announced.size} of ${sampleUniverse.size})`, {
+                    processed: announced.size,
+                    totalKnown: sampleUniverse.size,
+                    skipped: unsampledForTime,
+                });
+            };
+
+            // STREAMING. When the caller persists per object (onObject), each declared object is
+            // sampled HERE, as the connector hands it over, and then handed on — never collected.
+            // Everything after IntrospectSchema reads `schema.Objects`, which is empty by design
+            // when the connector streamed, so without this nothing streamed would be sampled and
+            // every runtime object would look brand new. Sampling stays serial, as it is when the
+            // catalog is accumulated, even when the connector describes several objects at once.
+            const streamedNames: string[] = [];
+            let streamedFields = 0;
+            const handOff = async (obj: SourceObjectInfo): Promise<void> => {
+                streamedNames.push(obj.ExternalName);
+                streamedFields += obj.Fields.length;
+                await onObject!(obj);
+            };
+            const serially = serialQueue();
+            const streamDeclared = async (obj: SourceObjectInfo): Promise<void> => {
+                const key = obj.ExternalName.toLowerCase();
+                declaredNames.push(obj.ExternalName);
+                seen.add(key);
+                if (inScope(obj.ExternalName)) {
+                    sampleUniverse.add(key);
+                    await serially(async () => {
+                        // Two declared entries differing only by case are ONE object: sample it once.
+                        if (sampledDeclared.has(key)) return;
+                        announceSample(obj.ExternalName);
+                        if (outOfTime()) { unsampledForTime++; return; }
+                        if (outOfMemory()) { unsampledForMemory++; return; }
+                        sampledDeclared.add(key);
+                        await this.SampleDeclaredObjectInPlace(obj, obj.ExternalName, opts, emitter);
+                    });
+                }
+                await handOff(obj);
+            };
+
             const schema = await opts.Connector.IntrospectSchema(
                 opts.CompanyIntegration,
                 opts.ContextUser,
-                { ...(opts.IntrospectOptions ?? {}), OnProgress: onProgress, OnObject: onObject }
+                { ...(opts.IntrospectOptions ?? {}), OnProgress: onProgress, OnObject: onObject ? streamDeclared : undefined }
             );
+            // Streamed if the connector says so — or if it called the handler at all: an override
+            // that forwards OnObject but rebuilds its result without the flag would otherwise get a
+            // whole-schema persist of an EMPTY schema, which on an authoritative comprehensive
+            // refresh finds every stored object absent and retires all of them.
+            const streamed = !!onObject && (schema.Streamed === true || streamedNames.length > 0);
+            if (streamed) {
+                // Anything the connector returned rather than streamed goes through the same door.
+                for (const leftover of schema.Objects.splice(0)) await streamDeclared(leftover);
+            } else {
+                for (const o of schema.Objects) {
+                    declaredNames.push(o.ExternalName);
+                    seen.add(o.ExternalName.toLowerCase());
+                }
+            }
 
             // UNIVERSAL additive runtime-object discovery — the single chokepoint EVERY connector
             // funnels through, regardless of which base it extends or whether that base's
@@ -650,8 +761,6 @@ export class IntegrationConnectorCreationPipeline {
             // can't silently lose runtime discovery). PersistDiscoveredSchema is additive, so
             // declared objects are preserved and runtime-only objects (e.g. an auth-gated file
             // feed's streams) get created as Discovered. Errors are SURFACED, never swallowed.
-            const declaredNames = schema.Objects.map(o => o.ExternalName);
-            const seen = new Set(declaredNames.map(n => n.toLowerCase()));
             let runtimeObjects: ExternalObjectSchema[] = [];
             // A DiscoverObjects failure used to end sampling for the ENTIRE run: the loop below was
             // the only thing that sampled, and it iterated this (now empty) list. The declared
@@ -668,47 +777,15 @@ export class IntegrationConnectorCreationPipeline {
                 console.error(`[IntrospectPipeline] DiscoverObjects failed: ${msg}`);
             }
 
-            // §7 — a SCOPED introspection asked about a named subset. IntrospectSchema already
-            // honours the filter; DiscoverObjects does not take it, so without this the scoped run
-            // pulled and sampled the whole runtime catalog anyway.
-            const wantedNames = opts.IntrospectOptions?.ObjectNames;
-            const wanted = wantedNames && wantedNames.length > 0
-                ? new Set(wantedNames.map(n => n.toLowerCase()))
-                : null;
-            const inScope = (name: string): boolean => !wanted || wanted.has(name.toLowerCase());
-
-            const sampledDeclared = new Set<string>();
-            let runtimeAdded = 0;
-            let unsampledForTime = 0;
-            let unsampledForMemory = 0;
-
-            // Per-object progress. Everything below this point is the expensive half of discovery —
-            // one read-path sample per object — and it emitted nothing, so a consumer watching a
-            // 23-object source saw the same silence as a 5-object one for however long it ran.
-            // The denominator is the union BOTH passes will sample (in-scope runtime objects plus
-            // in-scope declared ones) rather than either loop's own length, so the total is fixed
-            // before the first sample instead of revising upward when the second pass starts.
-            const sampleUniverse = new Set<string>();
             for (const d of runtimeObjects) if (inScope(d.Name)) sampleUniverse.add(d.Name.toLowerCase());
             for (const n of declaredNames) if (inScope(n)) sampleUniverse.add(n.toLowerCase());
-            const sampleTotal = sampleUniverse.size;
-            // Keyed, not counted: a name the connector surfaces twice is sampled twice by the loop
-            // below, and a bare counter would then report "24 of 23".
-            const announced = new Set<string>();
-            const announceSample = (name: string): void => {
-                const k = name.toLowerCase();
-                if (announced.has(k)) return;
-                announced.add(k);
-                emitter.heartbeat('Introspect', `Sampling "${name}" (${announced.size} of ${sampleTotal})`, {
-                    processed: announced.size,
-                    totalKnown: sampleTotal,
-                    skipped: unsampledForTime,
-                });
-            };
 
             for (const d of runtimeObjects) {
                 const key = d.Name.toLowerCase();
                 if (!inScope(d.Name)) continue;
+                // Streamed: a declared object was already sampled (or budget-skipped) and handed on
+                // as it arrived — counting it again here would report it twice.
+                if (streamed && seen.has(key)) continue;
                 // Announced BEFORE the budget check so an exhausted budget reads as a run that
                 // reached the end of its object list, not one that stalled partway through it.
                 announceSample(d.Name);
@@ -741,7 +818,7 @@ export class IntegrationConnectorCreationPipeline {
                     emitter.stageError('Introspect', `DiscoverFieldsViaFetch failed for "${d.Name}": ${msg}`, { code: 'discover-fields-failed' });
                     console.error(`[IntrospectPipeline] DiscoverFieldsViaFetch failed for "${d.Name}": ${msg}`);
                 }
-                schema.Objects.push({
+                const built: SourceObjectInfo = {
                     ExternalName: d.Name,
                     ExternalLabel: d.Label,
                     Description: d.Description,
@@ -767,7 +844,10 @@ export class IntegrationConnectorCreationPipeline {
                     Relationships: fields
                         .filter(f => (f.IsForeignKey ?? false) && f.ForeignKeyTarget)
                         .map(f => ({ FieldName: f.Name, TargetObject: f.ForeignKeyTarget!, TargetField: 'ID' })),
-                });
+                };
+                // Streamed: persisted now and released, like every other object of a streamed run.
+                if (streamed) await handOff(built);
+                else schema.Objects.push(built);
                 runtimeAdded++;
             }
 
@@ -777,8 +857,9 @@ export class IntegrationConnectorCreationPipeline {
             // for every object when DiscoverObjects fails — was never sampled at all. It kept whatever
             // widths the catalog guessed (a truncation waiting to happen) and could only ever gain its
             // undeclared columns later, one sync at a time, through the overflow path.
+            // (Streamed: every declared object went through streamDeclared, which already sampled it.)
             let declaredOnlySampled = 0;
-            for (const name of declaredNames) {
+            for (const name of streamed ? [] : declaredNames) {
                 const key = name.toLowerCase();
                 if (sampledDeclared.has(key) || !inScope(name)) continue;
                 announceSample(name);
@@ -819,23 +900,25 @@ export class IntegrationConnectorCreationPipeline {
                 });
                 console.warn(`[IntrospectPipeline] ${msg}`);
             }
-            console.log(`[IntrospectPipeline] declared=${declaredNames.length} runtime-added=${runtimeAdded} declared-only-sampled=${declaredOnlySampled} unsampled-for-time=${unsampledForTime} unsampled-for-memory=${unsampledForMemory} total=${schema.Objects.length}`);
+            // A streamed run handed its objects on instead of keeping them, so count what it handed.
+            const discovered = streamedNames.length + schema.Objects.length;
+            console.log(`[IntrospectPipeline] declared=${declaredNames.length} runtime-added=${runtimeAdded} declared-only-sampled=${declaredOnlySampled} unsampled-for-time=${unsampledForTime} unsampled-for-memory=${unsampledForMemory} streamed=${streamed} total=${discovered}`);
 
-            const fieldCount = schema.Objects.reduce((acc, o) => acc + o.Fields.length, 0);
+            const fieldCount = streamedFields + schema.Objects.reduce((acc, o) => acc + o.Fields.length, 0);
             emitter.stageComplete('Introspect', {
-                processed: schema.Objects.length,
-                succeeded: schema.Objects.length,
-                totalKnown: schema.Objects.length,
+                processed: discovered,
+                succeeded: discovered,
+                totalKnown: discovered,
             });
             emitter.checkpoint('Introspect', {
-                objectsDiscovered: schema.Objects.length,
+                objectsDiscovered: discovered,
                 fieldsDiscovered: fieldCount,
                 durationMs: Date.now() - startMs,
                 discoverObjectsFailed,
                 unsampledForTime,
                 unsampledForMemory,
             });
-            return schema;
+            return streamed ? { ...schema, Objects: [], Streamed: true } : schema;
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             emitter.stageError('Introspect', msg, { code: 'introspect-failed' });
@@ -958,6 +1041,9 @@ export class IntegrationConnectorCreationPipeline {
         const agg = emptyPersistResult();
         const onObject = async (obj: SourceObjectInfo): Promise<void> => {
             names.push(obj.ExternalName);
+            // Not authoritative: the source's claim is only known once the stream ends, so the
+            // per-object persist cannot retire anything yet. Field retirement is requested here so
+            // the intent is in one place, but it stays gated on that claim inside PersistDiscoveredSchema.
             const r = await this.StagePersist(
                 emitter, opts,
                 { Objects: [obj], IsAuthoritative: false },
@@ -970,13 +1056,13 @@ export class IntegrationConnectorCreationPipeline {
             // The connector did not stream — persist the whole schema exactly as before.
             return withDeadline('Persist', this.StagePersist(emitter, opts, sourceSchema));
         }
+        // The final name pass exists only to retire absent OBJECTS; with nothing to retire it would
+        // be one no-op upsert per object.
+        if (!opts.DeactivateAbsent) return agg;
         const tail = await this.StagePersist(
             emitter, opts,
-            {
-                Objects: names.map(n => ({ ExternalName: n, ExternalLabel: n, Fields: [], PrimaryKeyFields: [], Relationships: [] })),
-                IsAuthoritative: sourceSchema.IsAuthoritative,
-            },
-            { DeactivateAbsentObjects: opts.DeactivateAbsent ?? false, DeactivateAbsentFields: false },
+            { Objects: names.map(n => nameStub(n)), IsAuthoritative: sourceSchema.IsAuthoritative },
+            { DeactivateAbsentObjects: true, DeactivateAbsentFields: false },
         );
         agg.ObjectsDeactivated.push(...tail.ObjectsDeactivated);
         return agg;
