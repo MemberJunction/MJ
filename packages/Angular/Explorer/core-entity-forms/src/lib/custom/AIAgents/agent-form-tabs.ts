@@ -35,16 +35,7 @@ export const AGENT_TAB_DESIGNER = 'designer';
 export const AGENT_TAB_DETAILS = 'details';
 export const AGENT_TAB_INVOCATIONS = 'invocations';
 export const AGENT_TAB_RUBRICS = 'rubrics';
-
-/** Default Evaluation links first, then SelfCheck, then ProductionSampling, then sequence. */
-export function sortAgentRubrics<T extends { Purpose?: string; IsDefault?: boolean | number; Sequence?: number; Rubric?: string }>(rows: T[]): T[] {
-    const purposeOrder = (purpose: string | undefined) => purpose === 'Evaluation' ? 0 : purpose === 'SelfCheck' ? 1 : 2;
-    return [...rows].sort((left, right) =>
-        Number(right.IsDefault === true || right.IsDefault === 1) - Number(left.IsDefault === true || left.IsDefault === 1)
-        || purposeOrder(left.Purpose) - purposeOrder(right.Purpose)
-        || Number(left.Sequence ?? 0) - Number(right.Sequence ?? 0)
-        || String(left.Rubric ?? '').localeCompare(String(right.Rubric ?? '')));
-}
+export { sortAgentRubrics } from '../../../../../../Generic/agents/src/lib/components/agent-rubrics.model';
 
 /**
  * Builds the tab strip and resolves which tab is active.
