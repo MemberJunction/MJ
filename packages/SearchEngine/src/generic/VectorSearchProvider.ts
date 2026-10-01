@@ -12,9 +12,10 @@
 import { EntityInfo, LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey } from '@memberjunction/core';
 import { MJVectorIndexEntity, MJVectorDatabaseEntity, MJContentSourceEntity, MJEntityDocumentEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
-import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai';
+import { GetAIAPIKey } from '@memberjunction/ai';
+import { AIEmbeddingRunner } from '@memberjunction/ai-prompts';
 import { VectorDBBase, BaseResponse, QueryByVectorValues } from '@memberjunction/ai-vectordb';
-import { MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseSearchProvider } from './ISearchProvider';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints, ScopeExternalIndexConstraint } from './search.types';
 import { CheckScopeJsonFilter, ScopeFilterCheck } from './ScopeFilterGuard';
@@ -53,7 +54,10 @@ export class VectorSearchProvider extends BaseSearchProvider {
 
     private available = false;
 
-    /** LRU cache for query embeddings. Key = `${modelDriverClass}::${query}`, Value = embedding vector */
+    /**
+     * LRU cache for query embeddings. Key = `${modelID}::${dimensions}::${query}` (see
+     * {@link queryEmbeddingCacheKey}), Value = embedding vector.
+     */
     private static embeddingCache = new Map<string, EmbeddingCacheEntry>();
     private static readonly CACHE_MAX_SIZE = 200;
     private static readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -172,6 +176,15 @@ export class VectorSearchProvider extends BaseSearchProvider {
         return null;
     }
 
+    /**
+     * Cache key for a query embedding. It names the model and the dimension, not the driver: two
+     * models on one driver (two local Xenova models, or two OpenAI embedding models) produce vectors
+     * that are not interchangeable, and neither are one model's vectors at two dimensions.
+     */
+    private queryEmbeddingCacheKey(modelID: string, dimensions: number | undefined, query: string): string {
+        return `${NormalizeUUID(modelID)}::${dimensions ?? 'native'}::${query}`;
+    }
+
     /** Store an embedding in the cache, evicting the oldest entry if at capacity */
     private setCachedEmbedding(key: string, vector: number[]): void {
         // Evict least-recently-used (first key in insertion order) if at capacity
@@ -221,39 +234,31 @@ export class VectorSearchProvider extends BaseSearchProvider {
                 return [];
             }
 
-            const apiKey = GetAIAPIKey(model.DriverClass);
             // All indexes in this model group share the same embedding model; they should also
             // share the same dimension config. Take the first non-null Dimensions value —
             // undefined means "use the model's native default".
             const dimensions = indexes.find(idx => idx.Dimensions != null)?.Dimensions ?? undefined;
             // Check embedding cache before calling the model
-            const cacheKey = `${model.DriverClass}::${query}`;
+            const cacheKey = this.queryEmbeddingCacheKey(model.ID, dimensions, query);
             let queryVector = this.getCachedEmbedding(cacheKey);
 
             if (queryVector) {
                 LogStatus(`VectorSearchProvider: Embedding cache hit for model ${model.Name}`);
             } else {
-                const embeddingInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
-                    BaseEmbeddings, model.DriverClass, apiKey
-                );
-                if (!embeddingInstance) {
-                    LogError(`VectorSearchProvider: Failed to create embedding for ${model.DriverClass}`);
+                const embeddingRunner = new AIEmbeddingRunner();
+                const embedResult = await embeddingRunner.RunEmbedding({
+                    Texts: [query],
+                    ModelID: model.ID,
+                    Dimensions: dimensions,
+                    ContextUser: contextUser,
+                    Description: `Vector search query embedding for model ${model.Name}`,
+                });
+                if (!embedResult?.Success || !embedResult?.Vectors || !embedResult.Vectors[0]?.length) {
+                    LogError(`VectorSearchProvider: Failed to embed with ${model.Name}: ${embedResult?.ErrorMessage ?? 'No vector returned'}`);
                     return [];
                 }
 
-                // Some embedding drivers (e.g. LocalEmbedding via Xenova/transformers)
-                // require the model identifier to load the correct pipeline.
-                // Prefer APIName (the canonical identifier the driver expects)
-                // and fall back to Name when APIName isn't set or is empty.
-                // `||` (not `??`) so an empty-string `APIName` also falls back.
-                const modelName = model.APIName || model.Name;
-                const embedResult = await embeddingInstance.EmbedText({ text: query, model: modelName, dimensions });
-                if (!embedResult?.vector?.length) {
-                    LogError(`VectorSearchProvider: Failed to embed with ${model.Name}`);
-                    return [];
-                }
-
-                queryVector = embedResult.vector;
+                queryVector = embedResult.Vectors[0];
                 this.setCachedEmbedding(cacheKey, queryVector);
             }
 

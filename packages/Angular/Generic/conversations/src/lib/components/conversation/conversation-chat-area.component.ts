@@ -821,6 +821,22 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   @Input() AutoNameConversation: boolean = true;
 
   /**
+   * Whether an untagged message asks one fast typed decision which agent in the conversation
+   * should answer it, instead of always going back to the last agent that answered. It replaces
+   * that agent only when the answer is confident and arrives within `DECISION_ROUTING_TIMEOUT_MS`
+   * (250 ms). False (the default)
+   * changes nothing: no decision call, and today's routing. See
+   * `MessageInputComponent.EnableDecisionRouting`.
+   *
+   * Turning it on sends conversation text to the model behind the `Default Decision` prompt, which
+   * can be a different vendor from the agents' own: the first 1,000 characters of the new message,
+   * the last 6 turns (150 characters each), each participant's name, description and last reply,
+   * and the names of their artifact versions. Each call writes an `MJ: AI Prompt Runs` row, even
+   * when the answer comes too late to be used.
+   */
+  @Input() EnableDecisionRouting: boolean = false;
+
+  /**
    * Scope to apply when this surface CREATES a new conversation. Forwarded
    * to `ConversationEngine.CreateConversation` so the new row's
    * `ApplicationScope` column is stamped correctly. Embedded surfaces
