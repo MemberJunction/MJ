@@ -1,3 +1,9 @@
+# Week of 2026-09-26 — ALL IDEAS REJECTED
+
+> **Status (2026-10-01):** All three ideas proposed this week were reviewed and **rejected** by AN-BC.
+> None of the three proposals (Search Relevance Confidence Standard, Backup & Restore Assurance Layer,
+> Outbound AI Content Assurance Gate) will be implemented. This PR is being closed without merge.
+
 # Week of 2026-09-26
 
 Three framework-level improvement ideas, grounded in this week's open GitHub issues, the active PR
