@@ -164,6 +164,17 @@ describe('GetFormContributionsForEntityAction — what a row claims, and identit
         expect(payload.Contributions.map((c: { ContributionID: string }) => c.ContributionID)).toEqual(['mine']);
     });
 
+    it('looks up component labels only for the rows it lists', async () => {
+        hoisted.contributions = [
+            contribution({ ID: 'global', Scope: 'Global', ComponentID: 'COMP-SHARED' }),
+            contribution({ ID: 'mine', Scope: 'User', ComponentID: 'COMP-MINE' }),
+        ];
+        await run(params({ EntityName: 'MJ: Users' }));
+        const componentFilter = hoisted.filters.find(f => f.startsWith('ID IN')) ?? '';
+        expect(componentFilter).toContain("'COMP-MINE'");
+        expect(componentFilter).not.toContain('COMP-SHARED');
+    });
+
     it('lists every scope on an ordinary entity', async () => {
         hoisted.contributions = [contribution({ ID: 'global', Scope: 'Global' }), contribution({ ID: 'mine', Scope: 'User' })];
         const payload = JSON.parse((await run(params())).Message ?? '{}');

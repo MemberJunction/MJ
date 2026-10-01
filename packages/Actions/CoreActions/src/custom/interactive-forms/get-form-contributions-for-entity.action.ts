@@ -64,11 +64,12 @@ export class GetFormContributionsForEntityAction extends BaseAction {
             }, user);
             if (!rows.Success) return Failure("QUERY_FAILED", rows.ErrorMessage ?? 'Contribution lookup failed.');
 
-            const components = await this.loadComponentLabels(rv, rows.Results ?? [], user);
+            const applicable = (rows.Results ?? []).filter(r => FormScopeAllowedOnEntity(entity.Name, r.Scope));
+            const components = await this.loadComponentLabels(rv, applicable, user);
 
             const statusRank = (s: string): number => (s === 'Active' ? 0 : s === 'Pending' ? 1 : 2);
-            const summaries: FormContributionSummary[] = (rows.Results ?? [])
-                .filter(r => FormScopeAllowedOnEntity(entity.Name, r.Scope))
+            const summaries: FormContributionSummary[] = applicable
+                .slice()
                 .sort((a, b) => statusRank(a.Status) - statusRank(b.Status) || (b.Precedence ?? 0) - (a.Precedence ?? 0))
                 .map(r => {
                     const component = components.get(r.ComponentID.toLowerCase());
