@@ -32,8 +32,9 @@ This guide covers the complete caching, pub/sub, and real-time data synchronizat
 22. [The User Cache](#the-user-cache)
 23. [Publish modes, leases and the sweep](#publish-modes-leases-and-the-sweep)
 24. [Categories and expiry](#categories-and-expiry)
-25. [Clearing the shared cache from a tool](#clearing-the-shared-cache-from-a-tool)
-26. [Process-local caches: a miss is not a negative fact](#process-local-caches-a-miss-is-not-a-negative-fact)
+25. [Enabling sweeping (operator runbook)](#enabling-sweeping-operator-runbook)
+26. [Clearing the shared cache from a tool](#clearing-the-shared-cache-from-a-tool)
+27. [Process-local caches: a miss is not a negative fact](#process-local-caches-a-miss-is-not-a-negative-fact)
 
 ---
 
@@ -2419,6 +2420,64 @@ clock: every server would delete the same keys on its own schedule, publish a `r
 and make every peer reload — a fleet-wide storm for keys Redis expires by itself. `LocalCacheManager`
 therefore applies its local TTL only to a process-private store, and on a shared one merely *forgets*
 an entry whose own expiry has passed, leaving the key to the store.
+
+## Enabling sweeping (operator runbook)
+
+MJ's periodic checks are **off in effect** on a stock installation: all four tick, and none of them
+reads the database, because every MJ entity ships with `TrustServerCacheCompletely = true` — a
+declaration that every mutation flows through `BaseEntity` and therefore fires an event the caches
+already hear. You enable a sweep by **declaring that an entity can change without one**, not by
+turning a switch on.
+
+### The four periodic checks
+
+| Check | Setting (`cacheSettings` unless noted) | Reads the database when |
+|---|---|---|
+| Engine sweep | `engineSweepIntervalSeconds` (300) | an engine holds a config whose entity declares drift |
+| Metadata sweep | `metadataSweepIntervalSeconds` (300) | a metadata-dataset member entity declares drift |
+| User-cache staleness check | `userCacheCheckIntervalSeconds` (300) | `MJ: Users` or `MJ: User Roles` declares drift |
+| User-cache periodic reload | `databaseSettings.metadataCacheRefreshInterval` (180 s) | as above |
+
+Each takes `0` to stop its timer outright. **If you want the database to idle** — Azure SQL serverless,
+where any recurring query prevents auto-pause — the default already achieves that; set the intervals to
+`0` as well if you want the timers gone entirely.
+
+### Turning a sweep on
+
+1. **Decide which entities you actually write outside MJ.** Bulk loads, ETL, maintenance scripts,
+   another application writing the same tables. Those, and only those.
+2. **Declare it** by setting `TrustServerCacheCompletely = 0` on each. The platform already requires
+   this for `AllowDirectSQLInsert`/`Update`/`Delete`, so entities that sanction direct SQL carry it.
+   Prefer the metadata path — a `metadata/entities/*.json` entry pushed with `mj sync push` — over an
+   ad-hoc `UPDATE`, because the push is versioned *and* invalidates the snapshot for you (step 3).
+3. **Invalidate the metadata snapshot**, or the running servers will not see the declaration. This is
+   the step that surprises people, so it is spelled out below.
+4. **Verify**: with a shared cache, a lease key appears for the engine being swept
+   (`{prefix}:__lease__:engine-sweep:<EngineClass>`, or `…:metadata-sweep`), and a sweep that finds
+   drift logs what it reloaded. No lease key means nothing declared drift.
+
+### Why step 3 exists
+
+Servers read `TrustServerCacheCompletely` from the **entity metadata they hold**, and a warm-booting
+server reads that metadata from the shared snapshot. So a flag you change in the database is invisible
+until the snapshot is replaced:
+
+- **`mj sync push` or `mj cache clear` removes the snapshot**, which makes every server re-check its
+  metadata against the database and adopt the change. These are the normal paths and they work.
+- **Restarting alone is not enough.** A restarted server adopts the existing snapshot and keeps the old
+  flag. Verified on a two-server pair: after a raw SQL flag change the sweep ignored the entity across
+  several intervals and swept it ~12 s after the snapshot was dropped.
+
+There is a pleasing consequence for the metadata sweep in particular: **enabling it is itself a
+metadata change**, so it cannot bootstrap itself — the very staleness it exists to detect hides the
+declaration that switches it on. One explicit `mj cache clear` (or `mj sync push`) breaks that circle,
+and from then on the sweep keeps metadata converged on its own.
+
+### What sweeping does not cover
+
+- **A trusted entity whose event was lost** to a pub/sub outage. The sweep will not look at it, by
+  design. Redis reconnection and recovery reconciliation are tracked separately.
+- **An open browser form.** A sweep converges servers, not a form holding a record it already loaded.
 
 ## Clearing the shared cache from a tool
 

@@ -3235,3 +3235,23 @@ Three tests, all three verified to fail with the check removed (`expected [ 'eng
 `SweepAgainstDatabase` already returned early with no configs. So the gain is Redis traffic and the
 clarity of not claiming a fleet-wide lock to do nothing — stated that way in the test rather than
 overclaimed.
+
+### 30.2 Operator runbook, and the bootstrap circle
+
+The owner pointed out that on a stock installation the metadata sweep only starts working once an
+operator declares drift on a metadata entity **and the servers see that declaration** — which, per
+§28's finding, needs the snapshot invalidated rather than merely a restart. Agreed, and it wants
+documentation rather than code.
+
+`guides/CACHING_AND_PUBSUB_GUIDE.md` now carries an **Enabling sweeping (operator runbook)** section:
+the four periodic checks in one table with their settings and the condition under which each reads the
+database; the four-step procedure (decide which entities you write outside MJ → declare it, preferably
+through `metadata/` so the push versions it *and* invalidates the snapshot → invalidate the snapshot →
+verify by looking for the lease key); why the invalidation step exists, with the verified observation
+that restarting alone is not enough; and what sweeping does not cover.
+
+One point is worth stating on its own, because it is a genuine circularity: **enabling the metadata
+sweep is itself a metadata change.** The staleness it exists to detect hides the declaration that
+switches it on, so the first invalidation has to be explicit — one `mj cache clear` or `mj sync push`.
+After that the sweep keeps metadata converged by itself. Any future operator who hits this will think
+they have found a bug; the runbook says so plainly instead.
