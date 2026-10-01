@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { RunActionParams, ActionResultSimple } from '@memberjunction/actions-base';
+import type { UserInfo } from '@memberjunction/core';
+import { ComponentWriteRefusal, UserCanManageFormDefaults, type FormScope } from '@memberjunction/core-entities';
 
 vi.mock('@memberjunction/global', async () => {
     const actual = await vi.importActual<Record<string, unknown>>('@memberjunction/global');
@@ -38,6 +40,8 @@ const { hoisted } = vi.hoisted(() => ({
         failingSaves: new Set<string>(),
         /** While a transaction is open, saves are pending and reach `committed` only on Commit. */
         tx: { supported: false, open: false, pending: [] as string[], committed: [] as string[], rolledBack: 0 },
+        /** Stands in for the server's component guard: a refusal for a component, or null. */
+        componentGuard: null as ((componentID: string) => string | null) | null,
     },
 }));
 
@@ -171,6 +175,11 @@ vi.mock('@memberjunction/core', async () => {
             async Save(): Promise<boolean> {
                 const id = String(state.record.ID);
                 if (!state.saveOutcome || hoisted.failingSaves.has(id) || hoisted.failingSaves.has(entityName)) return false;
+                const refusal = entityName === 'MJ: Components' ? hoisted.componentGuard?.(id) : null;
+                if (refusal) {
+                    this.LatestResult = { CompleteMessage: refusal };
+                    return false;
+                }
                 (hoisted.tx.open ? hoisted.tx.pending : hoisted.tx.committed).push(id);
                 return true;
             },
@@ -255,6 +264,7 @@ describe('ModifyInteractiveFormAction', () => {
         hoisted.lintResult = { violations: [] };
         hoisted.failingSaves = new Set();
         hoisted.tx = { supported: false, open: false, pending: [], committed: [], rolledBack: 0 };
+        hoisted.componentGuard = null;
     });
 
     it('returns MISSING_PARAMETER when OverrideID is absent', async () => {
@@ -415,6 +425,68 @@ describe('ModifyInteractiveFormAction', () => {
         expect(newOver.Scope).toBe('User');
         expect(newOver.UserID).toBe('U1');
         expect(newOver.RoleID).toBeNull();
+    });
+
+    /**
+     * The stock UI role may create and update components, and the server refuses a change to a
+     * component that a shared or another user's form uses (`ComponentWriteRefusal`). Here the
+     * component save applies that rule to the overrides that use the component, as the server does.
+     */
+    describe('a UI user without the Manage Form Defaults grant', () => {
+        const plainUser = { ID: 'U1', Name: 'Test', UserRoles: [{ RoleID: 'R1' }] };
+        const guard = vi.fn((componentID: string) => ComponentWriteRefusal({
+            Operation: 'update',
+            ChangedFields: ['Specification', 'Status'],
+            References: [...hoisted.overrides.values()]
+                .map((state) => state.record)
+                .filter((row) => row.ComponentID === componentID)
+                .map((row) => ({ Scope: row.Scope as FormScope, UserID: row.UserID as string | null })),
+            CallerID: plainUser.ID,
+            CallerHoldsGrant: UserCanManageFormDefaults(plainUser as unknown as UserInfo, null),
+        }));
+
+        function asPlainUser(p: RunActionParams): RunActionParams {
+            (p as unknown as { ContextUser: unknown }).ContextUser = plainUser;
+            return p;
+        }
+
+        beforeEach(() => {
+            guard.mockClear();
+            hoisted.componentGuard = guard;
+        });
+
+        it('holds no grant', () => {
+            expect(UserCanManageFormDefaults(plainUser as unknown as UserInfo, null)).toBe(false);
+        });
+
+        it('changes the component of their own form in place', async () => {
+            seed('OVER-P', 'COMP-P', { Status: 'Pending' });
+            const result = await run(new ModifyInteractiveFormAction(), asPlainUser(mkParams('OVER-P')));
+            expect(result.Success).toBe(true);
+            expect(guard).toHaveBeenCalledWith('COMP-P');
+            expect(hoisted.components.get('COMP-P')!.record.Specification).not.toBe('{}');
+        });
+
+        it('sets the component of their own draft aside when bumping its version', async () => {
+            seed('OVER-P', 'COMP-P', { Status: 'Pending' });
+            const p = asPlainUser(mkParams('OVER-P'));
+            p.Params.push({ Name: 'VersionBumpKind', Type: 'Input', Value: 'patch' });
+            const result = await run(new ModifyInteractiveFormAction(), p);
+            expect(result.Success).toBe(true);
+            expect(guard).toHaveBeenCalledWith('COMP-P');
+            // Set only when the component's save went through.
+            expect(JSON.parse(result.Message ?? '{}').DemotedComponentID).toBe('COMP-P');
+            expect(hoisted.components.get('COMP-P')!.record.Status).toBe('Deprecated');
+        });
+
+        it('is refused on a Role form before the component is touched, and the server would refuse it too', async () => {
+            seed('OVER-SHARED', 'COMP-SHARED', { Scope: 'Role', UserID: null, RoleID: 'R1', Status: 'Pending' });
+            const result = await run(new ModifyInteractiveFormAction(), asPlainUser(mkParams('OVER-SHARED')));
+            expect(result.ResultCode).toBe('FORBIDDEN');
+            expect(guard).not.toHaveBeenCalled();
+            expect(hoisted.components.get('COMP-SHARED')!.record.Specification).toBe('{}');
+            expect(guard('COMP-SHARED')).toMatch(/Manage Form Defaults/);
+        });
     });
 
     /** The component and the override are written together or not at all. */

@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { RunActionParams, ActionResultSimple } from '@memberjunction/actions-base';
+import type { UserInfo } from '@memberjunction/core';
+import { ComponentWriteRefusal, UserCanManageFormDefaults, type FormScope } from '@memberjunction/core-entities';
 
 vi.mock('@memberjunction/global', async () => {
     const actual = await vi.importActual<Record<string, unknown>>('@memberjunction/global');
@@ -22,6 +24,8 @@ const { hoisted } = vi.hoisted(() => ({
          * on Commit. Without one (the provider does not support transactions) every save commits.
          */
         tx: { supported: false, open: false, pending: [] as string[], committed: [] as string[], rolledBack: 0 },
+        /** Stands in for the server's component guard: a refusal for a component, or null. */
+        componentGuard: null as ((componentID: string) => string | null) | null,
     },
 }));
 
@@ -38,6 +42,11 @@ function loadedEntity(entityName: string, seed: Record<string, unknown>): Loaded
         async Load() { return true; },
         async Save() {
             if (!target.saveOutcome) return false;
+            const refusal = entityName === 'MJ: Components' ? hoisted.componentGuard?.(target.ID) : null;
+            if (refusal) {
+                target.LatestResult = { CompleteMessage: refusal };
+                return false;
+            }
             target.saved = true;
             recordWrite(`${entityName}:${target.ID}`);
             return true;
@@ -144,6 +153,7 @@ beforeEach(() => {
     hoisted.served = new Set();
     hoisted.newSaveOutcome = new Map();
     hoisted.tx = { supported: false, open: false, pending: [], committed: [], rolledBack: 0 };
+    hoisted.componentGuard = null;
     loadedRow = loadedEntity('MJ: Entity Form Contributions', {
         ID: 'ROW-1', EntityID: 'ENT-PEOPLE', ComponentID: 'COMP-1', Name: 'LTV strip', Description: null, Notes: null,
         Slot: 'before-fields', SortKey: 0, ContributionKey: 'skip:person-ltv', RelatedEntityID: null, RelatedJoinField: null,
@@ -371,6 +381,57 @@ describe('ModifyFormContributionAction', () => {
         it('accepts the caller\'s own row when the stored ID differs only in casing', async () => {
             loadedRow.UserID = 'user-1';
             expect((await run(params())).Success).toBe(true);
+        });
+    });
+
+    /**
+     * The stock UI role may create and update components, and the server refuses a change to a
+     * component that a shared or another user's panel uses (`ComponentWriteRefusal`). Here the
+     * component save applies that rule to the rows that use the component, as the server does.
+     */
+    describe('a UI user without the Manage Form Defaults grant', () => {
+        const guard = vi.fn((componentID: string) => ComponentWriteRefusal({
+            Operation: 'update',
+            ChangedFields: ['Specification', 'Status'],
+            References: [loadedRow]
+                .filter((row) => row.ComponentID === componentID)
+                .map((row) => ({ Scope: row.Scope as FormScope, UserID: row.UserID as string | null })),
+            CallerID: user.ID,
+            CallerHoldsGrant: UserCanManageFormDefaults(user as unknown as UserInfo, provider as never),
+        }));
+
+        beforeEach(() => {
+            guard.mockClear();
+            hoisted.componentGuard = guard;
+        });
+
+        it('holds no grant', () => {
+            expect(UserCanManageFormDefaults(user as unknown as UserInfo, provider as never)).toBe(false);
+        });
+
+        it('changes the component of their own panel in place', async () => {
+            const result = await run(params());
+            expect(result.Success).toBe(true);
+            expect(guard).toHaveBeenCalledWith('COMP-1');
+            expect(loadedComponent.saved).toBe(true);
+        });
+
+        it('sets the component of their own draft aside when bumping its version', async () => {
+            const result = await run(params({ VersionBumpKind: 'minor' }));
+            expect(result.Success).toBe(true);
+            expect(guard).toHaveBeenCalledWith('COMP-1');
+            expect(loadedComponent).toMatchObject({ saved: true, Status: 'Deprecated' });
+        });
+
+        it('is refused on a Role panel before the component is touched, and the server would refuse it too', async () => {
+            Object.assign(loadedRow, { Scope: 'Role', UserID: null, RoleID: 'ROLE-1' });
+            const p = params();
+            p.ContextUser = { ...user, UserRoles: [{ RoleID: 'ROLE-1' }] } as unknown as RunActionParams['ContextUser'];
+            const result = await run(p);
+            expect(result.ResultCode).toBe('FORBIDDEN');
+            expect(guard).not.toHaveBeenCalled();
+            expect(loadedComponent.saved).toBe(false);
+            expect(guard('COMP-1')).toMatch(/Manage Form Defaults/);
         });
     });
 
