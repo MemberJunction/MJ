@@ -10,12 +10,12 @@ const SETTING_KEY = 'mj.form.conversations.headerCollapsed';
     key: 'form-panel:MJ: Conversations:header',
     metadata: {
         entity: 'MJ: Conversations',
-        // 'header' was never a member of FormPanelSlot, so this panel never mounted.
-        // Heroes live in before-fields and declare themselves with presentation.
+        // A hero is a bare strip in before-fields. Its sortKey is above the overview's
+        // (higher draws first), so it draws above the overview cards.
         slot: 'before-fields',
         presentation: 'bare',
         contributionKey: 'conversations:header',
-        sortKey: 10,
+        sortKey: 20,
     },
 })
 @Component({
