@@ -97,6 +97,7 @@ export * from './lib/related-grid-height';
 export * from './lib/interactive-form/interactive-form-panel.component';
 export * from './lib/interactive-form/form-panel-host-props.builder';
 export * from './lib/chrome/form-composition-snapshot';
+export * from './lib/chrome/form-composition-registry';
 export * from './lib/apply/form-placement';
 export * from './lib/apply/form-placement-dialog.component';
 export * from './lib/apply/form-placement-preview.component';

@@ -5,6 +5,8 @@ import { CompositeKey, type BaseEntity } from '@memberjunction/core';
 import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
 import { MjRecordFormContainerComponent } from './record-form-container.component';
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
+import { FormCompositionRegistry } from '../chrome/form-composition-registry';
+import type { FormCompositionSnapshot } from '../chrome/form-composition-snapshot';
 import { DETAILS_SECTION_KEY } from '../chrome/form-chrome';
 import type { FormChromeSpec } from '../chrome/form-chrome';
 import type { BaseFormComponent } from '../base-form-component';
@@ -923,5 +925,100 @@ describe('MjRecordFormContainerComponent (DOM) — the record the snapshot names
   it('names no record for one not saved yet', () => {
     const key = CompositeKey.FromKeyValuePair('ID', 'generated-uuid');
     expect(publish({ IsSaved: false, PrimaryKey: key } as Partial<BaseEntity>)).toBeNull();
+  });
+});
+
+/**
+ * The snapshot lists every section, so a section a contribution or the form's config hides reads
+ * as hidden rather than absent. It is published only when it changed, and into the registry the
+ * apply flow reads, which forgets it when the form goes away.
+ */
+describe('MjRecordFormContainerComponent (DOM) — publishing the composition', () => {
+  type Publishing = { publishCompositionSnapshot(spec: FormChromeSpec): void };
+  const SPEC: FormChromeSpec = { Layout: 'accordion', Groups: [], RelatedRoles: new Map(), MoreSectionKeys: [] };
+
+  function fakeForm(over: Record<string, unknown> = {}) {
+    const emitted: FormCompositionSnapshot[] = [];
+    const form = {
+      record: { IsSaved: true, PrimaryKey: CompositeKey.FromKeyValuePair('ID', 'acct-7') },
+      EntityInfo: { Name: 'Accounts', RelatedEntities: [], ChildEntities: [] },
+      OwnsEntireFormBody: false,
+      CompositionChanged: { emit: (snapshot: FormCompositionSnapshot) => { emitted.push(snapshot); } },
+      CompositionSnapshot: null as FormCompositionSnapshot | null,
+      ...over,
+    };
+    return { form, emitted };
+  }
+
+  /** Adds sections the way a generated form draws them. */
+  function addSections(f: ReturnType<typeof render>, keys: string[]): void {
+    for (const key of keys) {
+      const el = document.createElement('mj-collapsible-panel');
+      el.setAttribute('data-section-key', key);
+      f.nativeElement.appendChild(el);
+    }
+  }
+
+  const publish = (f: ReturnType<typeof render>) => (f.componentInstance as unknown as Publishing).publishCompositionSnapshot(SPEC);
+
+  it('lists a section the form hides, marked hidden', () => {
+    const f = render();
+    addSections(f, ['details', 'notes']);
+    const { form } = fakeForm({ formContext: { hiddenSectionKeys: ['notes'] } });
+    f.componentInstance.FormComponent = form as unknown as BaseFormComponent;
+    publish(f);
+    expect(form.CompositionSnapshot?.Sections.map((s) => [s.Key, s.Hidden])).toEqual([['details', false], ['notes', true]]);
+  });
+
+  it('says which form the user sees', () => {
+    const f = render();
+    const { form } = fakeForm();
+    f.componentInstance.FormComponent = form as unknown as BaseFormComponent;
+    publish(f);
+    expect(form.CompositionSnapshot?.FormChoice).toEqual({ FullCustomForm: false, OverrideID: null, Label: 'Default form' });
+  });
+
+  it('does not publish a snapshot equal to the last one', () => {
+    const f = render();
+    addSections(f, ['details']);
+    const { form, emitted } = fakeForm();
+    f.componentInstance.FormComponent = form as unknown as BaseFormComponent;
+    publish(f);
+    publish(f);
+    expect(emitted).toHaveLength(1);
+    addSections(f, ['notes']);
+    publish(f);
+    expect(emitted).toHaveLength(2);
+  });
+
+  it('registers the snapshot for the apply flow, and forgets it when the form goes away', () => {
+    const f = render();
+    const registry = f.debugElement.injector.get(FormCompositionRegistry);
+    const { form } = fakeForm();
+    f.componentInstance.FormComponent = form as unknown as BaseFormComponent;
+    publish(f);
+    expect(registry.Get('Accounts', 'ID|acct-7')).toBe(form.CompositionSnapshot);
+    f.destroy();
+    expect(registry.Get('Accounts', 'ID|acct-7')).toBeNull();
+  });
+});
+
+/**
+ * A count or chrome-rule result can land after the form is closed. It must not schedule a chrome
+ * pass on a destroyed container or draw it.
+ */
+describe('MjRecordFormContainerComponent (DOM) — after the form is closed', () => {
+  type Internals = { scheduleChromeResolve(): void; chromeResolveTimer: unknown; countRequestToken: number; chromeRulesForEntityId: string | null };
+
+  it('schedules no chrome pass and drops results still in flight', () => {
+    const f = render();
+    const inst = f.componentInstance as unknown as Internals;
+    inst.chromeRulesForEntityId = 'entity-1';
+    const token = inst.countRequestToken;
+    f.destroy();
+    inst.scheduleChromeResolve();
+    expect(inst.chromeResolveTimer).toBeNull();
+    expect(inst.countRequestToken).not.toBe(token);
+    expect(inst.chromeRulesForEntityId).toBeNull();
   });
 });

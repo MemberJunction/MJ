@@ -35,7 +35,8 @@ import { RestoreVersionEvent, RecordChangesComponent } from '@memberjunction/ng-
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ListManagementResult } from '@memberjunction/ng-list-management';
 import { FormSlotCoordinator } from '../panel-slot/form-slot-coordinator.service';
-import { BuildFormCompositionSnapshot } from '../chrome/form-composition-snapshot';
+import { BuildFormCompositionSnapshot, FormCompositionSnapshotsEqual, type FormCompositionSnapshot } from '../chrome/form-composition-snapshot';
+import { FormCompositionRegistry } from '../chrome/form-composition-registry';
 import { FormPanelAdminService } from '../panel-manager/form-panel-admin.service';
 import type { FormChromeSpec } from '../chrome/form-chrome';
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
@@ -165,6 +166,11 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   private host = inject(ElementRef<HTMLElement>);
   /** The placement dialog's unsaved panel, when this form is the dialog's preview. */
   private placementPreview = inject(FORM_PLACEMENT_PREVIEW, { optional: true });
+  private compositionRegistry = inject(FormCompositionRegistry);
+  /** The last snapshot published, and the form it was published on. */
+  private lastComposition: { Form: BaseFormComponent; Snapshot: FormCompositionSnapshot } | null = null;
+  /** Set in ngOnDestroy, so a late async result schedules nothing and draws nothing. */
+  private destroyed = false;
   private destroy$ = new Subject<void>();
   private panelNavReset$ = new Subject<void>();
   private chromeResolveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -804,6 +810,11 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
+    // A count or chrome-rule result still in flight then matches nothing and is dropped.
+    this.countRequestToken++;
+    this.chromeRulesForEntityId = null;
+    this.compositionRegistry.Remove(this);
     if (this.chromeResolveTimer) {
       clearTimeout(this.chromeResolveTimer);
       this.chromeResolveTimer = null;
@@ -1058,6 +1069,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   private scheduleChromeResolve(): void {
+    if (this.destroyed) return;
     if (this.chromeResolveTimer) {
       clearTimeout(this.chromeResolveTimer);
     }
@@ -1118,6 +1130,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   private async loadChromeRules(entityId: string): Promise<void> {
     const rules = await LoadFormChromeRules(entityId, this.ProviderToUse);
+    // Also false once the container is destroyed (ngOnDestroy clears the id).
     if (this.chromeRulesForEntityId !== entityId) return;
     this.chromeRules = rules;
     this.scheduleChromeResolve();
@@ -1260,14 +1273,22 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   /**
-   * Publish what is actually on this form. The record tab forwards this to agent context,
-   * so an agent proposing a contribution can target a slot and section key that exist
-   * rather than guessing from the schema.
+   * Publish what is actually on this form: through `CompositionChanged`, which the record tab
+   * turns into the agent's compact form context, and into the {@link FormCompositionRegistry},
+   * where the apply flow reads the whole snapshot. Every section is listed; the ones the form
+   * does not show are marked hidden. A snapshot equal to the last one published on the same
+   * form is not published again. The placement dialog's preview is not registered: it is not a
+   * form the user has open.
+   *
+   * @param shown The sections the form shows, as the chrome resolve used them.
    */
-  private publishCompositionSnapshot(spec: FormChromeSpec, panels: FormChromePanelSnapshot[] = this.chromePanelSnapshots()): void {
+  private publishCompositionSnapshot(spec: FormChromeSpec, shown: FormChromePanelSnapshot[] = this.chromePanelSnapshots()): void {
     const entity = this.EffectiveEntityInfo;
     const form = this.Fc;
     if (!entity || !form) return;
+    const shownKeys = new Set(shown.map((p) => p.SectionKey));
+    const panels = this.chromePanelSnapshots(new Set(), true);
+    const hiddenSectionKeys = new Set(panels.map((p) => p.SectionKey).filter((key) => !shownKeys.has(key)));
     const hiddenContributionKeys = new Set(
       [...this.contributionInclusionByKey()].filter(([, inclusion]) => inclusion === 'None').map(([key]) => key),
     );
@@ -1280,10 +1301,15 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     const snapshot = BuildFormCompositionSnapshot({
       EntityName: entity.Name,
       RecordPrimaryKey: record?.IsSaved ? record.PrimaryKey.ToURLSegment() : null,
+      FormChoice: {
+        FullCustomForm: form.OwnsEntireFormBody === true,
+        OverrideID: this.EffectiveCurrentVariantID,
+        Label: this.CurrentVariantLabel,
+      },
       Layout: spec.Layout,
       Groups: spec.Groups,
       Panels: panels,
-      HiddenSectionKeys: this.hiddenChromeSectionKeys(),
+      HiddenSectionKeys: hiddenSectionKeys,
       RelatedEntities: this.Fc?.OwnsEntireFormBody ? [] : (entity.RelatedEntities ?? []),
       IsaChildEntityIDs: (entity.ChildEntities ?? []).map((c) => c.ID),
       BakedSectionKeys: this.BakedRelatedSectionKeys,
@@ -1294,7 +1320,11 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       SlotsPresent: this.Fc?.OwnsEntireFormBody ? [] : this.slots.PresentSlots,
       ChromeRuleCount: this.chromeRules.length,
     });
+    const last = this.lastComposition;
+    if (last && last.Form === form && FormCompositionSnapshotsEqual(last.Snapshot, snapshot)) return;
+    this.lastComposition = { Form: form, Snapshot: snapshot };
     form.CompositionSnapshot = snapshot;
+    if (!this.placementPreview) this.compositionRegistry.Publish(this, snapshot);
     form.CompositionChanged.emit(snapshot);
   }
 
@@ -1629,12 +1659,19 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     return hidden;
   }
 
-  private chromePanelSnapshots(skip: ReadonlySet<string> = this.contributionHiddenSectionKeys()): FormChromePanelSnapshot[] {
+  /**
+   * The sections on the form, once each, in panel order.
+   *
+   * @param skip Section keys to leave out.
+   * @param keepHidden Keep the sections the form's own config hides too, rather than leaving
+   *   them out.
+   */
+  private chromePanelSnapshots(skip: ReadonlySet<string> = this.contributionHiddenSectionKeys(), keepHidden = false): FormChromePanelSnapshot[] {
     const ctx = this.Fc?.formContext;
     const byKey = new Map<string, FormChromePanelSnapshot>();
     const add = (snapshot: FormChromePanelSnapshot) => {
       if (!snapshot.SectionKey || skip.has(snapshot.SectionKey)) return;
-      if (IsFormSectionHidden(ctx, snapshot.SectionKey, snapshot.Variant)) return;
+      if (!keepHidden && IsFormSectionHidden(ctx, snapshot.SectionKey, snapshot.Variant)) return;
       if (!byKey.has(snapshot.SectionKey)) {
         byKey.set(snapshot.SectionKey, snapshot);
       }
@@ -1984,7 +2021,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
         ExtraFilter: `EntityID='${EscapeSQLString(record.EntityInfo.ID)}' AND RecordID='${EscapeSQLString(record.PrimaryKey.Values())}'`,
         ResultType: 'count_only'
       });
-      if (result.Success) {
+      if (result.Success && !this.destroyed) {
         this.AttachmentCount = result.TotalRowCount ?? 0;
         this.cdr.detectChanges();
       }
@@ -2007,7 +2044,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
         ExtraFilter: `EntityID='${EscapeSQLString(record.EntityInfo.ID)}' AND RecordID='${EscapeSQLString(record.PrimaryKey.Values())}'`,
         ResultType: 'count_only'
       });
-      if (result.Success) {
+      if (result.Success && !this.destroyed) {
         this.TagCount = result.TotalRowCount ?? 0;
         this.cdr.detectChanges();
       }
@@ -2030,7 +2067,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
         ExtraFilter: `EntityID='${EscapeSQLString(record.EntityInfo.ID)}' AND RecordID='${EscapeSQLString(record.PrimaryKey.ToConcatenatedString())}'`,
         ResultType: 'count_only'
       });
-      if (result.Success) {
+      if (result.Success && !this.destroyed) {
         this.VersionCount = result.TotalRowCount ?? 0;
         this.cdr.detectChanges();
       }

@@ -1,6 +1,6 @@
 // packages/Angular/Generic/base-forms/src/lib/chrome/__tests__/form-composition-snapshot.test.ts
 import { describe, it, expect } from 'vitest';
-import { BuildFormCompositionSnapshot } from '../form-composition-snapshot';
+import { BuildFormAgentContext, BuildFormCompositionSnapshot, FormCompositionSnapshotsEqual, type FormCompositionChoice } from '../form-composition-snapshot';
 import type { FormContributionRegistration, FormContributionRelationship } from '../../panel-slot/form-contribution';
 
 const PEOPLE = 'MJ_BizApps_Common: People';
@@ -13,6 +13,8 @@ const rel = (related: string, id: string, join: string, seq: number): FormContri
 const tickets = rel(TICKETS, 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'PersonID', 1);
 const addresses = rel(ADDR, 'cccccccc-cccc-cccc-cccc-cccccccccccc', 'RecordID', 2);
 
+const STANDARD_FORM: FormCompositionChoice = { FullCustomForm: false, OverrideID: null, Label: 'Default form' };
+
 const regs: FormContributionRegistration[] = [
     { Priority: 0, Source: 'class', Metadata: { entity: PEOPLE, slot: 'before-fields', contributionKey: 'header', presentation: 'bare' } },
     { Priority: 0, Source: 'metadata', ComponentID: 'c1', Title: 'Tickets as cards', Presentation: 'panel',
@@ -23,6 +25,7 @@ describe('BuildFormCompositionSnapshot', () => {
     const snapshot = BuildFormCompositionSnapshot({
         EntityName: PEOPLE,
         RecordPrimaryKey: 'ID|person-1',
+        FormChoice: STANDARD_FORM,
         Layout: 'left-nav',
         Groups: [{ Key: 'details', Title: 'Details', Icon: '', SectionKeys: ['details', 'personalIdentity'], IsMore: false }],
         Panels: [
@@ -63,8 +66,98 @@ describe('BuildFormCompositionSnapshot', () => {
         ]);
     });
 
-    it('carries entity, layout, slots and rule count', () => {
-        expect(snapshot).toMatchObject({ Entity: PEOPLE, Layout: 'left-nav', SlotsPresent: ['before-fields', 'after-fields', 'after-everything'], ChromeRuleCount: 2 });
+    it('carries entity, form choice, layout, slots and rule count', () => {
+        expect(snapshot).toMatchObject({
+            Entity: PEOPLE, FormChoice: STANDARD_FORM, Layout: 'left-nav',
+            SlotsPresent: ['before-fields', 'after-fields', 'after-everything'], ChromeRuleCount: 2,
+        });
+    });
+
+    it('keys each grid once against every peer, two grids on one entity by their join field', () => {
+        const billTo = rel(ADDR, 'cccccccc-cccc-cccc-cccc-cccccccccccc', 'BillToID', 3);
+        const shipTo = rel(ADDR, 'cccccccc-cccc-cccc-cccc-cccccccccccc', 'ShipToID', 4);
+        const both = BuildFormCompositionSnapshot({
+            EntityName: PEOPLE, RecordPrimaryKey: null, FormChoice: STANDARD_FORM, Layout: 'accordion', Groups: [], Panels: [],
+            HiddenSectionKeys: new Set(), RelatedEntities: [tickets, billTo, shipTo], IsaChildEntityIDs: [], BakedSectionKeys: [],
+            Registrations: [], RelatedRoles: new Map(), HiddenContributionKeys: new Set(), SlotsPresent: [], ChromeRuleCount: 0,
+        });
+        expect(both.Related.map((r) => r.SectionKey)).toEqual([
+            'mJBizAppsOrdersEventOrderLines', 'mJBizAppsCommonAddressesBillToID', 'mJBizAppsCommonAddressesShipToID',
+        ]);
+    });
+
+    it('equals a snapshot built from the same input, and differs once a section is hidden', () => {
+        const again = BuildFormCompositionSnapshot({
+            EntityName: PEOPLE, RecordPrimaryKey: 'ID|person-1', FormChoice: STANDARD_FORM, Layout: 'left-nav',
+            Groups: [{ Key: 'details', Title: 'Details', Icon: '', SectionKeys: ['details', 'personalIdentity'], IsMore: false }],
+            Panels: [
+                { SectionKey: 'details', SectionName: 'Details', Variant: 'default' },
+                { SectionKey: 'personalIdentity', SectionName: 'Personal Identity', Variant: 'default' },
+                { SectionKey: 'mJBizAppsCommonAddresses', SectionName: 'Addresses', Variant: 'related-entity' },
+            ],
+            HiddenSectionKeys: new Set(['personalIdentity']), RelatedEntities: [tickets, addresses], IsaChildEntityIDs: [],
+            BakedSectionKeys: ['mJBizAppsCommonAddresses'], Registrations: regs,
+            RelatedRoles: new Map([['mJBizAppsCommonAddresses', 'Primary']]), HiddenContributionKeys: new Set(),
+            SlotsPresent: ['before-fields', 'after-fields', 'after-everything'], ChromeRuleCount: 2,
+        });
+        expect(FormCompositionSnapshotsEqual(snapshot, again)).toBe(true);
+        const changed = { ...again, Sections: again.Sections.map((s) => ({ ...s, Hidden: true })) };
+        expect(FormCompositionSnapshotsEqual(snapshot, changed)).toBe(false);
+        expect(FormCompositionSnapshotsEqual(snapshot, null)).toBe(false);
+    });
+});
+
+/**
+ * Every value of the agent context goes into every agent prompt, so the agent gets a compact form
+ * of the snapshot: which form, which record, and each section with the contribution that holds it.
+ */
+describe('BuildFormAgentContext', () => {
+    const snapshot = BuildFormCompositionSnapshot({
+        EntityName: PEOPLE,
+        RecordPrimaryKey: 'ID|person-1',
+        FormChoice: STANDARD_FORM,
+        Layout: 'left-nav',
+        Groups: [{ Key: 'details', Title: 'Details', Icon: '', SectionKeys: ['details'], IsMore: false }],
+        Panels: [
+            { SectionKey: 'details', SectionName: 'Details', Variant: 'default', Fields: [{ Name: 'Email', Label: 'Email' } as never] },
+            { SectionKey: 'notes', SectionName: 'Notes', Variant: 'default' },
+            { SectionKey: 'mJBizAppsOrdersEventOrderLines', SectionName: 'Tickets', Variant: 'related-entity' },
+            { SectionKey: 'skip:ltv', SectionName: 'Lifetime value', Variant: 'default' },
+        ],
+        HiddenSectionKeys: new Set(['notes', 'mJBizAppsOrdersEventOrderLines']),
+        RelatedEntities: [tickets],
+        IsaChildEntityIDs: [],
+        BakedSectionKeys: [],
+        Registrations: [
+            regs[1],
+            { Priority: 0, Source: 'metadata', ComponentID: 'c2', Title: 'Notes card', Presentation: 'panel',
+              Metadata: { entity: PEOPLE, slot: 'after-fields', contributionKey: 'notes-card', replacesSectionKey: 'notes' } },
+            { Priority: 0, Source: 'metadata', ComponentID: 'c3', Title: 'Lifetime value', Presentation: 'panel',
+              Metadata: { entity: PEOPLE, slot: 'after-fields', contributionKey: 'skip:ltv' } },
+        ],
+        RelatedRoles: new Map(),
+        HiddenContributionKeys: new Set(),
+        SlotsPresent: ['before-fields'],
+        ChromeRuleCount: 0,
+    });
+    const context = BuildFormAgentContext(snapshot);
+
+    it('carries the entity, the record and the form choice', () => {
+        expect(context).toMatchObject({ Entity: PEOPLE, RecordPrimaryKey: 'ID|person-1', FormChoice: STANDARD_FORM });
+    });
+
+    it('lists each section with the contribution that draws it or stands in for it', () => {
+        expect(context.Sections).toEqual([
+            { Key: 'details', Title: 'Details', Variant: 'default', Hidden: false, ContributionKey: null },
+            { Key: 'notes', Title: 'Notes', Variant: 'default', Hidden: true, ContributionKey: 'notes-card' },
+            { Key: 'mJBizAppsOrdersEventOrderLines', Title: 'Tickets', Variant: 'related-entity', Hidden: true, ContributionKey: `related:${TICKETS}:PersonID` },
+            { Key: 'skip:ltv', Title: 'Lifetime value', Variant: 'default', Hidden: false, ContributionKey: 'skip:ltv' },
+        ]);
+    });
+
+    it('leaves out the fields, the rail and the contribution details', () => {
+        expect(Object.keys(context).sort()).toEqual(['Entity', 'FormChoice', 'RecordPrimaryKey', 'Sections']);
+        expect(JSON.stringify(context)).not.toContain('Email');
     });
 });
 
@@ -81,6 +174,7 @@ describe('BuildFormCompositionSnapshot — panels the user hid', () => {
     const build = (hidden: string[]) => BuildFormCompositionSnapshot({
         EntityName: PEOPLE,
         RecordPrimaryKey: null,
+        FormChoice: STANDARD_FORM,
         Layout: 'accordion',
         Groups: [],
         Panels: [],

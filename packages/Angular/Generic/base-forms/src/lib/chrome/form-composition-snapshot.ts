@@ -2,13 +2,14 @@
 import type { FormInclusion, FormRole } from '@memberjunction/core';
 import type { FormPanelSlot } from '../panel-slot/base-form-panel';
 import {
+    CreateRelatedEntitySectionKeyResolver,
     RelatedContributionKey,
-    RelatedEntitySectionKey,
     ResolveContributionKey,
     ReplacedSectionKeys,
     ResolveFormContributionWinners,
     ResolveFormContributions,
     StripJoinFieldBrackets,
+    VisibleFormRelationships,
     type FormContributionRegistration,
     type FormContributionRelationship,
 } from '../panel-slot/form-contribution';
@@ -16,10 +17,10 @@ import { IsPanelHiddenByUser } from '../panel-slot/panel-hides';
 import type { FormChromeGroup, FormChromePanelSnapshot } from './form-chrome';
 
 /**
- * What is on this form right now — the input an agent needs to add or replace one piece.
- * Built by the container after every chrome resolve; published through
- * `BaseFormComponent.CompositionChanged`, then `NavigationService.SetAgentContext`.
- * Shape is mirrored by `SkipFormContext` in @askskip/types; keep field names stable.
+ * What is on this form right now — the input the apply flow needs to add or replace one piece.
+ * Built by the container after every chrome resolve that changes it; published through
+ * `BaseFormComponent.CompositionChanged` and the `FormCompositionRegistry`. It stays in the
+ * browser: an agent is handed the compact {@link FormAgentContext} built from it.
  */
 export interface FormCompositionSection {
     Key: string;
@@ -68,6 +69,16 @@ export interface FormCompositionContribution {
     ReplacesPlace?: boolean;
 }
 
+/** Which form the user sees: the standard form, or one full custom form. */
+export interface FormCompositionChoice {
+    /** True when a full custom form owns the whole body, so no section, grid or panel draws. */
+    FullCustomForm: boolean;
+    /** The `MJ: Entity Form Overrides` row the user sees, or null for the standard form. */
+    OverrideID: string | null;
+    /** The form's name in the form picker. */
+    Label: string;
+}
+
 export interface FormCompositionSnapshot {
     Entity: string;
     /**
@@ -78,6 +89,7 @@ export interface FormCompositionSnapshot {
      * describes rather than assuming it matches the conversation.
      */
     RecordPrimaryKey: string | null;
+    FormChoice: FormCompositionChoice;
     Layout: 'accordion' | 'left-nav';
     Sections: FormCompositionSection[];
     Related: FormCompositionRelated[];
@@ -100,9 +112,12 @@ export interface FormCompositionRailItem {
 export interface BuildFormCompositionSnapshotInput {
     EntityName: string;
     RecordPrimaryKey: string | null;
+    FormChoice: FormCompositionChoice;
     Layout: 'accordion' | 'left-nav';
     Groups: readonly FormChromeGroup[];
+    /** Every section on the form, the hidden ones included. */
     Panels: readonly FormChromePanelSnapshot[];
+    /** The sections in {@link Panels} the form does not show. */
     HiddenSectionKeys: ReadonlySet<string>;
     RelatedEntities: readonly FormContributionRelationship[];
     IsaChildEntityIDs: readonly string[];
@@ -147,14 +162,13 @@ export function BuildFormCompositionSnapshot(input: BuildFormCompositionSnapshot
             .map((w) => RelatedContributionKey(w.RelatedEntity as string, w.RelatedJoinField)),
     );
 
-    const visibleRelated = input.RelatedEntities
-        .filter((rel) => rel.DisplayInForm && !input.IsaChildEntityIDs.some((id) => id.toLowerCase() === rel.RelatedEntityID.toLowerCase()))
-        .sort((a, b) => (a.Sequence ?? 999999) - (b.Sequence ?? 999999) || a.RelatedEntity.localeCompare(b.RelatedEntity));
+    const visibleRelated = VisibleFormRelationships(input.RelatedEntities, input.IsaChildEntityIDs);
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(visibleRelated);
 
     const related: FormCompositionRelated[] = visibleRelated.map((rel) => {
         const join = StripJoinFieldBrackets(rel.RelatedEntityJoinField);
         const key = RelatedContributionKey(rel.RelatedEntity, join);
-        const sectionKey = RelatedEntitySectionKey(rel, visibleRelated);
+        const sectionKey = sectionKeyOf(rel);
         const role = input.RelatedRoles.get(sectionKey);
         return {
             Entity: rel.RelatedEntity,
@@ -189,6 +203,7 @@ export function BuildFormCompositionSnapshot(input: BuildFormCompositionSnapshot
     return {
         Entity: input.EntityName,
         RecordPrimaryKey: input.RecordPrimaryKey,
+        FormChoice: { ...input.FormChoice },
         Layout: input.Layout,
         Sections: input.Panels.map((p) => ({
             Key: p.SectionKey,
@@ -209,5 +224,71 @@ export function BuildFormCompositionSnapshot(input: BuildFormCompositionSnapshot
         })),
         SlotsPresent: [...input.SlotsPresent],
         ChromeRuleCount: input.ChromeRuleCount,
+    };
+}
+
+/**
+ * Whether two snapshots describe the same form. Snapshots are plain data built by
+ * {@link BuildFormCompositionSnapshot} in a fixed key order, so their JSON text compares them.
+ */
+export function FormCompositionSnapshotsEqual(a: FormCompositionSnapshot | null, b: FormCompositionSnapshot | null): boolean {
+    if (a === b) return true;
+    if (!a || !b) return false;
+    return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** One section of {@link FormAgentContext}. */
+export interface FormAgentContextSection {
+    Key: string;
+    Title: string;
+    Variant: string;
+    Hidden: boolean;
+    /** The contribution that draws this section or stands in for it, or null when none does. */
+    ContributionKey: string | null;
+}
+
+/**
+ * The form the user is looking at, as an agent sees it in `AppContext.AdditionalContext.Form`.
+ *
+ * Every value of `AdditionalContext` goes into every agent prompt, so this carries only what
+ * identifies the form and its sections. The rest (fields, rail, contribution details) stays in
+ * the full {@link FormCompositionSnapshot}, which the apply flow reads from the
+ * `FormCompositionRegistry`, and the `Get Form Composition For Entity` and
+ * `Get Form Contributions For Entity` actions report it to an agent that needs it. Keep field
+ * names stable.
+ */
+export interface FormAgentContext {
+    Entity: string;
+    /** The record, as `CompositeKey.ToURLSegment()`; null for a record not saved yet. */
+    RecordPrimaryKey: string | null;
+    FormChoice: FormCompositionChoice;
+    Sections: FormAgentContextSection[];
+}
+
+/** The compact {@link FormAgentContext} of a snapshot. */
+export function BuildFormAgentContext(snapshot: FormCompositionSnapshot): FormAgentContext {
+    const contributionKeys = new Set(snapshot.Contributions.map((c) => c.Key));
+    const holderBySection = new Map<string, string>();
+    // Weakest claim first, so a stronger one overwrites it: a grid claim, then a block a
+    // contribution stands in for, then the contribution's own section.
+    for (const rel of snapshot.Related) {
+        const key = RelatedContributionKey(rel.Entity, rel.JoinField);
+        if (rel.Source === 'claimed' && contributionKeys.has(key)) holderBySection.set(rel.SectionKey, key);
+    }
+    for (const c of snapshot.Contributions) {
+        for (const sectionKey of c.SectionKeys ?? []) holderBySection.set(sectionKey, c.Key);
+    }
+    for (const key of contributionKeys) holderBySection.set(key, key);
+    return {
+        Entity: snapshot.Entity,
+        RecordPrimaryKey: snapshot.RecordPrimaryKey,
+        FormChoice: { ...snapshot.FormChoice },
+        Sections: snapshot.Sections.map((section) => ({
+            Key: section.Key,
+            Title: section.Title,
+            Variant: section.Variant,
+            Hidden: section.Hidden,
+            ContributionKey: holderBySection.get(section.Key) ?? null,
+        })),
     };
 }
