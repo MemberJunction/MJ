@@ -826,6 +826,60 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
         expect(existing.Get('DetectionMethod')).toBe('Manual');
       });
 
+      it('resolves an @owner: reference in a matchOn key before comparing', async () => {
+        const existing = new MockEntity('QueryParameters', {
+          ID: 'generated', Name: 'ORD-001', DetectionMethod: 'AI',
+        });
+        const items = [existing];
+        mockOwnerEntity.collections['Parameters'] = buildCollection(items);
+
+        await callApplyAxes(
+          mockOwnerEntity,
+          {
+            primaryKey: { ID: 'ord-1' },
+            fields: { ID: 'ord-1' },
+            collections: { Parameters: [{ fields: { Name: '@owner:OrderNumber', DetectionMethod: 'Manual' } }] },
+          },
+          {},
+          configWithMatchOn(['Name'])
+        );
+
+        expect(items).toHaveLength(1);
+        expect(existing.Get('Name')).toBe('ORD-001');
+        expect(existing.Get('DetectionMethod')).toBe('Manual');
+      });
+
+      it('resolves an @lookup: reference in a matchOn key before comparing, once', async () => {
+        const lookupRef = '@lookup:Things.Name=Widget';
+        const processFieldValue = mockSyncEngine.processFieldValue as unknown as ReturnType<typeof vi.fn>;
+        processFieldValue.mockImplementation((val: unknown) => (val === lookupRef ? 'thing-42' : val));
+
+        const existing = new MockEntity('QueryParameters', {
+          ID: 'generated', Name: 'agentRunID', ThingID: 'thing-42', DetectionMethod: 'AI',
+        });
+        const items = [existing];
+        mockOwnerEntity.collections['Parameters'] = buildCollection(items);
+
+        await callApplyAxes(
+          mockOwnerEntity,
+          {
+            primaryKey: { ID: 'ord-1' },
+            fields: { ID: 'ord-1' },
+            collections: {
+              Parameters: [{ fields: { Name: 'agentRunID', ThingID: lookupRef, DetectionMethod: 'Manual' } }],
+            },
+          },
+          {},
+          configWithMatchOn(['Name', 'ThingID'])
+        );
+
+        expect(items).toHaveLength(1);
+        expect(existing.Get('ThingID')).toBe('thing-42');
+        expect(existing.Get('DetectionMethod')).toBe('Manual');
+        const lookupCalls = processFieldValue.mock.calls.filter((c: unknown[]) => c[0] === lookupRef);
+        expect(lookupCalls).toHaveLength(1);
+      });
+
       it('still duplicates without matchOn — the behaviour that made this necessary', async () => {
         const existing = new MockEntity('QueryParameters', {
           ID: 'generated', Name: 'agentRunID', DetectionMethod: 'AI',
@@ -1208,6 +1262,84 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
       expect(collections['OrderLines'].length).toBe(3);
       // Deterministically sorted by PK: line-a, line-b, line-c
       expect(collections['OrderLines'].map((c) => c.primaryKey?.ID)).toEqual(['line-a', 'line-b', 'line-c']);
+    });
+
+    describe('natural-keyed collections (matchOn) on pull', () => {
+      const pullParameters = async (collectionConfig: NonNullable<EntityConfig['collections']>[string]) => {
+        const mockSync = {
+          getEntityInfo: vi.fn(),
+          calculateChecksum: vi.fn().mockReturnValue('cs-1'),
+          calculateChecksumWithFileContent: vi.fn().mockResolvedValue('cs-1'),
+        } as unknown as SyncEngine;
+        const processor = new RecordProcessor(mockSync);
+        const owner = new MockEntity('MJ: Queries', { ID: 'query-1' }, ['ID'], ['ID']);
+        const childFields = ['ID', 'QueryID', 'Name', 'DetectionMethod', 'Description'];
+        const param = (id: string, name: string, detection: string) =>
+          new MockEntity('MJ: Query Parameters', { ID: id, QueryID: 'query-1', Name: name, DetectionMethod: detection, Description: `${name} desc` }, ['ID'], childFields);
+
+        owner.collections['Parameters'] = {
+          LoadMode: 'explicit',
+          IsLoaded: true,
+          // Primary-key order (a, b, c, d) deliberately differs from Name order
+          Items: [param('a', 'zeta', 'Manual'), param('b', 'maxDepth', 'AI'), param('c', 'alpha', 'Manual'), param('d', 'agentRunID', 'AI')],
+          Load: vi.fn().mockResolvedValue(undefined),
+        } as unknown as (typeof owner.collections)[string];
+        owner.EntityInfo.RelatedEntities = [
+          {
+            RelatedEntity: 'MJ: Query Parameters',
+            RelatedEntityJoinField: 'QueryID',
+            RelatedRecordCollection: JSON.stringify({ Name: 'Parameters' }),
+          } as unknown as EntityRelationshipInfo,
+        ];
+
+        const collections: Record<string, RecordData[]> = {};
+        await (processor as unknown as {
+          processCollections: (
+            record: MockEntity,
+            targetDir: string,
+            entityConfig: EntityConfig,
+            collections: Record<string, RecordData[]>,
+            currentDepth: number,
+            ancestryPath: Set<string>
+          ) => Promise<void>;
+        }).processCollections(
+          owner,
+          '/dummy',
+          { entity: 'MJ: Queries', filePattern: '*.json', collections: { Parameters: collectionConfig } },
+          collections,
+          0,
+          new Set()
+        );
+        return collections['Parameters'];
+      };
+
+      it('emits only declared items, without primaryKey or the join field, sorted by the natural key', async () => {
+        const items = await pullParameters({ matchOn: ['Name'], declaredWhere: { DetectionMethod: 'Manual' } });
+
+        expect(items.map((i) => i.fields.Name)).toEqual(['alpha', 'zeta']);
+        for (const item of items) {
+          expect(item.primaryKey).toBeUndefined();
+          expect(item.fields.QueryID).toBeUndefined();
+          expect(item.fields.DetectionMethod).toBe('Manual');
+        }
+      });
+
+      it('compares declaredWhere strings case-insensitively', async () => {
+        const items = await pullParameters({ matchOn: ['Name'], declaredWhere: { DetectionMethod: 'manual' } });
+        expect(items.map((i) => i.fields.Name)).toEqual(['alpha', 'zeta']);
+      });
+
+      it('emits nothing when no item is declared', async () => {
+        const items = await pullParameters({ matchOn: ['Name'], declaredWhere: { DetectionMethod: 'User' } });
+        expect(items).toBeUndefined();
+      });
+
+      it('keeps primaryKey and the join field for a collection without matchOn', async () => {
+        const items = await pullParameters({});
+        expect(items).toHaveLength(4);
+        expect(items.map((i) => i.primaryKey?.ID)).toEqual(['a', 'b', 'c', 'd']);
+        expect(items[0].fields.QueryID).toBe('query-1');
+      });
     });
 
     it('skips Load: "never" collections on pull without emitting empty array', async () => {

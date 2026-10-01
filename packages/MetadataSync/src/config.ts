@@ -269,9 +269,21 @@ export interface EntityConfig {
      *
      * Items matched this way should omit `primaryKey` entirely — the natural key IS their
      * identity, which keeps the same metadata portable across databases whose generated
-     * ids differ.
+     * ids differ. Declared values are resolved (`@lookup:`, `@parent:`, `@owner:` …) before
+     * they are compared. There is no default: a collection without `matchOn` matches by
+     * primary key only.
+     *
+     * On pull, a collection with `matchOn` emits each item without `primaryKey` and without
+     * the join field (the collection stamps the owner's foreign key itself).
      */
     matchOn?: string[];
+    /**
+     * Field values that mark a collection item as declared rather than derived by the
+     * server, e.g. `{ "DetectionMethod": "Manual" }` for query parameters. Pull emits only
+     * items whose fields equal every value given here (strings compare case-insensitively);
+     * the rest are left to the server that derives them. Push is unaffected.
+     */
+    declaredWhere?: Record<string, unknown>;
   }>;
   /** Pull command specific configuration */
   pull?: {

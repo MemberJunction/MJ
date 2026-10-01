@@ -3127,14 +3127,37 @@ export class PushService {
           // declaration cannot know, so a primary-key match can never find it and the item
           // below would be created a second time, colliding on the child's unique
           // constraint. Matching on the declared fields adopts that row instead.
+          //
+          // Declared values are resolved first, so a key written as a reference
+          // (`@lookup:`, `@parent:`, `@owner:` …) compares as the value it stands for. The
+          // resolved values are reused when the fields are applied below, so each
+          // reference is resolved once.
+          const resolvedFieldValues = new Map<string, unknown>();
           if (!targetChild && matchOn.length > 0 && loadedItems.length > 0 && itemData.fields) {
             const fields = itemData.fields;
             const wanted = matchOn.filter((f) => f in fields);
             if (wanted.length === matchOn.length) {
+              for (const f of wanted) {
+                resolvedFieldValues.set(
+                  f,
+                  await this.syncEngine.processFieldValue(
+                    fields[f],
+                    entityDir,
+                    null,
+                    null,
+                    0,
+                    batchContext,
+                    resolutionCollector,
+                    f,
+                    recordProvider,
+                    entity // ownerRecord
+                  )
+                );
+              }
               targetChild = loadedItems.find((child) =>
                 wanted.every((f) => {
                   const childValue = child.Get(f);
-                  const declaredValue = fields[f];
+                  const declaredValue = resolvedFieldValues.get(f);
                   if (childValue == null || declaredValue == null) return childValue === declaredValue;
                   // Case-insensitive: the constraints these keys stand in for are, and a
                   // declaration differing only in case means the same row, not a new one.
@@ -3167,6 +3190,10 @@ export class PushService {
           // Apply fields with ownerRecord = entity for @owner:Field resolution
           if (itemData.fields && typeof itemData.fields === 'object') {
             for (const [fName, fVal] of Object.entries(itemData.fields)) {
+              if (resolvedFieldValues.has(fName)) {
+                targetChild.Set(fName, resolvedFieldValues.get(fName));
+                continue;
+              }
               const processedValue = await this.syncEngine.processFieldValue(
                 fVal,
                 entityDir,

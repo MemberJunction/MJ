@@ -8,7 +8,10 @@
     "Parameters": {
       "matchOn": [
         "Name"
-      ]
+      ],
+      "declaredWhere": {
+        "DetectionMethod": "Manual"
+      }
     }
   },
   "pull": {
