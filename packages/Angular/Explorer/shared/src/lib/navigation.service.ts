@@ -205,8 +205,11 @@ export class NavigationService implements OnDestroy {
    */
   private readonly agentToolsByDetachedResource = new Map<BaseResourceComponent, NonNullable<AgentContextUpdate['AgentClientTools']>>();
 
-  /** Cached resource components the shell has detached and not reattached since. */
-  private readonly detachedResources = new Set<BaseResourceComponent>();
+  /**
+   * Cached resource components the shell has detached and not reattached since. Weak, so a
+   * component the cache destroys without calling {@link ForgetResource} is not kept alive here.
+   */
+  private readonly detachedResources = new WeakSet<BaseResourceComponent>();
 
   /**
    * Emits each cached resource component as the shell reattaches it to a tab. A cached component

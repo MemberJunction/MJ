@@ -72,4 +72,11 @@ describe('NavigationService — resource attachment', () => {
     nav.ForgetResource(tab);
     expect(nav.IsResourceDetached(tab)).toBe(false);
   });
+
+  // The cache's ClearCache paths destroy components without calling ForgetResource, so the
+  // detached marks must not keep a destroyed component alive.
+  it('holds its detached marks weakly', () => {
+    const marks = (nav as unknown as { detachedResources: unknown }).detachedResources;
+    expect(marks).toBeInstanceOf(WeakSet);
+  });
 });
