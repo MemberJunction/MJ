@@ -11,6 +11,9 @@
  * @module @memberjunction/ng-core-entity-forms
  */
 import type { TabConfig } from '@memberjunction/ng-ui-components';
+import { sortAgentRubrics } from '@memberjunction/ng-agents';
+
+export { sortAgentRubrics };
 
 /** Just enough of the agent type to decide the tab strip — so tests need no entity instance. */
 export type AgentFormTabContext = {
@@ -35,7 +38,6 @@ export const AGENT_TAB_DESIGNER = 'designer';
 export const AGENT_TAB_DETAILS = 'details';
 export const AGENT_TAB_INVOCATIONS = 'invocations';
 export const AGENT_TAB_RUBRICS = 'rubrics';
-export { sortAgentRubrics } from '../../../../../../Generic/agents/src/lib/components/agent-rubrics.model';
 
 /**
  * Builds the tab strip and resolves which tab is active.

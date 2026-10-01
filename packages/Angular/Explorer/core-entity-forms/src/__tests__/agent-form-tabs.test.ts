@@ -1,3 +1,4 @@
+import '@angular/compiler';
 /**
  * Tests for the AI Agents form's tab rules.
  *
@@ -16,9 +17,9 @@ import {
     DesignerTabLabel,
     HasDesignerTab,
     ResolveActiveTab,
-    sortAgentRubrics,
     type AgentFormTabContext,
 } from '../lib/custom/AIAgents/agent-form-tabs';
+import { sortAgentRubrics } from '@memberjunction/ng-agents';
 
 const flow: AgentFormTabContext = { AgentTypeName: 'Flow', UIFormSectionKey: 'FlowAgentType', HasRecordID: true };
 const loop: AgentFormTabContext = { AgentTypeName: 'Loop', UIFormSectionKey: null, HasRecordID: true };
