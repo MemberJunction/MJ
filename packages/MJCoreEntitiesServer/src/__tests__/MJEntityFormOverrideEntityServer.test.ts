@@ -182,6 +182,12 @@ describe.each<[string, GuardedClass]>([
             expect(e.SuperSaveCalled).toBe(false);
         });
 
+        it('refuses a ReplayOnly save of a Scope that is not exactly one of the three, before the write', async () => {
+            const e = make({ IsSaved: false, Scope: 'global', UserID: null, Caller: OWNER });
+            expect(await e.Save({ ReplayOnly: true })).toBe(false);
+            expect(e.SuperSaveCalled).toBe(false);
+        });
+
         it('allows a ReplayOnly save by a holder on a shared item', async () => {
             const e = make({ IsSaved: true, Scope: 'Role', UserID: null, Caller: OWNER });
             expect(await e.Save({ ReplayOnly: true })).toBe(true);

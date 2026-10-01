@@ -60,12 +60,6 @@ describe('DescribeFormScopeWrite', () => {
         expect(write).toMatchObject({ PriorScope: 'Global', PriorUserID: null, NextScope: 'User', NextUserID: ME });
     });
 
-    it('uses the row as it stands for both sides of a delete', () => {
-        const r = row({ IsSaved: true, Scope: 'Role', UserID: null });
-        const write = DescribeFormScopeWrite(r, 'delete', true);
-        expect(write).toMatchObject({ PriorScope: 'Role', NextScope: 'Role', CallerHoldsGrant: true });
-    });
-
     /** A delete removes the row as stored, so an unsaved edit to its scope cannot change the check. */
     it('reads both sides of a delete from the loaded values, not unsaved edits', () => {
         const r = row({ IsSaved: true, Scope: 'User', UserID: ME, PriorScope: 'Global', PriorUserID: null });
@@ -155,8 +149,16 @@ describe('FormScopeReplayRefusal', () => {
         expect(FormScopeReplayRefusal(row({ IsSaved: false, Scope: 'User', UserID: ME, CallerType: 'Owner' }), PROVIDER, replay)).toBeNull();
     });
 
-    it('allows anything in a trusted context with no caller', () => {
+    it('allows a canonical scope in a trusted context with no caller', () => {
         expect(FormScopeReplayRefusal(row({ IsSaved: false, Scope: 'Global', UserID: null, Caller: null }), PROVIDER, replay)).toBeNull();
+    });
+
+    /** A replayed write skips Validate(), so the canonical-Scope check runs here too. */
+    it('refuses a Scope that is not exactly User, Role or Global, from a holder and with no caller', () => {
+        for (const caller of [ME, null]) {
+            const r = row({ IsSaved: false, Scope: 'Global ' as FormScope, UserID: null, Caller: caller, CallerType: 'Owner' });
+            expect(FormScopeReplayRefusal(r, PROVIDER, replay)).toMatch(/exactly/);
+        }
     });
 });
 

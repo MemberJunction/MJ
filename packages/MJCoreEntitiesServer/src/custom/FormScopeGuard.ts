@@ -88,20 +88,29 @@ export function CallerHoldsFormDefaultsGrant(row: GuardedFormScopeRow, provider:
 }
 
 /**
- * Adds a scope problem, if any, to a `Validate()` result. Runs on create and update.
+ * Why the row's Scope may not be stored, or null when it is exactly `User`, `Role` or `Global`.
  *
- * A Scope that is not exactly `User`, `Role` or `Global` is refused for every caller, a trusted
- * one included: the value-list check trims and case-folds, and SQL Server ignores trailing spaces
- * in the CHECK, so a padded or re-cased value would otherwise be stored. Then the scope rule runs.
+ * Refused for every caller, a trusted one included: the value-list check trims and case-folds,
+ * and SQL Server ignores trailing spaces in the CHECK, so a padded or re-cased value would
+ * otherwise be stored.
+ */
+function nonCanonicalScopeRefusal(row: GuardedFormScopeRow): string | null {
+    return IsCanonicalFormScope(row.Scope)
+        ? null
+        : `Scope must be exactly 'User', 'Role' or 'Global'; '${row.Scope ?? ''}' is not.`;
+}
+
+/**
+ * Adds a scope problem, if any, to a `Validate()` result. Runs on create and update: first the
+ * canonical-Scope check, then the scope rule.
  */
 export function ApplyFormScopeValidation(
     row: GuardedFormScopeRow,
     provider: IMetadataProvider,
     result: ValidationResult,
 ): void {
-    const problem = IsCanonicalFormScope(row.Scope)
-        ? FormScopeGuardRefusal(row, row.IsSaved ? 'update' : 'create', CallerHoldsFormDefaultsGrant(row, provider))
-        : `Scope must be exactly 'User', 'Role' or 'Global'; '${row.Scope ?? ''}' is not.`;
+    const problem = nonCanonicalScopeRefusal(row)
+        ?? FormScopeGuardRefusal(row, row.IsSaved ? 'update' : 'create', CallerHoldsFormDefaultsGrant(row, provider));
     if (!problem) return;
     result.Errors.push(new ValidationErrorInfo('Scope', problem, row.Scope, ValidationErrorType.Failure));
     result.Success = false;
@@ -110,17 +119,21 @@ export function ApplyFormScopeValidation(
 /**
  * Why a `ReplayOnly` save is refused, or null.
  *
- * `ReplayOnly` performs the write without calling `Validate()`, so it would skip the scope rule
- * entirely. It is a replication facility for trusted sync paths: only a caller who holds the grant
- * may use it, and the ownership half of the rule still applies, so a holder cannot replay a write
- * to someone else's personal item.
+ * `ReplayOnly` performs the write without calling `Validate()`, so it would skip every check
+ * there. The canonical-Scope check runs for every caller. Beyond that, it is a replication
+ * facility for trusted sync paths: only a caller who holds the grant may use it, and the
+ * ownership half of the rule still applies, so a holder cannot replay a write to someone else's
+ * personal item.
  */
 export function FormScopeReplayRefusal(
     row: GuardedFormScopeRow,
     provider: IMetadataProvider,
     options: EntitySaveOptions | undefined,
 ): string | null {
-    if (!options?.ReplayOnly || !row.ActiveUser) return null;
+    if (!options?.ReplayOnly) return null;
+    const nonCanonical = nonCanonicalScopeRefusal(row);
+    if (nonCanonical) return nonCanonical;
+    if (!row.ActiveUser) return null;
     if (!CallerHoldsFormDefaultsGrant(row, provider)) {
         return 'A ReplayOnly save skips validation, which is where form scope is checked, so it needs the ' +
             'Manage Form Defaults authorization.';
