@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EvaluateSampledAgentRuns, driftDeltas, keepSample, sampleBucket, selectSampledRuns } from '../sampling.js';
+import { EvaluateSampledAgentRuns, driftDeltas, keepSample, periodMeans, sampleBucket, selectSampledRuns } from '../sampling.js';
 
 describe('production sampling', () => {
     it('keeps the same run for the same rate', () => {
@@ -10,14 +10,28 @@ describe('production sampling', () => {
         expect(keepSample('run-1', (bucket + 1) / 10000)).toBe(true);
     });
 
-    it('skips a run that already has an evaluation for that rubric', () => {
+    it('skips a run that already has an evaluation for that rubric', async () => {
         const chosen = selectSampledRuns({
             links: [{ agentId: 'agent', rubricId: 'rubric', sampleRate: 1, status: 'Active' }],
             runs: [{ id: 'done', agentId: 'agent' }, { id: 'open', agentId: 'agent' }],
             evaluated: [{ runId: 'done', rubricId: 'rubric' }],
         });
         expect(chosen.map(row => row.runId)).toEqual(['open']);
-        expect(new EvaluateSampledAgentRuns().plan({
+        const evaluated: { rubricId: string; subjectRecordId: string }[] = [];
+        const job = new EvaluateSampledAgentRuns({
+            async load() {
+                return {
+                    links: [{ agentId: 'agent', rubricId: 'rubric', sampleRate: 1, status: 'Active' }],
+                    runs: [{ id: 'done', agentId: 'agent' }, { id: 'open', agentId: 'agent' }],
+                    evaluated: [{ runId: 'done', rubricId: 'rubric' }],
+                };
+            },
+        }, {
+            async evaluateRecord(input) { evaluated.push(input); },
+        });
+        expect((await job.run()).map(row => row.runId)).toEqual(['open']);
+        expect(evaluated).toEqual([{ rubricId: 'rubric', subjectRecordId: 'open' }]);
+        expect(new EvaluateSampledAgentRuns({ async load() { return { links: [], runs: [], evaluated: [] }; } }, { async evaluateRecord() {} }).plan({
             links: [{ agentId: 'agent', rubricId: 'rubric', sampleRate: 1, status: 'Active' }],
             runs: [{ id: 'open', agentId: 'agent' }],
             evaluated: [],

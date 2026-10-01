@@ -64,6 +64,13 @@
         "isDefault": false
       },
       {
+        "Label": "Rubric drift",
+        "Icon": "fa-solid fa-scale-balanced",
+        "ResourceType": "Custom",
+        "DriverClass": "RubricDriftResource",
+        "isDefault": false
+      },
+      {
         "Label": "Configuration",
         "Icon": "fa-solid fa-cogs",
         "ResourceType": "Custom",

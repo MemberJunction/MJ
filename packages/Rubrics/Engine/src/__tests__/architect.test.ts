@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { critiqueRubric, draftFromImport, importMatrix, publishImportedDraft } from '../architect.js';
+import { critiqueRubric, draftFromImport, importMatrix, improveFromData, publishImportedDraft, saveImportedDraft } from '../architect.js';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 
 describe('rubric architect', () => {
@@ -8,7 +8,7 @@ describe('rubric architect', () => {
         expect(rows[1]).toMatchObject({ key: '3.2', parentKey: '3', name: 'Encryption', weight: 2, gate: true });
     });
 
-    it('flags a vague name, a missing anchor, and a gate that allows not-applicable', () => {
+    it('flags a vague name, a missing anchor, and a gate that allows not-applicable', async () => {
         const version: RubricVersionSnapshot = {
             id: 'v', rubricId: 'r', notApplicablePolicy: 'ExcludeAndRedistribute', scoreDisplayMin: 0, scoreDisplayMax: 1,
             nodes: [{
@@ -25,6 +25,16 @@ describe('rubric architect', () => {
         expect(critiqueRubric(inherited).some(note => note.includes('not-applicable'))).toBe(false);
         expect(draftFromImport('Imported', '1,Accuracy,1,yes').status).toBe('Draft');
         expect(publishImportedDraft().ok).toBe(false);
+        const saved: { name: string; status: string }[] = [];
+        const result = await saveImportedDraft({
+            async saveVersion(fields) { saved.push(fields); return 'version-1'; },
+        }, 'Imported', '1,Accuracy,1,yes');
+        expect(result).toEqual({ id: 'version-1', status: 'Draft' });
+        expect(saved).toEqual([{ name: 'Imported', status: 'Draft' }]);
+        expect(improveFromData([{ criterionKey: 'facts', flag: 'NoDiscrimination' }], { withheld: false, kappa: 0.2 })).toEqual([
+            'facts: NoDiscrimination',
+            'Agreement kappa 0.2 is low.',
+        ]);
         expect(critiqueRubric(version)).toEqual([
             'ok: the name is too vague.',
             'ok: no anchors.',

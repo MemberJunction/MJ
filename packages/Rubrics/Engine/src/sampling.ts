@@ -38,11 +38,41 @@ export function selectSampledRuns(input: {
     return chosen;
 }
 
-/** Scheduled job body. Evaluation is this list, not work on the agent's response path. */
+export interface SamplingLoader {
+    load(): Promise<Parameters<typeof selectSampledRuns>[0]>;
+}
+
+export interface SamplingEvaluator {
+    evaluateRecord(input: { rubricId: string; subjectRecordId: string }): Promise<void>;
+}
+
+/** Scheduled job. Loads links and runs, then evaluates the kept runs off the agent response path. */
 export class EvaluateSampledAgentRuns {
+    public constructor(private readonly loader: SamplingLoader, private readonly engine: SamplingEvaluator) {}
+
     public plan(input: Parameters<typeof selectSampledRuns>[0]): ReturnType<typeof selectSampledRuns> {
         return selectSampledRuns(input);
     }
+
+    public async run(): Promise<ReturnType<typeof selectSampledRuns>> {
+        const chosen = this.plan(await this.loader.load());
+        for (const item of chosen) {
+            await this.engine.evaluateRecord({ rubricId: item.rubricId, subjectRecordId: item.runId });
+        }
+        return chosen;
+    }
+}
+
+/** Mean score of each key whose timestamp falls in [start, end). */
+export function periodMeans(rows: { key: string; score: number; at: string }[], start: string, end: string): { key: string; mean: number }[] {
+    const buckets = new Map<string, number[]>();
+    for (const row of rows) {
+        if (row.at < start || row.at >= end) continue;
+        const list = buckets.get(row.key) ?? [];
+        list.push(row.score);
+        buckets.set(row.key, list);
+    }
+    return [...buckets.entries()].map(([key, scores]) => ({ key, mean: scores.reduce((sum, score) => sum + score, 0) / scores.length }));
 }
 
 /** Drop of the current period's mean below the previous period. A drop past the threshold alerts. */

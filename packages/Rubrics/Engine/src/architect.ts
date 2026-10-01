@@ -46,6 +46,24 @@ export function critiqueRubric(version: RubricVersionSnapshot): string[] {
     return notes;
 }
 
+export interface DraftVersionStore {
+    saveVersion(fields: { name: string; status: 'Draft' }): Promise<string>;
+}
+
+/** Saves the imported tree as a Draft version row. */
+export async function saveImportedDraft(store: DraftVersionStore, name: string, csv: string): Promise<{ id: string; status: 'Draft' }> {
+    const draft = draftFromImport(name, csv);
+    const id = await store.saveVersion({ name: draft.name, status: draft.status });
+    return { id, status: 'Draft' };
+}
+
+/** Notes from item analysis and agreement. A withheld agreement adds no kappa note. */
+export function improveFromData(diagnostics: { criterionKey: string; flag: string }[], agreement: { withheld: boolean; kappa?: number }): string[] {
+    const notes = diagnostics.map(flag => `${flag.criterionKey}: ${flag.flag}`);
+    if (!agreement.withheld && agreement.kappa != null && agreement.kappa < 0.4) notes.push(`Agreement kappa ${agreement.kappa} is low.`);
+    return notes;
+}
+
 /** The imported tree is a Draft. This path does not publish. */
 export function draftFromImport(name: string, csv: string): { name: string; status: 'Draft'; nodes: ImportedCriterion[] } {
     return { name, status: 'Draft', nodes: importMatrix(csv) };
