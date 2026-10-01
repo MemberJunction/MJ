@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { RunInCatalogScope } from './CatalogScope.js';
+import { EvictCatalogScope, LoadCatalogScope, RunInWarmedCatalogScope, UnpinCatalogObjects, WarmCatalogObject } from './CatalogScope.js';
 import { CompositeKey, DatabaseProviderBase, IMetadataProvider, LogError, LogStatusEx, Metadata, RunView, type UserInfo, TransactionGroupBase, BaseEntity, EntitySaveOptions, EntityDeleteOptions } from '@memberjunction/core';
 import { RunOwnershipLostError, RunOwnershipService, type TerminalRunStatus } from './RunOwnershipService.js';
 import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
@@ -945,8 +945,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         rv: RunView,
         contextUser: UserInfo
     ): Promise<void> {
-        // A resumed run reads the same catalog the original did — its own connection's.
-        return RunInCatalogScope(run.CompanyIntegrationID, async () => {
+        // A resumed run reads the same catalog the original did — its own connection's — in the
+        // same warmed scope a fresh run uses (see RunSync).
+        return RunInWarmedCatalogScope(run.CompanyIntegrationID, async () => {
         const companyIntegrationID = run.CompanyIntegrationID;
         const runID = run.ID;
         const lockKey = companyIntegrationID.toLowerCase();
@@ -1148,7 +1149,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // The connection's catalog is in scope for the WHOLE run: the DAG, the excluded-field
         // resolution and every connector-side GetCachedObject resolve to this connection's own
         // rows once it has them, and to the shared declared rows until it does.
-        return RunInCatalogScope(companyIntegrationID, () =>
+        //
+        // A WARMED scope: the run warms each map's objects before the map reads them (see
+        // ExecuteEntityMaps), so inside it a cold read is a missed warm site and throws instead of
+        // quietly answering with no fields. Entered synchronously, as before — the catalog itself
+        // is loaded at the head of ExecuteEntityMaps, inside the run's own error handling.
+        return RunInWarmedCatalogScope(companyIntegrationID, () =>
             this.runWithOwnedContext(companyIntegrationID, contextUser, triggerType, onProgress, onNotification, options, provider));
     }
 
@@ -1812,6 +1818,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         if (runCtxForFlags) {
             runCtxForFlags.suppressWriteSideEffects = this.ReadWriteSideEffects(config.companyIntegration) === 'suppressed';
         }
+        // This connection's own catalog rows are not resident (MJ-RUN-43): the scope holds what was
+        // read when it was last loaded, memoised for the process. Re-read them here, at the async
+        // head of the run — both the direct and the adopted path come through — for the same reason
+        // the shared catalog is re-read at the head of a run: a discovery since (on this host or
+        // another) must be what this run syncs, not whatever this process first read.
+        await this.refreshRunCatalogScope(config.companyIntegration.ID, contextUser);
         const aggregate: SyncResult = {
             Success: true,
             RecordsProcessed: 0,
@@ -1843,7 +1855,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 direction,
                 priority: entityMap.Priority ?? null,
             });
+            let warmed: string[] = [];
             try {
+                // Warm the field rows this map reads BEFORE it reads them (MJ-RUN-43), pinned until
+                // it finishes. The readers underneath — connectors' GetCachedFields — are synchronous
+                // and cannot fetch, so the load has to happen here. Per MAP rather than per layer, so
+                // what is pinned is bounded by the maps in flight, not by the width of a layer — and
+                // the pipelined path below gets the same warm site for free.
+                warmed = await this.warmEntityMapCatalog(config, entityMap, depGraph, contextUser);
                 const mapResult = await this.ProcessSingleEntityMap(
                     config, entityMap, run, contextUser, i, totalMaps, onProgress, abortSignal, logger
                 );
@@ -1903,6 +1922,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     Duration: Date.now() - mapStartTime,
                 });
                 return { ok: false, throttled: ClassifyError(err).Code === 'RATE_LIMIT_EXCEEDED' };
+            } finally {
+                UnpinCatalogObjects(warmed);
             }
         };
 
@@ -2055,9 +2076,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const parentsByIoId = new Map<string, Set<string>>();
         for (const ioId of selectedIoIds) {
             const set = new Set<string>();
-            // (1) hard FK pointer on a field (RelatedIntegrationObjectID).
-            for (const f of this.GetIntegrationObjectFields(ioId)) {
-                const parent = f.RelatedIntegrationObjectID?.toUpperCase();
+            // (1) hard FK pointer on a field (RelatedIntegrationObjectID). Asked for as the object's
+            // related ids rather than read off its field rows: on a per-connection catalog those
+            // rows are not resident, and this graph is built before any of them are warmed — it is
+            // what decides the order they are warmed in. The related ids come from the edge set.
+            for (const related of this.GetRelatedIntegrationObjectIDs(ioId)) {
+                const parent = related.toUpperCase();
                 if (parent && parent !== ioId && selectedIoIds.has(parent)) set.add(parent);
             }
             // (2) SOFT-FK form (parent-iterated children): the parent is named in the IO's
@@ -2090,6 +2114,56 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             parentsByIoId.set(ioId, set);
         }
         return { mapToIoId, parentsByIoId };
+    }
+
+    /**
+     * Re-read this connection's catalog into the scope cache: objects and dependency edges now,
+     * field rows lazily as maps warm them. Field rows cached from before are dropped with the rest —
+     * they are what a discovery since would have rewritten.
+     */
+    private async refreshRunCatalogScope(companyIntegrationID: string, contextUser: UserInfo): Promise<void> {
+        if (!companyIntegrationID) return;
+        EvictCatalogScope(companyIntegrationID);
+        await LoadCatalogScope(companyIntegrationID, contextUser);
+    }
+
+    /**
+     * Warm the field rows one entity map is about to read, pinned until the caller releases them
+     * (MJ-RUN-43). That is the map's own object and its parents in the dependency graph: a child's
+     * nested fetch reads its parent's key fields, and the parent's own map may have finished long
+     * enough ago for its rows to have been evicted.
+     *
+     * Only this connection's OWN objects are warmed — a shared object's fields are resident. A map
+     * whose object is not in the connection's catalog warms nothing; the map's own handling of a
+     * missing object applies further in. Returns the ids it pinned.
+     */
+    private async warmEntityMapCatalog(
+        config: RunConfiguration,
+        entityMap: ICompanyIntegrationEntityMap,
+        depGraph: { parentsByIoId: Map<string, Set<string>> } | null,
+        contextUser: UserInfo,
+    ): Promise<string[]> {
+        const companyIntegrationID = config.companyIntegration?.ID;
+        const objectName = entityMap.ExternalObjectName;
+        if (!companyIntegrationID || !objectName) return [];
+        const own = this.Base.GetCompanyIntegrationObject(companyIntegrationID, objectName);
+        if (!own) return [];
+        const ids = [own.ID];
+        for (const parentID of depGraph?.parentsByIoId.get(own.ID.toUpperCase()) ?? []) {
+            const parent = this.Base.GetCompanyIntegrationObjectByID(parentID);
+            if (parent && !ids.some(id => UUIDsEqual(id, parent.ID))) ids.push(parent.ID);
+        }
+        const pinned: string[] = [];
+        try {
+            for (const id of ids) {
+                await WarmCatalogObject(id, contextUser);
+                pinned.push(id);
+            }
+        } catch (err) {
+            UnpinCatalogObjects(pinned);
+            throw err;
+        }
+        return pinned;
     }
 
     /**
@@ -6517,6 +6591,11 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
     public GetIntegrationObjectFields(objectID: string): MJIntegrationObjectFieldEntity[] {
         return this.Base.GetIntegrationObjectFields(objectID);
+    }
+
+    /** Delegates to IntegrationEngineBase.GetRelatedIntegrationObjectIDs — an object's FK parents. */
+    public GetRelatedIntegrationObjectIDs(objectID: string): string[] {
+        return this.Base.GetRelatedIntegrationObjectIDs(objectID);
     }
 
     /**

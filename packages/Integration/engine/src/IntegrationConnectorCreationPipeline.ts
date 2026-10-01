@@ -16,7 +16,7 @@ import {
 import { BaseIntegrationConnector, type ExternalObjectSchema, type ExternalFieldSchema } from './BaseIntegrationConnector.js';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import { BuildCatalogWriter, ResolveCatalogSource } from './CatalogSource.js';
-import { WithCatalogScope } from './CatalogScope.js';
+import { LoadCatalogScope, RunInCatalogScope } from './CatalogScope.js';
 import { IntegrationSchemaSync, type PersistSchemaResult } from './IntegrationSchemaSync.js';
 import type { IntrospectSchemaOptions, SourceObjectInfo } from './types.js';
 import { MergeDeclaredWithSample } from './DeclaredSampleMerge.js';
@@ -204,7 +204,11 @@ export class IntegrationConnectorCreationPipeline {
      * not what some other connection of the same connector found.
      */
     public async Run(opts: ConnectorCreationPipelineOptions): Promise<ConnectorCreationPipelineResult> {
-        return WithCatalogScope(opts.CompanyIntegration?.ID ?? '', () => this.runWithDedup(opts));
+        // Entered SYNCHRONOUSLY. The de-dup below registers this run before the caller's next
+        // statement, which is what lets a concurrent duplicate find it; awaiting the catalog load
+        // first would open a window in which both callers start a run. The connection's catalog is
+        // loaded inside the run instead (runInternal), where a failed read is a failed run.
+        return RunInCatalogScope(opts.CompanyIntegration?.ID ?? '', () => this.runWithDedup(opts));
     }
 
     private async runWithDedup(opts: ConnectorCreationPipelineOptions): Promise<ConnectorCreationPipelineResult> {
@@ -403,6 +407,9 @@ export class IntegrationConnectorCreationPipeline {
         };
 
         try {
+            // The connection's own catalog is no longer resident (MJ-RUN-43): load its objects and
+            // dependency edges into the scope before any stage reads them synchronously.
+            await LoadCatalogScope(opts.CompanyIntegration.ID, opts.ContextUser);
             await withDeadline('ConnectionTest', this.StageConnectionTest(emitter, opts));
             const sourceSchema = await withDeadline('Introspect', this.StageIntrospect(emitter, opts));
             const persistResult = await withDeadline('Persist', this.StagePersist(emitter, opts, sourceSchema));

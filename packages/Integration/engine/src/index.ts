@@ -168,9 +168,16 @@ export type { BasicAuthRequest } from './auth-helpers/index.js';
 export {
     CurrentCatalogCI,
     RunInCatalogScope,
+    RunInWarmedCatalogScope,
     WithCatalogScope,
     RunOutsideCatalogScope,
     InstallCatalogScopeResolver,
+    LoadCatalogScope,
+    WarmCatalogObject,
+    UnpinCatalogObjects,
+    EvictCatalogScope,
+    CatalogFieldCacheStats,
+    FIELD_ROW_BUDGET,
 } from './CatalogScope.js';
 export type { CatalogScopeState } from './CatalogScope.js';
 export { CatalogRow, CompanyIntegrationCatalogStore } from './CompanyIntegrationCatalogStore.js';
