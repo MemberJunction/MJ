@@ -34,7 +34,7 @@ vi.mock('@memberjunction/global', async (importOriginal) => ({
 
 vi.mock('@memberjunction/core', () => ({
     BaseEntity: class {},
-    DatabaseProviderBase: class { TransactionDepth = 0; },
+    DatabaseProviderBase: class {},
     Metadata: vi.fn(),
     RunView: vi.fn(),
     LogError: vi.fn(),
@@ -95,6 +95,7 @@ vi.mock('../generic/ActionEngine', () => ({
 
 import { EntityActionInvocationSingleRecord } from '../entity-actions/EntityActionInvocationTypes';
 import type { EntityActionInvocationParams } from '@memberjunction/actions-base';
+import { LogError } from '@memberjunction/core';
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -372,20 +373,80 @@ describe('InvokeAction — the change context reaches the filter layer', () => {
 describe('Durable AfterCreate without a queue submitter', () => {
     const invocation = new EntityActionInvocationSingleRecord();
 
-    it('defers locally instead of nesting in the caller transaction', async () => {
+    type DeferredRunArgs = {
+        DeferExecution?: (p: unknown) => Promise<{ ResultCode: string; Message?: string }>;
+        Params?: unknown;
+    };
+
+    /** Invoke a Durable AfterCreate binding against an entity whose provider is `provider`. */
+    async function invokeDurable(provider: object, postCommitToken?: { Epoch: number; FrameIds: number[] }): Promise<DeferredRunArgs> {
         const entity = new RecordLikeEntity({ ID: 'rec-1', Amount: 42 }) as unknown as Record<string, unknown>;
-        (entity as { ProviderToUse: { TransactionDepth: number } }).ProviderToUse = { TransactionDepth: 0 };
+        (entity as { ProviderToUse: object }).ProviderToUse = provider;
         (entity as { EntityInfo: { ID: string; Name: string } }).EntityInfo = { ID: TARGET_ENTITY_ID, Name: 'People' };
         await invocation.InvokeAction(invocationParams({
             InvocationType: { ID: INVOCATION_TYPE_ID, Name: 'AfterCreate' },
             EntityAction: { ...invocationParams().EntityAction, RunMode: 'Durable' },
             EntityObject: entity,
+            PostCommitToken: postCommitToken,
         }));
-        const runArgs = mockRunAction.mock.calls[0][0] as {
-            DeferExecution?: (p: unknown) => Promise<{ ResultCode: string }>;
-        };
+        const runArgs = mockRunAction.mock.calls[0][0] as DeferredRunArgs;
         expect(typeof runArgs.DeferExecution).toBe('function');
+        return runArgs;
+    }
+
+    it('hands the run to the provider post-commit queue instead of polling or nesting', async () => {
+        const queued: Array<{ task: () => Promise<void>; description: string }> = [];
+        const provider = {
+            TransactionDepth: 1,
+            RunAfterCommit: vi.fn((task: () => Promise<void>, description: string, _token?: object) => { queued.push({ task, description }); }),
+        };
+        const runArgs = await invokeDurable(provider);
+
         const simple = await runArgs.DeferExecution!(runArgs);
         expect(simple.ResultCode).toBe('DEFERRED_LOCAL');
+        expect(simple.Message).toMatch(/commits.*rolls back/);
+        expect(provider.RunAfterCommit).toHaveBeenCalledTimes(1);
+        expect(provider.RunAfterCommit.mock.calls[0][2]).toBeUndefined();
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        // Nothing runs until the provider decides the transaction committed.
+        expect(mockRunAction).toHaveBeenCalledTimes(1);
+
+        await queued[0].task();
+        expect(mockRunAction).toHaveBeenCalledTimes(2);
+        const deferredRun = mockRunAction.mock.calls[1][0] as DeferredRunArgs;
+        expect(deferredRun.DeferExecution).toBeUndefined();
+        expect(deferredRun.Params).toBe(runArgs.Params);
+    });
+
+    it('hands the provider the token the dispatcher captured, so a rolled-back save drops the run', async () => {
+        const token = { Epoch: 7, FrameIds: [11, 12] };
+        const provider = { RunAfterCommit: vi.fn() };
+        const runArgs = await invokeDurable(provider, token);
+        await runArgs.DeferExecution!(runArgs);
+        expect(provider.RunAfterCommit).toHaveBeenCalledWith(
+            expect.any(Function),
+            expect.stringContaining('Durable entity action'),
+            token,
+        );
+    });
+
+    it('a failing deferred run is logged, not thrown into the post-commit drain', async () => {
+        let queuedTask: (() => Promise<void>) | undefined;
+        const provider = { RunAfterCommit: (task: () => Promise<void>) => { queuedTask = task; } };
+        const runArgs = await invokeDurable(provider);
+        await runArgs.DeferExecution!(runArgs);
+        mockRunAction.mockRejectedValueOnce(new Error('action blew up'));
+        await expect(queuedTask!()).resolves.toBeUndefined();
+        expect(vi.mocked(LogError)).toHaveBeenCalledWith(expect.stringContaining('action blew up'));
+    });
+
+    it('falls back to running on the next tick when the provider has no post-commit queue', async () => {
+        const runArgs = await invokeDurable({ TransactionDepth: 0 });
+        const simple = await runArgs.DeferExecution!(runArgs);
+        expect(simple.ResultCode).toBe('DEFERRED_LOCAL');
+        expect(mockRunAction).toHaveBeenCalledTimes(1);
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        expect(mockRunAction).toHaveBeenCalledTimes(2);
+        expect((mockRunAction.mock.calls[1][0] as DeferredRunArgs).DeferExecution).toBeUndefined();
     });
 });

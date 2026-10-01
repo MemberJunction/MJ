@@ -67,7 +67,7 @@ import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
 import { ClientToolRequestManager, AgentRunWatchdog } from '@memberjunction/ai-agents';
 import { SessionJanitor } from './agentSessions/index.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
-import { CACHE_INVALIDATION_TOPIC } from './generic/CacheInvalidationResolver.js';
+import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData, ConfigureRecordDataBroadcast } from './generic/CacheInvalidationResolver.js';
 import { ConnectorFactory, IntegrationEngine, IntegrationSyncOptions } from '@memberjunction/integration-engine';
 import { CronExpressionHelper } from '@memberjunction/scheduling-engine';
 import {
@@ -896,6 +896,11 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // publish hook above so the first RSU event also reaches live subscribers.
   RegisterRSUProgressBridge();
 
+  // Hand the resolver its allowlist before anything can publish. It cannot read configInfo itself:
+  // config.ts loads and validates at module scope, so importing it there would pull full config
+  // validation into every import chain that touches the resolver, unit tests included.
+  ConfigureRecordDataBroadcast(configInfo.cacheSettings?.recordDataBroadcastEntities);
+
   // Global listener: broadcast CACHE_INVALIDATION to all browser clients whenever
   // ANY BaseEntity save/delete occurs on this server — regardless of whether it
   // originated from a GraphQL mutation or internal server-side code (agents, actions,
@@ -905,14 +910,21 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     if (event.event === MJEventType.ComponentEvent && event.eventCode === BaseEntity.BaseEventCode) {
       const beEvent = event.args as BaseEntityEvent;
       if (beEvent.type === 'save' || beEvent.type === 'delete') {
+        const entityName = beEvent.baseEntity.EntityInfo.Name;
         PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, {
-          entityName: beEvent.baseEntity.EntityInfo.Name,
+          entityName,
           primaryKeyValues: JSON.stringify(beEvent.baseEntity.PrimaryKey.KeyValuePairs),
           action: beEvent.type,
           sourceServerId: MJGlobal.Instance.ProcessUUID,
           timestamp: new Date(),
           originSessionId: null,
-          recordData: beEvent.type === 'save' ? JSON.stringify(beEvent.baseEntity.GetAll()) : undefined,
+          // Opt-in only: this event reaches every connected client unfiltered, and this listener
+          // fires for server-internal saves too (agents, actions, orchestrator), which are exactly
+          // the ones no browser session asked for.
+          recordData:
+            beEvent.type === 'save' && MayBroadcastRecordData(entityName)
+              ? JSON.stringify(beEvent.baseEntity.GetAll())
+              : undefined,
         });
       }
     }

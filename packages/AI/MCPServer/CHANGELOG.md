@@ -1,5 +1,98 @@
 # @memberjunction/ai-mcp-server
 
+## 6.1.4
+
+### Patch Changes
+
+- Updated dependencies [6a3e1d2]
+- Updated dependencies [982fbfe]
+  - @memberjunction/server@6.1.4
+  - @memberjunction/core@6.1.4
+  - @memberjunction/core-entities@6.1.4
+  - @memberjunction/ai-agent-manager@6.1.4
+  - @memberjunction/ai-agents@6.1.4
+  - @memberjunction/ai-core-plus@6.1.4
+  - @memberjunction/aiengine@6.1.4
+  - @memberjunction/ai-prompts@6.1.4
+  - @memberjunction/api-keys@6.1.4
+  - @memberjunction/actions-base@6.1.4
+  - @memberjunction/actions@6.1.4
+  - @memberjunction/auth-providers@6.1.4
+  - @memberjunction/credentials@6.1.4
+  - @memberjunction/encryption@6.1.4
+  - @memberjunction/generic-database-provider@6.1.4
+  - @memberjunction/sqlserver-dataprovider@6.1.4
+  - @memberjunction/server-bootstrap-lite@6.1.4
+  - @memberjunction/ai-provider-bundle@6.1.4
+  - @memberjunction/ai@6.1.4
+  - @memberjunction/config@6.1.4
+  - @memberjunction/dynamic-packages@6.1.4
+  - @memberjunction/global@6.1.4
+
+## 6.1.3
+
+### Patch Changes
+
+- Updated dependencies [747a8f4]
+- Updated dependencies [7cdf2cc]
+- Updated dependencies [3707f26]
+- Updated dependencies [5e937c4]
+  - @memberjunction/ai-agents@6.1.3
+  - @memberjunction/core@6.1.3
+  - @memberjunction/generic-database-provider@6.1.3
+  - @memberjunction/sqlserver-dataprovider@6.1.3
+  - @memberjunction/actions-base@6.1.3
+  - @memberjunction/actions@6.1.3
+  - @memberjunction/server@6.1.3
+  - @memberjunction/ai-agent-manager@6.1.3
+  - @memberjunction/server-bootstrap-lite@6.1.3
+  - @memberjunction/ai-core-plus@6.1.3
+  - @memberjunction/aiengine@6.1.3
+  - @memberjunction/ai-prompts@6.1.3
+  - @memberjunction/api-keys@6.1.3
+  - @memberjunction/auth-providers@6.1.3
+  - @memberjunction/credentials@6.1.3
+  - @memberjunction/encryption@6.1.3
+  - @memberjunction/core-entities@6.1.3
+  - @memberjunction/ai-provider-bundle@6.1.3
+  - @memberjunction/ai@6.1.3
+  - @memberjunction/config@6.1.3
+  - @memberjunction/dynamic-packages@6.1.3
+  - @memberjunction/global@6.1.3
+
+## 6.1.2
+
+### Patch Changes
+
+- Updated dependencies [e1a8894]
+- Updated dependencies [283f83d]
+- Updated dependencies [dbc5b7d]
+- Updated dependencies [842e28b]
+- Updated dependencies [6e2f000]
+- Updated dependencies [b9178ed]
+  - @memberjunction/ai@6.1.2
+  - @memberjunction/aiengine@6.1.2
+  - @memberjunction/core-entities@6.1.2
+  - @memberjunction/ai-agents@6.1.2
+  - @memberjunction/server-bootstrap-lite@6.1.2
+  - @memberjunction/server@6.1.2
+  - @memberjunction/ai-core-plus@6.1.2
+  - @memberjunction/ai-prompts@6.1.2
+  - @memberjunction/actions@6.1.2
+  - @memberjunction/sqlserver-dataprovider@6.1.2
+  - @memberjunction/ai-agent-manager@6.1.2
+  - @memberjunction/generic-database-provider@6.1.2
+  - @memberjunction/api-keys@6.1.2
+  - @memberjunction/actions-base@6.1.2
+  - @memberjunction/credentials@6.1.2
+  - @memberjunction/encryption@6.1.2
+  - @memberjunction/ai-provider-bundle@6.1.2
+  - @memberjunction/auth-providers@6.1.2
+  - @memberjunction/config@6.1.2
+  - @memberjunction/dynamic-packages@6.1.2
+  - @memberjunction/core@6.1.2
+  - @memberjunction/global@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes

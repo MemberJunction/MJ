@@ -42,6 +42,12 @@ export type { PullOptions, PullCallbacks, PullResult } from './services/PullServ
 
 export { PushService } from './services/PushService';
 export type { PushOptions, PushCallbacks, PushResult } from './services/PushService';
+export { PushAbortedError, describeRollbackOutcome, describeCommittedWrites, describeCommitFailure } from './lib/push-outcome';
+export type { CommittedWrite, PushAbortedDetails, PushPartialTotals } from './lib/push-outcome';
+export { resolveDirectoryMode, graphBatchSizeFor, isolatedModeWarning, unusedBatchSizeWarning, DEFAULT_PARALLEL_BATCH_SIZE } from './lib/push-write-mode';
+export type { PushWriteMode, PushWriteModeInput, PushWriteModeSource, PushDirectoryMode } from './lib/push-write-mode';
+export { GraphProviderPool, probeIndependentInstances } from './lib/graph-provider-pool';
+export type { GraphProviderLike, GraphProviderMode, GraphSettleOutcome, GraphProviderPoolOptions } from './lib/graph-provider-pool';
 
 export { StatusService } from './services/StatusService';
 export type { StatusOptions, StatusCallbacks, StatusResult } from './services/StatusService';

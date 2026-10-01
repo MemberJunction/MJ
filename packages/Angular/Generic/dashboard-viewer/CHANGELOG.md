@@ -1,5 +1,59 @@
 # @memberjunction/ng-dashboard-viewer
 
+## 6.1.4
+
+### Patch Changes
+
+- Updated dependencies [6a3e1d2]
+- Updated dependencies [40f15b9]
+  - @memberjunction/core@6.1.4
+  - @memberjunction/core-entities@6.1.4
+  - @memberjunction/ng-entity-viewer@6.1.4
+  - @memberjunction/ng-artifacts@6.1.4
+  - @memberjunction/ng-base-types@6.1.4
+  - @memberjunction/ng-map-view@6.1.4
+  - @memberjunction/ng-query-viewer@6.1.4
+  - @memberjunction/ng-shared-generic@6.1.4
+  - @memberjunction/ng-trees@6.1.4
+  - @memberjunction/ng-ui-components@6.1.4
+  - @memberjunction/global@6.1.4
+
+## 6.1.3
+
+### Patch Changes
+
+- Updated dependencies [7cdf2cc]
+- Updated dependencies [3707f26]
+- Updated dependencies [5e937c4]
+  - @memberjunction/core@6.1.3
+  - @memberjunction/ng-artifacts@6.1.3
+  - @memberjunction/ng-base-types@6.1.3
+  - @memberjunction/ng-entity-viewer@6.1.3
+  - @memberjunction/ng-map-view@6.1.3
+  - @memberjunction/ng-query-viewer@6.1.3
+  - @memberjunction/ng-shared-generic@6.1.3
+  - @memberjunction/ng-trees@6.1.3
+  - @memberjunction/core-entities@6.1.3
+  - @memberjunction/ng-ui-components@6.1.3
+  - @memberjunction/global@6.1.3
+
+## 6.1.2
+
+### Patch Changes
+
+- Updated dependencies [e1a8894]
+  - @memberjunction/core-entities@6.1.2
+  - @memberjunction/ng-artifacts@6.1.2
+  - @memberjunction/ng-base-types@6.1.2
+  - @memberjunction/ng-entity-viewer@6.1.2
+  - @memberjunction/ng-map-view@6.1.2
+  - @memberjunction/ng-query-viewer@6.1.2
+  - @memberjunction/ng-shared-generic@6.1.2
+  - @memberjunction/ng-trees@6.1.2
+  - @memberjunction/ng-ui-components@6.1.2
+  - @memberjunction/core@6.1.2
+  - @memberjunction/global@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes

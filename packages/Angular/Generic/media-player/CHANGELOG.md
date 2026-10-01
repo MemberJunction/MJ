@@ -1,5 +1,33 @@
 # @memberjunction/ng-media-player
 
+## 6.1.4
+
+### Patch Changes
+
+- Updated dependencies [6a3e1d2]
+  - @memberjunction/core@6.1.4
+  - @memberjunction/ng-base-types@6.1.4
+  - @memberjunction/graphql-dataprovider@6.1.4
+
+## 6.1.3
+
+### Patch Changes
+
+- Updated dependencies [7cdf2cc]
+- Updated dependencies [3707f26]
+- Updated dependencies [5e937c4]
+  - @memberjunction/core@6.1.3
+  - @memberjunction/ng-base-types@6.1.3
+  - @memberjunction/graphql-dataprovider@6.1.3
+
+## 6.1.2
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@6.1.2
+- @memberjunction/graphql-dataprovider@6.1.2
+- @memberjunction/core@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes

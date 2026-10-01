@@ -25,6 +25,82 @@ import { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
  
 
 /**
+ * Field properties carried into the browser's mock metadata.
+ *
+ * `EntityFieldInfo` exposes ~77 own properties at runtime. The list below is the subset the
+ * in-page React runtime actually reads — derived from its bundle, not assumed — plus a few
+ * cheap scalars component code plausibly touches (`Sequence`, `AllowsNull`, `DefaultInView`,
+ * `Description`). Everything omitted is a server-side concern: search predicates, generated
+ * form layout, schema auto-update settings. None of it is reachable from component code.
+ *
+ * Note that several of the most frequently read names — `CodeName`, `TSType`,
+ * `DisplayNameOrName`, `NeedsQuotes` — are prototype GETTERS. Serialization to the browser
+ * has never carried prototype members, so they are already `undefined` in the page today;
+ * they are listed here only so that a build which promotes them to own properties keeps
+ * working.
+ */
+const BROWSER_FIELD_PROPERTIES: ReadonlySet<string> = new Set([
+  'ID', 'EntityID', 'Name', 'DisplayName', 'Description', 'Sequence',
+  'Type', 'Length', 'MaxLength', 'Precision', 'Scale', 'AllowsNull', 'DefaultValue',
+  'IsPrimaryKey', 'IsUnique', 'IsVirtual', 'IsNameField', 'DefaultInView',
+  'ExtendedType', 'ValueListType', 'EntityFieldValues',
+  'RelatedEntityID', 'RelatedEntity', 'RelatedEntityFieldName',
+  'CodeName', 'TSType',
+]);
+
+/**
+ * Builds the entity metadata handed to the browser context.
+ *
+ * Replaces a `JSON.parse(JSON.stringify(entities))` deep clone, which was there to strip
+ * functions before the value reached `page.evaluate`. Playwright already does that — it
+ * serializes the argument itself and takes only own enumerable properties — so the round
+ * trip was redundant, and strictly worse in one respect: `JSON.stringify` throws on a
+ * circular graph, and the caller's catch then yields an EMPTY entity list silently, where
+ * Playwright would have handled the cycle by reference.
+ *
+ * The projection matters more than the clone removal. `page.evaluate` does not JSON-encode
+ * its argument; it walks the graph building a tagged protocol representation, so every
+ * property becomes additional objects and the cost scales with NODE COUNT rather than byte
+ * size. Field objects dominate that count: an entity with 1,043 fields at ~77 properties
+ * each contributes ~80,000 property slots on its own.
+ *
+ * Measured against a client with 363 entities and 32,209 fields: the injection blocked the
+ * event loop for ~18s and allocated ~2.6GB, tripping the caller's memory watchdog before the
+ * component rendered. With the caller also narrowing to the 7 entities a component declares,
+ * projecting fields took that injection from 1,059ms to 321ms — 23 of 77 properties kept,
+ * 75% smaller — and halved total component-test time.
+ *
+ * Entity-level properties are preserved as-is; only `Fields` is projected. The input is never
+ * mutated.
+ */
+function projectEntitiesForBrowser(entities: readonly unknown[]): unknown[] {
+  if (!Array.isArray(entities) || entities.length === 0) {
+    return entities as unknown[];
+  }
+
+  return entities.map(entity => {
+    if (!entity || typeof entity !== 'object') return entity;
+
+    const source = entity as Record<string, unknown>;
+    const projected: Record<string, unknown> = { ...source };
+    const fields = source.Fields;
+
+    if (Array.isArray(fields)) {
+      projected.Fields = fields.map(field => {
+        if (!field || typeof field !== 'object') return field;
+        const slim: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(field as Record<string, unknown>)) {
+          if (BROWSER_FIELD_PROPERTIES.has(key)) slim[key] = value;
+        }
+        return slim;
+      });
+    }
+
+    return projected;
+  });
+}
+
+/**
  * Pre-resolve a component spec for browser execution
  * Converts registry components to embedded format with all code included
  */
@@ -50,6 +126,253 @@ async function preResolveComponentSpec(
 
   // For other types, return as-is
   return spec;
+}
+
+/**
+ * Row ceilings applied to the data bridges the component under test calls through
+ * (`__mjRunView`, `__mjRunViews`, `__mjRunQuery`).
+ *
+ * A test run only needs enough rows to render and be looked at, so the harness does not
+ * honour an unbounded request. `MaxRows` is applied at the SQL level by the provider, so
+ * the surplus is never produced rather than fetched and discarded — which matters because
+ * a bridge result is serialized in Node, shipped over CDP and rehydrated in Chromium,
+ * leaving several resident copies of the same data.
+ */
+export interface DataCapOptions {
+  /** Ceiling for `RunView` / `RunViews`. @default 1000 */
+  runViewMaxRows?: number;
+  /** Ceiling for `RunQuery`. @default 1000 */
+  runQueryMaxRows?: number;
+}
+
+/**
+ * One data call made by the component under test, recorded by the harness bridges.
+ *
+ * Lets a caller tell apart failure modes that a screenshot alone cannot: a component
+ * showing no data because its query returned zero rows is an upstream data or parameter
+ * problem, while one showing no data after rows *were* returned is a render or binding
+ * bug.
+ */
+/**
+ * Machine-readable identity of what a data call resolved to.
+ *
+ * Field names mirror `ComponentSpec.dataRequirements` (`ComponentQueryDataRequirement.name`
+ * / `.categoryPath`, `ComponentEntityDataRequirement.name`) so a caller can correlate what
+ * a component declared against what it actually called, without parsing a display string.
+ *
+ * It mirrors that vocabulary rather than referencing the spec, because a record must be
+ * able to describe a call that appears nowhere in `dataRequirements`.
+ */
+export interface DataAccessIdentity {
+  /** Entity name — corresponds to `ComponentEntityDataRequirement.name`. */
+  entityName?: string;
+  /** Query name — corresponds to `ComponentQueryDataRequirement.name`. Not unique alone. */
+  queryName?: string;
+  /** Category path that disambiguates `queryName` — `ComponentQueryDataRequirement.categoryPath`. */
+  categoryPath?: string;
+  /** Present when the call named a query by ID, which takes precedence over name. */
+  queryId?: string;
+  /** Present when the call named a saved view by ID. */
+  viewId?: string;
+  /** Present when the call named a saved view by name. */
+  viewName?: string;
+}
+
+export interface DataAccessRecord {
+  kind: 'RunView' | 'RunViews' | 'RunQuery';
+  /**
+   * Human/LLM-readable rendering of {@link identity} — a category-qualified query path,
+   * or the view/entity a `RunView` resolved to. For display and prompts; use `identity`
+   * for matching.
+   */
+  target: string;
+  /** Structured identity, for correlating against declared data requirements. */
+  identity: DataAccessIdentity;
+  /** Rows actually handed to the component. */
+  rowsReturned: number;
+  /**
+   * Rows the query would have produced without the harness ceiling, when the provider
+   * reports it (`TotalRowCount`). Equal to `rowsReturned` when nothing was capped.
+   */
+  totalRowCount?: number;
+  /** True when the harness ceiling reduced the result below what the source held. */
+  capped: boolean;
+  /** Ceiling actually applied to this call. */
+  appliedMaxRows?: number;
+  /** `MaxRows` the component asked for, when it asked for one. */
+  requestedMaxRows?: number;
+  /** Wall-clock duration of the call, in milliseconds. */
+  durationMs: number;
+  /** Present when the call failed; the bridge returns an empty result set in that case. */
+  error?: string;
+}
+
+/** Default row ceiling for `RunView` / `RunViews`. @see DataCapOptions */
+export const DEFAULT_RUN_VIEW_MAX_ROWS = 1000;
+
+/** Default row ceiling for `RunQuery`. @see DataCapOptions */
+export const DEFAULT_RUN_QUERY_MAX_ROWS = 1000;
+
+/**
+ * Resolves the `MaxRows` to send for one data call.
+ *
+ * Clamps downward only: a component asking for 50 rows still gets 50, while one asking for
+ * nothing or for more than the ceiling gets the ceiling. A nonsensical request (zero,
+ * negative, non-numeric) is treated as absent.
+ *
+ * Returns the requested value alongside the applied one, so a capped call can report what
+ * the component wanted.
+ *
+ * Pure (no I/O) so it can be unit-tested without launching a browser.
+ */
+export function ResolveDataCapMaxRows(
+  requested: number | undefined,
+  ceiling: number
+): { applied: number; requested?: number } {
+  const validRequest =
+    typeof requested === 'number' && Number.isFinite(requested) && requested > 0 ? requested : undefined;
+  return {
+    applied: validRequest === undefined ? ceiling : Math.min(validRequest, ceiling),
+    requested: validRequest,
+  };
+}
+
+/**
+ * Builds a {@link DataAccessRecord} from a completed provider call.
+ *
+ * `TotalRowCount` is the provider's count of rows the query would have produced without
+ * paging, making it the denominator for "capped at N of M". Providers that omit it, or
+ * leave it equal to `RowCount`, yield `capped: false` rather than a guess.
+ *
+ * Pure (no I/O) so it can be unit-tested without launching a browser.
+ */
+export function BuildDataAccessRecord(
+  kind: DataAccessRecord['kind'],
+  resolved: { target: string; identity: DataAccessIdentity },
+  result: { Results?: any[]; TotalRowCount?: number } | undefined,
+  maxRows: { applied: number; requested?: number },
+  durationMs: number
+): DataAccessRecord {
+  const rowsReturned = result?.Results?.length ?? 0;
+  const total = typeof result?.TotalRowCount === 'number' ? result.TotalRowCount : undefined;
+  return {
+    kind,
+    target: resolved.target,
+    identity: resolved.identity,
+    rowsReturned,
+    totalRowCount: total,
+    capped: total !== undefined && total > rowsReturned,
+    appliedMaxRows: maxRows.applied,
+    requestedMaxRows: maxRows.requested,
+    durationMs,
+  };
+}
+
+/** Debug-log suffix naming the cap, e.g. ` (capped at 1000 of 205802)`. Empty when uncapped. */
+export function DescribeDataCap(record: DataAccessRecord): string {
+  return record.capped ? ` (capped at ${record.rowsReturned} of ${record.totalRowCount})` : '';
+}
+
+/**
+ * Normalizes a category path and appends a leaf name, e.g. (`/MJ/AI/Agents/`, `Foo`) →
+ * `/MJ/AI/Agents/Foo`. Tolerates missing or doubled slashes on either side.
+ */
+function joinCategoryPath(categoryPath: string, name: string): string {
+  const trimmed = categoryPath.replace(/^\/+|\/+$/g, '');
+  return trimmed.length === 0 ? `/${name}` : `/${trimmed}/${name}`;
+}
+
+/**
+ * Names the query a `RunQuery` call resolved to, as both a display string and a structured
+ * {@link DataAccessIdentity}.
+ *
+ * A query name is not unique on its own — name and category path identify a query together
+ * — so the display form is category-qualified.
+ *
+ * Precedence mirrors how `RunQuery` itself resolves: `QueryID` wins and `QueryName` is
+ * ignored when both are supplied, so the ID is reported as the identity and the supplied
+ * name is kept only as a label. `identity` retains every part the caller passed, so a
+ * correlation by name and path still works when an ID drove the resolution.
+ */
+export function ResolveQueryTarget(params: {
+  QueryID?: string;
+  QueryName?: string;
+  CategoryPath?: string;
+  CategoryID?: string;
+}): { target: string; identity: DataAccessIdentity } {
+  // `identity` records what the caller supplied, so a correlation against declared
+  // requirements can match on name+categoryPath even when an ID drove the resolution.
+  const identity: DataAccessIdentity = {};
+  if (params.QueryID) identity.queryId = params.QueryID;
+  if (params.QueryName) identity.queryName = params.QueryName;
+  if (params.CategoryPath) identity.categoryPath = params.CategoryPath;
+
+  if (params.QueryID) {
+    return {
+      target: params.QueryName
+        ? `${params.QueryName} (resolved by QueryID ${params.QueryID})`
+        : `QueryID ${params.QueryID}`,
+      identity,
+    };
+  }
+  if (params.QueryName) {
+    if (params.CategoryPath) {
+      return { target: joinCategoryPath(params.CategoryPath, params.QueryName), identity };
+    }
+    if (params.CategoryID) {
+      return { target: `${params.QueryName} (CategoryID ${params.CategoryID})`, identity };
+    }
+    // Neither qualifier given: the name is all the caller supplied, so it is all we can
+    // report — flagged, because this is the ambiguous case rather than a resolved identity.
+    return { target: `${params.QueryName} (uncategorized)`, identity };
+  }
+  return { target: 'unknown', identity };
+}
+
+/** Display-only form of {@link ResolveQueryTarget}. */
+export function DescribeQueryTarget(params: {
+  QueryID?: string;
+  QueryName?: string;
+  CategoryPath?: string;
+  CategoryID?: string;
+}): string {
+  return ResolveQueryTarget(params).target;
+}
+
+/**
+ * Names the view a `RunView` call resolved to, as both a display string and a structured
+ * {@link DataAccessIdentity}.
+ *
+ * Follows `RunViewParams`' own precedence — `ViewEntity` → `ViewID` → `ViewName` →
+ * `EntityName` — where each earlier field causes the later ones to be ignored. Reporting
+ * `EntityName` regardless would name something the call did not resolve by.
+ */
+export function ResolveViewTarget(params: {
+  ViewEntity?: unknown;
+  ViewID?: string;
+  ViewName?: string;
+  EntityName?: string;
+}): { target: string; identity: DataAccessIdentity } {
+  const identity: DataAccessIdentity = {};
+  if (params.EntityName) identity.entityName = params.EntityName;
+  if (params.ViewID) identity.viewId = params.ViewID;
+  if (params.ViewName) identity.viewName = params.ViewName;
+
+  const entitySuffix = params.EntityName ? ` on ${params.EntityName}` : '';
+  if (params.ViewEntity) return { target: `saved view via ViewEntity${entitySuffix}`, identity };
+  if (params.ViewID) return { target: `ViewID ${params.ViewID}${entitySuffix}`, identity };
+  if (params.ViewName) return { target: `view "${params.ViewName}"${entitySuffix}`, identity };
+  return { target: params.EntityName || 'unknown', identity };
+}
+
+/** Display-only form of {@link ResolveViewTarget}. */
+export function DescribeViewTarget(params: {
+  ViewEntity?: unknown;
+  ViewID?: string;
+  ViewName?: string;
+  EntityName?: string;
+}): string {
+  return ResolveViewTarget(params).target;
 }
 
 /**
@@ -150,6 +473,16 @@ export interface ComponentExecutionOptions extends LinterOptions {
    * @default 15000
    */
   dataIdleTimeoutMs?: number;
+
+  /**
+   * Row ceilings for the data bridges. Omitted fields fall back to
+   * {@link DEFAULT_RUN_VIEW_MAX_ROWS} /
+   * {@link DEFAULT_RUN_QUERY_MAX_ROWS} (1000).
+   *
+   * A component asking for fewer rows than the ceiling keeps its own smaller number;
+   * the ceiling only ever clamps downward.
+   */
+  dataCaps?: DataCapOptions;
 }
 
 export interface ComponentExecutionResult {
@@ -188,6 +521,14 @@ export interface ComponentExecutionResult {
    * This field gives you the "did the code work?" answer directly.
    */
   codeExecutionSuccess?: boolean;
+
+  /**
+   * Every data call the component made, in the order the bridges served them.
+   *
+   * Empty when the component fetched nothing — itself a useful signal, and distinct from
+   * a component whose calls all returned zero rows.
+   */
+  dataAccess?: DataAccessRecord[];
 }
 
 /**
@@ -211,6 +552,7 @@ export class ComponentRunner {
   // create 15,000-21,000 elements. We use a raised hard ceiling plus rate-of-growth
   // detection to distinguish real infinite loops from large but finite renders.
   private static readonly MAX_RENDER_COUNT = 50000;
+
 
   // Browser/page crash patterns - these are infrastructure issues, not code errors
   private static readonly BROWSER_CRASH_PATTERNS = [
@@ -296,6 +638,7 @@ export class ComponentRunner {
     const warnings: string[] = [];
     const consoleLogs: { type: string; text: string }[] = [];
     const dataErrors: string[] = []; // Track data access errors from RunView/RunQuery
+    const dataAccess: DataAccessRecord[] = []; // Track every data call: target, rows, cap state
     let renderCount = 0;
     
     const debug = options.debug !== false; // Default to true for debugging
@@ -379,7 +722,7 @@ export class ComponentRunner {
       this.setupConsoleLogging(page, consoleLogs, warnings);
       
       // Expose MJ utilities to the page
-      await this.exposeMJUtilities(page, options, dataErrors, debug)
+      await this.exposeMJUtilities(page, options, dataErrors, dataAccess, debug)
       if (debug) {
         console.log('📤 NODE: About to call page.evaluate with:');
         console.log('  - spec.name:', options.componentSpec.name);
@@ -1217,18 +1560,30 @@ export class ComponentRunner {
       let screenshot: Buffer;
 
       try {
-        // Try to get HTML content with a reasonable size limit
-        html = await page.content();
+        // Backstop only — the row ceilings on the data bridges (see DataCapOptions) stop a
+        // runaway result set before it reaches the DOM. Deliberately far below Node's ~536MB
+        // string limit: the harness shares a heap with the host process, so by the time a
+        // page serializes to tens of megabytes the run is pathological whether or not the
+        // string itself fits.
+        const maxSafeSize = 25 * 1024 * 1024; // 25MB
 
-        // Check if HTML is excessively large (>100MB is suspicious)
-        const htmlSizeEstimate = Buffer.byteLength(html, 'utf8');
-        const maxSafeSize = 100 * 1024 * 1024; // 100MB
+        // Measure and slice IN THE PAGE. `page.content()` materialises the entire document
+        // as a Node string first, so the ceiling below used to be enforced only after the
+        // allocation it exists to prevent — and beyond Node's string limit the transfer
+        // throws before any check can run. Extracting a bounded slice keeps this side
+        // bounded by the cap no matter how large the document is; the true length still
+        // crosses, so an oversized render is just as visible in the error.
+        const extracted: { length: number; html: string } = await page.evaluate((limit: number) => {
+          const full = document.documentElement.outerHTML;
+          return { length: full.length, html: full.length > limit ? full.slice(0, limit) : full };
+        }, maxSafeSize);
 
-        if (htmlSizeEstimate > maxSafeSize) {
-          console.warn(`⚠️ HTML content is very large (${Math.round(htmlSizeEstimate / 1024 / 1024)}MB). Truncating to prevent crashes.`);
-          // Truncate to a safe size
-          html = html.substring(0, maxSafeSize) + '\n<!-- TRUNCATED: Content exceeded safe size limit -->';
-          errors.push(`HTML content too large (${Math.round(htmlSizeEstimate / 1024 / 1024)}MB). This may indicate excessive data or a render issue.`);
+        html = extracted.html;
+
+        if (extracted.length > maxSafeSize) {
+          console.warn(`⚠️ HTML content is very large (${Math.round(extracted.length / 1024 / 1024)}MB). Truncating to prevent crashes.`);
+          html += '\n<!-- TRUNCATED: Content exceeded safe size limit -->';
+          errors.push(`HTML content too large (${Math.round(extracted.length / 1024 / 1024)}MB). This may indicate excessive data or a render issue.`);
         }
       } catch (error: unknown) {
         const errorMsg = error instanceof Error ? error.message : String(error);
@@ -1385,23 +1740,42 @@ export class ComponentRunner {
       );
       const codeExecutionSuccess = nonCrashCriticalHighErrors.length === 0;
 
+      // Surface capped data calls as their own warnings, so a downstream evaluator does not
+      // read a deliberately truncated render as a defect.
+      const capWarnings: Violation[] = dataAccess
+        .filter(d => d.capped)
+        .map(d => ({
+          message:
+            `Data capped: ${d.kind} "${d.target}" returned ${d.rowsReturned} of ${d.totalRowCount} rows ` +
+            `(harness ceiling ${d.appliedMaxRows}). Values aggregated in the component from this ` +
+            `result are computed over partial data.`,
+          severity: 'medium' as const,
+          rule: 'data-row-cap',
+          line: 0,
+          column: 0
+        }));
+
       const result: ComponentExecutionResult = {
         success: success && dataErrors.length === 0 && criticalWarningViolations.length === 0, // Fail on critical warnings too
         html,
         errors: allErrorViolations,
         browserCrash: hasBrowserCrash,
-        warnings: regularWarnings.map(w => ({
-          message: w,
-          severity: 'low' as const,
-          rule: 'warning',
-          line: 0,
-          column: 0
-        })),
+        warnings: [
+          ...regularWarnings.map(w => ({
+            message: w,
+            severity: 'low' as const,
+            rule: 'warning',
+            line: 0,
+            column: 0
+          })),
+          ...capWarnings,
+        ],
         console: consoleLogs,
         screenshot,
         executionTime: Date.now() - startTime,
         renderCount,
         codeExecutionSuccess,
+        dataAccess,
         sourceMaps: (this as any)._lastSourceMaps,
       };
 
@@ -1482,7 +1856,9 @@ export class ComponentRunner {
         executionTime: Date.now() - startTime,
         renderCount,
         browserCrash: hasBrowserCrash,
-        codeExecutionSuccess
+        codeExecutionSuccess,
+        // Data calls made before the failure still describe what the component reached for.
+        dataAccess,
       };
 
       if (debug) {
@@ -2152,23 +2528,53 @@ export class ComponentRunner {
     consoleLogs: { type: string; text: string }[],
     warnings: string[]
   ): void {
+    // Ceilings, not trimming. Normal runs land far below both — a passing component test was
+    // observed at ~1,800 messages and 0.7MB — so these exist only to stop a component stuck
+    // in a render or error loop from growing this array without bound. The harness shares a
+    // heap with its host process, so an unbounded collector here is the host's problem too.
+    const MAX_CONSOLE_MESSAGES = 5000;
+    const MAX_MESSAGE_CHARS = 32 * 1024;
+
+    // Membership test, not a linear scan: `warnings.includes` made de-duplication O(n^2) in
+    // the number of distinct warnings, on the event loop everything else shares. `warnings`
+    // stays an array because callers index it.
+    const seenWarnings = new Set<string>(warnings);
+    let overflowed = false;
+
+    const record = (type: string, text: string): void => {
+      const clipped = typeof text === 'string' && text.length > MAX_MESSAGE_CHARS
+        ? `${text.slice(0, MAX_MESSAGE_CHARS)}… [truncated, ${text.length} chars]`
+        : text;
+
+      if (consoleLogs.length < MAX_CONSOLE_MESSAGES) {
+        consoleLogs.push({ type, text: clipped });
+      } else if (!overflowed) {
+        // Record the overflow once, so a truncated run is never mistaken for a quiet one.
+        overflowed = true;
+        consoleLogs.push({
+          type: 'warning',
+          text: `[harness] console output exceeded ${MAX_CONSOLE_MESSAGES} messages; further `
+              + `messages are not retained. This usually indicates a render or error loop.`,
+        });
+      }
+    };
+
     page.on('console', (msg: any) => {
       const type = msg.type();
       const text = msg.text();
-      
-      consoleLogs.push({ type, text });
-      
+
+      record(type, text);
+
       // Note: We're already handling warnings in our console.error override
       // This catches any direct console.warn() calls
-      if (type === 'warning') {
-        if (!warnings.includes(text)) {
-          warnings.push(text);
-        }
+      if (type === 'warning' && !seenWarnings.has(text)) {
+        seenWarnings.add(text);
+        warnings.push(text);
       }
     });
 
     page.on('pageerror', (error: Error) => {
-      consoleLogs.push({ type: 'error', text: error.message });
+      record('error', error.message);
     });
   }
 
@@ -2351,7 +2757,17 @@ export class ComponentRunner {
   /**
    * Expose MJ utilities to the browser context
    */
-  private async exposeMJUtilities(page: any, options: ComponentExecutionOptions, dataErrors: string[], debug: boolean = false): Promise<void> {
+  private async exposeMJUtilities(
+    page: any,
+    options: ComponentExecutionOptions,
+    dataErrors: string[],
+    dataAccess: DataAccessRecord[],
+    debug: boolean = false
+  ): Promise<void> {
+    // Row ceilings for this run, resolved once rather than per call.
+    const viewCeiling = options.dataCaps?.runViewMaxRows ?? DEFAULT_RUN_VIEW_MAX_ROWS;
+    const queryCeiling = options.dataCaps?.runQueryMaxRows ?? DEFAULT_RUN_QUERY_MAX_ROWS;
+
     // Don't check if already exposed - we always start fresh after goto('about:blank')
     // The page.exposeFunction calls need to be made for each new page instance
 
@@ -2364,13 +2780,15 @@ export class ComponentRunner {
 
     // Create a lightweight mock metadata object with serializable data
     // This avoids authentication/provider issues in the browser context
-    let entitiesData: any[] = [];
+    let entitiesData: unknown[] = [];
     try {
       // Try to get entities if available, otherwise use empty array
       if (util.md?.Entities) {
-        // Serialize the entities data (remove functions, keep data)
-        entitiesData = JSON.parse(JSON.stringify(util.md.Entities));
-        // Serialized entities for browser context
+        // Project to the properties the in-page runtime reads, rather than deep-cloning the
+        // whole EntityInfo graph. See `projectEntitiesForBrowser` for why this matters: the
+        // value goes to `page.evaluate`, whose cost scales with NODE COUNT, and field
+        // objects dominate that count on a wide schema.
+        entitiesData = projectEntitiesForBrowser(util.md.Entities);
       } else {
         // Metadata.Entities not available, using empty array
       }
@@ -2445,56 +2863,86 @@ export class ComponentRunner {
     });
 
     await page.exposeFunction('__mjRunView', async (params: RunViewParams) => {
+      const viewTarget = ResolveViewTarget(params);
+      const maxRows = ResolveDataCapMaxRows(params.MaxRows, viewCeiling);
+      const startedAt = Date.now();
       try {
-        const result = await util.rv.RunView(params, options.contextUser);
-        
+        const result = await util.rv.RunView({ ...params, MaxRows: maxRows.applied }, options.contextUser);
+
+        const record = BuildDataAccessRecord('RunView', viewTarget, result, maxRows, Date.now() - startedAt);
+        dataAccess.push(record);
+
         // Debug logging for successful calls
         if (debug) {
-          const rowCount = result.Results?.length || 0;
-          console.log(`💾 RunView SUCCESS: Entity="${params.EntityName}" Rows=${rowCount}`);
+          console.log(`💾 RunView SUCCESS: View="${viewTarget.target}" Rows=${record.rowsReturned}${DescribeDataCap(record)}`);
           if (params.ExtraFilter) {
             console.log(`   Filter: ${params.ExtraFilter}`);
           }
         }
-        
+
         return result;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        
+
+        dataAccess.push({
+          kind: 'RunView', target: viewTarget.target, identity: viewTarget.identity, rowsReturned: 0, capped: false,
+          appliedMaxRows: maxRows.applied, requestedMaxRows: maxRows.requested,
+          durationMs: Date.now() - startedAt, error: errorMessage,
+        });
+
         // Debug logging for errors
         if (debug) {
-          console.log(`❌ RunView FAILED: Entity="${params.EntityName || 'unknown'}"`);
+          console.log(`❌ RunView FAILED: View="${viewTarget.target}"`);
           console.log(`   Error: ${errorMessage}`);
         } else {
           console.error('Error in __mjRunView:', errorMessage);
         }
-        
+
         // Collect this error for the test report
-        dataErrors.push(`RunView error: ${errorMessage} (Entity: ${params.EntityName || 'unknown'})`);
-        
+        dataErrors.push(`RunView error: ${errorMessage} (View: ${viewTarget.target})`);
+
         // Return error result that won't crash the component
         return { Success: false, ErrorMessage: errorMessage, Results: [] };
       }
     });
 
     await page.exposeFunction('__mjRunViews', async (params: RunViewParams[]) => {
+      const perCallMaxRows = params.map(p => ResolveDataCapMaxRows(p.MaxRows, viewCeiling));
+      const startedAt = Date.now();
       try {
-        const results = await util.rv.RunViews(params, options.contextUser);
-        
+        const results = await util.rv.RunViews(
+          params.map((p, i) => ({ ...p, MaxRows: perCallMaxRows[i].applied })),
+          options.contextUser
+        );
+
+        // One record per view in the batch — a batch that partially returns data is a
+        // meaningfully different signal from one that returns none.
+        const elapsed = Date.now() - startedAt;
+        const records = params.map((p, i) => BuildDataAccessRecord(
+          'RunViews', ResolveViewTarget(p), results[i], perCallMaxRows[i], elapsed
+        ));
+        records.forEach(r => dataAccess.push(r));
+
         // Debug logging for successful calls
         if (debug) {
           console.log(`💾 RunViews SUCCESS: ${params.length} queries executed`);
-          params.forEach((p, i) => {
-            const rowCount = results[i]?.Results?.length || 0;
-            console.log(`   [${i+1}] Entity="${p.EntityName}" Rows=${rowCount}`);
+          records.forEach((r, i) => {
+            console.log(`   [${i+1}] Entity="${r.target}" Rows=${r.rowsReturned}${DescribeDataCap(r)}`);
           });
         }
-        
+
         return results;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        const entities = params.map(p => p.EntityName || 'unknown').join(', ');
-        
+        const entities = params.map(p => DescribeViewTarget(p)).join(', ');
+
+        // RunViews fails as a batch, so every view in it failed.
+        params.forEach((p, i) => dataAccess.push({
+          kind: 'RunViews', ...ResolveViewTarget(p), rowsReturned: 0, capped: false,
+          appliedMaxRows: perCallMaxRows[i].applied, requestedMaxRows: perCallMaxRows[i].requested,
+          durationMs: Date.now() - startedAt, error: errorMessage,
+        }));
+
         // Debug logging for errors
         if (debug) {
           console.log(`❌ RunViews FAILED: Entities=[${entities}]`);
@@ -2512,34 +2960,43 @@ export class ComponentRunner {
     });
 
     await page.exposeFunction('__mjRunQuery', async (params: RunQueryParams) => {
+      const queryIdentifier = ResolveQueryTarget(params);
+      const maxRows = ResolveDataCapMaxRows(params.MaxRows, queryCeiling);
+      const startedAt = Date.now();
       try {
-        const result = await util.rq.RunQuery(params, options.contextUser);
-        
+        const result = await util.rq.RunQuery({ ...params, MaxRows: maxRows.applied }, options.contextUser);
+
+        const record = BuildDataAccessRecord('RunQuery', queryIdentifier, result, maxRows, Date.now() - startedAt);
+        dataAccess.push(record);
+
         // Debug logging for successful calls
         if (debug) {
-          const queryIdentifier = params.QueryName || params.QueryID || 'unknown';
-          const rowCount = result.Results?.length || 0;
-          console.log(`💾 RunQuery SUCCESS: Query="${queryIdentifier}" Rows=${rowCount}`);
+          console.log(`💾 RunQuery SUCCESS: Query="${queryIdentifier.target}" Rows=${record.rowsReturned}${DescribeDataCap(record)}`);
           if (params.Parameters && Object.keys(params.Parameters).length > 0) {
             console.log(`   Parameters:`, params.Parameters);
           }
         }
-        
+
         return result;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        const queryIdentifier = params.QueryName || params.QueryID || 'unknown';
-        
+
+        dataAccess.push({
+          kind: 'RunQuery', target: queryIdentifier.target, identity: queryIdentifier.identity, rowsReturned: 0, capped: false,
+          appliedMaxRows: maxRows.applied, requestedMaxRows: maxRows.requested,
+          durationMs: Date.now() - startedAt, error: errorMessage,
+        });
+
         // Debug logging for errors
         if (debug) {
-          console.log(`❌ RunQuery FAILED: Query="${queryIdentifier}"`);
+          console.log(`❌ RunQuery FAILED: Query="${queryIdentifier.target}"`);
           console.log(`   Error: ${errorMessage}`);
         } else {
           console.error('Error in __mjRunQuery:', errorMessage);
         }
         
         // Collect this error for the test report
-        dataErrors.push(`RunQuery error: ${errorMessage} (Query: ${queryIdentifier})`);
+        dataErrors.push(`RunQuery error: ${errorMessage} (Query: ${queryIdentifier.target})`);
         
         // Return error result that won't crash the component
         return { Success: false, ErrorMessage: errorMessage, Results: [] };

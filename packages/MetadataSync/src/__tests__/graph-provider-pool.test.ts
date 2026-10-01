@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { GraphProviderPool, type GraphProviderLike } from '../lib/graph-provider-pool';
+import {
+    GraphProviderPool,
+    probeIndependentInstances,
+    type GraphProviderLike,
+    type GraphSettleOutcome,
+} from '../lib/graph-provider-pool';
 
 class FakeProvider implements GraphProviderLike {
     static created = 0;
@@ -44,7 +49,7 @@ describe('GraphProviderPool', () => {
     it('keeps leftover-depth graphs live across levels and releases at last level', async () => {
         const host = new FakeProvider();
         host.leftoverDepth = 1;
-        const pool = new GraphProviderPool(host);
+        const pool = new GraphProviderPool(host, { mode: 'independent' });
         pool.noteLevels([
             [{ graphId: 'A' }, { graphId: 'B' }],
             [{ graphId: 'A' }, { graphId: 'B' }],
@@ -71,7 +76,7 @@ describe('GraphProviderPool', () => {
     it('releases settled (depth 0) graphs at the current batch even if they have a later level', async () => {
         const host = new FakeProvider();
         host.leftoverDepth = 0;
-        const pool = new GraphProviderPool(host);
+        const pool = new GraphProviderPool(host, { mode: 'independent' });
         pool.noteLevels([
             [{ graphId: 'A' }, { graphId: 'B' }],
             [{ graphId: 'A' }, { graphId: 'B' }],
@@ -92,7 +97,7 @@ describe('GraphProviderPool', () => {
 
     it('does not commit leftover depth when a record reported status: error', async () => {
         const host = new FakeProvider();
-        const pool = new GraphProviderPool(host);
+        const pool = new GraphProviderPool(host, { mode: 'independent' });
         pool.noteLevels([[{ graphId: 'A' }]]);
 
         const a = await pool.obtain('A');
@@ -106,7 +111,7 @@ describe('GraphProviderPool', () => {
 
     it('returns a commit failure and still releases the instance', async () => {
         const host = new FakeProvider();
-        const pool = new GraphProviderPool(host);
+        const pool = new GraphProviderPool(host, { mode: 'independent' });
         pool.noteLevels([[{ graphId: 'A' }]]);
 
         const a = (await pool.obtain('A')) as FakeProvider;
@@ -118,30 +123,9 @@ describe('GraphProviderPool', () => {
         expect(a.rollbacks).toBe(1);
     });
 
-    it('memoizes CreateIndependentInstance failure and uses the host for every graph', async () => {
+    it('throws when CreateIndependentInstance fails, and never falls back to the host', async () => {
         const host = new FakeProvider();
-        host.independentShouldThrow = true;
-        const logs: string[] = [];
-        const pool = new GraphProviderPool(host, (m) => logs.push(m));
-        pool.noteLevels([[{ graphId: 'A' }, { graphId: 'B' }]]);
-
-        const a = await pool.obtain('A');
-        const b = await pool.obtain('B');
-        expect(a).toBe(host);
-        expect(b).toBe(host);
-        expect(FakeProvider.created).toBe(0);
-        expect(logs).toHaveLength(1);
-        expect(logs[0]).toMatch(/ALL graphs in this file use the host provider/);
-
-        // Host is not stored, so drain must not ReleaseIndependentInstance the host
-        await pool.drainBatch(['A', 'B'], 0);
-        expect(host.releases).toBe(0);
-        expect(host.commits).toBe(0);
-    });
-
-    it('throws if CreateIndependentInstance fails after independents already exist', async () => {
-        const host = new FakeProvider();
-        const pool = new GraphProviderPool(host);
+        const pool = new GraphProviderPool(host, { mode: 'independent' });
         pool.noteLevels([[{ graphId: 'A' }, { graphId: 'B' }, { graphId: 'C' }]]);
 
         const a = await pool.obtain('A');
@@ -150,7 +134,7 @@ describe('GraphProviderPool', () => {
         expect(b).not.toBe(host);
 
         host.independentShouldThrow = true;
-        await expect(pool.obtain('C')).rejects.toThrow(/Refusing mixed host \+ independent topology/);
+        await expect(pool.obtain('C')).rejects.toThrow(/Refusing to run this graph on the host provider/);
         // Earlier graphs stay independent — the mix never starts
         expect(await pool.obtain('A')).toBe(a);
         expect(FakeProvider.created).toBe(2);
@@ -158,7 +142,7 @@ describe('GraphProviderPool', () => {
 
     it('releaseAll rolls back remaining graphs after a thrown failure', async () => {
         const host = new FakeProvider();
-        const pool = new GraphProviderPool(host);
+        const pool = new GraphProviderPool(host, { mode: 'independent' });
         pool.noteLevels([
             [{ graphId: 'A' }],
             [{ graphId: 'A' }],
@@ -170,5 +154,116 @@ describe('GraphProviderPool', () => {
         expect((a as FakeProvider).commits).toBe(0);
         expect((a as FakeProvider).rollbacks).toBe(1);
         expect((a as FakeProvider).releases).toBe(1);
+    });
+    it('reports committed for graphs whose Save already committed, even after a failure', async () => {
+        const host = new FakeProvider();
+        host.leftoverDepth = 0;
+        const outcomes: Array<[string, GraphSettleOutcome]> = [];
+        const pool = new GraphProviderPool(host, {
+            mode: 'independent',
+            onGraphSettled: (id, outcome) => outcomes.push([id, outcome]),
+        });
+        pool.noteLevels([[{ graphId: 'A' }, { graphId: 'B' }]]);
+        await pool.obtain('A');
+        await pool.obtain('B');
+        pool.markFailed();
+        await pool.releaseAll();
+        // Depth 0 means each Save committed on its own; a failure elsewhere cannot undo that.
+        expect(outcomes).toEqual([['A', 'committed'], ['B', 'committed']]);
+    });
+
+    it('reports rolledBack for leftover depth after a failure, and committed after a clean commit', async () => {
+        const host = new FakeProvider();
+        const outcomes: Array<[string, GraphSettleOutcome]> = [];
+        const pool = new GraphProviderPool(host, {
+            mode: 'independent',
+            onGraphSettled: (id, outcome) => outcomes.push([id, outcome]),
+        });
+        pool.noteLevels([[{ graphId: 'A' }], [{ graphId: 'B' }]]);
+        await pool.obtain('A');
+        await pool.drainBatch(['A'], 0);
+        await pool.obtain('B');
+        pool.markFailed();
+        await pool.drainBatch(['B'], 1);
+        expect(outcomes).toEqual([['A', 'committed'], ['B', 'rolledBack']]);
+    });
+});
+
+describe('GraphProviderPool in host mode', () => {
+    beforeEach(() => {
+        FakeProvider.created = 0;
+    });
+
+    it('hands every graph the host and never creates an independent instance', async () => {
+        const host = new FakeProvider();
+        const pool = new GraphProviderPool(host, { mode: 'host' });
+        pool.noteLevels([[{ graphId: 'A' }, { graphId: 'B' }]]);
+
+        expect(await pool.obtain('A')).toBe(host);
+        await pool.drainBatch(['A'], 0);
+        expect(await pool.obtain('B')).toBe(host);
+        await pool.drainBatch(['B'], 0);
+
+        expect(FakeProvider.created).toBe(0);
+        expect(pool.Mode).toBe('host');
+    });
+
+    it('refuses to hand the host to a second graph while another graph holds it', async () => {
+        const host = new FakeProvider();
+        const pool = new GraphProviderPool(host, { mode: 'host' });
+        pool.noteLevels([[{ graphId: 'A' }, { graphId: 'B' }]]);
+
+        await pool.obtain('A');
+        await expect(pool.obtain('B')).rejects.toThrow(/still holds it/);
+        // The holder itself may ask again (a graph's records run one after another).
+        expect(await pool.obtain('A')).toBe(host);
+    });
+
+    it('never commits, rolls back, or releases the host — the push transaction owns it', async () => {
+        const host = new FakeProvider();
+        host.TransactionDepth = 1;
+        const settled: string[] = [];
+        const pool = new GraphProviderPool(host, { mode: 'host', onGraphSettled: (id) => settled.push(id) });
+        pool.noteLevels([[{ graphId: 'A' }]]);
+
+        await pool.obtain('A');
+        pool.markFailed();
+        expect(await pool.drainBatch(['A'], 0)).toBeUndefined();
+        expect(await pool.releaseAll()).toBeUndefined();
+
+        expect(host.commits).toBe(0);
+        expect(host.rollbacks).toBe(0);
+        expect(host.releases).toBe(0);
+        expect(settled).toEqual([]);
+    });
+
+    it('frees the host after releaseAll so the next file can use it', async () => {
+        const host = new FakeProvider();
+        const pool = new GraphProviderPool(host, { mode: 'host' });
+        await pool.obtain('A');
+        await pool.releaseAll();
+        expect(await pool.obtain('B')).toBe(host);
+    });
+});
+
+describe('probeIndependentInstances', () => {
+    it('returns undefined and releases the probe instance when independents work', async () => {
+        const host = new FakeProvider();
+        const created: FakeProvider[] = [];
+        const original = host.CreateIndependentInstance.bind(host);
+        host.CreateIndependentInstance = async () => {
+            const child = (await original()) as FakeProvider;
+            created.push(child);
+            return child;
+        };
+        expect(await probeIndependentInstances(host)).toBeUndefined();
+        expect(created).toHaveLength(1);
+        expect(created[0].releases).toBe(1);
+    });
+
+    it('returns the reason when CreateIndependentInstance throws', async () => {
+        const host = new FakeProvider();
+        host.independentShouldThrow = true;
+        expect(await probeIndependentInstances(host)).toMatch(/does not implement/);
     });
 });

@@ -1,5 +1,64 @@
 # Change Log - @memberjunction/core
 
+## 6.1.4
+
+### Patch Changes
+
+- 6a3e1d2: Cache-invalidation events no longer carry row data unless the deployment opts in, and the consumers that needed that row now re-read it through an access-controlled path.
+
+  The `cacheInvalidation` subscription is delivered to every connected client with no per-user filter, and both publish sites attached the full row (`JSON.stringify(entity.GetAll())`) to every save. Row-level security and any consumer-side scoping apply on the read path, which a push bypasses — so every signed-in session received the contents of rows it had no right to read.
+
+  **Server.** `recordData` is populated only for entities named in the new `cacheSettings.recordDataBroadcastEntities`, default `[]`. `['*']` restores the previous behaviour wholesale. `EntityName` and `PrimaryKeyValues` still broadcast unconditionally — they disclose nothing a client cannot already derive, and they are what tells a consumer _which_ record changed.
+
+  **Core.** New `ResolveEntityEventRow(event, provider?, contextUser?)` and `ResolveEntityEventKey(event)`. The first returns the row from the live entity (local events), from `recordData` (allowlisted entities), or by re-reading that one record by primary key through the provider — as the signed-in user, so the server decides what comes back. A session that may not read the record gets `null` rather than an exception or someone else's data. The second reads identity from the primary key, which is always present.
+
+  **Consumers.** `ConversationEngine` hydrates once in its already-async event dispatcher and passes the row to its five handlers, which stay synchronous; identity now comes from the primary key, so a conversation delete and a project delete need no row at all. The dispatcher asks `EntityEventRowIsFree(event)` first — a row that is already in hand, from the live entity or from allowlisted `recordData`, is never worth skipping, and the per-entity skips below it are about avoiding THE READ. The AI Agent Run form resolves `Status` the same way, behind its id match; `AgentRunID` on a step cannot be gated that way (it is the foreign key being matched), so while that form is open on a Running agent every step save in the deployment costs it one keyed read, bounded by the run's lifetime. The Form Builder cockpit resolves `Name` only after its id match has already missed. A conversation whose re-read comes back null — refused, gone, or failed — is left as it was rather than handed to `SetMany`, and a remote delete on the detail path no longer re-reads a row that is guaranteed gone.
+
+  **Cost, stated plainly for whoever sets the allowlist.** `BaseEngine` is unchanged in code and is the broadest behavioural change here: it applies a remote save in place only when `recordData` is present, so with the default `[]` every remote save of an `AutoRefresh` entity falls through to a full `RunView` reload of each matching config (`LoadSingleConfig(..., bypassCache=true)`), not a keyed read. Remote deletes still apply in place from the primary key. Engine-cached reference entities that every signed-in user may read are the ones worth listing.
+
+  Without the consumer half, defaulting `recordDataBroadcastEntities` to `[]` would have made `ConversationEngine`'s remote handling a silent no-op — including the eviction whose own comment warns that a warm cache "would keep serving without this row forever".
+  - @memberjunction/global@6.1.4
+  - @memberjunction/sql-dialect@6.1.4
+
+## 6.1.3
+
+### Patch Changes
+
+- 7cdf2cc: Add a provider post-commit queue: `DatabaseProviderBase.RunAfterCommit(task, description, token?)` plus `CapturePostCommitToken()`, which returns a `PostCommitToken` naming the transaction frames open at that moment. Inside a transaction a task waits for the outermost commit and is discarded on rollback, failed commit, abandoned (doomed) transaction, or `ResetTransactionState`; a savepoint rollback discards only the tasks registered inside that savepoint. Work dispatched fire-and-forget by a save registers after the transaction may already have settled, so the entity-action and AI-action dispatchers capture a token before their first `await` and pass it along: the task then follows the transaction that caused it rather than whatever is open when it registers. SQL Server's deferred Entity AI Action queueing uses this, and Durable After\* entity actions with no queue submitter (e.g. `mj sync push`) are handed to it instead of polling `TransactionDepth` on every tick — so they no longer busy-spin during a long transaction, and never fire for rows a rollback removed. A savepoint that rolled back keeps that fate after the outer transaction commits, so work caused inside it is still dropped. A token captured with no transaction open says so, and its task runs rather than being attached to an unrelated transaction that opened in the meantime. A task whose own transaction has committed waits for any unrelated transaction on that provider to end, so its writes are never enlisted in — or rolled back with — a transaction it has nothing to do with.
+- 3707f26: Rebuild an engine's derived state after a cross-server cache payload replaces one of its arrays.
+
+  In a multi-server deployment with Redis pub/sub enabled, `BaseEngine.OnExternalCacheChange` applies a peer's cache payload by replacing the config's property with newly materialized entity objects. It then returned without calling `AdditionalLoading`, so anything a subclass derived from the _previous_ objects — grouped child collections, memoized lookups — still referenced instances the engine had just discarded.
+
+  The resulting state is unusually hard to diagnose, because nothing about the engine looks wrong. The replaced array is complete and correct and its row count is unchanged; only the derived collections are empty. Consumers that read derived state behave as though the data were missing while every count-based health check passes. It also does not self-correct: the config is still marked loaded, so `EnsureLoaded()` and `Config()` short-circuit and the process stays that way until it restarts.
+
+  For `AIEngineBase` this surfaced as model selection failing with "No suitable model found … No model-vendor candidates were available" on every request, because `AdditionalLoading` is what attaches `ModelVendors` to each `AIModel`. Any peer server warming its cache at startup was enough to trigger it, since that republishes every entity config it loads to every other server.
+
+  `AdditionalLoading` now runs on both paths that replace a property — the payload fast path and the full-reload fallback — and the property-change notification is emitted after the rebuild, so subscribers cannot observe a property before its derived state is attached. That notification was also missing from the payload path entirely, so `ObserveProperty` subscribers never saw cross-server updates at all.
+
+  One supporting change:
+
+  **`AIEngineBase.AdditionalLoading` is now idempotent and linear.** It previously appended into whatever each parent already held, which is only correct on a full load where the parents are new. Running it per cache event multiplied every derived collection on each call — unbounded growth on a long-lived process. It now buckets children in a single pass and replaces each parent collection outright, which also drops the model/model-vendor pairing from O(parents × children) to O(parents + children) and leaves no window in which a parent is observably empty.
+
+- 5e937c4: `mj sync push` is all-or-nothing again (#4550).
+  - **Atomic by default.** Every create, update and delete runs in one database transaction, one JSON-root graph at a time. A failure anywhere rolls back everything the push wrote and restores the metadata files. This also removes the push deadlocking against itself when an entity view reads other rows during the insert read-back (#4550).
+  - **Isolated transactions are opt-in, per entity.** `push.isolatedTransactions: true` in an entity's `.mj-sync.json` (or at the root as a default) keeps the 6.1.0 behavior for that directory: its graphs run in parallel on independent provider instances (`--parallel-batch-size`, default 10), and each create and update commits as it is saved. For an entity that manages its own transaction scopes and wants the parallelism. The CLI flags `--isolated-transactions` and `--no-isolated-transactions` override every file, in either direction, so one run can be forced without editing metadata. A push that mixes the two is all-or-nothing for its shared directories and best effort for its isolated ones, and says which is which.
+  - **Every record error stops the push**, including a record that fails without throwing (`status: 'error'`) and a deferred record that fails in Phase 2.5. The push transaction is never left open.
+  - **Messages are true.** "rolled back successfully" is printed only when nothing was committed. A failed non-atomic push lists the files and records that stayed in the database and keeps those files as written. The deletion banner matches the mode. A rejected COMMIT says so, and on PostgreSQL explains that deferred foreign keys are checked at commit. Deferred-record failures appear in the JSON `errors[]`.
+  - **Incremental state** is saved only after the push commits.
+  - The interactive "commit the successful changes?" prompt is removed: a failed push has already rolled back.
+  - A failed push still reports: the JSON result keeps its `data` block with the counts reached, the SQL log path, and how many records stayed committed.
+  - A file whose write was deferred (it contains deletions) is written after a failed push when its records were committed, so their primary keys are not lost and the next push does not duplicate them.
+  - A write is reported as committed the moment its save settles, so a graph rolling back leftover depth afterwards cannot hide a row that is in the database.
+  - @memberjunction/global@6.1.3
+  - @memberjunction/sql-dialect@6.1.3
+
+## 6.1.2
+
+### Patch Changes
+
+- @memberjunction/global@6.1.2
+- @memberjunction/sql-dialect@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes

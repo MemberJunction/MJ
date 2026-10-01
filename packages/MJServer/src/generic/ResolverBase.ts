@@ -40,7 +40,7 @@ import { SQLParser } from '@memberjunction/sql-parser';
 import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { PUSH_STATUS_UPDATES_TOPIC, publishStatusUpdate } from './PushStatusResolver.js';
-import { CACHE_INVALIDATION_TOPIC } from './CacheInvalidationResolver.js';
+import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData } from './CacheInvalidationResolver.js';
 import { PubSubManager } from './PubSubManager.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 import { Subscription } from 'rxjs';
@@ -1449,16 +1449,24 @@ export class ResolverBase {
    * Publishes a CACHE_INVALIDATION event to connected browser clients after a successful
    * entity save or delete. Includes the originSessionId so the originating browser can
    * skip redundant re-fetches (it already handled the event locally).
+   *
+   * The row itself rides along ONLY for entities opted in via
+   * `cacheSettings.recordDataBroadcastEntities` — this event reaches every connected client
+   * unfiltered, so the row would otherwise be readable by sessions that could not read the record.
    */
   protected PublishCacheInvalidation(entityObject: BaseEntity, action: 'save' | 'delete', userPayload: UserPayload): void {
+    const entityName = entityObject.EntityInfo.Name;
     PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, {
-      entityName: entityObject.EntityInfo.Name,
+      entityName,
       primaryKeyValues: JSON.stringify(entityObject.PrimaryKey.KeyValuePairs),
       action,
       sourceServerId: MJGlobal.Instance.ProcessUUID,
       timestamp: new Date(),
       originSessionId: userPayload?.sessionId || null,
-      recordData: action === 'save' ? JSON.stringify(entityObject.GetAll()) : undefined,
+      recordData:
+        action === 'save' && MayBroadcastRecordData(entityName)
+          ? JSON.stringify(entityObject.GetAll())
+          : undefined,
     });
   }
 

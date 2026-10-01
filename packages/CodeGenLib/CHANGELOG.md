@@ -1,5 +1,119 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 6.1.4
+
+### Patch Changes
+
+- Updated dependencies [6a3e1d2]
+  - @memberjunction/core@6.1.4
+  - @memberjunction/core-entities@6.1.4
+  - @memberjunction/ai-core-plus@6.1.4
+  - @memberjunction/aiengine@6.1.4
+  - @memberjunction/ai-prompts@6.1.4
+  - @memberjunction/actions-base@6.1.4
+  - @memberjunction/actions@6.1.4
+  - @memberjunction/external-data-sources@6.1.4
+  - @memberjunction/external-data-source-databricks@6.1.4
+  - @memberjunction/external-data-source-mongodb@6.1.4
+  - @memberjunction/external-data-source-mysql@6.1.4
+  - @memberjunction/external-data-source-oracle@6.1.4
+  - @memberjunction/external-data-source-postgres@6.1.4
+  - @memberjunction/external-data-source-sqlserver@6.1.4
+  - @memberjunction/external-data-source-snowflake@6.1.4
+  - @memberjunction/generic-database-provider@6.1.4
+  - @memberjunction/core-entities-server@6.1.4
+  - @memberjunction/postgresql-dataprovider@6.1.4
+  - @memberjunction/query-processor@6.1.4
+  - @memberjunction/sqlserver-dataprovider@6.1.4
+  - @memberjunction/server-bootstrap-lite@6.1.4
+  - @memberjunction/ai-provider-bundle@6.1.4
+  - @memberjunction/ai@6.1.4
+  - @memberjunction/cli-core@6.1.4
+  - @memberjunction/config@6.1.4
+  - @memberjunction/global@6.1.4
+  - @memberjunction/sql-dialect@6.1.4
+  - @memberjunction/sql-parser@6.1.4
+
+## 6.1.3
+
+### Patch Changes
+
+- 6cddf7c: Stop a working install from reporting itself as failed.
+
+  The CodeGen AFTER commands end with a boot check that runs `npm start` in MJAPI with a 30-second timeout. `npm start` is a server — it cannot exit on its own, so the timeout is the only way it can ever end, and `runCommand` hardcoded `success: false` on that path. `runCodeGen` fails the pipeline on any unsuccessful command, so every distribution install that reached CodeGen printed `Installation failed` and exited 1 on a system where the API had booted fine (verified: 390 tables, 388 entities, 87 migrations, API answering `401 Authentication required`).
+
+  `CommandInfo` gains `isDaemon`, which declares that staying up for the whole timeout is the pass. Exiting before the timeout is still a failure — a service that comes down on its own crashed — and `isDaemon` without a positive `timeout` is rejected up front rather than making CodeGen wait forever. Applied to the MJAPI boot check in both the shipped distribution config and the built-in default.
+
+- Updated dependencies [7cdf2cc]
+- Updated dependencies [3707f26]
+- Updated dependencies [5e937c4]
+  - @memberjunction/core@6.1.3
+  - @memberjunction/generic-database-provider@6.1.3
+  - @memberjunction/sqlserver-dataprovider@6.1.3
+  - @memberjunction/actions-base@6.1.3
+  - @memberjunction/actions@6.1.3
+  - @memberjunction/postgresql-dataprovider@6.1.3
+  - @memberjunction/server-bootstrap-lite@6.1.3
+  - @memberjunction/ai-core-plus@6.1.3
+  - @memberjunction/aiengine@6.1.3
+  - @memberjunction/ai-prompts@6.1.3
+  - @memberjunction/external-data-sources@6.1.3
+  - @memberjunction/external-data-source-databricks@6.1.3
+  - @memberjunction/external-data-source-mongodb@6.1.3
+  - @memberjunction/external-data-source-mysql@6.1.3
+  - @memberjunction/external-data-source-oracle@6.1.3
+  - @memberjunction/external-data-source-postgres@6.1.3
+  - @memberjunction/external-data-source-sqlserver@6.1.3
+  - @memberjunction/external-data-source-snowflake@6.1.3
+  - @memberjunction/core-entities@6.1.3
+  - @memberjunction/core-entities-server@6.1.3
+  - @memberjunction/query-processor@6.1.3
+  - @memberjunction/ai-provider-bundle@6.1.3
+  - @memberjunction/ai@6.1.3
+  - @memberjunction/cli-core@6.1.3
+  - @memberjunction/config@6.1.3
+  - @memberjunction/global@6.1.3
+  - @memberjunction/sql-dialect@6.1.3
+  - @memberjunction/sql-parser@6.1.3
+
+## 6.1.2
+
+### Patch Changes
+
+- Updated dependencies [e1a8894]
+- Updated dependencies [283f83d]
+- Updated dependencies [842e28b]
+- Updated dependencies [6e2f000]
+- Updated dependencies [b9178ed]
+  - @memberjunction/ai@6.1.2
+  - @memberjunction/aiengine@6.1.2
+  - @memberjunction/core-entities@6.1.2
+  - @memberjunction/server-bootstrap-lite@6.1.2
+  - @memberjunction/ai-core-plus@6.1.2
+  - @memberjunction/ai-prompts@6.1.2
+  - @memberjunction/actions@6.1.2
+  - @memberjunction/core-entities-server@6.1.2
+  - @memberjunction/sqlserver-dataprovider@6.1.2
+  - @memberjunction/generic-database-provider@6.1.2
+  - @memberjunction/actions-base@6.1.2
+  - @memberjunction/external-data-sources@6.1.2
+  - @memberjunction/external-data-source-databricks@6.1.2
+  - @memberjunction/external-data-source-mongodb@6.1.2
+  - @memberjunction/external-data-source-mysql@6.1.2
+  - @memberjunction/external-data-source-oracle@6.1.2
+  - @memberjunction/external-data-source-postgres@6.1.2
+  - @memberjunction/external-data-source-sqlserver@6.1.2
+  - @memberjunction/external-data-source-snowflake@6.1.2
+  - @memberjunction/query-processor@6.1.2
+  - @memberjunction/ai-provider-bundle@6.1.2
+  - @memberjunction/postgresql-dataprovider@6.1.2
+  - @memberjunction/cli-core@6.1.2
+  - @memberjunction/config@6.1.2
+  - @memberjunction/core@6.1.2
+  - @memberjunction/global@6.1.2
+  - @memberjunction/sql-dialect@6.1.2
+  - @memberjunction/sql-parser@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes

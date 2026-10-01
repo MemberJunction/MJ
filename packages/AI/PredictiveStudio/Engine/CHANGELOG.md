@@ -1,5 +1,67 @@
 # @memberjunction/predictive-studio
 
+## 6.1.4
+
+### Patch Changes
+
+- Updated dependencies [6a3e1d2]
+  - @memberjunction/core@6.1.4
+  - @memberjunction/core-entities@6.1.4
+  - @memberjunction/ai-agents@6.1.4
+  - @memberjunction/ai-core-plus@6.1.4
+  - @memberjunction/actions-base@6.1.4
+  - @memberjunction/actions@6.1.4
+  - @memberjunction/record-set-processor-base@6.1.4
+  - @memberjunction/record-set-processor@6.1.4
+  - @memberjunction/ai@6.1.4
+  - @memberjunction/predictive-studio-core@6.1.4
+  - @memberjunction/predictive-studio-sidecar@6.1.4
+  - @memberjunction/global@6.1.4
+
+## 6.1.3
+
+### Patch Changes
+
+- Updated dependencies [747a8f4]
+- Updated dependencies [7cdf2cc]
+- Updated dependencies [3707f26]
+- Updated dependencies [5e937c4]
+  - @memberjunction/ai-agents@6.1.3
+  - @memberjunction/core@6.1.3
+  - @memberjunction/actions-base@6.1.3
+  - @memberjunction/actions@6.1.3
+  - @memberjunction/record-set-processor@6.1.3
+  - @memberjunction/ai-core-plus@6.1.3
+  - @memberjunction/core-entities@6.1.3
+  - @memberjunction/record-set-processor-base@6.1.3
+  - @memberjunction/ai@6.1.3
+  - @memberjunction/predictive-studio-core@6.1.3
+  - @memberjunction/predictive-studio-sidecar@6.1.3
+  - @memberjunction/global@6.1.3
+
+## 6.1.2
+
+### Patch Changes
+
+- Updated dependencies [e1a8894]
+- Updated dependencies [283f83d]
+- Updated dependencies [dbc5b7d]
+- Updated dependencies [842e28b]
+- Updated dependencies [6e2f000]
+- Updated dependencies [b9178ed]
+  - @memberjunction/ai@6.1.2
+  - @memberjunction/core-entities@6.1.2
+  - @memberjunction/ai-agents@6.1.2
+  - @memberjunction/ai-core-plus@6.1.2
+  - @memberjunction/actions@6.1.2
+  - @memberjunction/record-set-processor@6.1.2
+  - @memberjunction/actions-base@6.1.2
+  - @memberjunction/predictive-studio-core@6.1.2
+  - @memberjunction/predictive-studio-sidecar@6.1.2
+  - @memberjunction/core@6.1.2
+  - @memberjunction/global@6.1.2
+  - @memberjunction/record-set-processor-base@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes

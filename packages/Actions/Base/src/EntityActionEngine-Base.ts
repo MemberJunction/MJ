@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, IMetadataProvider, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, IMetadataProvider, PostCommitToken, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual } from "@memberjunction/global";
 import { MJActionExecutionLogEntity, MJActionResultCodeEntity, MJEntityActionFilterEntity, MJEntityActionInvocationEntity, MJEntityActionInvocationTypeEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
 import { ActionParam, AIDirective, RunActionParams } from "./ActionEngine-Base";
@@ -49,6 +49,17 @@ export class EntityActionInvocationParams {
      * Absent on invocations with no save behind them (a View or List fan-out, a direct call).
      */
     public EntityChange?: EntityChangeContext;
+
+    /**
+     * The transaction frames that were open on the entity's provider when the lifecycle event fired,
+     * from `DatabaseProviderBase.CapturePostCommitToken()`. Captured by the dispatcher before its first
+     * `await`, for the same reason as {@link EntityChange}: a Durable `After*` run deferred with no
+     * queue submitter is handed to `RunAfterCommit` with this token, so it follows the save's own
+     * transaction — run once that commits, dropped if it rolled back — even when it registers late.
+     *
+     * Absent outside a transaction and on invocations with no save behind them.
+     */
+    public PostCommitToken?: PostCommitToken;
 }
 
 

@@ -124,9 +124,9 @@ export class RealtimeActivityRailComponent implements OnInit, OnDestroy {
     return FormatElapsed(card.FinishedAt - card.StartedAt);
   }
 
-  /** True when the dev "Open run" link should render for this card (gear on + run id known). Suppressed for direct actions. */
+  /** True when the dev "Open run" link should render for this card (gear on + run id known). Suppressed for direct actions and narration. */
   public ShowOpenRun(card: RealtimeDelegationCardVM): boolean {
-    return this.DevMode && card.Kind !== 'action' && !!card.RunID;
+    return this.DevMode && card.Kind === 'agent' && !!card.RunID;
   }
 
   /** Emits the open-run request for the card's delegated run. */

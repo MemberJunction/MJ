@@ -428,5 +428,19 @@
       "lastModified": "2026-09-10T17:40:33.656Z",
       "checksum": "1134eae54271063f047baa8030bb6feee93f8075662a587c598337e1bc8648a0"
     }
+  },
+  {
+    "fields": {
+      "Name": "Sakana AI",
+      "Description": "Sakana AI - Tokyo-based research lab, developer of the Fugu family of learned multi-agent orchestration models. Rather than answering directly, a Fugu model routes each task across a pool of open-weight and specialist models (including NVIDIA's Nemotron family) and recursively calls instances of itself. Sakana serves an OpenAI-compatible first-party API authenticated with an API key; MJ currently reaches Fugu models through OpenRouter rather than Sakana direct, because no Sakana driver class exists yet.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "5F935B01-EC5F-4409-AADC-8063A94936D6"
+    },
+    "sync": {
+      "lastModified": "2026-09-15T13:56:42.685Z",
+      "checksum": "ffcb145b12e3690546bdd56181db4092ed845f55c858f1e2657aa6efd72ff7c5"
+    }
   }
 ]

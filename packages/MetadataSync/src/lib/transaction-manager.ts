@@ -6,6 +6,7 @@
  * all related entities are saved atomically with rollback capability.
  */
 
+import type { DatabaseProviderBase } from '@memberjunction/core';
 import { getDataProvider } from './provider-utils';
 import { SQLLogger } from './sql-logger';
 
@@ -15,9 +16,22 @@ export interface TransactionOptions {
 export class TransactionManager {
   private inTransaction = false;
   private sqlLogger?: SQLLogger;
+  private readonly explicitProvider?: DatabaseProviderBase;
 
-  constructor(sqlLogger?: SQLLogger) {
+  /**
+   * @param sqlLogger - optional SQL logger
+   * @param provider - the provider that owns the transaction. Pass it whenever the caller runs
+   *   work on a specific provider (an atomic `mj sync push` runs every save on it), so the
+   *   transaction and the work cannot end up on different instances. Defaults to the provider
+   *   `initializeProvider()` set up.
+   */
+  constructor(sqlLogger?: SQLLogger, provider?: DatabaseProviderBase) {
     this.sqlLogger = sqlLogger;
+    this.explicitProvider = provider;
+  }
+
+  private resolveProvider(): DatabaseProviderBase | null {
+    return this.explicitProvider ?? getDataProvider();
   }
 
   /**
@@ -42,7 +56,7 @@ export class TransactionManager {
       throw new Error('Transaction already in progress');
     }
 
-    const provider = getDataProvider();
+    const provider = this.resolveProvider();
     if (!provider) {
       throw new Error('No data provider available');
     }
@@ -63,7 +77,7 @@ export class TransactionManager {
       return; // No transaction to commit
     }
 
-    const provider = getDataProvider();
+    const provider = this.resolveProvider();
     if (!provider) {
       throw new Error('No data provider available');
     }
@@ -85,7 +99,7 @@ export class TransactionManager {
       return true; // No transaction to rollback
     }
 
-    const provider = getDataProvider();
+    const provider = this.resolveProvider();
     if (!provider) {
       throw new Error('No data provider available');
     }
@@ -97,6 +111,11 @@ export class TransactionManager {
     } catch (error) {
       // Log but don't throw - we're already in an error state
       console.error('Failed to rollback transaction:', error);
+      if (provider.TransactionDepth === 0) {
+        // The provider already dropped its handle, so there is nothing left to retry. The rollback
+        // is still reported as failed: the server-side transaction was not confirmed as rolled back.
+        this.inTransaction = false;
+      }
       return false;
     }
   }

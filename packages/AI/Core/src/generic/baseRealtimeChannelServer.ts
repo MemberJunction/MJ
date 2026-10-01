@@ -14,6 +14,7 @@
  */
 
 import { RealtimeToolDefinition } from './baseRealtime';
+import type { RealtimeTrackDescriptor } from './realtimeTracks';
 
 /**
  * Why an agent session was closed — the server-side channel plugin's view of the session-close
@@ -199,6 +200,44 @@ export abstract class BaseRealtimeChannelServer {
      * @returns The channel's server-executed tool definitions (possibly empty).
      */
     public GetServerToolDefinitions(): RealtimeToolDefinition[] {
+        return [];
+    }
+
+    /**
+     * Media tracks this channel can SOURCE — samples flowing from the channel's surface INTO the
+     * model. Default `[]`: a channel contributes no media unless it says so.
+     *
+     * **This is where the media plane and the semantic plane meet.** A channel remains a tool
+     * surface; declaring a sourced track additionally lets the model *watch* that surface live. The
+     * whiteboard sourcing inbound video is what lets an agent see what it draws and correct itself
+     * mid-stroke, and see what the user draws directly rather than through a described diff. The
+     * remote browser sourcing inbound video is what lets the model watch the page continuously while
+     * the agent still acts through tools — a different quality of control, not a faster version of
+     * polling screenshots.
+     *
+     * Declared in CODE rather than metadata for the same reason {@link GetServerToolDefinitions} is:
+     * whether a surface can produce frames is a property of the implementation, not a deployment
+     * choice. Whether it *should* on a given session is negotiation
+     * (`ModelConfiguration.Realtime.RequestedTracks` intersected with the model's support), and a
+     * model with no video track simply falls back to the channel's tool-only behaviour.
+     *
+     * @returns Track descriptors this channel can produce (possibly empty).
+     */
+    public GetSourcedTracks(): readonly RealtimeTrackDescriptor[] {
+        return [];
+    }
+
+    /**
+     * Media tracks this channel can SINK — samples flowing from the model OUT to the channel's
+     * surface. Default `[]`.
+     *
+     * Nothing in play emits non-audio outbound media yet; the contract admits it because direction is
+     * a property of a track rather than part of its type. An avatar is the obvious first case: a
+     * channel owning a render surface that sinks outbound video.
+     *
+     * @returns Track descriptors this channel can consume (possibly empty).
+     */
+    public GetSunkTracks(): readonly RealtimeTrackDescriptor[] {
         return [];
     }
 

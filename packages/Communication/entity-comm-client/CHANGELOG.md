@@ -1,5 +1,43 @@
 # Change Log - @memberjunction/entity-communications-client
 
+## 6.1.4
+
+### Patch Changes
+
+- Updated dependencies [6a3e1d2]
+  - @memberjunction/core@6.1.4
+  - @memberjunction/core-entities@6.1.4
+  - @memberjunction/communication-types@6.1.4
+  - @memberjunction/entity-communications-base@6.1.4
+  - @memberjunction/graphql-dataprovider@6.1.4
+  - @memberjunction/global@6.1.4
+
+## 6.1.3
+
+### Patch Changes
+
+- Updated dependencies [7cdf2cc]
+- Updated dependencies [3707f26]
+- Updated dependencies [5e937c4]
+  - @memberjunction/core@6.1.3
+  - @memberjunction/communication-types@6.1.3
+  - @memberjunction/entity-communications-base@6.1.3
+  - @memberjunction/graphql-dataprovider@6.1.3
+  - @memberjunction/core-entities@6.1.3
+  - @memberjunction/global@6.1.3
+
+## 6.1.2
+
+### Patch Changes
+
+- Updated dependencies [e1a8894]
+  - @memberjunction/core-entities@6.1.2
+  - @memberjunction/communication-types@6.1.2
+  - @memberjunction/entity-communications-base@6.1.2
+  - @memberjunction/graphql-dataprovider@6.1.2
+  - @memberjunction/core@6.1.2
+  - @memberjunction/global@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes

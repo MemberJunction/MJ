@@ -1,5 +1,81 @@
 # @memberjunction/scheduling-engine
 
+## 6.1.4
+
+### Patch Changes
+
+- Updated dependencies [6a3e1d2]
+  - @memberjunction/core@6.1.4
+  - @memberjunction/core-entities@6.1.4
+  - @memberjunction/ai-agents@6.1.4
+  - @memberjunction/ai-core-plus@6.1.4
+  - @memberjunction/ai-prompts@6.1.4
+  - @memberjunction/actions-base@6.1.4
+  - @memberjunction/actions@6.1.4
+  - @memberjunction/notifications@6.1.4
+  - @memberjunction/integration-engine@6.1.4
+  - @memberjunction/materialization@6.1.4
+  - @memberjunction/record-set-processor@6.1.4
+  - @memberjunction/sqlserver-dataprovider@6.1.4
+  - @memberjunction/scheduling-engine-base@6.1.4
+  - @memberjunction/task-graph@6.1.4
+  - @memberjunction/templates@6.1.4
+  - @memberjunction/global@6.1.4
+  - @memberjunction/scheduling-base-types@6.1.4
+
+## 6.1.3
+
+### Patch Changes
+
+- Updated dependencies [747a8f4]
+- Updated dependencies [7cdf2cc]
+- Updated dependencies [3707f26]
+- Updated dependencies [5e937c4]
+- Updated dependencies [e9a453e]
+  - @memberjunction/ai-agents@6.1.3
+  - @memberjunction/core@6.1.3
+  - @memberjunction/sqlserver-dataprovider@6.1.3
+  - @memberjunction/actions-base@6.1.3
+  - @memberjunction/actions@6.1.3
+  - @memberjunction/task-graph@6.1.3
+  - @memberjunction/record-set-processor@6.1.3
+  - @memberjunction/ai-core-plus@6.1.3
+  - @memberjunction/ai-prompts@6.1.3
+  - @memberjunction/notifications@6.1.3
+  - @memberjunction/integration-engine@6.1.3
+  - @memberjunction/core-entities@6.1.3
+  - @memberjunction/materialization@6.1.3
+  - @memberjunction/scheduling-engine-base@6.1.3
+  - @memberjunction/templates@6.1.3
+  - @memberjunction/global@6.1.3
+  - @memberjunction/scheduling-base-types@6.1.3
+
+## 6.1.2
+
+### Patch Changes
+
+- Updated dependencies [e1a8894]
+- Updated dependencies [283f83d]
+- Updated dependencies [dbc5b7d]
+- Updated dependencies [6e2f000]
+  - @memberjunction/core-entities@6.1.2
+  - @memberjunction/ai-agents@6.1.2
+  - @memberjunction/ai-core-plus@6.1.2
+  - @memberjunction/ai-prompts@6.1.2
+  - @memberjunction/actions@6.1.2
+  - @memberjunction/sqlserver-dataprovider@6.1.2
+  - @memberjunction/templates@6.1.2
+  - @memberjunction/record-set-processor@6.1.2
+  - @memberjunction/task-graph@6.1.2
+  - @memberjunction/actions-base@6.1.2
+  - @memberjunction/notifications@6.1.2
+  - @memberjunction/integration-engine@6.1.2
+  - @memberjunction/materialization@6.1.2
+  - @memberjunction/scheduling-engine-base@6.1.2
+  - @memberjunction/core@6.1.2
+  - @memberjunction/global@6.1.2
+  - @memberjunction/scheduling-base-types@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes

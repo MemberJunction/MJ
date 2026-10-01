@@ -1,5 +1,80 @@
 # @memberjunction/ng-artifacts
 
+## 6.1.4
+
+### Patch Changes
+
+- Updated dependencies [6a3e1d2]
+- Updated dependencies [ce7d74f]
+  - @memberjunction/core@6.1.4
+  - @memberjunction/core-entities@6.1.4
+  - @memberjunction/ng-base-forms@6.1.4
+  - @memberjunction/ng-base-types@6.1.4
+  - @memberjunction/ng-code-editor@6.1.4
+  - @memberjunction/ng-media-player@6.1.4
+  - @memberjunction/ng-notifications@6.1.4
+  - @memberjunction/ng-query-viewer@6.1.4
+  - @memberjunction/ng-react@6.1.4
+  - @memberjunction/ng-shared-generic@6.1.4
+  - @memberjunction/ng-trees@6.1.4
+  - @memberjunction/graphql-dataprovider@6.1.4
+  - @memberjunction/interactive-component-types@6.1.4
+  - @memberjunction/ng-export-service@6.1.4
+  - @memberjunction/ng-markdown@6.1.4
+  - @memberjunction/ng-ui-components@6.1.4
+  - @memberjunction/ng-pagination@6.1.4
+  - @memberjunction/global@6.1.4
+
+## 6.1.3
+
+### Patch Changes
+
+- Updated dependencies [7cdf2cc]
+- Updated dependencies [3707f26]
+- Updated dependencies [5e937c4]
+  - @memberjunction/core@6.1.3
+  - @memberjunction/ng-base-forms@6.1.3
+  - @memberjunction/ng-base-types@6.1.3
+  - @memberjunction/ng-code-editor@6.1.3
+  - @memberjunction/ng-media-player@6.1.3
+  - @memberjunction/ng-notifications@6.1.3
+  - @memberjunction/ng-query-viewer@6.1.3
+  - @memberjunction/ng-react@6.1.3
+  - @memberjunction/ng-shared-generic@6.1.3
+  - @memberjunction/ng-trees@6.1.3
+  - @memberjunction/graphql-dataprovider@6.1.3
+  - @memberjunction/interactive-component-types@6.1.3
+  - @memberjunction/core-entities@6.1.3
+  - @memberjunction/ng-export-service@6.1.3
+  - @memberjunction/ng-markdown@6.1.3
+  - @memberjunction/ng-ui-components@6.1.3
+  - @memberjunction/ng-pagination@6.1.3
+  - @memberjunction/global@6.1.3
+
+## 6.1.2
+
+### Patch Changes
+
+- Updated dependencies [e1a8894]
+  - @memberjunction/core-entities@6.1.2
+  - @memberjunction/ng-base-forms@6.1.2
+  - @memberjunction/ng-base-types@6.1.2
+  - @memberjunction/ng-code-editor@6.1.2
+  - @memberjunction/ng-notifications@6.1.2
+  - @memberjunction/ng-query-viewer@6.1.2
+  - @memberjunction/ng-react@6.1.2
+  - @memberjunction/ng-shared-generic@6.1.2
+  - @memberjunction/ng-trees@6.1.2
+  - @memberjunction/graphql-dataprovider@6.1.2
+  - @memberjunction/ng-media-player@6.1.2
+  - @memberjunction/ng-export-service@6.1.2
+  - @memberjunction/ng-markdown@6.1.2
+  - @memberjunction/ng-pagination@6.1.2
+  - @memberjunction/ng-ui-components@6.1.2
+  - @memberjunction/interactive-component-types@6.1.2
+  - @memberjunction/core@6.1.2
+  - @memberjunction/global@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes

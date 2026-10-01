@@ -420,8 +420,10 @@ export class InstallerEngine {
    * Run diagnostics on an existing or target install directory.
    *
    * Performs preflight checks (Node version, disk space, SQL connectivity, etc.)
-   * and known-issue detection. Does **not** modify any files. Results are
-   * returned as a {@link Diagnostics} object and also emitted as `diagnostic` events.
+   * and known-issue detection. Creates `targetDir` if it does not already exist
+   * (preflight needs it to exist to probe the package manager from it), but
+   * changes nothing else. Results are returned as a {@link Diagnostics} object
+   * and also emitted as `diagnostic` events.
    *
    * @param targetDir - Absolute path to the directory to diagnose.
    * @param options - Optional doctor options (currently reserved for future use).
