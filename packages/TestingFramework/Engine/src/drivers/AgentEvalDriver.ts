@@ -333,12 +333,10 @@ export class AgentEvalDriver extends BaseTestDriver {
                 context
             );
 
-            // Calculate score and status
-            // When oracles are disabled, consider test passed if final agent run succeeded
+            // A completed run with no oracle results stays Failed. A resolved rubric
+            // adds an oracle before this point; an empty list means nothing judged the run.
             const score = this.calculateScore(oracleResults, config.scoringWeights);
-            const status = oracleResults.length === 0 && finalAgentRun.Status === 'Completed'
-                ? 'Passed'
-                : this.determineStatus(oracleResults);
+            const status = this.determineStatus(oracleResults);
 
             // Count checks
             const passedChecks = oracleResults.filter(r => r.passed).length;
@@ -841,15 +839,6 @@ export class AgentEvalDriver extends BaseTestDriver {
         expected: AgentEvalExpectedOutcomes,
         context: DriverExecutionContext
     ): Promise<OracleResult[]> {
-        // TODO: Temporarily skip oracle execution while oracles are being finalized
-        // Remove this flag once oracles are ready (SQL schema fixes, LLM Judge prompt creation, etc.)
-        const skipOracles = true;
-
-        if (skipOracles) {
-            this.log('⚠️  Oracle execution temporarily disabled', context.options.verbose);
-            return [];
-        }
-
         const strategy = config.evaluationStrategy || 'final-turn-only';
 
         switch (strategy) {

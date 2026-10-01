@@ -839,7 +839,8 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
       the engine `Mean`. Deleting a draft removes its tree.
 
 **T — testing framework**
-- [ ] **T1** Re-enable Agent Eval oracles (§10.1).
+- [x] **T1** Re-enable Agent Eval oracles (§10.1). Empty oracle results stay Failed.
+      The self-check decision retries a loop agent and records a flow-agent failure.
 - [ ] **T2** Rubric resolution + suite-run version pinning (§10.2).
 - [ ] **T3** `RubricOracle` + implicit rubric (§10.3).
 - [ ] **T4** Inline rubric path; rebuild `LLMJudgeOracle`; Computer Use driver reporting;
