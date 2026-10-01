@@ -126,12 +126,12 @@
           "maxSubAgentsInPrompt": {
             "type": "integer",
             "default": -1,
-            "description": "Catalog narrowing for sub-agents. -1 (the default) or 0 turns it off, and the prompt describes every sub-agent. A positive N: when the agent has more than N sub-agents, one decision call per run judges which are most useful for the run's opening request, and the prompt describes those N plus any with MinExecutionsPerRun set, after a line naming the sub-agents it hides. Narrowing only hides: every permitted sub-agent can still be called by name, and a failed decision shows them all. It is prose-only: with native tool calling, every sub-agent is still declared as a tool. Setting N adds one decision call to each run."
+            "description": "Maximum number of sub-agents to include in the prompt's capabilities section. Use -1 to include all available sub-agents, 0 to hide sub-agent capabilities entirely, or a positive number to limit to the first N sub-agents. Useful for agents with many sub-agents where only a few are commonly used."
           },
           "maxActionsInPrompt": {
             "type": "integer",
             "default": -1,
-            "description": "Catalog narrowing for actions and skills. -1 (the default) or 0 turns it off, and the prompt describes every action and skill. A positive N: when the agent has more than N actions (or skills), one decision call per run judges which are most useful for the run's opening request, and the prompt describes those N plus any action with MinExecutionsPerRun set and the Find Candidate Actions / Find Candidate Agents actions, after a line saying how many it hides and how to reach them. Hidden skills are named; hidden actions are found with Find Candidate Actions, so actions are narrowed only when the agent has that action. Narrowing only hides: every permitted action and skill can still be used, and a failed decision shows them all. It is prose-only: with native tool calling, every action is still declared as a tool. Setting N adds one decision call to each run."
+            "description": "Maximum number of actions to include in the prompt's capabilities section. Use -1 to include all available actions, 0 to hide action capabilities entirely, or a positive number to limit to the first N actions. Useful for agents with many actions where only a few are commonly used."
           }
         }
       }
