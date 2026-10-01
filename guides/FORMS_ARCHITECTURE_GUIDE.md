@@ -460,13 +460,19 @@ Form Version` set the prior version aside after that transaction; if Activate ca
 Builder, and needs the `Manage Form Defaults` authorization.
 
 A panel's component is an `MJ: Components` row. The stock `UI` role can create and update that
-entity (not delete), so any user can create or change their own panel through the actions and turn
-it on, off or to a draft in the drawer. `MJComponentEntityServer` checks a delete, and a change to a
-component's specification, status, name or type, against every contribution and full custom form
-row that uses the component (`ComponentWriteRefusal`): a `Role` or `Global` row needs
-`Manage Form Defaults`, another user's personal row refuses everyone else, and the caller's own row
-passes. A component no row uses follows the entity permission alone. The rows are read as the
-caller, and when they cannot be read the write is refused.
+entity (not delete), and a form can also load a component by name, so the server checks every
+change to what a component draws. A delete, or a change to a component's specification, status,
+name, namespace or type, is checked against every contribution and full custom form row that uses
+the component (`ComponentWriteRefusal`): without `Manage Form Defaults` it is allowed only when at
+least one row uses the component and every such row is the caller's own personal row, so a
+component no row uses is read-only; with the grant it is allowed unless another user's personal
+row uses the component. A row created or re-pointed at a component is refused when another user's
+personal row uses that component, or when a `Role` or `Global` row uses it and the caller lacks the
+grant (`FormRowComponentRefusal`). Without the grant, a component also may not take a name another
+component already has unless that component is the caller's own (`ComponentNameCollisionRefusal`).
+The reads run as the caller, the changed columns come from the stored row, and a failed read
+refuses the write. Any user can therefore author their own panel through the actions and turn it
+on, off or to a draft in the drawer.
 
 **Form context for agents.** Each record form publishes its composition snapshot (sections, related
 grids, contributions, rail, slots) to `FormCompositionRegistry` in `@memberjunction/ng-base-forms`;

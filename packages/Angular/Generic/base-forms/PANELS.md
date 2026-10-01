@@ -463,23 +463,37 @@ audience is set aside instead. A set-aside (`Inactive`) shared form is retracted
 it and it does not render. A set-aside personal form stays in its owner's form picker.
 
 **Component rights.** A panel's component is an `MJ: Components` row. The stock `UI` role can create
-and update that entity, but not delete from it, so any user can create or change their own panel
-through the actions (they write its component) and turn it on, off or to a draft in the drawer
-(that sets the component's status). Changing what a component draws changes every form and panel
-that uses it, so `MJComponentEntityServer` checks a delete, and a change to a component's
-specification, status, name or type, against each contribution and full custom form row that uses
-the component (`ComponentWriteRefusal` in `@memberjunction/core-entities`):
+and update that entity, but not delete from it. A form or panel draws the component its row points
+at, and a form's spec can also load a component by name, so the server checks three things (the
+rules are in `@memberjunction/core-entities`; the server side is `FormComponentGuard` in
+`@memberjunction/core-entities-server`):
 
-| A row that uses the component | Who may make the change |
-|---|---|
-| The caller's own personal row | The caller |
-| Another user's personal row | Nobody else, a holder of `Manage Form Defaults` included |
-| A `Role` or `Global` row | A holder of `Manage Form Defaults` |
+1. **Changing a component** (`ComponentWriteRefusal`, in `MJComponentEntityServer`): a delete, or a
+   change to its specification, status, name, namespace or type.
 
-A component no row uses is not checked: the entity permission alone decides who may change it. A
-change to any other column, a create, and a write with no caller (a trusted server context) are not
-checked either. The rows are read as the caller, so a read filter that hides a row from a user also
-hides it from this check; when the rows cannot be read, the write is refused.
+   | Rows that use the component | Without `Manage Form Defaults` | With it |
+   |---|---|---|
+   | Only the caller's own personal rows | Allowed | Allowed |
+   | A `Role` or `Global` row | Refused | Allowed |
+   | Another user's personal row | Refused | Refused |
+   | No row | Refused | Allowed |
+
+2. **Pointing a row at a component** (`FormRowComponentRefusal`, in both form entity subclasses), on
+   create or when `ComponentID` changes: refused when another user's personal row uses the
+   component (for everyone, an Owner included), or when a `Role` or `Global` row uses it and the
+   caller does not hold the grant. The caller's own rows may share a component.
+3. **A component's name** (`ComponentNameCollisionRefusal`): without the grant, a created or renamed
+   component may not take a name another component already has, unless every such component is
+   the caller's own (used by at least one row, and only by the caller's own personal rows). The
+   match is the `Name` filter `ComponentMetadataEngine.FindComponent` uses, in any namespace. A
+   holder is not restricted.
+
+A create is otherwise not checked, nor is a change to any other column or a write with no caller
+(a trusted server context). The rows and the stored columns are read as the caller, and the
+changed columns come from the stored row, not from the values as loaded; when a read fails, the
+write is refused. So any user can author their own panel through the actions (a new component,
+then their own row pointing at it, then changes to it) and turn it on, off or to a draft in the
+drawer.
 
 On identity, permission and form-metadata entities (`RESTRICTED_FORM_ENTITIES` in
 `@memberjunction/core-entities`, 11 entities) only `User` rows and forms render, whatever wrote the
