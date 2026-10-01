@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { RunActionParams, ActionResultSimple } from '@memberjunction/actions-base';
+import type { UserInfo } from '@memberjunction/core';
+import {
+    ComponentNameCollisionRefusal, FormRowComponentRefusal, UserCanManageFormDefaults, type FormComponentReference,
+} from '@memberjunction/core-entities';
 
 vi.mock('@memberjunction/global', async () => {
     const actual = await vi.importActual<Record<string, unknown>>('@memberjunction/global');
@@ -21,6 +25,8 @@ const { hoisted } = vi.hoisted(() => ({
         failingSaves: new Set<string>(),
         /** While a transaction is open, saves are pending and reach `committed` only on Commit. */
         tx: { supported: false, open: false, pending: [] as string[], committed: [] as string[], rolledBack: 0 },
+        /** Stands in for the server's component and row guards: a refusal for a new row, or null. */
+        saveGuard: null as ((entityName: string, fields: Record<string, unknown>, id: string) => string | null) | null,
     },
 }));
 
@@ -43,6 +49,11 @@ function makeEntity(entityName: string): MockEntity {
         NewRecord() { /* no-op */ },
         async Save() {
             if (!target.saveOutcome || hoisted.failingSaves.has(entityName)) return false;
+            const refusal = hoisted.saveGuard?.(entityName, target.fields, target.ID) ?? null;
+            if (refusal) {
+                target.LatestResult = { CompleteMessage: refusal };
+                return false;
+            }
             if (hoisted.tx.open) hoisted.tx.pending.push(entityName);
             else hoisted.tx.committed.push(entityName);
             return true;
@@ -143,6 +154,7 @@ beforeEach(() => {
     hoisted.entities = []; hoisted.dupRows = []; hoisted.dupQueryFails = false; hoisted.lintViolations = [];
     hoisted.failingSaves = new Set();
     hoisted.tx = { supported: false, open: false, pending: [], committed: [], rolledBack: 0 };
+    hoisted.saveGuard = null;
 });
 
 describe('CreateFormContributionAction', () => {
@@ -293,5 +305,57 @@ describe('CreateFormContributionAction', () => {
 
     it('reports ENTITY_NOT_FOUND for an unregistered entity', async () => {
         expect((await run(params({ EntityName: 'Not An Entity' }))).ResultCode).toBe('ENTITY_NOT_FOUND');
+    });
+});
+
+/**
+ * A UI user without Manage Form Defaults authors their own panel: the action creates a component,
+ * then their own row pointing at it. The stand-in saves apply the server's rules: a new component
+ * may not take a name another user's component has (`ComponentNameCollisionRefusal`), and a row may
+ * not point at a component a shared or another user's row uses (`FormRowComponentRefusal`).
+ */
+describe('CreateFormContributionAction — a UI user without the Manage Form Defaults grant', () => {
+    /** Components already stored, by name, with the rows that use them. */
+    let existing: Array<{ Name: string; References: FormComponentReference[] }>;
+    /** Rows already stored that point at a component, by component ID. */
+    let uses: Array<FormComponentReference & { ComponentID: string }>;
+
+    const holdsGrant = () => UserCanManageFormDefaults(user as unknown as UserInfo, provider as never);
+
+    beforeEach(() => {
+        existing = [];
+        uses = [];
+        hoisted.saveGuard = (entityName, fields, id) => entityName === 'MJ: Components'
+            ? ComponentNameCollisionRefusal({
+                NamesComponent: true,
+                Collisions: existing.filter((c) => c.Name.toLowerCase() === String(fields.Name).toLowerCase()),
+                CallerID: user.ID,
+                CallerHoldsGrant: holdsGrant(),
+            })
+            : FormRowComponentRefusal({
+                RowID: null,
+                References: uses.filter((u) => u.ComponentID === fields.ComponentID && u.ID !== id),
+                CallerID: user.ID,
+                CallerHoldsGrant: holdsGrant(),
+            });
+    });
+
+    it('holds no grant', () => {
+        expect(holdsGrant()).toBe(false);
+    });
+
+    it('creates the component and their own row pointing at it', async () => {
+        const result = await run(params());
+        expect(result.Success).toBe(true);
+        expect(contributionRow().fields).toMatchObject({ ComponentID: componentRow().ID, Scope: 'User', UserID: 'USER-1' });
+    });
+
+    it('is refused, writing nothing, when another user\'s component already has the name', async () => {
+        hoisted.tx.supported = true;
+        existing = [{ Name: 'PersonLtvStrip', References: [{ Scope: 'User', UserID: 'SOMEONE-ELSE' }] }];
+        const result = await run(params());
+        expect(result.ResultCode).toBe('PERSIST_FAILED');
+        expect(result.Message).toMatch(/already has this name/);
+        expect(hoisted.tx.committed).toEqual([]);
     });
 });

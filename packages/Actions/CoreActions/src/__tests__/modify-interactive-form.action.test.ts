@@ -175,7 +175,8 @@ vi.mock('@memberjunction/core', async () => {
             async Save(): Promise<boolean> {
                 const id = String(state.record.ID);
                 if (!state.saveOutcome || hoisted.failingSaves.has(id) || hoisted.failingSaves.has(entityName)) return false;
-                const refusal = entityName === 'MJ: Components' ? hoisted.componentGuard?.(id) : null;
+                // A new component is a create, which the update guard does not see.
+                const refusal = entityName === 'MJ: Components' && !this.NewRecordCalled ? hoisted.componentGuard?.(id) : null;
                 if (refusal) {
                     this.LatestResult = { CompleteMessage: refusal };
                     return false;
