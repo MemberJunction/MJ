@@ -843,7 +843,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
       The self-check decision retries a loop agent and records a flow-agent failure.
 - [x] **T2** Rubric resolution + suite-run version pinning (§10.2). The implicit rubric
       oracle is added when the test does not name one (§10.3).
-- [ ] **T3** `RubricOracle` + implicit rubric (§10.3).
+- [x] **T3** `RubricOracle` + implicit rubric (§10.3). Cleared with the resolution reviews.
 - [x] **T4** Inline rubric path, rebuilt `LLMJudgeOracle`, and Computer Use verdicts
       report through the same details. `mj test promote-criteria` writes a Draft rubric (§10.4).
 - [x] **T5** Persist `TestSuiteRun.Score` (§10.5). The mean of executed test-run scores.
@@ -856,9 +856,8 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked (s
 **A — agents**
 - [x] **A1** Agent rubric links: metadata support, agent form Rubrics tab (§11.1).
 - [x] **A2** Default Evaluation rubric in resolution (§11.2) — the last source in T2.
-- [ ] **A3** Self-check in `BaseAgent` (§11.3) with tests for pass, retry-then-pass,
-      exhausted-attempts and Flow-agent paths.
-- [ ] **A4** Production sampling job + drift view (§11.4).
+- [x] **A3** Self-check in `BaseAgent` (§11.3). `decideSelfCheck` covers pass, retry, exhausted attempts, and a flow-agent failure.
+- [~] **A4** Production sampling job + drift view (§11.4). Not in the form commit.
 - [ ] **A5** Rubric Evaluation Agent, `AgentRubricEvaluator` (§8.3).
 - [ ] **A6** Rubric Architect agent: draft, import, critique, improve-from-data (§11.5).
 

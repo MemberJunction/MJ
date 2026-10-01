@@ -108,6 +108,7 @@ import { RubricsModule } from "@memberjunction/ng-rubrics";
 import { MJRubricFormComponentExtended } from "./Rubrics/rubric-form.component";
 import { MJRubricEvaluationFormComponentExtended } from "./Rubrics/evaluation-form.component";
 import { MJRubricScaleFormComponentExtended } from "./Rubrics/scale-form.component";
+import { MJAIAgentRubricFormComponentExtended, MJRubricBandFormComponentExtended, MJRubricCategoryFormComponentExtended, MJRubricCriterionFormComponentExtended, MJRubricEvaluationScoreFormComponentExtended, MJRubricScaleLevelFormComponentExtended, MJRubricVersionFormComponentExtended } from "./Rubrics/record-forms.component";
 import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
 
 @NgModule({
@@ -157,6 +158,13 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         MJRubricFormComponentExtended,
         MJRubricEvaluationFormComponentExtended,
         MJRubricScaleFormComponentExtended,
+        MJRubricVersionFormComponentExtended,
+        MJRubricCriterionFormComponentExtended,
+        MJRubricEvaluationScoreFormComponentExtended,
+        MJRubricScaleLevelFormComponentExtended,
+        MJRubricBandFormComponentExtended,
+        MJRubricCategoryFormComponentExtended,
+        MJAIAgentRubricFormComponentExtended,
         // ContentSource-specific BaseFormPanel slot components (no custom form override).
         TagPipelineConfigurationPanel,
         WebsiteCrawlerSettingsPanel,
