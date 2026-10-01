@@ -1,0 +1,110 @@
+[
+  {
+    "fields": {
+      "Name": "Record Cloning",
+      "ParentID": null,
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Root authorization for all record cloning operations. Users or roles must hold this authorization (or a descendant) to plan or execute record clones."
+    },
+    "primaryKey": {
+      "ID": "AF418D76-E145-4FFC-838A-9EB75689AB7F"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Clone Records",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Record Cloning",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants permission to execute record clone operations. Evaluated with ancestors; holders pass all schema-level checks unless explicitly restricted."
+    },
+    "primaryKey": {
+      "ID": "4D3F6622-86E4-4165-BF6D-8CDBC31585C7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Clone Records in Platform Schema",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Clone Records",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Permits cloning records belonging to core platform entities in the __mj schema."
+    },
+    "primaryKey": {
+      "ID": "4E72DAB8-0974-4BB3-9A52-43758FE0171D"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Clone Records in Custom Schemas",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Clone Records",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Permits cloning records belonging to entities in custom/application schemas."
+    },
+    "primaryKey": {
+      "ID": "6DF9D1FE-1142-4952-83D5-FF6C23D835F8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Clone Records: Fire Hooks",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Record Cloning",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Change whether Entity Actions and Entity AI Actions run during a clone, overriding the entity's clone configuration (Entity Actions run by default; AI Actions are suppressed). A sibling of Clone Records, so holding Clone Records does not grant it."
+    },
+    "primaryKey": {
+      "ID": "50B8A92E-6287-48DA-AC9B-87E0FEE52B7B"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Clone Records: Batch",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Record Cloning",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Clone several records in one request (the Clone Records action). A sibling of Clone Records, so holding Clone Records does not grant it."
+    },
+    "primaryKey": {
+      "ID": "28640F1A-2D0F-4386-8F9E-CB11159E7709"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Record Changes: Annotate",
+      "ParentID": null,
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Permits updating the Comments column on existing RecordChange rows to annotate history and explain past edits."
+    },
+    "primaryKey": {
+      "ID": "DCD5C54B-4E1F-45EE-B5AC-1AB54044DC00"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Manage Authorizations",
+      "ParentID": null,
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Root authorization for managing the authorization hierarchy, role mappings, and security policies."
+    },
+    "primaryKey": {
+      "ID": "7A2CED86-A774-46D4-B3E6-67501BCC48A5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Clone Records: Override Scope",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Record Cloning",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Permits widening a clone beyond the entity's configured scope for one request: raising MaxDepth or MaxRecords, or including soft links, IS-A subtypes or a hierarchy subtree the configuration leaves out. Narrowing scope never needs it."
+    },
+    "primaryKey": {
+      "ID": "F893CD89-66E6-400D-A490-468187AB09D1"
+    }
+  }
+]

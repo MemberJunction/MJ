@@ -576,6 +576,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * is confident and arrives in time; an error, a slow or unsure answer keeps today's routing, and
    * a tagged message or a form response makes no call (see `decision-routing.ts`). False (the
    * default) changes nothing: no call, and today's routing.
+   *
+   * What goes to the model: each qualifying message sends these to the model behind the
+   * `Default Decision` prompt, which can be a different vendor from the agents' own: the first
+   * 1,000 characters of the new message, the last 6 turns (150 characters each), each participant's
+   * name, description and last reply, and the names of their artifact versions. Each call writes an
+   * `MJ: AI Prompt Runs` row, even when the answer comes too late to be used.
    */
   @Input() EnableDecisionRouting: boolean = false;
 
@@ -2149,15 +2155,24 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * The routing decision's input, rebuilt from the conversation as it is now: the agents that
    * have answered within the history floor, the last few turns, and the conversation manager.
    * Artifact versions are added after, once the input is known to be worth asking about.
+   *
+   * Participants come only from the '@' list's agents (`GetAvailableAgents`): active, top-level,
+   * unrestricted agents this person has run permission for. An agent that answered here but that
+   * the person can't run (a shared conversation, a revoked permission) is never offered, so routing
+   * can't send the turn to an agent the server would refuse. Before that list has loaded there are
+   * no participants, so no call is made and the message keeps today's routing. Speaker names in
+   * the recent turns still come from the full catalog, since any agent may have spoken.
    */
   private buildRoutingDecisionInput(message: MJConversationDetailEntity, continuityAgentId: string): RoutingDecisionInput {
     const history = this.ConversationHistory.filter(row => this.isWithinHistoryFloor(row) && !UUIDsEqual(row.ID, message.ID));
     const findAgent = (agentId: string): RoutingCatalogAgent | undefined => AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
+    const runnable = this.mentionAutocomplete.GetAvailableAgents();
+    const findRunnable = (agentId: string): RoutingCatalogAgent | undefined => runnable.find(a => UUIDsEqual(a.ID, agentId));
     const manager = this.ConverationManagerAgent;
     return {
       Message: message.Message ?? '',
       ContinuityAgentId: continuityAgentId,
-      Participants: CollectRoutingParticipants(history, manager?.ID ?? null, this.AllowedAgentIDs, findAgent),
+      Participants: CollectRoutingParticipants(history, manager?.ID ?? null, this.AllowedAgentIDs, findRunnable),
       ConversationManager: manager?.ID && IsAgentAllowed(manager.ID, this.AllowedAgentIDs) ? manager : null,
       RecentTurns: BuildRecentTurns(history, findAgent),
       ArtifactVersions: [],

@@ -11,7 +11,8 @@ export type StandardToolbarItemKey =
   | 'list'
   | 'tags'
   | 'attachments'
-  | 'refresh';
+  | 'refresh'
+  | 'clone';
 
 /**
  * Union of standard toolbar item keys and any custom button key.
