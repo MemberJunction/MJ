@@ -84,7 +84,12 @@ beforeEach(() => {
 });
 
 /** The placement dialog is covered by its own spec; here it only has to exist. */
-@Component({ standalone: true, selector: 'mj-form-placement-dialog', template: '<div class="dialog-stub"></div>' })
+/** Its read-only form preview is inert, as the real dialog's is. */
+@Component({
+    standalone: true,
+    selector: 'mj-form-placement-dialog',
+    template: '<div class="dialog-stub"><div inert><button class="preview-btn">x</button></div><button class="answer-btn">ok</button></div>',
+})
 class PlacementDialogStub {
     @Input() Provider: IMetadataProvider | null = null;
     @Input() Context: unknown;
@@ -720,6 +725,14 @@ describe('MjPanelManagerComponent (DOM) — keyboard', () => {
         await tick();
         drawerStops(f)[0].focus();
         expect(key(f, { key: 'Tab' }).defaultPrevented).toBe(false);
+    });
+
+    it('moves focus into the placement dialog, past its inert form preview', async () => {
+        const f = render();
+        f.componentInstance.OnEdit(f.componentInstance.Items[0]);
+        f.detectChanges();
+        await tick();
+        expect(document.activeElement).toBe((f.nativeElement as HTMLElement).querySelector('.answer-btn'));
     });
 
     it('gives focus back to what opened the drawer when it closes', async () => {

@@ -505,7 +505,7 @@ export class MjPanelManagerComponent implements OnChanges {
   private keepFocusInside(event: KeyboardEvent): void {
     const layer = this.topLayer();
     if (!layer) return;
-    const stops = Array.from(layer.querySelectorAll<HTMLElement>(TAB_STOPS));
+    const stops = tabStops(layer);
     const active = this.focusedElement();
     if (stops.length === 0) {
       event.preventDefault();
@@ -539,7 +539,7 @@ export class MjPanelManagerComponent implements OnChanges {
     setTimeout(() => {
       const target = this.host.nativeElement.querySelector<HTMLElement>(selector);
       if (!target) return;
-      const stop = target.matches(TAB_STOPS) ? target : target.querySelector<HTMLElement>(TAB_STOPS);
+      const stop = target.matches(TAB_STOPS) ? target : tabStops(target)[0];
       (stop ?? target).focus();
     }, 0);
   }
@@ -588,6 +588,15 @@ export class MjPanelManagerComponent implements OnChanges {
 /** Elements Tab stops on inside the drawer. */
 const TAB_STOPS = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), '
   + 'textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * The elements Tab stops on inside `root`, in document order. Leaves out anything inside an
+ * `inert` or `hidden` subtree, such as the placement dialog's read-only form preview, which
+ * cannot take focus.
+ */
+function tabStops(root: HTMLElement): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(TAB_STOPS)).filter((el) => !el.closest('[inert], [hidden]'));
+}
 
 /** A row's status as a lifecycle status. Anything unknown reads as off. */
 function lifecycleStatus(status: string): FormLifecycleStatus {
