@@ -167,6 +167,7 @@ describe('MJRecordChangeEntityServer.CheckPermissions', () => {
     });
 
     it('delegates other permission types (Read, Delete, Create) to super.CheckPermissions', () => {
+        Object.assign(entity, { Source: 'External', Type: 'Create' });
         expect(entity.CheckPermissions(EntityPermissionType.Read, false)).toBe(true);
         expect(entity.CheckPermissions(EntityPermissionType.Create, false)).toBe(true);
         expect(entity.CheckPermissions(EntityPermissionType.Delete, false)).toBe(true);
@@ -179,7 +180,7 @@ describe('MJRecordChangeEntityServer.CheckPermissions', () => {
  * component from one), so a caller may not create one through the API.
  */
 describe('MJRecordChangeEntityServer — creating a record change', () => {
-    function newChange(caller: unknown, source: string, type: string): MJRecordChangeEntityServer {
+    function newChange(caller: unknown, source: string | null | undefined, type: string | null | undefined): MJRecordChangeEntityServer {
         const change = new MJRecordChangeEntityServer();
         Object.assign(change, { ContextCurrentUser: caller, IsSaved: false, Source: source, Type: type });
         return change;
@@ -200,6 +201,19 @@ describe('MJRecordChangeEntityServer — creating a record change', () => {
         for (const [source, type] of [['internal', 'Create'], ['Internal ', 'Create'], ['Internal', 'create'], ['Internal', 'Create '], [' INTERNAL', ' CREATE']]) {
             expect(newChange(uiUser, source, type).CheckPermissions(EntityPermissionType.Create, false)).toBe(false);
         }
+    });
+
+    it('refuses a missing Source or Type, which the database stores as Internal and Create', () => {
+        const pairs: Array<[string | null | undefined, string | null | undefined]> = [
+            [null, null], ['Internal', null], [null, 'Create'], [undefined, undefined],
+        ];
+        const allowed = pairs.map(([source, type]) => newChange(uiUser, source, type).CheckPermissions(EntityPermissionType.Create, false));
+        expect(allowed).toEqual([false, false, false, false]);
+    });
+
+    it('leaves a missing Source or Type paired with a non-matching value to the role permission', () => {
+        expect(newChange(uiUser, null, 'Snapshot').CheckPermissions(EntityPermissionType.Create, false)).toBe(true);
+        expect(newChange(uiUser, 'External', null).CheckPermissions(EntityPermissionType.Create, false)).toBe(true);
     });
 
     it('leaves an Internal Snapshot record change, as version labels write, to the role permission', () => {

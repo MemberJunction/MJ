@@ -24,9 +24,11 @@ import { MJRecordChangeEntity } from '@memberjunction/core-entities';
  * Any other update is strictly forbidden to protect audit trail integrity.
  *
  * A create with a caller (`ActiveUser` set) of a record change whose `Source` is `Internal` and
- * whose `Type` is `Create` is refused for every caller. Both are compared trimmed and case-folded,
- * as value-list validation and the database compare them, so `'internal '` or `'create'` is refused
- * too. Those rows are the platform's own record of
+ * whose `Type` is `Create` is refused for every caller. A null or undefined `Source` or `Type` counts
+ * as `Internal` or `Create`, the defaults the database stores for it. Both are compared trimmed and
+ * case-folded, as value-list validation compares them, so `'internal '` or `'create'` is refused too.
+ * That is wider than the database CHECK (SQL Server ignores trailing spaces only), which is safe: the
+ * extra values refused are ones the database would reject. Those rows are the platform's own record of
  * who created a record, which the database provider writes in SQL alongside each insert; other
  * code trusts them, for example to read who created a component. Other Internal types, such as the
  * `Snapshot` rows `SnapshotBuilder` writes for version labels, are left to the role permission.
@@ -92,10 +94,16 @@ export class MJRecordChangeEntityServer extends MJRecordChangeEntity {
         return super.CheckPermissions(type, throwError);
     }
 
-    /** True for a new row with `Source` 'Internal' and `Type` 'Create', in any padding or casing, that a caller is creating. */
+    /**
+     * True for a new row with `Source` 'Internal' and `Type` 'Create', in any padding or casing, that a
+     * caller is creating. A missing value counts as the database default.
+     */
     private isCallerCreatingInternalRow(): boolean {
-        return !this.IsSaved && !!this.ActiveUser
-            && EntityFieldInfo.NormalizeValueListValue(this.Source) === 'internal'
-            && EntityFieldInfo.NormalizeValueListValue(this.Type) === 'create';
+        if (this.IsSaved || !this.ActiveUser) return false;
+        // These defaults mirror the ISNULL defaults in spCreateRecordChange.
+        const source = this.Source ?? 'Internal';
+        const type = this.Type ?? 'Create';
+        return EntityFieldInfo.NormalizeValueListValue(source) === 'internal'
+            && EntityFieldInfo.NormalizeValueListValue(type) === 'create';
     }
 }
