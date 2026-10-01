@@ -7,7 +7,9 @@ import type { MJEntityFormContributionEntity } from '../../generated/entities/__
  *
  * A form or panel belongs to one user, to a role, or to everyone. Anyone may manage their own.
  * Changing what OTHER people see — creating, editing, removing or re-aiming a role or everyone
- * item — takes the {@link MANAGE_FORM_DEFAULTS_AUTHORIZATION} grant.
+ * item — takes the {@link MANAGE_FORM_DEFAULTS_AUTHORIZATION} grant. Changing the component a
+ * form or panel draws changes that form or panel, so {@link ComponentWriteRefusal} applies the
+ * same rule to the `MJ: Components` row.
  *
  * Lives here, in a package both the server and the browser depend on, so the two cannot disagree:
  * the server-side entity subclasses enforce this rule on every write path, and the form's drawer
@@ -85,6 +87,76 @@ export function FormScopeWriteRefusal(write: FormScopeWrite): string | null {
 /** True when a scope is `User` once trimmed and case-folded, as the database compares it. */
 function readsAsPersonal(scope: string | null): boolean {
     return (scope ?? '').trim().toLowerCase() === 'user';
+}
+
+/**
+ * The `MJ: Components` columns that change what a form or panel using the component draws.
+ * A change to any other column is not checked against the forms and panels that use it.
+ */
+export const GUARDED_COMPONENT_FIELDS: readonly string[] = ['Specification', 'Status', 'Name', 'Type'];
+
+const GUARDED_COMPONENT_FIELD_KEYS: ReadonlySet<string> = new Set(GUARDED_COMPONENT_FIELDS.map((f) => f.toLowerCase()));
+
+/** A full custom form or panel row that uses a component, as the component rule reads it. */
+export interface FormComponentReference {
+    Scope: FormScope;
+    UserID: string | null;
+}
+
+/** One write to a `MJ: Components` row, as {@link ComponentWriteRefusal} needs to see it. */
+export interface ComponentWrite {
+    Operation: FormScopeOperation;
+    /** The columns the write changes. Read on update only. */
+    ChangedFields: readonly string[];
+    /** Every `MJ: Entity Form Contributions` and `MJ: Entity Form Overrides` row that uses the component. */
+    References: readonly FormComponentReference[];
+    /** Null when there is no caller: a trusted server context. */
+    CallerID: string | null;
+    CallerHoldsGrant: boolean;
+}
+
+const COMPONENT_REFUSAL_LEAD =
+    'This component is used by a form or panel, so changing its specification, status, name or ' +
+    'type, or deleting it, changes that form or panel.';
+
+/**
+ * Whether this write must be checked against the forms and panels that use the component: a
+ * delete, or an update that changes a {@link GUARDED_COMPONENT_FIELDS} column, by a caller.
+ * A create is never checked, because no row can use a component that does not exist yet.
+ */
+export function ComponentWriteIsGuarded(write: Pick<ComponentWrite, 'Operation' | 'ChangedFields' | 'CallerID'>): boolean {
+    if (write.CallerID == null || write.Operation === 'create') return false;
+    if (write.Operation === 'delete') return true;
+    return write.ChangedFields.some((field) => GUARDED_COMPONENT_FIELD_KEYS.has(field.trim().toLowerCase()));
+}
+
+/**
+ * Why this write to a component is not allowed, or null when it is.
+ *
+ * A guarded write ({@link ComponentWriteIsGuarded}) changes every form and panel that uses the
+ * component, so each row that uses it is checked with {@link FormScopeWriteRefusal} as if the
+ * caller were updating that row in place: a `Role` or `Global` row needs the grant, another
+ * user's personal row is refused for everyone, and the caller's own personal row passes.
+ *
+ * A component no row uses is not checked here: the entity permission alone decides who may
+ * change it. Personal rows are checked first, so when the grant would not help, the refusal says so.
+ */
+export function ComponentWriteRefusal(write: ComponentWrite): string | null {
+    if (!ComponentWriteIsGuarded(write)) return null;
+    const callerID = write.CallerID ?? '';
+    const personalFirst = [...write.References].sort(
+        (a, b) => Number(readsAsPersonal(b.Scope)) - Number(readsAsPersonal(a.Scope)));
+    for (const reference of personalFirst) {
+        const refusal = FormScopeWriteRefusal({
+            Operation: 'update',
+            PriorScope: reference.Scope, PriorUserID: reference.UserID,
+            NextScope: reference.Scope, NextUserID: reference.UserID,
+            CallerID: callerID,
+            CallerHoldsGrant: write.CallerHoldsGrant,
+        });
+        if (refusal) return `${COMPONENT_REFUSAL_LEAD} ${refusal}`;
+    }
+    return null;
 }
 
 /**
