@@ -19,7 +19,7 @@ import {
 } from '../services/testing-instrumentation.service';
 import { UUIDsEqual } from '@memberjunction/global';
 import { Metadata, RunView } from '@memberjunction/core';
-import { disagreementFromScores, type DisagreementItem } from '@memberjunction/ng-testing';
+import { criterionIdentity, disagreementFromScores, type DisagreementItem } from '@memberjunction/ng-testing';
 
 type ViewMode = 'queue' | 'history';
 type HistorySort = 'date' | 'rating' | 'test-name';
@@ -1203,8 +1203,7 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
         })),
         scores: ((scores.Results ?? []) as Record<string, unknown>[]).map(row => ({
           evaluationId: String(row.EvaluationID ?? ''),
-          key: String(row.CriterionKey ?? ''),
-          name: row.Criterion == null ? null : String(row.Criterion),
+          ...criterionIdentity(row),
           normalizedScore: row.NormalizedScore == null ? null : Number(row.NormalizedScore),
         })),
       });

@@ -9,7 +9,7 @@ import {
   VersionMetrics
 } from '../services/testing-instrumentation.service';
 import { Metadata, RunView } from '@memberjunction/core';
-import { criterionFailureRates, scoreTrend } from '@memberjunction/ng-testing';
+import { criterionFailureRates, criterionIdentity, scoreTrend } from '@memberjunction/ng-testing';
 
 // ---------------------------------------------------------------------------
 // Local interfaces
@@ -885,7 +885,7 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
         const evaluation = evaluationById.get(String(row.EvaluationID ?? ''));
         const versionId = evaluation ? String(evaluation.RubricVersionID ?? '') : '';
         return {
-          key: String(row.CriterionKey ?? ''),
+          key: criterionIdentity(row).key,
           normalizedScore: row.NormalizedScore == null ? null : Number(row.NormalizedScore),
           gateFailed: row.GateFailed === true || row.GateFailed === 1,
           passThreshold: thresholdByVersion.get(versionId) ?? null,

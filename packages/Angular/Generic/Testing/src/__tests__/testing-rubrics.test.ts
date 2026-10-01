@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { criterionFailureRates, disagreementFromScores, rubricPickerOptions, rubricRunView, scoreTrend } from '../lib/models/testing-rubrics';
+import { criterionFailureRates, criterionIdentity, disagreementFromScores, rubricPickerOptions, rubricRunView, scoreTrend } from '../lib/models/testing-rubrics';
 
 describe('testing rubric UI', () => {
     it('orders the review queue by the largest human–AI gap', () => {
@@ -19,8 +19,26 @@ describe('testing rubric UI', () => {
                 { evaluationId: 'ai-open', key: 'open', name: 'Open', normalizedScore: 1 },
             ],
         });
-        expect(queue.map(row => row.key)).toEqual(['facts', 'tone']);
+        expect(queue.map(row => row.key)).toEqual(['run|v1|facts', 'run|v1|tone']);
         expect(queue[0].gap).toBeCloseTo(0.6);
+        const facts = criterionIdentity({ CriterionID: 'c-facts', Criterion: 'Facts' });
+        const twoSubjects = disagreementFromScores({
+            evaluations: [
+                { id: 'a-human', subjectId: 'run-a', versionId: 'v1', evaluatorType: 'Human', status: 'Submitted' },
+                { id: 'a-ai', subjectId: 'run-a', versionId: 'v1', evaluatorType: 'AIPrompt', status: 'Submitted' },
+                { id: 'b-human', subjectId: 'run-b', versionId: 'v1', evaluatorType: 'Human', status: 'Submitted' },
+                { id: 'b-ai', subjectId: 'run-b', versionId: 'v1', evaluatorType: 'AIPrompt', status: 'Submitted' },
+            ],
+            scores: [
+                { evaluationId: 'a-human', ...facts, normalizedScore: 0.2 },
+                { evaluationId: 'a-ai', ...facts, normalizedScore: 1 },
+                { evaluationId: 'b-human', ...facts, normalizedScore: 0.9 },
+                { evaluationId: 'b-ai', ...facts, normalizedScore: 0.8 },
+            ],
+        });
+        expect(twoSubjects.map(row => row.key)).toEqual(['run-a|v1|c-facts', 'run-b|v1|c-facts']);
+        expect(twoSubjects.every(row => row.name === 'Facts')).toBe(true);
+        expect(criterionIdentity({}).key).toBe('');
     });
 
     it('trends one suite and reports per-criterion failure rates', () => {

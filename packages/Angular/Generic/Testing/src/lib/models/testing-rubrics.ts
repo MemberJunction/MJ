@@ -10,6 +10,13 @@ export interface DisagreementItem {
 
 const AI_EVALUATORS = new Set(['AIPrompt', 'Agent']);
 
+/** Score rows identify a criterion by CriterionID. Criterion is the label. CriterionKey is not a column. */
+export function criterionIdentity(row: { CriterionID?: unknown; Criterion?: unknown }): { key: string; name: string | null } {
+    const key = row.CriterionID == null || row.CriterionID === '' ? '' : String(row.CriterionID);
+    const name = row.Criterion == null || row.Criterion === '' ? null : String(row.Criterion);
+    return { key, name };
+}
+
 /**
  * Means of submitted human scores and submitted AI scores for one criterion,
  * within one subject and version. A criterion with only one side is left out.
@@ -27,7 +34,7 @@ export function disagreementFromScores(input: {
         const side = evaluation.evaluatorType === 'Human' ? 'human' : AI_EVALUATORS.has(evaluation.evaluatorType) ? 'ai' : null;
         if (!side) continue;
         const id = `${evaluation.subjectId}|${evaluation.versionId}|${score.key}`;
-        const group = groups.get(id) ?? { key: score.key, name: score.name || score.key, human: [], ai: [] };
+        const group = groups.get(id) ?? { key: id, name: score.name || score.key, human: [], ai: [] };
         if (score.name) group.name = score.name;
         group[side].push(score.normalizedScore);
         groups.set(id, group);
