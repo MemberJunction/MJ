@@ -1,0 +1,176 @@
+export interface ConsensusResult {
+    method: 'Mean' | 'Median' | 'TrimmedMean';
+    overall: number | null;
+    stdDev: number | null;
+    range: number | null;
+    sampleSize: number;
+}
+
+/**
+ * Overall consensus of normalized scores. Mean matches the SQL view's average.
+ * TrimmedMean drops the floor(p * n) scores from each end. Population standard
+ * deviation and the range are the disagreement measures.
+ */
+export function getConsensus(scores: number[], method: ConsensusResult['method'] = 'Mean', trim = 0.1): ConsensusResult {
+    const sample = [...scores].sort((a, b) => a - b);
+    const n = sample.length;
+    if (n === 0) return { method, overall: null, stdDev: null, range: null, sampleSize: 0 };
+    const used = method === 'TrimmedMean' ? trimEnds(sample, trim) : sample;
+    const overall = method === 'Median' ? median(sample) : mean(used);
+    return { method, overall, stdDev: populationStdDev(sample), range: sample[n - 1] - sample[0], sampleSize: n };
+}
+
+export interface AgreementResult {
+    withheld: boolean;
+    sampleSize: number;
+    minimumSample: number;
+    kappa?: number;
+    alpha?: number;
+}
+
+/**
+ * Agreement between paired ratings. Quadratic-weighted Cohen's kappa is for
+ * two raters. Krippendorff's alpha (ordinal) is for two or more. Both are
+ * omitted when the number of subjects is below the floor. The sample size is
+ * always returned, so a withheld result is not a bare statistic.
+ */
+export function getAgreement(ratings: number[][], minimumSample = 20): AgreementResult {
+    const sampleSize = ratings.length;
+    if (sampleSize < minimumSample) return { withheld: true, sampleSize, minimumSample };
+    const pairs = ratings.filter(row => row.length >= 2).map(row => [row[0], row[1]] as const);
+    return {
+        withheld: false,
+        sampleSize,
+        minimumSample,
+        kappa: pairs.length > 0 ? quadraticKappa(pairs) : undefined,
+        alpha: krippendorffAlpha(ratings),
+    };
+}
+
+export interface DiagnosticFlag {
+    criterionKey: string;
+    flag: 'NoDiscrimination' | 'RangeCollapse' | 'HighCorrelation' | 'MostlyNotApplicable' | 'InsufficientData';
+}
+
+/** Item analysis. Flags are attached to the criterion key. InsufficientData is n < 20. */
+export function getDiagnostics(criteria: { key: string; scores: (number | null)[]; notApplicable: number }[]): DiagnosticFlag[] {
+    const flags: DiagnosticFlag[] = [];
+    const totals = criteria[0]?.scores.map((_, index) => {
+        const values = criteria.map(item => item.scores[index]).filter((value): value is number => value !== null);
+        return values.length === 0 ? null : mean(values);
+    }) ?? [];
+    for (const item of criteria) {
+        const scored = item.scores.filter((value): value is number => value !== null);
+        const n = item.scores.length;
+        if (n < 20) flags.push({ criterionKey: item.key, flag: 'InsufficientData' });
+        if (n > 0 && item.notApplicable / n >= 0.5) flags.push({ criterionKey: item.key, flag: 'MostlyNotApplicable' });
+        if (scored.length >= 2 && populationStdDev(scored) === 0) flags.push({ criterionKey: item.key, flag: 'RangeCollapse' });
+        if (scored.length >= 2 && Math.abs(correlation(item.scores, totals)) < 0.05) {
+            flags.push({ criterionKey: item.key, flag: 'NoDiscrimination' });
+        }
+    }
+    for (let i = 0; i < criteria.length; i++) {
+        for (let j = i + 1; j < criteria.length; j++) {
+            if (Math.abs(correlation(criteria[i].scores, criteria[j].scores)) >= 0.9) {
+                flags.push({ criterionKey: criteria[i].key, flag: 'HighCorrelation' });
+            }
+        }
+    }
+    return flags;
+}
+
+/** Quadratic-weighted Cohen's kappa. Categories are the distinct rating values, ordered. */
+export function quadraticKappa(pairs: readonly (readonly [number, number])[]): number {
+    const categories = [...new Set(pairs.flat())].sort((a, b) => a - b);
+    const index = new Map(categories.map((value, position) => [value, position]));
+    const k = categories.length;
+    if (k < 2) return 1;
+    const grid = Array.from({ length: k }, () => Array(k).fill(0));
+    for (const [a, b] of pairs) grid[index.get(a)!][index.get(b)!] += 1;
+    const n = pairs.length;
+    const row = grid.map(line => line.reduce((sum, value) => sum + value, 0));
+    const col = grid[0].map((_, column) => grid.reduce((sum, line) => sum + line[column], 0));
+    let observed = 0;
+    let expected = 0;
+    for (let i = 0; i < k; i++) {
+        for (let j = 0; j < k; j++) {
+            const weight = ((i - j) / (k - 1)) ** 2;
+            observed += weight * grid[i][j];
+            expected += weight * row[i] * col[j] / n;
+        }
+    }
+    if (expected === 0) return 1;
+    return 1 - observed / expected;
+}
+
+/** Ordinal Krippendorff's alpha. Each inner array is one subject's ratings. */
+export function krippendorffAlpha(units: number[][]): number {
+    const values = [...new Set(units.flat())].sort((a, b) => a - b);
+    const index = new Map(values.map((value, position) => [value, position]));
+    const k = values.length;
+    if (k < 2) return 1;
+    const coincidence = Array.from({ length: k }, () => Array(k).fill(0));
+    for (const unit of units) {
+        const counts = Array(k).fill(0);
+        for (const value of unit) counts[index.get(value)!] += 1;
+        const m = unit.length;
+        if (m < 2) continue;
+        for (let c = 0; c < k; c++) {
+            for (let d = 0; d < k; d++) {
+                coincidence[c][d] += c === d ? counts[c] * (counts[c] - 1) / (m - 1) : counts[c] * counts[d] / (m - 1);
+            }
+        }
+    }
+    const marginal = coincidence.map(row => row.reduce((sum, value) => sum + value, 0));
+    const n = marginal.reduce((sum, value) => sum + value, 0);
+    const cumulative: number[] = [];
+    let running = 0;
+    for (const count of marginal) {
+        cumulative.push(running + count / 2);
+        running += count;
+    }
+    const distance = (c: number, d: number) => (cumulative[c] - cumulative[d]) ** 2;
+    let observed = 0;
+    let expected = 0;
+    for (let c = 0; c < k; c++) {
+        for (let d = 0; d < k; d++) {
+            observed += coincidence[c][d] * distance(c, d);
+            expected += marginal[c] * marginal[d] * distance(c, d);
+        }
+    }
+    if (expected === 0) return 1;
+    return 1 - (observed / n) / (expected / (n * (n - 1)));
+}
+
+function mean(values: number[]): number {
+    return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function median(values: number[]): number {
+    const mid = Math.floor(values.length / 2);
+    return values.length % 2 === 0 ? (values[mid - 1] + values[mid]) / 2 : values[mid];
+}
+
+function trimEnds(sorted: number[], p: number): number[] {
+    const drop = Math.floor(p * sorted.length);
+    const kept = sorted.slice(drop, sorted.length - drop);
+    return kept.length > 0 ? kept : sorted;
+}
+
+function populationStdDev(values: number[]): number {
+    const avg = mean(values);
+    return Math.sqrt(values.reduce((sum, value) => sum + (value - avg) ** 2, 0) / values.length);
+}
+
+function correlation(left: (number | null)[], right: (number | null)[]): number {
+    const pairs = left.map((value, index) => [value, right[index]] as const).filter((pair): pair is [number, number] => pair[0] !== null && pair[1] !== null);
+    if (pairs.length < 2) return 0;
+    const xs = pairs.map(pair => pair[0]);
+    const ys = pairs.map(pair => pair[1]);
+    const sx = populationStdDev(xs);
+    const sy = populationStdDev(ys);
+    if (sx === 0 || sy === 0) return 0;
+    const mx = mean(xs);
+    const my = mean(ys);
+    return pairs.reduce((sum, [x, y]) => sum + (x - mx) * (y - my), 0) / pairs.length / sx / sy;
+}
