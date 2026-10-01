@@ -37,9 +37,14 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /** The engine property whose poisoning produced the observed agent crash. */
 const NOTES_PROPERTY = '_agentNotes';
+
+/** The fixture row NC5 edits. Named so its assertion can find the row back without reading an
+ *  `unknown` off the deliberately loose payload shape below, and so the two cannot drift apart. */
+const EDITED_ROW_ID = '22222222-2222-4222-8222-222222222222';
 
 /** Rows shaped like `MJ: AI Agent Notes` as a serialized cache payload holds them — dates are STRINGS. */
 const PAYLOAD_ROWS: Array<Record<string, unknown>> = [
@@ -55,7 +60,7 @@ const PAYLOAD_ROWS: Array<Record<string, unknown>> = [
         __mj_UpdatedAt: '2026-08-01T00:00:00.000Z',
     },
     {
-        ID: '22222222-2222-4222-8222-222222222222',
+        ID: EDITED_ROW_ID,
         AgentID: null,
         Note: 'IT cache-type probe (newer)',
         Type: 'Preference',
@@ -254,7 +259,7 @@ export const AgentNoteCacheTypeChecks: NamedCheck[] = [
                 try {
                     await poisonNotesCache(changed);
                     Assert(AIEngine.Instance.AgentNotes !== held, 'a changed payload must replace the AgentNotes array');
-                    const edited = AIEngine.Instance.AgentNotes.find(n => n.ID === changed[1].ID);
+                    const edited = AIEngine.Instance.AgentNotes.find(n => UUIDsEqual(n.ID, EDITED_ROW_ID));
                     AssertEqual(edited?.Note, 'IT cache-type probe (newer, edited)', 'the edited row is visible');
                     AssertEqual(emissions.count(), 1, 'a changed payload notifies AgentNotes observers once');
                 } finally {
