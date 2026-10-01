@@ -30,7 +30,7 @@ import { ComponentGuardRefusal, type GuardedComponentRow } from "./FormComponent
  *
  * The rows, the stored columns and the creator are read in one batch as the caller. The creator is
  * the component's `Create` record in `MJ: Record Changes` with `Source` 'Internal', which the
- * platform writes with every insert and which a caller cannot create. The changed columns are
+ * platform writes with every insert and which a caller cannot create through the API. The changed columns are
  * found by comparing with the stored row, not with the values as loaded. When a read fails, the
  * write is refused. The check needs a query and `Validate()` is synchronous, so it runs in `Save()`
  * (an ordinary save and a `ReplayOnly` save alike) and in `Delete()`, before the write.

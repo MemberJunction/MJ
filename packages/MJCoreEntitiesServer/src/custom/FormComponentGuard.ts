@@ -198,8 +198,8 @@ function usesViews(componentIDs: string[]): Pick<Record<ViewRole, RunViewParams>
  * The caller's `Create` record changes for these components, with `Source` 'Internal'.
  * `MJ: Components` tracks record changes, so every component created through the platform has one,
  * written by the database provider in the same batch as the insert. `MJRecordChangeEntityServer`
- * refuses an Internal record change created by a caller, so such a row cannot be forged through the
- * API. Null when the component entity is missing from the metadata, which `runBatch` reports as a
+ * refuses an Internal `Create` record change created by a caller, so such a row cannot be forged
+ * through the API. Null when the component entity is missing from the metadata, which `runBatch` reports as a
  * failed read.
  */
 function createdByCallerView(caller: GuardCaller, componentIDs: string[]): RunViewParams | null {

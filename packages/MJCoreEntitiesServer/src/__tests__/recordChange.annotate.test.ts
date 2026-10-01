@@ -174,33 +174,37 @@ describe('MJRecordChangeEntityServer.CheckPermissions', () => {
 });
 
 /**
- * Internal record changes are the platform's own audit rows, written in SQL alongside each save.
- * Code trusts them (the form component guard reads who created a component from one), so a caller
- * may not create one through the API.
+ * An Internal `Create` record change is the platform's own record of who created a record, written
+ * in SQL alongside each insert. Code trusts it (the form component guard reads who created a
+ * component from one), so a caller may not create one through the API.
  */
 describe('MJRecordChangeEntityServer — creating a record change', () => {
-    function newChange(caller: unknown, source: string | undefined): MJRecordChangeEntityServer {
+    function newChange(caller: unknown, source: string, type: string): MJRecordChangeEntityServer {
         const change = new MJRecordChangeEntityServer();
-        Object.assign(change, { ContextCurrentUser: caller, IsSaved: false, Source: source });
+        Object.assign(change, { ContextCurrentUser: caller, IsSaved: false, Source: source, Type: type });
         return change;
     }
 
     const uiUser = { ID: 'u-ui', Name: 'Plain user', Type: 'User' };
     const owner = { ID: 'u-owner', Name: 'Owner', Type: 'Owner' };
 
-    it('refuses an Internal record change created by a caller, a UI user or an Owner alike', () => {
+    it('refuses an Internal Create record change created by a caller, a UI user or an Owner alike', () => {
         for (const caller of [uiUser, owner]) {
-            const change = newChange(caller, 'Internal');
+            const change = newChange(caller, 'Internal', 'Create');
             expect(change.CheckPermissions(EntityPermissionType.Create, false)).toBe(false);
-            expect(() => change.CheckPermissions(EntityPermissionType.Create, true)).toThrow(/Source 'Internal'/);
+            expect(() => change.CheckPermissions(EntityPermissionType.Create, true)).toThrow(/Source 'Internal' and Type 'Create'/);
         }
     });
 
-    it('leaves an External record change to the role permission', () => {
-        expect(newChange(uiUser, 'External').CheckPermissions(EntityPermissionType.Create, false)).toBe(true);
+    it('leaves an Internal Snapshot record change, as version labels write, to the role permission', () => {
+        expect(newChange(uiUser, 'Internal', 'Snapshot').CheckPermissions(EntityPermissionType.Create, false)).toBe(true);
     });
 
-    it('allows an Internal record change with no caller, a trusted server context', () => {
-        expect(newChange(null, 'Internal').CheckPermissions(EntityPermissionType.Create, false)).toBe(true);
+    it('leaves an External record change to the role permission', () => {
+        expect(newChange(uiUser, 'External', 'Create').CheckPermissions(EntityPermissionType.Create, false)).toBe(true);
+    });
+
+    it('allows an Internal Create record change with no caller, a trusted server context', () => {
+        expect(newChange(null, 'Internal', 'Create').CheckPermissions(EntityPermissionType.Create, false)).toBe(true);
     });
 });
