@@ -8,7 +8,16 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 
 export class PromptFileLoader extends nunjucks.Loader {
-  public async: true = true;
+  public Async: true = true;
+
+  /** @deprecated Use {@link Async}. */
+  public get async(): true {
+    return this.Async;
+  }
+  /** @deprecated Use {@link Async}. */
+  public set async(value: true) {
+    this.Async = value;
+  }
 
   private prompts: Map<string, string> = new Map();
 
@@ -19,7 +28,7 @@ export class PromptFileLoader extends nunjucks.Loader {
   /**
    * Load all prompt files from directory
    */
-  public async loadAll(): Promise<void> {
+  public async LoadAll(): Promise<void> {
     const files = await fs.readdir(this.promptsDir);
 
     for (const file of files) {
@@ -32,11 +41,16 @@ export class PromptFileLoader extends nunjucks.Loader {
     }
   }
 
+  /** @deprecated Use {@link LoadAll}. */
+  public async loadAll(): Promise<void> {
+    return this.LoadAll();
+  }
+
   /**
    * Required by Nunjucks Loader - provides template source
    * Pattern from Templates package
    */
-  public getSource(name: string, callback: any): void {
+  public GetSource(name: string, callback: any): void {
     const content = this.prompts.get(name);
     if (content) {
       callback(null, {
@@ -47,5 +61,10 @@ export class PromptFileLoader extends nunjucks.Loader {
     } else {
       callback(new Error(`Prompt not found: ${name}`));
     }
+  }
+
+  /** @deprecated Use {@link GetSource}. */
+  public getSource(name: string, callback: any): void {
+    return this.GetSource(name, callback);
   }
 }

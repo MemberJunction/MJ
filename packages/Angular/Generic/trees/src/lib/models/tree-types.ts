@@ -358,7 +358,7 @@ export interface TreeSearchConfig {
 /**
  * Create a default TreeNode
  */
-export function createDefaultTreeNode(partial: Partial<TreeNode> = {}): TreeNode {
+export function CreateDefaultTreeNode(partial: Partial<TreeNode> = {}): TreeNode {
     return {
         ID: '',
         Label: '',
@@ -378,10 +378,15 @@ export function createDefaultTreeNode(partial: Partial<TreeNode> = {}): TreeNode
     };
 }
 
+/** @deprecated Use {@link CreateDefaultTreeNode}. */
+export function createDefaultTreeNode(partial: Partial<TreeNode> = {}): TreeNode {
+    return CreateDefaultTreeNode(partial);
+}
+
 /**
  * Create default branch config with sensible defaults
  */
-export function createDefaultBranchConfig(partial: Partial<TreeBranchConfig> = {}): TreeBranchConfig {
+export function CreateDefaultBranchConfig(partial: Partial<TreeBranchConfig> = {}): TreeBranchConfig {
     return {
         EntityName: '',
         DisplayField: 'Name',
@@ -393,10 +398,15 @@ export function createDefaultBranchConfig(partial: Partial<TreeBranchConfig> = {
     };
 }
 
+/** @deprecated Use {@link CreateDefaultBranchConfig}. */
+export function createDefaultBranchConfig(partial: Partial<TreeBranchConfig> = {}): TreeBranchConfig {
+    return CreateDefaultBranchConfig(partial);
+}
+
 /**
  * Create default leaf config with sensible defaults
  */
-export function createDefaultLeafConfig(partial: Partial<TreeLeafConfig> = {}): TreeLeafConfig {
+export function CreateDefaultLeafConfig(partial: Partial<TreeLeafConfig> = {}): TreeLeafConfig {
     return {
         EntityName: '',
         ParentField: '',
@@ -406,4 +416,9 @@ export function createDefaultLeafConfig(partial: Partial<TreeLeafConfig> = {}): 
         OrderBy: 'Name ASC',
         ...partial
     };
+}
+
+/** @deprecated Use {@link CreateDefaultLeafConfig}. */
+export function createDefaultLeafConfig(partial: Partial<TreeLeafConfig> = {}): TreeLeafConfig {
+    return CreateDefaultLeafConfig(partial);
 }

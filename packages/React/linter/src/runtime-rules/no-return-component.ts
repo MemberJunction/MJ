@@ -2,7 +2,7 @@ import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
-import { createViolation } from '../lint-utils';
+import { CreateViolation } from '../lint-utils';
 
 /**
  * Rule: no-return-component
@@ -32,7 +32,7 @@ export class NoReturnComponentRule extends BaseLintRule {
           if (argument && t.isIdentifier(argument)) {
             // If it's returning the component name or any identifier at top level
             violations.push(
-              createViolation(
+              CreateViolation(
                 'no-return-component',
                 'critical',
                 statement,
@@ -75,7 +75,7 @@ function MyComponent({ utilities, styles, components }) {
         // Also check for expression statements that might be standalone identifiers
         if (t.isExpressionStatement(statement) && t.isIdentifier(statement.expression) && statement.expression.name === componentName) {
           violations.push(
-            createViolation(
+            CreateViolation(
               'no-return-component',
               'critical',
               statement,

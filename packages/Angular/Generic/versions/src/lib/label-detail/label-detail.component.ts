@@ -218,7 +218,7 @@ export class MjLabelDetailComponent extends BaseAngularComponent implements OnIn
         try {
             const md = this.ProviderToUse;
             const label = await md.GetEntityObject<MJVersionLabelEntity>('MJ: Version Labels');
-            await label.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: this.Label.ID }]));
+            await label.InnerLoad(CompositeKey.FromID(this.Label.ID));
             label.Status = 'Archived';
             const saved = await label.Save();
             if (saved) {
@@ -277,7 +277,7 @@ export class MjLabelDetailComponent extends BaseAngularComponent implements OnIn
 
         // Resolve entity icon for overview
         if (this.Label.EntityID) {
-            this.OverviewEntityIcon = this.resolveEntityIcon(this.Label.EntityID);
+            this.OverviewEntityIcon = this.ResolveEntityIcon(this.Label.EntityID);
         }
 
         // Resolve record display name for Record-scoped labels
@@ -290,7 +290,7 @@ export class MjLabelDetailComponent extends BaseAngularComponent implements OnIn
      * For Record-scoped labels, load the record's display name via GetEntityRecordNames.
      */
     private async loadOverviewRecordName(): Promise<void> {
-        const entityName = this.resolveEntityName(this.Label.EntityID ?? '');
+        const entityName = this.ResolveEntityName(this.Label.EntityID ?? '');
         if (!entityName || entityName === 'Unknown') return;
 
         const rawId = this.extractRawRecordId(this.Label.RecordID ?? '');
@@ -299,7 +299,9 @@ export class MjLabelDetailComponent extends BaseAngularComponent implements OnIn
         try {
             const input = new EntityRecordNameInput();
             input.EntityName = entityName;
-            input.CompositeKey = new CompositeKey([{ FieldName: 'ID', Value: rawId }]);
+            // RecordID is a CompositeKey segment ("ID|<uuid>", or composite) — parse it against the
+            // entity's real key column(s) rather than stripping the prefix and assuming `ID`.
+            input.CompositeKey = CompositeKey.FromURLSegment(this.metadata.EntityByName(entityName), this.Label.RecordID ?? '');
 
             const results = await this.metadata.GetEntityRecordNames([input]);
             const recordName = results.length > 0 && results[0].Success ? results[0].RecordName : undefined;
@@ -319,7 +321,7 @@ export class MjLabelDetailComponent extends BaseAngularComponent implements OnIn
 
         for (const item of this.LabelItems) {
             const entityId = item.EntityID ?? '';
-            const entityName = this.resolveEntityName(entityId);
+            const entityName = this.ResolveEntityName(entityId);
             const key = entityName || entityId;
 
             if (!groupMap.has(key)) {
@@ -340,7 +342,7 @@ export class MjLabelDetailComponent extends BaseAngularComponent implements OnIn
             .map(([name, group]) => ({
                 EntityName: name,
                 EntityID: group.entityId,
-                EntityIcon: this.resolveEntityIcon(group.entityId),
+                EntityIcon: this.ResolveEntityIcon(group.entityId),
                 Items: group.items,
                 IsExpanded: false,
                 IsLoadingNames: false,
@@ -449,7 +451,7 @@ export class MjLabelDetailComponent extends BaseAngularComponent implements OnIn
 
             // For each entity group, load latest RecordChanges and compare
             for (const [entityId, items] of entityItemMap) {
-                const entityName = this.resolveEntityName(entityId);
+                const entityName = this.ResolveEntityName(entityId);
                 const records: ClientRecordDiff[] = [];
 
                 for (const item of items) {
@@ -528,13 +530,19 @@ export class MjLabelDetailComponent extends BaseAngularComponent implements OnIn
                 {
                     EntityName: 'MJ: Record Changes',
                     ExtraFilter: `ID = '${oldChangeId}'`,
-                    Fields: ['FullRecordJSON'],
+                    // 'EntityID' is required, not decorative: field-level security projects a Record Change's
+                    // payload against the entity the row is ABOUT, and a row arriving without EntityID cannot
+                    // be resolved — so the payload is withheld. See guides/FIELD_LEVEL_SECURITY_GUIDE.md §3.2.
+                    Fields: ['EntityID', 'FullRecordJSON'],
                     ResultType: 'simple'
                 },
                 {
                     EntityName: 'MJ: Record Changes',
                     ExtraFilter: `ID = '${newChangeId}'`,
-                    Fields: ['FullRecordJSON'],
+                    // 'EntityID' is required, not decorative: field-level security projects a Record Change's
+                    // payload against the entity the row is ABOUT, and a row arriving without EntityID cannot
+                    // be resolved — so the payload is withheld. See guides/FIELD_LEVEL_SECURITY_GUIDE.md §3.2.
+                    Fields: ['EntityID', 'FullRecordJSON'],
                     ResultType: 'simple'
                 }
             ]);
@@ -624,7 +632,7 @@ export class MjLabelDetailComponent extends BaseAngularComponent implements OnIn
     private buildSnapshotEntityNameSet(): Set<string> {
         const names = new Set<string>();
         for (const item of this.LabelItems) {
-            const entityName = this.resolveEntityName(item.EntityID ?? '');
+            const entityName = this.ResolveEntityName(item.EntityID ?? '');
             if (entityName && entityName !== 'Unknown') {
                 names.add(entityName);
             }
@@ -738,11 +746,11 @@ export class MjLabelDetailComponent extends BaseAngularComponent implements OnIn
         this.cdr.markForCheck();
 
         try {
+            const groupEntity = this.metadata.EntityByName(group.EntityName);
             const inputs: EntityRecordNameInput[] = group.Items.map(item => {
-                const rawId = this.extractRawRecordId(item.RecordID);
                 const input = new EntityRecordNameInput();
                 input.EntityName = group.EntityName;
-                input.CompositeKey = new CompositeKey([{ FieldName: 'ID', Value: rawId }]);
+                input.CompositeKey = CompositeKey.FromURLSegment(groupEntity, item.RecordID);
                 return input;
             });
 
@@ -866,9 +874,9 @@ export class MjLabelDetailComponent extends BaseAngularComponent implements OnIn
     /** Open the record referenced by a Record-scoped label via navigation. */
     public OnOpenOverviewRecord(): void {
         if (!this.Label.EntityID || !this.Label.RecordID) return;
-        const entityName = this.resolveEntityName(this.Label.EntityID);
+        const entityName = this.ResolveEntityName(this.Label.EntityID);
         const rawId = this.extractRawRecordId(this.Label.RecordID);
-        const pkey = new CompositeKey([{ FieldName: 'ID', Value: rawId }]);
+        const pkey = CompositeKey.FromURLSegment(this.metadata.EntityByName(entityName), this.Label.RecordID);
         this.EntityLinkClick.emit({
             EntityName: entityName,
             RecordID: rawId,
@@ -953,24 +961,39 @@ export class MjLabelDetailComponent extends BaseAngularComponent implements OnIn
         return UUIDsEqual(pl.ID, this.Label.ParentID);
     }
 
-    public resolveEntityName(entityId: string | null | undefined): string {
+    public ResolveEntityName(entityId: string | null | undefined): string {
         if (!entityId) return 'Unknown';
         const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityId));
         return entity ? entity.Name : 'Unknown';
     }
 
+    /** @deprecated Use {@link ResolveEntityName}. */
+    public resolveEntityName(entityId: string | null | undefined): string {
+      return this.ResolveEntityName(entityId);
+    }
+
     /** Resolve icon CSS class for an entity by ID, falling back to generic table icon. */
-    public resolveEntityIcon(entityId: string): string {
+    public ResolveEntityIcon(entityId: string): string {
         if (!entityId) return 'fa-solid fa-table';
         const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityId));
         return entity?.Icon || 'fa-solid fa-table';
     }
 
+    /** @deprecated Use {@link ResolveEntityIcon}. */
+    public resolveEntityIcon(entityId: string): string {
+      return this.ResolveEntityIcon(entityId);
+    }
+
     /** Resolve icon CSS class for an entity by name, falling back to generic table icon. */
-    public resolveEntityIconByName(entityName: string): string {
+    public ResolveEntityIconByName(entityName: string): string {
         if (!entityName) return 'fa-solid fa-table';
         const entity = this.metadata.Entities.find(e => e.Name === entityName);
         return entity?.Icon || 'fa-solid fa-table';
+    }
+
+    /** @deprecated Use {@link ResolveEntityIconByName}. */
+    public resolveEntityIconByName(entityName: string): string {
+      return this.ResolveEntityIconByName(entityName);
     }
 
     /** Format a record ID for display — strips 'ID|' prefix for single-value PKs. */

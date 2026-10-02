@@ -6,9 +6,9 @@ import { PageRecordsParams } from "../generic/VectorCore.types";
 import { MJAIModelEntityExtended } from "@memberjunction/ai-core-plus";
 
 export class VectorBase {
-    _runView: RunView;
-    _metadata: Metadata;
-    _currentUser: UserInfo;
+    _runView: RunView;  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
+    _metadata: Metadata;  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
+    _currentUser: UserInfo;  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
     protected _provider: IMetadataProvider | null = null;
 
     /**
@@ -19,8 +19,9 @@ export class VectorBase {
      * multi-provider scenarios. Falls back to the global default provider when omitted.
      */
     constructor(provider?: IMetadataProvider | null) {
-        // Fall back to the global default only when no provider was supplied
-        this._metadata = (provider as unknown as Metadata) ?? new Metadata();
+        // `_metadata` is the global `Metadata` helper, kept only because the field is public. It is
+        // not an IMetadataProvider, so nothing may hand it to code that expects one — see `Provider`.
+        this._metadata = new Metadata(); // global-provider-ok: legacy public field; metadata reads go through Provider
         this.Provider = provider ?? null; // setter also binds _runView to the provider
         this._currentUser = provider?.CurrentUser ?? this._metadata.CurrentUser;
     }
@@ -31,7 +32,7 @@ export class VectorBase {
      * operations in this class hierarchy go through this getter so a bound instance never
      * leaks onto the global provider.
      */
-    public get Metadata(): IMetadataProvider { return this._provider ?? (this._metadata as unknown as IMetadataProvider); }
+    public get Metadata(): IMetadataProvider { return this.Provider; }
     public get RunView(): RunView { return this._runView; }
     public get CurrentUser(): UserInfo { return this._currentUser; }
     public set CurrentUser(user: UserInfo) { this._currentUser = user; }
@@ -41,9 +42,13 @@ export class VectorBase {
      * or set `instance.Provider = providerToUse` before invoking helper methods in
      * multi-provider contexts. Setting it rebinds the internal RunView instance so view
      * execution rides the same provider. Falls back to the global default when unset.
+     *
+     * The fallback is the global provider itself, never the `Metadata` wrapper: consumers
+     * type-check what they get here (e.g. `VectorDBBase.TryWireColocatedHost` needs an
+     * `IColocatedVectorHost`), and the wrapper fails those checks.
      */
     public get Provider(): IMetadataProvider {
-        return this._provider ?? (this._metadata as unknown as IMetadataProvider);
+        return this._provider ?? Metadata.Provider;
     }
     public set Provider(value: IMetadataProvider | null) {
         this._provider = value;
@@ -96,7 +101,7 @@ export class VectorBase {
             // so every page is a fresh DB read.
             BypassCache: true,
             ...(useKeyset
-                ? { AfterKey: params.AfterKey, OrderBy: entity.FirstPrimaryKey!.Name }
+                ? { AfterKey: params.AfterKey, OrderBy: entity.FirstPrimaryKey!.Name } // first-pk-ok: keyset AfterKey/OrderBy is single-column by design; callers gate on CanUseKeysetPagination (PrimaryKeys.length === 1)
                 : { StartRow: Math.max(0, (params.PageNumber - 1) * params.PageSize) }),
             ExtraFilter: params.Filter
         }, this.CurrentUser);
@@ -115,16 +120,33 @@ export class VectorBase {
      */
     protected CanUseKeysetPagination(entityID: string | number): boolean {
         const entity = this.Metadata.Entities.find(e => UUIDsEqual(e.ID, entityID as string));
-        if (!entity || !entity.FirstPrimaryKey) return false;
+        if (!entity || !entity.FirstPrimaryKey) return false; // first-pk-ok: keyset-eligibility check; an entity without a key column cannot be seek-paginated
         if (entity.PrimaryKeys.length !== 1) return false;
         // Inline allowlist check (avoid pulling in the helper here)
-        const t = (entity.FirstPrimaryKey.Type || '').replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
+        const t = VectorBase.normalizeSqlTypeName(entity.FirstPrimaryKey.Type || ''); // first-pk-ok: guarded by PrimaryKeys.length === 1 above
         // Same set as KEYSET_PAGINATION_ORDERABLE_PK_TYPES in @memberjunction/core
         return ['uniqueidentifier','uuid','int','bigint','smallint','tinyint','decimal','numeric','money','smallmoney',
             'float','real','double precision','char','varchar','nchar','nvarchar','text','ntext',
             'date','datetime','datetime2','datetimeoffset','smalldatetime','time','bit',
             'integer','bigserial','serial','character varying','character','timestamp',
             'timestamp with time zone','timestamp without time zone','boolean'].includes(t);
+    }
+
+    /**
+     * Lower-cases a SQL type name and drops a trailing size spec, so `nvarchar(255)` becomes
+     * `nvarchar` and `decimal(10, 2)` becomes `decimal`. It scans the string instead of using a
+     * regex: the type comes from metadata, and a backtracking pattern over it runs in polynomial time.
+     */
+    private static normalizeSqlTypeName(type: string): string {
+        const trimmed = type.trim();
+        if (!trimmed.endsWith(')')) {
+            return trimmed.toLowerCase();
+        }
+        const close = trimmed.length - 1;
+        // The size spec is the last "(...)" group: it opens at the first '(' after the previous ')'.
+        const open = trimmed.indexOf('(', trimmed.lastIndexOf(')', close - 1) + 1);
+        const base = open >= 0 && open < close ? trimmed.slice(0, open) : trimmed;
+        return base.trim().toLowerCase();
     }
 
     /**

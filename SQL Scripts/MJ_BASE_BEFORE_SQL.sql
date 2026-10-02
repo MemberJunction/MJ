@@ -713,7 +713,8 @@ CREATE PROCEDURE __mj.[spCreateRecordChange_Internal]
     @Comments         NVARCHAR(MAX),
     @Source           NVARCHAR(20)     = NULL,
     @RestoredFromID   UNIQUEIDENTIFIER = NULL,
-    @RestoreReason    NVARCHAR(MAX)    = NULL
+    @RestoreReason    NVARCHAR(MAX)    = NULL,
+    @ChangeContext    NVARCHAR(MAX)    = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -734,7 +735,8 @@ BEGIN
             Status,
             Comments,
             RestoredFromID,
-            RestoreReason
+            RestoreReason,
+            ChangeContext
         )
     OUTPUT INSERTED.[ID] INTO @InsertedRow
     VALUES
@@ -751,7 +753,8 @@ BEGIN
             @Status,
             @Comments,
             @RestoredFromID,
-            @RestoreReason
+            @RestoreReason,
+            @ChangeContext
         );
 
     -- Return the new record from the base view so calculated fields are included

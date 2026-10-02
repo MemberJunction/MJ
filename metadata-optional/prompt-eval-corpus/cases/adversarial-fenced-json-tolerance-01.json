@@ -1,0 +1,27 @@
+{
+  "id": "adversarial-fenced-json-tolerance-01",
+  "agent": "Sage",
+  "tags": [
+    "adversarial-exemplar",
+    "prompt-fragility"
+  ],
+  "description": "A control, not a trap: a markdown-fenced envelope is tolerated by both the runtime parser and this harness. It exists so the adversarial numbers are not inflated by a formatting habit that costs nothing.",
+  "input": {
+    "payload": {},
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "What's the weather in Denver?"
+      }
+    ]
+  },
+  "expect": {
+    "kind": "action",
+    "actions": [
+      {
+        "name": "Get Weather"
+      }
+    ],
+    "allowAdditionalActions": false
+  }
+}

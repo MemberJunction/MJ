@@ -1,9 +1,10 @@
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseDashboard } from '@memberjunction/ng-dashboards';
+import { BaseDashboard } from '@memberjunction/ng-shared';
+import { ResourceData } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 import { RunView, Metadata, CompositeKey } from '@memberjunction/core';
-import { EventEntity, SubmissionEntity, SpeakerEntity } from 'mj_generatedentities';
+import { EventsEventEntity, EventsSubmissionEntity, EventsSpeakerEntity } from 'mj_generatedentities';
 
 interface DashboardStats {
   totalEvents: number;
@@ -14,7 +15,7 @@ interface DashboardStats {
 }
 
 interface EventSummary {
-  event: EventEntity;
+  event: EventsEventEntity;
   submissionCount: number;
   daysUntilDeadline: number | null;
   urgency: 'high' | 'medium' | 'low' | 'none';
@@ -30,12 +31,13 @@ interface ActivityItem {
 }
 
 interface SpeakerStats {
-  speaker: SpeakerEntity;
+  speaker: EventsSpeakerEntity;
   submissionCount: number;
   acceptanceRate: number;
 }
 
 @Component({
+  standalone: false,
   selector: 'mj-events-dashboard',
   templateUrl: './events-dashboard.component.html',
   styleUrls: ['./events-dashboard.component.css']
@@ -52,9 +54,9 @@ export class EventsDashboardComponent extends BaseDashboard implements OnInit {
     avgAIScore: 0
   };
 
-  public events: EventEntity[] = [];
-  public submissions: SubmissionEntity[] = [];
-  public speakers: SpeakerEntity[] = [];
+  public events: EventsEventEntity[] = [];
+  public submissions: EventsSubmissionEntity[] = [];
+  public speakers: EventsSpeakerEntity[] = [];
   public eventSummaries: EventSummary[] = [];
   public recentActivity: ActivityItem[] = [];
   public topSpeakers: SpeakerStats[] = [];
@@ -68,6 +70,10 @@ export class EventsDashboardComponent extends BaseDashboard implements OnInit {
 
   override async ngOnInit(): Promise<void> {
     await super.ngOnInit();
+  }
+
+  async GetResourceDisplayName(_data: ResourceData): Promise<string> {
+    return 'Events';
   }
 
   protected initDashboard(): void {
@@ -90,7 +96,6 @@ export class EventsDashboardComponent extends BaseDashboard implements OnInit {
     } finally {
       this.isLoading = false;
       this.cdr.detectChanges();
-      this.LoadingComplete.emit();
     }
   }
 
@@ -120,15 +125,15 @@ export class EventsDashboardComponent extends BaseDashboard implements OnInit {
     ], md.CurrentUser);
 
     if (eventsResult.Success && eventsResult.Results) {
-      this.events = eventsResult.Results as EventEntity[];
+      this.events = eventsResult.Results as EventsEventEntity[];
     }
 
     if (submissionsResult.Success && submissionsResult.Results) {
-      this.submissions = submissionsResult.Results as SubmissionEntity[];
+      this.submissions = submissionsResult.Results as EventsSubmissionEntity[];
     }
 
     if (speakersResult.Success && speakersResult.Results) {
-      this.speakers = speakersResult.Results as SpeakerEntity[];
+      this.speakers = speakersResult.Results as EventsSpeakerEntity[];
     }
   }
 
@@ -215,7 +220,7 @@ export class EventsDashboardComponent extends BaseDashboard implements OnInit {
   }
 
   private buildTopSpeakers(): void {
-    const speakerMap = new Map<string, { speaker: SpeakerEntity; submissions: SubmissionEntity[] }>();
+    const speakerMap = new Map<string, { speaker: EventsSpeakerEntity; submissions: EventsSubmissionEntity[] }>();
 
     // Group submissions by speaker
     this.submissions.forEach(submission => {

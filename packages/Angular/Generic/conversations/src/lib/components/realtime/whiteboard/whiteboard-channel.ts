@@ -1,12 +1,106 @@
 import type { Type } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
-import { RealtimeToolDefinition } from '@memberjunction/ai';
-import { BaseRealtimeChannelClient, ChannelOnboardingDetails } from '../channels/base-realtime-channel-client';
+import { CHANNEL_INBOUND_VIDEO_TRACK, RealtimeToolDefinition, RealtimeTrack, RealtimeTrackDescriptor } from '@memberjunction/ai';
+import { ChannelInboundVideoBridge, IChannelFrameProvider } from '@memberjunction/ai-realtime-client';
+import { BaseRealtimeChannelClient, ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
 import {
-  ApplyWhiteboardAgentTool, RealtimeWhiteboardHostComponent, WHITEBOARD_TOOL_DEFINITIONS,
+  ApplyWhiteboardAgentTool, BuildWhiteboardExportSvg, RealtimeWhiteboardHostComponent, WHITEBOARD_TOOL_DEFINITIONS,
   WHITEBOARD_TOOL_PREFIX, WhiteboardState, WhiteboardWidgetInteractionEvent, WhiteboardWidgetSubmitEvent
 } from '@memberjunction/ng-whiteboard';
+
+/**
+ * Whether a whiteboard tool result reports success.
+ *
+ * `ApplyWhiteboardAgentTool` returns a JSON `WhiteboardToolResult` string — `{ success: true, … }`
+ * or `{ success: false, error }` — for every tool and every failure path. Anything that does not
+ * parse as an object with `success === true` is treated as NOT a successful mutation, which is the
+ * safe direction: the cost of missing a confirmation frame is one stale picture until the next
+ * change, while the cost of a false one is telling the model an edit landed when it did not.
+ */
+function toolSucceeded(result: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(result);
+    return parsed !== null && typeof parsed === 'object' && (parsed as { success?: unknown }).success === true;
+  } catch {
+    // A non-JSON result cannot be confirmed as a mutation — the host returned something this
+    // channel does not understand, so it does not get a "your change is on screen" note.
+    return false;
+  }
+}
+
+/**
+ * Asynchronously rasterizes an SVG string to a JPEG base64 string (without the `data:image/jpeg;base64,` prefix)
+ * using an offscreen canvas. Returns null in non-DOM environments or when rendering fails.
+ */
+export async function RasterizeSvgToJpegBase64(svg: string, width = 1280, height = 720): Promise<string | null> {
+  if (typeof document === 'undefined' || typeof Image === 'undefined') {
+    return null;
+  }
+  return new Promise<string | null>((resolve) => {
+    let url: string | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const cleanup = () => {
+      if (timer != null) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      if (url) {
+        URL.revokeObjectURL(url);
+        url = null;
+      }
+    };
+
+    try {
+      const img = new Image();
+      const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+      url = URL.createObjectURL(svgBlob);
+
+      // Capped wait: resolve null and revoke URL if the Image never fires onload or onerror (item 61)
+      timer = setTimeout(() => {
+        console.error('[RealtimeWhiteboardChannel] SVG rasterization timed out after 5000ms');
+        cleanup();
+        resolve(null);
+      }, 5000);
+
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            cleanup();
+            resolve(null);
+            return;
+          }
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+          cleanup();
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          const comma = dataUrl.indexOf(',');
+          resolve(comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl);
+        } catch (err) {
+          console.error('[RealtimeWhiteboardChannel] Failed to rasterize SVG canvas to JPEG:', err);
+          cleanup();
+          resolve(null);
+        }
+      };
+      img.onerror = (err) => {
+        console.error('[RealtimeWhiteboardChannel] Failed to load SVG image for rasterization:', err);
+        cleanup();
+        resolve(null);
+      };
+      img.src = url;
+    } catch (err) {
+      console.error('[RealtimeWhiteboardChannel] Failed to initialize SVG rasterization:', err);
+      cleanup();
+      resolve(null);
+    }
+  });
+}
 
 /**
  * Per-widget throttle window for AMBIENT interaction context notes: at most one note per
@@ -56,7 +150,7 @@ interface InteractionThrottleEntry {
  * incompatible payloads are tolerated — the board simply starts fresh.
  */
 @RegisterClass(BaseRealtimeChannelClient, 'RealtimeWhiteboardChannel')
-export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<RealtimeWhiteboardHostComponent> {
+export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<RealtimeWhiteboardHostComponent> implements IChannelFrameProvider {
   /** The board's state of record — created fresh with the plugin (one per session). */
   public readonly State = new WhiteboardState();
 
@@ -68,9 +162,172 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
   private stateChangedSub: Subscription | null = null;
   /** Per-widget ambient-interaction note throttles (ItemID → window state). */
   private interactionThrottles = new Map<string, InteractionThrottleEntry>();
+  /** Shared video bridge streaming board frames to the model when the model supports inbound video. */
+  private videoBridge: ChannelInboundVideoBridge | null = null;
+  /** Pacing timestamp for event-driven visual scene pushes (enforces max 1 fps). */
+  private lastPushTimestamp = 0;
 
   public get ChannelName(): string {
     return 'Whiteboard';
+  }
+
+  /**
+   * Sourced tracks: Whiteboard can source inbound video to the model when the model supports it.
+   */
+  public override GetSourcedTracks(): readonly RealtimeTrackDescriptor[] {
+    return [CHANNEL_INBOUND_VIDEO_TRACK];
+  }
+
+  /**
+   * Produces the latest visual scene as a base64-encoded frame for the video bridge.
+   * Renders the whiteboard SVG into an offscreen canvas and returns base64 JPEG.
+   */
+  public async GetLatestFrame(): Promise<string | null> {
+    if (!this.State) {
+      return null;
+    }
+    try {
+      const svg = BuildWhiteboardExportSvg(this.State);
+      return await RasterizeSvgToJpegBase64(svg);
+    } catch (err) {
+      console.error('[RealtimeWhiteboardChannel] Failed to export whiteboard frame:', err);
+      return null;
+    }
+  }
+
+  private static readonly WHITEBOARD_DEFAULT_CADENCE_MS = 1000;
+  private static readonly WHITEBOARD_MIN_CADENCE_MS = 250;
+
+  // NO liveness heartbeat here, deliberately. This channel is 100% CHANGE-DRIVEN: the only thing
+  // that pushes a frame is a board mutation. A periodic keep-alive would have to be driven by its
+  // own always-on interval — this channel does no work at all while the board is idle, and
+  // resurrecting it every 15 seconds to re-send an unchanged picture is a cost with no shown
+  // benefit. (It also cannot be smuggled in via the mutation path: a 15s elapsed-check inside
+  // onUserMutation only runs when a mutation arrives, so on an idle board it is never evaluated —
+  // which is exactly what the constant this replaced did.) If the inbound video track ever needs
+  // keep-alive frames, that belongs on the track or the bridge, once, not per channel.
+
+  /** Trailing timer to deliver the settled resting frame after rapid user drawing/edits. */
+  private whiteboardTrailingTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Last base64 JPEG frame pushed to the bridge, used for deduplication. */
+  private lastPushedWhiteboardFrame: string | null = null;
+
+  /** Cancels any active trailing-edge settle timer and clears the handle. */
+  private clearWhiteboardTrailingTimer(): void {
+    if (this.whiteboardTrailingTimer != null) {
+      clearTimeout(this.whiteboardTrailingTimer);
+      this.whiteboardTrailingTimer = null;
+    }
+  }
+
+  /**
+   * Resolves the effective push cadence in milliseconds based on the negotiated inbound video track.
+   * Defaults to 1000ms (1 fps ceiling for Gemini Live), but clamps down to a minimum of 250ms (4 fps)
+   * if the negotiated track specifies a higher `Rate`.
+   */
+  private getNegotiatedVideoCadenceMs(): number {
+    const client = this.Context?.Client;
+    if (!client) {
+      return RealtimeWhiteboardChannel.WHITEBOARD_DEFAULT_CADENCE_MS;
+    }
+    const tracks: readonly RealtimeTrack[] = client.EstablishedTracks;
+    const videoTrack = tracks?.find(
+      (t: RealtimeTrack) =>
+        t.Descriptor.Modality === 'video' &&
+        t.Descriptor.Direction === 'inbound'
+    );
+    const rate = videoTrack?.Descriptor.Rate;
+    if (typeof rate === 'number' && rate > 0) {
+      return Math.max(
+        RealtimeWhiteboardChannel.WHITEBOARD_MIN_CADENCE_MS,
+        Math.floor(1000 / rate)
+      );
+    }
+    return RealtimeWhiteboardChannel.WHITEBOARD_DEFAULT_CADENCE_MS;
+  }
+
+  /**
+   * Pushes a frame to the video bridge, updating timestamp and deduplication cache.
+   */
+  private pushWhiteboardFrame(frame: string): void {
+    this.lastPushTimestamp = Date.now();
+    this.lastPushedWhiteboardFrame = frame;
+    this.ensureVideoBridge()?.PushFrame(frame);
+  }
+
+  /**
+   * Pushes the latest board visual scene when user mutations occur, with dynamic pacing,
+   * deduplication, and a trailing-edge settle timer so the model sees the final resting state.
+   */
+  private async onUserMutation(): Promise<void> {
+    try {
+      const bridge = this.ensureVideoBridge();
+      if (!bridge || !this.Context?.Client?.IsTrackEstablished('video', 'inbound')) {
+        return;
+      }
+
+      const now = Date.now();
+      const cadenceMs = this.getNegotiatedVideoCadenceMs();
+      const elapsed = now - this.lastPushTimestamp;
+
+      if (elapsed >= cadenceMs) {
+        this.clearWhiteboardTrailingTimer();
+        const frame = await this.GetLatestFrame();
+        if (!frame) {
+          return;
+        }
+        if (frame !== this.lastPushedWhiteboardFrame) {
+          this.pushWhiteboardFrame(frame);
+        }
+      } else {
+        // Within cooldown window: schedule trailing settle timer if not already armed.
+        if (!this.whiteboardTrailingTimer) {
+          const delay = Math.max(0, cadenceMs - elapsed);
+          this.whiteboardTrailingTimer = setTimeout(async () => {
+            this.whiteboardTrailingTimer = null;
+            try {
+              if (!this.Context?.Client?.IsTrackEstablished('video', 'inbound')) {
+                return;
+              }
+              const frame = await this.GetLatestFrame();
+              if (!frame) {
+                return;
+              }
+              if (frame !== this.lastPushedWhiteboardFrame) {
+                this.pushWhiteboardFrame(frame);
+              }
+            } catch (err) {
+              console.error('[RealtimeWhiteboardChannel] Error in whiteboard trailing settle timer:', err);
+            }
+          }, delay);
+        }
+      }
+    } catch (err) {
+      console.error('[RealtimeWhiteboardChannel] Error in onUserMutation:', err);
+    }
+  }
+
+  /**
+   * Pushes exactly ONE confirmation frame after an agent tool mutates the board, and
+   * informs the model context so it does not loop narrating its own change.
+   */
+  private async pushAgentConfirmationFrame(): Promise<void> {
+    try {
+      const bridge = this.ensureVideoBridge();
+      if (!bridge || !this.Context?.Client?.IsTrackEstablished('video', 'inbound')) {
+        return;
+      }
+      this.clearWhiteboardTrailingTimer();
+      const frame = await this.GetLatestFrame();
+      if (frame) {
+        this.pushWhiteboardFrame(frame);
+        this.Context?.SendContextNote(
+          '[whiteboard] visual confirmation of your action (background — do NOT narrate or announce your own change; continue naturally)'
+        );
+      }
+    } catch (err) {
+      console.error('[RealtimeWhiteboardChannel] Error in pushAgentConfirmationFrame:', err);
+    }
   }
 
   public get ToolNamePrefix(): string {
@@ -111,9 +368,31 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
 
   /** Persist the board (host-debounced) on EVERY board mutation — user edits AND agent tools. */
   protected override OnInitialize(): void {
-    this.stateChangedSub = this.State.Changed$.subscribe(() => {
+    this.stateChangedSub?.unsubscribe();
+    this.clearWhiteboardTrailingTimer();
+    this.stateChangedSub = this.State.Changed$.subscribe((change) => {
       this.Context?.RequestSave(this.State.ToJSON());
+      // Only user edits (and scene replacements like undo) drive the user settle-debounce pipeline.
+      // Agent edits are confirmed with a single frame in ApplyAgentTool.
+      if (change.Author === 'user' || change.Op === 'replace') {
+        void this.onUserMutation();
+      }
     });
+    this.ensureVideoBridge();
+  }
+
+  public override OnSessionStarted(): void {
+    this.ensureVideoBridge();
+  }
+
+  private ensureVideoBridge(): ChannelInboundVideoBridge | null {
+    if (!this.videoBridge && this.Context) {
+      this.videoBridge = new ChannelInboundVideoBridge(() => this.Context?.Client, this);
+    }
+    if (this.videoBridge && !this.videoBridge.IsActive && this.Context?.Client?.IsTrackEstablished('video', 'inbound')) {
+      this.videoBridge.Start?.();
+    }
+    return this.videoBridge;
   }
 
   /**
@@ -122,6 +401,7 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
    * outputs are subscribed back into the host context — the overlay never sees any of it.
    */
   public BindSurface(instance: RealtimeWhiteboardHostComponent): void {
+    this.ensureVideoBridge();
     this.releaseSurface();
     this.host = instance;
     instance.State = this.State;
@@ -250,10 +530,22 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
    * bound so the channel keeps working with the pane collapsed.
    */
   public ApplyAgentTool(toolName: string, argsJson: string): string {
+    let result: string;
     if (this.host) {
-      return this.host.ApplyAgentTool(toolName, argsJson);
+      result = this.host.ApplyAgentTool(toolName, argsJson);
+    } else {
+      result = ApplyWhiteboardAgentTool(this.State, toolName, argsJson);
     }
-    return ApplyWhiteboardAgentTool(this.State, toolName, argsJson);
+    // A SUCCESSFUL agent tool triggers exactly ONE immediate visual confirmation frame and a note
+    // telling the model not to narrate its own change. A FAILED one must trigger neither: every
+    // failure path returns `{ success: false, error }` (bad JSON args, unknown tool, per-tool
+    // validation), and confirming it would tell the model its edit landed AND instruct it to stay
+    // quiet about it — so the failure would vanish from the user's view while the model carried on.
+    // It would also push a frame identical to the last one, since a failed tool changes nothing.
+    if (toolSucceeded(result)) {
+      void this.pushAgentConfirmationFrame();
+    }
+    return result;
   }
 
   /** The board's serialized state of record (persisted under {@link ChannelName}). */
@@ -283,8 +575,12 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
   }
 
   public override Dispose(): void {
+    this.clearWhiteboardTrailingTimer();
+    this.videoBridge?.Stop();
+    this.videoBridge = null;
     this.stateChangedSub?.unsubscribe();
     this.stateChangedSub = null;
+    this.lastPushedWhiteboardFrame = null;
     super.Dispose(); // releases the surface binding + context
   }
 
@@ -307,4 +603,9 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
  */
 export function LoadRealtimeWhiteboardChannel(): void {
   // intentional no-op — the import side effect performs the registration
+}
+
+/** @deprecated Use {@link RasterizeSvgToJpegBase64}. */
+export async function rasterizeSvgToJpegBase64(svg: string, width = 1280, height = 720): Promise<string | null> {
+  return RasterizeSvgToJpegBase64(svg, width, height);
 }

@@ -33,7 +33,7 @@ while [ $# -gt 0 ]; do
 done
 
 INC=(--include='*.html' --include='*.ts')
-EXC=(--exclude-dir=node_modules --exclude-dir=dist --exclude-dir=generated --exclude-dir=initial-prototype-now-old)
+EXC=(--exclude-dir=node_modules --exclude-dir=dist --exclude-dir=generated)
 
 # Genuine bespoke-alert class markers (verified). Bootstrap-style .alert + its
 # modifiers, the *-banner family, box/card/panel forms, the .message+X-message

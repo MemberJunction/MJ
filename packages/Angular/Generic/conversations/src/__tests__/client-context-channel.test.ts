@@ -7,7 +7,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { Subject } from 'rxjs';
 import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 import { ClientContextChannel, CONTEXT_TOOL_NAME } from '../lib/components/realtime/channels/client-context-channel';
-import type { RealtimeChannelContext } from '../lib/components/realtime/channels/base-realtime-channel-client';
+import type { RealtimeChannelContext } from '@memberjunction/realtime-runtime';
 
 function makeContext(over: Partial<RealtimeChannelContext> = {}): RealtimeChannelContext {
   return {

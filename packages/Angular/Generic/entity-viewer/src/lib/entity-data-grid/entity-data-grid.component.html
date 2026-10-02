@@ -154,7 +154,7 @@
           </button>
         }
         <!-- Communication Button (predefined) -->
-        @if (ShowCommunicationButton) {
+        @if (ShowCommunicationButton && EntitySupportsCommunication) {
           <button
             class="toolbar-button"
             title="Send message to selected records"
@@ -329,8 +329,8 @@
         [Size]="EmptyStateSize"
         Variant="error"
         Icon="fa-solid fa-triangle-exclamation"
-        Title="Could not load data"
-        [Message]="errorMessage"
+        Title="Couldn't load this data"
+        [Message]="FriendlyErrorMessage"
         ActionText="Retry"
         ActionIcon="fa-solid fa-arrows-rotate"
         (Action)="Refresh()" />
@@ -342,7 +342,7 @@
         class="mj-grid-state-fill"
         [Size]="EmptyStateSize"
         Icon="fa-solid fa-inbox"
-        Title="No data to display" />
+        [Title]="EntityInfo ? 'No ' + EntityInfo.DisplayNamePlural + ' to display' : 'No data to display'" />
     }
 
     <!-- AG Grid (Client-side mode) -->

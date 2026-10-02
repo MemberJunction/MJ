@@ -17,12 +17,12 @@ import { MJLeftNavItem, MJLeftNavSection } from '@memberjunction/ng-ui-component
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { SearchScopeChildGridColumn } from '@memberjunction/ng-search';
 import {
-    buildKnowledgeConfigAgentContext,
-    resolveConfigSection,
-    resolveByIDOrName,
-    buildConfigNotFoundError,
+    BuildKnowledgeConfigAgentContext,
+    ResolveConfigSection,
+    ResolveByIDOrName,
+    BuildConfigNotFoundError,
 } from './knowledge-config-agent-context';
-import { validateStringParam } from '../../../shared/agent-tool-validation';
+import { ValidateStringParam } from '../../../shared/agent-tool-validation';
 
 /** Configuration section definition */
 interface ConfigSection {
@@ -301,9 +301,9 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
      * Deep context is shaped by the pure {@link buildKnowledgeConfigAgentContext}.
      */
     private emitAgentContext(): void {
-        this.navigationService.SetAgentContext(this, buildKnowledgeConfigAgentContext({
+        this.navigationService.SetAgentContext(this, BuildKnowledgeConfigAgentContext({
             ActiveSection: this.ActiveSection,
-            ActiveSectionLabel: this.currentSection?.Label ?? this.ActiveSection,
+            ActiveSectionLabel: this.CurrentSection?.Label ?? this.ActiveSection,
             Sections: this.Sections,
             IsLoading: this.IsLoading,
             HasUnsavedChanges: this.HasUnsavedChanges,
@@ -349,13 +349,13 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
                     required: ['section'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const v = validateStringParam(params['section'], 'section');
+                    const v = ValidateStringParam(params['section'], 'section');
                     if (!v.ok) return v.result;
-                    const match = resolveConfigSection(v.value, this.Sections);
+                    const match = ResolveConfigSection(v.value, this.Sections);
                     if (!match) {
                         return {
                             Success: false,
-                            ErrorMessage: buildConfigNotFoundError(v.value, 'section', this.Sections.map(s => s.ID)),
+                            ErrorMessage: BuildConfigNotFoundError(v.value, 'section', this.Sections.map(s => s.ID)),
                         };
                     }
                     this.SelectSection(match.ID);
@@ -381,17 +381,17 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
                     required: ['scope'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const v = validateStringParam(params['scope'], 'scope');
+                    const v = ValidateStringParam(params['scope'], 'scope');
                     if (!v.ok) return v.result;
                     if (this.SearchScopes.length === 0) {
                         await this.LoadSearchScopes();
                     }
                     const candidates = this.SearchScopes.map(s => ({ ID: s.ID, Name: s.Name }));
-                    const match = resolveByIDOrName(v.value, candidates);
+                    const match = ResolveByIDOrName(v.value, candidates);
                     if (!match) {
                         return {
                             Success: false,
-                            ErrorMessage: buildConfigNotFoundError(v.value, 'search scope', candidates.map(c => c.Name)),
+                            ErrorMessage: BuildConfigNotFoundError(v.value, 'search scope', candidates.map(c => c.Name)),
                         };
                     }
                     this.SelectSection('search-scopes');
@@ -412,11 +412,11 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
                     if (typeof raw === 'string' && raw.trim()) {
                         if (this.SearchScopes.length === 0) await this.LoadSearchScopes();
                         const candidates = this.SearchScopes.map(s => ({ ID: s.ID, Name: s.Name }));
-                        const match = resolveByIDOrName(raw, candidates);
+                        const match = ResolveByIDOrName(raw, candidates);
                         if (!match) {
                             return {
                                 Success: false,
-                                ErrorMessage: buildConfigNotFoundError(raw, 'search scope', candidates.map(c => c.Name)),
+                                ErrorMessage: BuildConfigNotFoundError(raw, 'search scope', candidates.map(c => c.Name)),
                             };
                         }
                         this.SelectSection('search-scopes');
@@ -461,7 +461,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
                     required: ['query'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const v = validateStringParam(params['query'], 'query');
+                    const v = ValidateStringParam(params['query'], 'query');
                     if (!v.ok) return v.result;
                     this.SelectSection('fulltext');
                     this.FTSFilterText = v.value;
@@ -484,7 +484,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
     // ================================================================
 
     /** Wraps `Sections` for `<mj-left-nav>`. Single unlabeled section. */
-    public get navSections(): MJLeftNavSection[] {
+    public get NavSections(): MJLeftNavSection[] {
         return [{
             items: this.Sections.map(s => ({
                 id: s.ID,
@@ -495,18 +495,33 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         }];
     }
 
+    /** @deprecated Use {@link NavSections}. */
+    public get navSections(): MJLeftNavSection[] {
+        return this.NavSections;
+    }
+
     /**
      * Active section metadata — drives the `<mj-page-header-interior>` Title +
      * Subtitle for the current section. Reusing the existing Sections array
      * (already used to drive the left rail) keeps section identity DRY.
      */
-    public get currentSection(): ConfigSection | undefined {
+    public get CurrentSection(): ConfigSection | undefined {
         return this.Sections.find(s => UUIDsEqual(s.ID, this.ActiveSection));
     }
 
+    /** @deprecated Use {@link CurrentSection}. */
+    public get currentSection(): ConfigSection | undefined {
+        return this.CurrentSection;
+    }
+
     /** Adapter for `<mj-left-nav>`'s `(ItemClicked)` output. */
-    public onNavItemClicked(item: MJLeftNavItem): void {
+    public OnNavItemClicked(item: MJLeftNavItem): void {
         this.SelectSection(item.id);
+    }
+
+    /** @deprecated Use {@link OnNavItemClicked}. */
+    public onNavItemClicked(item: MJLeftNavItem): void {
+        return this.OnNavItemClicked(item);
     }
 
     public SelectSection(sectionId: string): void {
@@ -901,8 +916,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
     public OpenActiveScopeFullForm(): void {
         const scope = this.ActiveScope;
         if (!scope?.ID) return;
-        const pkey = new CompositeKey([{ FieldName: 'ID', Value: scope.ID }]);
-        this.navigationService.OpenEntityRecord('MJ: Search Scopes', pkey);
+        this.navigationService.OpenEntityRecord('MJ: Search Scopes', CompositeKey.FromID(scope.ID));
     }
 
     public async SaveActiveScope(): Promise<void> {

@@ -82,10 +82,15 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
     private metadata = this.ProviderToUse;
     protected override destroy$ = new Subject<void>();
 
-    public readonly viewOptions: ViewToggleOption[] = [
+    public readonly ViewOptions: ViewToggleOption[] = [
         { key: 'card', icon: 'fa-solid fa-grip', title: 'Card view' },
         { key: 'list', icon: 'fa-solid fa-list', title: 'List view' }
     ];
+
+    /** @deprecated Use {@link ViewOptions}. */
+    public get viewOptions(): ViewToggleOption[] {
+      return this.ViewOptions;
+    }
 
     public get FilterFields(): FilterFieldConfig[] {
         const scopeOptions = [
@@ -124,7 +129,7 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
         if (this.StatusFilter) n++;
         return n;
     }
-    public onFilterValuesChange(v: Record<string, unknown>): void {
+    public OnFilterValuesChange(v: Record<string, unknown>): void {
         const next = (v ?? {}) as { scopeFilter?: string; statusFilter?: string };
         if ((next.scopeFilter ?? '') !== this.ScopeFilter) {
             this.OnScopeFilterChange(next.scopeFilter ?? '');
@@ -133,9 +138,19 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
             this.OnStatusFilterChange(next.statusFilter ?? '');
         }
     }
-    public resetFilters(): void {
+
+    /** @deprecated Use {@link OnFilterValuesChange}. */
+    public onFilterValuesChange(v: Record<string, unknown>): void {
+      return this.OnFilterValuesChange(v);
+    }
+    public ResetFilters(): void {
         if (this.ScopeFilter) this.OnScopeFilterChange('');
         if (this.StatusFilter) this.OnStatusFilterChange('');
+    }
+
+    /** @deprecated Use {@link ResetFilters}. */
+    public resetFilters(): void {
+      return this.ResetFilters();
     }
 
     constructor(private cdr: ChangeDetectorRef) {
@@ -194,7 +209,7 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
                     : [];
                 this.ItemCountMap = this.buildItemCountMap(items);
                 this.computeStats();
-                this.applyFilters();
+                this.ApplyFilters();
             }
         } catch (error) {
             console.error('Error loading version labels:', error);
@@ -291,18 +306,23 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
     }
 
     /** Empty-state CTA: reset search + filters when narrowed, otherwise create. */
-    public onEmptyStateAction(): void {
+    public OnEmptyStateAction(): void {
         if (this.IsListNarrowed) {
             this.SearchText = '';
             this.ScopeFilter = '';
             this.StatusFilter = '';
-            this.applyFilters();
+            this.ApplyFilters();
         } else {
             this.OpenCreateDialog();
         }
     }
 
-    public applyFilters(): void {
+    /** @deprecated Use {@link OnEmptyStateAction}. */
+    public onEmptyStateAction(): void {
+      return this.OnEmptyStateAction();
+    }
+
+    public ApplyFilters(): void {
         // First: exclude child labels (those with ParentID) from top-level list
         let result = this.Labels.filter(l => !l.ParentID);
 
@@ -332,6 +352,11 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
 
         this.FilteredLabels = result;
         this.cdr.markForCheck();
+    }
+
+    /** @deprecated Use {@link ApplyFilters}. */
+    public applyFilters(): void {
+      return this.ApplyFilters();
     }
 
     private sortLabels(labels: MJVersionLabelEntityType[]): MJVersionLabelEntityType[] {
@@ -368,7 +393,7 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
             this.SortField = field;
             this.SortDirection = field === 'Date' ? 'desc' : 'asc';
         }
-        this.applyFilters();
+        this.ApplyFilters();
         this.persistPreferences();
     }
 
@@ -379,19 +404,19 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
 
     public OnScopeFilterChange(scope: string): void {
         this.ScopeFilter = this.ScopeFilter === scope ? '' : scope;
-        this.applyFilters();
+        this.ApplyFilters();
         this.persistPreferences();
     }
 
     public OnStatusFilterChange(status: string): void {
         this.StatusFilter = this.StatusFilter === status ? '' : status;
-        this.applyFilters();
+        this.ApplyFilters();
         this.persistPreferences();
     }
 
     public OnSearchChange(text: string): void {
         this.SearchText = text;
-        this.applyFilters();
+        this.ApplyFilters();
     }
 
     public Refresh(): void {

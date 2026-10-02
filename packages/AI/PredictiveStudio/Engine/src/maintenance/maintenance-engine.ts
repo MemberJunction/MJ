@@ -52,7 +52,7 @@ import type {
   MaintenancePassEntry,
 } from './types';
 import { DEFAULT_RETRAINING_POLICY, MaintenanceSystemClock } from './types';
-import { resolveComparisonMetric, readMetric } from './metrics';
+import { ResolveComparisonMetric, ReadMetric } from './metrics';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -73,7 +73,7 @@ export class MaintenanceEngine {
    * @param policy the staleness/retraining policy (partial → merged with defaults)
    * @param deps the injected dependency bundle
    */
-  public async detectStaleness(
+  public async DetectStaleness(
     binding: MJMLModelScoringBindingEntity,
     model: MJMLModelEntity,
     policy: Partial<RetrainingPolicy>,
@@ -98,6 +98,16 @@ export class MaintenanceEngine {
       currentRowCount,
       trainedRowCount,
     };
+  }
+
+  /** @deprecated Use {@link DetectStaleness}. */
+  public async detectStaleness(
+    binding: MJMLModelScoringBindingEntity,
+    model: MJMLModelEntity,
+    policy: Partial<RetrainingPolicy>,
+    deps: MaintenanceDeps,
+  ): Promise<StalenessResult> {
+    return this.DetectStaleness(binding, model, policy, deps);
   }
 
   /** Append a cadence reason when the anchor timestamp is older than `cadenceDays`. */
@@ -208,7 +218,7 @@ export class MaintenanceEngine {
    * @param deps the injected dependency bundle
    * @returns the re-score result, or `null` when the binding is not `Scheduled`
    */
-  public async rescoreScheduledBinding(
+  public async RescoreScheduledBinding(
     binding: MJMLModelScoringBindingEntity,
     model: MJMLModelEntity,
     deps: MaintenanceDeps,
@@ -230,6 +240,15 @@ export class MaintenanceEngine {
 
     await this.stampScoringRun(binding, result, deps);
     return result;
+  }
+
+  /** @deprecated Use {@link RescoreScheduledBinding}. */
+  public async rescoreScheduledBinding(
+    binding: MJMLModelScoringBindingEntity,
+    model: MJMLModelEntity,
+    deps: MaintenanceDeps,
+  ): Promise<RescoreResult | null> {
+    return this.RescoreScheduledBinding(binding, model, deps);
   }
 
   /** Stamp `LastScoredAt` / `LastRowCount` on a binding after a re-score (clock-driven). */
@@ -259,7 +278,7 @@ export class MaintenanceEngine {
    * @param deps the injected dependency bundle (carries the training engine + deps)
    * @param trainInputOverrides optional extra train inputs (labelEventDates / maxRows / etc.)
    */
-  public async triggerRetrainIfStale(
+  public async TriggerRetrainIfStale(
     binding: MJMLModelScoringBindingEntity,
     incumbent: MJMLModelEntity,
     staleness: StalenessResult,
@@ -278,7 +297,7 @@ export class MaintenanceEngine {
 
     const p = this.resolvePolicy(policy);
     const challenger = await this.retrainSamePipeline(incumbent, deps, trainInputOverrides);
-    const comparison = this.compareChallenger(incumbent, challenger.model, p);
+    const comparison = this.CompareChallenger(incumbent, challenger.model, p);
 
     return {
       bindingId: binding.ID,
@@ -288,6 +307,18 @@ export class MaintenanceEngine {
       challenger,
       comparison,
     };
+  }
+
+  /** @deprecated Use {@link TriggerRetrainIfStale}. */
+  public async triggerRetrainIfStale(
+    binding: MJMLModelScoringBindingEntity,
+    incumbent: MJMLModelEntity,
+    staleness: StalenessResult,
+    policy: Partial<RetrainingPolicy>,
+    deps: MaintenanceDeps,
+    trainInputOverrides?: Partial<Omit<TrainModelInput, 'pipelineId'>>,
+  ): Promise<RetrainOutcome> {
+    return this.TriggerRetrainIfStale(binding, incumbent, staleness, policy, deps, trainInputOverrides);
   }
 
   /** Retrain the incumbent's pipeline into a new immutable version via the training engine. */
@@ -313,14 +344,14 @@ export class MaintenanceEngine {
    * @param challenger the freshly-retrained model
    * @param policy the resolved policy (margin + comparison metric)
    */
-  public compareChallenger(
+  public CompareChallenger(
     incumbent: MJMLModelEntity,
     challenger: MJMLModelEntity,
     policy: RetrainingPolicy,
   ): ChallengerComparison {
-    const metric = resolveComparisonMetric(policy.comparisonMetric, incumbent, challenger);
-    const incumbentValue = readMetric(incumbent.HoldoutMetrics, metric);
-    const challengerValue = readMetric(challenger.HoldoutMetrics, metric);
+    const metric = ResolveComparisonMetric(policy.comparisonMetric, incumbent, challenger);
+    const incumbentValue = ReadMetric(incumbent.HoldoutMetrics, metric);
+    const challengerValue = ReadMetric(challenger.HoldoutMetrics, metric);
     // `delta` is reported as challenger − incumbent for transparency, but the
     // promote decision uses `improvement`, computed in the metric's NATURAL
     // direction: for error metrics (RMSE/MAE/logloss) lower is better, so an
@@ -338,6 +369,15 @@ export class MaintenanceEngine {
       recommendation,
       detail: this.buildComparisonDetail(metric, incumbentValue, challengerValue, delta, policy.promotionMargin, recommendation),
     };
+  }
+
+  /** @deprecated Use {@link CompareChallenger}. */
+  public compareChallenger(
+    incumbent: MJMLModelEntity,
+    challenger: MJMLModelEntity,
+    policy: RetrainingPolicy,
+  ): ChallengerComparison {
+    return this.CompareChallenger(incumbent, challenger, policy);
   }
 
   /**
@@ -399,7 +439,7 @@ export class MaintenanceEngine {
    * @param deps the injected dependency bundle
    * @param options pass toggles (re-score scheduled / retrain stale)
    */
-  public async runMaintenancePass(
+  public async RunMaintenancePass(
     bindings: MJMLModelScoringBindingEntity[],
     policy: Partial<RetrainingPolicy>,
     deps: MaintenanceDeps,
@@ -413,6 +453,16 @@ export class MaintenanceEngine {
       entries.push(await this.maintainOne(binding, policy, deps, { rescoreScheduled, retrainStale, trainModelInput: options.trainModelInput }));
     }
     return this.summarizePass(entries);
+  }
+
+  /** @deprecated Use {@link RunMaintenancePass}. */
+  public async runMaintenancePass(
+    bindings: MJMLModelScoringBindingEntity[],
+    policy: Partial<RetrainingPolicy>,
+    deps: MaintenanceDeps,
+    options: MaintenancePassOptions = {},
+  ): Promise<MaintenancePassResult> {
+    return this.RunMaintenancePass(bindings, policy, deps, options);
   }
 
   /** Maintain a single binding end-to-end, capturing any error on the entry. */
@@ -433,14 +483,14 @@ export class MaintenanceEngine {
       }
 
       const rescore = options.rescoreScheduled
-        ? (await this.rescoreScheduledBinding(binding, model, deps)) ?? undefined
+        ? (await this.RescoreScheduledBinding(binding, model, deps)) ?? undefined
         : undefined;
 
-      const staleness = await this.detectStaleness(binding, model, policy, deps);
+      const staleness = await this.DetectStaleness(binding, model, policy, deps);
 
       const retrain =
         options.retrainStale && staleness.stale
-          ? await this.triggerRetrainIfStale(binding, model, staleness, policy, deps, options.trainModelInput)
+          ? await this.TriggerRetrainIfStale(binding, model, staleness, policy, deps, options.trainModelInput)
           : undefined;
 
       return { bindingId: binding.ID, staleness, rescore, retrain };
@@ -522,13 +572,23 @@ export class MaintenanceEngine {
  * @param deps the injected dependency bundle
  * @param options pass toggles
  */
-export function runMaintenancePass(
+export function RunMaintenancePass(
   bindings: MJMLModelScoringBindingEntity[],
   policy: Partial<RetrainingPolicy>,
   deps: MaintenanceDeps,
   options?: MaintenancePassOptions,
 ): Promise<MaintenancePassResult> {
   return new MaintenanceEngine().runMaintenancePass(bindings, policy, deps, options);
+}
+
+/** @deprecated Use {@link RunMaintenancePass}. */
+export function runMaintenancePass(
+  bindings: MJMLModelScoringBindingEntity[],
+  policy: Partial<RetrainingPolicy>,
+  deps: MaintenanceDeps,
+  options?: MaintenancePassOptions,
+): Promise<MaintenancePassResult> {
+  return RunMaintenancePass(bindings, policy, deps, options);
 }
 
 /** Parse a possibly-null JSON column, falling back to a default on null/parse error. */

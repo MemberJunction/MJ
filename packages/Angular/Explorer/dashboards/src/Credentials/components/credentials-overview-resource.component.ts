@@ -51,18 +51,108 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
     public isLoading = true;
 
     // Summary stats
-    public totalCredentials = 0;
-    public activeCredentials = 0;
-    public expiredCredentials = 0;
-    public expiringSoonCount = 0;
-    public credentialTypes = 0;
-    public categories = 0;
+    public TotalCredentials = 0;
+
+    /** @deprecated Use {@link TotalCredentials}. */
+    public get totalCredentials() {
+      return this.TotalCredentials;
+    }
+    /** @deprecated Use {@link TotalCredentials}. */
+    public set totalCredentials(value) {
+      this.TotalCredentials = value;
+    }
+    public ActiveCredentials = 0;
+
+    /** @deprecated Use {@link ActiveCredentials}. */
+    public get activeCredentials() {
+      return this.ActiveCredentials;
+    }
+    /** @deprecated Use {@link ActiveCredentials}. */
+    public set activeCredentials(value) {
+      this.ActiveCredentials = value;
+    }
+    public ExpiredCredentials = 0;
+
+    /** @deprecated Use {@link ExpiredCredentials}. */
+    public get expiredCredentials() {
+      return this.ExpiredCredentials;
+    }
+    /** @deprecated Use {@link ExpiredCredentials}. */
+    public set expiredCredentials(value) {
+      this.ExpiredCredentials = value;
+    }
+    public ExpiringSoonCount = 0;
+
+    /** @deprecated Use {@link ExpiringSoonCount}. */
+    public get expiringSoonCount() {
+      return this.ExpiringSoonCount;
+    }
+    /** @deprecated Use {@link ExpiringSoonCount}. */
+    public set expiringSoonCount(value) {
+      this.ExpiringSoonCount = value;
+    }
+    public CredentialTypes = 0;
+
+    /** @deprecated Use {@link CredentialTypes}. */
+    public get credentialTypes() {
+      return this.CredentialTypes;
+    }
+    /** @deprecated Use {@link CredentialTypes}. */
+    public set credentialTypes(value) {
+      this.CredentialTypes = value;
+    }
+    public Categories = 0;
+
+    /** @deprecated Use {@link Categories}. */
+    public get categories() {
+      return this.Categories;
+    }
+    /** @deprecated Use {@link Categories}. */
+    public set categories(value) {
+      this.Categories = value;
+    }
 
     // Grouped data
-    public categoryStats: CategoryStat[] = [];
-    public typeStats: TypeStat[] = [];
-    public recentActivity: ActivityItem[] = [];
-    public usageTrend: UsageTrendPoint[] = [];
+    public CategoryStats: CategoryStat[] = [];
+
+    /** @deprecated Use {@link CategoryStats}. */
+    public get categoryStats(): CategoryStat[] {
+      return this.CategoryStats;
+    }
+    /** @deprecated Use {@link CategoryStats}. */
+    public set categoryStats(value: CategoryStat[]) {
+      this.CategoryStats = value;
+    }
+    public TypeStats: TypeStat[] = [];
+
+    /** @deprecated Use {@link TypeStats}. */
+    public get typeStats(): TypeStat[] {
+      return this.TypeStats;
+    }
+    /** @deprecated Use {@link TypeStats}. */
+    public set typeStats(value: TypeStat[]) {
+      this.TypeStats = value;
+    }
+    public RecentActivity: ActivityItem[] = [];
+
+    /** @deprecated Use {@link RecentActivity}. */
+    public get recentActivity(): ActivityItem[] {
+      return this.RecentActivity;
+    }
+    /** @deprecated Use {@link RecentActivity}. */
+    public set recentActivity(value: ActivityItem[]) {
+      this.RecentActivity = value;
+    }
+    public UsageTrend: UsageTrendPoint[] = [];
+
+    /** @deprecated Use {@link UsageTrend}. */
+    public get usageTrend(): UsageTrendPoint[] {
+      return this.UsageTrend;
+    }
+    /** @deprecated Use {@link UsageTrend}. */
+    public set usageTrend(value: UsageTrendPoint[]) {
+      this.UsageTrend = value;
+    }
 
     // Raw data
     private credentials: MJCredentialEntity[] = [];
@@ -194,13 +284,13 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
 
             if (typeResult.Success) {
                 this.types = typeResult.Results as MJCredentialTypeEntity[];
-                this.credentialTypes = this.types.length;
+                this.CredentialTypes = this.types.length;
                 this.processTypeStats();
             }
 
             if (categoryResult.Success) {
                 this.categoryList = categoryResult.Results as MJCredentialCategoryEntity[];
-                this.categories = this.categoryList.length;
+                this.Categories = this.categoryList.length;
                 this.processCategoryStats();
             }
 
@@ -210,7 +300,7 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
             }
 
             // Build recent activity from credentials if no audit logs
-            if (this.recentActivity.length === 0) {
+            if (this.RecentActivity.length === 0) {
                 this.buildActivityFromCredentials();
             }
 
@@ -224,18 +314,18 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
     }
 
     private processCredentialStats(): void {
-        this.totalCredentials = this.credentials.length;
-        this.activeCredentials = this.credentials.filter(c => c.IsActive).length;
+        this.TotalCredentials = this.credentials.length;
+        this.ActiveCredentials = this.credentials.filter(c => c.IsActive).length;
 
         const now = new Date();
         const thirtyDaysFromNow = new Date();
         thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
 
-        this.expiredCredentials = this.credentials.filter(c =>
+        this.ExpiredCredentials = this.credentials.filter(c =>
             c.ExpiresAt && new Date(c.ExpiresAt) < now
         ).length;
 
-        this.expiringSoonCount = this.credentials.filter(c =>
+        this.ExpiringSoonCount = this.credentials.filter(c =>
             c.ExpiresAt &&
             new Date(c.ExpiresAt) >= now &&
             new Date(c.ExpiresAt) <= thirtyDaysFromNow &&
@@ -248,7 +338,7 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
         const thirtyDaysFromNow = new Date();
         thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
 
-        this.typeStats = this.types.map(type => {
+        this.TypeStats = this.types.map(type => {
             const typeCredentials = this.credentials.filter(c => UUIDsEqual(c.CredentialTypeID, type.ID));
 
             return {
@@ -290,18 +380,18 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
         }
 
         // Calculate percentages
-        const total = this.totalCredentials || 1;
+        const total = this.TotalCredentials || 1;
         categoryMap.forEach(stat => {
             stat.percentage = Math.round((stat.count / total) * 100);
         });
 
-        this.categoryStats = Array.from(categoryMap.values())
+        this.CategoryStats = Array.from(categoryMap.values())
             .sort((a, b) => b.count - a.count);
     }
 
     private processActivityAndTrends(): void {
         // Process recent activity from audit logs
-        this.recentActivity = this.auditLogs
+        this.RecentActivity = this.auditLogs
             .slice(0, 10)
             .map(log => ({
                 id: log.ID,
@@ -345,12 +435,12 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
             point.uniqueCredentials = uniqueCredentialsPerDay.get(dateKey)?.size || 0;
         });
 
-        this.usageTrend = Array.from(trendMap.values())
+        this.UsageTrend = Array.from(trendMap.values())
             .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
     }
 
     private buildActivityFromCredentials(): void {
-        this.recentActivity = this.credentials
+        this.RecentActivity = this.credentials
             .filter(c => c.__mj_UpdatedAt)
             .sort((a, b) => new Date(b.__mj_UpdatedAt).getTime() - new Date(a.__mj_UpdatedAt).getTime())
             .slice(0, 10)
@@ -397,58 +487,107 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
 
     // === Navigation Actions ===
 
-    public createNewCredential(): void {
+    public CreateNewCredential(): void {
         // Navigate to Credentials tab with openCreatePanel flag to show the slide-in editor
         this.navigationService.OpenNavItemByName('Credentials', {
             openCreatePanel: true
         });
     }
 
-    public openCredential(credentialId: string): void {
-        const key = new CompositeKey([{ FieldName: 'ID', Value: credentialId }]);
-        this.navigationService.OpenEntityRecord('MJ: Credentials', key);
+    /** @deprecated Use {@link CreateNewCredential}. */
+    public createNewCredential(): void {
+      return this.CreateNewCredential();
     }
 
-    public onCategoryClick(category: CategoryStat): void {
+    public OpenCredential(credentialId: string): void {
+        this.navigationService.OpenEntityRecord('MJ: Credentials', CompositeKey.FromID(credentialId));
+    }
+
+    /** @deprecated Use {@link OpenCredential}. */
+    public openCredential(credentialId: string): void {
+      return this.OpenCredential(credentialId);
+    }
+
+    public OnCategoryClick(category: CategoryStat): void {
         // Navigate to types nav item with category filter
         this.navigationService.OpenNavItemByName('Types', {
             categoryFilter: category.category
         });
     }
 
-    public onTypeClick(typeStat: TypeStat): void {
+    /** @deprecated Use {@link OnCategoryClick}. */
+    public onCategoryClick(category: CategoryStat): void {
+      return this.OnCategoryClick(category);
+    }
+
+    public OnTypeClick(typeStat: TypeStat): void {
         // Navigate to credentials nav item with type filter
         this.navigationService.OpenNavItemByName('Credentials', {
             typeId: typeStat.typeId
         });
     }
 
-    public onActivityClick(activity: ActivityItem): void {
+    /** @deprecated Use {@link OnTypeClick}. */
+    public onTypeClick(typeStat: TypeStat): void {
+      return this.OnTypeClick(typeStat);
+    }
+
+    public OnActivityClick(activity: ActivityItem): void {
         if (activity.credentialId) {
-            this.openCredential(activity.credentialId);
+            this.OpenCredential(activity.credentialId);
         }
     }
 
-    public viewAllCredentials(): void {
+    /** @deprecated Use {@link OnActivityClick}. */
+    public onActivityClick(activity: ActivityItem): void {
+      return this.OnActivityClick(activity);
+    }
+
+    public ViewAllCredentials(): void {
         this.navigationService.OpenNavItemByName('Credentials');
     }
 
-    public viewAuditLog(): void {
+    /** @deprecated Use {@link ViewAllCredentials}. */
+    public viewAllCredentials(): void {
+      return this.ViewAllCredentials();
+    }
+
+    public ViewAuditLog(): void {
         this.navigationService.OpenNavItemByName('Audit Log');
     }
 
-    public viewAllTypes(): void {
+    /** @deprecated Use {@link ViewAuditLog}. */
+    public viewAuditLog(): void {
+      return this.ViewAuditLog();
+    }
+
+    public ViewAllTypes(): void {
         this.navigationService.OpenNavItemByName('Types');
     }
 
-    public viewAllCategories(): void {
+    /** @deprecated Use {@link ViewAllTypes}. */
+    public viewAllTypes(): void {
+      return this.ViewAllTypes();
+    }
+
+    public ViewAllCategories(): void {
         this.navigationService.OpenNavItemByName('Categories');
     }
 
-    public viewExpiringCredentials(): void {
+    /** @deprecated Use {@link ViewAllCategories}. */
+    public viewAllCategories(): void {
+      return this.ViewAllCategories();
+    }
+
+    public ViewExpiringCredentials(): void {
         this.navigationService.OpenNavItemByName('Credentials', {
             filter: 'expiring'
         });
+    }
+
+    /** @deprecated Use {@link ViewExpiringCredentials}. */
+    public viewExpiringCredentials(): void {
+      return this.ViewExpiringCredentials();
     }
 
     // === Formatting Helpers ===
@@ -473,7 +612,7 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
         });
     }
 
-    public getActionIcon(action: string): string {
+    public GetActionIcon(action: string): string {
         const iconMap: Record<string, string> = {
             'Created': 'fa-solid fa-plus',
             'Updated': 'fa-solid fa-pen',
@@ -483,7 +622,12 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
         return iconMap[action] || 'fa-solid fa-circle';
     }
 
-    public getActionClass(action: string): string {
+    /** @deprecated Use {@link GetActionIcon}. */
+    public getActionIcon(action: string): string {
+      return this.GetActionIcon(action);
+    }
+
+    public GetActionClass(action: string): string {
         const classMap: Record<string, string> = {
             'Created': 'action-created',
             'Updated': 'action-updated',
@@ -493,44 +637,74 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
         return classMap[action] || '';
     }
 
-    public refresh(): void {
+    /** @deprecated Use {@link GetActionClass}. */
+    public getActionClass(action: string): string {
+      return this.GetActionClass(action);
+    }
+
+    public Refresh(): void {
         this.loadData();
     }
 
-    public getHealthScore(): number {
-        if (this.totalCredentials === 0) return 100;
+    /** @deprecated Use {@link Refresh}. */
+    public refresh(): void {
+      return this.Refresh();
+    }
 
-        const activeRatio = this.activeCredentials / this.totalCredentials;
-        const expiredPenalty = (this.expiredCredentials / this.totalCredentials) * 30;
-        const expiringPenalty = (this.expiringSoonCount / this.totalCredentials) * 15;
+    public GetHealthScore(): number {
+        if (this.TotalCredentials === 0) return 100;
+
+        const activeRatio = this.ActiveCredentials / this.TotalCredentials;
+        const expiredPenalty = (this.ExpiredCredentials / this.TotalCredentials) * 30;
+        const expiringPenalty = (this.ExpiringSoonCount / this.TotalCredentials) * 15;
 
         return Math.max(0, Math.min(100, Math.round((activeRatio * 100) - expiredPenalty - expiringPenalty)));
     }
 
-    public getHealthClass(): string {
-        const score = this.getHealthScore();
+    /** @deprecated Use {@link GetHealthScore}. */
+    public getHealthScore(): number {
+      return this.GetHealthScore();
+    }
+
+    public GetHealthClass(): string {
+        const score = this.GetHealthScore();
         if (score >= 80) return 'health-good';
         if (score >= 60) return 'health-warning';
         return 'health-critical';
     }
 
-    public getHealthLabel(): string {
-        const score = this.getHealthScore();
+    /** @deprecated Use {@link GetHealthClass}. */
+    public getHealthClass(): string {
+      return this.GetHealthClass();
+    }
+
+    public GetHealthLabel(): string {
+        const score = this.GetHealthScore();
         if (score >= 80) return 'Healthy';
         if (score >= 60) return 'Needs Attention';
         return 'Critical';
     }
 
-    public getDonutOffset(index: number): number {
+    /** @deprecated Use {@link GetHealthLabel}. */
+    public getHealthLabel(): string {
+      return this.GetHealthLabel();
+    }
+
+    public GetDonutOffset(index: number): number {
         // Calculate cumulative offset for donut chart segments
         // Each segment starts where the previous one ended
         // The circumference is 251 (2 * PI * 40)
         let offset = 63; // Start at top (25% of circumference = 90 degrees rotation)
 
         for (let i = 0; i < index; i++) {
-            offset -= this.categoryStats[i].percentage * 2.51;
+            offset -= this.CategoryStats[i].percentage * 2.51;
         }
 
         return offset;
+    }
+
+    /** @deprecated Use {@link GetDonutOffset}. */
+    public getDonutOffset(index: number): number {
+      return this.GetDonutOffset(index);
     }
 }

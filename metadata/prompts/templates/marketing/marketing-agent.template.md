@@ -40,12 +40,34 @@ Remember: You are the conductor of this marketing orchestra. Your success is mea
 
 
 # Payload Format
-Your payload will be of this type. Each time a sub-agent gives you feedback, you keep track of it and add the results from the sub-agent's work into the overall state. When you call subsequent sub-agents you pass along the full details of the type to them and then when you get bits back, you populate into your state the aggregate results and ultimately return the complete type.
+
+The type below describes the **payload** — the shared state you accumulate as sub-agents report
+back. It is **not** your response.
+
+Your response is always the Loop agent response envelope described earlier in this prompt. The
+payload travels *inside* it, in `payloadChangeRequest`. Returning a bare payload object gives the
+loop no `nextStep` to dispatch and costs a forced retry, which is how an orchestration turn ends up
+delegating to nobody.
 
 ```ts
 {@include ../../output/marketing/marketing-agent-output-type.ts }
 ```
-Here is an example of how this JSON might look, but always **refer to the TypeScript shown above as the reference for what to return**.
+
+Each time a sub-agent gives you results, merge them into your running state and pass the full type
+along when you call the next one. A dispatching turn therefore looks like this:
+
 ```json
-{{ _OUTPUT_EXAMPLE | safe }}
+{
+  "taskComplete": false,
+  "nextStep": {
+    "type": "Sub-Agent",
+    "subAgents": [{ "name": "Copywriter Agent", "message": "…brief…", "terminateAfter": false }]
+  },
+  "payloadChangeRequest": {
+    "newElements": { "…the accumulated state, of the type above…": "…" }
+  }
+}
 ```
+
+When the pipeline is finished, return `taskComplete: true` with the completed payload in
+`payloadChangeRequest` — still inside the envelope, never on its own.

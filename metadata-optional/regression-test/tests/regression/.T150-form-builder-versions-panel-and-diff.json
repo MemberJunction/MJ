@@ -1,0 +1,53 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T150 - Form Builder Versions Panel And Diff",
+    "Description": "Exercises the version rail (fb-versions-list rows + activate/restore) and the side-by-side diff dialog (OnVersionDiffClick \u2192 fb-diff-modal) \u2014 Form Builder version-control UI unique to this surface.",
+    "InputDefinition": "{\n  \"goal\": \"In Component Studio \u2192 Form Studio, open an existing form in the left rail. Below the forms list, verify the 'Versions' panel renders showing version rows (v1, v2, \u2026) with Active/Pending/Inactive tags \u2014 or a 'No version history yet' empty state if the form has none. If two or more versions exist, click the diff (code-compare) icon on one version row, then on another, to open the 'Compare versions' dialog showing side-by-side A/B code panes. Pages can take 10-30s to load \u2014 wait, don't navigate away. Seeing the versions panel render (and, when 2+ versions exist, the diff dialog open) is success. A clean 'no version history' empty state is also a pass.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"Opening a form shows a 'Versions' panel with version rows (with Active/Pending/Inactive tags) or a clear 'No version history yet' empty state\",\n    \"When multiple versions exist, initiating a diff opens a 'Compare versions' dialog with two side-by-side code panes\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,component-studio",
+    "Priority": 0,
+    "EstimatedDurationSeconds": null,
+    "EstimatedCostUSD": null,
+    "RepeatCount": null,
+    "MaxExecutionTimeMS": null,
+    "Variables": null,
+    "Type": "Computer Use",
+    "SkipEmbeddings": false
+  },
+  "primaryKey": {
+    "ID": "D2B2D2CB-E1AD-41E4-964B-21F7294A5D1F"
+  }
+}

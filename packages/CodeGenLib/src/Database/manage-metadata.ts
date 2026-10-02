@@ -1,61 +1,85 @@
 import { SQLDialect, SQLServerDialect, PostgreSQLDialect } from '@memberjunction/sql-dialect';
 import { CodeGenConnection, CodeGenTransaction, CodeGenQueryResult, CodeGenQueryRow, CodeGenDatabaseProvider, MaterializedColumnSpec } from './codeGenDatabaseProvider';
-import { analyzeQueryForMaterialization, detectAggregationKeyColumns, detectAdditiveMeasures, MATERIALIZATION_SURROGATE_COLUMN, type ReadFilterSpecEntry } from './materializationAnalysis';
-import { evaluateMaterializationDrift, type MaterializationDriftFacts } from './materializationDrift';
-import { classifyQueryParameters, buildHeldValues, type QueryParamDef, type VariantRenderer } from './materializationParamClassifier';
-import { buildBroadRowFilterSQL } from './materializationBroadRender';
+import { AnalyzeQueryForMaterialization, DetectAggregationKeyColumns, DetectAdditiveMeasures, MATERIALIZATION_SURROGATE_COLUMN, type ReadFilterSpecEntry } from './materializationAnalysis';
+import { EvaluateMaterializationDrift, type MaterializationDriftFacts } from './materializationDrift';
+import { ClassifyQueryParameters, BuildHeldValues, type QueryParamDef, type VariantRenderer } from './materializationParamClassifier';
+import { BuildBroadRowFilterSQL } from './materializationBroadRender';
 import { QueryParameterProcessor, type QueryTemplateInput } from '@memberjunction/query-processor';
 // Side-effect import — registers `SQLServerCodeGenProvider` with `MJGlobal.ClassFactory`
 // under the `'sqlserver'` key via its `@RegisterClass` decorator. Without this import,
 // `ClassFactory.CreateInstance(CodeGenDatabaseProvider, 'sqlserver')` returns nothing
 // and the SS code path silently fails.
 import './providers/sqlserver/SQLServerCodeGenProvider';
-import { configInfo, currentWorkingDirectory, dbPlatform, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
+import { configInfo, currentWorkingDirectory, DbPlatform, GetSettingValue, MjCoreSchema, OutputDir } from '../Config/config';
 import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFieldInfo, EntityInfo, ExternalDataSourceReadRouter, ExternalSchemaObject, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, RunQuerySQLFilterManager, SeverityType, UserInfo } from "@memberjunction/core";
 import { MJApplicationEntity, MJEntityFieldSchema, MJQueryParameterEntity } from "@memberjunction/core-entities";
-import { logError, logMessage, logStatus, startSpinner, updateSpinner, succeedSpinner } from "../Misc/status_logging";
+import { logError, LogMessage, logStatus, LogWarning, StartSpinner, UpdateSpinner, SucceedSpinner } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
-import { applyIncludeSchemaScope } from "./schema-scope";
-import { buildHealSchemaRoutineParams, getAuthoredExcludeSchemas, snapshotAuthoredExcludeSchemas } from "./heal-schema-params";
-import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
+import { ApplyIncludeSchemaScope } from "./schema-scope";
+import { BuildHealSchemaRoutineParams, GetAuthoredExcludeSchemas, SnapshotAuthoredExcludeSchemas } from "./heal-schema-params";
+import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult, IsPlausibleEntityName } from "../Misc/advanced_generation";
 import { CodeGenReporter } from "../Misc/codegen-reporter";
 import {
-   applySearchableFieldsCap,
-   defaultPredicateFor,
-   entityLevelEnableBlockedReason,
-   isNarrativeFieldName,
-   normalizePredicate,
-   normalizeSmartFieldResultShape,
+   ApplySearchableFieldsCap,
+   DefaultPredicateFor,
+   EntityLevelEnableBlockedReason,
+   IsNarrativeFieldName,
+   MAX_SEARCHABLE_FIELDS_PER_ENTITY,
+   NAME_LIKE_FIELD_NAMES,
+   NormalizePredicate,
+   NormalizeSmartFieldResultShape,
    SearchPredicate,
 } from "./search-guardrails";
-import { mapExternalNativeTypeToMJ } from "../Misc/externalTypeMapping";
+import { MapExternalNativeTypeToMJ } from "../Misc/externalTypeMapping";
 import { SQLParser } from "@memberjunction/sql-parser";
-import { createDisplayName, generatePluralName, MJGlobal, RegisterClass, ResolveSingleEntityResourceTarget, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
-import { v4 as uuidv4 } from 'uuid';
+import { createDisplayName, EscapeSQLString, generatePluralName, MJGlobal, RegisterClass, ResolveSingleEntityResourceTarget, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
+import { v4 as uuidv4, v5 as uuidv5 } from 'uuid';
 
 import * as fs from 'fs';
 import path from 'path';
+import { CanonicalJSONStringify, DeepEqualJSON } from "../Misc/util";
+import { TrimTrailingStatementTerminators } from "../Misc/sql_text";
 import { SQLLogging } from "../Misc/sql_logging";
 import { AIEngine } from "@memberjunction/aiengine";
+import { ComputeFieldMetadataUpdate, FieldLockContext } from "./field-metadata-lock";
+import {
+   TRACKED_FIELD_COLUMNS,
+   FieldChangeReason,
+   DISPLAYNAME_REOPEN_REASONS,
+   TYPE_REOPEN_REASONS,
+   EntityFieldSnapshotRow,
+   EntityFieldChange,
+   diffEntityFieldSnapshots,
+} from './entity-field-change-tracking';
+
+export {
+   TRACKED_FIELD_COLUMNS,
+   FieldChangeReason,
+   DISPLAYNAME_REOPEN_REASONS,
+   TYPE_REOPEN_REASONS,
+   EntityFieldSnapshotRow,
+   EntityFieldChange,
+   DiffEntityFieldSnapshots, diffEntityFieldSnapshots,
+} from './entity-field-change-tracking';
 
 
 export class ValidatorResult {
-   public entityName: string = "";
-   public fieldName?: string;
-   public sourceCheckConstraint: string = "";
-   public functionText: string = "";
-   public functionName: string = "";
-   public functionDescription: string = "";
+   public entityName: string = "";  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+   public fieldName?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+   public sourceCheckConstraint: string = "";  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+   public functionText: string = "";  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+   public functionName: string = "";  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+   public functionDescription: string = "";  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
    /**
     * The ID value in the Generated Codes entity that was created for this validator.
     */
-   public generatedCodeId: string = "";
+   public generatedCodeId: string = "";  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
    /**
     * The ID for the AI Model that was used to generate the code
     */
-   public aiModelID: string = "";
-   public wasGenerated: boolean = true;
-   public success: boolean = false;
+   public aiModelID: string = "";  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+   public wasGenerated: boolean = true;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+   public success: boolean = false;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 /**
@@ -190,7 +214,12 @@ export interface OrganicKeyTransitiveViewConfig {
    Name: string;
    /** The schema to create the view in (defaults to the related entity's schema if not specified) */
    SchemaName?: string;
-   /** Raw SQL for the view body (the SELECT statement). CodeGen emits CREATE OR ALTER VIEW wrapping this. */
+   /**
+    * Raw SQL for the view body (the SELECT statement), written in the target platform's dialect.
+    * CodeGen wraps it in the platform's create-or-replace DDL (`CREATE OR ALTER VIEW` on SQL Server,
+    * `CREATE OR REPLACE VIEW` on PostgreSQL). On PostgreSQL the body is not auto-quoted, so
+    * mixed-case identifiers must be double-quoted.
+    */
    SQL: string;
 }
 
@@ -299,7 +328,7 @@ export class ManageMetadataBase {
     */
    protected get dbProvider(): CodeGenDatabaseProvider {
       if (!this._dbProvider) {
-         const platform = dbPlatform();
+         const platform = DbPlatform();
          const provider = MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
             CodeGenDatabaseProvider,
             platform
@@ -359,6 +388,20 @@ export class ManageMetadataBase {
    }
 
    /**
+    * Returns an explicitly-typed UUID literal for the platform.
+    * SQL Server: CAST('...' AS uniqueidentifier), PostgreSQL: CAST('...' AS uuid)
+    *
+    * Needed wherever a UUID literal appears in the SELECT list of an `INSERT ... SELECT`. A bare
+    * quoted literal is fine in `INSERT ... VALUES`, where both platforms coerce it to the target
+    * column's type — but in the projection of a SELECT, PostgreSQL can resolve an untyped literal
+    * to `text` and then refuse to assign it to a `uuid` column. `CAST(x AS y)` is ANSI and settles
+    * it on both, with the type name coming from the dialect rather than a platform branch here.
+    */
+   protected uuidLit(value: string): string {
+      return `CAST('${value}' AS ${this.dialect.UuidTypeNames[0]})`;
+   }
+
+   /**
     * Quotes mixed-case identifiers in a SQL string for the current platform.
     * Delegates to the database provider's quoteSQLForExecution method.
     */
@@ -381,48 +424,19 @@ export class ManageMetadataBase {
    }
 
    /**
-    * Returns a sequence value safe to use for an EntityField INSERT under the given
-    * EntityID, defaulting to `candidate` when it doesn't collide. Otherwise returns
-    * `MAX(Sequence) + 1` for that entity.
+    * The `Sequence` expression for every EntityField INSERT CodeGen emits:
+    * `(SELECT COALESCE(MAX(Sequence), 0) + 1 FROM EntityField WHERE EntityID = '<id>')`.
     *
-    * Why this exists: several insert paths (virtual-entity field sync, IS-A parent
-    * field sync, schema-derived field creation) compute a deterministic sequence
-    * up-front, but a partial prior run can leave rows at that exact ordinal under
-    * the target EntityID. SS hides the collision because retried runs typically
-    * succeed before failing; PG raises UQ_EntityField_EntityID_Sequence (~4 errors
-    * per advanced-generation run). The values are temporary anyway —
-    * spUpdateExistingEntityFieldsFromSchema renumbers them on the next pass.
+    * Evaluated at APPLY time, never a literal. The value is disposable — the run's own
+    * spUpdateExistingEntityFieldsFromSchema pass and R__RefreshMetadata renumber every field from
+    * the schema — but it must be unique on ANY database in ANY order, because the INSERT is
+    * appended verbatim to a migration and Flyway runs every versioned migration before the
+    * repeatable renumber. Each INSERT re-evaluates MAX after the one before it, so a batch that
+    * executes sequentially in emission order rises in that order (#3670, #4202).
     */
-   protected async nextAvailableEntityFieldSequence(
-      pool: CodeGenConnection,
-      entityId: string,
-      candidate: number
-   ): Promise<number> {
-      const schema = mj_core_schema();
-      const tbl = this.qs(schema, 'EntityField');
-      const seqCol = this.qi('Sequence');
-      const entityIdCol = this.qi('EntityID');
-      const sql = `SELECT
-                      ${this.coalesce(`MAX(${seqCol})`, '0')} AS ${this.qi('MaxSeq')},
-                      ${this.coalesce(`MAX(CASE WHEN ${seqCol} = @Candidate THEN 1 ELSE 0 END)`, '0')} AS ${this.qi('Hit')}
-                   FROM ${tbl}
-                   WHERE ${entityIdCol} = @EntityID`;
-      try {
-         const result = await this.runQueryWithParams(pool, sql, {
-            EntityID: entityId,
-            Candidate: candidate,
-         });
-         const row = result.recordset?.[0];
-         if (!row) return candidate;
-         const hit = Number(row.Hit ?? 0) > 0;
-         if (!hit) return candidate;
-         const maxSeq = Number(row.MaxSeq ?? 0);
-         return maxSeq + 1;
-      } catch {
-         // If the lookup itself fails, fall back to the candidate. The downstream
-         // INSERT will surface the real error if there's a true collision.
-         return candidate;
-      }
+   protected applyTimeEntityFieldSequenceSQL(entityID: string): string {
+      // COALESCE is valid on both platforms and is the form the docs and the gate describe.
+      return `(SELECT COALESCE(MAX(${this.qi('Sequence')}), 0) + 1 FROM ${this.qs(MjCoreSchema(), 'EntityField')} WHERE ${this.qi('EntityID')} = '${entityID}')`;
    }
 
    /**
@@ -446,7 +460,7 @@ export class ManageMetadataBase {
     * (avoids hardcoding runtime UUIDs that may differ on a fresh database).
     */
    protected entityIdSubquery(tableName: string, schemaName: string): string {
-      const schema = mj_core_schema();
+      const schema = MjCoreSchema();
       return `(${this.selectTop(1, 'ID',
          `FROM ${this.qs(schema, 'vwEntities')} WHERE BaseTable = '${tableName}' AND SchemaName = '${schemaName}'`)})`;
    }
@@ -508,15 +522,201 @@ export class ManageMetadataBase {
    /**
     * Globally scoped list of entities that have been created during the metadata management process.
     */
-   public static get newEntityList(): string[] {
+   public static get NewEntityList(): string[] {
       return this._newEntityList;
+   }
+   public static set NewEntityList(value: string[]) {
+      this._newEntityList = value;
+   }
+
+   /** @deprecated Use {@link NewEntityList}. */
+   public static get newEntityList(): string[] {
+      return this.NewEntityList;
+   }
+   /** @deprecated Use {@link NewEntityList}. */
+   public static set newEntityList(value: string[]) {
+      this.NewEntityList = value;
    }
    private static _modifiedEntityList: string[] = [];
    /**
     * Globally scoped list of entities that have been modified during the metadata management process.
     */
-   public static get modifiedEntityList(): string[] {
+   public static get ModifiedEntityList(): string[] {
       return this._modifiedEntityList;
+   }
+   public static set ModifiedEntityList(value: string[]) {
+      this._modifiedEntityList = value;
+   }
+
+   /** @deprecated Use {@link ModifiedEntityList}. */
+   public static get modifiedEntityList(): string[] {
+      return this.ModifiedEntityList;
+   }
+   /** @deprecated Use {@link ModifiedEntityList}. */
+   public static set modifiedEntityList(value: string[]) {
+      this.ModifiedEntityList = value;
+   }
+
+   private static _newFieldSet = new Set<string>();
+   private static _changedFields = new Map<string, Set<FieldChangeReason>>();
+   private static _changedFieldReport: { entityName: string; fieldName: string; reasons: FieldChangeReason[] }[] = [];
+
+   private static fieldKey(entityID: string, name: string): string | null {
+      const eid = (entityID ?? '').trim().toLowerCase();
+      const fld = (name ?? '').trim().toLowerCase();
+      if (!eid || !fld) {
+         return null;
+      }
+      return `${eid}:${fld}`;
+   }
+
+   public static RegisterNewField(entityID: string, name: string): void {
+      const key = this.fieldKey(entityID, name);
+      if (key) {
+         this._newFieldSet.add(key);
+      }
+   }
+
+   /** @deprecated Use {@link RegisterNewField}. */
+   public static registerNewField(entityID: string, name: string): void {
+      return this.RegisterNewField(entityID, name);
+   }
+
+   public static RegisterFieldChange(entityID: string, name: string, reasons: Iterable<FieldChangeReason>): void {
+      const key = this.fieldKey(entityID, name);
+      if (key) {
+         let set = this._changedFields.get(key);
+         if (!set) {
+            set = new Set<FieldChangeReason>();
+            this._changedFields.set(key, set);
+         }
+         for (const r of reasons) {
+            set.add(r);
+         }
+      }
+   }
+
+   /** @deprecated Use {@link RegisterFieldChange}. */
+   public static registerFieldChange(entityID: string, name: string, reasons: Iterable<FieldChangeReason>): void {
+      return this.RegisterFieldChange(entityID, name, reasons);
+   }
+
+   public static IsFieldNew(entityID: string, name: string): boolean {
+      const key = this.fieldKey(entityID, name);
+      return key ? this._newFieldSet.has(key) : false;
+   }
+
+   /** @deprecated Use {@link IsFieldNew}. */
+   public static isFieldNew(entityID: string, name: string): boolean {
+      return this.IsFieldNew(entityID, name);
+   }
+
+   public static FieldChangeReasons(entityID: string, name: string): ReadonlySet<FieldChangeReason> {
+      const key = this.fieldKey(entityID, name);
+      const set = key ? this._changedFields.get(key) : undefined;
+      return set ?? new Set<FieldChangeReason>();
+   }
+
+   /** @deprecated Use {@link FieldChangeReasons}. */
+   public static fieldChangeReasons(entityID: string, name: string): ReadonlySet<FieldChangeReason> {
+      return this.FieldChangeReasons(entityID, name);
+   }
+
+   public static IsDisplayNameReopened(entityID: string, name: string): boolean {
+      const reasons = this.FieldChangeReasons(entityID, name);
+      for (const r of reasons) {
+         if (DISPLAYNAME_REOPEN_REASONS.has(r)) {
+            return true;
+         }
+      }
+      return false;
+   }
+
+   /** @deprecated Use {@link IsDisplayNameReopened}. */
+   public static isDisplayNameReopened(entityID: string, name: string): boolean {
+      return this.IsDisplayNameReopened(entityID, name);
+   }
+
+   public static IsTypeReopened(entityID: string, name: string): boolean {
+      const reasons = this.FieldChangeReasons(entityID, name);
+      for (const r of reasons) {
+         if (TYPE_REOPEN_REASONS.has(r)) {
+            return true;
+         }
+      }
+      return false;
+   }
+
+   /** @deprecated Use {@link IsTypeReopened}. */
+   public static isTypeReopened(entityID: string, name: string): boolean {
+      return this.IsTypeReopened(entityID, name);
+   }
+
+   public static get NewFieldCount(): number {
+      return this._newFieldSet.size;
+   }
+
+   /** @deprecated Use {@link NewFieldCount}. */
+   public static get newFieldCount(): number {
+      return this.NewFieldCount;
+   }
+
+   public static get ChangedFieldCount(): number {
+      return this._changedFields.size;
+   }
+
+   /** @deprecated Use {@link ChangedFieldCount}. */
+   public static get changedFieldCount(): number {
+      return this.ChangedFieldCount;
+   }
+
+   public static get ChangedFieldReport(): ReadonlyArray<{ entityName: string; fieldName: string; reasons: FieldChangeReason[] }> {
+      return this._changedFieldReport;
+   }
+
+   /** @deprecated Use {@link ChangedFieldReport}. */
+   public static get changedFieldReport(): ReadonlyArray<{ entityName: string; fieldName: string; reasons: FieldChangeReason[] }> {
+      return this.ChangedFieldReport;
+   }
+
+   public static ClearFieldTracking(): void {
+      this._newFieldSet.clear();
+      this._changedFields.clear();
+      this._changedFieldReport = [];
+   }
+
+   /** @deprecated Use {@link ClearFieldTracking}. */
+   public static clearFieldTracking(): void {
+      return this.ClearFieldTracking();
+   }
+
+   /**
+    * Takes a snapshot of EntityField rows from vwEntityFields for diffing.
+    * Only queries columns in TRACKED_FIELD_COLUMNS (Sequence is excluded).
+    */
+   protected async snapshotEntityFields(pool: CodeGenConnection, entityIDs?: string[]): Promise<Map<string, EntityFieldSnapshotRow>> {
+      const isScoped = entityIDs !== undefined && entityIDs.length > 0;
+      const filter = isScoped
+         ? `WHERE ${this.qi('EntityID')} IN (${entityIDs!.map(id => `'${id}'`).join(',')})`
+         : '';
+      const cols = TRACKED_FIELD_COLUMNS.map(c => this.qi(c)).join(', ');
+      const sSQL = `SELECT ${this.qi('ID')}, ${this.qi('EntityID')}, ${this.qi('Entity')} AS ${this.qi('EntityName')}, ${this.qi('Name')}, ${cols}
+                    FROM ${this.qs(MjCoreSchema(), 'vwEntityFields')}
+                    ${filter}`;
+      const result = await this.runQuery(pool, sSQL);
+      const map = new Map<string, EntityFieldSnapshotRow>();
+      if (result && result.recordset) {
+         for (const r of result.recordset as EntityFieldSnapshotRow[]) {
+            map.set(String(r.ID).toLowerCase(), r);
+         }
+      }
+      return map;
+   }
+
+   protected findFieldByName<T extends { Name: string }>(fields: T[], name: string | null | undefined): T | undefined {
+      if (!name) return undefined;
+      const target = name.trim().toLowerCase();
+      return fields.find(f => (f.Name ?? '').trim().toLowerCase() === target);
    }
    private static _deletedEntitySchemaList: string[] = [];
    /**
@@ -531,8 +731,13 @@ export class ManageMetadataBase {
     * the dead class keeps a live `@RegisterClass` registration on disk. The old monolith could
     * not drift this way: it was rewritten in full every run.
     */
-   public static get deletedEntitySchemaList(): string[] {
+   public static get DeletedEntitySchemaList(): string[] {
       return this._deletedEntitySchemaList;
+   }
+
+   /** @deprecated Use {@link DeletedEntitySchemaList}. */
+   public static get deletedEntitySchemaList(): string[] {
+      return this.DeletedEntitySchemaList;
    }
    private static _entitiesRequiringViewRegen: ViewRegenEntry[] = [];
    /**
@@ -552,11 +757,16 @@ export class ManageMetadataBase {
    /**
     * Globally scoped list of validators that have been generated during the metadata management process.
     */
-   public static get generatedValidators(): ValidatorResult[] {
+   public static get GeneratedValidators(): ValidatorResult[] {
       return this._generatedValidators;
    }
 
-   private static _softPKFKConfigCache: any = null;
+   /** @deprecated Use {@link GeneratedValidators}. */
+   public static get generatedValidators(): ValidatorResult[] {
+      return this.GeneratedValidators;
+   }
+
+   private static _softPKFKConfigCache: Record<string, unknown> | null = null;
    private static _softPKFKConfigPath: string = '';
    /**
     * Drops the cached soft PK/FK config so the next {@link getSoftPKFKConfig} call re-reads the
@@ -570,16 +780,21 @@ export class ManageMetadataBase {
     * Deterministic + event-driven (no mtime/TOCTOU race). The CLI `Run()` path does not call this, so its
     * load-once-per-process behavior is unchanged.
     */
-   public static invalidateSoftPKFKConfigCache(): void {
+   public static InvalidateSoftPKFKConfigCache(): void {
       ManageMetadataBase._softPKFKConfigCache = null;
       ManageMetadataBase._softPKFKConfigPath = '';
+   }
+
+   /** @deprecated Use {@link InvalidateSoftPKFKConfigCache}. */
+   public static invalidateSoftPKFKConfigCache(): void {
+      return this.InvalidateSoftPKFKConfigCache();
    }
    /**
     * Loads and caches the soft PK/FK configuration from the additionalSchemaInfo file.
     * Cached per process to avoid repeated I/O within a CodeGen run; the in-process (RSU) path calls
     * {@link invalidateSoftPKFKConfigCache} at the start of each run so a rewritten file is picked up.
     */
-   private static getSoftPKFKConfig(): any {
+   public static GetSoftPKFKConfig(): Record<string, unknown> | null {
       // Return cached config if path hasn't changed
       const configPath = configInfo.additionalSchemaInfo
          ? path.join(currentWorkingDirectory, configInfo.additionalSchemaInfo)
@@ -606,6 +821,11 @@ export class ManageMetadataBase {
          this._softPKFKConfigPath = configPath;
          return null;
       }
+   }
+
+   /** @deprecated Use {@link GetSoftPKFKConfig}. */
+   public static getSoftPKFKConfig(): Record<string, unknown> | null {
+      return this.GetSoftPKFKConfig();
    }
 
    /**
@@ -671,6 +891,30 @@ export class ManageMetadataBase {
          PrimaryKey: Array.isArray(ve.PrimaryKey) ? (ve.PrimaryKey as string[]) : undefined,
          ForeignKeys: Array.isArray(ve.ForeignKeys) ? (ve.ForeignKeys as SoftFKFieldConfig[]) : undefined,
       }));
+   }
+
+   /**
+    * Schema a VirtualEntities entry resolves to when it names none. Same default as table entries.
+    */
+   protected resolveVirtualEntitySchema(ve: VirtualEntityConfig): string {
+      const schema = ve.SchemaName?.trim();
+      return schema && schema.length > 0 ? schema : 'dbo';
+   }
+
+   /**
+    * VirtualEntities entries that declare keys, in the table-entry shape the soft key writer consumes.
+    * A virtual entity stores its view name in BaseTable, so the existing SchemaName + BaseTable lookup applies.
+    */
+   protected virtualEntityConfigsAsTableConfigs(config: Record<string, unknown>): SoftPKFKTableConfig[] {
+      return this.extractVirtualEntitiesFromConfig(config)
+         .filter(ve => (ve.PrimaryKey?.length ?? 0) > 0 || (ve.ForeignKeys?.length ?? 0) > 0)
+         .map(ve => ({
+            SchemaName: this.resolveVirtualEntitySchema(ve),
+            TableName: ve.ViewName,
+            Description: ve.Description,
+            PrimaryKey: (ve.PrimaryKey ?? []).map(fieldName => ({ FieldName: fieldName })),
+            ForeignKeys: ve.ForeignKeys ?? [],
+         }));
    }
 
    /**
@@ -836,46 +1080,57 @@ export class ManageMetadataBase {
     * All SQL is executed AND logged via LogSQLAndExecute for complete CI/CD traceability.
     * Must run AFTER entities are created.
     */
-   protected async processOrganicKeyConfig(pool: CodeGenConnection): Promise<{ success: boolean; createdCount: number; updatedCount: number }> {
+   protected async processOrganicKeyConfig(pool: CodeGenConnection): Promise<{ success: boolean; createdCount: number; updatedCount: number; failedCount: number }> {
       const config = ManageMetadataBase.getSoftPKFKConfig();
-      if (!config) return { success: true, createdCount: 0, updatedCount: 0 };
+      if (!config) return { success: true, createdCount: 0, updatedCount: 0, failedCount: 0 };
 
       const allOrganicKeys = this.extractOrganicKeysFromConfig(config as Record<string, unknown>);
-      if (allOrganicKeys.length === 0) return { success: true, createdCount: 0, updatedCount: 0 };
+      if (allOrganicKeys.length === 0) return { success: true, createdCount: 0, updatedCount: 0, failedCount: 0 };
 
-      const schema = mj_core_schema();
+      const schema = MjCoreSchema();
       let createdCount = 0;
       let updatedCount = 0;
+      let failedCount = 0;
 
       for (const tableConfig of allOrganicKeys) {
          // Resolve the owning entity
-         const ownerResult = await this.runQueryWithParams(pool, `
-            ${this.selectTop(1, 'ID, Name',
-               `FROM ${this.qs(schema, 'vwEntities')}
-            WHERE (BaseTable = @TableName AND SchemaName = @SchemaName)
-               OR Name = @TableName`,
-               'CASE WHEN BaseTable = @TableName AND SchemaName = @SchemaName THEN 0 ELSE 1 END')}
-         `, { 'TableName': tableConfig.TableName, 'SchemaName': tableConfig.SchemaName });
-
-         if (ownerResult.recordset.length === 0) {
-            logError(`    > Organic keys config: entity "${tableConfig.SchemaName}.${tableConfig.TableName}" not found — skipping`);
+         const owner = await this.findOrganicKeyEntity(pool, tableConfig.SchemaName, tableConfig.TableName);
+         if (!owner) {
+            // Every key declared on this table goes unapplied, so each one counts as a failure.
+            failedCount += tableConfig.OrganicKeys.length;
+            logError(`    > Organic keys config: entity "${tableConfig.SchemaName}.${tableConfig.TableName}" not found — skipping its ${tableConfig.OrganicKeys.length} organic key(s)`);
             continue;
          }
 
-         const ownerEntityId = ownerResult.recordset[0].ID;
-         const ownerEntityName = ownerResult.recordset[0].Name;
+         const ownerEntityId = owner.ID;
+         const ownerEntityName = owner.Name;
 
          for (const okConfig of tableConfig.OrganicKeys) {
             try {
+               // Resolve every related entity BEFORE writing anything for this key. Step 1 creates
+               // bridge views (in the database and the migration log) and step 2 records the key, so
+               // discovering a missing related entity in step 3 would leave an orphan view and a key
+               // with a mapping missing.
+               const relatedEntities = await this.resolveOrganicKeyRelatedEntities(pool, okConfig);
+               if (!relatedEntities) {
+                  failedCount++;
+                  continue;
+               }
+
                // Step 1: Create transitive views if defined
                for (const re of okConfig.RelatedEntities) {
                   if (re.TransitiveView) {
                      const viewSchema = re.TransitiveView.SchemaName || re.SchemaName;
                      const viewFullName = `${viewSchema}.${re.TransitiveView.Name}`;
 
-                     const viewSQL = `CREATE OR ALTER VIEW ${this.qs(viewSchema, re.TransitiveView.Name)} AS\n${re.TransitiveView.SQL}`;
-                     await this.LogSQLAndExecute(pool, viewSQL,
-                        `Create transitive bridge view ${viewFullName} for organic key "${okConfig.Name}" on ${ownerEntityName}`);
+                     const viewSQL = this.dbProvider.generateCreateOrReplaceViewSQL(viewSchema, re.TransitiveView.Name, re.TransitiveView.SQL);
+                     // T-SQL requires CREATE [OR ALTER] VIEW to be the ONLY statement in its batch — first as
+                     // well as last — and the metadata DML logged just before it (entity-config UPDATEs, the
+                     // previous key's INSERTs) has no trailing GO. requiresOwnBatch puts the provider's
+                     // separator on both sides in the migration file ('' on PostgreSQL: nothing is added).
+                     await this.logSQLAndExecute(pool, viewSQL,
+                        `Create transitive bridge view ${viewFullName} for organic key "${okConfig.Name}" on ${ownerEntityName}`,
+                        false, true, this.dbProvider.BatchSeparator, true);
 
                      // Auto-populate TransitiveObject from the view definition
                      re.TransitiveObject = viewFullName;
@@ -901,7 +1156,7 @@ export class ManageMetadataBase {
                      Sequence = ${okConfig.Sequence ?? 0},
                      Status = 'Active'
                      WHERE ID = '${organicKeyId}'`;
-                  await this.LogSQLAndExecute(pool, updateSQL,
+                  await this.logSQLAndExecute(pool, updateSQL,
                      `Update organic key "${okConfig.Name}" on ${ownerEntityName}`);
                   updatedCount++;
                   logStatus(`    > Organic key: Updated "${okConfig.Name}" on ${ownerEntityName}`);
@@ -911,7 +1166,7 @@ export class ManageMetadataBase {
                   const insertSQL = `INSERT INTO ${this.qs(schema, 'EntityOrganicKey')}
                      (EntityID, Name, ${okConfig.Description ? 'Description, ' : ''}MatchFieldNames, NormalizationStrategy, ${okConfig.CustomNormalizationExpression ? 'CustomNormalizationExpression, ' : ''}Sequence, Status)
                      VALUES (${ownerSubquery}, '${okConfig.Name}', ${okConfig.Description ? `'${okConfig.Description.replace(/'/g, "''")}', ` : ''}'${matchFieldNames}', '${okConfig.NormalizationStrategy || 'LowerCaseTrim'}', ${okConfig.CustomNormalizationExpression ? `'${okConfig.CustomNormalizationExpression.replace(/'/g, "''")}', ` : ''}${okConfig.Sequence ?? 0}, 'Active')`;
-                  await this.LogSQLAndExecute(pool, insertSQL,
+                  await this.logSQLAndExecute(pool, insertSQL,
                      `Insert organic key "${okConfig.Name}" on ${ownerEntityName}`);
                   createdCount++;
                   logStatus(`    > Organic key: Created "${okConfig.Name}" on ${ownerEntityName}`);
@@ -924,22 +1179,9 @@ export class ManageMetadataBase {
                }
 
                // Step 3: Upsert EntityOrganicKeyRelatedEntity for each related entity
-               for (const reConfig of okConfig.RelatedEntities) {
-                  const relResult = await this.runQueryWithParams(pool, `
-                     ${this.selectTop(1, 'ID, Name',
-                        `FROM ${this.qs(schema, 'vwEntities')}
-                     WHERE (BaseTable = @TableName AND SchemaName = @SchemaName)
-                        OR Name = @TableName`,
-                        'CASE WHEN BaseTable = @TableName AND SchemaName = @SchemaName THEN 0 ELSE 1 END')}
-                  `, { 'TableName': reConfig.TableName, 'SchemaName': reConfig.SchemaName });
-
-                  if (relResult.recordset.length === 0) {
-                     logError(`    > Organic key "${okConfig.Name}": related entity "${reConfig.SchemaName}.${reConfig.TableName}" not found — skipping`);
-                     continue;
-                  }
-
-                  const relEntityId = relResult.recordset[0].ID;
-                  const relEntityName = relResult.recordset[0].Name;
+               for (const { config: reConfig, entity: relEntity } of relatedEntities) {
+                  const relEntityId = relEntity.ID;
+                  const relEntityName = relEntity.Name;
 
                   // Check if this related entity mapping already exists
                   const existingRel = await this.runQueryWithParams(pool,
@@ -964,7 +1206,7 @@ export class ManageMetadataBase {
                         DisplayLocation = '${reConfig.DisplayLocation || 'After Field Tabs'}',
                         Sequence = ${reConfig.Sequence ?? 0}
                         WHERE ID = '${relId}'`;
-                     await this.LogSQLAndExecute(pool, updateRelSQL,
+                     await this.logSQLAndExecute(pool, updateRelSQL,
                         `Update organic key related entity: "${okConfig.Name}" → ${relEntityName}`);
                   } else {
                      // Use subqueries for FK references so the logged SQL is portable across databases
@@ -984,20 +1226,63 @@ export class ManageMetadataBase {
                          ${reConfig.DisplayName ? `'${reConfig.DisplayName.replace(/'/g, "''")}'` : 'NULL'},
                          '${reConfig.DisplayLocation || 'After Field Tabs'}',
                          ${reConfig.Sequence ?? 0})`;
-                     await this.LogSQLAndExecute(pool, insertRelSQL,
+                     await this.logSQLAndExecute(pool, insertRelSQL,
                         `Insert organic key related entity: "${okConfig.Name}" → ${relEntityName}`);
                   }
 
                   logStatus(`    > Organic key "${okConfig.Name}": ${existingRel.recordset.length > 0 ? 'updated' : 'created'} → ${relEntityName} (${isDirect ? 'direct' : 'transitive'})`);
                }
             } catch (err) {
+               // Keep going so one bad key doesn't block the others — but count it: a key that failed
+               // here (bridge-view DDL the database rejected, a refused view drop, …) is missing from
+               // the database, and the run must not report success for it.
+               failedCount++;
                const errMessage = err instanceof Error ? err.message : String(err);
                logError(`    > Organic key config: Failed to process "${okConfig.Name}" on ${ownerEntityName}: ${errMessage}`);
             }
          }
       }
 
-      return { success: true, createdCount, updatedCount };
+      return { success: failedCount === 0, createdCount, updatedCount, failedCount };
+   }
+
+   /**
+    * Finds the entity an organic-key config names: by base table + schema, else by entity name.
+    * Returns `null` when neither matches.
+    */
+   private async findOrganicKeyEntity(pool: CodeGenConnection, schemaName: string, tableName: string): Promise<{ ID: string; Name: string } | null> {
+      const result = await this.runQueryWithParams(pool, `
+         ${this.selectTop(1, 'ID, Name',
+            `FROM ${this.qs(MjCoreSchema(), 'vwEntities')}
+         WHERE (BaseTable = @TableName AND SchemaName = @SchemaName)
+            OR Name = @TableName`,
+            'CASE WHEN BaseTable = @TableName AND SchemaName = @SchemaName THEN 0 ELSE 1 END')}
+      `, { 'TableName': tableName, 'SchemaName': schemaName });
+      const row = result.recordset[0];
+      return row ? { ID: row.ID, Name: row.Name } : null;
+   }
+
+   /**
+    * Resolves every related entity of an organic key, in config order. Logs each one that doesn't
+    * resolve and returns `null` if any is missing, so the caller can skip the key before writing any
+    * of it.
+    */
+   private async resolveOrganicKeyRelatedEntities(
+      pool: CodeGenConnection,
+      okConfig: OrganicKeyConfig
+   ): Promise<{ config: OrganicKeyRelatedEntityConfig; entity: { ID: string; Name: string } }[] | null> {
+      const resolved: { config: OrganicKeyRelatedEntityConfig; entity: { ID: string; Name: string } }[] = [];
+      let missing = 0;
+      for (const reConfig of okConfig.RelatedEntities) {
+         const entity = await this.findOrganicKeyEntity(pool, reConfig.SchemaName, reConfig.TableName);
+         if (entity) {
+            resolved.push({ config: reConfig, entity });
+         } else {
+            missing++;
+            logError(`    > Organic key "${okConfig.Name}": related entity "${reConfig.SchemaName}.${reConfig.TableName}" not found — the key is not applied`);
+         }
+      }
+      return missing === 0 ? resolved : null;
    }
 
    /**
@@ -1050,7 +1335,7 @@ export class ManageMetadataBase {
       if (relationships.length === 0) return { success: true, updatedCount: 0 };
 
       let updatedCount = 0;
-      const schema = mj_core_schema();
+      const schema = MjCoreSchema();
 
       for (const rel of relationships) {
          try {
@@ -1100,7 +1385,7 @@ export class ManageMetadataBase {
                                   SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()},
                                       ${this.qi('ParentID')} = '${parentId}'
                                   WHERE ${this.qi('ID')} = '${childId}'`;
-               await this.LogSQLAndExecute(pool, updateSQL, `Set IS-A ParentID for "${childName}" → "${parentName}"`);
+               await this.logSQLAndExecute(pool, updateSQL, `Set IS-A ParentID for "${childName}" → "${parentName}"`);
 
                if (existingParentId) {
                   logStatus(`    > IS-A: Updated "${childName}" ParentID from previous value to "${parentName}"`);
@@ -1149,7 +1434,7 @@ export class ManageMetadataBase {
     * so a broken declaration fails before it produces generated code.
     */
    protected async validateISARelationships(pool: CodeGenConnection): Promise<{ success: boolean; errorCount: number }> {
-      const schema = mj_core_schema();
+      const schema = MjCoreSchema();
       let errorCount = 0;
       try {
          const results = await this.runQuery(pool, this.buildISAValidationSQL(schema));
@@ -1240,7 +1525,7 @@ export class ManageMetadataBase {
       if (entityConfigs.length === 0) return { success: true, updatedCount: 0 };
 
       let updatedCount = 0;
-      const schema = mj_core_schema();
+      const schema = MjCoreSchema();
       const reservedKeys = new Set(['BaseTable', 'SchemaName']);
 
       for (const ec of entityConfigs) {
@@ -1252,9 +1537,10 @@ export class ManageMetadataBase {
                continue;
             }
 
-            // Look up the entity by BaseTable + SchemaName
+            // Look up the entity by BaseTable + SchemaName, selecting current values for the named attributes
+            const attrCols = attrs.map(([k]) => `${this.qi(k)}`).join(', ');
             const entityResult = await this.runQueryWithParams(pool, `
-                  ${this.selectTop(1, 'ID, Name',
+                  ${this.selectTop(1, `ID, Name, ${attrCols}`,
                      `FROM ${this.qs(schema, 'vwEntities')}
                   WHERE BaseTable = @BaseTable AND SchemaName = @SchemaName`)}
                `,
@@ -1266,23 +1552,55 @@ export class ManageMetadataBase {
                continue;
             }
 
-            const entityId = entityResult.recordset[0].ID;
-            const entityName = entityResult.recordset[0].Name;
+            const currentRow = entityResult.recordset[0] as Record<string, unknown>;
+            const entityId = String(currentRow.ID);
+            const entityName = String(currentRow.Name);
 
-            // Build a parameterized UPDATE with one SET clause per attribute
-            const queryParams: Record<string, unknown> = { 'EntityID': entityId };
-            const setClauses: string[] = [];
+            // Compare each attribute against the current database value; only include differing attributes
+            const differingAttrs: Array<{ key: string; literalValue: string; summary: string }> = [];
             for (const [key, value] of attrs) {
-               const paramName = `attr_${key}`;
-               // Pass booleans through — both mssql and pg drivers handle native boolean values
-               const sqlValue = value;
-               queryParams[paramName] = sqlValue;
-               setClauses.push(`${this.qi(key)} = @${paramName}`);
+               const curVal = currentRow[key];
+               let differs = false;
+               let litVal = 'NULL';
+
+               if (typeof value === 'boolean') {
+                  const curBool = curVal === true || curVal === 1 || curVal === '1';
+                  differs = curBool !== value;
+                  litVal = this.boolLit(value);
+               } else if (typeof value === 'number') {
+                  const curNum = curVal === null || curVal === undefined ? null : Number(curVal);
+                  differs = curNum !== value;
+                  litVal = String(value);
+               } else if (typeof value === 'string') {
+                  const curStr = curVal === null || curVal === undefined ? '' : String(curVal);
+                  differs = curStr !== value;
+                  litVal = `'${value.replace(/'/g, "''")}'`;
+               } else if (value === null) {
+                  differs = curVal !== null && curVal !== undefined;
+                  litVal = 'NULL';
+               } else {
+                  differs = JSON.stringify(curVal) !== JSON.stringify(value);
+                  litVal = `'${JSON.stringify(value).replace(/'/g, "''")}'`;
+               }
+
+               if (differs) {
+                  differingAttrs.push({ key, literalValue: litVal, summary: `${key}=${value}` });
+               }
             }
 
-            await this.runQueryWithParams(pool, `UPDATE ${this.qs(schema, 'Entity')} SET ${setClauses.join(', ')} WHERE ID = @EntityID`, queryParams);
+            if (differingAttrs.length === 0) {
+               continue;
+            }
 
-            const attrSummary = attrs.map(([k, v]) => `${k}=${v}`).join(', ');
+            // Build an UPDATE with literal values and execute through LogSQLAndExecute for migration capture
+            const setClauses = differingAttrs.map(a => `${this.qi(a.key)} = ${a.literalValue}`);
+            setClauses.unshift(`${this.qi(EntityInfo.UpdatedAtFieldName)} = ${this.utcNow()}`);
+            const updateSQL = `UPDATE ${this.qs(schema, 'Entity')}
+                              SET ${setClauses.join(', ')}
+                              WHERE ${this.qi('ID')} = '${entityId}'`;
+            await this.logSQLAndExecute(pool, updateSQL, `Update attributes on "${entityName}" from additionalSchemaInfo`);
+
+            const attrSummary = differingAttrs.map(a => a.summary).join(', ');
             logStatus(`    > Entities config: Set ${attrSummary} on "${entityName}"`);
             updatedCount++;
          } catch (err) {
@@ -1295,26 +1613,28 @@ export class ManageMetadataBase {
    }
 
    /**
-    * Processes virtual entity configurations from the additionalSchemaInfo config.
-    * For each configured virtual entity, checks if it already exists and creates
-    * it if not. Uses the spCreateVirtualEntity stored procedure.
-    * Must run BEFORE manageVirtualEntities() so newly created entities get field-synced.
+    * Creates the virtual entities declared in additionalSchemaInfo that do not exist yet.
+    * Creation is two logged statements (Entity row with a CodeGen-generated ID, then the first key
+    * column) so the CodeGen_Run capture replays on any database. Each new entity joins its schema's
+    * application, gets the default permissions, and is registered in NewEntityList so pass 2 and
+    * file generation include it in this same run. Must run BEFORE manageVirtualEntities().
+    * An entry whose EntityName is already in use is skipped before anything is written to the capture.
     */
-   protected async processVirtualEntityConfig(pool: CodeGenConnection, currentUser: UserInfo): Promise<{ success: boolean; createdCount: number }> {
-      const config = ManageMetadataBase.getSoftPKFKConfig();
-      if (!config) return { success: true, createdCount: 0 };
+   protected async processVirtualEntityConfig(pool: CodeGenConnection, currentUser: UserInfo, md: Metadata): Promise<{ success: boolean; createdCount: number; createdEntityNames: string[] }> {
+      const config = ManageMetadataBase.GetSoftPKFKConfig();
+      if (!config) return { success: true, createdCount: 0, createdEntityNames: [] };
 
       const virtualEntities = this.extractVirtualEntitiesFromConfig(config as Record<string, unknown>);
-      if (virtualEntities.length === 0) return { success: true, createdCount: 0 };
+      if (virtualEntities.length === 0) return { success: true, createdCount: 0, createdEntityNames: [] };
 
-      let createdCount = 0;
-      const schema = mj_core_schema();
+      const createdEntityNames: string[] = [];
+      const existingEntityNames = md.Entities.map(e => e.Name);
+      const schema = MjCoreSchema();
 
       for (const ve of virtualEntities) {
-         const viewSchema = ve.SchemaName || schema;
+         const viewSchema = this.resolveVirtualEntitySchema(ve);
          const viewName = ve.ViewName;
-         const entityName = ve.EntityName || this.deriveEntityNameFromView(viewName);
-         const pkField = ve.PrimaryKey?.[0] || 'ID';
+         const configuredName = ve.EntityName || this.deriveEntityNameFromView(viewName);
 
          // Check if entity already exists for this view
          const existsResult = await this.runQueryWithParams(pool, `SELECT ID FROM ${this.qs(schema, 'vwEntities')} WHERE BaseView = @ViewName AND SchemaName = @SchemaName`,
@@ -1322,7 +1642,7 @@ export class ManageMetadataBase {
                );
 
          if (existsResult.recordset.length > 0) {
-            logStatus(`    > Virtual entity "${entityName}" already exists for view [${viewSchema}].[${viewName}], skipping creation`);
+            logStatus(`    > Virtual entity "${configuredName}" already exists for view [${viewSchema}].[${viewName}], skipping creation`);
             continue;
          }
 
@@ -1333,36 +1653,67 @@ export class ManageMetadataBase {
                );
 
          if (viewExistsResult.recordset.length === 0) {
-            logError(`    > View [${viewSchema}].[${viewName}] does not exist — skipping virtual entity creation for "${entityName}"`);
+            logError(`    > View [${viewSchema}].[${viewName}] does not exist — skipping virtual entity creation for "${configuredName}"`);
             continue;
          }
 
-         // Create the virtual entity via the stored procedure
-         try {
-            const createResult = await pool.executeStoredProcedure(`${this.qs(schema, 'spCreateVirtualEntity')}`,
-               { 'Name': entityName, 'BaseView': viewName, 'SchemaName': viewSchema, 'PrimaryKeyFieldName': pkField, 'Description': ve.Description || null }
-               );
+         const entityName = this.resolveVirtualEntityName(ve, viewSchema, existingEntityNames);
+         if (!entityName) {
+            logError(`    > Entity name "${configuredName}" is already in use — skipping virtual entity creation for view [${viewSchema}].[${viewName}]. Set a different EntityName.`);
+            continue;
+         }
+         if (entityName !== configuredName) {
+            logStatus(`    > Entity name "${configuredName}" is already in use; using "${entityName}" for view [${viewSchema}].[${viewName}]`);
+         }
 
-            const newEntityId = createResult.recordset?.[0]?.['']
-               || createResult.recordset?.[0]?.ID
-               || createResult.recordset?.[0]?.Column0;
-
-            logStatus(`    > Created virtual entity "${entityName}" (ID: ${newEntityId}) for view [${viewSchema}].[${viewName}]`);
-            createdCount++;
-
-            // Add virtual entity to the application for its schema and set default permissions
-            // (same logic as table-backed entities)
-            if (newEntityId) {
-               await this.addEntityToApplicationForSchema(pool, newEntityId, entityName, viewSchema, currentUser);
-               await this.addDefaultPermissionsForEntity(pool, newEntityId, entityName);
-            }
-         } catch (err) {
-            const errMessage = err instanceof Error ? err.message : String(err);
-            logError(`    > Failed to create virtual entity "${entityName}": ${errMessage}`);
+         if (await this.createVirtualEntityFromConfig(pool, ve, entityName, viewSchema, currentUser)) {
+            createdEntityNames.push(entityName);
          }
       }
 
-      return { success: true, createdCount };
+      return { success: true, createdCount: createdEntityNames.length, createdEntityNames };
+   }
+
+   /**
+    * Name for a new config-declared virtual entity, or null when its EntityName is already in use.
+    * A name derived from the view gets the same collision suffix as a table-backed entity. Names are
+    * compared without case, as UQ_Entity_Name does, and include the names created earlier in this run.
+    */
+   protected resolveVirtualEntityName(ve: VirtualEntityConfig, viewSchema: string, existingEntityNames: string[]): string | null {
+      if (ve.EntityName) {
+         return this.ResolveUniqueEntityName(ve.EntityName, viewSchema, existingEntityNames).suffix === '' ? ve.EntityName : null;
+      }
+      return this.ResolveUniqueEntityName(this.deriveEntityNameFromView(ve.ViewName), viewSchema, existingEntityNames).name;
+   }
+
+   /**
+    * Writes the logged Entity INSERT and key seed for one config-declared virtual entity, registers it
+    * in NewEntityList, adds it to its schema's application and grants the default permissions.
+    * @returns true when the entity rows were written, even if the application or permission step failed
+    */
+   protected async createVirtualEntityFromConfig(pool: CodeGenConnection, ve: VirtualEntityConfig, entityName: string, viewSchema: string, currentUser: UserInfo): Promise<boolean> {
+      const pkFields = ve.PrimaryKey && ve.PrimaryKey.length > 0 ? ve.PrimaryKey : ['ID'];
+      let created = false;
+      try {
+         const newEntityId = this.createNewUUID();
+         await this.logSQLAndExecute(pool,
+            this.buildVirtualEntityInsertSQL(newEntityId, entityName, viewSchema, ve.ViewName, ve.Description ?? null),
+            `SQL generated to create new virtual entity ${entityName}`);
+         await this.logSQLAndExecute(pool,
+            this.buildVirtualEntityPlaceholderPKSQL(this.createNewUUID(), newEntityId, pkFields[0], pkFields.length === 1),
+            `SQL generated to seed primary key field ${pkFields[0]} for virtual entity ${entityName}`);
+
+         logStatus(`    > Created virtual entity "${entityName}" (ID: ${newEntityId}) for view [${viewSchema}].[${ve.ViewName}]`);
+         ManageMetadataBase.NewEntityList.push(entityName);
+         created = true;
+
+         await this.addEntityToApplicationForSchema(pool, newEntityId, entityName, viewSchema, currentUser);
+         await this.addDefaultPermissionsForEntity(pool, newEntityId, entityName);
+      } catch (err) {
+         const errMessage = err instanceof Error ? err.message : String(err);
+         logError(`    > Failed to create virtual entity "${entityName}": ${errMessage}`);
+      }
+      return created;
    }
 
    /**
@@ -1404,7 +1755,7 @@ export class ManageMetadataBase {
       const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       await md.Refresh();
 
-      const coreSchema = mj_core_schema();
+      const coreSchema = MjCoreSchema();
       const esc = (s: string) => s.replace(/'/g, "''");
       const lit = (s: string | undefined) => (s ? `'${esc(s)}'` : 'NULL');
       let processedCount = 0;
@@ -1473,9 +1824,10 @@ export class ManageMetadataBase {
          const tableSQL = this.dbProvider.generateMaterializedTableSQL(matSchema, tableName, columns);
          const viewSQL = this.dbProvider.generateMaterializedWrapperViewSQL(matSchema, viewName, tableName);
          // includeBatchSeparator: each is a single GO-free batch (executed via ds.query), but the
-         // migration file needs a GO between statements for Flyway/sqlcmd.
-         await this.LogSQLAndExecute(pool, tableSQL, `Create materialized table for base-view materialization of entity ${entity.Name}`, false, true);
-         await this.LogSQLAndExecute(pool, viewSQL, `Create wrapper view for base-view materialization of entity ${entity.Name}`, false, true);
+         // migration file needs a GO between statements for Flyway/sqlcmd. Pass the provider's
+         // separator, not the 'GO' default: on PostgreSQL it is '' and a literal GO breaks replay.
+         await this.logSQLAndExecute(pool, tableSQL, `Create materialized table for base-view materialization of entity ${entity.Name}`, false, true, this.dbProvider.BatchSeparator);
+         await this.logSQLAndExecute(pool, viewSQL, `Create wrapper view for base-view materialization of entity ${entity.Name}`, false, true, this.dbProvider.BatchSeparator);
 
          // 4) Upsert the MJ: Materialized Results row, keyed on (SourceType, SourceEntityID).
          const existing = await this.runQueryWithParams(
@@ -1488,7 +1840,7 @@ export class ManageMetadataBase {
                               SET SchemaName='${esc(matSchema)}', TableName='${esc(tableName)}', ViewName='${esc(viewName)}',
                                   RefreshSchedule=${lit(decl.RefreshSchedule)}, IntendedWorkload=${lit(decl.IntendedWorkload)}
                             WHERE ID='${existing.recordset[0].ID}'`;
-            await this.LogSQLAndExecute(pool, sqlUpd, `Update MJ: Materialized Results for base-view materialization of ${entity.Name}`);
+            await this.logSQLAndExecute(pool, sqlUpd, `Update MJ: Materialized Results for base-view materialization of ${entity.Name}`);
          } else {
             const newId = this.createNewUUID();
             const q = (n: string) => this.qi(n);
@@ -1499,7 +1851,7 @@ export class ManageMetadataBase {
                             VALUES ( '${newId}', 'EntityBaseView', '${entity.ID}', '${esc(matSchema)}', '${esc(tableName)}', '${esc(viewName)}',
                                  'None', 'FullRebuild', ${lit(decl.RefreshSchedule)}, 'Building', ${lit(decl.IntendedWorkload)},
                                  ${this.utcNow()}, ${this.utcNow()} )`;
-            await this.LogSQLAndExecute(pool, sqlIns, `Insert MJ: Materialized Results for base-view materialization of ${entity.Name}`);
+            await this.logSQLAndExecute(pool, sqlIns, `Insert MJ: Materialized Results for base-view materialization of ${entity.Name}`);
          }
 
          processedCount++;
@@ -1522,7 +1874,7 @@ export class ManageMetadataBase {
       outputColumns: string[],
       currentUser: UserInfo,
    ): Promise<{ qualifies: true; rowFilterColumns: string[]; broadSQL: string; readFilterSpec: ReadFilterSpecEntry[] } | { qualifies: false; reason: string }> {
-      const coreSchema = mj_core_schema();
+      const coreSchema = MjCoreSchema();
       const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
 
       // Load the query template + parameter definitions (typed entities for the renderer).
@@ -1557,31 +1909,31 @@ export class ManageMetadataBase {
       // Phase 2 is shipped: enable Bucket-1 row-filter broad materialization. The provider now auto-injects
       // the read-time predicate from the persisted ReadFilterSpec (bound params), so a RowFilterBroad
       // materialization is safe to mint. `allowRowFilterBroad` remains the build-level kill switch.
-      const classification = classifyQueryParameters({ queryName, params: paramDefs, outputColumns, dialect, render, allowRowFilterBroad: true });
-      if (!classification.qualification.qualifies) {
-         const detail = classification.perParam.map((pp) => `${pp.name}: ${pp.verdict.reason}`).join('; ');
-         return { qualifies: false, reason: `${classification.qualification.reason ?? 'parameters not materializable'}${detail ? ` — [${detail}]` : ''}` };
+      const classification = ClassifyQueryParameters({ queryName, params: paramDefs, outputColumns, dialect, render, allowRowFilterBroad: true });
+      if (!classification.Qualification.qualifies) {
+         const detail = classification.PerParam.map((pp) => `${pp.name}: ${pp.verdict.reason}`).join('; ');
+         return { qualifies: false, reason: `${classification.Qualification.reason ?? 'parameters not materializable'}${detail ? ` — [${detail}]` : ''}` };
       }
-      if (classification.qualification.paramMode !== 'RowFilterBroad') {
-         return { qualifies: false, reason: `parameterization mode '${classification.qualification.paramMode}' is not supported for materialization in v1 (only RowFilterBroad)` };
+      if (classification.Qualification.paramMode !== 'RowFilterBroad') {
+         return { qualifies: false, reason: `parameterization mode '${classification.Qualification.paramMode}' is not supported for materialization in v1 (only RowFilterBroad)` };
       }
 
       // Build the broad source SQL: render a concrete instance (held values) then strip the row-filter predicates.
       let renderedHeld: string;
       try {
-         renderedHeld = render(buildHeldValues(paramDefs));
+         renderedHeld = render(BuildHeldValues(paramDefs));
       } catch (e) {
          return { qualifies: false, reason: `could not render the query to build broad SQL: ${e instanceof Error ? e.message : String(e)}` };
       }
-      const expectedRemovals = classification.qualification.rowFilterColumns.length;
-      const broad = buildBroadRowFilterSQL(renderedHeld, classification.qualification.rowFilterColumns, dialect, expectedRemovals);
-      if (broad.removedCount === 0) {
-         return { qualifies: false, reason: `expected to strip row-filter predicate(s) on [${classification.qualification.rowFilterColumns.join(', ')}] but none were removed from the rendered SQL — refusing to avoid a wrongly-filtered materialization` };
+      const expectedRemovals = classification.Qualification.rowFilterColumns.length;
+      const broad = BuildBroadRowFilterSQL(renderedHeld, classification.Qualification.rowFilterColumns, dialect, expectedRemovals);
+      if (broad.RemovedCount === 0) {
+         return { qualifies: false, reason: `expected to strip row-filter predicate(s) on [${classification.Qualification.rowFilterColumns.join(', ')}] but none were removed from the rendered SQL — refusing to avoid a wrongly-filtered materialization` };
       }
-      if (broad.ambiguous) {
-         return { qualifies: false, reason: `expected to strip exactly ${expectedRemovals} row-filter parameter predicate(s) on [${classification.qualification.rowFilterColumns.join(', ')}] but matched ${broad.removedCount} — the parameter predicate(s) cannot be cleanly isolated from other static or same-named predicates on those columns, so a broad materialization would include or exclude rows the live query never would. Refusing (query stays live-only).` };
+      if (broad.Ambiguous) {
+         return { qualifies: false, reason: `expected to strip exactly ${expectedRemovals} row-filter parameter predicate(s) on [${classification.Qualification.rowFilterColumns.join(', ')}] but matched ${broad.RemovedCount} — the parameter predicate(s) cannot be cleanly isolated from other static or same-named predicates on those columns, so a broad materialization would include or exclude rows the live query never would. Refusing (query stays live-only).` };
       }
-      return { qualifies: true, rowFilterColumns: classification.qualification.rowFilterColumns, broadSQL: broad.sql, readFilterSpec: classification.qualification.readFilterSpec };
+      return { qualifies: true, rowFilterColumns: classification.Qualification.rowFilterColumns, broadSQL: broad.Sql, readFilterSpec: classification.Qualification.readFilterSpec };
    }
 
    /**
@@ -1601,7 +1953,7 @@ export class ManageMetadataBase {
     * Parameterized queries are skipped with a log (deferred to Phase 2).
     */
    protected async processQueryMaterializations(pool: CodeGenConnection, currentUser: UserInfo): Promise<{ success: boolean; processedCount: number; mintedCount: number }> {
-      const coreSchema = mj_core_schema();
+      const coreSchema = MjCoreSchema();
       // Gate the whole method on the IsMaterialized column existing — the flagged-query SELECT below filters on it,
       // and it (like the MaterializedResult table) is added by the materialization Foundation migration. On a DB
       // where that migration hasn't run yet the SELECT would throw and abort the entire codegen pass; with no such
@@ -1673,7 +2025,7 @@ export class ManageMetadataBase {
          // Detected BEFORE the shape analysis so the surrogate column can be typed for the keyed case.
          const detectSQL = paramMode === 'RowFilterBroad' ? (broadSQL ?? '') : querySQL;
          const matDialect = this.dbProvider.PlatformKey === 'postgresql' ? new PostgreSQLDialect() : new SQLServerDialect();
-         const detectedKeyColumns = detectSQL ? detectAggregationKeyColumns({ sql: detectSQL, dialect: matDialect, fields }) : null;
+         const detectedKeyColumns = detectSQL ? DetectAggregationKeyColumns({ sql: detectSQL, dialect: matDialect, fields }) : null;
          // An EXTERNAL query refreshes via rebuildFromExternalQuery, which fetches all rows through the EDS
          // driver and writes a SYNTHETIC row-index surrogate — it cannot compute the per-group combined-key
          // hash and ignores KeyColumns entirely. So minting a keyed (hash-surrogate) entity for an external
@@ -1701,7 +2053,7 @@ export class ManageMetadataBase {
          // The materialized table's column shape is the query's output columns — independent of
          // parameterization (a row-filter query is materialized broad over the same columns). Pass
          // isParameterized:false so the analyzer yields the shape; the param gate above already ran.
-         const analysis = analyzeQueryForMaterialization({ queryName, isParameterized: false, fields, surrogateSQLType });
+         const analysis = AnalyzeQueryForMaterialization({ queryName, isParameterized: false, fields, surrogateSQLType });
          if (!analysis.qualifies) {
             logStatus(`    > Skipping materialization of query "${queryName}": ${analysis.reason}`);
             continue;
@@ -1722,7 +2074,7 @@ export class ManageMetadataBase {
             isKeyed && !!detectSQL && SQLParser.ExtractTableRefs(detectSQL, matDialect).length === 1;
          const refreshStrategy: 'FullRebuild' | 'DirtyGroupRecompute' | 'Incremental' = !isKeyedSingleSource
             ? 'FullRebuild'
-            : detectAdditiveMeasures(detectSQL)
+            : DetectAdditiveMeasures(detectSQL)
               ? 'Incremental'
               : 'DirtyGroupRecompute';
 
@@ -1771,10 +2123,10 @@ export class ManageMetadataBase {
             );
             continue;
          }
-         const tableSQL = this.dbProvider.generateMaterializedTableSQL(coreSchema, tableName, analysis.columns);
+         const tableSQL = this.dbProvider.generateMaterializedTableSQL(coreSchema, tableName, analysis.Columns);
          const viewSQL = this.dbProvider.generateMaterializedWrapperViewSQL(coreSchema, viewName, tableName);
-         await this.LogSQLAndExecute(pool, tableSQL, `Create materialized table for query "${queryName}"`, false, true);
-         await this.LogSQLAndExecute(pool, viewSQL, `Create wrapper view for query "${queryName}"`, false, true);
+         await this.logSQLAndExecute(pool, tableSQL, `Create materialized table for query "${queryName}"`, false, true, this.dbProvider.BatchSeparator);
+         await this.logSQLAndExecute(pool, viewSQL, `Create wrapper view for query "${queryName}"`, false, true, this.dbProvider.BatchSeparator);
 
          // 3) Mint the read-only Virtual Entity over the wrapper view (idempotent by view).
          const existingVE = await this.runQueryWithParams(pool, `SELECT ID FROM ${this.qs(coreSchema, 'vwEntities')} WHERE BaseView = @V AND SchemaName = @S`, { V: viewName, S: coreSchema });
@@ -1785,7 +2137,7 @@ export class ManageMetadataBase {
                   Name: queryName,
                   BaseView: viewName,
                   SchemaName: coreSchema,
-                  PrimaryKeyFieldName: analysis.surrogateColumnName,
+                  PrimaryKeyFieldName: analysis.SurrogateColumnName,
                   Description: `Materialized result of query "${queryName}".`,
                });
                generatedEntityId = createRes.recordset?.[0]?.[''] || createRes.recordset?.[0]?.ID || createRes.recordset?.[0]?.Column0;
@@ -1829,7 +2181,7 @@ export class ManageMetadataBase {
                               SET GeneratedEntityID=${idLit(generatedEntityId)}, SchemaName='${esc(coreSchema)}', TableName='${esc(tableName)}', ViewName='${esc(viewName)}',
                                   ${this.qi('ParamMode')}='${paramMode}', ${this.qi('RowFilterColumns')}=${rowFilterColumnsLit}, ${this.qi('BroadSQL')}=${broadSQLLit}, ${this.qi('ReadFilterSpec')}=${readFilterSpecLit}, ${this.qi('KeyColumns')}=${keyColumnsLit}, ${this.qi('RefreshStrategy')}='${refreshStrategy}'
                             WHERE ID='${matResultId}'`;
-            await this.LogSQLAndExecute(pool, sqlUpd, `Update MJ: Materialized Results for query "${queryName}"`);
+            await this.logSQLAndExecute(pool, sqlUpd, `Update MJ: Materialized Results for query "${queryName}"`);
          } else {
             matResultId = this.createNewUUID();
             const c = (n: string) => this.qi(n);
@@ -1838,13 +2190,13 @@ export class ManageMetadataBase {
                                  ${c('ParamMode')}, ${c('RowFilterColumns')}, ${c('BroadSQL')}, ${c('ReadFilterSpec')}, ${c('KeyColumns')}, ${c('RefreshStrategy')}, ${c('Status')}, ${c('__mj_CreatedAt')}, ${c('__mj_UpdatedAt')} )
                             VALUES ( '${matResultId}', 'Query', ${idLit(generatedEntityId)}, '${esc(coreSchema)}', '${esc(tableName)}', '${esc(viewName)}',
                                  '${paramMode}', ${rowFilterColumnsLit}, ${broadSQLLit}, ${readFilterSpecLit}, ${keyColumnsLit}, '${refreshStrategy}', 'Building', ${this.utcNow()}, ${this.utcNow()} )`;
-            await this.LogSQLAndExecute(pool, sqlIns, `Insert MJ: Materialized Results for query "${queryName}"`);
+            await this.logSQLAndExecute(pool, sqlIns, `Insert MJ: Materialized Results for query "${queryName}"`);
             // Link the new materialization to its source Query via the join table.
             const joinId = this.createNewUUID();
             const sqlJoinIns = `INSERT INTO ${this.qs(coreSchema, 'MaterializedResultQuery')} (
                                  ${c('ID')}, ${c('MaterializedResultID')}, ${c('QueryID')}, ${c('__mj_CreatedAt')}, ${c('__mj_UpdatedAt')} )
                             VALUES ( '${joinId}', '${matResultId}', '${queryId}', ${this.utcNow()}, ${this.utcNow()} )`;
-            await this.LogSQLAndExecute(pool, sqlJoinIns, `Link MJ: Materialized Results to Query "${queryName}" via join row`);
+            await this.logSQLAndExecute(pool, sqlJoinIns, `Link MJ: Materialized Results to Query "${queryName}" via join row`);
          }
 
          processedCount++;
@@ -1865,7 +2217,7 @@ export class ManageMetadataBase {
     * auto-rebuilds. Already-held (`DriftHold`) and `Disabled` rows are skipped.
     */
    protected async detectMaterializationDrift(pool: CodeGenConnection): Promise<{ success: boolean; heldCount: number }> {
-      const coreSchema = mj_core_schema();
+      const coreSchema = MjCoreSchema();
       // Gate on MaterializedResult existing — the SELECT below reads it. Absent (materialization migration not yet
       // applied on this DB) ⇒ no materializations exist to check for drift; skip cleanly rather than throwing and
       // aborting the codegen pass.
@@ -1980,12 +2332,12 @@ export class ManageMetadataBase {
             // would only stop FUTURE refreshes while leaving the already-populated rows queryable via raw SQL
             // over the wrapper view. Emptying (not dropping) removes the leaked data without breaking any object
             // dependency; the wrapper view remains but returns nothing. Then DriftHold so refresh never refills it.
-            await this.LogSQLAndExecute(
+            await this.logSQLAndExecute(
                pool,
                `DELETE FROM ${this.qs(r.SchemaName as string, r.TableName as string)}`,
                `Empty external RLS base-view mirror "${r.TableName}" (leak guard — mirror exposed RLS-refused rows)`,
             );
-            await this.LogSQLAndExecute(
+            await this.logSQLAndExecute(
                pool,
                `UPDATE ${this.qs(coreSchema, 'MaterializedResult')} SET ${this.qi('Status')}='DriftHold' WHERE ID='${r.ID}'`,
                `Flag external RLS base-view materialization "${r.TableName}" as DriftHold (leak guard)`,
@@ -1996,7 +2348,7 @@ export class ManageMetadataBase {
       }
 
       const facts = await this.gatherDriftFacts(pool, md, r as CodeGenQueryRow, coreSchema);
-      const verdict = evaluateMaterializationDrift(facts);
+      const verdict = EvaluateMaterializationDrift(facts);
       if (verdict.drift) {
          // Fail-closed on ANY hold of a QUERY materialization: once held, the row drops out of
          // detectMaterializationDrift's `Status NOT IN ('DriftHold', ...)` scan, so the C1 RLS re-check and the
@@ -2008,7 +2360,7 @@ export class ManageMetadataBase {
          if (r.SourceType === 'Query' && r.GeneratedEntityID) {
             await this.revokeMaterializedEntityReadAccess(pool, r.GeneratedEntityID as string, r.TableName as string, `drift hold — ${verdict.reason ?? 'shape/provenance drift'}`);
          }
-         await this.LogSQLAndExecute(
+         await this.logSQLAndExecute(
             pool,
             `UPDATE ${this.qs(coreSchema, 'MaterializedResult')} SET ${this.qi('Status')}='DriftHold' WHERE ID='${r.ID}'`,
             `Flag materialization "${r.TableName}" as DriftHold`,
@@ -2054,7 +2406,7 @@ export class ManageMetadataBase {
       if (r.GeneratedEntityID) {
          await this.revokeMaterializedEntityReadAccess(pool, r.GeneratedEntityID as string, r.TableName as string, reason);
       }
-      await this.LogSQLAndExecute(
+      await this.logSQLAndExecute(
          pool,
          `UPDATE ${this.qs(coreSchema, 'MaterializedResult')} SET ${this.qi('Status')}='DriftHold' WHERE ID='${r.ID}'`,
          `Flag materialization "${r.TableName}" as DriftHold (${label.toLowerCase()})`,
@@ -2175,7 +2527,7 @@ export class ManageMetadataBase {
     * @param pool - the ConnectionPool object to use for querying and updating the database
     * @returns
     */
-   public async manageMetadata(pool: CodeGenConnection, currentUser: UserInfo): Promise<boolean> {
+   public async ManageMetadata(pool: CodeGenConnection, currentUser: UserInfo): Promise<boolean> {
       const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       // Auto-exclude platform-specific system schemas.
       // We mutate configInfo.excludeSchemas directly so that all downstream code
@@ -2196,7 +2548,7 @@ export class ManageMetadataBase {
       // machinery — when the provider supplies DDL (PostgreSQL), we install it
       // idempotently here rather than depending on migrations to have shipped
       // it. Nothing below can work without them, so a failure here is fatal.
-      const supportObjectsSQL = this.dbProvider.getMetadataSupportObjectsSQL(mj_core_schema());
+      const supportObjectsSQL = this.dbProvider.getMetadataSupportObjectsSQL(MjCoreSchema());
       if (supportObjectsSQL) {
          try {
             await pool.query(supportObjectsSQL);
@@ -2211,7 +2563,7 @@ export class ManageMetadataBase {
       // Authored exclude list (sys, staging, …) must be captured BEFORE includeSchemas is
       // compiled into excludeSchemas. Heal EXEC statements use that original list plus
       // @IncludedSchemaNames — never the sibling snapshot of this machine's database.
-      snapshotAuthoredExcludeSchemas(configInfo.excludeSchemas);
+      SnapshotAuthoredExcludeSchemas(configInfo.excludeSchemas);
 
       // Resolve the opt-in `includeSchemas` positive scope into excludeSchemas, BEFORE the exclude
       // snapshot below and before createNewEntities() runs. The universe is queried from the DATABASE
@@ -2222,12 +2574,12 @@ export class ManageMetadataBase {
       // every run after, orphaning its entity records). No-op when includeSchemas is unset.
       if (configInfo.includeSchemas && configInfo.includeSchemas.length > 0) {
          try {
-            const schemaSQL = `SELECT DISTINCT ${this.qi('SchemaName')} FROM ${this.qs(mj_core_schema(), 'vwSQLTablesAndEntities')}`;
+            const schemaSQL = `SELECT DISTINCT ${this.qi('SchemaName')} FROM ${this.qs(MjCoreSchema(), 'vwSQLTablesAndEntities')}`;
             const schemaResult = await this.runQuery(pool, schemaSQL);
             const allSchemas: string[] = (schemaResult.recordset ?? [])
                .map((r: { SchemaName?: string }) => r.SchemaName)
                .filter((s: string | undefined): s is string => !!s);
-            const newlyExcluded = applyIncludeSchemaScope(allSchemas, configInfo);
+            const newlyExcluded = ApplyIncludeSchemaScope(allSchemas, configInfo);
             logStatus(
                `   Applied includeSchemas scope [${configInfo.includeSchemas.join(', ')}] — excluded ${newlyExcluded.length} other schema(s) present in the database`
             );
@@ -2289,12 +2641,12 @@ export class ManageMetadataBase {
       logStatus('   Recompiling base views...');
       const sqlUtility = MJGlobal.Instance.ClassFactory.CreateInstance<SQLUtilityBase>(SQLUtilityBase)!;
 
-      const adminSchema = getSettingValue('mj_core_schema', '__mj');
-      const schemasToExclude = getSettingValue('recompile_mj_views', true)
+      const adminSchema = GetSettingValue('mj_core_schema', '__mj');
+      const schemasToExclude = GetSettingValue('recompile_mj_views', true)
         ? excludeSchemas.filter((s) => s !== adminSchema)
         : excludeSchemas;
       if (! await sqlUtility.recompileAllBaseViews(pool, schemasToExclude, true, ManageMetadataBase._newEntityList/*exclude the newly created entities from the above step the first time we run as those views don't exist yet*/)) {
-         logMessage('   Warning: Non-Fatal error recompiling base views', SeverityType.Warning, false);
+         LogMessage('   Warning: Non-Fatal error recompiling base views', SeverityType.Warning, false);
          // many times the former versions of base views will NOT succesfully recompile, so don't consider that scenario to be a
          // failure for this entire function
       }
@@ -2305,7 +2657,7 @@ export class ManageMetadataBase {
       // Also skip deleting unneeded fields on this first pass — base views haven't been regenerated yet,
       // so virtual fields (which come from view JOINs) would be incorrectly identified as orphaned and deleted.
       // Deletion runs on the second pass (in sql_codegen.ts) after views are current.
-      if (! await this.manageEntityFields(pool, excludeSchemas, false, false, currentUser, true, true)) {
+      if (! await this.ManageEntityFields(pool, excludeSchemas, false, false, currentUser, true, true)) {
          logError('   Error managing entity fields');
          bSuccess = false;
       }
@@ -2324,7 +2676,7 @@ export class ManageMetadataBase {
 
       // Config-driven virtual entity creation — run BEFORE manageVirtualEntities
       // so newly created entities get their fields synced in the next step
-      const vecResult = await this.processVirtualEntityConfig(pool, currentUser);
+      const vecResult = await this.processVirtualEntityConfig(pool, currentUser, md);
       if (vecResult.createdCount > 0) {
          logStatus(`    > Created ${vecResult.createdCount} virtual entit${vecResult.createdCount === 1 ? 'y' : 'ies'} from config`);
          // Refresh metadata so manageVirtualEntities can find the newly-created entities
@@ -2344,6 +2696,12 @@ export class ManageMetadataBase {
       const veResult = await this.manageVirtualEntities(pool)
       if (! veResult.success) {
          logError('   Error managing virtual entities');
+         bSuccess = false;
+      }
+
+      // VirtualEntities keys apply after the view-column sync, so a new entity or a new view column
+      // gets its configured key in this run — the same second pass external entities get below.
+      if (! await this.applyConfiguredVirtualEntityKeys(pool, excludeSchemas, md)) {
          bSuccess = false;
       }
 
@@ -2397,6 +2755,10 @@ export class ManageMetadataBase {
       if (organicKeyResult.createdCount > 0 || organicKeyResult.updatedCount > 0) {
          logStatus(`    > Organic keys: ${organicKeyResult.createdCount} created, ${organicKeyResult.updatedCount} updated from config`);
       }
+      if (!organicKeyResult.success) {
+         logError(`   Error processing organic keys: ${organicKeyResult.failedCount} key(s) failed and were not applied — see the errors above`);
+         bSuccess = false;
+      }
 
       // Config-driven base-view materialization — emit the physical table + wrapper view and
       // attach an "MJ: Materialized Results" row to the existing entity. Runs AFTER entity fields
@@ -2430,12 +2792,17 @@ export class ManageMetadataBase {
       return bSuccess;
    }
 
+   /** @deprecated Use {@link ManageMetadata}. */
+   public async manageMetadata(pool: CodeGenConnection, currentUser: UserInfo): Promise<boolean> {
+      return this.ManageMetadata(pool, currentUser);
+   }
+
    /**
     * INTEGRITY CHECK — in a well-formed entity every base (non-virtual) field sequences BEFORE the
     * virtual/related fields, so the EntityField order matches the base view's `SELECT [base].*, <joins>`
     * column output. The positional save-capture in the data providers (e.g. SQLServerDataProvider's
-    * @ResultTable) relies on that alignment. CodeGen assigns newly-discovered columns a temporary
-    * `maxSequence + 100000` offset that updateExistingEntityFieldsFromSchema is supposed to renumber; if
+    * @ResultTable) relies on that alignment. CodeGen inserts newly-discovered columns at an apply-time
+    * `MAX(Sequence) + ordinal` placeholder that updateExistingEntityFieldsFromSchema is supposed to renumber; if
     * a base column is left sequenced AFTER a virtual field, the save-capture would mis-route values by
     * position. The providers now compensate (saves stay correct), but the metadata is still wrong — so we
     * scan for it after every metadata pass and log a prominent warning to drive the root cause out over time.
@@ -2443,12 +2810,12 @@ export class ManageMetadataBase {
    protected async checkEntityFieldSequenceIntegrity(pool: CodeGenConnection, excludeSchemas: string[]): Promise<void> {
       try {
          const excl = excludeSchemas.length > 0
-            ? `WHERE ${this.qi('EntityID')} NOT IN (SELECT ${this.qi('ID')} FROM ${this.qs(mj_core_schema(), 'Entity')} WHERE ${this.qi('SchemaName')} IN (${excludeSchemas.map(s => `'${s}'`).join(',')}))`
+            ? `WHERE ${this.qi('EntityID')} NOT IN (SELECT ${this.qi('ID')} FROM ${this.qs(MjCoreSchema(), 'Entity')} WHERE ${this.qi('SchemaName')} IN (${excludeSchemas.map(s => `'${s}'`).join(',')}))`
             : '';
          const sSQL = `SELECT ${this.qi('EntityID')}, ${this.qi('Entity')}, ${this.qi('Name')}, ${this.qi('Sequence')}, ${this.qi('IsVirtual')}
-                       FROM ${this.qs(mj_core_schema(), 'vwEntityFields')}
+                       FROM ${this.qs(MjCoreSchema(), 'vwEntityFields')}
                        ${excl}
-                       ORDER BY ${this.qi('EntityID')}, ${this.qi('Sequence')}`;
+                       ORDER BY ${this.qi('EntityID')}, ${this.qi('Sequence')}, ${this.qi('Name')}`;
          const result = await this.runQuery(pool, sSQL);
          const rows: Array<{ EntityID: string; Entity: string; Name: string; Sequence: number; IsVirtual: unknown }> = result.recordset;
          const isV = (v: unknown): boolean => v === true || v === 1 || v === '1';
@@ -2479,7 +2846,7 @@ export class ManageMetadataBase {
                    `   Healthy entities sequence ALL base (non-virtual) fields before virtual/related fields, so EntityField\n` +
                    `   order matches the base view ([base].* then joins) that the data-provider save-capture relies on. When a\n` +
                    `   base column sequences after a virtual field, the capture re-orders defensively (saves stay correct), but\n` +
-                   `   the metadata is wrong. Usual cause: a newly-added column's temporary maxSequence+100000 offset was not\n` +
+                   `   the metadata is wrong. Usual cause: a newly-added column's apply-time MAX(Sequence)+ordinal placeholder was not\n` +
                    `   renumbered. Fix the field's Sequence at the source so it sorts with the base columns.\n` +
                    `   Affected (entity: base fields out of order):\n`;
          for (const o of offenders) msg += `      • ${o.entity}: ${o.fields.join(', ')}\n`;
@@ -2495,7 +2862,7 @@ export class ManageMetadataBase {
       // virtual entities are records defined in the entity metadata and do NOT define a distinct base table
       // but they do specify a base view. We DO NOT generate a base view for a virtual entity, we simply use it to figure
       // out the fields that should be in the entity definition and add/update/delete the entity definition to match what's in the view when this runs
-      const sql = `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntities')} WHERE VirtualEntity = ${this.boolLit(true)}`;
+      const sql = `SELECT * FROM ${this.qs(MjCoreSchema(), 'vwEntities')} WHERE VirtualEntity = ${this.boolLit(true)}`;
       const virtualEntitiesResult = await this.runQuery(pool, sql);
       const virtualEntities = virtualEntitiesResult.recordset;
       let anyUpdates: boolean = false;
@@ -2564,7 +2931,7 @@ export class ManageMetadataBase {
    protected async materializedResultTableExists(pool: CodeGenConnection): Promise<boolean> {
       if (this._materializedResultTableExists === null) {
          const sql = `SELECT COUNT(*) AS TblExists FROM INFORMATION_SCHEMA.TABLES ` +
-                     `WHERE TABLE_SCHEMA = '${mj_core_schema()}' AND TABLE_NAME = 'MaterializedResult'`;
+                     `WHERE TABLE_SCHEMA = '${MjCoreSchema()}' AND TABLE_NAME = 'MaterializedResult'`;
          const result = await this.runQuery(pool, sql);
          const row = (result.recordset?.[0] ?? {}) as Record<string, unknown>;
          const cnt = row.TblExists ?? row.tblexists ?? 0;
@@ -2583,7 +2950,7 @@ export class ManageMetadataBase {
       if (!(await this.entityHasExternalDataSourceColumn(pool))) {
          return {success: true, anyUpdates: false, relationshipsUpdated: false};
       }
-      const sql = `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntities')} WHERE ExternalDataSourceID IS NOT NULL`;
+      const sql = `SELECT * FROM ${this.qs(MjCoreSchema(), 'vwEntities')} WHERE ExternalDataSourceID IS NOT NULL`;
       const result = await this.runQuery(pool, sql);
       const externalEntities = result.recordset;
       if (!externalEntities || externalEntities.length === 0) {
@@ -2704,7 +3071,7 @@ export class ManageMetadataBase {
 
          // Map each introspected column into the veField shape that manageSingleVirtualEntityField consumes.
          const eeFields = obj.Columns.map(c => {
-            const t = mapExternalNativeTypeToMJ(c.NativeType);
+            const t = MapExternalNativeTypeToMJ(c.NativeType);
             return { FieldName: c.Name, Type: t.Type, Length: t.Length, Precision: t.Precision, Scale: t.Scale, AllowsNull: c.Nullable, IsPrimaryKey: c.IsPrimaryKey };
          });
 
@@ -2712,9 +3079,9 @@ export class ManageMetadataBase {
          const entity = md.EntityByName(externalEntity.Name);
          if (entity) {
             // remove EntityFields no longer present in the remote object
-            const sqlRemove = this.buildExternalFieldRemoveSQL(mj_core_schema(), entity.Fields, eeFields.map(ef => ef.FieldName));
+            const sqlRemove = this.buildExternalFieldRemoveSQL(MjCoreSchema(), entity.Fields, eeFields.map(ef => ef.FieldName));
             if (sqlRemove) {
-               await this.LogSQLAndExecute(pool, sqlRemove, `SQL text to remove fields from external entity ${externalEntity.Name}`);
+               await this.logSQLAndExecute(pool, sqlRemove, `SQL text to remove fields from external entity ${externalEntity.Name}`);
                bUpdated = true;
             }
 
@@ -2748,8 +3115,8 @@ export class ManageMetadataBase {
          }
 
          if (bUpdated) {
-            const sqlUpdate = `UPDATE ${this.qs(mj_core_schema(), 'Entity')} SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()} WHERE ID='${externalEntity.ID}'`;
-            await this.LogSQLAndExecute(pool, sqlUpdate, `SQL text to update external entity updated date for ${externalEntity.Name}`);
+            const sqlUpdate = `UPDATE ${this.qs(MjCoreSchema(), 'Entity')} SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()} WHERE ID='${externalEntity.ID}'`;
+            await this.logSQLAndExecute(pool, sqlUpdate, `SQL text to update external entity updated date for ${externalEntity.Name}`);
          }
          return {success: bSuccess, updatedEntity: bUpdated, relationshipsUpdated: bRelationshipsUpdated};
       }
@@ -2813,7 +3180,7 @@ export class ManageMetadataBase {
          if (alreadySet) {
             continue;
          }
-         sqlStatements.push(`UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
+         sqlStatements.push(`UPDATE ${this.qs(MjCoreSchema(), 'EntityField')}
                          SET RelatedEntityID='${relatedEntity.ID}',
                              RelatedEntityFieldName='${refColumn.replace(/'/g, "''")}',
                              IsSoftForeignKey=1
@@ -2824,7 +3191,7 @@ export class ManageMetadataBase {
       if (sqlStatements.length === 0) {
          return false;
       }
-      await this.LogSQLBatchAndExecute(pool, sqlStatements, `Set external foreign keys for ${externalEntity.Name}`);
+      await this.logSQLBatchAndExecute(pool, sqlStatements, `Set external foreign keys for ${externalEntity.Name}`);
       return true;
    }
 
@@ -2843,22 +3210,25 @@ export class ManageMetadataBase {
             const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
             const entity = md.EntityByName(virtualEntity.Name)
             if (entity) {
-               const removeList = [];
-               const fieldsToRemove = entity.Fields.filter(f => !veFields.find((vf: any) => vf.FieldName === f.Name));
+               const removeList: string[] = [];
+               // Same case-insensitive match as manageSingleVirtualEntityField, which keeps the row and fixes its casing
+               const fieldsToRemove = entity.Fields.filter(f => !veFields.find((vf: { FieldName: string }) => vf.FieldName.trim().toLowerCase() === f.Name.trim().toLowerCase()));
                for (const f of fieldsToRemove) {
                   removeList.push(f.ID);
                }
 
                if (removeList.length > 0) {
-                  const sqlRemove = `DELETE FROM ${this.qs(mj_core_schema(), 'EntityField')} WHERE ID IN (${removeList.map(removeId => `'${removeId}'`).join(',')})`;
+                  const sqlRemove = `DELETE FROM ${this.qs(MjCoreSchema(), 'EntityField')} WHERE ID IN (${removeList.map(removeId => `'${removeId}'`).join(',')})`;
                   // this removes the fields that shouldn't be there anymore
-                  await this.LogSQLAndExecute(pool, sqlRemove, `SQL text to remove fields from entity ${virtualEntity.Name}`);
+                  await this.logSQLAndExecute(pool, sqlRemove, `SQL text to remove fields from entity ${virtualEntity.Name}`);
                   bUpdated = true;
                }
 
-               // check to see if any of the fields in the virtual entity have Pkey attribute set. If not, we will default to the first field
-               // as pkey and user can change this.
-               const hasPkey = entity.Fields.find(f => f.IsPrimaryKey) !== undefined;
+               // A key must survive the removal above; otherwise the first view column becomes the key.
+               const hasPkey = this.virtualEntityHasPrimaryKey(entity.Fields, new Set(removeList));
+               if (!hasPkey) {
+                  logStatus(`      ⚠️  Virtual entity ${virtualEntity.Name} has no primary key; using first view column ${veFields[0].FieldName}. Set PrimaryKey in additionalSchemaInfo to choose the key.`);
+               }
 
                // now create/update the fields that are in the view
                for (let i = 0; i < veFields.length; i++) {
@@ -2875,8 +3245,8 @@ export class ManageMetadataBase {
 
          if (bUpdated) {
             // finally make sure we update the UpdatedAt field for the entity if we made changes to its fields
-            const sqlUpdate = `UPDATE ${this.qs(mj_core_schema(), 'Entity')} SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()} WHERE ID='${virtualEntity.ID}'`;
-            await this.LogSQLAndExecute(pool, sqlUpdate, `SQL text to update virtual entity updated date for ${virtualEntity.Name}`);
+            const sqlUpdate = `UPDATE ${this.qs(MjCoreSchema(), 'Entity')} SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()} WHERE ID='${virtualEntity.ID}'`;
+            await this.logSQLAndExecute(pool, sqlUpdate, `SQL text to update virtual entity updated date for ${virtualEntity.Name}`);
          }
 
          return {success: bSuccess, updatedEntity: bUpdated};
@@ -2894,6 +3264,14 @@ export class ManageMetadataBase {
     */
    protected resolvePrimaryKeyFlags(makePrimaryKey: boolean, singleColumnPrimaryKey: boolean): { wantPrimaryKey: boolean; wantUnique: boolean } {
       return { wantPrimaryKey: makePrimaryKey, wantUnique: makePrimaryKey && singleColumnPrimaryKey };
+   }
+
+   /**
+    * True when a key field survives the removal of view columns that no longer exist.
+    * The cached field list still holds rows the sync just deleted, so they must be excluded.
+    */
+   protected virtualEntityHasPrimaryKey(fields: ReadonlyArray<Pick<EntityFieldInfo, 'ID' | 'IsPrimaryKey'>>, removedFieldIDs: ReadonlySet<string>): boolean {
+      return fields.some(f => f.IsPrimaryKey && !removedFieldIDs.has(f.ID));
    }
 
    /**
@@ -2948,7 +3326,9 @@ export class ManageMetadataBase {
             const pkFlagsChanged = this.primaryKeyFlagsChanged(
                { isPrimaryKey: field.IsPrimaryKey, isUnique: field.IsUnique },
                { wantPrimaryKey, wantUnique }, makePrimaryKey, reconcilePrimaryKey);
-            if (pkFlagsChanged ||
+            // The match above ignores case; the stored name takes the view column's exact casing.
+            const nameChanged = field.Name !== veField.FieldName;
+            if (pkFlagsChanged || nameChanged ||
                 field.Type.trim().toLowerCase() !== veField.Type.trim().toLowerCase() ||
                 field.Length !== veField.Length ||
                 field.AllowsNull !== veField.AllowsNull ||
@@ -2957,8 +3337,9 @@ export class ManageMetadataBase {
                 field.Sequence !== fieldSequence) {
                // the field needs to be updated, so update it
                const sqlUpdate = `UPDATE
-                                    ${this.qs(mj_core_schema(), 'EntityField')}
+                                    ${this.qs(MjCoreSchema(), 'EntityField')}
                                   SET
+                                    ${nameChanged ? `Name='${EscapeSQLString(veField.FieldName)}',` : ''}
                                     Sequence=${fieldSequence},
                                     Type='${veField.Type}',
                                     AllowsNull=${this.boolLit(veField.AllowsNull)},
@@ -2969,30 +3350,28 @@ export class ManageMetadataBase {
                                   WHERE
                                     ID = '${field.ID}'`; // don't need to update the __mj_UpdatedAt field here, that happens automatically via the trigger
 
-               await this.LogSQLAndExecute(pool, sqlUpdate, `SQL text to update virtual entity field ${veField.FieldName} for entity ${virtualEntity.Name}`);
+               await this.logSQLAndExecute(pool, sqlUpdate, `SQL text to update virtual entity field ${veField.FieldName} for entity ${virtualEntity.Name}`);
                didUpdate = true;
             }
          }
          else {
             // this means that we do NOT have a match so the field does not exist in the entity definition, so we need to add it
             newEntityFieldUUID = this.createNewUUID();
-            // Compute a non-colliding sequence by querying MAX(Sequence) for this entity. The
-            // ordinal `fieldSequence` (column index in the view) is correct for stable ordering
-            // when nothing exists yet, but a partial prior run could have left rows at the same
-            // ordinal under this EntityID — UQ_EntityField_EntityID_Sequence then fires on PG.
-            const safeSequence = await this.nextAvailableEntityFieldSequence(pool, entity.ID, fieldSequence);
+            // Apply-time Sequence: see applyTimeEntityFieldSequenceSQL. A literal here would be
+            // replayed verbatim from the CodeGen capture and collide on a fresh install.
             const q = (n: string) => this.qi(n);
-            const sqlAdd = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityField')} (
+            const sqlAdd = `INSERT INTO ${this.qs(MjCoreSchema(), 'EntityField')} (
                                       ${q('ID')}, ${q('EntityID')}, ${q('Name')}, ${q('Type')}, ${q('AllowsNull')},
                                       ${q('Length')}, ${q('Precision')}, ${q('Scale')},
                                       ${q('Sequence')}, ${q('IsPrimaryKey')}, ${q('IsUnique')},
                                       ${q('__mj_CreatedAt')}, ${q('__mj_UpdatedAt')} )
                             VALUES (  '${newEntityFieldUUID}', '${entity.ID}', '${String(veField.FieldName).replace(/'/g, "''")}', '${veField.Type}', ${this.boolLit(veField.AllowsNull)},
                                        ${veField.Length}, ${veField.Precision}, ${veField.Scale},
-                                       ${safeSequence}, ${this.boolLit(wantPrimaryKey)}, ${this.boolLit(wantUnique)},
+                                       ${this.applyTimeEntityFieldSequenceSQL(entity.ID)}, ${this.boolLit(wantPrimaryKey)}, ${this.boolLit(wantUnique)},
                                        ${this.utcNow()}, ${this.utcNow()}
                                     )`;
-            await this.LogSQLAndExecute(pool, sqlAdd, `SQL text to add virtual entity field ${veField.FieldName} for entity ${virtualEntity.Name}`);
+            await this.logSQLAndExecute(pool, sqlAdd, `SQL text to add virtual entity field ${veField.FieldName} for entity ${virtualEntity.Name}`);
+            ManageMetadataBase.registerNewField(entity.ID, veField.FieldName);
             didUpdate = true;
          }
       }
@@ -3017,14 +3396,16 @@ export class ManageMetadataBase {
          return;
       }
 
-      // Pre-build available entities list once (shared across all virtual entity decorations)
+      // Pre-build available entities list once (shared across all virtual entity decorations).
+      // Only single-column keys are offered as FK targets: an MJ foreign key references exactly one
+      // column (RelatedEntityFieldName), so a composite-key entity cannot be the target of a soft FK.
       const availableEntities = md.Entities
-         .filter(e => !e.VirtualEntity && e.PrimaryKeys.length > 0)
+         .filter(e => !e.VirtualEntity && e.PrimaryKeys.length === 1)
          .map(e => ({
             Name: e.Name,
             SchemaName: e.SchemaName,
             BaseTable: e.BaseTable,
-            PrimaryKeyField: e.PrimaryKeys[0]?.Name || 'ID'
+            PrimaryKeyField: e.FirstPrimaryKey.Name // first-pk-ok: filtered to PrimaryKeys.length === 1 above; this is the FK target column offered to the LLM
          }));
 
       logStatus(`   Decorating virtual entity fields with LLM (${virtualEntities.length} entities)...`);
@@ -3115,7 +3496,7 @@ export class ManageMetadataBase {
          }
 
          // Apply results to EntityField records
-         const schema = mj_core_schema();
+         const schema = MjCoreSchema();
          let anyUpdated = false;
 
          // Apply primary keys
@@ -3132,7 +3513,7 @@ export class ManageMetadataBase {
 
          if (anyUpdated) {
             const sqlUpdate = `UPDATE ${this.qs(schema, 'Entity')} SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()} WHERE ID='${entity.ID}'`;
-            await this.LogSQLAndExecute(pool, sqlUpdate, `Update entity timestamp for ${entity.Name} after LLM decoration`);
+            await this.logSQLAndExecute(pool, sqlUpdate, `Update entity timestamp for ${entity.Name} after LLM decoration`);
          }
 
          return { decorated: anyUpdated, skipped: false };
@@ -3221,17 +3602,17 @@ export class ManageMetadataBase {
       }
 
       // Load VE EntityField rows from DB (we need the ID and auto-update flags)
-      const schema = mj_core_schema();
+      const schema = MjCoreSchema();
       const fieldsSQL = `
-         SELECT ID, Name, Category, AutoUpdateCategory, AutoUpdateDisplayName, GeneratedFormSection, DisplayName, ExtendedType, CodeType
+         SELECT ID, Name, Category, AutoUpdateCategory, AutoUpdateDisplayName, AutoUpdateExtendedType, GeneratedFormSection, DisplayName, ExtendedType, CodeType, ValueListType
          FROM ${this.qs(schema, 'EntityField')}
          WHERE EntityID = '${entity.ID}'
       `;
       const fieldsResult = await this.runQuery(pool, fieldsSQL);
       const dbFields = fieldsResult.recordset as Array<{
          ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; 
-         AutoUpdateDisplayName: boolean, GeneratedFormSection: string, DisplayName: string, 
-         ExtendedType: string, CodeType: string
+         AutoUpdateDisplayName: boolean; AutoUpdateExtendedType: boolean; GeneratedFormSection: string; DisplayName: string; 
+         ExtendedType: string; CodeType: string; ValueListType?: string | null;
       }>;
 
       if (dbFields.length === 0) return false;
@@ -3250,16 +3631,17 @@ export class ManageMetadataBase {
       if (fieldCategories.length === 0) return false;
 
       const existingCategories = this.buildExistingCategorySet(dbFields);
-      await this.applyFieldCategories(pool, entity, dbFields, fieldCategories, existingCategories);
+      const isNewEntity = ManageMetadataBase.newEntityList.includes(entity.Name);
+      await this.applyFieldCategories(pool, entity, dbFields, fieldCategories, existingCategories, { isNewEntity });
 
       // Apply entity icon if provided
       if (result.entityIcon) {
-         await this.applyEntityIcon(pool, entity.ID, result.entityIcon);
+         await this.applyEntityIcon(pool, entity.ID, result.entityIcon, entity.Name);
       }
 
       // Apply category info settings if provided
       if (result.categoryInfo && Object.keys(result.categoryInfo).length > 0) {
-         await this.applyCategoryInfoSettings(pool, entity.ID, result.categoryInfo);
+         await this.applyCategoryInfoSettings(pool, entity.ID, result.categoryInfo, entity.Name);
       }
 
       logStatus(`         Applied categories for VE ${entity.Name} (${fieldCategories.length} fields)`);
@@ -3306,7 +3688,7 @@ export class ManageMetadataBase {
          logStatus(`         ✓ Set PK for ${entity.Name}.${pk} (LLM-identified)`);
       }
 
-      await this.LogSQLBatchAndExecute(pool, sqlStatements, `Set LLM-identified PKs for ${entity.Name}: ${validPKs.join(', ')}`);
+      await this.logSQLBatchAndExecute(pool, sqlStatements, `Set LLM-identified PKs for ${entity.Name}: ${validPKs.join(', ')}`);
       return true;
    }
 
@@ -3365,7 +3747,7 @@ export class ManageMetadataBase {
          return false;
       }
 
-      await this.LogSQLBatchAndExecute(pool, sqlStatements, `Set LLM-identified FKs for ${entity.Name}`);
+      await this.logSQLBatchAndExecute(pool, sqlStatements, `Set LLM-identified FKs for ${entity.Name}`);
       return true;
    }
 
@@ -3397,10 +3779,13 @@ export class ManageMetadataBase {
          }
 
          const escapedDescription = fd.description.replace(/'/g, "''");
-         let setClauses = `Description='${escapedDescription}'`;
+         let setClauses = `Description='${escapedDescription}', ${this.qi('AutoUpdateDescription')} = ${this.boolLit(false)}`;
 
-         // Apply extended type if provided and valid
-         if (fd.extendedType) {
+         // Apply extended type if provided, valid, and the field is not locked
+         const isFieldNew = ManageMetadataBase.isFieldNew(entity.ID, field.Name);
+         const isTypeReopened = ManageMetadataBase.isTypeReopened(entity.ID, field.Name);
+         const isNewEntity = ManageMetadataBase.newEntityList.includes(entity.Name);
+         if (fd.extendedType && field.AutoUpdateExtendedType && (isNewEntity || isFieldNew || isTypeReopened)) {
             const validExtendedType = this.validateExtendedType(fd.extendedType);
             if (validExtendedType) {
                setClauses += `, ExtendedType='${validExtendedType}'`;
@@ -3416,17 +3801,14 @@ export class ManageMetadataBase {
          return false;
       }
 
-      await this.LogSQLBatchAndExecute(pool, sqlStatements, `Set LLM-generated descriptions for ${entity.Name} (${sqlStatements.length} fields)`);
+      await this.logSQLBatchAndExecute(pool, sqlStatements, `Set LLM-generated descriptions for ${entity.Name} (${sqlStatements.length} fields)`);
       return true;
    }
 
    /**
-    * Valid values for EntityField.ExtendedType, plus common LLM aliases mapped to valid values.
+    * Valid values for EntityField.ExtendedType. Domain lives on {@link EntityFieldInfo.ExtendedTypes}.
     */
-   private static readonly VALID_EXTENDED_TYPES = new Set<EntityFieldExtendedType>([
-      'Code', 'Email', 'FaceTime', 'Geo', 'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince',
-      'GeoCity', 'GeoPostalCode', 'GeoAddress', 'MSTeams', 'Other', 'SIP', 'SMS', 'Skype', 'Tel', 'URL', 'WhatsApp', 'ZoomMtg'
-   ]);
+   private static readonly VALID_EXTENDED_TYPES = new Set<EntityFieldExtendedType>(EntityFieldInfo.ExtendedTypes);
 
    private static readonly EXTENDED_TYPE_ALIASES: Record<string, EntityFieldExtendedType> = {
       'phone': 'Tel',
@@ -3457,6 +3839,17 @@ export class ManageMetadataBase {
       'zoom': 'ZoomMtg',
       'whatsapp': 'WhatsApp',
       'skype': 'Skype',
+      'image': 'Image',
+      'photo': 'Image',
+      'picture': 'Image',
+      'logo': 'Image',
+      'avatar': 'Image',
+      'thumbnail': 'Image',
+      'color': 'Color',
+      'colour': 'Color',
+      'hex': 'Color',
+      'json': 'JSON',
+      'jsonb': 'JSON',
    };
 
    /**
@@ -3551,7 +3944,7 @@ export class ManageMetadataBase {
          // SQL Server's case-insensitive resolution hid this for as long as IS-A ran only there.
          const existsResult = await this.runQueryWithParams(pool,
                `SELECT ${this.qi('ID')}, ${this.qi('IsVirtual')}, ${this.qi('Type')}, ${this.qi('Length')}, ${this.qi('Precision')}, ${this.qi('Scale')}, ${this.qi('AllowsNull')}, ${this.qi('AllowUpdateAPI')}
-                    FROM ${this.qs(mj_core_schema(), 'EntityField')}
+                    FROM ${this.qs(MjCoreSchema(), 'EntityField')}
                     WHERE ${this.qi('EntityID')} = @EntityID AND ${this.qi('Name')} = @FieldName`,
                { 'EntityID': childEntity.ID, 'FieldName': parentField.Name }
                );
@@ -3568,7 +3961,7 @@ export class ManageMetadataBase {
                !existingRow.AllowUpdateAPI;
 
             if (needsUpdate) {
-               const sqlUpdate = `UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
+               const sqlUpdate = `UPDATE ${this.qs(MjCoreSchema(), 'EntityField')}
                   SET ${this.qi('IsVirtual')}=${this.boolLit(true)},
                       ${this.qi('Type')}='${parentField.Type}',
                       ${this.qi('Length')}=${parentField.Length},
@@ -3577,22 +3970,17 @@ export class ManageMetadataBase {
                       ${this.qi('AllowsNull')}=${this.boolLit(parentField.AllowsNull)},
                       ${this.qi('AllowUpdateAPI')}=${this.boolLit(true)}
                   WHERE ${this.qi('ID')}='${existingRow.ID}'`;
-               await this.LogSQLAndExecute(pool, sqlUpdate,
+               await this.logSQLAndExecute(pool, sqlUpdate,
                   `Update IS-A parent field ${parentField.Name} on ${childEntity.Name}`);
                bUpdated = true;
             }
          } else {
             // Create new virtual field record for this parent field
             const newFieldID = this.createNewUUID();
-            // Use high sequence — will be reordered by updateExistingEntityFieldsFromSchema.
-            // Query MAX(Sequence) at insert time so we never collide with an existing row
-            // (e.g. partial prior run left a record at the candidate ordinal under this
-            // EntityID — UQ_EntityField_EntityID_Sequence then fires on PG).
-            const candidate = 100000 + parentFields.indexOf(parentField);
-            const sequence = await this.nextAvailableEntityFieldSequence(pool, childEntity.ID, candidate);
-
+            // Apply-time Sequence (see applyTimeEntityFieldSequenceSQL); reordered by
+            // updateExistingEntityFieldsFromSchema afterwards.
             const q = (n: string) => this.qi(n);
-            const sqlInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityField')} (
+            const sqlInsert = `INSERT INTO ${this.qs(MjCoreSchema(), 'EntityField')} (
                   ${q('ID')}, ${q('EntityID')}, ${q('Name')}, ${q('Type')}, ${q('AllowsNull')},
                   ${q('Length')}, ${q('Precision')}, ${q('Scale')},
                   ${q('Sequence')}, ${q('IsVirtual')}, ${q('AllowUpdateAPI')},
@@ -3602,10 +3990,11 @@ export class ManageMetadataBase {
                   '${newFieldID}', '${childEntity.ID}', '${parentField.Name}',
                   '${parentField.Type}', ${this.boolLit(parentField.AllowsNull)},
                   ${parentField.Length}, ${parentField.Precision}, ${parentField.Scale},
-                  ${sequence}, ${this.boolLit(true)}, ${this.boolLit(true)}, ${this.boolLit(false)}, ${this.boolLit(false)},
+                  ${this.applyTimeEntityFieldSequenceSQL(childEntity.ID)}, ${this.boolLit(true)}, ${this.boolLit(true)}, ${this.boolLit(false)}, ${this.boolLit(false)},
                   ${this.utcNow()}, ${this.utcNow()})`;
-            await this.LogSQLAndExecute(pool, sqlInsert,
+            await this.logSQLAndExecute(pool, sqlInsert,
                `Create IS-A parent field ${parentField.Name} on ${childEntity.Name}`);
+            ManageMetadataBase.registerNewField(childEntity.ID, parentField.Name);
             bUpdated = true;
          }
       }
@@ -3620,15 +4009,15 @@ export class ManageMetadataBase {
       );
 
       for (const staleField of staleFields) {
-         const sqlDelete = `DELETE FROM ${this.qs(mj_core_schema(), 'EntityField')} WHERE ID='${staleField.ID}'`;
-         await this.LogSQLAndExecute(pool, sqlDelete,
+         const sqlDelete = `DELETE FROM ${this.qs(MjCoreSchema(), 'EntityField')} WHERE ID='${staleField.ID}'`;
+         await this.logSQLAndExecute(pool, sqlDelete,
             `Remove stale IS-A parent field ${staleField.Name} from ${childEntity.Name}`);
          bUpdated = true;
       }
 
       if (bUpdated) {
-         const sqlUpdate = `UPDATE ${this.qs(mj_core_schema(), 'Entity')} SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()} WHERE ID='${childEntity.ID}'`;
-         await this.LogSQLAndExecute(pool, sqlUpdate,
+         const sqlUpdate = `UPDATE ${this.qs(MjCoreSchema(), 'Entity')} SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()} WHERE ID='${childEntity.ID}'`;
+         await this.logSQLAndExecute(pool, sqlUpdate,
             `Update entity timestamp for ${childEntity.Name} after IS-A field sync`);
       }
 
@@ -3686,17 +4075,17 @@ export class ManageMetadataBase {
       try {
          // STEP 1 - search for all foreign keys in the vwEntityFields view, we use the RelatedEntityID field to determine our FKs
          const sSQL = `SELECT *
-                       FROM ${this.qs(mj_core_schema(), 'vwEntityFields')}
+                       FROM ${this.qs(MjCoreSchema(), 'vwEntityFields')}
                        WHERE
                              RelatedEntityID IS NOT NULL AND
                              IsVirtual = ${this.boolLit(false)} AND
-                             EntityID NOT IN (SELECT ID FROM ${this.qs(mj_core_schema(), 'Entity')} WHERE SchemaName IN (${excludeSchemas.map(s => `'${s}'`).join(',')}))
-                       ORDER BY RelatedEntityID`;
+                             EntityID NOT IN (SELECT ID FROM ${this.qs(MjCoreSchema(), 'Entity')} WHERE SchemaName IN (${excludeSchemas.map(s => `'${s}'`).join(',')}))
+                       ORDER BY RelatedEntityID, EntityID, Sequence, ID`;
          const entityFieldsResult = await this.runQuery(pool, sSQL);
          const entityFields = entityFieldsResult.recordset;
 
          // Get the relationship counts for each entity
-         const sSQLRelationshipCount = `SELECT ${this.qi('EntityID')}, COUNT(*) AS ${this.qi('Count')} FROM ${this.qs(mj_core_schema(), 'EntityRelationship')} GROUP BY ${this.qi('EntityID')}`;
+         const sSQLRelationshipCount = `SELECT ${this.qi('EntityID')}, COUNT(*) AS ${this.qi('Count')} FROM ${this.qs(MjCoreSchema(), 'EntityRelationship')} GROUP BY ${this.qi('EntityID')}`;
          const relationshipCountsResult = await this.runQuery(pool, sSQLRelationshipCount);
          const relationshipCounts = relationshipCountsResult.recordset;
 
@@ -3707,7 +4096,7 @@ export class ManageMetadataBase {
          }
 
          // get all relationships in one query for performance improvement
-         const sSQLRelationship = `SELECT * FROM ${this.qs(mj_core_schema(), 'EntityRelationship')}`;
+         const sSQLRelationship = `SELECT * FROM ${this.qs(MjCoreSchema(), 'EntityRelationship')}`;
          const allRelationshipsResult = await this.runQuery(pool, sSQLRelationship);
          const allRelationships = allRelationshipsResult.recordset;
 
@@ -3739,12 +4128,12 @@ export class ManageMetadataBase {
 
             batchCount++;
             if (batchCount % batchItems === 0 && batchSQL.length > 0) {
-               await this.LogSQLAndExecute(pool, batchSQL);
+               await this.logSQLAndExecute(pool, batchSQL);
                batchSQL = '';
             }
          }
          if (batchSQL.length > 0) {
-            await this.LogSQLAndExecute(pool, batchSQL);
+            await this.logSQLAndExecute(pool, batchSQL);
          }
 
          // NOTE: Stale relationship cleanup is intentionally NOT done here because this
@@ -3789,8 +4178,8 @@ export class ManageMetadataBase {
       const relCount = relationshipCountMap.get(parentEntityID) || 0;
       const sequence = relCount + 1;
       const newEntityRelationshipUUID = this.createNewUUID();
-      const checkQuery = `SELECT 1 FROM ${this.qs(mj_core_schema(), 'EntityRelationship')} WHERE ${this.qi('ID')} = '${newEntityRelationshipUUID}'`;
-      const insertSQL = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityRelationship')} (${this.qi('ID')}, ${this.qi('EntityID')}, ${this.qi('RelatedEntityID')}, ${this.qi('RelatedEntityJoinField')}, ${this.qi('Type')}, ${this.qi('BundleInAPI')}, ${this.qi('DisplayInForm')}, ${this.qi('Sequence')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')})
+      const checkQuery = `SELECT 1 FROM ${this.qs(MjCoreSchema(), 'EntityRelationship')} WHERE ${this.qi('ID')} = '${newEntityRelationshipUUID}'`;
+      const insertSQL = `INSERT INTO ${this.qs(MjCoreSchema(), 'EntityRelationship')} (${this.qi('ID')}, ${this.qi('EntityID')}, ${this.qi('RelatedEntityID')}, ${this.qi('RelatedEntityJoinField')}, ${this.qi('Type')}, ${this.qi('BundleInAPI')}, ${this.qi('DisplayInForm')}, ${this.qi('Sequence')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')})
                     VALUES ('${newEntityRelationshipUUID}', '${f.RelatedEntityID}', '${f.EntityID}', '${f.Name}', 'One To Many', ${this.boolLit(true)}, ${this.boolLit(true)}, ${sequence}, ${this.utcNow()}, ${this.utcNow()})`;
       relationshipCountMap.set(parentEntityID, sequence);
       return `
@@ -3864,7 +4253,7 @@ export class ManageMetadataBase {
             logStatus(`      > Updating EntityRelationship join field: ${oldJoinField} -> ${newJoinField} (ID: ${r.ID})`);
             sql += `
 /* Update EntityRelationship join field from '${oldJoinField}' to '${newJoinField}' */
-   UPDATE ${this.qs(mj_core_schema(), 'EntityRelationship')}
+   UPDATE ${this.qs(MjCoreSchema(), 'EntityRelationship')}
       SET ${this.qi('RelatedEntityJoinField')} = '${newJoinField}',
           ${this.qi('__mj_UpdatedAt')} = ${this.utcNow()}
       WHERE ${this.qi('ID')} = '${r.ID}';
@@ -3889,19 +4278,19 @@ export class ManageMetadataBase {
     * @param pool - database connection
     * @param excludeSchemas - schemas to exclude from FK field lookup
     */
-   public async cleanupStaleEntityRelationships(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
+   public async CleanupStaleEntityRelationships(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
       try {
          const sSQL = `SELECT *
-                       FROM ${this.qs(mj_core_schema(), 'vwEntityFields')}
+                       FROM ${this.qs(MjCoreSchema(), 'vwEntityFields')}
                        WHERE
                              RelatedEntityID IS NOT NULL AND
                              IsVirtual = ${this.boolLit(false)} AND
-                             EntityID NOT IN (SELECT ID FROM ${this.qs(mj_core_schema(), 'Entity')} WHERE SchemaName IN (${excludeSchemas.map(s => `'${s}'`).join(',')}))
-                       ORDER BY RelatedEntityID`;
+                             EntityID NOT IN (SELECT ID FROM ${this.qs(MjCoreSchema(), 'Entity')} WHERE SchemaName IN (${excludeSchemas.map(s => `'${s}'`).join(',')}))
+                       ORDER BY RelatedEntityID, EntityID, Sequence, ID`;
          const entityFieldsResult = await this.runQuery(pool, sSQL);
          const entityFields = entityFieldsResult.recordset;
 
-         const sSQLRelationship = `SELECT * FROM ${this.qs(mj_core_schema(), 'EntityRelationship')}`;
+         const sSQLRelationship = `SELECT * FROM ${this.qs(MjCoreSchema(), 'EntityRelationship')}`;
          const allRelationshipsResult = await this.runQuery(pool, sSQLRelationship);
          const allRelationships = allRelationshipsResult.recordset;
 
@@ -3912,6 +4301,11 @@ export class ManageMetadataBase {
          logError(e as string);
          return false;
       }
+   }
+
+   /** @deprecated Use {@link CleanupStaleEntityRelationships}. */
+   public async cleanupStaleEntityRelationships(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
+      return this.CleanupStaleEntityRelationships(pool, excludeSchemas);
    }
 
    /**
@@ -3940,10 +4334,10 @@ export class ManageMetadataBase {
             logStatus(`      > Removing stale EntityRelationship: ${r.Entity} -> ${r.RelatedEntity} via '${r.RelatedEntityJoinField}' (ID: ${r.ID})`);
             deleteSQL += `
 /* Remove stale EntityRelationship: ${r.Entity} -> ${r.RelatedEntity} (FK field '${r.RelatedEntityJoinField}' no longer exists) */
-   DELETE FROM ${this.qs(mj_core_schema(), 'EntityRelationship')} WHERE ${this.qi('ID')} = '${r.ID}';
+   DELETE FROM ${this.qs(MjCoreSchema(), 'EntityRelationship')} WHERE ${this.qi('ID')} = '${r.ID}';
 `;
          }
-         await this.LogSQLAndExecute(pool, deleteSQL, 'Remove stale One-To-Many EntityRelationships');
+         await this.logSQLAndExecute(pool, deleteSQL, 'Remove stale One-To-Many EntityRelationships');
       }
    }
 
@@ -3955,7 +4349,7 @@ export class ManageMetadataBase {
     */
    protected async checkAndRemoveMetadataForDeletedTables(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
       try {
-         const sql = `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntitiesWithMissingBaseTables')}${this.dbProvider.getEntitiesWithMissingBaseTablesFilter()}`;
+         const sql = `SELECT * FROM ${this.qs(MjCoreSchema(), 'vwEntitiesWithMissingBaseTables')}${this.dbProvider.getEntitiesWithMissingBaseTablesFilter()}`;
          const entitiesResult = await this.runQuery(pool, sql);
          const entities = <EntityInfo[]>entitiesResult.recordset;
          if (entities && entities.length > 0) {
@@ -3978,8 +4372,8 @@ export class ManageMetadataBase {
                   // discardResult: this routine only performs deletions — nothing below reads rows
                   // from it — and on PostgreSQL it is declared RETURNS SETOF record, which cannot be
                   // invoked through the default `SELECT * FROM` form at all.
-                  const sqlDelete = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spDeleteEntityWithCoreDependencies', [`'${e.ID}'`], ['EntityID'], true);
-                  await this.LogSQLAndExecute(pool, sqlDelete, `SQL text to remove entity ${e.Name}`);
+                  const sqlDelete = this.dbProvider.callRoutineSQL(MjCoreSchema(), 'spDeleteEntityWithCoreDependencies', [`'${e.ID}'`], ['EntityID'], true);
+                  await this.logSQLAndExecute(pool, sqlDelete, `SQL text to remove entity ${e.Name}`);
                   logStatus(`      > Removed metadata for table ${e.SchemaName}.${e.BaseTable}`);
                   // Recorded only after the delete succeeds, so a failed removal (logged below for
                   // an admin to handle) does not mark a schema dirty for an entity still present.
@@ -4019,10 +4413,10 @@ export class ManageMetadataBase {
             // Object type codes: P = Stored Procedure, V = View, FN = Scalar Function, IF/TF = Table-Valued Function
             const upperType = type.toUpperCase() as 'VIEW' | 'PROCEDURE' | 'FUNCTION';
             const sqlDelete = this.dbProvider.dropObjectSQL(upperType, schemaName, name);
-            await this.LogSQLAndExecute(pool, sqlDelete, `SQL text to remove ${type} ${schemaName}.${name}`);
+            await this.logSQLAndExecute(pool, sqlDelete, `SQL text to remove ${type} ${schemaName}.${name}`);
 
             // next up, we need to clean up the cache of saved DB objects that may exist for this entity in the appropriate sub-directory.
-            const sqlOutputDir = outputDir('SQL', true);
+            const sqlOutputDir = OutputDir('SQL', true);
             if (sqlOutputDir) {
                // now do the same thing for the /schema directory within the provided directory
                const fType = type === 'procedure' ? 'sp' : type === 'view' ? 'view' : 'full_text_search_function';
@@ -4099,7 +4493,7 @@ export class ManageMetadataBase {
     *   which is the typical "no schema changes since last run" case in Pass 2.
     *   `undefined` (default) preserves prior full-scan behavior.
     */
-   public async manageEntityFields(pool: CodeGenConnection, excludeSchemas: string[], skipCreatedAtUpdatedAtDeletedAtFieldValidation: boolean, skipEntityFieldValues: boolean, currentUser: UserInfo, skipAdvancedGeneration: boolean, skipDeleteUnneededFields: boolean = false, entityFilter?: string[]): Promise<boolean> {
+   public async ManageEntityFields(pool: CodeGenConnection, excludeSchemas: string[], skipCreatedAtUpdatedAtDeletedAtFieldValidation: boolean, skipEntityFieldValues: boolean, currentUser: UserInfo, skipAdvancedGeneration: boolean, skipDeleteUnneededFields: boolean = false, entityFilter?: string[]): Promise<boolean> {
       let bSuccess = true;
       const startTime: Date = new Date();
 
@@ -4146,7 +4540,7 @@ export class ManageMetadataBase {
       // AN: 14-June-2025 - See note below about the new order of these steps, this must
       // happen before we update existing entity fields from schema.
       const step2StartTime: Date = new Date();
-      if (! await this.createNewEntityFieldsFromSchema(pool, scopedEntityIDs)) { // has its own internal filtering for exclude schema/table so don't pass in
+      if (! await this.createNewEntityFieldsFromSchema(pool, scopedEntityIDs, excludeSchemas)) {
          logError ('Error creating new entity fields from schema')
          bSuccess = false;
       }
@@ -4157,15 +4551,15 @@ export class ManageMetadataBase {
       // Fix: derive virtual field AllowsNull from the FK column that drives the JOIN.
       // The virtual field name = FK field name minus trailing "ID" (e.g. ClassID → Class).
       if (this.dbProvider.NeedsVirtualFieldNullabilityFix) {
-         const fixSQL = this.dbProvider.getFixVirtualFieldNullabilitySQL(mj_core_schema());
+         const fixSQL = this.dbProvider.getFixVirtualFieldNullabilitySQL(MjCoreSchema());
          if (fixSQL) {
-            await this.LogSQLAndExecute(pool, fixSQL, 'SQL to fix virtual field nullability');
+            await this.logSQLAndExecute(pool, fixSQL, 'SQL to fix virtual field nullability');
          }
       }
 
       // AN: 14-June-2025 - we are now running this AFTER we create new entity fields from schema
       // which results in the same pattern of behavior as migrations where we first create new fields
-      // with VERY HIGH sequence numbers (e.g. 100,000 above what they will be approx) and then
+      // at an apply-time MAX(Sequence)+ordinal placeholder (above every existing row) and then
       // we align them properly in sequential order from 1+ via this method below.
       const step3StartTime: Date = new Date();
       if (! await this.updateExistingEntityFieldsFromSchema(pool, excludeSchemas, scopedEntityIDs)) {
@@ -4237,18 +4631,40 @@ export class ManageMetadataBase {
       // Advanced Generation - Smart field identification and form layout
       if (!skipAdvancedGeneration) {
          const step7StartTime: Date = new Date();
-         startSpinner('Applying AI-powered advanced generation (smart fields, form layout)...');
+         StartSpinner('Applying AI-powered advanced generation (smart fields, form layout)...');
          if (! await this.applyAdvancedGeneration(pool, excludeSchemas, currentUser)) {
             logError('Error applying advanced generation features');
             // Don't fail the entire process - advanced generation is optional
          }
          const step7Elapsed = ((new Date().getTime() - step7StartTime.getTime()) / 1000).toFixed(1);
-         succeedSpinner(`Advanced generation completed (${step7Elapsed}s)`);
+         SucceedSpinner(`Advanced generation completed (${step7Elapsed}s)`);
+      }
+
+      // Deterministic search-flag hygiene. Deliberately OUTSIDE the `skipAdvancedGeneration`
+      // guard above: advanced generation is off by default, and an entity created under that
+      // default is precisely the one that ends up flagged searchable with nothing searchable on
+      // it. Ordered after it so the model's choices, where it did run, are already applied and
+      // the seed only fills a genuine gap. See buildSearchFlagHygieneSQL.
+      if (!await this.applySearchFlagHygiene(pool, excludeSchemas)) {
+         logError('Error applying search flag hygiene');
+         // FATAL, unlike advanced generation. This pass compares before it writes, so a failure
+         // means the probes could not run — and because nothing is written in that case, the pass
+         // failing is indistinguishable from the pass having nothing to do: no SQL, no artifact,
+         // every gate green. Advanced generation can degrade quietly because it only ever ADDS
+         // model-suggested metadata; this one turns search OFF on entities and is the only thing
+         // keeping AllowUserSearchAPI honest, so a run where it did not execute must not be
+         // reported as a clean run.
+         bSuccess = false;
       }
 
       logStatus(`      Total time to manage entity fields: ${(new Date().getTime() - startTime.getTime()) / 1000} seconds`);
 
       return bSuccess;
+   }
+
+   /** @deprecated Use {@link ManageEntityFields}. */
+   public async manageEntityFields(pool: CodeGenConnection, excludeSchemas: string[], skipCreatedAtUpdatedAtDeletedAtFieldValidation: boolean, skipEntityFieldValues: boolean, currentUser: UserInfo, skipAdvancedGeneration: boolean, skipDeleteUnneededFields: boolean = false, entityFilter?: string[]): Promise<boolean> {
+      return this.ManageEntityFields(pool, excludeSchemas, skipCreatedAtUpdatedAtDeletedAtFieldValidation, skipEntityFieldValues, currentUser, skipAdvancedGeneration, skipDeleteUnneededFields, entityFilter);
    }
 
 
@@ -4260,7 +4676,7 @@ export class ManageMetadataBase {
          const sqlEntities = `SELECT
                                  *
                               FROM
-                                 ${this.qs(mj_core_schema(), 'vwEntities')}
+                                 ${this.qs(MjCoreSchema(), 'vwEntities')}
                               WHERE
                                  VirtualEntity=${this.boolLit(false)} AND
                                  DeleteType='Soft' AND
@@ -4305,6 +4721,8 @@ export class ManageMetadataBase {
     * For soft PKs: Sets BOTH IsPrimaryKey=1 AND IsSoftPrimaryKey=1 (IsPrimaryKey is source of truth, IsSoftPrimaryKey protects from schema sync).
     * For soft FKs: Sets RelatedEntityID/RelatedEntityFieldName + IsSoftForeignKey=1 (RelatedEntityID is source of truth, IsSoftForeignKey protects from schema sync).
     * All UPDATE statements are logged to migration files via LogSQLAndExecute() for CI/CD traceability.
+    * Covers table entries only. VirtualEntities entries are applied after the view-column sync by
+    * {@link applyVirtualEntitySoftKeys}.
     */
    protected async applySoftPKFKConfig(pool: CodeGenConnection): Promise<boolean> {
       // Check if additionalSchemaInfo is configured in mj.config.cjs
@@ -4323,89 +4741,200 @@ export class ManageMetadataBase {
       try {
          logStatus(`         Found ${configInfo.additionalSchemaInfo}, applying soft PK/FK configuration...`);
          const config = ManageMetadataBase.getSoftPKFKConfig();
-
-         let totalPKs = 0;
-         let totalFKs = 0;
-         const schema = mj_core_schema();
+         if (!config) {
+            return true;
+         }
 
          // Config supports two formats:
          //   1. Schema-as-key (template format): { "dbo": [{ "TableName": "Orders", ... }] }
          //   2. Flat tables array (legacy format): { "tables": [{ "SchemaName": "dbo", "TableName": "Orders", ... }] }
          // Both use PascalCase property names.
-         const tables = this.extractTablesFromConfig(config);
-
-         for (const table of tables) {
-            const tableSchema = table.SchemaName;
-            const tableName = table.TableName;
-
-            // Look up entity ID (SELECT query - no need to log to migration file)
-            const entityLookupSQL = `SELECT ID FROM ${this.qs(schema, 'Entity')} WHERE SchemaName = '${tableSchema}' AND BaseTable = '${tableName}'`;
-            const entityResult = await this.runQuery(pool, entityLookupSQL);
-
-            if (entityResult.recordset.length === 0) {
-               logStatus(`         ⚠️  Entity not found for ${tableSchema}.${tableName} - skipping`);
-               continue;
-            }
-
-            const entityId = entityResult.recordset[0].ID;
-
-            // Process primary keys - set BOTH IsPrimaryKey = 1 AND IsSoftPrimaryKey = 1
-            // IsPrimaryKey is the source of truth, IsSoftPrimaryKey protects it from schema sync
-            const primaryKeys = table.PrimaryKey || [];
-            if (primaryKeys.length > 0) {
-               for (const pk of primaryKeys) {
-                  const sSQL = `UPDATE ${this.qs(schema, 'EntityField')}
-                                SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()},
-                                    ${this.qi('IsPrimaryKey')} = ${this.boolLit(true)},
-                                    ${this.qi('IsSoftPrimaryKey')} = ${this.boolLit(true)}
-                                WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = '${pk.FieldName}'`;
-                  const result = await this.LogSQLAndExecute(pool, sSQL, `Set soft PK for ${tableSchema}.${tableName}.${pk.FieldName}`);
-
-                  if (result !== null) {
-                     logStatus(`         ✓ Set IsPrimaryKey=1, IsSoftPrimaryKey=1 for ${tableName}.${pk.FieldName}`);
-                     totalPKs++;
-                  }
-               }
-            }
-
-            // Process foreign keys - set RelatedEntityID, RelatedEntityFieldName, and IsSoftForeignKey = 1
-            const foreignKeys = table.ForeignKeys || [];
-            if (foreignKeys.length > 0) {
-               for (const fk of foreignKeys) {
-                  const fkSchema = fk.SchemaName || tableSchema;
-                  // Look up related entity ID (SELECT query - no need to log to migration file)
-                  const relatedLookupSQL = `SELECT ID FROM ${this.qs(schema, 'Entity')} WHERE SchemaName = '${fkSchema}' AND BaseTable = '${fk.RelatedTable}'`;
-                  const relatedEntityResult = await this.runQuery(pool, relatedLookupSQL);
-
-                  if (relatedEntityResult.recordset.length === 0) {
-                     logStatus(`         ⚠️  Related entity not found for ${fkSchema}.${fk.RelatedTable} - skipping FK ${fk.FieldName}`);
-                     continue;
-                  }
-
-                  const relatedEntityId = relatedEntityResult.recordset[0].ID;
-
-                  const sSQL = `UPDATE ${this.qs(schema, 'EntityField')}
-                                SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()},
-                                    ${this.qi('RelatedEntityID')} = '${relatedEntityId}',
-                                    ${this.qi('RelatedEntityFieldName')} = '${fk.RelatedField}',
-                                    ${this.qi('IsSoftForeignKey')} = ${this.boolLit(true)}
-                                WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = '${fk.FieldName}'`;
-                  const result = await this.LogSQLAndExecute(pool, sSQL, `Set soft FK for ${tableSchema}.${tableName}.${fk.FieldName} → ${fk.RelatedTable}.${fk.RelatedField}`);
-
-                  if (result !== null) {
-                     logStatus(`         ✓ Set soft FK for ${tableName}.${fk.FieldName} → ${fk.RelatedTable}.${fk.RelatedField}`);
-                     totalFKs++;
-                  }
-               }
-            }
-         }
-
-         logStatus(`         Applied ${totalPKs} soft PK(s) and ${totalFKs} soft FK(s) from configuration`);
+         await this.applySoftKeysToTables(pool, this.extractTablesFromConfig(config), false);
          return true;
       } catch (e) {
          logError(`Error applying soft PK/FK configuration: ${e}`);
          return false;
       }
+   }
+
+   /**
+    * Applies the PrimaryKey and ForeignKeys of VirtualEntities entries. Runs after the view-column
+    * sync, so it sees the fields of entities and view columns created in the same run. On a
+    * composite key it also clears IsUnique, which spCreateVirtualEntity set on the first column.
+    * @returns success, and the number of UPDATEs written
+    */
+   protected async applyVirtualEntitySoftKeys(pool: CodeGenConnection): Promise<{ success: boolean; writeCount: number }> {
+      const config = ManageMetadataBase.GetSoftPKFKConfig();
+      const entries = config ? this.virtualEntityConfigsAsTableConfigs(config) : [];
+      if (entries.length === 0) {
+         return { success: true, writeCount: 0 };
+      }
+      try {
+         logStatus(`   Applying configured keys for ${entries.length} virtual entit${entries.length === 1 ? 'y' : 'ies'}...`);
+         return { success: true, writeCount: await this.applySoftKeysToTables(pool, entries, true) };
+      } catch (e) {
+         logError(`Error applying VirtualEntities soft PK/FK configuration: ${e}`);
+         return { success: false, writeCount: 0 };
+      }
+   }
+
+   /**
+    * Applies the VirtualEntities keys, then refreshes metadata and rebuilds relationships when a key
+    * changed. Runs on every CodeGen run, right after the view-column sync.
+    */
+   protected async applyConfiguredVirtualEntityKeys(pool: CodeGenConnection, excludeSchemas: string[], md: Metadata): Promise<boolean> {
+      const { success, writeCount } = await this.applyVirtualEntitySoftKeys(pool);
+      if (!success) {
+         logError('   Error applying soft PK/FK configuration for virtual entities');
+         return false;
+      }
+      if (writeCount === 0) {
+         return true;
+      }
+      await md.Refresh();
+      logStatus('   Managing virtual-entity relationships...');
+      if (!await this.manageEntityRelationships(pool, excludeSchemas, md)) {
+         logError('   Error managing virtual-entity relationships');
+         return false;
+      }
+      return true;
+   }
+
+   /**
+    * Writes the soft keys of each config entry, compare-first: a column that is already set, or that
+    * does not exist, gets no UPDATE.
+    * @param clearUniqueOnCompositeKey clear IsUnique on the columns of a multi-column key. Only for
+    *        virtual entities: no schema sync maintains their IsUnique.
+    * @returns the number of UPDATEs written
+    */
+   protected async applySoftKeysToTables(pool: CodeGenConnection, tables: SoftPKFKTableConfig[], clearUniqueOnCompositeKey: boolean): Promise<number> {
+      let totalPKs = 0;
+      let totalFKs = 0;
+
+      for (const table of tables) {
+         // Look up entity ID (SELECT query - no need to log to migration file)
+         const entityLookupSQL = `SELECT ID FROM ${this.qs(MjCoreSchema(), 'Entity')} WHERE SchemaName = '${EscapeSQLString(table.SchemaName)}' AND BaseTable = '${EscapeSQLString(table.TableName)}'`;
+         const entityResult = await this.runQuery(pool, entityLookupSQL);
+
+         if (entityResult.recordset.length === 0) {
+            logStatus(`         ⚠️  Entity not found for ${table.SchemaName}.${table.TableName} - skipping`);
+            continue;
+         }
+
+         const entityId = entityResult.recordset[0].ID;
+         const primaryKeys = table.PrimaryKey || [];
+         totalPKs += await this.applySoftPrimaryKeys(pool, table, entityId, clearUniqueOnCompositeKey && primaryKeys.length > 1);
+         totalFKs += await this.applySoftForeignKeys(pool, table, entityId);
+      }
+
+      logStatus(`         Applied ${totalPKs} soft PK(s) and ${totalFKs} soft FK(s) from configuration`);
+      return totalPKs + totalFKs;
+   }
+
+   /**
+    * Sets IsPrimaryKey = 1 AND IsSoftPrimaryKey = 1 on each configured key column.
+    * IsPrimaryKey is the source of truth, IsSoftPrimaryKey protects it from schema sync.
+    * @returns the number of UPDATEs written
+    */
+   protected async applySoftPrimaryKeys(pool: CodeGenConnection, table: SoftPKFKTableConfig, entityId: string, clearUnique: boolean): Promise<number> {
+      const schema = MjCoreSchema();
+      let written = 0;
+
+      for (const pk of table.PrimaryKey || []) {
+         const fieldName = EscapeSQLString(pk.FieldName);
+         const checkSQL = `SELECT ${this.qi('IsPrimaryKey')}, ${this.qi('IsSoftPrimaryKey')}, ${this.qi('IsUnique')}
+                           FROM ${this.qs(schema, 'EntityField')}
+                           WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = '${fieldName}'`;
+         const checkRes = await this.runQuery(pool, checkSQL);
+         if (checkRes.recordset.length === 0) {
+            logStatus(`         ⚠️  Field ${table.TableName}.${pk.FieldName} not found - skipping soft PK`);
+            continue;
+         }
+         const row = checkRes.recordset[0];
+         if (this.isFlagSet(row.IsPrimaryKey) && this.isFlagSet(row.IsSoftPrimaryKey) && !(clearUnique && this.isFlagSet(row.IsUnique))) {
+            continue; // Already correctly set, skip write
+         }
+
+         const clearUniqueSQL = clearUnique ? `,
+                           ${this.qi('IsUnique')} = ${this.boolLit(false)}` : '';
+         const sSQL = `UPDATE ${this.qs(schema, 'EntityField')}
+                       SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()},
+                           ${this.qi('IsPrimaryKey')} = ${this.boolLit(true)},
+                           ${this.qi('IsSoftPrimaryKey')} = ${this.boolLit(true)}${clearUniqueSQL}
+                       WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = '${fieldName}'`;
+         const result = await this.logSQLAndExecute(pool, sSQL, `Set soft PK for ${table.SchemaName}.${table.TableName}.${pk.FieldName}`);
+
+         if (result !== null) {
+            logStatus(`         ✓ Set IsPrimaryKey=1, IsSoftPrimaryKey=1 for ${table.TableName}.${pk.FieldName}`);
+            written++;
+         }
+      }
+      return written;
+   }
+
+   /**
+    * Sets RelatedEntityID, RelatedEntityFieldName and IsSoftForeignKey = 1 on each configured foreign
+    * key column. RelatedEntityID is the source of truth, IsSoftForeignKey protects it from schema sync.
+    * @returns the number of UPDATEs written
+    */
+   protected async applySoftForeignKeys(pool: CodeGenConnection, table: SoftPKFKTableConfig, entityId: string): Promise<number> {
+      const schema = MjCoreSchema();
+      let written = 0;
+
+      for (const fk of table.ForeignKeys || []) {
+         const fkSchema = fk.SchemaName || table.SchemaName;
+         // Look up related entity ID (SELECT query - no need to log to migration file)
+         const relatedLookupSQL = `SELECT ID FROM ${this.qs(schema, 'Entity')} WHERE SchemaName = '${EscapeSQLString(fkSchema)}' AND BaseTable = '${EscapeSQLString(fk.RelatedTable)}'`;
+         const relatedEntityResult = await this.runQuery(pool, relatedLookupSQL);
+
+         if (relatedEntityResult.recordset.length === 0) {
+            logStatus(`         ⚠️  Related entity not found for ${fkSchema}.${fk.RelatedTable} - skipping FK ${fk.FieldName}`);
+            continue;
+         }
+
+         const relatedEntityId = relatedEntityResult.recordset[0].ID;
+         const fieldName = EscapeSQLString(fk.FieldName);
+
+         const checkSQL = `SELECT ${this.qi('RelatedEntityID')}, ${this.qi('RelatedEntityFieldName')}, ${this.qi('IsSoftForeignKey')}, ${this.qi('AutoUpdateRelatedEntityInfo')}
+                           FROM ${this.qs(schema, 'EntityField')}
+                           WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = '${fieldName}'`;
+         const checkRes = await this.runQuery(pool, checkSQL);
+         if (checkRes.recordset.length === 0) {
+            logStatus(`         ⚠️  Field ${table.TableName}.${fk.FieldName} not found - skipping soft FK`);
+            continue;
+         }
+         const row = checkRes.recordset[0];
+         const curRelId = String(row.RelatedEntityID ?? '').trim().toLowerCase();
+         const curRelField = String(row.RelatedEntityFieldName ?? '').trim().toLowerCase();
+         if (
+            curRelId === String(relatedEntityId).trim().toLowerCase() &&
+            curRelField === String(fk.RelatedField).trim().toLowerCase() &&
+            this.isFlagSet(row.IsSoftForeignKey) &&
+            !this.isFlagSet(row.AutoUpdateRelatedEntityInfo)
+         ) {
+            continue; // Already correctly set, skip write
+         }
+
+         const sSQL = `UPDATE ${this.qs(schema, 'EntityField')}
+                       SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()},
+                           ${this.qi('RelatedEntityID')} = '${relatedEntityId}',
+                           ${this.qi('RelatedEntityFieldName')} = '${EscapeSQLString(fk.RelatedField)}',
+                           ${this.qi('IsSoftForeignKey')} = ${this.boolLit(true)},
+                           ${this.qi('AutoUpdateRelatedEntityInfo')} = ${this.boolLit(false)}
+                       WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = '${fieldName}'`;
+         const result = await this.logSQLAndExecute(pool, sSQL, `Set soft FK for ${table.SchemaName}.${table.TableName}.${fk.FieldName} → ${fk.RelatedTable}.${fk.RelatedField}`);
+
+         if (result !== null) {
+            logStatus(`         ✓ Set soft FK for ${table.TableName}.${fk.FieldName} → ${fk.RelatedTable}.${fk.RelatedField}`);
+            written++;
+         }
+      }
+      return written;
+   }
+
+   /** True for a bit column value as the SQL Server and PostgreSQL drivers return it. */
+   private isFlagSet(value: unknown): boolean {
+      return value === true || value === 1 || value === '1';
    }
 
    /**
@@ -4423,7 +4952,7 @@ export class ManageMetadataBase {
 
       try {
          // Load all existing EntityFieldValue rows for dedup checking
-         const efvSQL = `SELECT * FROM ${this.qs(mj_core_schema(), 'EntityFieldValue')} ORDER BY EntityFieldID, Sequence`;
+         const efvSQL = `SELECT * FROM ${this.qs(MjCoreSchema(), 'EntityFieldValue')} ORDER BY EntityFieldID, Sequence, Value, ID`;
          const allEFVResult = await this.runQuery(pool, efvSQL);
          const allEntityFieldValues = allEFVResult.recordset;
 
@@ -4460,7 +4989,7 @@ export class ManageMetadataBase {
       fields: SoftFieldValueListConfig[],
       allEntityFieldValues: { EntityFieldID: string | number; Value: string; ID: string }[]
    ): Promise<{ applied: number; skipped: number }> {
-      const schema = mj_core_schema();
+      const schema = MjCoreSchema();
       let applied = 0;
       let skipped = 0;
 
@@ -4524,7 +5053,7 @@ export class ManageMetadataBase {
       const newType = fieldCfg.ValueListType;
       if (currentValueListType !== newType.toLowerCase()) {
          const updateSQL = `UPDATE ${this.qs(schema, 'EntityField')} SET ValueListType='${newType}' WHERE ID='${entityFieldID}'`;
-         await this.LogSQLAndExecute(pool, updateSQL, `Set soft ValueListType='${newType}' for ${schemaName}.${tableName}.${fieldCfg.FieldName}`);
+         await this.logSQLAndExecute(pool, updateSQL, `Set soft ValueListType='${newType}' for ${schemaName}.${tableName}.${fieldCfg.FieldName}`);
       }
 
       logStatus(`         ✓ Applied soft value-list for ${tableName}.${fieldCfg.FieldName} (${sortedValues.length} values, type=${newType})`);
@@ -4548,7 +5077,7 @@ export class ManageMetadataBase {
          const sqlEntities = `SELECT
                                  *
                               FROM
-                                 ${this.qs(mj_core_schema(), 'vwEntities')}
+                                 ${this.qs(MjCoreSchema(), 'vwEntities')}
                               WHERE
                                  VirtualEntity = ${this.boolLit(false)} AND
                                  ${externalEntityClause}
@@ -4615,7 +5144,7 @@ export class ManageMetadataBase {
                // and the subsequent UPDATE referencing that column run in separate batches.
                // SQL Server compiles an entire batch before executing, so without the separator
                // the UPDATE fails with "Invalid column name" since the column doesn't exist yet at compile time.
-               await this.LogSQLAndExecute(pool, stmt, `SQL text to add special date field ${fieldName} to entity ${entity.SchemaName}.${entity.BaseTable}`, false, true, this.dbProvider.BatchSeparator);
+               await this.logSQLAndExecute(pool, stmt, `SQL text to add special date field ${fieldName} to entity ${entity.SchemaName}.${entity.BaseTable}`, false, true, this.dbProvider.BatchSeparator);
             }
          }
          else {
@@ -4629,7 +5158,7 @@ export class ManageMetadataBase {
                await this.dropExistingDefaultConstraint(pool, entity, fieldName);
 
                const sql = this.dbProvider.alterColumnTypeAndNullabilitySQL(entity.SchemaName, entity.BaseTable, fieldName, this.timestampType, allowNull);
-               await this.LogSQLAndExecute(pool, sql, `SQL text to update special date field ${fieldName} in entity ${entity.SchemaName}.${entity.BaseTable}`);
+               await this.logSQLAndExecute(pool, sql, `SQL text to update special date field ${fieldName} in entity ${entity.SchemaName}.${entity.BaseTable}`);
 
                if (!allowNull)
                   await this.createDefaultConstraintForSpecialDateField(pool, entity, fieldName);
@@ -4661,7 +5190,7 @@ export class ManageMetadataBase {
    protected async createDefaultConstraintForSpecialDateField(pool: CodeGenConnection, entity: any, fieldName: string) {
       try {
          const sqlAddDefaultConstraint = this.dbProvider.addDefaultConstraintSQL(entity.SchemaName, entity.BaseTable, fieldName, this.utcNow());
-         await this.LogSQLAndExecute(pool, sqlAddDefaultConstraint, `SQL text to add default constraint for special date field ${fieldName} in entity ${entity.SchemaName}.${entity.BaseTable}`);
+         await this.logSQLAndExecute(pool, sqlAddDefaultConstraint, `SQL text to add default constraint for special date field ${fieldName} in entity ${entity.SchemaName}.${entity.BaseTable}`);
       }
       catch (e) {
          logError(e as string);
@@ -4689,7 +5218,8 @@ export class ManageMetadataBase {
    protected async dropExistingDefaultConstraint(pool: CodeGenConnection, entity: any, fieldName: string) {
       try {
          const sqlDropDefaultConstraint = this.dbProvider.dropDefaultConstraintSQL(entity.SchemaName, entity.BaseTable, fieldName);
-         await this.LogSQLAndExecute(pool, sqlDropDefaultConstraint, `SQL text to drop default existing default constraints in entity ${entity.SchemaName}.${entity.BaseTable}`);
+         // DECLARE-bearing block: close its batch in the replayable log (see SQLLogging.appendToSQLLogFile).
+         await this.logSQLAndExecute(pool, sqlDropDefaultConstraint, `SQL text to drop default existing default constraints in entity ${entity.SchemaName}.${entity.BaseTable}`, false, true, this.dbProvider.BatchSeparator);
       }
       catch (e) {
          logError(e as string);
@@ -4716,22 +5246,22 @@ export class ManageMetadataBase {
             // "Unclosed quotation mark" (SQL Server) at the very end of an otherwise-complete
             // pass. '' doubling is correct on both supported dialects.
             const esc = (s: string) => s.replace(/'/g, "''");
-            const dataResult = await this.runQuery(pool, `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntities')} WHERE Name = '${esc(e)}'`);
+            const dataResult = await this.runQuery(pool, `SELECT * FROM ${this.qs(MjCoreSchema(), 'vwEntities')} WHERE Name = '${esc(e)}'`);
             const data = dataResult.recordset;
-            const fieldsResult = await this.runQuery(pool, `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntityFields')} WHERE EntityID='${data[0].ID}'`);
+            const fieldsResult = await this.runQuery(pool, `SELECT * FROM ${this.qs(MjCoreSchema(), 'vwEntityFields')} WHERE EntityID='${data[0].ID}'`);
             const fields = fieldsResult.recordset;
 
             // Use new API to generate entity description
             const result = await ag.generateEntityDescription(
                e,
                data[0].BaseTable,
-               fields.map((f: any) => ({ Name: f.Name, Type: f.Type, IsNullable: f.AllowsNull, Description: f.Description })),
+               fields.map((f: { Name: string; Type: string; AllowsNull: boolean; Description: string | null }) => ({ Name: f.Name, Type: f.Type, IsNullable: f.AllowsNull, Description: f.Description })),
                currentUser
             );
 
             if (result?.entityDescription && result.entityDescription.length > 0) {
-               const sSQL = `UPDATE ${this.qs(mj_core_schema(), 'Entity')} SET Description = '${esc(result.entityDescription)}' WHERE Name = '${esc(e)}'`;
-               await this.LogSQLAndExecute(pool, sSQL, `SQL text to update entity description for entity ${e}`);
+               const sSQL = `UPDATE ${this.qs(MjCoreSchema(), 'Entity')} SET ${this.qi('Description')} = '${esc(result.entityDescription)}', ${this.qi('AutoUpdateDescription')} = ${this.boolLit(false)} WHERE ${this.qi('Name')} = '${esc(e)}'`;
+               await this.logSQLAndExecute(pool, sSQL, `SQL text to update entity description for entity ${e}`);
             }
             else {
                console.warn('   >>> Advanced Generation Error: LLM returned invalid result, skipping entity description for entity ' + e);
@@ -4753,9 +5283,9 @@ export class ManageMetadataBase {
          const sql = `SELECT
                         ef.ID, ef.Name
                       FROM
-                        ${this.qs(mj_core_schema(), 'vwEntityFields')} ef
+                        ${this.qs(MjCoreSchema(), 'vwEntityFields')} ef
                       INNER JOIN
-                        ${this.qs(mj_core_schema(), 'vwEntities')} e
+                        ${this.qs(MjCoreSchema(), 'vwEntities')} e
                       ON
                         ef.EntityID = e.ID
                       WHERE
@@ -4770,8 +5300,8 @@ export class ManageMetadataBase {
                const namingOptions = configInfo.entityNaming?.normalizeFieldNames !== false ? this.getEntityNamingOptions() : undefined;
                const sDisplayName = stripTrailingChars(createDisplayName(field.Name, namingOptions), 'ID', true).trim()
                if (sDisplayName.length > 0 && sDisplayName.toLowerCase().trim() !== field.Name.toLowerCase().trim()) {
-                  const sSQL = `UPDATE ${this.qs(mj_core_schema(), 'EntityField')} SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()}, DisplayName = '${sDisplayName}' WHERE ID = '${field.ID}'`
-                  await this.LogSQLAndExecute(pool, sSQL, `SQL text to update display name for field ${field.Name}`);
+                  const sSQL = `UPDATE ${this.qs(MjCoreSchema(), 'EntityField')} SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()}, DisplayName = '${sDisplayName}' WHERE ID = '${field.ID}'`
+                  await this.logSQLAndExecute(pool, sSQL, `SQL text to update display name for field ${field.Name}`);
                }
             }
 
@@ -4793,12 +5323,12 @@ export class ManageMetadataBase {
     */
    protected async setDefaultColumnWidthWhereNeeded(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
       try   {
-         const heal = buildHealSchemaRoutineParams({
-            authoredExclude: getAuthoredExcludeSchemas(excludeSchemas),
+         const heal = BuildHealSchemaRoutineParams({
+            authoredExclude: GetAuthoredExcludeSchemas(excludeSchemas),
             includeSchemas: configInfo.includeSchemas,
          });
-         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spSetDefaultColumnWidthWhereNeeded', heal.values, heal.names);
-         await this.LogSQLAndExecute(pool, sSQL, `SQL text to set default column width where needed`, true);
+         const sSQL = this.dbProvider.callRoutineSQL(MjCoreSchema(), 'spSetDefaultColumnWidthWhereNeeded', heal.Values, heal.Names);
+         await this.logSQLAndExecute(pool, sSQL, `SQL text to set default column width where needed`, true);
          return true;
       }
       catch (e) {
@@ -4818,9 +5348,9 @@ export class ManageMetadataBase {
     *
     * @returns {string} - The SQL statement to retrieve pending entity fields.
     */
-   protected getPendingEntityFieldsSELECTSQL(entityIDs?: string[]): string {
-      const schema = mj_core_schema();
-      return this.dbProvider.getPendingEntityFieldsSQL(schema, entityIDs);
+   protected getPendingEntityFieldsSELECTSQL(entityIDs?: string[], excludeSchemas?: string[]): string {
+      const schema = MjCoreSchema();
+      return this.dbProvider.getPendingEntityFieldsSQL(schema, entityIDs, excludeSchemas);
    }
 
    /**
@@ -4834,7 +5364,11 @@ export class ManageMetadataBase {
       const isPrimaryKey = n.FieldName?.trim().toLowerCase() === 'id';
       const isForeignKey = n.RelatedEntityID && n.RelatedEntityID.length > 0; // Foreign keys have RelatedEntityID set
       const isNameField = n.FieldName?.trim().toLowerCase() === 'name' || n.IsNameField;
-      const isEarlySequence = n.Sequence <= configInfo.newEntityDefaults?.IncludeFirstNFieldsAsDefaultInView;
+      // The field's position in the schema (SourceOrdinal / column_id). `n.Sequence` is NOT that:
+      // the pending-fields SELECT computes it as MAX+100000+ordinal, so comparing it against
+      // IncludeFirstNFieldsAsDefaultInView could never be true and the setting was dead.
+      const sourceOrdinal = typeof n.SourceOrdinal === 'number' && n.SourceOrdinal > 0 ? n.SourceOrdinal : 1;
+      const isEarlySequence = sourceOrdinal <= configInfo.newEntityDefaults?.IncludeFirstNFieldsAsDefaultInView;
 
       const bDefaultInView: boolean = (isNameField || isEarlySequence) && !isPrimaryKey && !isForeignKey;
       const escapedDescription = n.Description ? `'${n.Description.replace(/'/g, "''")}'` : 'NULL';
@@ -4861,24 +5395,17 @@ export class ManageMetadataBase {
                                     ? 'NULL'
                                     : (parsedDefaultValue.trim().toLowerCase() === 'null' ? 'NULL' : `'${escapedParsedDefault}'`);
 
-      const conflictCheck = `SELECT 1 FROM ${this.qs(mj_core_schema(), 'EntityField')} WHERE ID = '${newEntityFieldUUID}' OR (EntityID = '${n.EntityID}' AND Name = '${n.FieldName}')`;
+      const conflictCheck = `SELECT 1 FROM ${this.qs(MjCoreSchema(), 'EntityField')} WHERE ID = '${newEntityFieldUUID}' OR (EntityID = '${n.EntityID}' AND Name = '${n.FieldName}')`;
       const guard = this.dbProvider.wrapInsertWithConflictGuard(conflictCheck);
 
-      // Sequence is the catalog ordinal of this column on the entity's BaseView
-      // (`SourceOrdinal` / column_id). Existing rows on the same entity are parked
-      // at Sequence+100000 first (see parkEntityFieldSequencesSQL) so this INSERT
-      // cannot collide on UQ_EntityField_EntityID_Sequence. Immediately after the
-      // batch, manageEntityFields calls spUpdateExistingEntityFieldsFromSchema
-      // which rewrites EVERY field on the entity from the live view — including
-      // parked rows. That proc must run AFTER views are current (CodeGen Pass 2,
-      // after SQL generation). Pass 1 still emits this SQL against whatever the
-      // view is at that moment; Pass 2 is the one that matches the finished BaseView.
-      const sourceOrdinal = typeof n.SourceOrdinal === 'number' && n.SourceOrdinal > 0 ? n.SourceOrdinal : 1;
-      const sequenceExpr = String(sourceOrdinal);
+      // Sequence is an apply-time expression, never a literal: see applyTimeEntityFieldSequenceSQL.
+      // `n.Sequence` (MAX+100000+ordinal from the pending SELECT) is only that query's ORDER BY key
+      // and must never be written; `sourceOrdinal` above feeds DefaultInView only.
+      const sequenceExpr = this.applyTimeEntityFieldSequenceSQL(n.EntityID);
 
       return `
       ${guard.prefix}
-         INSERT INTO ${this.qs(mj_core_schema(), 'EntityField')}
+         INSERT INTO ${this.qs(MjCoreSchema(), 'EntityField')}
          (
             ${this.qi('ID')},
             ${this.qi('EntityID')},
@@ -4929,7 +5456,7 @@ export class ManageMetadataBase {
             ${n.RelatedEntityID && n.RelatedEntityID.length > 0 ? `'${n.RelatedEntityID}'` : 'NULL'},
             ${n.RelatedEntityFieldName && n.RelatedEntityFieldName.length > 0 ? `'${n.RelatedEntityFieldName}'` : 'NULL'},
             ${this.boolLit(n.IsNameField !== null ? n.IsNameField : false)},
-            ${this.boolLit(n.FieldName === 'ID' || n.IsNameField)},
+            ${this.boolLit(Boolean(n.IsNameField))},
             ${this.boolLit(n.RelatedEntityID && n.RelatedEntityID.length > 0)},
             ${this.boolLit(bDefaultInView)},
             ${this.boolLit(n.IsPrimaryKey)},
@@ -4950,35 +5477,6 @@ export class ManageMetadataBase {
     * @param sqlDefaultValue
     * @returns
     */
-   /**
-    * Park existing EntityField.Sequence values out of the 1..N catalog range so a
-    * following INSERT can use the real BaseView column_id without colliding on
-    * UQ_EntityField_EntityID_Sequence. The +100000 band is unique-safe; the
-    * subsequent spUpdateExistingEntityFieldsFromSchema rewrite brings every row
-    * (parked and new) back to live catalog order.
-    *
-    * Parks ONLY when nothing on the entity is parked yet, which is what makes a second
-    * emission for the same entity in the same run a no-op. `Sequence < 100000` alone does
-    * not achieve that: after the first park the rows below the band are precisely the ones
-    * the first pass just INSERTED at their catalog ordinals, so a second park lifts THOSE
-    * into the band — onto the row the first park moved from the same ordinal, and the
-    * migration dies on UQ_EntityField_EntityID_Sequence with a duplicate at 100000+ordinal.
-    * Reachable whenever an entity gains fields in both CodeGen passes: pass 1 for the real
-    * columns, pass 2 for the denormalized name column a new foreign key introduces.
-    */
-   protected parkEntityFieldSequencesSQL(entityID: string): string {
-      const table = this.qs(mj_core_schema(), 'EntityField');
-      return `UPDATE ${table}
-         SET ${this.qi('Sequence')} = ${this.qi('Sequence')} + 100000
-       WHERE ${this.qi('EntityID')} = '${entityID}'
-         AND ${this.qi('Sequence')} < 100000
-         AND NOT EXISTS (
-             SELECT 1 FROM ${table}
-              WHERE ${this.qi('EntityID')} = '${entityID}'
-                AND ${this.qi('Sequence')} >= 100000
-         );`;
-   }
-
    protected parseDefaultValue(sqlDefaultValue: string): string {
       if (sqlDefaultValue === null || sqlDefaultValue === undefined) {
          return null!;
@@ -4986,11 +5484,14 @@ export class ManageMetadataBase {
       return this.dbProvider.parseColumnDefaultValue(sqlDefaultValue) as string ?? null!;
    }
 
-   protected async createNewEntityFieldsFromSchema(pool: CodeGenConnection, entityIDs?: string[]): Promise<boolean> {
+   protected async createNewEntityFieldsFromSchema(pool: CodeGenConnection, entityIDs?: string[], excludeSchemas?: string[]): Promise<boolean> {
       try   {
          // entityIDs flows down to the provider's WHERE clause so the inline SELECT
-         // narrows to changed entities only when scoped.
-         const sSQL = this.getPendingEntityFieldsSELECTSQL(entityIDs);
+         // narrows to changed entities only when scoped. excludeSchemas is the compiled
+         // includeSchemas scope (out-of-allow-list schemas). Without it, Pass 1 inserts
+         // pending fields for every schema in the database (Forms CodeGen emitted Common
+         // Activity Files EntityField rows).
+         const sSQL = this.getPendingEntityFieldsSELECTSQL(entityIDs, excludeSchemas);
          const newEntityFieldsResult = await this.runQuery(pool, sSQL);
          const newEntityFields = newEntityFieldsResult.recordset;
          if (newEntityFields.length > 0) {
@@ -5008,24 +5509,20 @@ export class ManageMetadataBase {
                // Batch size is configurable via `metadataInsertBatchSize` (default 250).
                const CHUNK_SIZE = configInfo.metadataInsertBatchSize ?? 250;
                const inserts: string[] = [];
-               const parkedEntityIDs = new Set<string>();
                for (let i = 0; i < newEntityFields.length; ++i) {
                   const n = newEntityFields[i];
                   if (n.EntityID !== null && n.EntityID !== undefined && n.EntityID.length > 0) {
                      // need to check for null entity id = that is because the above query can return candidate Entity Fields but the entities may not have been created if the entities
                      // that would have been created violate rules - such as not having an ID column, etc.
-                     if (!parkedEntityIDs.has(n.EntityID)) {
-                        inserts.push(this.parkEntityFieldSequencesSQL(n.EntityID));
-                        parkedEntityIDs.add(n.EntityID);
-                     }
                      const newEntityFieldUUID = this.createNewUUID();
                      inserts.push(this.getPendingEntityFieldINSERTSQL(newEntityFieldUUID, n));
+                     ManageMetadataBase.registerNewField(n.EntityID, n.FieldName);
                   }
                }
                for (let i = 0; i < inserts.length; i += CHUNK_SIZE) {
                   const chunk = inserts.slice(i, i + CHUNK_SIZE);
                   try {
-                     await this.LogSQLBatchAndExecute(pool, chunk, `SQL text to insert ${chunk.length} new entity field(s)`);
+                     await this.logSQLBatchAndExecute(pool, chunk, `SQL text to insert ${chunk.length} new entity field(s)`);
                      // an error blows up the transaction (all-or-nothing), which is what we want
                   }
                   catch (e) {
@@ -5061,11 +5558,11 @@ export class ManageMetadataBase {
     * @param relatedEntityNameFieldMap
     * @returns
     */
-   public async updateEntityFieldRelatedEntityNameFieldMap(pool: CodeGenConnection, entityFieldID: string, relatedEntityNameFieldMap: string): Promise<boolean> {
+   public async UpdateEntityFieldRelatedEntityNameFieldMap(pool: CodeGenConnection, entityFieldID: string, relatedEntityNameFieldMap: string): Promise<boolean> {
       try   {
-         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spUpdateEntityFieldRelatedEntityNameFieldMap', [`'${entityFieldID}'`, `'${relatedEntityNameFieldMap}'`], ['EntityFieldID', 'RelatedEntityNameFieldMap']);
+         const sSQL = this.dbProvider.callRoutineSQL(MjCoreSchema(), 'spUpdateEntityFieldRelatedEntityNameFieldMap', [`'${entityFieldID}'`, `'${relatedEntityNameFieldMap}'`], ['EntityFieldID', 'RelatedEntityNameFieldMap']);
 
-         await this.LogSQLAndExecute(pool, sSQL, `SQL text to update entity field related entity name field map for entity field ID ${entityFieldID}`);
+         await this.logSQLAndExecute(pool, sSQL, `SQL text to update entity field related entity name field map for entity field ID ${entityFieldID}`);
          return true;
       }
       catch (e) {
@@ -5073,18 +5570,23 @@ export class ManageMetadataBase {
          return false;
       }
    }
+
+   /** @deprecated Use {@link UpdateEntityFieldRelatedEntityNameFieldMap}. */
+   public async updateEntityFieldRelatedEntityNameFieldMap(pool: CodeGenConnection, entityFieldID: string, relatedEntityNameFieldMap: string): Promise<boolean> {
+      return this.UpdateEntityFieldRelatedEntityNameFieldMap(pool, entityFieldID, relatedEntityNameFieldMap);
+   }
    protected async updateExistingEntitiesFromSchema(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
       try   {
-         const heal = buildHealSchemaRoutineParams({
-            authoredExclude: getAuthoredExcludeSchemas(excludeSchemas),
+         const heal = BuildHealSchemaRoutineParams({
+            authoredExclude: GetAuthoredExcludeSchemas(excludeSchemas),
             includeSchemas: configInfo.includeSchemas,
          });
-         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spUpdateExistingEntitiesFromSchema', heal.values, heal.names);
-         const result = await this.LogSQLAndExecute(pool, sSQL, `SQL text to update existing entities from schema`, true);
+         const sSQL = this.dbProvider.callRoutineSQL(MjCoreSchema(), 'spUpdateExistingEntitiesFromSchema', heal.Values, heal.Names);
+         const result = await this.logSQLAndExecute(pool, sSQL, `SQL text to update existing entities from schema`, true);
          // result contains the updated entities, and there is a property of each row called Name which has the entity name that was modified
          // add these to the modified entity list if they're not already in there
          if (result && result.length > 0 ) {
-            ManageMetadataBase.addNewEntitiesToModifiedList(result.map((r: { Name: any; }) => r.Name));
+            ManageMetadataBase.addNewEntitiesToModifiedList(result.map((r: { Name: string; }) => r.Name));
          }
          return true;
       }
@@ -5097,11 +5599,16 @@ export class ManageMetadataBase {
    /**
     * Adds a list of entity names to the modified entity list if they're not already in there
     */
-   public static addNewEntitiesToModifiedList(entityNames: string[]) {
+   public static AddNewEntitiesToModifiedList(entityNames: string[]) {
       const distinctEntityNames = [...new Set(entityNames)];
       const newlyModifiedEntityNames = distinctEntityNames.filter((e: string) => !ManageMetadataBase._modifiedEntityList.includes(e));
       // now make sure that each of these entity names is in the modified entity list
       ManageMetadataBase._modifiedEntityList = ManageMetadataBase._modifiedEntityList.concat(newlyModifiedEntityNames);
+   }
+
+   /** @deprecated Use {@link AddNewEntitiesToModifiedList}. */
+   public static addNewEntitiesToModifiedList(entityNames: string[]) {
+      return this.AddNewEntitiesToModifiedList(entityNames);
    }
 
    protected async updateExistingEntityFieldsFromSchema(pool: CodeGenConnection, excludeSchemas: string[], entityIDs?: string[]): Promise<boolean> {
@@ -5110,21 +5617,32 @@ export class ManageMetadataBase {
          // string (mirrors the @ExcludedSchemaNames pattern). The SP fans the list out into
          // a table variable via STRING_SPLIT and joins once. This avoids both per-entity
          // round-trips (slow) and parallel calls (page-level lock contention on EntityField).
-         const heal = buildHealSchemaRoutineParams({
-            authoredExclude: getAuthoredExcludeSchemas(excludeSchemas),
+         const heal = BuildHealSchemaRoutineParams({
+            authoredExclude: GetAuthoredExcludeSchemas(excludeSchemas),
             includeSchemas: configInfo.includeSchemas,
             entityIDs,
          });
-         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spUpdateExistingEntityFieldsFromSchema', heal.values, heal.names);
+         const sSQL = this.dbProvider.callRoutineSQL(MjCoreSchema(), 'spUpdateExistingEntityFieldsFromSchema', heal.Values, heal.Names);
          const isScoped = entityIDs !== undefined && entityIDs.length > 0;
          const label = isScoped
             ? `SQL text to update existing entity fields from schema (${entityIDs!.length} scoped entities)`
             : `SQL text to update existing entity fields from schema`;
-         const result = await this.LogSQLAndExecute(pool, sSQL, label, true);
-         // result contains the updated entity fields. Get a distinct list of entity names
-         // and add them to the modified entity list if they're not already in there.
-         if (result && result.length > 0) {
-            ManageMetadataBase.addNewEntitiesToModifiedList(result.map((r: { EntityName: any; }) => r.EntityName));
+
+         const before = await this.snapshotEntityFields(pool, entityIDs);
+         await this.logSQLAndExecute(pool, sSQL, label, true);
+         const after = await this.snapshotEntityFields(pool, entityIDs);
+
+         const changes = diffEntityFieldSnapshots(before, after, (e, n) => ManageMetadataBase.isFieldNew(e, n));
+         if (changes.length > 0) {
+            ManageMetadataBase.addNewEntitiesToModifiedList(changes.map(c => c.entityName));
+            for (const c of changes) {
+               ManageMetadataBase.registerFieldChange(c.entityID, c.fieldName, c.reasons);
+               ManageMetadataBase._changedFieldReport.push({
+                  entityName: c.entityName,
+                  fieldName: c.fieldName,
+                  reasons: [...c.reasons],
+               });
+            }
          }
          return true;
       }
@@ -5144,12 +5662,12 @@ export class ManageMetadataBase {
     */
    protected async updateSchemaInfoFromDatabase(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
       try {
-         const heal = buildHealSchemaRoutineParams({
-            authoredExclude: getAuthoredExcludeSchemas(excludeSchemas),
+         const heal = BuildHealSchemaRoutineParams({
+            authoredExclude: GetAuthoredExcludeSchemas(excludeSchemas),
             includeSchemas: configInfo.includeSchemas,
          });
-         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spUpdateSchemaInfoFromDatabase', heal.values, heal.names);
-         const result = await this.LogSQLAndExecute(pool, sSQL, `SQL text to sync schema info from database schemas`, true);
+         const sSQL = this.dbProvider.callRoutineSQL(MjCoreSchema(), 'spUpdateSchemaInfoFromDatabase', heal.Values, heal.Names);
+         const result = await this.logSQLAndExecute(pool, sSQL, `SQL text to sync schema info from database schemas`, true);
 
          if (result && result.length > 0) {
             logStatus(`   > Updated/created ${result.length} SchemaInfo records`);
@@ -5183,7 +5701,7 @@ export class ManageMetadataBase {
     */
    protected async loadSchemaInfoRecords(pool: CodeGenConnection): Promise<boolean> {
       try {
-         const sSQL = `SELECT * FROM ${this.qs(mj_core_schema(), 'SchemaInfo')}`;
+         const sSQL = `SELECT * FROM ${this.qs(MjCoreSchema(), 'SchemaInfo')}`;
          const result = await this.runQuery(pool, sSQL);
          if (result?.recordset?.length > 0) {
             this.cacheSchemaInfoRecords(result.recordset);
@@ -5255,17 +5773,17 @@ export class ManageMetadataBase {
          // string (mirrors the @ExcludedSchemaNames pattern). The SP fans the list out into
          // a table variable via STRING_SPLIT and filters once. Avoids both per-entity
          // round-trips and parallel calls (page-level lock contention on EntityField).
-         const heal = buildHealSchemaRoutineParams({
-            authoredExclude: getAuthoredExcludeSchemas(excludeSchemas),
+         const heal = BuildHealSchemaRoutineParams({
+            authoredExclude: GetAuthoredExcludeSchemas(excludeSchemas),
             includeSchemas: configInfo.includeSchemas,
             entityIDs,
          });
-         const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spDeleteUnneededEntityFields', heal.values, heal.names);
+         const sSQL = this.dbProvider.callRoutineSQL(MjCoreSchema(), 'spDeleteUnneededEntityFields', heal.Values, heal.Names);
          const isScoped = entityIDs !== undefined && entityIDs.length > 0;
          const label = isScoped
             ? `SQL text to delete unneeded entity fields (${entityIDs!.length} scoped entities)`
             : `SQL text to delete unneeded entity fields`;
-         const result = await this.LogSQLAndExecute(pool, sSQL, label, true);
+         const result = await this.logSQLAndExecute(pool, sSQL, label, true);
          // result contains the DELETED entity fields. Get a distinct list of entity names
          // and add them to the modified entity list if they're not already in there.
          if (result && result.length > 0) {
@@ -5286,47 +5804,65 @@ export class ManageMetadataBase {
          // for the field and sync that up with the EntityFieldValue table. If it is not a simple series of OR statements, we will not be able to parse it and we'll
          // just ignore it.
          const filter = this.dbProvider.getCheckConstraintsSchemaFilter(excludeSchemas);
-         const sSQL = `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntityFieldsWithCheckConstraints')}${filter}`
+         const sSQL = `SELECT * FROM ${this.qs(MjCoreSchema(), 'vwEntityFieldsWithCheckConstraints')}${filter}`
          const resultResult = await this.runQuery(pool, sSQL);
          const result = resultResult.recordset;
 
-         const efvSQL = `SELECT * FROM ${this.qs(mj_core_schema(), 'EntityFieldValue')} ORDER BY EntityFieldID, Sequence`;
+         const efvSQL = `SELECT * FROM ${this.qs(MjCoreSchema(), 'EntityFieldValue')} ORDER BY EntityFieldID, Sequence, Value, ID`;
          const allEntityFieldValuesResult = await this.runQuery(pool, efvSQL);
          const allEntityFieldValues = allEntityFieldValuesResult.recordset;
 
-         const efSQL = `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntityFields')} ORDER BY EntityID, Sequence`;
+         const efSQL = `SELECT * FROM ${this.qs(MjCoreSchema(), 'vwEntityFields')} ORDER BY EntityID, Sequence, Name, ID`;
          const allEntityFieldsResult = await this.runQuery(pool, efSQL);
          const allEntityFields = allEntityFieldsResult.recordset;
 
          const generationPromises = [];
+         const ag = new AdvancedGeneration();
+
+         // `skipDBUpdate` means load-only: `runValidationGeneration` is called below with
+         // `generateNewCode = false`, and `generateValidatorFunctionFromCheckConstraint` only reaches an
+         // LLM when that flag is true. Reading a validator back out of an Approved `GeneratedCode` record
+         // is therefore a plain database read — gating it on the AI feature flag is what made
+         // `mj codegen --no-ai` DELETE every committed `Validate()` override rather than preserve it, and
+         // the `codegen-drift` gate (which runs `--no-ai`) then demanded that lossy output. Generation
+         // stays gated; only the read is unconditional.
+         const emitValidators = skipDBUpdate || ag.featureEnabled('ParseCheckConstraints');
 
          const columnLevelResults = result.filter((r: any) => r.EntityFieldID); // get the column level constraints
          const tableLevelResults = result.filter((r: any) => !r.EntityFieldID); // get the table level constraints
          for (const r of columnLevelResults) {
             // now, for each of the constraints we get back here, loop through and evaluate if they're simple and if they're simple, parse and sync with entity field values for that field
             if (r.ConstraintDefinition && r.ConstraintDefinition.length > 0) {
-               const parsedValues = this.parseCheckConstraintValues(r.ConstraintDefinition, r.ColumnName, r.EntityName);
+               // parse first, then decide whether THIS field should carry the list (bit, PK singleton guards).
+               // UUIDsEqual, not ===: PG returns lowercase UUIDs and SQL Server uppercase, and a missed
+               // lookup here fails OPEN (the exclusions stop applying), so a case mismatch would be silent.
+               const field = allEntityFields.find((f: { ID: string; Type?: string; IsPrimaryKey?: boolean; }) =>
+                  UUIDsEqual(f.ID, r.EntityFieldID));
+               const parsedValues = ManageMetadataBase.valueListForField(
+                  field,
+                  this.parseCheckConstraintValues(r.ConstraintDefinition, r.ColumnName, r.EntityName));
                if (parsedValues) {
                   if (!skipDBUpdate) {
                      // we only do this part if we are not skiping the database update as this code will sync values from the CHECK
                      // with the EntityFieldValues in the database.
 
-                     // Sort values alphabetically to ensure consistent sequences across all databases
-                     // This guarantees the same value always gets the same sequence number regardless of
-                     // how SQL Server returns CHECK constraint values (which can vary)
-                     parsedValues.sort();
+                     // Sort the values to ensure consistent sequences across all databases. This guarantees the
+                     // same value always gets the same sequence number regardless of how SQL Server returns
+                     // CHECK constraint values (which can vary). An all-numeric list sorts numerically so the
+                     // dropdown reads 1, 2, 10 rather than the lexical 1, 10, 2 — still fully deterministic.
+                     ManageMetadataBase.sortCheckConstraintValues(parsedValues);
 
                      // we have parsed values from the check constraint, so sync them with the entity field values
                      await this.syncEntityFieldValues(pool, r.EntityFieldID, parsedValues, allEntityFieldValues);
 
                      // finally, make sure the ValueListType column within the EntityField table is set to "List" because for check constraints we only allow the values specified in the list.
                      // check to see if the ValueListType is already set to "List", if not, update it
-                     const sSQLCheck: string = `SELECT ValueListType FROM ${this.qs(mj_core_schema(), 'EntityField')} WHERE ID='${r.EntityFieldID}'`;
+                     const sSQLCheck: string = `SELECT ValueListType FROM ${this.qs(MjCoreSchema(), 'EntityField')} WHERE ID='${r.EntityFieldID}'`;
                      const checkResultResult = await this.runQuery(pool, sSQLCheck);
                      const checkResult = checkResultResult.recordset;
                      if (checkResult && checkResult.length > 0 && checkResult[0].ValueListType.trim().toLowerCase() !== 'list') {
-                        const sSQL: string = `UPDATE ${this.qs(mj_core_schema(), 'EntityField')} SET ValueListType='List' WHERE ID='${r.EntityFieldID}'`
-                        await this.LogSQLAndExecute(pool, sSQL, `SQL text to update ValueListType for entity field ID ${r.EntityFieldID}`);
+                        const sSQL: string = `UPDATE ${this.qs(MjCoreSchema(), 'EntityField')} SET ValueListType='List' WHERE ID='${r.EntityFieldID}'`
+                        await this.logSQLAndExecute(pool, sSQL, `SQL text to update ValueListType for entity field ID ${r.EntityFieldID}`);
                      }
                   }
                   else {
@@ -5336,9 +5872,8 @@ export class ManageMetadataBase {
                else {
                   // if we get here that means we don't have a simple condition in the check constraint that the RegEx could parse. If Advanced Generation is enabled, we will
                   // attempt to use an LLM to do things fancier now
-                  if (configInfo.advancedGeneration?.enableAdvancedGeneration && 
-                      configInfo.advancedGeneration?.features.find(f => f.name === 'ParseCheckConstraints' && f.enabled))  {
-                     // the user has the feature turned on, let's generate a description of the constraint and then build a Validate function for the constraint 
+                  if (emitValidators) {
+                     // either we are loading persisted validators, or the feature is on and we may generate new ones
                      // run this in parallel
                      generationPromises.push(this.runValidationGeneration(r, allEntityFields, !skipDBUpdate, currentUser));
                   }
@@ -5346,14 +5881,15 @@ export class ManageMetadataBase {
             }
          }
 
-         // now for the table level constraints run the process for advanced generation
+         // now for the table level constraints, build a Validate function for each constraint.
+         // As above: no featureEnabled() gate here. Loading previously-generated code is not an AI operation, and the
+         // ParseCheckConstraints gate that does guard the LLM call lives inside generateValidatorFunctionFromCheckConstraint.
          for (const r of tableLevelResults) {
-            if (configInfo.advancedGeneration?.enableAdvancedGeneration && 
-               configInfo.advancedGeneration?.features.find(f => f.name === 'ParseCheckConstraints' && f.enabled))  {
-              // the user has the feature turned on, let's generate a description of the constraint and then build a Validate function for the constraint 
-              // run this in parallel
-              generationPromises.push(this.runValidationGeneration(r, allEntityFields, !skipDBUpdate, currentUser));
-           }
+            if (emitValidators) {
+               // either we are loading persisted validators, or the feature is on and we may generate new ones
+               // run this in parallel
+               generationPromises.push(this.runValidationGeneration(r, allEntityFields, !skipDBUpdate, currentUser));
+            }
          }
 
          // await the completion of all generation promises here
@@ -5371,7 +5907,7 @@ export class ManageMetadataBase {
     * @param pool 
     * @param currentUser 
     */
-   public async loadGeneratedCode(pool: CodeGenConnection, currentUser: UserInfo): Promise<boolean> {
+   public async LoadGeneratedCode(pool: CodeGenConnection, currentUser: UserInfo): Promise<boolean> {
       try {
          // right now we're just doing validator functions which are handled here
          return await this.manageEntityFieldValuesAndValidatorFunctions(pool, [], currentUser, true);
@@ -5380,6 +5916,11 @@ export class ManageMetadataBase {
          logError(e as string);
          return false;
       }
+   }
+
+   /** @deprecated Use {@link LoadGeneratedCode}. */
+   public async loadGeneratedCode(pool: CodeGenConnection, currentUser: UserInfo): Promise<boolean> {
+      return this.LoadGeneratedCode(pool, currentUser);
    }
 
    private async runValidationGeneration(r: any, allEntityFields: any[], generateNewCode: boolean, currentUser: UserInfo) {
@@ -5427,9 +5968,9 @@ export class ManageMetadataBase {
       }
 
       try {
-         if (generateNewCode && configInfo.advancedGeneration?.enableAdvancedGeneration && configInfo.advancedGeneration?.features.find(f => f.name === 'ParseCheckConstraints' && f.enabled)) {
+         const ag = new AdvancedGeneration();
+         if (generateNewCode && ag.featureEnabled('ParseCheckConstraints')) {
             // feature is enabled, so let's call the AI to generate a function for us
-            const ag = new AdvancedGeneration();
             const entityFieldListInfo = allEntityFields.filter(item => item.Entity.trim().toLowerCase() === data.EntityName.trim().toLowerCase()).map(item => `   * ${item.Name} - ${item.Type}${item.AllowsNull ? ' (nullable)' : ' (not null)'}`).join('\n');
 
             // Use new API to parse check constraint
@@ -5474,8 +6015,8 @@ export class ManageMetadataBase {
             for (const ev of existingValues) {
                if (!possibleValues.find(v => v === ev.Value)) {
                   // delete the value from the database
-                  const sSQLDelete = `DELETE FROM ${this.qs(mj_core_schema(), 'EntityFieldValue')} WHERE ID='${ev.ID}'`;
-                  await this.LogSQLAndExecute(ds, sSQLDelete, `SQL text to delete entity field value ID ${ev.ID}`);
+                  const sSQLDelete = `DELETE FROM ${this.qs(MjCoreSchema(), 'EntityFieldValue')} WHERE ID='${ev.ID}'`;
+                  await this.logSQLAndExecute(ds, sSQLDelete, `SQL text to delete entity field value ID ${ev.ID}`);
                   numRemoved++;
                }
             }
@@ -5488,11 +6029,11 @@ export class ManageMetadataBase {
                   const newId = uuidv4();
 
                   // add the value to the database with explicit ID
-                  const sSQLInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityFieldValue')}
+                  const sSQLInsert = `INSERT INTO ${this.qs(MjCoreSchema(), 'EntityFieldValue')}
                                        (${this.qi('ID')}, ${this.qi('EntityFieldID')}, ${this.qi('Sequence')}, ${this.qi('Value')}, ${this.qi('Code')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')})
                                     VALUES
                                        ('${newId}', '${entityFieldID}', ${1 + possibleValues.indexOf(v)}, '${v}', '${v}', ${this.utcNow()}, ${this.utcNow()})`;
-                  await this.LogSQLAndExecute(ds, sSQLInsert, `SQL text to insert entity field value with ID ${newId}`);
+                  await this.logSQLAndExecute(ds, sSQLInsert, `SQL text to insert entity field value with ID ${newId}`);
                   numAdded++;
                }
             }
@@ -5506,8 +6047,8 @@ export class ManageMetadataBase {
                //       DB returns a string for Sequence instead of a number.
                if (ev && ev.Sequence != 1 + possibleValues.indexOf(v)) {
                   // update the sequence to match the order in the possible values list, if it doesn't already match
-                  const sSQLUpdate = `UPDATE ${this.qs(mj_core_schema(), 'EntityFieldValue')} SET Sequence=${1 + possibleValues.indexOf(v)} WHERE ID='${ev.ID}'`;
-                  await this.LogSQLAndExecute(ds, sSQLUpdate, `SQL text to update entity field value sequence`);
+                  const sSQLUpdate = `UPDATE ${this.qs(MjCoreSchema(), 'EntityFieldValue')} SET Sequence=${1 + possibleValues.indexOf(v)} WHERE ID='${ev.ID}'`;
+                  await this.logSQLAndExecute(ds, sSQLUpdate, `SQL text to update entity field value sequence`);
                   numUpdated++;
                }
             }
@@ -5525,10 +6066,24 @@ export class ManageMetadataBase {
       }
    }
 
+   /**
+    * Parses a column-level CHECK constraint into the list of values it permits, or returns null when the
+    * constraint is not a simple value list (a range, a `LEN()` predicate, a mixed condition, and so on).
+    *
+    * Both of the ways `IN (...)` is rendered by SQL Server are handled. String, date and GUID literals come
+    * back quoted — `([Status]='Active' OR [Status]='Inactive')` — but numeric and `bit` literals come back
+    * **unquoted and parenthesized**: `([Level]=(3) OR [Level]=(2) OR [Level]=(1))`. Matching only the quoted
+    * form left a numeric IN-list with no value list at all, and so no dropdown in Explorer either (#3978).
+    * PostgreSQL's `= ANY (ARRAY[...])` rendering is handled separately, by parsePgArrayConstraint.
+    *
+    * A single-value list is captured too: `CHECK (Status='Active')` — which is also how SQL Server renders
+    * `IN ('Active')` — permits exactly one value, which is a one-item list.
+    *
+    * This is a parser, not a policy: it reports what the constraint permits. WHICH fields get a value list
+    * out of that is decided after the fact, by valueListForField.
+    */
    protected parseCheckConstraintValues(constraintDefinition: string, fieldName: string, entityName: string): string[] | null {
-      // This regex checks for the overall structure including field name and 'OR' sequences
-      // SQL Server uses [FieldName]='Value' quoting, PostgreSQL uses "FieldName" or unquoted FieldName
-      // We handle both: [FieldName], "FieldName", or bare FieldName
+      // Normalize N'literal' to 'literal' so one pattern handles both.
       // Note: Assuming fieldName does not contain regex special characters; otherwise, it needs to be escaped as well.
       const processedConstraint = constraintDefinition.replace(/(^|[=(\s])N'([^']*)'/g, "$1'$2'");
 
@@ -5544,50 +6099,103 @@ export class ManageMetadataBase {
       // [FieldName] (SQL Server) or "FieldName" (PostgreSQL) or bare FieldName
       const quotedField = `(?:\\[${fieldName}\\]|"${fieldName}"|${fieldName})`;
 
-      // Check for nested pattern: (Field IS NULL OR (Field='Value1' OR ...))
-      const nestedNullRegex = new RegExp(`^\\(${quotedField} IS NULL OR \\(${quotedField}='[^']+'(?: OR ${quotedField}='[^']+?')+\\)\\)$`);
-      if (nestedNullRegex.test(processedConstraint)) {
-         // Extract values from nested pattern - same extraction logic works
-         const valueRegex = new RegExp(`${quotedField}='([^']+)\'`, 'g');
-         let match;
-         const possibleValues: string[] = [];
-         while ((match = valueRegex.exec(processedConstraint)) !== null) {
-            if (match.index === valueRegex.lastIndex) {
-               valueRegex.lastIndex++;
-            }
-            if (match[1]) {
-               possibleValues.push(match[1]);
-            }
-         }
-         return possibleValues.length > 0 ? possibleValues : null;
-      }
+      // One literal, either quoting style. The unquoted numeric forms are the ones sys.check_constraints
+      // actually stores: (3) (-1) (1.00) (2.5) (1.0000000000000000e+030) and (12345678901234567890.) —
+      // an integral literal with a trailing point once the precision is large enough.
+      const literal = `(?:'[^']+'|${ManageMetadataBase.NUMERIC_CHECK_LITERAL})`;
+      const assignment = `${quotedField}=${literal}`;
 
-      // Check for standard pattern with optional trailing IS NULL
-      const structureRegex = new RegExp(`^\\(${quotedField}='[^']+'(?: OR ${quotedField}='[^']+?')+(?: OR ${quotedField} IS NULL)?\\)$`);
-      if (!structureRegex.test(processedConstraint)) {
+      // Nested pattern: (Field IS NULL OR (Field=<literal> OR ...)) — how `X IS NULL OR X IN (...)` renders
+      const nestedNullRegex = new RegExp(`^\\(${quotedField} IS NULL OR \\(${assignment}(?: OR ${assignment})*\\)\\)$`);
+      // Standard pattern, with an optional trailing IS NULL: (Field=<literal> OR ... [OR Field IS NULL])
+      const structureRegex = new RegExp(`^\\(${assignment}(?: OR ${assignment})*(?: OR ${quotedField} IS NULL)?\\)$`);
+      if (!nestedNullRegex.test(processedConstraint) && !structureRegex.test(processedConstraint)) {
          return null;
       }
-      else {
-         // Regular expression to match the values within the single quotes specifically for the field
-         const valueRegex = new RegExp(`${quotedField}='([^']+)\'`, 'g');
-         let match;
-         const possibleValues: string[] = [];
 
-         // Use regex to find matches and extract the values
-         while ((match = valueRegex.exec(processedConstraint)) !== null) {
-            // This is necessary to avoid infinite loops with zero-width matches
-            if (match.index === valueRegex.lastIndex) {
-               valueRegex.lastIndex++;
-            }
-
-            // The first captured group contains the value
-            if (match[1]) {
-               possibleValues.push(match[1]);
-            }
+      // Extract the values: group 1 is a quoted literal, group 2 an unquoted numeric one.
+      const valueRegex = new RegExp(`${quotedField}=(?:'([^']+)'|(${ManageMetadataBase.NUMERIC_CHECK_LITERAL}))`, 'g');
+      const possibleValues: string[] = [];
+      let match;
+      while ((match = valueRegex.exec(processedConstraint)) !== null) {
+         // This is necessary to avoid infinite loops with zero-width matches
+         if (match.index === valueRegex.lastIndex) {
+            valueRegex.lastIndex++;
          }
 
-         return possibleValues;
+         const value = match[1] ?? (match[2] ? ManageMetadataBase.normalizeNumericCheckLiteral(match[2]) : undefined);
+         if (value && value.length > 0) {
+            possibleValues.push(value);
+         }
       }
+
+      // An empty result is not a value list — returning [] here would set ValueListType='List' on a field
+      // with no EntityFieldValue rows behind it.
+      return possibleValues.length > 0 ? possibleValues : null;
+   }
+
+   /**
+    * The value list to actually store for a field, or null when a parsed list should NOT become
+    * EntityFieldValue rows (and so should not become a dropdown in Explorer either).
+    *
+    * Runs AFTER parsing rather than gating it, so each exclusion is no broader than its own reason and
+    * neither one can drop a list that was captured before #3978:
+    *
+    * - `bit`: `IN (0,1)` is vacuous — bit already permits exactly 0 and 1 — and `= 1` is a validator,
+    *   not a two-item dropdown over what renders as a checkbox. Every bit list is rendered unquoted, so
+    *   none of them was reachable before this change and nothing regresses.
+    * - a PRIMARY KEY carrying a SINGLE value: `CHECK (ID=1)` is the single-row-table guard MJ's own
+    *   sequence tables use — a structural invariant, not a set of values a user picks from. A
+    *   MULTI-value list on a primary key is left alone: `CHECK (Code IN ('US','CA'))` on a natural-key
+    *   PK is a real domain list, it was captured before this change, and CodeGen also runs over customer
+    *   schemas where natural-key primary keys are ordinary.
+    *
+    * A field whose metadata row was not found keeps whatever parsed, which is the pre-#3978 behaviour.
+    */
+   protected static valueListForField(
+      field: { Type?: string; IsPrimaryKey?: boolean; } | undefined,
+      parsedValues: string[] | null
+   ): string[] | null {
+      if (!parsedValues || !field) {
+         return parsedValues;
+      }
+      if (field.Type?.trim().toLowerCase() === 'bit') {
+         return null;
+      }
+      if (field.IsPrimaryKey && parsedValues.length === 1) {
+         return null;
+      }
+      return parsedValues;
+   }
+
+   /**
+    * Sorts a parsed value list in place, so the sequence a value gets is stable across databases and runs.
+    * An all-numeric list is compared as numbers (1, 2, 10); anything else keeps the default lexical order.
+    *
+    * Keyed off the VALUES, not the column type — so a string column whose list happens to be all-numeric
+    * (`CHECK (Code IN ('1','2','10'))` on nvarchar) would re-sequence too. Measured over every column CHECK
+    * constraint in a live 6.x database (MJ core + BizApps accounting/orders): of the 431 lists the previous
+    * parser already captured, ZERO re-sequence under this comparison. If one ever turns up and the churn is
+    * unwanted, gate `allNumeric` on the field being numeric as well.
+    */
+   protected static sortCheckConstraintValues(values: string[]): string[] {
+      const allNumeric = values.length > 0 && values.every(v => /^-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?$/.test(v));
+      return allNumeric ? values.sort((a, b) => Number(a) - Number(b)) : values.sort();
+   }
+
+   /**
+    * A numeric literal as SQL Server renders it inside a CHECK constraint: parenthesized, unquoted, and
+    * possibly signed, fractional or exponential — `(3)`, `(-1)`, `(1.00)`, `(2.5)`, `(1.0e+030)`.
+    */
+   private static readonly NUMERIC_CHECK_LITERAL = `\\(-?\\d+(?:\\.\\d*)?(?:[eE][+-]?\\d+)?\\)`;
+
+   /**
+    * Turns a matched numeric literal into the value to store: strips the wrapping parentheses, and the
+    * trailing point SQL Server adds to a large integral literal (`(12345678901234567890.)`).
+    */
+   private static normalizeNumericCheckLiteral(literal: string): string {
+      const inner = literal.slice(1, -1);
+      return inner.endsWith('.') ? inner.slice(0, -1) : inner;
    }
 
    /**
@@ -5658,7 +6266,7 @@ export class ManageMetadataBase {
          // it — user-visible AND editable, letting someone mutate the snapshot the refresher overwrites. The
          // wrapper view is already excluded (it carries the minted entity, so EntityID IS NOT NULL). The outer
          // view is aliased `t` so the correlated MaterializedResult subquery can't resolve columns ambiguously.
-         const coreSchema = mj_core_schema();
+         const coreSchema = MjCoreSchema();
          // Gate the MaterializedResult reference on the table actually existing. Referencing it unconditionally
          // would throw — breaking new-entity creation for EVERY entity — on any DB where MaterializedResult
          // isn't present yet (e.g. the PostgreSQL parallel world's object-availability lag). If it's absent we
@@ -5678,6 +6286,10 @@ export class ManageMetadataBase {
          if (newEntities && newEntities.length > 0 ) {
             const md = new Metadata() // global-provider-ok: codegen runs offline against a single provider
             const transaction = await pool.beginTransaction();
+            // The in-run list of new entity names is process-static. Names pushed by a batch that is then
+            // rolled back must not survive into the next run of the same process (in-process CodeGen runs
+            // many times per process), or every one of them reads as "taken" and gets a schema suffix.
+            const newEntityNamesBefore = ManageMetadataBase.newEntityList.length;
             try {
                // wrap in a transaction so we get all of it or none of it
                for ( let i = 0; i < newEntities.length; ++i) {
@@ -5687,6 +6299,7 @@ export class ManageMetadataBase {
                await transaction.commit();
             } catch (e) {
                await transaction.rollback();
+               ManageMetadataBase.newEntityList.length = newEntityNamesBefore;
                throw e;
             }
 
@@ -5809,11 +6422,13 @@ export class ManageMetadataBase {
 
    protected async newEntityNameWithAdvancedGeneration(ag: AdvancedGeneration, newEntity: any, currentUser: UserInfo): Promise<string> {
       const result = await ag.generateEntityName(newEntity.TableName, currentUser);
-      if (result?.entityName) {
+      // Checked here as well as inside generateEntityName: a subclass or a stub can return anything, and
+      // a non-name that reaches the INSERT fails it (see createNewEntity's catch for why that used to be silent).
+      if (result && IsPlausibleEntityName(result.entityName)) {
          return this.markupEntityName(newEntity.SchemaName, result.entityName);
       }
       else {
-         console.warn('   >>> Advanced Generation Error: LLM returned invalid result, falling back to simple generated entity name');
+         console.warn(`   >>> Advanced Generation Error: LLM returned an unusable entity name for ${newEntity.SchemaName}.${newEntity.TableName}, falling back to simple generated entity name`);
          return this.simpleNewEntityName(newEntity.SchemaName, newEntity.TableName);
       }
    }
@@ -5881,7 +6496,7 @@ export class ManageMetadataBase {
       return configInfo.newEntityDefaults?.NameRulesBySchema?.find(r => {
          let schemaNameToUse = r.SchemaName;
          if (schemaNameToUse?.trim().toLowerCase() === '${mj_core_schema}') {
-            schemaNameToUse = mj_core_schema();
+            schemaNameToUse = MjCoreSchema();
          }
          return schemaNameToUse.trim().toLowerCase() === schemaName.trim().toLowerCase();
       });
@@ -5942,7 +6557,7 @@ export class ManageMetadataBase {
             let newEntityName: string = await this.createNewEntityName(newEntity, currentUser);
             const newEntityDisplayName = this.createNewEntityDisplayName(newEntity, newEntityName);
 
-            const { name: uniqueName, suffix: uniqueSuffix } = this.resolveUniqueEntityName(
+            const { name: uniqueName, suffix: uniqueSuffix } = this.ResolveUniqueEntityName(
                newEntityName,
                newEntity.SchemaName,
                md.Entities.map(e => e.Name)
@@ -5956,7 +6571,7 @@ export class ManageMetadataBase {
             const isNewSchema = await this.isSchemaNew(pool, newEntity.SchemaName);
             const newEntityID = this.createNewUUID();
             const sSQLInsert = this.createNewEntityInsertSQL(newEntityID, newEntityName, newEntity, suffix, newEntityDisplayName);
-            await this.LogSQLAndExecute(pool, sSQLInsert, `SQL generated to create new entity ${newEntityName}`);
+            await this.logSQLAndExecute(pool, sSQLInsert, `SQL generated to create new entity ${newEntityName}`);
 
             // if we get here we created a new entity safely, otherwise we get exception
 
@@ -5994,10 +6609,10 @@ export class ManageMetadataBase {
                if (configInfo.newEntityDefaults.AddToApplicationWithSchemaName) {
                   // only do this if the configuration setting is set to add new entities to applications for schema names
                   for (const appUUID of apps) {
-                     const sSQLInsertApplicationEntity = `INSERT INTO ${this.qs(mj_core_schema(), 'ApplicationEntity')}
+                     const sSQLInsertApplicationEntity = `INSERT INTO ${this.qs(MjCoreSchema(), 'ApplicationEntity')}
                                        (${this.qi('ApplicationID')}, ${this.qi('EntityID')}, ${this.qi('Sequence')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')}) VALUES
-                                       ('${appUUID}', '${newEntityID}', (SELECT COALESCE(MAX(${this.qi('Sequence')}),0)+1 FROM ${this.qs(mj_core_schema(), 'ApplicationEntity')} WHERE ${this.qi('ApplicationID')} = '${appUUID}'), ${this.utcNow()}, ${this.utcNow()})`;
-                     await this.LogSQLAndExecute(pool, sSQLInsertApplicationEntity, `SQL generated to add new entity ${newEntityName} to application ID: '${appUUID}'`);
+                                       ('${appUUID}', '${newEntityID}', (SELECT COALESCE(MAX(${this.qi('Sequence')}),0)+1 FROM ${this.qs(MjCoreSchema(), 'ApplicationEntity')} WHERE ${this.qi('ApplicationID')} = '${appUUID}'), ${this.utcNow()}, ${this.utcNow()})`;
+                     await this.logSQLAndExecute(pool, sSQLInsertApplicationEntity, `SQL generated to add new entity ${newEntityName} to application ID: '${appUUID}'`);
                   }
                }
                else {
@@ -6016,10 +6631,8 @@ export class ManageMetadataBase {
                for (const p of permissions) {
                   const RoleID = md.Roles.find(r => r.Name.trim().toLowerCase() === p.RoleName.trim().toLowerCase())?.ID;
                   if (RoleID) {
-                     const sSQLInsertPermission = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityPermission')}
-                                                   (${this.qi('EntityID')}, ${this.qi('RoleID')}, ${this.qi('CanRead')}, ${this.qi('CanCreate')}, ${this.qi('CanUpdate')}, ${this.qi('CanDelete')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')}) VALUES
-                                                   ('${newEntityID}', '${RoleID}', ${this.boolLit(p.CanRead)}, ${this.boolLit(p.CanCreate)}, ${this.boolLit(p.CanUpdate)}, ${this.boolLit(p.CanDelete)}, ${this.utcNow()}, ${this.utcNow()})`;
-                     await this.LogSQLAndExecute(pool, sSQLInsertPermission, `SQL generated to add new permission for entity ${newEntityName} for role ${p.RoleName}`);
+                     const sSQLInsertPermission = this.buildEntityPermissionInsertSQL(newEntityID, RoleID, p.CanRead, p.CanCreate, p.CanUpdate, p.CanDelete);
+                     await this.logSQLAndExecute(pool, sSQLInsertPermission, `SQL generated to add new permission for entity ${newEntityName} for role ${p.RoleName}`);
                   }
                   else
                      LogError(`   >>>> ERROR: Unable to find Role ID for role ${p.RoleName} to add permissions for new entity ${newEntityName}`);
@@ -6040,13 +6653,22 @@ export class ManageMetadataBase {
          if (errStack) {
             LogError(`   Stack trace: ${errStack}`);
          }
+         // Rethrow so createNewEntities stops, rolls back, and the run fails. Swallowing here let CodeGen
+         // commit a PARTIAL set of new entities and report success: the table whose INSERT failed was simply
+         // absent afterwards, with a log line as the only witness. It has bitten twice — a UQ_Entity_Name
+         // collision (see resolveUniqueEntityName) and an AI-generated name of `-1` that dropped eleven of a
+         // connector's twenty-seven tables while the schema update reported "complete". The transaction in
+         // createNewEntities exists to give "all of it or none of it"; it can only do that if a failure
+         // reaches it. A table that does not QUALIFY (no primary key) is still a skip, not a failure — that
+         // path returns above and never gets here.
+         throw e instanceof Error ? e : new Error(errMsg);
       }
    }
 
    protected async isSchemaNew(pool: CodeGenConnection, schemaName: string): Promise<boolean> {
       // check to see if there are any entities in the db with this schema name
       // Quote the alias so PostgreSQL preserves PascalCase (unquoted aliases are lowercased in PG)
-      const sSQL: string = `SELECT COUNT(*) AS ${this.qi('Count')} FROM ${this.qs(mj_core_schema(), 'Entity')} WHERE ${this.qi('SchemaName')} = '${schemaName}'`;
+      const sSQL: string = `SELECT COUNT(*) AS ${this.qi('Count')} FROM ${this.qs(MjCoreSchema(), 'Entity')} WHERE ${this.qi('SchemaName')} = '${schemaName}'`;
       const resultResult = await this.runQuery(pool, sSQL);
       const result = resultResult.recordset;
       // Use Number() because PG returns COUNT(*) as bigint, which the pg driver delivers as a string
@@ -6080,7 +6702,7 @@ export class ManageMetadataBase {
          // Guard the INSERT with an existence check so the emitted (and re-runnable) migration SQL is
          // idempotent. drop-schema clears an app's ApplicationEntity/EntityPermission/Entity rows but NOT
          // its Application row, so replaying this block would otherwise collide on the Application PK.
-         const appCheckQuery = `SELECT 1 FROM ${this.qs(mj_core_schema(), 'Application')} WHERE ${this.qi('ID')} = '${appID}'`;
+         const appCheckQuery = `SELECT 1 FROM ${this.qs(MjCoreSchema(), 'Application')} WHERE ${this.qi('ID')} = '${appID}'`;
          // Schema-named bucket apps are plumbing (entity links, role grants, SchemaAutoAddNewEntities),
          // not products — hide them from new users. Application.DefaultForNewUser defaults to 1 in the
          // DB, so omitting the column here is what put raw '__mj_*'-named apps in every new user's
@@ -6089,10 +6711,10 @@ export class ManageMetadataBase {
          // statement in PG's `DO $$ ... $$` block, and the identifier auto-quoter skips dollar-quoted
          // blocks wholesale (they can legally contain arbitrary text), so nothing downstream will quote
          // these for us. Bare `ID` reaches PG folded to `id` and the INSERT fails on every run.
-         const appInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'Application')} (${this.qi('ID')}, ${this.qi('Name')}, ${this.qi('Description')}, ${this.qi('SchemaAutoAddNewEntities')}, ${this.qi('Path')}, ${this.qi('AutoUpdatePath')}, ${this.qi('DefaultForNewUser')})
+         const appInsert = `INSERT INTO ${this.qs(MjCoreSchema(), 'Application')} (${this.qi('ID')}, ${this.qi('Name')}, ${this.qi('Description')}, ${this.qi('SchemaAutoAddNewEntities')}, ${this.qi('Path')}, ${this.qi('AutoUpdatePath')}, ${this.qi('DefaultForNewUser')})
                        VALUES ('${appID}', '${appName}', 'Generated for schema', '${schemaName}', '${path}', ${this.dialect.BooleanLiteral(true)}, ${this.dialect.BooleanLiteral(false)})`;
          const sSQL = this.conditionalInsert(appCheckQuery, appInsert);
-         await this.LogSQLAndExecute(pool, sSQL, `SQL generated to create new application ${appName}`);
+         await this.logSQLAndExecute(pool, sSQL, `SQL generated to create new application ${appName}`);
          LogStatus(`Created new application ${appName} with Path: ${path}`);
 
          // Auto-assign default roles to the new application
@@ -6130,12 +6752,12 @@ export class ManageMetadataBase {
             // This covers BOTH re-running the block after drop-schema (which leaves ApplicationRole rows
             // intact) AND the collision with the Integration role that manageMetadata recreates
             // out-of-band — either path would otherwise violate UQ_ApplicationRole_App_Role.
-            const roleCheckQuery = `SELECT 1 FROM ${this.qs(mj_core_schema(), 'ApplicationRole')} WHERE ${this.qi('ApplicationID')} = '${appId}' AND ${this.qi('RoleID')} = '${role.ID}'`;
-            const roleInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'ApplicationRole')}
+            const roleCheckQuery = `SELECT 1 FROM ${this.qs(MjCoreSchema(), 'ApplicationRole')} WHERE ${this.qi('ApplicationID')} = '${appId}' AND ${this.qi('RoleID')} = '${role.ID}'`;
+            const roleInsert = `INSERT INTO ${this.qs(MjCoreSchema(), 'ApplicationRole')}
                                  (${this.qi('ApplicationID')}, ${this.qi('RoleID')}, ${this.qi('CanAccess')}, ${this.qi('CanAdmin')}) VALUES
                                  ('${appId}', '${role.ID}', ${this.boolLit(roleDef.CanAccess)}, ${this.boolLit(roleDef.CanAdmin)})`;
             const sSQLInsert = this.conditionalInsert(roleCheckQuery, roleInsert);
-            await this.LogSQLAndExecute(pool, sSQLInsert, `Adding role ${roleDef.RoleName} to application ${appName}`);
+            await this.logSQLAndExecute(pool, sSQLInsert, `Adding role ${roleDef.RoleName} to application ${appName}`);
          } else {
             LogError(`Unable to find Role '${roleDef.RoleName}' for application ${appName}`);
          }
@@ -6143,7 +6765,7 @@ export class ManageMetadataBase {
    }
 
    protected async applicationExists(pool: CodeGenConnection, applicationName: string): Promise<boolean>{
-      const sSQL: string = `SELECT ID FROM ${this.qs(mj_core_schema(), 'Application')} WHERE Name = '${applicationName}'`;
+      const sSQL: string = `SELECT ID FROM ${this.qs(MjCoreSchema(), 'Application')} WHERE Name = '${applicationName}'`;
       const resultResult = await this.runQuery(pool, sSQL);
       const result = resultResult.recordset;
       return result && result.length > 0 ? result[0].ID.length > 0 : false;
@@ -6151,7 +6773,7 @@ export class ManageMetadataBase {
 
    protected async getApplicationIDForSchema(pool: CodeGenConnection, schemaName: string): Promise<string[] | null>{
       // get all the apps each time from DB as we might be adding, don't use Metadata here for that reason
-      const sSQL: string = `SELECT ID, Name, SchemaAutoAddNewEntities FROM ${this.qs(mj_core_schema(), 'vwApplications')}`;
+      const sSQL: string = `SELECT ID, Name, SchemaAutoAddNewEntities FROM ${this.qs(MjCoreSchema(), 'vwApplications')}`;
       const resultResult = await this.runQuery(pool, sSQL);
       const result = resultResult.recordset;
 
@@ -6202,15 +6824,52 @@ export class ManageMetadataBase {
       if (apps && apps.length > 0) {
          if (configInfo.newEntityDefaults.AddToApplicationWithSchemaName) {
             for (const appUUID of apps) {
-               const sSQLInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'ApplicationEntity')}
+               const sSQLInsert = `INSERT INTO ${this.qs(MjCoreSchema(), 'ApplicationEntity')}
                                     (${this.qi('ApplicationID')}, ${this.qi('EntityID')}, ${this.qi('Sequence')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')}) VALUES
-                                    ('${appUUID}', '${entityId}', (SELECT COALESCE(MAX(${this.qi('Sequence')}),0)+1 FROM ${this.qs(mj_core_schema(), 'ApplicationEntity')} WHERE ${this.qi('ApplicationID')} = '${appUUID}'), ${this.utcNow()}, ${this.utcNow()})`;
-               await this.LogSQLAndExecute(pool, sSQLInsert, `SQL generated to add entity ${entityName} to application ID: '${appUUID}'`);
+                                    ('${appUUID}', '${entityId}', (SELECT COALESCE(MAX(${this.qi('Sequence')}),0)+1 FROM ${this.qs(MjCoreSchema(), 'ApplicationEntity')} WHERE ${this.qi('ApplicationID')} = '${appUUID}'), ${this.utcNow()}, ${this.utcNow()})`;
+               await this.logSQLAndExecute(pool, sSQLInsert, `SQL generated to add entity ${entityName} to application ID: '${appUUID}'`);
             }
          }
       } else {
          LogError(`   >>>> WARNING: No application found for schema ${schemaName} to add entity ${entityName}`);
       }
+   }
+
+   /**
+    * INSERT for one `EntityPermission` row, skipped when a row already exists for that
+    * (EntityID, RoleID, Type).
+    *
+    * The guard is not defensive tidiness — `EntityPermission` carries a UNIQUE constraint on those
+    * three columns (`UQ_EntityPermission_EntityID_RoleID_Type`), so an unguarded INSERT is a failed
+    * CodeGen run rather than a duplicate row. All three call sites are "grant the configured default
+    * permissions", which is naturally re-entrant: an entity re-detected as new, or a second CodeGen
+    * pass over the same entity, reaches them again. Before the constraint existed this silently
+    * accumulated duplicates — a live database showed one (entity, role) pair with rows created three
+    * years apart, and pairs whose verb flags disagreed.
+    *
+    * `Type` is written explicitly rather than left to the column default so the row being inserted
+    * and the row being tested for are keyed identically; a default that changed later would
+    * otherwise put them out of step. Expressed as INSERT ... SELECT ... WHERE NOT EXISTS, which is
+    * valid on both SQL Server and PostgreSQL, so no provider branch is needed.
+    */
+   protected buildEntityPermissionInsertSQL(
+      entityId: string,
+      roleId: string,
+      canRead: boolean,
+      canCreate: boolean,
+      canUpdate: boolean,
+      canDelete: boolean
+   ): string {
+      const table = this.qs(MjCoreSchema(), 'EntityPermission');
+      const entityLit = this.uuidLit(entityId);
+      const roleLit = this.uuidLit(roleId);
+      return `INSERT INTO ${table}
+                (${this.qi('EntityID')}, ${this.qi('RoleID')}, ${this.qi('Type')}, ${this.qi('CanRead')}, ${this.qi('CanCreate')}, ${this.qi('CanUpdate')}, ${this.qi('CanDelete')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')})
+              SELECT ${entityLit}, ${roleLit}, 'Allow', ${this.boolLit(canRead)}, ${this.boolLit(canCreate)}, ${this.boolLit(canUpdate)}, ${this.boolLit(canDelete)}, ${this.utcNow()}, ${this.utcNow()}
+              WHERE NOT EXISTS (
+                SELECT 1 FROM ${table}
+                WHERE ${this.qi('EntityID')} = ${entityLit} AND ${this.qi('RoleID')} = ${roleLit} AND ${this.qi('Type')} = 'Allow'
+              )`;
    }
 
    /**
@@ -6231,10 +6890,8 @@ export class ManageMetadataBase {
       for (const p of permissions) {
          const RoleID = md.Roles.find(r => r.Name.trim().toLowerCase() === p.RoleName.trim().toLowerCase())?.ID;
          if (RoleID) {
-            const sSQLInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityPermission')}
-                                 (${this.qi('EntityID')}, ${this.qi('RoleID')}, ${this.qi('CanRead')}, ${this.qi('CanCreate')}, ${this.qi('CanUpdate')}, ${this.qi('CanDelete')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')}) VALUES
-                                 ('${entityId}', '${RoleID}', ${this.boolLit(p.CanRead)}, ${this.boolLit(p.CanCreate)}, ${this.boolLit(p.CanUpdate)}, ${this.boolLit(p.CanDelete)}, ${this.utcNow()}, ${this.utcNow()})`;
-            await this.LogSQLAndExecute(pool, sSQLInsert, `SQL generated to add permission for entity ${entityName} for role ${p.RoleName}`);
+            const sSQLInsert = this.buildEntityPermissionInsertSQL(entityId, RoleID, p.CanRead, p.CanCreate, p.CanUpdate, p.CanDelete);
+            await this.logSQLAndExecute(pool, sSQLInsert, `SQL generated to add permission for entity ${entityName} for role ${p.RoleName}`);
          } else {
             LogError(`   >>>> ERROR: Unable to find Role ID for role ${p.RoleName} to add permissions for entity ${entityName}`);
          }
@@ -6394,10 +7051,8 @@ export class ManageMetadataBase {
             logStatus(`    > Materialized entity "${entityName}": role "${p.RoleName}" NOT granted read (it cannot read every source entity; the snapshot has no row-level scoping).`);
             continue;
          }
-         const sSQLInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityPermission')}
-                              (${this.qi('EntityID')}, ${this.qi('RoleID')}, ${this.qi('CanRead')}, ${this.qi('CanCreate')}, ${this.qi('CanUpdate')}, ${this.qi('CanDelete')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')}) VALUES
-                              ('${entityId}', '${roleId}', ${this.boolLit(true)}, ${this.boolLit(false)}, ${this.boolLit(false)}, ${this.boolLit(false)}, ${this.utcNow()}, ${this.utcNow()})`;
-         await this.LogSQLAndExecute(pool, sSQLInsert, `SQL generated to add read permission for materialized entity ${entityName} for role ${p.RoleName}`);
+         const sSQLInsert = this.buildEntityPermissionInsertSQL(entityId, roleId, true, false, false, false);
+         await this.logSQLAndExecute(pool, sSQLInsert, `SQL generated to add read permission for materialized entity ${entityName} for role ${p.RoleName}`);
       }
    }
 
@@ -6408,8 +7063,8 @@ export class ManageMetadataBase {
     * human authors protection. Non-destructive (rows are kept, just flipped) so the grant can be restored.
     */
    protected async revokeMaterializedEntityReadAccess(pool: CodeGenConnection, entityId: string, entityLabel: string, reason: string): Promise<void> {
-      const sql = `UPDATE ${this.qs(mj_core_schema(), 'EntityPermission')} SET ${this.qi('CanRead')}=${this.boolLit(false)} WHERE ${this.qi('EntityID')}='${entityId}' AND ${this.qi('CanRead')}=${this.boolLit(true)}`;
-      await this.LogSQLAndExecute(pool, sql, `Revoke read access on materialized entity "${entityLabel}" (${reason})`);
+      const sql = `UPDATE ${this.qs(MjCoreSchema(), 'EntityPermission')} SET ${this.qi('CanRead')}=${this.boolLit(false)} WHERE ${this.qi('EntityID')}='${entityId}' AND ${this.qi('CanRead')}=${this.boolLit(true)}`;
+      await this.logSQLAndExecute(pool, sql, `Revoke read access on materialized entity "${entityLabel}" (${reason})`);
    }
 
    /**
@@ -6431,7 +7086,10 @@ export class ManageMetadataBase {
    }
 
    /** Pure form of the role-RLS layer (see {@link entityHasRowLevelSecurity}). IO-free so it can be reused
-    *  verbatim by the runtime refresher's equivalent gate. */
+    *  verbatim by the runtime refresher's equivalent gate. Deliberately WIDER than the runtime's own reader
+    *  (`EntityInfo.GetUserRowLevelSecurityInfo` collects a filter only from an Allow row whose `CanRead` is
+    *  set, since #4358): a leftover filter beside a cleared flag still counts as "protected" here, which errs
+    *  conservative for a leak gate. */
    public static EntityHasRoleReadRLS(entity: EntityInfo): boolean {
       return entity.Permissions.some((p) => !!p.ReadRLSFilterID && p.ReadRLSFilterID.trim().length > 0);
    }
@@ -6493,7 +7151,7 @@ export class ManageMetadataBase {
             if (!(await this.columnExistsInCoreSchema(pool, table, 'RowFilterID'))) continue;
             const res = await this.runQuery(
                pool,
-               `SELECT DISTINCT ${this.qi('ResourcePattern')} AS ResourcePattern FROM ${this.qs(mj_core_schema(), table)} WHERE ${this.qi('RowFilterID')} IS NOT NULL`,
+               `SELECT DISTINCT ${this.qi('ResourcePattern')} AS ResourcePattern FROM ${this.qs(MjCoreSchema(), table)} WHERE ${this.qi('RowFilterID')} IS NOT NULL`,
             );
             for (const row of res.recordset ?? []) {
                const r = row as CodeGenQueryRow;
@@ -6538,7 +7196,7 @@ export class ManageMetadataBase {
       const cached = this._coreSchemaColumnExists.get(key);
       if (cached !== undefined) return cached;
       const sql = `SELECT COUNT(*) AS ColExists FROM INFORMATION_SCHEMA.COLUMNS ` +
-                  `WHERE TABLE_SCHEMA = '${mj_core_schema()}' AND TABLE_NAME = '${table}' AND COLUMN_NAME = '${column}'`;
+                  `WHERE TABLE_SCHEMA = '${MjCoreSchema()}' AND TABLE_NAME = '${table}' AND COLUMN_NAME = '${column}'`;
       const result = await this.runQuery(pool, sql);
       const row = (result.recordset?.[0] ?? {}) as Record<string, unknown>;
       const cnt = row.ColExists ?? row.colexists ?? 0;
@@ -6566,16 +7224,16 @@ export class ManageMetadataBase {
          sourceEntities.every((e) => e.Permissions.some((p) => UUIDsEqual(p.RoleID, roleId) && p.CanRead));
       const grants = await this.runQuery(
          pool,
-         `SELECT ${this.qi('RoleID')} FROM ${this.qs(mj_core_schema(), 'EntityPermission')} WHERE ${this.qi('EntityID')}='${entityId}' AND ${this.qi('CanRead')}=${this.boolLit(true)}`,
+         `SELECT ${this.qi('RoleID')} FROM ${this.qs(MjCoreSchema(), 'EntityPermission')} WHERE ${this.qi('EntityID')}='${entityId}' AND ${this.qi('CanRead')}=${this.boolLit(true)}`,
       );
       let revoked = 0;
       for (const g of grants.recordset) {
          const roleId = (g as CodeGenQueryRow).RoleID as string | null;
          if (!roleId) continue;
          if (!roleCanReadAllSources(roleId)) {
-            await this.LogSQLAndExecute(
+            await this.logSQLAndExecute(
                pool,
-               `UPDATE ${this.qs(mj_core_schema(), 'EntityPermission')} SET ${this.qi('CanRead')}=${this.boolLit(false)} WHERE ${this.qi('EntityID')}='${entityId}' AND ${this.qi('RoleID')}='${roleId}' AND ${this.qi('CanRead')}=${this.boolLit(true)}`,
+               `UPDATE ${this.qs(MjCoreSchema(), 'EntityPermission')} SET ${this.qi('CanRead')}=${this.boolLit(false)} WHERE ${this.qi('EntityID')}='${entityId}' AND ${this.qi('RoleID')}='${roleId}' AND ${this.qi('CanRead')}=${this.boolLit(true)}`,
                `Narrow read grant on materialized entity "${entityLabel}": role ${roleId} can no longer read every source (C2 intersection re-narrowed)`,
             );
             revoked++;
@@ -6608,7 +7266,7 @@ export class ManageMetadataBase {
     *                    earlier in this run (which are not in metadata yet)
     * @returns the free name and the suffix used to reach it ('' when the name was already free)
     */
-   public resolveUniqueEntityName(
+   public ResolveUniqueEntityName(
       desiredName: string,
       schemaName: string,
       takenNames: string[]
@@ -6637,13 +7295,57 @@ export class ManageMetadataBase {
       return { name, suffix };
    }
 
+   /** @deprecated Use {@link ResolveUniqueEntityName}. */
+   public resolveUniqueEntityName(
+      desiredName: string,
+      schemaName: string,
+      takenNames: string[]
+   ): { name: string; suffix: string } {
+      return this.ResolveUniqueEntityName(desiredName, schemaName, takenNames);
+   }
+
+   /**
+    * INSERT for a config-declared virtual entity's Entity row. Logged rather than a stored-procedure
+    * call so the CodeGen_Run capture replays it with the same ID on every database, exactly like
+    * table-backed entities. Column set and flags match spCreateVirtualEntity, plus Description.
+    */
+   protected buildVirtualEntityInsertSQL(entityId: string, entityName: string, viewSchema: string, viewName: string, description: string | null): string {
+      const q = (name: string) => this.qi(name);
+      const lit = (value: string) => `'${EscapeSQLString(value)}'`;
+      return `INSERT INTO ${this.qs(MjCoreSchema(), 'Entity')} (
+         ${q('ID')}, ${q('Name')}, ${q('Description')}, ${q('BaseTable')}, ${q('BaseView')}, ${q('SchemaName')},
+         ${q('VirtualEntity')}, ${q('IncludeInAPI')}, ${q('AllowCreateAPI')}, ${q('AllowUpdateAPI')}, ${q('AllowDeleteAPI')},
+         ${q('AllowRecordMerge')}, ${q('TrackRecordChanges')}, ${q('__mj_CreatedAt')}, ${q('__mj_UpdatedAt')}
+      ) VALUES (
+         ${this.uuidLit(entityId)}, ${lit(entityName)}, ${description ? lit(description) : 'NULL'}, ${lit(viewName)}, ${lit(viewName)}, ${lit(viewSchema)},
+         ${this.boolLit(true)}, ${this.boolLit(true)}, ${this.boolLit(false)}, ${this.boolLit(false)}, ${this.boolLit(false)},
+         ${this.boolLit(false)}, ${this.boolLit(false)}, ${this.utcNow()}, ${this.utcNow()}
+      )`;
+   }
+
+   /**
+    * Seeds the first configured key column before the view-column sync runs, so the sync sees a key
+    * and does not promote the first view column. Type is a placeholder the sync replaces.
+    */
+   protected buildVirtualEntityPlaceholderPKSQL(fieldId: string, entityId: string, pkFieldName: string, singleColumnPrimaryKey: boolean): string {
+      const q = (name: string) => this.qi(name);
+      const { wantPrimaryKey, wantUnique } = this.resolvePrimaryKeyFlags(true, singleColumnPrimaryKey);
+      return `INSERT INTO ${this.qs(MjCoreSchema(), 'EntityField')} (
+         ${q('ID')}, ${q('EntityID')}, ${q('Sequence')}, ${q('Name')}, ${q('IsPrimaryKey')}, ${q('IsUnique')}, ${q('Type')},
+         ${q('__mj_CreatedAt')}, ${q('__mj_UpdatedAt')}
+      ) VALUES (
+         ${this.uuidLit(fieldId)}, ${this.uuidLit(entityId)}, ${this.applyTimeEntityFieldSequenceSQL(entityId)}, '${EscapeSQLString(pkFieldName)}',
+         ${this.boolLit(wantPrimaryKey)}, ${this.boolLit(wantUnique)}, 'int', ${this.utcNow()}, ${this.utcNow()}
+      )`;
+   }
+
    protected createNewEntityInsertSQL(newEntityUUID: string, newEntityName: string, newEntity: any, newEntitySuffix: string, newEntityDisplayName: string | null): string {
       const newEntityDefaults = configInfo.newEntityDefaults;
       const newEntityDescriptionEscaped = newEntity.EntityDescription ? `'${newEntity.EntityDescription.replace(/'/g, "''")}'` : null;
       const allowCaching = this.resolveAllowCachingForSchema(newEntity.SchemaName);
       const q = (name: string) => this.qi(name);
       const sSQLInsert = `
-      INSERT INTO ${this.qs(mj_core_schema(), 'Entity')} (
+      INSERT INTO ${this.qs(MjCoreSchema(), 'Entity')} (
          ${q('ID')},
          ${q('Name')},
          ${q('DisplayName')},
@@ -6706,7 +7408,7 @@ export class ManageMetadataBase {
       const match = overrides.find(entry => {
          let candidate = entry.SchemaName;
          if (candidate?.trim().toLowerCase() === '${mj_core_schema}') {
-            candidate = mj_core_schema();
+            candidate = MjCoreSchema();
          }
          return candidate.trim().toLowerCase() === schemaName.trim().toLowerCase();
       });
@@ -6774,11 +7476,12 @@ export class ManageMetadataBase {
                e.FullTextSearchEnabled,
                e.AutoUpdateFullTextSearch
             FROM
-               ${this.qs(mj_core_schema(), 'vwEntities')} e
+               ${this.qs(MjCoreSchema(), 'vwEntities')} e
             WHERE
                ${whereClause}
             ORDER BY
-               e.Name
+               e.Name,
+               e.ID
          `;
 
          const entitiesResult = await this.runQuery(pool, entitiesSQL);
@@ -6807,11 +7510,16 @@ export class ManageMetadataBase {
                ef.AutoUpdateIncludeInUserSearchAPI,
                ef.AutoUpdateCategory,
                ef.AutoUpdateDisplayName,
+               ef.AutoUpdateExtendedType,
+               ef.ExtendedType,
+               ef.CodeType,
+               ef.GeneratedFormSection,
                ef.EntityIDFieldName,
                ef.RelatedEntity,
                ef.IsVirtual,
                ef.AllowUpdateAPI,
                ef.IsNameField,
+               ef.ValueListType,
                ef.DefaultInView,
                ef.IncludeInUserSearchAPI,
                ef.UserSearchPredicateAPI,
@@ -6820,12 +7528,14 @@ export class ManageMetadataBase {
                ef.AutoUpdateFullTextSearch,
                ef.${this.qi('Length')} as MaxLength
             FROM
-               ${this.qs(mj_core_schema(), 'vwEntityFields')} ef
+               ${this.qs(MjCoreSchema(), 'vwEntityFields')} ef
             WHERE
                ef.EntityID IN (${entityIds})
             ORDER BY
                ef.EntityID,
-               ef.Sequence
+               ef.Sequence,
+               ef.Name,
+               ef.ID
          `;
 
          const fieldsResult = await this.runQuery(pool, fieldsSQL);
@@ -6838,10 +7548,13 @@ export class ManageMetadataBase {
                es.Name,
                es.Value
             FROM
-               ${this.qs(mj_core_schema(), 'EntitySetting')} es
+               ${this.qs(MjCoreSchema(), 'EntitySetting')} es
             WHERE
                es.EntityID IN (${entityIds})
                AND es.Name = 'FieldCategoryInfo'
+            ORDER BY
+               es.EntityID,
+               es.Name
          `;
          const settingsResult = await this.runQuery(pool, settingsSQL);
          const allSettings = settingsResult.recordset;
@@ -6926,14 +7639,14 @@ export class ManageMetadataBase {
          }
 
          const pct = Math.round((processedCount / total) * 100);
-         updateSpinner(`Advanced generation: ${processedCount}/${total} entities (${pct}%)${errorCount > 0 ? ` — ${errorCount} error(s)` : ''}`);
+         UpdateSpinner(`Advanced generation: ${processedCount}/${total} entities (${pct}%)${errorCount > 0 ? ` — ${errorCount} error(s)` : ''}`);
 
          // Credential circuit tripped (e.g. keyless / mis-credentialed env) — stop issuing further
          // AI calls; the remaining entities would only produce doomed round-trips. One clear message
          // was already logged when the circuit opened.
          if (ag.AICircuitOpen) {
             const skipped = total - processedCount;
-            updateSpinner(`Advanced generation: AI credential circuit open — skipping remaining ${skipped} entit${skipped === 1 ? 'y' : 'ies'} (check AI credentials).`);
+            UpdateSpinner(`Advanced generation: AI credential circuit open — skipping remaining ${skipped} entit${skipped === 1 ? 'y' : 'ies'} (check AI credentials).`);
             break;
          }
       }
@@ -6966,17 +7679,28 @@ export class ManageMetadataBase {
          // EntityID) instead of a linear scan of the full pooled array.
          const fields = fieldsByEntity.get(String(entity.ID ?? '').trim().toLowerCase()) ?? [];
 
+         // Decorate fields with change state from field tracking (C1/C3)
+         for (const f of fields) {
+            f.IsNew = ManageMetadataBase.isFieldNew(entity.ID, f.Name);
+            f.DescriptionReopened = ManageMetadataBase.isDisplayNameReopened(entity.ID, f.Name);
+            f.TypeReopened = ManageMetadataBase.isTypeReopened(entity.ID, f.Name);
+         }
+         const newFieldNames = new Set(fields.filter((f: Record<string, unknown>) => f.IsNew).map((f: Record<string, unknown>) => String(f.Name)));
+         const typeReopenedNames = new Set(fields.filter((f: Record<string, unknown>) => f.TypeReopened).map((f: Record<string, unknown>) => String(f.Name)));
+         const hasNewFields = newFieldNames.size > 0;
+         const hasTypeReopened = typeReopenedNames.size > 0;
+         const hasDescriptionReopened = fields.some((f: Record<string, unknown>) => f.DescriptionReopened);
+
          // Determine if this is a new entity (for DefaultForNewUser decision)
          const isNewEntity = ManageMetadataBase.newEntityList.includes(entity.Name);
 
-         // Smart Field Identification
-         // Only run if at least one field allows auto-update for any of the smart field properties,
-         // or if entity-level search/FTS auto-update flags are set
-         const needsFieldAnalysis = fields.some((f: any) => f.AutoUpdateIsNameField || f.AutoUpdateDefaultInView || f.AutoUpdateIncludeInUserSearchAPI || f.AutoUpdateUserSearchPredicate || f.AutoUpdateFullTextSearch);
+         // Smart Field Identification — FM4. Runs only when there is something new to decide about.
+         const needsFieldAnalysis = (isNewEntity || hasNewFields || hasTypeReopened) && fields.some((f: Record<string, unknown>) => f.AutoUpdateIsNameField || f.AutoUpdateDefaultInView || f.AutoUpdateIncludeInUserSearchAPI || f.AutoUpdateUserSearchPredicate || f.AutoUpdateFullTextSearch);
          // entity-level auto-update flags come from the raw SQL query, not EntityInfo
          const entityRecord = entity as unknown as Record<string, unknown>;
-         const needsEntitySearchConfig = entityRecord.AutoUpdateAllowUserSearchAPI || entityRecord.AutoUpdateFullTextSearch;
+         const needsEntitySearchConfig = isNewEntity && (Boolean(entityRecord.AutoUpdateAllowUserSearchAPI) || Boolean(entityRecord.AutoUpdateFullTextSearch));
          if (needsFieldAnalysis || needsEntitySearchConfig) {
+            CodeGenReporter.Instance.counter('ai.smartFieldCalls');
             const fieldAnalysis = await ag.identifyFields({
                Name: entity.Name,
                Description: entity.Description,
@@ -6992,14 +7716,18 @@ export class ManageMetadataBase {
                   AutoUpdateAllowUserSearchAPI: entityRecord.AutoUpdateAllowUserSearchAPI as boolean | undefined,
                   FullTextSearchEnabled: entityRecord.FullTextSearchEnabled as boolean | undefined,
                   AutoUpdateFullTextSearch: entityRecord.AutoUpdateFullTextSearch as boolean | undefined,
-               }, fields, fieldAnalysis);
+               }, fields, fieldAnalysis, { isNewEntity, newFieldNames, typeReopenedNames });
             }
          }
 
          // Form Layout Generation
-         // Only run if at least one field allows auto-update
-         const needsCategoryGeneration = fields.some((f: any) => f.AutoUpdateCategory && (!f.Category || f.Category.trim() === ''));
+         // Fires only on change events (new entity, new fields, reopened description/type) AND when there is work to do
+         // (blank categories with AutoUpdateCategory=1, or reopened fields to review). Gated on events so omitted blank fields don't loop (§3.4).
+         const hasCategoryNeeded = fields.some((f: Record<string, unknown>) => Boolean(f.AutoUpdateCategory) && (!f.Category || String(f.Category).trim() === ''));
+         const needsCategoryGeneration = (isNewEntity || hasNewFields || hasDescriptionReopened || hasTypeReopened)
+            && (hasCategoryNeeded || hasDescriptionReopened || hasTypeReopened);
          if (needsCategoryGeneration) {
+            CodeGenReporter.Instance.counter('ai.formLayoutCalls');
             // Build IS-A parent chain context if this entity has a parent
             const parentChainContext = this.buildParentChainContext(entity, fields);
 
@@ -7105,7 +7833,8 @@ export class ManageMetadataBase {
       pool: CodeGenConnection,
       entity: { ID: string; Name?: string; SchemaName?: string; AllowUserSearchAPI?: boolean; AutoUpdateAllowUserSearchAPI?: boolean; FullTextSearchEnabled?: boolean; AutoUpdateFullTextSearch?: boolean },
       fields: Array<Record<string, unknown>>,
-      result: SmartFieldIdentificationResult
+      result: SmartFieldIdentificationResult,
+      ctx?: { isNewEntity: boolean; newFieldNames: ReadonlySet<string>; typeReopenedNames: ReadonlySet<string> }
    ): Promise<void> {
       // Run the guardrail pipeline once up front so every downstream applier
       // sees the same already-normalized result. See search-guardrails.ts for
@@ -7114,19 +7843,21 @@ export class ManageMetadataBase {
 
       const sqlStatements: string[] = [];
 
-      this.applyNameFieldUpdates(sqlStatements, fields, result);
-      this.applyDefaultInViewUpdates(sqlStatements, fields, result);
-      this.applySearchableFieldUpdates(sqlStatements, fields, result, entity);
-      this.applySearchPredicateUpdates(sqlStatements, fields, result);
-      this.applyEntitySearchConfig(sqlStatements, entity, result);
+      this.applyNameFieldUpdates(sqlStatements, fields, result, entity);
+      this.applyDefaultInViewUpdates(sqlStatements, fields, result, entity, ctx);
+      this.applySearchableFieldUpdates(sqlStatements, fields, result, entity, ctx);
+      this.applySearchPredicateUpdates(sqlStatements, fields, result, entity, ctx);
+      if (!ctx || ctx.isNewEntity) {
+         this.applyEntitySearchConfig(sqlStatements, entity, result);
+      }
       if (configInfo.advancedGeneration?.allowFullTextSearchAutoUpdate) {
-         this.applyFullTextSearchUpdates(sqlStatements, entity, fields, result);
+         this.applyFullTextSearchUpdates(sqlStatements, entity, fields, result, ctx);
       }
 
       // Execute all updates in one batch
       if (sqlStatements.length > 0) {
          try {
-            await this.LogSQLBatchAndExecute(pool, sqlStatements, `Set field properties for entity`, false);
+            await this.logSQLBatchAndExecute(pool, sqlStatements, `Set field properties for entity`, false);
          }
          catch (ex) {
             logError('Error executing combined smart field SQL: ', ex)
@@ -7160,7 +7891,7 @@ export class ManageMetadataBase {
       const proposedAllowUserSearch = result.allowUserSearch === true;
 
       // 1. Shape cleanup (defensive — identifyFields() also runs this).
-      const cleaned = normalizeSmartFieldResultShape(result);
+      const cleaned = NormalizeSmartFieldResultShape(result);
       result.searchableFields = cleaned.searchableFields ?? [];
       result.searchPredicates = cleaned.searchPredicates ?? [];
       result.allowUserSearch = cleaned.allowUserSearch;
@@ -7181,7 +7912,7 @@ export class ManageMetadataBase {
             droppedIneligibleCount += 1;
             continue;
          }
-         if (isNarrativeFieldName(name) && !ftxEnabled) {
+         if (IsNarrativeFieldName(name) && !ftxEnabled) {
             droppedNarrativeCount += 1;
             continue;
          }
@@ -7189,7 +7920,7 @@ export class ManageMetadataBase {
       }
 
       // 3. Per-entity cap.
-      const { accepted, dropped: droppedByCap } = applySearchableFieldsCap(eligible);
+      const { accepted, dropped: droppedByCap } = ApplySearchableFieldsCap(eligible);
       result.searchableFields = accepted;
 
       // 4. Predicate normalization. Build a fresh searchPredicates list keyed
@@ -7205,7 +7936,7 @@ export class ManageMetadataBase {
       const normalizedPredicates: Array<{ field: string; predicate: SearchPredicate }> = [];
       let predicatesRewrittenCount = 0;
       for (const fieldName of accepted) {
-         const { predicate, rewritten } = normalizePredicate({
+         const { predicate, rewritten } = NormalizePredicate({
             fieldName,
             proposed: proposedByName.get(fieldName),
             isInFullTextSearchFields: ftsFieldSet.has(fieldName),
@@ -7271,13 +8002,14 @@ export class ManageMetadataBase {
    protected applyNameFieldUpdates(
       sqlStatements: string[],
       fields: Array<Record<string, unknown>>,
-      result: SmartFieldIdentificationResult
+      result: SmartFieldIdentificationResult,
+      entity?: { Name?: string }
    ): void {
       const nameFieldNames: string[] = result.nameFields ?? [];
 
       // Surface LLM candidates that don't exist on the entity (same diagnostics as before).
       for (const nfName of nameFieldNames) {
-         if (!fields.some(f => f.Name === nfName)) {
+         if (!this.findFieldByName(fields as Array<{ Name: string }>, nfName)) {
             logError(`Smart field identification returned invalid nameField: '${nfName}' not found in entity fields`);
          }
       }
@@ -7287,7 +8019,7 @@ export class ManageMetadataBase {
       // Set the winner when it isn't flagged yet (and auto-update is allowed).
       if (winner && winner.AutoUpdateIsNameField && winner.ID && !winner.IsNameField) {
          sqlStatements.push(`
-               UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
+               UPDATE ${this.qs(MjCoreSchema(), 'EntityField')}
                SET IsNameField = ${this.boolLit(true)}
                WHERE ID = '${winner.ID}'
                AND AutoUpdateIsNameField = ${this.boolLit(true)}
@@ -7300,7 +8032,7 @@ export class ManageMetadataBase {
             continue;
          }
          sqlStatements.push(`
-               UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
+               UPDATE ${this.qs(MjCoreSchema(), 'EntityField')}
                SET IsNameField = ${this.boolLit(false)}
                WHERE ID = '${f.ID}'
                AND AutoUpdateIsNameField = ${this.boolLit(true)}
@@ -7330,7 +8062,7 @@ export class ManageMetadataBase {
          return this.preferLiteralNameField(eligibleFlagged);
       }
       for (const candidateName of rankedCandidates) {
-         const candidate = fields.find(f => f.Name === candidateName);
+         const candidate = this.findFieldByName(fields as Array<{ Name: string }>, candidateName) as Record<string, unknown> | undefined;
          if (candidate && this.isFieldEligibleForNameField(candidate)) {
             return candidate;
          }
@@ -7442,18 +8174,23 @@ export class ManageMetadataBase {
    protected applyDefaultInViewUpdates(
       sqlStatements: string[],
       fields: Array<Record<string, unknown>>,
-      result: SmartFieldIdentificationResult
+      result: SmartFieldIdentificationResult,
+      entityOrCtx?: { Name?: string } | { isNewEntity: boolean; newFieldNames: ReadonlySet<string>; typeReopenedNames: ReadonlySet<string> },
+      maybeCtx?: { isNewEntity: boolean; newFieldNames: ReadonlySet<string>; typeReopenedNames: ReadonlySet<string> }
    ): void {
+      const entity = (entityOrCtx && 'Name' in entityOrCtx) ? entityOrCtx : undefined;
+      const ctx = (entityOrCtx && 'newFieldNames' in entityOrCtx) ? entityOrCtx : maybeCtx;
+      const inScope = (f: Record<string, unknown>) => !ctx || ctx.isNewEntity || ctx.newFieldNames.has(String(f.Name)) || ctx.typeReopenedNames.has(String(f.Name));
       // Guard against a malformed LLM result that omits the array entirely.
       // Mirrors the defensive handling in the sibling apply* methods.
       const defaultInView: string[] = result.defaultInView ?? [];
 
       const defaultInViewFields = fields.filter(f =>
-         defaultInView.includes(f.Name as string) && f.AutoUpdateDefaultInView && f.ID
+         defaultInView.some(n => n.toLowerCase() === String(f.Name ?? '').toLowerCase()) && f.AutoUpdateDefaultInView && f.ID && inScope(f)
       );
 
       const missingFields = defaultInView.filter(name =>
-         !fields.some(f => f.Name === name)
+         !this.findFieldByName(fields as Array<{ Name: string }>, name)
       );
       if (missingFields.length > 0) {
          logError(`Smart field identification returned invalid defaultInView fields: ${missingFields.join(', ')} not found in entity`);
@@ -7462,7 +8199,7 @@ export class ManageMetadataBase {
       for (const field of defaultInViewFields) {
          if (!field.DefaultInView) {
             sqlStatements.push(`
-               UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
+               UPDATE ${this.qs(MjCoreSchema(), 'EntityField')}
                SET DefaultInView = ${this.boolLit(true)}
                WHERE ID = '${field.ID}'
                AND AutoUpdateDefaultInView = ${this.boolLit(true)}
@@ -7486,18 +8223,20 @@ export class ManageMetadataBase {
       sqlStatements: string[],
       fields: Array<Record<string, unknown>>,
       result: SmartFieldIdentificationResult,
-      entity?: { FullTextSearchEnabled?: boolean }
+      entity?: { Name?: string; FullTextSearchEnabled?: boolean },
+      ctx?: { isNewEntity: boolean; newFieldNames: ReadonlySet<string>; typeReopenedNames: ReadonlySet<string> }
    ): void {
+      const inScope = (f: Record<string, unknown>) => !ctx || ctx.isNewEntity || ctx.newFieldNames.has(String(f.Name)) || ctx.typeReopenedNames.has(String(f.Name));
       if (!result.searchableFields || result.searchableFields.length === 0) {
          return;
       }
 
       const searchableFields = fields.filter(f =>
-         result.searchableFields.includes(f.Name as string) && f.AutoUpdateIncludeInUserSearchAPI && f.ID
+         result.searchableFields.some(n => n.toLowerCase() === String(f.Name ?? '').toLowerCase()) && f.AutoUpdateIncludeInUserSearchAPI && f.ID && inScope(f)
       );
 
       const missingSearchableFields = result.searchableFields.filter(name =>
-         !fields.some(f => f.Name === name)
+         !this.findFieldByName(fields as Array<{ Name: string }>, name)
       );
       if (missingSearchableFields.length > 0) {
          logError(`Smart field identification returned invalid searchableFields: ${missingSearchableFields.join(', ')} not found in entity`);
@@ -7512,13 +8251,316 @@ export class ManageMetadataBase {
          }
          if (!field.IncludeInUserSearchAPI) {
             sqlStatements.push(`
-               UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
+               UPDATE ${this.qs(MjCoreSchema(), 'EntityField')}
                SET IncludeInUserSearchAPI = ${this.boolLit(true)}
                WHERE ID = '${field.ID}'
                AND AutoUpdateIncludeInUserSearchAPI = ${this.boolLit(true)}
             `);
          }
       }
+   }
+
+   /**
+    * Build the two deterministic search-flag hygiene statements.
+    *
+    * These exist because the LLM-driven smart-field pipeline cannot be relied on to run at all:
+    * `AdvancedGeneration.enabled` reads `enableAdvancedGeneration ?? false`, so on a default
+    * configuration none of `applySearchableFieldUpdates` / `applyEntitySearchConfig` ever
+    * executes — while every new entity is still INSERTed with `AllowUserSearchAPI = 1`
+    * (see `createNewEntityInsertSQL`). The result is an entity flagged searchable with nothing
+    * searchable on it, which is not a harmless default: `UserSearchString` against such an entity
+    * is a documented no-op (MJ#4581/#4582), so the data provider ignores the term and returns the
+    * UNFILTERED table. Global search then fans out to it on every keystroke and discards every row.
+    *
+    * Both statements are deterministic, need no model, and are safe to run on every pass:
+    *
+    *  1. **Seed** — an entity with NO searchable field gets its name-like columns flagged
+    *     (`NAME_LIKE_FIELD_NAMES`: Name, Title, FirstName, LastName, …). Those are what a person
+    *     types into a search box, so they are the one defensible default. Only fires when the
+    *     entity has nothing flagged at all, so it fills a gap rather than overriding anyone —
+    *     including the LLM, which has already run by this point when it is enabled.
+    *
+    *     Note this keys on the field's NAME, not on `IsNameField`. That flag looks like the
+    *     obvious source and is the wrong one: measured against a real database, seeding from it
+    *     would flag 54 fields of which 41 are VIRTUAL — the denormalized FK display columns
+    *     CodeGen puts on views (`Action`, `Agent`, `Artifact`). Those are computed by JOIN, so a
+    *     LIKE against them cannot seek any index, and flagging them would push 49 junction
+    *     entities into the global-search fan-out with unindexable predicates — the exact cost
+    *     `search-guardrails.ts` exists to prevent. It also picked up identifiers (`RecordID`,
+    *     `Token`, `ExternalSystemRecordID`) and a `Description`, which `isNarrativeFieldName`
+    *     rejects on the LLM path. And it would still not have fixed `MJ: Employees`, whose only
+    *     `IsNameField` is the virtual `FirstLast`; keying on the name reaches its real
+    *     `FirstName` / `LastName` columns, which is what the reported bug needed.
+    *  2. **Clear** — an entity STILL left with no searchable field has `AllowUserSearchAPI` turned
+    *     off, so it drops out of the search fan-out instead of contributing noise.
+    *
+    * Both honor the `AutoUpdate*` opt-outs, which is how an operator pins a hand-made decision —
+    * and is exactly how the curated entries in `metadata/entities/.entity-search-exclusions.json`
+    * protect themselves (they set `AutoUpdateAllowUserSearchAPI` to false alongside the flag).
+    *
+    * Full-text-search entities are exempt from both. An FTS entity is searchable through its
+    * INDEX: `createViewUserSearchSQL` takes the full-text branch before it ever reads
+    * `IncludeInUserSearchAPI`, so those flags are dead metadata there and the entity is a
+    * perfectly valid search target without them.
+    *
+    * Written as `UPDATE ... WHERE <key> IN (subquery)` rather than `UPDATE ... FROM ... JOIN`,
+    * which is T-SQL-only. The subquery form is ANSI and runs unchanged on both platforms.
+    */
+   protected buildSearchFlagHygieneSQL(excludeSchemas: string[]): {
+      seedSQL: string;
+      clearSQL: string;
+      /** COUNT of the rows {@link seedSQL} would touch — see the compare-first note on the apply method. */
+      seedProbeSQL: string;
+      /** NAMES of the entities {@link clearSQL} would disable. Valid only AFTER the seed has run. */
+      clearProbeSQL: string;
+   } {
+      const coreSchema = MjCoreSchema();
+      const entity = this.qs(coreSchema, 'Entity');
+      const entityField = this.qs(coreSchema, 'EntityField');
+      const yes = this.boolLit(true);
+      const no = this.boolLit(false);
+      // Same set the LLM path's isNameLikeFieldName() tests, lowered for a case-insensitive
+      // comparison that does not depend on the database collation.
+      const nameLikeList = NAME_LIKE_FIELD_NAMES.map(n => `'${n.toLowerCase()}'`).join(',');
+
+      // Every name in NAME_LIKE_FIELD_NAMES resolves to the same predicate, so one literal covers
+      // the whole seed. This MUST be set explicitly: `EntityField.UserSearchPredicateAPI` defaults
+      // to 'Contains' in the database, which is `LIKE '%term%'` — the unindexable scan the
+      // guardrails exist to prevent. Seeding the flag without the predicate would have made every
+      // seeded entity a full scan on every keystroke.
+      const seedPredicate = DefaultPredicateFor(NAME_LIKE_FIELD_NAMES[0]);
+
+      // The entity-shape guardrails the LLM path applies (`entityLevelEnableBlockedReason`).
+      // A log / audit / run-history table grows without bound and a detail / line-item child is
+      // reached through its parent; neither is a global-search target, whichever columns it has.
+      // Expressed as SQL rather than reusing the regex helpers because this runs in the database.
+      const shapeSuffixes = [
+         'Logs', 'Log', 'Runs', 'Run', 'Run History', 'Run Steps', 'Run Messages', 'Execution Logs',
+         'Details', 'Detail', 'Lines', 'Line', 'Items', 'Item', 'Steps', 'Step',
+         'Params', 'Param', 'Mappings', 'Mapping',
+      ];
+
+      // WORD boundaries, not raw suffixes. `LIKE '%Lines'` is a case-insensitive endsWith under
+      // the default collation, so it matched `Pipelines`, `Guidelines`, `Timelines`, `Airlines`,
+      // `Deadlines` and `Baselines`; `LIKE '%Logs'` matched `Catalogs`, `Dialogs` and `Blogs`;
+      // `LIKE '%Audit%'` matched `Auditors`. MJ's own metadata was not exempt — `MJ: ML Training
+      // Pipelines` was caught by `'%Lines'`. Those entities were then excluded from the seed and
+      // swept up by the clear (which carries no shape filter, deliberately — see below), so a
+      // guardrail meaning "do not bother seeding these" silently turned search OFF on them.
+      //
+      // Matching the final WORD keeps every intended shape — `Order Details`, `Audit Logs`,
+      // `MJ: AI Agent Runs` — while `Catalogs`, `Pipelines` and `Auditors` fall through to the
+      // seed as ordinary entities.
+      const nameEndsWithWord = (word: string) =>
+         `(e.${this.qi('Name')} = '${word}' OR e.${this.qi('Name')} LIKE '% ${word}')`;
+      const nameContainsWord = (word: string) =>
+         `(e.${this.qi('Name')} = '${word}'`
+         + ` OR e.${this.qi('Name')} LIKE '${word} %'`
+         + ` OR e.${this.qi('Name')} LIKE '% ${word}'`
+         + ` OR e.${this.qi('Name')} LIKE '% ${word} %')`;
+
+      const shapeClauses = shapeSuffixes
+         .map(sfx => nameEndsWithWord(sfx))
+         .concat([nameContainsWord('Audit'), nameContainsWord('Record Change')])
+         .join(' OR ');
+      const entityShapeFilter = `AND NOT (${shapeClauses})`;
+      // Schema names are configuration, not literals we control: double any apostrophe rather
+      // than interpolating it straight into the statement.
+      const schemaFilter = excludeSchemas.length > 0
+         ? `AND e.${this.qi('SchemaName')} NOT IN (${excludeSchemas.map(sc => `'${sc.replace(/'/g, "''")}'`).join(',')})`
+         : '';
+
+      // "This entity has nothing a user search can match." Mirrors
+      // `EntityInfo.HasSearchFields` and the runtime screen in EntitySearchProvider.
+      const noSearchableField = `NOT EXISTS (
+               SELECT 1 FROM ${entityField} f2
+               WHERE f2.${this.qi('EntityID')} = e.${this.qi('ID')}
+                 AND f2.${this.qi('IncludeInUserSearchAPI')} = ${yes}
+            )`;
+
+      // An FTS entity is searchable through its index, with no per-field flags involved.
+      const notFullText = `AND ${this.coalesce(`e.${this.qi('FullTextSearchEnabled')}`, no)} = ${no}`;
+
+      // The eligibility predicate here mirrors `isFieldEligibleForUserSearch` (and the runtime
+      // `isTextSearchableType` it was written against): not the primary key, a bounded text
+      // column. A name field that is neither is left alone rather than flagged uselessly.
+      // The candidate SELECTs are built once and used twice: once as the UPDATE's subquery, once
+      // as the probe `applySearchFlagHygiene` runs to decide whether to emit the UPDATE at all.
+      // Sharing the text is the point — a probe whose predicates could drift from the statement
+      // it guards would either suppress a needed write or emit a no-op one.
+      const seedCandidateSQL = `
+            SELECT ranked.${this.qi('ID')} FROM (
+               SELECT f.${this.qi('ID')},
+                      ROW_NUMBER() OVER (
+                         PARTITION BY f.${this.qi('EntityID')}
+                         ORDER BY f.${this.qi('Sequence')}, f.${this.qi('Name')}
+                      ) AS rn
+               FROM ${entityField} f
+               INNER JOIN ${entity} e ON e.${this.qi('ID')} = f.${this.qi('EntityID')}
+               WHERE LOWER(f.${this.qi('Name')}) IN (${nameLikeList})
+                 AND f.${this.qi('AutoUpdateIncludeInUserSearchAPI')} = ${yes}
+                 AND f.${this.qi('IncludeInUserSearchAPI')} = ${no}
+                 AND ${this.coalesce(`f.${this.qi('IsPrimaryKey')}`, no)} = ${no}
+                 AND ${this.coalesce(`f.${this.qi('IsVirtual')}`, no)} = ${no}
+                 AND LOWER(f.${this.qi('Type')}) IN ('nvarchar','varchar','char','nchar')
+                 AND ${this.coalesce(`f.${this.qi('Length')}`, '0')} <> -1
+                 AND e.${this.qi('VirtualEntity')} = ${no}
+                 AND e.${this.qi('AllowUserSearchAPI')} = ${yes}
+                 ${notFullText}
+                 ${entityShapeFilter}
+                 ${schemaFilter}
+                 AND ${noSearchableField}
+            ) ranked
+            WHERE ranked.rn <= ${MAX_SEARCHABLE_FIELDS_PER_ENTITY}`;
+
+      // The clear carries NO entity-shape filter, and that is deliberate rather than an
+      // oversight: a log / run / detail table is exactly what should drop out of the search
+      // fan-out, so the shapes the seed refuses to touch are meant to fall through to here.
+      //
+      // That composition is load-bearing and worth stating, because it means the shape list
+      // above does not merely withhold help — it DECIDES which entities get search turned off.
+      // A name wrongly matched there is not "left alone", it is disabled. Which is why the
+      // matching is word-boundary (see nameEndsWithWord) and why widening that list is a
+      // destructive change, not a conservative one.
+      const clearWhere = `e.${this.qi('AllowUserSearchAPI')} = ${yes}
+              AND e.${this.qi('AutoUpdateAllowUserSearchAPI')} = ${yes}
+              AND e.${this.qi('VirtualEntity')} = ${no}
+              ${notFullText}
+              ${schemaFilter}
+              AND ${noSearchableField}`;
+
+      const clearCandidateSQL = `
+            SELECT e.${this.qi('ID')}
+            FROM ${entity} e
+            WHERE ${clearWhere}`;
+
+      const seedSQL = `
+         UPDATE ${entityField}
+         SET ${this.qi('IncludeInUserSearchAPI')} = ${yes},
+             ${this.qi('UserSearchPredicateAPI')} = '${seedPredicate}'
+         WHERE ${this.qi('ID')} IN (${seedCandidateSQL}
+         )`;
+
+      const clearSQL = `
+         UPDATE ${entity}
+         SET ${this.qi('AllowUserSearchAPI')} = ${no}
+         WHERE ${this.qi('ID')} IN (${clearCandidateSQL}
+         )`;
+
+      // Derived-table alias is required by T-SQL and accepted by PostgreSQL, so one form serves
+      // both. COUNT(*) rather than EXISTS because the count also feeds the status line.
+      const seedProbeSQL = `SELECT COUNT(*) AS ${this.qi('Cnt')} FROM (${seedCandidateSQL}
+         ) probe`;
+
+      // The clear probe returns NAMES, not a count. Disabling search is the destructive half of
+      // this pass and it is effectively one-way: getting it back means flagging a field by hand
+      // AND pinning AutoUpdateAllowUserSearchAPI = 0, or the next run undoes the repair. An
+      // operator told "cleared 14 entities" has no way to learn which 14 without going to the
+      // database; naming them in the run output is the difference between an auditable change
+      // and a silent one. Shares `clearWhere` with the UPDATE so the two cannot disagree.
+      const clearProbeSQL = `
+         SELECT e.${this.qi('Name')} AS ${this.qi('Name')}
+         FROM ${entity} e
+         WHERE ${clearWhere}
+         ORDER BY e.${this.qi('Name')}`;
+
+      return { seedSQL, clearSQL, seedProbeSQL, clearProbeSQL };
+   }
+
+   /**
+    * Run the deterministic search-flag hygiene pass (see {@link buildSearchFlagHygieneSQL}).
+    *
+    * Runs OUTSIDE `applyAdvancedGeneration` and therefore regardless of whether advanced
+    * generation is enabled — which is the whole point, since it is off by default and an entity
+    * created under that default is exactly the one that needs this. Ordered after it so the
+    * model's choices, when it did run, are already in place and the seed only fills a real gap.
+    *
+    * COMPARE FIRST, then write — the T20 contract every-run config writers are held to (see
+    * `__tests__/idempotency/config-writers-compare-first.test.ts`). The two UPDATEs converge on
+    * their own, because the first pass makes `noSearchableField` false for every row it touches,
+    * so re-running them changes nothing. That is not sufficient: `LogSQLBatchAndExecute` writes
+    * whatever it is handed into the run's `CodeGen_Run_*.sql` capture whether or not a row moves,
+    * and the drift gate's warm-twice stage fails on ANY capture surviving a second run. Emitting
+    * unconditionally therefore reddened the gate on every PR while the data was perfectly
+    * idempotent — the data converged, the log did not. So each statement is emitted only when its
+    * own candidate probe finds work.
+    */
+   protected async applySearchFlagHygiene(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
+      try {
+         const { seedSQL, clearSQL, seedProbeSQL, clearProbeSQL } = this.buildSearchFlagHygieneSQL(excludeSchemas);
+
+         // Order matters: seeding first means an entity whose name field was just flagged is no
+         // longer a candidate for having its AllowUserSearchAPI cleared. Reversed, the pass would
+         // disable search on an entity it was about to make searchable.
+         //
+         // 4th arg is `isRecurringScript`, NOT a throw flag — passing `false` here is the default
+         // and is spelled out only to make the intent explicit. Errors are caught below.
+         const seedCount = await this.searchFlagHygieneCandidateCount(pool, seedProbeSQL);
+         if (seedCount > 0) {
+            logStatus(`         Search-flag hygiene: seeding ${seedCount} name field(s)`);
+            await this.logSQLBatchAndExecute(pool, [seedSQL], 'Deterministic search-flag hygiene — seed name fields', false);
+         }
+
+         // Probed AFTER the seed has run, not alongside it. Seeding changes which entities still
+         // have nothing searchable, so a clear probe taken before it would count entities the seed
+         // was about to repair and emit a statement that then matched nothing — reintroducing the
+         // stray capture file this is here to avoid.
+         const clearNames = await this.searchFlagHygieneClearCandidates(pool, clearProbeSQL);
+         if (clearNames.length > 0) {
+            // NAME them. This is the destructive half and it is effectively one-way for an
+            // operator who does not know it happened.
+            const shown = clearNames.slice(0, 25).join(', ');
+            const more = clearNames.length > 25 ? `, ... and ${clearNames.length - 25} more` : '';
+            logStatus(`         Search-flag hygiene: turning AllowUserSearchAPI OFF on ${clearNames.length} entity(ies): ${shown}${more}`);
+            await this.logSQLBatchAndExecute(pool, [clearSQL], 'Deterministic search-flag hygiene — clear AllowUserSearchAPI', false);
+         }
+
+         return true;
+      }
+      catch (ex) {
+         // A probe that cannot run is NOT the same as "nothing to do", and must not be allowed to
+         // look like it. Before this pass compared first, a malformed statement was appended to
+         // the CodeGen_Run capture by SQLLogging BEFORE it was executed, so a broken pass left a
+         // surviving artifact and reddened the drift gate. Probing first removes that signal: the
+         // throw now happens before anything is written, so without a loud failure here the pass
+         // would silently do nothing while every gate stayed green — the exact silent no-op this
+         // whole change exists to eliminate, one level up in the fixer. The caller fails the run.
+         logError('Search-flag hygiene FAILED — search flags were NOT reconciled on this run', ex);
+         return false;
+      }
+   }
+
+   /**
+    * Row count for one of the search-flag hygiene probes (see {@link applySearchFlagHygiene}).
+    *
+    * Reads the first column of the first row positionally rather than by name, because the alias
+    * comes back cased differently across drivers. A probe that returns nothing is treated as no
+    * work, which is the safe direction: the statement is skipped rather than emitted blind.
+    */
+   private async searchFlagHygieneCandidateCount(pool: CodeGenConnection, probeSQL: string): Promise<number> {
+      const result = await this.runQuery(pool, probeSQL);
+      const row = result?.recordset?.[0];
+      if (!row) {
+         return 0;
+      }
+      const count = Number(Object.values(row)[0]);
+      return Number.isFinite(count) ? count : 0;
+   }
+
+   /**
+    * Names of the entities the clear would disable (see {@link applySearchFlagHygiene}).
+    *
+    * Valid only AFTER the seed has run, since seeding changes which entities still have nothing
+    * searchable. Names rather than a count because this is the destructive half: the run output
+    * is the only place an operator can see which entities lost search, and getting it back is
+    * manual.
+    */
+   private async searchFlagHygieneClearCandidates(pool: CodeGenConnection, probeSQL: string): Promise<string[]> {
+      const result = await this.runQuery(pool, probeSQL);
+      const rows = result?.recordset ?? [];
+      return rows
+         .map(r => String(Object.values(r)[0] ?? '').trim())
+         .filter(n => n.length > 0);
    }
 
    /**
@@ -7536,7 +8578,7 @@ export class ManageMetadataBase {
       const textTypes = new Set(['nvarchar', 'varchar', 'char', 'nchar']);
       if (!textTypes.has(type)) return false;
       // Unbounded text on a non-FTX entity cannot be index-seeked.
-      const length = field.Length as number | undefined;
+      const length = (field.Length ?? field.MaxLength) as number | undefined;
       if (length === -1 && !ftxEnabled) return false;
       return true;
    }
@@ -7547,25 +8589,30 @@ export class ManageMetadataBase {
    protected applySearchPredicateUpdates(
       sqlStatements: string[],
       fields: Array<Record<string, unknown>>,
-      result: SmartFieldIdentificationResult
+      result: SmartFieldIdentificationResult,
+      entityOrCtx?: { Name?: string } | { isNewEntity: boolean; newFieldNames: ReadonlySet<string>; typeReopenedNames: ReadonlySet<string> },
+      maybeCtx?: { isNewEntity: boolean; newFieldNames: ReadonlySet<string>; typeReopenedNames: ReadonlySet<string> }
    ): void {
+      const entity = (entityOrCtx && 'Name' in entityOrCtx) ? entityOrCtx : undefined;
+      const ctx = (entityOrCtx && 'newFieldNames' in entityOrCtx) ? entityOrCtx : maybeCtx;
+      const inScope = (f: Record<string, unknown>) => !ctx || ctx.isNewEntity || ctx.newFieldNames.has(String(f.Name)) || ctx.typeReopenedNames.has(String(f.Name));
       if (!result.searchPredicates || result.searchPredicates.length === 0) {
          return;
       }
 
       for (const sp of result.searchPredicates) {
-         const field = fields.find(f => f.Name === sp.field);
+         const field = this.findFieldByName(fields as Array<{ Name: string }>, sp.field) as Record<string, unknown> | undefined;
          if (!field) {
             logError(`Smart field identification returned invalid searchPredicate field: '${sp.field}' not found in entity fields`);
             continue;
          }
-         if (!field.AutoUpdateUserSearchPredicate || !field.ID) {
+         if (!field.AutoUpdateUserSearchPredicate || !field.ID || !inScope(field)) {
             continue;
          }
          // Only update if the current value differs from the recommended predicate
          if (field.UserSearchPredicateAPI !== sp.predicate) {
             sqlStatements.push(`
-               UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
+               UPDATE ${this.qs(MjCoreSchema(), 'EntityField')}
                SET UserSearchPredicateAPI = '${sp.predicate}'
                WHERE ID = '${field.ID}'
                AND AutoUpdateUserSearchPredicate = ${this.boolLit(true)}
@@ -7601,7 +8648,7 @@ export class ManageMetadataBase {
          // the field-level guardrails, and refuses log/audit and detail/line-
          // item-shaped entities. Anything blocked here gets a one-line note in
          // the CodeGen run report so the team can audit proposals.
-         const blocked = entityLevelEnableBlockedReason({
+         const blocked = EntityLevelEnableBlockedReason({
             entityName: entity.Name,
             confidence: result.confidence,
             acceptedSearchableFieldsCount: (result.searchableFields ?? []).length,
@@ -7617,7 +8664,7 @@ export class ManageMetadataBase {
       }
       if (newValue !== currentValue) {
          sqlStatements.push(`
-            UPDATE ${this.qs(mj_core_schema(), 'Entity')}
+            UPDATE ${this.qs(MjCoreSchema(), 'Entity')}
             SET AllowUserSearchAPI = ${this.boolLit(newValue)}
             WHERE ID = '${entity.ID}'
             AND AutoUpdateAllowUserSearchAPI = ${this.boolLit(true)}
@@ -7649,17 +8696,19 @@ export class ManageMetadataBase {
     */
    protected applyFullTextSearchUpdates(
       sqlStatements: string[],
-      entity: { ID: string; FullTextSearchEnabled?: boolean; AutoUpdateFullTextSearch?: boolean },
+      entity: { ID: string; Name?: string; FullTextSearchEnabled?: boolean; AutoUpdateFullTextSearch?: boolean },
       fields: Array<Record<string, unknown>>,
-      result: SmartFieldIdentificationResult
+      result: SmartFieldIdentificationResult,
+      ctx?: { isNewEntity: boolean; newFieldNames: ReadonlySet<string>; typeReopenedNames: ReadonlySet<string> }
    ): void {
-      // Entity-level FullTextSearchEnabled
-      if (result.enableFullTextSearch != null && entity.AutoUpdateFullTextSearch) {
+      const inScope = (f: Record<string, unknown>) => !ctx || ctx.isNewEntity || ctx.newFieldNames.has(String(f.Name)) || ctx.typeReopenedNames.has(String(f.Name));
+      // Entity-level FullTextSearchEnabled (only for new entities)
+      if ((!ctx || ctx.isNewEntity) && result.enableFullTextSearch != null && entity.AutoUpdateFullTextSearch) {
          const newValue = result.enableFullTextSearch;
          const currentValue = !!entity.FullTextSearchEnabled;
          if (newValue !== currentValue) {
             sqlStatements.push(`
-               UPDATE ${this.qs(mj_core_schema(), 'Entity')}
+               UPDATE ${this.qs(MjCoreSchema(), 'Entity')}
                SET FullTextSearchEnabled = ${this.boolLit(newValue)}
                WHERE ID = '${entity.ID}'
                AND AutoUpdateFullTextSearch = ${this.boolLit(true)}
@@ -7673,17 +8722,17 @@ export class ManageMetadataBase {
       }
 
       for (const ftsFieldName of result.fullTextSearchFields) {
-         const field = fields.find(f => f.Name === ftsFieldName);
+         const field = this.findFieldByName(fields as Array<{ Name: string }>, ftsFieldName) as Record<string, unknown> | undefined;
          if (!field) {
             logError(`Smart field identification returned invalid fullTextSearchField: '${ftsFieldName}' not found in entity fields`);
             continue;
          }
-         if (!field.AutoUpdateFullTextSearch || !field.ID) {
+         if (!field.AutoUpdateFullTextSearch || !field.ID || !inScope(field)) {
             continue;
          }
          if (!field.FullTextSearchEnabled) {
             sqlStatements.push(`
-               UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
+               UPDATE ${this.qs(MjCoreSchema(), 'EntityField')}
                SET FullTextSearchEnabled = ${this.boolLit(true)}
                WHERE ID = '${field.ID}'
                AND AutoUpdateFullTextSearch = ${this.boolLit(true)}
@@ -7704,7 +8753,7 @@ export class ManageMetadataBase {
    protected async applyFormLayout(
       pool: CodeGenConnection,
       entity: EntityInfo,
-      fields: Array<{ ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean, GeneratedFormSection: string, DisplayName: string, ExtendedType: string, CodeType: string }>,
+      fields: Array<{ ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean; AutoUpdateExtendedType: boolean; GeneratedFormSection: string; DisplayName: string; ExtendedType: string; CodeType: string; ValueListType?: string | null }>,
       result: FormLayoutResult,
       isNewEntity: boolean = false
    ): Promise<void> {
@@ -7714,43 +8763,42 @@ export class ManageMetadataBase {
       // non-array; both consumers below iterate it, so coerce to a safe array.
       const fieldCategories = Array.isArray(result.fieldCategories) ? result.fieldCategories : [];
 
-      await this.applyFieldCategories(pool, entity, fields, fieldCategories, existingCategories);
-
+      await this.applyFieldCategories(pool, entity, fields, fieldCategories, existingCategories, { isNewEntity });
+ 
       // Auto-detect geo-capable entities and set SupportsGeoCoding
-      await this.detectAndSetGeoCodingSupport(pool, entity, fieldCategories);
-
+      await this.detectAndSetGeoCodingSupport(pool, entity);
+ 
       if (result.entityIcon) {
-         await this.applyEntityIcon(pool, entity.ID, result.entityIcon);
+         await this.applyEntityIcon(pool, entity.ID, result.entityIcon, entity.Name);
       }
-
+ 
       // Resolve categoryInfo from new or legacy format
       const categoryInfoToStore = result.categoryInfo ||
          (result.categoryIcons ?
             Object.fromEntries(
                Object.entries(result.categoryIcons).map(([cat, icon]) => [cat, { icon, description: '' }])
             ) as Record<string, FieldCategoryInfo> : null);
-
+ 
       if (categoryInfoToStore) {
-         await this.applyCategoryInfoSettings(pool, entity.ID, categoryInfoToStore);
+         await this.applyCategoryInfoSettings(pool, entity.ID, categoryInfoToStore, entity.Name);
       }
-
+ 
       if (isNewEntity && result.entityImportance) {
-         await this.applyEntityImportance(pool, entity.ID, result.entityImportance);
+         await this.applyEntityImportance(pool, entity.ID, result.entityImportance, entity.Name);
       }
    }
-
+ 
    /**
-    * Detect if an entity has geo-capable fields based on LLM-assigned ExtendedType values.
+    * Detect if an entity has geo-capable fields based on persisted ExtendedType values in the database.
     * If any field has a Geo* ExtendedType, set Entity.SupportsGeoCoding = 1.
     * Respects the AutoUpdateSupportsGeoCoding flag — if 0, the value is locked.
     */
    protected async detectAndSetGeoCodingSupport(
       pool: CodeGenConnection,
-      entity: EntityInfo,
-      fieldCategories: Array<{ fieldName: string; extendedType: EntityFieldExtendedType | null }>
+      entity: EntityInfo
    ): Promise<void> {
-      const schema = mj_core_schema();
-
+      const schema = MjCoreSchema();
+ 
       // Check if the entity's AutoUpdateSupportsGeoCoding flag allows us to modify it
       const autoUpdateResult = await pool.query(`
          SELECT ${this.qi('AutoUpdateSupportsGeoCoding')}, ${this.qi('SupportsGeoCoding')}
@@ -7761,18 +8809,9 @@ export class ManageMetadataBase {
       if (!row || !row.AutoUpdateSupportsGeoCoding) {
          return; // Flag is locked, don't modify
       }
-
-      // Detect geo-capable fields from the LLM results
-      const geoExtendedTypes = new Set<EntityFieldExtendedType>([
-         'Geo', 'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince',
-         'GeoCity', 'GeoPostalCode', 'GeoAddress'
-      ]);
-      const hasGeoFields = fieldCategories.some(fc =>
-         fc.extendedType != null && geoExtendedTypes.has(fc.extendedType)
-      );
-
-      // Also check existing fields in the database for Geo* ExtendedTypes
-      // (in case the LLM didn't re-assign them this run but they were previously set)
+ 
+      // Check existing fields in the database for Geo* ExtendedTypes
+      // (relies on persisted state after applyFieldCategories has run)
       const existingGeoResult = await pool.query(`
          SELECT COUNT(*) AS ${this.qi('GeoFieldCount')}
          FROM ${this.qs(schema, 'EntityField')}
@@ -7780,17 +8819,17 @@ export class ManageMetadataBase {
            AND ${this.qi('ExtendedType')} IN ('Geo', 'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince', 'GeoCity', 'GeoPostalCode', 'GeoAddress')
       `);
       const existingGeoCount = existingGeoResult?.recordset?.[0]?.GeoFieldCount ?? 0;
-
-      const shouldSupportGeo = hasGeoFields || existingGeoCount > 0;
+ 
+      const shouldSupportGeo = existingGeoCount > 0;
       const currentValue = row.SupportsGeoCoding ? true : false;
-
+ 
       if (shouldSupportGeo !== currentValue) {
-         await this.LogSQLAndExecute(pool, `
+         await this.logSQLAndExecute(pool, `
             UPDATE ${this.qs(schema, 'Entity')}
             SET ${this.qi('SupportsGeoCoding')} = ${this.boolLit(shouldSupportGeo)}
             WHERE ${this.qi('ID')} = '${entity.ID}' AND ${this.qi('AutoUpdateSupportsGeoCoding')} = ${this.boolLit(true)}
          `, `Set SupportsGeoCoding = ${shouldSupportGeo} for ${entity.Name}`);
-         logStatus(`  Entity ${entity.Name}: SupportsGeoCoding = ${shouldSupportGeo ? 1 : 0} (auto-detected from ${hasGeoFields ? 'LLM' : 'existing'} geo fields)`);
+         logStatus(`  Entity ${entity.Name}: SupportsGeoCoding = ${shouldSupportGeo ? 1 : 0} (auto-detected from persisted geo fields)`);
          // Queue for late-phase view regeneration — the view was already generated
          // before this flag was set, so it needs to be regenerated with the geo JOIN
          ManageMetadataBase.AddEntityRequiringViewRegen(entity.Name, 'Geocoding');
@@ -7845,7 +8884,7 @@ export class ManageMetadataBase {
    protected async applyFieldCategories(
       pool: CodeGenConnection,
       entity: EntityInfo,
-      fields: Array<{ ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean, GeneratedFormSection: string, DisplayName: string, ExtendedType: string, CodeType: string}>,
+      fields: Array<{ ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean; AutoUpdateExtendedType: boolean; GeneratedFormSection: string; DisplayName: string; ExtendedType: string | null; CodeType: string | null; ValueListType?: string | null }>,
       fieldCategories: Array<{
          fieldName: string;
          category: string;
@@ -7854,74 +8893,89 @@ export class ManageMetadataBase {
          codeType?: string | null;
          reason?: string;
       }>,
-      existingCategories: Set<string>
+      existingCategories: Set<string>,
+      ctx: { isNewEntity: boolean }
    ): Promise<void> {
       const sqlStatements: string[] = [];
+      const reporter = CodeGenReporter.Instance;
+
+      // Count fields with blank Category that the LLM omitted (FM2 re-trigger loop tracking)
+      const proposedNames = new Set(fieldCategories.map(fc => (fc.fieldName ?? '').trim().toLowerCase()));
+      let omittedBlankCount = 0;
+      for (const field of fields) {
+         const isBlankCategory = !field.Category || field.Category.trim() === '';
+         if (isBlankCategory && field.AutoUpdateCategory && !proposedNames.has(field.Name.trim().toLowerCase())) {
+            omittedBlankCount++;
+         }
+      }
+      if (omittedBlankCount > 0) {
+         reporter.counter('ai.fieldsOmittedByLLM', omittedBlankCount);
+      }
 
       for (const fieldCategory of fieldCategories) {
-         const field = fields.find(f => f.Name === fieldCategory.fieldName);
+         const field = this.findFieldByName(fields, fieldCategory.fieldName);
 
-         if (field && field.AutoUpdateCategory && field.ID) {
-            // Override category to "System Metadata" for __mj_ fields (system audit fields)
-            let category = fieldCategory.category;
-            if (field.Name.startsWith('__mj_')) {
-               category = 'System Metadata';
+         if (!field) {
+            logError(`Form layout returned invalid fieldName: '${fieldCategory.fieldName}' not found in entity`);
+            continue;
+         }
+
+         const lockCtx: FieldLockContext = {
+            IsNewEntity: ctx.isNewEntity,
+            IsNewField: ManageMetadataBase.isFieldNew(entity.ID, field.Name),
+            DescriptionReopened: ManageMetadataBase.isDisplayNameReopened(entity.ID, field.Name),
+            TypeReopened: ManageMetadataBase.isTypeReopened(entity.ID, field.Name),
+            ExistingCategories: existingCategories,
+         };
+
+         const update = ComputeFieldMetadataUpdate(
+            field,
+            fieldCategory,
+            lockCtx,
+            this.validateExtendedType.bind(this),
+            (val, fn) => this.sanitizeCodeType(val, fn ?? field.Name, entity.Name)
+         );
+
+         for (const skip of update.Skipped) {
+            if (skip.reason === 'locked') {
+               reporter.counter('ai.fieldsLocked');
+            } else if (skip.reason === 'invalid') {
+               reporter.counter('ai.fieldsInvalidProposal');
             }
+         }
 
-            // ENFORCEMENT: Prevent category renaming
-            const fieldHasExistingCategory = field.Category != null && field.Category.trim() !== '';
-            const categoryIsNew = !existingCategories.has(category);
+         const setClauses: string[] = [];
 
-            if (fieldHasExistingCategory && categoryIsNew) {
-               logStatus(`         Rejected category change for field '${field.Name}': cannot move from existing category '${field.Category}' to new category '${category}'. Keeping original category.`);
-               category = field.Category!;
-            }
+         if (update.Category !== undefined) {
+            setClauses.push(`Category = '${update.Category.replace(/'/g, "''")}'`);
+         }
+         if (update.GeneratedFormSection !== undefined) {
+            setClauses.push(`GeneratedFormSection = 'Category'`);
+         }
+         if (update.DisplayName !== undefined) {
+            setClauses.push(`DisplayName = '${update.DisplayName.replace(/'/g, "''")}'`);
+         }
+         if (update.ExtendedType !== undefined) {
+            const extVal = update.ExtendedType === null ? 'NULL' : `'${update.ExtendedType.replace(/'/g, "''")}'`;
+            setClauses.push(`ExtendedType = ${extVal}`);
+         }
+         if (update.CodeType !== undefined) {
+            const codeVal = update.CodeType === null ? 'NULL' : `'${update.CodeType.replace(/'/g, "''")}'`;
+            setClauses.push(`CodeType = ${codeVal}`);
+         }
 
-            const setClauses: string[] = []
-            
-            if (field.Category !== category) {
-               setClauses.push(
-                  `Category = '${category.replace(/'/g, "''")}'`
-               );
-            }
-
-            if (field.GeneratedFormSection !== 'Category') {
-               setClauses.push(`GeneratedFormSection = 'Category'`)
-            }
-           
-            if (fieldCategory.displayName && field.AutoUpdateDisplayName && field.DisplayName !== fieldCategory.displayName) {
-               setClauses.push(`DisplayName = '${fieldCategory.displayName.replace(/'/g, "''")}'`);
-            }
-
-            if (fieldCategory.extendedType !== undefined && field.ExtendedType !== fieldCategory.extendedType) {
-               const extendedType = fieldCategory.extendedType === null ? 'NULL' : `'${String(fieldCategory.extendedType).replace(/'/g, "''")}'`;
-               setClauses.push(`ExtendedType = ${extendedType}`);
-            }
-
-            if (fieldCategory.codeType !== undefined) {
-               const sanitized = this.sanitizeCodeType(fieldCategory.codeType, field.Name, entity.Name);
-               if (field.CodeType !== sanitized) {
-                  const codeType = sanitized == null ? 'NULL' : `'${sanitized.replace(/'/g, "''")}'`;
-                  setClauses.push(`CodeType = ${codeType}`);
-               }
-            }
-
-            if (setClauses.length > 0) {
-               // only generate an UPDATE if we have 1+ set clause
-               sqlStatements.push(`\n-- UPDATE Entity Field Category Info ${entity.Name}.${field.Name} \nUPDATE ${this.qs(mj_core_schema(), 'EntityField')}
+         if (setClauses.length > 0) {
+            sqlStatements.push(`\n-- UPDATE Entity Field Category Info ${entity.Name}.${field.Name} \nUPDATE ${this.qs(MjCoreSchema(), 'EntityField')}
 SET 
    ${setClauses.join(',\n   ')}
 WHERE 
-   ID = '${field.ID}' AND AutoUpdateCategory = ${this.boolLit(true)}`);
-            }
-         } else if (!field) {
-            logError(`Form layout returned invalid fieldName: '${fieldCategory.fieldName}' not found in entity`);
+   ID = '${field.ID}'`);
          }
       }
 
       if (sqlStatements.length > 0) {
          try {
-            await this.LogSQLBatchAndExecute(pool, sqlStatements, `Set categories for ${sqlStatements.length} fields`, false);
+            await this.logSQLBatchAndExecute(pool, sqlStatements, `Set categories for ${sqlStatements.length} fields`, false);
          }
          catch (ex) {
             logError('Error Applying Field Categories', ex)
@@ -7935,11 +8989,12 @@ WHERE
    protected async applyEntityIcon(
       pool: CodeGenConnection,
       entityId: string,
-      entityIcon: string
+      entityIcon: string,
+      entityName?: string
    ): Promise<void> {
       if (!entityIcon || entityIcon.trim().length === 0) return;
 
-      const checkSQL = `SELECT Icon FROM ${this.qs(mj_core_schema(), 'Entity')} WHERE ID = '${entityId}'`;
+      const checkSQL = `SELECT Icon FROM ${this.qs(MjCoreSchema(), 'Entity')} WHERE ID = '${entityId}'`;
       const entityCheck = await this.runQuery(pool, checkSQL);
 
       if (entityCheck.recordset.length > 0) {
@@ -7947,12 +9002,12 @@ WHERE
          if (!currentIcon || currentIcon.trim().length === 0) {
             const escapedIcon = entityIcon.replace(/'/g, "''");
             const updateSQL = `
-               UPDATE ${this.qs(mj_core_schema(), 'Entity')}
+               UPDATE ${this.qs(MjCoreSchema(), 'Entity')}
                SET ${this.qi('Icon')} = '${escapedIcon}', ${this.qi(EntityInfo.UpdatedAtFieldName)} = ${this.utcNow()}
                WHERE ${this.qi('ID')} = '${entityId}'
             `;
             try {
-               await this.LogSQLAndExecute(pool, updateSQL, `Set entity icon to ${entityIcon}`, false);
+               await this.logSQLAndExecute(pool, updateSQL, `Set entity icon to ${entityIcon}`, false);
                logStatus(`  Set entity icon: ${entityIcon}`);
             }
             catch (ex) {
@@ -7968,34 +9023,50 @@ WHERE
    protected async applyCategoryInfoSettings(
       pool: CodeGenConnection,
       entityId: string,
-      categoryInfo: Record<string, FieldCategoryInfo>
+      categoryInfo: Record<string, FieldCategoryInfo>,
+      _entityName?: string
    ): Promise<void> {
       if (!categoryInfo || Object.keys(categoryInfo).length === 0) return;
 
-      const infoJSON = JSON.stringify(categoryInfo).replace(/'/g, "''");
+      const canonicalInfo = CanonicalJSONStringify(categoryInfo, 2);
+      const infoJSON = canonicalInfo.replace(/'/g, "''");
+
+      const ENTITY_SETTING_NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
 
       // Upsert FieldCategoryInfo (new format)
-      const checkNewSQL = `SELECT ${this.qi('ID')} FROM ${this.qs(mj_core_schema(), 'EntitySetting')} WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = 'FieldCategoryInfo'`;
+      const checkNewSQL = `SELECT ${this.qi('ID')}, ${this.qi('Value')} FROM ${this.qs(MjCoreSchema(), 'EntitySetting')} WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = 'FieldCategoryInfo'`;
       const existingNew = await this.runQuery(pool, checkNewSQL);
 
       if (existingNew.recordset.length > 0) {
+         let isMatch = false;
          try {
-            await this.LogSQLAndExecute(pool, `
-               UPDATE ${this.qs(mj_core_schema(), 'EntitySetting')}
-               SET ${this.qi('Value')} = '${infoJSON}', ${this.qi(EntityInfo.UpdatedAtFieldName)} = ${this.utcNow()}
-               WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = 'FieldCategoryInfo'
-            `, `Update FieldCategoryInfo setting for entity`, false);
+            const rawVal = existingNew.recordset[0].Value;
+            const parsed = typeof rawVal === 'string' ? JSON.parse(rawVal) : rawVal;
+            isMatch = DeepEqualJSON(parsed, categoryInfo);
+         } catch {
+            isMatch = false;
          }
-         catch (ex) {
-            logError('Error Applying Category Info Settings: Part 1', ex)
+
+         if (!isMatch) {
+            try {
+               await this.logSQLAndExecute(pool, `
+                  UPDATE ${this.qs(MjCoreSchema(), 'EntitySetting')}
+                  SET ${this.qi('Value')} = '${infoJSON}', ${this.qi(EntityInfo.UpdatedAtFieldName)} = ${this.utcNow()}
+                  WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = 'FieldCategoryInfo'
+               `, `Update FieldCategoryInfo setting for entity`, false);
+            }
+            catch (ex) {
+               logError('Error Applying Category Info Settings: Part 1', ex)
+            }
          }
       } else {
-         const newId = uuidv4();
+         const newId = uuidv5(`${entityId}|FieldCategoryInfo`, ENTITY_SETTING_NAMESPACE);
          try {
-            await this.LogSQLAndExecute(pool, `
-               INSERT INTO ${this.qs(mj_core_schema(), 'EntitySetting')} (${this.qi('ID')}, ${this.qi('EntityID')}, ${this.qi('Name')}, ${this.qi('Value')}, ${this.qi(EntityInfo.CreatedAtFieldName)}, ${this.qi(EntityInfo.UpdatedAtFieldName)})
-               VALUES ('${newId}', '${entityId}', 'FieldCategoryInfo', '${infoJSON}', ${this.utcNow()}, ${this.utcNow()})
-            `, `Insert FieldCategoryInfo setting for entity`, false);
+            const checkQuery = `SELECT 1 FROM ${this.qs(MjCoreSchema(), 'EntitySetting')} WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = 'FieldCategoryInfo'`;
+            const insertSQL = `INSERT INTO ${this.qs(MjCoreSchema(), 'EntitySetting')} (${this.qi('ID')}, ${this.qi('EntityID')}, ${this.qi('Name')}, ${this.qi('Value')}, ${this.qi(EntityInfo.CreatedAtFieldName)}, ${this.qi(EntityInfo.UpdatedAtFieldName)})
+               VALUES ('${newId}', '${entityId}', 'FieldCategoryInfo', '${infoJSON}', ${this.utcNow()}, ${this.utcNow()})`;
+            const sSQL = this.conditionalInsert(checkQuery, insertSQL);
+            await this.logSQLAndExecute(pool, sSQL, `Insert FieldCategoryInfo setting for entity`, false);
          }
          catch (ex) {
             logError('Error Applying Category Info Settings: Part 2', ex)
@@ -8009,29 +9080,42 @@ WHERE
             iconsOnly[category] = info.icon;
          }
       }
-      const iconsJSON = JSON.stringify(iconsOnly).replace(/'/g, "''");
+      const canonicalIcons = CanonicalJSONStringify(iconsOnly, 2);
+      const iconsJSON = canonicalIcons.replace(/'/g, "''");
 
-      const checkLegacySQL = `SELECT ${this.qi('ID')} FROM ${this.qs(mj_core_schema(), 'EntitySetting')} WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = 'FieldCategoryIcons'`;
+      const checkLegacySQL = `SELECT ${this.qi('ID')}, ${this.qi('Value')} FROM ${this.qs(MjCoreSchema(), 'EntitySetting')} WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = 'FieldCategoryIcons'`;
       const existingLegacy = await this.runQuery(pool, checkLegacySQL);
 
       if (existingLegacy.recordset.length > 0) {
+         let isMatch = false;
          try {
-            await this.LogSQLAndExecute(pool, `
-               UPDATE ${this.qs(mj_core_schema(), 'EntitySetting')}
-               SET ${this.qi('Value')} = '${iconsJSON}', ${this.qi(EntityInfo.UpdatedAtFieldName)} = ${this.utcNow()}
-               WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = 'FieldCategoryIcons'
-            `, `Update FieldCategoryIcons setting (legacy)`, false);
+            const rawVal = existingLegacy.recordset[0].Value;
+            const parsed = typeof rawVal === 'string' ? JSON.parse(rawVal) : rawVal;
+            isMatch = DeepEqualJSON(parsed, iconsOnly);
+         } catch {
+            isMatch = false;
          }
-         catch (ex) {
-            logError('Error Applying Category Info Settings: Part 3', ex)
+
+         if (!isMatch) {
+            try {
+               await this.logSQLAndExecute(pool, `
+                  UPDATE ${this.qs(MjCoreSchema(), 'EntitySetting')}
+                  SET ${this.qi('Value')} = '${iconsJSON}', ${this.qi(EntityInfo.UpdatedAtFieldName)} = ${this.utcNow()}
+                  WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = 'FieldCategoryIcons'
+               `, `Update FieldCategoryIcons setting (legacy)`, false);
+            }
+            catch (ex) {
+               logError('Error Applying Category Info Settings: Part 3', ex)
+            }
          }
       } else {
-         const newId = uuidv4();
+         const newId = uuidv5(`${entityId}|FieldCategoryIcons`, ENTITY_SETTING_NAMESPACE);
          try {
-            await this.LogSQLAndExecute(pool, `
-               INSERT INTO ${this.qs(mj_core_schema(), 'EntitySetting')} (${this.qi('ID')}, ${this.qi('EntityID')}, ${this.qi('Name')}, ${this.qi('Value')}, ${this.qi(EntityInfo.CreatedAtFieldName)}, ${this.qi(EntityInfo.UpdatedAtFieldName)})
-               VALUES ('${newId}', '${entityId}', 'FieldCategoryIcons', '${iconsJSON}', ${this.utcNow()}, ${this.utcNow()})
-            `, `Insert FieldCategoryIcons setting (legacy)`, false);
+            const checkQuery = `SELECT 1 FROM ${this.qs(MjCoreSchema(), 'EntitySetting')} WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = 'FieldCategoryIcons'`;
+            const insertSQL = `INSERT INTO ${this.qs(MjCoreSchema(), 'EntitySetting')} (${this.qi('ID')}, ${this.qi('EntityID')}, ${this.qi('Name')}, ${this.qi('Value')}, ${this.qi(EntityInfo.CreatedAtFieldName)}, ${this.qi(EntityInfo.UpdatedAtFieldName)})
+               VALUES ('${newId}', '${entityId}', 'FieldCategoryIcons', '${iconsJSON}', ${this.utcNow()}, ${this.utcNow()})`;
+            const sSQL = this.conditionalInsert(checkQuery, insertSQL);
+            await this.logSQLAndExecute(pool, sSQL, `Insert FieldCategoryIcons setting (legacy)`, false);
          }
          catch (ex) {
             logError('Error Applying Category Info Settings: Part 4', ex)
@@ -8046,16 +9130,17 @@ WHERE
    protected async applyEntityImportance(
       pool: CodeGenConnection,
       entityId: string,
-      importance: { defaultForNewUser: boolean; entityCategory: string; confidence: string; reasoning: string }
+      importance: { defaultForNewUser: boolean; entityCategory: string; confidence: string; reasoning: string },
+      entityName?: string
    ): Promise<void> {
       const updateSQL = `
-         UPDATE ${this.qs(mj_core_schema(), 'ApplicationEntity')}
+         UPDATE ${this.qs(MjCoreSchema(), 'ApplicationEntity')}
          SET ${this.qi('DefaultForNewUser')} = ${this.boolLit(importance.defaultForNewUser)}, ${this.qi(EntityInfo.UpdatedAtFieldName)} = ${this.utcNow()}
          WHERE ${this.qi('EntityID')} = '${entityId}'
       `;
 
       try {
-         await this.LogSQLAndExecute(pool, updateSQL,
+         await this.logSQLAndExecute(pool, updateSQL,
             `Set DefaultForNewUser=${importance.defaultForNewUser} for NEW entity (category: ${importance.entityCategory}, confidence: ${importance.confidence})`, false);
 
          logStatus(`  Entity importance (NEW Entity): ${importance.entityCategory} (defaultForNewUser: ${importance.defaultForNewUser}, confidence: ${importance.confidence})`);
@@ -8076,8 +9161,8 @@ WHERE
     * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
     * @returns - The result of the query execution.
     */
-   private async LogSQLAndExecute(pool: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = 'GO'): Promise<any> {
-      return await SQLLogging.LogSQLAndExecute(pool, this.qsql(query), description, isRecurringScript, includeBatchSeparator, batchSeparator);
+   private async logSQLAndExecute(pool: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = 'GO', requiresOwnBatch: boolean = false): Promise<any> {
+      return await SQLLogging.LogSQLAndExecute(pool, this.qsql(query), description, isRecurringScript, includeBatchSeparator, batchSeparator, requiresOwnBatch);
    }
 
    /**
@@ -8096,7 +9181,7 @@ WHERE
     * Empty / whitespace-only statements are filtered out. Returns
     * `undefined` (no execution) when nothing remains.
     */
-   private async LogSQLBatchAndExecute(
+   private async logSQLBatchAndExecute(
       pool: CodeGenConnection,
       statements: string[],
       description?: string,
@@ -8106,11 +9191,11 @@ WHERE
    ): Promise<any> {
       const terminated: string[] = [];
       for (const s of statements) {
-         const trimmed = (s ?? '').replace(/[\s;]+$/g, '');
+         const trimmed = TrimTrailingStatementTerminators(s ?? '');
          if (trimmed.length === 0) continue;
          terminated.push(`${trimmed};`);
       }
       if (terminated.length === 0) return undefined;
-      return await this.LogSQLAndExecute(pool, terminated.join('\n'), description, isRecurringScript, includeBatchSeparator, batchSeparator);
+      return await this.logSQLAndExecute(pool, terminated.join('\n'), description, isRecurringScript, includeBatchSeparator, batchSeparator);
    }
 }

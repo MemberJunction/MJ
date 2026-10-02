@@ -59,7 +59,7 @@ export const CUSTOM_OVERFLOW_COLUMN = '__mj_integration_CustomOverflow';
  * @param mappedSourceFieldNames - SourceFieldName of every active field map
  * @returns the extra keys + values, or an empty object when everything was mapped
  */
-export function computeUnmappedFields(
+export function ComputeUnmappedFields(
     externalFields: Record<string, unknown>,
     mappedSourceFieldNames: ReadonlySet<string>
 ): Record<string, unknown> {
@@ -72,12 +72,25 @@ export function computeUnmappedFields(
     return unmapped;
 }
 
+/** @deprecated Use {@link ComputeUnmappedFields}. */
+export function computeUnmappedFields(
+    externalFields: Record<string, unknown>,
+    mappedSourceFieldNames: ReadonlySet<string>
+): Record<string, unknown> {
+    return ComputeUnmappedFields(externalFields, mappedSourceFieldNames);
+}
+
 /**
  * Whether a computed unmapped-field object carries anything worth persisting. Used by
  * both the per-record write gate and (later) the post-sync RSU trigger gate.
  */
-export function hasUnmappedFields(unmapped: Record<string, unknown> | undefined | null): boolean {
+export function HasUnmappedFields(unmapped: Record<string, unknown> | undefined | null): boolean {
     return unmapped != null && Object.keys(unmapped).length > 0;
+}
+
+/** @deprecated Use {@link HasUnmappedFields}. */
+export function hasUnmappedFields(unmapped: Record<string, unknown> | undefined | null): boolean {
+    return HasUnmappedFields(unmapped);
 }
 
 /** Mutable per-key accumulator used by {@link foldCustomKeyStats}. */
@@ -99,7 +112,7 @@ export const CUSTOM_KEY_SAMPLE_CAP = 20;
  * the TRUE longest observed serialized value across every record — the generous-width input
  * for the eventual promoted column.
  */
-export function foldCustomKeyStats(
+export function FoldCustomKeyStats(
     unmappedBatch: Array<Record<string, unknown> | undefined | null>,
     agg: Map<string, CustomKeyAccumulator>,
 ): void {
@@ -122,6 +135,14 @@ export function foldCustomKeyStats(
     }
 }
 
+/** @deprecated Use {@link FoldCustomKeyStats}. */
+export function foldCustomKeyStats(
+    unmappedBatch: Array<Record<string, unknown> | undefined | null>,
+    agg: Map<string, CustomKeyAccumulator>,
+): void {
+    return FoldCustomKeyStats(unmappedBatch, agg);
+}
+
 /**
  * U4 — the value to write to the overflow column when a record is synced: this record's CURRENT
  * unmapped keys as JSON, or `null` when it has none. Returning `null` (instead of skipping the write)
@@ -132,8 +153,15 @@ export function foldCustomKeyStats(
  * Byte-identical-safe: a customs-free row's overflow is already `null`, so writing `null` is a no-op
  * under MJ's dirty tracking — only a row that USED to carry overflow and no longer does becomes dirty.
  */
+export function ReconcileOverflowValue(
+    unmapped: Record<string, unknown> | undefined | null,
+): string | null {
+    return HasUnmappedFields(unmapped) ? JSON.stringify(unmapped) : null;
+}
+
+/** @deprecated Use {@link ReconcileOverflowValue}. */
 export function reconcileOverflowValue(
     unmapped: Record<string, unknown> | undefined | null,
 ): string | null {
-    return hasUnmappedFields(unmapped) ? JSON.stringify(unmapped) : null;
+    return ReconcileOverflowValue(unmapped);
 }

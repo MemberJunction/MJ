@@ -14,8 +14,8 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
        return super.getInstance<ResourcePermissionEngine>();
     }
 
-    private _Permissions: MJResourcePermissionEntity[];
-    private _ResourceTypes: {
+    private _permissions: MJResourcePermissionEntity[];
+    private _resourceTypes: {
         ResourceTypes: MJResourceTypeEntity[];
     };
 
@@ -24,13 +24,13 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
             {
                 Type: 'entity',
                 EntityName: 'MJ: Resource Permissions',
-                PropertyName: "_Permissions",
+                PropertyName: "_permissions",
                 CacheLocal: true
             },
             {
                 Type: 'dataset',
                 DatasetName: 'ResourceTypes',
-                PropertyName: "_ResourceTypes",
+                PropertyName: "_resourceTypes",
                 DatasetResultHandling: "single_property"
             }
         ]
@@ -38,11 +38,11 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
     }
 
     public get ResourceTypes(): MJResourceTypeEntity[] {
-        return this._ResourceTypes?.ResourceTypes ?? [];
+        return this._resourceTypes?.ResourceTypes ?? [];
     }
 
     public get Permissions(): MJResourcePermissionEntity[] {
-        return this._Permissions ?? [];
+        return this._permissions ?? [];
     }
 
     /**
@@ -54,7 +54,7 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
     public ResourceTypeIdByName(name: string | null | undefined): string | null {
         if (!name) return null;
         const lower = name.trim().toLowerCase();
-        const match = this._ResourceTypes?.ResourceTypes?.find((rt) => rt.Name?.trim().toLowerCase() === lower);
+        const match = this._resourceTypes?.ResourceTypes?.find((rt) => rt.Name?.trim().toLowerCase() === lower);
         return match?.ID ?? null;
     }
 
@@ -194,7 +194,7 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
         return {
             OwnerIDFieldName: ownerIDField?.Name,
             NameFieldName: nameField?.Name,
-            PrimaryKeyFieldName: entity.FirstPrimaryKey.Name
+            PrimaryKeyFieldName: entity.FirstPrimaryKey.Name // first-pk-ok: ResourcePermission.ResourceRecordID stores one key value, so resource entities are single-column by contract
         }
     }
 }

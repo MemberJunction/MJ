@@ -122,3 +122,59 @@ describe('BaseInfo.copyInitData (perf-bundle)', () => {
         });
     });
 });
+
+/**
+ * A class shaped like the metadata classes after a PascalCase rename: the real field is `SpCreate`
+ * and the old camelCase name survives as a @deprecated accessor pair on the prototype.
+ */
+class AliasedInfo extends TestableInfo {
+    SpCreate: string | null = null;
+    ReadOnlyAlias: string | null = null;
+
+    /** @deprecated Use {@link SpCreate}. */
+    get spCreate(): string | null {
+        return this.SpCreate;
+    }
+    set spCreate(value: string | null) {
+        this.SpCreate = value;
+    }
+
+    /** A get-only accessor has nothing to assign to, so a matching key must NOT be copied. */
+    get derived(): string | null {
+        return this.ReadOnlyAlias;
+    }
+
+    constructor(initData: Record<string, unknown> | null = null) {
+        super();
+        if (initData) this.CallCopyInitData(initData);
+    }
+}
+
+describe('copyInitData — @deprecated aliases for renamed fields', () => {
+    it('routes a value arriving under the OLD name through the alias setter', () => {
+        // The `Entities` table's column really is `spCreate`, so metadata rows arrive spelling it
+        // that way. An alias is a PROTOTYPE accessor, which hasOwnProperty does not see — without
+        // the settable-accessor check the value is dropped and the entity loads with no custom
+        // routine name, silently.
+        const info = new AliasedInfo({ spCreate: 'custom_fn_create' });
+
+        expect(info.SpCreate).toBe('custom_fn_create');
+        expect(info.spCreate).toBe('custom_fn_create');
+    });
+
+    it('still copies a value arriving under the NEW name', () => {
+        const info = new AliasedInfo({ SpCreate: 'direct' });
+        expect(info.SpCreate).toBe('direct');
+    });
+
+    it('ignores a key that only matches a read-only getter', () => {
+        const info = new AliasedInfo({ derived: 'nope' });
+        expect(info.ReadOnlyAlias).toBeNull();
+        expect(info.derived).toBeNull();
+    });
+
+    it('does not copy a key that merely matches an inherited METHOD', () => {
+        const info = new AliasedInfo({ CallCopyInitData: 'clobbered' });
+        expect(typeof info.CallCopyInitData).toBe('function');
+    });
+});

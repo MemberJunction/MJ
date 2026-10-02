@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChanges, ChangeDetectorRef, HostListener } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { EntityInfo, EntityFieldInfo, Metadata } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, Metadata, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
 import {
   MJUserViewEntityExtended,
   ViewColumnInfo,
@@ -18,7 +18,7 @@ import {
   CompositeFilterDescriptor,
   FilterFieldInfo,
   FilterFieldType,
-  createEmptyFilter
+  CreateEmptyFilter
 } from '@memberjunction/ng-filter-builder';
 import { ViewConfigSummary } from '../types';
 
@@ -171,6 +171,25 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   @Input() PendingNewViewIsShared: boolean = false;
 
   /**
+   * Pre-populated traditional filter from the quick save dialog (used when DefaultSaveAsNew is
+   * true). Without it, reopening this panel from the dialog would reset the filter the user had
+   * already configured. {@link ExternalFilterState} can't carry it back: the staged filter is the
+   * very object this panel is already bound to, so that input never registers a change.
+   */
+  @Input() PendingNewViewFilterState: CompositeFilterDescriptor | null = null;
+
+  /**
+   * Pre-populated smart-filter toggle from the quick save dialog (used when DefaultSaveAsNew is
+   * true) — the smart-mode counterpart of {@link PendingNewViewFilterState}.
+   */
+  @Input() PendingNewViewSmartFilterEnabled: boolean = false;
+
+  /**
+   * Pre-populated smart-filter prompt from the quick save dialog (used when DefaultSaveAsNew is true)
+   */
+  @Input() PendingNewViewSmartFilterPrompt: string = '';
+
+  /**
    * Emitted when user wants to duplicate the current view (F-005)
    */
   @Output() Duplicate = new EventEmitter<void>();
@@ -204,7 +223,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   public SmartFilterExplanation: string = '';
 
   // Traditional Filter state
-  public FilterState: CompositeFilterDescriptor = createEmptyFilter();
+  public FilterState: CompositeFilterDescriptor = CreateEmptyFilter();
   public FilterFields: FilterFieldInfo[] = [];
 
   // Filter mode: 'smart' or 'traditional' (mutually exclusive)
@@ -217,7 +236,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
 
   // Saved filter state for mode switching (BUG-006: preserve both modes' data)
   private savedSmartFilterPrompt: string = '';
-  private savedTraditionalFilter: CompositeFilterDescriptor = createEmptyFilter();
+  private savedTraditionalFilter: CompositeFilterDescriptor = CreateEmptyFilter();
 
   // Filter mode switch confirmation (BUG-006)
   public ShowFilterModeSwitchConfirm: boolean = false;
@@ -395,6 +414,22 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   /**
+   * Field names field-level security denies the current user READ on, lowercased. Empty when
+   * there is no entity or resolved user, when the entity has field security off, or when nothing
+   * is denied — so callers can treat it as "nothing to filter".
+   *
+   * Uses the BULK primitive rather than the per-field form: `GetDeniedReadFields` aggregates the
+   * user's roles once, where the per-field call would repeat that for every field.
+   */
+  private deniedReadFields(): Set<string> {
+    const user = this.ProviderToUse?.CurrentUser;
+    if (!this.Entity || !user) {
+      return new Set<string>();
+    }
+    return this.Entity.GetDeniedReadFields(user);
+  }
+
+  /**
    * Initialize form state from entity and view
    * Priority for column state: currentGridState > viewEntity.Columns > entity defaults
    */
@@ -404,8 +439,17 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       return;
     }
 
-    // Initialize columns from entity fields (including __mj_ fields for audit/timestamp info)
+    // Initialize columns from entity fields (including __mj_ fields for audit/timestamp info).
+    //
+    // Field security: a field the user cannot READ is not offered as a column at all. The grid
+    // already refuses to render its values, so listing it here would only advertise the NAME of a
+    // column they can never populate — and invite them to "fix" a column that will always be
+    // blank. This is a rendering surface, so filtering is correct here; the saved view's stored
+    // column preferences are deliberately left alone (see EntityDataGrid.filterToExistingFields —
+    // a denial is reversible, and dropping the preference would not restore it on re-grant).
+    const denied = this.deniedReadFields();
     this.Columns = this.Entity.Fields
+      .filter(field => !denied.has(field.Name.trim().toLowerCase()))
       .map((field, index) => ({
         fieldId: field.ID,
         fieldName: field.Name,
@@ -517,12 +561,22 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
         this.SortDirection = 'asc';
         this.SortItems = [];
       }
-      this.SmartFilterPrompt = '';
+      // Carry a filter back from the quick-save dialog when continuing a new-view flow; otherwise
+      // start clean. Smart takes precedence, matching how a saved view's filter mode is chosen.
+      const carryingSmartFilter = this.DefaultSaveAsNew && this.PendingNewViewSmartFilterEnabled;
+      const carriedFilter = this.DefaultSaveAsNew && !carryingSmartFilter ? this.PendingNewViewFilterState : null;
+      this.SmartFilterPrompt = carryingSmartFilter ? this.PendingNewViewSmartFilterPrompt : '';
       this.SmartFilterExplanation = '';
-      this.FilterState = createEmptyFilter();
-      // Default to smart mode (promote AI filtering)
-      this.FilterMode = 'smart';
-      this.SmartFilterEnabled = true;
+      if (carriedFilter && this.countFilters(carriedFilter) > 0) {
+        this.FilterState = carriedFilter;
+        this.FilterMode = 'traditional';
+        this.SmartFilterEnabled = false;
+      } else {
+        this.FilterState = CreateEmptyFilter();
+        // Default to smart mode (promote AI filtering)
+        this.FilterMode = 'smart';
+        this.SmartFilterEnabled = true;
+      }
     }
 
     // Load aggregates from currentGridState if available
@@ -584,7 +638,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    */
   private parseFilterState(filterStateJson: string | null | undefined): CompositeFilterDescriptor {
     if (!filterStateJson) {
-      return createEmptyFilter();
+      return CreateEmptyFilter();
     }
     try {
       const parsed = JSON.parse(filterStateJson);
@@ -592,9 +646,9 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       if (parsed && typeof parsed === 'object' && 'logic' in parsed && 'filters' in parsed) {
         return parsed as CompositeFilterDescriptor;
       }
-      return createEmptyFilter();
+      return CreateEmptyFilter();
     } catch {
-      return createEmptyFilter();
+      return CreateEmptyFilter();
     }
   }
 
@@ -653,7 +707,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    * Clear all filters
    */
   ClearFilters(): void {
-    this.FilterState = createEmptyFilter();
+    this.FilterState = CreateEmptyFilter();
     this.cdr.detectChanges();
   }
 
@@ -1245,7 +1299,11 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   /**
    * Format a value for preview display
    */
-  FormatPreviewValue(value: unknown, format: ColumnFormat | undefined): string {
+  /**
+   * @param field The column's field, so a SQL `date` previews as its stored calendar day rather
+   * than shifting into the reader's zone (MJ#4210).
+   */
+  FormatPreviewValue(value: unknown, format: ColumnFormat | undefined, field?: EntityFieldInfo): string {
     if (value == null) return '—';
     if (!format || format.type === 'auto') return String(value);
 
@@ -1258,7 +1316,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
         return this.formatPercent(value as number, format);
       case 'date':
       case 'datetime':
-        return this.formatDate(value as Date, format);
+        return this.formatDate(value as Date, format, IsDateOnlySQLType(field?.Type));
       case 'boolean':
         return this.formatBoolean(value as boolean, format);
       default:
@@ -1295,7 +1353,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     return new Intl.NumberFormat('en-US', options).format(value / 100);
   }
 
-  private formatDate(value: Date, format: ColumnFormat): string {
+  private formatDate(value: Date, format: ColumnFormat, dateOnly: boolean): string {
     const date = value instanceof Date ? value : new Date(value);
     if (isNaN(date.getTime())) return String(value);
 
@@ -1303,6 +1361,8 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     const formatStr = format.dateFormat || 'medium';
     const includeWeekday = formatStr.includes('-weekday');
     const baseFormat = formatStr.replace('-weekday', '') as 'short' | 'medium' | 'long';
+    // A `date` column has no time to show and must not shift into the reader's zone.
+    const withTime = format.type === 'datetime' && !dateOnly;
 
     let options: Intl.DateTimeFormatOptions;
 
@@ -1317,7 +1377,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
         // medium
         options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
       }
-      if (format.type === 'datetime') {
+      if (withTime) {
         options.hour = 'numeric';
         options.minute = '2-digit';
       }
@@ -1326,12 +1386,12 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       options = {
         dateStyle: baseFormat === 'short' ? 'short' : baseFormat === 'long' ? 'long' : 'medium'
       };
-      if (format.type === 'datetime') {
+      if (withTime) {
         options.timeStyle = 'short';
       }
     }
 
-    return new Intl.DateTimeFormat('en-US', options).format(date);
+    return dateOnly ? FormatDateOnly(date, options, 'en-US') : new Intl.DateTimeFormat('en-US', options).format(date);
   }
 
   private formatBoolean(value: boolean, format: ColumnFormat): string {
@@ -1590,7 +1650,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     if (mode === 'smart') {
       this.SmartFilterEnabled = true;
       this.SmartFilterPrompt = this.savedSmartFilterPrompt;
-      this.FilterState = createEmptyFilter();
+      this.FilterState = CreateEmptyFilter();
     } else {
       this.SmartFilterEnabled = false;
       this.SmartFilterPrompt = '';

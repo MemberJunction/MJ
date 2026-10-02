@@ -1,0 +1,32 @@
+{
+  "id": "sage-disambig-scheduled-job-family-01",
+  "agent": "Sage",
+  "tags": [
+    "disambiguation"
+  ],
+  "description": "Five scheduled-job actions differing only by verb. 'Show me what's scheduled' is a query, not a create, update, delete or execute.",
+  "input": {
+    "payload": {},
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "What jobs are currently scheduled?"
+      }
+    ]
+  },
+  "expect": {
+    "kind": "action",
+    "actions": [
+      {
+        "name": "Query Scheduled Jobs"
+      }
+    ],
+    "allowAdditionalActions": false,
+    "forbiddenActions": [
+      "Create Scheduled Job",
+      "Delete Scheduled Job",
+      "Execute Scheduled Job Now",
+      "Update Scheduled Job"
+    ]
+  }
+}

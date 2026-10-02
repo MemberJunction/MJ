@@ -1,0 +1,25 @@
+{"id": "D3000000-0000-4000-8000-000000000001", "label": "continue", "source": "construction", "note": "Invented for the fixture."}
+{"id": "D3000000-0000-4000-8000-000000000002", "label": "switch", "source": "construction", "note": "Invented for the fixture."}
+{"id": "D3000000-0000-4000-8000-000000000003", "label": "continue", "source": "construction", "note": "Invented for the fixture."}
+{"id": "D3000000-0000-4000-8000-000000000004", "label": "switch", "source": "construction", "note": "Invented for the fixture."}
+{"id": "D3000000-0000-4000-8000-000000000005", "label": "ambiguous", "source": "construction", "note": "Invented for the fixture."}
+{"id": "D3000000-0000-4000-8000-000000000006", "label": "continue", "source": "construction", "note": "Invented for the fixture."}
+{"id": "D3000000-0000-4000-8000-000000000007", "label": "switch", "source": "construction", "note": "Invented for the fixture."}
+{"id": "D3000000-0000-4000-8000-000000000008", "label": "ambiguous", "source": "construction", "note": "Invented for the fixture."}
+{"id": "D3000000-0000-4000-8000-000000000009", "label": "continue", "source": "construction", "note": "Invented for the fixture."}
+{"id": "D3000000-0000-4000-8000-000000000010", "label": "switch", "source": "construction", "note": "Invented for the fixture."}
+{"id": "D3000000-0000-4000-8000-000000000011", "label": "continue", "source": "construction", "note": "Invented for the fixture."}
+{"id": "D3000000-0000-4000-8000-000000000002", "label": "ambiguous", "source": "claude-audit", "note": "Invented second opinion."}
+{"id": "D3000000-0000-4000-8000-000000000005", "label": "continue", "source": "claude-audit", "note": "Invented second opinion."}
+{"id": "D3000000-0000-4000-8000-000000000008", "label": "switch", "source": "claude-audit", "note": "Invented second opinion."}
+{"id": "D3000000-0000-4000-8000-000000000001", "label": "continue", "source": "behavioral:always-continue", "note": ""}
+{"id": "D3000000-0000-4000-8000-000000000002", "label": "continue", "source": "behavioral:always-continue", "note": ""}
+{"id": "D3000000-0000-4000-8000-000000000003", "label": "continue", "source": "behavioral:always-continue", "note": ""}
+{"id": "D3000000-0000-4000-8000-000000000004", "label": "continue", "source": "behavioral:always-continue", "note": ""}
+{"id": "D3000000-0000-4000-8000-000000000005", "label": "continue", "source": "behavioral:always-continue", "note": ""}
+{"id": "D3000000-0000-4000-8000-000000000006", "label": "continue", "source": "behavioral:always-continue", "note": ""}
+{"id": "D3000000-0000-4000-8000-000000000007", "label": "continue", "source": "behavioral:always-continue", "note": ""}
+{"id": "D3000000-0000-4000-8000-000000000008", "label": "continue", "source": "behavioral:always-continue", "note": ""}
+{"id": "D3000000-0000-4000-8000-000000000009", "label": "continue", "source": "behavioral:always-continue", "note": ""}
+{"id": "D3000000-0000-4000-8000-000000000010", "label": "continue", "source": "behavioral:always-continue", "note": ""}
+{"id": "D3000000-0000-4000-8000-000000000011", "label": "continue", "source": "behavioral:always-continue", "note": ""}

@@ -1,4 +1,4 @@
-import { encodePcm16Wav, PeakAccumulator } from './realtime-pcm-wav';
+import { EncodePcm16Wav, PeakAccumulator } from './realtime-pcm-wav';
 
 /**
  * Browser-side audio recorder for a CLIENT-DIRECT realtime voice session.
@@ -27,13 +27,13 @@ import { encodePcm16Wav, PeakAccumulator } from './realtime-pcm-wav';
  */
 export class RealtimeAudioRecorder {
     /** The container/codec we now produce — a seekable mono 16-bit PCM WAV. */
-    private static readonly WavMimeType = 'audio/wav';
+    private static readonly wavMimeType = 'audio/wav';
     /** Target waveform-peak resolution (buckets) across the whole recording. */
-    private static readonly PeakBuckets = 600;
+    private static readonly peakBuckets = 600;
     /** PCM frame size for the ScriptProcessor fallback (worklet uses its native 128-frame quantum). */
-    private static readonly ScriptProcessorBufferSize = 4096;
+    private static readonly scriptProcessorBufferSize = 4096;
     /** Inline AudioWorklet processor: forwards each 128-frame mono input block to the main thread. */
-    private static readonly WorkletProcessorSource = `
+    private static readonly workletProcessorSource = `
         class MJPcmCaptureProcessor extends AudioWorkletProcessor {
             process(inputs) {
                 const input = inputs[0];
@@ -56,7 +56,7 @@ export class RealtimeAudioRecorder {
     /** Total captured sample count across {@link pcmFrames} (kept in step to avoid re-summing). */
     private totalSamples = 0;
     /** Streaming waveform-peak accumulator — bounded regardless of recording length. */
-    private peaks = new PeakAccumulator(RealtimeAudioRecorder.PeakBuckets);
+    private peaks = new PeakAccumulator(RealtimeAudioRecorder.peakBuckets);
     /** Final normalized peaks, snapshotted at {@link Stop} so {@link GetPeaks} survives cleanup. */
     private finalPeaks: number[] = [];
     private recording = false;
@@ -91,7 +91,7 @@ export class RealtimeAudioRecorder {
      * crash-recovery shards are all 16-bit PCM WAV.
      */
     public get MimeType(): string {
-        return this.recording ? RealtimeAudioRecorder.WavMimeType : '';
+        return this.recording ? RealtimeAudioRecorder.wavMimeType : '';
     }
 
     /**
@@ -260,7 +260,7 @@ export class RealtimeAudioRecorder {
         }
         try {
             const moduleUrl = URL.createObjectURL(
-                new Blob([RealtimeAudioRecorder.WorkletProcessorSource], { type: 'application/javascript' }),
+                new Blob([RealtimeAudioRecorder.workletProcessorSource], { type: 'application/javascript' }),
             );
             try {
                 await audioContext.audioWorklet.addModule(moduleUrl);
@@ -283,7 +283,7 @@ export class RealtimeAudioRecorder {
         if (typeof audioContext.createScriptProcessor !== 'function') {
             throw new Error('Neither AudioWorklet nor ScriptProcessor is supported');
         }
-        const node = audioContext.createScriptProcessor(RealtimeAudioRecorder.ScriptProcessorBufferSize, 1, 1);
+        const node = audioContext.createScriptProcessor(RealtimeAudioRecorder.scriptProcessorBufferSize, 1, 1);
         node.onaudioprocess = (event: AudioProcessingEvent) => {
             // Copy out of the reused input buffer before retaining.
             this.captureFrame(event.inputBuffer.getChannelData(0).slice(0));
@@ -367,8 +367,8 @@ export class RealtimeAudioRecorder {
             return null;
         }
         const all = this.collectSamples(0, this.totalSamples);
-        const wav = encodePcm16Wav(all, this.sampleRate);
-        return new Blob([wav], { type: RealtimeAudioRecorder.WavMimeType });
+        const wav = EncodePcm16Wav(all, this.sampleRate);
+        return new Blob([wav], { type: RealtimeAudioRecorder.wavMimeType });
     }
 
     /** Releases the audio graph + capture node and resets state. Idempotent. */
@@ -378,7 +378,7 @@ export class RealtimeAudioRecorder {
         this.totalSamples = 0;
         this.flushedSampleCount = 0;
         this.sampleRate = 0;
-        this.peaks = new PeakAccumulator(RealtimeAudioRecorder.PeakBuckets);
+        this.peaks = new PeakAccumulator(RealtimeAudioRecorder.peakBuckets);
         this.remoteAttached = false;
         this.pendingRemoteStream = null;
         if (this.workletNode) {

@@ -3,7 +3,7 @@ import type { ActionResultSimple, RunActionParams } from '@memberjunction/action
 import { RegisterClass } from '@memberjunction/global';
 import { ListOperations } from '@memberjunction/lists';
 
-import { addOutputParam, getStringParam, missingParam } from './_action-helpers';
+import { AddOutputParam, GetStringParam, MissingParam } from './_action-helpers';
 
 /**
  * Add a User View's current results to an existing List. Always additive;
@@ -23,17 +23,17 @@ import { addOutputParam, getStringParam, missingParam } from './_action-helpers'
 @RegisterClass(BaseAction, 'Add View Results To List')
 export class AddViewResultsToListAction extends BaseAction {
   protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-    const viewId = getStringParam(params, 'ViewID');
-    const listId = getStringParam(params, 'ListID');
-    if (!viewId) return missingParam('ViewID');
-    if (!listId) return missingParam('ListID');
+    const viewId = GetStringParam(params, 'ViewID');
+    const listId = GetStringParam(params, 'ListID');
+    if (!viewId) return MissingParam('ViewID');
+    if (!listId) return MissingParam('ListID');
 
     const ops = new ListOperations(params.ContextUser, params.Provider);
     const result = await ops.AddViewResultsToList(viewId, listId);
 
-    addOutputParam(params, 'Added', result.Counts?.Added);
-    addOutputParam(params, 'Removed', result.Counts?.Removed);
-    addOutputParam(params, 'Failed', result.Counts?.Failed);
+    AddOutputParam(params, 'Added', result.Counts?.Added);
+    AddOutputParam(params, 'Removed', result.Counts?.Removed);
+    AddOutputParam(params, 'Failed', result.Counts?.Failed);
 
     return {
       Success: result.Success,

@@ -90,9 +90,14 @@ export const DEFAULT_FIELD_CONFIG: Required<FeedbackFieldConfig> = {
 /**
  * Merge user config with defaults
  */
-export function mergeFieldConfig(config?: FeedbackFieldConfig): Required<FeedbackFieldConfig> {
+export function MergeFieldConfig(config?: FeedbackFieldConfig): Required<FeedbackFieldConfig> {
   return {
     ...DEFAULT_FIELD_CONFIG,
     ...config
   };
+}
+
+/** @deprecated Use {@link MergeFieldConfig}. */
+export function mergeFieldConfig(config?: FeedbackFieldConfig): Required<FeedbackFieldConfig> {
+  return MergeFieldConfig(config);
 }

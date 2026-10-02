@@ -136,10 +136,10 @@ export class EmployeeOverviewPanel extends BaseFormPanel<MJEmployeeEntity> imple
     }
 
     public ngOnInit(): void {
-        this.LoadDirectReports();
+        this.loadDirectReports();
     }
 
-    private async LoadDirectReports(): Promise<void> {
+    private async loadDirectReports(): Promise<void> {
         if (!this.Record?.ID) return;
         try {
             const rv = new RunView();

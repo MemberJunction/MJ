@@ -36,7 +36,7 @@ export class UserProfileComponent extends BaseAngularComponent implements OnInit
   private destroy$ = new Subject<void>();
 
   constructor(
-    public authBase: MJAuthBase,
+    public authBase: MJAuthBase,  // case-violation-ok-legacy-back-compat: the constructor uses this parameter by bare name, so the rename is scope-sensitive
     private sharedService: SharedService,
     private cdr: ChangeDetectorRef
   ) {
@@ -46,7 +46,7 @@ export class UserProfileComponent extends BaseAngularComponent implements OnInit
   }
 
   async ngOnInit() {
-    await this.LoadNotificationData();
+    await this.loadNotificationData();
   }
 
   ngOnDestroy(): void {
@@ -57,7 +57,7 @@ export class UserProfileComponent extends BaseAngularComponent implements OnInit
   /**
    * Loads notification data from UserInfoEngine
    */
-  private async LoadNotificationData() {
+  private async loadNotificationData() {
     try {
       this.Loading = true;
 
@@ -185,7 +185,7 @@ export class UserProfileComponent extends BaseAngularComponent implements OnInit
       this.sharedService.CreateSimpleNotification(`Failed to update preferences: ${message}`, 'error', 3000);
 
       // Revert the UI state
-      await this.LoadNotificationData();
+      await this.loadNotificationData();
     }
   }
 

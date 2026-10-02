@@ -28,8 +28,8 @@ const hook: Hook<'postrun'> = async function (options) {
     return;
   }
   try {
-    const { closeConnectionPool } = await import('../utils/open-app-context.js');
-    await closeConnectionPool();
+    const { CloseConnectionPool } = await import('../utils/open-app-context.js');
+    await CloseConnectionPool();
   } catch {
     /* best effort — pool may already be closed or never opened */
   }

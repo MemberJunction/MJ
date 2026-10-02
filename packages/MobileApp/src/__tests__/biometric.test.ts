@@ -22,7 +22,7 @@ vi.mock('expo-local-authentication', () => ({
         la.authThrows ? Promise.reject(new Error('boom')) : Promise.resolve({ success: la.authSuccess }),
 }));
 
-import { authenticate, getBiometricLabel, isBiometricAvailable } from '@/auth/biometric';
+import { authenticate, GetBiometricLabel, IsBiometricAvailable } from '@/auth/biometric';
 
 beforeEach(() => {
     la.hasHardware = true;
@@ -32,36 +32,36 @@ beforeEach(() => {
     la.authThrows = false;
 });
 
-describe('isBiometricAvailable', () => {
+describe('IsBiometricAvailable', () => {
     it('is true only when hardware exists AND a biometric is enrolled', async () => {
-        expect(await isBiometricAvailable()).toBe(true);
+        expect(await IsBiometricAvailable()).toBe(true);
     });
 
     it('is false without hardware', async () => {
         la.hasHardware = false;
-        expect(await isBiometricAvailable()).toBe(false);
+        expect(await IsBiometricAvailable()).toBe(false);
     });
 
     it('is false when nothing is enrolled (e.g. bare simulator)', async () => {
         la.isEnrolled = false;
-        expect(await isBiometricAvailable()).toBe(false);
+        expect(await IsBiometricAvailable()).toBe(false);
     });
 });
 
-describe('getBiometricLabel', () => {
+describe('GetBiometricLabel', () => {
     it('reports Face ID when facial recognition is supported', async () => {
         la.types = [2];
-        expect(await getBiometricLabel()).toBe('Face ID');
+        expect(await GetBiometricLabel()).toBe('Face ID');
     });
 
     it('reports Touch ID when only fingerprint is supported', async () => {
         la.types = [1];
-        expect(await getBiometricLabel()).toBe('Touch ID');
+        expect(await GetBiometricLabel()).toBe('Touch ID');
     });
 
     it('falls back to a generic label when nothing is supported', async () => {
         la.types = [];
-        expect(await getBiometricLabel()).toBe('Biometrics');
+        expect(await GetBiometricLabel()).toBe('Biometrics');
     });
 });
 

@@ -23,6 +23,8 @@ vi.mock('@memberjunction/actions', () => ({
 vi.mock('@memberjunction/global', () => ({
   RegisterClass: () => (target: unknown) => target,
   UUIDsEqual: (a: string, b: string) => a === b,
+  IsValidUUID: (value: string | null | undefined) =>
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value ?? '').trim()),
   EscapeSQLString: (value: string | null | undefined) => String(value ?? '').replace(/'/g, "''"),
   MJGlobal: {
     Instance: {
@@ -46,6 +48,17 @@ vi.mock('@memberjunction/core', () => ({
 vi.mock('@memberjunction/core-entities', () => ({
   MJCompanyIntegrationEntity: class MJCompanyIntegrationEntity {},
   MJIntegrationEntity: class MJIntegrationEntity {},
+  MJCredentialEntity: class MJCredentialEntity {},
+}));
+
+// The token endpoint is the SDK boundary for connector-style Business Central auth.
+const { getAccessTokenMock } = vi.hoisted(() => ({ getAccessTokenMock: vi.fn() }));
+vi.mock('@memberjunction/integration-engine', () => ({
+  OAuth2TokenManager: class OAuth2TokenManager {
+    GetAccessToken(request: unknown, grant: string): Promise<unknown> {
+      return getAccessTokenMock(request, grant);
+    }
+  },
 }));
 
 vi.mock('@memberjunction/actions-base', () => ({
@@ -53,7 +66,7 @@ vi.mock('@memberjunction/actions-base', () => ({
 }));
 
 import { MJGlobal } from '@memberjunction/global';
-import { UserInfo } from '@memberjunction/core';
+import { LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import type { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { CreateQuickBooksJournalEntryAction } from '../providers/quickbooks/actions/create-journal-entry.action';
 import { GetQuickBooksAccountBalancesAction } from '../providers/quickbooks/actions/get-account-balances.action';
@@ -68,7 +81,15 @@ import { CreateBusinessCentralJournalEntryAction } from '../providers/business-c
 import { GetBusinessCentralAccountBalancesAction } from '../providers/business-central/actions/get-account-balances.action';
 import { GetBusinessCentralDimensionsAction } from '../providers/business-central/actions/get-dimensions.action';
 import { CreateJournalEntryAction } from '../verbs/create-journal-entry.action';
-import { ACCOUNTING_VERBS, ERP_INTEGRATION, erpPluginKey } from '../constants';
+import { BusinessCentralBaseAction } from '../providers/business-central/business-central-base.action';
+import {
+  BC_DEFAULT_AUTHORITY_HOST,
+  BC_DEFAULT_SCOPE,
+  ClearBusinessCentralTokenManagers,
+  GetBusinessCentralTokenManager,
+  ResolveBusinessCentralConnectorConfig,
+} from '../providers/business-central/business-central-connection';
+import { ACCOUNTING_VERBS, ERP_INTEGRATION, ErpPluginKey } from '../constants';
 
 const contextUser = { ID: 'user-1', Name: 'Test User', Email: 'test@example.com' } as unknown as UserInfo;
 
@@ -91,6 +112,84 @@ async function runWithoutUser(action: object, params: ActionParam[]): Promise<Ac
 function outParam(result: ActionResultSimple, name: string): unknown {
   return result.Params?.find((p) => p.Name === name)?.Value;
 }
+
+const COMPANY_ID = 'aaaaaaaa-0000-4000-8000-000000000001';
+const OTHER_COMPANY_ID = 'aaaaaaaa-0000-4000-8000-000000000002';
+const CI_PROD = 'cccccccc-0000-4000-8000-000000000001';
+const CI_UAT = 'cccccccc-0000-4000-8000-000000000002';
+const CREDENTIAL_ID = 'dddddddd-0000-4000-8000-000000000001';
+
+type Row = Record<string, unknown>;
+
+/** Every `new RunView()` returns a RunView() that resolves to `results`. */
+function mockRunViewResults(results: Row[]) {
+  const runViewFn = vi.fn().mockResolvedValue({ Success: true, Results: results });
+  vi.mocked(RunView).mockImplementation(function (this: unknown) {
+    return { RunView: runViewFn };
+  } as never);
+  return runViewFn;
+}
+
+/**
+ * `new Metadata().GetEntityObject(entityName).Load(id)` fills the entity from `rows[entityName]`
+ * (or returns false when there is no row). Returns the log of loads.
+ */
+function mockEntityLoads(rows: Record<string, Row | null>) {
+  const loads: Array<{ entity: string; id: string }> = [];
+  vi.mocked(Metadata).mockImplementation(function (this: unknown) {
+    return {
+      GetEntityObject: vi.fn(async (entityName: string) => ({
+        async Load(this: Row, id: string) {
+          loads.push({ entity: entityName, id });
+          const row = rows[entityName];
+          if (!row) {
+            return false;
+          }
+          Object.assign(this, row);
+          return true;
+        },
+      })),
+    };
+  } as never);
+  return loads;
+}
+
+function connectionRow(id: string, name: string, integration: string, overrides: Row = {}): Row {
+  return {
+    ID: id,
+    Name: name,
+    CompanyID: COMPANY_ID,
+    IntegrationID: 'int-bc',
+    Integration: integration,
+    IsActive: true,
+    CredentialID: null,
+    Configuration: null,
+    ...overrides,
+  };
+}
+
+/** A plugin stand-in that records the params it was run with. */
+function recordingPlugin() {
+  const runFn = vi.fn(async (runParams: RunActionParams): Promise<ActionResultSimple> => ({
+    Success: true,
+    ResultCode: 'SUCCESS',
+    Params: runParams.Params,
+  }));
+  vi.mocked(MJGlobal.Instance.ClassFactory.TryCreateInstance).mockReturnValue({
+    Resolved: true,
+    Instance: { Run: runFn },
+  } as never);
+  return runFn;
+}
+
+function paramsPassedTo(runFn: ReturnType<typeof recordingPlugin>): ActionParam[] {
+  return (runFn.mock.calls[0][0] as RunActionParams).Params;
+}
+
+const BALANCED_LINES = [
+  { accountNumber: '1000', debit: 100 },
+  { accountNumber: '2000', credit: 100 },
+];
 
 // ─── QuickBooks: CreateQuickBooksJournalEntryAction ─────────────────────────
 
@@ -494,7 +593,7 @@ describe('CreateJournalEntry dispatcher', () => {
     expect(result.Success).toBe(false);
     expect(result.ResultCode).toBe('PROVIDER_NOT_REGISTERED');
     expect(result.Message).toContain(
-      erpPluginKey(ACCOUNTING_VERBS.CreateJournalEntry, 'NetSuite'),
+      ErpPluginKey(ACCOUNTING_VERBS.CreateJournalEntry, 'NetSuite'),
     );
   });
 
@@ -535,13 +634,164 @@ describe('CreateJournalEntry dispatcher', () => {
 
     expect(MJGlobal.Instance.ClassFactory.TryCreateInstance).toHaveBeenCalledWith(
       expect.anything(),
-      erpPluginKey(ACCOUNTING_VERBS.CreateJournalEntry, ERP_INTEGRATION.QuickBooksOnline),
+      ErpPluginKey(ACCOUNTING_VERBS.CreateJournalEntry, ERP_INTEGRATION.QuickBooksOnline),
     );
     const [endpoint, method] = spy.mock.calls[0] as unknown as [string, string];
     expect(endpoint).toBe('journalentry');
     expect(method).toBe('POST');
     expect(result.Success).toBe(true);
     expect(outParam(result, 'JournalEntryID')).toBe('je-1');
+  });
+
+  it('should dispatch a business-central connection to the canonical Business Central plugin key', async () => {
+    mockRunViewResults([connectionRow(CI_PROD, 'BC Production', 'business-central')]);
+    const runFn = recordingPlugin();
+
+    const result = await run(action, inputs({ CompanyID: COMPANY_ID, Lines: BALANCED_LINES }));
+
+    expect(result.Success).toBe(true);
+    expect(MJGlobal.Instance.ClassFactory.TryCreateInstance).toHaveBeenCalledWith(
+      expect.anything(),
+      'CreateJournalEntry:Microsoft Dynamics 365 Business Central',
+    );
+    expect(runFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('should add the resolved CompanyIntegrationID to the params the plugin receives', async () => {
+    mockRunViewResults([connectionRow(CI_PROD, 'BC Production', 'business-central')]);
+    const runFn = recordingPlugin();
+
+    await run(action, inputs({ CompanyID: COMPANY_ID, Lines: BALANCED_LINES }));
+
+    const passed = paramsPassedTo(runFn);
+    expect(passed.filter((p) => p.Name === 'CompanyIntegrationID')).toEqual([
+      { Name: 'CompanyIntegrationID', Type: 'Input', Value: CI_PROD },
+    ]);
+  });
+
+  it('should fill in a blank CompanyIntegrationID param with the resolved connection', async () => {
+    mockRunViewResults([connectionRow(CI_PROD, 'BC Production', 'business-central')]);
+    const runFn = recordingPlugin();
+
+    await run(action, inputs({ CompanyID: COMPANY_ID, CompanyIntegrationID: null, Lines: BALANCED_LINES }));
+
+    const passed = paramsPassedTo(runFn).filter((p) => p.Name === 'CompanyIntegrationID');
+    expect(passed).toHaveLength(1);
+    expect(passed[0].Value).toBe(CI_PROD);
+  });
+
+  it('should honor an explicit CompanyIntegrationID and skip the ambiguity search', async () => {
+    const runViewFn = mockRunViewResults([
+      connectionRow(CI_PROD, 'BC Production', 'business-central'),
+      connectionRow(CI_UAT, 'BC UAT', 'business-central'),
+    ]);
+    const loads = mockEntityLoads({ 'MJ: Company Integrations': connectionRow(CI_UAT, 'BC UAT', 'business-central') });
+    const runFn = recordingPlugin();
+
+    const result = await run(action, inputs({ CompanyID: COMPANY_ID, CompanyIntegrationID: CI_UAT, Lines: BALANCED_LINES }));
+
+    expect(result.Success).toBe(true);
+    expect(runViewFn).not.toHaveBeenCalled();
+    expect(loads).toEqual([{ entity: 'MJ: Company Integrations', id: CI_UAT }]);
+    expect(MJGlobal.Instance.ClassFactory.TryCreateInstance).toHaveBeenCalledWith(
+      expect.anything(),
+      ErpPluginKey(ACCOUNTING_VERBS.CreateJournalEntry, ERP_INTEGRATION.BusinessCentral),
+    );
+    const passed = paramsPassedTo(runFn).filter((p) => p.Name === 'CompanyIntegrationID');
+    expect(passed).toHaveLength(1);
+    expect(passed[0].Value).toBe(CI_UAT);
+  });
+
+  it('should refuse an explicit CompanyIntegrationID that belongs to another company', async () => {
+    mockEntityLoads({
+      'MJ: Company Integrations': connectionRow(CI_UAT, 'BC UAT', 'business-central', { CompanyID: OTHER_COMPANY_ID }),
+    });
+
+    const result = await run(action, inputs({ CompanyID: COMPANY_ID, CompanyIntegrationID: CI_UAT, Lines: BALANCED_LINES }));
+
+    expect(result.Success).toBe(false);
+    expect(result.ResultCode).toBe('COMPANY_INTEGRATION_WRONG_COMPANY');
+    expect(result.Message).toContain(`does not belong to company ${COMPANY_ID}`);
+    expect(MJGlobal.Instance.ClassFactory.TryCreateInstance).not.toHaveBeenCalled();
+  });
+
+  it('should refuse an inactive explicit CompanyIntegrationID', async () => {
+    mockEntityLoads({
+      'MJ: Company Integrations': connectionRow(CI_UAT, 'BC UAT', 'business-central', { IsActive: false }),
+    });
+
+    const result = await run(action, inputs({ CompanyID: COMPANY_ID, CompanyIntegrationID: CI_UAT, Lines: BALANCED_LINES }));
+
+    expect(result.Success).toBe(false);
+    expect(result.ResultCode).toBe('COMPANY_INTEGRATION_INACTIVE');
+    expect(MJGlobal.Instance.ClassFactory.TryCreateInstance).not.toHaveBeenCalled();
+  });
+
+  it('should refuse an explicit CompanyIntegrationID that is not an accounting connection', async () => {
+    mockEntityLoads({ 'MJ: Company Integrations': connectionRow(CI_UAT, 'CRM', 'HubSpot') });
+
+    const result = await run(action, inputs({ CompanyID: COMPANY_ID, CompanyIntegrationID: CI_UAT, Lines: BALANCED_LINES }));
+
+    expect(result.Success).toBe(false);
+    expect(result.ResultCode).toBe('NOT_ACCOUNTING_INTEGRATION');
+    expect(MJGlobal.Instance.ClassFactory.TryCreateInstance).not.toHaveBeenCalled();
+  });
+
+  it('should refuse an explicit CompanyIntegrationID that does not exist', async () => {
+    mockEntityLoads({ 'MJ: Company Integrations': null });
+
+    const result = await run(action, inputs({ CompanyID: COMPANY_ID, CompanyIntegrationID: CI_UAT, Lines: BALANCED_LINES }));
+
+    expect(result.Success).toBe(false);
+    expect(result.ResultCode).toBe('COMPANY_INTEGRATION_NOT_FOUND');
+  });
+
+  it('should refuse an ambiguous plain lookup and name the connections', async () => {
+    mockRunViewResults([
+      connectionRow(CI_PROD, 'BC Production', 'business-central'),
+      connectionRow(CI_UAT, 'BC UAT', 'business-central'),
+    ]);
+
+    const result = await run(action, inputs({ CompanyID: COMPANY_ID, Lines: BALANCED_LINES }));
+
+    expect(result.Success).toBe(false);
+    expect(result.ResultCode).toBe('AMBIGUOUS_ACCOUNTING_INTEGRATION');
+    expect(result.Message).toContain(CI_PROD);
+    expect(result.Message).toContain(CI_UAT);
+    expect(MJGlobal.Instance.ClassFactory.TryCreateInstance).not.toHaveBeenCalled();
+  });
+
+  it('should make the Business Central plugin post through the connection the dispatcher chose', async () => {
+    // One search (the dispatcher's); the plugin then loads that exact row by ID.
+    const runViewFn = mockRunViewResults([connectionRow(CI_UAT, 'BC UAT', 'business-central')]);
+    const loads = mockEntityLoads({ 'MJ: Company Integrations': connectionRow(CI_UAT, 'BC UAT', 'business-central') });
+    const plugin = new CreateBusinessCentralJournalEntryAction();
+    vi.spyOn(plugin as never, 'resolveBCConnection').mockResolvedValue({
+      AccessToken: 'token',
+      TenantId: 'tenant',
+      Environment: 'AIDP_Next_UAT',
+      CompanyId: 'bc-company',
+    } as never);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((async (url: string | URL | Request) => {
+      const target = String(url);
+      if (target.endsWith('/journals')) {
+        return new Response(JSON.stringify({ value: [{ id: 'j-1', code: 'GENERAL', balancingAccountNumber: null }] }));
+      }
+      if (target.endsWith('/journalLines')) {
+        return new Response(JSON.stringify({ id: 'line-1', documentNumber: 'JE-1' }));
+      }
+      return new Response(null, { status: 204 });
+    }) as never);
+    vi.mocked(MJGlobal.Instance.ClassFactory.TryCreateInstance).mockReturnValue({ Resolved: true, Instance: plugin });
+
+    const result = await run(action, inputs({ CompanyID: COMPANY_ID, Lines: BALANCED_LINES }));
+
+    expect(result.Success).toBe(true);
+    expect(runViewFn).toHaveBeenCalledTimes(1);
+    expect(loads).toEqual([{ entity: 'MJ: Company Integrations', id: CI_UAT }]);
+    expect(String(fetchSpy.mock.calls[0][0])).toBe(
+      'https://api.businesscentral.dynamics.com/v2.0/tenant/AIDP_Next_UAT/api/v2.0/companies(bc-company)/journals',
+    );
   });
 });
 
@@ -800,6 +1050,335 @@ describe('GetQuickBooksDimensionsAction', () => {
       { code: 'Class', displayName: 'Class', values: [{ code: 'Sales', displayName: 'Sales' }] },
       { code: 'Department', displayName: 'Department', values: [{ code: 'Ops', displayName: 'Ops' }] },
     ]);
+  });
+});
+
+// ─── Business Central: connection resolution ────────────────────────────────
+
+class TestBusinessCentralAction extends BusinessCentralBaseAction {
+  public get Description(): string {
+    return 'test';
+  }
+
+  protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+    this.params = params.Params;
+    return { Success: true, ResultCode: 'SUCCESS', Params: params.Params };
+  }
+}
+
+const CONNECTOR_COLUMNS = {
+  ID: CI_UAT,
+  ClientID: 'col-client',
+  ClientSecret: 'col-secret',
+  APIKey: 'col-tenant',
+  ExternalSystemID: 'col-company',
+};
+
+describe('ResolveBusinessCentralConnectorConfig', () => {
+  it('should let the Credential override the Configuration, and the Configuration override the columns', () => {
+    const config = ResolveBusinessCentralConnectorConfig(
+      CONNECTOR_COLUMNS,
+      { TenantId: 'cfg-tenant', Environment: 'cfg-env', CompanyId: 'cfg-company', ClientId: 'cfg-client' },
+      { TenantId: 'cred-tenant', ClientSecret: 'cred-secret' },
+    );
+
+    expect(config).toEqual({
+      ClientId: 'cfg-client',
+      ClientSecret: 'cred-secret',
+      TenantId: 'cred-tenant',
+      CompanyId: 'cfg-company',
+      Environment: 'cfg-env',
+      AuthorityHost: BC_DEFAULT_AUTHORITY_HOST,
+      Scope: BC_DEFAULT_SCOPE,
+    });
+  });
+
+  it('should fall back to ClientID, ClientSecret, APIKey and ExternalSystemID', () => {
+    const config = ResolveBusinessCentralConnectorConfig(CONNECTOR_COLUMNS, { environmentName: 'production' }, {});
+
+    expect(config.ClientId).toBe('col-client');
+    expect(config.ClientSecret).toBe('col-secret');
+    expect(config.TenantId).toBe('col-tenant');
+    expect(config.CompanyId).toBe('col-company');
+    expect(config.Environment).toBe('production');
+  });
+
+  it('should read the connector key spellings', () => {
+    const config = ResolveBusinessCentralConnectorConfig(
+      { ID: CI_UAT, ClientID: null, ClientSecret: null, APIKey: null, ExternalSystemID: null },
+      { tenant_id: 'tenant', EnvironmentName: 'env', BusinessCentralCompanyId: 'company' },
+      { azureClientId: 'client', azureClientSecret: 'secret', AuthorityHost: 'https://login.example.com/', Scope: 'custom/.default' },
+    );
+
+    expect(config).toEqual({
+      ClientId: 'client',
+      ClientSecret: 'secret',
+      TenantId: 'tenant',
+      CompanyId: 'company',
+      Environment: 'env',
+      AuthorityHost: 'https://login.example.com',
+      Scope: 'custom/.default',
+    });
+  });
+
+  it('should error when the environment is missing, never defaulting it', () => {
+    expect(() => ResolveBusinessCentralConnectorConfig(CONNECTOR_COLUMNS, { tenantId: 'tenant' }, {}))
+      .toThrow(`Business Central environment is not configured for CompanyIntegration ${CI_UAT}`);
+  });
+
+  it('should error when the company is missing', () => {
+    expect(() => ResolveBusinessCentralConnectorConfig(
+      { ...CONNECTOR_COLUMNS, ExternalSystemID: null },
+      { environmentName: 'production' },
+      {},
+    )).toThrow(/company ID is not configured/);
+  });
+});
+
+describe('BusinessCentralBaseAction connection resolution', () => {
+  let action: TestBusinessCentralAction;
+
+  beforeEach(() => {
+    action = new TestBusinessCentralAction();
+    ClearBusinessCentralTokenManagers();
+    getAccessTokenMock.mockReset();
+    getAccessTokenMock.mockResolvedValue({ AccessToken: 'minted-token', TokenType: 'Bearer', ExpiresAt: Date.now() + 3_600_000 });
+    vi.mocked(LogError).mockClear();
+  });
+
+  function connectorRow(overrides: Row = {}): Row {
+    return connectionRow(CI_UAT, 'BC UAT', 'business-central', {
+      CredentialID: CREDENTIAL_ID,
+      Configuration: JSON.stringify({ tenantId: 'cfg-tenant', environmentName: 'AIDP_Next_UAT', companyId: 'bc-company' }),
+      ...overrides,
+    });
+  }
+
+  function credentialRow(values: unknown, overrides: Row = {}): Row {
+    return { ID: CREDENTIAL_ID, IsActive: true, Values: typeof values === 'string' ? values : JSON.stringify(values), ...overrides };
+  }
+
+  it('should mint a client-credentials token from the Credential for a connector connection', async () => {
+    const loads = mockEntityLoads({
+      'MJ: Credentials': credentialRow({ TenantId: 'cred-tenant', ClientId: 'client', ClientSecret: 'secret' }),
+    });
+
+    const connection = await action['resolveBCConnection'](connectorRow() as never, COMPANY_ID, contextUser);
+
+    expect(loads).toEqual([{ entity: 'MJ: Credentials', id: CREDENTIAL_ID }]);
+    expect(getAccessTokenMock).toHaveBeenCalledWith(
+      {
+        TokenURL: 'https://login.microsoftonline.com/cred-tenant/oauth2/v2.0/token',
+        ClientId: 'client',
+        ClientSecret: 'secret',
+        Scopes: BC_DEFAULT_SCOPE,
+      },
+      'client_credentials',
+    );
+    expect(connection).toEqual({
+      AccessToken: 'minted-token',
+      TenantId: 'cred-tenant',
+      Environment: 'AIDP_Next_UAT',
+      CompanyId: 'bc-company',
+    });
+  });
+
+  it('should call the connector connection\'s tenant, environment and company with the minted token', async () => {
+    mockEntityLoads({
+      'MJ: Company Integrations': connectorRow(),
+      'MJ: Credentials': credentialRow({ ClientId: 'client', ClientSecret: 'secret' }),
+    });
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ value: [] })));
+    await action['InternalRunAction']({ Params: inputs({ CompanyID: COMPANY_ID, CompanyIntegrationID: CI_UAT }), ContextUser: contextUser } as never);
+
+    await action['makeBCRequest']('journals', 'GET', undefined, contextUser);
+
+    const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.businesscentral.dynamics.com/v2.0/cfg-tenant/AIDP_Next_UAT/api/v2.0/companies(bc-company)/journals');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer minted-token');
+  });
+
+  it('should treat a Configuration with a tenant or environment as a connector connection even without a Credential', async () => {
+    const loads = mockEntityLoads({});
+    const row = connectorRow({ CredentialID: null, ClientID: 'col-client', ClientSecret: 'col-secret' });
+
+    const connection = await action['resolveBCConnection'](row as never, COMPANY_ID, contextUser);
+
+    expect(loads).toEqual([]);
+    expect(getAccessTokenMock).toHaveBeenCalledTimes(1);
+    expect(connection.TenantId).toBe('cfg-tenant');
+    expect(connection.AccessToken).toBe('minted-token');
+  });
+
+  it('should error clearly when a connector connection has no environment', async () => {
+    mockEntityLoads({ 'MJ: Credentials': credentialRow({ ClientId: 'client', ClientSecret: 'secret' }) });
+    const row = connectorRow({ Configuration: JSON.stringify({ tenantId: 'cfg-tenant', companyId: 'bc-company' }) });
+
+    await expect(action['resolveBCConnection'](row as never, COMPANY_ID, contextUser))
+      .rejects.toThrow(/Business Central environment is not configured/);
+    expect(getAccessTokenMock).not.toHaveBeenCalled();
+  });
+
+  it('should refuse an inactive Credential', async () => {
+    mockEntityLoads({ 'MJ: Credentials': credentialRow({ ClientId: 'client' }, { IsActive: false }) });
+
+    await expect(action['resolveBCConnection'](connectorRow() as never, COMPANY_ID, contextUser))
+      .rejects.toThrow(`Credential ${CREDENTIAL_ID} for CompanyIntegration ${CI_UAT} is not active.`);
+  });
+
+  it('should refuse Credential Values that are not a JSON object', async () => {
+    mockEntityLoads({ 'MJ: Credentials': credentialRow('{not json') });
+    await expect(action['resolveBCConnection'](connectorRow() as never, COMPANY_ID, contextUser))
+      .rejects.toThrow(`Values of Credential ${CREDENTIAL_ID} is not valid JSON`);
+
+    mockEntityLoads({ 'MJ: Credentials': credentialRow(['a', 'b']) });
+    await expect(action['resolveBCConnection'](connectorRow() as never, COMPANY_ID, contextUser))
+      .rejects.toThrow(`Values of Credential ${CREDENTIAL_ID} must be a JSON object.`);
+  });
+
+  it('should not repeat the JSON parser\'s message, which can quote part of a secret', async () => {
+    mockEntityLoads({ 'MJ: Credentials': credentialRow('{"ClientSecret": s3cr3tVALUE}') });
+
+    const error = await action['resolveBCConnection'](connectorRow() as never, COMPANY_ID, contextUser).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe(`Values of Credential ${CREDENTIAL_ID} is not valid JSON.`);
+    expect((error as Error).message).not.toContain('s3cr3t');
+  });
+
+  it('should load the Credential through the provider the request was run with', async () => {
+    mockEntityLoads({});
+    vi.mocked(Metadata).mockClear();
+    const credential = credentialRow({ ClientId: 'client', ClientSecret: 'secret' });
+    const providerGetEntityObject = vi.fn(async () => ({
+      async Load(this: Row) {
+        Object.assign(this, credential);
+        return true;
+      },
+    }));
+
+    await action.Run({ Params: [], ContextUser: contextUser, Provider: { GetEntityObject: providerGetEntityObject } } as never);
+    await action['resolveBCConnection'](connectorRow() as never, COMPANY_ID, contextUser);
+
+    expect(providerGetEntityObject).toHaveBeenCalledWith('MJ: Credentials', contextUser);
+    expect(Metadata).not.toHaveBeenCalled();
+  });
+
+  it('should encode the tenant, environment and company in the token and API URLs', async () => {
+    mockEntityLoads({
+      'MJ: Company Integrations': connectorRow({
+        Configuration: JSON.stringify({ tenantId: 'ten/ant', environmentName: 'env name', companyId: 'co?1' }),
+      }),
+      'MJ: Credentials': credentialRow({ ClientId: 'client', ClientSecret: 'secret' }),
+    });
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ value: [] })));
+    await action['InternalRunAction']({ Params: inputs({ CompanyID: COMPANY_ID, CompanyIntegrationID: CI_UAT }), ContextUser: contextUser } as never);
+
+    await action['makeBCRequest']('journals', 'GET', undefined, contextUser);
+
+    expect(getAccessTokenMock.mock.calls[0][0].TokenURL).toBe('https://login.microsoftonline.com/ten%2Fant/oauth2/v2.0/token');
+    const [url] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.businesscentral.dynamics.com/v2.0/ten%2Fant/env%20name/api/v2.0/companies(co%3F1)/journals');
+  });
+
+  it('should refuse a Credential that cannot be loaded', async () => {
+    mockEntityLoads({ 'MJ: Credentials': null });
+
+    await expect(action['resolveBCConnection'](connectorRow() as never, COMPANY_ID, contextUser))
+      .rejects.toThrow(/could not be loaded/);
+  });
+
+  describe('legacy connections (no CredentialID, no connector Configuration)', () => {
+    function legacyRow(overrides: Row = {}): Row {
+      return connectionRow(CI_PROD, 'BC', ERP_INTEGRATION.BusinessCentral, {
+        AccessToken: 'legacy-token',
+        TokenExpirationDate: null,
+        CustomAttribute1: 'tenant-or-env',
+        ExternalSystemID: 'bc-co',
+        ...overrides,
+      });
+    }
+
+    it('should keep reading the token from AccessToken and tenant and environment from CustomAttribute1', async () => {
+      const loads = mockEntityLoads({});
+
+      const connection = await action['resolveBCConnection'](legacyRow() as never, COMPANY_ID, contextUser);
+
+      expect(connection).toEqual({
+        AccessToken: 'legacy-token',
+        TenantId: 'tenant-or-env',
+        Environment: 'tenant-or-env',
+        CompanyId: 'bc-co',
+      });
+      expect(getAccessTokenMock).not.toHaveBeenCalled();
+      expect(loads).toEqual([]);
+    });
+
+    it('should build the same URL as before from a plain lookup', async () => {
+      mockRunViewResults([legacyRow()]);
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ value: [] })));
+      await action['InternalRunAction']({ Params: inputs({ CompanyID: COMPANY_ID }), ContextUser: contextUser } as never);
+
+      await action['makeBCRequest']('journals', 'GET', undefined, contextUser);
+
+      const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe('https://api.businesscentral.dynamics.com/v2.0/tenant-or-env/tenant-or-env/api/v2.0/companies(bc-co)/journals');
+      expect((init.headers as Record<string, string>).Authorization).toBe('Bearer legacy-token');
+    });
+
+    it('should keep the legacy errors for a missing BC company or tenant', async () => {
+      await expect(action['resolveBCConnection'](legacyRow({ ExternalSystemID: null }) as never, COMPANY_ID, contextUser))
+        .rejects.toThrow('Business Central Company ID not found. Set in CompanyIntegration.ExternalSystemID');
+      await expect(action['resolveBCConnection'](legacyRow({ CustomAttribute1: null }) as never, COMPANY_ID, contextUser))
+        .rejects.toThrow('Tenant ID not found. Set in CompanyIntegration.CustomAttribute1 or environment variable');
+    });
+
+    it('should stay legacy when the Configuration carries no tenant or environment', async () => {
+      const connection = await action['resolveBCConnection'](
+        legacyRow({ Configuration: JSON.stringify({ syncDirection: 'pull' }) }) as never,
+        COMPANY_ID,
+        contextUser,
+      );
+
+      expect(connection.AccessToken).toBe('legacy-token');
+      expect(getAccessTokenMock).not.toHaveBeenCalled();
+    });
+
+    it('should log and ignore a Configuration that is not valid JSON', async () => {
+      const connection = await action['resolveBCConnection'](
+        legacyRow({ Configuration: '{not json' }) as never,
+        COMPANY_ID,
+        contextUser,
+      );
+
+      expect(connection.AccessToken).toBe('legacy-token');
+      expect(LogError).toHaveBeenCalledWith(expect.stringContaining(`Configuration of CompanyIntegration ${CI_PROD} is not valid JSON`));
+    });
+  });
+});
+
+describe('GetBusinessCentralTokenManager', () => {
+  const config = ResolveBusinessCentralConnectorConfig(
+    CONNECTOR_COLUMNS,
+    { tenantId: 'tenant', environmentName: 'production' },
+    {},
+  );
+
+  beforeEach(() => {
+    ClearBusinessCentralTokenManagers();
+  });
+
+  it('should keep one token manager per CompanyIntegration', () => {
+    const first = GetBusinessCentralTokenManager(CI_UAT, config);
+
+    expect(GetBusinessCentralTokenManager(CI_UAT.toUpperCase(), config)).toBe(first);
+    expect(GetBusinessCentralTokenManager(CI_PROD, config)).not.toBe(first);
+  });
+
+  it('should start a new token manager when the connection\'s tenant changes', () => {
+    const first = GetBusinessCentralTokenManager(CI_UAT, config);
+
+    expect(GetBusinessCentralTokenManager(CI_UAT, { ...config, TenantId: 'other-tenant' })).not.toBe(first);
   });
 });
 

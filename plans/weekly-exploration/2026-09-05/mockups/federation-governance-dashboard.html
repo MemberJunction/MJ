@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Federation &amp; Chapters Dashboard</title>
+<style>
+  :root {
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: white;
+    --mj-bg-surface-card: #f5f7fa;
+    --mj-bg-surface-sunken: #f0f2f5;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #64748b;
+    --mj-text-muted: #94a3b8;
+    --mj-brand-primary: #264FAF;
+    --mj-brand-primary-soft: #eef2fb;
+    --mj-border-default: #e2e8f0;
+    --mj-border-subtle: #f1f5f9;
+    --mj-status-success: #16a34a;
+    --mj-status-success-bg: #f0fdf4;
+    --mj-status-warning: #ea580c;
+    --mj-status-warning-bg: #fff7ed;
+    --mj-status-error: #dc2626;
+    --mj-status-error-bg: #fef2f2;
+    --mj-status-info: #0284c7;
+    --mj-status-info-bg: #f0f9ff;
+    --sidebar-width: 230px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--mj-bg-page); color: var(--mj-text-primary); line-height: 1.5; display: flex; min-height: 100vh; font-size: 14px;
+  }
+  .sidebar { width: var(--sidebar-width); min-width: var(--sidebar-width); background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); position: fixed; top:0; left:0; bottom:0; overflow-y:auto; }
+  .brand { padding: 18px 16px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--mj-brand-primary); font-size: 15px; }
+  .nav-section { padding: 14px 16px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--mj-text-muted); }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; color: var(--mj-text-secondary); font-weight: 500; border-left: 3px solid transparent; }
+  .nav-item.active { color: var(--mj-brand-primary); border-left-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)); font-weight: 600; }
+  .nav-item i { width: 16px; text-align: center; font-size: 13px; }
+
+  .main { margin-left: var(--sidebar-width); flex: 1; display: flex; flex-direction: column; }
+  .topbar { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; }
+  .topbar h1 { font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .topbar h1 i { color: var(--mj-brand-primary); }
+  .topbar .sub { color: var(--mj-text-secondary); font-size: 12.5px; margin-top: 3px; }
+  .btn { border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-secondary); padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor: default; }
+  .btn-primary { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); color: white; }
+
+  .content { padding: 22px 28px 40px; }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 22px; }
+  .kpi { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; padding: 16px 18px; }
+  .kpi .label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); margin-bottom: 8px; }
+  .kpi .value { font-size: 28px; font-weight: 800; }
+  .kpi .delta { font-size: 12px; font-weight: 600; margin-top: 4px; color: var(--mj-status-success); }
+
+  .insight-banner { background: var(--mj-status-info-bg); border: 1px solid color-mix(in srgb, var(--mj-status-info) 30%, transparent); border-radius: 10px; padding: 14px 18px; display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+  .insight-banner i { color: var(--mj-status-info); font-size: 18px; }
+  .insight-banner b { display: block; }
+  .insight-banner span.d { font-size: 12.5px; color: var(--mj-text-secondary); }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1.15fr; gap: 20px; align-items: start; }
+  .card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+  .card-header { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: space-between; }
+  .card-header h2 { font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .card-header h2 i { color: var(--mj-brand-primary); }
+  .card-body { padding: 0; }
+  .card-body.pad { padding: 18px; }
+
+  /* hierarchy tree */
+  .tree { padding: 14px 10px; font-size: 13px; }
+  .tnode { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 7px; cursor: default; }
+  .tnode:hover { background: var(--mj-bg-surface-card); }
+  .tnode.selected { background: var(--mj-brand-primary-soft); border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 35%, transparent); }
+  .tnode i.caret { width: 12px; color: var(--mj-text-muted); font-size: 10px; }
+  .tnode i.node-icon { color: var(--mj-brand-primary); width: 16px; text-align:center; }
+  .tnode .name { font-weight: 600; flex: 1; }
+  .tnode .count { color: var(--mj-text-muted); font-size: 11.5px; }
+  .tnode .override-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mj-status-warning); flex-shrink: 0; }
+  .depth-1 { padding-left: 10px; }
+  .depth-2 { padding-left: 34px; }
+  .depth-3 { padding-left: 58px; }
+
+  /* node detail */
+  .rp-header { display: flex; align-items: center; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); }
+  .rp-avatar { width: 42px; height: 42px; border-radius: 10px; background: var(--mj-brand-primary-soft); color: var(--mj-brand-primary); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 15px; }
+  .rp-name { font-weight: 700; font-size: 15px; }
+  .rp-path { font-size: 12px; color: var(--mj-text-secondary); }
+
+  .setting-row { display: flex; align-items: center; gap: 14px; padding: 13px 18px; border-bottom: 1px solid var(--mj-border-subtle); }
+  .setting-row:last-child { border-bottom: none; }
+  .setting-name { flex: 0 0 190px; font-weight: 600; font-size: 12.8px; }
+  .setting-name .key { display:block; font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--mj-text-muted); font-weight: 400; margin-top: 2px; }
+  .setting-val { flex: 1; font-size: 13px; }
+  .badge { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; font-size: 10.5px; font-weight: 700; white-space: nowrap; }
+  .badge-inherited { background: var(--mj-bg-surface-sunken); color: var(--mj-text-secondary); }
+  .badge-override { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+  .setting-action { font-size: 11.5px; font-weight: 600; color: var(--mj-brand-primary); white-space: nowrap; }
+  .setting-action.muted { color: var(--mj-text-muted); }
+  .inherit-chain { font-size: 10.5px; color: var(--mj-text-muted); margin-top: 3px; }
+
+  .rollup-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; padding: 16px 18px; }
+  .rollup-tile { background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-subtle); border-radius: 8px; padding: 12px 14px; }
+  .rollup-tile .rt-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing:.04em; color: var(--mj-text-muted); }
+  .rollup-tile .rt-val { font-size: 20px; font-weight: 800; margin-top: 4px; }
+  .rollup-tile .rt-scope { font-size: 10.5px; color: var(--mj-text-muted); margin-top: 2px; }
+
+  .footnote { padding: 12px 18px; font-size: 11.5px; color: var(--mj-text-muted); border-top: 1px solid var(--mj-border-subtle); background: var(--mj-bg-surface-card); }
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="brand"><i class="fa-solid fa-cube"></i> MJ Explorer</div>
+    <div class="nav-section">Admin</div>
+    <div class="nav-item"><i class="fa-solid fa-users"></i> Members</div>
+    <div class="nav-item"><i class="fa-solid fa-heart-pulse"></i> Data Health</div>
+    <div class="nav-item active"><i class="fa-solid fa-sitemap"></i> Federation &amp; Chapters</div>
+    <div class="nav-item"><i class="fa-solid fa-shield-halved"></i> Suppression &amp; Safety</div>
+    <div class="nav-item"><i class="fa-solid fa-eye"></i> Data Access Sentinel</div>
+    <div class="nav-section">Configuration</div>
+    <div class="nav-item"><i class="fa-solid fa-table-list"></i> Entities</div>
+    <div class="nav-item"><i class="fa-solid fa-lock"></i> Permissions</div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1><i class="fa-solid fa-sitemap"></i> Federation &amp; Chapters</h1>
+        <div class="sub">National Council of Wildlife Advocates — 1 national body, 6 regions, 46 chapters</div>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn"><i class="fa-solid fa-arrows-rotate"></i> Recompute roll-ups</button>
+        <button class="btn btn-primary"><i class="fa-solid fa-plus"></i> New override</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="insight-banner">
+        <i class="fa-solid fa-circle-info"></i>
+        <div>
+          <b>3 chapters have overridden their default dues schedule</b>
+          <span class="d">Everything else inherits national defaults automatically — no chapter has to redeclare a setting it doesn't need to change.</span>
+        </div>
+      </div>
+
+      <div class="kpi-row">
+        <div class="kpi"><div class="label">Total active members</div><div class="value">18,204</div><div class="delta">rolled up from 46 chapters</div></div>
+        <div class="kpi"><div class="label">Chapters</div><div class="value">46</div><div class="delta" style="color:var(--mj-text-muted)">across 6 regions</div></div>
+        <div class="kpi"><div class="label">Settings inherited</div><div class="value">41 / 46</div><div class="delta">89% on national default</div></div>
+        <div class="kpi"><div class="label">Local overrides</div><div class="value">7</div><div class="delta" style="color:var(--mj-status-warning)">reviewed quarterly</div></div>
+      </div>
+
+      <div class="grid-2">
+        <!-- Tree -->
+        <div class="card">
+          <div class="card-header"><h2><i class="fa-solid fa-diagram-project"></i> Organization Hierarchy</h2><span style="font-size:11.5px;color:var(--mj-text-muted)">mj-hierarchy-tree</span></div>
+          <div class="card-body">
+            <div class="tree">
+              <div class="tnode depth-1"><i class="fa-solid fa-caret-down caret"></i><i class="fa-solid fa-globe node-icon"></i><span class="name">National Council</span><span class="count">18,204 members</span></div>
+
+              <div class="tnode depth-2"><i class="fa-solid fa-caret-down caret"></i><i class="fa-solid fa-map node-icon"></i><span class="name">Northeast Region</span><span class="count">8 chapters</span></div>
+              <div class="tnode depth-3 selected"><i class="fa-solid fa-caret-right caret"></i><i class="fa-solid fa-building node-icon"></i><span class="name">Massachusetts Chapter</span><span class="override-dot" title="has overrides"></span><span class="count">612</span></div>
+              <div class="tnode depth-3"><i class="fa-solid fa-caret-right caret"></i><i class="fa-solid fa-building node-icon"></i><span class="name">Vermont Chapter</span><span class="count">204</span></div>
+              <div class="tnode depth-3"><i class="fa-solid fa-caret-right caret"></i><i class="fa-solid fa-building node-icon"></i><span class="name">New York Chapter</span><span class="override-dot" title="has overrides"></span><span class="count">1,340</span></div>
+              <div class="tnode depth-3"><i class="fa-solid fa-caret-right caret"></i><i class="fa-solid fa-building node-icon"></i><span class="name">Connecticut Chapter</span><span class="count">388</span></div>
+
+              <div class="tnode depth-2"><i class="fa-solid fa-caret-down caret"></i><i class="fa-solid fa-map node-icon"></i><span class="name">Southeast Region</span><span class="count">9 chapters</span></div>
+              <div class="tnode depth-3"><i class="fa-solid fa-caret-right caret"></i><i class="fa-solid fa-building node-icon"></i><span class="name">Georgia Chapter</span><span class="count">701</span></div>
+              <div class="tnode depth-3"><i class="fa-solid fa-caret-right caret"></i><i class="fa-solid fa-building node-icon"></i><span class="name">Florida Chapter</span><span class="override-dot" title="has overrides"></span><span class="count">2,105</span></div>
+
+              <div class="tnode depth-2"><i class="fa-solid fa-caret-right caret"></i><i class="fa-solid fa-map node-icon"></i><span class="name">Midwest Region</span><span class="count">8 chapters</span></div>
+              <div class="tnode depth-2"><i class="fa-solid fa-caret-right caret"></i><i class="fa-solid fa-map node-icon"></i><span class="name">Southwest Region</span><span class="count">7 chapters</span></div>
+              <div class="tnode depth-2"><i class="fa-solid fa-caret-right caret"></i><i class="fa-solid fa-map node-icon"></i><span class="name">Mountain West Region</span><span class="count">6 chapters</span></div>
+              <div class="tnode depth-2"><i class="fa-solid fa-caret-right caret"></i><i class="fa-solid fa-map node-icon"></i><span class="name">Pacific Region</span><span class="count">8 chapters</span></div>
+            </div>
+          </div>
+          <div class="footnote"><i class="fa-solid fa-circle-dot" style="color:var(--mj-status-warning); font-size:8px;"></i> Amber dot = chapter has one or more local overrides</div>
+        </div>
+
+        <!-- Node detail -->
+        <div>
+          <div class="card">
+            <div class="rp-header">
+              <div class="rp-avatar">MA</div>
+              <div>
+                <div class="rp-name">Massachusetts Chapter</div>
+                <div class="rp-path">National Council › Northeast Region › Massachusetts Chapter</div>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="setting-row">
+                <div class="setting-name">Brand Theme<span class="key">BrandTheme</span></div>
+                <div class="setting-val">National Blue &amp; Gold <span class="badge badge-inherited">Inherited</span></div>
+                <div class="setting-action muted">—</div>
+              </div>
+              <div class="setting-row">
+                <div class="setting-name">Dues Schedule<span class="key">DuesSchedule</span></div>
+                <div class="setting-val">Standard $65/yr <span class="badge badge-override">Override</span>
+                  <div class="inherit-chain">National default is $45/yr — MA chapter set its own rate 2026-01-14</div>
+                </div>
+                <div class="setting-action">Reset to inherited</div>
+              </div>
+              <div class="setting-row">
+                <div class="setting-name">Default Comm. Provider<span class="key">DefaultCommunicationProvider</span></div>
+                <div class="setting-val">SendGrid (National account) <span class="badge badge-inherited">Inherited</span></div>
+                <div class="setting-action muted">—</div>
+              </div>
+              <div class="setting-row">
+                <div class="setting-name">Renewal Reminder Lead Time<span class="key">RenewalReminderDays</span></div>
+                <div class="setting-val">45 days <span class="badge badge-override">Override</span>
+                  <div class="inherit-chain">National default is 30 days</div>
+                </div>
+                <div class="setting-action">Reset to inherited</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h2><i class="fa-solid fa-chart-column"></i> Roll-Up Summary — National Council</h2></div>
+            <div class="rollup-row">
+              <div class="rollup-tile"><div class="rt-label">Active Members</div><div class="rt-val">18,204</div><div class="rt-scope">self + all descendants</div></div>
+              <div class="rollup-tile"><div class="rt-label">YTD Dues Collected</div><div class="rt-val">$941K</div><div class="rt-scope">sum, all chapters</div></div>
+              <div class="rollup-tile"><div class="rt-label">Open Volunteer Roles</div><div class="rt-val">62</div><div class="rt-scope">count, direct + indirect</div></div>
+              <div class="rollup-tile"><div class="rt-label">Chapters Below Quorum</div><div class="rt-val" style="color:var(--mj-status-warning)">3</div><div class="rt-scope">flagged for outreach</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

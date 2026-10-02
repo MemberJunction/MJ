@@ -22,7 +22,7 @@ import { UserInfo, IMetadataProvider, LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentSessionEntity, MJAIAgentEntity } from '@memberjunction/core-entities';
 import { NormalizeInstanceKey, RemoteBrowserEngine } from '@memberjunction/remote-browser-server';
-import { beginBrowserGoalStep, finalizeBrowserGoalStep, extractCoAgentRunID } from '../agentSessions/remoteBrowserGoalEngine.js';
+import { BeginBrowserGoalStep, FinalizeBrowserGoalStep, ExtractCoAgentRunID } from '../agentSessions/remoteBrowserGoalEngine.js';
 import { RemoteBrowserGoalRegistry } from '../agentSessions/remoteBrowserGoalRegistry.js';
 import { randomUUID } from 'node:crypto';
 import {
@@ -230,6 +230,20 @@ interface VisualInterpreterPayload {
  * (the process-wide singleton) backs every request; ownership is enforced per call against the session's
  * `UserID`.
  */
+/**
+ * Safety cap on how long a {@link RemoteBrowserActionResolver.startedScreencasts} /
+ * {@link RemoteBrowserActionResolver.startedAudioStreams} entry is trusted without confirmation.
+ *
+ * `RemoteBrowserActionResolver` is instantiated once per process by type-graphql's default resolver
+ * container, so these idempotency maps live as long as the server does. `StopRemoteBrowserScreencast` /
+ * `StopRemoteBrowserAudioStream` are the only code paths that ever delete an entry — a session that
+ * crashes, disconnects, or times out before calling Stop (a normal occurrence: tab close, network drop,
+ * agent timeout) leaves its entry behind forever. This TTL bounds that growth the same way
+ * {@link RemoteBrowserGoalRegistry}'s own sweep bounds its run records, without requiring a dedicated
+ * session-end hook that doesn't otherwise exist for this resolver.
+ */
+const MAX_STREAM_ENTRY_AGE_MS = 4 * 60 * 60 * 1000; // 4 hours — generous vs. SessionJanitor's 15-minute idle threshold
+
 @Resolver()
 export class RemoteBrowserActionResolver extends ResolverBase {
   /**
@@ -237,20 +251,43 @@ export class RemoteBrowserActionResolver extends ResolverBase {
    * {@link RemoteBrowserActionResolver.streamKey} (agent session **plus** instance) so a re-issued
    * {@link RemoteBrowserActionResolver.StartRemoteBrowserScreencast} — the surface re-binding after a
    * tab collapse — is idempotent and never stacks two screencasts on the one browser. Entries are
-   * removed by {@link RemoteBrowserActionResolver.StopRemoteBrowserScreencast}.
+   * normally removed by {@link RemoteBrowserActionResolver.StopRemoteBrowserScreencast}; the value is
+   * the entry's start time (ms epoch) so {@link RemoteBrowserActionResolver.sweepStreamEntries} can
+   * reclaim ones whose session never called Stop.
    *
    * Keyed by agent session ALONE (#3531) this was the idempotency guard turning into a lockout: the
    * first surface's entry made the SECOND surface's bind a silent `Streaming: true` no-op, so a second
    * browser could be started and driven but never watched.
    */
-  private startedScreencasts = new Set<string>();
+  private startedScreencasts = new Map<string, number>();
 
   /**
    * Surfaces whose live tab-audio stream this resolver has already started, keyed by
-   * {@link RemoteBrowserActionResolver.streamKey} for the same reason the screencast set is. Entries
-   * are removed by {@link RemoteBrowserActionResolver.StopRemoteBrowserAudioStream}.
+   * {@link RemoteBrowserActionResolver.streamKey} for the same reason the screencast map is. Entries
+   * are normally removed by {@link RemoteBrowserActionResolver.StopRemoteBrowserAudioStream}; see
+   * {@link RemoteBrowserActionResolver.startedScreencasts} for why the value is a timestamp.
    */
-  private startedAudioStreams = new Set<string>();
+  private startedAudioStreams = new Map<string, number>();
+
+  /**
+   * Drops any {@link startedScreencasts} / {@link startedAudioStreams} entry older than
+   * {@link MAX_STREAM_ENTRY_AGE_MS} — the reclaim path for sessions that never called
+   * `StopRemoteBrowserScreencast`/`StopRemoteBrowserAudioStream` (crash, disconnect, timeout). Called
+   * on every Start mutation, mirroring {@link RemoteBrowserGoalRegistry.Begin}'s sweep-on-access pattern.
+   */
+  private sweepStreamEntries(): void {
+    const cutoff = Date.now() - MAX_STREAM_ENTRY_AGE_MS;
+    for (const [key, startedAt] of this.startedScreencasts) {
+      if (startedAt < cutoff) {
+        this.startedScreencasts.delete(key);
+      }
+    }
+    for (const [key, startedAt] of this.startedAudioStreams) {
+      if (startedAt < cutoff) {
+        this.startedAudioStreams.delete(key);
+      }
+    }
+  }
 
   /**
    * Execute ONE browser action relayed from the client-direct realtime session, returning the outcome +
@@ -363,8 +400,8 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     const providerName = await this.resolveProviderName(session, contextUser, provider);
     // Observability: nest this goal's many prompt runs under ONE "Browser goal" step on the realtime
     // co-agent run (when the session has one). Best-effort — a null step just means the goal runs unlinked.
-    const coAgentRunID = extractCoAgentRunID(session.Config_);
-    const goalStep = await beginBrowserGoalStep(provider, contextUser, coAgentRunID, goal);
+    const coAgentRunID = ExtractCoAgentRunID(session.Config_);
+    const goalStep = await BeginBrowserGoalStep(provider, contextUser, coAgentRunID, goal);
 
     // ASYNC START: a goal loop can run for minutes; do NOT hold this request open for it (browser
     // fetch / proxy / janitor timeouts would kill the request while the loop runs on, and the agent
@@ -383,14 +420,14 @@ export class RemoteBrowserActionResolver extends ResolverBase {
       AgentRunStepID: goalStep?.ID,
     })
       .then(async (result) => {
-        await finalizeBrowserGoalStep(goalStep, result);
+        await FinalizeBrowserGoalStep(goalStep, result);
         RemoteBrowserGoalRegistry.Instance.Complete(agentSessionID, goalRunID, result);
       })
       .catch(async (err) => {
         const message = err instanceof Error ? err.message : String(err);
         LogError(`ExecuteRemoteBrowserGoal failed (provider='${providerName}'): ${message}`);
         const failure = { Success: false, Status: 'Error', Detail: `Remote browser error (${providerName}): ${message}` };
-        await finalizeBrowserGoalStep(goalStep, failure);
+        await FinalizeBrowserGoalStep(goalStep, failure);
         RemoteBrowserGoalRegistry.Instance.Complete(agentSessionID, goalRunID, failure);
       });
 
@@ -569,6 +606,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
 
     // Idempotent PER SURFACE: a re-bind must not stack a second screencast on the one live browser,
     // but a SECOND surface binding for the first time is not a re-bind (#3531).
+    this.sweepStreamEntries();
     const streamKey = this.streamKey(agentSessionID, instanceKey);
     if (this.startedScreencasts.has(streamKey)) {
       return { Streaming: true };
@@ -580,7 +618,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
       await liveSession.StartScreencast((frame) =>
         this.publishFrame(pubSub, userPayload, agentSessionID, instanceKey, frame, liveSession.GetCurrentUrl()),
       );
-      this.startedScreencasts.add(streamKey);
+      this.startedScreencasts.set(streamKey, Date.now());
       return { Streaming: true };
     } catch (err) {
       if (err instanceof RemoteBrowserCapabilityNotSupportedError) {
@@ -647,7 +685,8 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
     const session = await this.loadOwnedSession(agentSessionID, contextUser, provider);
 
-    // Idempotent PER SURFACE — same reasoning as the screencast set (#3531).
+    // Idempotent PER SURFACE — same reasoning as the screencast map (#3531).
+    this.sweepStreamEntries();
     const streamKey = this.streamKey(agentSessionID, instanceKey);
     if (this.startedAudioStreams.has(streamKey)) {
       return { Streaming: true };
@@ -657,7 +696,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     try {
       const liveSession = await RemoteBrowserEngine.Instance.StartSessionForAgentSession(agentSessionID, contextUser, providerName, instanceKey);
       await liveSession.StartAudioStream((chunk) => this.publishAudioChunk(pubSub, userPayload, agentSessionID, instanceKey, chunk));
-      this.startedAudioStreams.add(streamKey);
+      this.startedAudioStreams.set(streamKey, Date.now());
       return { Streaming: true };
     } catch (err) {
       if (err instanceof RemoteBrowserCapabilityNotSupportedError) {

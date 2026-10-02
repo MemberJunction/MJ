@@ -34,6 +34,10 @@ vi.mock('@memberjunction/ai', async () => {
     class BaseLLM extends BaseModel {}
     class BaseEmbeddings extends BaseModel {}
     class BaseAudioGenerator extends BaseModel {}
+    // The OpenAI audio driver also registers against the split TTS and STT bases, so its
+    // decorators read these at module evaluation.
+    class BaseTextToSpeech extends BaseModel {}
+    class BaseSpeechToText extends BaseModel {}
     class BaseImageGenerator extends BaseModel {}
     // Static-method error helper referenced by those modules' method bodies.
     class ErrorAnalyzer {
@@ -53,7 +57,7 @@ vi.mock('@memberjunction/ai', async () => {
     // and drift from reality, which is how the xAI top-level-usage bug survived here in the first
     // place — so the real implementation is the thing under test.
     const { ResolveResponseDoneUsage } = await import('../../../../Core/src/generic/realtimeUsage');
-    return { BaseModel, BaseRealtimeModel, BaseLLM, BaseEmbeddings, BaseAudioGenerator, BaseImageGenerator, ErrorAnalyzer, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage };
+    return { BaseModel, BaseRealtimeModel, BaseLLM, BaseEmbeddings, BaseAudioGenerator, BaseTextToSpeech, BaseSpeechToText, BaseImageGenerator, ErrorAnalyzer, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage };
 });
 
 // Mock the SDK WebSocket so importing the driver never touches the network. The driver's
@@ -864,7 +868,8 @@ describe('xAIRealtime edge coverage (shared-driver surface)', () => {
 
     it('inherits live Reconfigure with the Grok transcription model', async () => {
         const session = (await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys' })) as xAIRealtimeSession;
-        expect(session.Capabilities).toEqual({ CanReconfigureTurnMode: true });
+        expect(session.Capabilities).toEqual({ CanReconfigureTurnMode: true, SupportsDynamicToolSet: true });
+        expect(xAIRealtime.SupportsDynamicToolSet).toBe(true);
         const before = driver.Fake.Sent.length;
         session.Reconfigure({ DisableAutoResponse: true });
         const frame = driver.Fake.Sent.slice(before)[0];

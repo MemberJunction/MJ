@@ -5,7 +5,7 @@ import d3CloudModule from 'd3-cloud';
 import { JSDOM } from 'jsdom';
 import { WordItem, CloudLayout, SVGActionResult, ViewBox, Branding } from './shared/svg-types';
 import { SVGUtils } from './shared/svg-utils';
-import { getPalette, generateCSS, getFontSpec, getColorForIndex } from './shared/svg-theming';
+import { GetPalette, GenerateCSS, GetFontSpec, GetColorForIndex } from './shared/svg-theming';
 
 // Handle d3-cloud module export
 const d3Cloud = (d3CloudModule as any).default || d3CloudModule;
@@ -224,7 +224,7 @@ export class CreateSVGWordCloudAction extends BaseAction {
                         .words(wordsWithSize)
                         .padding(5)
                         .rotate(getRotation)
-                        .font(getFontSpec(branding.font).family)
+                        .font(GetFontSpec(branding.font).family)
                         .fontSize((d) => d.size)
                         .random(random)
                         .spiral('archimedean')
@@ -269,7 +269,7 @@ export class CreateSVGWordCloudAction extends BaseAction {
 
                                 // Add styles - STEP 4
                                 try {
-                                    const css = generateCSS(branding);
+                                    const css = GenerateCSS(branding);
                                     SVGUtils.addStyles(svg, css);
                                 } catch (error) {
                                     throw new Error(`[STEP 4: addStyles] ${error instanceof Error ? error.message : String(error)}\nStack: ${error instanceof Error ? error.stack : 'N/A'}`);
@@ -278,7 +278,7 @@ export class CreateSVGWordCloudAction extends BaseAction {
                                 // Get palette - STEP 5
                                 let palette;
                                 try {
-                                    palette = getPalette(branding.palette);
+                                    palette = GetPalette(branding.palette);
                                 } catch (error) {
                                     throw new Error(`[STEP 5: getPalette] ${error instanceof Error ? error.message : String(error)}\nStack: ${error instanceof Error ? error.stack : 'N/A'}`);
                                 }
@@ -298,13 +298,13 @@ export class CreateSVGWordCloudAction extends BaseAction {
                                         try {
                                             const text = doc.createElementNS(ns, 'text');
                                             text.setAttribute('transform', `translate(${word.x || 0}, ${word.y || 0}) rotate(${word.rotate || 0})`);
-                                            text.setAttribute('font-family', getFontSpec(branding.font).family);
+                                            text.setAttribute('font-family', GetFontSpec(branding.font).family);
                                             text.setAttribute('font-size', String(word.size));
                                             text.setAttribute('text-anchor', 'middle');
                                             text.setAttribute('font-weight', String(word.size > 40 ? 'bold' : 'normal'));
 
                                             // Get color from palette
-                                            const color = getColorForIndex(i, branding.palette);
+                                            const color = GetColorForIndex(i, branding.palette);
                                             text.setAttribute('fill', color);
 
                                             // Add subtle stroke for better visibility
@@ -327,7 +327,7 @@ export class CreateSVGWordCloudAction extends BaseAction {
                                 // Add title if present - STEP 8
                                 if (title) {
                                     try {
-                                        this.addTitle(doc, svg, title, vb.width, getFontSpec(branding.font));
+                                        this.addTitle(doc, svg, title, vb.width, GetFontSpec(branding.font));
                                     } catch (error) {
                                         throw new Error(`[STEP 8: addTitle] ${error instanceof Error ? error.message : String(error)}\nStack: ${error instanceof Error ? error.stack : 'N/A'}`);
                                     }
@@ -375,12 +375,12 @@ export class CreateSVGWordCloudAction extends BaseAction {
         }
 
         // Add styles
-        const css = generateCSS(branding);
+        const css = GenerateCSS(branding);
         SVGUtils.addStyles(svg, css);
 
         // Get palette
-        const palette = getPalette(branding.palette);
-        const font = getFontSpec(branding.font);
+        const palette = GetPalette(branding.palette);
+        const font = GetFontSpec(branding.font);
 
         // Calculate bar dimensions
         const barHeight = 40;
@@ -413,7 +413,7 @@ export class CreateSVGWordCloudAction extends BaseAction {
             rect.setAttribute('y', '0');
             rect.setAttribute('width', String(barWidth));
             rect.setAttribute('height', String(barHeight));
-            rect.setAttribute('fill', getColorForIndex(i, branding.palette));
+            rect.setAttribute('fill', GetColorForIndex(i, branding.palette));
             rect.setAttribute('rx', '5');
             g.appendChild(rect);
 

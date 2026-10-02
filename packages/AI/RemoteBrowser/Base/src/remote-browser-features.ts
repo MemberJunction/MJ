@@ -61,8 +61,15 @@ export const KNOWN_REMOTE_BROWSER_FEATURE_KEYS: ReadonlyArray<keyof IRemoteBrows
  * @param provider The remote-browser provider metadata row.
  * @returns The provider's capability flags, or an empty object when none are declared.
  */
-export function featuresOf(
+export function FeaturesOf(
     provider: MJAIRemoteBrowserProviderEntity,
 ): IRemoteBrowserProviderFeatures {
     return provider.SupportedFeaturesObject ?? {};
+}
+
+/** @deprecated Use {@link FeaturesOf}. */
+export function featuresOf(
+    provider: MJAIRemoteBrowserProviderEntity,
+): IRemoteBrowserProviderFeatures {
+    return FeaturesOf(provider);
 }
