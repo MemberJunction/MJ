@@ -8,8 +8,8 @@
 import { describe, it, expect } from 'vitest';
 import {
     AUTO_VECTOR_INDEX_NAME_MAX_LENGTH,
-    buildAutoVectorIndexName,
-    findMatchingVectorIndex,
+    BuildAutoVectorIndexName,
+    FindMatchingVectorIndex,
 } from '../AI/components/vectors/vector-index-auto';
 
 const DB_PINECONE = 'D0000001-0000-0000-0000-000000000001';
@@ -23,44 +23,44 @@ const INDEXES = [
     { ID: 'I3', VectorDatabaseID: DB_SQL, EmbeddingModelID: MODEL_SMALL },
 ];
 
-describe('findMatchingVectorIndex', () => {
+describe('FindMatchingVectorIndex', () => {
     it('returns the index on the same database built for the same embedding model', () => {
-        expect(findMatchingVectorIndex(INDEXES, DB_PINECONE, MODEL_SMALL)?.ID).toBe('I2');
-        expect(findMatchingVectorIndex(INDEXES, DB_SQL, MODEL_SMALL)?.ID).toBe('I3');
+        expect(FindMatchingVectorIndex(INDEXES, DB_PINECONE, MODEL_SMALL)?.ID).toBe('I2');
+        expect(FindMatchingVectorIndex(INDEXES, DB_SQL, MODEL_SMALL)?.ID).toBe('I3');
     });
 
     it('never falls back to a same-database index for a different model', () => {
-        expect(findMatchingVectorIndex(INDEXES, DB_SQL, MODEL_LARGE)).toBeNull();
+        expect(FindMatchingVectorIndex(INDEXES, DB_SQL, MODEL_LARGE)).toBeNull();
     });
 
     it('compares IDs regardless of casing', () => {
-        expect(findMatchingVectorIndex(INDEXES, DB_PINECONE.toLowerCase(), MODEL_LARGE.toLowerCase())?.ID).toBe('I1');
+        expect(FindMatchingVectorIndex(INDEXES, DB_PINECONE.toLowerCase(), MODEL_LARGE.toLowerCase())?.ID).toBe('I1');
     });
 
     it('returns null when the database or model is not chosen, or nothing is registered', () => {
-        expect(findMatchingVectorIndex(INDEXES, null, MODEL_SMALL)).toBeNull();
-        expect(findMatchingVectorIndex(INDEXES, DB_PINECONE, '')).toBeNull();
-        expect(findMatchingVectorIndex([], DB_PINECONE, MODEL_SMALL)).toBeNull();
+        expect(FindMatchingVectorIndex(INDEXES, null, MODEL_SMALL)).toBeNull();
+        expect(FindMatchingVectorIndex(INDEXES, DB_PINECONE, '')).toBeNull();
+        expect(FindMatchingVectorIndex([], DB_PINECONE, MODEL_SMALL)).toBeNull();
     });
 
     it('ignores indexes whose database or model is unset', () => {
         const partial = [{ ID: 'I9', VectorDatabaseID: null, EmbeddingModelID: null }];
-        expect(findMatchingVectorIndex(partial, DB_PINECONE, MODEL_SMALL)).toBeNull();
+        expect(FindMatchingVectorIndex(partial, DB_PINECONE, MODEL_SMALL)).toBeNull();
     });
 });
 
-describe('buildAutoVectorIndexName', () => {
+describe('BuildAutoVectorIndexName', () => {
     it('names the index after the entity and the embedding model', () => {
-        expect(buildAutoVectorIndexName('Organizations', 'text-embedding-3-small')).toBe('Organizations - text-embedding-3-small');
+        expect(BuildAutoVectorIndexName('Organizations', 'text-embedding-3-small')).toBe('Organizations - text-embedding-3-small');
     });
 
     it('trims and substitutes placeholders for missing parts', () => {
-        expect(buildAutoVectorIndexName('  Organizations ', null)).toBe('Organizations - Embeddings');
-        expect(buildAutoVectorIndexName('', 'text-embedding-3-small')).toBe('Entity - text-embedding-3-small');
+        expect(BuildAutoVectorIndexName('  Organizations ', null)).toBe('Organizations - Embeddings');
+        expect(BuildAutoVectorIndexName('', 'text-embedding-3-small')).toBe('Entity - text-embedding-3-small');
     });
 
     it('caps the length', () => {
-        const name = buildAutoVectorIndexName('E'.repeat(120), 'model');
+        const name = BuildAutoVectorIndexName('E'.repeat(120), 'model');
         expect(name.length).toBeLessThanOrEqual(AUTO_VECTOR_INDEX_NAME_MAX_LENGTH);
         expect(name.endsWith(' ')).toBe(false);
     });

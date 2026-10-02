@@ -50,9 +50,16 @@ export class DeleteOptionsInput {
      * schema-sync gate requires `DeleteOptionsInput` to carry every `EntityDeleteOptions` field;
      * {@link DeleteOptionsInput.SanitizeFromWire} forces it back to false on every request. See
      * that method for why.
+     *
+     * **Optional on the wire, on purpose.** This field did not exist in 5.51.x, and every other
+     * field here is required, so making it required too turned a 6.1 upgrade into a hard failure
+     * for every client that spells out `options___` on a delete (`Field
+     * "DeleteOptionsInput.SkipRecordChanges" of required type "Boolean!" was not provided`). A
+     * 5.51 client that omits it and a 6.1 client that sends `false` mean the same thing, and the
+     * server forces it to `false` regardless, so `null`/absent defaults to `false` here.
      */
-    @Field(() => Boolean)
-    SkipRecordChanges: boolean;
+    @Field(() => Boolean, { nullable: true, defaultValue: false })
+    SkipRecordChanges?: boolean;
 
     /**
      * Strips wire-unreachable capabilities from client-supplied delete options.

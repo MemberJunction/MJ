@@ -1,0 +1,21 @@
+{
+  "fields": {
+    "Name": "Likert 1-5",
+    "ScaleType": "Levels",
+    "HigherIsBetter": true,
+    "Status": "Active",
+    "Description": "1 is 0, 2 is 0.25, 3 is 0.5, 4 is 0.75, and 5 is 1."
+  },
+  "primaryKey": {
+    "ID": "B7F34498-53E4-4B8B-9B42-C07755E80972"
+  },
+  "relatedEntities": {
+    "MJ: Rubric Scale Levels": [
+      { "fields": { "ScaleID": "@parent:ID", "Label": "1", "Value": 1, "NormalizedValue": 0, "Sequence": 0 }, "primaryKey": { "ID": "EC848623-13AF-4826-94A8-028F28A84DB8" } },
+      { "fields": { "ScaleID": "@parent:ID", "Label": "2", "Value": 2, "NormalizedValue": 0.25, "Sequence": 1 }, "primaryKey": { "ID": "4451F7D4-4DA3-48CF-93F7-FB6179EC13B8" } },
+      { "fields": { "ScaleID": "@parent:ID", "Label": "3", "Value": 3, "NormalizedValue": 0.5, "Sequence": 2 }, "primaryKey": { "ID": "55E57034-003C-420A-8997-B32585EFB40A" } },
+      { "fields": { "ScaleID": "@parent:ID", "Label": "4", "Value": 4, "NormalizedValue": 0.75, "Sequence": 3 }, "primaryKey": { "ID": "BE4BBC22-561A-47C2-8430-7913C5ED6CD9" } },
+      { "fields": { "ScaleID": "@parent:ID", "Label": "5", "Value": 5, "NormalizedValue": 1, "Sequence": 4 }, "primaryKey": { "ID": "64539CD1-D368-4F4A-A097-87721B42DC0B" } }
+    ]
+  }
+}

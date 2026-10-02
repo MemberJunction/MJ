@@ -14,17 +14,17 @@ import {
     PredictionBand,
     PredictionDriver,
     PredictionHistoryItem,
-    bandFor,
-    filterHistoryByModel,
-    formatLastScored,
-    formatValue,
-    gaugePct,
-    getDistinctModelsFromHistory,
-    parseDrivers,
-    parseHistoryItem,
-    resolveLabel,
-    toNumber,
-    valueKind,
+    BandFor,
+    FilterHistoryByModel,
+    FormatLastScored,
+    FormatValue,
+    GaugePct,
+    GetDistinctModelsFromHistory,
+    ParseDrivers,
+    ParseHistoryItem,
+    ResolveLabel,
+    ToNumber,
+    ValueKind,
 } from './model-prediction.logic';
 
 /**
@@ -33,37 +33,37 @@ import {
  */
 export interface PredictionCard {
     /** Binding ID — used as the @for track key. */
-    bindingId: string;
+    BindingId: string;
     /** Model ID — used to cross-link with prediction history. */
-    modelId: string;
+    modelId: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Human label for the prediction (model target → bound column → fallback). */
-    label: string;
+    Label: string;
     /** True when the model is a 0–1 probability we can render as a gauge. */
-    isProbability: boolean;
+    IsProbability: boolean;
     /** True for regression models showing a raw numeric value. */
-    isNumeric: boolean;
+    IsNumeric: boolean;
     /** True for classification models showing a class label. */
-    isClass: boolean;
+    IsClass: boolean;
     /** Pre-formatted primary value string ("72%", "1,240.5", "Renewing", "—"). */
-    displayValue: string;
+    DisplayValue: string;
     /** 0–100 fill for the probability gauge (only meaningful when isProbability). */
-    gaugePct: number;
+    GaugePct: number;
     /** Neutral band for the gauge segment styling (only meaningful when isProbability). */
-    band: PredictionBand | null;
+    Band: PredictionBand | null;
     /** Resolved semantic status band from outcomeConfig */
-    statusBand: OutcomeBand | null;
+    StatusBand: OutcomeBand | null;
     /** Human-readable status label (e.g. "Low Risk", "High") */
-    statusLabel: string | null;
+    StatusLabel: string | null;
     /** Semantic badge color: 'green' | 'amber' | 'red' | 'blue' | 'gray' */
-    badgeColor: 'green' | 'amber' | 'red' | 'blue' | 'gray';
+    BadgeColor: 'green' | 'amber' | 'red' | 'blue' | 'gray';
     /** FontAwesome icon class (e.g. 'fa-circle-check', 'fa-triangle-exclamation') */
-    badgeIcon: string | null;
+    BadgeIcon: string | null;
     /** Top feature-importance drivers, or empty when unavailable. */
-    drivers: PredictionDriver[];
+    Drivers: PredictionDriver[];
     /** Provenance: "Pipeline Name v3". */
-    provenance: string;
+    Provenance: string;
     /** "Last scored" timestamp string, or null when unavailable. */
-    lastScored: string | null;
+    LastScored: string | null;
 }
 
 /**
@@ -106,7 +106,16 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
     /** True once the binding lookup has completed (success or empty). */
     public Loaded = false;
     /** Resolved models by ID for lineage and history decoration. */
-    public modelsById: Map<string, MJMLModelEntity> = new Map();
+    public ModelsById: Map<string, MJMLModelEntity> = new Map();
+
+    /** @deprecated Use {@link ModelsById}. */
+    public get modelsById(): Map<string, MJMLModelEntity> {
+        return this.ModelsById;
+    }
+    /** @deprecated Use {@link ModelsById}. */
+    public set modelsById(value: Map<string, MJMLModelEntity>) {
+        this.ModelsById = value;
+    }
     /** Historical prediction runs for this record across models. */
     public HistoryItems: PredictionHistoryItem[] = [];
     /** Loading flag for historical predictions lookup. */
@@ -131,12 +140,12 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
 
     /** Filtered history items based on currently selected model. */
     public get FilteredHistory(): PredictionHistoryItem[] {
-        return filterHistoryByModel(this.HistoryItems, this.SelectedModelId);
+        return FilterHistoryByModel(this.HistoryItems, this.SelectedModelId);
     }
 
     /** Distinct models in prediction history with counts. */
     public get ModelSummaries(): ModelHistorySummary[] {
-        return getDistinctModelsFromHistory(this.HistoryItems);
+        return GetDistinctModelsFromHistory(this.HistoryItems);
     }
 
     /**
@@ -161,7 +170,7 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
                 this.Cards = [];
             } else {
                 const models = await this.loadModelsForBindings(bindings);
-                this.modelsById = models;
+                this.ModelsById = models;
                 this.Cards = this.buildCards(bindings, models);
             }
             // Preload history in the background for this record
@@ -218,14 +227,14 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
             // Ensure any models referenced in historical payloads are loaded
             await this.ensureModelsLoadedForHistory(rawDetails);
 
-            this.HistoryItems = rawDetails.map(d => parseHistoryItem({
+            this.HistoryItems = rawDetails.map(d => ParseHistoryItem({
                 ID: d.ID,
                 ProcessRunID: d.ProcessRunID,
                 Status: d.Status,
                 CompletedAt: d.CompletedAt,
                 ResultPayload: d.ResultPayload,
                 ErrorMessage: d.ErrorMessage,
-            }, this.modelsById));
+            }, this.ModelsById));
         } catch (e) {
             LogError(`[ModelPredictionPanel] Error loading prediction history: ${e instanceof Error ? e.message : String(e)}`);
             this.HistoryItems = [];
@@ -350,7 +359,7 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
                     const rec = parsed as Record<string, unknown>;
                     const out = (rec['output'] && typeof rec['output'] === 'object' ? rec['output'] : rec) as Record<string, unknown>;
                     const mid = typeof out['modelId'] === 'string' ? out['modelId'] : null;
-                    if (mid && !this.modelsById.has(mid) && !missingModelIds.includes(mid)) {
+                    if (mid && !this.ModelsById.has(mid) && !missingModelIds.includes(mid)) {
                         missingModelIds.push(mid);
                     }
                 }
@@ -373,7 +382,7 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
         );
         if (result.Success && result.Results) {
             for (const model of result.Results) {
-                this.modelsById.set(model.ID, model);
+                this.ModelsById.set(model.ID, model);
             }
         }
     }
@@ -399,8 +408,8 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
         // The column name is data-driven (from the binding), so reading it
         // dynamically via Get() is the legitimate use of the dynamic accessor.
         const rawValue = binding.TargetColumn ? this.Record.Get(binding.TargetColumn) : null;
-        const numeric = toNumber(rawValue);
-        const kind = valueKind(model.ProblemType, numeric);
+        const numeric = ToNumber(rawValue);
+        const kind = ValueKind(model.ProblemType, numeric);
 
         const outcomeConfig = resolveOutcomeConfig({
             Lineage: model.Lineage,
@@ -428,22 +437,22 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
         }
 
         return {
-            bindingId: binding.ID,
+            BindingId: binding.ID,
             modelId: model.ID,
-            label: resolveLabel(model.TargetVariable, binding.TargetColumn),
-            isProbability: kind === 'probability',
-            isNumeric: kind === 'numeric',
-            isClass: kind === 'class',
-            displayValue: formatValue(rawValue, numeric, kind),
-            gaugePct: kind === 'probability' && numeric != null ? gaugePct(numeric) : 0,
-            band: kind === 'probability' && numeric != null ? bandFor(numeric) : null,
-            statusBand,
-            statusLabel,
-            badgeColor,
-            badgeIcon,
-            drivers: parseDrivers(model.FeatureImportance),
-            provenance: `${model.Pipeline} v${model.Version}`,
-            lastScored: formatLastScored(binding.LastScoredAt),
+            Label: ResolveLabel(model.TargetVariable, binding.TargetColumn),
+            IsProbability: kind === 'probability',
+            IsNumeric: kind === 'numeric',
+            IsClass: kind === 'class',
+            DisplayValue: FormatValue(rawValue, numeric, kind),
+            GaugePct: kind === 'probability' && numeric != null ? GaugePct(numeric) : 0,
+            Band: kind === 'probability' && numeric != null ? BandFor(numeric) : null,
+            StatusBand: statusBand,
+            StatusLabel: statusLabel,
+            BadgeColor: badgeColor,
+            BadgeIcon: badgeIcon,
+            Drivers: ParseDrivers(model.FeatureImportance),
+            Provenance: `${model.Pipeline} v${model.Version}`,
+            LastScored: FormatLastScored(binding.LastScoredAt),
         };
     }
 

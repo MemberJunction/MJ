@@ -47,7 +47,7 @@ let initializationPromise: Promise<DatabaseProviderBase> | null = null;
  * // Provider is ready for use
  * ```
  */
-export async function initializeProvider(config: MJConfig): Promise<DatabaseProviderBase> {
+export async function InitializeProvider(config: MJConfig): Promise<DatabaseProviderBase> {
   // Return existing provider if already initialized
   if (globalProvider) {
     return globalProvider;
@@ -65,6 +65,11 @@ export async function initializeProvider(config: MJConfig): Promise<DatabaseProv
     : initializeSqlServerProvider(config);
 
   return initializationPromise;
+}
+
+/** @deprecated Use {@link InitializeProvider}. */
+export async function initializeProvider(config: MJConfig): Promise<DatabaseProviderBase> {
+  return InitializeProvider(config);
 }
 
 async function initializeSqlServerProvider(config: MJConfig): Promise<DatabaseProviderBase> {
@@ -186,7 +191,7 @@ async function initializePostgresProvider(config: MJConfig): Promise<DatabasePro
  * }
  * ```
  */
-export async function cleanupProvider(): Promise<void> {
+export async function CleanupProvider(): Promise<void> {
   if (globalPool && globalPool.connected) {
     // mssql pool.close() can hang indefinitely when a query is still in flight
     // against the closing pool (e.g. a late async metadata load racing teardown).
@@ -215,6 +220,11 @@ export async function cleanupProvider(): Promise<void> {
   initializationPromise = null;
 }
 
+/** @deprecated Use {@link CleanupProvider}. */
+export async function cleanupProvider(): Promise<void> {
+  return CleanupProvider();
+}
+
 /**
  * Get the system user from the UserCache
  * 
@@ -231,7 +241,7 @@ export async function cleanupProvider(): Promise<void> {
  * const syncEngine = new SyncEngine(systemUser);
  * ```
  */
-export function getSystemUser(): UserInfo {
+export function GetSystemUser(): UserInfo {
   const sysUser = UserCache.Instance.UserByName("System", false);
   if (!sysUser) {
     throw new Error("System user not found in cache. Ensure the system user exists in the database.");    
@@ -254,6 +264,11 @@ export function getSystemUser(): UserInfo {
   return sysUser;
 }
 
+/** @deprecated Use {@link GetSystemUser}. */
+export function getSystemUser(): UserInfo {
+  return GetSystemUser();
+}
+
 /**
  * Get the current data provider instance
  * 
@@ -270,8 +285,13 @@ export function getSystemUser(): UserInfo {
  * }
  * ```
  */
-export function getDataProvider(): DatabaseProviderBase | null {
+export function GetDataProvider(): DatabaseProviderBase | null {
   return globalProvider;
+}
+
+/** @deprecated Use {@link GetDataProvider}. */
+export function getDataProvider(): DatabaseProviderBase | null {
+  return GetDataProvider();
 }
 
 /**
@@ -307,7 +327,7 @@ export function getDataProvider(): DatabaseProviderBase | null {
  * const dirs = findEntityDirectories(process.cwd(), undefined, undefined, undefined, undefined, ['*-test', 'temp']);
  * ```
  */
-export function findEntityDirectories(
+export function FindEntityDirectories(
   dir: string,
   specificDir?: string,
   directoryOrder?: string[],
@@ -342,7 +362,7 @@ export function findEntityDirectories(
               ...(ignoreDirectories || []),
               ...(config.ignoreDirectories || [])
             ];
-            return findEntityDirectories(
+            return FindEntityDirectories(
               targetDir,
               undefined,
               config.directoryOrder,
@@ -357,7 +377,7 @@ export function findEntityDirectories(
       }
       
       // Fallback: look for entity subdirectories in the target directory
-      return findEntityDirectories(targetDir, undefined, directoryOrder, ignoreDirectories, includeFilter, excludeFilter);
+      return FindEntityDirectories(targetDir, undefined, directoryOrder, ignoreDirectories, includeFilter, excludeFilter);
     }
     return results;
   }
@@ -418,6 +438,18 @@ export function findEntityDirectories(
   // No ordering specified, return in alphabetical order (existing behavior)
   const sortedDirs = foundDirectories.sort((a, b) => path.basename(a).localeCompare(path.basename(b)));
   return applyDirectoryFilters(sortedDirs, includeFilter, excludeFilter);
+}
+
+/** @deprecated Use {@link FindEntityDirectories}. */
+export function findEntityDirectories(
+  dir: string,
+  specificDir?: string,
+  directoryOrder?: string[],
+  ignoreDirectories?: string[],
+  includeFilter?: string[],
+  excludeFilter?: string[]
+): string[] {
+  return FindEntityDirectories(dir, specificDir, directoryOrder, ignoreDirectories, includeFilter, excludeFilter);
 }
 
 /**

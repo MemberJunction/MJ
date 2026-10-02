@@ -31,7 +31,7 @@ const LLM_TYPE = '@lookup:MJ: AI Model Types.Name=LLM';
 /** Driver classes whose `SupportsTools` is true, directly or by inheritance (OpenAILLM, GeminiLLM subclasses). */
 const CAPABLE = new Set([
     'AnthropicLLM',
-    'OpenAILLM', 'OpenRouterLLM', 'xAILLM', 'ZhipuLLM', 'MiniMaxLLM', 'LlamaCppLLM',
+    'OpenAILLM', 'OpenRouterLLM', 'xAILLM', 'ZhipuLLM', 'MiniMaxLLM', 'LlamaCppLLM', 'DeepInfraLLM', 'SiliconFlowLLM',
     'GeminiLLM', 'VertexLLM',
     'CerebrasLLM', 'GroqLLM',
 ]);

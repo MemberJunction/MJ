@@ -176,6 +176,33 @@
             "checksum": "913cc4254ee7a0a969b5bf5a069060aac35b7e18418b002360513066aaad2e17"
           }
         }
+      ],
+      "MJ: AI Agent Rubrics": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RubricID": "@lookup:MJ: Rubrics.Name=Catalog contract",
+            "Purpose": "Evaluation",
+            "IsDefault": true,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "74F68F51-FDDB-4268-8240-DA19715F5545"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RubricID": "@lookup:MJ: Rubrics.Name=Catalog contract",
+            "Purpose": "SelfCheck",
+            "IsDefault": true,
+            "Status": "Disabled",
+            "MaxSelfCheckAttempts": 1
+          },
+          "primaryKey": {
+            "ID": "4B435F6F-4193-4968-BE50-A35F98E55E99"
+          }
+        }
       ]
     },
     "primaryKey": {

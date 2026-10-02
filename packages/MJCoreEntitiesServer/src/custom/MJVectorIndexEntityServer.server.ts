@@ -1,8 +1,9 @@
-import { BaseEntity, LogError, LogStatus, Metadata, RunView } from "@memberjunction/core";
+import { BaseEntity, EntitySaveOptions, LogError, LogStatus, Metadata, RunView } from "@memberjunction/core";
 import { RegisterClass, MJGlobal } from "@memberjunction/global";
 import { MJVectorIndexEntity, MJVectorDatabaseEntity } from "@memberjunction/core-entities";
 import { VectorDBBase, CreateIndexParams, IndexModelMetricEnum } from "@memberjunction/ai-vectordb";
 import { GetAIAPIKey } from "@memberjunction/ai";
+import { AIEngineBase } from "@memberjunction/ai-engine-base";
 
 /**
  * Server-side VectorIndex entity that syncs with the vector database provider.
@@ -27,9 +28,9 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
      * request that triggered the save (an "Auto" index from the UI, or the Config page) must not wait
      * on the provider. Failures are logged; the record keeps its metadata row either way.
      */
-    public override async Save(): Promise<boolean> {
+    public override async Save(options?: EntitySaveOptions): Promise<boolean> {
         const isNew = this.IsSaved === false;
-        const saveResult = await super.Save();
+        const saveResult = await super.Save(options);
 
         if (saveResult && isNew) {
             this.createIndexInProvider().catch((error) => {
@@ -133,8 +134,9 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
             return;
         }
 
-        // Use ExternalID if available (the sanitized name stored in the provider), fall back to Name
-        const providerIndexName = this.ExternalID || this.sanitizeIndexName(this.Name);
+        // Same rule every read path uses to address the index on its provider (ExternalID, else Name).
+        // An index provisioned through Save() above always has ExternalID set to its sanitized name.
+        const providerIndexName = AIEngineBase.Instance.GetProviderIndexName(this);
         LogStatus(`Deleting index "${providerIndexName}" from vector DB provider...`);
         const result = await vectorDB.DeleteIndex({ id: providerIndexName });
         if (result.success) {

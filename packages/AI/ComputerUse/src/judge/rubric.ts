@@ -16,25 +16,25 @@
 /** One criterion's binary verdict from the judge, with its supporting evidence. */
 export interface CriterionVerdict {
     /** The criterion text (echoed back from the rubric). */
-    criterion: string;
+    criterion: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Whether this criterion is satisfied by the observed end-state. */
-    met: boolean;
+    met: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
  /** The judge's evidence for the decision (feeds triage + distillation). */
-    evidence: string;
+    evidence: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /** Aggregate of a rubric evaluation. */
 export interface RubricEvaluation {
     /** True iff every criterion is met — the binary Done signal. */
-    done: boolean;
+    done: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Fraction of criteria met (0..1) — a calibrated confidence / score. */
-    coverage: number;
+    Coverage: number;
     /** How many criteria were met. */
-    metCount: number;
+    MetCount: number;
     /** Total number of criteria. */
-    total: number;
+    Total: number;
     /** The criterion texts that were NOT met (for the feedback/reason string). */
-    unmet: string[];
+    Unmet: string[];
 }
 
 /**
@@ -43,18 +43,23 @@ export interface RubricEvaluation {
  * rubric returns `{done:false, coverage:0, total:0}` so the caller knows there
  * was no rubric and can fall back to the judge's scalar verdict.
  */
-export function evaluateRubric(criteria: CriterionVerdict[]): RubricEvaluation {
+export function EvaluateRubric(criteria: CriterionVerdict[]): RubricEvaluation {
     const total = criteria.length;
     if (total === 0) {
-        return { done: false, coverage: 0, metCount: 0, total: 0, unmet: [] };
+        return { done: false, Coverage: 0, MetCount: 0, Total: 0, Unmet: [] };
     }
     const metCount = criteria.filter(c => c.met).length;
     const unmet = criteria.filter(c => !c.met).map(c => c.criterion);
     return {
         done: metCount === total,
-        coverage: metCount / total,
-        metCount,
-        total,
-        unmet,
+        Coverage: metCount / total,
+        MetCount: metCount,
+        Total: total,
+        Unmet: unmet,
     };
+}
+
+/** @deprecated Use {@link EvaluateRubric}. */
+export function evaluateRubric(criteria: CriterionVerdict[]): RubricEvaluation {
+ return EvaluateRubric(criteria);
 }

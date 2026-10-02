@@ -369,7 +369,7 @@ export class RunViewParams {
      *
      * @internal This property is for framework internal use only.
      */
-    _fromEngine?: boolean;
+    _fromEngine?: boolean;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * When set to true, the RunView will first check the LocalCacheManager for cached results.

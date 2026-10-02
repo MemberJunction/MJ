@@ -22,7 +22,7 @@ export const AUTO_VECTOR_INDEX_NAME_MAX_LENGTH = 100;
  * The index already built for this database + embedding model, or null when none exists. Never falls
  * back to an index on the same database for a different model.
  */
-export function findMatchingVectorIndex<T extends VectorIndexCandidate>(
+export function FindMatchingVectorIndex<T extends VectorIndexCandidate>(
     indexes: readonly T[],
     vectorDatabaseID: string | null | undefined,
     embeddingModelID: string | null | undefined
@@ -39,7 +39,7 @@ export function findMatchingVectorIndex<T extends VectorIndexCandidate>(
  * Human-readable name for an auto-created index: "<entity> - <embedding model>", so an operator can
  * tell at a glance which entity document and model it serves.
  */
-export function buildAutoVectorIndexName(
+export function BuildAutoVectorIndexName(
     entityName: string | null | undefined,
     embeddingModelName: string | null | undefined
 ): string {

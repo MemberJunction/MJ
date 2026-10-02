@@ -10,6 +10,7 @@ import { WorkflowRunLayout } from './workflow-run-layout';
 import {
     EmptyDebugState,
     ParseWorkflowRunParentBag,
+    StepFailureReason,
     TryParseJsonObject,
     type WorkflowRunDebugState,
     type WorkflowRunInvocation,
@@ -66,6 +67,8 @@ export type WorkflowRunStep = {
     StepType: string | null;
     StartedAt: Date | null;
     CompletedAt: Date | null;
+    /** Why the step failed — what the Workflow tab shows beside a Failed step. */
+    ErrorMessage: string | null;
     /** Every column of the row, for the JSON pane. */
     Record: Record<string, unknown>;
 };
@@ -793,6 +796,7 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
                 StepType: t.StepType,
                 StartedAt: t.StartedAt,
                 CompletedAt: t.CompletedAt,
+                ErrorMessage: t.ErrorMessage,
                 Record: t.GetAll(),
             }));
         } catch (e) {
@@ -828,6 +832,12 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
 
     public get SelectedStep(): WorkflowRunStep | null {
         return this.SelectedSteps.find((s) => UUIDsEqual(s.ID, this.SelectedStepID ?? '')) ?? null;
+    }
+
+    /** Why the selected step failed, or `null` — the inspector otherwise shows FAILED with no reason. */
+    public get SelectedStepFailureReason(): string | null {
+        const step = this.SelectedStep;
+        return step ? StepFailureReason(step.Status, step.ErrorMessage) : null;
     }
 
     /** The selected step, as formatted JSON for the viewer. */
@@ -896,15 +906,15 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
             if (!UUIDsEqual(this.SelectedRunID ?? '', parentTaskID)) return;
             const parent = result.Success ? result.Results?.[0] : undefined;
             const bag = ParseWorkflowRunParentBag(parent?.InputPayload);
-            this.Invocation = bag.invocation;
+            this.Invocation = bag.Invocation;
             // Settled trumps the durable bag: $.debug.paused can still be true after the last
             // continue, and painting that as "paused here" hides that the run is over.
             if (this.GraphSettled) {
-                this.DebugState = { ...bag.debug, paused: false, pausedAtTaskID: null };
+                this.DebugState = { ...bag.Debug, paused: false, pausedAtTaskID: null };
                 this.DebugPaused = false;
             } else {
-                this.DebugState = bag.debug;
-                this.DebugPaused = bag.debug.paused;
+                this.DebugState = bag.Debug;
+                this.DebugPaused = bag.Debug.paused;
             }
         } catch {
             // A failed parent read leaves the last known debug state; frames remain the safety net.

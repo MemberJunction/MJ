@@ -48,13 +48,18 @@ export const ACTION_FIXTURES: ActionFixture[] = actionFixtures as ActionFixture[
  * call back to the Action it names; §8.2 makes a post-sanitization collision a hard error at
  * tool-build time, which is why this returns the name rather than silently disambiguating it.
  */
-export function sanitizeToolName(actionName: string): string {
+export function SanitizeToolName(actionName: string): string {
     const sanitized = actionName
         .trim()
         .replace(/[^a-zA-Z0-9]+/g, '_')
         .replace(/^_+|_+$/g, '')
         .toLowerCase();
     return sanitized.slice(0, 64);
+}
+
+/** @deprecated Use {@link SanitizeToolName}. */
+export function sanitizeToolName(actionName: string): string {
+    return SanitizeToolName(actionName);
 }
 
 /**
@@ -72,8 +77,13 @@ export function sanitizeToolName(actionName: string): string {
  */
 export type ScalarStrategy = 'union' | 'string';
 
-export function scalarSchema(strategy: ScalarStrategy): Record<string, unknown> {
+export function ScalarSchema(strategy: ScalarStrategy): Record<string, unknown> {
     return strategy === 'union' ? { type: ['string', 'number', 'boolean'] } : { type: 'string' };
+}
+
+/** @deprecated Use {@link ScalarSchema}. */
+export function scalarSchema(strategy: ScalarStrategy): Record<string, unknown> {
+    return ScalarSchema(strategy);
 }
 
 /**
@@ -92,7 +102,7 @@ export type OpaqueStrategy = 'object' | 'string';
 /** Maps one param's `ValueType` onto a schema fragment, per the §8.2 table. */
 function schemaForValueType(valueType: string, scalar: ScalarStrategy, opaque: OpaqueStrategy): Record<string, unknown> {
     if (valueType === 'Scalar') {
-        return scalarSchema(scalar);
+        return ScalarSchema(scalar);
     }
     // `Simple Object` carries no shape in the catalog, and BaseEntity Sub-Class / MediaOutput /
     // Other are opaque by definition — so whichever way this goes, the prose description is doing
@@ -118,7 +128,7 @@ function describeParam(param: ActionParamFixture): string {
 }
 
 /** Builds the `ChatTool` for one Action under a given pair of mapping strategies. */
-export function buildToolFromAction(action: ActionFixture, strategy: ScalarStrategy, opaque: OpaqueStrategy = 'object'): ChatTool {
+export function BuildToolFromAction(action: ActionFixture, strategy: ScalarStrategy, opaque: OpaqueStrategy = 'object'): ChatTool {
     const properties: Record<string, unknown> = {};
     const required: string[] = [];
     for (const param of action.Params) {
@@ -136,7 +146,7 @@ export function buildToolFromAction(action: ActionFixture, strategy: ScalarStrat
         inputSchema.required = required;
     }
     return {
-        name: sanitizeToolName(action.Name),
+        name: SanitizeToolName(action.Name),
         // §8.2: prescriptive about WHEN to call, not just what it does — it measurably improves
         // should-call rates, and the catalog Description alone is rarely phrased that way.
         description: `Call this when you need to: ${(action.Description ?? action.Name).trim()}`,
@@ -144,11 +154,21 @@ export function buildToolFromAction(action: ActionFixture, strategy: ScalarStrat
     };
 }
 
+/** @deprecated Use {@link BuildToolFromAction}. */
+export function buildToolFromAction(action: ActionFixture, strategy: ScalarStrategy, opaque: OpaqueStrategy = 'object'): ChatTool {
+    return BuildToolFromAction(action, strategy, opaque);
+}
+
 /** Looks a fixture up by Action name, throwing on a typo rather than silently building nothing. */
-export function getActionFixture(name: string): ActionFixture {
+export function GetActionFixture(name: string): ActionFixture {
     const found = ACTION_FIXTURES.find((a) => a.Name === name);
     if (!found) {
         throw new Error(`No action fixture named '${name}'. Known: ${ACTION_FIXTURES.map((a) => a.Name).join(', ')}`);
     }
     return found;
+}
+
+/** @deprecated Use {@link GetActionFixture}. */
+export function getActionFixture(name: string): ActionFixture {
+    return GetActionFixture(name);
 }

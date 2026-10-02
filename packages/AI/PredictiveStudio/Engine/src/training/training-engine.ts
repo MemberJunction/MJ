@@ -96,7 +96,7 @@ export class TrainingEngine {
    * @param deps the injected dependency bundle (entity factory, loader, sidecar, store)
    * @returns the produced `Draft` model and the `Completed`/`Failed` training run
    */
-  public async trainModel(input: TrainModelInput, deps: TrainingDeps): Promise<TrainModelResult> {
+  public async trainModel(input: TrainModelInput, deps: TrainingDeps): Promise<TrainModelResult> {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
     const resolved = await this.resolvePipeline(input.pipelineId, deps);
     const run = await this.createRunRow(resolved, input, deps);
 

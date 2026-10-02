@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
     DEFAULT_EXPORT_OPTIONS,
     CommonStyles,
-    mergeCellStyles,
+    MergeCellStyles,
 } from '../types';
 import type {
     ExportFormat,
@@ -158,19 +158,19 @@ describe('CommonStyles', () => {
 
 describe('mergeCellStyles', () => {
     it('should return empty object when no styles provided', () => {
-        const result = mergeCellStyles();
+        const result = MergeCellStyles();
         expect(result).toEqual({});
     });
 
     it('should skip undefined styles', () => {
-        const result = mergeCellStyles(undefined, undefined);
+        const result = MergeCellStyles(undefined, undefined);
         expect(result).toEqual({});
     });
 
     it('should merge font styles', () => {
         const style1: CellStyle = { font: { bold: true } };
         const style2: CellStyle = { font: { italic: true } };
-        const result = mergeCellStyles(style1, style2);
+        const result = MergeCellStyles(style1, style2);
         expect(result.font?.bold).toBe(true);
         expect(result.font?.italic).toBe(true);
     });
@@ -178,7 +178,7 @@ describe('mergeCellStyles', () => {
     it('should merge fill styles', () => {
         const style1: CellStyle = { fill: { pattern: 'solid' } };
         const style2: CellStyle = { fill: { fgColor: 'FF0000' } };
-        const result = mergeCellStyles(style1, style2);
+        const result = MergeCellStyles(style1, style2);
         expect(result.fill?.pattern).toBe('solid');
         expect(result.fill?.fgColor).toBe('FF0000');
     });
@@ -186,7 +186,7 @@ describe('mergeCellStyles', () => {
     it('should merge alignment styles', () => {
         const style1: CellStyle = { alignment: { horizontal: 'center' } };
         const style2: CellStyle = { alignment: { wrapText: true } };
-        const result = mergeCellStyles(style1, style2);
+        const result = MergeCellStyles(style1, style2);
         expect(result.alignment?.horizontal).toBe('center');
         expect(result.alignment?.wrapText).toBe(true);
     });
@@ -194,14 +194,14 @@ describe('mergeCellStyles', () => {
     it('should override numFmt with later value', () => {
         const style1: CellStyle = { numFmt: '#,##0' };
         const style2: CellStyle = { numFmt: '$#,##0.00' };
-        const result = mergeCellStyles(style1, style2);
+        const result = MergeCellStyles(style1, style2);
         expect(result.numFmt).toBe('$#,##0.00');
     });
 
     it('should override font properties with later values', () => {
         const style1: CellStyle = { font: { bold: true, color: 'FF0000' } };
         const style2: CellStyle = { font: { color: '0000FF' } };
-        const result = mergeCellStyles(style1, style2);
+        const result = MergeCellStyles(style1, style2);
         expect(result.font?.bold).toBe(true);
         expect(result.font?.color).toBe('0000FF');
     });
@@ -210,7 +210,7 @@ describe('mergeCellStyles', () => {
         const style1: CellStyle = { font: { bold: true } };
         const style2: CellStyle = { fill: { fgColor: 'FFFF00' } };
         const style3: CellStyle = { numFmt: '0.00%' };
-        const result = mergeCellStyles(style1, style2, style3);
+        const result = MergeCellStyles(style1, style2, style3);
         expect(result.font?.bold).toBe(true);
         expect(result.fill?.fgColor).toBe('FFFF00');
         expect(result.numFmt).toBe('0.00%');
@@ -219,7 +219,7 @@ describe('mergeCellStyles', () => {
     it('should merge border styles', () => {
         const style1: CellStyle = { border: { top: { style: 'thin', color: '000000' } } };
         const style2: CellStyle = { border: { bottom: { style: 'thick', color: 'FF0000' } } };
-        const result = mergeCellStyles(style1, style2);
+        const result = MergeCellStyles(style1, style2);
         expect(result.border?.top?.style).toBe('thin');
         expect(result.border?.bottom?.style).toBe('thick');
     });

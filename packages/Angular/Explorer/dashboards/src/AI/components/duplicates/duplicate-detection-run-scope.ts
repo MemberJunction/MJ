@@ -56,7 +56,7 @@ export interface EntityDocumentCandidate {
  * reloads and shows its full set. Runs for other entities are never candidates. Returns null when
  * there is no entity or no run for it.
  */
-export function selectCurrentRunForEntity<T extends DuplicateRunCandidate>(
+export function SelectCurrentRunForEntity<T extends DuplicateRunCandidate>(
     runs: readonly T[],
     entityID: string | null | undefined
 ): T | null {
@@ -71,7 +71,7 @@ export function selectCurrentRunForEntity<T extends DuplicateRunCandidate>(
  * of the most recent run, so a first visit lands on results that exist. Falls back to the first
  * document when no run matches any document, and to null when there are no documents at all.
  */
-export function pickDefaultEntityDocument<D extends EntityDocumentCandidate>(
+export function PickDefaultEntityDocument<D extends EntityDocumentCandidate>(
     documents: readonly D[],
     runs: readonly DuplicateRunCandidate[]
 ): D | null {
@@ -92,7 +92,7 @@ function newestFirst<T extends DuplicateRunCandidate>(runs: readonly T[]): T[] {
 }
 
 /** The completed details of ONE run, newest first. Bounded by the run; `IgnoreMaxRows` per the file comment. */
-export function buildRunScopedDetailsQuery(runID: string): RunViewParams {
+export function BuildRunScopedDetailsQuery(runID: string): RunViewParams {
     return {
         EntityName: 'MJ: Duplicate Run Details',
         ExtraFilter: `DuplicateRunID='${EscapeSQLString(runID)}' AND MatchStatus='${DETAIL_COMPLETE}'`,
@@ -107,7 +107,7 @@ export function buildRunScopedDetailsQuery(runID: string): RunViewParams {
  * {@link MATCH_QUERY_DETAIL_CHUNK_SIZE} IDs. No IDs, no queries. Plain `IN (...)` so it runs on any
  * database behind the API; `IgnoreMaxRows` per the file comment.
  */
-export function buildMatchQueriesForDetailIDs(
+export function BuildMatchQueriesForDetailIDs(
     detailIDs: readonly string[],
     chunkSize: number = MATCH_QUERY_DETAIL_CHUNK_SIZE
 ): RunViewParams[] {
@@ -125,8 +125,8 @@ export function buildMatchQueriesForDetailIDs(
     return queries;
 }
 
-/** The detail IDs a matches query built by {@link buildMatchQueriesForDetailIDs} covers. */
-export function detailIDsCoveredByMatchQuery(query: RunViewParams): string[] {
+/** The detail IDs a matches query built by {@link BuildMatchQueriesForDetailIDs} covers. */
+export function DetailIDsCoveredByMatchQuery(query: RunViewParams): string[] {
     const filter = typeof query.ExtraFilter === 'string' ? query.ExtraFilter : '';
     const list = /DuplicateRunDetailID IN \((.*)\)/s.exec(filter)?.[1] ?? '';
     return list
@@ -136,7 +136,7 @@ export function detailIDsCoveredByMatchQuery(query: RunViewParams): string[] {
 }
 
 /** Index matches by their parent detail; the join buildGroups() performs. */
-export function groupMatchesByDetail<M extends { DuplicateRunDetailID: string }>(
+export function GroupMatchesByDetail<M extends { DuplicateRunDetailID: string }>(
     matches: readonly M[]
 ): Map<string, M[]> {
     const byDetail = new Map<string, M[]>();

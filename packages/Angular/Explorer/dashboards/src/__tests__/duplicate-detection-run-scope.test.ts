@@ -16,12 +16,12 @@ import { describe, it, expect } from 'vitest';
 import type { RunViewParams, RunViewResult } from '@memberjunction/core';
 import {
     MATCH_QUERY_DETAIL_CHUNK_SIZE,
-    buildMatchQueriesForDetailIDs,
-    buildRunScopedDetailsQuery,
-    detailIDsCoveredByMatchQuery,
-    groupMatchesByDetail,
-    pickDefaultEntityDocument,
-    selectCurrentRunForEntity,
+    BuildMatchQueriesForDetailIDs,
+    BuildRunScopedDetailsQuery,
+    DetailIDsCoveredByMatchQuery,
+    GroupMatchesByDetail,
+    PickDefaultEntityDocument,
+    SelectCurrentRunForEntity,
 } from '../AI/components/duplicates/duplicate-detection-run-scope';
 
 const ENTITY_ORGS = 'E0000001-0000-0000-0000-000000000001';
@@ -80,7 +80,7 @@ function fakeRunViews(store: { details: DetailRow[]; matches: MatchRow[] }) {
             rows = store.details.filter(d =>
                 (!scopedRun || d.DuplicateRunID === scopedRun) && (!completeOnly || d.MatchStatus === 'Complete'));
         } else if (q.EntityName === 'MJ: Duplicate Run Detail Matches') {
-            const covered = new Set(detailIDsCoveredByMatchQuery(q));
+            const covered = new Set(DetailIDsCoveredByMatchQuery(q));
             rows = store.matches.filter(m => covered.size === 0 || covered.has(m.DuplicateRunDetailID));
         } else {
             throw new Error(`unexpected entity ${q.EntityName}`);
@@ -100,9 +100,9 @@ function fakeRunViews(store: { details: DetailRow[]; matches: MatchRow[] }) {
 
 /** The two-step load the board performs: the run's details, then the matches for exactly those details. */
 function loadReviewRows(runViews: ReturnType<typeof fakeRunViews>, runID: string) {
-    const [detailsResult] = runViews([buildRunScopedDetailsQuery(runID)]);
+    const [detailsResult] = runViews([BuildRunScopedDetailsQuery(runID)]);
     const details = detailsResult.Results as DetailRow[];
-    const matchQueries = buildMatchQueriesForDetailIDs(details.map(d => d.ID));
+    const matchQueries = BuildMatchQueriesForDetailIDs(details.map(d => d.ID));
     const matches = runViews(matchQueries).flatMap(r => r.Results as MatchRow[]);
     return { details, matchQueries, matches };
 }
@@ -111,7 +111,7 @@ function run(ID: string, EntityID: string, ProcessingStatus: string, StartedAt: 
     return { ID, EntityID, ProcessingStatus, StartedAt: new Date(StartedAt) };
 }
 
-describe('selectCurrentRunForEntity', () => {
+describe('SelectCurrentRunForEntity', () => {
     const runs = [
         run(RUN_PEOPLE, ENTITY_PEOPLE, 'Complete', '2026-09-20T00:00:00Z'),
         run(RUN_ORGS_NEW, ENTITY_ORGS, 'Complete', '2026-09-15T00:00:00Z'),
@@ -119,14 +119,14 @@ describe('selectCurrentRunForEntity', () => {
     ];
 
     it("picks the latest run of the requested entity, ignoring other entities' newer runs", () => {
-        expect(selectCurrentRunForEntity(runs, ENTITY_ORGS)?.ID).toBe(RUN_ORGS_NEW);
-        expect(selectCurrentRunForEntity(runs, ENTITY_PEOPLE)?.ID).toBe(RUN_PEOPLE);
+        expect(SelectCurrentRunForEntity(runs, ENTITY_ORGS)?.ID).toBe(RUN_ORGS_NEW);
+        expect(SelectCurrentRunForEntity(runs, ENTITY_PEOPLE)?.ID).toBe(RUN_PEOPLE);
     });
 
     it('shows a newer run even while it is still In Progress (a cancelled run stays In Progress)', () => {
         // Preferring the older Complete run here would hide the rows the user just watched being produced.
         const withActive = [...runs, run('D0000000-0000-0000-0000-00000000000D', ENTITY_ORGS, 'In Progress', '2026-09-22T00:00:00Z')];
-        expect(selectCurrentRunForEntity(withActive, ENTITY_ORGS)?.ID).toBe('D0000000-0000-0000-0000-00000000000D');
+        expect(SelectCurrentRunForEntity(withActive, ENTITY_ORGS)?.ID).toBe('D0000000-0000-0000-0000-00000000000D');
     });
 
     it('orders by StartedAt, not by the order the rows arrived in', () => {
@@ -135,22 +135,22 @@ describe('selectCurrentRunForEntity', () => {
             run(RUN_ORGS_NEW, ENTITY_ORGS, 'Complete', '2026-09-15T00:00:00Z'),
             run(RUN_ORGS_OLD, ENTITY_ORGS, 'Complete', '2026-09-01T00:00:00Z'),
         ];
-        expect(selectCurrentRunForEntity(shuffled, ENTITY_ORGS)?.ID).toBe(RUN_ORGS_NEW);
+        expect(SelectCurrentRunForEntity(shuffled, ENTITY_ORGS)?.ID).toBe(RUN_ORGS_NEW);
     });
 
     it('returns null when there is no entity, or no run for it', () => {
-        expect(selectCurrentRunForEntity(runs, null)).toBeNull();
-        expect(selectCurrentRunForEntity(runs, '')).toBeNull();
-        expect(selectCurrentRunForEntity(runs, 'E0000009-0000-0000-0000-000000000009')).toBeNull();
-        expect(selectCurrentRunForEntity([], ENTITY_ORGS)).toBeNull();
+        expect(SelectCurrentRunForEntity(runs, null)).toBeNull();
+        expect(SelectCurrentRunForEntity(runs, '')).toBeNull();
+        expect(SelectCurrentRunForEntity(runs, 'E0000009-0000-0000-0000-000000000009')).toBeNull();
+        expect(SelectCurrentRunForEntity([], ENTITY_ORGS)).toBeNull();
     });
 
     it('matches the entity ID regardless of casing', () => {
-        expect(selectCurrentRunForEntity(runs, ENTITY_ORGS.toLowerCase())?.ID).toBe(RUN_ORGS_NEW);
+        expect(SelectCurrentRunForEntity(runs, ENTITY_ORGS.toLowerCase())?.ID).toBe(RUN_ORGS_NEW);
     });
 });
 
-describe('pickDefaultEntityDocument', () => {
+describe('PickDefaultEntityDocument', () => {
     const docs = [
         { ID: 'DOC-UNRELATED', EntityID: 'E0000009-0000-0000-0000-000000000009' },
         { ID: 'DOC-ORGS', EntityID: ENTITY_ORGS },
@@ -162,7 +162,7 @@ describe('pickDefaultEntityDocument', () => {
             run(RUN_ORGS_NEW, ENTITY_ORGS, 'Complete', '2026-09-15T00:00:00Z'),
             run(RUN_PEOPLE, ENTITY_PEOPLE, 'Complete', '2026-09-20T00:00:00Z'),
         ];
-        expect(pickDefaultEntityDocument(docs, runs)?.ID).toBe('DOC-PEOPLE');
+        expect(PickDefaultEntityDocument(docs, runs)?.ID).toBe('DOC-PEOPLE');
     });
 
     it('skips runs whose entity has no document and takes the next newest', () => {
@@ -170,18 +170,18 @@ describe('pickDefaultEntityDocument', () => {
             run('Z0000000-0000-0000-0000-00000000000Z', 'E0000007-0000-0000-0000-000000000007', 'Complete', '2026-09-21T00:00:00Z'),
             run(RUN_ORGS_NEW, ENTITY_ORGS, 'Complete', '2026-09-15T00:00:00Z'),
         ];
-        expect(pickDefaultEntityDocument(docs, runs)?.ID).toBe('DOC-ORGS');
+        expect(PickDefaultEntityDocument(docs, runs)?.ID).toBe('DOC-ORGS');
     });
 
     it('falls back to the first document when no run matches, and to null with no documents', () => {
-        expect(pickDefaultEntityDocument(docs, [])?.ID).toBe('DOC-UNRELATED');
-        expect(pickDefaultEntityDocument([], [run(RUN_ORGS_NEW, ENTITY_ORGS, 'Complete', '2026-09-15T00:00:00Z')])).toBeNull();
+        expect(PickDefaultEntityDocument(docs, [])?.ID).toBe('DOC-UNRELATED');
+        expect(PickDefaultEntityDocument([], [run(RUN_ORGS_NEW, ENTITY_ORGS, 'Complete', '2026-09-15T00:00:00Z')])).toBeNull();
     });
 });
 
-describe('buildRunScopedDetailsQuery', () => {
+describe('BuildRunScopedDetailsQuery', () => {
     it('scopes details to the run and its completed rows, with the row cap off', () => {
-        const q = buildRunScopedDetailsQuery(RUN_ORGS_NEW);
+        const q = BuildRunScopedDetailsQuery(RUN_ORGS_NEW);
         expect(q.EntityName).toBe('MJ: Duplicate Run Details');
         expect(q.ExtraFilter).toContain(`DuplicateRunID='${RUN_ORGS_NEW}'`);
         expect(q.ExtraFilter).toContain(`MatchStatus='Complete'`);
@@ -189,26 +189,26 @@ describe('buildRunScopedDetailsQuery', () => {
     });
 
     it('doubles a stray quote in the run ID instead of letting it close the literal', () => {
-        expect(buildRunScopedDetailsQuery("abc'def").ExtraFilter).toContain("DuplicateRunID='abc''def'");
+        expect(BuildRunScopedDetailsQuery("abc'def").ExtraFilter).toContain("DuplicateRunID='abc''def'");
     });
 });
 
-describe('buildMatchQueriesForDetailIDs', () => {
+describe('BuildMatchQueriesForDetailIDs', () => {
     it('covers exactly the detail IDs it was given, chunked, and nothing for an empty list', () => {
         const ids = Array.from({ length: 1200 }, (_, i) => `D${i}`);
-        const queries = buildMatchQueriesForDetailIDs(ids);
+        const queries = BuildMatchQueriesForDetailIDs(ids);
         expect(queries).toHaveLength(Math.ceil(1200 / MATCH_QUERY_DETAIL_CHUNK_SIZE));
         expect(queries.every(q => q.EntityName === 'MJ: Duplicate Run Detail Matches')).toBe(true);
         expect(queries.every(q => q.IgnoreMaxRows === true)).toBe(true);
-        const covered = queries.flatMap(detailIDsCoveredByMatchQuery);
+        const covered = queries.flatMap(DetailIDsCoveredByMatchQuery);
         expect(covered).toEqual(ids);
-        expect(queries.map(q => detailIDsCoveredByMatchQuery(q).length)).toEqual([500, 500, 200]);
-        expect(buildMatchQueriesForDetailIDs([])).toEqual([]);
+        expect(queries.map(q => DetailIDsCoveredByMatchQuery(q).length)).toEqual([500, 500, 200]);
+        expect(BuildMatchQueriesForDetailIDs([])).toEqual([]);
     });
 
     it('keeps an ID with a quote intact through escaping and back', () => {
-        const [q] = buildMatchQueriesForDetailIDs(["x'y", 'z']);
-        expect(detailIDsCoveredByMatchQuery(q)).toEqual(["x'y", 'z']);
+        const [q] = BuildMatchQueriesForDetailIDs(["x'y", 'z']);
+        expect(DetailIDsCoveredByMatchQuery(q)).toEqual(["x'y", 'z']);
     });
 });
 
@@ -223,13 +223,13 @@ describe('review rows for one run among several, each above the 1000-row cap', (
     });
 
     it("asks for matches of exactly the selected run's details, no more and no fewer", () => {
-        const covered = matchQueries.flatMap(detailIDsCoveredByMatchQuery).sort();
+        const covered = matchQueries.flatMap(DetailIDsCoveredByMatchQuery).sort();
         expect(covered).toEqual(details.map(d => d.ID).sort());
     });
 
     it('joins every detail of the selected run to all of its matches, so every group builds', () => {
         expect(matches).toHaveLength(3600);
-        const byDetail = groupMatchesByDetail(matches);
+        const byDetail = GroupMatchesByDetail(matches);
         expect(details.every(d => byDetail.get(d.ID)?.length === 3)).toBe(true);
     });
 
@@ -241,7 +241,7 @@ describe('review rows for one run among several, each above the 1000-row cap', (
             { EntityName: 'MJ: Duplicate Run Details', ExtraFilter: "MatchStatus='Complete'", OrderBy: '__mj_CreatedAt DESC' },
             { EntityName: 'MJ: Duplicate Run Detail Matches', OrderBy: 'MatchProbability DESC' },
         ]);
-        const byDetail = groupMatchesByDetail(legacyMatches.Results as MatchRow[]);
+        const byDetail = GroupMatchesByDetail(legacyMatches.Results as MatchRow[]);
         const loadedNewRunDetails = (legacyDetails.Results as DetailRow[]).filter(d => d.DuplicateRunID === RUN_ORGS_NEW);
         expect(loadedNewRunDetails.length).toBeGreaterThan(900);
         expect(loadedNewRunDetails.filter(d => byDetail.has(d.ID))).toHaveLength(0);

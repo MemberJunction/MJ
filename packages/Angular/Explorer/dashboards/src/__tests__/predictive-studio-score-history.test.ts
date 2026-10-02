@@ -59,11 +59,11 @@ describe('PredictiveStudioScoreHistoryService', () => {
 
     expect(points.length).toBe(2);
     expect(points[0].score).toBe(0.65);
-    expect(points[0].delta).toBeNull();
+    expect(points[0].Delta).toBeNull();
     expect(points[0].band).toBe('medium');
 
     expect(points[1].score).toBe(0.85);
-    expect(points[1].delta).toBeCloseTo(0.20, 5);
+    expect(points[1].Delta).toBeCloseTo(0.20, 5);
     expect(points[1].band).toBe('high');
     expect(points[1].drivers[0].label).toContain('Tenure');
   });

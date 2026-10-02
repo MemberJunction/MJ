@@ -42,69 +42,168 @@ export class DeepDiffComponent implements OnInit {
   }
 
   @Input()
-  get showUnchanged(): boolean {
+  get ShowUnchanged(): boolean {
     return this._showUnchanged;
   }
-  set showUnchanged(value: boolean) {
+  set ShowUnchanged(value: boolean) {
     this._showUnchanged = value;
     this.updateDifferConfig();
     this.generateDiff();
   }
 
+  /** @deprecated Use {@link ShowUnchanged}. */
+  get showUnchanged(): boolean {
+    return this.ShowUnchanged;
+  }
+  /** @deprecated Use {@link ShowUnchanged}. */
+  @Input() set showUnchanged(value: boolean) {
+    this.ShowUnchanged = value;
+  }
+
   @Input()
-  get maxDepth(): number {
+  get MaxDepth(): number {
     return this._maxDepth;
   }
-  set maxDepth(value: number) {
+  set MaxDepth(value: number) {
     this._maxDepth = value;
     this.updateDifferConfig();
     this.generateDiff();
   }
 
+  /** @deprecated Use {@link MaxDepth}. */
+  get maxDepth(): number {
+    return this.MaxDepth;
+  }
+  /** @deprecated Use {@link MaxDepth}. */
+  @Input() set maxDepth(value: number) {
+    this.MaxDepth = value;
+  }
+
   @Input()
-  get maxStringLength(): number {
+  get MaxStringLength(): number {
     return this._maxStringLength;
   }
-  set maxStringLength(value: number) {
+  set MaxStringLength(value: number) {
     this._maxStringLength = value;
     this.updateDifferConfig();
     this.generateDiff();
   }
 
+  /** @deprecated Use {@link MaxStringLength}. */
+  get maxStringLength(): number {
+    return this.MaxStringLength;
+  }
+  /** @deprecated Use {@link MaxStringLength}. */
+  @Input() set maxStringLength(value: number) {
+    this.MaxStringLength = value;
+  }
+
   @Input()
-  get treatNullAsUndefined(): boolean {
+  get TreatNullAsUndefined(): boolean {
     return this._treatNullAsUndefined;
   }
-  set treatNullAsUndefined(value: boolean) {
+  set TreatNullAsUndefined(value: boolean) {
     this._treatNullAsUndefined = value;
     this.updateDifferConfig();
     this.generateDiff();
   }
 
-  @Input() title: string = 'Deep Diff Analysis';
-  @Input() showSummary: boolean = true;
-  @Input() expandAll: boolean = false;
-  @Input() truncateValues: boolean = true;
+  /** @deprecated Use {@link TreatNullAsUndefined}. */
+  get treatNullAsUndefined(): boolean {
+    return this.TreatNullAsUndefined;
+  }
+  /** @deprecated Use {@link TreatNullAsUndefined}. */
+  @Input() set treatNullAsUndefined(value: boolean) {
+    this.TreatNullAsUndefined = value;
+  }
 
-  diffResult: DeepDiffResult | null = null;
-  diffItems: DeepDiffItem[] = [];
+  @Input() title: string = 'Deep Diff Analysis';
+  @Input() ShowSummary: boolean = true;
+
+  /** @deprecated Use {@link ShowSummary}. */
+  @Input() set showSummary(value: boolean) {
+    this.ShowSummary = value;
+  }
+  /** @deprecated Use {@link ShowSummary}. */
+  get showSummary(): boolean {
+    return this.ShowSummary;
+  }
+  @Input() ExpandAll: boolean = false;
+
+  /** @deprecated Use {@link ExpandAll}. */
+  @Input() set expandAll(value: boolean) {
+    this.ExpandAll = value;
+  }
+  /** @deprecated Use {@link ExpandAll}. */
+  get expandAll(): boolean {
+    return this.ExpandAll;
+  }
+  @Input() TruncateValues: boolean = true;
+
+  /** @deprecated Use {@link TruncateValues}. */
+  @Input() set truncateValues(value: boolean) {
+    this.TruncateValues = value;
+  }
+  /** @deprecated Use {@link TruncateValues}. */
+  get truncateValues(): boolean {
+    return this.TruncateValues;
+  }
+
+  DiffResult: DeepDiffResult | null = null;
+
+  /** @deprecated Use {@link DiffResult}. */
+  get diffResult(): DeepDiffResult | null {
+    return this.DiffResult;
+  }
+  /** @deprecated Use {@link DiffResult}. */
+  set diffResult(value: DeepDiffResult | null) {
+    this.DiffResult = value;
+  }
+  DiffItems: DeepDiffItem[] = [];
+
+  /** @deprecated Use {@link DiffItems}. */
+  get diffItems(): DeepDiffItem[] {
+    return this.DiffItems;
+  }
+  /** @deprecated Use {@link DiffItems}. */
+  set diffItems(value: DeepDiffItem[]) {
+    this.DiffItems = value;
+  }
 
   private _filter: string = '';
-  get filter(): string {
+  get Filter(): string {
     return this._filter;
   }
-  set filter(value: string) {
+  set Filter(value: string) {
     this._filter = value;
     this.recomputeFilteredItems();
   }
 
+  /** @deprecated Use {@link Filter}. */
+  get filter(): string {
+    return this.Filter;
+  }
+  /** @deprecated Use {@link Filter}. */
+  set filter(value: string) {
+    this.Filter = value;
+  }
+
   private _filterType: 'all' | 'added' | 'removed' | 'modified' | 'unchanged' = 'all';
-  get filterType(): 'all' | 'added' | 'removed' | 'modified' | 'unchanged' {
+  get FilterType(): 'all' | 'added' | 'removed' | 'modified' | 'unchanged' {
     return this._filterType;
   }
-  set filterType(value: 'all' | 'added' | 'removed' | 'modified' | 'unchanged') {
+  set FilterType(value: 'all' | 'added' | 'removed' | 'modified' | 'unchanged') {
     this._filterType = value;
     this.recomputeFilteredItems();
+  }
+
+  /** @deprecated Use {@link FilterType}. */
+  get filterType(): 'all' | 'added' | 'removed' | 'modified' | 'unchanged' {
+    return this.FilterType;
+  }
+  /** @deprecated Use {@link FilterType}. */
+  set filterType(value: 'all' | 'added' | 'removed' | 'modified' | 'unchanged') {
+    this.FilterType = value;
   }
 
   /**
@@ -114,9 +213,27 @@ export class DeepDiffComponent implements OnInit {
    * `@for` and empty-state length check, which preserves `@for` referential
    * stability between CD passes (the recursive walk no longer runs >= 2x/CD).
    */
-  filteredItems: DeepDiffItem[] = [];
+  FilteredItems: DeepDiffItem[] = [];
 
-  expandedValuesMap: { [key: string]: boolean } = {};
+  /** @deprecated Use {@link FilteredItems}. */
+  get filteredItems(): DeepDiffItem[] {
+    return this.FilteredItems;
+  }
+  /** @deprecated Use {@link FilteredItems}. */
+  set filteredItems(value: DeepDiffItem[]) {
+    this.FilteredItems = value;
+  }
+
+  ExpandedValuesMap: { [key: string]: boolean } = {};
+
+  /** @deprecated Use {@link ExpandedValuesMap}. */
+  get expandedValuesMap(): { [key: string]: boolean } {
+    return this.ExpandedValuesMap;
+  }
+  /** @deprecated Use {@link ExpandedValuesMap}. */
+  set expandedValuesMap(value: { [key: string]: boolean }) {
+    this.ExpandedValuesMap = value;
+  }
 
   /**
    * Memoization cache for {@link formatValue} / {@link isValueTruncated}. Keyed
@@ -133,9 +250,9 @@ export class DeepDiffComponent implements OnInit {
   constructor(private cdr: ChangeDetectorRef) {
     this.differ = new DeepDiffer({
       includeUnchanged: false,
-      maxDepth: this.maxDepth,
-      maxStringLength: this.maxStringLength,
-      treatNullAsUndefined: this.treatNullAsUndefined
+      maxDepth: this.MaxDepth,
+      maxStringLength: this.MaxStringLength,
+      treatNullAsUndefined: this.TreatNullAsUndefined
     });
   }
 
@@ -146,10 +263,10 @@ export class DeepDiffComponent implements OnInit {
 
   private updateDifferConfig(): void {
     this.differ.updateConfig({
-      includeUnchanged: this.showUnchanged,
-      maxDepth: this.maxDepth,
-      maxStringLength: this.maxStringLength,
-      treatNullAsUndefined: this.treatNullAsUndefined
+      includeUnchanged: this.ShowUnchanged,
+      maxDepth: this.MaxDepth,
+      maxStringLength: this.MaxStringLength,
+      treatNullAsUndefined: this.TreatNullAsUndefined
     });
   }
 
@@ -157,19 +274,19 @@ export class DeepDiffComponent implements OnInit {
     if (this.oldValue === undefined && this.newValue === undefined) {
       this.formatValueCache.clear();
       this.truncatedCache.clear();
-      this.diffResult = null;
-      this.diffItems = [];
+      this.DiffResult = null;
+      this.DiffItems = [];
       this.recomputeFilteredItems();
       return;
     }
 
     this.formatValueCache.clear();
     this.truncatedCache.clear();
-    this.diffResult = this.differ.diff(this.oldValue, this.newValue);
-    this.diffItems = this.buildHierarchicalItems(this.diffResult.changes);
+    this.DiffResult = this.differ.diff(this.oldValue, this.newValue);
+    this.DiffItems = this.buildHierarchicalItems(this.DiffResult.changes);
 
-    if (this.expandAll) {
-      this.expandAllItems();
+    if (this.ExpandAll) {
+      this.ExpandAllItems();
     }
 
     this.recomputeFilteredItems();
@@ -212,12 +329,17 @@ export class DeepDiffComponent implements OnInit {
     return rootItems;
   }
 
-  toggleItem(item: DeepDiffItem): void {
+  ToggleItem(item: DeepDiffItem): void {
     item.isExpanded = !item.isExpanded;
     this.cdr.markForCheck();
   }
 
-  expandAllItems(): void {
+  /** @deprecated Use {@link ToggleItem}. */
+  toggleItem(item: DeepDiffItem): void {
+    return this.ToggleItem(item);
+  }
+
+  ExpandAllItems(): void {
     const expand = (items: DeepDiffItem[]) => {
       for (const item of items) {
         item.isExpanded = true;
@@ -226,11 +348,16 @@ export class DeepDiffComponent implements OnInit {
         }
       }
     };
-    expand(this.diffItems);
+    expand(this.DiffItems);
     this.cdr.markForCheck();
   }
 
-  collapseAllItems(): void {
+  /** @deprecated Use {@link ExpandAllItems}. */
+  expandAllItems(): void {
+    return this.ExpandAllItems();
+  }
+
+  CollapseAllItems(): void {
     const collapse = (items: DeepDiffItem[]) => {
       for (const item of items) {
         item.isExpanded = false;
@@ -239,8 +366,13 @@ export class DeepDiffComponent implements OnInit {
         }
       }
     };
-    collapse(this.diffItems);
+    collapse(this.DiffItems);
     this.cdr.markForCheck();
+  }
+
+  /** @deprecated Use {@link CollapseAllItems}. */
+  collapseAllItems(): void {
+    return this.CollapseAllItems();
   }
 
   /**
@@ -249,21 +381,21 @@ export class DeepDiffComponent implements OnInit {
    * `filter` / `filterType` setters (filter change) — NOT per CD cycle.
    */
   private recomputeFilteredItems(): void {
-    if (!this.filter && this.filterType === 'all') {
-      this.filteredItems = this.diffItems;
+    if (!this.Filter && this.FilterType === 'all') {
+      this.FilteredItems = this.DiffItems;
       this.cdr.markForCheck();
       return;
     }
 
     const filterFn = (item: DeepDiffItem): boolean => {
-      const matchesType = this.filterType === 'all' || 
-        (this.filterType === 'added' && item.type === DiffChangeType.Added) ||
-        (this.filterType === 'removed' && item.type === DiffChangeType.Removed) ||
-        (this.filterType === 'modified' && item.type === DiffChangeType.Modified) ||
-        (this.filterType === 'unchanged' && item.type === DiffChangeType.Unchanged);
-      const matchesText = !this.filter || 
-        item.path.toLowerCase().includes(this.filter.toLowerCase()) ||
-        item.description.toLowerCase().includes(this.filter.toLowerCase());
+      const matchesType = this.FilterType === 'all' || 
+        (this.FilterType === 'added' && item.type === DiffChangeType.Added) ||
+        (this.FilterType === 'removed' && item.type === DiffChangeType.Removed) ||
+        (this.FilterType === 'modified' && item.type === DiffChangeType.Modified) ||
+        (this.FilterType === 'unchanged' && item.type === DiffChangeType.Unchanged);
+      const matchesText = !this.Filter || 
+        item.path.toLowerCase().includes(this.Filter.toLowerCase()) ||
+        item.description.toLowerCase().includes(this.Filter.toLowerCase());
       
       return matchesType && matchesText;
     };
@@ -282,7 +414,7 @@ export class DeepDiffComponent implements OnInit {
       }, [] as DeepDiffItem[]);
     };
 
-    this.filteredItems = filterRecursive(this.diffItems);
+    this.FilteredItems = filterRecursive(this.DiffItems);
     this.cdr.markForCheck();
   }
 
@@ -296,7 +428,7 @@ export class DeepDiffComponent implements OnInit {
     }
   }
 
-  getTypeClass(type: DiffChangeType): string {
+  GetTypeClass(type: DiffChangeType): string {
     switch (type) {
       case DiffChangeType.Added: return 'added';
       case DiffChangeType.Removed: return 'removed';
@@ -306,11 +438,16 @@ export class DeepDiffComponent implements OnInit {
     }
   }
 
+  /** @deprecated Use {@link GetTypeClass}. */
+  getTypeClass(type: DiffChangeType): string {
+    return this.GetTypeClass(type);
+  }
+
   formatValue(value: any, path: string): string {
     if (value === undefined) return 'undefined';
     if (value === null) return 'null';
 
-    const isExpanded = !!this.expandedValuesMap[path];
+    const isExpanded = !!this.ExpandedValuesMap[path];
     const cacheKey = `${path}|${isExpanded ? 1 : 0}`;
     const cached = this.formatValueCache.get(cacheKey);
     if (cached !== undefined) return cached;
@@ -321,11 +458,11 @@ export class DeepDiffComponent implements OnInit {
   }
 
   private computeFormattedValue(value: any, isExpanded: boolean): string {
-    const shouldTruncate = this.truncateValues && !isExpanded;
+    const shouldTruncate = this.TruncateValues && !isExpanded;
 
     if (typeof value === 'string') {
-      if (shouldTruncate && value.length > this.maxStringLength) {
-        return `"${value.substring(0, this.maxStringLength)}..."`;
+      if (shouldTruncate && value.length > this.MaxStringLength) {
+        return `"${value.substring(0, this.MaxStringLength)}..."`;
       }
       return `"${value}"`;
     }
@@ -347,8 +484,8 @@ export class DeepDiffComponent implements OnInit {
     return String(value);
   }
   
-  isValueTruncated(value: any, path: string): boolean {
-    if (!this.truncateValues || this.expandedValuesMap[path]) {
+  IsValueTruncated(value: any, path: string): boolean {
+    if (!this.TruncateValues || this.ExpandedValuesMap[path]) {
       return false;
     }
 
@@ -361,9 +498,14 @@ export class DeepDiffComponent implements OnInit {
     return result;
   }
 
+  /** @deprecated Use {@link IsValueTruncated}. */
+  isValueTruncated(value: any, path: string): boolean {
+    return this.IsValueTruncated(value, path);
+  }
+
   private computeValueTruncated(value: any): boolean {
     if (typeof value === 'string') {
-      return value.length > this.maxStringLength;
+      return value.length > this.MaxStringLength;
     }
     
     if (typeof value === 'object' && value !== null) {
@@ -378,17 +520,22 @@ export class DeepDiffComponent implements OnInit {
     return false;
   }
   
-  toggleValueExpansion(path: string, event: Event): void {
+  ToggleValueExpansion(path: string, event: Event): void {
     event.stopPropagation();
     
     // Create a new object to trigger change detection
-    this.expandedValuesMap = {
-      ...this.expandedValuesMap,
-      [path]: !this.expandedValuesMap[path]
+    this.ExpandedValuesMap = {
+      ...this.ExpandedValuesMap,
+      [path]: !this.ExpandedValuesMap[path]
     };
     
     // Force change detection
     this.cdr.markForCheck();
+  }
+
+  /** @deprecated Use {@link ToggleValueExpansion}. */
+  toggleValueExpansion(path: string, event: Event): void {
+    return this.ToggleValueExpansion(path, event);
   }
   
   private getObjectSize(obj: any): number {
@@ -398,17 +545,27 @@ export class DeepDiffComponent implements OnInit {
     return Object.keys(obj).length;
   }
 
-  copyToClipboard(text: string): void {
+  CopyToClipboard(text: string): void {
     navigator.clipboard.writeText(text).then(() => {
       // Could add a toast notification here
     });
   }
-  
-  isExpanded(path: string): boolean {
-    return !!this.expandedValuesMap[path];
+
+  /** @deprecated Use {@link CopyToClipboard}. */
+  copyToClipboard(text: string): void {
+    return this.CopyToClipboard(text);
   }
   
-  copyValueToClipboard(value: any, event: Event): void {
+  IsExpanded(path: string): boolean {
+    return !!this.ExpandedValuesMap[path];
+  }
+
+  /** @deprecated Use {@link IsExpanded}. */
+  isExpanded(path: string): boolean {
+    return this.IsExpanded(path);
+  }
+  
+  CopyValueToClipboard(value: any, event: Event): void {
     event.stopPropagation();
     let textToCopy: string;
     
@@ -431,10 +588,15 @@ export class DeepDiffComponent implements OnInit {
     });
   }
 
-  exportDiff(): void {
-    if (!this.diffResult) return;
+  /** @deprecated Use {@link CopyValueToClipboard}. */
+  copyValueToClipboard(value: any, event: Event): void {
+    return this.CopyValueToClipboard(value, event);
+  }
+
+  ExportDiff(): void {
+    if (!this.DiffResult) return;
     
-    const blob = new Blob([JSON.stringify(this.diffResult, null, 2)], 
+    const blob = new Blob([JSON.stringify(this.DiffResult, null, 2)], 
       { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -442,5 +604,10 @@ export class DeepDiffComponent implements OnInit {
     a.download = `diff-${new Date().toISOString()}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  /** @deprecated Use {@link ExportDiff}. */
+  exportDiff(): void {
+    return this.ExportDiff();
   }
 }

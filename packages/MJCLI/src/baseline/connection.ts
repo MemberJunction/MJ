@@ -10,39 +10,44 @@
 import type { Dialect } from './types';
 
 export interface DbConnectionOverrides {
-  database?: string;
-  host?: string;
-  port?: number;
-  user?: string;
-  password?: string;
-  encrypt?: boolean;
-  trustServerCertificate?: boolean;
+  database?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  Host?: string;
+  port?: number;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  user?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  password?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  encrypt?: boolean;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  trustServerCertificate?: boolean;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 export interface DbConnectionParams {
-  dialect: Dialect;
-  host: string;
-  port?: number;
-  user: string;
-  password: string;
-  database: string;
-  encrypt?: boolean;
-  trustServerCertificate?: boolean;
+  Dialect: Dialect;
+  Host: string;
+  port?: number;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  User: string;
+  Password: string;
+  Database: string;
+  encrypt?: boolean;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  trustServerCertificate?: boolean;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 export interface QueryRunner {
   /** Run a query and return all rows as plain JS objects. */
-  query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
+  query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /** Stream rows one at a time. Used for large table dumps + full row compare. */
-  stream(sql: string, onRow: (row: Record<string, unknown>) => void | Promise<void>): Promise<void>;
-  close(): Promise<void>;
-  readonly dialect: Dialect;
-  readonly database: string;
+  stream(sql: string, onRow: (row: Record<string, unknown>) => void | Promise<void>): Promise<void>;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  close(): Promise<void>;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  readonly dialect: Dialect;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  readonly database: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
-export async function openConnection(params: DbConnectionParams): Promise<QueryRunner> {
-  if (params.dialect === 'mssql') return openMssql(params);
+export async function OpenConnection(params: DbConnectionParams): Promise<QueryRunner> {
+  if (params.Dialect === 'mssql') return openMssql(params);
   return openPostgres(params);
+}
+
+/** @deprecated Use {@link OpenConnection}. */
+export async function openConnection(params: DbConnectionParams): Promise<QueryRunner> {
+  return OpenConnection(params);
 }
 
 async function openMssql(params: DbConnectionParams): Promise<QueryRunner> {
@@ -53,11 +58,11 @@ async function openMssql(params: DbConnectionParams): Promise<QueryRunner> {
     ? mssqlMod
     : (mssqlMod as unknown as { default: typeof mssqlMod }).default;
   const config = {
-    server: params.host,
+    server: params.Host,
     port: params.port ?? 1433,
-    user: params.user,
-    password: params.password,
-    database: params.database,
+    user: params.User,
+    password: params.Password,
+    database: params.Database,
     options: {
       encrypt: params.encrypt ?? false,
       trustServerCertificate: params.trustServerCertificate ?? true,
@@ -69,7 +74,7 @@ async function openMssql(params: DbConnectionParams): Promise<QueryRunner> {
 
   return {
     dialect: 'mssql',
-    database: params.database,
+    database: params.Database,
     async query<T>(sql: string): Promise<T[]> {
       const result = await pool.request().query(sql);
       return result.recordset as T[];
@@ -99,17 +104,17 @@ async function openPostgres(params: DbConnectionParams): Promise<QueryRunner> {
   const pg = await import('pg');
   const Client = pg.Client ?? (pg as unknown as { default: { Client: typeof pg.Client } }).default.Client;
   const client = new Client({
-    host: params.host,
+    host: params.Host,
     port: params.port ?? 5432,
-    user: params.user,
-    password: params.password,
-    database: params.database,
+    user: params.User,
+    password: params.Password,
+    database: params.Database,
   });
   await client.connect();
 
   return {
     dialect: 'postgres',
-    database: params.database,
+    database: params.Database,
     async query<T>(sql: string, values?: unknown[]): Promise<T[]> {
       const result = await client.query(sql, values as unknown[] | undefined);
       return result.rows as T[];

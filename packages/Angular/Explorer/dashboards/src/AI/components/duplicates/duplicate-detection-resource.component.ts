@@ -24,19 +24,19 @@ import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService, ActivityService } from '@memberjunction/ng-shared';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import {
-    buildDuplicateAgentContext,
-    resolveEntityDoc,
-    resolveEntityFilter,
+    BuildDuplicateAgentContext,
+    ResolveEntityDoc,
+    ResolveEntityFilter,
     DupeEntityDocCandidate,
 } from './duplicate-detection-agent-context';
 import {
-    buildMatchQueriesForDetailIDs,
-    buildRunScopedDetailsQuery,
-    groupMatchesByDetail,
-    pickDefaultEntityDocument,
-    selectCurrentRunForEntity,
+    BuildMatchQueriesForDetailIDs,
+    BuildRunScopedDetailsQuery,
+    GroupMatchesByDetail,
+    PickDefaultEntityDocument,
+    SelectCurrentRunForEntity,
 } from './duplicate-detection-run-scope';
-import { validateStringParam } from '../../../shared/agent-tool-validation';
+import { ValidateStringParam } from '../../../shared/agent-tool-validation';
 
 /**
  * Represents a group of duplicate matches for a single source record,
@@ -437,7 +437,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             return;
         }
         const selectedDoc = this.SelectedDocumentThresholds;
-        this.navigationService.SetAgentContext(this, buildDuplicateAgentContext({
+        this.navigationService.SetAgentContext(this, BuildDuplicateAgentContext({
             IsDetecting: this.IsDetecting,
             DetectionProgress: this.DetectionProgress,
             DetectionStage: this.DetectionStage,
@@ -491,14 +491,14 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                     required: ['document'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const v = validateStringParam(params['document'], 'document');
+                    const v = ValidateStringParam(params['document'], 'document');
                     if (!v.ok) return v.result;
-                    const resolved = resolveEntityDoc(v.value, this.getEntityDocCandidates());
-                    if (!resolved.ok) return { Success: false, ErrorMessage: resolved.error };
-                    this.SelectedEntityDocumentID = resolved.value.ID;
+                    const resolved = ResolveEntityDoc(v.value, this.getEntityDocCandidates());
+                    if (!resolved.Ok) return { Success: false, ErrorMessage: resolved.Error };
+                    this.SelectedEntityDocumentID = resolved.Value.ID;
                     this.emitAgentContext();
                     this.cdr.detectChanges();
-                    return { Success: true, Data: { SelectedEntityDocID: resolved.value.ID, SelectedEntityDocName: resolved.value.Name } };
+                    return { Success: true, Data: { SelectedEntityDocID: resolved.Value.ID, SelectedEntityDocName: resolved.Value.Name } };
                 },
             },
             {
@@ -525,12 +525,12 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                     required: ['entityName'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const v = validateStringParam(params['entityName'], 'entityName');
+                    const v = ValidateStringParam(params['entityName'], 'entityName');
                     if (!v.ok) return v.result;
-                    const resolved = resolveEntityFilter(v.value, this.EntityNames);
-                    if (!resolved.ok) return { Success: false, ErrorMessage: resolved.error };
-                    this.FilterByEntity(resolved.value);
-                    return { Success: true, Data: { EntityFilter: resolved.value || 'All', PendingCount: this.PendingGroups.length } };
+                    const resolved = ResolveEntityFilter(v.value, this.EntityNames);
+                    if (!resolved.Ok) return { Success: false, ErrorMessage: resolved.Error };
+                    this.FilterByEntity(resolved.Value);
+                    return { Success: true, Data: { EntityFilter: resolved.Value || 'All', PendingCount: this.PendingGroups.length } };
                 },
             },
             {
@@ -643,7 +643,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         // Until the user picks a document, point the board at the one that actually has runs, so a
         // first visit does not land on an unrelated document and report "no results" beside a real run.
         if (this.selectionIsDefault) {
-            const pick = pickDefaultEntityDocument(this.EntityDocuments, this.Runs);
+            const pick = PickDefaultEntityDocument(this.EntityDocuments, this.Runs);
             if (pick && !UUIDsEqual(pick.ID, this.SelectedEntityDocumentID)) {
                 this.applyEntityDocumentSelection(pick.ID);
             }
@@ -669,12 +669,12 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
      * current (see reviewLoadGeneration).
      */
     private async fetchReviewRowsForSelectedDocument(): Promise<ReviewRows> {
-        const run = selectCurrentRunForEntity(this.Runs, this.SelectedDocumentThresholds?.EntityID);
+        const run = SelectCurrentRunForEntity(this.Runs, this.SelectedDocumentThresholds?.EntityID);
         if (!run) {
             return { run: null, details: [], matches: [] };
         }
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const detailsResult = await rv.RunView<MJDuplicateRunDetailEntity>(buildRunScopedDetailsQuery(run.ID));
+        const detailsResult = await rv.RunView<MJDuplicateRunDetailEntity>(BuildRunScopedDetailsQuery(run.ID));
         if (!detailsResult.Success) {
             console.error('[DuplicateDetection] Could not load run details:', detailsResult.ErrorMessage);
             return { run, details: [], matches: [] };
@@ -684,7 +684,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             return { run, details, matches: [] };
         }
         const matchResults = await rv.RunViews<MJDuplicateRunDetailMatchEntity>(
-            buildMatchQueriesForDetailIDs(details.map(d => d.ID))
+            BuildMatchQueriesForDetailIDs(details.map(d => d.ID))
         );
         const failed = matchResults.find(r => !r.Success);
         if (failed) {
@@ -1289,7 +1289,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             runMap.set(run.ID, run);
         }
 
-        const matchesByDetail = groupMatchesByDetail(this.Matches);
+        const matchesByDetail = GroupMatchesByDetail(this.Matches);
 
         this.AllGroups = [];
         for (const detail of this.Details) {
