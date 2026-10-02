@@ -53,4 +53,17 @@ describe('shipped rubric metadata', () => {
         expect(publications.map(row => row.primaryKey.ID).sort()).toEqual([...versionIds].sort());
         for (const row of publications) expect(row.fields).toEqual({ Status: 'Published' });
     });
+
+    it('keys the three rubric prompts by uuid so a push does not duplicate them', () => {
+        const prompts = [
+            ['.rubric-evaluator-prompt.json', '71932BB5-CEC3-4484-947C-EB17704F992C'],
+            ['.rubric-evaluation-agent-prompt.json', '258BD01A-6F1F-4D0D-8EEF-6B99530318B6'],
+            ['.rubric-architect-prompt.json', 'A04F025E-E797-4CA2-8EB3-8C0D4983C274'],
+        ] as const;
+        for (const [file, id] of prompts) {
+            const prompt = JSON.parse(readFileSync(join(root, 'prompts', file), 'utf8'));
+            expect(prompt.primaryKey).toEqual({ ID: id });
+            expect(prompt.primaryKey.Name).toBeUndefined();
+        }
+    });
 });
