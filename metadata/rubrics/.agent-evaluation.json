@@ -33,7 +33,7 @@
                 "GateMinimumScore": 0.6,
                 "NotApplicablePolicy": "NotAllowed",
                 "Sequence": 0,
-                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Binary (Met / Not met)"
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
               },
               "primaryKey": { "ID": "4B49EC56-3B88-4CAB-BCF1-4FBAC7EC0055" }
             },
@@ -46,7 +46,7 @@
                 "Weight": 1,
                 "IsGate": false,
                 "Sequence": 1,
-                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Binary (Met / Not met)"
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
               },
               "primaryKey": { "ID": "1236BD7A-5C95-4613-87B4-FF2A433EE3E1" }
             },
@@ -59,7 +59,7 @@
                 "Weight": 1,
                 "IsGate": false,
                 "Sequence": 2,
-                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Binary (Met / Not met)"
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
               },
               "primaryKey": { "ID": "2DEE3DED-5E1B-4D3A-B4A7-8FC0F8F437DF" }
             }

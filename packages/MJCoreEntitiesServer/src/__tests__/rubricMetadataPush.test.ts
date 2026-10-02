@@ -54,6 +54,17 @@ describe('shipped rubric metadata', () => {
         for (const row of publications) expect(row.fields).toEqual({ Status: 'Published' });
     });
 
+    it('matches the agent evaluation example to the guide scale', () => {
+        const rubric = JSON.parse(readFileSync(join(root, 'rubrics/.agent-evaluation.json'), 'utf8'));
+        const version = rubric.relatedEntities['MJ: Rubric Versions'][0];
+        const scales = version.relatedEntities['MJ: Rubric Criteria'].map((criterion: { fields: { ScaleID: string } }) => criterion.fields.ScaleID);
+        expect(new Set(scales)).toEqual(new Set(['@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss']));
+        const guide = readFileSync(join(root, '../guides/RUBRICS_GUIDE.md'), 'utf8');
+        const section = guide.slice(guide.indexOf('### Agent evaluation'), guide.indexOf('### Peer review'));
+        expect(section).toContain('Meets / Partial / Miss');
+        expect(section).not.toContain('Binary (Met / Not met)');
+    });
+
     it('keys the three rubric prompts by uuid so a push does not duplicate them', () => {
         const prompts = [
             ['.rubric-evaluator-prompt.json', '71932BB5-CEC3-4484-947C-EB17704F992C'],
