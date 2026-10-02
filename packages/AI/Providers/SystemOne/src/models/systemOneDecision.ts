@@ -2,9 +2,11 @@ import {
     BaseDecision,
     BaseSystemOneDecision,
     IsSystemOneWireObject,
+    NonEmptyString,
     SystemOneConfigurationError,
+    TrimTrailingSlashes,
 } from '@memberjunction/ai';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
 
 /** The route every System One server answers on. */
 const SYSTEMONE_PATH = '/v1/systemone';
@@ -50,7 +52,7 @@ export class SystemOneDecision extends BaseSystemOneDecision {
      */
     constructor(apiKey: string, baseURL?: string) {
         super(apiKey);
-        const base = nonEmpty(baseURL) ?? this.Credential.Endpoint ?? nonEmpty(process.env[SystemOneDecision.BASE_URL_ENV_VAR]);
+        const base = NonEmptyString(baseURL) ?? this.Credential.Endpoint ?? NonEmptyString(process.env[SystemOneDecision.BASE_URL_ENV_VAR]);
         this._endpointURL = base ? ToSystemOneURL(base) : undefined;
     }
 
@@ -84,7 +86,7 @@ export class SystemOneDecision extends BaseSystemOneDecision {
      * string or a list of `{ msg }`; llama.cpp sends `error.message`. Otherwise the start of the body.
      */
     protected DescribeHTTPError(status: number, bodyText: string): string {
-        const message = serverMessage(parseJSON(bodyText));
+        const message = serverMessage(SafeJSONParse<unknown>(bodyText));
         return message ? `${this.ServiceName} returned HTTP ${status}: ${message}` : super.DescribeHTTPError(status, bodyText);
     }
 
@@ -109,33 +111,11 @@ export class SystemOneDecision extends BaseSystemOneDecision {
  * URL already ends with it, or `/systemone` when it ends in `/v1`.
  */
 export function ToSystemOneURL(baseURL: string): string {
-    const base = trimTrailingSlashes(baseURL.trim());
+    const base = TrimTrailingSlashes(baseURL.trim());
     if (base.endsWith(SYSTEMONE_PATH)) {
         return base;
     }
     return base.endsWith('/v1') ? `${base}/systemone` : `${base}${SYSTEMONE_PATH}`;
-}
-
-/** The value without trailing slashes. A loop, not `/\/+$/`, which is polynomial on untrusted text (CodeQL js/polynomial-redos). */
-function trimTrailingSlashes(value: string): string {
-    let end = value.length;
-    while (end > 0 && value.charCodeAt(end - 1) === 47) {
-        end--;
-    }
-    return value.slice(0, end);
-}
-
-function nonEmpty(value: string | undefined): string | undefined {
-    const trimmed = value?.trim();
-    return trimmed && trimmed.length > 0 ? trimmed : undefined;
-}
-
-function parseJSON(text: string): unknown {
-    try {
-        return JSON.parse(text);
-    } catch {
-        return undefined;
-    }
 }
 
 /** The error message a System One server put in its body, or an empty string. */

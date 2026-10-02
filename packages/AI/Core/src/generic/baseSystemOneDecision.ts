@@ -93,15 +93,27 @@ export function ParseSystemOneCredential(apiKey: string): SystemOneCredential {
         return { APIKey: raw };
     }
     return {
-        APIKey: stringValue(parsed['apiKey']) ?? '',
-        Endpoint: stringValue(parsed['endpoint']),
-        AccountID: stringValue(parsed['accountId']),
+        APIKey: NonEmptyString(parsed['apiKey']) ?? '',
+        Endpoint: NonEmptyString(parsed['endpoint']),
+        AccountID: NonEmptyString(parsed['accountId']),
     };
 }
 
-/** A trimmed, non-empty string value, or undefined. */
-function stringValue(value: unknown): string | undefined {
+/** A trimmed, non-empty string value, or undefined for anything else: a blank string, a non-string, nothing. */
+export function NonEmptyString(value: unknown): string | undefined {
     return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+/**
+ * The value without trailing slashes, for joining a base URL with a path. A loop, not `/\/+$/`, which
+ * is polynomial on untrusted text (CodeQL js/polynomial-redos).
+ */
+export function TrimTrailingSlashes(value: string): string {
+    let end = value.length;
+    while (end > 0 && value.charCodeAt(end - 1) === 47) {
+        end--;
+    }
+    return value.slice(0, end);
 }
 
 /**

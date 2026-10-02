@@ -204,6 +204,16 @@ describe('CloudflareDecision', () => {
       expect(calls[0].Init?.headers).toEqual({ Authorization: `Bearer ${API_TOKEN}`, 'Content-Type': 'application/json' });
     });
 
+    it('splits a key at its first colon, so a token may itself hold a colon', async () => {
+      const calls = fakeFetch(() => jsonResponse(WRAPPED_RESPONSE));
+      const driver = new CloudflareDecision(`${ACCOUNT_ID}:tok:en`);
+      await driver.Decide(params());
+
+      expect(driver.AccountID).toBe(ACCOUNT_ID);
+      expect(calls[0].Url).toBe(CLEF_URL);
+      expect(calls[0].Init?.headers).toEqual({ Authorization: 'Bearer tok:en', 'Content-Type': 'application/json' });
+    });
+
     it("reads an AI Credential's JSON: its accountId wins over a compound apiKey and the environment", async () => {
       process.env[CloudflareDecision.ACCOUNT_ID_ENV_VAR] = 'env-account';
       const calls = fakeFetch(() => jsonResponse(WRAPPED_RESPONSE));

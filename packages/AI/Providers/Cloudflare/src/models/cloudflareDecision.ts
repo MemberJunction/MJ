@@ -3,10 +3,12 @@ import {
     BaseSystemOneDecision,
     CreateSystemOneHTTPError,
     IsSystemOneWireObject,
+    NonEmptyString,
     SystemOneConfigurationError,
     SystemOneWireObject,
+    TrimTrailingSlashes,
 } from '@memberjunction/ai';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
 
 /** The placeholder a base URL carries where the Cloudflare account ID goes. */
 const ACCOUNT_ID_PLACEHOLDER = '{account_id}';
@@ -67,8 +69,8 @@ export class CloudflareDecision extends BaseSystemOneDecision {
         const key = splitAccountFromToken(this.Credential.APIKey);
         this._apiToken = key.APIToken;
         this._accountID = this.Credential.AccountID ?? key.AccountID ?? readEnv(CloudflareDecision.ACCOUNT_ID_ENV_VAR);
-        const base = nonEmpty(baseURL) ?? this.Credential.Endpoint ?? readEnv(CloudflareDecision.BASE_URL_ENV_VAR) ?? CloudflareDecision.DEFAULT_BASE_URL;
-        this._baseURL = trimTrailingSlashes(base);
+        const base = NonEmptyString(baseURL) ?? this.Credential.Endpoint ?? readEnv(CloudflareDecision.BASE_URL_ENV_VAR) ?? CloudflareDecision.DEFAULT_BASE_URL;
+        this._baseURL = TrimTrailingSlashes(base);
     }
 
     /** The Cloudflare account ID, from the credential, the API key or `CLOUDFLARE_ACCOUNT_ID`; undefined when none has one. */
@@ -123,7 +125,7 @@ export class CloudflareDecision extends BaseSystemOneDecision {
 
     /** Names the envelope's `errors[].message` when the body has them, otherwise the start of the body. */
     protected DescribeHTTPError(status: number, bodyText: string): string {
-        const messages = errorMessages(parseJSON(bodyText));
+        const messages = errorMessages(SafeJSONParse<unknown>(bodyText));
         return messages ? `${this.ServiceName} returned HTTP ${status}: ${messages}` : super.DescribeHTTPError(status, bodyText);
     }
 
@@ -157,38 +159,16 @@ function splitAccountFromToken(apiKey: string): CloudflareKey {
     if (colon < 0) {
         return { APIToken: key };
     }
-    return { AccountID: nonEmpty(key.slice(0, colon)), APIToken: key.slice(colon + 1).trim() };
-}
-
-/** The value without trailing slashes. A loop, not `/\/+$/`, which is polynomial on untrusted text (CodeQL js/polynomial-redos). */
-function trimTrailingSlashes(value: string): string {
-    let end = value.length;
-    while (end > 0 && value.charCodeAt(end - 1) === 47) {
-        end--;
-    }
-    return value.slice(0, end);
-}
-
-function nonEmpty(value: string | undefined): string | undefined {
-    const trimmed = value?.trim();
-    return trimmed && trimmed.length > 0 ? trimmed : undefined;
+    return { AccountID: NonEmptyString(key.slice(0, colon)), APIToken: key.slice(colon + 1).trim() };
 }
 
 function readEnv(name: string): string | undefined {
-    return nonEmpty(process.env[name]);
+    return NonEmptyString(process.env[name]);
 }
 
 /** Whether a parsed body is Cloudflare's v4 envelope rather than a bare System One response. */
 function isEnvelope(body: unknown): body is SystemOneWireObject {
     return IsSystemOneWireObject(body) && typeof body['success'] === 'boolean' && !('answers' in body);
-}
-
-function parseJSON(text: string): unknown {
-    try {
-        return JSON.parse(text);
-    } catch {
-        return undefined;
-    }
 }
 
 /** The envelope's `errors[].message` values, joined, or an empty string when there are none. */
