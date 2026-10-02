@@ -16,20 +16,20 @@
  * (and the engine's cached key material) once every credential it encrypted is deleted. A configured key
  * is used as it is.
  *
- * CLEANUP, children first: prompt runs, credential bindings, prompt models, prompts, the credentials'
- * `Credential Access` audit-log rows, then the credentials. Every delete is best-effort and logged, so a
- * failing check still cleans up. The platform's own Record Changes history for the tracked entities is
- * left, as every other bundle leaves it.
+ * CLEANUP, children first: prompt runs (the tracked ones, and any other run of a test prompt), credential
+ * bindings, prompt models, prompts, the credentials' `Credential Access` audit-log rows, then the
+ * credentials. Every delete is best-effort, and one that fails or returns false is logged with its
+ * reason, so a failing check still cleans up and a row it leaves is named. The platform's own Record
+ * Changes history for the tracked entities is left, as every other bundle leaves it.
  */
 import { randomBytes } from 'node:crypto';
-import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { CompositeKey, RunView, type BaseEntity, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { EscapeSQLString, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { BaseDecision } from '@memberjunction/ai';
 import type {
     MJAICredentialBindingEntity,
     MJAIPromptEntity,
     MJAIPromptModelEntity,
-    MJAuditLogEntity,
     MJCredentialEntity,
 } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -39,7 +39,7 @@ import { CredentialEngine } from '@memberjunction/credentials';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { Settle } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext } from '@memberjunction/testing-integration';
-import { AGENT_LIVE_FIXTURE_TAG, DeleteById, NewMarker, RequireRows } from './agent-live-shared';
+import { AGENT_LIVE_FIXTURE_TAG, NewMarker, RequireRows } from './agent-live-shared';
 
 // ─── Constants ───────────────────────────────────────────────────────────────────────────────────
 
@@ -376,6 +376,7 @@ export class DecisionFixtures {
         DecisionFixtures.open.delete(this);
         try {
             await this.deleteAll('MJ: AI Prompt Runs', this.promptRunIDs);
+            await this.deleteUntrackedPromptRuns();
             await this.deleteAll('MJ: AI Credential Bindings', this.bindingIDs);
             await this.deleteAll('MJ: AI Prompt Models', this.promptModelIDs);
             await this.deleteAll('MJ: AI Prompts', this.promptIDs);
@@ -422,8 +423,55 @@ export class DecisionFixtures {
 
     private async deleteAll(entityName: string, ids: string[]): Promise<void> {
         for (const id of ids.splice(0).reverse()) {
-            await DeleteById(entityName, id, this.provider, this.user);
+            await this.deleteRow(entityName, id);
         }
+    }
+
+    /**
+     * Deletes one row, logging a delete that throws or returns false with its reason. `Delete()` reports
+     * a refused delete (a foreign key still pointing at the row) by returning false, not by throwing.
+     */
+    private async deleteRow(entityName: string, id: string): Promise<void> {
+        try {
+            const row = await this.provider.GetEntityObject<BaseEntity>(entityName, this.user);
+            if (!(await row.InnerLoad(CompositeKey.FromID(id)))) {
+                return;
+            }
+            if (!(await row.Delete())) {
+                console.error(`[decision-fixtures] could not delete ${entityName} ${id}: ${row.LatestResult?.CompleteMessage ?? 'no message'}`);
+            }
+        } catch (err: unknown) {
+            console.error(`[decision-fixtures] deleting ${entityName} ${id} threw:`, err);
+        }
+    }
+
+    /** Any run of this fixture's prompts it was not handed, such as one from a run that threw, which would block the prompt's delete. */
+    private async deleteUntrackedPromptRuns(): Promise<void> {
+        if (this.promptIDs.length === 0) {
+            return;
+        }
+        const ids = await this.idsWhere('MJ: AI Prompt Runs', `PromptID IN (${this.inList(this.promptIDs)})`);
+        await this.deleteAll('MJ: AI Prompt Runs', ids);
+    }
+
+    /** The IDs of the rows of `entityName` that match `filter`, read past every cache; none, logged, when the read fails. */
+    private async idsWhere(entityName: string, filter: string): Promise<string[]> {
+        const rows = await RunView.FromMetadataProvider(this.provider).RunView<{ ID: string }>({
+            EntityName: entityName,
+            ExtraFilter: filter,
+            Fields: ['ID'],
+            ResultType: 'simple',
+            BypassCache: true,
+        }, this.user);
+        if (!rows.Success) {
+            console.error(`[decision-fixtures] could not read ${entityName} to clean up: ${rows.ErrorMessage}`);
+            return [];
+        }
+        return rows.Results.map(r => r.ID);
+    }
+
+    private inList(ids: string[]): string {
+        return ids.map(id => `'${EscapeSQLString(id)}'`).join(', ');
     }
 
     /** The credentials' audit-log rows, then the credentials. */
@@ -433,20 +481,8 @@ export class DecisionFixtures {
             return;
         }
         await Settle(CREDENTIAL_TOUCH_SETTLE_MS);
-        const inList = ids.map(id => `'${EscapeSQLString(id)}'`).join(', ');
-        const logs = await RunView.FromMetadataProvider(this.provider).RunView<Pick<MJAuditLogEntity, 'ID'>>({
-            EntityName: 'MJ: Audit Logs',
-            ExtraFilter: `RecordID IN (${inList})`,
-            Fields: ['ID'],
-            ResultType: 'simple',
-            BypassCache: true,
-        }, this.user);
-        for (const log of logs.Success ? logs.Results : []) {
-            await DeleteById('MJ: Audit Logs', log.ID, this.provider, this.user);
-        }
-        for (const id of ids.reverse()) {
-            await DeleteById('MJ: Credentials', id, this.provider, this.user);
-        }
+        await this.deleteAll('MJ: Audit Logs', await this.idsWhere('MJ: Audit Logs', `RecordID IN (${this.inList(ids)})`));
+        await this.deleteAll('MJ: Credentials', ids);
         await CredentialEngine.Instance.Config(true, this.user);
     }
 
