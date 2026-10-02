@@ -22,6 +22,10 @@ const options = {
     ResolvePromptName: (id: string) => `Prompt ${id}`,
 };
 
+/** A spec field as its column stores it: JSON text, whichever shape the spec carried. */
+const asText = (value: string | Record<string, unknown> | undefined): string | undefined =>
+    typeof value === 'object' ? JSON.stringify(value) : value;
+
 /** Re-reads a saved AgentSpec as compiler input, which is what reopening a workflow does. */
 const asCompilerInput = (spec: AgentSpec): { steps: FlowCompilerStep[]; paths: FlowCompilerPath[] } => ({
     steps: (spec.Steps ?? []).map((s) => ({
@@ -35,9 +39,9 @@ const asCompilerInput = (spec: AgentSpec): { steps: FlowCompilerStep[]; paths: F
         ActionID: s.ActionID,
         PromptID: s.PromptID,
         LoopBodyType: s.LoopBodyType,
-        Configuration: s.Configuration,
-        ActionInputMapping: s.ActionInputMapping,
-        ActionOutputMapping: s.ActionOutputMapping,
+        Configuration: asText(s.Configuration),
+        ActionInputMapping: asText(s.ActionInputMapping),
+        ActionOutputMapping: asText(s.ActionOutputMapping),
         TimeoutSeconds: s.TimeoutSeconds,
         RetryCount: s.RetryCount,
         OnErrorBehavior: s.OnErrorBehavior,

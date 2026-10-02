@@ -3,8 +3,8 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RecordProcessStudioComponent } from '@memberjunction/ng-record-process-studio';
-import { AgentToolResult, validateStringParam } from '../shared/agent-tool-validation';
-import { buildStudioAgentContext, resolveRowByIDOrName } from './bulk-operations-agent-helpers';
+import { AgentToolResult, ValidateStringParam } from '../shared/agent-tool-validation';
+import { BuildStudioAgentContext, ResolveRowByIDOrName } from './bulk-operations-agent-helpers';
 
 /**
  * "Operations" sub-page of the Bulk Operations shell. A thin host that renders the generic, self-contained
@@ -82,7 +82,7 @@ export class BulkOperationsOperationsComponent extends BaseResourceComponent imp
             this.navigationService.SetAgentContext(this, { CurrentMode: 'list', IsReady: false });
             return;
         }
-        this.navigationService.SetAgentContext(this, buildStudioAgentContext({
+        this.navigationService.SetAgentContext(this, BuildStudioAgentContext({
             Mode: s.Mode,
             ProcessCount: s.Processes.length,
             Filtered: s.Filtered,
@@ -178,7 +178,7 @@ export class BulkOperationsOperationsComponent extends BaseResourceComponent imp
      * change detection exactly as it would for a real keystroke.
      */
     private async handleSearch(params: Record<string, unknown>): Promise<AgentToolResult & { Data?: Record<string, unknown> }> {
-        const check = validateStringParam(params['query'], 'query');
+        const check = ValidateStringParam(params['query'], 'query');
         if (!check.ok) return check.result;
         const s = this.requireStudio();
         if (!s) return this.notReady();
@@ -257,7 +257,7 @@ export class BulkOperationsOperationsComponent extends BaseResourceComponent imp
         s: RecordProcessStudioComponent,
         rawRef: unknown,
     ): { ok: true; value: RecordProcessStudioComponent['Processes'][number] } | { ok: false; result: AgentToolResult } {
-        return resolveRowByIDOrName(s.Processes, rawRef, 'process', 'bulk operation', (p) => p.Name);
+        return ResolveRowByIDOrName(s.Processes, rawRef, 'process', 'bulk operation', (p) => p.Name);
     }
 
     /** Build a minimal synthetic input event so we can drive the studio's `onSearch(event)` API. */

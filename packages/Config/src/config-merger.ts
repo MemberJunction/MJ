@@ -33,7 +33,7 @@ export interface MergeOptions {
  * @param options - Merge behavior options
  * @returns Merged configuration object
  */
-export function mergeConfigs<T extends Record<string, any>>(
+export function MergeConfigs<T extends Record<string, any>>(
   defaults: T,
   overrides: Partial<T> | undefined,
   options: MergeOptions = {}
@@ -58,6 +58,15 @@ export function mergeConfigs<T extends Record<string, any>>(
       });
     }
   );
+}
+
+/** @deprecated Use {@link MergeConfigs}. */
+export function mergeConfigs<T extends Record<string, any>>(
+  defaults: T,
+  overrides: Partial<T> | undefined,
+  options: MergeOptions = {}
+): T {
+  return MergeConfigs(defaults, overrides, options);
 }
 
 /**
@@ -139,7 +148,7 @@ function isPlainObject(value: any): boolean {
  * @param config - Merged configuration object
  * @param allowedKeys - Set of allowed top-level keys
  */
-export function validateConfigStructure(
+export function ValidateConfigStructure(
   config: Record<string, any>,
   allowedKeys: Set<string>
 ): void {
@@ -152,4 +161,12 @@ export function validateConfigStructure(
       `These may be typos or deprecated settings.`
     );
   }
+}
+
+/** @deprecated Use {@link ValidateConfigStructure}. */
+export function validateConfigStructure(
+  config: Record<string, any>,
+  allowedKeys: Set<string>
+): void {
+  return ValidateConfigStructure(config, allowedKeys);
 }

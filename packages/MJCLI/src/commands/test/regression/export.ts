@@ -3,11 +3,11 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import {
   AGENTIC_TEST_RUNNER_IMAGE,
-  dockerRunArgs,
+  DockerRunArgs,
   INLINE_REPORT_SCRIPT,
-  isInsideMonorepo,
+  IsInsideMonorepo,
   RESULTS_DIR,
-  spawnInherit,
+  SpawnInherit,
 } from '../../../lib/regression/docker-helpers.js';
 
 export default class TestRegressionExport extends Command {
@@ -37,7 +37,7 @@ export default class TestRegressionExport extends Command {
   async run(): Promise<void> {
     const { flags } = await this.parse(TestRegressionExport);
 
-    if (isInsideMonorepo()) {
+    if (IsInsideMonorepo()) {
       // On-disk inline-report.cjs against docker/regression/test-results.
       if (!existsSync(INLINE_REPORT_SCRIPT)) this.error(`✗ Exporter missing: ${INLINE_REPORT_SCRIPT}`);
       const args = [INLINE_REPORT_SCRIPT];
@@ -49,7 +49,7 @@ export default class TestRegressionExport extends Command {
         if (!existsSync(runDir)) this.error(`✗ Run directory not found: ${runDir}`);
         args.push(runDir);
       }
-      const code = await spawnInherit(process.execPath, args);
+      const code = await SpawnInherit(process.execPath, args);
       if (code !== 0) this.exit(code);
       return;
     }
@@ -61,9 +61,9 @@ export default class TestRegressionExport extends Command {
     if (!existsSync(resultsDir)) this.error(`✗ No ./test-results directory found to export from.`);
     const runArg = flags.run ? `/app/test-results/${path.basename(flags.run)}` : '/app/test-results/latest';
     this.log(`▶ docker run ${image} export ${runArg}`);
-    const code = await spawnInherit(
+    const code = await SpawnInherit(
       'docker',
-      dockerRunArgs(image, ['export', runArg], { mounts: [[resultsDir, '/app/test-results']] }),
+      DockerRunArgs(image, ['export', runArg], { mounts: [[resultsDir, '/app/test-results']] }),
     );
     if (code !== 0) this.exit(code);
   }

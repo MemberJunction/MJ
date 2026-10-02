@@ -315,10 +315,6 @@ vi.mock('@memberjunction/actions-base', () => ({
     }
 }));
 
-vi.mock('@memberjunction/storage', () => ({
-    FileStorageBase: class FileStorageBase {},
-}));
-
 vi.mock('@memberjunction/templates-base-types', () => ({
     TemplateEngineBase: {
         Instance: {

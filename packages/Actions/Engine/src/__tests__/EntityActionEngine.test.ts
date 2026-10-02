@@ -199,6 +199,66 @@ describe('EntityActionEngineServer', () => {
             expect(mockInvocation.InvokeAction).toHaveBeenCalledWith(params);
             expect(result.Success).toBe(true);
         });
+
+        // Round 16 memory-leak fix: RunEntityAction() previously asked ClassFactory.CreateInstance for
+        // a brand-new EntityActionInvocationBase instance on EVERY dispatch, discarding it immediately —
+        // so an invocation type's own bounded cache (e.g. the Script type's _scriptCache) was rebuilt
+        // from empty and thrown away before a second lookup could ever hit it. Fixed by caching the
+        // instance keyed by InvocationType.Name, mirroring CommunicationEngine._providerInstanceCache.
+        describe('invocation instance caching (Round 16 leak fix)', () => {
+            it('reuses the same invocation instance across repeated calls with the same InvocationType.Name', async () => {
+                const mockInvocation = {
+                    InvokeAction: vi.fn().mockResolvedValue({ Success: true, Message: 'OK' }),
+                };
+                mockClassFactory.CreateInstance.mockReturnValue(mockInvocation);
+
+                const engine = new EntityActionEngineServer();
+                const params1 = { EntityAction: { ID: 'ea-1' }, InvocationType: { Name: 'SingleRecord' } };
+                const params2 = { EntityAction: { ID: 'ea-2' }, InvocationType: { Name: 'SingleRecord' } };
+
+                await engine.RunEntityAction(params1 as unknown as Record<string, Function>);
+                await engine.RunEntityAction(params2 as unknown as Record<string, Function>);
+
+                // Only the FIRST call asked ClassFactory for a new instance — the second reused the cache.
+                expect(mockClassFactory.CreateInstance).toHaveBeenCalledTimes(1);
+                expect(mockInvocation.InvokeAction).toHaveBeenCalledTimes(2);
+                expect(mockInvocation.InvokeAction).toHaveBeenNthCalledWith(1, params1);
+                expect(mockInvocation.InvokeAction).toHaveBeenNthCalledWith(2, params2);
+            });
+
+            it('caches distinct instances per distinct InvocationType.Name', async () => {
+                const singleRecordInvocation = { InvokeAction: vi.fn().mockResolvedValue({ Success: true }) };
+                const listInvocation = { InvokeAction: vi.fn().mockResolvedValue({ Success: true }) };
+                mockClassFactory.CreateInstance.mockImplementation((_base: unknown, name: string) =>
+                    name === 'SingleRecord' ? singleRecordInvocation : listInvocation
+                );
+
+                const engine = new EntityActionEngineServer();
+                await engine.RunEntityAction({ EntityAction: { ID: 'ea-1' }, InvocationType: { Name: 'SingleRecord' } } as unknown as Record<string, Function>);
+                await engine.RunEntityAction({ EntityAction: { ID: 'ea-2' }, InvocationType: { Name: 'MultipleRecords' } } as unknown as Record<string, Function>);
+                await engine.RunEntityAction({ EntityAction: { ID: 'ea-3' }, InvocationType: { Name: 'SingleRecord' } } as unknown as Record<string, Function>);
+
+                expect(mockClassFactory.CreateInstance).toHaveBeenCalledTimes(2); // one per distinct name
+                expect(singleRecordInvocation.InvokeAction).toHaveBeenCalledTimes(2);
+                expect(listInvocation.InvokeAction).toHaveBeenCalledTimes(1);
+            });
+
+            it('does not poison the cache when ClassFactory fails to create an instance', async () => {
+                mockClassFactory.CreateInstance.mockReturnValueOnce(null);
+                const engine = new EntityActionEngineServer();
+                const params = { EntityAction: { ID: 'ea-1' }, InvocationType: { Name: 'SingleRecord' } };
+
+                await expect(engine.RunEntityAction(params as unknown as Record<string, Function>)).rejects.toThrow('Error creating instance');
+
+                // A retry after the failure asks ClassFactory again rather than being stuck on a cached failure.
+                const mockInvocation = { InvokeAction: vi.fn().mockResolvedValue({ Success: true }) };
+                mockClassFactory.CreateInstance.mockReturnValueOnce(mockInvocation);
+                const result = await engine.RunEntityAction(params as unknown as Record<string, Function>);
+
+                expect(mockClassFactory.CreateInstance).toHaveBeenCalledTimes(2);
+                expect(result.Success).toBe(true);
+            });
+        });
     });
 });
 

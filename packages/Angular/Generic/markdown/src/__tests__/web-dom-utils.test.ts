@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { sanitizeSvgContent } from '../lib/extensions/svg-renderer.extension';
+import { SanitizeSvgContent } from '../lib/extensions/svg-renderer.extension';
 import {
-  addCopyButtonsToCodeBlocks,
-  removeCopyButtonsFromCodeBlocks,
+  AddCopyButtonsToCodeBlocks,
+  RemoveCopyButtonsFromCodeBlocks,
 } from '../lib/extensions/code-copy.extension';
 import {
-  toggleCollapsibleSection,
-  expandAllSections,
-  collapseAllSections,
-  expandToHeading,
+  ToggleCollapsibleSection,
+  ExpandAllSections,
+  CollapseAllSections,
+  ExpandToHeading,
 } from '../lib/extensions/collapsible-headings.extension';
 
 function container(html: string): HTMLElement {
@@ -26,14 +26,14 @@ afterEach(() => {
 describe('sanitizeSvgContent', () => {
   it('removes <script> elements', () => {
     const el = container('<svg><script>alert(1)</script><circle/></svg>');
-    sanitizeSvgContent(el);
+    SanitizeSvgContent(el);
     expect(el.querySelector('script')).toBeNull();
     expect(el.querySelector('circle')).not.toBeNull();
   });
 
   it('strips inline event-handler attributes', () => {
     const el = container('<svg><rect onclick="hack()" onload="x()"/></svg>');
-    sanitizeSvgContent(el);
+    SanitizeSvgContent(el);
     const rect = el.querySelector('rect');
     expect(rect?.hasAttribute('onclick')).toBe(false);
     expect(rect?.hasAttribute('onload')).toBe(false);
@@ -41,43 +41,43 @@ describe('sanitizeSvgContent', () => {
 
   it('removes javascript: hrefs', () => {
     const el = container('<svg><a href="javascript:evil()">x</a></svg>');
-    sanitizeSvgContent(el);
+    SanitizeSvgContent(el);
     expect(el.querySelector('a')?.hasAttribute('href')).toBe(false);
   });
 
   it('removes foreignObject and external <use>', () => {
     const el = container('<svg><foreignObject></foreignObject><use href="https://evil.test/x"/></svg>');
-    sanitizeSvgContent(el);
+    SanitizeSvgContent(el);
     expect(el.querySelector('foreignObject')).toBeNull();
     expect(el.querySelector('use')).toBeNull();
   });
 
   it('strips javascript: from xlink:href', () => {
     const el = container('<svg><a xlink:href="javascript:evil()">x</a></svg>');
-    sanitizeSvgContent(el);
+    SanitizeSvgContent(el);
     expect(el.querySelector('a')?.hasAttribute('xlink:href')).toBe(false);
   });
 
   it('keeps a local <use> reference (only external ones are removed)', () => {
     const el = container('<svg><use href="#icon"/></svg>');
-    sanitizeSvgContent(el);
+    SanitizeSvgContent(el);
     expect(el.querySelector('use')).not.toBeNull();
   });
 
   it('is a no-op on a container with no dangerous content', () => {
     const el = container('<svg><circle cx="1" cy="1" r="1"/></svg>');
-    sanitizeSvgContent(el);
+    SanitizeSvgContent(el);
     expect(el.querySelector('circle')).not.toBeNull();
   });
 
   it('does not throw on an empty container', () => {
     const el = container('');
-    expect(() => sanitizeSvgContent(el)).not.toThrow();
+    expect(() => SanitizeSvgContent(el)).not.toThrow();
   });
 
   it('removes handler attributes that are not on a fixed list', () => {
     const el = container('<svg><rect onbegin="a()" onpointerrawupdate="b()" ONANIMATIONEND="c()" OnMouseEnter="d()"/></svg>');
-    sanitizeSvgContent(el);
+    SanitizeSvgContent(el);
     expect(el.querySelector('rect')?.attributes.length).toBe(0);
   });
 
@@ -93,7 +93,7 @@ describe('sanitizeSvgContent', () => {
   ])('removes href using %s', (_label, href) => {
     const el = container('<svg><a>x</a></svg>');
     el.querySelector('a')!.setAttribute('href', href);
-    sanitizeSvgContent(el);
+    SanitizeSvgContent(el);
     expect(el.querySelector('a')?.hasAttribute('href')).toBe(false);
   });
 
@@ -103,7 +103,7 @@ describe('sanitizeSvgContent', () => {
     el.querySelector('image')!.setAttribute('src', 'javascript:alert(1)');
     el.querySelector('foo')!.setAttribute('action', 'javascript:alert(1)');
     el.querySelector('foo')!.setAttribute('formaction', 'vbscript:alert(1)');
-    sanitizeSvgContent(el);
+    SanitizeSvgContent(el);
     expect(el.querySelector('a')?.hasAttribute('xlink:href')).toBe(false);
     expect(el.querySelector('image')?.hasAttribute('src')).toBe(false);
     expect(el.querySelector('foo')?.attributes.length).toBe(0);
@@ -113,14 +113,14 @@ describe('sanitizeSvgContent', () => {
     const el = container('<svg><image id="png"/><image id="svg"/></svg>');
     el.querySelector('#png')!.setAttribute('href', 'data:image/png;base64,iVBORw0KGgo=');
     el.querySelector('#svg')!.setAttribute('href', 'data:image/svg+xml;base64,PHN2Zy8+');
-    sanitizeSvgContent(el);
+    SanitizeSvgContent(el);
     expect(el.querySelector('#png')?.hasAttribute('href')).toBe(true);
     expect(el.querySelector('#svg')?.hasAttribute('href')).toBe(false);
   });
 
   it('keeps safe hrefs and non-URL attributes untouched', () => {
     const el = container('<svg><a href="https://example.test/" class="k" data-x="1">x</a></svg>');
-    sanitizeSvgContent(el);
+    SanitizeSvgContent(el);
     const a = el.querySelector('a')!;
     expect(a.getAttribute('href')).toBe('https://example.test/');
     expect(a.getAttribute('class')).toBe('k');
@@ -134,7 +134,7 @@ describe('sanitizeSvgContent', () => {
   ])('removes a <use> whose reference is not same-document (%s)', (_label, href) => {
     const el = container('<svg><use/></svg>');
     el.querySelector('use')!.setAttribute('href', href);
-    sanitizeSvgContent(el);
+    SanitizeSvgContent(el);
     expect(el.querySelector('use')).toBeNull();
   });
 });
@@ -142,56 +142,56 @@ describe('sanitizeSvgContent', () => {
 describe('addCopyButtonsToCodeBlocks / removeCopyButtonsFromCodeBlocks', () => {
   it('adds a copy button with a formatted language label', () => {
     const el = container('<pre><code class="language-ts">const x = 1;</code></pre>');
-    addCopyButtonsToCodeBlocks(el);
+    AddCopyButtonsToCodeBlocks(el);
     expect(el.querySelector('.code-copy-btn')).not.toBeNull();
     expect(el.querySelector('.code-language-label')?.textContent).toBe('TypeScript');
   });
 
   it('does not double-add a toolbar', () => {
     const el = container('<pre><code class="language-js">a</code></pre>');
-    addCopyButtonsToCodeBlocks(el);
-    addCopyButtonsToCodeBlocks(el);
+    AddCopyButtonsToCodeBlocks(el);
+    AddCopyButtonsToCodeBlocks(el);
     expect(el.querySelectorAll('.code-toolbar')).toHaveLength(1);
   });
 
   it('removes toolbars on cleanup', () => {
     const el = container('<pre><code class="language-js">a</code></pre>');
-    addCopyButtonsToCodeBlocks(el);
-    removeCopyButtonsFromCodeBlocks(el);
+    AddCopyButtonsToCodeBlocks(el);
+    RemoveCopyButtonsFromCodeBlocks(el);
     expect(el.querySelector('.code-toolbar')).toBeNull();
   });
 
   it('adds a copy button but no language label for a code block without a language class', () => {
     const el = container('<pre><code>plain code</code></pre>');
-    addCopyButtonsToCodeBlocks(el);
+    AddCopyButtonsToCodeBlocks(el);
     expect(el.querySelector('.code-copy-btn')).not.toBeNull();
     expect(el.querySelector('.code-language-label')).toBeNull();
   });
 
   it('omits the language label when showLanguageLabel is false', () => {
     const el = container('<pre><code class="language-ts">a</code></pre>');
-    addCopyButtonsToCodeBlocks(el, { showLanguageLabel: false });
+    AddCopyButtonsToCodeBlocks(el, { showLanguageLabel: false });
     expect(el.querySelector('.code-copy-btn')).not.toBeNull();
     expect(el.querySelector('.code-language-label')).toBeNull();
   });
 
   it('honors a custom button/toolbar class and can remove it again', () => {
     const el = container('<pre><code class="language-js">a</code></pre>');
-    addCopyButtonsToCodeBlocks(el, { toolbarClass: 'my-bar', buttonClass: 'my-btn' });
+    AddCopyButtonsToCodeBlocks(el, { toolbarClass: 'my-bar', buttonClass: 'my-btn' });
     expect(el.querySelector('.my-btn')).not.toBeNull();
-    removeCopyButtonsFromCodeBlocks(el, 'my-bar');
+    RemoveCopyButtonsFromCodeBlocks(el, 'my-bar');
     expect(el.querySelector('.my-bar')).toBeNull();
   });
 
   it('is a no-op on a container with no code blocks', () => {
     const el = container('<p>no code here</p>');
-    expect(() => addCopyButtonsToCodeBlocks(el)).not.toThrow();
+    expect(() => AddCopyButtonsToCodeBlocks(el)).not.toThrow();
     expect(el.querySelector('.code-toolbar')).toBeNull();
   });
 
   it('removeCopyButtonsFromCodeBlocks is safe when there are no toolbars', () => {
     const el = container('<pre><code>a</code></pre>');
-    expect(() => removeCopyButtonsFromCodeBlocks(el)).not.toThrow();
+    expect(() => RemoveCopyButtonsFromCodeBlocks(el)).not.toThrow();
   });
 });
 
@@ -214,24 +214,24 @@ describe('collapsible DOM helpers', () => {
 
   it('toggleCollapsibleSection flips the collapsed class and aria-expanded', () => {
     const parent = el.querySelector('.collapsible-section') as HTMLElement;
-    toggleCollapsibleSection(parent);
+    ToggleCollapsibleSection(parent);
     expect(parent.classList.contains('collapsed')).toBe(true);
     expect(parent.querySelector('.collapsible-toggle')?.getAttribute('aria-expanded')).toBe('false');
   });
 
   it('expandAllSections clears every collapsed section', () => {
-    expandAllSections(el);
+    ExpandAllSections(el);
     expect(el.querySelectorAll('.collapsible-section.collapsed')).toHaveLength(0);
   });
 
   it('collapseAllSections collapses every section', () => {
-    collapseAllSections(el);
+    CollapseAllSections(el);
     expect(el.querySelectorAll('.collapsible-section:not(.collapsed)')).toHaveLength(0);
   });
 
   it('expandToHeading reveals ancestor sections of a heading', () => {
     // child section starts collapsed; expanding to #child should clear it
-    expandToHeading(el, 'child');
+    ExpandToHeading(el, 'child');
     const child = el.querySelector('[data-level="3"]') as HTMLElement;
     expect(child.classList.contains('collapsed')).toBe(false);
   });
@@ -239,21 +239,21 @@ describe('collapsible DOM helpers', () => {
   it('toggleCollapsibleSection expands a section that starts collapsed', () => {
     const child = el.querySelector('[data-level="3"]') as HTMLElement;
     expect(child.classList.contains('collapsed')).toBe(true);
-    toggleCollapsibleSection(child);
+    ToggleCollapsibleSection(child);
     expect(child.classList.contains('collapsed')).toBe(false);
     expect(child.querySelector('.collapsible-toggle')?.getAttribute('aria-expanded')).toBe('true');
   });
 
   it('expandToHeading is a no-op for an unknown heading id (no throw)', () => {
     const child = el.querySelector('[data-level="3"]') as HTMLElement;
-    expect(() => expandToHeading(el, 'does-not-exist')).not.toThrow();
+    expect(() => ExpandToHeading(el, 'does-not-exist')).not.toThrow();
     // The child that was collapsed stays collapsed — nothing was touched.
     expect(child.classList.contains('collapsed')).toBe(true);
   });
 
   it('expand/collapse helpers are safe on a container with no sections', () => {
     const empty = container('<p>nothing collapsible</p>');
-    expect(() => expandAllSections(empty)).not.toThrow();
-    expect(() => collapseAllSections(empty)).not.toThrow();
+    expect(() => ExpandAllSections(empty)).not.toThrow();
+    expect(() => CollapseAllSections(empty)).not.toThrow();
   });
 });

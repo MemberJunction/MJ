@@ -7,13 +7,13 @@
  */
 
 import { createHash } from 'node:crypto';
-import { transformCodeOnly } from './ExpressionHelpers.js';
+import { TransformCodeOnly } from './ExpressionHelpers.js';
 
 /**
  * Final cleanup pass on the complete converted SQL output.
  * Applied after all individual statement conversions are done.
  */
-export function postProcess(sql: string): string {
+export function PostProcess(sql: string): string {
   // Remove any remaining [brackets] that slipped through
   // Preserve PostgreSQL array access like p_Parts[1] (numeric indices)
   // IMPORTANT: Skip dollar-quoted blocks ($$...$$) and string literals
@@ -235,12 +235,12 @@ export function postProcess(sql: string): string {
   // literals, those TS member accesses get rewritten to `this."GranteeType"` etc.,
   // producing invalid TypeScript that breaks the build when CodeGen re-emits it.
   // A SQL->SQL converter must treat string-literal content as opaque data.
-  sql = transformCodeOnly(sql, (code) =>
+  sql = TransformCodeOnly(sql, (code) =>
     code.replace(/(\b\w+)\.(?!")([A-Z][a-zA-Z_]\w*)/g, '$1."$2"')
   );
 
   // Also handle quoted schema: "schema".PascalCase → "schema"."PascalCase"
-  sql = transformCodeOnly(sql, (code) =>
+  sql = TransformCodeOnly(sql, (code) =>
     code.replace(/"(\w+)"\.(?!")([A-Z][a-zA-Z_]\w*)/g, '"$1"."$2"')
   );
 
@@ -374,6 +374,11 @@ export function postProcess(sql: string): string {
   sql = sql.replace(/\n{4,}/g, '\n\n\n');
 
   return sql;
+}
+
+/** @deprecated Use {@link PostProcess}. */
+export function postProcess(sql: string): string {
+  return PostProcess(sql);
 }
 
 /**

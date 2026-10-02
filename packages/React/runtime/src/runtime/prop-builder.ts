@@ -36,7 +36,7 @@ export interface PropBuilderOptions {
  * @param options - Builder options
  * @returns Built component props
  */
-export function buildComponentProps(
+export function BuildComponentProps(
   data: any = {},
   userState: any = {},
   utilities: any = {},
@@ -66,18 +66,36 @@ export function buildComponentProps(
     data: transformedData,
     userState: transformedState,
     utilities,
-    callbacks: normalizeCallbacks(callbacks, debounceUpdateUserState),
+    callbacks: NormalizeCallbacks(callbacks, debounceUpdateUserState),
     components,
-    styles: normalizeStyles(styles),
+    styles: NormalizeStyles(styles),
     onStateChanged
   };
 
   // Validate if enabled
   if (validate) {
-    validateComponentProps(props);
+    ValidateComponentProps(props);
   }
 
   return props;
+}
+
+/** @deprecated Use {@link BuildComponentProps}. */
+export function buildComponentProps(
+  data: any = {},
+  userState: any = {},
+  utilities: any = {},
+  callbacks: ComponentCallbacks = {
+    OpenEntityRecord: () => {},
+    RegisterMethod: () => {},
+    CreateSimpleNotification: () => {}
+  },
+  components: Record<string, any> = {},
+  styles?: ComponentStyles,
+  options: PropBuilderOptions = {},
+  onStateChanged?: (stateUpdate: Record<string, any>) => void
+): ComponentProps {
+  return BuildComponentProps(data, userState, utilities, callbacks, components, styles, options, onStateChanged);
 }
 
 // Store subjects for debouncing per component instance
@@ -120,7 +138,7 @@ function deepEqual(obj1: any, obj2: any): boolean {
  * @param debounceMs - Debounce time for UpdateUserState in milliseconds
  * @returns Normalized callbacks
  */
-export function normalizeCallbacks(callbacks: any, debounceMs: number = 3000): ComponentCallbacks {
+export function NormalizeCallbacks(callbacks: any, debounceMs: number = 3000): ComponentCallbacks {
   // Provide default implementations for required callbacks
   const normalized: ComponentCallbacks = {
     OpenEntityRecord: callbacks?.OpenEntityRecord || (() => {}),
@@ -140,16 +158,26 @@ export function normalizeCallbacks(callbacks: any, debounceMs: number = 3000): C
   return normalized;
 }
 
+/** @deprecated Use {@link NormalizeCallbacks}. */
+export function normalizeCallbacks(callbacks: any, debounceMs: number = 3000): ComponentCallbacks {
+  return NormalizeCallbacks(callbacks, debounceMs);
+}
+
 /**
  * Normalizes component styles
  * @param styles - Raw styles object
  * @returns Normalized styles
  */
-export function normalizeStyles(styles?: any): any {
+export function NormalizeStyles(styles?: any): any {
   // Pass through the full styles object as-is
   // This allows Skip components to access their full style structure
   // including colors, typography, borders, etc.
   return styles;
+}
+
+/** @deprecated Use {@link NormalizeStyles}. */
+export function normalizeStyles(styles?: any): any {
+  return NormalizeStyles(styles);
 }
 
 /**
@@ -157,7 +185,7 @@ export function normalizeStyles(styles?: any): any {
  * @param props - Props to validate
  * @throws Error if validation fails
  */
-export function validateComponentProps(props: ComponentProps): void {
+export function ValidateComponentProps(props: ComponentProps): void {
   // Validate data
   if (props.data === null || props.data === undefined) {
     throw new Error('Component props.data cannot be null or undefined');
@@ -186,12 +214,17 @@ export function validateComponentProps(props: ComponentProps): void {
   }
 }
 
+/** @deprecated Use {@link ValidateComponentProps}. */
+export function validateComponentProps(props: ComponentProps): void {
+  return ValidateComponentProps(props);
+}
+
 /**
  * Merges multiple prop objects
  * @param propsList - Array of props to merge
  * @returns Merged props
  */
-export function mergeProps(...propsList: Partial<ComponentProps>[]): ComponentProps {
+export function MergeProps(...propsList: Partial<ComponentProps>[]): ComponentProps {
   const merged: ComponentProps = {
     data: {},
     userState: {},
@@ -229,13 +262,18 @@ export function mergeProps(...propsList: Partial<ComponentProps>[]): ComponentPr
 
   return merged;
 }
+
+/** @deprecated Use {@link MergeProps}. */
+export function mergeProps(...propsList: Partial<ComponentProps>[]): ComponentProps {
+  return MergeProps(...propsList);
+}
  
 /**
  * Creates a props transformer function
  * @param transformations - Map of prop paths to transformer functions
  * @returns Props transformer
  */
-export function createPropsTransformer(
+export function CreatePropsTransformer(
   transformations: Record<string, (value: any) => any>
 ): (props: ComponentProps) => ComponentProps {
   return (props: ComponentProps) => {
@@ -264,13 +302,20 @@ export function createPropsTransformer(
   };
 }
 
+/** @deprecated Use {@link CreatePropsTransformer}. */
+export function createPropsTransformer(
+  transformations: Record<string, (value: any) => any>
+): (props: ComponentProps) => ComponentProps {
+  return CreatePropsTransformer(transformations);
+}
+
 /**
  * Creates a callback wrapper that adds logging
  * @param callbacks - Original callbacks
  * @param componentName - Component name for logging
  * @returns Wrapped callbacks
  */
-export function wrapCallbacksWithLogging(
+export function WrapCallbacksWithLogging(
   callbacks: ComponentCallbacks,
   componentName: string
 ): ComponentCallbacks {
@@ -322,12 +367,20 @@ export function wrapCallbacksWithLogging(
   return wrapped;
 }
 
+/** @deprecated Use {@link WrapCallbacksWithLogging}. */
+export function wrapCallbacksWithLogging(
+  callbacks: ComponentCallbacks,
+  componentName: string
+): ComponentCallbacks {
+  return WrapCallbacksWithLogging(callbacks, componentName);
+}
+
 /**
  * Extracts props paths used by a component
  * @param componentCode - Component source code
  * @returns Array of prop paths
  */
-export function extractPropPaths(componentCode: string): string[] {
+export function ExtractPropPaths(componentCode: string): string[] {
   const paths: string[] = [];
   
   // Simple regex patterns to find prop access
@@ -346,4 +399,9 @@ export function extractPropPaths(componentCode: string): string[] {
   }
 
   return [...new Set(paths)]; // Remove duplicates
+}
+
+/** @deprecated Use {@link ExtractPropPaths}. */
+export function extractPropPaths(componentCode: string): string[] {
+  return ExtractPropPaths(componentCode);
 }

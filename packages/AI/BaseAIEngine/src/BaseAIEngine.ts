@@ -1,6 +1,6 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual, NormalizeUUID, MJGlobal } from "@memberjunction/global";
-import { AIModelConfiguration, ModelUsage, ModelUsageUnitKind, ParseModelConfiguration, ResolveEffectiveModelConfiguration } from "@memberjunction/ai";
+import { AIModelConfiguration, ModelUsage, ModelUsageUnitKind, ParseModelConfiguration, ParseVendorConfiguration, ResolveEffectiveModelConfiguration } from "@memberjunction/ai";
 import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
          MJAIModelActionEntity,
          MJAIPromptModelEntity, MJAIPromptTypeEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity,
@@ -550,45 +550,76 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         this._modelVendorsByModelID = null;
         this._promptModelsByPromptID = null;
 
+        // Each grouping below buckets the children in one pass, then gives each parent a
+        // finished array. Three properties follow from that shape:
+        //
+        //  1. Idempotent. This method runs after any reload of the underlying arrays, not
+        //     only the initial load — cross-server cache events and remote record mutations
+        //     both reach it with the existing parent objects still in place. Replacing each
+        //     collection outright means repeated calls converge instead of accumulating
+        //     duplicates the way appending into the previous contents would.
+        //  2. Linear. Bucketing once is O(parents + children); filtering the child array
+        //     separately for each parent is O(parents x children), which is significant for
+        //     the model/model-vendor pairing on a large catalog.
+        //  3. No partially-rebuilt parent is observable. Each collection goes from its old
+        //     contents to its new contents in a single call, so a reader can never catch one
+        //     emptied mid-rebuild — unlike clearing and then refilling.
+        const groupBy = <TChild>(children: TChild[], keyOf: (c: TChild) => string | null | undefined): Map<string, TChild[]> => {
+            const map = new Map<string, TChild[]>();
+            for (const child of children) {
+                const raw = keyOf(child);
+                if (!raw) continue;
+                const key = raw.toUpperCase();
+                const bucket = map.get(key);
+                if (bucket) bucket.push(child);
+                else map.set(key, [child]);
+            }
+            return map;
+        };
+        const keyFor = (id: string | null | undefined): string => (id ? id.toUpperCase() : '');
+        // These child collections are exposed as read-only getters over an internal array and
+        // cannot be reassigned, so the contents are replaced in place. A single splice() swaps
+        // them atomically with respect to any reader; the fallback path is for buckets large
+        // enough to exceed the argument limit on a spread call.
+        const replaceContents = <TChild>(target: TChild[], next: TChild[]): void => {
+            if (next.length <= 30000) {
+                target.splice(0, target.length, ...next);
+                return;
+            }
+            target.length = 0;
+            for (const item of next) target.push(item);
+        };
+
         // handle associating prompts with prompt categories
         //here we're using the underlying data (i.e _promptCategories and _prompts)
         //rather than the getter methods because the engine's Loaded property is still false
-        for(const PromptCategory of this._promptCategories){
-            this._prompts.filter((prompt: MJAIPromptEntityExtended) => {
-                return UUIDsEqual(prompt.CategoryID, PromptCategory.ID);
-            }).forEach((prompt: MJAIPromptEntityExtended) => {
-                if (!PromptCategory.Prompts) {
-                    // this is a duck typing check and means that at runtime
-                    // we didn't get MJAIPromptEntityExtended, but prob got the
-                    // MJAIPromptEntity class instead that doesn't have a Prompts property
-                    // in which case we need to emit a console error with clear information next
-                    console.error(`PromptCategory class does not have a Prompts property. This is indicative of
-                                a failure to properly include the MJAIPromptEntityExtended class (or a subclass thereof) and often means tree-shaking or similar processes has resulted in the class
-                                not being included in the runtime environment. Check to make sure the bootstrap package associated with your runtime has its dynamic class registrations properly being imported`)
-                }
-                else {
-                    PromptCategory.Prompts.push(prompt);
-                }
-            });
+        const promptsByCategory = groupBy(this._prompts, (p: MJAIPromptEntityExtended) => p.CategoryID);
+        for (const PromptCategory of this._promptCategories) {
+            if (!PromptCategory.Prompts) {
+                // this is a duck typing check and means that at runtime
+                // we didn't get MJAIPromptEntityExtended, but prob got the
+                // MJAIPromptEntity class instead that doesn't have a Prompts property
+                // in which case we need to emit a console error with clear information next
+                console.error(`PromptCategory class does not have a Prompts property. This is indicative of
+                            a failure to properly include the MJAIPromptEntityExtended class (or a subclass thereof) and often means tree-shaking or similar processes has resulted in the class
+                            not being included in the runtime environment. Check to make sure the bootstrap package associated with your runtime has its dynamic class registrations properly being imported`);
+                continue;
+            }
+            replaceContents(PromptCategory.Prompts, promptsByCategory.get(keyFor(PromptCategory.ID)) ?? []);
         }
 
         // Agent ACTIONS are no longer associated here. `agent.Actions` is a generated
         // related-record collection declared `Source: 'cache'` / `Load: 'lazy'`, so it filters this
         // same engine's cached AI Agent Actions by AgentID on first read — generically, and without
         // this loop having to know the shape. Notes have no collection declared, so they still are.
-        for(const agent of this._agents){
-            this._agentNotes.filter((note: MJAIAgentNoteEntity) => {
-                return UUIDsEqual(note.AgentID, agent.ID);
-            }).forEach((note: MJAIAgentNoteEntity) => {
-                agent.Notes.push(note);
-            });
+        const notesByAgent = groupBy(this._agentNotes, (n: MJAIAgentNoteEntity) => n.AgentID);
+        for (const agent of this._agents) {
+            if (agent.Notes) replaceContents(agent.Notes, notesByAgent.get(keyFor(agent.ID)) ?? []);
         }
 
+        const vendorsByModel = groupBy(this._modelVendors, (mv: MJAIModelVendorEntity) => mv.ModelID);
         for (const model of this._models) {
-            this._modelVendors.filter(mv => UUIDsEqual(mv.ModelID, model.ID))
-            .forEach((mv: MJAIModelVendorEntity) => {
-                model.ModelVendors.push(mv);
-            });
+            if (model.ModelVendors) replaceContents(model.ModelVendors, vendorsByModel.get(keyFor(model.ID)) ?? []);
         }
     }
 
@@ -1379,7 +1410,14 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * Resolves the EFFECTIVE {@link AIModelConfiguration} for a model (optionally scoped to one of
      * its vendor rows) by walking the catalog cascade base-first:
      *
-     * `AIModelType.ModelConfiguration` < `AIModel.ModelConfiguration` < `AIModelVendor.ModelConfiguration`
+     * `AIModelType.ModelConfiguration` < `AIModel.ModelConfiguration` < `AIVendor.Configuration.ModelDefaults` < `AIModelVendor.ModelConfiguration`
+     *
+     * The vendor layer (`ModelDefaults` inside the vendor's own `Configuration` bag) is the host-wide
+     * default for every model that vendor serves. It sits ABOVE the model's own bag: a host's
+     * statement about how it serves models beats the model's generic description, and the
+     * model-vendor row is the tie-breaker where a host diverges for one model. Merged per key, so a
+     * vendor default only touches the keys it sets. The vendor layer only contributes when a
+     * model-vendor row is supplied, because that row's `VendorID` is what names the vendor.
      *
      * Each layer's JSON column is parsed TOLERANTLY (a malformed/absent layer contributes nothing)
      * and the layers deep-merge per key, so a vendor row overriding one knob inherits everything
@@ -1398,13 +1436,15 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             return null;
         }
         const modelType = model.AIModelTypeID ? this.ModelTypesByID.get(NormalizeUUID(model.AIModelTypeID)) : undefined;
-        const vendor = vendorModelVendorID
+        const modelVendor = vendorModelVendorID
             ? (this.ModelVendorsByModelID.get(NormalizeUUID(model.ID)) ?? []).find(mv => UUIDsEqual(mv.ID, vendorModelVendorID))
             : undefined;
+        const vendor = modelVendor?.VendorID ? this.VendorsByID.get(NormalizeUUID(modelVendor.VendorID)) : undefined;
         return ResolveEffectiveModelConfiguration(
             ParseModelConfiguration(modelType?.ModelConfiguration),
             ParseModelConfiguration(model.ModelConfiguration),
-            ParseModelConfiguration(vendor?.ModelConfiguration),
+            ParseVendorConfiguration(vendor?.Configuration)?.ModelDefaults,
+            ParseModelConfiguration(modelVendor?.ModelConfiguration),
         );
     }
 

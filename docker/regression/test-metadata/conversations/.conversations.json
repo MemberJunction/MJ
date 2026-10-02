@@ -1,0 +1,71 @@
+[
+  {
+    "_comment": "T094's disposable target. T094's goal is 'open A conversation's ... menu and click Delete' — deliberately non-specific, so it takes whatever is in the sidebar. With only one seeded conversation it ate the T100 fixture below, and every later conversation test in the FULL suite saw an empty chat (T095 logged BaseEntity.Load failures for the deleted ID; T100 failed 0/4). This row exists to be destroyed: named so a human reading the sidebar knows it is expendable, and listed FIRST so it is the most likely pick.",
+    "fields": {
+      "Name": "Scratch conversation (safe to delete)",
+      "Description": "Seeded regression fixture — T094's delete target. Expendable by design.",
+      "UserID": "@lookup:MJ: Users.Email=computeruse@bluecypress.io",
+      "EnvironmentID": "@lookup:MJ: Environments.Name=Default",
+      "Type": "Chat",
+      "Status": "Available",
+      "ApplicationScope": "Global",
+      "IsArchived": false,
+      "IsPinned": false
+    },
+    "relatedEntities": {
+      "MJ: Conversation Details": [
+        {
+          "fields": {
+            "ConversationID": "@parent:ID",
+            "UserID": "@lookup:MJ: Users.Email=computeruse@bluecypress.io",
+            "Role": "User",
+            "Message": "Scratch thread for the delete-conversation regression test.",
+            "Status": "Complete",
+            "HiddenToUser": false,
+            "IsPinned": false
+          }
+        }
+      ]
+    }
+  },
+  {
+    "_comment": "T100 fixture — a conversation that ALREADY contains a completed AI message, so the per-message action controls (pin, thumbs rating, reactions) have something to render on. Without this the Chat app opens on an empty state and T100's only alternative is to send a message and wait on a live model reply: a real LLM call, real cost, and real flakiness on every single run. The four filter predicates in ConversationEngine.LoadConversations are all load-bearing here — the sidebar shows a conversation only when EnvironmentID matches, UserID is the signed-in user, IsArchived is 0/NULL, and ApplicationScope is Global or Both. Miss any one and the row exists in the DB but never appears in the UI.",
+    "fields": {
+      "Name": "Membership renewal questions",
+      "Description": "Seeded regression fixture — exercises per-message action controls on a completed AI message.",
+      "UserID": "@lookup:MJ: Users.Email=computeruse@bluecypress.io",
+      "EnvironmentID": "@lookup:MJ: Environments.Name=Default",
+      "Type": "Chat",
+      "Status": "Available",
+      "ApplicationScope": "Global",
+      "IsArchived": false,
+      "IsPinned": false
+    },
+    "relatedEntities": {
+      "MJ: Conversation Details": [
+        {
+          "fields": {
+            "ConversationID": "@parent:ID",
+            "UserID": "@lookup:MJ: Users.Email=computeruse@bluecypress.io",
+            "Role": "User",
+            "Message": "How do I check when a member's subscription is due for renewal?",
+            "Status": "Complete",
+            "HiddenToUser": false,
+            "IsPinned": false
+          }
+        },
+        {
+          "_comment": "Role='AI' + Status='Complete' is what T100 needs: the message footer renders its action affordances only for a finished assistant message, not a User message and not one still In-Progress.",
+          "fields": {
+            "ConversationID": "@parent:ID",
+            "Role": "AI",
+            "Message": "Open the **Memberships** entity and look at the `RenewalDate` field. To see everything expiring soon, filter the list to `RenewalDate` within the next 30 days and sort ascending — the closest renewals come first.\n\nA couple of related places to check:\n\n1. **Membership Types** tells you the term length each membership was sold on.\n2. **Invoices** shows whether a renewal has already been paid.\n\nWant me to build a saved view for renewals due in the next 30 days?",
+            "Status": "Complete",
+            "HiddenToUser": false,
+            "IsPinned": false
+          }
+        }
+      ]
+    }
+  }
+]

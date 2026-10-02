@@ -25,7 +25,7 @@ import {
     ItemsOverTimeBucket,
     WeightHistogramBin,
 } from '@memberjunction/tag-engine-base';
-import { formatNumber, formatShortDate } from '../shared/classify.format';
+import { FormatNumber, FormatShortDate } from '../shared/classify.format';
 
 /** A bar in the tag-distribution chart, pre-scaled to the chart width. */
 interface DistributionBar {
@@ -91,7 +91,7 @@ export class ClassifyOverviewAnalyticsComponent extends BaseAngularComponent imp
     public HistogramBars: HistogramBar[] = [];
 
     // Template-facing formatters + geometry constants
-    public readonly FormatNumber = formatNumber;
+    public readonly FormatNumber = FormatNumber;
     public readonly LineWidth = ClassifyOverviewAnalyticsComponent.LINE_WIDTH;
     public readonly LineHeight = ClassifyOverviewAnalyticsComponent.LINE_HEIGHT;
 
@@ -152,7 +152,7 @@ export class ClassifyOverviewAnalyticsComponent extends BaseAngularComponent imp
         this.LinePoints = buckets.map((b, i) => {
             const x = pad + (buckets.length > 1 ? i * stepX : innerW / 2);
             const y = pad + innerH - (b.Count / max) * innerH;
-            return { X: Math.round(x), Y: Math.round(y), Label: formatShortDate(b.BucketStart), Count: b.Count };
+            return { X: Math.round(x), Y: Math.round(y), Label: FormatShortDate(b.BucketStart), Count: b.Count };
         });
 
         this.LinePath = this.LinePoints

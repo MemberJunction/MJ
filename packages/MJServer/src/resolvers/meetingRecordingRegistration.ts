@@ -81,13 +81,13 @@ export interface MeetingRecordingRegistrationConfig {
    * The `MJ: File Storage Providers` id whose accounts target the egress sink (where LiveKit wrote the
    * MP4). Falls back to `process.env.MJ_MEETING_RECORDING_STORAGE_PROVIDER`.
    */
-  sinkStorageProviderID?: string;
+  SinkStorageProviderID?: string;
   /**
    * OPTIONAL canonical provider id — when set AND different from the sink, the MP4 is copied into it and
    * the Files row points there (the "copy into Box" option). Falls back to
    * `process.env.MJ_MEETING_RECORDING_CANONICAL_STORAGE_PROVIDER`. OFF by default.
    */
-  canonicalStorageProviderID?: string;
+  CanonicalStorageProviderID?: string;
 }
 
 /**
@@ -100,7 +100,7 @@ export interface MeetingRecordingRegistrationConfig {
  * @param provider The metadata provider servicing this request.
  * @param config Optional config overrides (otherwise read from env).
  */
-export async function registerMeetingRecordingFile(
+export async function RegisterMeetingRecordingFile(
   egress: MeetingRecordingEgressResult,
   contextUser: UserInfo,
   provider: IMetadataProvider,
@@ -115,7 +115,7 @@ export async function registerMeetingRecordingFile(
       };
     }
 
-    const sinkProviderID = config?.sinkStorageProviderID ?? process.env.MJ_MEETING_RECORDING_STORAGE_PROVIDER;
+    const sinkProviderID = config?.SinkStorageProviderID ?? process.env.MJ_MEETING_RECORDING_STORAGE_PROVIDER;
     if (!sinkProviderID) {
       return {
         Success: false,
@@ -138,7 +138,7 @@ export async function registerMeetingRecordingFile(
       };
     }
 
-    const conversationID = await resolveMeetingConversation(egress, contextUser, provider);
+    const conversationID = await ResolveMeetingConversation(egress, contextUser, provider);
     if (!conversationID) {
       return { Success: false, ErrorMessage: 'Could not resolve or create the Meeting-Room Conversation for the recording.' };
     }
@@ -175,6 +175,16 @@ export async function registerMeetingRecordingFile(
   }
 }
 
+/** @deprecated Use {@link RegisterMeetingRecordingFile}. */
+export async function registerMeetingRecordingFile(
+  egress: MeetingRecordingEgressResult,
+  contextUser: UserInfo,
+  provider: IMetadataProvider,
+  config?: MeetingRecordingRegistrationConfig,
+): Promise<MeetingRecordingRegistrationResult> {
+  return RegisterMeetingRecordingFile(egress, contextUser, provider, config);
+}
+
 /**
  * Best-effort correlation when a recording STARTS: stamps `Conversation.EgressID` onto the room's
  * Meeting-Room Conversation (if it already exists) so a live recording is tracked against the room. If the
@@ -187,7 +197,7 @@ export async function registerMeetingRecordingFile(
  * @param provider The metadata provider.
  * @returns `true` when an existing conversation was stamped, else `false`.
  */
-export async function correlateRecordingStart(roomName: string, egressID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<boolean> {
+export async function CorrelateRecordingStart(roomName: string, egressID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<boolean> {
   try {
     const conversationID = await findConversationByRoomName(roomName, contextUser, provider);
     if (!conversationID) {
@@ -210,12 +220,17 @@ export async function correlateRecordingStart(roomName: string, egressID: string
   }
 }
 
+/** @deprecated Use {@link CorrelateRecordingStart}. */
+export async function correlateRecordingStart(roomName: string, egressID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<boolean> {
+  return CorrelateRecordingStart(roomName, egressID, contextUser, provider);
+}
+
 /**
  * Resolves the Meeting-Room Conversation for a completed recording: prefer matching by `EgressID` (set on
  * start), fall back to the room name (`ExternalID` + `Type`), else create one following the transcript
  * sink's pattern (scoped `Application` so it stays out of the normal chat list).
  */
-export async function resolveMeetingConversation(
+export async function ResolveMeetingConversation(
   egress: MeetingRecordingEgressResult,
   contextUser: UserInfo,
   provider: IMetadataProvider,
@@ -229,6 +244,15 @@ export async function resolveMeetingConversation(
     return byRoom;
   }
   return createMeetingConversation(egress.RoomName, contextUser, provider);
+}
+
+/** @deprecated Use {@link ResolveMeetingConversation}. */
+export async function resolveMeetingConversation(
+  egress: MeetingRecordingEgressResult,
+  contextUser: UserInfo,
+  provider: IMetadataProvider,
+): Promise<string | null> {
+  return ResolveMeetingConversation(egress, contextUser, provider);
 }
 
 /** Finds a non-archived Meeting-Room Conversation by its `EgressID`. */
@@ -310,7 +334,7 @@ async function resolveFileLocation(
   config?: MeetingRecordingRegistrationConfig,
 ): Promise<FileLocationResult> {
   const outputLocation = egress.OutputLocation!;
-  const canonicalProviderID = config?.canonicalStorageProviderID ?? process.env.MJ_MEETING_RECORDING_CANONICAL_STORAGE_PROVIDER;
+  const canonicalProviderID = config?.CanonicalStorageProviderID ?? process.env.MJ_MEETING_RECORDING_CANONICAL_STORAGE_PROVIDER;
 
   // Default (v1): point directly at the sink output — playback streams straight from it, no byte copy.
   if (!canonicalProviderID || canonicalProviderID === sinkProviderID) {
@@ -319,7 +343,7 @@ async function resolveFileLocation(
 
   // OPTIONAL "copy into Box": a separate canonical provider IS configured and differs from the sink —
   // read the bytes from the sink and upload them into the canonical provider, then point there.
-  const canonicalKey = await copyEgressOutputToCanonical(outputLocation, sinkAccountID, canonicalProviderID, contextUser);
+  const canonicalKey = await CopyEgressOutputToCanonical(outputLocation, sinkAccountID, canonicalProviderID, contextUser);
   if (!canonicalKey.Success) {
     return { Success: false, ErrorMessage: canonicalKey.ErrorMessage, ProviderID: '', ProviderKey: '' };
   }
@@ -338,7 +362,7 @@ interface CanonicalCopyResult {
  * into Box" option). Reads the bytes via the sink driver's `GetObject({ fullPath })` and re-uploads them
  * into the canonical provider via `FileStorageEngine.UploadFile`. Returns the canonical `ProviderKey`.
  */
-export async function copyEgressOutputToCanonical(
+export async function CopyEgressOutputToCanonical(
   outputLocation: string,
   sinkAccountID: string,
   canonicalProviderID: string,
@@ -367,6 +391,16 @@ export async function copyEgressOutputToCanonical(
     pathPrefix: `meeting-recordings/${new Date().toISOString().slice(0, 10)}`,
   });
   return { Success: true, ProviderKey: uploaded.StoragePath };
+}
+
+/** @deprecated Use {@link CopyEgressOutputToCanonical}. */
+export async function copyEgressOutputToCanonical(
+  outputLocation: string,
+  sinkAccountID: string,
+  canonicalProviderID: string,
+  contextUser: UserInfo,
+): Promise<CanonicalCopyResult> {
+  return CopyEgressOutputToCanonical(outputLocation, sinkAccountID, canonicalProviderID, contextUser);
 }
 
 /** Creates the `MJ: Files` row pointing at the recording (no byte copy in the default v1 path). */

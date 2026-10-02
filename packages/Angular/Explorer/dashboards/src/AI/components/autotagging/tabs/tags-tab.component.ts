@@ -13,7 +13,7 @@ import { NormalizeUUID } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { WordCloudItem } from '@memberjunction/ng-word-cloud';
 import { TagRow, TagBySource } from '../shared/classify.types';
-import { formatWeight, tagFontSize, formatShortDate, deriveDisplayName } from '../shared/classify.format';
+import { FormatWeight, TagFontSize, FormatShortDate, DeriveDisplayName } from '../shared/classify.format';
 
 /** One row in the per-tag drill-down (content items carrying a given tag). */
 interface TagDrillDownItem {
@@ -73,14 +73,19 @@ export class ClassifyTagsTabComponent extends BaseAngularComponent {
     }
 
     // Template-facing formatters (shared pure helpers exposed for the view).
-    public readonly TagFontSize = tagFontSize;
-    public readonly FormatWeight = formatWeight;
+    public readonly TagFontSize = TagFontSize;
+    public readonly FormatWeight = FormatWeight;
 
     /** Bubble a request to open a content item's detail slide-in (host-owned). */
     @Output() OpenItemDetailRequested = new EventEmitter<string>();
 
-    public onOpenItemDetail(contentItemID: string): void {
+    public OnOpenItemDetail(contentItemID: string): void {
         this.OpenItemDetailRequested.emit(contentItemID);
+    }
+
+    /** @deprecated Use {@link OnOpenItemDetail}. */
+    public onOpenItemDetail(contentItemID: string): void {
+        return this.OnOpenItemDetail(contentItemID);
     }
 
     /** Rebuild all tag-tab view models from the current inputs. */
@@ -201,10 +206,10 @@ export class ClassifyTagsTabComponent extends BaseAngularComponent {
             if (weight !== undefined) {
                 this.TagDrillDownItems.push({
                     ID: item['ID'] as string,
-                    Name: deriveDisplayName({ Name: item['Name'] as string | null, Description: item['Description'] as string | null }),
+                    Name: DeriveDisplayName({ Name: item['Name'] as string | null, Description: item['Description'] as string | null }),
                     SourceName: (item['ContentSource'] as string) ?? 'Unknown',
                     Weight: weight,
-                    UpdatedAt: formatShortDate((item['__mj_UpdatedAt'] as string) ?? ''),
+                    UpdatedAt: FormatShortDate((item['__mj_UpdatedAt'] as string) ?? ''),
                     FeedIndex: i,
                 });
             }
@@ -282,7 +287,7 @@ export class ClassifyTagsTabComponent extends BaseAngularComponent {
             const t = tag['Tag'] as string;
             if (t && !result.has(t)) {
                 const date = tag['__mj_CreatedAt'] as string;
-                result.set(t, date ? formatShortDate(date) : '');
+                result.set(t, date ? FormatShortDate(date) : '');
             }
         }
         return result;

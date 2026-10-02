@@ -1,5 +1,5 @@
-import { Component, ComponentRef, Input, OnDestroy, OnInit, ViewContainerRef, inject } from '@angular/core';
-import { BaseRealtimeChannelClient } from './base-realtime-channel-client';
+import { Component, ComponentRef, Input, OnDestroy, OnInit, Type, ViewContainerRef, inject } from '@angular/core';
+import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 
 /**
  * Generic pane host for an interactive channel's surface inside the overlay's tabbed
@@ -42,7 +42,10 @@ export class RealtimeChannelPaneComponent implements OnInit, OnDestroy {
     if (!surface) {
       return;
     }
-    this.surfaceRef = this.viewContainer.createComponent(surface);
+    // The runtime carries the surface as an opaque component class — it has no business knowing
+    // what a component is in any given framework. This is the single point that does, so the
+    // Angular narrowing belongs here rather than as a structural claim in the shared contract.
+    this.surfaceRef = this.viewContainer.createComponent(surface as Type<object>);
     // Bind BEFORE the created component's first change detection — inputs the plugin sets
     // here are in place when the surface's ngOnInit runs.
     this.Plugin.BindSurface(this.surfaceRef.instance);

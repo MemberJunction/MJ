@@ -200,23 +200,104 @@ interface PermissionDisplay extends ArtifactPermission {
     styleUrls: ['./artifact-share-modal.component.css']
 })
 export class ArtifactShareModalComponent implements OnInit, OnChanges {
-    @Input() isOpen: boolean = false;
-    @Input() artifact: MJArtifactEntity | null = null;
-    @Input() currentUser!: UserInfo;
+    @Input() IsOpen: boolean = false;
 
-    @Output() saved = new EventEmitter<void>();
+    /** @deprecated Use {@link IsOpen}. */
+    @Input() set isOpen(value: boolean) {
+        this.IsOpen = value;
+    }
+    /** @deprecated Use {@link IsOpen}. */
+    get isOpen(): boolean {
+        return this.IsOpen;
+    }
+    @Input() Artifact: MJArtifactEntity | null = null;
+
+    /** @deprecated Use {@link Artifact}. */
+    @Input() set artifact(value: MJArtifactEntity | null) {
+        this.Artifact = value;
+    }
+    /** @deprecated Use {@link Artifact}. */
+    get artifact(): MJArtifactEntity | null {
+        return this.Artifact;
+    }
+    @Input() CurrentUser!: UserInfo;
+
+    /** @deprecated Use {@link CurrentUser}. */
+    @Input() set currentUser(value: UserInfo) {
+        this.CurrentUser = value;
+    }
+    /** @deprecated Use {@link CurrentUser}. */
+    get currentUser(): UserInfo {
+        return this.CurrentUser;
+    }
+
+    @Output() Saved = new EventEmitter<void>();
+
+    /**
+     * @deprecated Use {@link Saved}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (saved) keeps working. Must stay AFTER Saved: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() saved = this.Saved;
     @Output() cancelled = new EventEmitter<void>();
 
-    permissions: PermissionDisplay[] = [];
-    selectedUser: UserSearchResult | null = null;
-    availablePermissions: string[] = [];
-    canModifyPermissions: boolean = false;
+    Permissions: PermissionDisplay[] = [];
 
-    newPermissions: ArtifactPermissionSet = {
+    /** @deprecated Use {@link Permissions}. */
+    get permissions(): PermissionDisplay[] {
+        return this.Permissions;
+    }
+    /** @deprecated Use {@link Permissions}. */
+    set permissions(value: PermissionDisplay[]) {
+        this.Permissions = value;
+    }
+    SelectedUser: UserSearchResult | null = null;
+
+    /** @deprecated Use {@link SelectedUser}. */
+    get selectedUser(): UserSearchResult | null {
+        return this.SelectedUser;
+    }
+    /** @deprecated Use {@link SelectedUser}. */
+    set selectedUser(value: UserSearchResult | null) {
+        this.SelectedUser = value;
+    }
+    AvailablePermissions: string[] = [];
+
+    /** @deprecated Use {@link AvailablePermissions}. */
+    get availablePermissions(): string[] {
+        return this.AvailablePermissions;
+    }
+    /** @deprecated Use {@link AvailablePermissions}. */
+    set availablePermissions(value: string[]) {
+        this.AvailablePermissions = value;
+    }
+    CanModifyPermissions: boolean = false;
+
+    /** @deprecated Use {@link CanModifyPermissions}. */
+    get canModifyPermissions(): boolean {
+        return this.CanModifyPermissions;
+    }
+    /** @deprecated Use {@link CanModifyPermissions}. */
+    set canModifyPermissions(value: boolean) {
+        this.CanModifyPermissions = value;
+    }
+
+    NewPermissions: ArtifactPermissionSet = {
         canRead: true,
         canShare: false,
         canEdit: false
     };
+
+    /** @deprecated Use {@link NewPermissions}. */
+    get newPermissions(): ArtifactPermissionSet {
+        return this.NewPermissions;
+    }
+    /** @deprecated Use {@link NewPermissions}. */
+    set newPermissions(value: ArtifactPermissionSet) {
+        this.NewPermissions = value;
+    }
 
     constructor(
         private permissionService: ArtifactPermissionService,
@@ -225,7 +306,7 @@ export class ArtifactShareModalComponent implements OnInit, OnChanges {
     ) {}
 
     async ngOnInit(): Promise<void> {
-        if (this.artifact) {
+        if (this.Artifact) {
             await this.loadPermissions();
             await this.updateAvailablePermissions();
         }
@@ -236,17 +317,17 @@ export class ArtifactShareModalComponent implements OnInit, OnChanges {
         const modalOpened = changes['isOpen']?.currentValue === true && changes['isOpen']?.previousValue === false;
         const artifactChanged = changes['artifact'] && !changes['artifact'].isFirstChange();
 
-        if ((modalOpened || artifactChanged) && this.artifact) {
+        if ((modalOpened || artifactChanged) && this.Artifact) {
             await this.loadPermissions();
             await this.updateAvailablePermissions();
         }
     }
 
     private async loadPermissions(): Promise<void> {
-        if (!this.artifact) return;
+        if (!this.Artifact) return;
 
-        const perms = await this.permissionService.loadPermissions(this.artifact.ID, this.currentUser);
-        this.permissions = perms.map(p => ({
+        const perms = await this.permissionService.loadPermissions(this.Artifact.ID, this.CurrentUser);
+        this.Permissions = perms.map(p => ({
             ...p,
             isEditing: false,
             editingPermissions: {
@@ -259,64 +340,74 @@ export class ArtifactShareModalComponent implements OnInit, OnChanges {
     }
 
     private async updateAvailablePermissions(): Promise<void> {
-        if (!this.artifact) return;
+        if (!this.Artifact) return;
 
         // Check if current user is owner
-        const isOwner = await this.permissionService.isOwner(this.artifact.ID, this.currentUser.ID, this.currentUser);
+        const isOwner = await this.permissionService.isOwner(this.Artifact.ID, this.CurrentUser.ID, this.CurrentUser);
 
         // Check if user has share permission
         const hasSharePermission = await this.permissionService.checkPermission(
-            this.artifact.ID,
-            this.currentUser.ID,
+            this.Artifact.ID,
+            this.CurrentUser.ID,
             'share',
-            this.currentUser
+            this.CurrentUser
         );
 
         // Allow modification if user is owner OR has Share permission
-        this.canModifyPermissions = isOwner || hasSharePermission;
+        this.CanModifyPermissions = isOwner || hasSharePermission;
 
         // Get user's current permissions
         const userPerms: ArtifactPermissionSet = {
             canRead: true,
             canShare: hasSharePermission,
             canEdit: await this.permissionService.checkPermission(
-                this.artifact.ID,
-                this.currentUser.ID,
+                this.Artifact.ID,
+                this.CurrentUser.ID,
                 'edit',
-                this.currentUser
+                this.CurrentUser
             )
         };
 
-        this.availablePermissions = this.permissionService.getAvailablePermissions(userPerms, isOwner);
+        this.AvailablePermissions = this.permissionService.getAvailablePermissions(userPerms, isOwner);
 
         console.log('Share modal permissions:', {
-            artifactId: this.artifact?.ID,
-            userId: this.artifact?.UserID,
-            currentUserId: this.currentUser.ID,
+            artifactId: this.Artifact?.ID,
+            userId: this.Artifact?.UserID,
+            currentUserId: this.CurrentUser.ID,
             isOwner,
-            availablePermissions: this.availablePermissions
+            availablePermissions: this.AvailablePermissions
         });
 
         this.cdr.detectChanges(); // zone.js 0.15: async permission checks don't trigger CD
     }
 
-    getExcludedUserIds(): string[] {
-        const ids = this.permissions.map(p => p.userId);
-        ids.push(this.currentUser.ID); // Can't share with yourself
-        if (this.artifact?.UserID) {
-            ids.push(this.artifact.UserID); // Owner already has all permissions
+    GetExcludedUserIds(): string[] {
+        const ids = this.Permissions.map(p => p.userId);
+        ids.push(this.CurrentUser.ID); // Can't share with yourself
+        if (this.Artifact?.UserID) {
+            ids.push(this.Artifact.UserID); // Owner already has all permissions
         }
         return ids;
     }
 
-    onUserSelected(user: UserSearchResult): void {
-        this.selectedUser = user;
+    /** @deprecated Use {@link GetExcludedUserIds}. */
+    getExcludedUserIds(): string[] {
+        return this.GetExcludedUserIds();
+    }
+
+    OnUserSelected(user: UserSearchResult): void {
+        this.SelectedUser = user;
         this.cdr.detectChanges();
     }
 
-    onClearSelection(): void {
-        this.selectedUser = null;
-        this.newPermissions = {
+    /** @deprecated Use {@link OnUserSelected}. */
+    onUserSelected(user: UserSearchResult): void {
+        return this.OnUserSelected(user);
+    }
+
+    OnClearSelection(): void {
+        this.SelectedUser = null;
+        this.NewPermissions = {
             canRead: true,
             canShare: false,
             canEdit: false
@@ -324,60 +415,75 @@ export class ArtifactShareModalComponent implements OnInit, OnChanges {
         this.cdr.detectChanges();
     }
 
-    async onAddUser(): Promise<void> {
-        if (!this.selectedUser || !this.artifact) return;
+    /** @deprecated Use {@link OnClearSelection}. */
+    onClearSelection(): void {
+        return this.OnClearSelection();
+    }
+
+    async OnAddUser(): Promise<void> {
+        if (!this.SelectedUser || !this.Artifact) return;
 
         try {
             // Check if user is owner
-            const isOwner = await this.permissionService.isOwner(this.artifact.ID, this.currentUser.ID, this.currentUser);
+            const isOwner = await this.permissionService.isOwner(this.Artifact.ID, this.CurrentUser.ID, this.CurrentUser);
 
             // Get current user's permissions
             const userPerms: ArtifactPermissionSet = {
                 canRead: true,
                 canShare: await this.permissionService.checkPermission(
-                    this.artifact.ID,
-                    this.currentUser.ID,
+                    this.Artifact.ID,
+                    this.CurrentUser.ID,
                     'share',
-                    this.currentUser
+                    this.CurrentUser
                 ),
                 canEdit: await this.permissionService.checkPermission(
-                    this.artifact.ID,
-                    this.currentUser.ID,
+                    this.Artifact.ID,
+                    this.CurrentUser.ID,
                     'edit',
-                    this.currentUser
+                    this.CurrentUser
                 )
             };
 
             // Validate permissions
-            if (!this.permissionService.validatePermissions(this.newPermissions, userPerms, isOwner)) {
+            if (!this.permissionService.validatePermissions(this.NewPermissions, userPerms, isOwner)) {
                 MJNotificationService.Instance.CreateSimpleNotification('You cannot grant permissions you do not have', 'warning', 4000);
                 return;
             }
 
             // Grant permission
             await this.permissionService.grantPermission(
-                this.artifact.ID,
-                this.selectedUser.id,
-                this.newPermissions,
-                this.currentUser.ID,
-                this.currentUser
+                this.Artifact.ID,
+                this.SelectedUser.id,
+                this.NewPermissions,
+                this.CurrentUser.ID,
+                this.CurrentUser
             );
 
             await this.loadPermissions();
-            this.onClearSelection();
-            this.saved.emit();
+            this.OnClearSelection();
+            this.Saved.emit();
         } catch (error) {
             console.error('Error adding user:', error);
             MJNotificationService.Instance.CreateSimpleNotification('Failed to add user. Please try again.', 'error', 5000);
         }
     }
 
-    onEditPermission(permission: PermissionDisplay): void {
+    /** @deprecated Use {@link OnAddUser}. */
+    async onAddUser(): Promise<void> {
+        return this.OnAddUser();
+    }
+
+    OnEditPermission(permission: PermissionDisplay): void {
         permission.isEditing = true;
         this.cdr.detectChanges();
     }
 
-    onCancelEdit(permission: PermissionDisplay): void {
+    /** @deprecated Use {@link OnEditPermission}. */
+    onEditPermission(permission: PermissionDisplay): void {
+        return this.OnEditPermission(permission);
+    }
+
+    OnCancelEdit(permission: PermissionDisplay): void {
         permission.isEditing = false;
         permission.editingPermissions = {
             canRead: permission.canRead,
@@ -387,27 +493,32 @@ export class ArtifactShareModalComponent implements OnInit, OnChanges {
         this.cdr.detectChanges();
     }
 
-    async onSavePermission(permission: PermissionDisplay): Promise<void> {
-        if (!this.artifact) return;
+    /** @deprecated Use {@link OnCancelEdit}. */
+    onCancelEdit(permission: PermissionDisplay): void {
+        return this.OnCancelEdit(permission);
+    }
+
+    async OnSavePermission(permission: PermissionDisplay): Promise<void> {
+        if (!this.Artifact) return;
 
         try {
             // Check if user is owner
-            const isOwner = await this.permissionService.isOwner(this.artifact.ID, this.currentUser.ID, this.currentUser);
+            const isOwner = await this.permissionService.isOwner(this.Artifact.ID, this.CurrentUser.ID, this.CurrentUser);
 
             // Get current user's permissions
             const userPerms: ArtifactPermissionSet = {
                 canRead: true,
                 canShare: await this.permissionService.checkPermission(
-                    this.artifact.ID,
-                    this.currentUser.ID,
+                    this.Artifact.ID,
+                    this.CurrentUser.ID,
                     'share',
-                    this.currentUser
+                    this.CurrentUser
                 ),
                 canEdit: await this.permissionService.checkPermission(
-                    this.artifact.ID,
-                    this.currentUser.ID,
+                    this.Artifact.ID,
+                    this.CurrentUser.ID,
                     'edit',
-                    this.currentUser
+                    this.CurrentUser
                 )
             };
 
@@ -421,30 +532,40 @@ export class ArtifactShareModalComponent implements OnInit, OnChanges {
             await this.permissionService.updatePermission(
                 permission.id,
                 permission.editingPermissions,
-                this.currentUser
+                this.CurrentUser
             );
 
             await this.loadPermissions();
-            this.saved.emit();
+            this.Saved.emit();
         } catch (error) {
             console.error('Error updating permission:', error);
             MJNotificationService.Instance.CreateSimpleNotification('Failed to update permissions. Please try again.', 'error', 5000);
         }
     }
 
-    async onRevokePermission(permission: PermissionDisplay): Promise<void> {
+    /** @deprecated Use {@link OnSavePermission}. */
+    async onSavePermission(permission: PermissionDisplay): Promise<void> {
+        return this.OnSavePermission(permission);
+    }
+
+    async OnRevokePermission(permission: PermissionDisplay): Promise<void> {
         if (!(await this.confirmService.ConfirmDelete({ title: 'Remove Access', message: `Remove ${permission.userName}'s access to this artifact?`, confirmText: 'Remove' }))) {
             return;
         }
 
         try {
-            await this.permissionService.revokePermission(permission.id, this.currentUser);
+            await this.permissionService.revokePermission(permission.id, this.CurrentUser);
             await this.loadPermissions();
-            this.saved.emit();
+            this.Saved.emit();
         } catch (error) {
             console.error('Error revoking permission:', error);
             MJNotificationService.Instance.CreateSimpleNotification('Failed to revoke permission. Please try again.', 'error', 5000);
         }
+    }
+
+    /** @deprecated Use {@link OnRevokePermission}. */
+    async onRevokePermission(permission: PermissionDisplay): Promise<void> {
+        return this.OnRevokePermission(permission);
     }
 
     onCancel(): void {

@@ -1,7 +1,7 @@
 import { Command, Flags } from '@oclif/core';
 import { ListInstalledApps } from '@memberjunction/open-app-engine';
 import chalk from 'chalk';
-import { buildContextUser } from '../../utils/open-app-context.js';
+import { BuildContextUser } from '../../utils/open-app-context.js';
 
 /** Minimal shape for rendering the app list table. */
 interface InstalledAppRow {
@@ -33,7 +33,7 @@ export default class AppList extends Command {
     const { flags } = await this.parse(AppList);
 
     try {
-      const contextUser = await buildContextUser();
+      const contextUser = await BuildContextUser();
       const apps = await ListInstalledApps(contextUser);
 
       if (apps.length === 0) {

@@ -81,7 +81,7 @@ export class MjIsaRelatedPanelComponent extends BaseAngularComponent implements 
 
   ngOnInit(): void {
     this.recordRefresh?.Refreshed$.pipe(takeUntil(this.destroy$)).subscribe(() => {
-      void this.DiscoverRelatedItems();
+      void this.discoverRelatedItems();
     });
   }
 
@@ -92,7 +92,25 @@ export class MjIsaRelatedPanelComponent extends BaseAngularComponent implements 
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['Record']) {
-      this.DiscoverRelatedItems();
+      this.discoverRelatedItems();
+      return;
+    }
+
+    // Leaving edit mode is the OTHER moment this answer can change, and until now nothing
+    // re-asked. A save can ATTACH a subtype that did not exist when this panel last looked —
+    // IS-A writes parent and child in one transaction — and the form deliberately keeps the
+    // SAME record object across that save (EntityFormHostComponent's PrimaryKey setter skips
+    // the reload when the incoming key is just the now-saved PK), so `changes['Record']` never
+    // fires; and `FormRecordRefreshCoordinator.Notify()` is reached only from the Refresh
+    // button. The result was a panel that stayed empty on a record that plainly had a subtype
+    // until the user pressed Refresh.
+    //
+    // Re-discovering here is close to free on the common path: for a disjoint hierarchy
+    // DiscoverISADescendants walks the in-memory ISAChild chain and issues no query at all.
+    // An overlapping parent (AllowMultipleSubtypes) does load its child entities, so that
+    // configuration pays one extra discovery per edit session.
+    if (changes['EditMode'] && changes['EditMode'].previousValue === true && !this.EditMode) {
+      this.discoverRelatedItems();
     }
   }
 
@@ -101,7 +119,7 @@ export class MjIsaRelatedPanelComponent extends BaseAngularComponent implements 
    * entity hierarchy. Finds siblings (other children of the same parent)
    * and all descendants (children, grandchildren, etc.) as a tree.
    */
-  private async DiscoverRelatedItems(): Promise<void> {
+  private async discoverRelatedItems(): Promise<void> {
     this.RelatedItems = [];
 
     if (!this.Record) return;
@@ -111,12 +129,12 @@ export class MjIsaRelatedPanelComponent extends BaseAngularComponent implements 
 
     // Case 1: Current entity is a child type — find siblings via parent
     if (entityInfo.IsChildType && entityInfo.ParentEntityInfo) {
-      this.DiscoverSiblingsFromParent(entityInfo);
+      this.discoverSiblingsFromParent(entityInfo);
     }
 
     // Case 2: Current entity is a parent type — discover all descendants as tree
     if (entityInfo.IsParentType) {
-      await this.DiscoverDescendants();
+      await this.discoverDescendants();
     }
 
     this.cdr.markForCheck();
@@ -127,7 +145,7 @@ export class MjIsaRelatedPanelComponent extends BaseAngularComponent implements 
    * (e.g., Speaker) that also have records with the same parent PK.
    * Uses the parent's ISAChildren if the parent uses overlapping subtypes.
    */
-  private DiscoverSiblingsFromParent(entityInfo: EntityInfo): void {
+  private discoverSiblingsFromParent(entityInfo: EntityInfo): void {
     const parent = this.Record?.ISAParent;
     if (!parent) return;
 
@@ -154,7 +172,7 @@ export class MjIsaRelatedPanelComponent extends BaseAngularComponent implements 
    * Recursively discover all IS-A descendants and build a tree structure.
    * Root-level children appear as top-level cards; grandchildren nest inside.
    */
-  private async DiscoverDescendants(): Promise<void> {
+  private async discoverDescendants(): Promise<void> {
     if (!this.Record) return;
 
     const descendants = await DiscoverISADescendants(this.Record, this.ProviderToUse);

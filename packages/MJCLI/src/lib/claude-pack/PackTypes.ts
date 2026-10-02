@@ -16,25 +16,25 @@
 /** One file entry inside a pack's `MANIFEST.json`. */
 export interface ManifestEntry {
   /** Pack-relative POSIX path, e.g. `.claude/mj/core.md`. */
-  path: string;
+  path: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /** Byte length of the file as shipped. */
-  bytes: number;
+  bytes: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /** Hex sha256 digest of the file bytes. */
-  sha256: string;
+  sha256: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /** Top-level shape of `.claude/mj/MANIFEST.json`. */
 export interface Manifest {
   /** Pack semver, e.g. `5.1.0`. */
-  packVersion: string;
+  packVersion: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** MJ major version, e.g. `5`. */
-  mjMajor: string;
+  mjMajor: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /**
    * Public URL prefix used as the base for over-the-wire fetches.
    * Example: `https://raw.githubusercontent.com/MemberJunction/MJ/main/templates/claude-pack/dist/v5/`
    */
-  remoteUrlPrefix: string;
-  files: ManifestEntry[];
+  remoteUrlPrefix: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  files: ManifestEntry[];  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 }
 
 // ---------------------------------------------------------------------------
@@ -53,9 +53,9 @@ export type FileOutcome = 'added' | 'updated' | 'skipped' | 'error';
  * explanation surfaced in `--verbose` output and warnings.
  */
 export interface FileMergeResult {
-  path: string;
-  outcome: FileOutcome;
-  reason?: string;
+  Path: string;
+  Outcome: FileOutcome;
+  Reason?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -67,10 +67,10 @@ export interface FileMergeResult {
  * human-readable summary and the `--json` output (§7.5).
  */
 export interface ActionLog {
-  added: string[];
-  updated: string[];
-  skipped: string[];
-  errors: string[];
+  added: string[];  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  updated: string[];  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  skipped: string[];  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  errors: string[];  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 }
 
 /**
@@ -86,18 +86,23 @@ export interface ActionLog {
  * keeping `--json` consumers happy.
  */
 export interface InstallResult {
-  ok: boolean;
-  packVersion: string;
+  ok: boolean;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  packVersion: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** MJ semver detected in the target dir (e.g. `5.33.0`), or `null` if undetectable. */
-  installedMJVersion: string | null;
-  actions: ActionLog;
-  warnings: string[];
-  notes: string[];
+  installedMJVersion: string | null;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  actions: ActionLog;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  warnings: string[];  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  notes: string[];  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 }
 
 /** Empty action log helper — exported to avoid `{} as ActionLog` casts. */
-export function emptyActionLog(): ActionLog {
+export function EmptyActionLog(): ActionLog {
   return { added: [], updated: [], skipped: [], errors: [] };
+}
+
+/** @deprecated Use {@link EmptyActionLog}. */
+export function emptyActionLog(): ActionLog {
+  return EmptyActionLog();
 }
 
 /**
@@ -114,9 +119,14 @@ const OUTCOME_TO_BUCKET: Record<FileOutcome, keyof ActionLog> = {
 };
 
 /** Apply a single file's outcome to the rolling action log. */
+export function RecordOutcome(log: ActionLog, result: FileMergeResult): void {
+  const bucket = OUTCOME_TO_BUCKET[result.Outcome];
+  log[bucket].push(result.Reason ? `${result.Path} (${result.Reason})` : result.Path);
+}
+
+/** @deprecated Use {@link RecordOutcome}. */
 export function recordOutcome(log: ActionLog, result: FileMergeResult): void {
-  const bucket = OUTCOME_TO_BUCKET[result.outcome];
-  log[bucket].push(result.reason ? `${result.path} (${result.reason})` : result.path);
+  return RecordOutcome(log, result);
 }
 
 // ---------------------------------------------------------------------------
@@ -129,8 +139,8 @@ export function recordOutcome(log: ActionLog, result: FileMergeResult): void {
  * an already-installed copy (the user's existing `.claude/mj/`).
  */
 export type PackSource =
-  | { kind: 'remote'; baseUrl: string; ref: string }
-  | { kind: 'local'; rootDir: string };
+  | { Kind: 'remote'; BaseUrl: string; Ref: string }
+  | { Kind: 'local'; RootDir: string };
 
 // ---------------------------------------------------------------------------
 // Managed settings.json metadata
@@ -145,11 +155,11 @@ export type PackSource =
  */
 export interface ManagedSettingsMeta {
   /** Pack semver that last wrote this block. */
-  version: string;
+  Version: string;
   /** MJ major the pack was built for. */
-  mjMajor?: string;
+  mjMajor?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
   /** Dotted paths in `settings.json` that MJ manages. */
-  keys: string[];
+  Keys: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -162,10 +172,10 @@ export interface ManagedSettingsMeta {
  * rewritten block reconstitute the full file.
  */
 export interface ManagedBlock {
-  before: string;
+  Before: string;
   /** The contents between START and END markers (exclusive of marker lines). */
-  body: string;
-  after: string;
+  Body: string;
+  After: string;
   /** Attributes parsed off the START marker, e.g. `version=5.1.0` and `mj-major=5`. */
-  attrs: Record<string, string>;
+  Attrs: Record<string, string>;
 }

@@ -1997,7 +1997,30 @@ def _transpile_if_exists_begin(m: _IfExistsMatch) -> tuple[str, list[dict], list
         body_sql, u2, d2 = _transpile_extprop_segment(raw_body)
     if not cond_full or not body_sql.strip():
         return "", (u1 + u2 + [{"kind": "IF-EXISTS-BEGIN", "snippet": m.group(0)[:80]}]), (d1 + d2)
+    # PostgreSQL refuses CREATE INDEX on a table carrying pending (deferred) trigger events:
+    #   cannot CREATE INDEX "Entity" because it has pending trigger events
+    # A migration that seeds FK-bearing rows and then indexes the REFERENCED table hits this,
+    # because the FK checks queued by those inserts are still outstanding for COMMIT. SQL Server
+    # has no equivalent restriction, so the T-SQL original is perfectly legal and the failure
+    # appears only after conversion — and only at apply time, never in the converter's summary.
+    # Flushing first is semantically free: SET CONSTRAINTS ALL IMMEDIATE runs the deferred checks
+    # now instead of at COMMIT, so anything that would have failed still fails, just earlier and
+    # attached to a clearer statement. Emitted only when the guarded body actually creates an
+    # index, so ordinary guards are unchanged.
+    # The flush is a TOP-LEVEL statement, deliberately outside the DO block. SET CONSTRAINTS is
+    # transaction-scoped, and issuing it inside plpgsql does not clear events already queued by
+    # earlier statements in the migration — verified live: emitting it inside the block left the
+    # apply still failing with the same error. The committed ledger already uses the statement-level
+    # form for exactly this purpose (see V202608042204__APIKey_Scope_RowFilterID.pg.sql), so this
+    # matches shipped precedent rather than inventing a second convention.
+    flush = (
+        "-- Flush any pending deferred trigger events from prior DML so the index DDL below can proceed.\n"
+        "SET CONSTRAINTS ALL IMMEDIATE;\n"
+        if _re.search(r"\bCREATE\s+(?:UNIQUE\s+)?INDEX\b", body_sql, _re.IGNORECASE)
+        else ""
+    )
     do = (
+        f"{flush}"
         "DO $$\nBEGIN\n"
         f"  IF {cond_full} THEN\n"
         f"    {body_sql.strip()}\n"

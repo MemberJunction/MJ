@@ -106,7 +106,7 @@ export class BrowserManager {
     return raw === '1' || raw === 'true' || raw === 'yes';
   }
 
-  async initialize(): Promise<void> {
+  async Initialize(): Promise<void> {
     if (this.browser) {
       return;
     }
@@ -143,9 +143,14 @@ export class BrowserManager {
     this.page = await this.context.newPage();
   }
 
-  async getPage(): Promise<Page> {
+  /** @deprecated Use {@link Initialize}. */
+  async initialize(): Promise<void> {
+    return this.Initialize();
+  }
+
+  async GetPage(): Promise<Page> {
     if (!this.context) {
-      await this.initialize();
+      await this.Initialize();
     }
     // Always create a fresh page for each test to ensure isolation
     // This prevents issues with page.exposeFunction being called multiple times
@@ -154,32 +159,62 @@ export class BrowserManager {
     return newPage;
   }
 
-  async navigateTo(url: string): Promise<void> {
-    const page = await this.getPage();
+  /** @deprecated Use {@link GetPage}. */
+  async getPage(): Promise<Page> {
+    return this.GetPage();
+  }
+
+  async NavigateTo(url: string): Promise<void> {
+    const page = await this.GetPage();
     await page.goto(url);
   }
 
-  async evaluateInPage<T>(fn: (...args: any[]) => T, ...args: any[]): Promise<T> {
-    const page = await this.getPage();
+  /** @deprecated Use {@link NavigateTo}. */
+  async navigateTo(url: string): Promise<void> {
+    return this.NavigateTo(url);
+  }
+
+  async EvaluateInPage<T>(fn: (...args: any[]) => T, ...args: any[]): Promise<T> {
+    const page = await this.GetPage();
     return await page.evaluate(fn, ...args);
   }
 
-  async waitForSelector(selector: string, options?: { timeout?: number }): Promise<void> {
-    const page = await this.getPage();
+  /** @deprecated Use {@link EvaluateInPage}. */
+  async evaluateInPage<T>(fn: (...args: any[]) => T, ...args: any[]): Promise<T> {
+    return this.EvaluateInPage(fn, ...args);
+  }
+
+  async WaitForSelector(selector: string, options?: { timeout?: number }): Promise<void> {
+    const page = await this.GetPage();
     await page.waitForSelector(selector, options);
   }
 
-  async screenshot(path?: string): Promise<Buffer> {
-    const page = await this.getPage();
+  /** @deprecated Use {@link WaitForSelector}. */
+  async waitForSelector(selector: string, options?: { timeout?: number }): Promise<void> {
+    return this.WaitForSelector(selector, options);
+  }
+
+  async Screenshot(path?: string): Promise<Buffer> {
+    const page = await this.GetPage();
     return await page.screenshot({ path });
   }
 
-  async getContent(): Promise<string> {
-    const page = await this.getPage();
+  /** @deprecated Use {@link Screenshot}. */
+  async screenshot(path?: string): Promise<Buffer> {
+    return this.Screenshot(path);
+  }
+
+  async GetContent(): Promise<string> {
+    const page = await this.GetPage();
     return await page.content();
   }
 
-  async close(): Promise<void> {
+  /** @deprecated Use {@link GetContent}. */
+  async getContent(): Promise<string> {
+    return this.GetContent();
+  }
+
+  async Close(): Promise<void> {
     if (this.page) {
       // Always close pages we opened. Swallow errors — the page may already be
       // gone (e.g. the external browser closed it) and that must not mask cleanup.
@@ -206,13 +241,28 @@ export class BrowserManager {
     }
   }
 
-  async reload(): Promise<void> {
-    const page = await this.getPage();
+  /** @deprecated Use {@link Close}. */
+  async close(): Promise<void> {
+    return this.Close();
+  }
+
+  async Reload(): Promise<void> {
+    const page = await this.GetPage();
     await page.reload();
   }
 
-  async waitForLoadState(state: 'load' | 'domcontentloaded' | 'networkidle' = 'load'): Promise<void> {
-    const page = await this.getPage();
+  /** @deprecated Use {@link Reload}. */
+  async reload(): Promise<void> {
+    return this.Reload();
+  }
+
+  async WaitForLoadState(state: 'load' | 'domcontentloaded' | 'networkidle' = 'load'): Promise<void> {
+    const page = await this.GetPage();
     await page.waitForLoadState(state);
+  }
+
+  /** @deprecated Use {@link WaitForLoadState}. */
+  async waitForLoadState(state: 'load' | 'domcontentloaded' | 'networkidle' = 'load'): Promise<void> {
+    return this.WaitForLoadState(state);
   }
 }

@@ -68,14 +68,14 @@ const HTML_STYLES = {
 };
 
 export class CompositeFilter {
-    private Descriptor: CompositeFilterDescriptor;
+    private descriptor: CompositeFilterDescriptor;
 
     /**
      * Empty AND group, or wrap an existing descriptor / single rule.
      * Prefer {@link FromJSON} / {@link FromDescriptor} at call sites that already have payload.
      */
     constructor(source?: CompositeFilterDescriptor | FilterDescriptor | null) {
-        this.Descriptor = CompositeFilter.Normalize(source);
+        this.descriptor = CompositeFilter.normalize(source);
     }
 
     public static FromJSON(json: string | object | null | undefined): CompositeFilter {
@@ -96,28 +96,28 @@ export class CompositeFilter {
     public static FormatFilterField = FormatFilterField;
 
     public get Logic(): FilterLogic {
-        return this.Descriptor.logic;
+        return this.descriptor.logic;
     }
     public set Logic(value: FilterLogic) {
-        this.Descriptor.logic = value;
+        this.descriptor.logic = value;
     }
 
     public get Filters(): (FilterDescriptor | CompositeFilterDescriptor)[] {
-        return this.Descriptor.filters;
+        return this.descriptor.filters;
     }
 
     /** Append a rule, a nested descriptor, or another CompositeFilter. */
     public Add(item: FilterDescriptor | CompositeFilterDescriptor | CompositeFilter): this {
-        this.Descriptor.filters.push(item instanceof CompositeFilter ? item.ToDescriptor() : item);
+        this.descriptor.filters.push(item instanceof CompositeFilter ? item.ToDescriptor() : item);
         return this;
     }
 
     public ToDescriptor(): CompositeFilterDescriptor {
-        return JSON.parse(JSON.stringify(this.Descriptor)) as CompositeFilterDescriptor;
+        return JSON.parse(JSON.stringify(this.descriptor)) as CompositeFilterDescriptor;
     }
 
     public ToJSON(): string {
-        return JSON.stringify(this.Descriptor);
+        return JSON.stringify(this.descriptor);
     }
 
     /**
@@ -126,28 +126,28 @@ export class CompositeFilter {
      * (false unless the operator is empty/null).
      */
     public Evaluate(context: FilterEvalContext): boolean {
-        return CompositeFilter.EvaluateNode(this.Descriptor, context ?? {});
+        return CompositeFilter.evaluateNode(this.descriptor, context ?? {});
     }
 
     /** Compact one-liner for a grid cell. Empty filter → empty string. */
     public SummaryText(options?: FilterSummaryOptions): string {
-        if (!this.Descriptor.filters?.length) return '';
-        return this.BuildText(this.Descriptor, options ?? {});
+        if (!this.descriptor.filters?.length) return '';
+        return this.buildText(this.descriptor, options ?? {});
     }
 
     /** Indented HTML with the same highlighting the filter-builder accordion uses. */
     public SummaryHTML(options?: FilterSummaryOptions): string {
-        if (!this.Descriptor.filters?.length) {
+        if (!this.descriptor.filters?.length) {
             return '<span style="color: #9ca3af; font-style: italic;">No filters applied</span>';
         }
-        return this.BuildHtml(this.Descriptor, 0, options ?? {});
+        return this.buildHtml(this.descriptor, 0, options ?? {});
     }
 
     public GetSummary(options?: FilterSummaryOptions): { Text: string; HTML: string } {
         return { Text: this.SummaryText(options), HTML: this.SummaryHTML(options) };
     }
 
-    private static Normalize(
+    private static normalize(
         source?: CompositeFilterDescriptor | FilterDescriptor | null,
     ): CompositeFilterDescriptor {
         if (source == null) return { logic: 'and', filters: [] };
@@ -163,7 +163,7 @@ export class CompositeFilter {
         return { logic: 'and', filters: [] };
     }
 
-    private static EvaluateNode(
+    private static evaluateNode(
         filter: CompositeFilterDescriptor | FilterDescriptor | null | undefined,
         context: FilterEvalContext,
     ): boolean {
@@ -172,20 +172,20 @@ export class CompositeFilter {
             const parts = (filter.filters ?? []).filter((f) => f != null);
             if (parts.length === 0) return true;
             if (filter.logic === 'or') {
-                return parts.some((p) => CompositeFilter.EvaluateNode(p, context));
+                return parts.some((p) => CompositeFilter.evaluateNode(p, context));
             }
-            return parts.every((p) => CompositeFilter.EvaluateNode(p, context));
+            return parts.every((p) => CompositeFilter.evaluateNode(p, context));
         }
-        return CompositeFilter.EvaluateRule(filter, context);
+        return CompositeFilter.evaluateRule(filter, context);
     }
 
-    private static EvaluateRule(rule: FilterDescriptor, context: FilterEvalContext): boolean {
+    private static evaluateRule(rule: FilterDescriptor, context: FilterEvalContext): boolean {
         if (!rule?.field) return true;
-        const actual = CompositeFilter.ReadValue(context, rule.field);
-        return CompositeFilter.Compare(actual, rule.operator, rule.value);
+        const actual = CompositeFilter.readValue(context, rule.field);
+        return CompositeFilter.compare(actual, rule.operator, rule.value);
     }
 
-    private static ReadValue(context: FilterEvalContext, field: string): unknown {
+    private static readValue(context: FilterEvalContext, field: string): unknown {
         const { Source, Name } = ParseFilterField(field);
         const rec = context[Source ?? ''];
         if (rec == null) return undefined;
@@ -198,7 +198,7 @@ export class CompositeFilter {
         return rec[Name];
     }
 
-    private static Compare(actual: unknown, operator: FilterOperator, expected: unknown): boolean {
+    private static compare(actual: unknown, operator: FilterOperator, expected: unknown): boolean {
         switch (operator) {
             case 'isnull':
             case 'isempty':
@@ -207,60 +207,60 @@ export class CompositeFilter {
             case 'isnotempty':
                 return actual != null && actual !== '';
             case 'eq':
-                return CompositeFilter.Equals(actual, expected);
+                return CompositeFilter.equals(actual, expected);
             case 'neq':
-                return !CompositeFilter.Equals(actual, expected);
+                return !CompositeFilter.equals(actual, expected);
             case 'gt':
-                return CompositeFilter.Num(actual) > CompositeFilter.Num(expected);
+                return CompositeFilter.num(actual) > CompositeFilter.num(expected);
             case 'gte':
-                return CompositeFilter.Num(actual) >= CompositeFilter.Num(expected);
+                return CompositeFilter.num(actual) >= CompositeFilter.num(expected);
             case 'lt':
-                return CompositeFilter.Num(actual) < CompositeFilter.Num(expected);
+                return CompositeFilter.num(actual) < CompositeFilter.num(expected);
             case 'lte':
-                return CompositeFilter.Num(actual) <= CompositeFilter.Num(expected);
+                return CompositeFilter.num(actual) <= CompositeFilter.num(expected);
             case 'contains':
-                return CompositeFilter.Str(actual).includes(CompositeFilter.Str(expected));
+                return CompositeFilter.str(actual).includes(CompositeFilter.str(expected));
             case 'doesnotcontain':
-                return !CompositeFilter.Str(actual).includes(CompositeFilter.Str(expected));
+                return !CompositeFilter.str(actual).includes(CompositeFilter.str(expected));
             case 'startswith':
-                return CompositeFilter.Str(actual).startsWith(CompositeFilter.Str(expected));
+                return CompositeFilter.str(actual).startsWith(CompositeFilter.str(expected));
             case 'endswith':
-                return CompositeFilter.Str(actual).endsWith(CompositeFilter.Str(expected));
+                return CompositeFilter.str(actual).endsWith(CompositeFilter.str(expected));
             default:
                 return false;
         }
     }
 
-    private static Equals(a: unknown, b: unknown): boolean {
+    private static equals(a: unknown, b: unknown): boolean {
         if (a == null && b == null) return true;
         if (typeof a === 'boolean' || typeof b === 'boolean') {
             return Boolean(a) === Boolean(b === true || b === 'true' || b === 1 || b === '1');
         }
         if (typeof a === 'number' || typeof b === 'number') {
-            return CompositeFilter.Num(a) === CompositeFilter.Num(b);
+            return CompositeFilter.num(a) === CompositeFilter.num(b);
         }
-        return CompositeFilter.Str(a) === CompositeFilter.Str(b);
+        return CompositeFilter.str(a) === CompositeFilter.str(b);
     }
 
-    private static Str(v: unknown): string {
+    private static str(v: unknown): string {
         if (v == null) return '';
         return String(v).toLowerCase();
     }
 
-    private static Num(v: unknown): number {
+    private static num(v: unknown): number {
         if (v instanceof Date) return v.getTime();
         const n = typeof v === 'number' ? v : Number(v);
         return Number.isFinite(n) ? n : NaN;
     }
 
-    private BuildText(filter: CompositeFilterDescriptor, options: FilterSummaryOptions): string {
+    private buildText(filter: CompositeFilterDescriptor, options: FilterSummaryOptions): string {
         const parts: string[] = [];
         for (const item of filter.filters || []) {
             if (IsCompositeFilter(item)) {
-                const inner = this.BuildText(item, options);
+                const inner = this.buildText(item, options);
                 if (inner) parts.push(`(${inner})`);
             } else {
-                const rule = this.RuleText(item, options);
+                const rule = this.ruleText(item, options);
                 if (rule) parts.push(rule);
             }
         }
@@ -268,19 +268,19 @@ export class CompositeFilter {
         return parts.join(join);
     }
 
-    private BuildHtml(filter: CompositeFilterDescriptor, depth: number, options: FilterSummaryOptions): string {
+    private buildHtml(filter: CompositeFilterDescriptor, depth: number, options: FilterSummaryOptions): string {
         const parts: string[] = [];
         const indent = '  '.repeat(depth);
         for (const item of filter.filters || []) {
             if (IsCompositeFilter(item)) {
-                const inner = this.BuildHtml(item, depth + 1, options);
+                const inner = this.buildHtml(item, depth + 1, options);
                 if (inner) {
                     parts.push(
                         `<span style="${HTML_STYLES.groupBracket}">(</span>\n${inner}\n${indent}<span style="${HTML_STYLES.groupBracket}">)</span>`,
                     );
                 }
             } else {
-                const rule = this.RuleHtml(item, options);
+                const rule = this.ruleHtml(item, options);
                 if (rule) parts.push(rule);
             }
         }
@@ -291,54 +291,54 @@ export class CompositeFilter {
         return `${indent}${parts.join(connector)}`;
     }
 
-    private RuleText(rule: FilterDescriptor, options: FilterSummaryOptions): string {
+    private ruleText(rule: FilterDescriptor, options: FilterSummaryOptions): string {
         if (!rule.field) return '';
-        const label = this.FieldLabel(rule.field, options);
+        const label = this.fieldLabel(rule.field, options);
         const op = OPERATOR_LABELS[rule.operator] || rule.operator;
-        if (this.IsNullOp(rule.operator)) return `${label} ${op}`;
-        return `${label} ${op} ${this.ValueText(rule.value)}`;
+        if (this.isNullOp(rule.operator)) return `${label} ${op}`;
+        return `${label} ${op} ${this.valueText(rule.value)}`;
     }
 
-    private RuleHtml(rule: FilterDescriptor, options: FilterSummaryOptions): string {
+    private ruleHtml(rule: FilterDescriptor, options: FilterSummaryOptions): string {
         if (!rule.field) return '';
         const { Source, Name } = ParseFilterField(rule.field);
-        const fieldLabel = this.BareFieldLabel(rule.field, Name, options);
-        const sourceLabel = Source ? this.SourceLabel(Source, options) : null;
+        const fieldLabel = this.bareFieldLabel(rule.field, Name, options);
+        const sourceLabel = Source ? this.sourceLabel(Source, options) : null;
         const fieldHtml = sourceLabel
             ? `<span style="${HTML_STYLES.source}">${EscapeHtml(sourceLabel)}</span> <span style="${HTML_STYLES.fieldName}">${EscapeHtml(fieldLabel)}</span>`
             : `<span style="${HTML_STYLES.fieldName}">${EscapeHtml(fieldLabel)}</span>`;
         const operatorHtml = `<span style="${HTML_STYLES.operator}">${EscapeHtml(OPERATOR_LABELS[rule.operator] || rule.operator)}</span>`;
-        if (this.IsNullOp(rule.operator)) return `${fieldHtml} ${operatorHtml}`;
-        return `${fieldHtml} ${operatorHtml} ${this.ValueHtml(rule.value)}`;
+        if (this.isNullOp(rule.operator)) return `${fieldHtml} ${operatorHtml}`;
+        return `${fieldHtml} ${operatorHtml} ${this.valueHtml(rule.value)}`;
     }
 
-    private FieldLabel(stored: string, options: FilterSummaryOptions): string {
+    private fieldLabel(stored: string, options: FilterSummaryOptions): string {
         const { Source, Name } = ParseFilterField(stored);
-        const bare = this.BareFieldLabel(stored, Name, options);
+        const bare = this.bareFieldLabel(stored, Name, options);
         if (!Source) return bare;
-        return `${this.SourceLabel(Source, options)} ${bare}`;
+        return `${this.sourceLabel(Source, options)} ${bare}`;
     }
 
-    private BareFieldLabel(stored: string, name: string, options: FilterSummaryOptions): string {
+    private bareFieldLabel(stored: string, name: string, options: FilterSummaryOptions): string {
         const hit = options.Fields?.find((f) => f.Name === stored || f.Name === name);
         return hit?.DisplayName || name;
     }
 
-    private SourceLabel(source: string, options: FilterSummaryOptions): string {
+    private sourceLabel(source: string, options: FilterSummaryOptions): string {
         return options.SourceLabels?.[source] || source;
     }
 
-    private IsNullOp(op: FilterOperator | string): boolean {
+    private isNullOp(op: FilterOperator | string): boolean {
         return ['isnull', 'isnotnull', 'isempty', 'isnotempty'].includes(op);
     }
 
-    private ValueText(value: unknown): string {
+    private valueText(value: unknown): string {
         if (value == null) return '';
         if (typeof value === 'boolean') return value ? 'true' : 'false';
         return String(value);
     }
 
-    private ValueHtml(value: unknown): string {
+    private valueHtml(value: unknown): string {
         if (value == null) return '';
         if (typeof value === 'boolean') {
             const style = value ? HTML_STYLES.valueTrue : HTML_STYLES.valueFalse;

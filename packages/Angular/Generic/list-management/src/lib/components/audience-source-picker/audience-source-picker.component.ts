@@ -41,14 +41,14 @@ export class AudienceSourcePickerComponent extends BaseAngularComponent implemen
     this._source = value;
     if (value) {
       // Pick the right tab + restore the saved field values.
-      this.activeTab = value.kind;
+      this.ActiveTab = value.kind;
       if (value.kind === 'list') {
-        this.selectedListId = value.listId;
+        this.SelectedListId = value.listId;
       } else if (value.kind === 'view') {
-        this.selectedViewId = value.viewId;
+        this.SelectedViewId = value.viewId;
       } else {
-        this.adhocEntityName = value.entityName;
-        this.adhocFilter = value.extraFilter;
+        this.AdhocEntityName = value.entityName;
+        this.AdhocFilter = value.extraFilter;
       }
     }
   }
@@ -62,54 +62,185 @@ export class AudienceSourcePickerComponent extends BaseAngularComponent implemen
 
   @Output() SourceChange = new EventEmitter<AudienceSource | null>();
 
-  public activeTab: AudienceSourcePickerTab = 'list';
-  public entityOptions: EntityInfo[] = [];
+  public ActiveTab: AudienceSourcePickerTab = 'list';
+
+  /** @deprecated Use {@link ActiveTab}. */
+  public get activeTab(): AudienceSourcePickerTab {
+    return this.ActiveTab;
+  }
+  /** @deprecated Use {@link ActiveTab}. */
+  public set activeTab(value: AudienceSourcePickerTab) {
+    this.ActiveTab = value;
+  }
+  public EntityOptions: EntityInfo[] = [];
+
+  /** @deprecated Use {@link EntityOptions}. */
+  public get entityOptions(): EntityInfo[] {
+    return this.EntityOptions;
+  }
+  /** @deprecated Use {@link EntityOptions}. */
+  public set entityOptions(value: EntityInfo[]) {
+    this.EntityOptions = value;
+  }
 
   // List-tab state
-  public selectedEntityName: string | null = null;
-  public availableLists: MJListEntity[] = [];
-  public filteredLists: MJListEntity[] = [];
-  public listSearch = '';
-  public selectedListId: string | null = null;
+  public SelectedEntityName: string | null = null;
+
+  /** @deprecated Use {@link SelectedEntityName}. */
+  public get selectedEntityName(): string | null {
+    return this.SelectedEntityName;
+  }
+  /** @deprecated Use {@link SelectedEntityName}. */
+  public set selectedEntityName(value: string | null) {
+    this.SelectedEntityName = value;
+  }
+  public AvailableLists: MJListEntity[] = [];
+
+  /** @deprecated Use {@link AvailableLists}. */
+  public get availableLists(): MJListEntity[] {
+    return this.AvailableLists;
+  }
+  /** @deprecated Use {@link AvailableLists}. */
+  public set availableLists(value: MJListEntity[]) {
+    this.AvailableLists = value;
+  }
+  public FilteredLists: MJListEntity[] = [];
+
+  /** @deprecated Use {@link FilteredLists}. */
+  public get filteredLists(): MJListEntity[] {
+    return this.FilteredLists;
+  }
+  /** @deprecated Use {@link FilteredLists}. */
+  public set filteredLists(value: MJListEntity[]) {
+    this.FilteredLists = value;
+  }
+  public ListSearch = '';
+
+  /** @deprecated Use {@link ListSearch}. */
+  public get listSearch() {
+    return this.ListSearch;
+  }
+  /** @deprecated Use {@link ListSearch}. */
+  public set listSearch(value) {
+    this.ListSearch = value;
+  }
+  public SelectedListId: string | null = null;
+
+  /** @deprecated Use {@link SelectedListId}. */
+  public get selectedListId(): string | null {
+    return this.SelectedListId;
+  }
+  /** @deprecated Use {@link SelectedListId}. */
+  public set selectedListId(value: string | null) {
+    this.SelectedListId = value;
+  }
 
   // View-tab state
-  public availableViews: MJUserViewEntity[] = [];
-  public filteredViews: MJUserViewEntity[] = [];
-  public viewSearch = '';
-  public selectedViewId: string | null = null;
+  public AvailableViews: MJUserViewEntity[] = [];
+
+  /** @deprecated Use {@link AvailableViews}. */
+  public get availableViews(): MJUserViewEntity[] {
+    return this.AvailableViews;
+  }
+  /** @deprecated Use {@link AvailableViews}. */
+  public set availableViews(value: MJUserViewEntity[]) {
+    this.AvailableViews = value;
+  }
+  public FilteredViews: MJUserViewEntity[] = [];
+
+  /** @deprecated Use {@link FilteredViews}. */
+  public get filteredViews(): MJUserViewEntity[] {
+    return this.FilteredViews;
+  }
+  /** @deprecated Use {@link FilteredViews}. */
+  public set filteredViews(value: MJUserViewEntity[]) {
+    this.FilteredViews = value;
+  }
+  public ViewSearch = '';
+
+  /** @deprecated Use {@link ViewSearch}. */
+  public get viewSearch() {
+    return this.ViewSearch;
+  }
+  /** @deprecated Use {@link ViewSearch}. */
+  public set viewSearch(value) {
+    this.ViewSearch = value;
+  }
+  public SelectedViewId: string | null = null;
+
+  /** @deprecated Use {@link SelectedViewId}. */
+  public get selectedViewId(): string | null {
+    return this.SelectedViewId;
+  }
+  /** @deprecated Use {@link SelectedViewId}. */
+  public set selectedViewId(value: string | null) {
+    this.SelectedViewId = value;
+  }
 
   // Adhoc-tab state
-  public adhocEntityName: string | null = null;
-  public adhocFilter = '';
+  public AdhocEntityName: string | null = null;
 
-  public loading = false;
+  /** @deprecated Use {@link AdhocEntityName}. */
+  public get adhocEntityName(): string | null {
+    return this.AdhocEntityName;
+  }
+  /** @deprecated Use {@link AdhocEntityName}. */
+  public set adhocEntityName(value: string | null) {
+    this.AdhocEntityName = value;
+  }
+  public AdhocFilter = '';
+
+  /** @deprecated Use {@link AdhocFilter}. */
+  public get adhocFilter() {
+    return this.AdhocFilter;
+  }
+  /** @deprecated Use {@link AdhocFilter}. */
+  public set adhocFilter(value) {
+    this.AdhocFilter = value;
+  }
+
+  public Loading = false;
+
+  /** @deprecated Use {@link Loading}. */
+  public get loading() {
+    return this.Loading;
+  }
+  /** @deprecated Use {@link Loading}. */
+  public set loading(value) {
+    this.Loading = value;
+  }
 
   async ngOnInit(): Promise<void> {
-    this.entityOptions = this.ProviderToUse.Entities
+    this.EntityOptions = this.ProviderToUse.Entities
       .filter((e) => !e.SchemaName.startsWith('sys'))
       .sort((a, b) => a.Name.localeCompare(b.Name));
     if (this.LockedEntityName) {
-      this.selectedEntityName = this.LockedEntityName;
-      this.adhocEntityName = this.LockedEntityName;
-    } else if (this.entityOptions.length > 0) {
-      this.selectedEntityName = this.entityOptions[0].Name;
-      this.adhocEntityName = this.selectedEntityName;
+      this.SelectedEntityName = this.LockedEntityName;
+      this.AdhocEntityName = this.LockedEntityName;
+    } else if (this.EntityOptions.length > 0) {
+      this.SelectedEntityName = this.EntityOptions[0].Name;
+      this.AdhocEntityName = this.SelectedEntityName;
     }
     await this.refreshTabData();
   }
 
-  public async setTab(tab: AudienceSourcePickerTab): Promise<void> {
-    this.activeTab = tab;
+  public async SetTab(tab: AudienceSourcePickerTab): Promise<void> {
+    this.ActiveTab = tab;
     this.emitCurrentSource();
     await this.refreshTabData();
   }
 
+  /** @deprecated Use {@link SetTab}. */
+  public async setTab(tab: AudienceSourcePickerTab): Promise<void> {
+    return this.SetTab(tab);
+  }
+
   public async OnEntityChange(name: string): Promise<void> {
-    this.selectedEntityName = name;
-    this.adhocEntityName = name;
+    this.SelectedEntityName = name;
+    this.AdhocEntityName = name;
     // Selecting a new entity invalidates any picked list/view.
-    this.selectedListId = null;
-    this.selectedViewId = null;
+    this.SelectedListId = null;
+    this.SelectedViewId = null;
     this.emitCurrentSource();
     await this.refreshTabData();
   }
@@ -123,12 +254,12 @@ export class AudienceSourcePickerComponent extends BaseAngularComponent implemen
   }
 
   public OnSelectList(list: MJListEntity): void {
-    this.selectedListId = list.ID;
+    this.SelectedListId = list.ID;
     this.emitCurrentSource();
   }
 
   public OnSelectView(view: MJUserViewEntity): void {
-    this.selectedViewId = view.ID;
+    this.SelectedViewId = view.ID;
     this.emitCurrentSource();
   }
 
@@ -140,22 +271,27 @@ export class AudienceSourcePickerComponent extends BaseAngularComponent implemen
    * Build the currently-selected `AudienceSource` from picker state, or
    * `null` if the picker isn't yet in a complete state.
    */
-  public get currentSource(): AudienceSource | null {
-    if (this.activeTab === 'list') {
-      return this.selectedListId ? { kind: 'list', listId: this.selectedListId } : null;
+  public get CurrentSource(): AudienceSource | null {
+    if (this.ActiveTab === 'list') {
+      return this.SelectedListId ? { kind: 'list', listId: this.SelectedListId } : null;
     }
-    if (this.activeTab === 'view') {
-      return this.selectedViewId ? { kind: 'view', viewId: this.selectedViewId } : null;
+    if (this.ActiveTab === 'view') {
+      return this.SelectedViewId ? { kind: 'view', viewId: this.SelectedViewId } : null;
     }
     // adhoc
-    if (this.adhocEntityName && this.adhocFilter.trim().length > 0) {
-      return { kind: 'adhoc', entityName: this.adhocEntityName, extraFilter: this.adhocFilter.trim() };
+    if (this.AdhocEntityName && this.AdhocFilter.trim().length > 0) {
+      return { kind: 'adhoc', entityName: this.AdhocEntityName, extraFilter: this.AdhocFilter.trim() };
     }
     return null;
   }
 
+  /** @deprecated Use {@link CurrentSource}. */
+  public get currentSource(): AudienceSource | null {
+    return this.CurrentSource;
+  }
+
   private emitCurrentSource(): void {
-    this._source = this.currentSource;
+    this._source = this.CurrentSource;
     this.SourceChange.emit(this._source);
     this.cdr.markForCheck();
   }
@@ -166,14 +302,14 @@ export class AudienceSourcePickerComponent extends BaseAngularComponent implemen
    * switching tabs doesn't re-query.
    */
   private async refreshTabData(): Promise<void> {
-    if (!this.selectedEntityName) return;
-    this.loading = true;
+    if (!this.SelectedEntityName) return;
+    this.Loading = true;
     this.cdr.markForCheck();
     try {
-      const entityInfo = this.ProviderToUse.EntityByName(this.selectedEntityName);
+      const entityInfo = this.ProviderToUse.EntityByName(this.SelectedEntityName);
       if (!entityInfo) {
-        this.availableLists = [];
-        this.availableViews = [];
+        this.AvailableLists = [];
+        this.AvailableViews = [];
         this.recomputeFilteredLists();
         this.recomputeFilteredViews();
         return;
@@ -193,29 +329,29 @@ export class AudienceSourcePickerComponent extends BaseAngularComponent implemen
           ResultType: 'entity_object',
         }),
       ]);
-      this.availableLists = lists.Success ? lists.Results ?? [] : [];
-      this.availableViews = views.Success ? views.Results ?? [] : [];
+      this.AvailableLists = lists.Success ? lists.Results ?? [] : [];
+      this.AvailableViews = views.Success ? views.Results ?? [] : [];
       this.recomputeFilteredLists();
       this.recomputeFilteredViews();
     } finally {
-      this.loading = false;
+      this.Loading = false;
       this.cdr.markForCheck();
     }
   }
 
   private recomputeFilteredLists(): void {
-    const term = this.listSearch.trim().toLowerCase();
-    this.filteredLists = term
-      ? this.availableLists.filter((l) => l.Name.toLowerCase().includes(term))
-      : this.availableLists;
+    const term = this.ListSearch.trim().toLowerCase();
+    this.FilteredLists = term
+      ? this.AvailableLists.filter((l) => l.Name.toLowerCase().includes(term))
+      : this.AvailableLists;
     this.cdr.markForCheck();
   }
 
   private recomputeFilteredViews(): void {
-    const term = this.viewSearch.trim().toLowerCase();
-    this.filteredViews = term
-      ? this.availableViews.filter((v) => v.Name.toLowerCase().includes(term))
-      : this.availableViews;
+    const term = this.ViewSearch.trim().toLowerCase();
+    this.FilteredViews = term
+      ? this.AvailableViews.filter((v) => v.Name.toLowerCase().includes(term))
+      : this.AvailableViews;
     this.cdr.markForCheck();
   }
 }

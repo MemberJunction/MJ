@@ -2,7 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
-import { traverse, NodePath, createViolation } from '../lint-utils';
+import { Traverse, NodePath, CreateViolation } from '../lint-utils';
 
 /**
  * Rule: react-component-naming
@@ -22,7 +22,7 @@ export class ReactComponentNamingRule extends BaseLintRule {
   Test(ast: t.File, componentName: string): Violation[] {
     const violations: Violation[] = [];
 
-    traverse(ast, {
+    Traverse(ast, {
       FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
         if (path.node.id && path.node.id.name === componentName) {
           // Check if it's the main component function
@@ -34,7 +34,7 @@ export class ReactComponentNamingRule extends BaseLintRule {
 
           if (hasComponentProps && funcName[0] !== funcName[0].toUpperCase()) {
             violations.push(
-              createViolation(
+              CreateViolation(
                 'react-component-naming',
                 'critical',
                 path.node.id,
@@ -75,7 +75,7 @@ export class ReactComponentNamingRule extends BaseLintRule {
 
             if (hasComponentLikeProps && funcName[0] !== funcName[0].toUpperCase()) {
               violations.push(
-                createViolation(
+                CreateViolation(
                   'react-component-naming',
                   'critical',
                   path.node.id,

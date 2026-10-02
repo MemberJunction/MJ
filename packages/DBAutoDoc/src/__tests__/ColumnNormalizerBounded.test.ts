@@ -35,11 +35,11 @@ function table(name: string): TableNormalizationInput {
       {
         schema: 'dbo',
         table: name,
-        column: 'email',
+        Column: 'email',
         dataType: 'nvarchar',
-        originalDescription: 'the email',
-        sampleValues: ['a@b.com'],
-        participatesInFK: false,
+        OriginalDescription: 'the email',
+        SampleValues: ['a@b.com'],
+        ParticipatesInFK: false,
         isPrimaryKey: false,
       },
     ],
@@ -135,7 +135,7 @@ describe('the normalizer call is bounded', () => {
   it('a stalled provider becomes a reported error instead of parking the pass', async () => {
     const { n } = normalizerWith([{ kind: 'stall' }], aiConfig({ callTimeoutMs: 20, retry: { initialDelayMs: 1 } }));
 
-    const r = await n.normalizeTable(table('Contacts'), 0);
+    const r = await n.NormalizeTable(table('Contacts'), 0);
 
     expect(r.errorMessage).toMatch(/call timeout/);
     expect(r.normalized).toHaveLength(0);
@@ -144,7 +144,7 @@ describe('the normalizer call is bounded', () => {
   it('names the table in the timeout, so the log says which one stalled', async () => {
     const { n } = normalizerWith([{ kind: 'stall' }], aiConfig({ callTimeoutMs: 20, retry: { initialDelayMs: 1 } }));
 
-    const r = await n.normalizeTable(table('Invoices'), 0);
+    const r = await n.NormalizeTable(table('Invoices'), 0);
 
     expect(r.errorMessage).toContain('dbo.Invoices');
   }, 10_000);
@@ -152,7 +152,7 @@ describe('the normalizer call is bounded', () => {
   it('hands the driver a cancellationToken — what makes the abort real rather than abandonment', async () => {
     const { n, llm } = normalizerWith([{ kind: 'ok' }], aiConfig({ callTimeoutMs: 5_000 }));
 
-    await n.normalizeTable(table('Contacts'), 0);
+    await n.NormalizeTable(table('Contacts'), 0);
 
     expect(llm.calls[0].cancellationToken).toBeDefined();
   });
@@ -160,7 +160,7 @@ describe('the normalizer call is bounded', () => {
   it('passes no token when the bound is disabled, restoring the exact previous behaviour', async () => {
     const { n, llm } = normalizerWith([{ kind: 'ok' }], aiConfig({ callTimeoutMs: 0 }));
 
-    await n.normalizeTable(table('Contacts'), 0);
+    await n.NormalizeTable(table('Contacts'), 0);
 
     expect(llm.calls[0].cancellationToken).toBeUndefined();
   });
@@ -175,7 +175,7 @@ describe('retries wait, and only when waiting can help', () => {
         aiConfig({ callTimeoutMs: 0, retry: { initialDelayMs: 100, backoffMultiplier: 2, maxDelayMs: 1000 } })
       );
 
-      const r = await n.normalizeTable(table('Contacts'), 2);
+      const r = await n.NormalizeTable(table('Contacts'), 2);
 
       expect(llm.calls).toHaveLength(2);
       expect(r.normalized).toHaveLength(1);
@@ -195,7 +195,7 @@ describe('retries wait, and only when waiting can help', () => {
         aiConfig({ callTimeoutMs: 0, retry: { initialDelayMs: 100, backoffMultiplier: 2, maxDelayMs: 10_000 } })
       );
 
-      await n.normalizeTable(table('Contacts'), 2);
+      await n.NormalizeTable(table('Contacts'), 2);
 
       expect(delays).toHaveLength(2);
       expect(delays[1]).toBeGreaterThan(delays[0]);
@@ -213,7 +213,7 @@ describe('retries wait, and only when waiting can help', () => {
         aiConfig({ callTimeoutMs: 0, retry: { initialDelayMs: 100 } })
       );
 
-      const r = await n.normalizeTable(table('Contacts'), 2);
+      const r = await n.NormalizeTable(table('Contacts'), 2);
 
       expect(llm.calls).toHaveLength(2);   // it still retries
       expect(r.normalized).toHaveLength(1);
@@ -228,7 +228,7 @@ describe('retries wait, and only when waiting can help', () => {
     try {
       const { n } = normalizerWith([{ kind: 'fail' }], aiConfig({ callTimeoutMs: 0, retry: { initialDelayMs: 100 } }));
 
-      await n.normalizeTable(table('Contacts'), 1); // two attempts, one gap
+      await n.NormalizeTable(table('Contacts'), 1); // two attempts, one gap
 
       expect(delays).toHaveLength(1);
     } finally {
@@ -243,7 +243,7 @@ describe('the token budget is enforced, and a short run says so', () => {
   it('stops scheduling once the budget is reached', async () => {
     const { n, llm } = normalizerWith([{ kind: 'ok', tokens: 100 }], aiConfig({ callTimeoutMs: 0 }));
 
-    const r = await n.normalizeAll(TABLES, { concurrency: 1, maxRetries: 0, tokenBudget: 250 });
+    const r = await n.NormalizeAll(TABLES, { Concurrency: 1, MaxRetries: 0, tokenBudget: 250 });
 
     // Three calls take the total to 300, which is over; the fourth is never scheduled.
     expect(llm.calls).toHaveLength(3);
@@ -255,7 +255,7 @@ describe('the token budget is enforced, and a short run says so', () => {
     // that as a finding about the schema rather than as a budget outcome.
     const { n } = normalizerWith([{ kind: 'ok', tokens: 100 }], aiConfig({ callTimeoutMs: 0 }));
 
-    const r = await n.normalizeAll(TABLES, { concurrency: 1, maxRetries: 0, tokenBudget: 250 });
+    const r = await n.NormalizeAll(TABLES, { Concurrency: 1, MaxRetries: 0, tokenBudget: 250 });
 
     expect(r.budgetExhausted).toBe(true);
     expect(r.tablesSkippedForBudget).toBe(7);
@@ -264,7 +264,7 @@ describe('the token budget is enforced, and a short run says so', () => {
   it('runs everything when no budget is set — the previous behaviour, unchanged', async () => {
     const { n, llm } = normalizerWith([{ kind: 'ok', tokens: 100 }], aiConfig({ callTimeoutMs: 0 }));
 
-    const r = await n.normalizeAll(TABLES, { concurrency: 2, maxRetries: 0 });
+    const r = await n.NormalizeAll(TABLES, { Concurrency: 2, MaxRetries: 0 });
 
     expect(llm.calls).toHaveLength(10);
     expect(r.budgetExhausted).toBe(false);
@@ -276,7 +276,7 @@ describe('the token budget is enforced, and a short run says so', () => {
     // whole database and look like a schema with none.
     for (const tokenBudget of [0, -1, Number.NaN]) {
       const { n, llm } = normalizerWith([{ kind: 'ok', tokens: 100 }], aiConfig({ callTimeoutMs: 0 }));
-      const r = await n.normalizeAll(TABLES, { concurrency: 1, maxRetries: 0, tokenBudget });
+      const r = await n.NormalizeAll(TABLES, { Concurrency: 1, MaxRetries: 0, tokenBudget });
       expect(llm.calls).toHaveLength(10);
       expect(r.budgetExhausted).toBe(false);
     }

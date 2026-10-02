@@ -19,7 +19,7 @@ import type { LiveKitBackgroundEffect } from './types';
  * @param enabled Whether to enable the filter.
  * @returns `true` if applied/removed successfully; `false` if unsupported or the SDK is unavailable.
  */
-export async function applyNoiseFilter(track: LocalAudioTrack, enabled: boolean): Promise<boolean> {
+export async function ApplyNoiseFilter(track: LocalAudioTrack, enabled: boolean): Promise<boolean> {
   try {
     const mod = await import('@livekit/krisp-noise-filter');
     if (!enabled) {
@@ -36,6 +36,11 @@ export async function applyNoiseFilter(track: LocalAudioTrack, enabled: boolean)
   }
 }
 
+/** @deprecated Use {@link ApplyNoiseFilter}. */
+export async function applyNoiseFilter(track: LocalAudioTrack, enabled: boolean): Promise<boolean> {
+  return ApplyNoiseFilter(track, enabled);
+}
+
 /**
  * Applies a background effect (blur / virtual background) to a local camera track, or clears it.
  *
@@ -43,7 +48,7 @@ export async function applyNoiseFilter(track: LocalAudioTrack, enabled: boolean)
  * @param effect The effect to apply (`'none'` clears any active processor).
  * @returns `true` if applied/cleared successfully; `false` if the SDK is unavailable.
  */
-export async function applyBackgroundEffect(track: LocalVideoTrack, effect: LiveKitBackgroundEffect): Promise<boolean> {
+export async function ApplyBackgroundEffect(track: LocalVideoTrack, effect: LiveKitBackgroundEffect): Promise<boolean> {
   try {
     const mod = await import('@livekit/track-processors');
     if (effect.Kind === 'none') {
@@ -56,4 +61,9 @@ export async function applyBackgroundEffect(track: LocalVideoTrack, effect: Live
   } catch {
     return false;
   }
+}
+
+/** @deprecated Use {@link ApplyBackgroundEffect}. */
+export async function applyBackgroundEffect(track: LocalVideoTrack, effect: LiveKitBackgroundEffect): Promise<boolean> {
+  return ApplyBackgroundEffect(track, effect);
 }

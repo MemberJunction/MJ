@@ -147,7 +147,7 @@ export class EntityFormOverrideService {
      * Active override at the same scope target to Inactive. Components
      * mirror the override status (Published / Draft / Deprecated).
      */
-    public async activateVersion(
+    public async ActivateVersion(
         id: string,
         user?: UserInfo,
         provider?: IMetadataProvider,
@@ -203,12 +203,21 @@ export class EntityFormOverrideService {
         }
     }
 
+    /** @deprecated Use {@link ActivateVersion}. */
+    public async activateVersion(
+        id: string,
+        user?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<{ Success: boolean; Error?: string }> {
+        return this.ActivateVersion(id, user, provider);
+    }
+
     /**
      * Re-point an Active override at an older Component row in the same Name
      * lineage. Pure UPDATE on the override; no new rows created. Mirrors the
      * server-side `Revert Interactive Form` action.
      */
-    public async revertToComponent(
+    public async RevertToComponent(
         activeOverrideID: string,
         targetComponentID: string,
         user?: UserInfo,
@@ -245,6 +254,16 @@ export class EntityFormOverrideService {
             LogError(`EntityFormOverrideService.revertToComponent: ${message}`);
             return { Success: false, Error: message };
         }
+    }
+
+    /** @deprecated Use {@link RevertToComponent}. */
+    public async revertToComponent(
+        activeOverrideID: string,
+        targetComponentID: string,
+        user?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<{ Success: boolean; Error?: string }> {
+        return this.RevertToComponent(activeOverrideID, targetComponentID, user, provider);
     }
 
     /**
