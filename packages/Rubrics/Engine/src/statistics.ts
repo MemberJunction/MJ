@@ -50,8 +50,15 @@ export interface AgreementResult {
     Withheld: boolean;
     SampleSize: number;
     MinimumSample: number;
-    Kappa?: number;
+    /** Null when every usable pair sits in one category, so kappa is undefined. */
+    Kappa?: number | null;
     Alpha?: number;
+    /** Share of usable pairs whose two ratings are the same level. */
+    ExactAgreement?: number;
+    /** Mean absolute difference of the two ratings. */
+    MeanAbsoluteError?: number;
+    /** Mean of the second rating minus the first. */
+    Bias?: number;
 }
 
 /**
@@ -61,16 +68,30 @@ export interface AgreementResult {
  * always returned, so a withheld result is not a bare statistic.
  */
 export function GetAgreement(ratings: number[][], minimumSample = 20): AgreementResult {
-    const sampleSize = ratings.length;
+    const pairs = usablePairs(ratings);
+    const sampleSize = pairs.length;
     if (sampleSize < minimumSample) return { Withheld: true, SampleSize: sampleSize, MinimumSample: minimumSample };
-    const pairs = ratings.filter(row => row.length >= 2).map(row => [row[0], row[1]] as const);
+    const differences = pairs.map(([left, right]) => right - left);
     return {
         Withheld: false,
         SampleSize: sampleSize,
         MinimumSample: minimumSample,
-        Kappa: pairs.length > 0 ? QuadraticKappa(pairs) : undefined,
-        Alpha: KrippendorffAlpha(ratings),
+        Kappa: QuadraticKappa(pairs),
+        Alpha: KrippendorffAlpha(ratings.filter(row => row.filter(value => Number.isFinite(value)).length >= 2)),
+        ExactAgreement: pairs.filter(([left, right]) => left === right).length / sampleSize,
+        MeanAbsoluteError: differences.reduce((sum, value) => sum + Math.abs(value), 0) / sampleSize,
+        Bias: differences.reduce((sum, value) => sum + value, 0) / sampleSize,
     };
+}
+
+/** A row is usable when it has two finite ratings. A single rating does not count. */
+function usablePairs(ratings: number[][]): [number, number][] {
+    const pairs: [number, number][] = [];
+    for (const row of ratings) {
+        if (row.length < 2 || !Number.isFinite(row[0]) || !Number.isFinite(row[1])) continue;
+        pairs.push([row[0], row[1]]);
+    }
+    return pairs;
 }
 
 export interface DiagnosticFlag {
@@ -115,11 +136,11 @@ export function GetDiagnostics(criteria: { key: string; scores: (number | null)[
  * are not pulled together just because 1 was not used.
  * `categoryCount` is the scale length. When omitted, the scale runs through the highest level.
  */
-export function QuadraticKappa(pairs: readonly (readonly [number, number])[], categoryCount?: number): number {
-    if (pairs.length === 0) return 1;
+export function QuadraticKappa(pairs: readonly (readonly [number, number])[], categoryCount?: number): number | null {
+    if (pairs.length === 0) return null;
     const highest = pairs.reduce((max, [left, right]) => Math.max(max, left, right), 0);
     const k = categoryCount ?? highest + 1;
-    if (k < 2) return 1;
+    if (k < 2) return null;
     const grid = Array.from({ length: k }, () => Array<number>(k).fill(0));
     let n = 0;
     for (const [left, right] of pairs) {
@@ -127,7 +148,7 @@ export function QuadraticKappa(pairs: readonly (readonly [number, number])[], ca
         grid[left][right] += 1;
         n += 1;
     }
-    if (n === 0) return 1;
+    if (n === 0) return null;
     const row = grid.map(line => line.reduce((sum, value) => sum + value, 0));
     const col = grid[0].map((_, column) => grid.reduce((sum, line) => sum + line[column], 0));
     let observed = 0;
@@ -139,7 +160,7 @@ export function QuadraticKappa(pairs: readonly (readonly [number, number])[], ca
             expected += weight * row[i] * col[j] / n;
         }
     }
-    if (expected === 0) return 1;
+    if (expected === 0) return null;
     return 1 - observed / expected;
 }
 

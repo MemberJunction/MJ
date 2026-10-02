@@ -122,6 +122,27 @@ describe('rubric judge calibration', () => {
         expect(CalibrationOracles(enough).oracles.some(oracle => oracle.message === 'InsufficientData')).toBe(false);
     });
 
+    it('returns null kappa when every pair is the same category, and counts subjects once', () => {
+        expect(QuadraticWeightedKappa([1, 1], [1, 1], 2)).toBeNull();
+        const stuck = AgreementByCriterion([
+            { subjectId: 'a', criterionId: 'facts', humanLevel: 1, aiLevel: 1, categoryCount: 2, humanScore: 1, aiScore: 1, major: 1 },
+            { subjectId: 'b', criterionId: 'facts', humanLevel: 1, aiLevel: 1, categoryCount: 2, humanScore: 0.4, aiScore: 0.6, major: 1 },
+        ]);
+        expect(stuck[0].weightedKappa).toBeNull();
+        expect(stuck[0].exactAgreement).toBe(1);
+        expect(stuck[0].bias).toBeCloseTo(0.1, 6);
+        expect(stuck[0].meanAbsoluteError).toBeCloseTo(0.1, 6);
+        const pair = (subjectId: string, criterionId: string) => ({
+            subjectId, criterionId, humanLevel: 1, aiLevel: 1, categoryCount: 2, humanScore: 1, aiScore: 1, major: 1,
+        });
+        const repeated = CalibrationOracles([
+            ...Array.from({ length: 10 }, (_, index) => pair(`s${index}`, 'facts')),
+            ...Array.from({ length: 10 }, (_, index) => pair(`s${index}`, 'tone')),
+        ]);
+        expect(repeated.oracles[0].message).toBe('InsufficientData');
+        expect(repeated.oracles[0].details).toMatchObject({ sampleSize: 10, minSampleSize: 20 });
+    });
+
     it('returns no comparison when the gold set has no paired scores', () => {
         const empty = CalibrationOracles([]);
         expect(empty.score).toBe(0);

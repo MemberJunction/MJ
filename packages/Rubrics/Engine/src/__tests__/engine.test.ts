@@ -315,6 +315,21 @@ describe('agreement and consensus', () => {
         const enough = GetAgreement(pairs, 20);
         expect(enough.Withheld).toBe(false);
         expect(enough.Kappa).toBeCloseTo(0.4, 6);
+        expect(QuadraticKappa(Array.from({ length: 20 }, () => [1, 1] as [number, number]), 2)).toBeNull();
+        const singles = Array.from({ length: 18 }, () => [1]);
+        const five = Array.from({ length: 5 }, () => [0, 1]);
+        const gated = GetAgreement([...singles, ...five], 20);
+        expect(gated.SampleSize).toBe(5);
+        expect(gated.Withheld).toBe(true);
+        expect(gated.Kappa).toBeUndefined();
+        const described = GetAgreement([
+            ...Array.from({ length: 10 }, () => [0, 0] as [number, number]),
+            ...Array.from({ length: 10 }, () => [0, 1] as [number, number]),
+        ], 20);
+        expect(described.Withheld).toBe(false);
+        expect(described.ExactAgreement).toBe(0.5);
+        expect(described.MeanAbsoluteError).toBe(0.5);
+        expect(described.Bias).toBe(0.5);
     });
 
     it('matches a hand-computed ordinal alpha of 4/9', () => {
