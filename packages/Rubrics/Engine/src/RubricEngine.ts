@@ -74,6 +74,10 @@ export interface EvaluateRecordInput {
     contextEntityName?: string;
     contextRecordId?: string;
     evaluator?: EvaluateParams['evaluator'];
+    /** SinglePass when omitted. Sampling passes PerCriterion when the agent rubric says so. */
+    promptMode?: EvaluateParams['promptMode'];
+    /** Used when the agent rubric's evaluator is Agent. */
+    agent?: EvaluationAgentRunner;
     passThreshold?: number | null;
     /** When set, this version is used instead of the latest Published version. */
     versionId?: string;
@@ -206,7 +210,8 @@ export class RubricEngine {
      * {@link evaluate}. This is not the Get Rubric action.
      */
     public async EvaluateRecord(input: EvaluateRecordInput): Promise<EvaluateRecordResult> {
-        if (input.evaluator === 'AI') throw new Error('Evaluator AI is not accepted.');
+        const evaluator = input.evaluator ?? 'LLM';
+        const promptMode = input.promptMode ?? 'SinglePass';
         const version = input.versionId
             ? await this.GetRubric({ versionId: input.versionId })
             : await this.latestPublished(input);
@@ -223,8 +228,10 @@ export class RubricEngine {
             subject: { entityName: input.subjectEntityName, recordId: input.subjectRecordId, entityId: subjectEntityId },
             context,
             passThreshold: input.passThreshold ?? null,
-            evaluator: input.evaluator ?? 'Deterministic',
-            promptRunner: input.evaluator === 'LLM' ? this.rubricEvaluatorRunner() : undefined,
+            evaluator,
+            promptMode,
+            promptRunner: evaluator === 'LLM' ? this.rubricEvaluatorRunner() : undefined,
+            agent: input.agent,
             content: input.content,
             loadRecord: input.content ? undefined : async (entityName, recordId) => {
                 const rows = await this.records.rows(entityName, `ID=${sqlLiteral(recordId)}`);
@@ -383,8 +390,8 @@ export class RubricEngine {
             evaluator: params.evaluator,
             aiAgentRunId: params.subject.entityName === 'MJ: AI Agent Runs' ? params.subject.recordId : null,
             aiPromptRunId: params.subject.entityName === 'MJ: AI Prompt Runs' ? params.subject.recordId : null,
-            evaluatorName: params.evaluator ?? 'Deterministic',
-            metadata: { Evaluator: { Name: params.evaluator ?? 'Deterministic' } },
+            evaluatorName: params.evaluator ?? 'LLM',
+            metadata: { Evaluator: { Name: params.evaluator ?? 'LLM' } },
         };
     }
 

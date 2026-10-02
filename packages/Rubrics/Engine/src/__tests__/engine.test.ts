@@ -139,6 +139,71 @@ describe('RubricEngine', () => {
         expect(done.evaluation.status).toBe('Submitted');
         expect(done.output?.normalizedScore).toBe(1);
     });
+
+    it('defaults a missing evaluator to LLM SinglePass and runs an Agent config', async () => {
+        const tree = version();
+        const prompts: string[] = [];
+        const drafted: string[] = [];
+        const store: RubricEvaluationStore = {
+            async createDraft(input) {
+                drafted.push(input.evaluator ?? 'missing');
+                return { id: 'eval-choice', status: 'Draft' };
+            },
+            async submit() {
+                return { normalizedScore: 1, completeness: 1, outcome: 'Passed', passed: true, gateFailed: false, passThresholdApplied: 0.5, bandId: null, confidence: null, nodes: [], scoringEngineVersion: '1.0' };
+            },
+            async fail() { throw new Error('should not fail'); },
+        };
+        const records = {
+            async rows(entityName: string) {
+                if (entityName === 'MJ: Rubrics') return [{ ID: 'rubric', Name: 'Writing' }];
+                if (entityName === 'MJ: Rubric Versions') return [{
+                    ID: 'version', RubricID: 'rubric', Status: 'Published', MajorVersion: 1, MinorVersion: 0, PatchVersion: 0,
+                    NotApplicablePolicy: 'ExcludeAndRedistribute', ScoreDisplayMin: 0, ScoreDisplayMax: 100, PassThreshold: 0.5,
+                }];
+                if (entityName === 'MJ: Entities') return [{ ID: 'entity' }];
+                if (entityName === 'MJ: Rubric Criteria') return tree.nodes.map(node => ({
+                    ID: node.id, Key: node.key, Name: node.name, NodeType: node.nodeType, ScaleID: node.scaleId,
+                    Weight: node.weight, IsAdvisory: false, IsGate: false, Sequence: node.sequence,
+                }));
+                if (entityName === 'MJ: Rubric Scales') return [{ ID: 'scale', ScaleType: 'Levels', HigherIsBetter: true }];
+                if (entityName === 'MJ: Rubric Scale Levels') return [{ ID: 'high', ScaleID: 'scale', Label: 'High', Value: 1, NormalizedValue: 1, Sequence: 0 }];
+                return [];
+            },
+            async createDraft() { return { id: 'draft', status: 'Draft' }; },
+        };
+        const engine = new RubricEngine(store, records, {
+            async Run(_name, messages) {
+                prompts.push(messages.system);
+                return JSON.stringify({ decisions: [{ key: 'clarity', level: 'High', rationale: 'Clear.', evidence: [] }] });
+            },
+        });
+        await engine.evaluateRecord({
+            rubricId: 'rubric',
+            subjectEntityName: 'MJ: Documents',
+            subjectRecordId: 'record-1',
+            content: { text: 'Easy to read.' },
+        });
+        expect(drafted).toEqual(['LLM']);
+        expect(prompts).toHaveLength(1);
+
+        const agentCalls: string[] = [];
+        await engine.evaluateRecord({
+            rubricId: 'rubric',
+            subjectEntityName: 'MJ: Documents',
+            subjectRecordId: 'record-1',
+            content: { text: 'Easy to read.' },
+            evaluator: 'AI',
+            agent: {
+                async run() {
+                    agentCalls.push('agent');
+                    return { decisions: [{ key: 'clarity', level: 'High', rationale: 'Clear.', evidence: [] }] };
+                },
+            },
+        });
+        expect(agentCalls).toEqual(['agent']);
+        expect(drafted).toEqual(['LLM', 'AI']);
+    });
 });
 
 describe('agreement and consensus', () => {

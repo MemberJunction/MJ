@@ -74,6 +74,9 @@ export class EvaluateRecordAgainstRubricAction extends BaseAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
+            if (textValue(params, 'Evaluator') === 'AI') {
+                return { Success: false, ResultCode: 'FAILED', Message: 'Evaluator AI is not accepted.' };
+            }
             const result = await this.Invoke(EngineForAction(params), {
                 rubricId: textValue(params, 'RubricID'),
                 rubricName: textValue(params, 'RubricName'),

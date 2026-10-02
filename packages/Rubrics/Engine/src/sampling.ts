@@ -32,13 +32,21 @@ function parseConfig(value: string): unknown {
     }
 }
 
+export interface SampledRun {
+    runId: string;
+    agentId: string;
+    rubricId: string;
+    evaluator: 'LLM' | 'Deterministic' | 'AI';
+    promptMode: 'SinglePass' | 'PerCriterion';
+}
+
 /** Active production-sampling links, recent runs, skipping runs that already have this rubric's evaluation. */
 export function SelectSampledRuns(input: {
     links: SamplingLink[];
     runs: { id: string; agentId: string }[];
     evaluated: { runId: string; rubricId: string }[];
-}): { runId: string; agentId: string; rubricId: string }[] {
-    const chosen: { runId: string; agentId: string; rubricId: string }[] = [];
+}): SampledRun[] {
+    const chosen: SampledRun[] = [];
     for (const link of input.links) {
         if (link.status !== 'Active') continue;
         for (const run of input.runs) {
@@ -61,7 +69,7 @@ export function selectSampledRuns(input: {
     links: SamplingLink[];
     runs: { id: string; agentId: string }[];
     evaluated: { runId: string; rubricId: string }[];
-}): { runId: string; agentId: string; rubricId: string }[] {
+}): SampledRun[] {
     return SelectSampledRuns(input);
 }
 

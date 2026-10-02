@@ -32,6 +32,7 @@ export function ProviderProductionCatalog(provider: unknown, user: unknown): Pro
                 sampleRate: Number(row.SampleRate ?? 0),
                 status: String(row.Status ?? ''),
                 purpose: String(row.Purpose ?? ''),
+                evaluatorConfig: row.EvaluatorConfig ?? null,
             }));
         },
         async runs() {
