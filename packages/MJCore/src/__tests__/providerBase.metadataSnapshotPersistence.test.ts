@@ -1,24 +1,14 @@
 /**
- * The metadata snapshot is only worth writing if something can read it back (#4882).
+ * The gate that decides whether `ProviderBase` persists its metadata snapshot.
  *
- * `ProviderBase` persists a snapshot of ALL metadata to its local storage provider on every
- * metadata reload. On Redis or a browser store that is a real cross-process cache. On an
- * in-process `Map` the only possible reader is the heap that already holds the live objects, so the
- * save spends a full `JSON.stringify` of the whole metadata graph — 131M characters on a large
- * tenant — plus a `Blob` copy, a gzip pass and a base64 encode, to produce something nothing will
- * ever read. The load then spends a `JSON.parse` and a rebuild of every `EntityInfo` and
- * `EntityFieldInfo` to read it back.
+ * The snapshot is written to the local storage provider on every metadata reload. On Redis or a
+ * browser store that is a real cross-process cache; on an in-process `Map` the only reader is the
+ * heap that already holds those objects, and serializing, gzipping and base64-encoding the whole
+ * metadata graph to produce it is expensive enough to exhaust the heap on a large tenant.
  *
- * Measured on a 791-entity tenant with no `REDIS_URL`: ~10s and ~1.2GB of transient heap per
- * refresh against a 2.2GB steady state, and the final flatten of that JSON string needs one
- * contiguous ~500MB allocation. Saved queries are metadata members, so an agent writing them
- * triggers a refresh roughly every 30s; two overlapping refreshes exhausted the heap and MJAPI died
- * with `Reached heap limit Allocation failed` inside `String::SlowFlatten`.
- *
- * `ILocalStorageProvider.SupportsCrossProcessPersistence` lets the provider answer the only
- * question that matters here. The cases below pin both directions of the gate — that an in-process
- * store is skipped, and just as importantly that a persistent one is NOT, since over-reaching would
- * silently disable the cold-start cache everywhere.
+ * `ILocalStorageProvider.SupportsCrossProcessPersistence` is how a provider answers that question.
+ * These cases cover both directions: an in-process store is skipped, and — just as important — a
+ * persistent one is not, since over-reaching would disable the cold-start cache everywhere.
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
@@ -168,10 +158,7 @@ describe('ProviderBase — the metadata snapshot persistence gate', () => {
     });
 
     describe('the save path', () => {
-        /**
-         * REGRESSION PIN. Against the un-fixed code this fails: the full stringify/gzip/base64 pass
-         * runs and writes the snapshot and timestamp keys into a Map that dies with the process.
-         */
+        /** Counting the keys the store was asked for is the only way to show the pass did not run. */
         it('writes nothing at all to an in-process store', async () => {
             const store = new RecordingStorageProvider(false);
             await new TestProvider(store).SaveLocalMetadataToStorage();
@@ -200,10 +187,7 @@ describe('ProviderBase — the metadata snapshot persistence gate', () => {
     });
 
     describe('the load path', () => {
-        /**
-         * REGRESSION PIN. Symmetrical with the save. Against the un-fixed code the snapshot keys are
-         * read back and every metadata object is rebuilt from a copy of what the heap already holds.
-         */
+        /** Symmetrical with the save: reading back would rebuild every metadata object for nothing. */
         it('reads nothing at all from an in-process store', async () => {
             const store = new RecordingStorageProvider(false);
             await new TestProvider(store).LoadSnapshotForTest();
@@ -250,16 +234,13 @@ describe('ProviderBase — the metadata snapshot persistence gate', () => {
 });
 
 /**
- * The byte-at-a-time base64 loops were the second allocation hazard: `binary +=
- * String.fromCharCode(b)` builds a rope the size of the payload and then forces a flatten,
- * measured at 3702ms for an 8.6MB buffer under heap pressure against 191ms cold. Node encodes and
- * decodes the same bytes natively.
+ * The native base64 codecs must produce byte-identical output to the character-at-a-time loops they
+ * replace, since the snapshot is gzipped and a single wrong byte makes it unreadable.
  *
- * These are equivalence pins, not regression pins — the point is that the fast path produces
- * BYTE-IDENTICAL output to the loops it replaces, including for bytes above 0x7F where a latin1
- * assumption would corrupt the payload, and for lengths that are not a multiple of three where
- * base64 padding applies. A round-trip test alone would pass even if both directions were wrong in
- * the same way, so the encoder is also compared against an independent reference.
+ * Covers bytes above 0x7F, where a latin1 assumption would corrupt the payload, and lengths that are
+ * not a multiple of three, where padding applies. The encoder is compared against the original loop
+ * kept below as a reference: a round-trip test alone would pass even if both directions were wrong
+ * in the same way.
  */
 describe('ProviderBase — base64 codecs', () => {
     /** The implementation these replaced, kept as the reference. */
