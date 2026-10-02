@@ -69,8 +69,8 @@ export function DecideSelfCheck(input: {
 
 /** The candidate still in memory. FinalPayload is written only after the run finishes. */
 export interface SelfCheckCandidate {
-    message?: string;
-    payload?: unknown;
+    Message?: string;
+    Payload?: unknown;
 }
 
 export interface SelfCheckEngine {
@@ -119,8 +119,8 @@ export async function ExecuteSelfCheck(input: {
         passThreshold: input.link.passThreshold ?? null,
         ...(input.candidate ? {
             content: {
-                text: input.candidate.message,
-                data: { message: input.candidate.message, finalPayload: input.candidate.payload },
+                text: input.candidate.Message,
+                data: { message: input.candidate.Message, finalPayload: input.candidate.Payload },
             },
         } : {}),
     });

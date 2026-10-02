@@ -1,7 +1,7 @@
 import type { RubricScoreResult, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 
 /** A one-criterion draft the DOM specs can render without a provider. */
-export function draft(weight = 1, instructions: string | null = null): RubricVersionSnapshot {
+export function Draft(weight = 1, instructions: string | null = null): RubricVersionSnapshot {
     return {
         id: 'draft',
         rubricId: 'rubric',
@@ -38,7 +38,7 @@ export function draft(weight = 1, instructions: string | null = null): RubricVer
 }
 
 /** A passing score for the Clarity leaf. */
-export function passedResult(): RubricScoreResult {
+export function PassedResult(): RubricScoreResult {
     return {
         normalizedScore: 1,
         completeness: 1,

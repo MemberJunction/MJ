@@ -10,7 +10,7 @@ import { OracleInput, OracleConfig, OracleResult } from '../types';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import { renderRubricEvaluatorPrompt } from '@memberjunction/rubrics';
+import { RenderRubricEvaluatorPrompt } from '@memberjunction/rubrics';
 
 /** The prompt whose model selection this judge uses. The rendered rubric text is the user message. */
 const RUBRIC_EVALUATOR_PROMPT = 'Rubric Evaluator';
@@ -103,7 +103,7 @@ export class LLMJudgeOracle implements IOracle {
             const strict = config.strictMode === true;
             const passThreshold = typeof config.passThreshold === 'number' ? config.passThreshold : 0.7;
             const version = InlineVersion(leaves, strict, passThreshold);
-            const rendered = renderRubricEvaluatorPrompt(version, { text: judgeSubject(trace) }, 'SinglePass');
+            const rendered = RenderRubricEvaluatorPrompt(version, { text: judgeSubject(trace) }, 'SinglePass');
 
             await AIEngine.Instance.Config(false, input.contextUser);
             const prompt = AIEngine.Instance.Prompts.find(item => item.Name === RUBRIC_EVALUATOR_PROMPT);

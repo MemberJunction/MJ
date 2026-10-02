@@ -1,7 +1,7 @@
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import type { RubricDecisionRunner } from './LLMRubricEvaluator.js';
-import { RubricEvaluationAgentRunner } from './RubricEvaluationAgentRunner.js';
+import type { EvaluationAgentRunner } from './AgentRubricEvaluator.js';
 import { RunInEntityTransaction, RunView, type EntityTransactionScope } from '@memberjunction/core';
 import { MJRubricBandEntity, MJRubricCriterionEntity, MJRubricCriterionLevelEntity, MJRubricEntity, MJRubricEvaluationEntity, MJRubricEvaluationScoreEntity, MJRubricVersionEntity } from '@memberjunction/core-entities';
 import { EvidenceJson, HighestNonDraftVersion, type RubricNodeSnapshot, type ScoredNode } from '@memberjunction/rubrics-base';
@@ -396,7 +396,7 @@ export function RubricEvaluatorPromptRun(provider: RubricProvider, user: unknown
 /** PerCriterion asks AIDecisionRunner for a ScoreQuestion instead of sending the whole rubric. */
 export function PromptDecisionRunner(provider: unknown, user: unknown): RubricDecisionRunner {
     return {
-        async score(key, question, state) {
+        async Score(key, question, state) {
             const view = RunView.FromMetadataProvider(provider as never);
             const found = await view.RunView({
                 EntityName: 'MJ: AI Prompts',
@@ -421,6 +421,15 @@ export function PromptDecisionRunner(provider: unknown, user: unknown): RubricDe
     };
 }
 
+type AgentRunnerFactory = (provider: unknown, user: unknown) => EvaluationAgentRunner;
+
+let agentRunnerFactory: AgentRunnerFactory | undefined;
+
+/** Lets the agents package supply the runner without a package cycle. */
+export function RegisterRubricAgentRunner(factory: AgentRunnerFactory): void {
+    agentRunnerFactory = factory;
+}
+
 export function ProviderRubricEngine(provider: unknown, user: unknown): RubricEngine {
     const data = provider as RubricProvider;
     return new RubricEngine(
@@ -428,17 +437,17 @@ export function ProviderRubricEngine(provider: unknown, user: unknown): RubricEn
         ProviderRecords(data, user),
         RubricEvaluatorPromptRun(data, user),
         PromptDecisionRunner(data, user),
-        new RubricEvaluationAgentRunner(data, user),
+        agentRunnerFactory?.(data, user),
     );
 }
 
 export interface HumanScoreAnswer {
-    criterionId: string;
-    scaleLevelId?: string | null;
-    rawValue?: number | null;
-    isNotApplicable?: boolean;
-    rationale?: string | null;
-    evidence?: unknown;
+    CriterionId: string;
+    ScaleLevelId?: string | null;
+    RawValue?: number | null;
+    IsNotApplicable?: boolean;
+    Rationale?: string | null;
+    Evidence?: unknown;
 }
 
 /**
@@ -476,12 +485,12 @@ export async function SubmitHumanEvaluation(provider: RubricProvider, user: unkn
             const score = await provider.GetEntityObject('MJ: Rubric Evaluation Scores', user);
             score.NewRecord();
             score.EvaluationID = evaluationId;
-            score.CriterionID = answer.criterionId;
-            score.ScaleLevelID = answer.isNotApplicable ? null : answer.scaleLevelId ?? null;
-            score.RawValue = answer.isNotApplicable ? null : answer.rawValue ?? null;
-            score.IsNotApplicable = answer.isNotApplicable === true;
-            score.Rationale = answer.rationale ?? null;
-            score.Evidence = EvidenceJson(answer.evidence);
+            score.CriterionID = answer.CriterionId;
+            score.ScaleLevelID = answer.IsNotApplicable ? null : answer.ScaleLevelId ?? null;
+            score.RawValue = answer.IsNotApplicable ? null : answer.RawValue ?? null;
+            score.IsNotApplicable = answer.IsNotApplicable === true;
+            score.Rationale = answer.Rationale ?? null;
+            score.Evidence = EvidenceJson(answer.Evidence);
             if (!await score.Save()) throw new Error(score.LatestResult?.CompleteMessage || score.LatestResult?.Message || 'Could not save a criterion answer.');
         }
         evaluation.Status = 'Submitted';

@@ -30,11 +30,11 @@ function parseConfig(value: string): unknown {
 }
 
 export interface SampledRun {
-    runId: string;
-    agentId: string;
-    rubricId: string;
-    evaluator: 'LLM' | 'Deterministic' | 'AI';
-    promptMode: 'SinglePass' | 'PerCriterion';
+    RunId: string;
+    AgentId: string;
+    RubricId: string;
+    Evaluator: 'LLM' | 'Deterministic' | 'AI';
+    PromptMode: 'SinglePass' | 'PerCriterion';
 }
 
 /** Active production-sampling links, recent runs, skipping runs that already have this rubric's evaluation. */
@@ -50,11 +50,13 @@ export function SelectSampledRuns(input: {
             if (run.agentId !== link.agentId) continue;
             if (input.evaluated.some(row => row.runId === run.id && row.rubricId === link.rubricId)) continue;
             if (!KeepSample(run.id, link.sampleRate)) continue;
+            const choice = SamplingEvaluatorChoice(link.evaluatorConfig);
             chosen.push({
-                runId: run.id,
-                agentId: link.agentId,
-                rubricId: link.rubricId,
-                ...SamplingEvaluatorChoice(link.evaluatorConfig),
+                RunId: run.id,
+                AgentId: link.agentId,
+                RubricId: link.rubricId,
+                Evaluator: choice.evaluator,
+                PromptMode: choice.promptMode,
             });
         }
     }
@@ -81,7 +83,7 @@ export interface SamplingEvaluator {
 
 /** Scheduled job. Loads links and runs, then evaluates the kept runs off the agent response path. */
 export class EvaluateSampledAgentRuns {
-    public failures: { runId: string; message: string }[] = [];
+    public Failures: { runId: string; message: string }[] = [];
 
     public constructor(
         private readonly loader: SamplingLoader,
@@ -96,19 +98,19 @@ export class EvaluateSampledAgentRuns {
 
         public async Run(): Promise<ReturnType<typeof SelectSampledRuns>> {
         const chosen = this.Plan(await this.loader.Load()).slice(0, Math.max(0, this.volumeCap));
-        this.failures = [];
+        this.Failures = [];
         for (const item of chosen) {
             try {
                 await this.engine.EvaluateRecord({
-                    rubricId: item.rubricId,
-                    subjectRecordId: item.runId,
+                    rubricId: item.RubricId,
+                    subjectRecordId: item.RunId,
                     subjectEntityName: AGENT_RUN_SUBJECT,
-                    evaluator: item.evaluator,
-                    promptMode: item.promptMode,
+                    evaluator: item.Evaluator,
+                    promptMode: item.PromptMode,
                     ...(this.agent ? { agent: this.agent } : {}),
                 });
             } catch (error) {
-                this.failures.push({ runId: item.runId, message: error instanceof Error ? error.message : String(error) });
+                this.Failures.push({ runId: item.RunId, message: error instanceof Error ? error.message : String(error) });
             }
         }
         return chosen;
@@ -141,14 +143,14 @@ export const SAMPLING_VOLUME_CAP = 100;
 export const SAMPLING_EVALUATED_BATCH = 100;
 
 export interface SamplingJobOptions {
-    now?: Date;
-    windowMs?: number;
+    Now?: Date;
+    WindowMs?: number;
     /** Only these agents. Omit to use every agent that has a sampling link. */
-    agentIds?: string[];
-    volumeCap?: number;
-    evaluatedBatchSize?: number;
+    AgentIds?: string[];
+    VolumeCap?: number;
+    EvaluatedBatchSize?: number;
     /** Passed into EvaluateRecord for an Agent config. */
-    agent?: EvaluationAgentRunner;
+    Agent?: EvaluationAgentRunner;
 }
 
 export function SamplingSince(now: Date = new Date(), windowMs: number = SAMPLING_WINDOW_MS): string {
@@ -213,12 +215,12 @@ export function ProductionSamplingLoader(catalog: ProductionSamplingCatalog, opt
     return {
         async Load() {
             const links = ProductionSamplingLinks(await catalog.links());
-            const agentIds = options.agentIds ?? [...new Set(links.map(link => link.agentId))];
-            const since = SamplingSince(options.now ?? new Date(), options.windowMs ?? SAMPLING_WINDOW_MS);
+            const agentIds = options.AgentIds ?? [...new Set(links.map(link => link.agentId))];
+            const since = SamplingSince(options.Now ?? new Date(), options.WindowMs ?? SAMPLING_WINDOW_MS);
             const runs = FilterSamplingRuns(await catalog.runs({ since, agentIds }), { since, agentIds })
                 .map(run => ({ id: run.id, agentId: run.agentId }));
             const evaluatedRows = [];
-            for (const batch of ChunkIds(runs.map(run => run.id), options.evaluatedBatchSize ?? SAMPLING_EVALUATED_BATCH)) {
+            for (const batch of ChunkIds(runs.map(run => run.id), options.EvaluatedBatchSize ?? SAMPLING_EVALUATED_BATCH)) {
                 evaluatedRows.push(...await catalog.evaluated(batch));
             }
             const evaluated = EvaluatedRubricRuns(evaluatedRows, await catalog.versions());
@@ -232,8 +234,8 @@ export function ProductionSamplingJob(catalog: ProductionSamplingCatalog, engine
     return new EvaluateSampledAgentRuns(
         ProductionSamplingLoader(catalog, options),
         engine,
-        options.volumeCap ?? SAMPLING_VOLUME_CAP,
-        options.agent,
+        options.VolumeCap ?? SAMPLING_VOLUME_CAP,
+        options.Agent,
     );
 }
 

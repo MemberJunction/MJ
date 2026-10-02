@@ -111,9 +111,9 @@ describe('RubricEngineBase', () => {
 
     it('caches a published version with its tree and does not cache a draft', () => {
         const engine = new RubricEngineBase();
-        engine.replaceCache(snapshot);
+        engine.ReplaceCache(snapshot);
 
-        const published = engine.getPublishedVersion('published');
+        const published = engine.GetPublishedVersion('published');
         expect(published).not.toBeNull();
         expect(published?.nodes).toHaveLength(1);
         expect(published?.nodes[0].key).toBe('clarity');
@@ -128,12 +128,12 @@ describe('RubricEngineBase', () => {
         expect(published?.scoreDisplayMin).toBe(0);
         expect(published?.scoreDisplayMax).toBe(100);
 
-        expect(engine.getPublishedVersion('draft')).toBeNull();
-        expect(engine.getPublishedVersions('rubric').map(item => item.id)).toEqual(['published', 'older']);
-        expect(engine.getLatestPublishedVersion('rubric')?.id).toBe('published');
-        expect(engine.getCategory('cat')?.name).toBe('Quality');
-        expect(engine.getScale('scale')?.levels).toHaveLength(1);
-        expect(engine.getRubric('rubric')?.name).toBe('Writing');
-        expect(engine.getAgentRubrics('agent')).toHaveLength(1);
+        expect(engine.GetPublishedVersion('draft')).toBeNull();
+        expect(engine.GetPublishedVersions('rubric').map(item => item.id)).toEqual(['published', 'older']);
+        expect(engine.GetLatestPublishedVersion('rubric')?.id).toBe('published');
+        expect(engine.GetCategory('cat')?.name).toBe('Quality');
+        expect(engine.GetScale('scale')?.levels).toHaveLength(1);
+        expect(engine.GetRubric('rubric')?.name).toBe('Writing');
+        expect(engine.GetAgentRubrics('agent')).toHaveLength(1);
     });
 });

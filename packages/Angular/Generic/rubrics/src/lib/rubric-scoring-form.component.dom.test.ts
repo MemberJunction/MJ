@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { RubricScoringFormComponent } from './rubric-scoring-form.component';
-import { draft } from './dom-fixture';
+import { Draft } from './dom-fixture';
 
 describe('RubricScoringFormComponent (DOM)', () => {
     function render() {
         const fixture = TestBed.createComponent(RubricScoringFormComponent);
-        const tree = draft();
+        const tree = Draft();
         tree.nodes[0].rationaleRequired = true;
         fixture.componentInstance.Version = tree;
         fixture.detectChanges();

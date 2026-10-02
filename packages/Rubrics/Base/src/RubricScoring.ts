@@ -1,5 +1,5 @@
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
-import { BandFor, round6 } from './authoring.js';
+import { BandFor, Round6 } from './authoring.js';
 import { EvidenceSatisfied } from './evidence.js';
 import type {
     NotApplicablePolicy,
@@ -110,12 +110,12 @@ export class RubricScoring {
         const confidence = RubricScoring.confidence(leaves);
 
         return {
-            normalizedScore: overall === null ? null : round6(overall),
-            completeness: round6(completeness),
+            normalizedScore: overall === null ? null : Round6(overall),
+            completeness: Round6(completeness),
             outcome,
             passed,
             gateFailed,
-            passThresholdApplied: threshold === null ? null : round6(threshold),
+            passThresholdApplied: threshold === null ? null : Round6(threshold),
             bandId,
             confidence,
             scoredCriteriaCount: scored,
@@ -161,7 +161,7 @@ export class RubricScoring {
         };
         if (node.isGate && !node.isAdvisory) {
             const method = node.rollupMethod ?? 'WeightedMean';
-            if (score !== null && round6(score) < round6(node.gateMinimumScore ?? 0)) calc.gateFailed = true;
+            if (score !== null && Round6(score) < Round6(node.gateMinimumScore ?? 0)) calc.gateFailed = true;
             if (unansweredLeaves > 0 && (score === null || method === 'Minimum')) calc.gateFailed = true;
         }
         return calc;
@@ -234,7 +234,7 @@ export class RubricScoring {
         const node = calc.node;
         if (!node.isGate || node.isAdvisory) return;
         if (calc.unanswered) calc.gateFailed = true;
-        if (calc.score !== null && round6(calc.score) < round6(node.gateMinimumScore ?? 0)) calc.gateFailed = true;
+        if (calc.score !== null && Round6(calc.score) < Round6(node.gateMinimumScore ?? 0)) calc.gateFailed = true;
     }
 
     private static hasValue(answer: RubricAnswer): boolean {
@@ -327,11 +327,11 @@ export class RubricScoring {
         gateFailed: boolean,
         threshold: number | null,
     ): RubricScoreResult['outcome'] {
-        if (minimum !== null && round6(completeness) < round6(minimum)) return 'Incomplete';
+        if (minimum !== null && Round6(completeness) < Round6(minimum)) return 'Incomplete';
         if (naFailure) return 'NotApplicableFailure';
         if (score === null) return 'Incomplete';
         if (gateFailed) return 'GateFailed';
-        if (threshold !== null) return round6(score) >= round6(threshold) ? 'Passed' : 'BelowThreshold';
+        if (threshold !== null) return Round6(score) >= Round6(threshold) ? 'Passed' : 'BelowThreshold';
         return 'Scored';
     }
 
@@ -361,7 +361,7 @@ export class RubricScoring {
         if (sumWeight === 0) return null;
         const mean = weighted.reduce((sum, leaf) =>
             sum + (RubricScoring.leafConfidence(leaf) as number) * (leaf.pathWeight as number), 0) / sumWeight;
-        return round6(mean);
+        return Round6(mean);
     }
 
     /** Path weight keeps going under a Minimum or Maximum group. Contribution does not. */
@@ -411,14 +411,14 @@ export class RubricScoring {
         return {
             id: calc.node.id,
             key: calc.node.key,
-            normalizedScore: calc.score === null ? null : round6(calc.score),
-            effectiveWeight: calc.effectiveWeight === null ? null : round6(calc.effectiveWeight),
-            overallContribution: calc.overallContribution === null ? null : round6(calc.overallContribution),
+            normalizedScore: calc.score === null ? null : Round6(calc.score),
+            effectiveWeight: calc.effectiveWeight === null ? null : Round6(calc.effectiveWeight),
+            overallContribution: calc.overallContribution === null ? null : Round6(calc.overallContribution),
             gateFailed: calc.gateFailed,
             isNotApplicable: calc.isNotApplicable,
             isAdvisory: calc.node.isAdvisory,
-            completeness: calc.completeness === null ? null : round6(calc.completeness),
-            confidence: calc.confidence === null ? null : round6(calc.confidence),
+            completeness: calc.completeness === null ? null : Round6(calc.completeness),
+            confidence: calc.confidence === null ? null : Round6(calc.confidence),
         };
     }
 }

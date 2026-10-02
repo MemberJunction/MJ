@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { RubricResultComponent } from './rubric-result.component';
-import { draft, passedResult } from './dom-fixture';
+import { Draft, PassedResult } from './dom-fixture';
 
 describe('RubricResultComponent (DOM)', () => {
     function render(setup: (component: RubricResultComponent) => void): HTMLElement {
@@ -18,8 +18,8 @@ describe('RubricResultComponent (DOM)', () => {
 
     it('shows the display score, the band, and that the gate was met', () => {
         const host = render(component => {
-            component.Version = draft();
-            component.Result = passedResult();
+            component.Version = Draft();
+            component.Result = PassedResult();
         });
         expect(host.querySelector('h2')?.textContent).toBe('Passed');
         expect(host.textContent).toContain('100');
@@ -29,8 +29,8 @@ describe('RubricResultComponent (DOM)', () => {
 
     it('names the criterion and shows the saved rationale', () => {
         const host = render(component => {
-            component.Version = draft();
-            component.Result = passedResult();
+            component.Version = Draft();
+            component.Result = PassedResult();
             component.Answers = [{ criterionId: 'clarity', rationale: 'Easy to follow.' }];
         });
         expect(host.textContent).toContain('Clarity');
@@ -41,11 +41,11 @@ describe('RubricResultComponent (DOM)', () => {
     });
 
     it('says the gate was not met when the result failed it', () => {
-        const result = passedResult();
+        const result = PassedResult();
         result.gateFailed = true;
         result.outcome = 'Failed';
         const host = render(component => {
-            component.Version = draft();
+            component.Version = Draft();
             component.Result = result;
         });
         expect(host.textContent).toContain('Gate not met');

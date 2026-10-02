@@ -21,7 +21,7 @@ describe('production sampling', () => {
             runs: [{ id: 'done', agentId: 'agent' }, { id: 'open', agentId: 'agent' }],
             evaluated: [{ runId: 'done', rubricId: 'rubric' }],
         });
-        expect(chosen.map(row => row.runId)).toEqual(['open']);
+        expect(chosen.map(row => row.RunId)).toEqual(['open']);
         const evaluated: { rubricId: string; subjectRecordId: string }[] = [];
         const job = new EvaluateSampledAgentRuns({
             async Load() {
@@ -34,7 +34,7 @@ describe('production sampling', () => {
         }, {
             async EvaluateRecord(input) { evaluated.push(input); },
         });
-        expect((await job.Run()).map(row => row.runId)).toEqual(['open']);
+        expect((await job.Run()).map(row => row.RunId)).toEqual(['open']);
         expect(evaluated).toEqual([{
             rubricId: 'rubric',
             subjectRecordId: 'open',
@@ -46,7 +46,7 @@ describe('production sampling', () => {
             links: [{ agentId: 'agent', rubricId: 'rubric', sampleRate: 1, status: 'Active' }],
             runs: [{ id: 'open', agentId: 'agent' }],
             evaluated: [],
-        }).map(row => row.runId)).toEqual(['open']);
+        }).map(row => row.RunId)).toEqual(['open']);
     });
 
     it('does not sample a link whose purpose is Evaluation', async () => {
@@ -66,7 +66,7 @@ describe('production sampling', () => {
         }, {
             async EvaluateRecord(input) { evaluated.push(input); },
         });
-        expect((await job.Run()).map(row => row.rubricId)).toEqual(['sample-rubric']);
+        expect((await job.Run()).map(row => row.RubricId)).toEqual(['sample-rubric']);
         expect(evaluated).toEqual([{
             rubricId: 'sample-rubric',
             subjectRecordId: 'open',
@@ -176,19 +176,19 @@ describe('production sampling', () => {
                 if (input.subjectRecordId === 'a') throw new Error('boom');
             },
         }, {
-            now: new Date('2026-10-02T00:00:00.000Z'),
-            agentIds: ['keep'],
-            volumeCap: 1,
-            evaluatedBatchSize: 1,
+            Now: new Date('2026-10-02T00:00:00.000Z'),
+            AgentIds: ['keep'],
+            VolumeCap: 1,
+            EvaluatedBatchSize: 1,
         });
-        expect((await job.Run()).map(row => row.runId)).toEqual(['a']);
+        expect((await job.Run()).map(row => row.RunId)).toEqual(['a']);
         expect(evaluated).toEqual(['a']);
-        expect(job.failures).toEqual([{ runId: 'a', message: 'boom' }]);
+        expect(job.Failures).toEqual([{ runId: 'a', message: 'boom' }]);
         expect(batches).toEqual([['a'], ['b']]);
     });
 
     it('passes the agent runner when the config is Agent', async () => {
-        const agent = { async run() { return {}; } };
+        const agent = { async Run() { return {}; } };
         const seen: unknown[] = [];
         const job = ProductionSamplingJob({
             async links() {
@@ -199,7 +199,7 @@ describe('production sampling', () => {
             async versions() { return []; },
         }, {
             async EvaluateRecord(input) { seen.push(input.agent); },
-        }, { agent });
+        }, { Agent: agent });
         await job.Run();
         expect(seen).toEqual([agent]);
     });

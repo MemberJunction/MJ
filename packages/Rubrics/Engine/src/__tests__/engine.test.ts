@@ -212,7 +212,7 @@ describe('RubricEngine', () => {
             content: { text: 'Easy to read.' },
             evaluator: 'AI',
             agent: {
-                async run() {
+                async Run() {
                     agentCalls.push('agent');
                     return { decisions: [{ key: 'clarity', level: 'High', rationale: 'Clear.', evidence: [] }] };
                 },

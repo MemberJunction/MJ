@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { RubricPublishDialogComponent } from './publish-dialog.component';
-import { draft } from './dom-fixture';
+import { Draft } from './dom-fixture';
 
 describe('RubricPublishDialogComponent (DOM)', () => {
     function render(setup: (component: RubricPublishDialogComponent) => void) {
@@ -13,7 +13,7 @@ describe('RubricPublishDialogComponent (DOM)', () => {
 
     it('explains a first publish and confirms without sending Initial as the bump', () => {
         const events: { bump: string | null; summary: string }[] = [];
-        const { fixture, host } = render(component => { component.Draft = draft(); });
+        const { fixture, host } = render(component => { component.Draft = Draft(); });
         fixture.componentInstance.Confirm.subscribe(event => events.push(event));
         expect(host.textContent).toContain('This is the first publish');
         (host.querySelector('button') as HTMLButtonElement).click();
@@ -22,7 +22,7 @@ describe('RubricPublishDialogComponent (DOM)', () => {
 
     it('disables publish when the draft matches the base', () => {
         const events: unknown[] = [];
-        const same = draft();
+        const same = Draft();
         const { fixture, host } = render(component => {
             component.Base = same;
             component.Draft = same;
@@ -36,9 +36,9 @@ describe('RubricPublishDialogComponent (DOM)', () => {
     });
 
     it('describes a minor bump the way the bump table does', () => {
-        const base = draft();
+        const base = Draft();
         base.passThreshold = 0.5;
-        const next = draft();
+        const next = Draft();
         next.passThreshold = 0.8;
         const { host } = render(component => {
             component.Base = base;
@@ -53,8 +53,8 @@ describe('RubricPublishDialogComponent (DOM)', () => {
         const bumps: (string | null)[] = [];
         const summaries: string[] = [];
         const { fixture, host } = render(component => {
-            component.Base = draft(1, null);
-            component.Draft = draft(1, 'Clearer instructions');
+            component.Base = Draft(1, null);
+            component.Draft = Draft(1, 'Clearer instructions');
         });
         fixture.componentInstance.RequestedBumpChange.subscribe(value => bumps.push(value));
         fixture.componentInstance.SummaryChange.subscribe(value => summaries.push(value));

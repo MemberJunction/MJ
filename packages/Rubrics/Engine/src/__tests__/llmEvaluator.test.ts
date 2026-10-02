@@ -187,7 +187,7 @@ describe('LLMRubricEvaluator', () => {
         tree.scales[0].levels.push({ id: 'low', label: 'Low', value: 0, normalizedValue: 0, sequence: 1 });
         const questions: { Kind: string; Levels: string[] }[] = [];
         const decision = {
-            async score(_key: string, question: { Kind: string; Levels: string[] }) {
+            async Score(_key: string, question: { Kind: string; Levels: string[] }) {
                 questions.push(question);
                 return { Kind: 'Score' as const, Value: question.Levels.length - 1, Probabilities: { High: 0.8, Low: 0.2 }, Confidence: 0.8 };
             },

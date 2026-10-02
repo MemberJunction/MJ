@@ -1,32 +1,27 @@
 import { RunView } from '@memberjunction/core';
-import type { RubricSubjectContent } from './content.js';
-import type { EvaluationAgentRunner } from './AgentRubricEvaluator.js';
-import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
+import { EscapeSQLString } from '@memberjunction/global';
+import { RegisterRubricAgentRunner, type EvaluationAgentRunner } from '@memberjunction/rubrics';
 
-export const RUBRIC_EVALUATION_AGENT = 'Rubric Evaluation Agent';
+const RUBRIC_EVALUATION_AGENT = 'Rubric Evaluation Agent';
 
 /**
- * Runs the Rubric Evaluation Agent and returns its payload. The sampling job
- * passes this into EvaluateRecord so an Agent config is not called without a runner.
+ * Runs the Rubric Evaluation Agent. Registered for ProviderRubricEngine so the
+ * rubrics package does not depend on this package.
  */
-export class RubricEvaluationAgentRunner implements EvaluationAgentRunner {
+class RubricEvaluationAgentRunner implements EvaluationAgentRunner {
     public constructor(private readonly provider: unknown, private readonly user: unknown) {}
 
-    public async run(input: {
-        version: RubricVersionSnapshot;
-        content: RubricSubjectContent;
-        subject?: { entityName: string; recordId: string };
-    }): Promise<unknown> {
+    public async Run(input: Parameters<EvaluationAgentRunner['Run']>[0]): ReturnType<EvaluationAgentRunner['Run']> {
         const view = RunView.FromMetadataProvider(this.provider as never);
         const found = await view.RunView({
             EntityName: 'MJ: AI Agents',
-            ExtraFilter: `Name='${RUBRIC_EVALUATION_AGENT.replace(/'/g, "''")}'`,
+            ExtraFilter: `Name='${EscapeSQLString(RUBRIC_EVALUATION_AGENT)}'`,
             ResultType: 'entity_object',
             MaxRows: 1,
         }, this.user as never);
         const agent = found.Results?.[0];
         if (!found.Success || !agent) throw new Error('The Rubric Evaluation Agent was not found.');
-        const { AgentRunner } = await import('@memberjunction/ai-agents');
+        const { AgentRunner } = await import('./AgentRunner.js');
         const result = await new AgentRunner(this.provider as never).RunAgent({
             agent: agent as never,
             payload: { version: input.version, content: input.content, subject: input.subject },
@@ -34,6 +29,8 @@ export class RubricEvaluationAgentRunner implements EvaluationAgentRunner {
             conversationMessages: [],
         });
         if (!result.success) throw new Error(result.errorMessage || 'The Rubric Evaluation Agent failed.');
-        return result.payload ?? {};
+        return (result.payload ?? {}) as Awaited<ReturnType<EvaluationAgentRunner['Run']>>;
     }
 }
+
+RegisterRubricAgentRunner((provider, user) => new RubricEvaluationAgentRunner(provider, user));

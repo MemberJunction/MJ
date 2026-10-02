@@ -139,7 +139,7 @@ describe('agent self-check', () => {
             runId: 'run-1',
             agentKind: 'loop',
             attempt: 1,
-            candidate: { message: 'The answer is 4.', payload: { rows: [1] } },
+            candidate: { Message: 'The answer is 4.', Payload: { rows: [1] } },
             record: () => undefined,
         });
         expect(seen).toEqual([{

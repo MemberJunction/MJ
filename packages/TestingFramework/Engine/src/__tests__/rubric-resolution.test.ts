@@ -5,6 +5,7 @@ const evaluateRecord = vi.hoisted(() => vi.fn(async () => ({
 })));
 vi.mock('@memberjunction/rubrics', () => ({
     ProviderRubricEngine: () => ({ EvaluateRecord: evaluateRecord, evaluateRecord }),
+    RegisterRubricAgentRunner: () => undefined,
 }));
 
 import { readFileSync } from 'node:fs';

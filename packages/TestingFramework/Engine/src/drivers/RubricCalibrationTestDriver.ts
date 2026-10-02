@@ -1,5 +1,6 @@
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { RunView } from '@memberjunction/core';
+import '@memberjunction/ai-agents';
 import { ProviderRubricEngine } from '@memberjunction/rubrics';
 import { BaseTestDriver } from './BaseTestDriver';
 import { CalibrationOracles, CalibrationPairs, type CalibrationExpectation, type CalibrationPair } from './calibration';

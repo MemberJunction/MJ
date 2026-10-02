@@ -5,6 +5,7 @@ const views = vi.hoisted(() => [] as { EntityName: string }[]);
 
 vi.mock('@memberjunction/rubrics', () => ({
     ProviderRubricEngine: () => ({ evaluateRecord, EvaluateRecord: evaluateRecord }),
+    RegisterRubricAgentRunner: () => undefined,
 }));
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
@@ -13,6 +14,9 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     return {
         ...actual,
         RunView: class {
+            public static FromMetadataProvider(): InstanceType<typeof this> {
+                return new this();
+            }
             async RunView(params: { EntityName: string }) {
                 views.push(params);
                 if (params.EntityName === 'MJ: Rubric Evaluations') {
@@ -51,6 +55,7 @@ describe('RubricCalibrationTestDriver', () => {
 
     it('scores again with the named evaluator and ignores an older AI evaluation', async () => {
         const driver = new RubricCalibrationTestDriver();
+        driver.Provider = {} as never;
         const result = await driver.Execute({
             test: {
                 ID: 'test-1',

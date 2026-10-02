@@ -252,7 +252,7 @@ describe('rubric actions', () => {
             subjectEntityId: 'entity',
             subjectRecordId: 'run',
             evaluatorUserId: 'user-1',
-            answers: [{ criterionId: 'pct', rawValue: 80, evidence: 'The figure shows 80.' }],
+            answers: [{ CriterionId: 'pct', RawValue: 80, Evidence: 'The figure shows 80.' }],
         };
         await expect(SubmitHumanEvaluation(provider, { ID: 'user-1' }, input)).rejects.toThrow(/criterion answer/);
         expect(order).toContain('rollback');

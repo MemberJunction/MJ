@@ -860,7 +860,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "JSON array of answers. A percentage answer sets rawValue. evidence is quote text or an evidence list.",
+            "Description": "JSON array of answers. A percentage answer sets RawValue. Evidence is quote text or an evidence list.",
             "IsRequired": true
           },
           "primaryKey": { "ID": "82B310A4-E52A-411A-9366-38E0889A2783" }

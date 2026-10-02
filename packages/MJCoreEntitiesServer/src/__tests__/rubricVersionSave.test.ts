@@ -29,6 +29,9 @@ vi.mock('@memberjunction/core-entities', () => {
             this.SuperSaveCalled = true;
             return true;
         }
+        public Set(fieldName: string, value: unknown): void {
+            if (fieldName === 'Status') this.Status = String(value);
+        }
     }
     return { MJRubricVersionEntity };
 });
@@ -164,5 +167,68 @@ describe('MJRubricVersionEntityServer.Save', () => {
         expect(host.MajorVersion).toBe(3);
         expect(host.MinorVersion).toBe(0);
         expect(host.PatchVersion).toBe(0);
+    });
+
+    it('leaves Draft unset on a published version so a repeat sync is not a write', () => {
+        const version = new MJRubricVersionEntityServer();
+        const host = version as unknown as { IsSaved: boolean; Status: string };
+        host.IsSaved = true;
+        host.Status = 'Published';
+        version.Set('Status', 'Draft');
+        expect(host.Status).toBe('Published');
+    });
+
+    it('does not save when a published version was moved back to Draft', async () => {
+        const version = new MJRubricVersionEntityServer();
+        const host = version as unknown as { IsSaved: boolean; Status: string; LoadedStatus: string; SuperSaveCalled: boolean };
+        host.IsSaved = true;
+        host.LoadedStatus = 'Published';
+        host.Status = 'Draft';
+        await expect(version.Save()).resolves.toBe(true);
+        expect(host.Status).toBe('Published');
+        expect(host.SuperSaveCalled).toBe(false);
+    });
+
+    it('publishes the draft a publication record finds, and skips a version that is already published', async () => {
+        const version = new MJRubricVersionEntityServer();
+        const host = version as unknown as {
+            IsSaved: boolean;
+            Status: string;
+            LoadedStatus: string;
+            ID: string;
+            SuperSaveCalled: boolean;
+            ProviderToUse: { GetEntityObject: () => Promise<{ Status: string; InnerLoad: () => Promise<boolean>; Save: () => Promise<boolean> }> };
+        };
+        host.IsSaved = false;
+        host.Status = 'Published';
+        host.LoadedStatus = 'Published';
+        host.ID = 'version-1';
+        let publishedSave = false;
+        host.ProviderToUse = {
+            async GetEntityObject() {
+                return {
+                    Status: 'Draft',
+                    async InnerLoad() { return true; },
+                    async Save() { publishedSave = true; return true; },
+                };
+            },
+        };
+        await expect(version.Save()).resolves.toBe(true);
+        expect(publishedSave).toBe(true);
+        expect(host.SuperSaveCalled).toBe(false);
+
+        publishedSave = false;
+        host.ProviderToUse = {
+            async GetEntityObject() {
+                return {
+                    Status: 'Published',
+                    async InnerLoad() { return true; },
+                    async Save() { publishedSave = true; return true; },
+                };
+            },
+        };
+        await expect(version.Save()).resolves.toBe(true);
+        expect(publishedSave).toBe(false);
+        expect(host.SuperSaveCalled).toBe(false);
     });
 });

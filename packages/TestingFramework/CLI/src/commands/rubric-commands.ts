@@ -1,3 +1,4 @@
+import '@memberjunction/ai-agents';
 import { RubricCommands as RubricCatalog } from '@memberjunction/rubrics';
 import { CloseMJProvider, GetContextUser, GetMJProvider, InitializeMJProvider } from '../lib/mj-provider';
 

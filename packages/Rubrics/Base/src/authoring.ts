@@ -2,7 +2,7 @@ import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import type { RubricBandSnapshot, RubricNodeSnapshot, RubricScaleSnapshot } from './types.js';
 
 /** Six decimal places, the same rounding scoring uses before a band boundary. */
-export function round6(value: number): number {
+export function Round6(value: number): number {
     return Math.round((value + Number.EPSILON) * 1_000_000) / 1_000_000;
 }
 
@@ -13,11 +13,11 @@ export function round6(value: number): number {
  */
 export function BandFor(normalized: number | null, bands: RubricBandSnapshot[]): RubricBandSnapshot | null {
     if (normalized === null) return null;
-    const rounded = round6(normalized);
+    const rounded = Round6(normalized);
     const ordered = [...bands].sort((left, right) => left.minScore - right.minScore || left.maxScore - right.maxScore);
     for (const band of ordered) {
-        const min = round6(band.minScore);
-        const max = round6(band.maxScore);
+        const min = Round6(band.minScore);
+        const max = Round6(band.maxScore);
         const top = max === 1 && rounded === 1;
         if (rounded >= min && (rounded < max || top)) return band;
     }

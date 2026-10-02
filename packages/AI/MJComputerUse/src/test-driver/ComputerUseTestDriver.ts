@@ -56,7 +56,7 @@ import {
     ValidationWarning,
     TestRunOutputItem,
     ReplayTelemetry,
-    inlineOracleFromVerdicts,
+    InlineOracleFromVerdicts,
     OraclesWithNamedRubric,
 } from '@memberjunction/testing-engine';
 
@@ -1620,7 +1620,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         }
 
         if (verdicts && verdicts.length > 0) {
-            const inline = inlineOracleFromVerdicts(verdicts);
+            const inline = InlineOracleFromVerdicts(verdicts);
             inline.advisory = InlineVerdictIsAdvisory(config);
             results.push(inline);
             this.logToTestRun(

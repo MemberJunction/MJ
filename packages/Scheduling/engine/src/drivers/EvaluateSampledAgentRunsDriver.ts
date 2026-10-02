@@ -6,6 +6,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { DatabaseProviderBase, Metadata, ValidationResult } from '@memberjunction/core';
 import { MJScheduledJobEntity } from '@memberjunction/core-entities';
+import '@memberjunction/ai-agents';
 import { ProviderProductionCatalog, ProviderRubricEngine, ProductionSamplingJob } from '@memberjunction/rubrics';
 import { ScheduledJobResult, NotificationContent } from '@memberjunction/scheduling-base-types';
 import { BaseScheduledJob, ScheduledJobExecutionContext } from '../BaseScheduledJob';
@@ -28,7 +29,7 @@ export class EvaluateSampledAgentRunsDriver extends BaseScheduledJob {
                 void context.heartbeat?.();
                 await engine.EvaluateRecord(input);
             },
-        }).run();
+        }).Run();
         return { Success: true, Details: { Evaluated: chosen.length } };
     }
 

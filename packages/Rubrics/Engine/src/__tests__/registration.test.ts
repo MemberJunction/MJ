@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseEngine } from '@memberjunction/core';
@@ -24,6 +27,16 @@ describe('rubric registration', () => {
         RubricContentRegistry.Instance.Register('MJ: Notes', () => ({ text: 'from the registry' }));
         expect(ShapeContent('MJ: Notes', { Body: 'ignored' }).text).toBe('from the registry');
         expect(ShapeContent('MJ: Test Runs', { ActualOutputData: 'shipped' }).data?.actualOutput).toBe('shipped');
+    });
+
+    it('does not depend on the agents package', () => {
+        const root = join(dirname(fileURLToPath(import.meta.url)), '../../../..');
+        const rubrics = JSON.parse(readFileSync(join(root, 'Rubrics/Engine/package.json'), 'utf8')) as { dependencies: Record<string, string> };
+        expect(rubrics.dependencies['@memberjunction/ai-agents']).toBeUndefined();
+        const agents = readFileSync(join(root, 'AI/Agents/src/index.ts'), 'utf8');
+        expect(agents).toContain("import './rubric-evaluation-agent-runner.js'");
+        const runner = readFileSync(join(root, 'AI/Agents/src/rubric-evaluation-agent-runner.ts'), 'utf8');
+        expect(runner).toContain('RegisterRubricAgentRunner');
     });
 
     it('is a BaseEngine singleton and a BaseSingleton engine', () => {

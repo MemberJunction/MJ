@@ -6426,7 +6426,7 @@ export class BaseAgent {
                 runId: agentRun.ID,
                 agentKind: this.AgentTypeInstance?.constructor?.name === 'LoopAgentType' ? 'loop' : 'flow',
                 attempt,
-                candidate: { message: nextStep.message, payload: nextStep.newPayload ?? currentPayload },
+                candidate: { Message: nextStep.message, Payload: nextStep.newPayload ?? currentPayload },
                 record,
             });
             if (outcome.step === 'Success') return null;

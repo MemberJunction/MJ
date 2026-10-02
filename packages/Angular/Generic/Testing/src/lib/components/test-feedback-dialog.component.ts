@@ -736,7 +736,14 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
         { Name: 'ContextEntityID', Value: this.Judged.ContextEntityId, Type: 'Input' },
         { Name: 'ContextRecordID', Value: this.Judged.ContextRecordId, Type: 'Input' },
         { Name: 'SupersedesEvaluationID', Value: priorId, Type: 'Input' },
-        { Name: 'Answers', Value: JSON.stringify(answers), Type: 'Input' },
+        { Name: 'Answers', Value: JSON.stringify(answers.map(answer => ({
+          CriterionId: answer.criterionId,
+          ScaleLevelId: answer.scaleLevelId,
+          RawValue: answer.rawValue,
+          IsNotApplicable: answer.isNotApplicable,
+          Rationale: answer.rationale,
+          Evidence: answer.evidence,
+        }))), Type: 'Input' },
       ]);
       if (!result.Success) {
         this.errorMessage = result.Message || 'Could not submit the human score.';

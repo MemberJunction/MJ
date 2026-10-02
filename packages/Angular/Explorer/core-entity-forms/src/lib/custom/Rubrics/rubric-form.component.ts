@@ -144,11 +144,11 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
         const draftId = this.DraftId;
         this.nodeSaveTimer = QueueNodeSave(this.nodeSaveTimer, () => {
             this.nodeSaveTimer = null;
-            this.nodeSaveChain = this.nodeSaveChain.then(() => this.PersistNodes(draftId, nodes));
+            this.nodeSaveChain = this.nodeSaveChain.then(() => this.persistNodes(draftId, nodes));
         });
     }
 
-    private async PersistNodes(draftId: string, nodes: RubricNodeSnapshot[]): Promise<void> {
+    private async persistNodes(draftId: string, nodes: RubricNodeSnapshot[]): Promise<void> {
         if (this.disposed || this.DraftId !== draftId || this.Viewing === 'published') return;
         try {
             const saved = await this.rows('MJ: Rubric Criteria', `RubricVersionID='${draftId}'`);

@@ -1,8 +1,8 @@
-export { CreateRubricDraftAction, EvaluateRecordAgainstRubricAction, GetRubricAction, GetRubricConsensusAction, GetRubricSubjectAction } from './actions.js';
+export { CreateRubricDraftAction, EvaluateRecordAgainstRubricAction, GetRubricAction, GetRubricConsensusAction, GetRubricSubjectAction, SubmitHumanRubricAction } from './actions.js';
 export { AgentRunContent, ConversationContent, FallbackContent, PromptRunContent, RubricContentRegistry, TestRunContent, type RubricContentProvider, type RubricSubjectContent } from './content.js';
 export { DeterministicRubricEvaluator, type DeterministicRule } from './DeterministicRubricEvaluator.js';
 export { RubricEngine, type EvaluateParams, type EvaluateRecordInput, type EvaluateRecordResult, type RubricEvaluationRecord, type RubricEvaluationStore, type RubricRecords } from './RubricEngine.js';
-export { ProviderRubricEngine } from './providerRecords.js';
+export { ProviderRubricEngine, RegisterRubricAgentRunner } from './providerRecords.js';
 export { GetAgreement, GetConsensus, GetDiagnostics, KrippendorffAlpha, QuadraticKappa } from './statistics.js';
 export { BuildRubricEvaluatorMessages, LLMRubricEvaluator, RenderRubricEvaluatorPrompt, type LLMDecision, type LLMRubricResult, type RubricEvaluatorMessages, type RubricPromptMode, type RubricPromptRunner } from './LLMRubricEvaluator.js';
 export { AIRubricEvaluator, type AgentCriterionResult, type AgentScaleView, type RubricAgent, type RubricEvaluatorConfig } from './AIRubricEvaluator.js';

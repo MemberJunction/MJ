@@ -1,3 +1,4 @@
+import '@memberjunction/ai-agents';
 import { ProviderRubricEngine } from '@memberjunction/rubrics';
 import type { OracleConfig, OracleInput, OracleResult } from '../types';
 import type { IOracle } from './IOracle';

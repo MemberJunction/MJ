@@ -1,4 +1,4 @@
-import { BaseEntity, type EntitySaveOptions, type ValidationResult } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, type EntitySaveOptions, type ValidationResult } from '@memberjunction/core';
 import { MJRubricVersionEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
@@ -71,6 +71,16 @@ export class MJRubricVersionEntityServer extends MJRubricVersionEntity {
     }
 
     /**
+     * A repeat metadata push reapplies the draft file onto a version the
+     * publication file already published. Leaving Status untouched keeps the
+     * loaded row clean, so sync counts it unchanged instead of updating it.
+     */
+    public override Set(fieldName: string, value: unknown): void {
+        if (fieldName === 'Status' && value === 'Draft' && this.IsSaved !== false && (this.Status === 'Published' || this.Status === 'Retired')) return;
+        super.Set(fieldName, value);
+    }
+
+    /**
      * When Status moves Draft → Published, loads the draft tree and its base
      * version and calls {@link publish}. Setting Status and saving is enough.
      * Refuses the cases documented on the class. Writes PublishedAt with the
@@ -78,6 +88,24 @@ export class MJRubricVersionEntityServer extends MJRubricVersionEntity {
      * PublishedByUserID from the current user. Retiring stamps RetiredAt.
      */
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
+        const incoming = this.GetFieldByName('Status');
+        if (this.IsSaved !== false && incoming?.OldValue === 'Published' && this.Status === 'Draft') {
+            this.Status = 'Published';
+            if (!this.Dirty) return true;
+        }
+        if (this.IsSaved === false && this.Status === 'Published' && this.ID) {
+            const provider = this.ProviderToUse as unknown as { GetEntityObject?: <T>(name: string, user?: unknown) => Promise<T> } | null;
+            if (provider?.GetEntityObject) {
+                const existing = await provider.GetEntityObject<MJRubricVersionEntityServer>('MJ: Rubric Versions', this.ContextCurrentUser);
+                if (await existing.InnerLoad(CompositeKey.FromID(this.ID))) {
+                    if (existing.Status === 'Draft') {
+                        existing.Status = 'Published';
+                        return existing.Save(options);
+                    }
+                    if (existing.Status === 'Published' || existing.Status === 'Retired') return true;
+                }
+            }
+        }
         const status = this.GetFieldByName('Status');
         if (status?.Dirty && status.OldValue === 'Draft' && this.Status === 'Published') {
             const provider = this.ProviderToUse as { RunView?: (params: { EntityName: string; ExtraFilter: string }, user?: unknown) => Promise<{ Success: boolean; Results?: unknown[] }> };

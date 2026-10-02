@@ -27,6 +27,7 @@
     "@memberjunction/dynamic-packages": "6.2.0-edge.1",
     "@memberjunction/core-entities": "6.2.0-edge.1",
     "@memberjunction/testing-engine": "6.2.0-edge.1",
+    "@memberjunction/ai-agents": "6.2.0-edge.1",
     "@memberjunction/rubrics": "6.2.0-edge.1",
     "@memberjunction/rubrics-base": "6.2.0-edge.1",
     "@memberjunction/testing-engine-base": "6.2.0-edge.1",

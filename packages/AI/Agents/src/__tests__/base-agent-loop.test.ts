@@ -89,6 +89,7 @@ vi.mock('@memberjunction/aiengine', () => ({
 // The action-execution boundary. ExecuteSingleAction calls ActionEngineServer.Instance.RunAction;
 // buildAgentBaseCatalog reads ActionEngineServer.Instance.Actions.
 vi.mock('@memberjunction/actions', () => ({
+    BaseAction: class BaseAction {},
     ActionEngineServer: {
         get Instance() {
             return harness.actionEngineInstance;

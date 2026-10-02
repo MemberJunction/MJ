@@ -142,7 +142,7 @@ export class MJRubricCategoryFormComponentExtended extends MJRubricCategoryFormC
 @Component({
     standalone: false,
     selector: 'mj-ai-agent-rubric-form',
-    template: `@if (record) { <mj-record-form-container [Record]="record" [FormComponent]="this" (Navigate)="OnFormNavigate($event)" (DeleteRequested)="OnDeleteRequested()" (FavoriteToggled)="OnFavoriteToggled()" (HistoryRequested)="OnHistoryRequested()" (ListManagementRequested)="OnListManagementRequested()"><label>Purpose <select [value]="record.Purpose" (change)="record.Purpose = $any($event.target).value"><option>Evaluation</option><option>SelfCheck</option><option>ProductionSampling</option></select></label><label>Status <select [value]="record.Status" (change)="record.Status = $any($event.target).value"><option>Active</option><option>Disabled</option></select></label><label><input type="checkbox" [checked]="record.IsDefault" (change)="record.IsDefault = $any($event.target).checked"> Default</label><label>Sample rate <input type="number" min="0" max="1" step="0.01" [value]="record.SampleRate ?? ''" (change)="record.SampleRate = optionalNumber($event)"></label><label>Pass threshold <input type="number" min="0" max="1" step="0.01" [value]="record.PassThreshold ?? ''" (change)="record.PassThreshold = optionalNumber($event)"></label><label>Max self-check attempts <input type="number" min="0" step="1" [value]="record.MaxSelfCheckAttempts ?? ''" (change)="record.MaxSelfCheckAttempts = optionalNumber($event)"></label><label>Evaluator config <textarea [value]="record.EvaluatorConfig ?? ''" (change)="record.EvaluatorConfig = textOrNull($event)"></textarea></label><button type="button" (click)="TurnOff()">Turn off</button></mj-record-form-container> }`,
+    template: `@if (record) { <mj-record-form-container [Record]="record" [FormComponent]="this" (Navigate)="OnFormNavigate($event)" (DeleteRequested)="OnDeleteRequested()" (FavoriteToggled)="OnFavoriteToggled()" (HistoryRequested)="OnHistoryRequested()" (ListManagementRequested)="OnListManagementRequested()"><label>Purpose <select [value]="record.Purpose" (change)="record.Purpose = $any($event.target).value"><option>Evaluation</option><option>SelfCheck</option><option>ProductionSampling</option></select></label><label>Status <select [value]="record.Status" (change)="record.Status = $any($event.target).value"><option>Active</option><option>Disabled</option></select></label><label><input type="checkbox" [checked]="record.IsDefault" (change)="record.IsDefault = $any($event.target).checked"> Default</label><label>Sample rate <input type="number" min="0" max="1" step="0.01" [value]="record.SampleRate ?? ''" (change)="record.SampleRate = OptionalNumber($event)"></label><label>Pass threshold <input type="number" min="0" max="1" step="0.01" [value]="record.PassThreshold ?? ''" (change)="record.PassThreshold = OptionalNumber($event)"></label><label>Max self-check attempts <input type="number" min="0" step="1" [value]="record.MaxSelfCheckAttempts ?? ''" (change)="record.MaxSelfCheckAttempts = OptionalNumber($event)"></label><label>Evaluator config <textarea [value]="record.EvaluatorConfig ?? ''" (change)="record.EvaluatorConfig = TextOrNull($event)"></textarea></label><button type="button" (click)="TurnOff()">Turn off</button></mj-record-form-container> }`,
 })
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Rubrics')
 export class MJAIAgentRubricFormComponentExtended extends MJAIAgentRubricFormComponent {
@@ -151,11 +151,11 @@ export class MJAIAgentRubricFormComponentExtended extends MJAIAgentRubricFormCom
         this.record.Status = 'Disabled';
         this.record.IsDefault = false;
     }
-    public optionalNumber(event: Event): number | null {
+    public OptionalNumber(event: Event): number | null {
         const value = (event.target as HTMLInputElement).value;
         return value === '' ? null : Number(value);
     }
-    public textOrNull(event: Event): string | null {
+    public TextOrNull(event: Event): string | null {
         const value = (event.target as HTMLTextAreaElement).value;
         return value === '' ? null : value;
     }

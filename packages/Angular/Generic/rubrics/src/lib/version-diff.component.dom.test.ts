@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { RubricVersionDiffComponent } from './version-diff.component';
-import { draft } from './dom-fixture';
+import { Draft } from './dom-fixture';
 
 describe('RubricVersionDiffComponent (DOM)', () => {
     function render(setup: (component: RubricVersionDiffComponent) => void): HTMLElement {
@@ -12,7 +12,7 @@ describe('RubricVersionDiffComponent (DOM)', () => {
     }
 
     it('names the draft when there is no published base', () => {
-        const host = render(component => { component.Draft = draft(); });
+        const host = render(component => { component.Draft = Draft(); });
         expect(host.querySelector('h2')?.textContent).toContain('This version');
         expect(host.textContent).toContain('Weight 1');
         expect(host.querySelectorAll('.diff-side').length).toBe(1);
@@ -20,8 +20,8 @@ describe('RubricVersionDiffComponent (DOM)', () => {
 
     it('shows both weights and says the weight changed', () => {
         const host = render(component => {
-            component.Base = { ...draft(1), majorVersion: 1, minorVersion: 0, patchVersion: 0 };
-            component.Draft = draft(2);
+            component.Base = { ...Draft(1), majorVersion: 1, minorVersion: 0, patchVersion: 0 };
+            component.Draft = Draft(2);
         });
         expect(host.textContent).toContain('Weight 1');
         expect(host.textContent).toContain('Weight 2');
@@ -29,13 +29,13 @@ describe('RubricVersionDiffComponent (DOM)', () => {
     });
 
     it('shows version, group, band-range, and added-band rows', () => {
-        const base = draft();
+        const base = Draft();
         base.passThreshold = 0.5;
         base.nodes = [
             { id: 'quality', key: 'quality', name: 'Quality', nodeType: 'Group', weight: 1, isAdvisory: false, isGate: false, evidenceRequired: false, rationaleRequired: false, sequence: 0 },
             { ...base.nodes[0], parentId: 'quality' },
         ];
-        const next = draft();
+        const next = Draft();
         next.passThreshold = 0.8;
         next.nodes = [
             { id: 'quality', key: 'quality', name: 'Quality', nodeType: 'Group', weight: 2, isAdvisory: false, isGate: false, evidenceRequired: false, rationaleRequired: false, sequence: 0 },
@@ -58,8 +58,8 @@ describe('RubricVersionDiffComponent (DOM)', () => {
     });
 
     it('says a band that is only on the base was removed', () => {
-        const base = draft();
-        const next = draft();
+        const base = Draft();
+        const next = Draft();
         next.bands = [];
         const host = render(component => {
             component.Base = base;

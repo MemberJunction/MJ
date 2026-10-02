@@ -21,7 +21,7 @@ export interface RubricPromptRunner {
 
 /** One ScoreQuestion about the subject. PerCriterion uses this instead of the whole-rubric prompt. */
 export interface RubricDecisionRunner {
-    score(key: string, question: ScoreQuestion, state: string): Promise<ScoreAnswer>;
+    Score(key: string, question: ScoreQuestion, state: string): Promise<ScoreAnswer>;
 }
 
 /** Ordered levels, lowest to highest, for one criterion. Null when the scale has fewer than two labels. */
@@ -203,7 +203,7 @@ export class LLMRubricEvaluator extends BaseRubricEvaluator {
         for (const node of version.nodes.filter(item => item.nodeType === 'Criterion')) {
             const question = ScoreQuestionForCriterion(version, node);
             if (question && this.decision) {
-                const answer = await this.decision.score(node.key, question, state);
+                const answer = await this.decision.Score(node.key, question, state);
                 const index = Math.min(question.Levels.length - 1, Math.max(0, Math.round(answer.Value)));
                 const level = question.Levels[index];
                 decisions.push({

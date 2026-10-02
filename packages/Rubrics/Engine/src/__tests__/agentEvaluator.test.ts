@@ -37,7 +37,7 @@ describe('AgentRubricEvaluator', () => {
     it('scores the High level when the quote is in the subject text', async () => {
         const spy = vi.spyOn(RubricScoring, 'Compute');
         const output = await new AgentRubricEvaluator({
-            async run() {
+            async Run() {
                 return { key: 'accuracy', level: 'High', rationale: 'The answer cited the source.', evidence: [{ quote: 'cited' }] };
             },
         }).EvaluateContent(version(), { text: 'The report cited the source.' });
@@ -51,7 +51,7 @@ describe('AgentRubricEvaluator', () => {
 
     it('drops a quote that is not in the subject text', async () => {
         const output = await new AgentRubricEvaluator({
-            async run() {
+            async Run() {
                 return { key: 'accuracy', level: 'High', rationale: 'Missing quote.', evidence: [{ quote: 'not in the text' }] };
             },
         }).EvaluateContent(version(), { text: 'The report cited the source.' });

@@ -16,7 +16,7 @@ export interface EvaluationAgentDecision {
 }
 
 export interface EvaluationAgentRunner {
-    run(input: {
+    Run(input: {
         version: RubricVersionSnapshot;
         content: RubricSubjectContent;
         subject?: { entityName: string; recordId: string };
@@ -52,7 +52,7 @@ export class AgentRubricEvaluator extends BaseRubricEvaluator {
         content: RubricSubjectContent,
         subject?: { entityName: string; recordId: string },
     ): Promise<LLMRubricResult> {
-        const payload = await this.agent.run({ version, content, subject });
+        const payload = await this.agent.Run({ version, content, subject });
         const decisions = decisionsFrom(payload);
         return new LLMRubricEvaluator({
             async run() { return JSON.stringify({ decisions }); },

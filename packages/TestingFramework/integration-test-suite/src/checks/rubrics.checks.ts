@@ -25,10 +25,10 @@
  *        score is counted separately rather than inside that mean.
  */
 import type { ConnectionPool, Transaction } from 'mssql';
-import type { BaseEntity } from '@memberjunction/core';
+import { RunView, type BaseEntity } from '@memberjunction/core';
 import { MJAIAgentEntity, MJAIAgentRubricEntity, MJRubricBandEntity, MJRubricCategoryEntity, MJRubricCriterionEntity, MJRubricCriterionLevelEntity, MJRubricEntity, MJRubricEvaluationEntity, MJRubricEvaluationScoreEntity, MJRubricScaleEntity, MJRubricScaleLevelEntity, MJRubricVersionEntity, MJTestEntity } from '@memberjunction/core-entities';
 import { RubricScoring, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { getConsensus } from '@memberjunction/rubrics';
+import { GetConsensus } from '@memberjunction/rubrics';
 import { Assert } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
@@ -352,12 +352,17 @@ async function ensureBand(ctx: IntegrationCheckContext, versionId: string, label
 }
 
 async function ensureScoredEvaluation(ctx: IntegrationCheckContext, versionId: string, subjectEntityId: string, agentId: string, evaluatorType: 'Agent' | 'Human' | 'External' | 'Deterministic' | 'Self' | 'AIPrompt', evaluatorName: string, leaves: { ID: string; Key: string }[], met: string, missed: string, missKeys: Set<string>): Promise<void> {
-    const found = await poolOf(ctx).request().query(`
-        SELECT TOP 1 CONVERT(nvarchar(36), [ID]) AS ID
-        FROM [${schemaOf(ctx)}].[RubricEvaluation]
-        WHERE [RubricVersionID] = '${versionId}' AND [EvaluatorType] = N'${evaluatorType}' AND [SubjectRecordID] = N'${agentId}'
-    `);
-    if (found.recordset[0]) return;
+    // This runs inside the provider transaction that just inserted an evaluation. A second
+    // connection's SELECT waits on that lock until the request timeout, so the read stays
+    // on the provider connection.
+    const found = await RunView.FromMetadataProvider(ctx.Provider).RunView({
+        EntityName: 'MJ: Rubric Evaluations',
+        ExtraFilter: `RubricVersionID='${versionId}' AND EvaluatorType='${evaluatorType}' AND SubjectRecordID='${sqlText(agentId)}'`,
+        ResultType: 'simple',
+        MaxRows: 1,
+    }, ctx.User);
+    if (!found.Success) throw new Error(found.ErrorMessage || 'Could not read MJ: Rubric Evaluations.');
+    if ((found.Results ?? []).length > 0) return;
     const evaluation = await ctx.Provider.GetEntityObject<MJRubricEvaluationEntity>('MJ: Rubric Evaluations', ctx.User);
     evaluation.NewRecord();
     evaluation.RubricVersionID = versionId;
@@ -895,7 +900,7 @@ export const RubricsChecks: NamedCheck[] = [
                     FROM [${s}].[vwRubricEvaluations]
                     WHERE [ID] = '${lowId}'
                 `);
-                const engine = getConsensus([0.2, 0.8], 'Mean');
+                const engine = GetConsensus([0.2, 0.8], 'Mean');
                 const viewMean = Number(view.recordset[0].MeanScore);
                 Assert(engine.Overall !== null && Math.abs(viewMean - engine.Overall) < 0.000001, `view mean ${viewMean}, engine mean ${engine.Overall}`);
                 Assert(Number(view.recordset[0].SelfCount) === 1, `SelfAssessmentCount was ${view.recordset[0].SelfCount}`);

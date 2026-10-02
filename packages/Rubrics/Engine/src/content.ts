@@ -63,7 +63,7 @@ export class RubricContentRegistry extends BaseSingleton<RubricContentRegistry> 
 
     public constructor() {
         super();
-        this.RegisterBuiltIns();
+        this.registerBuiltIns();
     }
 
     public Register(entityName: string, provider: RubricContentProvider): void {
@@ -76,7 +76,7 @@ export class RubricContentRegistry extends BaseSingleton<RubricContentRegistry> 
         return FallbackContent(record, canRead ?? (() => true));
     }
 
-    private RegisterBuiltIns(): void {
+    private registerBuiltIns(): void {
         this.Register('MJ: Test Runs', record => TestRunContent({
             input: record.InputData ?? record.inputData,
             expectedOutcomes: record.ExpectedOutputData ?? record.expectedOutputData,
