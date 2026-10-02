@@ -4,6 +4,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { MJEmptyStateComponent, MJPageBodyComponent, MJPageHeaderComponent, MJPageLayoutComponent, MJRefreshButtonComponent } from '@memberjunction/ng-ui-components';
 import { driftDeltas, driftSeries, periodMeans } from '@memberjunction/rubrics-base';
+import { DriftSeriesInput } from './rubric-drift-series';
 
 /** Rolling mean against the previous period. This is not an alert product. */
 @Component({
@@ -157,15 +158,15 @@ export class RubricDriftResourceComponent extends BaseResourceComponent implemen
         const runs = await this.readByIds(view, user, 'MJ: AI Agent Runs', runIds);
         const versionIds = uniqueIds(evaluations.map(row => row.RubricVersionID));
         const versions = await this.readByIds(view, user, 'MJ: Rubric Versions', versionIds);
+        const criterionIds = uniqueIds(scoreRows.map(row => row.CriterionID));
+        const criteria = await this.readByIds(view, user, 'MJ: Rubric Criteria', criterionIds);
+        const series = DriftSeriesInput(scoreRows, criteria);
         const now = new Date();
         const currentStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
         const previousStart = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000).toISOString();
         const rows = driftSeries({
-            scores: scoreRows.map(row => ({
-                evaluationId: String(row.EvaluationID ?? ''),
-                criterionId: String(row.CriterionID ?? ''),
-                normalizedScore: Number(row.NormalizedScore),
-            })),
+            scores: series.scores,
+            criteria: series.criteria,
             evaluations: evaluations.map(row => ({
                 id: String(row.ID ?? ''),
                 subjectRecordId: String(row.SubjectRecordID ?? ''),
