@@ -1106,7 +1106,7 @@ export interface IMetadataProvider {
      * @param itemFilters 
      * @param dataset 
      */
-    CacheDataset(datasetName: string, itemFilters: DatasetItemFilterType[], dataset: DatasetResultType): Promise<void> 
+    CacheDataset(datasetName: string, itemFilters: DatasetItemFilterType[] | undefined, dataset: DatasetResultType): Promise<void> 
 
     /**
      * Determines if a given datasetName/itemFilters combination is cached locally or not

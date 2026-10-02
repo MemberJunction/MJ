@@ -5878,7 +5878,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         let cachedDataset: DatasetResultType | null = null;
         let cachedDateStr: string | null = null;
         if (ls && key && dateKey) {
-            const both = await ls.GetItems<DatasetResultType | string>([key, dateKey], 'DatasetCache');
+            const both = await ls.GetItems<DatasetResultType | string>([key, dateKey], ProviderBase.DatasetCacheCategory);
             const rawData = both.get(key);
             const rawDate = both.get(dateKey);
             // Type guards — entries can be either depending on which key matched.
@@ -5895,15 +5895,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             if (status && localDate.getTime() >= status.LatestUpdateDate.getTime()) {
                 // Timestamps suggest cache is fresh; verify per-entity row counts to
                 // catch deleted rows (timestamp comparison alone misses pure deletes).
-                let allCountsMatch = true;
-                for (const eu of status.EntityUpdateDates) {
-                    const localEntity = cachedDataset.Results.find(e => UUIDsEqual(e.EntityID, eu.EntityID));
-                    if (!localEntity || localEntity.Results.length !== eu.RowCount) {
-                        allCountsMatch = false;
-                        break;
-                    }
-                }
-                if (allCountsMatch) {
+                // Shared with IsDatasetCacheUpToDate so the two cannot drift again.
+                if (this.DatasetRowCountsMatch(cachedDataset, status)) {
                     return cachedDataset;
                 }
             }
@@ -5927,7 +5920,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (ls) {
             const key = this.GetDatasetCacheKey(datasetName, itemFilters);
             const dateKey = key + '_date';
-            const val = await ls.GetItem<string>(dateKey);
+            const val = await ls.GetItem<string>(dateKey, ProviderBase.DatasetCacheCategory);
             if (val) {
                 return new Date(val);
             }
@@ -5952,23 +5945,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     // in this situation, the last thing we check is for each entity, if the rowcount is the same as the server, if it is, we're good
                     // iterate through all of the entities and check the row counts
                     const localDataset = await this.GetCachedDataset(datasetName, itemFilters);
-                    for (const eu of status.EntityUpdateDates) {
-                        // `localDataset` can be missing even though its date key is present: the two
-                        // keys expire independently and a cache clear removes them in order, so the
-                        // date can outlive the blob. An absent blob means the row counts cannot be
-                        // compared, which is "not up to date" — but only reached when there IS a
-                        // count to compare, so a dataset with no entity rows still answers as it
-                        // always did rather than becoming permanently stale (plan §16.3 #3, §24).
-                        const localEntity = localDataset?.Results?.find(e => UUIDsEqual(e.EntityID, eu.EntityID));
-                        if (!localEntity || localEntity.Results.length !== eu.RowCount) {
-                            // we either couldn't find the entity in the local cache or the row count is different, so we're out of date
-                            // the RowCount being different picks up on DELETED rows. The UpdatedAt check which is handled above would pick up 
-                            // on any new rows or updated rows. This approach makes sure we detect deleted rows and refresh the cache.
-                            return false;
-                        }
-                    }
-                    // if we get here that means that the row counts are the same for all entities and we're up to date
-                    return true;
+                    return this.DatasetRowCountsMatch(localDataset, status);
                 }
                 else {
                     // our local cache timestamp is < the server timestamp, so we're out of date
@@ -5987,6 +5964,41 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
+     * Compares the per-entity row counts of a cached dataset against the server's status.
+     *
+     * The timestamp comparison its callers run first catches new and updated rows; it cannot catch a
+     * pure DELETE, which leaves `LatestUpdateDate` untouched while the count drops. This is the
+     * check that catches those, and it is shared by `GetAndCacheDatasetByName` (which already holds
+     * the blob) and `IsDatasetCacheUpToDate` (which reads it) so the two cannot drift apart again —
+     * they had, and the differences were only ever masked by the warm path not running.
+     *
+     * Two cases decide the shape of this, both load-bearing:
+     *
+     * - **No counts to compare.** A status reporting no `EntityUpdateDates` never touches the blob
+     *   and is judged on its timestamp alone, so it answers `true`. Returning `false` here instead
+     *   looks strictly safer and is not: it makes such a dataset permanently stale, reloading on
+     *   every check (plan §24.1 — the `dataset-cache.DS2` regression).
+     * - **A count to compare but no blob.** The blob and its `_date` proxy expire independently and
+     *   a clear removes them in order, so the date can outlive the blob. Counts then cannot be
+     *   compared, which is `false` — refetch (plan §16.3 #3). A blob present but missing `Results`
+     *   answers `false` for the same reason rather than throwing, which is what the pre-unification
+     *   copy in the warm path would have done the moment that path started running.
+     *
+     * @param cachedDataset the cached dataset, which may be absent or incomplete
+     * @param status the server's status for the same dataset/filters combination
+     * @returns true when every entity the server reports matches the cache's row count for it
+     */
+    protected DatasetRowCountsMatch(cachedDataset: DatasetResultType | null | undefined, status: DatasetStatusResultType): boolean {
+        for (const eu of status.EntityUpdateDates) {
+            const localEntity = cachedDataset?.Results?.find(e => UUIDsEqual(e.EntityID, eu.EntityID));
+            if (!localEntity || localEntity.Results.length !== eu.RowCount) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * This routine gets the local cached version of a given datasetName/itemFilters combination, it does NOT check the server status first and does not fall back on the server if there isn't a local cache version of this dataset/itemFilters combination
      * @param datasetName 
      * @param itemFilters 
@@ -5997,7 +6009,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (ls) {
             const key = this.GetDatasetCacheKey(datasetName, itemFilters);
             // Native object read — IDB structured-clones, localStorage / Redis JSON-decode internally.
-            const dataset = await ls.GetItem<DatasetResultType>(key);
+            const dataset = await ls.GetItem<DatasetResultType>(key, ProviderBase.DatasetCacheCategory);
             if (dataset) {
                 return dataset;
             }
@@ -6010,16 +6022,17 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param itemFilters 
      * @param dataset 
      */
-    public async CacheDataset(datasetName: string, itemFilters: DatasetItemFilterType[], dataset: DatasetResultType): Promise<void> {
+    public async CacheDataset(datasetName: string, itemFilters: DatasetItemFilterType[] | undefined, dataset: DatasetResultType): Promise<void> {
         const ls = this.LocalStorageProvider;
         if (ls) {
             const key = this.GetDatasetCacheKey(datasetName, itemFilters);
             // Native object storage — no JSON.stringify on the hot path.
-            await ls.SetItem<DatasetResultType>(key, dataset, undefined, { TTLSeconds: ProviderBase.DatasetCacheTTLSeconds });
+            await ls.SetItem<DatasetResultType>(key, dataset, ProviderBase.DatasetCacheCategory,
+                { TTLSeconds: ProviderBase.DatasetCacheTTLSeconds });
             // Date is stored as ISO string for forward-compatibility across providers
             // (Redis can't natively round-trip Date; localStorage requires string).
-            await ls.SetItem<string>(key + '_date', dataset.LatestUpdateDate.toISOString(), undefined,
-                { TTLSeconds: ProviderBase.DatasetDateCacheTTLSeconds });
+            await ls.SetItem<string>(key + '_date', dataset.LatestUpdateDate.toISOString(),
+                ProviderBase.DatasetCacheCategory, { TTLSeconds: ProviderBase.DatasetDateCacheTTLSeconds });
         }
     }
 
@@ -6037,26 +6050,34 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // CacheDataset, so the date's presence is a faithful proxy for the
             // data's presence.
             const key = this.GetDatasetCacheKey(datasetName, itemFilters);
-            const val = await ls.GetItem<string>(key + '_date');
+            const val = await ls.GetItem<string>(key + '_date', ProviderBase.DatasetCacheCategory);
             return val !== null && val !== undefined;
         }
     }
 
     /**
-     * Creates a unique key for the given datasetName and itemFilters combination coupled with the instance connection string to ensure uniqueness when 2+ connections exist
-     * @param datasetName 
-     * @param itemFilters 
-     * @returns 
+     * The cache category every dataset read and write uses.
+     *
+     * Every storage provider isolates by category — Redis keys are `{prefix}:{category}:{key}`,
+     * browser localStorage `[mj]:[category]:[key]`, IndexedDB a dedicated object store, the
+     * in-memory providers a nested map — so a read and a write that disagree about the category can
+     * never meet. From `987a126aab` until this constant they did disagree: the batched warm read in
+     * `GetAndCacheDatasetByName` named `'DatasetCache'` while every write and every other reader
+     * passed none and so landed in `default`. The warm-serve path therefore missed on every
+     * transport and silently refetched from the server for five months — correct, never cheap.
+     * Naming the category once is what keeps all six call sites honest.
      */
+    public static readonly DatasetCacheCategory = 'DatasetCache';
+
     /**
      * How long a cached dataset lives.
      *
-     * Datasets share the `default` category with the metadata snapshot's proxy keys, and that
-     * category deliberately never expires — a proxy that outlives its subject is worse than one that
-     * never expires at all. Datasets are not proxies, so inheriting that was an accident: every
-     * distinct filter set (`GetDatasetCacheKey` includes the filters) left a blob nothing removed.
-     * An explicit per-write TTL restores the hour they had before, and the store prefers it over the
-     * category's own setting. Providers that do not implement expiry ignore it (plan §22.3, §25).
+     * Datasets have a category to themselves and it carries no category-wide expiry, so without a
+     * per-write TTL every distinct filter set (`GetDatasetCacheKey` includes the filters) would
+     * leave behind a blob nothing removes. An explicit TTL bounds that growth, and the store
+     * prefers a per-write value over any category or global setting — which is also why giving
+     * datasets their own category did not change how long one lives. Providers that do not
+     * implement expiry ignore it (plan §22.3, §25).
      */
     public static readonly DatasetCacheTTLSeconds = 3600;
 
@@ -6070,6 +6091,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     public static readonly DatasetDateCacheTTLSeconds = ProviderBase.DatasetCacheTTLSeconds - 300;
 
+    /**
+     * Creates a unique key for the given datasetName and itemFilters combination coupled with the instance connection string to ensure uniqueness when 2+ connections exist
+     * @param datasetName 
+     * @param itemFilters 
+     * @returns 
+     */
     public GetDatasetCacheKey(datasetName: string, itemFilters?: DatasetItemFilterType[]): string {
         return this.LocalStoragePrefix + ProviderBase.localStorageRootKey + this.InstanceConnectionString + '__DATASET__' + datasetName + this.ConvertItemFiltersToUniqueKey(itemFilters);
     }
@@ -6104,9 +6131,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const ls = this.LocalStorageProvider;
         if (ls) {
             const key = this.GetDatasetCacheKey(datasetName, itemFilters);
-            await ls.Remove(key);
+            await ls.Remove(key, ProviderBase.DatasetCacheCategory);
             const dateKey = key + '_date';
-            await ls.Remove(dateKey);
+            await ls.Remove(dateKey, ProviderBase.DatasetCacheCategory);
         }
     }
 
