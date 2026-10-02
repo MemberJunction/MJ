@@ -22,6 +22,11 @@ import {
     ValidationWarning
 } from '../types';
 
+export interface AgentRubricResolution {
+    rubricId: string;
+    evaluatorConfig?: Record<string, unknown> | string;
+}
+
 /**
  * Configuration for Agent Evaluation tests.
  */
@@ -766,6 +771,12 @@ export class AgentEvalDriver extends BaseTestDriver {
         // Parse the FinalPayload string property (which exists on base MJAIAgentRunEntity)
         // SafeJSONParse returns the parsed object or an empty object if parsing fails
         const finalPayloadObject = SafeJSONParse(agentRun.FinalPayload ?? '');
+        if (finalPayloadObject && Object.keys(finalPayloadObject).length > 0) {
+            return finalPayloadObject;
+        }
+        if (agentRun.Message) {
+            return { message: agentRun.Message };
+        }
         return finalPayloadObject ?? {};
     }
 
@@ -864,15 +875,21 @@ export class AgentEvalDriver extends BaseTestDriver {
     }
 
     protected async WithResolvedRubric(config: AgentEvalConfig, context: DriverExecutionContext): Promise<AgentEvalConfig> {
-        const named = config.oracles?.find(oracle => oracle.type === 'rubric')?.config as { rubricId?: string; rubricVersionId?: string } | undefined;
+        const named = config.oracles?.find(oracle => oracle.type === 'rubric')?.config as { rubricId?: string; rubricVersionId?: string; evaluator?: Record<string, unknown> | string } | undefined;
         const loaded = await this.LoadSuites(context);
+        const agentRubricRaw = context.options.agentEvaluationRubricId
+            ? { rubricId: context.options.agentEvaluationRubricId }
+            : await this.LoadAgentEvaluationRubric(context, config.agentId);
+        const agentRubricId = typeof agentRubricRaw === 'string' ? agentRubricRaw : agentRubricRaw?.rubricId;
+        const agentEvaluatorConfig = typeof agentRubricRaw === 'object' && agentRubricRaw !== null ? agentRubricRaw.evaluatorConfig : undefined;
         const choice = ResolveRubric({
             run: context.options.rubricId ? { rubricId: context.options.rubricId, versionId: context.options.rubricVersionId } : undefined,
             oracle: named,
             testRubricId: context.test.RubricID,
             suites: loaded.suites,
             suiteId: loaded.suiteId,
-            agentRubricId: context.options.agentEvaluationRubricId ?? await this.LoadAgentEvaluationRubric(context, config.agentId),
+            agentRubricId,
+            agentEvaluatorConfig,
         });
         const hadRubric = (config.oracles ?? []).some(oracle => oracle.type === 'rubric');
         const suiteRunId = (context.testRun as { TestSuiteRunID?: string }).TestSuiteRunID || context.testRun.ID;
@@ -929,10 +946,24 @@ export class AgentEvalDriver extends BaseTestDriver {
     }
 
     /** The agent's Active default Evaluation rubric, when this test is an agent eval. */
-    protected async LoadAgentEvaluationRubric(context: DriverExecutionContext, agentId: string): Promise<string | undefined> {
+    protected async LoadAgentEvaluationRubric(context: DriverExecutionContext, agentId: string): Promise<AgentRubricResolution | string | undefined> {
         const rows = await this.ReadMany(context, 'MJ: AI Agent Rubrics', `AgentID='${agentId}' AND Purpose='Evaluation' AND Status='Active'`);
         const chosen = rows.find(row => row.IsDefault === true || row.IsDefault === 1) ?? rows[0];
-        return chosen?.RubricID == null ? undefined : String(chosen.RubricID);
+        if (!chosen || chosen.RubricID == null) return undefined;
+        let evaluatorConfig: Record<string, unknown> | string | undefined;
+        if (typeof chosen.EvaluatorConfig === 'string') {
+            try {
+                evaluatorConfig = JSON.parse(chosen.EvaluatorConfig) as Record<string, unknown>;
+            } catch {
+                evaluatorConfig = chosen.EvaluatorConfig;
+            }
+        } else if (typeof chosen.EvaluatorConfig === 'object' && chosen.EvaluatorConfig !== null) {
+            evaluatorConfig = chosen.EvaluatorConfig as Record<string, unknown>;
+        }
+        return {
+            rubricId: String(chosen.RubricID),
+            evaluatorConfig,
+        };
     }
 
     /** Latest Published version of the chosen rubric. The suite pin stores the first answer. */

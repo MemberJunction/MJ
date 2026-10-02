@@ -43,7 +43,7 @@ export interface RubricEvaluationStore {
 
 /** Rows the engine reads, and the one write that creates a Draft version. Tests pass a fake. */
 export interface RubricRecords {
-    rows(entityName: string, filter: string): Promise<Record<string, unknown>[]>;
+    rows(entityName: string, filter: string, orderBy?: string): Promise<Record<string, unknown>[]>;
     createDraft(input: { rubricId?: string; rubricName?: string; nodes: RubricNodeSnapshot[] }): Promise<{ id: string; status: string }>;
 }
 
@@ -402,7 +402,7 @@ export class RubricEngine {
         const scales = scaleIds.length === 0 ? [] : await this.records.rows('MJ: Rubric Scales', `ID IN (${scaleIds.map(sqlLiteral).join(', ')})`);
         const levels = scaleIds.length === 0 ? [] : await this.records.rows('MJ: Rubric Scale Levels', `ScaleID IN (${scaleIds.map(sqlLiteral).join(', ')})`);
         const criterionIds = criteria.map(row => text(row.ID)).filter(id => id.length > 0);
-        const anchors = criterionIds.length === 0 ? [] : await this.records.rows('MJ: Rubric Criterion Levels', `CriterionID IN (${criterionIds.map(sqlLiteral).join(', ')}) ORDER BY Sequence, ID`);
+        const anchors = criterionIds.length === 0 ? [] : await this.records.rows('MJ: Rubric Criterion Levels', `CriterionID IN (${criterionIds.map(sqlLiteral).join(', ')})`);
         return SnapshotFromRows({ version, rubricId: text(version.RubricID), criteria, anchors, bands, scales, levels });
     }
 
@@ -415,10 +415,10 @@ export class RubricEngine {
         if (!rows[0]) throw new Error('subject not found or not readable');
         const record = { ...rows[0] };
         if (input.subjectEntityName === 'MJ: AI Agent Runs') {
-            record.Steps = await this.records.rows('MJ: AI Agent Run Steps', `AgentRunID=${sqlLiteral(input.subjectRecordId)} ORDER BY StepNumber`);
+            record.Steps = await this.records.rows('MJ: AI Agent Run Steps', `AgentRunID=${sqlLiteral(input.subjectRecordId)}`, 'StepNumber');
         }
         if (input.subjectEntityName === 'MJ: Conversations') {
-            record.Details = await this.records.rows('MJ: Conversation Details', `ConversationID=${sqlLiteral(input.subjectRecordId)} ORDER BY __mj_CreatedAt`);
+            record.Details = await this.records.rows('MJ: Conversation Details', `ConversationID=${sqlLiteral(input.subjectRecordId)}`, '__mj_CreatedAt');
         }
         return ShapeContent(input.subjectEntityName, record);
     }

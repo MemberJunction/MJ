@@ -80,8 +80,15 @@ export class RubricOracle implements IOracle {
 
 /** The output the driver already has. The test-run row is not saved until later. */
 export function RubricOracleContent(input: { test?: { InputDefinition?: unknown }; expectedOutput?: unknown; actualOutput?: unknown }): { text?: string; data: Record<string, unknown> } {
+    let text: string | undefined = typeof input.actualOutput === 'string' ? input.actualOutput : undefined;
+    if (!text && input.actualOutput && typeof input.actualOutput === 'object') {
+        const obj = input.actualOutput as Record<string, unknown>;
+        if (typeof obj.message === 'string') text = obj.message;
+        else if (typeof obj.response === 'string') text = obj.response;
+        else if (typeof obj.text === 'string') text = obj.text;
+    }
     return {
-        text: typeof input.actualOutput === 'string' ? input.actualOutput : undefined,
+        text,
         data: {
             input: input.test?.InputDefinition,
             expectedOutput: input.expectedOutput,
