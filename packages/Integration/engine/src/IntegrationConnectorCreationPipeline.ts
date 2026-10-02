@@ -179,7 +179,7 @@ export class IntegrationConnectorCreationPipeline {
      * malformed Configuration falls through to the next source instead of disabling the one mechanism
      * that rescues a run stuck in-flight forever.
      */
-    private static ResolveRunDeadlineMs(opts: ConnectorCreationPipelineOptions): number {
+    private static resolveRunDeadlineMs(opts: ConnectorCreationPipelineOptions): number {
         const valid = (v: unknown): number | undefined =>
             typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : undefined;
 
@@ -397,7 +397,7 @@ export class IntegrationConnectorCreationPipeline {
         // THE RUN MUST END. Raced rather than awaited: a stage that never settles cannot be cancelled,
         // but it can be stopped being waited on — which is the difference between a run that fails and
         // one that is in-flight forever. See RunDeadlineMs.
-        const deadlineMs = IntegrationConnectorCreationPipeline.ResolveRunDeadlineMs(opts);
+        const deadlineMs = IntegrationConnectorCreationPipeline.resolveRunDeadlineMs(opts);
         // The ceiling is configurable and a caller (or a connection) may set seconds — in
         // which case rounding to minutes reported the failure as a "deadline of 0min", which reads as
         // a bug in the pipeline rather than the limit the caller actually asked for.
@@ -500,7 +500,7 @@ export class IntegrationConnectorCreationPipeline {
         // it, so the two differ by one connectivity probe. The approximation can only ever stop
         // work LATER than the race — never earlier — so it cannot truncate a run that would
         // otherwise have completed.
-        const budgetMs = IntegrationConnectorCreationPipeline.ResolveRunDeadlineMs(opts);
+        const budgetMs = IntegrationConnectorCreationPipeline.resolveRunDeadlineMs(opts);
         const outOfTime = (): boolean => budgetMs > 0 && Date.now() - startMs >= budgetMs;
         try {
             // U11 — determinate discovery progress: surface scanned/total on the structured

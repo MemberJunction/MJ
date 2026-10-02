@@ -94,8 +94,8 @@ describe('IntegrationConnectorCreationPipeline — where the deadline comes from
      */
     const resolve = (opts: unknown): number =>
         (IntegrationConnectorCreationPipeline as unknown as {
-            ResolveRunDeadlineMs: (o: unknown) => number;
-        }).ResolveRunDeadlineMs(opts);
+            resolveRunDeadlineMs: (o: unknown) => number;
+        }).resolveRunDeadlineMs(opts);
 
     const withConfig = (cfg: unknown, rest: Record<string, unknown> = {}) => ({
         CompanyIntegration: { Configuration: typeof cfg === 'string' ? cfg : JSON.stringify(cfg) },
