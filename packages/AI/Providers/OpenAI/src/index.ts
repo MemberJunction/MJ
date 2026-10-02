@@ -5,3 +5,5 @@ export * from './models/tts';
 export * from './models/openAIImage';
 export * from './models/openAIRealtime';
 export * from './models/rawRealtimeWebSocketConnection';
+export * from './models/openAILiveRealtime';
+

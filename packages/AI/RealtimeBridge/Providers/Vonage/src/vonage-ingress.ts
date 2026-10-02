@@ -25,7 +25,7 @@
  */
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { buildConnectNcco, NccoAction } from './real-vonage-bindings';
+import { BuildConnectNcco, NccoAction } from './real-vonage-bindings';
 
 /**
  * Verifies a Vonage **signed-request** webhook per Vonage's documented scheme:
@@ -44,7 +44,7 @@ import { buildConnectNcco, NccoAction } from './real-vonage-bindings';
  * @param params The webhook params (the `sig` param is ignored if present).
  * @returns `true` when the signature is valid; `false` otherwise (including a missing `sig`).
  */
-export function verifyVonageSignature(
+export function VerifyVonageSignature(
     signatureSecret: string,
     sig: string | undefined,
     params: Record<string, string>,
@@ -52,8 +52,17 @@ export function verifyVonageSignature(
     if (!sig) {
         return false;
     }
-    const expected = computeVonageSignature(signatureSecret, params);
+    const expected = ComputeVonageSignature(signatureSecret, params);
     return constantTimeEquals(expected, sig);
+}
+
+/** @deprecated Use {@link VerifyVonageSignature}. */
+export function verifyVonageSignature(
+    signatureSecret: string,
+    sig: string | undefined,
+    params: Record<string, string>,
+): boolean {
+    return VerifyVonageSignature(signatureSecret, sig, params);
 }
 
 /**
@@ -65,9 +74,14 @@ export function verifyVonageSignature(
  * @param params The webhook params.
  * @returns The uppercased hex HMAC-SHA256 signature.
  */
-export function computeVonageSignature(signatureSecret: string, params: Record<string, string>): string {
+export function ComputeVonageSignature(signatureSecret: string, params: Record<string, string>): string {
     const data = concatSortedParams(params);
     return createHmac('sha256', signatureSecret).update(data, 'utf8').digest('hex').toUpperCase();
+}
+
+/** @deprecated Use {@link ComputeVonageSignature}. */
+export function computeVonageSignature(signatureSecret: string, params: Record<string, string>): string {
+    return ComputeVonageSignature(signatureSecret, params);
 }
 
 /** The decoded, verified claims of a Vonage webhook JWT (the subset we read). */
@@ -93,7 +107,7 @@ export interface VonageJwtClaims {
  * @param nowSeconds The current epoch seconds (injected so the check is deterministic in tests).
  * @returns The verified claims, or `null` when verification fails.
  */
-export function verifyVonageJwt(
+export function VerifyVonageJwt(
     signatureSecret: string,
     bearerToken: string | undefined,
     nowSeconds: number,
@@ -121,6 +135,15 @@ export function verifyVonageJwt(
     return claims;
 }
 
+/** @deprecated Use {@link VerifyVonageJwt}. */
+export function verifyVonageJwt(
+    signatureSecret: string,
+    bearerToken: string | undefined,
+    nowSeconds: number,
+): VonageJwtClaims | null {
+    return VerifyVonageJwt(signatureSecret, bearerToken, nowSeconds);
+}
+
 /**
  * The NCCO returned to an inbound call's **answer** webhook to connect its bidirectional WebSocket media
  * leg. Identical `connect` websocket shape as the outbound path (it reuses {@link buildConnectNcco}), so
@@ -130,8 +153,13 @@ export function verifyVonageJwt(
  * @param contentType Optional wire content-type (defaults to `audio/l16;rate=8000`).
  * @returns The NCCO document (a JSON array) to return to Vonage as the answer-webhook response.
  */
+export function BuildInboundAnswerNcco(mediaWssUrl: string, contentType?: string): NccoAction[] {
+    return BuildConnectNcco(mediaWssUrl, contentType);
+}
+
+/** @deprecated Use {@link BuildInboundAnswerNcco}. */
 export function buildInboundAnswerNcco(mediaWssUrl: string, contentType?: string): NccoAction[] {
-    return buildConnectNcco(mediaWssUrl, contentType);
+    return BuildInboundAnswerNcco(mediaWssUrl, contentType);
 }
 
 /** The resolved identity of an inbound Vonage call, mapped from the answer/event-webhook params. */
@@ -154,7 +182,7 @@ export interface ResolvedInboundCall {
  * @returns The `{ callId, from, to }` mapping.
  * @throws When the call id (`uuid`/`conversation_uuid`), `from`, or `to` is missing.
  */
-export function resolveInboundCall(params: Record<string, string>): ResolvedInboundCall {
+export function ResolveInboundCall(params: Record<string, string>): ResolvedInboundCall {
     const callId = params['uuid'] || params['conversation_uuid'];
     const from = params['from'];
     const to = params['to'];
@@ -165,6 +193,11 @@ export function resolveInboundCall(params: Record<string, string>): ResolvedInbo
         );
     }
     return { callId, from, to };
+}
+
+/** @deprecated Use {@link ResolveInboundCall}. */
+export function resolveInboundCall(params: Record<string, string>): ResolvedInboundCall {
+    return ResolveInboundCall(params);
 }
 
 /** Concatenates params sorted by key as `&key=value` (Vonage's signature input), excluding `sig`. */

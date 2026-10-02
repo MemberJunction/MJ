@@ -62,6 +62,29 @@ class RSUConfig {
   get CompileCommand(): string | undefined {
     return process.env.RSU_COMPILE_COMMAND;
   }
+  /**
+   * How many packages the compile builds at once. ONE by default, deliberately.
+   *
+   * `turbo build` with no `--concurrency` fans out one `tsc` per filtered package — three of them on
+   * a 2 vCPU / 4 GB instance that is also serving the API, beside a heap that has just finished
+   * CodeGen. On the sandbox that took the whole workspace off the air for the duration of the compile
+   * (MJ-RUN-33). A slower compile that leaves the API answering beats a faster one that does not.
+   */
+  get CompileConcurrency(): string {
+    return process.env.RSU_COMPILE_CONCURRENCY || '1';
+  }
+  /** How often the compile reports that it is still alive. */
+  get CompileHeartbeatMs(): number {
+    return parseInt(process.env.RSU_COMPILE_HEARTBEAT_MS || '30000', 10);
+  }
+  /**
+   * Grace between SIGTERM and SIGKILL when a command has to be killed for exceeding its timeout.
+   * Small on purpose: the command is already over budget, and the point of the kill is that the box
+   * gets its CPU back.
+   */
+  get CommandKillGraceMs(): number {
+    return parseInt(process.env.RSU_COMMAND_KILL_GRACE_MS || '5000', 10);
+  }
   get CompilePackages(): string | undefined {
     return process.env.RSU_COMPILE_PACKAGES;
   }
@@ -359,6 +382,15 @@ interface PostMigrationResult {
   PendingWorkErrors?: Map<RSUPipelineInput, string[]>;
   /** The RunCodeGen failure message, surfaced when CodeGenSucceeded is false. */
   CodeGenError?: string;
+  /**
+   * Whether the run-wide TypeScript compile succeeded. Undefined when the compile was skipped (no
+   * successful migration, or CodeGen already failed). When FALSE the migrations executed and the
+   * entities were generated, but the code on disk was never compiled — so the pipeline STOPS: it does
+   * not commit the migration, and above all it does not restart the API onto an uncompiled tree.
+   */
+  CompileSucceeded?: boolean;
+  /** The CompileTypeScript failure message, surfaced when CompileSucceeded is false. */
+  CompileError?: string;
 }
 
 /**
@@ -1382,8 +1414,23 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     }
     if (codegenOk) {
       const compileOk = await this.runStep('CompileTypeScript', () => this.compileTypeScript(), sharedSteps);
+      result.CompileSucceeded = !!compileOk;
       if (compileOk) {
         this.ClearOutOfSync();
+      } else {
+        // STOP HERE. Everything below assumes the tree on disk matches the migrated database, and a
+        // failed compile is exactly the case where it does not:
+        //  - GitCommitAndPR would publish a migration whose generated code never built (its only
+        //    guard was SkipGitCommit, so it ran regardless);
+        //  - RestartMJAPI would bring the API back up on an UNCOMPILED tree.
+        // On the sandbox that combination presented as a 40-minute outage behind a pipeline that
+        // reported itself complete (MJ-RUN-33). The API stays flagged out-of-sync, no post-restart
+        // work is queued (nothing would consume it), and the caller's result names the step.
+        result.CompileError =
+          sharedSteps.find((s) => s.Name === 'CompileTypeScript' && s.Status === 'failed')?.Message ??
+          'TypeScript compile failed after CodeGen — the API code on disk does not match the migrated database';
+        this.rsuLog(`Compile failed — NOT committing and NOT restarting: ${result.CompileError}`);
+        return result;
       }
     }
 
@@ -1448,20 +1495,24 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     // A run-wide CodeGen failure means the migrations applied but the entities may have
     // no stored procedures — treat the run as failed, not success.
     const codeGenFailed = postResult.CodeGenSucceeded === false;
-    this._lastRunResult = successfulItems.length > 0 && !codeGenFailed ? 'success' : 'failed';
+    // A failed compile is the same class of failure one step later: the DDL is committed, the entity
+    // classes were generated, and nothing built them — so the running API cannot use them.
+    const compileFailed = postResult.CompileSucceeded === false;
+    this._lastRunResult = successfulItems.length > 0 && !codeGenFailed && !compileFailed ? 'success' : 'failed';
 
     const results: RSUPipelineResult[] = itemResults.map((item) => {
       const allSteps = [...sharedSteps, ...item.Steps];
       // A migration that executed but whose run-wide CodeGen failed is NOT a success —
       // the entity may have no spCreate/spUpdate procs and would silently skip on sync.
       const codeGenFailedThisCaller = codeGenFailed && item.Success;
+      const compileFailedThisCaller = compileFailed && item.Success;
       // Same reasoning as the CodeGen case above: the migration ran, but work the caller
       // asked to happen after the restart was never persisted, so the restart drops it.
       // Reporting success here would tell the caller their sync is coming when it is not.
       const pendingWorkErrors = postResult.PendingWorkErrors?.get(item.Input) ?? [];
       const pendingWorkFailedThisCaller = pendingWorkErrors.length > 0 && item.Success;
       const result: RSUPipelineResult = {
-        Success: item.Success && successfulItems.length > 0 && !codeGenFailed && !pendingWorkFailedThisCaller,
+        Success: item.Success && successfulItems.length > 0 && !codeGenFailed && !compileFailed && !pendingWorkFailedThisCaller,
         MigrationFilePath: item.FilePath,
         APIRestarted: postResult.ApiRestarted,
         GitCommitSuccess: postResult.GitCommitSuccess,
@@ -1469,16 +1520,20 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         Steps: allSteps,
         ErrorMessage: codeGenFailedThisCaller
           ? postResult.CodeGenError ?? item.Error
-          : pendingWorkFailedThisCaller
-            ? pendingWorkErrors.join('; ')
-            : item.Error,
+          : compileFailedThisCaller
+            ? postResult.CompileError ?? item.Error
+            : pendingWorkFailedThisCaller
+              ? pendingWorkErrors.join('; ')
+              : item.Error,
         ErrorStep: codeGenFailedThisCaller
           ? 'RunCodeGen'
-          : pendingWorkFailedThisCaller
-            ? 'RegisterPendingWork'
-            : item.Error
-              ? item.Steps.find((s) => s.Status === 'failed')?.Name
-              : undefined,
+          : compileFailedThisCaller
+            ? 'CompileTypeScript'
+            : pendingWorkFailedThisCaller
+              ? 'RegisterPendingWork'
+              : item.Error
+                ? item.Steps.find((s) => s.Status === 'failed')?.Name
+                : undefined,
         PendingWorkIDs: postResult.PendingWorkIDs?.get(item.Input),
       };
 
@@ -1893,7 +1948,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
       // guard), whose body legitimately contains `;`+newline. A naive split tears those apart.
       // The dialect owns this: PostgreSQLDialect.SplitStatements is dollar-quote-aware; the
       // base SplitStatements (SQL Server) is the prior naive `;`+EOL split.
-      const statements = GetDialect(this.Platform).SplitStatements(batch);
+      const statements = GetDialect(this.platform).SplitStatements(batch);
       this.rsuLog(`  Oversized batch (${batch.length} chars, ${statements.length} statements) — chunking into groups of ${STATEMENTS_PER_CHUNK}`);
       for (let i = 0; i < statements.length; i += STATEMENTS_PER_CHUNK) {
         finalBatches.push(statements.slice(i, i + STATEMENTS_PER_CHUNK).join('\n'));
@@ -1997,30 +2052,132 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    * environments without turbo).
    */
   private async compileTypeScript(): Promise<boolean> {
-    const { execAsync } = await this.getExecAsync();
     const codegenDir = rsuConfig.CodeGenDir;
     const timeoutMs = rsuConfig.CompileTimeoutMs;
+    const startedAt = Date.now();
+    const elapsedSec = () => Math.round((Date.now() - startedAt) / 1000);
 
-    // Allow full command override
-    const compileCmd = rsuConfig.CompileCommand;
-    if (compileCmd) {
-      await execAsync(`cd "${codegenDir}" && ${compileCmd}`, { timeout: timeoutMs });
+    // A compile is minutes of silence from a process that is also the API. Say so, with the elapsed
+    // time against the budget, so the pm2 log an incident gets read from can distinguish "compiling"
+    // from "hung" — on the sandbox the only record of a 40-minute compile was its failure line.
+    const heartbeat = setInterval(
+      () => this.rsuLog(`CompileTypeScript still running — ${elapsedSec()}s elapsed of a ${Math.round(timeoutMs / 1000)}s budget`),
+      rsuConfig.CompileHeartbeatMs,
+    );
+    heartbeat.unref?.();
+    try {
+      // A full-command override is honoured as-is, but it goes through the same killable runner: the
+      // override exists precisely because the default command was starving small boxes, and the
+      // replacement must be no harder to stop.
+      const compileCmd = rsuConfig.CompileCommand ?? this.defaultCompileCommand();
+      await this.runCommandInOwnProcessGroup(`cd "${codegenDir}" && ${compileCmd}`, { timeoutMs });
+      this.rsuLog(`CompileTypeScript completed in ${elapsedSec()}s`);
       return true;
+    } finally {
+      clearInterval(heartbeat);
     }
+  }
 
-    // Build using turbo with --filter for each package
+  /**
+   * The turbo invocation the compile step uses when nothing overrides it.
+   *
+   * `--concurrency` is the load-bearing part: without it turbo builds every filtered package at once,
+   * which is three `tsc` processes on a 2 vCPU / 4 GB instance that is simultaneously serving the API.
+   * See {@link RSUConfig.CompileConcurrency}.
+   */
+  private defaultCompileCommand(): string {
     const defaultPackages = '@memberjunction/core-entities,@memberjunction/server,mj_api';
     const envPackages = rsuConfig.CompilePackages;
     const rawPackages = envPackages !== undefined ? envPackages : defaultPackages;
-    const packageNames = rawPackages
+    const filterArgs = rawPackages
       .split(',')
-      .map((p) => p.trim())
-      .filter((p) => p.length > 0);
+      .map((pkg) => pkg.trim())
+      .filter((pkg) => pkg.length > 0)
+      .map((pkg) => `--filter="${pkg}"`)
+      .join(' ');
+    return `npx turbo build ${filterArgs} --concurrency=${rsuConfig.CompileConcurrency}`;
+  }
 
-    const filterArgs = packageNames.map((p) => `--filter="${p}"`).join(' ');
-    await execAsync(`cd "${codegenDir}" && npx turbo build ${filterArgs}`, { timeout: timeoutMs });
+  /**
+   * Runs a shell command in its OWN process group, and kills the whole group if it exceeds its
+   * timeout.
+   *
+   * Why this exists rather than `execAsync(cmd, { timeout })`: `promisify(exec)`'s timeout signals the
+   * `/bin/sh` it spawned, NOT the process tree beneath it, and the promise it returns does not settle
+   * until every pipe closes. A `turbo build` that outran its timeout therefore kept its `tsc` children
+   * alive AND left the pipeline awaiting a promise that would never resolve — a 300-second budget that
+   * ran for 40 minutes and ended only when a deploy replaced the release directory underneath it
+   * (MJ-RUN-33). The timeout was decorative.
+   *
+   * Three properties make it real:
+   *  - `detached: true` puts the child in a new process group whose id IS the child's pid, so
+   *    `process.kill(-pid, …)` reaches every descendant — the shell, turbo, and each `tsc`.
+   *  - SIGTERM first, SIGKILL after {@link RSUConfig.CommandKillGraceMs}, so a child that ignores the
+   *    polite signal still loses the CPU.
+   *  - the promise REJECTS as soon as the kill is issued, rather than waiting for pipes that a wedged
+   *    child may never close. Not settling was half the defect.
+   *
+   * Windows has no process groups in this sense; there the child is killed directly.
+   */
+  private runCommandInOwnProcessGroup(
+    command: string,
+    opts: { timeoutMs: number; maxBuffer?: number },
+  ): Promise<{ stdout: string; stderr: string }> {
+    const maxBuffer = opts.maxBuffer ?? 50 * 1024 * 1024; // 50 MB — build output is verbose
+    const posix = process.platform !== 'win32';
+    return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+      const child = childProcess.spawn(command, {
+        shell: true,
+        detached: posix,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      let stdout = '';
+      let stderr = '';
+      let settled = false;
+      child.stdout?.on('data', (chunk: Buffer | string) => {
+        if (stdout.length < maxBuffer) stdout += String(chunk);
+      });
+      child.stderr?.on('data', (chunk: Buffer | string) => {
+        if (stderr.length < maxBuffer) stderr += String(chunk);
+      });
 
-    return true;
+      const killGroup = (signal: NodeJS.Signals): void => {
+        try {
+          if (posix && child.pid !== undefined) process.kill(-child.pid, signal);
+          else child.kill(signal);
+        } catch {
+          /* already gone — nothing to signal */
+        }
+      };
+      const settle = (fn: () => void): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        fn();
+      };
+
+      const timer = setTimeout(() => {
+        killGroup('SIGTERM');
+        const hardKill = setTimeout(() => killGroup('SIGKILL'), rsuConfig.CommandKillGraceMs);
+        hardKill.unref?.();
+        settle(() =>
+          reject(
+            new RSUError(
+              'COMMAND_TIMEOUT',
+              `Command exceeded its ${opts.timeoutMs}ms timeout and its process group was killed: ${command}` +
+                (stderr ? ` — last stderr: ${stderr.slice(-500)}` : ''),
+            ),
+          ),
+        );
+      }, opts.timeoutMs);
+      timer.unref?.();
+
+      child.on('error', (err) => settle(() => reject(err)));
+      child.on('close', (code, signal) => {
+        if (code === 0) settle(() => resolve({ stdout, stderr }));
+        else settle(() => reject(new RSUError('COMMAND_FAILED', `Command failed (exit ${code ?? signal}): ${command}\n${stderr.slice(-2000)}`)));
+      });
+    });
   }
 
   /**
@@ -2427,7 +2584,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   // ─── DB-Backed Mutex (Multi-Instance Safety) ──────────────────
 
   /** Whether the DB-backed lock is enabled via RSU_DB_LOCK_ENABLED=1. */
-  private get IsDBLockEnabled(): boolean {
+  private get IsDBLockEnabled(): boolean {  // case-violation-ok-legacy-back-compat: reached by bracket access outside the declaring class, where a same-named key on an unrelated object is indistinguishable
     return rsuConfig.IsDBLockEnabled;
   }
 
@@ -2466,7 +2623,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     if (!this._dbLockId) return;
 
     try {
-      const d = this.Dialect;
+      const d = this.dialect;
       const defaultSchema = rsuConfig.DefaultSchema;
       const quotedTable = d.QuoteSchema(defaultSchema, 'RSULock');
       const sql = `DELETE FROM ${quotedTable} WHERE LockID = '${this._dbLockId}';`;
@@ -2503,7 +2660,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   // ─── Platform Abstraction ────────────────────────────────────────
 
   /** Resolve the database platform from environment configuration. */
-  private get Platform(): DatabasePlatform {
+  private get platform(): DatabasePlatform {
     const platform = (process.env.DB_PLATFORM || 'sqlserver').toLowerCase();
     if (platform !== 'sqlserver' && platform !== 'postgresql') {
       throw new RSUError('CONFIG', `Unsupported DB_PLATFORM: "${platform}". Must be "sqlserver" or "postgresql".`);
@@ -2512,8 +2669,8 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   }
 
   /** Get the SQLDialect for the configured platform (SQL generation). */
-  private get Dialect() {
-    return GetDialect(this.Platform);
+  private get dialect() {
+    return GetDialect(this.platform);
   }
 
   /** Get the database provider for DDL operations. Prefers the dedicated DDL provider if set. */
@@ -2532,7 +2689,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    * and attempt to acquire the lock.
    */
   private buildAcquireLockSQL(schema: string, lockId: string): string {
-    const d = this.Dialect;
+    const d = this.dialect;
     const quotedTable = d.QuoteSchema(schema, 'RSULock');
     const utcNow = d.CurrentTimestampUTC();
     const varchar200 = d.MapDataTypeToString('NVARCHAR', 200);
@@ -2559,7 +2716,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
   /** Generate SQL to create the RSUAuditLog table if it doesn't exist. */
   private buildAuditTableDDL(schema: string): string {
-    const d = this.Dialect;
+    const d = this.dialect;
     const intType = d.MapDataTypeToString('INT');
     const autoIncrement = d.AutoIncrementPKExpression();
     const varchar500 = d.MapDataTypeToString('NVARCHAR', 500);
@@ -2596,7 +2753,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    * The CREATE TABLE DDL runs separately (no user input, safe as-is).
    */
   private async writeAuditInsert(schema: string, input: RSUPipelineInput, result: RSUPipelineResult): Promise<void> {
-    const d = this.Dialect;
+    const d = this.dialect;
     const quotedTable = d.QuoteSchema(schema, 'RSUAuditLog');
     const totalMs = result.Steps.reduce((sum, s) => sum + s.DurationMs, 0);
     const stepsJson = JSON.stringify(result.Steps).substring(0, 8000);

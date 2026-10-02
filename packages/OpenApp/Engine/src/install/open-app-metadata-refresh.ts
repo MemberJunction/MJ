@@ -32,22 +32,32 @@ export interface RefreshDatabaseConfig {
 const ALWAYS_EXCLUDE_FROM_FIELD_PROCS = ['sys', 'staging'];
 const VIEW_REFRESH_EXCLUDED = ['sys', 'INFORMATION_SCHEMA'];
 
-export function isOpenAppSchema(targetSchema: string, coreSchema: string): boolean {
-    return normalizeSchema(targetSchema) !== normalizeSchema(coreSchema);
+export function IsOpenAppSchema(targetSchema: string, coreSchema: string): boolean {
+    return NormalizeSchema(targetSchema) !== NormalizeSchema(coreSchema);
 }
 
-export function normalizeSchema(name: string): string {
+/** @deprecated Use {@link IsOpenAppSchema}. */
+export function isOpenAppSchema(targetSchema: string, coreSchema: string): boolean {
+    return IsOpenAppSchema(targetSchema, coreSchema);
+}
+
+export function NormalizeSchema(name: string): string {
     return name.trim().toLowerCase();
 }
 
-export function buildFieldProcExcludedSchemaNames(appSchema: string, otherEntitySchemas: string[]): string {
+/** @deprecated Use {@link NormalizeSchema}. */
+export function normalizeSchema(name: string): string {
+    return NormalizeSchema(name);
+}
+
+export function BuildFieldProcExcludedSchemaNames(appSchema: string, otherEntitySchemas: string[]): string {
     const seen = new Set<string>();
     const names: string[] = [];
     for (const name of [...ALWAYS_EXCLUDE_FROM_FIELD_PROCS, ...otherEntitySchemas]) {
         const trimmed = name.trim();
         if (!trimmed) continue;
-        if (normalizeSchema(trimmed) === normalizeSchema(appSchema)) continue;
-        const key = normalizeSchema(trimmed);
+        if (NormalizeSchema(trimmed) === NormalizeSchema(appSchema)) continue;
+        const key = NormalizeSchema(trimmed);
         if (seen.has(key)) continue;
         seen.add(key);
         names.push(trimmed);
@@ -55,7 +65,12 @@ export function buildFieldProcExcludedSchemaNames(appSchema: string, otherEntity
     return names.join(',');
 }
 
-export function buildOpenAppRefreshMetadataSQL(
+/** @deprecated Use {@link BuildFieldProcExcludedSchemaNames}. */
+export function buildFieldProcExcludedSchemaNames(appSchema: string, otherEntitySchemas: string[]): string {
+    return BuildFieldProcExcludedSchemaNames(appSchema, otherEntitySchemas);
+}
+
+export function BuildOpenAppRefreshMetadataSQL(
     platform: DatabasePlatform,
     coreSchema: string,
     appSchema: string,
@@ -67,6 +82,16 @@ export function buildOpenAppRefreshMetadataSQL(
     return platform === 'postgresql'
         ? buildPostgresRefreshSQL(core, app, otherEntitySchemas)
         : buildSqlServerRefreshSQL(core, app, otherEntitySchemas);
+}
+
+/** @deprecated Use {@link BuildOpenAppRefreshMetadataSQL}. */
+export function buildOpenAppRefreshMetadataSQL(
+    platform: DatabasePlatform,
+    coreSchema: string,
+    appSchema: string,
+    otherEntitySchemas: string[],
+): string {
+    return BuildOpenAppRefreshMetadataSQL(platform, coreSchema, appSchema, otherEntitySchemas);
 }
 
 function sqlN(value: string): string {
@@ -89,7 +114,7 @@ function buildSqlServerRefreshSQL(coreSchema: string, appSchema: string, otherEn
     const core = bracketIdent(coreSchema);
     const included = sqlN(appSchema);
     const viewExcluded = sqlN(VIEW_REFRESH_EXCLUDED.join(','));
-    const fieldExcluded = sqlN(buildFieldProcExcludedSchemaNames(appSchema, otherEntitySchemas));
+    const fieldExcluded = sqlN(BuildFieldProcExcludedSchemaNames(appSchema, otherEntitySchemas));
 
     return [
         `EXEC ${core}.spRecompileAllViews @ExcludedSchemaNames=${viewExcluded}, @IncludedSchemaNames=${included};`,
@@ -103,7 +128,7 @@ function buildSqlServerRefreshSQL(coreSchema: string, appSchema: string, otherEn
 
 function buildPostgresRefreshSQL(coreSchema: string, appSchema: string, otherEntitySchemas: string[]): string {
     const core = pgIdent(coreSchema);
-    const fieldExcluded = sqlStr(buildFieldProcExcludedSchemaNames(appSchema, otherEntitySchemas));
+    const fieldExcluded = sqlStr(BuildFieldProcExcludedSchemaNames(appSchema, otherEntitySchemas));
     const app = sqlStr(appSchema);
 
     // Mirrors migrations-pg/v5/R__RefreshMetadata.pg-only.sql (AllowsNull + orphan prune)
@@ -131,7 +156,7 @@ function buildPostgresRefreshSQL(coreSchema: string, appSchema: string, otherEnt
     ].join('\n');
 }
 
-export function buildOtherEntitySchemasQuery(platform: DatabasePlatform, coreSchema: string, appSchema: string): string {
+export function BuildOtherEntitySchemasQuery(platform: DatabasePlatform, coreSchema: string, appSchema: string): string {
     const d = GetDialect(platform);
     const core = d.CanonicalSchemaName(coreSchema);
     const app = d.CanonicalSchemaName(appSchema);
@@ -141,11 +166,16 @@ export function buildOtherEntitySchemasQuery(platform: DatabasePlatform, coreSch
     return `SELECT DISTINCT ${col} AS "SchemaName" FROM ${entity} WHERE ${col} <> ${lit}`;
 }
 
+/** @deprecated Use {@link BuildOtherEntitySchemasQuery}. */
+export function buildOtherEntitySchemasQuery(platform: DatabasePlatform, coreSchema: string, appSchema: string): string {
+    return BuildOtherEntitySchemasQuery(platform, coreSchema, appSchema);
+}
+
 /**
  * Open a driver connection, run the heal SQL, close. Used by `mj migrate` and
  * `RunAppMigrations` (`mj app install` / upgrade).
  */
-export async function executeOpenAppMetadataRefresh(options: {
+export async function ExecuteOpenAppMetadataRefresh(options: {
     platform: DatabasePlatform;
     coreSchema: string;
     appSchema: string;
@@ -157,9 +187,9 @@ export async function executeOpenAppMetadataRefresh(options: {
     const appSchema = dialect.CanonicalSchemaName(options.appSchema);
     const runner = await openRefreshConnection(platform, database);
     try {
-        const schemaQuery = buildOtherEntitySchemasQuery(platform, coreSchema, appSchema);
+        const schemaQuery = BuildOtherEntitySchemasQuery(platform, coreSchema, appSchema);
         const rows = await runner.query<{ SchemaName: string }>(schemaQuery);
-        const sql = buildOpenAppRefreshMetadataSQL(
+        const sql = BuildOpenAppRefreshMetadataSQL(
             platform,
             coreSchema,
             appSchema,
@@ -169,6 +199,16 @@ export async function executeOpenAppMetadataRefresh(options: {
     } finally {
         await runner.close();
     }
+}
+
+/** @deprecated Use {@link ExecuteOpenAppMetadataRefresh}. */
+export async function executeOpenAppMetadataRefresh(options: {
+    platform: DatabasePlatform;
+    coreSchema: string;
+    appSchema: string;
+    database: RefreshDatabaseConfig;
+}): Promise<void> {
+    return ExecuteOpenAppMetadataRefresh(options);
 }
 
 interface RefreshRunner {

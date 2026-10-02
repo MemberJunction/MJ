@@ -26,8 +26,8 @@ function snapshotType(): string {
 }
 
 function mergeResultBody(): string {
-  const i = ENGINE.indexOf('private MergeResult(');
-  expect(i, 'MergeResult not found').toBeGreaterThan(-1);
+  const i = ENGINE.indexOf('private mergeResult(');
+  expect(i, 'mergeResult not found').toBeGreaterThan(-1);
   return ENGINE.slice(i, ENGINE.indexOf('\n    }', i));
 }
 

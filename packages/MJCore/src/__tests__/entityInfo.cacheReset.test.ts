@@ -3,10 +3,10 @@
  *
  * Context
  * -------
- * EntityInfo memoizes eight collections derived from `this._Fields`:
+ * EntityInfo memoizes eight collections derived from `this._fields`:
  *   _fieldByNameMap, _firstPrimaryKeyCache, _primaryKeysCache, _uniqueKeysCache,
  *   _foreignKeysCache, _encryptedFieldsCache, _datetimeFieldsCache, _nameFieldCache.
- * The constructor now explicitly resets all eight at the point `_Fields` is (re)assigned,
+ * The constructor now explicitly resets all eight at the point `_fields` is (re)assigned,
  * removing the previously load-bearing "write-once after construction" invariant.
  *
  * Why this file exists
@@ -15,10 +15,10 @@
  * don't cross-contaminate — which would pass even if the reset block were deleted (each fresh
  * instance starts with null caches regardless). That test does NOT exercise the reset.
  *
- * In the production code there is exactly ONE site that assigns `_Fields` and runs the reset:
- * the constructor (verified: `this._Fields = []` and `this._fieldByNameMap = null` each appear
+ * In the production code there is exactly ONE site that assigns `_fields` and runs the reset:
+ * the constructor (verified: `this._fields = []` and `this._fieldByNameMap = null` each appear
  * once). There is no public/protected re-init entry point (`copyInitData` is protected but does
- * not contain the `_Fields=[]`+reset block), so a *true* second construction-time reset cannot
+ * not contain the `_fields=[]`+reset block), so a *true* second construction-time reset cannot
  * be triggered from a unit test without adding a production seam — which this round forbids.
  *
  * What we therefore do
@@ -27,7 +27,7 @@
  * that reaches the private cache fields (TS `private` is compile-time only; the existing field-
  * index test already uses `as unknown as {...}` to reach privates). Crucially, the file contains
  * a CONTROL test proving that WITHOUT the reset the memoized getters serve STALE data after a
- * `_Fields` swap — i.e. the reset statements are *necessary* — and a paired test proving that
+ * `_fields` swap — i.e. the reset statements are *necessary* — and a paired test proving that
  * WITH the reset every derived getter reflects the NEW field set. This makes the assertions
  * meaningful: they encode the exact staleness bug the production reset guards against.
  */
@@ -61,7 +61,7 @@ const FIELDS_B: FieldInit[] = [
 
 // View into EntityInfo's private cache + field storage. `private` is erased at runtime.
 type EntityInternals = {
-    _Fields: EntityFieldInfo[];
+    _fields: EntityFieldInfo[];
     _fieldByNameMap: Map<string, EntityFieldInfo> | null;
     _firstPrimaryKeyCache: EntityFieldInfo | undefined;
     _primaryKeysCache: EntityFieldInfo[] | null;
@@ -70,6 +70,8 @@ type EntityInternals = {
     _encryptedFieldsCache: EntityFieldInfo[] | null;
     _datetimeFieldsCache: EntityFieldInfo[] | null;
     _nameFieldCache: EntityFieldInfo | null | undefined;
+    _hasSearchFields: boolean | undefined;
+    _hasInactiveFields: boolean | undefined;
 };
 
 const internals = (e: EntityInfo): EntityInternals => e as unknown as EntityInternals;
@@ -84,11 +86,13 @@ function primeAllDerivedCaches(e: EntityInfo): void {
     void e.EncryptedFields;
     void e.DatetimeFields;
     void e.NameField;
+    void e.HasSearchFields;
+    void e.HasInactiveFields;
 }
 
-/** Swap the backing `_Fields` array to a brand-new field set (no cache reset). */
+/** Swap the backing `_fields` array to a brand-new field set (no cache reset). */
 function swapFields(e: EntityInfo, fields: FieldInit[]): void {
-    internals(e)._Fields = fields.map(f => new EntityFieldInfo(f));
+    internals(e)._fields = fields.map(f => new EntityFieldInfo(f));
 }
 
 /**
@@ -105,6 +109,8 @@ function runProductionCacheReset(e: EntityInfo): void {
     i._encryptedFieldsCache = null;
     i._datetimeFieldsCache = null;
     i._nameFieldCache = undefined;
+    i._hasSearchFields = undefined;
+    i._hasInactiveFields = undefined;
 }
 
 function makeEntityA(): EntityInfo {
@@ -112,9 +118,9 @@ function makeEntityA(): EntityInfo {
 }
 
 describe('EntityInfo lazy derived-cache reset (Fix 2)', () => {
-    describe('CONTROL: without the reset, memoized getters serve STALE data after a _Fields swap', () => {
+    describe('CONTROL: without the reset, memoized getters serve STALE data after a _fields swap', () => {
         // This is the bug the production constructor reset prevents. If a future re-init path
-        // reassigned `_Fields` but forgot to null these caches, EVERY one of these getters would
+        // reassigned `_fields` but forgot to null these caches, EVERY one of these getters would
         // keep returning the OLD field set. We assert that here so the "after reset" tests below
         // are demonstrably non-tautological — the reset genuinely changes the observed behavior.
         it('FieldByName / PrimaryKeys / NameField / etc. still reflect the OLD fields', () => {
@@ -173,7 +179,7 @@ describe('EntityInfo lazy derived-cache reset (Fix 2)', () => {
         it('reset to an EMPTY field set yields empty/undefined derived caches (no stale carryover)', () => {
             const e = makeEntityA();
             primeAllDerivedCaches(e);
-            internals(e)._Fields = []; // no fields at all
+            internals(e)._fields = []; // no fields at all
             runProductionCacheReset(e);
 
             expect(e.FieldByName('ID')).toBeUndefined();
@@ -219,5 +225,117 @@ describe('EntityInfo lazy derived-cache reset (Fix 2)', () => {
             expect(e.NameField).toBe(e.NameField);
             expect(e.FieldByName('Code')).toBe(e.FieldByName('code')); // case-insensitive same instance
         });
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// HasSearchFields — MJ#4581
+// ─────────────────────────────────────────────────────────────────────────────────────────
+
+/** Same shape as FieldInit, plus the search flag the getter reads. */
+type SearchFieldInit = FieldInit & { IncludeInUserSearchAPI?: boolean };
+
+const NO_SEARCH_FIELDS: SearchFieldInit[] = [
+    { ID: 's1', EntityID: 'eS', Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, Sequence: 1, Status: 'Active' },
+    { ID: 's2', EntityID: 'eS', Name: 'Amount', Type: 'int', Sequence: 2, Status: 'Active' },
+];
+
+const WITH_SEARCH_FIELDS: SearchFieldInit[] = [
+    { ID: 't1', EntityID: 'eS', Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, Sequence: 1, Status: 'Active' },
+    { ID: 't2', EntityID: 'eS', Name: 'Title', Type: 'nvarchar', Sequence: 2, Status: 'Active', IncludeInUserSearchAPI: true },
+];
+
+function makeSearchEntity(fields: SearchFieldInit[]): EntityInfo {
+    return new EntityInfo({ ID: 'eS', Name: 'Searchy', SchemaName: 'app', BaseTable: 'Searchy', EntityFields: fields });
+}
+
+function swapSearchFields(e: EntityInfo, fields: SearchFieldInit[]): void {
+    internals(e)._fields = fields.map(f => new EntityFieldInfo(f));
+}
+
+describe('EntityInfo.HasSearchFields (MJ#4581)', () => {
+    it('is false when no field declares IncludeInUserSearchAPI', () => {
+        expect(makeSearchEntity(NO_SEARCH_FIELDS).HasSearchFields).toBe(false);
+    });
+
+    it('is true when any field declares it', () => {
+        expect(makeSearchEntity(WITH_SEARCH_FIELDS).HasSearchFields).toBe(true);
+    });
+
+    it('computes on first access and caches thereafter', () => {
+        const e = makeSearchEntity(WITH_SEARCH_FIELDS);
+        expect(internals(e)._hasSearchFields).toBeUndefined();   // nothing computed yet
+        expect(e.HasSearchFields).toBe(true);
+        expect(internals(e)._hasSearchFields).toBe(true);        // memoized
+        expect(e.HasSearchFields).toBe(true);                    // second read is served from cache
+    });
+
+    // Pairs with the CONTROL/reset tests above: proves the reset line added for this getter is
+    // load-bearing rather than decorative.
+    it('CONTROL: without the reset it serves STALE data after a _fields swap', () => {
+        const e = makeSearchEntity(NO_SEARCH_FIELDS);
+        expect(e.HasSearchFields).toBe(false);   // prime the cache
+        swapSearchFields(e, WITH_SEARCH_FIELDS); // <-- no reset
+        expect(e.HasSearchFields).toBe(false);   // stale: the new searchable field is invisible
+    });
+
+    it('the production cache reset makes it reflect the NEW field set', () => {
+        const e = makeSearchEntity(NO_SEARCH_FIELDS);
+        expect(e.HasSearchFields).toBe(false);
+        swapSearchFields(e, WITH_SEARCH_FIELDS);
+        runProductionCacheReset(e);
+        expect(e.HasSearchFields).toBe(true);
+    });
+
+    it('reset works in the other direction too (searchable -> not)', () => {
+        const e = makeSearchEntity(WITH_SEARCH_FIELDS);
+        expect(e.HasSearchFields).toBe(true);
+        swapSearchFields(e, NO_SEARCH_FIELDS);
+        runProductionCacheReset(e);
+        expect(e.HasSearchFields).toBe(false);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// HasInactiveFields — the same staleness, fixed alongside HasSearchFields
+// ─────────────────────────────────────────────────────────────────────────────────────────
+//
+// HasInactiveFields (added 2026-06-18) post-dates the constructor reset block (2026-06-15) and
+// was never added to it, so it carried the exact bug that block exists to prevent. Fixed in the
+// same change as HasSearchFields because it is one line in a block already being edited.
+
+const ALL_ACTIVE: FieldInit[] = [
+    { ID: 'c1', EntityID: 'eC', Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, Sequence: 1, Status: 'Active' },
+    { ID: 'c2', EntityID: 'eC', Name: 'Name', Type: 'nvarchar', Sequence: 2, Status: 'Active' },
+];
+
+const HAS_DEPRECATED: FieldInit[] = [
+    { ID: 'd1', EntityID: 'eC', Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, Sequence: 1, Status: 'Active' },
+    { ID: 'd2', EntityID: 'eC', Name: 'Legacy', Type: 'nvarchar', Sequence: 2, Status: 'Deprecated' },
+];
+
+function makeStatusEntity(fields: FieldInit[]): EntityInfo {
+    return new EntityInfo({ ID: 'eC', Name: 'Statusy', SchemaName: 'app', BaseTable: 'Statusy', EntityFields: fields });
+}
+
+describe('EntityInfo.HasInactiveFields cache reset', () => {
+    it('reflects the field set it was built from', () => {
+        expect(makeStatusEntity(ALL_ACTIVE).HasInactiveFields).toBe(false);
+        expect(makeStatusEntity(HAS_DEPRECATED).HasInactiveFields).toBe(true);
+    });
+
+    it('CONTROL: without the reset it serves STALE data after a _fields swap', () => {
+        const e = makeStatusEntity(ALL_ACTIVE);
+        expect(e.HasInactiveFields).toBe(false);          // prime
+        internals(e)._fields = HAS_DEPRECATED.map(f => new EntityFieldInfo(f)); // no reset
+        expect(e.HasInactiveFields).toBe(false);          // stale: the Deprecated field is invisible
+    });
+
+    it('the production cache reset makes it reflect the NEW field set', () => {
+        const e = makeStatusEntity(ALL_ACTIVE);
+        expect(e.HasInactiveFields).toBe(false);
+        internals(e)._fields = HAS_DEPRECATED.map(f => new EntityFieldInfo(f));
+        runProductionCacheReset(e);
+        expect(e.HasInactiveFields).toBe(true);
     });
 });

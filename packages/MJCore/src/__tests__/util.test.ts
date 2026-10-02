@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { FormatValue, RunMaybeSerial, SQLFullType, SQLMaxLength, TypeScriptTypeFromSQLType } from '../generic/util';
+import { FormatValue, RunMaybeSerial, SQLFullType, SQLMaxLength, TypeScriptTypeFromSQLType, IsDateOnlySQLType, FormatDateOnly } from '../generic/util';
 
 describe('FormatValue / FormatValueInternal', () => {
     describe('SQL Server types', () => {
@@ -247,5 +247,89 @@ describe('RunMaybeSerial', () => {
         const results2 = await RunMaybeSerial(undefined, [async () => 'b']);
         expect(results1).toEqual(['a']);
         expect(results2).toEqual(['b']);
+    });
+});
+
+describe('date-only values are a calendar day, not an instant (MJ#4210)', () => {
+    /**
+     * A SQL `date` column arrives as UTC midnight. Formatting it in the reader's local zone
+     * subtracts the offset and lands on the previous day for everyone west of Greenwich — a
+     * stored 2026-01-01 renders as 12/31/2025, the wrong year. These tests PIN A TIMEZONE rather
+     * than trusting the runner's: every assertion passes at Greenwich and fails in New York,
+     * which is how the bug shipped past a UTC CI box.
+     */
+    const AT = (tz: string, fn: () => void) => {
+        const original = process.env.TZ;
+        process.env.TZ = tz;
+        try {
+            fn();
+        } finally {
+            process.env.TZ = original;
+        }
+    };
+
+    describe('IsDateOnlySQLType', () => {
+        it('is true only for the date type, in any casing or padding', () => {
+            expect(IsDateOnlySQLType('date')).toBe(true);
+            expect(IsDateOnlySQLType(' DATE ')).toBe(true);
+        });
+        it('is false for every timestamp type and for nothing', () => {
+            for (const t of ['datetime', 'datetime2', 'smalldatetime', 'datetimeoffset', 'timestamp', 'timestamptz', 'time', '', null, undefined]) {
+                expect(IsDateOnlySQLType(t), `${t} is not date-only`).toBe(false);
+            }
+        });
+    });
+
+    describe('FormatDateOnly', () => {
+        it('renders the stored day west of Greenwich, not the previous one', () => {
+            AT('America/New_York', () => {
+                const shown = FormatDateOnly(new Date('2026-11-20T00:00:00.000Z'));
+                expect(shown, `got ${shown}`).toContain('20');
+                expect(shown).not.toContain('19');
+            });
+        });
+        it('does not roll a January date back into the previous year', () => {
+            AT('America/New_York', () => {
+                expect(FormatDateOnly(new Date('2026-01-01T00:00:00.000Z'))).not.toContain('2025');
+            });
+        });
+        it('shows no time of day', () => {
+            AT('America/New_York', () => {
+                expect(FormatDateOnly(new Date('2026-11-20T00:00:00.000Z'))).not.toMatch(/\d{1,2}:\d{2}/);
+            });
+        });
+        it('honours caller options while keeping the day pinned', () => {
+            AT('America/Los_Angeles', () => {
+                const shown = FormatDateOnly(new Date('2026-03-01T00:00:00.000Z'), { month: 'short', day: 'numeric', year: 'numeric' });
+                expect(shown).toContain('Mar');
+                expect(shown).toContain('1');
+                expect(shown).not.toContain('Feb');
+            });
+        });
+        it('accepts an epoch number or an ISO string and returns the raw value when unparseable', () => {
+            AT('America/New_York', () => {
+                expect(FormatDateOnly(Date.UTC(2026, 10, 20))).toContain('20');
+                expect(FormatDateOnly('2026-11-20T00:00:00.000Z')).toContain('20');
+                expect(FormatDateOnly('not-a-date')).toBe('not-a-date');
+            });
+        });
+    });
+
+    describe('FormatValue with a date-family SQL type', () => {
+        it('formats a date column as its stored calendar day west of Greenwich', () => {
+            AT('America/New_York', () => {
+                const shown = FormatValue('date', new Date('2026-01-01T00:00:00.000Z'));
+                expect(shown, `got ${shown}`).toContain('2026');
+                expect(shown).not.toContain('2025');
+            });
+        });
+        it('leaves a datetimeoffset column in the reader\'s local zone — that one is an instant', () => {
+            AT('America/New_York', () => {
+                // 02:00 UTC on the 2nd is still the 1st in New York; an instant must say so.
+                const shown = FormatValue('datetimeoffset', new Date('2026-06-02T02:00:00.000Z'));
+                expect(shown).toContain('1');
+                expect(shown).not.toContain('/2/');
+            });
+        });
     });
 });

@@ -1,4 +1,4 @@
-import { encodeFloat32ToPcm16Base64 } from './pcmUtils';
+import { EncodeFloat32ToPcm16Base64 } from './pcmUtils';
 
 /**
  * Handle returned by {@link createPcmMicCapture}: the only operation a driver needs is
@@ -57,7 +57,7 @@ async function loadCaptureWorklet(context: AudioContext): Promise<void> {
  *   ElevenLabs default).
  * @param onPcmChunk Invoked with each captured block as base64-encoded PCM16.
  */
-export async function createPcmMicCapture(
+export async function CreatePcmMicCapture(
     micStream: MediaStream,
     sampleRate: number,
     onPcmChunk: (base64Pcm16: string) => void
@@ -67,7 +67,7 @@ export async function createPcmMicCapture(
     const source = context.createMediaStreamSource(micStream);
     const worklet = new AudioWorkletNode(context, CAPTURE_WORKLET_NAME);
     worklet.port.onmessage = (event: MessageEvent<Float32Array>) => {
-        onPcmChunk(encodeFloat32ToPcm16Base64(event.data));
+        onPcmChunk(EncodeFloat32ToPcm16Base64(event.data));
     };
     source.connect(worklet);
     const muteTail = context.createGain();
@@ -82,4 +82,13 @@ export async function createPcmMicCapture(
             void context.close();
         },
     };
+}
+
+/** @deprecated Use {@link CreatePcmMicCapture}. */
+export async function createPcmMicCapture(
+    micStream: MediaStream,
+    sampleRate: number,
+    onPcmChunk: (base64Pcm16: string) => void
+): Promise<IPcmMicCapture> {
+    return CreatePcmMicCapture(micStream, sampleRate, onPcmChunk);
 }

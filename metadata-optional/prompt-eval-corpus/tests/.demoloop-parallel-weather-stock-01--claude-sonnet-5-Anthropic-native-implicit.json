@@ -1,0 +1,71 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "demoloop-parallel-weather-stock-01 [claude-sonnet-5 · Anthropic · native-implicit]",
+    "Description": "One question warranting two different tools. Distinct actions rather than the same one twice, so a provider that collapses duplicates cannot pass by accident.",
+    "InputDefinition": {
+      "payload": {},
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "What's the weather in Seattle, and what is AAPL trading at?"
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "demoloop-parallel-weather-stock-01",
+      "expect": {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Get Weather"
+          },
+          {
+            "name": "Get Stock Price"
+          }
+        ],
+        "allowAdditionalActions": false
+      }
+    },
+    "Configuration": {
+      "agentName": "Demo Loop Agent",
+      "modelId": "31280CE6-5EFC-4407-BEFB-339322D0CC2E",
+      "vendorId": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "native",
+      "nativeControlFlow": "implicit",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Get Weather"
+              },
+              {
+                "name": "Get Stock Price"
+              }
+            ],
+            "allowAdditionalActions": false
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "8EDC5A6B-50E2-4580-A451-E2599752E25B"
+  }
+}

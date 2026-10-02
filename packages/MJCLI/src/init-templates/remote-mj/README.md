@@ -27,8 +27,8 @@ remote-mj/
 ```
 
 No tests/, no oracles/, no metadata/ — this example reuses the canonical MJ
-suite that ships in `metadata/test-suites/.regression-suite.json` and the 25
-test JSONs in `metadata/tests/regression/`.
+suite that ships in `metadata-optional/regression-test/test-suites/.regression-suite.json`
+and the 155 test JSONs in `metadata-optional/regression-test/tests/regression/`.
 
 ## Running it (inside the MJ monorepo)
 
@@ -61,8 +61,8 @@ Behind the scenes:
 
 ## ⚠️ Prerequisite — variable substitution
 
-For Mode B to actually retarget the canonical MJ suite, the 25 test JSONs in
-`metadata/tests/regression/` need to use `{{baseUrl}}` / `{{authUsername}}` /
+For Mode B to actually retarget the canonical MJ suite, the 155 test JSONs in
+`metadata-optional/regression-test/tests/regression/` need to use `{{baseUrl}}` / `{{authUsername}}` /
 `{{authPassword}}` / `{{allowedDomains}}` placeholders instead of hardcoded
 `http://localhost:4200`. This was Phase 1A's deliverable; the substitution
 **code** ships and is fully tested, but the **JSON conversion** is a follow-up

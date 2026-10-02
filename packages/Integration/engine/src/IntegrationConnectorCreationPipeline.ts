@@ -13,13 +13,16 @@ import {
     SoftPKClassifier,
     type LLMOneShotCallback,
 } from '@memberjunction/integration-pk-classifier';
-import { BaseIntegrationConnector, type ExternalObjectSchema, type ExternalFieldSchema } from './BaseIntegrationConnector.js';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
+import { BaseIntegrationConnector, type ExternalObjectSchema, type ExternalFieldSchema } from './BaseIntegrationConnector.js';
 import { BuildCatalogWriter, ResolveCatalogSource } from './CatalogSource.js';
-import { WithCatalogScope } from './CatalogScope.js';
+import { LoadCatalogScope, RefreshCatalogScope, RunInCatalogScope } from './CatalogScope.js';
 import { IntegrationSchemaSync, type PersistSchemaResult } from './IntegrationSchemaSync.js';
 import type { IntrospectSchemaOptions, SourceObjectInfo } from './types.js';
 import { MergeDeclaredWithSample } from './DeclaredSampleMerge.js';
+
+/** How many field names a `pk.classifier.result` event carries — enough to read, bounded for a wide object. */
+const PK_VERDICT_FIELD_NAMES = 12;
 
 /** Options for the creation/refresh pipeline run. */
 export interface ConnectorCreationPipelineOptions {
@@ -204,7 +207,11 @@ export class IntegrationConnectorCreationPipeline {
      * not what some other connection of the same connector found.
      */
     public async Run(opts: ConnectorCreationPipelineOptions): Promise<ConnectorCreationPipelineResult> {
-        return WithCatalogScope(opts.CompanyIntegration?.ID ?? '', () => this.runWithDedup(opts));
+        // Entered SYNCHRONOUSLY. The de-dup below registers this run before the caller's next
+        // statement, which is what lets a concurrent duplicate find it; awaiting the catalog load
+        // first would open a window in which both callers start a run. The connection's catalog is
+        // loaded inside the run instead (runInternal), where a failed read is a failed run.
+        return RunInCatalogScope(opts.CompanyIntegration?.ID ?? '', () => this.runWithDedup(opts));
     }
 
     private async runWithDedup(opts: ConnectorCreationPipelineOptions): Promise<ConnectorCreationPipelineResult> {
@@ -403,9 +410,12 @@ export class IntegrationConnectorCreationPipeline {
         };
 
         try {
-            await withDeadline('ConnectionTest', this.StageConnectionTest(emitter, opts));
-            const sourceSchema = await withDeadline('Introspect', this.StageIntrospect(emitter, opts));
-            let persistResult = await withDeadline('Persist', this.StagePersist(emitter, opts, sourceSchema));
+            // The connection's own catalog is no longer resident (MJ-RUN-43): load its objects and
+            // dependency edges into the scope before any stage reads them synchronously.
+            await LoadCatalogScope(opts.CompanyIntegration.ID, opts.ContextUser);
+            await withDeadline('ConnectionTest', this.stageConnectionTest(emitter, opts));
+            const sourceSchema = await withDeadline('Introspect', this.stageIntrospect(emitter, opts));
+            let persistResult = await withDeadline('Persist', this.stagePersist(emitter, opts, sourceSchema));
 
             // MJ-DISC-16 — heal first-discovery sampling in the SAME run.
             //
@@ -426,15 +436,20 @@ export class IntegrationConnectorCreationPipeline {
                 try {
                     emitter.stageStart('Introspect', `${unsampled.length} first-discovered object(s) were persisted without sampling — sampling them now`);
                     await IntegrationEngineBase.Instance.RefreshCatalog(opts.ContextUser);
-                    const healSchema = await withDeadline('Introspect', this.StageIntrospect(emitter, opts));
-                    persistResult = await withDeadline('Persist', this.StagePersist(emitter, opts, healSchema));
+                    // The new rows are this connection's own, and those live in the catalog scope, not
+                    // in the engine's shared arrays (MJ-RUN-43). The scope was loaded before Persist
+                    // wrote them, so re-read it too, or the second pass samples the same empty
+                    // catalog as the first (MJ-RUN-46; see RefreshCatalog).
+                    await RefreshCatalogScope(opts.CompanyIntegration.ID, opts.ContextUser);
+                    const healSchema = await withDeadline('Introspect', this.stageIntrospect(emitter, opts));
+                    persistResult = await withDeadline('Persist', this.stagePersist(emitter, opts, healSchema));
                 } catch (healErr) {
                     const hm = healErr instanceof Error ? healErr.message : String(healErr);
                     emitter.stageError('Introspect', `First-discovery healing pass failed (run schema refresh once more to complete sampling evidence): ${hm}`, { code: 'first-discovery-heal-failed' });
                 }
             }
 
-            const { verdicts, unresolved } = await withDeadline('PKClassify', this.StagePKClassify(emitter, opts));
+            const { verdicts, unresolved } = await withDeadline('PKClassify', this.stagePKClassify(emitter, opts));
 
             emitter.stageComplete('Pipeline', {
                 processed: persistResult.ObjectsCreated + persistResult.ObjectsUpdated,
@@ -469,7 +484,7 @@ export class IntegrationConnectorCreationPipeline {
 
     // ── Stage 1: connection ──────────────────────────────────────────────
 
-    private async StageConnectionTest(
+    private async stageConnectionTest(
         emitter: IntegrationProgressEmitter,
         opts: ConnectorCreationPipelineOptions
     ): Promise<void> {
@@ -493,7 +508,7 @@ export class IntegrationConnectorCreationPipeline {
      */
     private _firstDiscoveryFallbacks?: Set<string>;
 
-    private async StageIntrospect(
+    private async stageIntrospect(
         emitter: IntegrationProgressEmitter,
         opts: ConnectorCreationPipelineOptions
     ) {
@@ -606,7 +621,7 @@ export class IntegrationConnectorCreationPipeline {
                     // and a fully-declared one gets its true widths and undeclared columns.
                     const existing = schema.Objects.find(o => o.ExternalName.toLowerCase() === key);
                     if (existing) {
-                        await this.SampleDeclaredObjectInPlace(existing, d.Name, opts, emitter);
+                        await this.sampleDeclaredObjectInPlace(existing, d.Name, opts, emitter);
                         sampledDeclared.add(key);
                     }
                     continue;
@@ -620,7 +635,7 @@ export class IntegrationConnectorCreationPipeline {
                     // DB write happens here; the real save is the later ApplyAll → StartSync.
                     fields = await opts.Connector.DiscoverFieldsViaFetch(
                         opts.CompanyIntegration, d.Name, opts.ContextUser,
-                        { OnFallback: (err) => this.ReportSampleFallback(d.Name, err, emitter) }
+                        { OnFallback: (err) => this.reportSampleFallback(d.Name, err, emitter) }
                     );
                 } catch (err) {
                     const msg = err instanceof Error ? err.message : String(err);
@@ -674,7 +689,7 @@ export class IntegrationConnectorCreationPipeline {
                 // Record it here too: two declared entries that differ only by case resolve to the
                 // SAME object, and sampling it twice doubles the most expensive part of discovery.
                 sampledDeclared.add(key);
-                await this.SampleDeclaredObjectInPlace(existing, name, opts, emitter);
+                await this.sampleDeclaredObjectInPlace(existing, name, opts, emitter);
                 declaredOnlySampled++;
             }
 
@@ -733,7 +748,7 @@ export class IntegrationConnectorCreationPipeline {
      * catalog states no observed widths — but from the outside the two are indistinguishable, so
      * without this an object quietly keeps a guessed width and drops every longer value at sync.
      */
-    private ReportSampleFallback(objectName: string, err: unknown, emitter: IntegrationProgressEmitter): void {
+    private reportSampleFallback(objectName: string, err: unknown, emitter: IntegrationProgressEmitter): void {
         const msg = err instanceof Error ? err.message : String(err);
         // MJ-DISC-16: an object discovered for the FIRST time cannot be sampled in the run that
         // discovers it — sampling reads through the catalog, and its row only exists after Persist.
@@ -751,7 +766,7 @@ export class IntegrationConnectorCreationPipeline {
         console.warn(`[IntrospectPipeline] sample fallback for "${objectName}": ${msg}`);
     }
 
-    private async SampleDeclaredObjectInPlace(
+    private async sampleDeclaredObjectInPlace(
         existing: SourceObjectInfo,
         objectName: string,
         opts: ConnectorCreationPipelineOptions,
@@ -760,7 +775,7 @@ export class IntegrationConnectorCreationPipeline {
         try {
             const dfields = await opts.Connector.DiscoverFieldsViaFetch(
                 opts.CompanyIntegration, objectName, opts.ContextUser,
-                { OnFallback: (err) => this.ReportSampleFallback(objectName, err, emitter) }
+                { OnFallback: (err) => this.reportSampleFallback(objectName, err, emitter) }
             );
             const sampled = dfields.map(f => ({
                 Name: f.Name, Label: f.Label, Description: f.Description, SourceType: f.DataType,
@@ -810,7 +825,7 @@ export class IntegrationConnectorCreationPipeline {
         }
     }
 
-    private async StagePersist(
+    private async stagePersist(
         emitter: IntegrationProgressEmitter,
         opts: ConnectorCreationPipelineOptions,
         sourceSchema: Awaited<ReturnType<BaseIntegrationConnector['IntrospectSchema']>>
@@ -874,7 +889,7 @@ export class IntegrationConnectorCreationPipeline {
 
     // ── Stage 4: PK classification ───────────────────────────────────────
 
-    private async StagePKClassify(
+    private async stagePKClassify(
         emitter: IntegrationProgressEmitter,
         opts: ConnectorCreationPipelineOptions
     ): Promise<{
@@ -883,20 +898,43 @@ export class IntegrationConnectorCreationPipeline {
     }> {
         emitter.stageStart('PKClassify', 'Soft PK classifier for objects still missing a PK');
         const md = opts.Provider ?? Metadata.Provider;
-        const engine = IntegrationEngineBase.Instance;
-        // Refresh from DB so we see what Persist just wrote
-        await engine.Config(true, opts.ContextUser, md);
+        // NO engine reload here (MJ-RUN-42). This stage used to open with
+        //     await IntegrationEngineBase.Instance.Config(true, opts.ContextUser, md);
+        // to "see what Persist just wrote". Config(true) reloads ALL EIGHT engine datasets,
+        // including every IntegrationObject and IntegrationObjectField row Persist has just written,
+        // and then this stage reads none of them: every read below goes through the catalog writer,
+        // which queries per call. So it bought nothing and cost a full second copy of the catalog in
+        // process memory at the exact moment memory peaks, immediately after the run's largest write.
+        // Observed 2026-09-19 (888 objects / 97,414 fields): the run persisted both passes and then
+        // died here with `Ineffective mark-compacts near heap limit`, taking classification with it —
+        // 412 keys instead of the 797 the same catalog produced the day before.
+        //
+        // Safe by ORDERING: this is the LAST stage of Run(), so no later stage can observe a staler
+        // cache; the discovery heal opens its second pass with its own refresh; and the callers that
+        // run this pipeline reload the engine once it returns. RefreshCatalog is no cheaper
+        // substitute: the two arrays it reloads ARE the cost. Do not reintroduce a reload here.
+        //
         // Read through the writer rather than the cache. On the per-connection catalog the cached
         // rows are read-only projections with no Save(), so the classifier's one write — promoting
         // its nominee to primary key — would have had nothing to write to.
         const writer = BuildCatalogWriter(md, opts.CompanyIntegration, opts.ContextUser);
         const objects = (await writer.ObjectsInScope()).filter(o => o.Status === 'Active');
+        // Ask ONCE which objects already have a key. The loop below used to load every object's
+        // fields as entity objects just to test `some(IsPrimaryKey)` — 97,414 BaseEntity instances
+        // on an 888-object catalog, right after the run's largest write. The keyed majority needs
+        // nothing else and is settled from one scan; the entity read is kept for the keyless
+        // minority, whose nominee must be Saved.
+        const keyedObjectIDs = await writer.KeyedObjectIDs(objects.map(o => String(o.ID)));
 
         const classifier = new SoftPKClassifier();
         const verdicts: ConnectorCreationPipelineResult['PKVerdicts'] = [];
         const unresolved: string[] = [];
 
         for (const obj of objects) {
+            if (keyedObjectIDs.has(String(obj.ID).toLowerCase())) {
+                emitter.entityGenerated(obj.Name, obj.Name);
+                continue;
+            }
             const fields = await writer.FieldsForObject(obj.ID);
             const hasPK = fields.some(f => f.IsPrimaryKey);
             if (hasPK) {
@@ -912,6 +950,16 @@ export class IntegrationConnectorCreationPipeline {
                 llmInference: opts.LLMInference,
             });
             emitter.pkClassifierResult(obj.Name, {
+                // How many fields the classifier was actually shown, the names of the first few, and
+                // the object id they were read against. Zero names a defect (an empty or failed
+                // catalog read); a non-zero count with no nominee is an honest "no signal". The names
+                // settle what the count cannot: on 2026-09-27 a connector reported all 34 objects
+                // keyless while 30 carried a primary key in the catalog, and the classifier claimed
+                // its naming strategy found nothing for objects whose field list contains a column
+                // literally named "id" — four theories were argued from that one ambiguous verdict.
+                FieldCount: fields.length,
+                FieldNames: fields.slice(0, PK_VERDICT_FIELD_NAMES).map(f => f.Name),
+                ObjectID: String(obj.ID),
                 Confident: verdict.Confident,
                 Nominee: verdict.Nominee,
                 Confidence: verdict.Confidence,

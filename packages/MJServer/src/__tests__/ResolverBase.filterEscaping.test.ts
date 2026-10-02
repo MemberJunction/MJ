@@ -4,8 +4,8 @@ import 'reflect-metadata';
 import { describe, it, expect } from 'vitest';
 import type { DatabaseProviderBase, IMetadataProvider, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
-import type { UserPayload } from '../types.js';
-import type { RunDynamicViewInput, RunViewByNameInput } from '../generic/RunViewResolver.js';
+import type { UserPayload, AppContext } from '../types.js';
+import { RunViewResolver, type RunDynamicViewInput, type RunViewByNameInput } from '../generic/RunViewResolver.js';
 import type { PubSubEngine } from 'type-graphql';
 
 /**
@@ -90,6 +90,14 @@ class Probe extends ResolverBase {
 
     public RunDynamic(input: RunDynamicViewInput, provider: DatabaseProviderBase) {
         return this.RunDynamicViewGeneric(input, provider, fakePayload(), undefined as unknown as PubSubEngine);
+    }
+
+    /** The whole boundary screen, as the RunView* entry points call it. */
+    public ScreenAll(
+        clauses: { extraFilter?: string | null; orderBy?: string | null; userSearchString?: string | null; overrideExcludeFilter?: string | null },
+        provider: DatabaseProviderBase,
+    ) {
+        return this.screenClientViewClauses(clauses, provider as unknown as IMetadataProvider);
     }
 }
 
@@ -251,6 +259,61 @@ describe('ResolverBase — GraphQL-boundary ExtraFilter AST screen', () => {
     });
 });
 
+describe('ResolverBase.screenClientViewClauses — UserSearchString is free text, not a clause (#4392)', () => {
+    // The base-view AST screen wraps its argument as `SELECT 1 FROM x WHERE (<clause>)` and fails
+    // closed when that does not parse. Applied to UserSearchString it rejected everything that
+    // wasn't coincidentally valid SQL — which is most of what people type into a search box.
+    // UserSearchString never reaches SQL as a fragment: createViewUserSearchSQL builds the
+    // predicate and lands the text as an escaped literal, so the screen has nothing to screen.
+
+    const provider = () => fakeProvider({ params: null });
+
+    const searchTerms = [
+        'Marcus Chen',            // a space — parses as nothing
+        "O'Leary",                // unterminated literal
+        "Marcus O'Leary Chen",    // both
+        'Smith, John',            // punctuation
+        '50% off',                // LIKE metacharacter
+        'a_b [c]',                // more LIKE metacharacters
+        'select',                 // a keyword as a term
+        'drop table users',       // keywords with spaces
+        'Union Pacific',          // a real company name
+        "x' OR '1'='1",           // an injection attempt — escaped as a literal downstream
+        '  spaced  out  ',
+        'café ☕',
+    ];
+
+    it.each(searchTerms)('lets %j through the boundary screen', (term) => {
+        expect(() => new Probe().ScreenAll({ userSearchString: term }, provider())).not.toThrow();
+    });
+
+    it('still screens the three real clause fragments alongside it', () => {
+        const p = new Probe();
+        const md = provider();
+
+        expect(() =>
+            p.ScreenAll({ userSearchString: 'Marcus Chen', extraFilter: `EXISTS (SELECT 1 FROM __mj.[User])` }, md)
+        ).toThrow(/entity base view/);
+
+        expect(() =>
+            p.ScreenAll({ userSearchString: 'Marcus Chen', orderBy: '(SELECT COUNT(*) FROM __mj.APIKey)' }, md)
+        ).toThrow(/entity base view/);
+
+        expect(() =>
+            p.ScreenAll({ userSearchString: 'Marcus Chen', overrideExcludeFilter: `EXISTS (SELECT 1 FROM __mj.[User])` }, md)
+        ).toThrow(/entity base view/);
+    });
+
+    it('RunDynamicViewGeneric carries a multi-word search term through to RunView', async () => {
+        const captured: Captured = { params: null };
+        const input = { EntityName: ENTITY_NAME, UserSearchString: "Marcus O'Leary" } as RunDynamicViewInput;
+
+        await new Probe().RunDynamic(input, fakeProvider(captured));
+
+        expect(captured.params?.UserSearchString).toBe("Marcus O'Leary");
+    });
+});
+
 describe('ResolverBase.RunViewByNameGeneric — view-name escaping', () => {
     it('escapes the client-supplied view name', async () => {
         const captured: Captured = { params: null };
@@ -267,5 +330,33 @@ describe('ResolverBase.RunViewByNameGeneric — view-name escaping', () => {
         expect(result).toBeNull();
         expect(captured.params?.EntityName).toBe('MJ: User Views');
         expect(captured.params?.ExtraFilter).toBe("Name='My View'' OR ''1''=''1'");
+    });
+});
+
+describe('RunViewResolver.RunViews — returns failure results instead of null on error', () => {
+    it('returns an array with Success: false and ErrorMessage when an ExtraFilter violates the base view screen', async () => {
+        const captured: Captured = { params: null };
+        const provider = fakeProvider(captured);
+        const resolver = new RunViewResolver();
+
+        const input = [
+            {
+                EntityName: ENTITY_NAME,
+                ExtraFilter: `EXISTS (SELECT 1 FROM __mj.[User] WHERE Type='Owner')`,
+            } as RunDynamicViewInput,
+        ];
+
+        const results = await resolver.RunViews(
+            input,
+            { providers: [{ type: 'Read-Only', provider }] as unknown as AppContext['providers'], userPayload: fakePayload() } as AppContext,
+            undefined as unknown as PubSubEngine
+        );
+
+        expect(results).not.toBeNull();
+        expect(Array.isArray(results)).toBe(true);
+        expect(results).toHaveLength(1);
+        expect(results![0].Success).toBe(false);
+        expect(results![0].ErrorMessage).toMatch(/entity base view/);
+        expect(results![0].Results).toEqual([]);
     });
 });

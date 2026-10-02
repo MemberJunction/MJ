@@ -385,4 +385,35 @@ describe('KnowledgeHubMetadataEngine', () => {
             expect(engine.VectorIndexes).toHaveLength(2);
         });
     });
+
+    // ================================================================
+    // Feature pipeline types
+    // ================================================================
+
+    describe('Feature pipeline types', () => {
+        type LoadableEngine = { Load: (configs: unknown[], ...rest: unknown[]) => Promise<void> };
+        type ConfigDataEngine = { GetConfigData?: (propertyName: string) => unknown[] };
+
+        it('declares MJ: Feature Pipeline Types in Config, cached in _featurePipelineTypes', async () => {
+            const loadSpy = vi.spyOn(engine as unknown as LoadableEngine, 'Load');
+            await engine.Config(false);
+            const configs = loadSpy.mock.calls[0][0] as Array<{ EntityName?: string; PropertyName?: string }>;
+            const entry = configs.find(c => c.EntityName === 'MJ: Feature Pipeline Types');
+            expect(entry?.PropertyName).toBe('_featurePipelineTypes');
+        });
+
+        it('FeaturePipelineTypes reads that array through GetConfigData', () => {
+            const rows = [{ ID: 'FPT-1', Name: 'LLM' }];
+            (engine as unknown as Record<string, unknown[]>)['_featurePipelineTypes'] = rows;
+            const getConfigData = vi.fn((propertyName: string) => (engine as unknown as Record<string, unknown[]>)[propertyName]);
+            const withConfigData = engine as unknown as ConfigDataEngine;
+            withConfigData.GetConfigData = getConfigData;
+            try {
+                expect(engine.FeaturePipelineTypes).toBe(rows);
+                expect(getConfigData).toHaveBeenCalledWith('_featurePipelineTypes');
+            } finally {
+                delete withConfigData.GetConfigData;
+            }
+        });
+    });
 });

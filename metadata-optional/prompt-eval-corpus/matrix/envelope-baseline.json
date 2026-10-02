@@ -1,0 +1,79 @@
+{
+  "_comment": [
+    "Envelope baseline matrix. Three models, one per wire family MJ can reach, all in ENVELOPE",
+    "mode — the baseline quantifies TODAY's path, so it contains no native cells; those are what it",
+    "is compared against. The SAME three models carry into matrix/tool-calling-comparison.json, because",
+    "envelope-vs-native is only attributable to the mode if the model is held fixed.",
+    "IDs are pinned rather than resolved by name so a rerun months later addresses the",
+    "same catalog rows; _apiName records the snapshot each resolved to.",
+    "Regenerate both matrices with: rigs/pin-eval-matrix.cjs"
+  ],
+  "suiteName": "Native Tool Calling — Envelope Baseline",
+  "pinnedAt": "2026-09-13T02:53:16.396Z",
+  "cells": [
+    {
+      "label": "gemini-3.7-flash · Google · envelope",
+      "toolCallingMode": "envelope",
+      "responseFormat": "Any",
+      "modelId": "63B1434F-0400-4A98-A1B9-0765BE4362F0",
+      "vendorId": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "inputPricePer1M": 0.75,
+      "outputPricePer1M": 3.75,
+      "_model": "Gemini 3.7 Flash",
+      "_vendor": "Google",
+      "_why": "current Google Flash; fixes 2.5's auto+JSON conflict",
+      "_apiName": "gemini-3.7-flash"
+    },
+    {
+      "label": "gpt-5.6-luna@xhigh · OpenAI · envelope",
+      "toolCallingMode": "envelope",
+      "responseFormat": "Any",
+      "modelId": "3D2A79B9-745E-4005-8440-5FB62CA61448",
+      "vendorId": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "effortLevel": "xhigh",
+      "inputPricePer1M": 1,
+      "outputPricePer1M": 6,
+      "_model": "GPT 5.6-luna",
+      "_vendor": "OpenAI",
+      "_why": "OpenAI row; xhigh on the baseline, none on the comparison (tools and reasoning_effort are mutually exclusive on chat-completions)",
+      "_apiName": "gpt-5.6-luna"
+    },
+    {
+      "label": "claude-sonnet-5 · Anthropic · envelope",
+      "toolCallingMode": "envelope",
+      "responseFormat": "Any",
+      "modelId": "31280CE6-5EFC-4407-BEFB-339322D0CC2E",
+      "vendorId": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "inputPricePer1M": 2,
+      "outputPricePer1M": 10,
+      "_model": "Claude Sonnet 5",
+      "_vendor": "Anthropic",
+      "_why": "Anthropic reasoning-class row; tools with no extended thinking, same footing as the other cells",
+      "_apiName": "claude-sonnet-5"
+    },
+    {
+      "label": "claude-haiku-4-5-20251001 · Anthropic · envelope",
+      "toolCallingMode": "envelope",
+      "responseFormat": "Any",
+      "modelId": "4FD92457-0BA8-486F-978A-E5947154F4F4",
+      "vendorId": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "inputPricePer1M": 1,
+      "outputPricePer1M": 5,
+      "_model": "Claude Haiku 4.5",
+      "_vendor": "Anthropic",
+      "_why": "Anthropic small/fast row, the size class Cerebras represents elsewhere",
+      "_apiName": "claude-haiku-4-5-20251001"
+    }
+  ],
+  "oracles": [
+    {
+      "type": "response-well-formed",
+      "weight": 0.3
+    },
+    {
+      "type": "agent-decision-match",
+      "weight": 0.7
+    }
+  ],
+  "reps": 3
+}

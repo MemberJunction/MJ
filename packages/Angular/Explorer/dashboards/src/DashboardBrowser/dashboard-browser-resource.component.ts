@@ -5,13 +5,13 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { ResourceData, MJDashboardEntity, MJDashboardCategoryEntity, MJDashboardPartTypeEntity, DashboardEngine, DashboardUserPermissions, MJDashboardCategoryLinkEntity, MJDashboardPermissionEntity } from '@memberjunction/core-entities';
 import { ShareDialogResult } from './dashboard-share-dialog.component';
 import {
-    buildDashboardBrowserAgentContext,
-    isValidBrowserViewMode,
+    BuildDashboardBrowserAgentContext,
+    IsValidBrowserViewMode,
     OpenedDashboardPanelSummary,
 } from './dashboard-browser-agent-context';
 import {
     AgentToolResult,
-    validateStringParam,
+    ValidateStringParam,
 } from '../shared/agent-tool-validation';
 import {
     DashboardViewerComponent,
@@ -79,14 +79,77 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     // State
     // ========================================
 
-    public mode: BrowserMode = 'list';
+    public Mode: BrowserMode = 'list';
+
+    /** @deprecated Use {@link Mode}. */
+    public get mode(): BrowserMode {
+      return this.Mode;
+    }
+    /** @deprecated Use {@link Mode}. */
+    public set mode(value: BrowserMode) {
+      this.Mode = value;
+    }
     public isLoading = false;
-    public dashboards: MJDashboardEntity[] = [];
-    public categories: MJDashboardCategoryEntity[] = [];
-    public selectedDashboard: MJDashboardEntity | null = null;
-    public selectedCategoryId: string | null = null;
-    public viewMode: DashboardBrowserViewMode = 'cards';
-    public showAddPanelDialog = false;
+    public Dashboards: MJDashboardEntity[] = [];
+
+    /** @deprecated Use {@link Dashboards}. */
+    public get dashboards(): MJDashboardEntity[] {
+      return this.Dashboards;
+    }
+    /** @deprecated Use {@link Dashboards}. */
+    public set dashboards(value: MJDashboardEntity[]) {
+      this.Dashboards = value;
+    }
+    public Categories: MJDashboardCategoryEntity[] = [];
+
+    /** @deprecated Use {@link Categories}. */
+    public get categories(): MJDashboardCategoryEntity[] {
+      return this.Categories;
+    }
+    /** @deprecated Use {@link Categories}. */
+    public set categories(value: MJDashboardCategoryEntity[]) {
+      this.Categories = value;
+    }
+    public SelectedDashboard: MJDashboardEntity | null = null;
+
+    /** @deprecated Use {@link SelectedDashboard}. */
+    public get selectedDashboard(): MJDashboardEntity | null {
+      return this.SelectedDashboard;
+    }
+    /** @deprecated Use {@link SelectedDashboard}. */
+    public set selectedDashboard(value: MJDashboardEntity | null) {
+      this.SelectedDashboard = value;
+    }
+    public SelectedCategoryId: string | null = null;
+
+    /** @deprecated Use {@link SelectedCategoryId}. */
+    public get selectedCategoryId(): string | null {
+      return this.SelectedCategoryId;
+    }
+    /** @deprecated Use {@link SelectedCategoryId}. */
+    public set selectedCategoryId(value: string | null) {
+      this.SelectedCategoryId = value;
+    }
+    public ViewMode: DashboardBrowserViewMode = 'cards';
+
+    /** @deprecated Use {@link ViewMode}. */
+    public get viewMode(): DashboardBrowserViewMode {
+      return this.ViewMode;
+    }
+    /** @deprecated Use {@link ViewMode}. */
+    public set viewMode(value: DashboardBrowserViewMode) {
+      this.ViewMode = value;
+    }
+    public ShowAddPanelDialog = false;
+
+    /** @deprecated Use {@link ShowAddPanelDialog}. */
+    public get showAddPanelDialog() {
+      return this.ShowAddPanelDialog;
+    }
+    /** @deprecated Use {@link ShowAddPanelDialog}. */
+    public set showAddPanelDialog(value) {
+      this.ShowAddPanelDialog = value;
+    }
 
     /**
      * Free-text search the agent has applied to the dashboard list (via the
@@ -105,28 +168,118 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     private lastRegisteredToolMode: 'list' | 'open' | null = null;
 
     // Config dialog state
-    public showConfigDialog = false;
-    public configDialogPanel: DashboardPanel | null = null;
-    public configDialogPartType: MJDashboardPartTypeEntity | null = null;
-    public configDialogClass: string = '';
+    public ShowConfigDialog = false;
+
+    /** @deprecated Use {@link ShowConfigDialog}. */
+    public get showConfigDialog() {
+      return this.ShowConfigDialog;
+    }
+    /** @deprecated Use {@link ShowConfigDialog}. */
+    public set showConfigDialog(value) {
+      this.ShowConfigDialog = value;
+    }
+    public ConfigDialogPanel: DashboardPanel | null = null;
+
+    /** @deprecated Use {@link ConfigDialogPanel}. */
+    public get configDialogPanel(): DashboardPanel | null {
+      return this.ConfigDialogPanel;
+    }
+    /** @deprecated Use {@link ConfigDialogPanel}. */
+    public set configDialogPanel(value: DashboardPanel | null) {
+      this.ConfigDialogPanel = value;
+    }
+    public ConfigDialogPartType: MJDashboardPartTypeEntity | null = null;
+
+    /** @deprecated Use {@link ConfigDialogPartType}. */
+    public get configDialogPartType(): MJDashboardPartTypeEntity | null {
+      return this.ConfigDialogPartType;
+    }
+    /** @deprecated Use {@link ConfigDialogPartType}. */
+    public set configDialogPartType(value: MJDashboardPartTypeEntity | null) {
+      this.ConfigDialogPartType = value;
+    }
+    public ConfigDialogClass: string = '';
+
+    /** @deprecated Use {@link ConfigDialogClass}. */
+    public get configDialogClass(): string {
+      return this.ConfigDialogClass;
+    }
+    /** @deprecated Use {@link ConfigDialogClass}. */
+    public set configDialogClass(value: string) {
+      this.ConfigDialogClass = value;
+    }
 
     // Confirm dialog state
-    public showConfirmDialog = false;
-    public confirmPanelId: string = '';
-    public confirmPanelTitle: string = '';
+    public ShowConfirmDialog = false;
+
+    /** @deprecated Use {@link ShowConfirmDialog}. */
+    public get showConfirmDialog() {
+      return this.ShowConfirmDialog;
+    }
+    /** @deprecated Use {@link ShowConfirmDialog}. */
+    public set showConfirmDialog(value) {
+      this.ShowConfirmDialog = value;
+    }
+    public ConfirmPanelId: string = '';
+
+    /** @deprecated Use {@link ConfirmPanelId}. */
+    public get confirmPanelId(): string {
+      return this.ConfirmPanelId;
+    }
+    /** @deprecated Use {@link ConfirmPanelId}. */
+    public set confirmPanelId(value: string) {
+      this.ConfirmPanelId = value;
+    }
+    public ConfirmPanelTitle: string = '';
+
+    /** @deprecated Use {@link ConfirmPanelTitle}. */
+    public get confirmPanelTitle(): string {
+      return this.ConfirmPanelTitle;
+    }
+    /** @deprecated Use {@link ConfirmPanelTitle}. */
+    public set confirmPanelTitle(value: string) {
+      this.ConfirmPanelTitle = value;
+    }
 
     // Share dialog state
-    public showShareDialog = false;
+    public ShowShareDialog = false;
+
+    /** @deprecated Use {@link ShowShareDialog}. */
+    public get showShareDialog() {
+      return this.ShowShareDialog;
+    }
+    /** @deprecated Use {@link ShowShareDialog}. */
+    public set showShareDialog(value) {
+      this.ShowShareDialog = value;
+    }
 
     // Edit mode state for name/description
-    public editingName = '';
-    public editingDescription = '';
+    public EditingName = '';
+
+    /** @deprecated Use {@link EditingName}. */
+    public get editingName() {
+      return this.EditingName;
+    }
+    /** @deprecated Use {@link EditingName}. */
+    public set editingName(value) {
+      this.EditingName = value;
+    }
+    public EditingDescription = '';
+
+    /** @deprecated Use {@link EditingDescription}. */
+    public get editingDescription() {
+      return this.EditingDescription;
+    }
+    /** @deprecated Use {@link EditingDescription}. */
+    public set editingDescription(value) {
+      this.EditingDescription = value;
+    }
     private originalName = '';
     private originalDescription = '';
     private originalConfig = '';
 
     // Permission state for selected dashboard
-    public selectedDashboardPermissions: DashboardUserPermissions = {
+    public SelectedDashboardPermissions: DashboardUserPermissions = {
         DashboardID: '',
         CanRead: true,
         CanEdit: true,
@@ -136,17 +289,53 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         PermissionSource: 'owner'
     };
 
+    /** @deprecated Use {@link SelectedDashboardPermissions}. */
+    public get selectedDashboardPermissions(): DashboardUserPermissions {
+      return this.SelectedDashboardPermissions;
+    }
+    /** @deprecated Use {@link SelectedDashboardPermissions}. */
+    public set selectedDashboardPermissions(value: DashboardUserPermissions) {
+      this.SelectedDashboardPermissions = value;
+    }
+
     // Permission map for all dashboards (used by browser component)
-    public dashboardPermissionsMap: Map<string, DashboardUserPermissions> = new Map();
+    public DashboardPermissionsMap: Map<string, DashboardUserPermissions> = new Map();
+
+    /** @deprecated Use {@link DashboardPermissionsMap}. */
+    public get dashboardPermissionsMap(): Map<string, DashboardUserPermissions> {
+      return this.DashboardPermissionsMap;
+    }
+    /** @deprecated Use {@link DashboardPermissionsMap}. */
+    public set dashboardPermissionsMap(value: Map<string, DashboardUserPermissions>) {
+      this.DashboardPermissionsMap = value;
+    }
 
     // Effective category map for shared dashboards (maps dashboard ID to effective category for display)
-    public effectiveCategoryMap: Map<string, string | null> = new Map();
+    public EffectiveCategoryMap: Map<string, string | null> = new Map();
+
+    /** @deprecated Use {@link EffectiveCategoryMap}. */
+    public get effectiveCategoryMap(): Map<string, string | null> {
+      return this.EffectiveCategoryMap;
+    }
+    /** @deprecated Use {@link EffectiveCategoryMap}. */
+    public set effectiveCategoryMap(value: Map<string, string | null>) {
+      this.EffectiveCategoryMap = value;
+    }
 
     // Query params that arrived before the dashboard list finished loading (cold
     // load / deep link / pin navigation). Applied once loadDashboards() completes.
     private _pendingQueryParams: Record<string, string> | null = null;
 
-    @ViewChild('dashboardViewer') dashboardViewer!: DashboardViewerComponent;
+    @ViewChild('dashboardViewer') DashboardViewer!: DashboardViewerComponent;
+
+    /** @deprecated Use {@link DashboardViewer}. */
+    get dashboardViewer(): DashboardViewerComponent {
+      return this.DashboardViewer;
+    }
+    /** @deprecated Use {@link DashboardViewer}. */
+    set dashboardViewer(value: DashboardViewerComponent) {
+      this.DashboardViewer = value;
+    }
 
     // ========================================
     // Constructor
@@ -187,9 +376,9 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      */
     protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
         // Category is a cheap assignment with no list lookup — apply it eagerly either way.
-        this.selectedCategoryId = params['category'] || null;
+        this.SelectedCategoryId = params['category'] || null;
 
-        if (params['dashboard'] && this.dashboards.length === 0) {
+        if (params['dashboard'] && this.Dashboards.length === 0) {
             // List not loaded yet — defer the dashboard selection until it is.
             this._pendingQueryParams = params;
             this.cdr.detectChanges();
@@ -205,19 +394,19 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      */
     private applyDashboardSelectionFromParams(params: Record<string, string>): void {
         const dashboardId = params['dashboard'] || null;
-        const currentDashboardId = this.selectedDashboard?.ID || null;
+        const currentDashboardId = this.SelectedDashboard?.ID || null;
         if (dashboardId === currentDashboardId) {
             this.cdr.detectChanges();
             return;
         }
 
         if (dashboardId) {
-            const dashboard = this.dashboards.find(d => UUIDsEqual(d.ID, dashboardId));
+            const dashboard = this.Dashboards.find(d => UUIDsEqual(d.ID, dashboardId));
             if (dashboard) {
-                this.openDashboard(dashboard);
+                this.OpenDashboard(dashboard);
             }
         } else {
-            this.backToList();
+            this.BackToList();
         }
     }
 
@@ -267,30 +456,30 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         // publish context, so the agent's tool manifest and context agree.
         this.syncAgentToolsForMode();
 
-        const selectedCategory = this.selectedCategoryId
-            ? this.categories.find(c => UUIDsEqual(c.ID, this.selectedCategoryId!)) ?? null
+        const selectedCategory = this.SelectedCategoryId
+            ? this.Categories.find(c => UUIDsEqual(c.ID, this.SelectedCategoryId!)) ?? null
             : null;
 
-        const dashboardOpen = this.mode !== 'list' && this.selectedDashboard !== null;
+        const dashboardOpen = this.Mode !== 'list' && this.SelectedDashboard !== null;
 
-        this.navigationService.SetAgentContext(this, buildDashboardBrowserAgentContext({
-            Mode: this.mode,
-            SelectedDashboardId: this.selectedDashboard?.ID ?? null,
-            SelectedDashboardName: this.selectedDashboard?.Name ?? null,
-            VisibleDashboardNames: this.dashboards.map(d => d.Name || '(untitled)'),
-            TotalDashboardCount: this.TotalAccessibleDashboardCount,
-            FilteredDashboardCount: this.dashboards.length,
+        this.navigationService.SetAgentContext(this, BuildDashboardBrowserAgentContext({
+            Mode: this.Mode,
+            SelectedDashboardId: this.SelectedDashboard?.ID ?? null,
+            SelectedDashboardName: this.SelectedDashboard?.Name ?? null,
+            VisibleDashboardNames: this.Dashboards.map(d => d.Name || '(untitled)'),
+            TotalDashboardCount: this.totalAccessibleDashboardCount,
+            FilteredDashboardCount: this.Dashboards.length,
             SearchText: this.agentSearchText,
-            AvailableCategoryNames: this.categories.map(c => c.Name),
-            SelectedCategoryId: this.selectedCategoryId,
+            AvailableCategoryNames: this.Categories.map(c => c.Name),
+            SelectedCategoryId: this.SelectedCategoryId,
             SelectedCategoryName: selectedCategory?.Name ?? null,
-            ViewMode: this.viewMode,
+            ViewMode: this.ViewMode,
             IsLoading: this.isLoading,
             // Opened-dashboard awareness (only meaningful when a dashboard is open)
-            OpenedDashboardName: dashboardOpen ? (this.selectedDashboard?.Name ?? null) : null,
-            OpenedDashboardId: dashboardOpen ? (this.selectedDashboard?.ID ?? null) : null,
-            OpenedDashboardIsEditing: this.mode === 'edit',
-            OpenedDashboardCanEdit: dashboardOpen ? this.selectedDashboardPermissions.CanEdit : false,
+            OpenedDashboardName: dashboardOpen ? (this.SelectedDashboard?.Name ?? null) : null,
+            OpenedDashboardId: dashboardOpen ? (this.SelectedDashboard?.ID ?? null) : null,
+            OpenedDashboardIsEditing: this.Mode === 'edit',
+            OpenedDashboardCanEdit: dashboardOpen ? this.SelectedDashboardPermissions.CanEdit : false,
             OpenedDashboardPanels: dashboardOpen ? this.readOpenedDashboardPanels() : [],
         }));
     }
@@ -308,7 +497,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * @returns a descriptive panel summary list (never null)
      */
     private readOpenedDashboardPanels(): OpenedDashboardPanelSummary[] {
-        const viewer = this.dashboardViewer;
+        const viewer = this.DashboardViewer;
         if (!viewer) return [];
 
         try {
@@ -338,7 +527,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * shrinks when SearchDashboards filters it, so we read the unfiltered count
      * straight from the engine to keep TotalDashboardCount honest.
      */
-    private get TotalAccessibleDashboardCount(): number {
+    private get totalAccessibleDashboardCount(): number {
         const md = this.ProviderToUse;
         return DashboardEngine.Instance.GetAccessibleDashboards(md.CurrentUser.ID).length;
     }
@@ -356,7 +545,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * Mirrors the Data Explorer's mode-scoped tool approach.
      */
     private syncAgentToolsForMode(): void {
-        const effective: 'list' | 'open' = this.mode === 'list' ? 'list' : 'open';
+        const effective: 'list' | 'open' = this.Mode === 'list' ? 'list' : 'open';
         if (effective === this.lastRegisteredToolMode) {
             return;
         }
@@ -378,9 +567,9 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 Description: 'Search/filter the dashboard list by a text query matching dashboard name or description.',
                 ParameterSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
                 Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
-                    const v = validateStringParam(params['query'], 'query');
+                    const v = ValidateStringParam(params['query'], 'query');
                     if (!v.ok) return v.result;
-                    return this.AgentSearchDashboards(v.value);
+                    return this.agentSearchDashboards(v.value);
                 },
             },
             {
@@ -388,9 +577,9 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 Description: 'Open a dashboard for viewing (inline). Accepts either the dashboard NAME (as listed in VisibleDashboards) or its ID. Works from the list and while another dashboard is open (to switch).',
                 ParameterSchema: { type: 'object', properties: { dashboard: { type: 'string', description: 'The dashboard name or ID to open.' }, dashboardId: { type: 'string', description: 'Deprecated alias for "dashboard" — the dashboard ID.' } } },
                 Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
-                    const v = validateStringParam(params['dashboard'] ?? params['dashboardId'], 'dashboard');
+                    const v = ValidateStringParam(params['dashboard'] ?? params['dashboardId'], 'dashboard');
                     if (!v.ok) return v.result;
-                    return this.AgentOpenDashboard(v.value);
+                    return this.agentOpenDashboard(v.value);
                 },
             },
             {
@@ -410,14 +599,14 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 Name: 'GetCategoryHierarchy',
                 Description: 'Get the dashboard category tree the user can access — each category\'s name, ID, parent ID, and the number of accessible dashboards filed directly under it. Read-only.',
                 ParameterSchema: { type: 'object', properties: {} },
-                Handler: async (): Promise<AgentToolResult> => this.AgentGetCategoryHierarchy(),
+                Handler: async (): Promise<AgentToolResult> => this.agentGetCategoryHierarchy(),
             },
             {
                 Name: 'GetDashboardShares',
                 Description: 'List who a dashboard is shared with and their access level (read/edit/delete/share). Defaults to the open dashboard; pass a dashboardId (or name) to inspect another accessible dashboard. Read-only — returns no secrets.',
                 ParameterSchema: { type: 'object', properties: { dashboardId: { type: 'string', description: 'Optional dashboard ID or name. Defaults to the open dashboard.' } } },
                 Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
-                    return this.AgentGetDashboardShares(params['dashboardId']);
+                    return this.agentGetDashboardShares(params['dashboardId']);
                 },
             },
         ];
@@ -435,9 +624,9 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 Description: 'Filter the dashboard list to a category. Accepts either the category NAME (as listed in AvailableCategories) or its ID. Pass an empty string to clear the category filter (show root).',
                 ParameterSchema: { type: 'object', properties: { category: { type: 'string', description: 'The category name or ID to filter by. Empty string clears the filter.' } }, required: ['category'] },
                 Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
-                    const v = validateStringParam(params['category'], 'category');
+                    const v = ValidateStringParam(params['category'], 'category');
                     if (!v.ok) return v.result;
-                    return this.AgentSelectCategory(v.value);
+                    return this.agentSelectCategory(v.value);
                 },
             },
             {
@@ -445,23 +634,23 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 Description: 'Filter the dashboard list to a category by its ID. Pass an empty string to clear the category filter (show root). Prefer SelectCategory, which also accepts a category name.',
                 ParameterSchema: { type: 'object', properties: { categoryId: { type: 'string' } }, required: ['categoryId'] },
                 Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
-                    const v = validateStringParam(params['categoryId'], 'categoryId');
+                    const v = ValidateStringParam(params['categoryId'], 'categoryId');
                     if (!v.ok) return v.result;
-                    return this.AgentSelectCategory(v.value);
+                    return this.agentSelectCategory(v.value);
                 },
             },
             {
                 Name: 'ClearDashboardFilters',
                 Description: 'Clear all active dashboard-list filters — both the text search and the category filter — and return to the full list at the root category.',
                 ParameterSchema: { type: 'object', properties: {} },
-                Handler: async (): Promise<AgentToolResult> => this.AgentClearDashboardFilters(),
+                Handler: async (): Promise<AgentToolResult> => this.agentClearDashboardFilters(),
             },
             {
                 Name: 'SwitchViewMode',
                 Description: 'Switch the dashboard list view mode between "cards" and "list".',
                 ParameterSchema: { type: 'object', properties: { mode: { type: 'string', enum: ['cards', 'list'] } }, required: ['mode'] },
                 Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
-                    return this.AgentSwitchViewMode(params['mode']);
+                    return this.agentSwitchViewMode(params['mode']);
                 },
             },
         ];
@@ -480,7 +669,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 Description: 'Return from a dashboard view/edit back to the dashboard list.',
                 ParameterSchema: { type: 'object', properties: {} },
                 Handler: async (): Promise<AgentToolResult> => {
-                    this.backToList();
+                    this.BackToList();
                     this.emitAgentContext();
                     return { Success: true };
                 },
@@ -490,7 +679,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 Description: 'List the panels/widgets on a dashboard — each panel\'s title, part-type, and icon. Defaults to the open dashboard; pass a dashboardId (or name) to inspect another accessible dashboard. Read-only.',
                 ParameterSchema: { type: 'object', properties: { dashboardId: { type: 'string', description: 'Optional dashboard ID or name. Defaults to the open dashboard.' } } },
                 Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
-                    return this.AgentGetDashboardPanels(params['dashboardId']);
+                    return this.agentGetDashboardPanels(params['dashboardId']);
                 },
             },
             {
@@ -498,7 +687,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 Description: 'Get detail about a dashboard — owner, created/updated dates, category, and the current user\'s access level (CanRead/Edit/Delete/Share, IsOwner). Defaults to the open dashboard; pass a dashboardId (or name) for another accessible dashboard. Read-only.',
                 ParameterSchema: { type: 'object', properties: { dashboardId: { type: 'string', description: 'Optional dashboard ID or name. Defaults to the open dashboard.' } } },
                 Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
-                    return this.AgentGetDashboardDetail(params['dashboardId']);
+                    return this.agentGetDashboardDetail(params['dashboardId']);
                 },
             },
         ];
@@ -510,7 +699,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * name/description filter via the same selected-category mechanism is not
      * applicable, so we narrow the in-memory list the browser renders.
      */
-    private AgentSearchDashboards(query: string): AgentToolResult {
+    private agentSearchDashboards(query: string): AgentToolResult {
         const q = query.trim().toLowerCase();
         const engine = DashboardEngine.Instance;
         const md = this.ProviderToUse;
@@ -523,10 +712,10 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             : all;
 
         this.agentSearchText = query.trim();
-        this.dashboards = matched.sort((a, b) =>
+        this.Dashboards = matched.sort((a, b) =>
             new Date(b.__mj_UpdatedAt).getTime() - new Date(a.__mj_UpdatedAt).getTime());
-        this.mode = 'list';
-        this.selectedDashboard = null;
+        this.Mode = 'list';
+        this.SelectedDashboard = null;
         this.emitAgentContext();
         this.cdr.detectChanges();
         return { Success: true };
@@ -538,14 +727,14 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * the loaded, accessible category list — mirroring the Data Explorer's
      * SelectView name→id resolution.
      */
-    private AgentSelectCategory(categoryNameOrId: string): AgentToolResult {
+    private agentSelectCategory(categoryNameOrId: string): AgentToolResult {
         const raw = categoryNameOrId.trim();
 
         // Empty string clears the filter.
         if (!raw) {
-            this.selectedCategoryId = null;
-            this.mode = 'list';
-            this.selectedDashboard = null;
+            this.SelectedCategoryId = null;
+            this.Mode = 'list';
+            this.SelectedDashboard = null;
             this.updateUrlQueryParams();
             this.emitAgentContext();
             this.cdr.detectChanges();
@@ -555,17 +744,17 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         // Prefer an exact id match, then fall back to a case-insensitive name match.
         const lowered = raw.toLowerCase();
         const match =
-            this.categories.find(c => UUIDsEqual(c.ID, raw)) ??
-            this.categories.find(c => (c.Name || '').toLowerCase() === lowered);
+            this.Categories.find(c => UUIDsEqual(c.ID, raw)) ??
+            this.Categories.find(c => (c.Name || '').toLowerCase() === lowered);
 
         if (!match) {
-            const available = this.categories.map(c => c.Name).join(', ') || '(none)';
+            const available = this.Categories.map(c => c.Name).join(', ') || '(none)';
             return { Success: false, ErrorMessage: `No accessible category named or identified by "${raw}". Available categories: ${available}.` };
         }
 
-        this.selectedCategoryId = match.ID;
-        this.mode = 'list';
-        this.selectedDashboard = null;
+        this.SelectedCategoryId = match.ID;
+        this.Mode = 'list';
+        this.SelectedDashboard = null;
         this.updateUrlQueryParams();
         this.emitAgentContext();
         this.cdr.detectChanges();
@@ -573,16 +762,16 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     }
 
     /** Clear both the text search and the category filter, returning to the full root list. */
-    private AgentClearDashboardFilters(): AgentToolResult {
+    private agentClearDashboardFilters(): AgentToolResult {
         this.agentSearchText = '';
-        this.selectedCategoryId = null;
-        this.mode = 'list';
-        this.selectedDashboard = null;
+        this.SelectedCategoryId = null;
+        this.Mode = 'list';
+        this.SelectedDashboard = null;
 
         // Restore the full accessible list (the search may have narrowed this.dashboards).
         const engine = DashboardEngine.Instance;
         const md = this.ProviderToUse;
-        this.dashboards = [...engine.GetAccessibleDashboards(md.CurrentUser.ID)].sort((a, b) =>
+        this.Dashboards = [...engine.GetAccessibleDashboards(md.CurrentUser.ID)].sort((a, b) =>
             new Date(b.__mj_UpdatedAt).getTime() - new Date(a.__mj_UpdatedAt).getTime());
 
         this.updateUrlQueryParams();
@@ -596,7 +785,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * (case-insensitive) to its dashboard against the loaded, accessible list —
      * mirroring the Data Explorer's SelectView name→id resolution.
      */
-    private AgentOpenDashboard(dashboardNameOrId: string): AgentToolResult {
+    private agentOpenDashboard(dashboardNameOrId: string): AgentToolResult {
         const raw = dashboardNameOrId.trim();
         if (!raw) return { Success: false, ErrorMessage: 'A dashboard name or ID is required.' };
 
@@ -615,17 +804,17 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             const available = accessible.map(d => d.Name || '(untitled)').slice(0, 25).join(', ') || '(none)';
             return { Success: false, ErrorMessage: `No accessible dashboard named or identified by "${raw}". Available dashboards include: ${available}.` };
         }
-        this.openDashboard(dashboard);
+        this.OpenDashboard(dashboard);
         this.emitAgentContext();
         return { Success: true };
     }
 
     /** Switch and persist the list view mode (cards | list). */
-    private AgentSwitchViewMode(rawMode: unknown): AgentToolResult {
-        if (!isValidBrowserViewMode(rawMode)) {
+    private agentSwitchViewMode(rawMode: unknown): AgentToolResult {
+        if (!IsValidBrowserViewMode(rawMode)) {
             return { Success: false, ErrorMessage: 'mode must be one of: cards, list.' };
         }
-        this.viewMode = rawMode;
+        this.ViewMode = rawMode;
         this.saveViewPreference(rawMode);
         this.emitAgentContext();
         this.cdr.detectChanges();
@@ -655,8 +844,8 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
 
         // No param → default to the open dashboard.
         if (!raw) {
-            if (this.selectedDashboard) {
-                return { ok: true, dashboard: this.selectedDashboard };
+            if (this.SelectedDashboard) {
+                return { ok: true, dashboard: this.SelectedDashboard };
             }
             return {
                 ok: false,
@@ -684,14 +873,14 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * dashboard we read live panels from the viewer; for another dashboard we
      * parse its persisted UIConfigDetails. Read-only.
      */
-    private AgentGetDashboardPanels(rawDashboardId: unknown): AgentToolDataResult {
+    private agentGetDashboardPanels(rawDashboardId: unknown): AgentToolDataResult {
         const resolved = this.resolveDashboardForTool(rawDashboardId);
         if (!resolved.ok) return resolved.result;
         const dashboard = resolved.dashboard;
 
         // If this is the currently-open dashboard, read the viewer's live panels
         // (reflects any in-session, unsaved layout edits).
-        const isOpen = this.selectedDashboard !== null && UUIDsEqual(dashboard.ID, this.selectedDashboard.ID);
+        const isOpen = this.SelectedDashboard !== null && UUIDsEqual(dashboard.ID, this.SelectedDashboard.ID);
         const panels = isOpen
             ? this.readOpenedDashboardPanels()
             : this.readPanelsFromPersistedConfig(dashboard);
@@ -743,7 +932,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * named) dashboard. Access level comes from the DashboardEngine permissions
      * already computed by the browser. Read-only.
      */
-    private AgentGetDashboardDetail(rawDashboardId: unknown): AgentToolDataResult {
+    private agentGetDashboardDetail(rawDashboardId: unknown): AgentToolDataResult {
         const resolved = this.resolveDashboardForTool(rawDashboardId);
         if (!resolved.ok) return resolved.result;
         const dashboard = resolved.dashboard;
@@ -778,7 +967,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * Return the accessible category tree (name, ID, parent ID, and per-category
      * count of accessible dashboards filed directly under it). Read-only.
      */
-    private AgentGetCategoryHierarchy(): AgentToolDataResult {
+    private agentGetCategoryHierarchy(): AgentToolDataResult {
         const md = this.ProviderToUse;
         const engine = DashboardEngine.Instance;
         const categories = engine.GetAccessibleCategories(md.CurrentUser.ID);
@@ -809,7 +998,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * DashboardEngine.GetDashboardShares (the real method) over the cached
      * permission records. Returns no secrets. Read-only.
      */
-    private AgentGetDashboardShares(rawDashboardId: unknown): AgentToolDataResult {
+    private agentGetDashboardShares(rawDashboardId: unknown): AgentToolDataResult {
         const resolved = this.resolveDashboardForTool(rawDashboardId);
         if (!resolved.ok) return resolved.result;
         const dashboard = resolved.dashboard;
@@ -851,7 +1040,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     /**
      * Handle dashboard open request from generic browser
      */
-    public onDashboardOpen(event: DashboardOpenEvent): void {
+    public OnDashboardOpen(event: DashboardOpenEvent): void {
         if (event.OpenInNewTab) {
             // Open in a dedicated Explorer tab via NavigationService
             this.navigationService.OpenDashboard(
@@ -861,18 +1050,23 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             );
         } else {
             // Open inline in the browser's view pane
-            this.openDashboard(event.Dashboard);
+            this.OpenDashboard(event.Dashboard);
         }
+    }
+
+    /** @deprecated Use {@link OnDashboardOpen}. */
+    public onDashboardOpen(event: DashboardOpenEvent): void {
+      return this.OnDashboardOpen(event);
     }
 
     /**
      * Open the current dashboard in its own dedicated Explorer tab
      */
     public openInNewTab(): void {
-        if (this.selectedDashboard) {
+        if (this.SelectedDashboard) {
             this.navigationService.OpenDashboard(
-                this.selectedDashboard.ID,
-                this.selectedDashboard.Name,
+                this.SelectedDashboard.ID,
+                this.SelectedDashboard.Name,
                 { forceNewTab: true }
             );
         }
@@ -881,14 +1075,19 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     /**
      * Handle dashboard edit request from generic browser
      */
+    public OnDashboardEdit(event: DashboardEditEvent): void {
+        this.EditDashboard(event.Dashboard);
+    }
+
+    /** @deprecated Use {@link OnDashboardEdit}. */
     public onDashboardEdit(event: DashboardEditEvent): void {
-        this.editDashboard(event.Dashboard);
+      return this.OnDashboardEdit(event);
     }
 
     /**
      * Handle dashboard delete request from generic browser
      */
-    public async onDashboardDelete(event: DashboardDeleteEvent): Promise<void> {
+    public async OnDashboardDelete(event: DashboardDeleteEvent): Promise<void> {
         // The generic browser handles the confirmation dialog
         // We just need to perform the actual deletion atomically
         try {
@@ -906,7 +1105,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
 
             if (await tg.Submit()) {
                 const deletedIds = new Set(event.Dashboards.map(d => d.ID));
-                this.dashboards = this.dashboards.filter(d => !deletedIds.has(d.ID));
+                this.Dashboards = this.Dashboards.filter(d => !deletedIds.has(d.ID));
             } else {
                 console.error('Failed to delete dashboards — all changes rolled back');
             }
@@ -918,12 +1117,17 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         }
     }
 
+    /** @deprecated Use {@link OnDashboardDelete}. */
+    public async onDashboardDelete(event: DashboardDeleteEvent): Promise<void> {
+      return this.OnDashboardDelete(event);
+    }
+
     /**
      * Handle dashboard move request from generic browser.
      * For owned dashboards: updates the dashboard's CategoryID directly.
      * For shared dashboards: creates/updates a DashboardCategoryLink to organize without modifying the original.
      */
-    public async onDashboardMove(event: DashboardMoveEvent): Promise<void> {
+    public async OnDashboardMove(event: DashboardMoveEvent): Promise<void> {
         try {
             this.isLoading = true;
             this.cdr.detectChanges();
@@ -969,11 +1173,11 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             if (await tg.Submit()) {
                 // Update the effective category map for the shared dashboards now that the server confirmed
                 for (const id of sharedDashboardIds) {
-                    this.effectiveCategoryMap.set(id, event.TargetCategoryId);
+                    this.EffectiveCategoryMap.set(id, event.TargetCategoryId);
                 }
-                this.effectiveCategoryMap = new Map(this.effectiveCategoryMap);
-                this.dashboards = [...this.dashboards];
-                this.selectedCategoryId = event.TargetCategoryId;
+                this.EffectiveCategoryMap = new Map(this.EffectiveCategoryMap);
+                this.Dashboards = [...this.Dashboards];
+                this.SelectedCategoryId = event.TargetCategoryId;
                 this.updateUrlQueryParams();
             } else {
                 console.error('Failed to move dashboards — all changes rolled back');
@@ -986,36 +1190,56 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         }
     }
 
+    /** @deprecated Use {@link OnDashboardMove}. */
+    public async onDashboardMove(event: DashboardMoveEvent): Promise<void> {
+      return this.OnDashboardMove(event);
+    }
+
     /**
      * Handle create dashboard request from generic browser
      */
+    public async OnDashboardCreate(event: DashboardCreateEvent): Promise<void> {
+        await this.CreateDashboard(event.CategoryId);
+    }
+
+    /** @deprecated Use {@link OnDashboardCreate}. */
     public async onDashboardCreate(event: DashboardCreateEvent): Promise<void> {
-        await this.createDashboard(event.CategoryId);
+      return this.OnDashboardCreate(event);
     }
 
     /**
      * Handle category change from generic browser - update URL
      */
-    public onCategoryChange(event: CategoryChangeEvent): void {
-        this.selectedCategoryId = event.CategoryId;
+    public OnCategoryChange(event: CategoryChangeEvent): void {
+        this.SelectedCategoryId = event.CategoryId;
         this.updateUrlQueryParams();
         this.emitAgentContext();
+    }
+
+    /** @deprecated Use {@link OnCategoryChange}. */
+    public onCategoryChange(event: CategoryChangeEvent): void {
+      return this.OnCategoryChange(event);
     }
 
     /**
      * Handle view preference change from generic browser - persist
      */
-    public onViewPreferenceChange(event: ViewPreferenceChangeEvent): void {
-        this.viewMode = event.ViewMode;
+    public OnViewPreferenceChange(event: ViewPreferenceChangeEvent): void {
+        this.ViewMode = event.ViewMode;
         this.saveViewPreference(event.ViewMode);
         this.emitAgentContext();
+    }
+
+    /** @deprecated Use {@link OnViewPreferenceChange}. */
+    public onViewPreferenceChange(event: ViewPreferenceChangeEvent): void {
+      return this.OnViewPreferenceChange(event);
     }
 
     /**
      * Handle category create request from generic browser
      * Includes extensive logging for debugging category creation issues
      */
-    public async onCategoryCreate(event: CategoryCreateEvent): Promise<void> {
+    public async OnCategoryCreate(event: CategoryCreateEvent): Promise<void> {
         console.debug('[DashboardBrowserResource] Category create requested:', {
             name: event.Name,
             parentCategoryId: event.ParentCategoryId
@@ -1063,8 +1287,8 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             if (saved) {
                 console.debug('[DashboardBrowserResource] Category saved successfully, ID:', category.ID);
                 // Add to local array - engine will self-update
-                this.categories.push(category);
-                this.categories = [...this.categories].sort((a, b) => a.Name.localeCompare(b.Name));
+                this.Categories.push(category);
+                this.Categories = [...this.Categories].sort((a, b) => a.Name.localeCompare(b.Name));
             } else {
                 const errorMessage = category.LatestResult?.Message || 'Unknown error saving category';
                 console.error('[DashboardBrowserResource] Failed to save category:', errorMessage);
@@ -1082,11 +1306,16 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         }
     }
 
+    /** @deprecated Use {@link OnCategoryCreate}. */
+    public async onCategoryCreate(event: CategoryCreateEvent): Promise<void> {
+      return this.OnCategoryCreate(event);
+    }
+
     /**
      * Handle category delete request from generic browser
      * Performs recursive deletion of category and all children
      */
-    public async onCategoryDelete(event: CategoryDeleteEvent): Promise<void> {
+    public async OnCategoryDelete(event: CategoryDeleteEvent): Promise<void> {
         console.debug('[DashboardBrowserResource] Category delete requested:', event.Category.Name);
 
         try {
@@ -1103,7 +1332,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             console.debug('[DashboardBrowserResource] Deleting categories:', categoriesToDelete.map(c => c.Name));
 
             const categoryIds = new Set(categoriesToDelete.map(c => c.ID));
-            const dashboardsToUncategorize = this.dashboards.filter(d =>
+            const dashboardsToUncategorize = this.Dashboards.filter(d =>
                 d.CategoryID && categoryIds.has(d.CategoryID)
             );
 
@@ -1123,8 +1352,8 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             }
 
             if (await tg.Submit()) {
-                this.categories = this.categories.filter(c => !categoryIds.has(c.ID));
-                this.dashboards = [...this.dashboards];
+                this.Categories = this.Categories.filter(c => !categoryIds.has(c.ID));
+                this.Dashboards = [...this.Dashboards];
             } else {
                 console.error('[DashboardBrowserResource] Failed to delete categories — all changes rolled back');
             }
@@ -1136,17 +1365,27 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         }
     }
 
+    /** @deprecated Use {@link OnCategoryDelete}. */
+    public async onCategoryDelete(event: CategoryDeleteEvent): Promise<void> {
+      return this.OnCategoryDelete(event);
+    }
+
     /**
      * Handle breadcrumb navigation event
      * Navigates back to list view with optional category selection
      */
-    public onBreadcrumbNavigate(event: BreadcrumbNavigateEvent): void {
+    public OnBreadcrumbNavigate(event: BreadcrumbNavigateEvent): void {
         console.debug('[DashboardBrowserResource] Breadcrumb navigate:', event);
 
         // CategoryId is null for root, or a category ID string
-        this.selectedCategoryId = event.CategoryId;
-        this.backToList();
+        this.SelectedCategoryId = event.CategoryId;
+        this.BackToList();
         this.updateUrlQueryParams();
+    }
+
+    /** @deprecated Use {@link OnBreadcrumbNavigate}. */
+    public onBreadcrumbNavigate(event: BreadcrumbNavigateEvent): void {
+      return this.OnBreadcrumbNavigate(event);
     }
 
     // ========================================
@@ -1156,13 +1395,13 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     /**
      * Open a dashboard for viewing
      */
-    public openDashboard(dashboard: MJDashboardEntity): void {
-        this.selectedDashboard = dashboard;
-        this.mode = 'view';
+    public OpenDashboard(dashboard: MJDashboardEntity): void {
+        this.SelectedDashboard = dashboard;
+        this.Mode = 'view';
 
         // Compute permissions for the selected dashboard
         const md = this.ProviderToUse;
-        this.selectedDashboardPermissions = DashboardEngine.Instance.GetDashboardPermissions(
+        this.SelectedDashboardPermissions = DashboardEngine.Instance.GetDashboardPermissions(
             dashboard.ID,
             md.CurrentUser.ID
         );
@@ -1173,10 +1412,15 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link OpenDashboard}. */
+    public openDashboard(dashboard: MJDashboardEntity): void {
+      return this.OpenDashboard(dashboard);
+    }
+
     /**
      * Open a dashboard for editing
      */
-    public editDashboard(dashboard: MJDashboardEntity): void {
+    public EditDashboard(dashboard: MJDashboardEntity): void {
         // Check if user has edit permission
         const md = this.ProviderToUse;
         const permissions = DashboardEngine.Instance.GetDashboardPermissions(
@@ -1189,13 +1433,13 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             return;
         }
 
-        this.selectedDashboard = dashboard;
-        this.selectedDashboardPermissions = permissions;
-        this.mode = 'edit';
+        this.SelectedDashboard = dashboard;
+        this.SelectedDashboardPermissions = permissions;
+        this.Mode = 'edit';
 
         // Initialize editing fields
-        this.editingName = dashboard.Name;
-        this.editingDescription = dashboard.Description || '';
+        this.EditingName = dashboard.Name;
+        this.EditingDescription = dashboard.Description || '';
 
         // Store originals for cancel
         this.originalName = dashboard.Name;
@@ -1206,70 +1450,100 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link EditDashboard}. */
+    public editDashboard(dashboard: MJDashboardEntity): void {
+      return this.EditDashboard(dashboard);
+    }
+
     /**
      * Go back to list view
      */
-    public backToList(): void {
-        this.selectedDashboard = null;
-        this.mode = 'list';
+    public BackToList(): void {
+        this.SelectedDashboard = null;
+        this.Mode = 'list';
         this.updateUrlQueryParams();
         this.NotifyDisplayNameChanged('Dashboards');
         this.emitAgentContext();
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link BackToList}. */
+    public backToList(): void {
+      return this.BackToList();
+    }
+
     /**
      * Toggle edit mode for current dashboard
      */
-    public toggleEditMode(): void {
-        if (this.mode === 'view' && this.selectedDashboard) {
-            this.editDashboard(this.selectedDashboard);
-        } else if (this.mode === 'edit') {
-            this.mode = 'view';
+    public ToggleEditMode(): void {
+        if (this.Mode === 'view' && this.SelectedDashboard) {
+            this.EditDashboard(this.SelectedDashboard);
+        } else if (this.Mode === 'edit') {
+            this.Mode = 'view';
             this.cdr.detectChanges();
         }
+    }
+
+    /** @deprecated Use {@link ToggleEditMode}. */
+    public toggleEditMode(): void {
+      return this.ToggleEditMode();
     }
 
     /**
      * Open the share dialog for the current dashboard
      */
-    public openShareDialog(): void {
-        if (!this.selectedDashboard) return;
+    public OpenShareDialog(): void {
+        if (!this.SelectedDashboard) return;
 
         // Verify user has share permission
-        if (!this.selectedDashboardPermissions.CanShare) {
+        if (!this.SelectedDashboardPermissions.CanShare) {
             console.warn('User does not have permission to share this dashboard');
             return;
         }
 
-        this.showShareDialog = true;
+        this.ShowShareDialog = true;
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link OpenShareDialog}. */
+    public openShareDialog(): void {
+      return this.OpenShareDialog();
     }
 
     /**
      * Close the share dialog
      */
-    public closeShareDialog(): void {
-        this.showShareDialog = false;
+    public CloseShareDialog(): void {
+        this.ShowShareDialog = false;
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link CloseShareDialog}. */
+    public closeShareDialog(): void {
+      return this.CloseShareDialog();
     }
 
     /**
      * Handle share dialog result
      */
-    public onShareDialogResult(result: ShareDialogResult): void {
-        this.showShareDialog = false;
+    public OnShareDialogResult(result: ShareDialogResult): void {
+        this.ShowShareDialog = false;
 
-        if (result.Action === 'save' && this.selectedDashboard) {
+        if (result.Action === 'save' && this.SelectedDashboard) {
             // Recompute permissions after sharing changes
             const md = this.ProviderToUse;
-            this.selectedDashboardPermissions = DashboardEngine.Instance.GetDashboardPermissions(
-                this.selectedDashboard.ID,
+            this.SelectedDashboardPermissions = DashboardEngine.Instance.GetDashboardPermissions(
+                this.SelectedDashboard.ID,
                 md.CurrentUser.ID
             );
         }
 
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link OnShareDialogResult}. */
+    public onShareDialogResult(result: ShareDialogResult): void {
+      return this.OnShareDialogResult(result);
     }
 
     // ========================================
@@ -1279,7 +1553,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     /**
      * Create a new dashboard
      */
-    public async createDashboard(categoryId?: string | null): Promise<void> {
+    public async CreateDashboard(categoryId?: string | null): Promise<void> {
         try {
             this.isLoading = true;
             this.cdr.detectChanges();
@@ -1294,16 +1568,16 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
 
             if (categoryId) {
                 dashboard.CategoryID = categoryId;
-            } else if (this.selectedCategoryId) {
-                dashboard.CategoryID = this.selectedCategoryId;
+            } else if (this.SelectedCategoryId) {
+                dashboard.CategoryID = this.SelectedCategoryId;
             }
 
             const saved = await dashboard.Save();
 
             if (saved) {
-                this.dashboards.unshift(dashboard);
-                this.dashboards = [...this.dashboards];
-                this.editDashboard(dashboard);
+                this.Dashboards.unshift(dashboard);
+                this.Dashboards = [...this.Dashboards];
+                this.EditDashboard(dashboard);
             } else {
                 console.error('Failed to save dashboard:', dashboard.LatestResult);
             }
@@ -1315,31 +1589,36 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         }
     }
 
+    /** @deprecated Use {@link CreateDashboard}. */
+    public async createDashboard(categoryId?: string | null): Promise<void> {
+      return this.CreateDashboard(categoryId);
+    }
+
     /**
      * Save the current dashboard
      */
-    public async saveDashboard(): Promise<void> {
-        if (!this.selectedDashboard) return;
+    public async SaveDashboard(): Promise<void> {
+        if (!this.SelectedDashboard) return;
 
         try {
             this.isLoading = true;
             this.cdr.detectChanges();
 
-            this.selectedDashboard.Name = this.editingName;
-            this.selectedDashboard.Description = this.editingDescription;
+            this.SelectedDashboard.Name = this.EditingName;
+            this.SelectedDashboard.Description = this.EditingDescription;
 
-            if (this.dashboardViewer) {
-                await this.dashboardViewer.save();
+            if (this.DashboardViewer) {
+                await this.DashboardViewer.save();
             }
 
-            this.originalName = this.editingName;
-            this.originalDescription = this.editingDescription;
-            this.originalConfig = this.selectedDashboard.UIConfigDetails || '';
+            this.originalName = this.EditingName;
+            this.originalDescription = this.EditingDescription;
+            this.originalConfig = this.SelectedDashboard.UIConfigDetails || '';
 
             // Update the dashboard in the list
-            this.dashboards = [...this.dashboards];
+            this.Dashboards = [...this.Dashboards];
 
-            this.mode = 'view';
+            this.Mode = 'view';
         } catch (err) {
             console.error('Failed to save dashboard:', err);
         } finally {
@@ -1348,33 +1627,48 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         }
     }
 
+    /** @deprecated Use {@link SaveDashboard}. */
+    public async saveDashboard(): Promise<void> {
+      return this.SaveDashboard();
+    }
+
     /**
      * Cancel editing and revert changes
      */
-    public cancelEdit(): void {
-        if (!this.selectedDashboard) {
-            this.backToList();
+    public CancelEdit(): void {
+        if (!this.SelectedDashboard) {
+            this.BackToList();
             return;
         }
 
-        this.selectedDashboard.Name = this.originalName;
-        this.selectedDashboard.Description = this.originalDescription;
-        this.selectedDashboard.UIConfigDetails = this.originalConfig;
+        this.SelectedDashboard.Name = this.originalName;
+        this.SelectedDashboard.Description = this.originalDescription;
+        this.SelectedDashboard.UIConfigDetails = this.originalConfig;
 
-        this.editingName = '';
-        this.editingDescription = '';
+        this.EditingName = '';
+        this.EditingDescription = '';
 
-        this.mode = 'view';
+        this.Mode = 'view';
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link CancelEdit}. */
+    public cancelEdit(): void {
+      return this.CancelEdit();
     }
 
     /**
      * Handle name input blur - validate name is not empty
      */
-    public onNameBlur(): void {
-        if (!this.editingName.trim()) {
-            this.editingName = this.originalName || 'Untitled Dashboard';
+    public OnNameBlur(): void {
+        if (!this.EditingName.trim()) {
+            this.EditingName = this.originalName || 'Untitled Dashboard';
         }
+    }
+
+    /** @deprecated Use {@link OnNameBlur}. */
+    public onNameBlur(): void {
+      return this.OnNameBlur();
     }
 
     // ========================================
@@ -1384,30 +1678,35 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     /**
      * Open the Add Part dialog
      */
-    public openAddPartDialog(): void {
-        this.showAddPanelDialog = true;
+    public OpenAddPartDialog(): void {
+        this.ShowAddPanelDialog = true;
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link OpenAddPartDialog}. */
+    public openAddPartDialog(): void {
+      return this.OpenAddPartDialog();
     }
 
     /**
      * Handle panel interaction events from the viewer
      */
-    public onPanelInteraction(event: PanelInteractionEvent): void {
+    public OnPanelInteraction(event: PanelInteractionEvent): void {
         if (event.interactionType !== 'custom') return;
 
         const action = event.payload?.['action'];
 
         switch (action) {
             case 'add-panel-requested':
-                this.openAddPartDialog();
+                this.OpenAddPartDialog();
                 break;
 
             case 'configure-part-requested':
-                this.openConfigDialog(event.panelId);
+                this.OpenConfigDialog(event.panelId);
                 break;
 
             case 'remove-part-requested':
-                this.openRemoveConfirmDialog(
+                this.OpenRemoveConfirmDialog(
                     event.panelId,
                     event.payload?.['panelTitle'] as string || 'this part'
                 );
@@ -1415,10 +1714,15 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         }
     }
 
+    /** @deprecated Use {@link OnPanelInteraction}. */
+    public onPanelInteraction(event: PanelInteractionEvent): void {
+      return this.OnPanelInteraction(event);
+    }
+
     /**
      * Handle navigation events from panels
      */
-    public onNavigationRequested(event: DashboardNavRequestEvent): void {
+    public OnNavigationRequested(event: DashboardNavRequestEvent): void {
         const request = event.request;
         const openInNewTab = request.openInNewTab || false;
 
@@ -1438,7 +1742,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             }
             case 'OpenDashboard': {
                 // Navigate to another dashboard
-                const targetDashboard = this.dashboards.find(d => UUIDsEqual(d.ID, request.dashboardId));
+                const targetDashboard = this.Dashboards.find(d => UUIDsEqual(d.ID, request.dashboardId));
                 if (targetDashboard) {
                     if (openInNewTab) {
                         this.navigationService.OpenDashboard(
@@ -1447,7 +1751,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                             { forceNewTab: true }
                         );
                     } else {
-                        this.openDashboard(targetDashboard);
+                        this.OpenDashboard(targetDashboard);
                     }
                 }
                 break;
@@ -1476,6 +1780,11 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         }
     }
 
+    /** @deprecated Use {@link OnNavigationRequested}. */
+    public onNavigationRequested(event: DashboardNavRequestEvent): void {
+      return this.OnNavigationRequested(event);
+    }
+
     /**
      * Resolve an application name to its ID
      */
@@ -1488,27 +1797,37 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     /**
      * Handle add panel dialog result
      */
-    public async onPanelAdded(result: AddPanelResult): Promise<void> {
-        if (this.dashboardViewer) {
-            await this.dashboardViewer.addPanel(
+    public async OnPanelAdded(result: AddPanelResult): Promise<void> {
+        if (this.DashboardViewer) {
+            await this.DashboardViewer.addPanel(
                 result.PartType.ID,
                 result.Config,
                 result.Title,
                 result.Icon
             );
         }
-        this.showAddPanelDialog = false;
+        this.ShowAddPanelDialog = false;
         // Panel set changed — refresh opened-dashboard context for the agent.
         this.emitAgentContext();
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link OnPanelAdded}. */
+    public async onPanelAdded(result: AddPanelResult): Promise<void> {
+      return this.OnPanelAdded(result);
+    }
+
     /**
      * Handle add panel dialog cancel
      */
-    public onAddPanelCancelled(): void {
-        this.showAddPanelDialog = false;
+    public OnAddPanelCancelled(): void {
+        this.ShowAddPanelDialog = false;
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link OnAddPanelCancelled}. */
+    public onAddPanelCancelled(): void {
+      return this.OnAddPanelCancelled();
     }
 
     // ========================================
@@ -1518,31 +1837,36 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     /**
      * Open the config dialog for a panel
      */
-    public openConfigDialog(panelId: string): void {
-        if (!this.dashboardViewer) return;
+    public OpenConfigDialog(panelId: string): void {
+        if (!this.DashboardViewer) return;
 
-        const panel = this.dashboardViewer.getPanel(panelId);
-        const partType = this.dashboardViewer.getPartTypeForPanel(panelId);
+        const panel = this.DashboardViewer.getPanel(panelId);
+        const partType = this.DashboardViewer.getPartTypeForPanel(panelId);
 
         if (!panel || !partType) {
             console.warn('Could not find panel or part type for config dialog');
             return;
         }
 
-        this.configDialogPanel = panel;
-        this.configDialogPartType = partType;
-        this.configDialogClass = partType.ConfigDialogClass || '';
-        this.showConfigDialog = true;
+        this.ConfigDialogPanel = panel;
+        this.ConfigDialogPartType = partType;
+        this.ConfigDialogClass = partType.ConfigDialogClass || '';
+        this.ShowConfigDialog = true;
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link OpenConfigDialog}. */
+    public openConfigDialog(panelId: string): void {
+      return this.OpenConfigDialog(panelId);
     }
 
     /**
      * Handle config dialog save
      */
-    public onConfigDialogSaved(result: EditPartDialogResult): void {
-        if (this.dashboardViewer && this.configDialogPanel) {
-            this.dashboardViewer.updatePanelConfig(
-                this.configDialogPanel.id,
+    public OnConfigDialogSaved(result: EditPartDialogResult): void {
+        if (this.DashboardViewer && this.ConfigDialogPanel) {
+            this.DashboardViewer.updatePanelConfig(
+                this.ConfigDialogPanel.id,
                 result.Config,
                 result.Title,
                 result.Icon
@@ -1553,21 +1877,31 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         this.emitAgentContext();
     }
 
+    /** @deprecated Use {@link OnConfigDialogSaved}. */
+    public onConfigDialogSaved(result: EditPartDialogResult): void {
+      return this.OnConfigDialogSaved(result);
+    }
+
     /**
      * Handle config dialog cancel
      */
-    public onConfigDialogCancelled(): void {
+    public OnConfigDialogCancelled(): void {
         this.closeConfigDialog();
+    }
+
+    /** @deprecated Use {@link OnConfigDialogCancelled}. */
+    public onConfigDialogCancelled(): void {
+      return this.OnConfigDialogCancelled();
     }
 
     /**
      * Close the config dialog
      */
     private closeConfigDialog(): void {
-        this.showConfigDialog = false;
-        this.configDialogPanel = null;
-        this.configDialogPartType = null;
-        this.configDialogClass = '';
+        this.ShowConfigDialog = false;
+        this.ConfigDialogPanel = null;
+        this.ConfigDialogPartType = null;
+        this.ConfigDialogClass = '';
         this.cdr.detectChanges();
     }
 
@@ -1578,39 +1912,54 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     /**
      * Open the remove confirmation dialog
      */
-    public openRemoveConfirmDialog(panelId: string, panelTitle: string): void {
-        this.confirmPanelId = panelId;
-        this.confirmPanelTitle = panelTitle;
-        this.showConfirmDialog = true;
+    public OpenRemoveConfirmDialog(panelId: string, panelTitle: string): void {
+        this.ConfirmPanelId = panelId;
+        this.ConfirmPanelTitle = panelTitle;
+        this.ShowConfirmDialog = true;
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link OpenRemoveConfirmDialog}. */
+    public openRemoveConfirmDialog(panelId: string, panelTitle: string): void {
+      return this.OpenRemoveConfirmDialog(panelId, panelTitle);
     }
 
     /**
      * Handle remove confirmation
      */
-    public onRemoveConfirmed(): void {
-        if (this.dashboardViewer && this.confirmPanelId) {
-            this.dashboardViewer.confirmRemovePanel(this.confirmPanelId);
+    public OnRemoveConfirmed(): void {
+        if (this.DashboardViewer && this.ConfirmPanelId) {
+            this.DashboardViewer.confirmRemovePanel(this.ConfirmPanelId);
         }
         this.closeRemoveConfirmDialog();
         // Panel set changed — refresh opened-dashboard context for the agent.
         this.emitAgentContext();
     }
 
+    /** @deprecated Use {@link OnRemoveConfirmed}. */
+    public onRemoveConfirmed(): void {
+      return this.OnRemoveConfirmed();
+    }
+
     /**
      * Handle remove cancel
      */
-    public onRemoveCancelled(): void {
+    public OnRemoveCancelled(): void {
         this.closeRemoveConfirmDialog();
+    }
+
+    /** @deprecated Use {@link OnRemoveCancelled}. */
+    public onRemoveCancelled(): void {
+      return this.OnRemoveCancelled();
     }
 
     /**
      * Close the remove confirm dialog
      */
     private closeRemoveConfirmDialog(): void {
-        this.showConfirmDialog = false;
-        this.confirmPanelId = '';
-        this.confirmPanelTitle = '';
+        this.ShowConfirmDialog = false;
+        this.ConfirmPanelId = '';
+        this.ConfirmPanelTitle = '';
         this.cdr.detectChanges();
     }
 
@@ -1632,26 +1981,26 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
 
             // Get data from engine - sort dashboards by updated date, categories by name
             // Filter dashboards to only those accessible to the current user
-            this.dashboards = [...engine.GetAccessibleDashboards(currentUserId)].sort((a, b) =>
+            this.Dashboards = [...engine.GetAccessibleDashboards(currentUserId)].sort((a, b) =>
                 new Date(b.__mj_UpdatedAt).getTime() - new Date(a.__mj_UpdatedAt).getTime()
             );
             // Filter categories to only those owned by or shared with the current user
-            this.categories = [...engine.GetAccessibleCategories(currentUserId)].sort((a, b) =>
+            this.Categories = [...engine.GetAccessibleCategories(currentUserId)].sort((a, b) =>
                 a.Name.localeCompare(b.Name)
             );
 
             // Build permissions map and effective category map for all dashboards
-            this.dashboardPermissionsMap = new Map();
-            this.effectiveCategoryMap = new Map();
+            this.DashboardPermissionsMap = new Map();
+            this.EffectiveCategoryMap = new Map();
 
             // Get category links for current user (from engine's cached data)
             const userCategoryLinks = engine.DashboardCategoryLinks.filter(
                 link => UUIDsEqual(link.UserID, currentUserId)
             );
 
-            for (const dashboard of this.dashboards) {
+            for (const dashboard of this.Dashboards) {
                 const perms = engine.GetDashboardPermissions(dashboard.ID, currentUserId);
-                this.dashboardPermissionsMap.set(dashboard.ID, perms);
+                this.DashboardPermissionsMap.set(dashboard.ID, perms);
 
                 // For shared dashboards (not owned), determine effective category
                 if (!perms.IsOwner) {
@@ -1662,10 +2011,10 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
 
                     if (categoryLink) {
                         // User has explicitly organized this shared dashboard
-                        this.effectiveCategoryMap.set(dashboard.ID, categoryLink.DashboardCategoryID);
+                        this.EffectiveCategoryMap.set(dashboard.ID, categoryLink.DashboardCategoryID);
                     } else {
                         // No link exists - show in root (null category)
-                        this.effectiveCategoryMap.set(dashboard.ID, null);
+                        this.EffectiveCategoryMap.set(dashboard.ID, null);
                     }
                 }
                 // For owned dashboards, we don't add to effectiveCategoryMap
@@ -1673,10 +2022,10 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             }
 
             console.debug('[DashboardBrowserResource] Loaded from DashboardEngine:', {
-                dashboardCount: this.dashboards.length,
-                categoryCount: this.categories.length,
-                sharedDashboardsInEffectiveMap: this.effectiveCategoryMap.size,
-                categories: this.categories.map(c => ({ id: c.ID, name: c.Name, parentId: c.ParentID }))
+                dashboardCount: this.Dashboards.length,
+                categoryCount: this.Categories.length,
+                sharedDashboardsInEffectiveMap: this.EffectiveCategoryMap.size,
+                categories: this.Categories.map(c => ({ id: c.ID, name: c.Name, parentId: c.ParentID }))
             });
 
             // List is now loaded — apply any query-param selection. Use params deferred by
@@ -1685,7 +2034,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             const params = this._pendingQueryParams ?? this.GetQueryParams();
             this._pendingQueryParams = null;
             if (params && Object.keys(params).length > 0) {
-                this.selectedCategoryId = params['category'] || this.selectedCategoryId;
+                this.SelectedCategoryId = params['category'] || this.SelectedCategoryId;
                 this.applyDashboardSelectionFromParams(params);
             }
 
@@ -1714,15 +2063,15 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         const queryParams: Record<string, string | null> = {};
 
         // Track category
-        if (this.selectedCategoryId) {
-            queryParams['category'] = this.selectedCategoryId;
+        if (this.SelectedCategoryId) {
+            queryParams['category'] = this.SelectedCategoryId;
         } else {
             queryParams['category'] = null;
         }
 
         // Track dashboard (for browser back/forward support)
-        if (this.selectedDashboard) {
-            queryParams['dashboard'] = this.selectedDashboard.ID;
+        if (this.SelectedDashboard) {
+            queryParams['dashboard'] = this.SelectedDashboard.ID;
         } else {
             queryParams['dashboard'] = null;
         }
@@ -1741,7 +2090,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      */
     private getChildCategoriesRecursive(parentId: string): MJDashboardCategoryEntity[] {
         const children: MJDashboardCategoryEntity[] = [];
-        const directChildren = this.categories.filter(c => UUIDsEqual(c.ParentID, parentId));
+        const directChildren = this.Categories.filter(c => UUIDsEqual(c.ParentID, parentId));
 
         for (const child of directChildren) {
             children.push(child);
@@ -1759,7 +2108,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         // TODO: Load from User Settings entity
         const stored = localStorage.getItem('dashboard-browser-view-mode');
         if (stored === 'cards' || stored === 'list') {
-            this.viewMode = stored;
+            this.ViewMode = stored;
         }
     }
 
