@@ -1,27 +1,19 @@
 /**
  * @fileoverview MessageListComponent.RefreshRenderedMessage — refreshing one rendered message
- * in place for a streamed delta, plus the `mj-streaming` host class that lifts the item's
- * status-line height cap while streamed text is shown and comes off once the message settles.
- * Instantiated via the prototype with a hand-built rendered-entry map.
+ * in place for a streamed delta, marking the item as streaming so its stylesheet can lift the
+ * status-line cap, and clearing that mark once the message settles. Instantiated via the
+ * prototype with a hand-built rendered-entry map.
  */
 import '@angular/compiler';
 import { describe, it, expect, vi } from 'vitest';
 import { MessageListComponent } from '../lib/components/message/message-list.component';
 import type { MJConversationDetailEntity } from '@memberjunction/core-entities';
 
-class FakeClassList {
-    private readonly classes = new Set<string>();
-    add(name: string): void { this.classes.add(name); }
-    remove(name: string): void { this.classes.delete(name); }
-    contains(name: string): boolean { return this.classes.has(name); }
-}
-
 interface ComponentEntry {
     kind: 'component';
     ref: {
-        instance: { message: MJConversationDetailEntity | null };
+        instance: { message: MJConversationDetailEntity | null; IsStreaming: boolean };
         changeDetectorRef: { detectChanges: ReturnType<typeof vi.fn>; destroyed: boolean };
-        location: { nativeElement: { classList: FakeClassList } };
     };
 }
 
@@ -33,9 +25,8 @@ function componentEntry(destroyed = false): ComponentEntry {
     return {
         kind: 'component',
         ref: {
-            instance: { message: null },
+            instance: { message: null, IsStreaming: false },
             changeDetectorRef: { detectChanges: vi.fn(), destroyed },
-            location: { nativeElement: { classList: new FakeClassList() } },
         },
     };
 }
@@ -54,17 +45,17 @@ describe('MessageListComponent.RefreshRenderedMessage', () => {
         expect(list.RefreshRenderedMessage(detail())).toBe(false);
     });
 
-    it('updates the rendered component in place, marks the host as streaming and checks its view', () => {
+    it('updates the rendered component in place, marks it streaming and checks its view', () => {
         const entry = componentEntry();
         const list = buildList({ 'ai-1': entry });
         const message = detail();
         expect(list.RefreshRenderedMessage(message)).toBe(true);
         expect(entry.ref.instance.message).toBe(message);
-        expect(entry.ref.location.nativeElement.classList.contains('mj-streaming')).toBe(true);
+        expect(entry.ref.instance.IsStreaming).toBe(true);
         expect(entry.ref.changeDetectorRef.detectChanges).toHaveBeenCalledTimes(1);
     });
 
-    it('does not check a destroyed view', () => {
+    it('does not check a destroyed component view', () => {
         const entry = componentEntry(true);
         const list = buildList({ 'ai-1': entry });
         expect(list.RefreshRenderedMessage(detail())).toBe(true);
@@ -74,7 +65,7 @@ describe('MessageListComponent.RefreshRenderedMessage', () => {
     it('updates an embedded custom-renderer view through its context', () => {
         const context: { $implicit: unknown; message: unknown } = { $implicit: null, message: null };
         const detectChanges = vi.fn();
-        const list = buildList({ 'ai-1': { kind: 'embedded', ref: { context, detectChanges } } });
+        const list = buildList({ 'ai-1': { kind: 'embedded', ref: { context, detectChanges, destroyed: false } } });
         const message = detail();
         expect(list.RefreshRenderedMessage(message)).toBe(true);
         expect(context.$implicit).toBe(message);
@@ -82,21 +73,15 @@ describe('MessageListComponent.RefreshRenderedMessage', () => {
         expect(detectChanges).toHaveBeenCalledTimes(1);
     });
 
-    it('cannot refresh a spacer standing in for an unmounted message', () => {
-        const list = buildList({ 'ai-1': { kind: 'spacer', ref: {} } });
-        expect(list.RefreshRenderedMessage(detail())).toBe(false);
+    it('does not check a destroyed embedded view', () => {
+        const detectChanges = vi.fn();
+        const list = buildList({ 'ai-1': { kind: 'embedded', ref: { context: {}, detectChanges, destroyed: true } } });
+        expect(list.RefreshRenderedMessage(detail())).toBe(true);
+        expect(detectChanges).not.toHaveBeenCalled();
     });
 
-    it('drops the streaming host class once the message has settled', () => {
-        const entry = componentEntry();
-        const list = buildList({ 'ai-1': entry });
-        list.RefreshRenderedMessage(detail());
-        const sync = (list as unknown as {
-            syncStreamingHostClass(ref: ComponentEntry['ref'], message: MJConversationDetailEntity, streaming: boolean): void;
-        }).syncStreamingHostClass.bind(list);
-        sync(entry.ref, detail('In-Progress'), false); // a plain progress render keeps it
-        expect(entry.ref.location.nativeElement.classList.contains('mj-streaming')).toBe(true);
-        sync(entry.ref, detail('Complete'), false);
-        expect(entry.ref.location.nativeElement.classList.contains('mj-streaming')).toBe(false);
+    it('treats a spacer standing in for an unmounted message as refreshed (nothing to paint, no fallback)', () => {
+        const list = buildList({ 'ai-1': { kind: 'spacer', ref: {} } });
+        expect(list.RefreshRenderedMessage(detail())).toBe(true);
     });
 });

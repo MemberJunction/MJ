@@ -45,6 +45,7 @@ function buildHarness(messageStatus = 'In-Progress', streamedObserved = true): C
         currentUser: undefined,
         completionTimestamps,
         registeredCallbacks,
+        ngZone: { run: (fn: () => void) => fn(), runOutsideAngular: (fn: () => void) => fn() },
         // One emitter under both names, as the component itself declares it: the deprecated
         // `messageSent` @Output IS the `MessageSent` EventEmitter, and only the canonical name is
         // ever emitted on. Object.create skips the field initialisers, so both are wired here.
@@ -143,14 +144,6 @@ describe('MessageInputComponent streamed final-response rendering', () => {
         const h = buildHarness();
         await h.invoke(streamingUpdate('almost done'));
         h.message.Status = 'Complete';
-        h.flushFrames();
-        expect(h.streamed).toHaveLength(0);
-    });
-
-    it('emits nothing from a frame that fires after completion was recorded for the message', async () => {
-        const h = buildHarness();
-        await h.invoke(streamingUpdate('almost done'));
-        h.completionTimestamps.set('detail-1', Date.now());
         h.flushFrames();
         expect(h.streamed).toHaveLength(0);
     });

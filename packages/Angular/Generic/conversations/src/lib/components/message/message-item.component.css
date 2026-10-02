@@ -63,10 +63,10 @@
   display: block;
 }
 
-/* A streamed reply is not a status line. The list sets `mj-streaming` on the host while it
-   renders streamed text into an in-progress bubble; the cap above would box the growing reply
-   into a 150px scroller of its own. */
-:host(.mj-streaming) .message-item.in-progress .message-text {
+/* A streamed reply is not a status line. While the bubble shows streamed reply text the item
+   adds `streaming` (IsStreaming, set by the list's in-place refresh); the cap above would box
+   the growing reply into a 150px scroller of its own. */
+.message-item.in-progress.streaming .message-text {
   max-height: none;
   overflow-y: visible;
 }

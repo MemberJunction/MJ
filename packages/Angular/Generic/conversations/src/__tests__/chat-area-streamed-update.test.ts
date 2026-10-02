@@ -2,9 +2,10 @@
  * @fileoverview ConversationChatAreaComponent.OnMessageStreamed — the in-place path for a
  * streamed delta. It must refresh the rendered bubble through the list instead of replacing
  * the messages array (while keeping the array and the window pointing at the streamed entity),
- * keep the viewport steady — one landing per turn with ReadReplyFromTop, a synchronous bottom
- * follow otherwise — and let completion skip a landing the stream already made while keeping
- * the post-landing hold. Instantiated via the prototype with only the members the path touches.
+ * and keep the viewport steady: with ReadReplyFromTop the turn's top is pinned as high as the
+ * content allows on every frame until the reader moves, and completion then skips its own
+ * landing; without it a reader at the bottom is followed there in the same frame. Instantiated
+ * via the prototype with only the members the path touches stubbed.
  */
 import '@angular/compiler';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -15,23 +16,25 @@ interface ScrollState {
     readerAtBottom: boolean;
     currentTurnStartMessageId: string | null;
     pendingTurnStartMessageId: string | null;
-    streamLanding: { turnId: string; landed: boolean } | null;
+    streamAnchor: number | 'declined' | null;
     bottomFollowSuppressedUntil: number;
     scrollToBottom: boolean;
     turnStartRetryHandle: ReturnType<typeof setTimeout> | null;
     messages: MJConversationDetailEntity[];
-    scrollContainer: { nativeElement: { scrollHeight: number; scrollTop: number } };
+    scrollContainer: { nativeElement: { scrollHeight: number; clientHeight: number; scrollTop: number } };
 }
 
 interface Harness {
     component: ConversationChatAreaComponent;
     state: ScrollState;
+    container: ScrollState['scrollContainer']['nativeElement'];
     refresh: ReturnType<typeof vi.fn>;
     applyLocalDetail: ReturnType<typeof vi.fn>;
-    scrollTurnToTop: ReturnType<typeof vi.fn>;
     onMessageSent: ReturnType<typeof vi.fn>;
-    followTranscript: (change: 'load' | 'new' | 'update', message?: MJConversationDetailEntity) => void;
+    followTranscript: (change: 'load' | 'new' | 'update' | 'stream', message?: MJConversationDetailEntity) => void;
     clearTurnTracking: () => void;
+    /** Simulates the reply growing by `px` (the pane does not move by itself). */
+    grow: (px: number) => void;
 }
 
 interface HarnessOptions {
@@ -40,7 +43,13 @@ interface HarnessOptions {
     readerAtBottom?: boolean;
     currentTurnStartMessageId?: string | null;
     messages?: MJConversationDetailEntity[];
+    /** Where the turn's first message starts, in scroller content coordinates. */
+    turnTop?: number;
+    /** Content height when the turn's first delta arrives. */
+    scrollHeight?: number;
 }
+
+const PANE = 600;
 
 function detail(overrides: Partial<{ ID: string; Role: string; Status: string; Message: string }> = {}): MJConversationDetailEntity {
     return {
@@ -56,8 +65,10 @@ function detail(overrides: Partial<{ ID: string; Role: string; Status: string; M
 function buildHarness(options: HarnessOptions = {}): Harness {
     const refresh = vi.fn(() => options.refreshed ?? true);
     const applyLocalDetail = vi.fn();
-    const scrollTurnToTop = vi.fn();
     const onMessageSent = vi.fn(async () => undefined);
+    const turnTop = options.turnTop ?? 900;
+    const container = { scrollHeight: options.scrollHeight ?? 1000, clientHeight: PANE, scrollTop: 0 };
+    container.scrollTop = container.scrollHeight - PANE; // the reader sits at the bottom
     const component = Object.create(ConversationChatAreaComponent.prototype) as ConversationChatAreaComponent;
     const state = component as unknown as ScrollState;
     Object.assign(component as unknown as Record<string, unknown>, {
@@ -65,38 +76,40 @@ function buildHarness(options: HarnessOptions = {}): Harness {
         readerAtBottom: options.readerAtBottom ?? true,
         currentTurnStartMessageId: options.currentTurnStartMessageId === undefined ? 'user-1' : options.currentTurnStartMessageId,
         pendingTurnStartMessageId: null,
-        streamLanding: null,
+        streamAnchor: null,
         bottomFollowSuppressedUntil: 0,
         scrollToBottom: false,
         turnStartRetryHandle: null,
         messages: options.messages ?? [],
-        scrollContainer: { nativeElement: { scrollHeight: 900, scrollTop: 0 } },
-        messageListComponent: { RefreshRenderedMessage: refresh },
+        scrollContainer: { nativeElement: container },
+        messageListComponent: { RefreshRenderedMessage: refresh, FindTimelineElement: () => ({}) },
         windowStore: { ApplyLocalDetail: applyLocalDetail },
+        ngZone: { run: (fn: () => void) => fn() },
         isActiveConversation: (conversationId: string) => conversationId === 'conv-1',
-        scrollTurnToTop,
+        offsetWithinScroller: () => turnTop,
+        turnTopClearance: () => 0,
         OnMessageSent: onMessageSent,
     });
     const internals = component as unknown as {
-        followTranscript(change: 'load' | 'new' | 'update', message?: MJConversationDetailEntity): void;
+        followTranscript(change: 'load' | 'new' | 'update' | 'stream', message?: MJConversationDetailEntity): void;
         clearTurnTracking(): void;
     };
     return {
         component,
         state,
+        container,
         refresh,
         applyLocalDetail,
-        scrollTurnToTop,
         onMessageSent,
         followTranscript: internals.followTranscript.bind(component),
         clearTurnTracking: internals.clearTurnTracking.bind(component),
+        grow: (px: number) => { container.scrollHeight += px; },
     };
 }
 
-/** A hold that is armed: later than now, and not the open-ended value the first draft used. */
+/** A hold that is armed: later than now. */
 function expectArmedHold(until: number): void {
     expect(until).toBeGreaterThan(Date.now() - 1);
-    expect(Number.isFinite(until)).toBe(true);
 }
 
 describe('ConversationChatAreaComponent.OnMessageStreamed', () => {
@@ -128,14 +141,6 @@ describe('ConversationChatAreaComponent.OnMessageStreamed', () => {
             expect(h.applyLocalDetail).toHaveBeenCalledWith(live);
         });
 
-        it('mirrors a message the array does not hold yet into the window', () => {
-            const h = buildHarness();
-            const live = detail();
-            h.component.OnMessageStreamed(live);
-            expect(h.applyLocalDetail).toHaveBeenCalledWith(live);
-            expect(h.state.messages).toHaveLength(0); // the array is not grown here; OnMessageSent appends
-        });
-
         it('yields to the completion path when the array already holds the message settled (a frame that outlived completion)', () => {
             const settled = detail({ Status: 'Complete', Message: 'the saved reply' });
             const h = buildHarness({ messages: [settled] });
@@ -151,7 +156,6 @@ describe('ConversationChatAreaComponent.OnMessageStreamed', () => {
             h.component.OnMessageStreamed(message);
             expect(h.onMessageSent).toHaveBeenCalledTimes(1);
             expect(h.onMessageSent).toHaveBeenCalledWith(message);
-            expect(h.state.scrollContainer.nativeElement.scrollTop).toBe(0);
         });
 
         it('ignores a message that is no longer in progress', () => {
@@ -170,36 +174,40 @@ describe('ConversationChatAreaComponent.OnMessageStreamed', () => {
     });
 
     describe('without ReadReplyFromTop', () => {
-        it('follows the bottom synchronously while the reader is at the bottom', () => {
+        it('follows the bottom in the same frame while the reader is at the bottom', () => {
             const h = buildHarness();
+            h.grow(300);
             h.component.OnMessageStreamed(detail());
-            expect(h.state.scrollContainer.nativeElement.scrollTop).toBe(900);
+            expect(h.container.scrollTop).toBe(h.container.scrollHeight);
             expect(h.state.scrollToBottom).toBe(false); // no deferred follow timer
         });
 
         it('leaves a reader who scrolled away where they are', () => {
             const h = buildHarness({ readerAtBottom: false });
+            const before = h.container.scrollTop;
+            h.grow(300);
             h.component.OnMessageStreamed(detail());
-            expect(h.state.scrollContainer.nativeElement.scrollTop).toBe(0);
+            expect(h.container.scrollTop).toBe(before);
         });
     });
 
     describe('with ReadReplyFromTop', () => {
-        it('lands the turn at its top once, on the first delta, and re-arms the follow hold per delta', () => {
-            const h = buildHarness({ readReplyFromTop: true });
+        it('pins the turn as high as the content allows and raises it to its top as the reply grows', () => {
+            const h = buildHarness({ readReplyFromTop: true, turnTop: 900, scrollHeight: 1000 });
             h.component.OnMessageStreamed(detail());
-            const firstHold = h.state.bottomFollowSuppressedUntil;
+            expect(h.container.scrollTop).toBe(400); // clamped: only 100px of content below the turn's top
+            h.grow(300);
             h.component.OnMessageStreamed(detail({ Message: 'partial and more' }));
-            expect(h.scrollTurnToTop).toHaveBeenCalledTimes(1);
-            expect(h.scrollTurnToTop).toHaveBeenCalledWith('user-1', 0, true);
-            expect(h.state.streamLanding).toEqual({ turnId: 'user-1', landed: true });
+            expect(h.container.scrollTop).toBe(700);
+            h.grow(600);
+            h.component.OnMessageStreamed(detail({ Message: 'partial and much more' }));
+            expect(h.container.scrollTop).toBe(900); // the question sits at the top; the reply fills the pane below
+            expect(h.state.streamAnchor).toBe(900);
             expect(h.state.scrollToBottom).toBe(false);
-            expectArmedHold(firstHold);
-            expect(h.state.bottomFollowSuppressedUntil).toBeGreaterThanOrEqual(firstHold);
-            expect(h.state.scrollContainer.nativeElement.scrollTop).toBe(0); // never pinned to the bottom
+            expectArmedHold(h.state.bottomFollowSuppressedUntil);
         });
 
-        it('cancels a landing still queued or retrying before it lands the turn itself', () => {
+        it('cancels a landing still queued or retrying before it pins the turn itself', () => {
             vi.useFakeTimers();
             try {
                 const h = buildHarness({ readReplyFromTop: true });
@@ -218,21 +226,34 @@ describe('ConversationChatAreaComponent.OnMessageStreamed', () => {
 
         it('follows the bottom instead when no turn is being tracked (a reload mid-stream)', () => {
             const h = buildHarness({ readReplyFromTop: true, currentTurnStartMessageId: null });
+            h.grow(300);
             h.component.OnMessageStreamed(detail());
-            expect(h.scrollTurnToTop).not.toHaveBeenCalled();
-            expect(h.state.scrollContainer.nativeElement.scrollTop).toBe(900);
+            expect(h.container.scrollTop).toBe(h.container.scrollHeight);
+            expect(h.state.streamAnchor).toBeNull();
         });
 
         it('leaves a reader who had scrolled away alone, for every delta, and lets completion land as before', () => {
             const h = buildHarness({ readReplyFromTop: true, readerAtBottom: false });
+            const before = h.container.scrollTop;
             h.component.OnMessageStreamed(detail());
             h.state.readerAtBottom = true; // they came back to read along
+            h.grow(300);
             h.component.OnMessageStreamed(detail({ Message: 'partial and more' }));
-            expect(h.scrollTurnToTop).not.toHaveBeenCalled();
-            expect(h.state.streamLanding).toEqual({ turnId: 'user-1', landed: false });
+            expect(h.container.scrollTop).toBe(before);
+            expect(h.state.streamAnchor).toBe('declined');
             expect(h.state.bottomFollowSuppressedUntil).toBe(0);
             h.followTranscript('update', detail({ Status: 'Complete' }));
             expect(h.state.pendingTurnStartMessageId).toBe('user-1'); // the normal completion landing
+        });
+
+        it('releases the pin for the turn once the reader scrolls away mid-stream', () => {
+            const h = buildHarness({ readReplyFromTop: true });
+            h.component.OnMessageStreamed(detail());
+            h.container.scrollTop -= 150; // the reader scrolled up to re-read something
+            h.grow(300);
+            h.component.OnMessageStreamed(detail({ Message: 'partial and more' }));
+            expect(h.container.scrollTop).toBe(250);
+            expect(h.state.streamAnchor).toBe('declined');
         });
 
         it('lets completion skip the landing a stream already made, keeping the post-landing hold', () => {
@@ -250,21 +271,22 @@ describe('ConversationChatAreaComponent.OnMessageStreamed', () => {
             expect(h.state.pendingTurnStartMessageId).toBe('user-1');
         });
 
-        it('lands again for the next turn', () => {
+        it('starts a fresh pin for the next turn', () => {
             const h = buildHarness({ readReplyFromTop: true });
             h.component.OnMessageStreamed(detail());
             h.followTranscript('update', detail({ Status: 'Complete' }));
             h.followTranscript('new', detail({ ID: 'user-2', Role: 'User' }));
+            expect(h.state.streamAnchor).toBeNull();
+            h.state.readerAtBottom = true;
             h.component.OnMessageStreamed(detail({ ID: 'ai-2' }));
-            expect(h.scrollTurnToTop).toHaveBeenCalledTimes(2);
-            expect(h.scrollTurnToTop).toHaveBeenLastCalledWith('user-2', 0, true);
+            expect(typeof h.state.streamAnchor).toBe('number');
         });
 
-        it('forgets the landing with the rest of the turn tracking', () => {
+        it('forgets the pin with the rest of the turn tracking', () => {
             const h = buildHarness({ readReplyFromTop: true });
             h.component.OnMessageStreamed(detail());
             h.clearTurnTracking();
-            expect(h.state.streamLanding).toBeNull();
+            expect(h.state.streamAnchor).toBeNull();
             expect(h.state.bottomFollowSuppressedUntil).toBe(0);
             expect(h.state.pendingTurnStartMessageId).toBeNull();
             expect(h.state.turnStartRetryHandle).toBeNull();

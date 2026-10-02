@@ -56,6 +56,7 @@ import {
 } from '../../services/realtime-pairing';
 import { Subscription } from 'rxjs';
 import { UUIDsEqual, CleanAndParseJSON } from '@memberjunction/global';
+import { InjectFrameZone } from '../../util/frame-zone';
 
 /** Streamed-delta render cadence where no animation frame will come (hidden tab, no rAF). */
 const STREAMED_FRAME_FALLBACK_MS = 50;
@@ -1015,6 +1016,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
   // Track completion timestamps to prevent race conditions with late progress updates
   private completionTimestamps = new Map<string, number>();
+  private readonly ngZone = InjectFrameZone();
   // Track registered streaming callbacks for cleanup
   private registeredCallbacks = new Map<string, (progress: MessageProgressUpdate) => Promise<void>>();
   // After a post-ACK disconnect, keep observing ConversationDetail.Status until
@@ -1622,40 +1624,40 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    */
   /**
    * Emits {@link MessageStreamed} for a coalesced frame of streamed deltas, unless the message
-   * settled in the meantime: then the completion path has already reconciled the bubble with the
-   * saved message and a late frame has nothing to add. "Settled" is read three ways because a
-   * frame can sleep through completion in a hidden tab: the captured entity's status, the
-   * completion timestamp (kept for a few seconds), and the callback registration, which
-   * markMessageComplete drops and which therefore outlasts the timestamp. A host that has not
-   * adopted MessageStreamed, and so still binds only the old output, keeps receiving the update
-   * on {@link MessageSent} as before, at the coalesced cadence.
+   * settled in the meantime: then the completion path has already reconciled the bubble and a
+   * late frame has nothing to add. Settled is read off the captured entity's status and off the
+   * callback registration, which markMessageComplete drops: a frame can sleep through completion
+   * in a hidden tab, and the registration outlasts every other trace of it.
    */
   private emitStreamedUpdate(messageId: string, message: MJConversationDetailEntity): void {
-    const settled = message.Status !== 'In-Progress'
-      || this.completionTimestamps.has(messageId)
-      || !this.registeredCallbacks.has(messageId);
-    if (settled) {
+    if (message.Status !== 'In-Progress' || !this.registeredCallbacks.has(messageId)) {
       return;
     }
     if (this.MessageStreamed.observed) {
       this.MessageStreamed.emit(message);
     } else {
-      this.MessageSent.emit(message);
+      // TRANSITIONAL: a host that still binds only the old output keeps streaming on MessageSent at
+      // the coalesced cadence. Remove once direct hosts bind MessageStreamed. Re-enters the zone
+      // because MessageSent handlers replace template-bound state.
+      this.ngZone.run(() => this.MessageSent.emit(message));
     }
   }
 
   /**
-   * Runs `callback` on the next animation frame. A hidden tab never paints one, so there (and
-   * wherever requestAnimationFrame is unavailable) a short timer stands in; the browser throttles
-   * it in the background, which is the right cadence for a bubble nobody is looking at.
+   * Runs `callback` on the next animation frame, outside Angular: the in-place render checks its
+   * own child view, so a zone-triggered application tick per frame would be pure waste, and the
+   * paths that do touch template-bound state re-enter the zone themselves. A hidden tab never
+   * paints a frame, so there (and without requestAnimationFrame) a short timer stands in; the
+   * browser throttles it in the background, the right cadence for a bubble nobody is looking at.
    */
   private scheduleFrame(callback: () => void): void {
-    const framesArePainting = typeof requestAnimationFrame === 'function' && typeof document !== 'undefined' && !document.hidden;
-    if (framesArePainting) {
-      requestAnimationFrame(() => callback());
-    } else {
-      setTimeout(callback, STREAMED_FRAME_FALLBACK_MS);
-    }
+    this.ngZone.runOutsideAngular(() => {
+      if (typeof requestAnimationFrame === 'function' && !document.hidden) {
+        requestAnimationFrame(callback);
+      } else {
+        setTimeout(callback, STREAMED_FRAME_FALLBACK_MS);
+      }
+    });
   }
 
   private createMessageProgressCallback(messageId: string): (progress: MessageProgressUpdate) => Promise<void> {

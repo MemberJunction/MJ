@@ -6,25 +6,22 @@
  * message is never changed.
  *
  * Fences follow CommonMark: three or more backticks or tildes, indented at most three spaces
- * (four is an indented code block, not a fence). An opening fence may carry an info string; a
- * closing fence is the same character, at least as long as the opener, and nothing else on the
- * line. A `~~~` block is not closed by backticks, and a four-backtick block is not closed by
- * three — which is exactly how a reply that explains markdown is written.
+ * (four is an indented code block, not a fence). An opening fence may carry an info string, but
+ * a backtick fence's info string may not contain a backtick, so a prose line quoting ```js ...
+ * ``` inline opens nothing. A closing fence is the same character, at least as long as the
+ * opener, and nothing else on the line: a `~~~` block is not closed by backticks, and a
+ * four-backtick block is not closed by three, which is how a reply that explains markdown is
+ * written.
  */
 
-/** A line that opens a fenced block: the fence, then an optional info string. */
-const FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})/;
-/** A line that can close a fenced block: the fence alone, trailing whitespace allowed. */
-const FENCE_CLOSE = /^ {0,3}(`{3,}|~{3,})\s*$/;
+/** A fence line: up to three spaces, the fence, then whatever follows it. */
+const FENCE_LINE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 
 /**
  * Returns `text` with a closing fence appended when it ends inside an open fenced block.
  * Text with balanced fences, or none, comes back unchanged.
  */
 export function CloseOpenCodeFence(text: string): string {
-  if (!text) {
-    return text;
-  }
   const openFence = findOpenFence(text);
   return openFence === null ? text : `${text}\n${openFence}`;
 }
@@ -33,12 +30,16 @@ export function CloseOpenCodeFence(text: string): string {
 function findOpenFence(text: string): string | null {
   let open: string | null = null;
   for (const line of text.split('\n')) {
-    if (open === null) {
-      open = FENCE_OPEN.exec(line)?.[1] ?? null;
+    const match = FENCE_LINE.exec(line);
+    if (!match) {
       continue;
     }
-    const closer = FENCE_CLOSE.exec(line)?.[1];
-    if (closer && closer[0] === open[0] && closer.length >= open.length) {
+    const [, fence, rest] = match;
+    if (open === null) {
+      if (fence[0] === '~' || !rest.includes('`')) {
+        open = fence;
+      }
+    } else if (rest.trim() === '' && fence[0] === open[0] && fence.length >= open.length) {
       open = null;
     }
   }

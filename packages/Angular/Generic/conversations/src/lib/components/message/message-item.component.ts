@@ -157,6 +157,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
   @Input() public IsProcessing: boolean = false;
 
+  /**
+   * Set by the list while this in-progress bubble shows streamed reply text rather than a status
+   * line. Rendered as the `streaming` class, which the stylesheet uses to lift the status cap.
+   */
+  @Input() public IsStreaming: boolean = false;
   /** @deprecated Use {@link IsProcessing}. */
   @Input() public set isProcessing(value: boolean) {
     this.IsProcessing = value;
@@ -663,7 +668,9 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   // Memoization for mention parsing to prevent repeated parsing on change detection
   private _cachedDisplayMessage: string = '';
-  private _cachedMessageText: string = '';
+  /** The raw Message and the fence decision the cached display text was computed from. */
+  private _cachedRawText: string = '';
+  private _cachedFenceClosed: boolean = false;
 
   // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
   private mentionAutocomplete = MentionAutocompleteService.Instance;
@@ -1188,12 +1195,17 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * ngDoCheck to snapshot the value; templates read _stableDisplayMessage.
    */
   private computeDisplayMessage(): string {
-    let text = this.message.Message || '';
+    const raw = this.message.Message || '';
+    const closeFence = this.message.Status === 'In-Progress';
+
+    // ngDoCheck calls this every pass; an unchanged Message is the same string object, so this
+    // compare is a pointer check and nothing below runs until the text or the status changes.
+    if (raw === this._cachedRawText && closeFence === this._cachedFenceClosed && this._cachedDisplayMessage) {
+      return this._cachedDisplayMessage;
+    }
 
     // A reply still streaming in may end inside an open code fence; close it for display only.
-    if (text && this.message.Status === 'In-Progress') {
-      text = CloseOpenCodeFence(text);
-    }
+    let text = closeFence && raw ? CloseOpenCodeFence(raw) : raw;
 
     // For Sage, only show the delegation line (starts with emoji)
     if (this.IsConversationManager && text) {
@@ -1203,16 +1215,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       }
     }
 
-    // Use cached result if message text hasn't changed (avoids re-parsing mentions)
-    if (this._cachedMessageText === text && this._cachedDisplayMessage) {
-      return this._cachedDisplayMessage;
-    }
-
     // Transform @mentions to HTML pills
     const transformed = this.transformMentionsToHTML(text);
 
-    // Cache the result
-    this._cachedMessageText = text;
+    this._cachedRawText = raw;
+    this._cachedFenceClosed = closeFence;
     this._cachedDisplayMessage = transformed;
 
     return transformed;
@@ -1786,6 +1793,9 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       classes.push('ai-message');
       if (this.IsInProgressAIMessage) {
         classes.push('in-progress');
+        if (this.IsStreaming) {
+          classes.push('streaming');
+        }
       }
     } else if (this.IsUserMessage) {
       classes.push('user-message');
@@ -1873,7 +1883,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
         this.EditedText = '';
         this.originalText = '';
         // Invalidate display message cache since message changed
-        this._cachedMessageText = '';
+        this._cachedRawText = '';
         this._cachedDisplayMessage = '';
         this.MessageEdited.emit(this.message);
         this.cdRef.detectChanges();

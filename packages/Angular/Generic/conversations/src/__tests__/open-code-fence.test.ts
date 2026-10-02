@@ -57,6 +57,15 @@ describe('CloseOpenCodeFence', () => {
         expect(CloseOpenCodeFence(complete)).toBe(complete);
     });
 
+    it('does not open a backtick fence whose info string contains backticks (prose quoting ```js ... ```)', () => {
+        const text = 'Wrap it in ```js ... ``` to run it.\nmore prose';
+        expect(CloseOpenCodeFence(text)).toBe(text);
+    });
+
+    it('still opens a tilde fence whatever follows it on the line', () => {
+        expect(CloseOpenCodeFence('~~~ anything `here`\nbody')).toBe('~~~ anything `here`\nbody\n~~~');
+    });
+
     it('does not let a fence line with an info string close a block', () => {
         const text = '```\nnot closed by this:\n```ts';
         expect(CloseOpenCodeFence(text)).toBe(`${text}\n\`\`\``);
