@@ -2,7 +2,7 @@
   "fields": {
     "Name": "Generated code",
     "Status": "Active",
-    "Description": "The code does the transformation that was asked for Gate minimum 0.6. Pass threshold 0.7. Scale Meets / Partial / Miss."
+    "Description": "Judges generated code: it does the transformation that was asked for, inside the requested libraries and inputs."
   },
   "primaryKey": {
     "ID": "4EA0F004-8818-4846-9268-6A8519471D2C"
@@ -17,7 +17,8 @@
           "NotApplicablePolicy": "NotAllowed",
           "ScoreDisplayMin": 0,
           "ScoreDisplayMax": 1,
-          "ChangeSummary": "Initial publish."
+          "ChangeSummary": "Initial publish.",
+          "Instructions": "Score each criterion Meets, Partial, or Miss. Partial is below the gate, so a gate scored Partial fails the code. Not applicable is not allowed: every criterion applies to the reply. Use the guidance and the anchors."
         },
         "primaryKey": {
           "ID": "081A1865-795E-4113-A7D0-9C959EAED7EA"
@@ -35,7 +36,8 @@
                 "GateMinimumScore": 0.6,
                 "NotApplicablePolicy": "NotAllowed",
                 "Sequence": 0,
-                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "The transformation is the one the person asked for. Extra behavior does not make up for a missing part of that transformation."
               },
               "primaryKey": {
                 "ID": "DFE323A1-67AF-4DC0-B471-2C7DFB265F2A"
@@ -46,7 +48,7 @@
                     "fields": {
                       "CriterionID": "@parent:ID",
                       "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
-                      "Descriptor": "The code does the transformation that was asked for"
+                      "Descriptor": "The code does the transformation that was asked for."
                     },
                     "primaryKey": {
                       "ID": "252AAB3F-E2D8-42C3-8E58-7CD6183022D4"
@@ -55,8 +57,18 @@
                   {
                     "fields": {
                       "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "The code does part of the transformation and leaves part of it undone."
+                    },
+                    "primaryKey": {
+                      "ID": "047A00AD-C5C1-4DF4-A3C5-1A58FB292050"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
                       "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
-                      "Descriptor": "Does not meet: The code does the transformation that was asked for"
+                      "Descriptor": "The code does not do the transformation that was asked for."
                     },
                     "primaryKey": {
                       "ID": "2B129F18-262D-4025-9EE1-ABAF0B205B52"
@@ -75,7 +87,8 @@
                 "IsGate": false,
                 "NotApplicablePolicy": "NotAllowed",
                 "Sequence": 1,
-                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "Libraries and inputs are the ones the person named. A library or input that was not named is outside the request."
               },
               "primaryKey": {
                 "ID": "F4C61466-4218-43B9-A497-181465F9BD62"
@@ -86,7 +99,7 @@
                     "fields": {
                       "CriterionID": "@parent:ID",
                       "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
-                      "Descriptor": "Stays inside the requested libraries and inputs"
+                      "Descriptor": "The code uses only the requested libraries and inputs."
                     },
                     "primaryKey": {
                       "ID": "46B8AAFA-63D1-4E68-BC74-BD2096A84A4B"
@@ -95,8 +108,18 @@
                   {
                     "fields": {
                       "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "The code uses the requested libraries and inputs and also one that was not requested."
+                    },
+                    "primaryKey": {
+                      "ID": "9D633613-4448-4424-AE27-C5B5BF658816"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
                       "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
-                      "Descriptor": "Does not meet: Stays inside the requested libraries and inputs"
+                      "Descriptor": "The code depends on a library or input that was not requested."
                     },
                     "primaryKey": {
                       "ID": "6CC59BE0-4AC6-47BD-98CD-35827CB5485B"
@@ -109,13 +132,14 @@
               "fields": {
                 "RubricVersionID": "@parent:ID",
                 "Key": "reports-what-it-could-not-do",
-                "Name": "Says what it could not do instead of pretending it ran",
+                "Name": "Reports what the code did and what it did not do",
                 "NodeType": "Criterion",
                 "Weight": 1,
                 "IsGate": false,
                 "NotApplicablePolicy": "NotAllowed",
                 "Sequence": 2,
-                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "A run that finished says that it ran. A run that stopped says what it could not do. Pretending an unrun step ran is a miss."
               },
               "primaryKey": {
                 "ID": "BA3FD778-412C-4144-A7A8-93EE63A3E143"
@@ -126,7 +150,7 @@
                     "fields": {
                       "CriterionID": "@parent:ID",
                       "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
-                      "Descriptor": "Says what it could not do instead of pretending it ran"
+                      "Descriptor": "The reply reports what ran and what did not run."
                     },
                     "primaryKey": {
                       "ID": "E359B511-3453-4786-81FD-4E9F53ED9263"
@@ -135,8 +159,18 @@
                   {
                     "fields": {
                       "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "The reply reports some of what ran and is silent about a step that did not run."
+                    },
+                    "primaryKey": {
+                      "ID": "BA8F43C2-6417-441F-893F-2F19E94A7FC9"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
                       "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
-                      "Descriptor": "Does not meet: Says what it could not do instead of pretending it ran"
+                      "Descriptor": "The reply pretends the code ran when it did not."
                     },
                     "primaryKey": {
                       "ID": "0CC0EC68-D539-4753-981D-5B4475770D52"

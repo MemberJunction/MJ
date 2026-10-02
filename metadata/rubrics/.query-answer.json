@@ -2,7 +2,7 @@
   "fields": {
     "Name": "Query answer",
     "Status": "Active",
-    "Description": "The stated result matches the rows the run returned Gate minimum 0.6. Pass threshold 0.7. Scale Meets / Partial / Miss."
+    "Description": "Judges a query reply: the stated result matches the rows the run returned, in the person's terms."
   },
   "primaryKey": {
     "ID": "27A57EB1-C1DF-48BD-8F19-48C462FAC793"
@@ -17,7 +17,8 @@
           "NotApplicablePolicy": "NotAllowed",
           "ScoreDisplayMin": 0,
           "ScoreDisplayMax": 1,
-          "ChangeSummary": "Initial publish."
+          "ChangeSummary": "Initial publish.",
+          "Instructions": "Score each criterion Meets, Partial, or Miss. Partial is below the gate, so a gate scored Partial fails the answer. Not applicable is not allowed: every criterion applies to the reply. Use the guidance and the anchors."
         },
         "primaryKey": {
           "ID": "F4170574-7536-481B-87AA-7C9B4C2DD763"
@@ -35,7 +36,8 @@
                 "GateMinimumScore": 0.6,
                 "NotApplicablePolicy": "NotAllowed",
                 "Sequence": 0,
-                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "Compare the stated numbers, names, and counts with the rows the run returned. Do not score the SQL."
               },
               "primaryKey": {
                 "ID": "1190FF55-6661-4F51-ADE0-AC133C16E69C"
@@ -46,7 +48,7 @@
                     "fields": {
                       "CriterionID": "@parent:ID",
                       "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
-                      "Descriptor": "The stated result matches the rows the run returned"
+                      "Descriptor": "The stated result matches the rows the run returned."
                     },
                     "primaryKey": {
                       "ID": "EEDF48A4-C28C-42CE-A3FF-49A86C9259A7"
@@ -55,8 +57,18 @@
                   {
                     "fields": {
                       "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "The stated result matches some of the returned rows and contradicts others."
+                    },
+                    "primaryKey": {
+                      "ID": "0F9BFF18-9565-4BB9-8272-B0CB7DE93C86"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
                       "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
-                      "Descriptor": "Does not meet: The stated result matches the rows the run returned"
+                      "Descriptor": "The stated result does not match the rows the run returned."
                     },
                     "primaryKey": {
                       "ID": "3403C328-C042-4302-BB07-1BA86DF713CE"
@@ -75,7 +87,8 @@
                 "IsGate": false,
                 "NotApplicablePolicy": "NotAllowed",
                 "Sequence": 1,
-                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "The business question is the person's question, not the column names. The answer uses those terms."
               },
               "primaryKey": {
                 "ID": "B44A51F3-EDBE-4C44-A0D3-7C0141FA7724"
@@ -86,7 +99,7 @@
                     "fields": {
                       "CriterionID": "@parent:ID",
                       "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
-                      "Descriptor": "Answers the business question in the user's terms"
+                      "Descriptor": "The reply answers the business question in the person's terms."
                     },
                     "primaryKey": {
                       "ID": "50D74D2F-BE93-4346-AE18-6D813D66A1D5"
@@ -95,8 +108,18 @@
                   {
                     "fields": {
                       "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "The reply answers the question and also leans on column names the person did not use."
+                    },
+                    "primaryKey": {
+                      "ID": "6FAC1226-19D7-4670-8D1F-8F2B55EC68B6"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
                       "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
-                      "Descriptor": "Does not meet: Answers the business question in the user's terms"
+                      "Descriptor": "The reply does not answer the business question."
                     },
                     "primaryKey": {
                       "ID": "B15BEBB8-0623-472F-9EC8-8F588180D4F2"
@@ -109,13 +132,14 @@
               "fields": {
                 "RubricVersionID": "@parent:ID",
                 "Key": "no-columns-outside-the-result",
-                "Name": "Does not describe columns that are not in the result",
+                "Name": "Does not describe columns that are absent from the result",
                 "NodeType": "Criterion",
                 "Weight": 1,
                 "IsGate": false,
                 "NotApplicablePolicy": "NotAllowed",
                 "Sequence": 2,
-                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "Describe only columns present in the returned rows. Saying a column is absent is allowed. Inventing its values is not."
               },
               "primaryKey": {
                 "ID": "5B3076ED-695D-493E-9F3F-549C7D25DE19"
@@ -126,7 +150,7 @@
                     "fields": {
                       "CriterionID": "@parent:ID",
                       "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
-                      "Descriptor": "Does not describe columns that are not in the result"
+                      "Descriptor": "The reply describes only columns that are in the result."
                     },
                     "primaryKey": {
                       "ID": "12CF4C9A-3761-461C-B599-EC96C4AC5967"
@@ -135,8 +159,18 @@
                   {
                     "fields": {
                       "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "The reply describes the result and also assigns a value to a column that is not in it."
+                    },
+                    "primaryKey": {
+                      "ID": "79CCAFD8-E434-4795-8125-F6A2E8F87977"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
                       "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
-                      "Descriptor": "Does not meet: Does not describe columns that are not in the result"
+                      "Descriptor": "The reply describes columns that are not in the result."
                     },
                     "primaryKey": {
                       "ID": "0BB79780-B98F-46CE-881A-A4572C74C5D5"

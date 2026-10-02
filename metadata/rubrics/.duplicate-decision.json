@@ -2,7 +2,7 @@
   "fields": {
     "Name": "Duplicate decision",
     "Status": "Active",
-    "Description": "Says merge or keep Gate minimum 0.6. Pass threshold 0.7. Scale Meets / Partial / Miss."
+    "Description": "Judges a duplicate decision: it says merge or keep, names the agreeing and conflicting fields, and does not merge across a conflicting unique field."
   },
   "primaryKey": {
     "ID": "AB4DC17B-2A17-4868-B690-1221228030DD"
@@ -17,7 +17,8 @@
           "NotApplicablePolicy": "NotAllowed",
           "ScoreDisplayMin": 0,
           "ScoreDisplayMax": 1,
-          "ChangeSummary": "Initial publish."
+          "ChangeSummary": "Initial publish.",
+          "Instructions": "Score each criterion Meets, Partial, or Miss. Partial is below the gate, so a gate scored Partial fails the decision. Not applicable is not allowed: every criterion applies, including when no unique field conflicts. Use the guidance and the anchors."
         },
         "primaryKey": {
           "ID": "662C8F7A-2133-4167-A677-5B3F0B895995"
@@ -35,7 +36,8 @@
                 "GateMinimumScore": 0.6,
                 "NotApplicablePolicy": "NotAllowed",
                 "Sequence": 0,
-                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "The decision is merge or keep. A discussion that never chooses is not a decision."
               },
               "primaryKey": {
                 "ID": "A12049ED-1C19-4DB9-BB28-E05A2E27A7B6"
@@ -46,7 +48,7 @@
                     "fields": {
                       "CriterionID": "@parent:ID",
                       "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
-                      "Descriptor": "Says merge or keep"
+                      "Descriptor": "The reply says merge or says keep."
                     },
                     "primaryKey": {
                       "ID": "0E70AE7A-702C-46EE-8760-E6CC8FD51D2F"
@@ -55,8 +57,18 @@
                   {
                     "fields": {
                       "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "The reply leans toward merge or keep and does not say which."
+                    },
+                    "primaryKey": {
+                      "ID": "06CF8B9A-04D5-46B7-95E3-AD08C82D1115"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
                       "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
-                      "Descriptor": "Does not meet: Says merge or keep"
+                      "Descriptor": "The reply does not say merge or keep."
                     },
                     "primaryKey": {
                       "ID": "9D45E876-018D-41F6-B5BF-66A2043B38FA"
@@ -75,7 +87,8 @@
                 "IsGate": false,
                 "NotApplicablePolicy": "NotAllowed",
                 "Sequence": 1,
-                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "Name the fields that agree and the fields that conflict. If a side has no fields, say that side has none."
               },
               "primaryKey": {
                 "ID": "559BC0A9-BB34-4B89-953D-3338BD0D4CA7"
@@ -86,7 +99,7 @@
                     "fields": {
                       "CriterionID": "@parent:ID",
                       "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
-                      "Descriptor": "Names the fields that agree and the fields that conflict"
+                      "Descriptor": "The reply names the fields that agree and the fields that conflict."
                     },
                     "primaryKey": {
                       "ID": "D782EFDB-DB6D-4A5C-B72C-BB4F552DEAA7"
@@ -95,8 +108,18 @@
                   {
                     "fields": {
                       "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "The reply names one of those two sets and omits the other."
+                    },
+                    "primaryKey": {
+                      "ID": "BD3B5489-BA8B-4C9B-95CE-55CBA1DEE174"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
                       "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
-                      "Descriptor": "Does not meet: Names the fields that agree and the fields that conflict"
+                      "Descriptor": "The reply does not name the fields that agree or the fields that conflict."
                     },
                     "primaryKey": {
                       "ID": "644B4482-EF44-49B2-9EA4-B041EDC84C99"
@@ -109,13 +132,14 @@
               "fields": {
                 "RubricVersionID": "@parent:ID",
                 "Key": "refuses-merge-on-unique-conflict",
-                "Name": "Refuses a merge when a conflicting unique field is present",
+                "Name": "Does not merge across a conflicting unique field",
                 "NodeType": "Criterion",
                 "Weight": 1,
                 "IsGate": false,
                 "NotApplicablePolicy": "NotAllowed",
                 "Sequence": 2,
-                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "A conflicting unique field blocks a merge. When no unique field conflicts, the reply says so and does not invent one."
               },
               "primaryKey": {
                 "ID": "C104BFB3-A60E-474B-B1EE-70B098BEA8B5"
@@ -126,7 +150,7 @@
                     "fields": {
                       "CriterionID": "@parent:ID",
                       "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
-                      "Descriptor": "Refuses a merge when a conflicting unique field is present"
+                      "Descriptor": "A conflicting unique field blocks the merge, or the reply says no unique field conflicts."
                     },
                     "primaryKey": {
                       "ID": "61074930-49A5-4B0A-BA37-A34D94890FEB"
@@ -135,8 +159,18 @@
                   {
                     "fields": {
                       "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "The reply notices a unique-field conflict and still merges, or it is unclear whether one exists."
+                    },
+                    "primaryKey": {
+                      "ID": "9F930938-0CF6-4744-8C51-14CBB32FE366"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
                       "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
-                      "Descriptor": "Does not meet: Refuses a merge when a conflicting unique field is present"
+                      "Descriptor": "The reply merges across a conflicting unique field, or it is silent about unique fields."
                     },
                     "primaryKey": {
                       "ID": "60971E87-15B4-4BE8-9CD5-391E5DC83956"

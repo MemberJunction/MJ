@@ -335,6 +335,14 @@ function perCriterionConfidence(decision: LLMDecision, chosen: string | undefine
     return probability === undefined ? null : probability;
 }
 
+function notApplicableLine(version: RubricVersionSnapshot, node: RubricNodeSnapshot): string {
+    const policy = node.notApplicablePolicy ?? version.notApplicablePolicy ?? 'NotAllowed';
+    if (policy === 'ExcludeAndRedistribute') return 'Not applicable is allowed. Exclude this criterion and redistribute its weight.';
+    if (policy === 'CountAsZero') return 'Not applicable is allowed and counts as zero.';
+    if (policy === 'FailEvaluation') return 'Not applicable fails the evaluation.';
+    return 'Not applicable is not allowed. Choose a level.';
+}
+
 function renderCriterion(version: RubricVersionSnapshot, node: RubricNodeSnapshot): string {
     const scale = version.scales.find(item => item.id === node.scaleId);
     const anchors = new Map((node.anchors ?? []).map(anchor => [anchor.scaleLevelId ?? '', anchor.descriptor]));
@@ -342,7 +350,7 @@ function renderCriterion(version: RubricVersionSnapshot, node: RubricNodeSnapsho
     const numeric = scale?.scaleType === 'Numeric'
         ? `Numeric ${scale.minValue}..${scale.maxValue}, step ${scale.step ?? 'any'}, higher is better: ${scale.higherIsBetter}`
         : levels;
-    return `### ${node.name} (${node.key})\n\nGuidance: ${node.guidance ?? ''}\n\n${numeric}`;
+    return `### ${node.name} (${node.key})\n\nGuidance: ${node.guidance ?? ''}\n\nNot applicable: ${notApplicableLine(version, node)}\n\n${numeric}`;
 }
 
 function labelOf(mode: RubricPromptMode, decision: LLMDecision | undefined): string | undefined {

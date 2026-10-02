@@ -40,7 +40,13 @@ describe('shipped rubric metadata', () => {
                     expect(key.endsWith('-')).toBe(false);
                     expect(key).not.toBe('the-stated-result-matches-the-rows-the-run-retur');
                     expect(criterion.fields.Name.length).toBeGreaterThan(0);
+                    expect(criterion.fields.Name).not.toMatch(/when there is/i);
+                    expect(String(criterion.fields.Guidance ?? '').length).toBeGreaterThan(0);
+                    const levelIds = (criterion.relatedEntities['MJ: Rubric Criterion Levels'] as { fields: { ScaleLevelID: string } }[]).map(level => level.fields.ScaleLevelID);
+                    expect(levelIds).toContain('A9E1A258-D99F-47A4-87EF-646C160D0282');
                 }
+                expect(String(version.fields.Instructions ?? '').length).toBeGreaterThan(0);
+                expect(String(rubric.fields.Description)).not.toMatch(/Gate minimum/);
             }
         }
         const publications = JSON.parse(readFileSync(join(root, 'rubric-publications/.publish-shipped-versions.json'), 'utf8')) as { fields: Record<string, string>; primaryKey: { ID: string } }[];

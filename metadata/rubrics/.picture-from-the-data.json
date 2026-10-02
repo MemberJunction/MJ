@@ -2,7 +2,7 @@
   "fields": {
     "Name": "Picture from the data",
     "Status": "Active",
-    "Description": "The title matches the request Gate minimum 0.6. Pass threshold 0.7. Scale Meets / Partial / Miss."
+    "Description": "Judges a chart: the title matches the request, and every series is one the person supplied."
   },
   "primaryKey": {
     "ID": "2E3280F6-0C20-49DD-B1E5-6B250532CEC6"
@@ -17,7 +17,8 @@
           "NotApplicablePolicy": "NotAllowed",
           "ScoreDisplayMin": 0,
           "ScoreDisplayMax": 1,
-          "ChangeSummary": "Initial publish."
+          "ChangeSummary": "Initial publish.",
+          "Instructions": "Score each criterion Meets, Partial, or Miss. Partial is below the gate, so a gate scored Partial fails the chart. Not applicable is not allowed: every criterion applies to the chart. Use the guidance and the anchors."
         },
         "primaryKey": {
           "ID": "3FE999E0-1DF0-499E-9CC4-38F0581FA92F"
@@ -35,7 +36,8 @@
                 "GateMinimumScore": 0.6,
                 "NotApplicablePolicy": "NotAllowed",
                 "Sequence": 0,
-                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "The title is the chart title. It matches the request, not a nearby topic."
               },
               "primaryKey": {
                 "ID": "826516AE-A6BC-40A5-B35E-61EC92803749"
@@ -46,7 +48,7 @@
                     "fields": {
                       "CriterionID": "@parent:ID",
                       "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
-                      "Descriptor": "The title matches the request"
+                      "Descriptor": "The title matches the request."
                     },
                     "primaryKey": {
                       "ID": "198283CC-4108-4456-8BBC-FB87D7400F59"
@@ -55,8 +57,18 @@
                   {
                     "fields": {
                       "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "The title matches part of the request and leaves part of it out."
+                    },
+                    "primaryKey": {
+                      "ID": "1C9BE14E-42C9-4F1C-82D8-F7F62D631A3F"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
                       "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
-                      "Descriptor": "Does not meet: The title matches the request"
+                      "Descriptor": "The title does not match the request."
                     },
                     "primaryKey": {
                       "ID": "61F6A796-872B-421A-9BA8-62E8ED14E2BA"
@@ -75,7 +87,8 @@
                 "IsGate": false,
                 "NotApplicablePolicy": "NotAllowed",
                 "Sequence": 1,
-                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "A series counts only when the person supplied it. A derived series that was not supplied is not one of those series."
               },
               "primaryKey": {
                 "ID": "C6552A93-8D61-42C2-AA87-56B36C5C93A4"
@@ -86,7 +99,7 @@
                     "fields": {
                       "CriterionID": "@parent:ID",
                       "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
-                      "Descriptor": "Every series is one the person supplied"
+                      "Descriptor": "Every series is one the person supplied."
                     },
                     "primaryKey": {
                       "ID": "DD072AC6-4F21-4350-B343-61384E1B5D17"
@@ -95,8 +108,18 @@
                   {
                     "fields": {
                       "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "Some series were supplied and at least one was not."
+                    },
+                    "primaryKey": {
+                      "ID": "EA0EF656-A896-4131-98EA-2F9CD6209B18"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
                       "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
-                      "Descriptor": "Does not meet: Every series is one the person supplied"
+                      "Descriptor": "The chart uses series the person did not supply."
                     },
                     "primaryKey": {
                       "ID": "11156EC5-A74B-4D65-91D1-1CD05FBE4480"
@@ -115,7 +138,8 @@
                 "IsGate": false,
                 "NotApplicablePolicy": "NotAllowed",
                 "Sequence": 2,
-                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "Each series is named by a label or by the legend. An unlabeled series is unnamed."
               },
               "primaryKey": {
                 "ID": "F0BAB0C5-3289-46C2-A41C-734BF07FAC1A"
@@ -126,7 +150,7 @@
                     "fields": {
                       "CriterionID": "@parent:ID",
                       "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
-                      "Descriptor": "Labels or a legend name those series"
+                      "Descriptor": "Labels or a legend name every series."
                     },
                     "primaryKey": {
                       "ID": "C42F4175-CD51-406A-87E6-89BCF398DD9D"
@@ -135,8 +159,18 @@
                   {
                     "fields": {
                       "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "Labels or a legend name some series and leave at least one unnamed."
+                    },
+                    "primaryKey": {
+                      "ID": "D0FE69BC-DD27-43C2-892B-B025553E9037"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
                       "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
-                      "Descriptor": "Does not meet: Labels or a legend name those series"
+                      "Descriptor": "The series are not named by labels or a legend."
                     },
                     "primaryKey": {
                       "ID": "09F14A24-F1DB-42EB-8FA8-015AB59DEEA6"

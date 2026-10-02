@@ -2,7 +2,7 @@
   "fields": {
     "Name": "Research answer",
     "Status": "Active",
-    "Description": "Answers the question that was asked Gate minimum 0.6. Pass threshold 0.7. Scale Meets / Partial / Miss."
+    "Description": "Judges a research reply: it answers the question that was asked and stays inside the sources the run retrieved."
   },
   "primaryKey": {
     "ID": "3EAEAEC4-E878-411E-8BE5-7C39A74FCD7C"
@@ -17,7 +17,8 @@
           "NotApplicablePolicy": "NotAllowed",
           "ScoreDisplayMin": 0,
           "ScoreDisplayMax": 1,
-          "ChangeSummary": "Initial publish."
+          "ChangeSummary": "Initial publish.",
+          "Instructions": "Score each criterion Meets, Partial, or Miss. Partial is below the gate, so a gate scored Partial fails the answer. Not applicable is not allowed: every criterion applies to the reply. Use the guidance and the anchors."
         },
         "primaryKey": {
           "ID": "30E4C0E3-1824-4DA5-ABFF-C9C8320762E4"
@@ -35,7 +36,8 @@
                 "GateMinimumScore": 0.6,
                 "NotApplicablePolicy": "NotAllowed",
                 "Sequence": 0,
-                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "The question is the one the person asked. A nearby topic is not an answer."
               },
               "primaryKey": {
                 "ID": "14763546-CDAF-46CF-9B00-6D5BC3454001"
@@ -46,7 +48,7 @@
                     "fields": {
                       "CriterionID": "@parent:ID",
                       "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
-                      "Descriptor": "Answers the question that was asked"
+                      "Descriptor": "The reply answers the question that was asked."
                     },
                     "primaryKey": {
                       "ID": "1BB7FB27-EA3B-4A5A-A1E2-0762E25BB0DB"
@@ -55,8 +57,18 @@
                   {
                     "fields": {
                       "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "The reply answers part of the question and leaves a part of it out."
+                    },
+                    "primaryKey": {
+                      "ID": "D98D7841-03EB-42DC-A371-2DD6479074FD"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
                       "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
-                      "Descriptor": "Does not meet: Answers the question that was asked"
+                      "Descriptor": "The reply does not answer the question that was asked."
                     },
                     "primaryKey": {
                       "ID": "F8F7A187-CD10-46FF-8222-F3CF44F074CF"
@@ -75,7 +87,8 @@
                 "IsGate": false,
                 "NotApplicablePolicy": "NotAllowed",
                 "Sequence": 1,
-                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "A citation counts only when that source is in the run. Outside knowledge with no retrieved source is not a citation."
               },
               "primaryKey": {
                 "ID": "C2D43C7F-F331-48F0-B233-402417839406"
@@ -86,7 +99,7 @@
                     "fields": {
                       "CriterionID": "@parent:ID",
                       "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
-                      "Descriptor": "Cites only sources the run retrieved"
+                      "Descriptor": "Every citation is a source the run retrieved."
                     },
                     "primaryKey": {
                       "ID": "2670CD35-CA68-4BED-9196-0ACB72233886"
@@ -95,8 +108,18 @@
                   {
                     "fields": {
                       "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "Some citations are retrieved sources and some are not."
+                    },
+                    "primaryKey": {
+                      "ID": "49BA479C-43D1-4C06-8B2A-F48811B36B59"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
                       "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
-                      "Descriptor": "Does not meet: Cites only sources the run retrieved"
+                      "Descriptor": "The reply cites sources the run did not retrieve."
                     },
                     "primaryKey": {
                       "ID": "4B1B1B8D-C088-44E9-B29C-3D25AE813374"
@@ -115,7 +138,8 @@
                 "IsGate": false,
                 "NotApplicablePolicy": "NotAllowed",
                 "Sequence": 2,
-                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "A retrieved fact is quoted or attributed to a source. An inference is labeled as the reply's own conclusion."
               },
               "primaryKey": {
                 "ID": "237EE595-8401-4C9B-923F-353038E977EB"
@@ -126,7 +150,7 @@
                     "fields": {
                       "CriterionID": "@parent:ID",
                       "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
-                      "Descriptor": "Separates a retrieved fact from an inference"
+                      "Descriptor": "Retrieved facts and inferences are distinguished."
                     },
                     "primaryKey": {
                       "ID": "7E972F54-C5C0-4EC8-9EEF-701BF28487F3"
@@ -135,8 +159,18 @@
                   {
                     "fields": {
                       "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "Some inferences are labeled and some are presented as retrieved facts."
+                    },
+                    "primaryKey": {
+                      "ID": "8D8A9C5C-EA06-4873-95E4-54C0E2B764F0"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
                       "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
-                      "Descriptor": "Does not meet: Separates a retrieved fact from an inference"
+                      "Descriptor": "Inferences are presented as retrieved facts."
                     },
                     "primaryKey": {
                       "ID": "96CBF1EC-A3F2-45A7-8243-0AA4E3F14EDD"
@@ -155,7 +189,8 @@
                 "IsGate": false,
                 "NotApplicablePolicy": "NotAllowed",
                 "Sequence": 3,
-                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss"
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "Claims about the subject come from the retrieved sources. A labeled inference may go beyond a source only when it is marked as an inference."
               },
               "primaryKey": {
                 "ID": "F544714C-6296-43E4-8465-5AEAE784D4B9"
@@ -166,7 +201,7 @@
                     "fields": {
                       "CriterionID": "@parent:ID",
                       "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
-                      "Descriptor": "Stays inside those sources"
+                      "Descriptor": "The reply stays inside the retrieved sources, apart from labeled inferences."
                     },
                     "primaryKey": {
                       "ID": "5FD23E62-1317-4F6C-B1F8-44414D3FECF4"
@@ -175,8 +210,18 @@
                   {
                     "fields": {
                       "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "Most claims stay inside the sources, and at least one unmarked claim does not."
+                    },
+                    "primaryKey": {
+                      "ID": "7A5063F4-4606-4865-B3FB-44BF1F05F2A7"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
                       "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
-                      "Descriptor": "Does not meet: Stays inside those sources"
+                      "Descriptor": "The reply makes unmarked claims that are not in the retrieved sources."
                     },
                     "primaryKey": {
                       "ID": "D394D13F-942F-48C4-BD9B-143A63FD5541"
