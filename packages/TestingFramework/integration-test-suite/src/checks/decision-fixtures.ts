@@ -178,15 +178,21 @@ function highestDecisionPriority(driverClass: string): number {
 
 /**
  * Registers `standIn` over `driverClass` above whatever is registered there, and returns a restore that
- * puts the previous class (or `shipped`, when there was none) back on top. A stand-in is a subclass of
- * the shipped driver that overrides only `SendRequest`, so everything but the network stays real.
+ * puts the previous class (or `shipped`, when there was none) back on top. A stand-in is usually a
+ * subclass of the shipped driver that overrides only `SendRequest`, so everything but the network stays
+ * real. `shipped` may be left out only when something is registered already; with neither, there would
+ * be nothing to restore, and the stand-in would outlive the check.
  */
-export function RegisterDecisionStandIn(driverClass: string, standIn: DecisionDriverClass, shipped: DecisionDriverClass): () => void {
+export function RegisterDecisionStandIn(driverClass: string, standIn: DecisionDriverClass, shipped?: DecisionDriverClass): () => void {
     const factory = MJGlobal.Instance.ClassFactory;
     const previous = factory.GetRegistration(BaseDecision, driverClass);
+    const restoreTo = previous ? previous.SubClass : shipped;
+    if (!restoreTo) {
+        throw new Error(`Nothing is registered for '${driverClass}' and no shipped class was given, so a stand-in could not be undone`);
+    }
     factory.Register(BaseDecision, standIn, driverClass, highestDecisionPriority(driverClass) + 1);
     return () => {
-        factory.Register(BaseDecision, previous ? previous.SubClass : shipped, driverClass, highestDecisionPriority(driverClass) + 1);
+        factory.Register(BaseDecision, restoreTo, driverClass, highestDecisionPriority(driverClass) + 1);
     };
 }
 

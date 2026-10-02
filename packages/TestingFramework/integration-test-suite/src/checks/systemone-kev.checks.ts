@@ -20,7 +20,9 @@
  *        One credential its candidates are Jev, then LLM Decision, then the fallbacks, every new model
  *        among the fallbacks, and the runner selects the first of Jev and LLM Decision it has a
  *        credential for; with a System One credential bound to Kev-27B's row, Kev-27B is a credentialed
- *        candidate that still comes after both, and the selection does not change.
+ *        candidate that still comes after both, and the selection does not change; and with every
+ *        driver but System One's unavailable, the run fails over from model to model (the prompt's
+ *        `SameModelDifferentVendor` strategy does not hold it to one model) and Kev-27B answers.
  *   KV5  the credential fix, end to end: a real `API Key with Endpoint` credential, created through
  *        `CredentialEngine` and stored encrypted, bound to Kev-9B's System One row, sends its token, not
  *        its JSON, as the bearer to its endpoint, and the answers map.
@@ -62,6 +64,7 @@ import { RunView } from '@memberjunction/core';
 import { EscapeSQLString, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import {
     BaseDecision,
+    DecisionResult,
     IsSystemOneWireObject,
     type ChoiceAnswer,
     type DecisionQuestion,
@@ -694,6 +697,73 @@ async function assertSelectionWithBoundKev(
     assertConsidered(result, bound, label);
 }
 
+/** The drivers KV4's failover leg makes unavailable: every decision driver but System One's. */
+const UNAVAILABLE_DRIVER_CLASSES: readonly string[] = ['OpenRouterDecision', 'LLMDecision', 'CloudflareDecision'];
+
+/** A decision driver that fails every call with an error that allows failover, as a 503 does. */
+class UnavailableDecision extends BaseDecision {
+    constructor(apiKey?: string) {
+        super(apiKey || 'it-unavailable-decision');
+    }
+
+    protected async DoDecide(): Promise<DecisionResult> {
+        const now = new Date();
+        const failed = new DecisionResult(false, now, now);
+        failed.errorMessage = 'The integration-test decision stand-in is unavailable';
+        failed.errorInfo = { errorType: 'ServiceUnavailable', severity: 'Retriable', canFailover: true };
+        return failed;
+    }
+}
+
+/**
+ * KV4 failover: with Jev, LLM Decision and Clef unavailable, `Default Decision` fails over from model to
+ * model, past every credentialed candidate ahead of the bound Kev-27B, and Kev-27B answers. Its
+ * `FailoverStrategy` is the column default, `SameModelDifferentVendor`, and `AIDecisionRunner` treats
+ * every strategy but `None` as the full priority list: the strategy does not keep it on one model.
+ */
+async function assertFailoverReachesBoundKev(
+    ctx: IntegrationCheckContext,
+    probe: DecisionRunnerProbe,
+    fixtures: DecisionFixtures,
+    prompt: MJAIPromptEntityExtended,
+    params: AIDecisionParams,
+    decider: ScriptedDecision,
+): Promise<void> {
+    const label = 'KV4 failover';
+    AssertEqual(prompt.FailoverStrategy, 'SameModelDifferentVendor', `${label}: Default Decision's FailoverStrategy`);
+    const candidates = probe.Candidates(prompt, params);
+    const kev = candidates.findIndex(c => c.model.Name === 'Kev-27B' && c.vendorName === VENDOR_NAME);
+    Assert(kev > 1, `${label}: Kev-27B on System One Endpoint is at ${kev}, not behind Jev and LLM Decision`);
+    const credentialedAhead = candidates.slice(0, kev).filter(c => probe.HasCredentials(c, prompt, params));
+    const unexpected = credentialedAhead.filter(c => !UNAVAILABLE_DRIVER_CLASSES.includes(c.driverClass));
+    AssertEqual(unexpected.map(describeCandidate).join(', '), '', `${label}: credentialed candidates ahead of Kev-27B that this leg cannot make unavailable`);
+
+    const restores = UNAVAILABLE_DRIVER_CLASSES.map(name => RegisterDecisionStandIn(name, UnavailableDecision));
+    const callsBefore = decider.Calls.length;
+    const attemptsBefore = probe.Attempts.length;
+    try {
+        const result = await runDecision(probe, decisionParams(ctx, prompt), id => fixtures.TrackPromptRun(id));
+        assertAnsweredBy(result, 'Kev-27B', VENDOR_NAME, DRIVER_CLASS, label);
+    } finally {
+        for (const restore of restores.reverse()) {
+            restore();
+        }
+    }
+    AssertEqual(decider.Calls.length - callsBefore, 1, `${label}: calls Kev-27B's scripted driver answered`);
+    const attempts = probe.Attempts.slice(attemptsBefore);
+    AssertEqual(
+        JSON.stringify(attempts.map(a => `${modelNameOf(a.Attempt.modelId)}:${a.Attempt.errorType}:${a.WillRetry ? 'retry' : 'stop'}`)),
+        JSON.stringify(credentialedAhead.map(c => `${c.model.Name}:ServiceUnavailable:retry`)),
+        `${label}: the failed attempts before Kev-27B`,
+    );
+    Assert(attempts.some(a => modelNameOf(a.Attempt.modelId) === 'LLM Decision'), `${label}: LLM Decision was not tried before Kev-27B`);
+}
+
+/** A model's name by ID, for comparisons and messages. */
+function modelNameOf(modelId: string): string {
+    return AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, modelId))?.Name ?? `unknown model ${modelId}`;
+}
+
 async function checkDefaultDecisionSelection(ctx: IntegrationCheckContext): Promise<void> {
     await AIEngine.Instance.Config(false, ctx.User);
     const prompt = RequireDefaultDecisionPrompt();
@@ -706,6 +776,7 @@ async function checkDefaultDecisionSelection(ctx: IntegrationCheckContext): Prom
     try {
         const pristine = await assertSelectionWithoutCredentials(ctx, probe, fixtures, prompt, params);
         await assertSelectionWithBoundKev(ctx, probe, fixtures, prompt, params, pristine);
+        await assertFailoverReachesBoundKev(ctx, probe, fixtures, prompt, params, decider);
     } finally {
         decider.Disarm();
         restore();
@@ -1021,7 +1092,7 @@ export const SystemOneKevChecks: NamedCheck[] = [
     },
     {
         Id: 'systemone-kev.KV4',
-        Name: "KV4: Default Decision's candidates and selection are unchanged by Clef and Kev: Jev, then LLM Decision, then the fallbacks; a bound Kev row stays behind both and is not selected",
+        Name: "KV4: Default Decision's candidates and selection are unchanged by Clef and Kev: Jev, then LLM Decision, then the fallbacks; a bound Kev row stays behind both and is not selected, and is reached only by failing over from both",
         Fn: checkDefaultDecisionSelection,
     },
     {
