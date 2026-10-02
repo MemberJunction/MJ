@@ -222,7 +222,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (432 classes)
+// @memberjunction/core-entities (433 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -446,6 +446,7 @@ import {
     MJEntityFieldEntityExtended,
     MJEntityFieldPermissionEntity,
     MJEntityFieldValueEntity,
+    MJEntityFormContributionEntity,
     MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
@@ -1313,7 +1314,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (56 classes)
+// @memberjunction/core-entities-server (58 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1342,6 +1343,8 @@ import {
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
+    MJEntityFormContributionEntityServer,
+    MJEntityFormOverrideEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
@@ -1421,10 +1424,11 @@ import {
     WebSearchQueryServerOperation,
 } from '@memberjunction/web-search-engine';
 
-// @memberjunction/core-actions (151 classes)
+// @memberjunction/core-actions (156 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
+    ActivateFormContributionVersionAction,
     ActivateInteractiveFormVersionAction,
     AddDocumentContentAction,
     AddRecordsToListAction,
@@ -1447,6 +1451,7 @@ import {
     CreateDirectoryAction,
     CreateDocumentAction,
     CreateEmployeeAction,
+    CreateFormContributionAction,
     CreateInteractiveFormAction,
     CreateListAction,
     CreateMermaidDiagramAction,
@@ -1491,6 +1496,8 @@ import {
     GetEntityListAction,
     GetEntitySchemaForFormAction,
     GetFileContentAction,
+    GetFormCompositionForEntityAction,
+    GetFormContributionsForEntityAction,
     GetListRecordsAction,
     GetMetadataAction,
     GetObjectAction,
@@ -1517,6 +1524,7 @@ import {
     MCPToolAction,
     MaterializeListFromViewAction,
     ModifyDocumentSectionAction,
+    ModifyFormContributionAction,
     ModifyInteractiveFormAction,
     MoveListMembersAction,
     MoveObjectAction,
@@ -1886,6 +1894,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJEntityFieldEntityExtended,
     MJEntityFieldPermissionEntity,
     MJEntityFieldValueEntity,
+    MJEntityFormContributionEntity,
     MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
@@ -2000,11 +2009,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRemoteOperationCategoryEntity,
     MJRemoteOperationEntity,
     MJResourceLinkEntity,
-    MJResourcePermissionEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJResourcePermissionEntity,
     MJResourcePermissionEntityExtended,
     MJResourceTypeEntity,
     MJRoleEntity,
@@ -2204,11 +2213,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetBundlesAction,
     GetCertificatesAction,
     GetCourseAnalyticsAction,
-    GetLearnWorldsBulkDataAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetLearnWorldsBulkDataAction,
     GetLearnWorldsCourseDetailsAction,
     GetLearnWorldsCoursesAction,
     GetLearnWorldsUserDetailsAction,
@@ -2408,11 +2417,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     CodexAdapter,
     GeminiCliAdapter,
     HarnessAgentBase,
-    HarnessAgentType,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    HarnessAgentType,
     OpenCodeAdapter,
     PiAdapter,
     StdioJsonAdapter,
@@ -2510,6 +2519,8 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
+    MJEntityFormContributionEntityServer,
+    MJEntityFormOverrideEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
@@ -2565,6 +2576,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     WebSearchQueryServerOperation,
     APIRateLimiterAction,
     ActionSmithAgent,
+    ActivateFormContributionVersionAction,
     ActivateInteractiveFormVersionAction,
     AddDocumentContentAction,
     AddRecordsToListAction,
@@ -2587,6 +2599,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     CreateDirectoryAction,
     CreateDocumentAction,
     CreateEmployeeAction,
+    CreateFormContributionAction,
     CreateInteractiveFormAction,
     CreateListAction,
     CreateMermaidDiagramAction,
@@ -2608,15 +2621,15 @@ const CLASS_REGISTRATIONS_4: any[] = [
     DirectoryExistsAction,
     DownloadSignedDocumentAction,
     ExcelReaderAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     ExecuteAIPromptAction,
     ExecuteAgentAction,
     ExecuteCodeAction,
     ExecuteMCPToolAction,
     ExploreDatabaseSchemaAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     ExternalChangeDetectionAction,
     FileCompressAction,
     FinalizeDocumentAction,
@@ -2635,6 +2648,8 @@ const CLASS_REGISTRATIONS_5: any[] = [
     GetEntityListAction,
     GetEntitySchemaForFormAction,
     GetFileContentAction,
+    GetFormCompositionForEntityAction,
+    GetFormContributionsForEntityAction,
     GetListRecordsAction,
     GetMetadataAction,
     GetObjectAction,
@@ -2661,6 +2676,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     MCPToolAction,
     MaterializeListFromViewAction,
     ModifyDocumentSectionAction,
+    ModifyFormContributionAction,
     ModifyInteractiveFormAction,
     MoveListMembersAction,
     MoveObjectAction,
@@ -2738,7 +2754,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1105;
+export const CLASS_REGISTRATIONS_COUNT = 1113;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

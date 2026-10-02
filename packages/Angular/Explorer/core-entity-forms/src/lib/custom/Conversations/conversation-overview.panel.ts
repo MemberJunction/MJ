@@ -13,9 +13,9 @@ interface ConversationDetailRow {
 }
 
 @RegisterClassEx(BaseFormPanel, {
-    key: 'form-panel:Conversations:overview',
+    key: 'form-panel:MJ: Conversations:overview',
     metadata: {
-        entity: 'Conversations',
+        entity: 'MJ: Conversations',
         slot: 'before-fields',
         sortKey: 10,
     },

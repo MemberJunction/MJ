@@ -333,6 +333,234 @@ Worked examples (Orders hero, Person tickets, Sales fill-in, competing headers):
 
 Related section keys use the same camelCase as CodeGen (`FormSectionCamelCase` / `RelatedEntitySectionKey`) so hide-baked and skip-baked hit the right panel.
 
+## Metadata contributions (React form panels)
+
+`BaseFormPanel` is the compiled path. The same slots also accept **rows**: a
+`MJ: Entity Form Contributions` row pointing at a `Type='Widget'` Component whose spec declares
+`componentRole: 'form-panel'`. No Angular, no build, no deployment.
+
+A row carries the same registration bag this document describes for the compiled metadata object —
+`Slot`, `SortKey`, `ContributionKey`, `RelatedEntityID` + `RelatedJoinField`, `ReplacesSectionKey`,
+`ReplacesSectionKeys`, `ReplacesFieldNames`, `InSectionKey` + `SectionPosition`, `Inclusion`,
+`ChromeGroup`, `Presentation` — plus `Title`, `Icon`, `Precedence`, a free-form `Configuration` JSON
+blob handed to the component, and scope (`User` / `Role` / `Global`) with status (`Active` /
+`Pending` / `Inactive`).
+
+### What a contribution can stand in for
+
+Five kinds of claim, largest first. A contribution makes at most one of them — the database
+enforces that, because replacing a section and one field inside it describes two different panels.
+
+| Claim | Field on the row | What goes | Where the panel draws |
+|---|---|---|---|
+| A whole rail tab | `ReplacesSectionKey` = a rail key | every panel filed under that tab | as that tab |
+| One field section | `ReplacesSectionKey` = a section key | that section's card | where the card was |
+| Several field sections | `ReplacesSectionKeys` | those sections' cards | where the first of them was |
+| Fields in one section | `ReplacesFieldNames` | those inputs | at the top or bottom of that section |
+| A related grid | `RelatedEntityID` (+ `RelatedJoinField`) | the stock grid | as that grid's section |
+
+A contribution can also be **placed inside a section without replacing anything**: `InSectionKey`
+names the section and `SectionPosition` (`start` or `end`) says where in it. That counts as its
+claim, so it cannot be combined with the five above.
+
+`ReplacesSectionKeys` and `ReplacesFieldNames` are JSON arrays, the same shape as
+`FormChromeRule.JoinFields`. Every section in a `ReplacesSectionKeys` list must be in one tab, and
+every field in a `ReplacesFieldNames` list must belong to **one** section — the panel has one place
+to draw. One section is always stored in `ReplacesSectionKey`, never as a one-item list.
+
+A panel drawn inside a section — a field claim, or one placed with `InSectionKey` — is not the
+`Slot` on the row's to position: the section decides. `<mj-collapsible-panel>` hosts two
+`<mj-form-field-panel-slot>`s, one above its fields and one below, and each mounts the panels
+whose `SectionPosition` matches it (a field claim with no position draws at the start). Claimed
+fields stop rendering through `FormContext.claimedFieldNames`.
+
+**You do not need to do anything to support this.** `CollectFormContributionRegistrations` merges
+rows and class registrations into one list, and the form collapses that list once per resolve
+(`ResolveFormContributionWinners`): one winner per `contributionKey`, which every slot host, the
+composer and the rail then read. The higher rank wins — a compiled panel's ClassFactory `Priority`,
+a row's `Precedence`. On a tie a compiled registration beats any row, and between two rows the
+narrower audience wins: `User`, then `Role`, then `Global` (`FormContributionOutranks` in
+`@memberjunction/core-entities`). Wildcard (`'*'`) registrations take part on every form, but a
+wildcard's place claim is ignored: one that claims a grid, a section or a tab replaces nothing, and
+one that names a section to draw in (`inSectionKey`) draws at its slot. A wildcard field claim
+(`replacesFieldNames`) still acts on every form that draws the field.
+
+`ResolveFormContributionWinners` remembers its answer per input array and entity name. The collector
+returns the same array until something changes, so the form resolves once. A caller that builds its
+own list must pass a new array after any change, and must not change the result it gets back.
+
+What a panel author should know:
+
+- **A compiled panel can make the same claims.** `replacesFieldNames` sits on the registration
+  metadata beside `replacesSectionKey`, and the slot host passes the whole bag to the panel as
+  `RegistrationMetadata`, which is what `BaseFormPanel.DisplayOrder` reads. Pass that getter as
+  `[Order]` on your own `mj-collapsible-panel` or the form draws your panel last whatever slot it
+  asked for.
+- **Your panel can be replaced by a row**, but only deliberately — the apply flow asks the user
+  before writing a row whose precedence exceeds an installed contribution's.
+- **`presentation: 'bare'`** is how both sources declare a hero: a strip that draws no collapsible
+  chrome and never becomes a rail item. Set it in your metadata bag rather than relying on the slot.
+- **A row's panel is React**, hosted by `InteractiveFormPanelComponent`. It receives
+  `FormPanelHostProps` — the record snapshot, entity metadata, permissions, and the contribution's
+  own key / slot / title / configuration — and reports validation back through the same
+  `BaseFormPanel.Validate()` contract your panel implements. A panel can change only the fields it
+  claims in `replacesFieldNames`, and only while the form is in edit mode.
+- **`Validate()` runs on Save.** `BaseFormComponent.Save()` awaits every mounted panel's
+  `Validate()` (through `ValidateAsync()`) and refuses the save when one fails. `Validate()` may
+  return a `ValidationResult` or a Promise of one. Synchronous callers read
+  `LastKnownValidation()`, so a panel that validates asynchronously should override it to return
+  its last result.
+
+A generated panel may propose its placement in `formContribution` (slot, a section key, field names,
+a related entity, or a section to sit inside). The apply dialog starts from every claim the open
+form can honour and from its default for the rest; the user confirms placement. A field claim writes
+the chosen field names into `configuration.fields`; `fields` is reserved for that use on a field panel.
+
+Rows are authored by an OpenApp under `metadata/entity-form-contributions/`, or by an agent through
+the `Create` / `Modify` / `Activate Form Contribution Version` actions. The actions change only the
+caller's own `User` rows; a `Role` or `Global` row returns `FORBIDDEN`. See
+[Forms Architecture §7c Scenario I](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md) for the full
+picture.
+
+**Turning rows off.** A kill switch turns every row off and leaves compiled panels as they are. It
+has two settings:
+
+- **Explorer:** set the instance configuration `Forms.MetadataContributions.Enabled` to `false`. The
+  shell applies it after `InstanceConfigEngine.Config()` has finished and before any form opens, and
+  no form draws a row. Another browser host calls
+  `InteractiveFormsEngine.ApplyInstanceConfiguration(InstanceConfigEngine.Instance)` at the same
+  point. In the browser it can only turn rows off, and when Instance Config fails to load, rows stay
+  on.
+- **Node hosts** (MJAPI, actions, the CLI): set `MJ_FORMS_METADATA_CONTRIBUTIONS=false`. The engine on
+  that process then loads no row.
+
+`Get Form Contributions For Entity` and `Get Form Composition For Entity` list no row when either
+setting is off, and say so with `MetadataContributionsEnabled: false`. They read the instance
+configuration on every call. The write actions still write rows while the switch is off. The
+environment variable does not reach the browser, so with only the Node setting off, Explorer still
+draws rows that those two actions leave out.
+
+## Who sees a panel
+
+A contribution row, and a full custom form (`MJ: Entity Form Overrides`), is for one of three
+audiences: one user (`Scope='User'`), one role (`Role`), or everyone (`Global`). Compiled panels
+have no row, so they are for everyone who has the package installed.
+
+| Who | What they can do |
+|---|---|
+| Any user | Add and change their own panels through the actions, turn them on or off, and save them as drafts. Remove their own personal items. Hide anything shared with them, for themselves only. |
+| Holder of `Manage Form Defaults` | Also publish an item to a role or to everyone, change a shared item's audience, and remove it. |
+| Nobody | Write another user's personal item. |
+
+The rule lives in `MJEntityFormContributionEntityServer` and `MJEntityFormOverrideEntityServer`
+(`@memberjunction/core-entities-server`), so it holds for every write path: the drawer, Form
+Builder, agent actions, `mj sync` and a direct `BaseEntity.Save()`. `UserCanManageFormDefaults`
+(`@memberjunction/core-entities`) is the same check, for a UI that wants to hide what the server
+would refuse. The grant goes to `Developer` and `Integration` by default. An `Owner` user counts as a holder.
+
+**Publishing moves the row, it does not copy it.** The item that was live for that audience under
+the same `contributionKey` is set `Inactive` in the same transaction, so the audience never sees
+two. Turning a panel on in the drawer retires that live sibling the same way, and sets the panel's
+component status to match the row. Keys are compared ignoring case, as the database's unique index
+does. A row with no key has no sibling, so two keyless rows can both be live. Publishing a draft, a panel that is off or a set-aside form turns
+it on, and the chooser says so first. A full form has no key, so the form that was live for that
+audience is set aside instead. A set-aside (`Inactive`) shared form is retracted: nobody is offered
+it and it does not render. A set-aside personal form stays in its owner's form picker.
+
+**Component rights.** A panel's component is an `MJ: Components` row. The stock `UI` role can create
+and update that entity, but not delete from it. A form or panel draws the component its row points
+at, and a form's spec can also load a component by name, so the server checks three things (the
+rules are in `@memberjunction/core-entities`; the server side is `FormComponentGuard` in
+`@memberjunction/core-entities-server`). Without `Manage Form Defaults`, each check asks whether the
+component is the caller's own (`IsCallersOwnComponent`): used by at least one row and only by the
+caller's own personal rows, or used by no row and created by the caller. The creator is read from
+the component's `Create` record in `MJ: Record Changes` with `Source` 'Internal'; `MJ: Components`
+tracks record changes, so the platform writes one with every component it creates, and
+`MJRecordChangeEntityServer` refuses a caller who tries to create an Internal `Create` record change
+through the API. A component created by clone or restore carries a `Clone` or `Restore` record
+change instead, so it is not its creator's own until a row of theirs uses it.
+
+1. **Changing a component** (`ComponentWriteRefusal`, in `MJComponentEntityServer`): a delete, or a
+   change to its specification, status, name, namespace or type.
+
+   | The component | Without `Manage Form Defaults` | With it |
+   |---|---|---|
+   | Used only by the caller's own personal rows | Allowed | Allowed |
+   | Used by a `Role` or `Global` row | Refused | Allowed |
+   | Used by another user's personal row | Refused | Refused |
+   | Used by no row, created by the caller | Allowed | Allowed |
+   | Used by no row, created by someone else | Refused | Allowed |
+
+2. **Pointing a row at a component** (`FormRowComponentRefusal`, in both form entity subclasses), on
+   create or when `ComponentID` changes: without the grant, the component must be the caller's own.
+   With the grant, a component another user's personal row uses is still refused (for everyone, an
+   Owner included); anything else is allowed. The caller's own rows may share a component.
+3. **A component's name** (`ComponentNameCollisionRefusal`): without the grant, a created or renamed
+   component may not take a name another component already has, unless every such component is
+   the caller's own. Names are compared trimmed and lower-cased, as the server's
+   `ComponentMetadataEngineServer.FindComponent` compares them, in any namespace. A holder is not
+   restricted.
+
+A create is otherwise not checked, nor is a change to any other column or a write with no caller
+(a trusted server context). The rows, the stored columns and the creator are read in one batch as
+the caller, and the changed columns come from the stored row, not from the values as loaded; when a
+read fails, the write is refused. The `Create` record change is written in the same batch as the
+component insert, so a row saved after it in the same transaction sees it. So any user can author
+their own panel through the actions (a new component, then their own row pointing at it, then
+changes to it) and turn it on, off or to a draft in the drawer.
+
+On identity, permission and form-metadata entities (`RESTRICTED_FORM_ENTITIES` in
+`@memberjunction/core-entities`, 11 entities) only `User` rows and forms render, whatever wrote the
+row.
+
+**Hiding is per user and changes no row.** `panel-hides.ts` keeps the hidden keys in the
+`mj.formPanels.hidden.<entity>` user setting, and the collector drops those registrations after
+the merge. The full custom form a user picks is kept the same way, in `mj.formVariant.<entity>`. A compiled panel is hidden by its `contributionKey`, or by `class:<Registration.Key>`
+when it has none, so give a compiled panel a key if its users may want to hide it. A user's own
+personal row is never dropped by a hide; they switch it off instead.
+
+The "Manage this form" drawer (`panel-manager/`) shows all of this in one list, grouped as
+yours, shared with you, hidden and fixed.
+
+## Counts and empty sections (`showCount` / `whenEmpty` / `count`)
+
+When a saved record opens, the container fetches the row count of every related section **and**
+the tag / attachment / version toolbar badges in **one** `RunViews` call of `count_only` views
+(the database provider runs an all-`count_only` batch as a single `UNION ALL`). Badges appear
+before any grid loads.
+
+A contribution opts in with three optional keys:
+
+```typescript
+@RegisterClassEx(BaseFormPanel, {
+    key: 'form-panel:People:orders',
+    metadata: {
+        entity: 'MJ_BizApps_Common: People',
+        slot: 'after-related',
+        contributionKey: 'orders',
+        whenEmpty: 'more',              // 'show' (default) | 'hide' | 'more'
+        showCount: true,                // default true — badge the count
+        count: {                        // omit to derive from relatedEntity / relatedJoinField
+            entity: 'MJ_BizApps_Orders: Order Headers',
+            joinFields: ['BillToPersonID', 'ShipToPersonID'],   // ORed
+        },
+    },
+})
+```
+
+- `whenEmpty: 'hide'` — hidden while it has 0 rows. `'more'` — moved into the More folder while
+  empty, back to its normal place once it has rows. The "show empty fields" toolbar toggle reveals
+  everything.
+- A section that had rows this session is never hidden when it empties (no yank), and the open
+  rail item is never hidden.
+- If the panel's `<mj-collapsible-panel SectionKey>` differs from its `contributionKey` (or the
+  key derived from `relatedEntity`), set `sectionKey` so counts land on the section the user sees.
+- A contribution with no count source (`count: false`, no `relatedEntity`) can still report
+  `this.FormComponent.SetSectionRowCount(sectionKey, n)` after it loads; hide/more then applies.
+- Relationships use the same verbs in `EntityRelationship.Configuration.UI` (`whenEmpty`,
+  `showCount`); an entity-wide default lives in `Entity.Configuration.UI.Form`
+  (`RelatedWhenEmpty`, `ShowRelatedCounts`).
+
 ## Implementation files
 
 | File                                                                                  | Role                                                          |
@@ -344,4 +572,8 @@ Related section keys use the same camelCase as CodeGen (`FormSectionCamelCase` /
 | `form-panel-slot.component.ts`                                                        | `<mj-form-panel-slot>` host — discovery, sorting, dynamic mount, fallback resolution. |
 | `form-slot-coordinator.service.ts`                                                    | `FormSlotCoordinator` — per-container registry of which slots are physically present. `FORM_SLOT_CHAIN` constant. |
 | `record-form-container.component.{ts,html}`                                           | Provides `FormSlotCoordinator` + fill-in contributions + the always-on `after-everything` slot. |
+| `base-contribution-panel.ts`                                                          | `BaseContributionPanel` (internal) — the chrome a panel drawing one contribution reads (title, icon, bare strip, variant). |
+| `../interactive-form/interactive-form-panel.component.ts`                             | Hosts a metadata row's React panel. |
+| `../apply/form-placement.ts`, `form-placement-text.ts`, `form-placement-order.ts`      | The placement dialog's rules: the state and decision, the sentences that describe it, and the order within one position. |
+| `../panel-manager/`                                                                   | The "Manage this form" drawer, its inventory and the service it writes through. |
 | `packages/CodeGenLib/src/Angular/angular-codegen.ts` (`innerCollapsiblePanelsHTML`)   | Emits the four primary slot markers into every generated form template. Related grids stay baked. |

@@ -13,6 +13,7 @@ import { BaseFormComponent } from '../base-form-component';
 import { BaseFormSectionComponent } from '../base-form-section-component';
 import { InteractiveFormComponent } from '../interactive-form/interactive-form.component';
 import { FormResolverService } from '../resolver/form-resolver.service';
+import { FormVariantChoices } from '../resolver/form-variants';
 import { EntityFormConfig } from '../types/entity-form-config';
 import { FormNavigationEvent } from '../types/navigation-events';
 import {
@@ -409,9 +410,7 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
     resolution: Awaited<ReturnType<FormResolverService['ResolveFormForEntity']>>,
     entityName: string,
   ): void {
-    instance.Variants = (resolution.variants ?? [])
-      .filter(v => v.Status === 'Active')
-      .map(v => ({ ID: v.ID, Label: v.Name ?? `Override ${v.ID.substring(0, 8)}`, Scope: v.Scope, Status: v.Status }));
+    instance.Variants = FormVariantChoices(resolution.variants ?? []);
     instance.CurrentVariantID = resolution.kind === 'interactive' ? resolution.override.ID : null;
     instance.OnVariantChanged = (variantID: string | null) => {
       if (variantID === null) {

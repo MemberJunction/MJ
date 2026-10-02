@@ -51,7 +51,7 @@ interface BridgeIdentityRow {
     key: 'ai-agents:realtime',
     skipNullKeyWarning: true,
     metadata: {
-        entity: 'AI Agents',
+        entity: 'MJ: AI Agents',
         slot: 'after-fields',
         sortKey: 40,
     },

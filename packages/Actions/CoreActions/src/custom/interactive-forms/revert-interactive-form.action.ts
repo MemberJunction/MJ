@@ -3,7 +3,7 @@ import { BaseAction } from "@memberjunction/actions";
 import { Metadata, LogError, RunView } from "@memberjunction/core";
 import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import {
-    AddOutput, CheckOverrideOwnership, Failure, GetNumberParam, GetStringParam, LoadComponent, LoadOverride, MapToComponentStatus,
+    AddOutput, CheckPersonalWrite, Failure, GetNumberParam, GetStringParam, LoadComponent, LoadOverride, MapToComponentStatus,
 } from "./_shared";
 
 /**
@@ -23,6 +23,11 @@ import {
  *
  * Old Component rows are never deleted — they remain as immutable history.
  * A subsequent revert can move forward again to any version.
+ *
+ * Only the caller's own User-scope overrides can be reverted. A Role or Global
+ * override, or another user's, returns FORBIDDEN for every caller (see
+ * `CheckPersonalWrite` in `_shared.ts`): shared forms are managed from Form
+ * Builder or the form's Manage drawer.
  *
  * Inputs:
  *   - `ActiveOverrideID` (required, string) — the Active override to re-point
@@ -62,7 +67,7 @@ export class RevertInteractiveFormAction extends BaseAction {
             if (!override) {
                 return Failure("OVERRIDE_NOT_FOUND", `EntityFormOverride '${activeOverrideID}' not found.`);
             }
-            const ownershipFail = CheckOverrideOwnership(override, user);
+            const ownershipFail = CheckPersonalWrite(override, user);
             if (ownershipFail) return ownershipFail;
             if (override.Status !== 'Active') {
                 return Failure("NOT_ACTIVE",

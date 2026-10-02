@@ -1,25 +1,35 @@
 import {
     Component,
     ComponentRef,
+    ElementRef,
+    HostBinding,
     Input,
     OnChanges,
     OnDestroy,
     OnInit,
     Optional,
     SimpleChanges,
-    Type,
     ViewChild,
     ViewContainerRef,
     inject,
 } from '@angular/core';
-import { Subject, takeUntil } from 'rxjs';
+import { Subject, filter, take, takeUntil, type Observable, type Subscription } from 'rxjs';
 import { BaseEntity, LogError } from '@memberjunction/core';
-import { ClassRegistration, MJGlobal } from '@memberjunction/global';
+import { InteractiveFormsEngine } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '../base-form-component';
 import { FormContext } from '../types/form-types';
-import { BaseFormPanel, FormPanelRegistrationMetadata, FormPanelSlot } from './base-form-panel';
+import { BaseFormPanel, FormPanelSlot } from './base-form-panel';
 import { FormSlotCoordinator } from './form-slot-coordinator.service';
-import { CollapseFormPanelRegistrations } from './form-contribution';
+import {
+    ContributionDrawsInSection,
+    FormContributionEntityMatches,
+    ResolveFormContributionWinners,
+    type FormContributionRegistration,
+} from './form-contribution';
+import { CollectFormContributionRegistrations } from './collect-form-contribution-registrations';
+import { MountFormContribution } from './mount-form-contribution';
+import { PanelHideKey } from './panel-hides';
+import { FORM_PLACEMENT_PREVIEW } from './placement-preview';
 import { FormRecordRefreshCoordinator } from '../form-record-refresh.coordinator';
 
 /**
@@ -76,6 +86,12 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
     /** Optional form context — same shape collapsible-panel chrome expects. */
     @Input() FormContext?: FormContext;
 
+    /** The position, on the element, so a form's slot set can be read without its injector. */
+    @HostBinding('attr.data-form-slot')
+    get HostSlot(): string {
+        return this.Slot ?? '';
+    }
+
     @ViewChild('anchor', { read: ViewContainerRef, static: true })
     private anchor!: ViewContainerRef;
 
@@ -83,9 +99,25 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
     private readonly destroy$ = new Subject<void>();
     private registeredSlot: FormPanelSlot | null = null;
     private readonly recordRefresh = inject(FormRecordRefreshCoordinator, { optional: true });
+    /** The placement dialog's unsaved panel, when this slot is on the dialog's preview form. */
+    private readonly preview = inject(FORM_PLACEMENT_PREVIEW, { optional: true });
+    private readonly element = inject<ElementRef<HTMLElement>>(ElementRef);
     /** Tracks synchronous re-entry depth into remount() so a future refactor
      *  that reintroduces a remount loop surfaces loudly instead of freezing. */
     private remountDepth = 0;
+    private readonly warnedLooseEntities = new Set<string>();
+    private awaitingContributions = false;
+
+    /**
+     * Process-wide, not per-instance. The readiness wait is a one-time courtesy so the first
+     * paint shows both sources together; once it has resolved — ready OR timed out — no slot
+     * host anywhere should pay it again. Per-instance state made a failing engine cost every
+     * slot on every form 1.5s apiece, which is far worse than the pop-in it was avoiding.
+     */
+    private static contributionGateResolved = false;
+
+    /** Bounded: a slow or unreachable engine must not leave the form blank. */
+    private static readonly READINESS_TIMEOUT_MS = 1500;
 
     constructor(@Optional() private readonly coordinator?: FormSlotCoordinator) {}
 
@@ -103,6 +135,16 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
         this.recordRefresh?.Refreshed$.pipe(takeUntil(this.destroy$)).subscribe((record) => {
             this.notifyMountedPanels(record);
         });
+        // Rows can arrive after the first paint (cold engine, a contribution saved in another
+        // tab). Without this the slot would keep showing whatever it mounted first.
+        try {
+            InteractiveFormsEngine.Instance.Contributions$
+                .pipe(takeUntil(this.destroy$))
+                .subscribe(() => this.remount());
+        } catch {
+            // No engine here — compiled registrations are the only source.
+        }
+        this.preview?.Changed$.pipe(takeUntil(this.destroy$)).subscribe(() => this.remount());
     }
 
     ngOnChanges(changes: SimpleChanges): void {
@@ -150,6 +192,19 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
     }
 
     private remount(): void {
+        // A form that renders its own body bars every panel. Checked before the readiness
+        // gate so a barred slot never waits on the engine.
+        if (this.FormComponent?.OwnsEntireFormBody) {
+            this.unmountAll();
+            return;
+        }
+        // Compiled panels and rows mount together or not at all. Mounting compiled panels
+        // first and adding rows a tick later is visible — and for a `bare` hero that replaces
+        // a baked section, the user watches that section render and then vanish.
+        if (!this.contributionsReady()) {
+            void this.awaitContributionsThenRemount();
+            return;
+        }
         this.remountDepth++;
         if (this.remountDepth > 5) {
             console.error(`[mj-form-panel-slot] LOOP DETECTED — remount depth ${this.remountDepth} on slot=${this.Slot}. Bailing.`);
@@ -158,23 +213,7 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
         }
         this.unmountAll();
 
-        // 1. Direct matches: panels registered for THIS slot.
-        const direct = this.findRegistrations(this.Slot);
-
-        // 2. Orphans: panels registered for some OTHER slot whose preferred
-        //    slot doesn't exist in this form, AND this slot host is the
-        //    coordinator-resolved fallback for them. Without a coordinator
-        //    (no parent container), no orphan handling — panels just bind
-        //    to their literal slot.
-        const orphans = this.findOrphans();
-
-        const all = CollapseFormPanelRegistrations(
-            [...direct, ...orphans].map((reg) => ({
-                Priority: reg.Priority,
-                Metadata: (reg.Metadata ?? { entity: this.Entity, slot: this.Slot }) as FormPanelRegistrationMetadata,
-                Registration: reg,
-            })),
-        ).map((row) => row.Registration);
+        const all = this.winnersForThisSlot();
         if (all.length === 0) {
             this.remountDepth--;
             return;
@@ -182,24 +221,33 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
 
         // Sort: higher sortKey first, then higher Priority, then registration order.
         all.sort((a, b) => {
-            const aSort = (a.Metadata as FormPanelRegistrationMetadata | undefined)?.sortKey ?? 0;
-            const bSort = (b.Metadata as FormPanelRegistrationMetadata | undefined)?.sortKey ?? 0;
+            const aSort = a.Metadata?.sortKey ?? 0;
+            const bSort = b.Metadata?.sortKey ?? 0;
             if (aSort !== bSort) return bSort - aSort;
             return b.Priority - a.Priority;
         });
 
         for (const reg of all) {
             try {
-                const ctor = reg.SubClass as Type<BaseFormPanel>;
-                const ref = this.anchor.createComponent(ctor);
+                const ref = MountFormContribution(this.anchor, reg);
+                if (!ref) continue;
                 ref.instance.Record = this.Record;
                 ref.instance.FormComponent = this.FormComponent;
+                ref.instance.RegistrationMetadata = reg.Metadata;
+                ref.instance.SlotElement = this.element.nativeElement;
                 if (this.FormContext) ref.instance.FormContext = this.FormContext;
                 // Left-nav leftover height targets mj-collapsible-panel as a
                 // flex child of .mj-forms-all-panels. The slot is already
                 // display:contents; the mounted host must be too.
                 const host = ref.location.nativeElement as HTMLElement | null;
-                if (host) host.style.display = 'contents';
+                if (host) {
+                    host.style.display = 'contents';
+                    // Lets the drawer tell a panel that drew something from one that self-hid,
+                    // by reading the DOM the way the form probe does.
+                    const hideKey = PanelHideKey(reg);
+                    if (hideKey) host.setAttribute('data-panel-key', hideKey);
+                }
+                this.FormComponent?.RegisterFormPanel?.(ref.instance);
                 // No detectChanges() — Angular's normal CD pass picks the new
                 // component up. Calling detectChanges() synchronously inside
                 // an ongoing CD cycle (which is when ngOnChanges → remount
@@ -214,64 +262,128 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
     }
 
     /**
-     * Find registrations whose metadata declares this exact entity (or the
-     * `'*'` wildcard) + slot. A panel registered with `entity: '*'` is
-     * entity-agnostic — it mounts on EVERY entity's form. Such panels are
-     * expected to self-hide (render nothing) when they don't apply to the
-     * current record, so the cross-cutting registration stays unobtrusive.
+     * The form's winning registrations that this slot mounts.
+     *
+     * The collapse runs once over every registration on the form (see
+     * `ResolveFormContributionWinners`), then this slot keeps the winners it hosts: those
+     * registered for this slot, and those whose slot is missing from the form when the
+     * coordinator resolves them to this one. A winner drawn inside a section is mounted by that
+     * section, not by a slot. A wildcard (`entity: '*'`) panel mounts on every form and is
+     * expected to hide itself where it does not apply.
      */
-    private findRegistrations(slot: FormPanelSlot): ClassRegistration[] {
-        return MJGlobal.Instance.ClassFactory.GetAllRegistrationsByMetadata(
-            BaseFormPanel,
-            (metadata) => {
-                if (!metadata) return false;
-                const meta = metadata as Partial<FormPanelRegistrationMetadata>;
-                return this.entityMatches(meta.entity) && meta.slot === slot;
-            },
-        );
-    }
-
-    /** True when a registration's `entity` matches this slot's entity, or is the `'*'` wildcard. */
-    private entityMatches(registeredEntity: string | undefined): boolean {
-        if (!registeredEntity || !this.Entity) return false;
-        if (registeredEntity === '*') return true;
-        const a = registeredEntity.trim().toLowerCase();
-        const b = this.Entity.trim().toLowerCase();
-        if (a === b) return true;
-        // Normalize schema prefixes like "MJ: " or "MJ_"
-        const strip = (s: string) => s.replace(/^mj[:_\s]+/i, '').replace(/[\s_]+/g, '').toLowerCase();
-        return strip(a) === strip(b);
+    private winnersForThisSlot(): FormContributionRegistration[] {
+        const entity = this.Record?.EntityInfo ?? null;
+        const provider = this.FormComponent?.ProviderToUse ?? null;
+        const all = CollectFormContributionRegistrations(entity, provider, { Preview: this.preview });
+        this.warnOnLooseRegistrations(all);
+        return ResolveFormContributionWinners(this.Entity, all).Winners.filter((reg) => {
+            if (ContributionDrawsInSection(reg.Metadata)) return false;
+            const slot = reg.Metadata.slot;
+            if (slot === this.Slot) return true;
+            // Without a coordinator (no parent container) a panel binds to its literal slot only.
+            return !!slot && !!this.coordinator && this.coordinator.resolveSlot(slot) === this.Slot;
+        });
     }
 
     /**
-     * Find panels registered for a different slot that should mount HERE
-     * because their preferred slot isn't present and this slot is the next
-     * existing one in the fallback chain.
+     * Diagnostic for the old prefix-insensitive match. A loosely named registration no
+     * longer mounts here — and never hid its baked grid on the container side, which has
+     * always matched strictly.
      *
-     * Only meaningful when we have a coordinator (i.e., we're inside an
-     * `<mj-record-form-container>`).
+     * This runs on every resolve, not only when nothing matched strictly. Keying it on
+     * "nothing matched" would miss the likeliest case: a form where some panels are named
+     * correctly and one is not, where the broken one would vanish with no warning at all.
      */
-    private findOrphans(): ClassRegistration[] {
-        if (!this.coordinator) return [];
-
-        const allForEntity = MJGlobal.Instance.ClassFactory.GetAllRegistrationsByMetadata(
-            BaseFormPanel,
-            (metadata) => {
-                if (!metadata) return false;
-                const meta = metadata as Partial<FormPanelRegistrationMetadata>;
-                return this.entityMatches(meta.entity) && meta.slot != null && meta.slot !== this.Slot;
-            },
+    private warnOnLooseRegistrations(all: readonly FormContributionRegistration[]): void {
+        if (this.warnedLooseEntities.has(this.Entity)) return;
+        const strip = (v: string) => v.replace(/^mj[:_\s]+/i, '').replace(/[\s_]+/g, '').toLowerCase();
+        const loose = all.filter((reg) => {
+            const name = reg.Metadata?.entity;
+            return !!name && !FormContributionEntityMatches(name, this.Entity) && strip(name) === strip(this.Entity);
+        });
+        if (loose.length === 0) return;
+        this.warnedLooseEntities.add(this.Entity);
+        const names = [...new Set(loose.map((reg) => reg.Metadata.entity))].join(', ');
+        console.warn(
+            `[mj-form-panel-slot] ${loose.length} BaseFormPanel registration(s) name "${names}" but the form entity is ` +
+            `"${this.Entity}". Entity names must match exactly; these panels will not mount.`,
         );
+    }
 
-        return allForEntity.filter(reg => {
-            const meta = reg.Metadata as FormPanelRegistrationMetadata | undefined;
-            if (!meta?.slot) return false;
-            const resolved = this.coordinator!.resolveSlot(meta.slot);
-            return resolved === this.Slot;
+    /**
+     * Whether the slot can mount now, or should wait for contribution rows.
+     *
+     * It waits only while a load is actually in flight. An engine nobody has configured
+     * is not "about to be ready" — blocking on it would delay every host that does not
+     * use metadata contributions at all. Those hosts mount immediately and self-heal:
+     * the collector kicks `Config`, and the `Contributions$` subscription below remounts
+     * when rows arrive.
+     */
+    private contributionsReady(): boolean {
+        if (FormPanelSlotComponent.contributionGateResolved) return true;
+        try {
+            const engine = InteractiveFormsEngine.Instance;
+            if (engine.ContributionsReady) {
+                FormPanelSlotComponent.contributionGateResolved = true;
+                return true;
+            }
+            if (!engine.LoadingSubject.value) {
+                // Nothing in flight — mount now rather than waiting on a load that may never start.
+                return true;
+            }
+            return false;
+        } catch {
+            // No engine in this context (a panel composed outside a form host).
+            FormPanelSlotComponent.contributionGateResolved = true;
+            return true;
+        }
+    }
+
+    /**
+     * Wait for the engine's load to finish, then remount once. Falls through on a timeout so a
+     * slow or unreachable engine degrades to compiled panels only rather than leaving the slot
+     * empty.
+     */
+    private async awaitContributionsThenRemount(): Promise<void> {
+        if (this.awaitingContributions) return;
+        this.awaitingContributions = true;
+        try {
+            const engine = InteractiveFormsEngine.Instance;
+            const outcome = await FormPanelSlotComponent.loadFinishedOrTimeout(engine.LoadingSubject);
+            if (!engine.ContributionsReady && !FormPanelSlotComponent.contributionGateResolved) {
+                // Once: the first slot to finish waiting closes the gate process-wide below.
+                LogError(outcome === 'timeout'
+                    ? `[mj-form-panel-slot] contribution cache not ready after ${FormPanelSlotComponent.READINESS_TIMEOUT_MS}ms; mounting compiled panels only from here on.`
+                    : '[mj-form-panel-slot] contribution cache failed to load; mounting compiled panels only from here on.');
+            }
+        } catch (e) {
+            LogError(`[mj-form-panel-slot] waiting on contributions failed: ${e instanceof Error ? e.message : String(e)}`);
+        } finally {
+            this.awaitingContributions = false;
+            // Ready or timed out, the gate is spent process-wide: from here every slot mounts
+            // whatever the collector returns rather than waiting again.
+            FormPanelSlotComponent.contributionGateResolved = true;
+        }
+        this.remount();
+    }
+
+    /** Resolves when `loading` emits false, or after the readiness timeout, whichever is first. */
+    private static loadFinishedOrTimeout(loading: Observable<boolean>): Promise<'loaded' | 'timeout'> {
+        return new Promise((resolve) => {
+            let subscription: Subscription | null = null;
+            const timer = setTimeout(() => {
+                subscription?.unsubscribe();
+                resolve('timeout');
+            }, FormPanelSlotComponent.READINESS_TIMEOUT_MS);
+            subscription = loading.pipe(filter((busy) => !busy), take(1)).subscribe(() => {
+                clearTimeout(timer);
+                resolve('loaded');
+            });
         });
     }
 
     private unmountAll(): void {
+        for (const ref of this.mounted) this.FormComponent?.UnregisterFormPanel?.(ref.instance);
         this.anchor.clear();
         this.mounted = [];
     }

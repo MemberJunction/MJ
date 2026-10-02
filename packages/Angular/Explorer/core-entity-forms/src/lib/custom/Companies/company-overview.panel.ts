@@ -13,9 +13,9 @@ interface EmployeeRow {
 }
 
 @RegisterClassEx(BaseFormPanel, {
-    key: 'form-panel:Companies:overview',
+    key: 'form-panel:MJ: Companies:overview',
     metadata: {
-        entity: 'Companies',
+        entity: 'MJ: Companies',
         slot: 'before-fields',
         sortKey: 10,
     },

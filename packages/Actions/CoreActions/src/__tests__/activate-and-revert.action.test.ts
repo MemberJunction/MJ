@@ -19,6 +19,12 @@ const { hoisted } = vi.hoisted(() => ({
         overrides: new Map<string, { record: Record<string, unknown>; saveOutcome: boolean }>(),
         components: new Map<string, { record: Record<string, unknown>; saveOutcome: boolean }>(),
         runViewResults: [] as Array<Array<Record<string, unknown>>>,
+        /** The ExtraFilter of every RunView, in order. */
+        filters: [] as string[],
+        /** Row IDs whose saves fail. */
+        failingSaves: new Set<string>(),
+        /** While a transaction is open, saves are pending and reach `committed` only on Commit. */
+        tx: { supported: false, open: false, pending: [] as string[], committed: [] as string[], rolledBack: 0 },
     },
 }));
 
@@ -51,7 +57,12 @@ vi.mock('@memberjunction/core', async () => {
                 else hoisted.overrides.set(id, state);
                 return true;
             },
-            async Save(): Promise<boolean> { return state.saveOutcome; },
+            async Save(): Promise<boolean> {
+                const id = String(state.record.ID);
+                if (!state.saveOutcome || hoisted.failingSaves.has(id)) return false;
+                (hoisted.tx.open ? hoisted.tx.pending : hoisted.tx.committed).push(id);
+                return true;
+            },
             NewRecord(): void { /* unused */ },
         };
         return new Proxy(inst, {
@@ -64,6 +75,15 @@ vi.mock('@memberjunction/core', async () => {
         });
     }
     class HoistedProvider {
+        get SupportsEntityTransactions() { return hoisted.tx.supported; }
+        async BeginEntityTransaction() {
+            hoisted.tx.open = true;
+            return {
+                IsNested: false,
+                async Commit() { hoisted.tx.committed.push(...hoisted.tx.pending); hoisted.tx.pending = []; hoisted.tx.open = false; },
+                async Rollback() { hoisted.tx.pending = []; hoisted.tx.open = false; hoisted.tx.rolledBack++; },
+            };
+        }
         EntityByName() { return { ID: 'ENT-1' }; }
         async GetEntityObject<T>(name: string): Promise<T> { return makeHoistedEntity(name) as unknown as T; }
     }
@@ -73,7 +93,8 @@ vi.mock('@memberjunction/core', async () => {
         RunView: class {
             static FromMetadataProvider() {
                 return new (class {
-                    async RunView() {
+                    async RunView(p: { ExtraFilter?: string }) {
+                        hoisted.filters.push(p?.ExtraFilter ?? '');
                         const next = hoisted.runViewResults.shift() ?? [];
                         return { Success: true, Results: next };
                     }
@@ -116,7 +137,25 @@ beforeEach(() => {
     hoisted.overrides.clear();
     hoisted.components.clear();
     hoisted.runViewResults.length = 0;
+    hoisted.failingSaves = new Set();
+    hoisted.filters = [];
+    hoisted.tx = { supported: false, open: false, pending: [], committed: [], rolledBack: 0 };
 });
+
+/**
+ * Agents change their own personal forms only. A shared form is managed by people, from Form
+ * Builder or the Manage drawer, so a Role or Global override is refused for a member of the role
+ * and for a grant holder alike.
+ */
+const SHARED_CASES = [
+    ['a Role override, for a member of the role', { Scope: 'Role', UserID: null, RoleID: 'R1' }, { ID: 'U1', Name: 'Test', UserRoles: [{ RoleID: 'R1' }] }],
+    ['a Global override, for an Owner', { Scope: 'Global', UserID: null, RoleID: null }, { ID: 'U1', Name: 'Test', Type: 'Owner' }],
+] as const;
+
+function asUser(p: RunActionParams, user: unknown): RunActionParams {
+    (p as unknown as { ContextUser: unknown }).ContextUser = user;
+    return p;
+}
 
 describe('ActivateInteractiveFormVersionAction', () => {
 
@@ -132,19 +171,46 @@ describe('ActivateInteractiveFormVersionAction', () => {
         expect(r.ResultCode).toBe('FORBIDDEN');
     });
 
-    it('FORBIDDEN when the target Override is Role-scope to a role the caller lacks', async () => {
-        seedOverride('OVER-Y', { ComponentID: 'COMP-Y', Scope: 'Role', UserID: null, RoleID: 'ROLE-NOT-MINE', Status: 'Pending' });
-        seedComponent('COMP-Y', { Status: 'Draft' });
-        const r = await run(new ActivateInteractiveFormVersionAction(), mkParams({ OverrideID: 'OVER-Y' }));
-        expect(r.ResultCode).toBe('FORBIDDEN');
+    for (const [label, scope, user] of SHARED_CASES) {
+        it(`FORBIDDEN on ${label}, before any write`, async () => {
+            seedOverride('OVER-S', { ComponentID: 'COMP-S', ...scope, Status: 'Pending' });
+            seedComponent('COMP-S', { Status: 'Draft' });
+            const r = await run(new ActivateInteractiveFormVersionAction(), asUser(mkParams({ OverrideID: 'OVER-S' }), user));
+            expect(r.ResultCode).toBe('FORBIDDEN');
+            expect(r.Message).toMatch(/Form Builder|Manage drawer/);
+            expect(hoisted.components.get('COMP-S')!.record.Status).toBe('Draft');
+            expect(hoisted.tx.committed).toEqual([]);
+        });
+    }
+
+    /** The component and the override flip together or not at all. */
+    it('rolls back the component when the override cannot be flipped to Active', async () => {
+        hoisted.tx.supported = true;
+        seedOverride('OVER-PENDING', { ComponentID: 'COMP-NEW', Status: 'Pending' });
+        seedComponent('COMP-NEW', { Status: 'Draft' });
+        hoisted.failingSaves.add('OVER-PENDING');
+        const r = await run(new ActivateInteractiveFormVersionAction(), mkParams({ OverrideID: 'OVER-PENDING' }));
+        expect(r.ResultCode).toBe('PERSIST_FAILED');
+        expect(hoisted.tx.rolledBack).toBe(1);
+        expect(hoisted.tx.committed).toEqual([]);
     });
 
-    it('FORBIDDEN when the target Override is Global and caller is not an Owner', async () => {
-        seedOverride('OVER-G', { ComponentID: 'COMP-G', Scope: 'Global', UserID: null, RoleID: null, Status: 'Pending' });
-        seedComponent('COMP-G', { Status: 'Draft' });
-        // Default test user has no Owner Type — should be rejected.
-        const r = await run(new ActivateInteractiveFormVersionAction(), mkParams({ OverrideID: 'OVER-G' }));
-        expect(r.ResultCode).toBe('FORBIDDEN');
+    it('commits the component and the override together', async () => {
+        hoisted.tx.supported = true;
+        seedOverride('OVER-PENDING', { ComponentID: 'COMP-NEW', Status: 'Pending' });
+        seedComponent('COMP-NEW', { Status: 'Draft' });
+        const r = await run(new ActivateInteractiveFormVersionAction(), mkParams({ OverrideID: 'OVER-PENDING' }));
+        expect(r.Success).toBe(true);
+        expect(hoisted.tx.committed).toEqual(['COMP-NEW', 'OVER-PENDING']);
+    });
+
+    it('looks for prior Active siblings among the caller\'s own overrides only', async () => {
+        seedOverride('OVER-PENDING', { ComponentID: 'COMP-NEW', Status: 'Pending' });
+        seedComponent('COMP-NEW', { Status: 'Draft' });
+        const r = await run(new ActivateInteractiveFormVersionAction(), mkParams({ OverrideID: 'OVER-PENDING' }));
+        expect(r.Success).toBe(true);
+        expect(hoisted.filters[0]).toContain("Scope='User' AND UserID='U1'");
+        expect(hoisted.filters[0]).toContain("ID <> 'OVER-PENDING'");
     });
 
     it('returns OVERRIDE_NOT_FOUND for an unknown ID', async () => {
@@ -166,6 +232,28 @@ describe('ActivateInteractiveFormVersionAction', () => {
         const r = await run(new ActivateInteractiveFormVersionAction(), mkParams({ OverrideID: 'OVER-INACTIVE' }));
         expect(r.ResultCode).toBe('NOT_PENDING');
     });
+
+    /**
+     * The prior version is set aside after the promotion's transaction. A save that fails there
+     * fails the action, so the caller learns that two forms are now Active.
+     */
+    it.each([['its override', 'OVER-PRIOR'], ['its component', 'COMP-OLD']])(
+        'fails when the prior Active version cannot be set aside (%s)',
+        async (_label, failingID) => {
+            seedOverride('OVER-PENDING', { ComponentID: 'COMP-NEW', Scope: 'User', Status: 'Pending' });
+            seedComponent('COMP-NEW', { Status: 'Draft' });
+            seedOverride('OVER-PRIOR', { ComponentID: 'COMP-OLD', Scope: 'User', Status: 'Active' });
+            seedComponent('COMP-OLD', { Status: 'Published' });
+            hoisted.runViewResults.push([{ ID: 'OVER-PRIOR', ComponentID: 'COMP-OLD' }]);
+            hoisted.failingSaves.add(failingID);
+
+            const r = await run(new ActivateInteractiveFormVersionAction(), mkParams({ OverrideID: 'OVER-PENDING' }));
+            expect(r.Success).toBe(false);
+            expect(r.ResultCode).toBe('PERSIST_FAILED');
+            expect(r.Message).toContain(failingID);
+            expect(r.Message).toContain('OVER-PENDING');
+        },
+    );
 
     it('promotes Pending → Active and demotes the prior sibling Active', async () => {
         seedOverride('OVER-PENDING', { ComponentID: 'COMP-NEW', Scope: 'User', Status: 'Pending' });
@@ -199,6 +287,26 @@ describe('RevertInteractiveFormAction', () => {
         const r = await run(new RevertInteractiveFormAction(), mkParams({ ActiveOverrideID: 'OVER-1' }));
         expect(r.ResultCode).toBe('MISSING_PARAMETER');
     });
+
+    it('FORBIDDEN on another user\'s override', async () => {
+        seedOverride('OVER-1', { ComponentID: 'COMP-NEW', Status: 'Active', UserID: 'OTHER-USER' });
+        seedComponent('COMP-NEW', { Name: 'F', Version: '1.1.0', Status: 'Published' });
+        const r = await run(new RevertInteractiveFormAction(), mkParams({ ActiveOverrideID: 'OVER-1', TargetComponentID: 'COMP-NEW' }));
+        expect(r.ResultCode).toBe('FORBIDDEN');
+    });
+
+    for (const [label, scope, user] of SHARED_CASES) {
+        it(`FORBIDDEN on ${label}, before any write`, async () => {
+            seedOverride('OVER-S', { ComponentID: 'COMP-NEW', ...scope, Status: 'Active' });
+            seedComponent('COMP-NEW', { Name: 'F', Version: '1.1.0', Status: 'Published' });
+            seedComponent('COMP-OLD', { Name: 'F', Version: '1.0.0', Status: 'Deprecated' });
+            const r = await run(new RevertInteractiveFormAction(),
+                asUser(mkParams({ ActiveOverrideID: 'OVER-S', TargetComponentID: 'COMP-OLD' }), user));
+            expect(r.ResultCode).toBe('FORBIDDEN');
+            expect(hoisted.overrides.get('OVER-S')!.record.ComponentID).toBe('COMP-NEW');
+            expect(hoisted.tx.committed).toEqual([]);
+        });
+    }
 
     it('NOT_ACTIVE when the override is not currently Active', async () => {
         seedOverride('OVER-PENDING', { ComponentID: 'COMP-1', Status: 'Pending' });
