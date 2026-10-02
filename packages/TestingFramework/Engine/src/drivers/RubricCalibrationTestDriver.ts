@@ -5,6 +5,16 @@ import { BaseTestDriver } from './BaseTestDriver';
 import { CalibrationOracles, CalibrationPairs, type CalibrationExpectation, type CalibrationPair } from './calibration';
 import type { DriverExecutionContext, DriverExecutionResult } from '../types';
 
+async function ReadRows(
+    view: RunView,
+    request: { EntityName: string; ExtraFilter?: string; ResultType: 'simple'; MaxRows: number },
+    user: DriverExecutionContext['contextUser'],
+): Promise<Record<string, unknown>[]> {
+    const result = await view.RunView(request, user);
+    if (!result.Success) throw new Error(result.ErrorMessage || `Could not read ${request.EntityName}.`);
+    return (result.Results ?? []) as Record<string, unknown>[];
+}
+
 interface CalibrationInput {
     rubricId: string;
     goldSet: { subjectEntity: string; filter?: string } | { subjects: { entity: string; recordID: string }[] };
@@ -55,20 +65,18 @@ export class RubricCalibrationTestDriver extends BaseTestDriver {
         const user = context.contextUser;
         const rubricId = input.rubricId.replace(/'/g, "''");
         const subjectIds = subjects.map(subject => `'${subject.recordID.replace(/'/g, "''")}'`).join(', ');
-        const evaluations = await view.RunView({
+        const evaluationRows = await ReadRows(view, {
             EntityName: 'MJ: Rubric Evaluations',
             ExtraFilter: `RubricID='${rubricId}' AND Status='Submitted' AND SubjectRecordID IN (${subjectIds})`,
             ResultType: 'simple',
             MaxRows: 1000,
         }, user);
-        const evaluationRows = (evaluations.Results ?? []) as Record<string, unknown>[];
-        const versions = await view.RunView({
+        const versionRows = await ReadRows(view, {
             EntityName: 'MJ: Rubric Versions',
             ExtraFilter: `RubricID='${rubricId}'`,
             ResultType: 'simple',
             MaxRows: 200,
         }, user);
-        const versionRows = (versions.Results ?? []) as Record<string, unknown>[];
         const majorByVersion = new Map(versionRows.map(row => [String(row.ID), Number(row.MajorVersion ?? 0)]));
         const human = evaluationRows.filter(row => String(row.EvaluatorType) === 'Human');
         const needed = new Map<string, number>();
@@ -82,12 +90,12 @@ export class RubricCalibrationTestDriver extends BaseTestDriver {
             const created = await this.scoreSubject(input, subjectId, subjects.find(subject => UUIDsEqual(subject.recordID, subjectId))?.entity ?? '', versionRows, major, context);
             if (created) freshIds.add(created);
         }
-        const refreshed = ((await view.RunView({
+        const refreshed = await ReadRows(view, {
             EntityName: 'MJ: Rubric Evaluations',
             ExtraFilter: `RubricID='${rubricId}' AND Status='Submitted' AND SubjectRecordID IN (${subjectIds})`,
             ResultType: 'simple',
             MaxRows: 1000,
-        }, user)).Results ?? []) as Record<string, unknown>[];
+        }, user);
         const scoped = refreshed.filter(row => String(row.EvaluatorType) === 'Human' || freshIds.has(String(row.ID)));
         return this.pairsFrom(scoped, versionRows, view, user);
     }
@@ -95,13 +103,13 @@ export class RubricCalibrationTestDriver extends BaseTestDriver {
     private async goldSubjects(input: CalibrationInput, context: DriverExecutionContext): Promise<{ entity: string; recordID: string }[]> {
         if ('subjects' in input.goldSet) return input.goldSet.subjects ?? [];
         const view = new RunView();
-        const result = await view.RunView({
+        const rows = await ReadRows(view, {
             EntityName: input.goldSet.subjectEntity,
             ExtraFilter: input.goldSet.filter || undefined,
             ResultType: 'simple',
             MaxRows: 200,
         }, context.contextUser);
-        return ((result.Results ?? []) as Record<string, unknown>[]).map(row => ({
+        return rows.map(row => ({
             entity: input.goldSet && 'subjectEntity' in input.goldSet ? input.goldSet.subjectEntity : '',
             recordID: String(row.ID ?? ''),
         })).filter(subject => subject.recordID.length > 0);
@@ -136,34 +144,33 @@ export class RubricCalibrationTestDriver extends BaseTestDriver {
         const majorByVersion = new Map(versions.map(row => [String(row.ID), Number(row.MajorVersion ?? 0)]));
         const ids = evaluations.map(row => `'${String(row.ID).replace(/'/g, "''")}'`);
         if (ids.length === 0) return [];
-        const scores = await view.RunView({
+        const scoreRows = await ReadRows(view, {
             EntityName: 'MJ: Rubric Evaluation Scores',
             ExtraFilter: `EvaluationID IN (${ids.join(', ')}) AND NormalizedScore IS NOT NULL`,
             ResultType: 'simple',
             MaxRows: 2000,
         }, user);
-        const scoreRows = (scores.Results ?? []) as Record<string, unknown>[];
         const levelIds = [...new Set(scoreRows.map(row => row.ScaleLevelID).filter(id => id != null).map(id => String(id)))];
-        const usedLevels = levelIds.length === 0 ? [] : ((await view.RunView({
+        const usedLevels = levelIds.length === 0 ? [] : await ReadRows(view, {
             EntityName: 'MJ: Rubric Scale Levels',
             ExtraFilter: `ID IN (${levelIds.map(id => `'${id.replace(/'/g, "''")}'`).join(', ')})`,
             ResultType: 'simple',
             MaxRows: 500,
-        }, user)).Results ?? []) as Record<string, unknown>[];
+        }, user);
         const scaleIds = [...new Set(usedLevels.map(row => String(row.ScaleID ?? '')).filter(id => id.length > 0))];
-        const scaleLevels = scaleIds.length === 0 ? usedLevels : ((await view.RunView({
+        const scaleLevels = scaleIds.length === 0 ? usedLevels : await ReadRows(view, {
             EntityName: 'MJ: Rubric Scale Levels',
             ExtraFilter: `ScaleID IN (${scaleIds.map(id => `'${id.replace(/'/g, "''")}'`).join(', ')})`,
             ResultType: 'simple',
             MaxRows: 500,
-        }, user)).Results ?? []) as Record<string, unknown>[];
+        }, user);
         const criterionIds = [...new Set(scoreRows.map(row => String(row.CriterionID ?? '')).filter(id => id.length > 0))];
-        const criteria = criterionIds.length === 0 ? [] : ((await view.RunView({
+        const criteria = criterionIds.length === 0 ? [] : await ReadRows(view, {
             EntityName: 'MJ: Rubric Criteria',
             ExtraFilter: `ID IN (${criterionIds.map(id => `'${id.replace(/'/g, "''")}'`).join(', ')})`,
             ResultType: 'simple',
             MaxRows: 500,
-        }, user)).Results ?? []) as Record<string, unknown>[];
+        }, user);
         return CalibrationPairs({
             evaluations: evaluations.map(row => ({
                 id: String(row.ID),

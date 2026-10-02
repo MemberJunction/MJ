@@ -22,6 +22,10 @@ describe('rubric CLI', () => {
         expect(commands).not.toMatch(/OR Name=/);
         expect(cli).toMatch(/RequireViewSuccess/);
         expect(commands).toMatch(/RequireViewSuccess/);
+        const report = readFileSync(join(directory, 'report.ts'), 'utf8');
+        const promote = readFileSync(join(directory, 'promote-criteria.ts'), 'utf8');
+        expect(report).toContain('if (!found.Success)');
+        expect(promote).toContain('if (!found.Success)');
     });
 
     it('parses a name, a version label, and a version id', () => {

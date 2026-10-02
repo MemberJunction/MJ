@@ -931,6 +931,7 @@ export class AgentEvalDriver extends BaseTestDriver {
     protected async readMany(context: DriverExecutionContext, entityName: string, filter: string, maxRows = 100): Promise<Record<string, unknown>[]> {
         const view = new RunView();
         const found = await view.RunView({ EntityName: entityName, ExtraFilter: filter, ResultType: 'simple', MaxRows: maxRows }, context.contextUser);
+        if (!found.Success) throw new Error(found.ErrorMessage || `Could not read ${entityName}.`);
         return (found.Results ?? []) as Record<string, unknown>[];
     }
 

@@ -144,4 +144,12 @@ describe('agent eval rubric driver', () => {
             { type: 'rubric', config: { rubricId: 'published-rubric', rubricVersionId: 'version-4', versionLabel: '1.2.0' } },
         ]);
     });
+
+    it('refuses a failed view instead of treating it as no rows', () => {
+        const directory = dirname(fileURLToPath(import.meta.url));
+        const driver = readFileSync(join(directory, '../drivers/AgentEvalDriver.ts'), 'utf8');
+        const calibration = readFileSync(join(directory, '../drivers/RubricCalibrationTestDriver.ts'), 'utf8');
+        expect(driver).toContain('if (!found.Success)');
+        expect(calibration).toContain('if (!result.Success)');
+    });
 });

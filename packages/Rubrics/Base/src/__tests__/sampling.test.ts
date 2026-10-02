@@ -1,4 +1,4 @@
-import { DriftDeltas, DriftSeries, KeepSample, PeriodMeans, SampleBucket } from '../sampling.js';
+import { DriftDeltas, DriftSeries, KeepSample, PeriodMeans, RubricIdFromVersion, SampleBucket } from '../sampling.js';
 
 describe('browser-safe sampling', () => {
     it('keeps a run only when its bucket falls inside the rate', () => {
@@ -8,6 +8,7 @@ describe('browser-safe sampling', () => {
         expect(KeepSample('run-1', bucket / 10000)).toBe(false);
         expect(KeepSample('run-1', (bucket + 1) / 10000)).toBe(true);
         expect(SampleBucket('AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE')).toBe(SampleBucket('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'));
+        expect(RubricIdFromVersion('VERSION', [{ id: 'version', rubricId: 'rubric' }])).toBe('rubric');
     });
 
     it('joins a score to its agent and rubric, then measures a drop', () => {

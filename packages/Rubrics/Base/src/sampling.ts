@@ -1,4 +1,4 @@
-import { NormalizeUUID } from '@memberjunction/global';
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 
 /** Stable bucket 0..9999 for a run id. The same id always lands in the same bucket. */
 export function SampleBucket(runId: string): number {
@@ -47,7 +47,7 @@ export interface DriftRunRow {
 
 /** Rubric id stored on the version. An unknown version resolves to an empty string. */
 export function RubricIdFromVersion(versionId: string, versions: { id: string; rubricId: string }[]): string {
-    return versions.find(row => row.id === versionId)?.rubricId ?? '';
+    return versions.find(row => UUIDsEqual(row.id, versionId))?.rubricId ?? '';
 }
 
 /** @deprecated Use {@link RubricIdFromVersion}. */
