@@ -4,7 +4,7 @@ import os from 'os';
 import path from 'path';
 import { FileWriteBatch } from '../lib/file-write-batch';
 import { RecordData } from '../lib/sync-engine';
-import { createPrimaryKeyLookup } from '../lib/record-primary-key';
+import { CreatePrimaryKeyLookup } from '../lib/record-primary-key';
 
 function record(id: string, name: string): RecordData {
   return { primaryKey: { ID: id }, fields: { Name: name } };
@@ -54,7 +54,7 @@ describe('FileWriteBatch array updates', () => {
     await fs.writeJson(file, keys.map((id) => record(id, `old ${id}`)));
     const batch = new FileWriteBatch();
     for (const id of keys) {
-      batch.queueArrayUpdate(file, record(id, `new ${id}`), createPrimaryKeyLookup({ ID: id }));
+      batch.queueArrayUpdate(file, record(id, `new ${id}`), CreatePrimaryKeyLookup({ ID: id }));
     }
     await batch.flush();
 

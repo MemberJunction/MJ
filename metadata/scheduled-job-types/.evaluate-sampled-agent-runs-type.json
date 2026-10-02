@@ -1,0 +1,15 @@
+[
+  {
+    "fields": {
+      "Name": "Evaluate Sampled Agent Runs",
+      "Description": "Evaluates a deterministic sample of completed MJ: AI Agent Runs for each Active ProductionSampling agent rubric. It does not run on the agent response path and it does not publish rubrics.",
+      "DriverClass": "EvaluateSampledAgentRunsDriver",
+      "DomainRunEntity": "MJ: AI Agent Runs",
+      "DomainRunEntityFKey": null,
+      "NotificationsAvailable": true
+    },
+    "primaryKey": {
+      "ID": "D1769877-808D-4C54-82BC-36D24F7027D1"
+    }
+  }
+]

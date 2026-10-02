@@ -4,7 +4,7 @@
  */
 
 import type { ControlToolRole } from '../eval/decision';
-import { encodeHistoryForArm } from '../eval/history';
+import { EncodeHistoryForArm } from '../eval/history';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { RunView } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
@@ -19,6 +19,7 @@ import { BaseTestDriver } from './BaseTestDriver';
 import { DriverExecutionContext, DriverExecutionResult, OracleInput, ValidationResult } from '../types';
 import type { OracleResult } from '@memberjunction/testing-engine-base';
 import type { PromptEvalActualOutput } from '../oracles/AgentDecisionOracle';
+import { OraclesWithNamedRubric } from '../oracles/rubric-resolution.js';
 
 /** One oracle to run, as it appears in the test's `Configuration`. */
 export interface PromptEvalOracleConfig {
@@ -222,7 +223,7 @@ export class PromptEvalDriver extends BaseTestDriver {
             prompt,
             // #3251: never rely on the provider's CurrentUser here.
             contextUser: context.contextUser,
-            conversationMessages: encodeHistoryForArm(input.conversationMessages ?? [], config.nativeToolResults === true),
+            conversationMessages: EncodeHistoryForArm(input.conversationMessages ?? [], config.nativeToolResults === true),
             // The corpus states a starting payload; the loop templates read it as _CURRENT_PAYLOAD.
             templateData: { ...(input.templateData ?? {}), _CURRENT_PAYLOAD: input.payload ?? {} },
             configurationId: config.configurationId,
@@ -279,7 +280,7 @@ export class PromptEvalDriver extends BaseTestDriver {
         const params = await composer.ComposeParams(agentConfig, input.payload ?? {}, {
             agent,
             contextUser: context.contextUser,
-            conversationMessages: encodeHistoryForArm(input.conversationMessages ?? [], config.nativeToolResults === true),
+            conversationMessages: EncodeHistoryForArm(input.conversationMessages ?? [], config.nativeToolResults === true),
             data: input.templateData
         } as ExecuteAgentParams);
 
@@ -439,7 +440,12 @@ export class PromptEvalDriver extends BaseTestDriver {
         context: DriverExecutionContext
     ): Promise<OracleResult[]> {
         const results: OracleResult[] = [];
-        for (const oracleConfig of config.oracles ?? []) {
+        const oracles = OraclesWithNamedRubric(config.oracles, {
+            runRubricId: context.options.rubricId,
+            runVersionId: context.options.rubricVersionId,
+            testRubricId: context.test.RubricID,
+        });
+        for (const oracleConfig of oracles) {
             const oracle = context.oracleRegistry.get(oracleConfig.type);
             if (!oracle) {
                 results.push({
@@ -452,6 +458,7 @@ export class PromptEvalDriver extends BaseTestDriver {
             }
             const oracleInput: OracleInput = {
                 test: context.test,
+                testRunId: context.testRun.ID,
                 expectedOutput: expected,
                 actualOutput,
                 targetEntity: result.promptRun,

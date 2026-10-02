@@ -219,7 +219,7 @@ function CodeBlock({ code, lang }: { code: string; lang?: string }) {
             <ScrollView horizontal directionalLockEnabled nestedScrollEnabled showsHorizontalScrollIndicator={false}>
                 <Text style={styles.codeText}>
                     {HighlightCode(code, lang).map((run, i) => (
-                        <Text key={i} style={{ color: run.color }}>{run.text}</Text>
+                        <Text key={i} style={{ color: run.Color }}>{run.Text}</Text>
                     ))}
                 </Text>
             </ScrollView>

@@ -1,0 +1,52 @@
+{
+  "fields": {
+    "Name": "Meets / Partial / Miss",
+    "ScaleType": "Levels",
+    "HigherIsBetter": true,
+    "Status": "Active",
+    "Description": "Meets is 1, Partial is 0.5, and Miss is 0. The default levels scale in guides/RUBRICS_GUIDE.md."
+  },
+  "primaryKey": {
+    "ID": "C882E907-2C02-49B1-919F-8AFCCCD4709F"
+  },
+  "relatedEntities": {
+    "MJ: Rubric Scale Levels": [
+      {
+        "fields": {
+          "ScaleID": "@parent:ID",
+          "Label": "Miss",
+          "Value": 0,
+          "NormalizedValue": 0,
+          "Sequence": 0
+        },
+        "primaryKey": {
+          "ID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367"
+        }
+      },
+      {
+        "fields": {
+          "ScaleID": "@parent:ID",
+          "Label": "Partial",
+          "Value": 1,
+          "NormalizedValue": 0.5,
+          "Sequence": 1
+        },
+        "primaryKey": {
+          "ID": "A9E1A258-D99F-47A4-87EF-646C160D0282"
+        }
+      },
+      {
+        "fields": {
+          "ScaleID": "@parent:ID",
+          "Label": "Meets",
+          "Value": 2,
+          "NormalizedValue": 1,
+          "Sequence": 2
+        },
+        "primaryKey": {
+          "ID": "42707415-F55B-4658-BDED-E6C63CEBAA5C"
+        }
+      }
+    ]
+  }
+}

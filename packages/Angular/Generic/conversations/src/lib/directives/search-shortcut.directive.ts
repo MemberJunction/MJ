@@ -10,7 +10,16 @@ import { Directive, HostListener, Output, EventEmitter } from '@angular/core';
   selector: '[mjSearchShortcut]'
 })
 export class SearchShortcutDirective {
-  @Output() searchTriggered = new EventEmitter<void>();
+  @Output() SearchTriggered = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link SearchTriggered}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (searchTriggered) keeps working. Must stay AFTER SearchTriggered: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() searchTriggered = this.SearchTriggered;
 
   /**
    * Listen for Ctrl+K or Cmd+K
@@ -24,7 +33,7 @@ export class SearchShortcutDirective {
     if (isCtrlOrCmd && event.key === 'k') {
       event.preventDefault();
       event.stopPropagation();
-      this.searchTriggered.emit();
+      this.SearchTriggered.emit();
     }
   }
 }

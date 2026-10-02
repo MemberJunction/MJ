@@ -4,7 +4,7 @@ import { UserInfo, Metadata, EntityInfo, QueryInfo, IMetadataProvider } from '@m
 import { AIEngineBase, AIAgentPermissionHelper, AISkillPermissionHelper } from '@memberjunction/ai-engine-base';
 import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
 import { IntersectAcceptedSkills } from './SkillNarrowing';
-import { MentionSuggestion, MentionSuggestionPreset } from './MentionSuggestion';
+import { MentionPerson, MentionSuggestion, MentionSuggestionPreset, MentionSuggestionScope } from './MentionSuggestion';
 
 /**
  * Shared engine behind the conversations composer plugins (the agent-mentions /
@@ -225,9 +225,18 @@ export class MentionAutocomplete extends BaseSingleton<MentionAutocomplete> {
    * `MJ: AI Agent Skills` grants — via {@link AIEngineBase.GetSkillsForAgent}. Without it (or for an
    * agent not in the user's runnable set) the user's full runnable catalog is shown, as before, and
    * the server's `RequestedSkills` guard is the backstop.
+   * @param scope Narrows the '@' list for one composer: the agents it may offer and the people it
+   * offers. Passed per call, never stored, because this engine is shared by every composer on the
+   * page. Omitted keeps today's list: every agent the user can run, and the current user.
    * @returns Filtered and ranked suggestions
    */
-  getSuggestions(query: string, includeUsers: boolean = true, trigger: string = '@', targetAgentId: string | null = null): MentionSuggestion[] {
+  GetSuggestions(
+    query: string,
+    includeUsers: boolean = true,
+    trigger: string = '@',
+    targetAgentId: string | null = null,
+    scope: MentionSuggestionScope | null = null
+  ): MentionSuggestion[] {
     // The '#' trigger searches entities + queries; '/' searches skills; '@' searches agents + users
     if (trigger === '#') {
       return this.getEntityAndQuerySuggestions(query);
@@ -237,42 +246,10 @@ export class MentionAutocomplete extends BaseSingleton<MentionAutocomplete> {
     }
 
     const lowerQuery = query.toLowerCase().trim();
-    const suggestions: MentionSuggestion[] = [];
-
-    // Add agent suggestions
-    for (const agent of this.agentsCache) {
-      const score = this.calculateMatchScore(agent.Name || '', lowerQuery);
-      if (score > 0 || !lowerQuery) {
-        suggestions.push({
-          type: 'agent',
-          id: agent.ID,
-          name: agent.Name || 'Unknown',
-          displayName: agent.Name || 'Unknown',
-          description: agent.Description || undefined,
-          imageUrl: agent.LogoURL || undefined, // Agent logo/avatar image
-          icon: this.getAgentIcon(agent),
-          // Configuration presets ride on the suggestion — the (AI-blind) composer
-          // renders a preset picker on the inserted chip when there are 2+.
-          presets: this.getAgentPresets(agent.ID)
-        });
-      }
-    }
-
-    // Add user suggestions (if enabled)
-    if (includeUsers) {
-      for (const user of this.usersCache) {
-        const score = this.calculateMatchScore(user.Name, lowerQuery);
-        if (score > 0 || !lowerQuery) {
-          suggestions.push({
-            type: 'user',
-            id: user.ID,
-            name: user.Name,
-            displayName: user.Name,
-            description: user.Email || undefined
-          });
-        }
-      }
-    }
+    const suggestions: MentionSuggestion[] = [
+      ...this.getAgentSuggestions(lowerQuery, scope?.AllowedAgentIDs ?? null),
+      ...(includeUsers ? this.getPeopleSuggestions(lowerQuery, scope?.People ?? null) : []),
+    ];
 
     // Sort by relevance: exact match > starts with > contains
     return suggestions.sort((a, b) => {
@@ -286,6 +263,57 @@ export class MentionAutocomplete extends BaseSingleton<MentionAutocomplete> {
       // Otherwise alphabetically
       return a.name.localeCompare(b.name);
     });
+  }
+
+  /** @deprecated Use {@link GetSuggestions}. */
+  getSuggestions(
+    query: string,
+    includeUsers: boolean = true,
+    trigger: string = '@',
+    targetAgentId: string | null = null,
+    scope: MentionSuggestionScope | null = null
+  ): MentionSuggestion[] {
+    return this.GetSuggestions(query, includeUsers, trigger, targetAgentId, scope);
+  }
+
+  /**
+   * Agent suggestions for '@': the user's runnable agents that match the query, narrowed to
+   * `allowedAgentIDs` when one is given (null offers every runnable agent).
+   */
+  private getAgentSuggestions(lowerQuery: string, allowedAgentIDs: readonly string[] | null): MentionSuggestion[] {
+    return this.agentsCache
+      .filter(agent => allowedAgentIDs == null || allowedAgentIDs.some(id => UUIDsEqual(id, agent.ID)))
+      .filter(agent => !lowerQuery || this.calculateMatchScore(agent.Name || '', lowerQuery) > 0)
+      .map(agent => ({
+        type: 'agent',
+        id: agent.ID,
+        name: agent.Name || 'Unknown',
+        displayName: agent.Name || 'Unknown',
+        description: agent.Description || undefined,
+        imageUrl: agent.LogoURL || undefined, // Agent logo/avatar image
+        icon: this.getAgentIcon(agent),
+        // Configuration presets ride on the suggestion — the (AI-blind) composer
+        // renders a preset picker on the inserted chip when there are 2+.
+        presets: this.getAgentPresets(agent.ID)
+      }));
+  }
+
+  /**
+   * People suggestions for '@': the host's list when a composer supplies one, otherwise the
+   * engine's own (which holds only the current user).
+   */
+  private getPeopleSuggestions(lowerQuery: string, people: readonly MentionPerson[] | null): MentionSuggestion[] {
+    const candidates: readonly MentionPerson[] = people
+      ?? this.usersCache.map(user => ({ ID: user.ID, Name: user.Name, Email: user.Email }));
+    return candidates
+      .filter(person => !lowerQuery || this.calculateMatchScore(person.Name, lowerQuery) > 0)
+      .map(person => ({
+        type: 'user',
+        id: person.ID,
+        name: person.Name,
+        displayName: person.Name,
+        description: person.Email || undefined
+      }));
   }
 
   /**
@@ -465,45 +493,75 @@ export class MentionAutocomplete extends BaseSingleton<MentionAutocomplete> {
   /**
    * Get available agents for parsing
    */
-  getAvailableAgents(): MJAIAgentEntityExtended[] {
+  GetAvailableAgents(): MJAIAgentEntityExtended[] {
     return this.agentsCache;
+  }
+
+  /** @deprecated Use {@link GetAvailableAgents}. */
+  getAvailableAgents(): MJAIAgentEntityExtended[] {
+    return this.GetAvailableAgents();
   }
 
   /**
    * Get available users for parsing
    */
-  getAvailableUsers(): UserInfo[] {
+  GetAvailableUsers(): UserInfo[] {
     return this.usersCache;
+  }
+
+  /** @deprecated Use {@link GetAvailableUsers}. */
+  getAvailableUsers(): UserInfo[] {
+    return this.GetAvailableUsers();
   }
 
   /**
    * Get available entities for parsing
    */
-  getAvailableEntities(): EntityInfo[] {
+  GetAvailableEntities(): EntityInfo[] {
     return this.entitiesCache;
+  }
+
+  /** @deprecated Use {@link GetAvailableEntities}. */
+  getAvailableEntities(): EntityInfo[] {
+    return this.GetAvailableEntities();
   }
 
   /**
    * Get available queries for parsing
    */
-  getAvailableQueries(): QueryInfo[] {
+  GetAvailableQueries(): QueryInfo[] {
     return this.queriesCache;
+  }
+
+  /** @deprecated Use {@link GetAvailableQueries}. */
+  getAvailableQueries(): QueryInfo[] {
+    return this.GetAvailableQueries();
   }
 
   /**
    * Get the generic icon used for all query mentions.
    */
-  getQueriesEntityIcon(): string {
+  GetQueriesEntityIcon(): string {
     return this.queriesEntityIcon;
+  }
+
+  /** @deprecated Use {@link GetQueriesEntityIcon}. */
+  getQueriesEntityIcon(): string {
+    return this.GetQueriesEntityIcon();
   }
 
   /**
    * Refresh the caches
    * Resets initialization state and reloads agents
    */
-  async refresh(currentUser: UserInfo): Promise<void> {
+  async Refresh(currentUser: UserInfo): Promise<void> {
     this.isInitialized = false;
     this.initializationPromise = null;
     await this.initialize(currentUser);
+  }
+
+  /** @deprecated Use {@link Refresh}. */
+  async refresh(currentUser: UserInfo): Promise<void> {
+    return this.Refresh(currentUser);
   }
 }

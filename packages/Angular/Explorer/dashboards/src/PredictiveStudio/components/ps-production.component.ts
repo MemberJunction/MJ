@@ -9,7 +9,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { MJMLModelEntity, MJMLModelScoringBindingEntity, MJProcessRunDetailEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
-import { PSProcessRunRow, primaryAuc, primaryModelScore, formatMetricValue } from '../predictive-studio.view-models';
+import { PSProcessRunRow, PrimaryAuc, PrimaryModelScore, FormatMetricValue } from '../predictive-studio.view-models';
 import { humanizeCron, StatusVariant } from '../production-distribution';
 import { PSOperateDialogComponent } from './ps-operate-dialog.component';
 import { PSPredictionsGridComponent } from './ps-predictions-grid.component';
@@ -307,29 +307,169 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
   private cdr = inject(ChangeDetectorRef);
   private modelsSub?: Subscription;
 
-  public models: ProductionModelVM[] = [];
-  public selectedModelId = '';
-  public selectedBindings: BindingVM[] = [];
-  public runs: PSProcessRunRow[] = [];
-  public loadingRuns = false;
-  public loadingDetails = false;
-  /** Whether the "Operate this model" dialog is open for the selected model. */
-  public operateOpen = false;
-  /** The run whose per-record predictions are drilled into (null = the run list). */
-  public selectedRunId: string | null = null;
-  public runDetails: RunDetailVM[] = [];
-  public listSizePct = 30;
-  public detailSizePct = 70;
-  public isListCollapsed = false;
-  public isHeaderCollapsed = false;
-  public isDeploymentCollapsed = false;
-  public isRunFocused = false;
+  public Models: ProductionModelVM[] = [];
 
-  public get runGridHeight(): string {
-    if (this.isRunFocused || (this.isHeaderCollapsed && this.isDeploymentCollapsed)) {
+  /** @deprecated Use {@link Models}. */
+  public get models(): ProductionModelVM[] {
+    return this.Models;
+  }
+  /** @deprecated Use {@link Models}. */
+  public set models(value: ProductionModelVM[]) {
+    this.Models = value;
+  }
+  public SelectedModelId = '';
+
+  /** @deprecated Use {@link SelectedModelId}. */
+  public get selectedModelId() {
+    return this.SelectedModelId;
+  }
+  /** @deprecated Use {@link SelectedModelId}. */
+  public set selectedModelId(value) {
+    this.SelectedModelId = value;
+  }
+  public SelectedBindings: BindingVM[] = [];
+
+  /** @deprecated Use {@link SelectedBindings}. */
+  public get selectedBindings(): BindingVM[] {
+    return this.SelectedBindings;
+  }
+  /** @deprecated Use {@link SelectedBindings}. */
+  public set selectedBindings(value: BindingVM[]) {
+    this.SelectedBindings = value;
+  }
+  public Runs: PSProcessRunRow[] = [];
+
+  /** @deprecated Use {@link Runs}. */
+  public get runs(): PSProcessRunRow[] {
+    return this.Runs;
+  }
+  /** @deprecated Use {@link Runs}. */
+  public set runs(value: PSProcessRunRow[]) {
+    this.Runs = value;
+  }
+  public LoadingRuns = false;
+
+  /** @deprecated Use {@link LoadingRuns}. */
+  public get loadingRuns() {
+    return this.LoadingRuns;
+  }
+  /** @deprecated Use {@link LoadingRuns}. */
+  public set loadingRuns(value) {
+    this.LoadingRuns = value;
+  }
+  public LoadingDetails = false;
+
+  /** @deprecated Use {@link LoadingDetails}. */
+  public get loadingDetails() {
+    return this.LoadingDetails;
+  }
+  /** @deprecated Use {@link LoadingDetails}. */
+  public set loadingDetails(value) {
+    this.LoadingDetails = value;
+  }
+  /** Whether the "Operate this model" dialog is open for the selected model. */
+  public OperateOpen = false;
+
+  /** @deprecated Use {@link OperateOpen}. */
+  public get operateOpen() {
+    return this.OperateOpen;
+  }
+  /** @deprecated Use {@link OperateOpen}. */
+  public set operateOpen(value) {
+    this.OperateOpen = value;
+  }
+  /** The run whose per-record predictions are drilled into (null = the run list). */
+  public SelectedRunId: string | null = null;
+
+  /** @deprecated Use {@link SelectedRunId}. */
+  public get selectedRunId(): string | null {
+    return this.SelectedRunId;
+  }
+  /** @deprecated Use {@link SelectedRunId}. */
+  public set selectedRunId(value: string | null) {
+    this.SelectedRunId = value;
+  }
+  public RunDetails: RunDetailVM[] = [];
+
+  /** @deprecated Use {@link RunDetails}. */
+  public get runDetails(): RunDetailVM[] {
+    return this.RunDetails;
+  }
+  /** @deprecated Use {@link RunDetails}. */
+  public set runDetails(value: RunDetailVM[]) {
+    this.RunDetails = value;
+  }
+  public ListSizePct = 30;
+
+  /** @deprecated Use {@link ListSizePct}. */
+  public get listSizePct() {
+    return this.ListSizePct;
+  }
+  /** @deprecated Use {@link ListSizePct}. */
+  public set listSizePct(value) {
+    this.ListSizePct = value;
+  }
+  public DetailSizePct = 70;
+
+  /** @deprecated Use {@link DetailSizePct}. */
+  public get detailSizePct() {
+    return this.DetailSizePct;
+  }
+  /** @deprecated Use {@link DetailSizePct}. */
+  public set detailSizePct(value) {
+    this.DetailSizePct = value;
+  }
+  public IsListCollapsed = false;
+
+  /** @deprecated Use {@link IsListCollapsed}. */
+  public get isListCollapsed() {
+    return this.IsListCollapsed;
+  }
+  /** @deprecated Use {@link IsListCollapsed}. */
+  public set isListCollapsed(value) {
+    this.IsListCollapsed = value;
+  }
+  public IsHeaderCollapsed = false;
+
+  /** @deprecated Use {@link IsHeaderCollapsed}. */
+  public get isHeaderCollapsed() {
+    return this.IsHeaderCollapsed;
+  }
+  /** @deprecated Use {@link IsHeaderCollapsed}. */
+  public set isHeaderCollapsed(value) {
+    this.IsHeaderCollapsed = value;
+  }
+  public IsDeploymentCollapsed = false;
+
+  /** @deprecated Use {@link IsDeploymentCollapsed}. */
+  public get isDeploymentCollapsed() {
+    return this.IsDeploymentCollapsed;
+  }
+  /** @deprecated Use {@link IsDeploymentCollapsed}. */
+  public set isDeploymentCollapsed(value) {
+    this.IsDeploymentCollapsed = value;
+  }
+  public IsRunFocused = false;
+
+  /** @deprecated Use {@link IsRunFocused}. */
+  public get isRunFocused() {
+    return this.IsRunFocused;
+  }
+  /** @deprecated Use {@link IsRunFocused}. */
+  public set isRunFocused(value) {
+    this.IsRunFocused = value;
+  }
+
+  public get RunGridHeight(): string {
+    if (this.IsRunFocused || (this.IsHeaderCollapsed && this.IsDeploymentCollapsed)) {
       return '740px';
     }
     return '520px';
+  }
+
+  /** @deprecated Use {@link RunGridHeight}. */
+  public get runGridHeight(): string {
+    return this.RunGridHeight;
   }
 
   ngOnInit(): void {
@@ -349,35 +489,50 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
 
   // ---- layout splitter resizing & persistence ----
 
+  public ToggleHeaderCollapse(): void {
+    this.IsHeaderCollapsed = !this.IsHeaderCollapsed;
+    this.updateFocusState();
+    this.saveLayoutPrefs();
+    this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link ToggleHeaderCollapse}. */
   public toggleHeaderCollapse(): void {
-    this.isHeaderCollapsed = !this.isHeaderCollapsed;
+    return this.ToggleHeaderCollapse();
+  }
+
+  public ToggleDeploymentCollapse(): void {
+    this.IsDeploymentCollapsed = !this.IsDeploymentCollapsed;
     this.updateFocusState();
     this.saveLayoutPrefs();
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link ToggleDeploymentCollapse}. */
   public toggleDeploymentCollapse(): void {
-    this.isDeploymentCollapsed = !this.isDeploymentCollapsed;
-    this.updateFocusState();
-    this.saveLayoutPrefs();
-    this.cdr.detectChanges();
+    return this.ToggleDeploymentCollapse();
   }
 
-  public toggleRunFocus(): void {
-    this.isRunFocused = !this.isRunFocused;
-    if (this.isRunFocused) {
-      this.isHeaderCollapsed = true;
-      this.isDeploymentCollapsed = true;
+  public ToggleRunFocus(): void {
+    this.IsRunFocused = !this.IsRunFocused;
+    if (this.IsRunFocused) {
+      this.IsHeaderCollapsed = true;
+      this.IsDeploymentCollapsed = true;
     } else {
-      this.isHeaderCollapsed = false;
-      this.isDeploymentCollapsed = false;
+      this.IsHeaderCollapsed = false;
+      this.IsDeploymentCollapsed = false;
     }
     this.saveLayoutPrefs();
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link ToggleRunFocus}. */
+  public toggleRunFocus(): void {
+    return this.ToggleRunFocus();
+  }
+
   private updateFocusState(): void {
-    this.isRunFocused = this.isHeaderCollapsed && this.isDeploymentCollapsed;
+    this.IsRunFocused = this.IsHeaderCollapsed && this.IsDeploymentCollapsed;
   }
 
   private loadLayoutPrefs(): void {
@@ -386,78 +541,103 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
       try {
         const parsed = JSON.parse(raw);
         if (typeof parsed.listSizePct === 'number' && parsed.listSizePct >= 15 && parsed.listSizePct <= 60) {
-          this.listSizePct = parsed.listSizePct;
-          this.detailSizePct = 100 - parsed.listSizePct;
+          this.ListSizePct = parsed.listSizePct;
+          this.DetailSizePct = 100 - parsed.listSizePct;
         }
         if (typeof parsed.isListCollapsed === 'boolean') {
-          this.isListCollapsed = parsed.isListCollapsed;
+          this.IsListCollapsed = parsed.isListCollapsed;
         }
         if (typeof parsed.isHeaderCollapsed === 'boolean') {
-          this.isHeaderCollapsed = parsed.isHeaderCollapsed;
+          this.IsHeaderCollapsed = parsed.isHeaderCollapsed;
         }
         if (typeof parsed.isDeploymentCollapsed === 'boolean') {
-          this.isDeploymentCollapsed = parsed.isDeploymentCollapsed;
+          this.IsDeploymentCollapsed = parsed.isDeploymentCollapsed;
         }
         if (typeof parsed.isRunFocused === 'boolean') {
-          this.isRunFocused = parsed.isRunFocused;
+          this.IsRunFocused = parsed.isRunFocused;
         }
       } catch {}
     }
   }
 
-  public onSplitDragEnd(sizes: readonly (number | '*')[]): void {
+  public OnSplitDragEnd(sizes: readonly (number | '*')[]): void {
     if (Array.isArray(sizes) && sizes.length === 2 && typeof sizes[0] === 'number' && typeof sizes[1] === 'number') {
-      this.listSizePct = Math.round(sizes[0]);
-      this.detailSizePct = Math.round(sizes[1]);
+      this.ListSizePct = Math.round(sizes[0]);
+      this.DetailSizePct = Math.round(sizes[1]);
       this.saveLayoutPrefs();
     }
   }
 
-  public toggleList(): void {
-    this.isListCollapsed = !this.isListCollapsed;
+  /** @deprecated Use {@link OnSplitDragEnd}. */
+  public onSplitDragEnd(sizes: readonly (number | '*')[]): void {
+    return this.OnSplitDragEnd(sizes);
+  }
+
+  public ToggleList(): void {
+    this.IsListCollapsed = !this.IsListCollapsed;
     this.saveLayoutPrefs();
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link ToggleList}. */
+  public toggleList(): void {
+    return this.ToggleList();
+  }
+
   private saveLayoutPrefs(): void {
     const prefs = {
-      listSizePct: this.listSizePct,
-      detailSizePct: this.detailSizePct,
-      isListCollapsed: this.isListCollapsed,
-      isHeaderCollapsed: this.isHeaderCollapsed,
-      isDeploymentCollapsed: this.isDeploymentCollapsed,
-      isRunFocused: this.isRunFocused,
+      listSizePct: this.ListSizePct,
+      detailSizePct: this.DetailSizePct,
+      isListCollapsed: this.IsListCollapsed,
+      isHeaderCollapsed: this.IsHeaderCollapsed,
+      isDeploymentCollapsed: this.IsDeploymentCollapsed,
+      isRunFocused: this.IsRunFocused,
     };
     UserInfoEngine.Instance.SetSettingDebounced('mj.predictiveStudio.production.layout', JSON.stringify(prefs));
   }
 
   // ---- KPIs ----
 
+  public get ScheduledModelCount(): number {
+    return this.Models.filter((m) => m.deployState === 'scheduled' || m.scheduledCount > 0).length;
+  }
+
+  /** @deprecated Use {@link ScheduledModelCount}. */
   public get scheduledModelCount(): number {
-    return this.models.filter((m) => m.deployState === 'scheduled' || m.scheduledCount > 0).length;
+    return this.ScheduledModelCount;
   }
+  public get BoundModelCount(): number {
+    return this.Models.filter((m) => m.bindingCount > 0).length;
+  }
+
+  /** @deprecated Use {@link BoundModelCount}. */
   public get boundModelCount(): number {
-    return this.models.filter((m) => m.bindingCount > 0).length;
+    return this.BoundModelCount;
   }
+  public get IdleModelCount(): number {
+    return this.Models.filter((m) => m.deployState === 'idle').length;
+  }
+
+  /** @deprecated Use {@link IdleModelCount}. */
   public get idleModelCount(): number {
-    return this.models.filter((m) => m.deployState === 'idle').length;
+    return this.IdleModelCount;
   }
 
   // ---- reactive list build (DB-light, from caches) ----
 
   private rebuildModels(): void {
-    this.models = (this.engine?.PublishedModels ?? []).map((m) => this.toVM(m));
-    if (!this.models.some((m) => UUIDsEqual(m.modelId, this.selectedModelId))) {
-      const first = this.models[0]?.modelId ?? '';
+    this.Models = (this.engine?.PublishedModels ?? []).map((m) => this.toVM(m));
+    if (!this.Models.some((m) => UUIDsEqual(m.modelId, this.SelectedModelId))) {
+      const first = this.Models[0]?.modelId ?? '';
       if (first) {
-        this.select(first);
+        this.Select(first);
       } else {
-        this.selectedModelId = '';
-        this.selectedBindings = [];
-        this.runs = [];
+        this.SelectedModelId = '';
+        this.SelectedBindings = [];
+        this.Runs = [];
       }
     } else {
-      this.selectedBindings = this.bindingsForModel(this.selectedModelId);
+      this.SelectedBindings = this.bindingsForModel(this.SelectedModelId);
     }
   }
 
@@ -471,8 +651,8 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
       null,
     );
     const lastRowCount = bindings.find((b) => b.LastRowCount != null)?.LastRowCount ?? null;
-    const score = primaryModelScore(m);
-    const holdoutMetric = score != null ? formatMetricValue(score.key, score.value) : '—';
+    const score = PrimaryModelScore(m);
+    const holdoutMetric = score != null ? FormatMetricValue(score.key, score.value) : '—';
     return {
       modelId: m.ID,
       label: this.engine.ModelDisplayName(m),
@@ -515,11 +695,11 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
     return '—';
   }
 
-  public get selectedTargetEntityName(): string | null {
-    if (this.selectedBindings.length > 0 && this.selectedBindings[0].targetEntity !== '—') {
-      return this.selectedBindings[0].targetEntity;
+  public get SelectedTargetEntityName(): string | null {
+    if (this.SelectedBindings.length > 0 && this.SelectedBindings[0].targetEntity !== '—') {
+      return this.SelectedBindings[0].targetEntity;
     }
-    const model = this.engine?.PublishedModels?.find((m) => UUIDsEqual(m.ID, this.selected.modelId));
+    const model = this.engine?.PublishedModels?.find((m) => UUIDsEqual(m.ID, this.Selected.modelId));
     if (model?.PipelineID) {
       const pipeline = this.engine?.Pipelines?.find((p) => UUIDsEqual(p.ID, model.PipelineID));
       if (pipeline?.TargetEntityID) {
@@ -530,16 +710,26 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
     return null;
   }
 
+  /** @deprecated Use {@link SelectedTargetEntityName}. */
+  public get selectedTargetEntityName(): string | null {
+    return this.SelectedTargetEntityName;
+  }
+
   // ---- selection + on-demand run history ----
 
-  public get selected(): ProductionModelVM {
+  public get Selected(): ProductionModelVM {
     return (
-      this.models.find((m) => UUIDsEqual(m.modelId, this.selectedModelId)) ??
-      this.models[0] ?? {
+      this.Models.find((m) => UUIDsEqual(m.modelId, this.SelectedModelId)) ??
+      this.Models[0] ?? {
         modelId: '', label: '—', algorithm: '—', problemType: '—', version: 0, holdoutMetric: '—',
         deployState: 'idle', bindingCount: 0, processCount: 0, scheduledCount: 0, lastScoredAt: null, lastRowCount: null,
       }
     );
+  }
+
+  /** @deprecated Use {@link Selected}. */
+  public get selected(): ProductionModelVM {
+    return this.Selected;
   }
 
   /**
@@ -548,37 +738,57 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
    * on-demand run history + bindings of the SELECTED model are not part of that stream, so reload them
    * here so a just-created run / binding shows immediately.
    */
-  public onOperateClose(result: { changed: boolean }): void {
-    this.operateOpen = false;
-    if (result.changed && this.selectedModelId) {
-      this.selectedBindings = this.bindingsForModel(this.selectedModelId);
-      void this.loadRuns(this.selectedModelId);
+  public OnOperateClose(result: { changed: boolean }): void {
+    this.OperateOpen = false;
+    if (result.changed && this.SelectedModelId) {
+      this.SelectedBindings = this.bindingsForModel(this.SelectedModelId);
+      void this.loadRuns(this.SelectedModelId);
     }
   }
 
-  public select(id: string): void {
-    this.selectedModelId = id;
-    this.selectedBindings = this.bindingsForModel(id);
-    this.closeRun();
+  /** @deprecated Use {@link OnOperateClose}. */
+  public onOperateClose(result: { changed: boolean }): void {
+    return this.OnOperateClose(result);
+  }
+
+  public Select(id: string): void {
+    this.SelectedModelId = id;
+    this.SelectedBindings = this.bindingsForModel(id);
+    this.CloseRun();
     void this.loadRuns(id);
+  }
+
+  /** @deprecated Use {@link Select}. */
+  public select(id: string): void {
+    return this.Select(id);
   }
 
   // ---- run drill-in: per-record predictions (on demand) ----
 
   /** Drill into a run's per-record predictions (`MJ: Process Run Details` `ResultPayload`). */
-  public openRun(runId: string): void {
-    this.selectedRunId = runId;
+  public OpenRun(runId: string): void {
+    this.SelectedRunId = runId;
     void this.loadRunDetails(runId);
   }
 
+  /** @deprecated Use {@link OpenRun}. */
+  public openRun(runId: string): void {
+    return this.OpenRun(runId);
+  }
+
+  public CloseRun(): void {
+    this.SelectedRunId = null;
+    this.RunDetails = [];
+  }
+
+  /** @deprecated Use {@link CloseRun}. */
   public closeRun(): void {
-    this.selectedRunId = null;
-    this.runDetails = [];
+    return this.CloseRun();
   }
 
   private async loadRunDetails(runId: string): Promise<void> {
-    this.loadingDetails = true;
-    this.runDetails = [];
+    this.LoadingDetails = true;
+    this.RunDetails = [];
     this.cdr.detectChanges();
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
@@ -592,9 +802,9 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
         },
         this.ProviderToUse.CurrentUser,
       );
-      this.runDetails = r.Success ? (r.Results ?? []).map((d) => this.toDetailVM(d)) : [];
+      this.RunDetails = r.Success ? (r.Results ?? []).map((d) => this.toDetailVM(d)) : [];
     } finally {
-      this.loadingDetails = false;
+      this.LoadingDetails = false;
       this.cdr.detectChanges();
     }
   }
@@ -621,53 +831,78 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
 
   /** On-demand run history for the selected model (DB-light — only the selected model, capped). */
   private async loadRuns(modelId: string): Promise<void> {
-    this.loadingRuns = true;
-    this.runs = [];
+    this.LoadingRuns = true;
+    this.Runs = [];
     this.cdr.detectChanges();
     try {
-      this.runs = await this.engine.LoadRecentRunsForModel(
+      this.Runs = await this.engine.LoadRecentRunsForModel(
         modelId,
         this.ProviderToUse,
         this.ProviderToUse.CurrentUser,
         { sinceDays: 90, maxRows: 50 },
       );
     } finally {
-      this.loadingRuns = false;
+      this.LoadingRuns = false;
       this.cdr.detectChanges();
     }
   }
 
   // ---- display helpers ----
 
-  public deployIcon(state: DeployState): string {
+  public DeployIcon(state: DeployState): string {
     switch (state) {
       case 'bound': return 'fa-solid fa-arrow-right-to-bracket';
       case 'scheduled': return 'fa-solid fa-clock';
       case 'idle': return 'fa-solid fa-circle-pause';
     }
   }
-  public deployLabel(state: DeployState): string {
+
+  /** @deprecated Use {@link DeployIcon}. */
+  public deployIcon(state: DeployState): string {
+    return this.DeployIcon(state);
+  }
+  public DeployLabel(state: DeployState): string {
     switch (state) {
       case 'bound': return 'Bound';
       case 'scheduled': return 'Scheduled';
       case 'idle': return 'Idle';
     }
   }
-  public deployBadge(state: DeployState): StatusVariant {
+
+  /** @deprecated Use {@link DeployLabel}. */
+  public deployLabel(state: DeployState): string {
+    return this.DeployLabel(state);
+  }
+  public DeployBadge(state: DeployState): StatusVariant {
     switch (state) {
       case 'bound': return 'green';
       case 'scheduled': return 'blue';
       case 'idle': return 'gray';
     }
   }
-  public modeBadge(mode: string): StatusVariant {
+
+  /** @deprecated Use {@link DeployBadge}. */
+  public deployBadge(state: DeployState): StatusVariant {
+    return this.DeployBadge(state);
+  }
+  public ModeBadge(mode: string): StatusVariant {
     return mode === 'Scheduled' ? 'blue' : mode === 'Materialized' ? 'green' : 'gray';
   }
-  public runBadge(status: string): StatusVariant {
+
+  /** @deprecated Use {@link ModeBadge}. */
+  public modeBadge(mode: string): StatusVariant {
+    return this.ModeBadge(mode);
+  }
+  public RunBadge(status: string): StatusVariant {
     const s = (status || '').toLowerCase();
     if (s.includes('complete') || s.includes('success')) return 'green';
     if (s.includes('fail') || s.includes('error')) return 'red';
     if (s.includes('run') || s.includes('progress')) return 'blue';
     return 'gray';
+  }
+
+  /** @deprecated Use {@link RunBadge}. */
+  public runBadge(status: string): StatusVariant {
+    return this.RunBadge(status);
   }
 }

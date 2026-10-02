@@ -117,6 +117,11 @@ export interface FormContext {
   showRelatedEntities?: boolean;
   hiddenSectionKeys?: string[];
   visibleSectionKeys?: string[];
+  /**
+   * Field names to omit from the form. A draft evaluation uses this to hide
+   * cohort figures until the viewer submits.
+   */
+  hiddenFieldNames?: string[];
 }
 
 /**
@@ -204,11 +209,16 @@ export type BaseFormContext = FormContext;
 /**
  * Creates a default FormContext with sensible defaults.
  */
-export function createDefaultFormContext(): FormContext {
+export function CreateDefaultFormContext(): FormContext {
   return {
     sectionFilter: '',
     showEmptyFields: false,
     showValidation: false,
     validationErrors: []
   };
+}
+
+/** @deprecated Use {@link CreateDefaultFormContext}. */
+export function createDefaultFormContext(): FormContext {
+  return CreateDefaultFormContext();
 }

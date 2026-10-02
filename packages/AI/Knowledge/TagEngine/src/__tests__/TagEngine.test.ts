@@ -68,8 +68,8 @@ vi.mock('@memberjunction/core-entities', () => ({
     KnowledgeHubMetadataEngine: { Instance: { Config: vi.fn() } },
 }));
 
-vi.mock('@memberjunction/ai-prompts', () => ({
-    AIModelRunner: class {
+vi.mock('@memberjunction/ai-prompts', () => {
+    class MockEmbeddingRunner {
         async RunEmbedding(params: { Texts: string[] }) {
             // Generate dummy vectors (one per input text) so embedding succeeds
             const vectors = (params.Texts || []).map((_: string, i: number) =>
@@ -77,13 +77,17 @@ vi.mock('@memberjunction/ai-prompts', () => ({
             );
             return { Success: true, Vectors: vectors, PromptRunID: null, TokensUsed: 0, Cost: 0, ErrorMessage: null, ExecutionTimeMs: 0 };
         }
-    },
-    AIPromptRunner: class {
-        async ExecutePrompt() {
-            return { success: true, result: { taxonomy: [] }, errorMessage: null };
-        }
-    },
-}));
+    }
+    return {
+        AIModelRunner: MockEmbeddingRunner,
+        AIEmbeddingRunner: MockEmbeddingRunner,
+        AIPromptRunner: class {
+            async ExecutePrompt() {
+                return { success: true, result: { taxonomy: [] }, errorMessage: null };
+            }
+        },
+    };
+});
 
 // SeedTaxonomy imports AIPromptParams (ai-core-plus) and the clustering engine.
 // Mock them so the real CorePlus module (which needs BaseEntity/MJAIPromptEntity) is

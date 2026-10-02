@@ -1,0 +1,15 @@
+[
+  {
+    "_comments": [
+      "A draft evaluation owns its score rows. CascadeDeletes makes the generated delete",
+      "procedure remove those rows first. The procedure still refuses a non-draft."
+    ],
+    "fields": {
+      "Name": "MJ: Rubric Evaluations",
+      "CascadeDeletes": true
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Rubric Evaluations"
+    }
+  }
+]

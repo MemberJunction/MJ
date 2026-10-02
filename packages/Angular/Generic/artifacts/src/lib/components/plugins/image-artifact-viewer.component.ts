@@ -42,7 +42,7 @@ export const IMAGE_MIME_EXTENSION_MAP: Readonly<Record<string, string>> = Object
  * @param mime   MIME type from the artifact version (e.g. `"image/jpeg"`). Optional.
  * @returns      Sanitized filename with extension (e.g. `"Generated_image_1.jpg"`).
  */
-export function buildImageDownloadFileName(name: string | null | undefined, mime: string | null | undefined): string {
+export function BuildImageDownloadFileName(name: string | null | undefined, mime: string | null | undefined): string {
     // `??` falls back on null/undefined but NOT empty / whitespace-only names —
     // those should also use the default, so trim first and check for length.
     const trimmed = name?.trim();
@@ -53,6 +53,11 @@ export function buildImageDownloadFileName(name: string | null | undefined, mime
     // If the name already ends with the right extension, don't append it again
     // (e.g. metadata round-tripped through a file upload).
     return safeBase.toLowerCase().endsWith(`.${extension}`) ? safeBase : `${safeBase}.${extension}`;
+}
+
+/** @deprecated Use {@link BuildImageDownloadFileName}. */
+export function buildImageDownloadFileName(name: string | null | undefined, mime: string | null | undefined): string {
+    return BuildImageDownloadFileName(name, mime);
 }
 
 /**
@@ -239,23 +244,68 @@ export function buildImageDownloadFileName(name: string | null | undefined, mime
 @RegisterClass(BaseArtifactViewerPluginComponent, 'ImageArtifactViewerPlugin')
 export class ImageArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit, OnDestroy {
     /** Current resolved URL to bind to the `<img src>` — either a data URI (inline) or a pre-auth URL (file). */
-    public imageUrl = '';
+    public ImageUrl = '';
+
+    /** @deprecated Use {@link ImageUrl}. */
+    public get imageUrl() {
+        return this.ImageUrl;
+    }
+    /** @deprecated Use {@link ImageUrl}. */
+    public set imageUrl(value) {
+        this.ImageUrl = value;
+    }
 
     /** True from `ngOnInit` until the `<img>` `(load)` event fires (or an error happens). */
     public isLoading = true;
 
     /** Set while the download is in flight, to drive the toolbar spinner. */
-    public isDownloading = false;
+    public IsDownloading = false;
+
+    /** @deprecated Use {@link IsDownloading}. */
+    public get isDownloading() {
+        return this.IsDownloading;
+    }
+    /** @deprecated Use {@link IsDownloading}. */
+    public set isDownloading(value) {
+        this.IsDownloading = value;
+    }
 
     /** User-facing error message; non-empty hides the image and shows the error block. */
     public errorMessage = '';
 
     /** Click-to-toggle display mode. `'fit'` = contained in the panel, `'actual'` = 1:1 with scroll. */
-    public displayMode: 'fit' | 'actual' = 'fit';
+    public DisplayMode: 'fit' | 'actual' = 'fit';
+
+    /** @deprecated Use {@link DisplayMode}. */
+    public get displayMode(): 'fit' | 'actual' {
+        return this.DisplayMode;
+    }
+    /** @deprecated Use {@link DisplayMode}. */
+    public set displayMode(value: 'fit' | 'actual') {
+        this.DisplayMode = value;
+    }
 
     /** Native image dimensions, populated by the `(load)` event. Null until then. */
-    public naturalWidth: number | null = null;
-    public naturalHeight: number | null = null;
+    public NaturalWidth: number | null = null;
+
+    /** @deprecated Use {@link NaturalWidth}. */
+    public get naturalWidth(): number | null {
+        return this.NaturalWidth;
+    }
+    /** @deprecated Use {@link NaturalWidth}. */
+    public set naturalWidth(value: number | null) {
+        this.NaturalWidth = value;
+    }
+    public NaturalHeight: number | null = null;
+
+    /** @deprecated Use {@link NaturalHeight}. */
+    public get naturalHeight(): number | null {
+        return this.NaturalHeight;
+    }
+    /** @deprecated Use {@link NaturalHeight}. */
+    public set naturalHeight(value: number | null) {
+        this.NaturalHeight = value;
+    }
 
     /**
      * Object URL we lazily build from inline data so Download / Print have a real
@@ -294,13 +344,23 @@ export class ImageArtifactViewerComponent extends BaseArtifactViewerPluginCompon
     }
 
     /** Filename surfaced by the toolbar in the center of the bar. */
-    public get toolbarFileName(): string {
+    public get ToolbarFileName(): string {
         return this.artifactVersion?.FileName || this.artifactVersion?.Name || 'image';
     }
 
+    /** @deprecated Use {@link ToolbarFileName}. */
+    public get toolbarFileName(): string {
+        return this.ToolbarFileName;
+    }
+
     /** Accessible alt text — prefers a descriptive name over a raw filename. */
-    public get imageAltText(): string {
+    public get ImageAltText(): string {
         return this.artifactVersion?.Name || this.artifactVersion?.FileName || 'Image artifact';
+    }
+
+    /** @deprecated Use {@link ImageAltText}. */
+    public get imageAltText(): string {
+        return this.ImageAltText;
     }
 
     async ngOnInit(): Promise<void> {
@@ -343,7 +403,7 @@ export class ImageArtifactViewerComponent extends BaseArtifactViewerPluginCompon
             if (this.artifactVersion.ContentMode === 'File') {
                 // File-backed: fetch a pre-auth URL from MJStorage via the shared service.
                 // ArtifactFileService caches the URL so reopening the same artifact is instant.
-                this.imageUrl = await this.fileService.getDownloadUrl(this.artifactVersion.ID);
+                this.ImageUrl = await this.fileService.getDownloadUrl(this.artifactVersion.ID);
             } else {
                 // Inline ('Text' mode): Content is a data URI ready to bind directly.
                 const content = this.artifactVersion.Content;
@@ -351,7 +411,7 @@ export class ImageArtifactViewerComponent extends BaseArtifactViewerPluginCompon
                     this.showError('This artifact has no image content.');
                     return;
                 }
-                this.imageUrl = content;
+                this.ImageUrl = content;
             }
             this.cdr.markForCheck();
         } catch (err) {
@@ -360,16 +420,26 @@ export class ImageArtifactViewerComponent extends BaseArtifactViewerPluginCompon
         }
     }
 
-    public onImageLoad(event: Event): void {
+    public OnImageLoad(event: Event): void {
         const img = event.target as HTMLImageElement;
-        this.naturalWidth = img.naturalWidth || null;
-        this.naturalHeight = img.naturalHeight || null;
+        this.NaturalWidth = img.naturalWidth || null;
+        this.NaturalHeight = img.naturalHeight || null;
         this.isLoading = false;
         this.cdr.markForCheck();
     }
 
-    public onImageError(): void {
+    /** @deprecated Use {@link OnImageLoad}. */
+    public onImageLoad(event: Event): void {
+        return this.OnImageLoad(event);
+    }
+
+    public OnImageError(): void {
         this.showError('The image could not be displayed. It may be corrupt or in an unsupported format.');
+    }
+
+    /** @deprecated Use {@link OnImageError}. */
+    public onImageError(): void {
+        return this.OnImageError();
     }
 
     private showError(message: string): void {
@@ -380,13 +450,18 @@ export class ImageArtifactViewerComponent extends BaseArtifactViewerPluginCompon
 
     // ─── User actions ───────────────────────────────────────────────────────────
 
-    public toggleDisplayMode(): void {
+    public ToggleDisplayMode(): void {
         // Don't toggle while loading or errored — the user has nothing to react to yet.
         if (this.isLoading || this.errorMessage) {
             return;
         }
-        this.displayMode = this.displayMode === 'fit' ? 'actual' : 'fit';
+        this.DisplayMode = this.DisplayMode === 'fit' ? 'actual' : 'fit';
         this.cdr.markForCheck();
+    }
+
+    /** @deprecated Use {@link ToggleDisplayMode}. */
+    public toggleDisplayMode(): void {
+        return this.ToggleDisplayMode();
     }
 
     /**
@@ -394,23 +469,28 @@ export class ImageArtifactViewerComponent extends BaseArtifactViewerPluginCompon
      * helper so the fetch → blob → object-URL → anchor pattern is shared across
      * every file-backed viewer (PDF, XLSX, DOCX, and now Image).
      */
-    public async onDownload(): Promise<void> {
-        if (this.isDownloading || !this.imageUrl) {
+    public async OnDownload(): Promise<void> {
+        if (this.IsDownloading || !this.ImageUrl) {
             return;
         }
-        this.isDownloading = true;
+        this.IsDownloading = true;
         this.cdr.markForCheck();
         try {
             const sourceUrl = this.ensureDownloadableUrl();
-            const fileName = buildImageDownloadFileName(
+            const fileName = BuildImageDownloadFileName(
                 this.artifactVersion?.FileName ?? this.artifactVersion?.Name ?? null,
                 this.artifactVersion?.MimeType ?? null,
             );
             await this.triggerBrowserDownload(sourceUrl, fileName);
         } finally {
-            this.isDownloading = false;
+            this.IsDownloading = false;
             this.cdr.markForCheck();
         }
+    }
+
+    /** @deprecated Use {@link OnDownload}. */
+    public async onDownload(): Promise<void> {
+        return this.OnDownload();
     }
 
     /**
@@ -418,12 +498,17 @@ export class ImageArtifactViewerComponent extends BaseArtifactViewerPluginCompon
      * native print dialog. We deliberately don't manage a print pipeline
      * ourselves — same approach as `PdfArtifactViewerComponent.onPrint()`.
      */
-    public onPrint(): void {
-        if (!this.imageUrl) {
+    public OnPrint(): void {
+        if (!this.ImageUrl) {
             return;
         }
         const sourceUrl = this.ensureDownloadableUrl();
         window.open(sourceUrl, '_blank');
+    }
+
+    /** @deprecated Use {@link OnPrint}. */
+    public onPrint(): void {
+        return this.OnPrint();
     }
 
     /**
@@ -435,13 +520,13 @@ export class ImageArtifactViewerComponent extends BaseArtifactViewerPluginCompon
      */
     private ensureDownloadableUrl(): string {
         if (this.artifactVersion?.ContentMode === 'File') {
-            return this.imageUrl;
+            return this.ImageUrl;
         }
         if (this.inlineObjectUrl) {
             return this.inlineObjectUrl;
         }
         const mime = this.artifactVersion?.MimeType || 'application/octet-stream';
-        this.inlineObjectUrl = this.fileService.dataUrlToObjectUrl(this.imageUrl, mime);
+        this.inlineObjectUrl = this.fileService.dataUrlToObjectUrl(this.ImageUrl, mime);
         return this.inlineObjectUrl;
     }
 
@@ -460,7 +545,7 @@ export class ImageArtifactViewerComponent extends BaseArtifactViewerPluginCompon
         snap.title = this.getDisplayTitle() ?? undefined;
 
         const dimensionPart =
-            this.naturalWidth && this.naturalHeight ? ` ${this.naturalWidth} × ${this.naturalHeight}` : '';
+            this.NaturalWidth && this.NaturalHeight ? ` ${this.NaturalWidth} × ${this.NaturalHeight}` : '';
         const mimeLabel = this.artifactVersion.MimeType ?? 'image';
         snap.interpretation = `Image (${mimeLabel}${dimensionPart}).`;
 
@@ -468,9 +553,9 @@ export class ImageArtifactViewerComponent extends BaseArtifactViewerPluginCompon
             mimeType: this.artifactVersion.MimeType ?? undefined,
             fileName: this.artifactVersion.FileName ?? undefined,
             contentMode: this.artifactVersion.ContentMode,
-            width: this.naturalWidth ?? undefined,
-            height: this.naturalHeight ?? undefined,
-            displayMode: this.displayMode,
+            width: this.NaturalWidth ?? undefined,
+            height: this.NaturalHeight ?? undefined,
+            displayMode: this.DisplayMode,
         };
         return snap;
     }

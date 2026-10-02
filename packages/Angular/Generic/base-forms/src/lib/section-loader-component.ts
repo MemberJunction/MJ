@@ -15,7 +15,16 @@ export class SectionLoaderComponent implements AfterViewInit, OnDestroy, OnChang
     @Input() EditMode: boolean = false;
     @Output() LoadComplete: EventEmitter<void> = new EventEmitter<void>();
 
-    @ViewChild('container', { read: ViewContainerRef }) container!: ViewContainerRef;
+    @ViewChild('container', { read: ViewContainerRef }) Container!: ViewContainerRef;
+
+    /** @deprecated Use {@link Container}. */
+    get container(): ViewContainerRef {
+      return this.Container;
+    }
+    /** @deprecated Use {@link Container}. */
+    set container(value: ViewContainerRef) {
+      this.Container = value;
+    }
   
     private _sectionObj: BaseFormSectionComponent | null = null;
     constructor(private cdr: ChangeDetectorRef) { }
@@ -38,7 +47,7 @@ export class SectionLoaderComponent implements AfterViewInit, OnDestroy, OnChang
       //console.log("loading component?", `${this.Entity}.${this.Section}`);
       const sectionInfo = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormSectionComponent,`${this.Entity}.${this.Section}`);
       if (sectionInfo) {
-        const componentRef = this.container.createComponent(sectionInfo.SubClass as Type<BaseFormSectionComponent>); 
+        const componentRef = this.Container.createComponent(sectionInfo.SubClass as Type<BaseFormSectionComponent>); 
         // pass in record and edit mode
         this._sectionObj = <BaseFormSectionComponent>componentRef.instance;
         this._sectionObj.record = this.record;
@@ -53,6 +62,6 @@ export class SectionLoaderComponent implements AfterViewInit, OnDestroy, OnChang
   
     ngOnDestroy() {
       // Don't forget to cleanup dynamically created components
-      this.container.clear();
+      this.Container.clear();
     }
 }

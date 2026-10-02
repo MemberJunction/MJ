@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+    "Name": "Core agent rubrics - Query Builder",
+    "Description": "Answers from the run itself. Scored by the Query Builder Evaluation rubric, not an inline judge.",
+    "InputDefinition": {
+      "userMessage": "The only row is name Ada and city Paris. What city is Ada in?"
+    },
+    "ExpectedOutcomes": {},
+    "Configuration": {
+      "agentId": "@lookup:MJ: AI Agents.Name=Query Builder",
+      "oracles": [
+        {
+          "type": "trace-no-errors",
+          "weight": 1
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "28760386-BDD2-421D-9356-0DCF8E53DDC4"
+  }
+}

@@ -85,8 +85,8 @@ import { MJAIAgentChannelFormComponentExtended } from "./AIAgentChannels/ai-agen
 // Realtime Bridges — custom Extended forms (Pattern 2) for the three major bridge entities.
 import { MJAIBridgeProviderFormComponentExtended, LoadMJAIBridgeProviderFormComponentExtended } from "./BridgeProviders/bridge-provider-form.component";
 import { MJAIAgentSessionBridgeFormComponentExtended, LoadMJAIAgentSessionBridgeFormComponentExtended } from "./SessionBridges/session-bridge-form.component";
-import { RecordProcessFormComponentExtended } from "./RecordProcesses/record-process-form.component";
-import { RecordProcessEditorComponent } from "@memberjunction/ng-record-process-studio";
+import { RecordProcessFormComponentExtended, LoadRecordProcessFormComponentExtended } from "./RecordProcesses/record-process-form.component";
+import { RecordProcessEditorComponent, FeaturePipelineBuilderComponent, RecordProcessHistoryComponent } from "@memberjunction/ng-record-process-studio";
 import { MJAIBridgeAgentIdentityFormComponentExtended, LoadMJAIBridgeAgentIdentityFormComponentExtended } from "./BridgeAgentIdentities/bridge-agent-identity-form.component";
 // AI Agent "Realtime" panel (Pattern 1 — BaseFormPanel slot). Imported so the
 // @RegisterClassEx decorator runs at module load (Angular tree-shaking guard).
@@ -102,8 +102,16 @@ import { ModelPredictionPanel } from "../panels/model-predictions/model-predicti
 import { AISkillSharingPanel } from "../panels/ai-skill-sharing/ai-skill-sharing-panel.component";
 import { EntityFormChromeEditorComponent } from "../panels/form-chrome/entity-form-chrome-editor.component";
 import { EntityRelationshipFormRolePanel } from "../panels/form-chrome/entity-relationship-form-role.panel";
+import { EntityCloneConfigEditorComponent } from "../panels/record-clone/entity-clone-config-editor.component";
+import { ClonePlanTreeComponent } from "@memberjunction/ng-record-clone";
 import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissions";
 import { MLModelFormComponentExtended, LoadMLModelFormComponentExtended } from "./MLModels/ml-model-form.component";
+import { RubricsModule } from "@memberjunction/ng-rubrics";
+import { MJRubricFormComponentExtended } from "./Rubrics/rubric-form.component";
+import { RubricAuthorPanel, RubricDiffPanel, RubricPublishPanel, RubricVersionsPanel } from "./Rubrics/rubric-form.panels";
+import { MJRubricEvaluationFormComponentExtended, RubricEvaluationComparePanel, RubricEvaluationResultPanel } from "./Rubrics/evaluation-form.component";
+import { MJRubricScaleFormComponentExtended, RubricScaleLevelsPanel } from "./Rubrics/scale-form.component";
+import { MJAIAgentRubricFormComponentExtended, MJRubricBandFormComponentExtended, MJRubricCategoryFormComponentExtended, MJRubricCriterionFormComponentExtended, MJRubricEvaluationScoreFormComponentExtended, MJRubricScaleLevelFormComponentExtended, MJRubricVersionFormComponentExtended, RubricVersionSummaryPanel } from "./Rubrics/record-forms.component";
 import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
 
 @NgModule({
@@ -150,6 +158,16 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         MJTestRubricFormComponentExtended,
         EntityLinkPillComponent,
         MJListFormComponentExtended,
+        MJRubricFormComponentExtended,
+        MJRubricEvaluationFormComponentExtended,
+        MJRubricScaleFormComponentExtended,
+        MJRubricVersionFormComponentExtended,
+        MJRubricCriterionFormComponentExtended,
+        MJRubricEvaluationScoreFormComponentExtended,
+        MJRubricScaleLevelFormComponentExtended,
+        MJRubricBandFormComponentExtended,
+        MJRubricCategoryFormComponentExtended,
+        MJAIAgentRubricFormComponentExtended,
         // ContentSource-specific BaseFormPanel slot components (no custom form override).
         TagPipelineConfigurationPanel,
         WebsiteCrawlerSettingsPanel,
@@ -167,11 +185,21 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         RecordProcessFormComponentExtended,
         EntityFormChromeEditorComponent,
         EntityRelationshipFormRolePanel,
+        EntityCloneConfigEditorComponent,
         MJFileFormComponentExtended,
         MLModelFormComponentExtended,
     ],
     imports: [
         CommonModule,
+        RubricsModule,
+        RubricAuthorPanel,
+        RubricDiffPanel,
+        RubricPublishPanel,
+        RubricVersionsPanel,
+        RubricVersionSummaryPanel,
+        RubricEvaluationResultPanel,
+        RubricEvaluationComparePanel,
+        RubricScaleLevelsPanel,
         FormsModule,
         ReactiveFormsModule,
         DragDropModule,
@@ -195,6 +223,7 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         LinkDirectivesModule,
         JoinGridModule,
         BaseFormsModule,
+        ClonePlanTreeComponent,
         MJTabStripModule,
         CodeEditorModule,
         DeepDiffModule,
@@ -216,6 +245,8 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         MjFormDialogComponent,
         SearchModule,
         RecordProcessEditorComponent,
+        FeaturePipelineBuilderComponent,
+        RecordProcessHistoryComponent,
         ResourcePermissionsModule,
         ...HIERARCHY_FORM_PANELS
     ],

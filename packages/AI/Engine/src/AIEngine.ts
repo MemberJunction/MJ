@@ -17,7 +17,7 @@ import { MJAIActionEntity, MJActionEntity,
          MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
          MJAIModelActionEntity, MJAIPromptModelEntity, MJAIPromptTypeEntity,
          MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJArtifactTypeEntity,
-         MJEntityAIActionEntity, MJVectorDatabaseEntity, MJAIAgentPromptEntity,
+         MJEntityAIActionEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJAIAgentPromptEntity,
          MJAIAgentTypeEntity, MJAIVendorEntity, MJAIModelVendorEntity, MJAIModelTypeEntity,
          MJAIModelCostEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity,
          MJAIConfigurationEntity, MJAIConfigurationParamEntity, MJAIAgentStepEntity,
@@ -40,19 +40,19 @@ import { MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptEntityExten
  * @deprecated AI Actions are deprecated. Use AIPromptRunner with the new AI Prompt system instead.
  */
 export class AIActionParams {
-    actionId: string
-    modelId: string
-    modelName?: string
-    systemPrompt?: string
-    userPrompt?: string
+    actionId: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    modelId: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    modelName?: string  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    systemPrompt?: string  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    userPrompt?: string  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
 /**
  * @deprecated Entity AI Actions are deprecated. Use AIPromptRunner with the new AI Prompt system instead.
  */
 export class EntityAIActionParams extends AIActionParams {
-    entityAIActionId: string
-    entityRecord: BaseEntity
+    entityAIActionId: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    entityRecord: BaseEntity  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 /**
@@ -147,7 +147,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     private _agentBaseCatalogCache: Map<string, object> = new Map();
     private _agentCatalogListenerSetUp: boolean = false;
     /** Entities whose change must coarse-invalidate the agent base-catalog cache (lowercased). */
-    private static readonly AgentCatalogInvalidatingEntities: ReadonlySet<string> = new Set([
+    private static readonly agentCatalogInvalidatingEntities: ReadonlySet<string> = new Set([
         'ai agents',
         'mj: ai agent actions',
         'mj: ai agent relationships',
@@ -189,7 +189,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
                     const e = event.args as BaseEntityEvent;
                     if (e?.type === 'save' || e?.type === 'delete' || e?.type === 'remote-invalidate') {
                         const name = e.baseEntity?.EntityInfo?.Name?.toLowerCase().trim();
-                        if (name && AIEngine.AgentCatalogInvalidatingEntities.has(name)) {
+                        if (name && AIEngine.agentCatalogInvalidatingEntities.has(name)) {
                             this.ClearAgentBaseCatalogCache();
                         }
                     }
@@ -307,6 +307,9 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public get ArtifactTypes(): MJArtifactTypeEntity[] { return this.Base.ArtifactTypes; }
     public get LanguageModels(): MJAIModelEntityExtended[] { return this.Base.LanguageModels; }
     public get VectorDatabases(): MJVectorDatabaseEntity[] { return this.Base.VectorDatabases; }
+    public get VectorIndexes(): MJVectorIndexEntity[] { return this.Base.VectorIndexes; }
+    public GetVectorIndexByID(id: string): MJVectorIndexEntity | undefined { return this.Base.GetVectorIndexByID(id); }
+    public GetProviderIndexName(vectorIndex: MJVectorIndexEntity): string { return this.Base.GetProviderIndexName(vectorIndex); }
     public get ModelCosts(): MJAIModelCostEntity[] { return this.Base.ModelCosts; }
     public get ModelPriceTypes(): MJAIModelPriceTypeEntity[] { return this.Base.ModelPriceTypes; }
     public get ModelPriceUnitTypes(): MJAIModelPriceUnitTypeEntity[] { return this.Base.ModelPriceUnitTypes; }
@@ -1069,6 +1072,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
                 model: model.APIName
             };
 
+            // BaseEmbeddings used directly: AIEngine sits below @memberjunction/ai-prompts in the dependency hierarchy.
             const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
                 BaseEmbeddings,
                 model.DriverClass,
@@ -1131,6 +1135,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
             return this.EmbedText(model, content, apiKey);
         }
 
+        // BaseEmbeddings used directly: AIEngine sits below @memberjunction/ai-prompts in the dependency hierarchy.
         const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
             BaseEmbeddings,
             model.DriverClass,

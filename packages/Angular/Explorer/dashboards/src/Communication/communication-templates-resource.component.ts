@@ -192,10 +192,46 @@ interface TemplateCardData {
   `]
 })
 export class CommunicationTemplatesResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
-    public allTemplates: TemplateCardData[] = [];
-    public filteredTemplates: TemplateCardData[] = [];
-    public categories: string[] = [];
-    public categoryFilter = '';
+    public AllTemplates: TemplateCardData[] = [];
+
+    /** @deprecated Use {@link AllTemplates}. */
+    public get allTemplates(): TemplateCardData[] {
+      return this.AllTemplates;
+    }
+    /** @deprecated Use {@link AllTemplates}. */
+    public set allTemplates(value: TemplateCardData[]) {
+      this.AllTemplates = value;
+    }
+    public FilteredTemplates: TemplateCardData[] = [];
+
+    /** @deprecated Use {@link FilteredTemplates}. */
+    public get filteredTemplates(): TemplateCardData[] {
+      return this.FilteredTemplates;
+    }
+    /** @deprecated Use {@link FilteredTemplates}. */
+    public set filteredTemplates(value: TemplateCardData[]) {
+      this.FilteredTemplates = value;
+    }
+    public Categories: string[] = [];
+
+    /** @deprecated Use {@link Categories}. */
+    public get categories(): string[] {
+      return this.Categories;
+    }
+    /** @deprecated Use {@link Categories}. */
+    public set categories(value: string[]) {
+      this.Categories = value;
+    }
+    public CategoryFilter = '';
+
+    /** @deprecated Use {@link CategoryFilter}. */
+    public get categoryFilter() {
+      return this.CategoryFilter;
+    }
+    /** @deprecated Use {@link CategoryFilter}. */
+    public set categoryFilter(value) {
+      this.CategoryFilter = value;
+    }
     public isLoading = false;
     private searchTerm = '';
 
@@ -238,8 +274,8 @@ export class CommunicationTemplatesResourceComponent extends BaseResourceCompone
 
             if (templatesResult.Success) {
                 const contents = contentsResult.Success ? contentsResult.Results : [];
-                this.allTemplates = templatesResult.Results.map(t => this.buildTemplateCard(t, contents));
-                this.categories = this.extractCategories(this.allTemplates);
+                this.AllTemplates = templatesResult.Results.map(t => this.buildTemplateCard(t, contents));
+                this.Categories = this.extractCategories(this.AllTemplates);
                 this.applyFilter();
             }
         } catch (error) {
@@ -269,55 +305,90 @@ export class CommunicationTemplatesResourceComponent extends BaseResourceCompone
         return Array.from(cats).sort();
     }
 
-    public getCategoryCount(category: string): number {
-        return this.allTemplates.filter(t => t.CategoryName === category).length;
+    public GetCategoryCount(category: string): number {
+        return this.AllTemplates.filter(t => t.CategoryName === category).length;
     }
 
-    public onSearchValue(value: string): void {
+    /** @deprecated Use {@link GetCategoryCount}. */
+    public getCategoryCount(category: string): number {
+      return this.GetCategoryCount(category);
+    }
+
+    public OnSearchValue(value: string): void {
         this.searchTerm = (value ?? '').toLowerCase();
         this.applyFilter();
     }
 
-    public onCategoryFilter(category: string): void {
-        this.categoryFilter = category;
+    /** @deprecated Use {@link OnSearchValue}. */
+    public onSearchValue(value: string): void {
+      return this.OnSearchValue(value);
+    }
+
+    public OnCategoryFilter(category: string): void {
+        this.CategoryFilter = category;
         this.applyFilter();
+    }
+
+    /** @deprecated Use {@link OnCategoryFilter}. */
+    public onCategoryFilter(category: string): void {
+      return this.OnCategoryFilter(category);
     }
 
     // -- Concise chrome: Category lives behind the one Filter popover ---------
 
-    public get filterFields(): FilterFieldConfig[] {
+    public get FilterFields(): FilterFieldConfig[] {
         return [{
             key: 'category',
             type: 'chips',
             label: 'Category',
             chipOptions: [
                 { text: 'All', value: '' },
-                ...this.categories.map(c => ({ text: c, value: c })),
+                ...this.Categories.map(c => ({ text: c, value: c })),
             ],
         }];
     }
 
+    /** @deprecated Use {@link FilterFields}. */
+    public get filterFields(): FilterFieldConfig[] {
+      return this.FilterFields;
+    }
+
+    public get FilterValues(): Record<string, unknown> {
+        return { category: this.CategoryFilter };
+    }
+
+    /** @deprecated Use {@link FilterValues}. */
     public get filterValues(): Record<string, unknown> {
-        return { category: this.categoryFilter };
+      return this.FilterValues;
     }
 
     public get ActiveFilterCount(): number {
-        return this.categoryFilter ? 1 : 0;
+        return this.CategoryFilter ? 1 : 0;
     }
 
+    public OnFilterValuesChange(values: Record<string, unknown>): void {
+        this.OnCategoryFilter((values['category'] as string) ?? '');
+    }
+
+    /** @deprecated Use {@link OnFilterValuesChange}. */
     public onFilterValuesChange(values: Record<string, unknown>): void {
-        this.onCategoryFilter((values['category'] as string) ?? '');
+      return this.OnFilterValuesChange(values);
     }
 
+    public ResetFilters(): void {
+        this.OnCategoryFilter('');
+    }
+
+    /** @deprecated Use {@link ResetFilters}. */
     public resetFilters(): void {
-        this.onCategoryFilter('');
+      return this.ResetFilters();
     }
 
     private applyFilter(): void {
-        let filtered = this.allTemplates;
+        let filtered = this.AllTemplates;
 
-        if (this.categoryFilter) {
-            filtered = filtered.filter(t => t.CategoryName === this.categoryFilter);
+        if (this.CategoryFilter) {
+            filtered = filtered.filter(t => t.CategoryName === this.CategoryFilter);
         }
 
         if (this.searchTerm) {
@@ -328,26 +399,41 @@ export class CommunicationTemplatesResourceComponent extends BaseResourceCompone
             );
         }
 
-        this.filteredTemplates = filtered;
+        this.FilteredTemplates = filtered;
         this.cdr.detectChanges();
     }
 
-    public openTemplate(template: MJTemplateEntity): void {
+    public OpenTemplate(template: MJTemplateEntity): void {
         const pk = new CompositeKey();
         pk.LoadFromEntityInfoAndRecord(this.ProviderToUse.Entities.find(e => e.Name === 'MJ: Templates')!, template);
         this.navService.OpenEntityRecord('MJ: Templates', pk);
     }
 
-    public addNewTemplate(): void {
+    /** @deprecated Use {@link OpenTemplate}. */
+    public openTemplate(template: MJTemplateEntity): void {
+      return this.OpenTemplate(template);
+    }
+
+    public AddNewTemplate(): void {
         this.navService.OpenEntityRecord('MJ: Templates', new CompositeKey());
     }
 
-    public getContentTypeIcon(type: string): string {
+    /** @deprecated Use {@link AddNewTemplate}. */
+    public addNewTemplate(): void {
+      return this.AddNewTemplate();
+    }
+
+    public GetContentTypeIcon(type: string): string {
         const t = type.toLowerCase();
         if (t.includes('html')) return 'fa-solid fa-code';
         if (t.includes('text') || t.includes('plain')) return 'fa-solid fa-align-left';
         if (t.includes('sms')) return 'fa-solid fa-comment-sms';
         return 'fa-solid fa-file';
+    }
+
+    /** @deprecated Use {@link GetContentTypeIcon}. */
+    public getContentTypeIcon(type: string): string {
+      return this.GetContentTypeIcon(type);
     }
 
     async GetResourceDisplayName(data: ResourceData): Promise<string> {
