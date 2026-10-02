@@ -31,6 +31,7 @@ import {
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { BadgeTextForAttachment } from '../../util/attachment-badge';
+import { CloseOpenCodeFence } from '../../util/open-code-fence';
 
 /**
  * Represents an attachment on a message for display
@@ -1188,6 +1189,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    */
   private computeDisplayMessage(): string {
     let text = this.message.Message || '';
+
+    // A reply still streaming in may end inside an open code fence; close it for display only.
+    if (text && this.message.Status === 'In-Progress') {
+      text = CloseOpenCodeFence(text);
+    }
 
     // For Sage, only show the delegation line (starts with emoji)
     if (this.IsConversationManager && text) {

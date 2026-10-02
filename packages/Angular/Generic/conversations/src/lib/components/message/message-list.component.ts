@@ -905,6 +905,56 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * (not just scroll to it) use this instead of a `[data-message-id]` query, which fails for
    * exactly the cases listed — see {@link scrollToTimelineEntry}.
    */
+  /**
+   * Refreshes one rendered message in place: the streaming path's alternative to replacing the
+   * whole `messages` array, which rebuilds the timeline and re-measures the mounted range on
+   * every delta. The host carries `mj-streaming` while streamed text is rendered this way, so
+   * the item's stylesheet can lift its status-line height cap; the class comes off once the
+   * message settles, whichever path renders it next.
+   *
+   * @returns false when the message has no rendered entry yet, so the caller can fall back to
+   * the full path for that one update.
+   */
+  public RefreshRenderedMessage(message: MJConversationDetailEntity): boolean {
+    const existing = this._renderedMessages.get(this.getMessageKey(message));
+    if (!existing) {
+      return false;
+    }
+    if (existing.kind === 'embedded') {
+      existing.ref.context.$implicit = message;
+      existing.ref.context.message = message;
+      existing.ref.detectChanges();
+      return true;
+    }
+    if (existing.kind !== 'component') {
+      return false;
+    }
+    existing.ref.instance.message = message;
+    this.syncStreamingHostClass(existing.ref, message, true);
+    if (!this.isViewDestroyed(existing.ref.changeDetectorRef)) {
+      existing.ref.changeDetectorRef.detectChanges();
+    }
+    return true;
+  }
+
+  /**
+   * `mj-streaming` marks a host whose in-progress bubble shows streamed reply text rather than a
+   * status line. Added on each in-place refresh while the message is In-Progress; removed as
+   * soon as it is not, on whichever render path sees the settled message first.
+   */
+  private syncStreamingHostClass(
+    ref: ComponentRef<MessageItemComponent>,
+    message: MJConversationDetailEntity,
+    streaming: boolean
+  ): void {
+    const host = ref.location.nativeElement as HTMLElement;
+    if (message.Status !== 'In-Progress') {
+      host.classList.remove('mj-streaming');
+    } else if (streaming) {
+      host.classList.add('mj-streaming');
+    }
+  }
+
   public FindTimelineElement(messageId: string): HTMLElement | null {
     const detail = this.messages?.find(m => UUIDsEqual(m.ID, messageId));
     if (!detail) {
@@ -1802,6 +1852,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     const previousMessage = instance.message;
 
     instance.message = message;
+    this.syncStreamingHostClass(ref, message, false);
     instance.allMessages = messages;
     instance.isProcessing = this.IsProcessing;
     instance.userAvatarMap = this.UserAvatarMap;

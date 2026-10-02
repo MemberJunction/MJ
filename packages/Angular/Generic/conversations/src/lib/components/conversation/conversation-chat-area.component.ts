@@ -115,6 +115,13 @@ const RUN_LIST_TERMINAL_STATUSES: string[] = ['Completed', 'AwaitingFeedback', '
 /** Default width (percentage) for the artifact viewer pane */
 export const DEFAULT_ARTIFACT_PANE_WIDTH = 40;
 
+/**
+ * ReadReplyFromTop: how long bottom-follow stays off after a turn lands at its top, so a status
+ * row or a repeated completion emit arriving right behind the landing cannot yank the reader
+ * back down. Also the per-delta hold while a streamed reply grows beneath a landed turn.
+ */
+const POST_LANDING_FOLLOW_HOLD_MS = 1500;
+
 @Component({
   standalone: false,
   selector: 'mj-conversation-chat-area',
@@ -1618,6 +1625,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * last progress updates must not fire and drag the reader back down.
    */
   private bottomFollowSuppressedUntil = 0;
+  /**
+   * ReadReplyFromTop: the landing decision taken on a turn's first streamed delta. `landed` means
+   * the turn sits at its top and completion must not land it again; `false` means the reader had
+   * scrolled away, so later deltas leave them alone and completion decides as it always has.
+   * Cleared with the rest of the tracking.
+   */
+  private streamLanding: { turnId: string; landed: boolean } | null = null;
   private turnStartRetryHandle: ReturnType<typeof setTimeout> | null = null;
   /** Gap kept between the pane's top edge and the turn's first message. */
   private static readonly TURN_TOP_GAP_PX = 16;
@@ -3579,6 +3593,97 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private async restoreActiveTasks(conversationId: string): Promise<void> {
     // Intentionally empty - ActiveTasksService only tracks in-memory running tasks
     // Database tasks are loaded separately by TasksDropdownComponent
+  }
+
+  /**
+   * A streamed delta landed on an in-progress message (MessageInputComponent.MessageStreamed).
+   * Unlike {@link OnMessageSent} this does not replace the `messages` array: that rebuilt the
+   * whole timeline, re-measured the mounted range and armed a scroll-to-bottom timer on every
+   * delta, which is what made a streaming reply flash and jump. The bubble is refreshed in place
+   * and the viewport is kept steady. With `ReadReplyFromTop` the turn lands at its top once, on
+   * the first delta, and the reply grows beneath it; otherwise the bottom is pinned in the same
+   * frame as the DOM update, so the growth and the scroll paint together.
+   */
+  public OnMessageStreamed(message: MJConversationDetailEntity): void {
+    if (!this.isActiveConversation(message.ConversationID) || message.Status !== 'In-Progress') {
+      return;
+    }
+    if (!this.adoptStreamedEntity(message)) {
+      return;
+    }
+    const refreshed = this.messageListComponent?.RefreshRenderedMessage(message) ?? false;
+    if (!refreshed) {
+      // The first delta can beat the bubble's own render; the full path handles that one update.
+      void this.OnMessageSent(message);
+      return;
+    }
+    if (this.ReadReplyFromTop && this.currentTurnStartMessageId) {
+      this.holdTurnForStream(this.currentTurnStartMessageId);
+      return;
+    }
+    // No read-from-top, or a turn this component never saw open (a reload mid-stream): follow the
+    // bottom as the full path would, but synchronously, so the growth and the scroll paint together.
+    if (this.readerAtBottom) {
+      this.ScrollToBottomNow();
+    }
+  }
+
+  /**
+   * Keeps `messages` and the loaded window pointing at the entity the stream mutates, so a full
+   * render in the middle of a stream (another row arriving, an artifact landing) cannot swap the
+   * bubble back to a stale copy. The array is edited in place: a new reference would rebuild the
+   * timeline, which is the cost this path exists to avoid. After the first delta this is a lookup.
+   *
+   * @returns false when the array already holds this message settled, meaning the frame outlived
+   * completion and the completion path owns the bubble.
+   */
+  private adoptStreamedEntity(message: MJConversationDetailEntity): boolean {
+    const index = this.messages.findIndex(m => UUIDsEqual(m.ID, message.ID));
+    const held = index >= 0 ? this.messages[index] : null;
+    if (held === message) {
+      return true;
+    }
+    if (held && this.isSettled(held)) {
+      return false;
+    }
+    if (held) {
+      this.messages[index] = message;
+    }
+    this.windowStore.ApplyLocalDetail(message);
+    return true;
+  }
+
+  /**
+   * ReadReplyFromTop while streaming: on a turn's first delta the reader at the bottom is landed
+   * at the turn's top (once), and bottom-follow is held so the growing reply cannot drag them
+   * back down. A reader who had already scrolled away is left alone, and completion then decides
+   * as it always has. The hold is re-armed per delta rather than left open-ended: a turn that
+   * never settles through followTranscript (a cancelled run, a dropped socket) releases it a
+   * moment after its last delta.
+   */
+  private holdTurnForStream(turnId: string): void {
+    let landing = this.streamLanding;
+    if (landing?.turnId !== turnId) {
+      landing = { turnId, landed: this.readerAtBottom };
+      this.streamLanding = landing;
+      if (landing.landed) {
+        this.cancelPendingLanding();
+        this.scrollToBottom = false;
+        this.scrollTurnToTop(turnId, 0, true);
+      }
+    }
+    if (landing.landed) {
+      this.bottomFollowSuppressedUntil = Date.now() + POST_LANDING_FOLLOW_HOLD_MS;
+    }
+  }
+
+  /** Drops a landing still queued or retrying, so it cannot resolve after a newer one. */
+  private cancelPendingLanding(): void {
+    this.pendingTurnStartMessageId = null;
+    if (this.turnStartRetryHandle) {
+      clearTimeout(this.turnStartRetryHandle);
+      this.turnStartRetryHandle = null;
+    }
   }
 
   async OnMessageSent(message: MJConversationDetailEntity): Promise<void> {
@@ -6443,10 +6548,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       if (message?.Role === 'User' && message.ID && message.ID !== this.currentTurnStartMessageId) {
         this.currentTurnStartMessageId = message.ID;
       } else if (this.currentTurnStartMessageId && message?.Role === 'AI' && this.isSettled(message)) {
+        if (this.streamLanding?.turnId === this.currentTurnStartMessageId && this.streamLanding.landed) {
+          // Landed on the first streamed delta. Keep the same post-landing hold a normal landing
+          // gets: a status row or a repeated completion emit right behind must not yank the reader.
+          this.bottomFollowSuppressedUntil = Date.now() + POST_LANDING_FOLLOW_HOLD_MS;
+          return;
+        }
         if (this.readerAtBottom) {
           this.pendingTurnStartMessageId = this.currentTurnStartMessageId;
           this.scrollToBottom = false;
-          this.bottomFollowSuppressedUntil = Date.now() + 1500;
+          this.bottomFollowSuppressedUntil = Date.now() + POST_LANDING_FOLLOW_HOLD_MS;
         }
         return;
       }
@@ -6471,7 +6582,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * sits at the top of the pane — but only if the turn is taller than the pane. A turn that
    * fits is already fully on screen at the bottom, and moving it would be motion for nothing.
    */
-  private scrollTurnToTop(messageId: string, attempt: number = 0): void {
+  private scrollTurnToTop(messageId: string, attempt: number = 0, force: boolean = false): void {
     if (!this.ReadReplyFromTop) {
       return;
     }
@@ -6484,14 +6595,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       // The reply's final render lands a tick or two after the array changes — the same
       // latency the bottom-follow path absorbs with its 100 ms timer.
       if (attempt < 20) {
-        this.turnStartRetryHandle = setTimeout(() => this.scrollTurnToTop(messageId, attempt + 1), 50);
+        this.turnStartRetryHandle = setTimeout(() => this.scrollTurnToTop(messageId, attempt + 1, force), 50);
       }
       return;
     }
     this.turnStartRetryHandle = null;
     const turnTop = this.offsetWithinScroller(target) - this.turnTopClearance(container);
     const turnHeight = container.scrollHeight - turnTop; // the turn is the newest content
-    if (turnHeight > container.clientHeight) {
+    // `force`: a turn that has only just started streaming is never taller than the pane yet,
+    // but it is about to be, and the landing has to happen before the reply grows.
+    if (force || turnHeight > container.clientHeight) {
       container.scroll({ top: turnTop, behavior: 'smooth' });
     } else {
       this.ScrollToBottomNow();
@@ -6523,12 +6636,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   private clearTurnTracking(): void {
     this.currentTurnStartMessageId = null;
-    this.pendingTurnStartMessageId = null;
+    this.streamLanding = null;
     this.bottomFollowSuppressedUntil = 0;
-    if (this.turnStartRetryHandle) {
-      clearTimeout(this.turnStartRetryHandle);
-      this.turnStartRetryHandle = null;
-    }
+    this.cancelPendingLanding();
   }
 
   /**

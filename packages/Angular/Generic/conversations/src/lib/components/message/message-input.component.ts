@@ -57,6 +57,9 @@ import {
 import { Subscription } from 'rxjs';
 import { UUIDsEqual, CleanAndParseJSON } from '@memberjunction/global';
 
+/** Streamed-delta render cadence where no animation frame will come (hidden tab, no rAF). */
+const STREAMED_FRAME_FALLBACK_MS = 50;
+
 @Component({
   standalone: false,
   selector: 'mj-message-input',
@@ -595,6 +598,14 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() messageSent = this.MessageSent;
+  /**
+   * A streamed final-response delta was applied to an in-progress message: `Message` holds the
+   * full reply so far. Informational, so no Before/After pair; coalesced to at most one emission
+   * per animation frame; silent once the message has settled, because the completion path owns
+   * the final render. Hosts refresh the bubble in place on this, while {@link MessageSent} keeps
+   * announcing new and status-changed messages.
+   */
+  @Output() MessageStreamed = new EventEmitter<MJConversationDetailEntity>();
   @Output() AgentResponse = new EventEmitter<{message: MJConversationDetailEntity, agentResult: any}>();
 
   /**
@@ -1609,11 +1620,51 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * Create a progress callback for a specific message ID.
    * This callback will be invoked by the streaming service when progress updates arrive.
    */
+  /**
+   * Emits {@link MessageStreamed} for a coalesced frame of streamed deltas, unless the message
+   * settled in the meantime: then the completion path has already reconciled the bubble with the
+   * saved message and a late frame has nothing to add. "Settled" is read three ways because a
+   * frame can sleep through completion in a hidden tab: the captured entity's status, the
+   * completion timestamp (kept for a few seconds), and the callback registration, which
+   * markMessageComplete drops and which therefore outlasts the timestamp. A host that has not
+   * adopted MessageStreamed, and so still binds only the old output, keeps receiving the update
+   * on {@link MessageSent} as before, at the coalesced cadence.
+   */
+  private emitStreamedUpdate(messageId: string, message: MJConversationDetailEntity): void {
+    const settled = message.Status !== 'In-Progress'
+      || this.completionTimestamps.has(messageId)
+      || !this.registeredCallbacks.has(messageId);
+    if (settled) {
+      return;
+    }
+    if (this.MessageStreamed.observed) {
+      this.MessageStreamed.emit(message);
+    } else {
+      this.MessageSent.emit(message);
+    }
+  }
+
+  /**
+   * Runs `callback` on the next animation frame. A hidden tab never paints one, so there (and
+   * wherever requestAnimationFrame is unavailable) a short timer stands in; the browser throttles
+   * it in the background, which is the right cadence for a bubble nobody is looking at.
+   */
+  private scheduleFrame(callback: () => void): void {
+    const framesArePainting = typeof requestAnimationFrame === 'function' && typeof document !== 'undefined' && !document.hidden;
+    if (framesArePainting) {
+      requestAnimationFrame(() => callback());
+    } else {
+      setTimeout(callback, STREAMED_FRAME_FALLBACK_MS);
+    }
+  }
+
   private createMessageProgressCallback(messageId: string): (progress: MessageProgressUpdate) => Promise<void> {
     // Resolve the message once and reuse it for the callback's lifetime: streamed
     // final-response updates arrive per content delta, and re-awaiting the cache on
     // every delta both wastes work and (on a cold cache) races concurrent loads.
     let resolvedMessage: Awaited<ReturnType<DataCacheService['getConversationDetail']>> = null;
+    // One pending frame per message: deltas arriving inside a frame collapse into one emission.
+    let streamedFramePending = false;
     return async (progress: MessageProgressUpdate) => {
       try {
         // Get message from cache (single source of truth)
@@ -1643,9 +1694,15 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         // bubble with the server-saved final message, so no append/merge is needed here.
         if (progress.streaming) {
           message.Message = progress.streaming.content;
-          this.MessageSent.emit(message);
-          // Keep the tasks dropdown on a stable status line rather than the growing reply text.
-          this.activeTasks.updateStatusByConversationDetailId(message.ID, 'Responding…');
+          if (!streamedFramePending) {
+            streamedFramePending = true;
+            this.scheduleFrame(() => {
+              streamedFramePending = false;
+              this.emitStreamedUpdate(messageId, message);
+            });
+            // Keep the tasks dropdown on a stable status line rather than the growing reply text.
+            this.activeTasks.updateStatusByConversationDetailId(message.ID, 'Responding…');
+          }
           return;
         }
 
