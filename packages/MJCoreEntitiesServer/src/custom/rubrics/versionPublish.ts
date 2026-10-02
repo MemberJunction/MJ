@@ -32,7 +32,9 @@ export interface PublishResult {
 
 /**
  * Refuses a draft that cannot be published: duplicate keys, a missing or cyclic parent,
- * a criterion with no scale, or a gate with no minimum. Warns when a group's
+ * a criterion with no scale, a gate with no minimum, a criterion that has children,
+ * an empty group, a non-advisory leaf under an advisory group, bands that overlap or
+ * leave a gap in 0..1, or a version with no non-advisory leaf. Warns when a group's
  * non-advisory children are all weight 0, and when a gate's effective not-applicable
  * policy is ExcludeAndRedistribute.
  */
@@ -41,11 +43,18 @@ export function ValidateRubricTree(version: RubricVersionSnapshot): { errors: st
     const warnings: PublishWarning[] = [];
     const byId = new Map(version.nodes.map(node => [node.id, node]));
     const keys = new Set<string>();
+    const childrenOf = (id: string) => version.nodes.filter(item => item.parentId === id);
     for (const node of version.nodes) {
         if (keys.has(node.key)) errors.push(`Duplicate key ${node.key}.`);
         keys.add(node.key);
         if (node.parentId && !byId.has(node.parentId)) errors.push(`${node.key} points at a missing parent.`);
         if (node.nodeType === 'Criterion' && !node.scaleId) errors.push(`${node.key} is a criterion with no scale.`);
+        if (node.nodeType === 'Criterion' && childrenOf(node.id).length > 0) {
+            errors.push(`${node.key} is a criterion with children, so a child gate is ignored.`);
+        }
+        if (node.nodeType === 'Group' && childrenOf(node.id).length === 0) {
+            errors.push(`${node.key} is an empty group.`);
+        }
         if (node.scaleId && !version.scales.some(scale => scale.id === node.scaleId)) {
             errors.push(`${node.key} names a scale that is not on this version.`);
         }
@@ -58,13 +67,48 @@ export function ValidateRubricTree(version: RubricVersionSnapshot): { errors: st
         }
     }
     if (hasCycle(version.nodes)) errors.push('The criteria tree has a cycle.');
+    for (const leaf of version.nodes.filter(node => node.nodeType === 'Criterion' && !node.isAdvisory)) {
+        const seen = new Set<string>();
+        let parentId = leaf.parentId;
+        while (parentId && byId.has(parentId) && !seen.has(parentId)) {
+            seen.add(parentId);
+            const parent = byId.get(parentId)!;
+            if (parent.isAdvisory) {
+                errors.push(`${leaf.key} is a non-advisory leaf under the advisory group ${parent.key}.`);
+                break;
+            }
+            parentId = parent.parentId;
+        }
+    }
+    if (!version.nodes.some(node => node.nodeType === 'Criterion' && !node.isAdvisory)) {
+        errors.push('A version needs a non-advisory leaf.');
+    }
     for (const node of version.nodes.filter(item => item.nodeType === 'Group')) {
-        const children = version.nodes.filter(item => item.parentId === node.id && !item.isAdvisory);
+        const children = childrenOf(node.id).filter(child => !child.isAdvisory);
         if (children.length > 0 && children.every(child => child.weight === 0)) {
             warnings.push({ severity: 'warning', message: `Group ${node.key} has only zero-weight children, so they share the score equally.` });
         }
     }
+    errors.push(...bandCoverageErrors(version.bands));
     return { errors, warnings };
+}
+
+/** Bands are optional. When present they tile 0..1: each meets the previous, and the ends are 0 and 1. */
+function bandCoverageErrors(bands: RubricVersionSnapshot['bands']): string[] {
+    if (bands.length === 0) return [];
+    const ordered = [...bands].sort((left, right) => left.minScore - right.minScore || left.maxScore - right.maxScore);
+    const errors: string[] = [];
+    const near = (left: number, right: number) => Math.abs(left - right) <= 1e-6;
+    if (ordered[0].minScore > 1e-6) errors.push(`Bands leave a gap before ${ordered[0].label}.`);
+    for (let index = 1; index < ordered.length; index++) {
+        const previous = ordered[index - 1];
+        const next = ordered[index];
+        if (next.minScore < previous.maxScore - 1e-6) errors.push(`Bands ${previous.label} and ${next.label} overlap.`);
+        else if (!near(next.minScore, previous.maxScore)) errors.push(`Bands ${previous.label} and ${next.label} leave a gap.`);
+    }
+    const last = ordered[ordered.length - 1];
+    if (last.maxScore < 1 - 1e-6) errors.push(`Bands leave a gap after ${last.label}.`);
+    return errors;
 }
 
 /** @deprecated Use {@link ValidateRubricTree}. */

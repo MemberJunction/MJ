@@ -53,6 +53,59 @@ describe('rubric version publish', () => {
         expect(errors).toMatch(/cycle/);
         expect(errors).toMatch(/Duplicate key/);
         expect(errors).toMatch(/not on this version/);
+        expect(errors).toMatch(/empty group/);
+    });
+
+    it('rejects a criterion with children, an empty tree, an advisory parent, and bands that do not tile 0..1', () => {
+        const leaf = version().nodes[0];
+        const withChild = version({
+            nodes: [
+                { ...leaf, id: 'parent', key: 'parent' },
+                { ...leaf, id: 'child', key: 'child', parentId: 'parent', isGate: true, gateMinimumScore: 0.8 },
+            ],
+        });
+        expect(ValidateRubricTree(withChild).errors.join(' ')).toMatch(/child gate is ignored/);
+
+        const advisory = version({
+            nodes: [
+                { id: 'advice', key: 'advice', name: 'Advice', nodeType: 'Group', weight: 1, isAdvisory: true, isGate: false, evidenceRequired: false, rationaleRequired: false, sequence: 0 },
+                { ...leaf, parentId: 'advice' },
+            ],
+        });
+        expect(ValidateRubricTree(advisory).errors.join(' ')).toMatch(/advisory group/);
+
+        const onlyAdvice = version({
+            nodes: [{ ...leaf, isAdvisory: true }],
+        });
+        expect(ValidateRubricTree(onlyAdvice).errors.join(' ')).toMatch(/non-advisory leaf/);
+
+        const overlap = version({
+            bands: [
+                { id: 'low', label: 'Low', minScore: 0, maxScore: 0.6, displayTone: 'Warning', sequence: 0 },
+                { id: 'high', label: 'High', minScore: 0.5, maxScore: 1, displayTone: 'Success', sequence: 1 },
+            ],
+        });
+        expect(ValidateRubricTree(overlap).errors.join(' ')).toMatch(/overlap/);
+
+        const gap = version({
+            bands: [
+                { id: 'low', label: 'Low', minScore: 0, maxScore: 0.4, displayTone: 'Warning', sequence: 0 },
+                { id: 'high', label: 'High', minScore: 0.5, maxScore: 1, displayTone: 'Success', sequence: 1 },
+            ],
+        });
+        expect(ValidateRubricTree(gap).errors.join(' ')).toMatch(/leave a gap/);
+
+        const tiled = version({
+            nodes: [
+                { id: 'group', key: 'group', name: 'Group', nodeType: 'Group', weight: 1, isAdvisory: false, isGate: false, evidenceRequired: false, rationaleRequired: false, sequence: 0 },
+                { ...leaf, parentId: 'group' },
+            ],
+            bands: [
+                { id: 'low', label: 'Low', minScore: 0, maxScore: 0.5, displayTone: 'Warning', sequence: 0 },
+                { id: 'high', label: 'High', minScore: 0.5, maxScore: 1, displayTone: 'Success', sequence: 1 },
+            ],
+        });
+        expect(ValidateRubricTree(tiled).errors).toEqual([]);
     });
 
     it('refuses an identical draft and publishes a weight change as major with hashes', async () => {
