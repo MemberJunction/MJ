@@ -27,6 +27,7 @@
 import type { ConnectionPool, Transaction } from 'mssql';
 import { RunView, type BaseEntity } from '@memberjunction/core';
 import { MJAIAgentEntity, MJAIAgentRubricEntity, MJRubricBandEntity, MJRubricCategoryEntity, MJRubricCriterionEntity, MJRubricCriterionLevelEntity, MJRubricEntity, MJRubricEvaluationEntity, MJRubricEvaluationScoreEntity, MJRubricScaleEntity, MJRubricScaleLevelEntity, MJRubricVersionEntity, MJTestEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import { RubricScoring, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { GetConsensus } from '@memberjunction/rubrics';
 import { Assert } from '@memberjunction/testing-integration';
@@ -212,7 +213,10 @@ async function ensureItWorld(ctx: IntegrationCheckContext): Promise<void> {
         Assert(test.RubricID == null || test.RubricID === '', 'the judged test does not pin Test.RubricID');
         Assert(!String(test.ExpectedOutcomes ?? '').includes('llm-judge'), 'the judged test has no llm-judge oracle');
         Assert(!String(test.ExpectedOutcomes ?? '').includes('trace-no-errors'), 'the trace oracle is not stored on ExpectedOutcomes');
-        Assert(String(test.Configuration ?? '').includes(agent.ID), 'the judged test aims at the IT agent');
+        const storedAgentId = typeof test.Configuration === 'string'
+            ? (JSON.parse(test.Configuration || '{}') as { agentId?: string }).agentId
+            : (test.Configuration as { agentId?: string } | null)?.agentId;
+        Assert(UUIDsEqual(storedAgentId, agent.ID), 'the judged test aims at the IT agent');
         Assert(String(test.Configuration ?? '').includes('trace-no-errors'), 'the trace oracle is in Configuration.oracles');
         const evaluation = await rubricRow(ctx, 'MJ: Rubric Evaluations');
         evaluation.RubricVersionID = versionId;
