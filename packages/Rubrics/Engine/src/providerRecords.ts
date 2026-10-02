@@ -4,7 +4,7 @@ import type { RubricDecisionRunner } from './LLMRubricEvaluator.js';
 import { RubricEvaluationAgentRunner } from './RubricEvaluationAgentRunner.js';
 import { RunInEntityTransaction, RunView, type EntityTransactionScope } from '@memberjunction/core';
 import { MJRubricBandEntity, MJRubricCriterionEntity, MJRubricCriterionLevelEntity, MJRubricEntity, MJRubricEvaluationEntity, MJRubricEvaluationScoreEntity, MJRubricVersionEntity } from '@memberjunction/core-entities';
-import { HighestNonDraftVersion, type RubricNodeSnapshot, type ScoredNode } from '@memberjunction/rubrics-base';
+import { EvidenceJson, HighestNonDraftVersion, type RubricNodeSnapshot, type ScoredNode } from '@memberjunction/rubrics-base';
 import { RubricEngine, type RubricEvaluationStore, type RubricPromptRun, type RubricRecords } from './RubricEngine.js';
 
 interface RubricProvider {
@@ -450,4 +450,62 @@ export function ProviderRubricEngine(provider: unknown, user: unknown): RubricEn
 /** @deprecated Use {@link ProviderRubricEngine}. */
 export function providerRubricEngine(provider: unknown, user: unknown): RubricEngine {
     return ProviderRubricEngine(provider, user);
+}
+
+export interface HumanScoreAnswer {
+    criterionId: string;
+    scaleLevelId?: string | null;
+    rawValue?: number | null;
+    isNotApplicable?: boolean;
+    rationale?: string | null;
+    evidence?: unknown;
+}
+
+/**
+ * Writes the human evaluation, its scores, and Submitted status in one transaction.
+ * A failed score rolls the evaluation back. Evidence is stored as an evidence list.
+ */
+export async function SubmitHumanEvaluation(provider: RubricProvider, user: unknown, input: {
+    rubricVersionId: string;
+    subjectEntityId: string;
+    subjectRecordId: string;
+    contextEntityId?: string | null;
+    contextRecordId?: string | null;
+    evaluatorUserId: string;
+    supersedesEvaluationId?: string | null;
+    answers: HumanScoreAnswer[];
+}): Promise<{ id: string; status: 'Submitted' }> {
+    if (!input.rubricVersionId || !input.subjectEntityId || !input.subjectRecordId) throw new Error('A human score needs a version and a subject.');
+    if (input.answers.length === 0) throw new Error('A human score needs at least one answer.');
+    return RunInEntityTransaction(provider, async () => {
+        const evaluation = await provider.GetEntityObject('MJ: Rubric Evaluations', user);
+        evaluation.NewRecord();
+        evaluation.RubricVersionID = input.rubricVersionId;
+        evaluation.SubjectEntityID = input.subjectEntityId;
+        evaluation.SubjectRecordID = input.subjectRecordId;
+        evaluation.ContextEntityID = input.contextEntityId ?? null;
+        evaluation.ContextRecordID = input.contextRecordId ?? null;
+        evaluation.EvaluatorType = 'Human';
+        evaluation.EvaluatorUserID = input.evaluatorUserId;
+        evaluation.Status = 'Draft';
+        evaluation.SupersedesEvaluationID = input.supersedesEvaluationId ?? null;
+        if (!await evaluation.Save()) throw new Error(evaluation.LatestResult?.Message || 'Could not start the human score.');
+        const evaluationId = String(evaluation.ID ?? '');
+        if (!evaluationId) throw new Error('Could not start the human score.');
+        for (const answer of input.answers) {
+            const score = await provider.GetEntityObject('MJ: Rubric Evaluation Scores', user);
+            score.NewRecord();
+            score.EvaluationID = evaluationId;
+            score.CriterionID = answer.criterionId;
+            score.ScaleLevelID = answer.isNotApplicable ? null : answer.scaleLevelId ?? null;
+            score.RawValue = answer.isNotApplicable ? null : answer.rawValue ?? null;
+            score.IsNotApplicable = answer.isNotApplicable === true;
+            score.Rationale = answer.rationale ?? null;
+            score.Evidence = EvidenceJson(answer.evidence);
+            if (!await score.Save()) throw new Error(score.LatestResult?.Message || 'Could not save a criterion answer.');
+        }
+        evaluation.Status = 'Submitted';
+        if (!await evaluation.Save()) throw new Error(evaluation.LatestResult?.Message || 'Could not submit the human score.');
+        return { id: evaluationId, status: 'Submitted' };
+    });
 }

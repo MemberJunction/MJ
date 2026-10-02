@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import type { NotApplicablePolicy } from '@memberjunction/rubrics-base';
 import { ScoringShortcutApplies } from './model.js';
-import { AnchorsForLevel, AnswerLevel, CanSubmit, EffectivePolicy, IncompleteAnswers, type RubricFormAnswer } from './model.js';
+import { AnchorsForLevel, AnswerLevel, CanSubmit, EffectivePolicy, IncompleteAnswers, ScoringCompleteness, type RubricFormAnswer } from './model.js';
 
 /**
  * Answer form. Keyboard: a digit selects that level, and N marks not applicable.
@@ -35,6 +35,11 @@ export class RubricScoringFormComponent {
         return this.Version !== null && CanSubmit(this.Version.nodes, this.Answers, this.Version.notApplicablePolicy);
     }
 
+    /** The completeness the server will store for these answers. */
+    public get Completeness(): number | null {
+        return this.Version ? ScoringCompleteness(this.Version, this.Answers) : null;
+    }
+
     public Policy(node: RubricNodeSnapshot): NotApplicablePolicy {
         return EffectivePolicy(node, this.Version?.notApplicablePolicy ?? 'ExcludeAndRedistribute');
     }
@@ -45,6 +50,21 @@ export class RubricScoringFormComponent {
 
     public Scale(node: RubricNodeSnapshot): RubricScaleSnapshot | undefined {
         return this.Version?.scales.find(scale => scale.id === node.scaleId);
+    }
+
+    public IsNumeric(node: RubricNodeSnapshot): boolean {
+        return this.Scale(node)?.scaleType === 'Numeric';
+    }
+
+    public IsPercentage(node: RubricNodeSnapshot): boolean {
+        const scale = this.Scale(node);
+        if (!scale || scale.scaleType !== 'Numeric') return false;
+        return scale.name?.trim().toLowerCase() === 'percentage' || (scale.minValue === 0 && scale.maxValue === 100);
+    }
+
+    public Raw(node: RubricNodeSnapshot): string {
+        const value = this.Answers.find(item => item.criterionId === node.id)?.rawValue;
+        return value == null ? '' : String(value);
     }
 
     public Selected(node: RubricNodeSnapshot, levelId: string): boolean {
@@ -71,7 +91,7 @@ export class RubricScoringFormComponent {
         const value = (event.target as HTMLTextAreaElement).value;
         const current = this.Answers.find(item => item.criterionId === node.id);
         const next = this.Answers.filter(item => item.criterionId !== node.id);
-        next.push({ criterionId: node.id, scaleLevelId: current?.scaleLevelId, isNotApplicable: current?.isNotApplicable, rationale: current?.rationale, evidence: current?.evidence, [field]: value });
+        next.push({ criterionId: node.id, scaleLevelId: current?.scaleLevelId, rawValue: current?.rawValue, isNotApplicable: current?.isNotApplicable, rationale: current?.rationale, evidence: current?.evidence, [field]: value });
         this.AnswersChange.emit(next);
     }
 
@@ -87,6 +107,22 @@ export class RubricScoringFormComponent {
             this.OnNotApplicable(node);
             event.preventDefault();
         }
+    }
+
+    public OnRaw(node: RubricNodeSnapshot, event: Event): void {
+        const raw = (event.target as HTMLInputElement).value.trim();
+        const parsed = raw === '' ? null : Number(raw);
+        const current = this.Answers.find(item => item.criterionId === node.id);
+        const next = this.Answers.filter(item => item.criterionId !== node.id);
+        next.push({
+            criterionId: node.id,
+            scaleLevelId: null,
+            rawValue: parsed != null && Number.isFinite(parsed) ? parsed : null,
+            isNotApplicable: false,
+            rationale: current?.rationale,
+            evidence: current?.evidence,
+        });
+        this.AnswersChange.emit(next);
     }
 
     public OnSubmit(): void {

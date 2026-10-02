@@ -1,9 +1,10 @@
 import { Component, OnInit, Input, Output, EventEmitter, ChangeDetectorRef } from '@angular/core';
 import { UserInfo, RunView } from '@memberjunction/core';
-import { MJRubricEvaluationEntity, MJRubricEvaluationScoreEntity, MJTestRunFeedbackEntity } from '@memberjunction/core-entities';
+import { MJTestRunFeedbackEntity } from '@memberjunction/core-entities';
+import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import type { RubricFormAnswer, RubricVersionSnapshot } from '@memberjunction/ng-rubrics';
-import { HumanEvaluationFields, HumanScoreFields, judgedRubric, PriorHumanEvaluation, VersionSnapshot, type JudgedRubric } from '../models/human-review';
+import { judgedRubric, PriorHumanEvaluation, VersionSnapshot, type JudgedRubric } from '../models/human-review';
 
 export interface TestFeedbackDialogData {
   testRunId: string;
@@ -726,39 +727,23 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
     try {
       const existing = await this.rows('MJ: Rubric Evaluations', `SubjectRecordID='${this.Data.testRunId.replace(/'/g, "''")}'`);
       const priorId = PriorHumanEvaluation(existing, this.Judged, this.Data.currentUser.ID);
-      const evaluation = await this.metadata.GetEntityObject<MJRubricEvaluationEntity>('MJ: Rubric Evaluations', this.Data.currentUser);
-      evaluation.NewRecord();
-      const draft = HumanEvaluationFields(this.Judged, this.Data.currentUser.ID, priorId);
-      evaluation.RubricVersionID = String(draft.RubricVersionID ?? '');
-      evaluation.SubjectEntityID = String(draft.SubjectEntityID ?? '');
-      evaluation.SubjectRecordID = String(draft.SubjectRecordID ?? '');
-      evaluation.ContextEntityID = draft.ContextEntityID == null || draft.ContextEntityID === '' ? null : String(draft.ContextEntityID);
-      evaluation.ContextRecordID = draft.ContextRecordID == null || draft.ContextRecordID === '' ? null : String(draft.ContextRecordID);
-      evaluation.EvaluatorType = 'Human';
-      evaluation.EvaluatorUserID = this.Data.currentUser.ID;
-      evaluation.Status = 'Draft';
-      evaluation.SupersedesEvaluationID = draft.SupersedesEvaluationID == null || draft.SupersedesEvaluationID === '' ? null : String(draft.SupersedesEvaluationID);
-      if (!await evaluation.Save()) {
-        this.errorMessage = evaluation.LatestResult?.Message || 'Could not start the human score.';
+      const found = await this.rows('MJ: Actions', `Name='Submit Human Rubric'`);
+      const actionId = String(found[0]?.ID ?? '');
+      if (!actionId) {
+        this.errorMessage = 'Submit Human Rubric was not found.';
         return;
       }
-      for (const fields of HumanScoreFields(evaluation.ID, answers)) {
-        const score = await this.metadata.GetEntityObject<MJRubricEvaluationScoreEntity>('MJ: Rubric Evaluation Scores', this.Data.currentUser);
-        score.NewRecord();
-        score.EvaluationID = String(fields.EvaluationID ?? '');
-        score.CriterionID = String(fields.CriterionID ?? '');
-        score.ScaleLevelID = fields.ScaleLevelID == null || fields.ScaleLevelID === '' ? null : String(fields.ScaleLevelID);
-        score.IsNotApplicable = fields.IsNotApplicable === true;
-        score.Rationale = fields.Rationale == null ? null : String(fields.Rationale);
-        score.Evidence = fields.Evidence == null ? null : String(fields.Evidence);
-        if (!await score.Save()) {
-          this.errorMessage = score.LatestResult?.Message || 'Could not save a criterion answer.';
-          return;
-        }
-      }
-      evaluation.Status = 'Submitted';
-      if (!await evaluation.Save()) {
-        this.errorMessage = evaluation.LatestResult?.Message || 'Could not submit the human score.';
+      const result = await new GraphQLActionClient(this.ProviderToUse as GraphQLDataProvider).RunAction(actionId, [
+        { Name: 'RubricVersionID', Value: this.Judged.VersionId, Type: 'Input' },
+        { Name: 'SubjectEntityID', Value: this.Judged.SubjectEntityId, Type: 'Input' },
+        { Name: 'SubjectRecordID', Value: this.Judged.SubjectRecordId, Type: 'Input' },
+        { Name: 'ContextEntityID', Value: this.Judged.ContextEntityId, Type: 'Input' },
+        { Name: 'ContextRecordID', Value: this.Judged.ContextRecordId, Type: 'Input' },
+        { Name: 'SupersedesEvaluationID', Value: priorId, Type: 'Input' },
+        { Name: 'Answers', Value: JSON.stringify(answers), Type: 'Input' },
+      ]);
+      if (!result.Success) {
+        this.errorMessage = result.Message || 'Could not submit the human score.';
         return;
       }
       this.RubricMessage = 'Human rubric score saved. The overall rating is unchanged.';

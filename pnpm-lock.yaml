@@ -5713,6 +5713,9 @@ importers:
       '@memberjunction/ng-ui-components':
         specifier: 6.2.0-edge.1
         version: link:../ui-components
+      '@memberjunction/rubrics-base':
+        specifier: 6.2.0-edge.1
+        version: link:../../../Rubrics/Base
       '@memberjunction/testing-engine-base':
         specifier: 6.2.0-edge.1
         version: link:../../../TestingFramework/EngineBase

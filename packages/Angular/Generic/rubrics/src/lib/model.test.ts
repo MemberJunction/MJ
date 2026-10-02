@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { AddCriterion, AddNode, AnchorsForLevel, AnswerLevel, BandFor, CanSubmit, CatalogRow, ChosenPublishBump, ScoringShortcutApplies, ComparisonCohortFilter, ComparisonMatrix, DisplayScore, DraftProblems, IncompleteAnswers, MatrixColumnsFromRows, MoveNode, MoveProblem, NodeFields, NodeFromRow, PatchNode, PlanBandSave, PlanNodeSave, PreviewScore, publishPreview, QueueNodeSave, RemoveBand, RemoveNode, SampleMatchesTree, ScaleFromRow, SetAnchor, SetGate, SetScale, SetWeight, VersionRows, VersionShownWithoutDraft, WeightShares } from './model.js';
+import { AddCriterion, AddNode, AnchorsForLevel, AnswerLevel, BandFor, CanSubmit, CatalogRow, ChosenPublishBump, ScoringShortcutApplies, ComparisonCohortFilter, ComparisonMatrix, DisplayScore, DraftProblems, IncompleteAnswers, ScoringCompleteness, MatrixColumnsFromRows, MoveNode, MoveProblem, NodeFields, NodeFromRow, PatchNode, PlanBandSave, PlanNodeSave, PreviewScore, publishPreview, QueueNodeSave, RemoveBand, RemoveNode, SampleMatchesTree, ScaleFromRow, SetAnchor, SetGate, SetScale, SetWeight, VersionRows, VersionShownWithoutDraft, WeightShares } from './model.js';
 
 const scale: RubricScaleSnapshot = {
     id: 'scale',
@@ -138,6 +138,12 @@ describe('answer form', () => {
         expect(AnchorsForLevel({ ...mandatory, guidance: 'Check the figure.', anchors: [{ scaleLevelId: 'high', descriptor: 'The figure matches.' }] }, 'high').map(anchor => anchor.descriptor)).toEqual(['The figure matches.']);
         expect(CanSubmit([mandatory], [{ criterionId: 'must', isNotApplicable: true }], 'ExcludeAndRedistribute')).toBe(false);
         expect(CanSubmit([note], [])).toBe(true);
+        const percent = leaf('pct', 1, { scaleId: 'pct' });
+        const percentage: RubricScaleSnapshot = { id: 'pct', name: 'Percentage', scaleType: 'Numeric', minValue: 0, maxValue: 100, step: 1, higherIsBetter: true, levels: [] };
+        const numeric = { ...version([percent, leaf('other', 1, { scaleId: 'pct' })]), scales: [percentage] };
+        expect(IncompleteAnswers(numeric.nodes, [{ criterionId: 'pct', rawValue: 80 }])).toEqual(['other is unanswered.']);
+        expect(ScoringCompleteness(numeric, [{ criterionId: 'pct', rawValue: 80 }])).toBe(0.5);
+        expect(ScoringCompleteness({ ...numeric, nodes: [percent] }, [{ criterionId: 'pct', rawValue: 80 }])).toBe(1);
     });
 });
 

@@ -765,5 +765,107 @@
         }
       ]
     }
+  },
+  {
+    "fields": {
+      "Name": "Submit Human Rubric",
+      "Description": "Stores a human evaluation and its scores, then marks it Submitted, in one transaction. Evidence is an evidence list. A percentage answer is a numeric value.",
+      "Type": "Custom",
+      "DriverClass": "Submit Human Rubric",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=AI",
+      "Status": "Active",
+      "CodeApprovalStatus": "Approved"
+    },
+    "primaryKey": {
+      "ID": "260B8927-0B3D-4879-BC29-6480DE46F2C9"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RubricVersionID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The pinned rubric version being scored.",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "84C9D81A-F001-4900-8C91-271FF7529F95" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SubjectEntityID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Entity of the record being scored.",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "0A127B85-9C11-4085-926B-3E1DA4008E50" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SubjectRecordID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Primary key of the record being scored.",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "A3701FC8-A6D5-4256-8ABC-4AE4B9D539ED" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ContextEntityID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional context entity. Set together with ContextRecordID.",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "03F8ECAC-2ACF-4C03-AD45-62B44C6FE028" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ContextRecordID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional context record.",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "C6CD617B-3394-4E28-A33B-2248F8C7E4D2" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SupersedesEvaluationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Earlier human evaluation this score replaces.",
+            "IsRequired": false
+          },
+          "primaryKey": { "ID": "9C13A1C6-F835-4EA0-812C-99DB832D9F41" }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Answers",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "JSON array of answers. A percentage answer sets rawValue. evidence is quote text or an evidence list.",
+            "IsRequired": true
+          },
+          "primaryKey": { "ID": "82B310A4-E52A-411A-9366-38E0889A2783" }
+        }
+      ]
+    }
   }
 ]

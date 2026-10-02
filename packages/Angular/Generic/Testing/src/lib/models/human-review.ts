@@ -1,4 +1,5 @@
 import type { RubricFormAnswer, RubricVersionSnapshot } from '@memberjunction/ng-rubrics';
+import { EvidenceJson } from '@memberjunction/rubrics-base';
 
 /** The rubric judgment already stored for a test run. Human rows are not a judgment. */
 export interface JudgedRubric {
@@ -78,9 +79,10 @@ export function HumanScoreFields(evaluationId: string, answers: RubricFormAnswer
         EvaluationID: evaluationId,
         CriterionID: answer.criterionId,
         ScaleLevelID: answer.isNotApplicable ? null : answer.scaleLevelId ?? null,
+        RawValue: answer.isNotApplicable ? null : answer.rawValue ?? null,
         IsNotApplicable: answer.isNotApplicable === true,
         Rationale: answer.rationale ?? null,
-        Evidence: answer.evidence ?? null,
+        Evidence: EvidenceJson(answer.evidence),
     }));
 }
 

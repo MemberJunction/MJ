@@ -42,9 +42,16 @@ describe('human rubric review', () => {
             { criterionId: 'c1', scaleLevelId: 'met', rationale: 'Matches.' },
             { criterionId: 'c2', isNotApplicable: true },
         ])).toEqual([
-            { EvaluationID: 'eval-1', CriterionID: 'c1', ScaleLevelID: 'met', IsNotApplicable: false, Rationale: 'Matches.', Evidence: null },
-            { EvaluationID: 'eval-1', CriterionID: 'c2', ScaleLevelID: null, IsNotApplicable: true, Rationale: null, Evidence: null },
+            { EvaluationID: 'eval-1', CriterionID: 'c1', ScaleLevelID: 'met', RawValue: null, IsNotApplicable: false, Rationale: 'Matches.', Evidence: null },
+            { EvaluationID: 'eval-1', CriterionID: 'c2', ScaleLevelID: null, RawValue: null, IsNotApplicable: true, Rationale: null, Evidence: null },
         ]);
+    });
+
+    it('stores a percentage value and evidence as a quote list', () => {
+        const [row] = HumanScoreFields('eval-1', [{ criterionId: 'pct', rawValue: 80, evidence: 'The figure shows 80.' }]);
+        expect(row.RawValue).toBe(80);
+        expect(row.Evidence).toBe(JSON.stringify([{ Type: 'Quote', Text: 'The figure shows 80.' }]));
+        expect(row.Evidence).not.toBe('The figure shows 80.');
     });
 
     it('builds the form version from the stored criterion and scale rows', () => {

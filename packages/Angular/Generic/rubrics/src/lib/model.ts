@@ -1,5 +1,7 @@
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
-import { NodeSnapshotFromRecord, RubricScoring, RubricVersionDiff, SnapshotFromRows, type NotApplicablePolicy, type RubricBandSnapshot, type RubricNodeSnapshot, type RubricScaleSnapshot, type RubricScoreResult, type RubricVersionSnapshot, type SnapshotRows, type VersionChange } from '@memberjunction/rubrics-base';
+import { EvidenceJson, NodeSnapshotFromRecord, RubricScoring, RubricVersionDiff, SnapshotFromRows, type NotApplicablePolicy, type RubricBandSnapshot, type RubricNodeSnapshot, type RubricScaleSnapshot, type RubricScoreResult, type RubricVersionSnapshot, type SnapshotRows, type VersionChange } from '@memberjunction/rubrics-base';
+
+export { EvidenceJson };
 
 /** One answer on the scoring form. Groups are not answered. */
 export interface RubricFormAnswer {
@@ -7,7 +9,10 @@ export interface RubricFormAnswer {
     scaleLevelId?: string | null;
     isNotApplicable?: boolean;
     rationale?: string;
+    /** Quote text the scorer typed. The stored column is an evidence list, not this string. */
     evidence?: string;
+    /** Numeric and Percentage scales. Level scales leave this empty. */
+    rawValue?: number | null;
 }
 
 /** Live weight share among a node's included siblings, as a percent. Advisory nodes are left out. */
@@ -238,8 +243,8 @@ export function IncompleteAnswers(nodes: RubricNodeSnapshot[], answers: RubricFo
     for (const node of nodes.filter(item => item.nodeType === 'Criterion')) {
         const answer = answers.find(item => item.criterionId === node.id);
         const policy = EffectivePolicy(node, versionPolicy);
-        if (node.isAdvisory && !answer?.scaleLevelId && !answer?.isNotApplicable) continue;
-        if (!answer?.scaleLevelId && !answer?.isNotApplicable) {
+        if (node.isAdvisory && !hasAnswer(answer) && !answer?.isNotApplicable) continue;
+        if (!hasAnswer(answer) && !answer?.isNotApplicable) {
             missing.push(`${node.name} is unanswered.`);
             continue;
         }
@@ -256,6 +261,29 @@ export function IncompleteAnswers(nodes: RubricNodeSnapshot[], answers: RubricFo
 /** @deprecated Use {@link IncompleteAnswers}. */
 export function incompleteAnswers(nodes: RubricNodeSnapshot[], answers: RubricFormAnswer[], versionPolicy: NotApplicablePolicy = 'ExcludeAndRedistribute'): string[] {
     return IncompleteAnswers(nodes, answers, versionPolicy);
+}
+
+function hasAnswer(answer: RubricFormAnswer | undefined): boolean {
+    if (!answer) return false;
+    if (answer.scaleLevelId) return true;
+    return answer.rawValue != null && Number.isFinite(answer.rawValue);
+}
+
+/** Same completeness the scorer stores: scored applicable leaves over applicable leaves, rounded to 6 places. */
+export function ScoringCompleteness(version: RubricVersionSnapshot, answers: RubricFormAnswer[]): number | null {
+    try {
+        return RubricScoring.Compute({
+            version,
+            answers: answers.map(answer => ({
+                criterionId: answer.criterionId,
+                scaleLevelId: answer.scaleLevelId,
+                rawValue: answer.rawValue,
+                isNotApplicable: answer.isNotApplicable,
+            })),
+        }).completeness;
+    } catch {
+        return null;
+    }
 }
 
 export function CanSubmit(nodes: RubricNodeSnapshot[], answers: RubricFormAnswer[], versionPolicy: NotApplicablePolicy = 'ExcludeAndRedistribute'): boolean {
@@ -278,6 +306,7 @@ export function AnswerLevel(answers: RubricFormAnswer[], criterionId: string, sc
     next.push({
         criterionId,
         scaleLevelId: notApplicable ? null : scaleLevelId,
+        rawValue: notApplicable || scaleLevelId ? null : previous?.rawValue ?? null,
         isNotApplicable: notApplicable,
         rationale: previous?.rationale,
         evidence: previous?.evidence,

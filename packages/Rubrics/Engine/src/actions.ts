@@ -5,7 +5,7 @@ import type { RubricNodeSnapshot, RubricVersionSnapshot } from '@memberjunction/
 import { RubricEngine, type EvaluateRecordInput, type EvaluateRecordResult } from './RubricEngine.js';
 import { DraftTitle, NodesFromDescription, NodesFromMatrix } from './architect.js';
 import type { RubricSubjectContent } from './content.js';
-import { ProviderRubricEngine } from './providerRecords.js';
+import { ProviderRubricEngine, SubmitHumanEvaluation, type HumanScoreAnswer } from './providerRecords.js';
 import type { ConsensusResult } from './statistics.js';
 
 /**
@@ -220,5 +220,52 @@ export class CreateRubricDraftAction extends BaseAction {
         } catch (error) {
             return failed(error);
         }
+    }
+}
+
+/**
+ * Submit Human Rubric. The evaluation, its scores, and the Submitted status
+ * commit together. Evidence stays an evidence list.
+ */
+@RegisterClass(BaseAction, 'Submit Human Rubric')
+export class SubmitHumanRubricAction extends BaseAction {
+    public async Invoke(provider: Parameters<typeof SubmitHumanEvaluation>[0], user: unknown, input: Parameters<typeof SubmitHumanEvaluation>[2]): Promise<{ id: string; status: 'Submitted' }> {
+        return SubmitHumanEvaluation(provider, user, input);
+    }
+
+    protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        try {
+            if (!params.Provider || !params.ContextUser) throw new Error('A rubric action needs a provider and a context user.');
+            const submitted = await this.Invoke(params.Provider as Parameters<typeof SubmitHumanEvaluation>[0], params.ContextUser, {
+                rubricVersionId: textValue(params, 'RubricVersionID') ?? '',
+                subjectEntityId: textValue(params, 'SubjectEntityID') ?? '',
+                subjectRecordId: textValue(params, 'SubjectRecordID') ?? '',
+                contextEntityId: textValue(params, 'ContextEntityID') ?? null,
+                contextRecordId: textValue(params, 'ContextRecordID') ?? null,
+                evaluatorUserId: params.ContextUser.ID,
+                supersedesEvaluationId: textValue(params, 'SupersedesEvaluationID') ?? null,
+                answers: answerInput(params),
+            });
+            output(params, 'EvaluationID', submitted.id);
+            output(params, 'Status', submitted.status);
+            return { Success: true, ResultCode: 'SUCCESS' };
+        } catch (error) {
+            return failed(error);
+        }
+    }
+}
+
+function answerInput(params: RunActionParams): HumanScoreAnswer[] {
+    const value = inputValue(params, 'Answers');
+    const parsed = typeof value === 'string' ? safeArray(value) : value;
+    if (!Array.isArray(parsed)) return [];
+    return parsed as HumanScoreAnswer[];
+}
+
+function safeArray(value: string): unknown {
+    try {
+        return JSON.parse(value) as unknown;
+    } catch {
+        return [];
     }
 }

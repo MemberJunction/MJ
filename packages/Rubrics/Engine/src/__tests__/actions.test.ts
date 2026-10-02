@@ -27,7 +27,7 @@ vi.mock('@memberjunction/ai-prompts', () => ({
 }));
 
 import { CreateRubricDraftAction, EvaluateRecordAgainstRubricAction, GetRubricAction, GetRubricConsensusAction } from '../actions.js';
-import { CreateDraftVersion } from '../providerRecords.js';
+import { CreateDraftVersion, SubmitHumanEvaluation } from '../providerRecords.js';
 import { RubricEngine, type RubricEvaluationStore, type RubricRecords } from '../RubricEngine.js';
 
 /** Property assignment, as on a generated MJRubric*Entity. Set is absent, so the old row type fails. */
@@ -214,6 +214,52 @@ describe('rubric actions', () => {
         expect(records.lastDraft?.rubricName).toBe('Score a vendor packet');
         records.draftStatus = 'Published';
         await expect(new CreateRubricDraftAction().Invoke(engine, { rubricId: 'rubric', nodes: [] })).rejects.toThrow(/never publishes/);
+    });
+
+    it('submits a percentage answer and its quote list in one transaction', async () => {
+        const order: string[] = [];
+        const written: { entity: string; values: Map<string, unknown> }[] = [];
+        const provider = {
+            SupportsEntityTransactions: true,
+            async BeginEntityTransaction() {
+                order.push('begin');
+                return { IsNested: false, async Commit() { order.push('commit'); }, async Rollback() { order.push('rollback'); } };
+            },
+            async GetEntityObject(entity: string) {
+                return draftEntity(entity, values => {
+                    order.push(`save:${entity}`);
+                    written.push({ entity, values: new Map(values) });
+                }, entity === 'MJ: Rubric Evaluation Scores' && written.some(row => row.entity === 'MJ: Rubric Evaluations'));
+            },
+        };
+        const input = {
+            rubricVersionId: 'version',
+            subjectEntityId: 'entity',
+            subjectRecordId: 'run',
+            evaluatorUserId: 'user-1',
+            answers: [{ criterionId: 'pct', rawValue: 80, evidence: 'The figure shows 80.' }],
+        };
+        await expect(SubmitHumanEvaluation(provider, { ID: 'user-1' }, input)).rejects.toThrow(/criterion answer/);
+        expect(order).toContain('rollback');
+        expect(order).not.toContain('commit');
+        const committed = {
+            SupportsEntityTransactions: true,
+            async BeginEntityTransaction() {
+                order.push('begin-ok');
+                return { IsNested: false, async Commit() { order.push('commit-ok'); }, async Rollback() { order.push('rollback-ok'); } };
+            },
+            async GetEntityObject(entity: string) {
+                return draftEntity(entity, values => {
+                    written.push({ entity, values: new Map(values) });
+                });
+            },
+        };
+        const saved = await SubmitHumanEvaluation(committed, { ID: 'user-1' }, input);
+        expect(saved.status).toBe('Submitted');
+        expect(order).toContain('commit-ok');
+        const score = written.filter(row => row.entity === 'MJ: Rubric Evaluation Scores').at(-1);
+        expect(score?.values.get('RawValue')).toBe(80);
+        expect(score?.values.get('Evidence')).toBe(JSON.stringify([{ Type: 'Quote', Text: 'The figure shows 80.' }]));
     });
 
     it('writes a draft version and does not set Status to Published', async () => {

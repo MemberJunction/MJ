@@ -9,6 +9,7 @@ export type {
     RubricScaleRecord,
     RubricVersionRecord,
 } from './RubricEngineBase.js';
+export { EvidenceJson, type QuoteEvidence } from './evidence.js';
 export { RubricScoring, RubricValidationError, SCORING_ENGINE_VERSION } from './RubricScoring.js';
 export { HighestNonDraftVersion, RubricVersionDiff } from './RubricVersionDiff.js';
 export type { VersionNumberRow } from './RubricVersionDiff.js';
