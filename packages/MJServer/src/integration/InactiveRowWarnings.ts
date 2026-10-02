@@ -51,6 +51,56 @@ const isActive = (row: NamedStatusRow): boolean => row.Status === 'Active';
  * Returns an empty array when everything declared and in scope is Active.
  */
 export function ComputeInactiveRowWarnings(input: InactiveRowWarningInput): string[] {
+    return computeInactiveRowWarnings(input);
+}
+
+/**
+ * The catalog, reduced to the three reads this warning needs. `IntegrationEngineBase` satisfies it
+ * structurally, so the resolver passes its engine instance and a test passes a literal — which is the
+ * point: the collection used to live inside the resolver's schema REBUILD, and the one apply path that
+ * skips the rebuild (the batch, which prefetches its schema) therefore lost the warnings entirely.
+ * They never depended on the rebuild; they are the catalog's own Status rows.
+ */
+export interface CatalogStatusReader {
+    /** Active objects of this integration — the ones an apply materializes. */
+    GetActiveIntegrationObjects(integrationID: string): ReadonlyArray<{ ID: string; Name: string }>;
+    /** EVERY object of this integration, Active or not. */
+    GetIntegrationObjectsByIntegrationID(integrationID: string): ReadonlyArray<{ Name: string; Status: string | null }>;
+    /** Every field of one object, Active or not. */
+    GetIntegrationObjectFields(objectID: string): ReadonlyArray<{ Name: string; Status: string | null }>;
+}
+
+/**
+ * Gathers the rows {@link ComputeInactiveRowWarnings} needs from the catalog and returns its verdict.
+ *
+ * `requestedNames` empty/undefined means "everything active", which deliberately does not report
+ * deactivated OBJECTS — see {@link InactiveRowWarningInput.RequestedNames}.
+ */
+export function CollectInactiveRowWarnings(
+    catalog: CatalogStatusReader,
+    integrationID: string,
+    requestedNames?: string[] | null,
+): string[] {
+    const filter = requestedNames && requestedNames.length > 0
+        ? new Set(requestedNames.map(n => n.toLowerCase()))
+        : null;
+    // Fields only for the objects this apply materializes: a non-materialized object is reported by
+    // the object warning, not by one line per field it also lost.
+    const FieldsByObjectName: Record<string, NamedStatusRow[]> = {};
+    for (const io of catalog.GetActiveIntegrationObjects(integrationID)) {
+        if (filter && !filter.has(io.Name.toLowerCase())) continue;
+        FieldsByObjectName[io.Name] = catalog.GetIntegrationObjectFields(io.ID)
+            .map(f => ({ Name: f.Name, Status: f.Status }));
+    }
+    return computeInactiveRowWarnings({
+        RequestedNames: requestedNames ?? null,
+        AllObjects: catalog.GetIntegrationObjectsByIntegrationID(integrationID)
+            .map(io => ({ Name: io.Name, Status: io.Status })),
+        FieldsByObjectName,
+    });
+}
+
+function computeInactiveRowWarnings(input: InactiveRowWarningInput): string[] {
     const warnings: string[] = [];
     const requested = input.RequestedNames && input.RequestedNames.length > 0
         ? new Set(input.RequestedNames.map(n => n.toLowerCase()))
