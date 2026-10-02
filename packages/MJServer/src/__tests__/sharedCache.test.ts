@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 /**
- * Routing of shared-cache events in MJAPI (plan F11): metadata notices trigger a metadata check,
+ * Routing of shared-cache events in MJAPI: metadata notices trigger a metadata check,
  * everything reaches LocalCacheManager, and only RunView slot changes reach browsers.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';

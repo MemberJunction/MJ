@@ -1,6 +1,6 @@
 /**
  * The slot-maintenance funnel stamps `maxUpdatedAt` from the rows, like the fill path does
- * (plan "maxUpdatedAt", item 1.3).
+ *.
  *
  * It used to stamp the event time. That value never matched anything a reader held or the
  * database reported, so the client smart-cache check could not recognise a maintained slot as

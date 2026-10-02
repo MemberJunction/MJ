@@ -1,28 +1,21 @@
 /**
- * The dataset cache's category, and the freshness comparison the category gated.
+ * The dataset cache's category, and the freshness comparison that depends on it.
  *
- * Six functions on `ProviderBase` touch the dataset cache. Between `987a126aab` (2026-05-02) and
- * `ProviderBase.DatasetCacheCategory`, exactly one of them named a category: the batched warm read
- * in `GetAndCacheDatasetByName` asked for `'DatasetCache'` while every write and every other reader
- * passed none and so landed in `default`. Every storage provider isolates by category, so the warm
- * read looked in a namespace nothing ever wrote to and missed on every transport — browsers
- * included. The fallback refetched from the server and rewrote the cache, which is why five months
- * of this was slow rather than wrong, and why no test caught it: nothing asserted that a second
- * call did NOT go to the server.
+ * All six `ProviderBase` functions that touch the dataset cache must name the same category. Every
+ * storage provider isolates by category, so a reader and a writer that disagree can never meet — and
+ * because the warm read falls back to refetching from the server, a disagreement makes the cache
+ * silently useless rather than wrong.
  *
- * Two consequences the cases below pin:
+ * Two properties that needs:
  *
- *  1. **The warm path serves from cache.** `fetchCount` is the only honest witness. A test that
- *     compares two returned datasets passes whether the second call was served or refetched, which
- *     is exactly how `dataset-cache.DS1` missed this.
- *  2. **`ClearCategory('DatasetCache')` actually clears datasets.** It reported success over an
- *     empty namespace before, which is a clear that lies.
+ *  1. **The warm path serves from the cache.** The server fetch count is the only witness; comparing
+ *     the two returned datasets passes whether the second call was served or refetched.
+ *  2. **`ClearCategory('DatasetCache')` actually clears datasets**, rather than reporting success
+ *     over an empty namespace.
  *
- * The freshness cases exist because fixing the category *switches on* a comparison that had not
- * executed since May. `GetAndCacheDatasetByName` and `IsDatasetCacheUpToDate` each carried their own
- * copy of it and they had drifted; both now call `DatasetRowCountsMatch`. Each case says whether it
- * is a regression pin (watched to fail against the un-fixed code) or an invariant pin (it cannot be
- * made to fail, and is here to stop a future "simplification" from changing the behaviour).
+ * The freshness cases cover `DatasetRowCountsMatch`, which `GetAndCacheDatasetByName` and
+ * `IsDatasetCacheUpToDate` share. They only run when the warm path hits, so they are easy to leave
+ * untested by accident.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';

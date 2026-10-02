@@ -625,7 +625,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * change made with raw SQL, so metadata edited directly in the database is never noticed by a
      * running process. This is the backstop for that case.
      *
-     * It is deliberately **not** an unconditional poll. `Entity.TrustServerCacheCompletely = true`
+     * It is **not** an unconditional poll. `Entity.TrustServerCacheCompletely = true`
      * (the default) states that every mutation flows through `BaseEntity`, which the event paths
      * already hear; polling such an entity cannot discover anything, and a recurring query prevents a
      * serverless database from pausing. So the check reads the database only when at least one
@@ -5677,7 +5677,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * last loaded or saved — another process sharing the store wrote a newer snapshot, or the
      * store was cleared. Otherwise only the small timestamps key is read. Reading and parsing the
      * whole snapshot on every periodic check cost each server ~230 ms per poll on a shared cache
-     * (plan F12).
+     *.
      */
     private async syncLocalMetadataFromStorage(): Promise<void> {
         const ls = this.LocalStorageProvider;

@@ -1,6 +1,6 @@
 /**
  * A periodic metadata check reads the full stored snapshot only when it may differ from what the
- * process holds (plan F12).
+ * process holds.
  *
  * Every check used to download, decompress and deserialize the whole snapshot (3.7 MB on a real
  * database, ~230 ms) before comparing timestamps, even when nothing had changed. On a shared cache

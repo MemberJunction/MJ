@@ -172,7 +172,7 @@ async function main(): Promise<void> {
         }
     });
 
-    suite.Test('XS3: a metadata change saved through A reaches B through the shared-cache notice (plan F11)', async () => {
+    suite.Test('XS3: a metadata change saved through A reaches B through the shared-cache notice', async () => {
         // B must be started with METADATA_CACHE_REFRESH_INTERVAL far above this test's timeout, so its
         // periodic poll cannot be what delivers the change.
         const cap = 3;

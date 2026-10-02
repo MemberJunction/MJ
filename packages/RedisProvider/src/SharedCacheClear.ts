@@ -18,15 +18,16 @@ export const SHARED_CACHE_WRITE_CATEGORIES: readonly string[] = ['RunViewCache',
 const SNAPSHOT_CATEGORY = 'default';
 
 /**
- * Every key of the provider's metadata snapshot (`___MJCore_Metadata_Timestamps`, `_AllMetadata`,
- * …) contains this.
+ * Substring shared by every key of the provider's metadata snapshot
+ * (`___MJCore_Metadata_Timestamps`, `_AllMetadata`, …).
  *
- * Dataset keys (`___MJCore_Metadata<connection>__DATASET__<name>`) contain it too, because
- * `GetDatasetCacheKey` builds on the same root. They are no longer written to this category —
- * `ProviderBase.DatasetCacheCategory` owns them, and the ordinary `DatasetCache` clear removes
- * them — but a Redis instance that served an older build still holds them here. Matching on the
- * marker is therefore what sweeps those legacy orphans, which is why this scan is deliberately not
- * narrowed to the snapshot's own suffixes.
+ * Dataset keys (`___MJCore_Metadata<connection>__DATASET__<name>`) contain it too, since
+ * `GetDatasetCacheKey` builds on the same root. Current builds write those to
+ * `ProviderBase.DatasetCacheCategory` instead, where the ordinary category clear removes them, but a
+ * Redis instance that served an older build still holds some here.
+ *
+ * Do not narrow this to the snapshot's own suffixes: matching the whole marker is what sweeps those
+ * older dataset keys.
  */
 const SNAPSHOT_KEY_MARKER = '___MJCore_Metadata';
 

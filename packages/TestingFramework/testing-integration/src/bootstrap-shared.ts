@@ -50,7 +50,7 @@ export interface BootstrapServerOptions {
     VerboseCacheLogging?: boolean;
     /**
      * A store shared with other processes (e.g. Redis) to use as the cache from the first read,
-     * the way MJAPI boots with REDIS_URL (plan N1). It is wrapped in the instrumented provider and
+     * the way MJAPI boots with REDIS_URL. It is wrapped in the instrumented provider and
      * also handed to the database provider. Omitted: a process-local in-memory store.
      */
     SharedStorage?: ILocalStorageProvider;

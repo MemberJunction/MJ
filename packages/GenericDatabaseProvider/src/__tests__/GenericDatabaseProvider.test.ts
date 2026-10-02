@@ -221,7 +221,7 @@ describe('GenericDatabaseProvider', () => {
         provider = new TestGenericProvider();
     });
 
-    describe('Config with a storage provider (plan N1)', () => {
+    describe('Config with a storage provider', () => {
         it('installs the configured storage before the base configuration runs', async () => {
             const shared = new InMemoryLocalStorageProvider();
             let seenDuringConfig: unknown;

@@ -358,7 +358,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         const depthAtBegin = this.CurrentTransactionDepth;
         // Cache maintenance for the saves in this scope waits for the outermost settle: one rewrite
         // per cached slot on commit instead of one per save, and nothing written for work that is
-        // rolled back (plan N11). Nested scopes join the same batch.
+        // rolled back. Nested scopes join the same batch.
         LocalCacheManager.Instance.BeginEntityEventBatch(this);
 
         let settled = false;

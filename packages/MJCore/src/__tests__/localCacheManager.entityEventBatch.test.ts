@@ -1,5 +1,5 @@
 /**
- * Entity-event batches (plan N11): saves and deletes raised through a provider with an open batch
+ * Entity-event batches: saves and deletes raised through a provider with an open batch
  * are applied to each cached slot once, when the batch closes — and not at all when it fails.
  *
  * Before this, a bulk unit of work of N saves rewrote (and on a shared cache, republished) every

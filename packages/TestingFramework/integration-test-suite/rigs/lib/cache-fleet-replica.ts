@@ -367,10 +367,10 @@ async function listen(redis: RedisLocalStorageProvider): Promise<void> {
 }
 
 /**
- * Boots like MJAPI. `boot=redis-first` (the default, MJAPI since plan N1): the shared store is
+ * Boots like MJAPI. `boot=redis-first` (the default, MJAPI since): the shared store is
  * installed and subscribed before the provider loads metadata and startup engines.
  * `boot=legacy`: engines load on an in-memory store, then the store is swapped to Redis (the
- * pre-N1 order, kept for comparison).
+ * the older order, kept for comparison).
  */
 async function cmdBoot(args: Args): Promise<Record<string, unknown>> {
     const mode = args['boot'] === 'legacy' ? 'legacy' : 'redis-first';

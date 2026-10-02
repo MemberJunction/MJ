@@ -36,32 +36,27 @@ const USER_ROLES_ENTITY = 'MJ: User Roles';
 const USER_ENTITY_NAMES: ReadonlySet<string> = new Set([USERS_ENTITY.toLowerCase(), USER_ROLES_ENTITY.toLowerCase()]);
 
 /**
- * Server side cache of users and their roles.
+ * Server-side cache of users and their roles, shared by every consumer in the process.
  *
  * Dialect-neutral: {@link UserCache.Refresh} takes a {@link DatabaseProviderBase} and reads through
- * `ExecuteSQL` / `QuoteSchemaAndView`, so SQL Server and PostgreSQL processes share one
- * implementation rather than each hand-rolling a `vwUsers` + `vwUserRoles` load.
+ * `ExecuteSQL` / `QuoteSchemaAndView`, so SQL Server and PostgreSQL share one implementation.
  *
- * **Staying current.** This cache used to be refreshed only by whichever process happened
- * to call {@link Refresh}, so a user created on one server was invisible to every other server until
- * it restarted — and consumers read a miss as "no such user" (a new organization's first API key was
- * rejected as "invalid or expired" until the next restart). It now keeps itself current:
- * 1. **Local writes.** It listens for `MJ: Users` / `MJ: User Roles` save and delete events and
- *    refreshes, so the process that made the change no longer has to remember to.
- * 2. **Other processes.** After refreshing for a local write it writes {@link USER_CACHE_STAMP_KEY}
- *    to the shared store; every other server hears the notice and refreshes. A tool that clears the
- *    shared cache (`mj sync push`, `mj codegen`, `mj migrate`) also makes servers refresh.
- * 3. **Everything else.** {@link RefreshIfChangedInDatabase} compares two counts and a timestamp
- *    with the database and reloads only when they differ, for writers that bypass both paths (raw
- *    SQL, another application). MJAPI runs it on the engine-sweep interval.
- * 4. **A miss is not a negative fact.** {@link FindUser} falls back to an authoritative single-row
- *    read, so a user this process has not heard about yet is found rather than denied.
+ * It keeps itself current by four independent routes, because each can be bypassed by the next:
  *
- * Uses BaseSingleton to guarantee a single instance across the entire process,
- * even if bundlers duplicate this module across multiple execution paths.
+ * 1. **Local writes** — refreshes on `MJ: Users` / `MJ: User Roles` save and delete events, so the
+ *    process making the change does not have to remember to.
+ * 2. **Other processes** — a refresh for a local write stamps {@link USER_CACHE_STAMP_KEY} in the
+ *    shared store, and peers refresh on that notice. Clearing the shared cache (`mj sync push`,
+ *    `mj codegen`, `mj migrate`) has the same effect.
+ * 3. **Writers that bypass both** (raw SQL, another application) —
+ *    {@link RefreshIfChangedInDatabase} compares two counts and a timestamp against the database and
+ *    reloads only on a difference. MJAPI runs it on the engine-sweep interval.
+ * 4. **A miss is not a negative fact** — {@link FindUser} falls back to an authoritative single-row
+ *    read, so a user this process has not heard about is looked up rather than denied.
  *
- * NOTE: the class name `UserCache` is load-bearing — `BaseSingleton` keys its global store on the
- * constructor name, so renaming it would hand every existing holder a second, empty instance.
+ * Extends `BaseSingleton` so bundler duplication cannot produce a second instance. The class NAME is
+ * load-bearing: `BaseSingleton` keys its global store on the constructor name, so renaming it hands
+ * every existing holder a second, empty instance.
  */
 export class UserCache extends BaseSingleton<UserCache> {
     /**

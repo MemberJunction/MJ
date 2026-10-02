@@ -1,17 +1,17 @@
 /**
- * A freshness claim with nothing behind it must not be believed (found in review).
+ * A stored freshness claim must not be believed when the metadata it vouches for is absent.
  *
- * The metadata snapshot is written as a payload followed by a timestamps key, deliberately in that
- * order so a half-written snapshot reads as obsolete. Under a per-key expiry the same order works
- * against us: the timestamps key is written last, so it is the last to expire, and there is a window
- * where the store holds a claim of freshness and no metadata. A cache clear produces the same window
- * on purpose, removing the timestamps key last.
+ * The snapshot is written payload-first, timestamps last, so a half-written one reads as obsolete.
+ * Per-key expiry inverts that: the timestamps key is written last and so expires last, leaving a
+ * window where the store holds a claim of freshness and no metadata. A cache clear leaves the same
+ * window, removing the timestamps key last for the same reason.
  *
- * A process booting into that window used to adopt the stored timestamps and then return with no
- * metadata loaded. Its staleness check compared those timestamps with the database, found them
- * current, and concluded that its EMPTY metadata was up to date — a server that serves nothing and
- * never repairs itself. No single-process test saw it because it needs two keys to expire
- * independently; the fleet rig never saw it because nothing there waits an hour.
+ * A process booting into that window must not adopt those timestamps. If it does, its staleness
+ * check compares them against the database, finds them current, and concludes that its empty
+ * metadata is up to date — a server that serves nothing and never repairs itself.
+ *
+ * Reproducing it needs two keys expiring independently, which is why the cases below drive expiry
+ * directly rather than waiting.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ProviderConfigDataBase } from '../generic/interfaces';

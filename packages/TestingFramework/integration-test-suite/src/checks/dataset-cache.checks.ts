@@ -100,19 +100,18 @@ export async function CheckDs3_ClearMakesUncachedAndStale(ctx: IntegrationCheckC
 }
 
 /**
- * DS4: the warm call is SERVED FROM CACHE, not silently refetched.
+ * DS4: the warm call is served from the cache rather than silently refetched.
  *
- * The only way to tell the two apart from outside the provider is to make the cached copy
- * distinguishable from what the server would return, then ask for it. A sentinel written into the
- * cached blob's `Status` does that: if the warm call returns the sentinel it came from the cache; if
- * it returns the server's own status the cache missed and the call refetched.
+ * Told apart from outside the provider by making the cached copy distinguishable from what the
+ * server would return: a sentinel is written into the cached blob's `Status`, and the warm call must
+ * return it. The server's own status coming back means the cache missed.
  *
- * The sentinel deliberately leaves every per-entity ROW COUNT untouched. The freshness check
- * compares those counts against the server precisely to catch pure deletes, so adding or removing
- * rows would (correctly) invalidate the cache and the check would prove nothing about serving.
+ * The sentinel leaves every per-entity row count untouched. Freshness compares those counts against
+ * the server to catch pure deletes, so changing one would invalidate the cache and the check would
+ * say nothing about serving.
  *
- * The cache is cleared at the end whatever happens, so no sentinel-bearing copy outlives this check
- * for the metadata bootstrap or a later bundle to read.
+ * Clears the cache in a `finally`, so no sentinel-bearing copy is left for the metadata bootstrap or
+ * a later bundle to read.
  */
 export async function CheckDs4WarmIsServedFromCache(ctx: IntegrationCheckContext): Promise<void> {
     const md = new Metadata(); // global-provider-ok: dedicated single-provider process (D1)
