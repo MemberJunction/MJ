@@ -1,4 +1,5 @@
-import type { RubricFormAnswer, RubricScoreResult, RubricVersionSnapshot } from '@memberjunction/ng-rubrics';
+import type { RubricFormAnswer } from '@memberjunction/ng-rubrics';
+import type { RubricScoreResult, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 
 export interface DisagreementItem {
     key: string;

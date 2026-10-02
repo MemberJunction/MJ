@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import type { RubricNodeSnapshot, RubricScaleSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { AddCriterion, AddNode, AnchorsForLevel, AnswerLevel, BandFor, CanSubmit, CatalogRow, ChosenPublishBump, ScoringShortcutApplies, ComparisonCohortFilter, ComparisonMatrix, DisplayScore, DraftProblems, IncompleteAnswers, ScoringCompleteness, MatrixColumnsFromRows, MoveNode, MoveProblem, NodeFields, NodeFromRow, PatchNode, PlanBandSave, PlanNodeSave, PreviewScore, publishPreview, QueueNodeSave, RemoveBand, RemoveNode, SampleMatchesTree, ScaleFromRow, SetAnchor, SetGate, SetScale, SetWeight, VersionRows, VersionShownWithoutDraft, WeightShares } from './model.js';
@@ -29,6 +32,11 @@ function version(nodes: RubricNodeSnapshot[]): RubricVersionSnapshot {
 }
 
 describe('catalog row', () => {
+    it('does not re-export rubrics-base types from the package entry', () => {
+        const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../public-api.ts'), 'utf8');
+        expect(source).not.toContain('@memberjunction/rubrics-base');
+    });
+
     it('names the published version, the previewed draft, and the category', () => {
         const row = CatalogRow({
             id: 'rubric',

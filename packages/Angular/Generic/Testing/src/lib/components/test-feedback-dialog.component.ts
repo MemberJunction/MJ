@@ -3,7 +3,8 @@ import { UserInfo, RunView } from '@memberjunction/core';
 import { MJTestRunFeedbackEntity } from '@memberjunction/core-entities';
 import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import type { RubricFormAnswer, RubricVersionSnapshot } from '@memberjunction/ng-rubrics';
+import type { RubricFormAnswer } from '@memberjunction/ng-rubrics';
+import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { judgedRubric, PriorHumanEvaluation, VersionSnapshot, type JudgedRubric } from '../models/human-review';
 
 export interface TestFeedbackDialogData {

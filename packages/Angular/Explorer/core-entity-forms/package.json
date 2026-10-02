@@ -74,6 +74,7 @@
     "@memberjunction/ng-versions": "6.2.0-edge.1",
     "@memberjunction/predictive-studio-core": "6.2.0-edge.1",
     "@memberjunction/record-cloning-base": "6.2.0-edge.1",
+    "@memberjunction/rubrics-base": "6.2.0-edge.1",
     "@memberjunction/templates-base-types": "6.2.0-edge.1",
     "@types/d3": "^7.4.3",
     "ag-grid-angular": "^35.0.1",

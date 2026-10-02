@@ -7,6 +7,9 @@ import '@angular/compiler';
  * form with nothing to explain it), and a hardcoded default sends every Flow agent back to Details —
  * re-burying the diagram that tabbing this form exists to surface.
  */
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import {
     AGENT_TAB_DESIGNER,
@@ -28,6 +31,11 @@ const keys = (c: AgentFormTabContext, stored: string | null = null) =>
     BuildAgentFormTabs(c, stored).Tabs.map((t) => t.key);
 
 describe('which tabs exist', () => {
+    it('does not re-export the agent rubric sort', () => {
+        const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../lib/custom/AIAgents/agent-form-tabs.ts'), 'utf8');
+        expect(source).not.toContain('export { SortAgentRubrics }');
+    });
+
     it('a Flow agent gets the designer, Details and Invocations — designer first', () => {
         expect(keys(flow)).toEqual([AGENT_TAB_DESIGNER, AGENT_TAB_DETAILS, AGENT_TAB_INVOCATIONS, AGENT_TAB_RUBRICS]);
     });

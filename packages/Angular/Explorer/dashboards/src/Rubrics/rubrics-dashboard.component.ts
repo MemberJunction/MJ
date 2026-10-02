@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, AfterViewInit } 
 import { CompositeKey, RunView } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboard } from '@memberjunction/ng-shared';
-import { catalogRow, type CatalogRowView, type CatalogRubricInput } from '@memberjunction/ng-rubrics';
+import { CatalogRow, type CatalogRowView, type CatalogRubricInput } from '@memberjunction/ng-rubrics';
 
 type Row = Record<string, unknown>;
 
@@ -60,7 +60,7 @@ export class RubricsDashboardComponent extends BaseDashboard implements AfterVie
                 list.push(row);
                 versionsByRubric.set(rubricId, list);
             }
-            this.Rows = ((rubrics.Results as Row[] ?? [])).map(rubric => catalogRow(this.inputFor(rubric, categoryNames, versionsByRubric, criteriaByVersion, scaleNames)));
+            this.Rows = ((rubrics.Results as Row[] ?? [])).map(rubric => CatalogRow(this.inputFor(rubric, categoryNames, versionsByRubric, criteriaByVersion, scaleNames)));
         } finally {
             this.Loading = false;
             this.changeDetector.markForCheck();

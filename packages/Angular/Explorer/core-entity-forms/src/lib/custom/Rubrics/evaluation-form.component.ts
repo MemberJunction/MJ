@@ -3,7 +3,8 @@ import { RunView } from '@memberjunction/core';
 import { MJRubricEvaluationEntity } from '@memberjunction/core-entities';
 import { RegisterClass, RegisterClassEx } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormPanel, BaseFormPolicy, BaseFormsModule, type FormChromeContext, type FormChromeSpec } from '@memberjunction/ng-base-forms';
-import { RubricComparisonMatrixComponent, RubricResultComponent, bandFromRow, nodeFromRow, scaleFromRow, type RubricFormAnswer, type RubricScoreResult, type RubricVersionSnapshot } from '@memberjunction/ng-rubrics';
+import { RubricComparisonMatrixComponent, RubricResultComponent, BandFromRow, NodeFromRow, ScaleFromRow, type RubricFormAnswer } from '@memberjunction/ng-rubrics';
+import type { RubricScoreResult, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { MJRubricEvaluationFormComponent } from '../../generated/Entities/MJRubricEvaluation/mjrubricevaluation.form.component';
 
 /** Cohort figures stay hidden until the viewer's own evaluation leaves Draft. */
@@ -81,10 +82,10 @@ export class MJRubricEvaluationFormComponentExtended extends MJRubricEvaluationF
             const versions = await this.rows('MJ: Rubric Versions', `ID='${this.record.RubricVersionID}'`);
             const version = versions[0];
             if (version) {
-                const bands = (await this.rows('MJ: Rubric Bands', `RubricVersionID='${version.ID}'`)).map(bandFromRow);
-                const criteria = (await this.rows('MJ: Rubric Criteria', `RubricVersionID='${version.ID}'`)).map(row => nodeFromRow(row));
+                const bands = (await this.rows('MJ: Rubric Bands', `RubricVersionID='${version.ID}'`)).map(BandFromRow);
+                const criteria = (await this.rows('MJ: Rubric Criteria', `RubricVersionID='${version.ID}'`)).map(row => NodeFromRow(row));
                 const scaleIds = [...new Set(criteria.map(node => node.scaleId).filter((id): id is string => !!id))];
-                const scales = scaleIds.length === 0 ? [] : (await this.rows('MJ: Rubric Scales', `ID IN (${scaleIds.map(id => `'${id}'`).join(',')})`)).map(row => scaleFromRow(row, []));
+                const scales = scaleIds.length === 0 ? [] : (await this.rows('MJ: Rubric Scales', `ID IN (${scaleIds.map(id => `'${id}'`).join(',')})`)).map(row => ScaleFromRow(row, []));
                 this.Version = {
                     id: String(version.ID),
                     rubricId: String(version.RubricID),

@@ -1,4 +1,5 @@
-import type { RubricFormAnswer, RubricVersionSnapshot } from '@memberjunction/ng-rubrics';
+import type { RubricFormAnswer } from '@memberjunction/ng-rubrics';
+import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { EvidenceJson } from '@memberjunction/rubrics-base';
 
 /** The rubric judgment already stored for a test run. Human rows are not a judgment. */

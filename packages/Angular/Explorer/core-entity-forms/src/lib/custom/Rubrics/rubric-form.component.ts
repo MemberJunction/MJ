@@ -5,7 +5,8 @@ import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphq
 import { RegisterClass, RegisterClassEx, UUIDsEqual } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormPolicy, type FormChromeContext, type FormChromeSpec } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
-import { bandFromRow, NodeFields, nodeFromRow, PlanNodeSave, planBandSave, QueueNodeSave, publishPreview, scaleFromRow, VersionShownWithoutDraft, type RubricBandSnapshot, type RubricNodeSnapshot, type RubricScaleSnapshot, type RubricVersionCard, type RubricVersionSnapshot } from '@memberjunction/ng-rubrics';
+import { BandFromRow, NodeFields, NodeFromRow, PlanNodeSave, PlanBandSave, QueueNodeSave, PublishPreview, ScaleFromRow, VersionShownWithoutDraft, type RubricVersionCard } from '@memberjunction/ng-rubrics';
+import type { RubricBandSnapshot, RubricNodeSnapshot, RubricScaleSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { MJRubricBandEntity, MJRubricCriterionEntity, MJRubricCriterionLevelEntity, MJRubricEntity, MJRubricVersionEntity } from '@memberjunction/core-entities';
 import { MJRubricFormComponent } from '../../generated/Entities/MJRubric/mjrubric.form.component';
 
@@ -44,11 +45,11 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
     }
 
     public get NextVersion(): string {
-        return this.DraftVersion ? publishPreview(this.BaseVersion, this.DraftVersion).nextVersion ?? '' : '';
+        return this.DraftVersion ? PublishPreview(this.BaseVersion, this.DraftVersion).nextVersion ?? '' : '';
     }
 
     public get ComputedBump(): string | null {
-        return this.DraftVersion ? publishPreview(this.BaseVersion, this.DraftVersion).computedBump : null;
+        return this.DraftVersion ? PublishPreview(this.BaseVersion, this.DraftVersion).computedBump : null;
     }
 
     public override async ngOnInit(): Promise<void> {
@@ -71,13 +72,13 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
             if (draft) {
                 this.Viewing = 'draft';
                 this.Nodes = await this.loadNodes(String(draft.ID));
-                this.Bands = (await this.rows('MJ: Rubric Bands', `RubricVersionID='${draft.ID}'`)).map(bandFromRow);
+                this.Bands = (await this.rows('MJ: Rubric Bands', `RubricVersionID='${draft.ID}'`)).map(BandFromRow);
                 this.DraftVersion = this.snapshot(draft, this.Nodes, this.Bands);
                 const baseId = draft.BasedOnVersionID ? String(draft.BasedOnVersionID) : null;
                 const base = baseId ? rows.find(row => String(row.ID) === baseId) : rows.find(row => row.Status === 'Published');
                 if (base) {
                     const baseNodes = await this.loadNodes(String(base.ID));
-                    const baseBands = (await this.rows('MJ: Rubric Bands', `RubricVersionID='${base.ID}'`)).map(bandFromRow);
+                    const baseBands = (await this.rows('MJ: Rubric Bands', `RubricVersionID='${base.ID}'`)).map(BandFromRow);
                     this.BaseVersion = this.snapshot(base, baseNodes, baseBands);
                 }
             } else {
@@ -85,7 +86,7 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
                 const published = VersionShownWithoutDraft(rows);
                 if (published) {
                     const nodes = await this.loadNodes(String(published.ID));
-                    const bands = (await this.rows('MJ: Rubric Bands', `RubricVersionID='${published.ID}'`)).map(bandFromRow);
+                    const bands = (await this.rows('MJ: Rubric Bands', `RubricVersionID='${published.ID}'`)).map(BandFromRow);
                     this.Nodes = nodes;
                     this.Bands = bands;
                     this.BaseVersion = this.snapshot(published, nodes, bands);
@@ -153,7 +154,7 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
             const saved = await this.rows('MJ: Rubric Criteria', `RubricVersionID='${draftId}'`);
             const anchorRows = saved.length === 0 ? [] : await this.rows('MJ: Rubric Criterion Levels', `CriterionID IN (${saved.map(row => `'${String(row.ID)}'`).join(', ')})`);
             const plan = PlanNodeSave(saved.map(row => {
-                const node = nodeFromRow(row, anchorRows.filter(anchor => String(anchor.CriterionID) === String(row.ID)).map(anchor => ({
+                const node = NodeFromRow(row, anchorRows.filter(anchor => String(anchor.CriterionID) === String(row.ID)).map(anchor => ({
                     scaleLevelId: anchor.ScaleLevelID == null ? null : String(anchor.ScaleLevelID),
                     anchorValue: anchor.AnchorValue == null ? null : Number(anchor.AnchorValue),
                     descriptor: String(anchor.Descriptor ?? ''),
@@ -180,7 +181,7 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
         this.Bands = bands;
         if (!this.DraftId) return;
         const saved = await this.rows('MJ: Rubric Bands', `RubricVersionID='${this.DraftId}'`);
-        const plan = planBandSave(saved.map(row => String(row.ID)), bands);
+        const plan = PlanBandSave(saved.map(row => String(row.ID)), bands);
         for (const id of plan.removedIds) await this.remove('MJ: Rubric Bands', id);
         for (const item of plan.upserts) await this.write('MJ: Rubric Bands', item.id, item.isNew, { ...item.fields, RubricVersionID: this.DraftId });
         if (this.DraftVersion) this.DraftVersion = { ...this.DraftVersion, bands };
@@ -224,7 +225,7 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
     private async loadNodes(versionId: string): Promise<RubricNodeSnapshot[]> {
         const criteria = await this.rows('MJ: Rubric Criteria', `RubricVersionID='${versionId}'`);
         const anchors = criteria.length === 0 ? [] : await this.rows('MJ: Rubric Criterion Levels', `CriterionID IN (${criteria.map(row => `'${row.ID}'`).join(', ')})`);
-        return criteria.map(row => nodeFromRow(row, anchors.filter(anchor => String(anchor.CriterionID) === String(row.ID)).map(anchor => ({
+        return criteria.map(row => NodeFromRow(row, anchors.filter(anchor => String(anchor.CriterionID) === String(row.ID)).map(anchor => ({
             scaleLevelId: anchor.ScaleLevelID == null ? null : String(anchor.ScaleLevelID),
             anchorValue: anchor.AnchorValue == null ? null : Number(anchor.AnchorValue),
             descriptor: String(anchor.Descriptor ?? ''),
@@ -236,7 +237,7 @@ export class MJRubricFormComponentExtended extends MJRubricFormComponent {
         const loaded: RubricScaleSnapshot[] = [];
         for (const scale of scales) {
             const levels = await this.rows('MJ: Rubric Scale Levels', `ScaleID='${scale.ID}'`);
-            loaded.push(scaleFromRow(scale, levels));
+            loaded.push(ScaleFromRow(scale, levels));
         }
         return loaded;
     }

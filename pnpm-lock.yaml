@@ -4574,6 +4574,9 @@ importers:
       '@memberjunction/record-cloning-base':
         specifier: 6.2.0-edge.1
         version: link:../../../RecordCloning/base
+      '@memberjunction/rubrics-base':
+        specifier: 6.2.0-edge.1
+        version: link:../../../Rubrics/Base
       '@memberjunction/templates-base-types':
         specifier: 6.2.0-edge.1
         version: link:../../../Templates/base-types
