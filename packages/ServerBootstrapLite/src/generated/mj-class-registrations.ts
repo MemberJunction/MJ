@@ -945,10 +945,11 @@ import {
     PromptReasoningProvider,
 } from '@memberjunction/ai-vector-dupe';
 
-// @memberjunction/rubrics (10 classes)
+// @memberjunction/rubrics (11 classes)
 import {
     AgentRubricEvaluator,
     CreateRubricDraftAction,
+    DecisionRubricEvaluator,
     DeterministicRubricEvaluator,
     EvaluateRecordAgainstRubricAction,
     GetRubricAction,
@@ -2038,6 +2039,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PromptReasoningProvider,
     AgentRubricEvaluator,
     CreateRubricDraftAction,
+    DecisionRubricEvaluator,
     DeterministicRubricEvaluator,
     EvaluateRecordAgainstRubricAction,
     GetRubricAction,
@@ -2149,11 +2151,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     UserRoutineDispatcherDriver,
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
-    MJAIAgentExampleEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
@@ -2353,11 +2355,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ValidateAddressAction,
     ValidateEmailUniqueAction,
     VectorizeEntityAction,
-    VoidSignatureRequestAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    VoidSignatureRequestAction,
     WebPageContentAction,
     WebSearchAction,
     WriteEntityFieldsAction,
@@ -2388,7 +2390,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1014;
+export const CLASS_REGISTRATIONS_COUNT = 1015;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
