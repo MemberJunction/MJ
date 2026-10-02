@@ -1,4 +1,5 @@
 import type { UserInfo } from '@memberjunction/core';
+import { IsValidUUID } from '@memberjunction/global';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 
 /** `name`, `id`, `name@1.2.0`, or `id@version-id`. */
@@ -185,18 +186,30 @@ export function snapshotFromRows(
     return SnapshotFromRows(version, criteria, scales, levels, bands);
 }
 
+/** A name is compared to Name. A uuid is compared to ID. One predicate, so a name is never cast to uniqueidentifier. */
+export function RubricIdentityFilter(value: string): string {
+    const escaped = value.replace(/'/g, "''");
+    return IsValidUUID(value) ? `ID='${escaped}'` : `Name='${escaped}'`;
+}
+
+/** A failed view is an error. An empty result is not. */
+export function RequireViewSuccess(result: { Success?: boolean; ErrorMessage?: string }, entityName: string): void {
+    if (result.Success) return;
+    throw new Error(result.ErrorMessage || `Could not read ${entityName}.`);
+}
+
 /** Loads the rubric and, when a version was named, that version's id. */
 export async function LookupRubricOverride(ref: string, user: UserInfo): Promise<{ rubricId: string; versionId?: string }> {
     const { RunView } = await import('@memberjunction/core');
     const parsed = ParseRubricRef(ref);
     const view = new RunView();
-    const escaped = parsed.rubric.replace(/'/g, "''");
     const found = await view.RunView({
         EntityName: 'MJ: Rubrics',
-        ExtraFilter: `ID='${escaped}' OR Name='${escaped}'`,
+        ExtraFilter: RubricIdentityFilter(parsed.rubric),
         ResultType: 'simple',
         MaxRows: 5,
     }, user);
+    RequireViewSuccess(found, 'MJ: Rubrics');
     const rubrics = ((found.Results ?? []) as Record<string, unknown>[]).map(row => ({ id: String(row.ID), name: String(row.Name) }));
     let versions: { id: string; rubricId: string; major: number; minor: number; patch: number }[] = [];
     const rubric = rubrics.find(row => row.id === parsed.rubric || row.name === parsed.rubric);
@@ -207,6 +220,7 @@ export async function LookupRubricOverride(ref: string, user: UserInfo): Promise
             ResultType: 'simple',
             MaxRows: 50,
         }, user);
+        RequireViewSuccess(rows, 'MJ: Rubric Versions');
         versions = ((rows.Results ?? []) as Record<string, unknown>[]).map(row => ({
             id: String(row.ID),
             rubricId: String(row.RubricID),

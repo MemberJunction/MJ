@@ -2,7 +2,7 @@ import { readFileSync } from 'fs';
 import { RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import { RubricVersionDiff, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { providerRubricEngine } from '@memberjunction/rubrics';
-import { FormatVersionDiff, ParseRubricRef, SnapshotFromRows, ValidateSnapshot } from './rubric-cli';
+import { FormatVersionDiff, ParseRubricRef, RequireViewSuccess, RubricIdentityFilter, SnapshotFromRows, ValidateSnapshot } from './rubric-cli';
 
 /** Thin database operations behind `mj rubric`. */
 export class RubricCommands {
@@ -60,8 +60,7 @@ export class RubricCommands {
 
     private async version(ref: string, user: UserInfo): Promise<{ rubric: Record<string, unknown>; version: Record<string, unknown> }> {
         const parsed = ParseRubricRef(ref);
-        const escaped = parsed.rubric.replace(/'/g, "''");
-        const rubrics = await this.rows('MJ: Rubrics', `ID='${escaped}' OR Name='${escaped}'`, user);
+        const rubrics = await this.rows('MJ: Rubrics', RubricIdentityFilter(parsed.rubric), user);
         const rubric = rubrics.find(row => String(row.ID) === parsed.rubric || String(row.Name) === parsed.rubric);
         if (!rubric) throw new Error(`Rubric "${parsed.rubric}" was not found.`);
         const versions = await this.rows('MJ: Rubric Versions', `RubricID='${String(rubric.ID).replace(/'/g, "''")}'`, user);
@@ -92,6 +91,7 @@ export class RubricCommands {
     private async rows(entityName: string, filter: string | undefined, user: UserInfo): Promise<Record<string, unknown>[]> {
         const view = new RunView();
         const result = await view.RunView({ EntityName: entityName, ExtraFilter: filter, ResultType: 'simple', MaxRows: 500 }, user);
+        RequireViewSuccess(result, entityName);
         return (result.Results ?? []) as Record<string, unknown>[];
     }
 }

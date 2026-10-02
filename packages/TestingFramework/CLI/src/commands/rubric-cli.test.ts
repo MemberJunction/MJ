@@ -1,11 +1,29 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { RubricVersionDiff } from '@memberjunction/rubrics-base';
-import { FormatCriterionReport, FormatVersionDiff, ParseRubricRef, ResolveRubricRef, SnapshotFromRows, ValidateSnapshot } from './rubric-cli.js';
+import { FormatCriterionReport, FormatVersionDiff, ParseRubricRef, RequireViewSuccess, ResolveRubricRef, RubricIdentityFilter, SnapshotFromRows, ValidateSnapshot } from './rubric-cli.js';
 
 const rubrics = [{ id: 'rubric-1', name: 'Reply check' }];
 const versions = [{ id: 'version-1', rubricId: 'rubric-1', major: 1, minor: 2, patch: 0 }];
 
 describe('rubric CLI', () => {
+    it('looks up a name by Name and a uuid by ID', () => {
+        expect(RubricIdentityFilter('Reply check')).toBe("Name='Reply check'");
+        expect(RubricIdentityFilter("O'Brien")).toBe("Name='O''Brien'");
+        expect(RubricIdentityFilter('A1B2C3D4-E5F6-7890-ABCD-EF1234567890')).toBe("ID='A1B2C3D4-E5F6-7890-ABCD-EF1234567890'");
+        expect(RubricIdentityFilter('Reply check')).not.toMatch(/ID=/);
+        expect(() => RequireViewSuccess({ Success: false, ErrorMessage: 'rubrics unread' }, 'MJ: Rubrics')).toThrow('rubrics unread');
+        const directory = dirname(fileURLToPath(import.meta.url));
+        const cli = readFileSync(join(directory, 'rubric-cli.ts'), 'utf8');
+        const commands = readFileSync(join(directory, 'rubric-commands.ts'), 'utf8');
+        expect(cli).not.toMatch(/OR Name=/);
+        expect(commands).not.toMatch(/OR Name=/);
+        expect(cli).toMatch(/RequireViewSuccess/);
+        expect(commands).toMatch(/RequireViewSuccess/);
+    });
+
     it('parses a name, a version label, and a version id', () => {
         expect(ParseRubricRef('Reply check')).toEqual({ rubric: 'Reply check' });
         expect(ResolveRubricRef(rubrics, versions, 'Reply check@1.2.0')).toEqual({ rubricId: 'rubric-1', versionId: 'version-1' });
