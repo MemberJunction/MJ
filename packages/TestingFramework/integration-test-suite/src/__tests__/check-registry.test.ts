@@ -151,7 +151,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['agent-wire-callback', AgentWireCallbackChecks, 2], // over-the-wire fire-and-forget callback (IT63)
         ['view-security', ViewSecurityChecks, 4], // two-identity V14/V15/V16 + RV17 (IT64)
         ['ai-providers', AiProvidersChecks, 3], // AI7/AI13/AI15 model-resolution seams (IT65)
-        ['cloudflare-clef', CloudflareClefChecks, 3], // CF1-CF3 Clef/Clef-flash metadata, driver registration, runner call through an HTTP stand-in (IT99)
+        ['cloudflare-clef', CloudflareClefChecks, 6], // CF1-CF6 Clef/Clef-flash metadata, driver registration, runner calls through an HTTP stand-in: envelope failures and failover, a bare response, a JSON credential's account (IT99)
         ['systemone-kev', SystemOneKevChecks, 9], // KV1-KV9 Kev metadata, SystemOneDecision registration, runner calls against loopback System One servers: Default Decision selection, bound credentials, per-row routing, failover and error classification, Kev-4B on OpenRouter (IT100)
         ['app-behavioral', AppBehavioralChecks, 3], // S4/S6/S8 Application behaviors (IT66)
         ['content-vectorization', ContentVectorizationChecks, 10], // CV1-CV10 content vectorization pipeline (IT67)
@@ -252,7 +252,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'cache-immutability': 15,
         'class-resolution': 5,
         'client-cache': 13,
-        'cloudflare-clef': 3,
+        'cloudflare-clef': 6,
         'codegen-determinism': 6,
         'communication': 5,
         'concurrent': 2,

@@ -1,5 +1,5 @@
 /**
- * cloudflare-clef.checks.ts — the 'cloudflare-clef' bundle (CF1–CF3): Cloudflare's Clef and
+ * cloudflare-clef.checks.ts — the 'cloudflare-clef' bundle (CF1–CF6): Cloudflare's Clef and
  * Clef-flash decision models, from the synced metadata through `AIDecisionRunner` to the Workers AI
  * request, with no network.
  *
@@ -15,17 +15,30 @@
  *        question kinds to the account's Workers AI URL with the token alone as the bearer, maps the
  *        scripted answers (Score probabilities re-keyed by level, Choice renormalised), and records the
  *        `MJ: AI Prompt Runs` row against that model and vendor, priced from its cost row.
+ *   CF4  Cloudflare's v4 envelope reporting `success: false` fails the call with the envelope's
+ *        `errors[].message`, whether it comes with a 200 or a 5xx, and the runner fails over to the next
+ *        candidate: Clef alone fails with that message; a test prompt bound to Clef, then Clef-flash,
+ *        answers from Clef-flash.
+ *   CF5  a bare System One response (no envelope, as a Worker or AI Gateway may return it) is accepted
+ *        and mapped.
+ *   CF6  a real `API Key` credential whose values carry an `accountId`, created through
+ *        `CredentialEngine` and bound to Clef's Cloudflare row, sends the request to that account's
+ *        Workers AI URL with its token as the bearer.
  *
- * NO NETWORK. CF3 registers a subclass of `CloudflareDecision` over the `CloudflareDecision` key for
+ * NO NETWORK. CF3–CF6 register a subclass of `CloudflareDecision` over the `CloudflareDecision` key for
  * the length of the check; it overrides only `SendRequest`, the driver's one network call, and answers
- * with a Workers AI response in Cloudflare's v4 envelope. Everything else is real: the prompt, model
- * and vendor rows, candidate selection, credential resolution (a legacy `apiKeys` entry), the driver's
- * URL, header and body building, the answer mapping, `BaseDecision`'s validation and the run row.
+ * as the check scripts it (by default, a Workers AI response in Cloudflare's v4 envelope). Everything
+ * else is real: the prompt, model and vendor rows, candidate selection, credential resolution (a legacy
+ * `apiKeys` entry, or a bound `MJ: Credentials` row in CF6), the driver's URL, header and body building,
+ * the envelope handling, the answer mapping, `BaseDecision`'s validation, the failover loop and the run
+ * row. The environment variables that would give the driver an account ID or base URL are unset for the
+ * bundle and restored after it.
  *
  * TRANSPORT: SERVER-ONLY by necessity: the stand-in is a ClassFactory registration in this process.
  *
- * FIXTURES: none seeded; the models are shipped metadata, read only. Every prompt run CF3 creates is
- * deleted in Teardown.
+ * FIXTURES: none seeded; the models are shipped metadata, read only. CF4 and CF6 create a test Decision
+ * prompt or a credential and binding (decision-fixtures.ts) and delete them in a `finally`; Teardown
+ * deletes whatever a failed check left, and every prompt run the bundle creates.
  */
 import { RunView } from '@memberjunction/core';
 import { EscapeSQLString, MJGlobal, UUIDsEqual } from '@memberjunction/global';
@@ -39,13 +52,21 @@ import {
     type SystemOneWireObject,
 } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
-import type { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
+import type { MJAIModelEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import type { MJAIVendorEntity } from '@memberjunction/core-entities';
-import { AIDecisionParams, AIDecisionRunner } from '@memberjunction/ai-prompts';
+import { AIDecisionParams, AIDecisionRunner, type AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { CloudflareDecision } from '@memberjunction/ai-cloudflare';
 import { Assert, AssertEqual, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
 import { DeleteById, RequireRows } from './agent-live-shared';
+import {
+    ClearEnvironment,
+    DecisionFixtures,
+    DecisionRunnerProbe,
+    ReadDecisionPromptRun,
+    RegisterDecisionStandIn,
+    RequireInferenceRowID,
+} from './decision-fixtures';
 
 // ─── Constants ───────────────────────────────────────────────────────────────────────────────────
 
@@ -141,35 +162,48 @@ interface WorkersAIRequest {
 /** What the stand-ins were sent. Module state, because the runner builds its own driver instance. */
 const sentRequests: WorkersAIRequest[] = [];
 
+/** How the stand-in answers: a response for the wire model the request names. */
+type WorkersAIResponder = (wireModel: string) => Response;
+
+/** A JSON response with the given status. */
+function jsonResponse(status: number, body: unknown): Response {
+    return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+}
+
+/** The default answer: {@link scriptedEnvelope} for the model the request names. */
+const answerWithEnvelope: WorkersAIResponder = wireModel => jsonResponse(200, scriptedEnvelope(wireModel));
+
+/** How the stand-in answers now. A check that changes it puts {@link answerWithEnvelope} back in a `finally`. */
+let respondAs: WorkersAIResponder = answerWithEnvelope;
+
 /**
  * The real `CloudflareDecision` with only its network call replaced: it records the request and
- * answers with {@link scriptedEnvelope} for the model the URL names.
+ * answers as {@link respondAs} scripts it for the model the request names.
  */
 class ScriptedWorkersAIDecision extends CloudflareDecision {
     protected async SendRequest(url: string, init: RequestInit): Promise<Response> {
         const body: unknown = JSON.parse(String(init.body));
         sentRequests.push({ Url: url, Authorization: new Headers(init.headers).get('Authorization'), Body: body });
         const wireModel = IsSystemOneWireObject(body) && typeof body['model'] === 'string' ? body['model'] : 'unknown';
-        return new Response(JSON.stringify(scriptedEnvelope(wireModel)), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        return respondAs(wireModel);
     }
 }
 
-/** The highest priority registered on BaseDecision for `name`, or 0 when it has none. */
-function highestDecisionPriority(name: string): number {
-    return Math.max(0, ...MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseDecision, name).map(r => r.Priority));
+/** Registers the stand-in over `CloudflareDecision` and returns the restore. */
+function registerStandIn(): () => void {
+    return RegisterDecisionStandIn(DRIVER_CLASS, ScriptedWorkersAIDecision, CloudflareDecision);
 }
 
-/**
- * Registers the stand-in over `CloudflareDecision` above whatever is registered there, and returns a
- * restore that puts the previous class back on top.
- */
-function registerStandIn(): () => void {
-    const factory = MJGlobal.Instance.ClassFactory;
-    const previous = factory.GetRegistration(BaseDecision, DRIVER_CLASS);
-    factory.Register(BaseDecision, ScriptedWorkersAIDecision, DRIVER_CLASS, highestDecisionPriority(DRIVER_CLASS) + 1);
-    return () => {
-        factory.Register(BaseDecision, previous ? previous.SubClass : CloudflareDecision, DRIVER_CLASS, highestDecisionPriority(DRIVER_CLASS) + 1);
-    };
+/** Runs `work` with the stand-in registered and answering as `responder`, then restores both. */
+async function withStandIn(responder: WorkersAIResponder, work: () => Promise<void>): Promise<void> {
+    const restore = registerStandIn();
+    respondAs = responder;
+    try {
+        await work();
+    } finally {
+        respondAs = answerWithEnvelope;
+        restore();
+    }
 }
 
 // ─── Fixture ─────────────────────────────────────────────────────────────────────────────────────
@@ -254,6 +288,21 @@ function assertCatalogRow(entry: ClefModel, vendorId: string): void {
     AssertEqual(cost!.UnitType, 'Per 1M Tokens', `${label}: cost unit type`);
 }
 
+/** Asserts the answers came back mapped from {@link scriptedEnvelope}, and the dated model from `wireModel`. */
+function assertScriptedAnswers(result: AIDecisionRunResult, wireModel: string, label: string): void {
+    const urgent = result.Answers['urgent'] as LikelihoodAnswer;
+    AssertEqual(urgent?.Kind, 'Likelihood', `${label}: urgent kind`);
+    assertClose(urgent.Probability, 0.91, `${label}: urgent probability`);
+    const team = result.Answers['team'] as ChoiceAnswer;
+    AssertEqual(team?.Value, 'technical', `${label}: team choice`);
+    assertClose(team.Probabilities['technical'], 0.95 / 0.98, `${label}: team probability renormalised`);
+    assertClose(team.Probabilities['billing'] + team.Probabilities['technical'] + team.Probabilities['sales'], 1, `${label}: team probabilities sum`);
+    const severity = result.Answers['severity'] as ScoreAnswer;
+    assertClose(severity?.Value, 2.7, `${label}: severity score`);
+    AssertEqual(JSON.stringify(severity.Probabilities), JSON.stringify({ 'No impact': 0, Minor: 0.05, Major: 0.2, Critical: 0.75 }), `${label}: severity probabilities keyed by level`);
+    AssertEqual(result.DecisionResult?.ResolvedModel, wireModel, `${label}: resolved model`);
+}
+
 /** CF3 for one model: one real runner call through the stand-in, then the request, answers and run row. */
 async function runThroughRunner(ctx: IntegrationCheckContext, entry: ClefModel, vendorId: string): Promise<void> {
     const label = `CF3 ${entry.Name}`;
@@ -290,17 +339,7 @@ async function runThroughRunner(ctx: IntegrationCheckContext, entry: ClefModel, 
     AssertEqual(JSON.stringify(sent.Body), JSON.stringify({ model: entry.WireModel, state: STATE, questions: EXPECTED_WIRE_QUESTIONS }), `${label}: request body`);
 
     // The answers, mapped.
-    const urgent = result.Answers['urgent'] as LikelihoodAnswer;
-    AssertEqual(urgent?.Kind, 'Likelihood', `${label}: urgent kind`);
-    assertClose(urgent.Probability, 0.91, `${label}: urgent probability`);
-    const team = result.Answers['team'] as ChoiceAnswer;
-    AssertEqual(team?.Value, 'technical', `${label}: team choice`);
-    assertClose(team.Probabilities['technical'], 0.95 / 0.98, `${label}: team probability renormalised`);
-    assertClose(team.Probabilities['billing'] + team.Probabilities['technical'] + team.Probabilities['sales'], 1, `${label}: team probabilities sum`);
-    const severity = result.Answers['severity'] as ScoreAnswer;
-    assertClose(severity?.Value, 2.7, `${label}: severity score`);
-    AssertEqual(JSON.stringify(severity.Probabilities), JSON.stringify({ 'No impact': 0, Minor: 0.05, Major: 0.2, Critical: 0.75 }), `${label}: severity probabilities keyed by level`);
-    AssertEqual(result.DecisionResult?.ResolvedModel, entry.WireModel, `${label}: resolved model`);
+    assertScriptedAnswers(result, entry.WireModel, label);
 
     // The run row.
     Assert(!!result.promptRun?.ID, `${label}: no prompt run`);
@@ -314,6 +353,156 @@ async function runThroughRunner(ctx: IntegrationCheckContext, entry: ClefModel, 
     assertClose(row!.Cost, (SCRIPTED_INPUT_TOKENS * entry.InputPricePerMillion) / 1_000_000, `${label}: run Cost from the cost row`);
     const recorded: unknown = JSON.parse(row!.Result ?? '{}');
     Assert(IsSystemOneWireObject(recorded) && IsSystemOneWireObject(recorded['team']) && recorded['team']['Value'] === 'technical', `${label}: run Result does not hold the mapped answers`);
+}
+
+// ─── CF4–CF6 ─────────────────────────────────────────────────────────────────────────────────────
+
+/** The legacy key CF3–CF5 resolve: `<accountId>:<apiToken>`. */
+const LEGACY_KEY = `${IT_ACCOUNT_ID}:${IT_API_TOKEN}`;
+
+/** A Workers AI v4 envelope reporting a failure. */
+function failureEnvelope(code: number, message: string): SystemOneWireObject {
+    return { result: null, success: false, errors: [{ code, message }], messages: [] };
+}
+
+/** The envelope failures CF4 scripts for Clef: one that arrives with a 200, one with a 500. */
+const ENVELOPE_FAILURES = [
+    { Label: 'CF4 200', Status: 200, Code: 3040, Message: 'Capacity temporarily exceeded, please try again.' },
+    { Label: 'CF4 500', Status: 500, Code: 5007, Message: 'AiError: inference failed on the upstream model' },
+] as const;
+
+/** Clef answers with `status` and `envelope`; every other model with the scripted envelope. */
+function clefFailsWith(status: number, envelope: SystemOneWireObject): WorkersAIResponder {
+    return wireModel => (wireModel === 'clef' ? jsonResponse(status, envelope) : jsonResponse(200, scriptedEnvelope(wireModel)));
+}
+
+/** A decision request on `prompt`, or on Default Decision naming `modelName` on Cloudflare, with the legacy key when given. */
+function clefParams(ctx: IntegrationCheckContext, prompt: MJAIPromptEntityExtended, overrideModel?: string, apiKey?: string): AIDecisionParams {
+    const params = new AIDecisionParams();
+    params.prompt = prompt;
+    params.contextUser = ctx.User;
+    if (overrideModel) {
+        params.override = { modelId: requireModel(overrideModel).ID, vendorId: requireVendor().ID };
+    }
+    if (apiKey) {
+        params.apiKeys = [{ driverClass: DRIVER_CLASS, apiKey }];
+    }
+    params.State = STATE;
+    params.Questions = QUESTIONS;
+    return params;
+}
+
+function requireDefaultDecision(): MJAIPromptEntityExtended {
+    const prompt = AIEngine.Instance.Prompts.find(p => p.Name === DEFAULT_DECISION_PROMPT);
+    if (!prompt) {
+        throw new Error(`The '${DEFAULT_DECISION_PROMPT}' prompt is not in this database: sync the metadata (mj sync push --dir=metadata)`);
+    }
+    return prompt;
+}
+
+/** Runs one decision, waits for its run row and hands its ID to `fixtures` for deletion. */
+async function runDecision(runner: AIDecisionRunner, params: AIDecisionParams, fixtures: DecisionFixtures): Promise<AIDecisionRunResult> {
+    const result = await runner.ExecuteDecision(params);
+    await runner.WaitForPendingPromptRunSaves();
+    fixtures.TrackPromptRun(result.promptRun?.ID);
+    return result;
+}
+
+/** The wire model each request since `before` named, from its URL's last segment. */
+function requestedModels(before: number): string[] {
+    return sentRequests.slice(before).map(r => r.Url.slice(r.Url.lastIndexOf('/') + 1));
+}
+
+/** CF4 for one envelope failure: Clef alone fails with Cloudflare's message; Clef then Clef-flash fails over. */
+async function runEnvelopeFailure(ctx: IntegrationCheckContext, fixtures: DecisionFixtures, failoverPrompt: MJAIPromptEntityExtended, failure: (typeof ENVELOPE_FAILURES)[number]): Promise<void> {
+    const label = failure.Label;
+    // Clef alone: the call fails and carries Cloudflare's message, to the result and the run row.
+    let before = sentRequests.length;
+    const alone = await runDecision(new AIDecisionRunner(), clefParams(ctx, requireDefaultDecision(), 'Clef', LEGACY_KEY), fixtures);
+    AssertEqual(JSON.stringify(requestedModels(before)), JSON.stringify(['clef']), `${label} alone: requests`);
+    Assert(!alone.success, `${label} alone: the decision succeeded`);
+    Assert((alone.errorMessage ?? '').includes(failure.Message), `${label} alone: the error does not carry Cloudflare's message: ${alone.errorMessage}`);
+    const row = await ReadDecisionPromptRun(ctx, alone.promptRun?.ID ?? '');
+    AssertEqual(row?.Success, false, `${label} alone: run Success`);
+    Assert((row?.ErrorMessage ?? '').includes(failure.Message), `${label} alone: the run's error does not carry Cloudflare's message: ${row?.ErrorMessage}`);
+
+    // Clef, then Clef-flash: the runner fails over past the failure, and Clef-flash answers.
+    before = sentRequests.length;
+    const probe = new DecisionRunnerProbe();
+    const result = await runDecision(probe, clefParams(ctx, failoverPrompt, undefined, LEGACY_KEY), fixtures);
+    AssertEqual(JSON.stringify(requestedModels(before)), JSON.stringify(['clef', 'clef-flash']), `${label} failover: requests`);
+    Assert(result.success, `${label} failover: the decision failed: ${result.errorMessage ?? 'no error message'}`);
+    AssertEqual(result.modelInfo?.modelName, 'Clef-flash', `${label} failover: answering model`);
+    assertScriptedAnswers(result, 'clef-flash', `${label} failover`);
+    AssertEqual(probe.Attempts.length, 1, `${label} failover: failed attempts`);
+    const attempt = probe.Attempts[0];
+    Assert(UUIDsEqual(attempt.Attempt.modelId, requireModel('Clef').ID), `${label} failover: the failed attempt was not Clef`);
+    AssertEqual(attempt.WillRetry, true, `${label} failover: Clef's failure allowed failover`);
+    Assert(attempt.Attempt.error.message.includes(failure.Message), `${label} failover: Clef's error does not carry Cloudflare's message: ${attempt.Attempt.error.message}`);
+}
+
+async function checkEnvelopeFailure(ctx: IntegrationCheckContext): Promise<void> {
+    await AIEngine.Instance.Config(false, ctx.User);
+    const fixtures = new DecisionFixtures(ctx, 'cf4');
+    try {
+        const created = await fixtures.CreateDecisionPrompt('CF4 envelope failover', {
+            Bindings: [
+                { Key: 'clef', ModelName: 'Clef', VendorName: VENDOR_NAME, Priority: 20 },
+                { Key: 'clef-flash', ModelName: 'Clef-flash', VendorName: VENDOR_NAME, Priority: 10 },
+            ],
+        });
+        for (const failure of ENVELOPE_FAILURES) {
+            await withStandIn(clefFailsWith(failure.Status, failureEnvelope(failure.Code, failure.Message)), () =>
+                runEnvelopeFailure(ctx, fixtures, created.Prompt, failure));
+        }
+    } finally {
+        await fixtures.Cleanup();
+    }
+}
+
+/** Answers with the System One response bare, as a Worker or an AI Gateway may return it. */
+const answerBare: WorkersAIResponder = wireModel => jsonResponse(200, scriptedEnvelope(wireModel)['result']);
+
+async function checkBareResponse(ctx: IntegrationCheckContext): Promise<void> {
+    await AIEngine.Instance.Config(false, ctx.User);
+    const fixtures = new DecisionFixtures(ctx, 'cf5');
+    try {
+        await withStandIn(answerBare, async () => {
+            const before = sentRequests.length;
+            const result = await runDecision(new AIDecisionRunner(), clefParams(ctx, requireDefaultDecision(), 'Clef', LEGACY_KEY), fixtures);
+            AssertEqual(JSON.stringify(requestedModels(before)), JSON.stringify(['clef']), 'CF5: requests');
+            Assert(result.success, `CF5: the decision failed: ${result.errorMessage ?? 'no error message'}`);
+            AssertEqual(result.modelInfo?.modelName, 'Clef', 'CF5: answering model');
+            assertScriptedAnswers(result, 'clef', 'CF5');
+            AssertEqual(result.promptTokens, SCRIPTED_INPUT_TOKENS, 'CF5: input tokens from the bare usage');
+        });
+    } finally {
+        await fixtures.Cleanup();
+    }
+}
+
+/** The account and token a CF6 credential carries in its values. */
+const JSON_CREDENTIAL = { AccountID: 'it-json-credential-account', Token: 'it-json-credential-token' } as const;
+
+async function checkJsonCredential(ctx: IntegrationCheckContext): Promise<void> {
+    await AIEngine.Instance.Config(false, ctx.User);
+    const fixtures = new DecisionFixtures(ctx, 'cf6');
+    try {
+        const credential = await fixtures.CreateCredential('API Key', 'CF6 Clef', { apiKey: JSON_CREDENTIAL.Token, accountId: JSON_CREDENTIAL.AccountID });
+        await fixtures.BindToModelVendor(credential.ID, RequireInferenceRowID('Clef', VENDOR_NAME));
+        await withStandIn(answerWithEnvelope, async () => {
+            const before = sentRequests.length;
+            const result = await runDecision(new AIDecisionRunner(), clefParams(ctx, requireDefaultDecision(), 'Clef'), fixtures);
+            Assert(result.success, `CF6: the decision failed: ${result.errorMessage ?? 'no error message'}`);
+            AssertEqual(sentRequests.length - before, 1, 'CF6: Workers AI requests');
+            const sent = sentRequests[sentRequests.length - 1];
+            AssertEqual(sent.Url, `https://api.cloudflare.com/client/v4/accounts/${JSON_CREDENTIAL.AccountID}/ai/run/@cf/cloudflare/clef`, 'CF6: request URL');
+            AssertEqual(sent.Authorization, `Bearer ${JSON_CREDENTIAL.Token}`, 'CF6: Authorization header');
+            assertScriptedAnswers(result, 'clef', 'CF6');
+        });
+    } finally {
+        await fixtures.Cleanup();
+    }
 }
 
 export const CloudflareClefChecks: NamedCheck[] = [
@@ -357,6 +546,21 @@ export const CloudflareClefChecks: NamedCheck[] = [
             }
         },
     },
+    {
+        Id: 'cloudflare-clef.CF4',
+        Name: "CF4: a Workers AI envelope with success false, with a 200 or a 5xx, fails the call with the envelope's error message, and the runner fails over from Clef to Clef-flash",
+        Fn: checkEnvelopeFailure,
+    },
+    {
+        Id: 'cloudflare-clef.CF5',
+        Name: 'CF5: a bare System One response from Workers AI, with no v4 envelope, is accepted and its answers mapped',
+        Fn: checkBareResponse,
+    },
+    {
+        Id: 'cloudflare-clef.CF6',
+        Name: "CF6: a real API Key credential carrying an accountId, bound to Clef's Cloudflare row, sends the request to that account's Workers AI URL with its token as the bearer",
+        Fn: checkJsonCredential,
+    },
 ];
 
 for (const check of CloudflareClefChecks) {
@@ -365,15 +569,24 @@ for (const check of CloudflareClefChecks) {
 
 // ─── Lifecycle ───────────────────────────────────────────────────────────────────────────────────
 
+/** Restores the environment Setup cleared. */
+let restoreEnvironment: (() => void) | undefined;
+
 IntegrationCheckRegistry.Instance.RegisterLifecycle('cloudflare-clef', {
     Setup: async (): Promise<void> => {
         sentRequests.length = 0;
         createdPromptRunIDs.length = 0;
+        respondAs = answerWithEnvelope;
+        restoreEnvironment = ClearEnvironment([CloudflareDecision.ACCOUNT_ID_ENV_VAR, CloudflareDecision.BASE_URL_ENV_VAR]);
     },
     Teardown: async (ctx: IntegrationCheckContext): Promise<void> => {
+        await DecisionFixtures.CleanupAll();
         for (const id of createdPromptRunIDs.splice(0)) {
             await DeleteById('MJ: AI Prompt Runs', id, ctx.Provider, ctx.User);
         }
         sentRequests.length = 0;
+        respondAs = answerWithEnvelope;
+        restoreEnvironment?.();
+        restoreEnvironment = undefined;
     },
 });
