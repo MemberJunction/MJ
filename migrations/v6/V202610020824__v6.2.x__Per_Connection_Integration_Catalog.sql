@@ -1,6 +1,6 @@
 /* ============================================================================
    Per-connection integration catalog — CompanyIntegrationObject / CompanyIntegrationObjectField
-   v6.1.x
+   v6.2.x
 
    IntegrationObject and IntegrationObjectField are keyed by IntegrationID alone, so two
    connections (CompanyIntegrations) of the same connector share ONE set of object and field
