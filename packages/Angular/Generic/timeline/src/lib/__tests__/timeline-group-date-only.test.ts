@@ -39,6 +39,23 @@ describe('TimelineGroup.GetDate', () => {
     expect([date.getFullYear(), date.getMonth(), date.getDate()]).toEqual([2026, 0, 1]);
   });
 
+  it('reads a plain-object record by the group EntityInfo (the entity viewer timeline shape)', () => {
+    // The entity viewer feeds `simple` RunView rows: plain objects with no EntityInfo of their own.
+    const g = new TimelineGroup<Record<string, unknown>>();
+    g.DataSourceType = 'array';
+    g.DateFieldName = 'DueDate';
+    g.EntityInfo = { Fields: [{ Name: 'DueDate', Type: 'date' }] } as unknown as EntityInfo;
+    const date = g.GetDate({ ID: '1', DueDate: '2026-10-01T00:00:00.000Z' });
+    expect([date.getFullYear(), date.getMonth(), date.getDate(), date.getHours()]).toEqual([2026, 9, 1, 0]);
+  });
+
+  it("prefers the record's own EntityInfo over the group's", () => {
+    const g = group();
+    g.EntityInfo = { Fields: [{ Name: 'DueDate', Type: 'date' }] } as unknown as EntityInfo;
+    const instant = new Date('2026-10-01T02:30:00.000Z');
+    expect(g.GetDate(entityRecord('datetimeoffset', instant)).getTime()).toBe(instant.getTime());
+  });
+
   it('leaves a timestamp as the instant it is', () => {
     const instant = new Date('2026-10-01T02:30:00.000Z');
     expect(group().GetDate(entityRecord('datetimeoffset', instant)).getTime()).toBe(instant.getTime());

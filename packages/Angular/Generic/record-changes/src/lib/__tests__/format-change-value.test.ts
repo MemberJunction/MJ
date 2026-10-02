@@ -6,7 +6,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { EntityFieldTSType, type EntityFieldInfo } from '@memberjunction/core';
-import { FormatChangeValue } from '../format-change-value';
+import { ChangeValuesMatch, FormatChangeValue } from '../format-change-value';
 
 const field = (Type: string, TSType: EntityFieldTSType): EntityFieldInfo => ({ Type, TSType }) as unknown as EntityFieldInfo;
 const dateOnly = field('date', EntityFieldTSType.Date);
@@ -41,5 +41,33 @@ describe('FormatChangeValue', () => {
     expect(FormatChangeValue({ a: 1 }, undefined)).toBe('{"a":1}');
     expect(FormatChangeValue({}, undefined)).toBe('');
     expect(FormatChangeValue(42, field('int', EntityFieldTSType.Number))).toBe('42');
+  });
+});
+
+describe('ChangeValuesMatch', () => {
+  const originalTZ = process.env.TZ;
+  beforeEach(() => {
+    process.env.TZ = 'America/Chicago';
+  });
+  afterEach(() => {
+    process.env.TZ = originalTZ;
+  });
+
+  it('compares a timestamp by instant, not by its minute-precision display', () => {
+    expect(ChangeValuesMatch('2026-10-01T14:00:00.000Z', new Date('2026-10-01T14:00:30.000Z'), timestamp)).toBe(false);
+    expect(ChangeValuesMatch('2026-10-01T14:00:30.000Z', new Date('2026-10-01T14:00:30.000Z'), timestamp)).toBe(true);
+  });
+
+  it('compares a date-only value by the calendar day it stores', () => {
+    expect(ChangeValuesMatch('2026-10-01', new Date('2026-10-01T00:00:00.000Z'), dateOnly)).toBe(true);
+    expect(ChangeValuesMatch('2026-09-30', new Date('2026-10-01T00:00:00.000Z'), dateOnly)).toBe(false);
+  });
+
+  it('falls back to the display strings for empty, unparseable and non-date values', () => {
+    expect(ChangeValuesMatch(null, undefined, timestamp)).toBe(true);
+    expect(ChangeValuesMatch(null, new Date('2026-10-01T00:00:00.000Z'), dateOnly)).toBe(false);
+    expect(ChangeValuesMatch('not a date', 'not a date', dateOnly)).toBe(true);
+    expect(ChangeValuesMatch('a', 'b', undefined)).toBe(false);
+    expect(ChangeValuesMatch(42, '42', field('int', EntityFieldTSType.Number))).toBe(true);
   });
 });

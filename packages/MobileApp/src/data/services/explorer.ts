@@ -4,7 +4,7 @@
  * (records), RunQuery (saved queries), all via the active provider.
  */
 
-import { Metadata, RunView, RunQuery, CompositeKey, type UserInfo, type EntityInfo, type EntityFieldInfo } from '@memberjunction/core';
+import { Metadata, RunView, RunQuery, CompositeKey, FormatDateOnly, IsDateOnlySQLType, type UserInfo, type EntityInfo, type EntityFieldInfo } from '@memberjunction/core';
 import type { MJDashboardEntity } from '@memberjunction/core-entities';
 import { BuildDashboardConfig, type DashboardPanelSpec } from '@/dashboards/dashboard-config';
 
@@ -56,12 +56,22 @@ function primaryDisplayField(entity: EntityInfo): EntityFieldInfo | undefined {
 }
 
 /**
- * A cell value rendered for card subtitles. Simple-read rows carry real `Date` objects for
- * date columns (normalized by @memberjunction/core), which must not fall through to
+ * A cell value rendered for card subtitles and the record detail. Simple-read rows carry real `Date`
+ * objects for date columns (normalized by @memberjunction/core), which must not fall through to
  * `String(v)` — `Date.toString()` is unreadable in a card. Handles the pre-normalization
  * ISO-string shape identically via the `Date` branch never matching.
+ *
+ * A SQL `date` column is a calendar day that arrives as UTC midnight: it is formatted as that day
+ * with `FormatDateOnly`. `toLocaleDateString()` read it in the device zone, so a stored 2026-10-01
+ * showed as 9/30/2026 anywhere west of Greenwich.
+ *
+ * @param v The cell value
+ * @param field The column's metadata, which says whether a date is a calendar day
  */
-function displayCellValue(v: unknown): string {
+function displayCellValue(v: unknown, field: EntityFieldInfo): string {
+    if (IsDateOnlySQLType(field.Type) && (v instanceof Date || typeof v === 'string')) {
+        return FormatDateOnly(v);
+    }
     if (v instanceof Date) {
         return v.toLocaleDateString();
     }
@@ -133,9 +143,9 @@ export async function LoadEntityRecords(
         const idVal = entity.PrimaryKeys.length > 0 ? CompositeKey.FromEntityRecord(entity, r).ToCompactURLSegment() : '';
         const title = titleField ? String(r[titleField.Name] ?? '(no name)') : idVal;
         const subtitle = secondary
-            .map((f) => r[f.Name])
-            .filter((v) => v !== null && v !== undefined && v !== '')
-            .map((v) => displayCellValue(v))
+            .map((f) => ({ f, v: r[f.Name] }))
+            .filter(({ v }) => v !== null && v !== undefined && v !== '')
+            .map(({ f, v }) => displayCellValue(v, f))
             .join(' · ');
         return { id: idVal, title, subtitle, raw: r };
     });
@@ -183,7 +193,7 @@ export async function LoadRecordDetail(
             return {
                 key: f.Name,
                 label: f.DisplayName || f.Name,
-                value: v === null || v === undefined ? '—' : displayCellValue(v),
+                value: v === null || v === undefined ? '—' : displayCellValue(v, f),
             };
         });
 

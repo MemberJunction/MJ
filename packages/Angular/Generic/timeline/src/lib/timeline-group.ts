@@ -204,6 +204,16 @@ export class TimelineGroup<T = any> {
   EntityName?: string;
 
   /**
+   * Metadata for the entity this group's records come from, for records that do not carry their own.
+   *
+   * A BaseEntity record exposes `EntityInfo`, and the group reads field types from it. A plain object
+   * (an `'array'` group fed `simple` RunView rows, as the entity viewer's timeline does) has none, so
+   * without this a SQL `date` field is read as an instant and lands a day early west of Greenwich.
+   * A record's own `EntityInfo` wins when it has one.
+   */
+  EntityInfo?: EntityInfo;
+
+  /**
    * How data is provided to the timeline.
    * - `'array'`: Data is provided via the `EntityObjects` array (works with any object type)
    * - `'entity'`: Data is loaded using MemberJunction's RunView (requires MJ core)
@@ -471,13 +481,14 @@ export class TimelineGroup<T = any> {
 
   /**
    * Whether `DateFieldName` is a SQL `date` column (a calendar day), from the record's own entity
-   * metadata. Entity-sourced groups load BaseEntity objects, which carry it; a plain object has no
-   * metadata and its date is treated as an instant, as before.
+   * metadata, else the group's {@link EntityInfo}. Entity-sourced groups load BaseEntity objects,
+   * which carry it; a plain object relies on the group's. With neither, the date is treated as an
+   * instant, as before.
    */
   private isDateOnlyDateField(record: T): boolean {
     const fieldName = this.DateFieldName?.trim().toLowerCase();
     if (!fieldName) return false;
-    const entityInfo = (record as { EntityInfo?: EntityInfo } | null)?.EntityInfo;
+    const entityInfo = (record as { EntityInfo?: EntityInfo } | null)?.EntityInfo ?? this.EntityInfo;
     const field = entityInfo?.Fields?.find(f => f.Name.trim().toLowerCase() === fieldName);
     return IsDateOnlySQLType(field?.Type);
   }

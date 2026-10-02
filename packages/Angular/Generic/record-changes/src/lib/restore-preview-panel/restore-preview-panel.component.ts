@@ -14,7 +14,7 @@ import {
   EntityInfo,
 } from '@memberjunction/core';
 import { MJRecordChangeEntity } from '@memberjunction/core-entities';
-import { FormatChangeValue } from '../format-change-value';
+import { ChangeValuesMatch, FormatChangeValue } from '../format-change-value';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 /**
@@ -485,9 +485,11 @@ export class RestorePreviewPanelComponent extends BaseAngularComponent implement
       ? ''
       : this.getCurrentFieldValue(fieldName, field);
 
+    // Compared by value, not by the display strings: those drop seconds, so a timestamp that moved
+    // by under a minute would read as unchanged and be left out of the restore.
     const isChanged = this.Mode === 'undelete'
       ? snapshotValue != null && snapshotValue !== ''
-      : formattedCurrent !== formattedRestore;
+      : !ChangeValuesMatch(this.getCurrentRawValue(fieldName), snapshotValue, field);
 
     // Default selection: pre-check changed rows that we can actually apply.
     const selected = isChanged && !isImmutable && !isMissingInSchema;
@@ -507,12 +509,16 @@ export class RestorePreviewPanelComponent extends BaseAngularComponent implement
   }
 
   private getCurrentFieldValue(fieldName: string, entityField: EntityFieldInfo | undefined): string {
-    if (!this._liveRecord) return '';
+    return FormatChangeValue(this.getCurrentRawValue(fieldName), entityField);
+  }
+
+  /** The live record's raw value for a field, or `undefined` when there is no live record or field. */
+  private getCurrentRawValue(fieldName: string): unknown {
+    if (!this._liveRecord) return undefined;
     const field = this._liveRecord.Fields.find(
       f => f.Name.trim().toLowerCase() === fieldName.trim().toLowerCase(),
     );
-    if (!field) return '';
-    return FormatChangeValue(field.Value, entityField);
+    return field?.Value;
   }
 
   private parseSnapshot(json: string | null | undefined): Record<string, unknown> | null {

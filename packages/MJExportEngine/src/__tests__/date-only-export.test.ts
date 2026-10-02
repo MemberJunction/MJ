@@ -57,6 +57,34 @@ describe('date-only columns in exports', () => {
         expect(parsed.map((r) => r['PaymentDate'])).toEqual(['2026-10-01', '2026-01-01', '2026-03-08', null]);
     });
 
+    describe('a value whose leading YYYY-MM-DD is not a real day', () => {
+        const badColumns: ExportColumn[] = [{ name: 'D', dataType: 'dateonly' }];
+        const badRows = [{ D: '2026-13-45' }, { D: '2026-02-30' }, { D: '2026-10-01' }];
+
+        it('CSV writes the original text, not "Invalid Date" or a rolled-over day', async () => {
+            const result = await new CSVExporter({ columns: badColumns }).export(badRows);
+            const lines = new TextDecoder().decode(result.data).replace(/^\uFEFF/, '').split('\r\n');
+            expect(lines.slice(1)).toEqual(['2026-13-45', '2026-02-30', '2026-10-01']);
+        });
+
+        it('JSON writes the original text', async () => {
+            const result = await new JSONExporter({ columns: badColumns, prettyPrint: false }).export(badRows);
+            const parsed = JSON.parse(new TextDecoder().decode(result.data)) as Array<Record<string, unknown>>;
+            expect(parsed.map((r) => r['D'])).toEqual(['2026-13-45', '2026-02-30', '2026-10-01']);
+        });
+
+        it('Excel writes the original text, not an invalid or rolled-over date cell', async () => {
+            const result = await new ExcelExporter({ columns: badColumns }).export(badRows);
+            expect(result.success).toBe(true);
+            const workbook = new ExcelJS.Workbook();
+            await workbook.xlsx.load(result.data as unknown as ArrayBuffer);
+            const cell = (row: number) => workbook.worksheets[0].getRow(row).getCell(1).value;
+            expect(cell(2)).toBe('2026-13-45');
+            expect(cell(3)).toBe('2026-02-30');
+            expect((cell(4) as Date).toISOString()).toBe('2026-10-01T00:00:00.000Z');
+        });
+    });
+
     it('Excel writes a real date cell on the stored day', async () => {
         const result = await new ExcelExporter({ columns }).export(rows);
         expect(result.success).toBe(true);

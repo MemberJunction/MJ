@@ -47,3 +47,38 @@ export function FormatChangeValue(value: unknown, field: EntityFieldInfo | undef
 
   return String(value);
 }
+
+/**
+ * Whether two values of the same field hold the same data, for deciding whether a restore would
+ * change anything.
+ *
+ * Comparing the display strings is not enough for a date: the display drops seconds, so a timestamp
+ * that moved by 30 seconds formats identically and would read as unchanged. A timestamp is compared
+ * as the instant it names, and a SQL `date` column as the calendar day it stores, so a snapshot's
+ * `'2026-10-01'` matches a live `Date` at UTC midnight of that day. Anything else, and a date that
+ * does not parse, falls back to the display strings, as before.
+ *
+ * @param a One value: a string or Date for date fields, any JSON value otherwise
+ * @param b The other value
+ * @param field The field's metadata, when known
+ */
+export function ChangeValuesMatch(a: unknown, b: unknown, field: EntityFieldInfo | undefined): boolean {
+  if (field?.TSType === EntityFieldTSType.Date) {
+    const left = asValidDate(a);
+    const right = asValidDate(b);
+    if (left && right) {
+      return IsDateOnlySQLType(field.Type)
+        ? left.toISOString().slice(0, 10) === right.toISOString().slice(0, 10)
+        : left.getTime() === right.getTime();
+    }
+  }
+  return FormatChangeValue(a, field) === FormatChangeValue(b, field);
+}
+
+/** A date or date string as a valid Date, or `null`. */
+function asValidDate(value: unknown): Date | null {
+  if (!(value instanceof Date) && typeof value !== 'string') return null;
+  if (typeof value === 'string' && value.trim() === '') return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return isNaN(date.getTime()) ? null : date;
+}

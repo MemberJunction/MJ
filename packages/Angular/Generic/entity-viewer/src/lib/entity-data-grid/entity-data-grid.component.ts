@@ -15,6 +15,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import type { EntityActionUXContext, EntityActionUXResult } from '@memberjunction/ng-entity-action-ux';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
+import { ExportColumnTypeForSQLType } from '../utils/export-column.util';
 import { LogError, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression, CoerceImageSrc, ParseCssHexColor, CompositeKey, IsDateOnlySQLType, FormatDateOnly, EntityFieldTSType } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
@@ -5029,7 +5030,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
           // exported a correctly-headed column of blank cells.
           name: field?.Name ?? colField,
           displayName: def.headerName || field?.DisplayNameOrName || colField,
-          dataType: this.mapFieldTypeToExportType(field?.Type)
+          dataType: ExportColumnTypeForSQLType(field?.Type)
         };
       });
   }
@@ -5037,32 +5038,6 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   /** A data column: not the layout filler, not the row-number column, and bound to a field. */
   private isExportableColumn(def: ColDef): boolean {
     return !!def.field && def.field !== ROW_NUMBER_FIELD && def.colId !== FILLER_COLUMN_ID;
-  }
-
-  /**
-   * Map MemberJunction field types to export column types
-   */
-  private mapFieldTypeToExportType(fieldType?: string): ExportColumn['dataType'] {
-    if (!fieldType) return 'string';
-
-    const type = fieldType.toLowerCase();
-    if (type.includes('int') || type.includes('decimal') || type.includes('float') || type.includes('numeric')) {
-      return 'number';
-    }
-    // A SQL `date` is a calendar day: exported as its stored day, never as an instant.
-    if (IsDateOnlySQLType(type)) {
-      return 'dateonly';
-    }
-    if (type.includes('date') || type.includes('time')) {
-      return 'date';
-    }
-    if (type.includes('bit') || type.includes('bool')) {
-      return 'boolean';
-    }
-    if (type.includes('money') || type.includes('currency')) {
-      return 'currency';
-    }
-    return 'string';
   }
 
   /**
