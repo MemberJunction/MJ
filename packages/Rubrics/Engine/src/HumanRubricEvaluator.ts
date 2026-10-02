@@ -1,3 +1,6 @@
+import { RegisterClass } from '@memberjunction/global';
+import { BaseRubricEvaluator } from './RubricEvaluator.js';
+
 export interface DraftEvaluationInput {
     versionId: string;
     rubricId: string;
@@ -21,11 +24,19 @@ export interface RubricTaskStore {
  * assignee. It does not score and it does not call an agent. The person
  * answers in the form, and submit runs RubricScoring later.
  */
-export class HumanRubricEvaluator {
-    public constructor(
-        private readonly evaluations: EvaluationDraftStore,
-        private readonly tasks: RubricTaskStore,
-    ) {}
+@RegisterClass(BaseRubricEvaluator, 'Human')
+export class HumanRubricEvaluator extends BaseRubricEvaluator {
+    public get EvaluatorName(): string {
+        return 'Human';
+    }
+    private readonly evaluations: EvaluationDraftStore;
+    private readonly tasks: RubricTaskStore;
+
+    public constructor(evaluations: EvaluationDraftStore, tasks: RubricTaskStore) {
+        super();
+        this.evaluations = evaluations;
+        this.tasks = tasks;
+    }
 
     /**
      * Creates the draft, then the task. Returns both ids. The task title

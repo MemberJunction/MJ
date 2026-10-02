@@ -1,4 +1,5 @@
 import { SnapshotFromRows, type RubricAnswer, type RubricNodeSnapshot, type RubricScoreResult, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
+import { BaseSingleton } from '@memberjunction/global';
 import { AgentRubricEvaluator, type EvaluationAgentRunner } from './AgentRubricEvaluator.js';
 import { LLMRubricEvaluator, type RubricEvaluatorMessages, type RubricPromptMode, type RubricPromptRunner } from './LLMRubricEvaluator.js';
 import { ShapeContent, type RubricSubjectContent } from './content.js';
@@ -108,12 +109,24 @@ const emptyRecords: RubricRecords = {
     async createDraft() { throw new Error('This engine has no rubric catalog.'); },
 };
 
-export class RubricEngine {
+const unsetEvaluations: RubricEvaluationStore = {
+    async createDraft() { throw new Error('RubricEngine has no evaluation store.'); },
+    async submit() { throw new Error('RubricEngine has no evaluation store.'); },
+    async fail() { throw new Error('RubricEngine has no evaluation store.'); },
+};
+
+export class RubricEngine extends BaseSingleton<RubricEngine> {
+    public static get Instance(): RubricEngine {
+        return super.getInstance<RubricEngine>();
+    }
+
     public constructor(
-        private readonly evaluations: RubricEvaluationStore,
-        private readonly records: RubricRecords = emptyRecords,
-        private readonly promptRun?: RubricPromptRun,
-    ) {}
+        private evaluations: RubricEvaluationStore = unsetEvaluations,
+        private records: RubricRecords = emptyRecords,
+        private promptRun?: RubricPromptRun,
+    ) {
+        super();
+    }
 
     /**
      * Runs the evaluator, saves the draft, and submits it. On failure the

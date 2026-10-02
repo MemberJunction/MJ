@@ -30,6 +30,10 @@
       "optional": true
     }
   },
+  "dependencies": {
+    "@memberjunction/core": "6.2.0-edge.1",
+    "@memberjunction/global": "6.2.0-edge.1"
+  },
   "devDependencies": {
     "typescript": "^5.9.3",
     "tsc-alias": "^1.8.16",

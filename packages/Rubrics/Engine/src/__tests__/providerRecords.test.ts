@@ -2,34 +2,38 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const viewCalls: { EntityName: string }[] = [];
 
-vi.mock('@memberjunction/core', () => ({
-    RunView: {
-        FromMetadataProvider() {
-            return {
-                async RunView(params: { EntityName: string }) {
-                    viewCalls.push(params);
-                    if (params.EntityName === 'MJ: Rubric Evaluation Scores') {
-                        return {
-                            Success: true,
-                            Results: [{
-                                CriterionID: 'criterion',
-                                NormalizedScore: 0,
-                                EffectiveWeight: 1,
-                                OverallContribution: 0,
-                                GateFailed: true,
-                                IsNotApplicable: false,
-                            }],
-                        };
-                    }
-                    if (params.EntityName === 'MJ: Rubric Criteria') {
-                        return { Success: true, Results: [{ ID: 'criterion', Key: 'accuracy', IsAdvisory: false }] };
-                    }
-                    return { Success: true, Results: [] };
-                },
-            };
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
+    return {
+        ...actual,
+        RunView: {
+            FromMetadataProvider() {
+                return {
+                    async RunView(params: { EntityName: string }) {
+                        viewCalls.push(params);
+                        if (params.EntityName === 'MJ: Rubric Evaluation Scores') {
+                            return {
+                                Success: true,
+                                Results: [{
+                                    CriterionID: 'criterion',
+                                    NormalizedScore: 0,
+                                    EffectiveWeight: 1,
+                                    OverallContribution: 0,
+                                    GateFailed: true,
+                                    IsNotApplicable: false,
+                                }],
+                            };
+                        }
+                        if (params.EntityName === 'MJ: Rubric Criteria') {
+                            return { Success: true, Results: [{ ID: 'criterion', Key: 'accuracy', IsAdvisory: false }] };
+                        }
+                        return { Success: true, Results: [] };
+                    },
+                };
+            },
         },
-    },
-}));
+    };
+});
 
 vi.mock('@memberjunction/ai-prompts', () => ({ AIPromptRunner: class AIPromptRunner {} }));
 vi.mock('@memberjunction/ai-core-plus', () => ({ AIPromptParams: class AIPromptParams {} }));

@@ -1,4 +1,4 @@
-export { RubricEngineBase } from './RubricEngineBase.js';
+export { RUBRIC_CACHE_ENTITIES, RubricEngineBase } from './RubricEngineBase.js';
 export type {
     AgentRubricRecord,
     CachedPublishedVersion,

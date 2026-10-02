@@ -1,3 +1,5 @@
+import { BaseSingleton } from '@memberjunction/global';
+
 /** What an evaluator is allowed to read about a subject. */
 export interface RubricSubjectContent {
     text?: string;
@@ -75,33 +77,59 @@ export function conversationContent(record: { name?: unknown; description?: unkn
  * Fallback for any other entity. Fields the context user may not read are
  * omitted. canRead is the field-level permission check.
  */
-/** Picks the built-in mapper from the entity name. Unknown entities use the fallback. */
-export function ShapeContent(entityName: string, record: Record<string, unknown>, canRead?: (fieldName: string) => boolean): RubricSubjectContent {
-    if (entityName === 'MJ: Test Runs') {
-        return TestRunContent({
+export type RubricContentProvider = (record: Record<string, unknown>, canRead?: (fieldName: string) => boolean) => RubricSubjectContent;
+
+/** Named content providers. ShapeContent asks this registry, then falls back. */
+export class RubricContentRegistry extends BaseSingleton<RubricContentRegistry> {
+    private readonly providers = new Map<string, RubricContentProvider>();
+
+    public static get Instance(): RubricContentRegistry {
+        return super.getInstance<RubricContentRegistry>();
+    }
+
+    public constructor() {
+        super();
+        this.RegisterBuiltIns();
+    }
+
+    public Register(entityName: string, provider: RubricContentProvider): void {
+        this.providers.set(entityName, provider);
+    }
+
+    public Shape(entityName: string, record: Record<string, unknown>, canRead?: (fieldName: string) => boolean): RubricSubjectContent {
+        const provider = this.providers.get(entityName);
+        if (provider) return provider(record, canRead);
+        return FallbackContent(record, canRead ?? (() => true));
+    }
+
+    private RegisterBuiltIns(): void {
+        this.Register('MJ: Test Runs', record => TestRunContent({
             input: record.InputData ?? record.inputData,
             expectedOutcomes: record.ExpectedOutputData ?? record.expectedOutputData,
             actualOutput: record.ActualOutputData ?? record.actualOutputData,
             trace: (record.ResultDetails ?? record.resultDetails) as string | undefined,
             files: record.files as { fileId: string; name: string }[] | undefined,
-        });
-    }
-    if (entityName === 'MJ: AI Agent Runs') {
-        return AgentRunContent({
+        }));
+        this.Register('MJ: AI Agent Runs', record => AgentRunContent({
             finalPayload: record.FinalPayload ?? record.finalPayload,
             message: record.Message ?? record.message,
             steps: record.Steps ?? record.steps,
-        });
-    }
-    if (entityName === 'MJ: AI Prompt Runs') return PromptRunContent({ messages: record.Messages ?? record.messages, result: record.Result ?? record.result });
-    if (entityName === 'MJ: Conversations') {
-        return ConversationContent({
+        }));
+        this.Register('MJ: AI Prompt Runs', record => PromptRunContent({
+            messages: record.Messages ?? record.messages,
+            result: record.Result ?? record.result,
+        }));
+        this.Register('MJ: Conversations', record => ConversationContent({
             name: record.Name ?? record.name,
             description: record.Description ?? record.description,
             details: record.Details ?? record.details,
-        });
+        }));
     }
-    return FallbackContent(record, canRead ?? (() => true));
+}
+
+/** Picks the built-in mapper from the entity name. Unknown entities use the fallback. */
+export function ShapeContent(entityName: string, record: Record<string, unknown>, canRead?: (fieldName: string) => boolean): RubricSubjectContent {
+    return RubricContentRegistry.Instance.Shape(entityName, record, canRead);
 }
 
 /** @deprecated Use {@link ShapeContent}. */

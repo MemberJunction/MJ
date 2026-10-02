@@ -1,3 +1,5 @@
+import { BaseEngine, type BaseEnginePropertyConfig, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { RegisterClass } from '@memberjunction/global';
 import type { NotApplicablePolicy, RubricBandSnapshot, RubricNodeSnapshot } from './types.js';
 
 export interface RubricCategoryRecord {
@@ -97,13 +99,48 @@ export interface CachedPublishedVersion {
     scales: RubricScaleRecord[];
 }
 
+/** Entities {@link RubricEngineBase.Config} keeps fresh. */
+export const RUBRIC_CACHE_ENTITIES = [
+    'MJ: Rubric Categories',
+    'MJ: Rubric Scales',
+    'MJ: Rubric Scale Levels',
+    'MJ: Rubrics',
+    'MJ: Rubric Versions',
+    'MJ: Rubric Criteria',
+    'MJ: Rubric Criterion Levels',
+    'MJ: Rubric Bands',
+    'MJ: AI Agent Rubrics',
+] as const;
+
 /**
- * UI-safe cache of rubric definitions. It has no database of its own: the server
- * engine loads rows and calls {@link RubricEngineBase.replaceCache}. Only versions
- * whose status is Published are kept, each with its criteria, level anchors, bands,
- * and the scales those criteria use. Drafts are dropped.
+ * Cache of rubric definitions. It is a {@link BaseEngine}, so a metadata provider
+ * can refresh it. Only versions whose status is Published are kept, each with its
+ * criteria, level anchors, bands, and the scales those criteria use. Drafts are dropped.
+ * Callers can still replace the shaped cache directly.
  */
-export class RubricEngineBase {
+@RegisterClass(BaseEngine, 'RubricEngineBase')
+export class RubricEngineBase extends BaseEngine<RubricEngineBase> {
+    public static get Instance(): RubricEngineBase {
+        return super.getInstance<RubricEngineBase>();
+    }
+
+    public constructor() {
+        super();
+    }
+
+    /**
+     * Loads the rubric entities into this engine. The shaped cache is still
+     * filled by {@link ReplaceCache}; this is the metadata subscription.
+     */
+    public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        const configs: Partial<BaseEnginePropertyConfig>[] = RUBRIC_CACHE_ENTITIES.map(entityName => ({
+            Type: 'entity',
+            EntityName: entityName,
+            PropertyName: propertyName(entityName),
+            CacheLocal: true,
+        }));
+        await this.Load(configs, provider, forceRefresh, contextUser);
+    }
     private categories = new Map<string, RubricCategoryRecord>();
     private scales = new Map<string, RubricScaleRecord>();
     private rubrics = new Map<string, RubricRecord>();
@@ -240,4 +277,8 @@ function compareVersionDesc(a: CachedPublishedVersion, b: CachedPublishedVersion
     if (a.majorVersion !== b.majorVersion) return b.majorVersion - a.majorVersion;
     if (a.minorVersion !== b.minorVersion) return b.minorVersion - a.minorVersion;
     return b.patchVersion - a.patchVersion;
+}
+
+function propertyName(entityName: string): string {
+    return `_${entityName.replace(/[^A-Za-z0-9]/g, '')}`;
 }

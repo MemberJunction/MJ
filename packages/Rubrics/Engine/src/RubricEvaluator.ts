@@ -1,4 +1,5 @@
 import { RubricScoring, type RubricAnswer, type RubricScoreResult, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
+import { RegisterClass } from '@memberjunction/global';
 import type { RubricSubjectContent } from './content.js';
 
 export interface EvidenceRef {
@@ -70,4 +71,12 @@ export class RubricEvaluator {
     public evaluate(version: RubricVersionSnapshot, candidates: RubricCandidate[]): RubricEvaluatorOutput {
         return this.Evaluate(version, candidates);
     }
+}
+
+/**
+ * ClassFactory root for rubric evaluators. Concrete evaluators register under
+ * Deterministic, LLM, Agent, and Human.
+ */
+export abstract class BaseRubricEvaluator extends RubricEvaluator {
+    public abstract get EvaluatorName(): string;
 }

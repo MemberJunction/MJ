@@ -1,5 +1,6 @@
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
-import { RubricEvaluator, type RubricCandidate, type RubricEvaluatorOutput } from './RubricEvaluator.js';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseRubricEvaluator, type RubricCandidate, type RubricEvaluatorOutput } from './RubricEvaluator.js';
 import type { RubricSubjectContent } from './content.js';
 
 /**
@@ -19,7 +20,11 @@ export interface DeterministicRule {
  * are omitted, so RubricScoring treats them as silence. The score still comes
  * only from RubricScoring.
  */
-export class DeterministicRubricEvaluator extends RubricEvaluator {
+@RegisterClass(BaseRubricEvaluator, 'Deterministic')
+export class DeterministicRubricEvaluator extends BaseRubricEvaluator {
+    public get EvaluatorName(): string {
+        return 'Deterministic';
+    }
     /**
      * Scores the subject JSON. Does not call an agent or a model.
      */

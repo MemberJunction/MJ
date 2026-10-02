@@ -1,8 +1,9 @@
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import type { RubricNodeSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
+import { RegisterClass } from '@memberjunction/global';
 import type { RubricSubjectContent } from './content.js';
-import { RubricEvaluator, type EvidenceRef, type RubricEvaluatorOutput } from './RubricEvaluator.js';
+import { BaseRubricEvaluator, type EvidenceRef, type RubricEvaluatorOutput } from './RubricEvaluator.js';
 
 export type RubricPromptMode = 'SinglePass' | 'PerCriterion';
 
@@ -44,7 +45,11 @@ export interface LLMRubricResult extends RubricEvaluatorOutput {
  * Levels map by label. A numeric value outside the scale throws before
  * scoring. A quote that is not in the subject text is dropped.
  */
-export class LLMRubricEvaluator extends RubricEvaluator {
+@RegisterClass(BaseRubricEvaluator, 'LLM')
+export class LLMRubricEvaluator extends BaseRubricEvaluator {
+    public get EvaluatorName(): string {
+        return 'LLM';
+    }
     public constructor(private readonly runner: RubricPromptRunner, private readonly mode: RubricPromptMode = 'SinglePass') {
         super();
     }

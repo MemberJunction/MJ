@@ -1,6 +1,8 @@
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
+import { RegisterClass } from '@memberjunction/global';
 import type { RubricSubjectContent } from './content.js';
 import { LLMRubricEvaluator, type LLMDecision, type LLMRubricResult } from './LLMRubricEvaluator.js';
+import { BaseRubricEvaluator } from './RubricEvaluator.js';
 
 /** One criterion from the Rubric Evaluation Agent. Same shape as the LLM payload. */
 export interface EvaluationAgentDecision {
@@ -33,8 +35,17 @@ function decisionsFrom(payload: EvaluationAgentDecision | EvaluationAgentDecisio
  * Unknown keys are dropped. Levels map by label. A value outside the scale throws.
  * A quote that is not in the subject text is dropped.
  */
-export class AgentRubricEvaluator {
-    public constructor(private readonly agent: EvaluationAgentRunner) {}
+@RegisterClass(BaseRubricEvaluator, 'Agent')
+export class AgentRubricEvaluator extends BaseRubricEvaluator {
+    public get EvaluatorName(): string {
+        return 'Agent';
+    }
+    private readonly agent: EvaluationAgentRunner;
+
+    public constructor(agent: EvaluationAgentRunner) {
+        super();
+        this.agent = agent;
+    }
 
     public async EvaluateContent(
         version: RubricVersionSnapshot,

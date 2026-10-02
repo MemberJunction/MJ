@@ -1,5 +1,5 @@
 export { CreateRubricDraftAction, EvaluateRecordAgainstRubricAction, GetRubricAction, GetRubricConsensusAction, GetRubricSubjectAction } from './actions.js';
-export { AgentRunContent, agentRunContent, ConversationContent, conversationContent, FallbackContent, fallbackContent, PromptRunContent, promptRunContent, TestRunContent, testRunContent, type RubricSubjectContent } from './content.js';
+export { AgentRunContent, agentRunContent, ConversationContent, conversationContent, FallbackContent, fallbackContent, PromptRunContent, promptRunContent, RubricContentRegistry, TestRunContent, testRunContent, type RubricContentProvider, type RubricSubjectContent } from './content.js';
 export { DeterministicRubricEvaluator, type DeterministicRule } from './DeterministicRubricEvaluator.js';
 export { RubricEngine, type EvaluateParams, type EvaluateRecordInput, type EvaluateRecordResult, type RubricEvaluationRecord, type RubricEvaluationStore, type RubricRecords } from './RubricEngine.js';
 export { ProviderRubricEngine, providerRubricEngine } from './providerRecords.js';
@@ -14,4 +14,4 @@ export { DraftFromDescription, draftFromDescription, DraftFromImport, draftFromI
 export { PeriodMeans, periodMeans } from './sampling.js';
 export { ProviderProductionCatalog, providerProductionCatalog } from './productionSamplingCatalog.js';
 export { HumanRubricEvaluator, type DraftEvaluationInput, type EvaluationDraftStore, type RubricTaskStore } from './HumanRubricEvaluator.js';
-export { RubricEvaluator, type EvidenceRef, type RubricCandidate, type RubricEvaluatorOutput, type RubricEvaluatorRequest } from './RubricEvaluator.js';
+export { BaseRubricEvaluator, RubricEvaluator, type EvidenceRef, type RubricCandidate, type RubricEvaluatorOutput, type RubricEvaluatorRequest } from './RubricEvaluator.js';
