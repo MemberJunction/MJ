@@ -365,10 +365,26 @@ function failureEnvelope(code: number, message: string): SystemOneWireObject {
     return { result: null, success: false, errors: [{ code, message }], messages: [] };
 }
 
-/** The envelope failures CF4 scripts for Clef: one that arrives with a 200, one with a 500. */
+/**
+ * The envelope failures CF4 scripts for Clef: one that arrives with a 200, one with a 500. `Error` is
+ * the message the driver must throw: the envelope's `errors[].message` alone, never the raw body,
+ * which would still contain the message and so prove nothing about the 500's handling.
+ */
 const ENVELOPE_FAILURES = [
-    { Label: 'CF4 200', Status: 200, Code: 3040, Message: 'Capacity temporarily exceeded, please try again.' },
-    { Label: 'CF4 500', Status: 500, Code: 5007, Message: 'AiError: inference failed on the upstream model' },
+    {
+        Label: 'CF4 200',
+        Status: 200,
+        Code: 3040,
+        Message: 'Capacity temporarily exceeded, please try again.',
+        Error: 'Cloudflare Workers AI reported a failure (HTTP 200): Capacity temporarily exceeded, please try again.',
+    },
+    {
+        Label: 'CF4 500',
+        Status: 500,
+        Code: 5007,
+        Message: 'AiError: inference failed on the upstream model',
+        Error: 'Cloudflare Workers AI returned HTTP 500: AiError: inference failed on the upstream model',
+    },
 ] as const;
 
 /** Clef answers with `status` and `envelope`; every other model with the scripted envelope. */
@@ -421,10 +437,10 @@ async function runEnvelopeFailure(ctx: IntegrationCheckContext, fixtures: Decisi
     const alone = await runDecision(new AIDecisionRunner(), clefParams(ctx, requireDefaultDecision(), 'Clef', LEGACY_KEY), fixtures);
     AssertEqual(JSON.stringify(requestedModels(before)), JSON.stringify(['clef']), `${label} alone: requests`);
     Assert(!alone.success, `${label} alone: the decision succeeded`);
-    Assert((alone.errorMessage ?? '').includes(failure.Message), `${label} alone: the error does not carry Cloudflare's message: ${alone.errorMessage}`);
+    Assert((alone.errorMessage ?? '').includes(failure.Error), `${label} alone: the error is not '${failure.Error}': ${alone.errorMessage}`);
     const row = await ReadDecisionPromptRun(ctx, alone.promptRun?.ID ?? '');
     AssertEqual(row?.Success, false, `${label} alone: run Success`);
-    Assert((row?.ErrorMessage ?? '').includes(failure.Message), `${label} alone: the run's error does not carry Cloudflare's message: ${row?.ErrorMessage}`);
+    Assert((row?.ErrorMessage ?? '').includes(failure.Error), `${label} alone: the run's error is not '${failure.Error}': ${row?.ErrorMessage}`);
 
     // Clef, then Clef-flash: the runner fails over past the failure, and Clef-flash answers.
     before = sentRequests.length;
@@ -438,7 +454,7 @@ async function runEnvelopeFailure(ctx: IntegrationCheckContext, fixtures: Decisi
     const attempt = probe.Attempts[0];
     Assert(UUIDsEqual(attempt.Attempt.modelId, requireModel('Clef').ID), `${label} failover: the failed attempt was not Clef`);
     AssertEqual(attempt.WillRetry, true, `${label} failover: Clef's failure allowed failover`);
-    Assert(attempt.Attempt.error.message.includes(failure.Message), `${label} failover: Clef's error does not carry Cloudflare's message: ${attempt.Attempt.error.message}`);
+    AssertEqual(attempt.Attempt.error.message, failure.Error, `${label} failover: Clef's error`);
 }
 
 async function checkEnvelopeFailure(ctx: IntegrationCheckContext): Promise<void> {
