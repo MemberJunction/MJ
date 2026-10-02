@@ -4,6 +4,7 @@ import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { renderComponentFixture, query, capture, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { QueryDataGridComponent } from './query-data-grid.component';
 import { ExportService } from '@memberjunction/ng-export-service';
+import type { QueryGridColumnConfig } from './models/query-grid-types';
 
 /**
  * DOM coverage for <mj-query-data-grid> — the AG-Grid-backed query results grid (~4×). The grid body
@@ -92,7 +93,10 @@ describe('QueryDataGridComponent (DOM)', () => {
       getExportColumns(): Array<{ name: string; dataType?: string }>;
     };
     const internals = (fx: Fx) => fx.componentInstance as unknown as GridInternals;
-    const dateCol = { field: 'PaymentDate', title: 'Payment Date', sqlBaseType: 'date', sqlFullType: 'date', visible: true };
+    const dateCol: QueryGridColumnConfig = {
+      field: 'PaymentDate', title: 'Payment Date', sqlBaseType: 'date', sqlFullType: 'date',
+      visible: true, sortable: true, resizable: true, reorderable: true, order: 0, isEntityLink: false,
+    };
 
     it('formats the cell as the stored day', () => {
       expect(internals(render()).formatCellValue('2026-10-01T00:00:00.000Z', dateCol)).toBe('Oct 1, 2026');
@@ -100,7 +104,7 @@ describe('QueryDataGridComponent (DOM)', () => {
 
     it('exports the column as a date-only column', () => {
       const fx = render();
-      fx.componentInstance.Columns = [dateCol as never];
+      fx.componentInstance.Columns = [dateCol];
       expect(internals(fx).getExportColumns()).toEqual([{ name: 'PaymentDate', displayName: 'Payment Date', dataType: 'dateonly' }]);
     });
   });

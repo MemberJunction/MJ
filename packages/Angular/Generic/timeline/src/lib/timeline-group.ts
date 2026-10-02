@@ -471,24 +471,15 @@ export class TimelineGroup<T = any> {
 
   /**
    * Whether `DateFieldName` is a SQL `date` column (a calendar day), from the record's own entity
-   * metadata or, for plain objects, the group's `EntityName`. Unknown metadata means "an instant".
+   * metadata. Entity-sourced groups load BaseEntity objects, which carry it; a plain object has no
+   * metadata and its date is treated as an instant, as before.
    */
   private isDateOnlyDateField(record: T): boolean {
     const fieldName = this.DateFieldName?.trim().toLowerCase();
     if (!fieldName) return false;
-    const entityInfo = (record as { EntityInfo?: EntityInfo } | null)?.EntityInfo ?? this.groupEntityInfo();
+    const entityInfo = (record as { EntityInfo?: EntityInfo } | null)?.EntityInfo;
     const field = entityInfo?.Fields?.find(f => f.Name.trim().toLowerCase() === fieldName);
     return IsDateOnlySQLType(field?.Type);
-  }
-
-  private groupEntityInfo(): EntityInfo | undefined {
-    if (!this.EntityName) return undefined;
-    const entityName = this.EntityName.trim().toLowerCase();
-    try {
-      return Metadata.Provider?.Entities?.find(e => e.Name.trim().toLowerCase() === entityName);
-    } catch {
-      return undefined;
-    }
   }
 
   /** @deprecated Use {@link GetDate}. */
