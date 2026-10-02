@@ -48,16 +48,33 @@ describe('rubric resolution', () => {
         const choice = ResolveRubric({ testRubricId: 'rubric' });
         const added = EnsureImplicitRubricOracle([{ type: 'trace-no-errors' }], choice, 'v1');
         expect(added.map(oracle => oracle.type)).toEqual(['trace-no-errors', 'rubric']);
-        expect(EnsureImplicitRubricOracle([{ type: 'rubric', config: { rubricId: 'named' } }], choice).some(oracle => oracle.config?.rubricId === 'named')).toBe(true);
+        const overwritten = EnsureImplicitRubricOracle(
+            [{ type: 'rubric', config: { rubricId: 'named', rubricVersionId: 'stale', versionLabel: 'old', note: 'keep' } }],
+            choice,
+            'v1',
+            '1.0.0',
+        );
+        expect(overwritten[0].config).toEqual({ rubricId: 'rubric', rubricVersionId: 'v1', versionLabel: '1.0.0', note: 'keep' });
         expect(WeightsForImplicitRubric(undefined, true)).toEqual({ rubric: 1 });
         expect(WeightsForImplicitRubric({ trace: 1 }, true)).toEqual({ trace: 1 });
     });
 
-    it('keeps an existing llm-judge and does not add the agent rubric', () => {
-        const choice = ResolveRubric({ testRubricId: 'rubric' });
+    it('lets an llm-judge skip only the agent rubric', () => {
         const inline = [{ type: 'llm-judge', config: { criteria: ['Accurate'] } }, { type: 'trace-no-errors' }];
-        const published = EnsureImplicitRubricOracle(inline, choice, 'v1', '1.0.0');
-        expect(published).toEqual(inline);
+        const agent = ResolveRubric({ agentRubricId: 'agent' });
+        expect(EnsureImplicitRubricOracle(inline, agent, 'v1', '1.0.0')).toEqual(inline);
+        for (const choice of [
+            ResolveRubric({ run: { rubricId: 'run' } }),
+            ResolveRubric({ testRubricId: 'test' }),
+            ResolveRubric({ suites, suiteId: 'child' }),
+            ResolveRubric({ oracle: { rubricId: 'promoted' } }),
+        ]) {
+            const pinned = EnsureImplicitRubricOracle(inline, choice, 'v1', '1.0.0');
+            expect(pinned.map(oracle => oracle.type)).toEqual(['llm-judge', 'trace-no-errors', 'rubric']);
+            expect(pinned.at(-1)?.config).toMatchObject({ rubricId: choice.RubricId, rubricVersionId: 'v1' });
+        }
+        const unnamed = EnsureImplicitRubricOracle(inline, ResolveRubric({ testRubricId: 'draft-rubric' }));
+        expect(unnamed.at(-1)).toEqual({ type: 'rubric', config: { rubricId: 'draft-rubric' } });
     });
 
     it('calls the engine with the test run as the subject and the test as the context', async () => {

@@ -95,21 +95,25 @@ export interface OracleConfigLike {
 }
 
 /**
- * Adds the agent's Evaluation rubric when the test did not already judge itself.
- * A test that has an llm-judge keeps that oracle list, and the rubric is not added.
- * A test with no llm-judge and no rubric oracle gets the resolved version.
+ * Pins the resolved rubric onto the oracle list.
+ * An llm-judge skips only the agent's own Evaluation rubric (`Source === 'agent'`).
+ * A run override, a test rubric, a suite rubric, or a promoted rubric is still pinned.
+ * A rubric with no published version is still named. The pin is written after the
+ * oracle config, so the config cannot replace the version.
  */
 export function EnsureImplicitRubricOracle(oracles: OracleConfigLike[] | undefined, choice: RubricChoice, versionId?: string, versionLabel?: string): OracleConfigLike[] {
     const list = oracles ?? [];
-    if (list.some(oracle => oracle.type === 'llm-judge')) return list;
-    if (!choice.RubricId || !versionId) return list;
-    const pinned = { rubricVersionId: versionId, versionLabel };
+    if (list.some(oracle => oracle.type === 'llm-judge') && choice.Source === 'agent') return list;
+    if (!choice.RubricId) return list;
+    const pinned: Record<string, unknown> = { rubricId: choice.RubricId };
+    if (versionId) pinned.rubricVersionId = versionId;
+    if (versionLabel) pinned.versionLabel = versionLabel;
     if (list.some(oracle => oracle.type === 'rubric')) {
         return list.map(oracle => oracle.type === 'rubric'
-            ? { ...oracle, config: { ...pinned, ...oracle.config, versionLabel: oracle.config?.versionLabel ?? versionLabel } }
+            ? { ...oracle, config: { ...oracle.config, ...pinned } }
             : oracle);
     }
-    return [...list, { type: 'rubric', config: { rubricId: choice.RubricId, ...pinned } }];
+    return [...list, { type: 'rubric', config: pinned }];
 }
 
 /** @deprecated Use {@link EnsureImplicitRubricOracle}. */

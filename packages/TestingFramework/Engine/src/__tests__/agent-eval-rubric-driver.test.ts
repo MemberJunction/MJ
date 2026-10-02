@@ -119,10 +119,13 @@ describe('agent eval rubric driver', () => {
             agentId: 'agent',
             oracles: [{ type: 'llm-judge', config: { criteria: ['Accurate'] } }],
         }, context);
-        expect(resolved.oracles.map(oracle => oracle.type)).toEqual(['llm-judge']);
+        expect(resolved.oracles).toEqual([
+            { type: 'llm-judge', config: { criteria: ['Accurate'] } },
+            { type: 'rubric', config: { rubricId: 'draft-rubric' } },
+        ]);
     });
 
-    it('keeps an existing llm-judge and does not add the agent rubric', async () => {
+    it('pins the test rubric when an llm-judge is also present', async () => {
         const driver = new SuiteProbe();
         const context = {
             test: { ID: 'test', RubricID: 'published-rubric' },
@@ -135,6 +138,10 @@ describe('agent eval rubric driver', () => {
             agentId: 'agent',
             oracles: [{ type: 'llm-judge', config: { criteria: ['Accurate'] } }, { type: 'trace-no-errors' }],
         }, context);
-        expect(resolved.oracles.map(oracle => oracle.type)).toEqual(['llm-judge', 'trace-no-errors']);
+        expect(resolved.oracles).toEqual([
+            { type: 'llm-judge', config: { criteria: ['Accurate'] } },
+            { type: 'trace-no-errors' },
+            { type: 'rubric', config: { rubricId: 'published-rubric', rubricVersionId: 'version-4', versionLabel: '1.2.0' } },
+        ]);
     });
 });
