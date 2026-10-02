@@ -522,5 +522,15 @@
     "primaryKey": {
       "ID": "21A966E8-AB6D-42E2-BD56-37584838A5A8"
     }
+  },
+  {
+    "fields": {
+      "Name": "System One Endpoint",
+      "Description": "Any server that answers TypeSafe's System One decisions API at POST {base}/v1/systemone: a Kev deployment (for example on Modal, deployed with modal deploy kev_serve.py), llama.cpp's llama-server running a decision model, or TypeSafe's own API. The endpoint and an optional bearer token come from an API Key with Endpoint credential, bound to each model's row so that each model can point at its own server; the SYSTEMONE_BASE_URL environment variable is the fallback. MJ reaches it through the SystemOneDecision driver.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key with Endpoint"
+    },
+    "primaryKey": {
+      "ID": "1DD8AAAA-E1F3-4FA2-993C-A76AE9153FE3"
+    }
   }
 ]
