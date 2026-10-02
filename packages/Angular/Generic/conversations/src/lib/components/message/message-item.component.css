@@ -405,6 +405,24 @@
   color: var(--mj-brand-primary);
 }
 
+/* Liveness states (MJ #4222) — the run may no longer be progressing, so the pill stops
+   presenting the elapsed time as healthy progress. These follow .in-progress/.active in the
+   stylesheet so they win on equal specificity. */
+.time-pill.checking {
+  background: var(--mj-status-warning-bg);
+  color: var(--mj-status-warning-text);
+}
+
+.time-pill.stalled {
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error-text);
+}
+
+.time-pill .liveness-label {
+  font-weight: 400;
+  opacity: 0.85;
+}
+
 /* Failed state - red */
 .time-pill.failed {
   background: var(--mj-status-error-bg);

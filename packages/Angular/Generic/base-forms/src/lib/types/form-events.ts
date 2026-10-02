@@ -99,6 +99,12 @@ export class BeforeHistoryViewEventArgs extends CancellableFormEvent {}
 export class BeforeListManagementEventArgs extends CancellableFormEvent {}
 
 /**
+ * Event args for BeforeClone event. Set `Cancel` to suppress the built-in clone slide-in,
+ * e.g. to open a host-specific clone flow instead.
+ */
+export class BeforeCloneEventArgs extends CancellableFormEvent {}
+
+/**
  * Event args for custom toolbar button clicks
  */
 export interface CustomToolbarButtonClickEventArgs {

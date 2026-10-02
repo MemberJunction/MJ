@@ -8,13 +8,13 @@ import { IntegrationEngine } from '../IntegrationEngine.js';
 import type { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
 
 /** Reaches the private reader the batch path uses. Named rather than cast to `any`. */
-type WriteModeReader = { ReadWriteMode: (ci: MJCompanyIntegrationEntity) => string };
+type WriteModeReader = { readWriteMode: (ci: MJCompanyIntegrationEntity) => string };
 const readMode = (configuration: unknown): string => {
     const engine = Object.create(IntegrationEngine.prototype) as unknown as WriteModeReader;
     // The generated TYPED property, which is what the reader uses (and what its four neighbours
     // in IntegrationEngine already used) — not `.Get('Configuration')`.
     const ci = { Configuration: configuration } as unknown as MJCompanyIntegrationEntity;
-    return engine.ReadWriteMode(ci);
+    return engine.readWriteMode(ci);
 };
 
 describe('ReadWriteMode — the opt-in must fail closed', () => {
@@ -150,7 +150,7 @@ describe('batching is independent of concurrency', () => {
         // primary-key shape. What it must NEVER consult is concurrency: assert the absence of the
         // old gate rather than the exact text of the line, so adding a legitimate condition (as
         // entityMapHasIdentityOnlyPK did) does not fail this while a concurrency gate still would.
-        expect(src).toMatch(/const batchedWrites = this\.ReadWriteMode\(companyIntegration\) === 'batched'/);
+        expect(src).toMatch(/const batchedWrites = this\.readWriteMode\(companyIntegration\) === 'batched'/);
         expect(src).not.toMatch(/const batchedWrites = useTransaction &&/);
         expect(src).not.toMatch(/const batchedWrites =[^;]*getSyncConcurrency/);
         expect(src).not.toMatch(/const batchedWrites =[^;]*useTransaction/);

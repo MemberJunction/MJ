@@ -13,7 +13,7 @@
  * singleton nor a database — the seam is `(candidate, users) -> resolution`.
  */
 import { describe, it, expect } from 'vitest';
-import { resolvePrincipalFrom, type ResolvablePrincipal } from '../auth/principals.js';
+import { ResolvePrincipalFrom, type ResolvablePrincipal } from '../auth/principals.js';
 
 /**
  * The system user's ID, pinned by `UserCache` (`SYSTEM_USER_ID`) and seeded by every baseline.
@@ -63,14 +63,14 @@ const STOCK_HOST: ResolvablePrincipal[] = [SYSTEM, ANONYMOUS, HOST_ADMIN];
 describe('resolvePrincipalFrom', () => {
     describe('the shipped default (#4209)', () => {
         it('resolves the email-shaped default to the seeded System user', () => {
-            const result = resolvePrincipalFrom(SHIPPED_DEFAULT, STOCK_HOST, SYSTEM_USER_ID);
+            const result = ResolvePrincipalFrom(SHIPPED_DEFAULT, STOCK_HOST, SYSTEM_USER_ID);
 
             expect(result.user).toBe(SYSTEM);
             expect(result.reason).toBe('email');
         });
 
         it('reports no warning when the default resolves, so a stock host logs nothing', () => {
-            const result = resolvePrincipalFrom(SHIPPED_DEFAULT, STOCK_HOST, SYSTEM_USER_ID);
+            const result = ResolvePrincipalFrom(SHIPPED_DEFAULT, STOCK_HOST, SYSTEM_USER_ID);
 
             expect(result.warning).toBeUndefined();
         });
@@ -81,8 +81,8 @@ describe('resolvePrincipalFrom', () => {
             // `SELECT * FROM vwUsers` carries no ORDER BY and the cache is mutated in place at
             // runtime, so row order differs between boots AND within a process. Attribution must
             // not depend on it: this is what made CreatedByUserID incidental.
-            const ordered = resolvePrincipalFrom(SHIPPED_DEFAULT, STOCK_HOST, SYSTEM_USER_ID);
-            const reversed = resolvePrincipalFrom(SHIPPED_DEFAULT, [...STOCK_HOST].reverse(), SYSTEM_USER_ID);
+            const ordered = ResolvePrincipalFrom(SHIPPED_DEFAULT, STOCK_HOST, SYSTEM_USER_ID);
+            const reversed = ResolvePrincipalFrom(SHIPPED_DEFAULT, [...STOCK_HOST].reverse(), SYSTEM_USER_ID);
 
             expect(reversed.user).toBe(ordered.user);
         });
@@ -107,7 +107,7 @@ describe('resolvePrincipalFrom', () => {
                 IsActive: true,
             };
 
-            const result = resolvePrincipalFrom('support@acme.com', [emailSupport, namedSupport], SYSTEM_USER_ID);
+            const result = ResolvePrincipalFrom('support@acme.com', [emailSupport, namedSupport], SYSTEM_USER_ID);
 
             expect(result.user).toBe(namedSupport);
             expect(result.reason).toBe('name');
@@ -125,15 +125,15 @@ describe('resolvePrincipalFrom', () => {
         const HIGH: ResolvablePrincipal = { ID: 'FFFFFFFF-0000-0000-0000-00000000000F', Name: 'shared.name', Email: 'high@acme.com', Type: 'User', IsActive: true };
 
         it('picks the lowest-ID user when two users share the configured Name', () => {
-            const result = resolvePrincipalFrom('shared.name', [HIGH, LOW, SYSTEM], SYSTEM_USER_ID);
+            const result = ResolvePrincipalFrom('shared.name', [HIGH, LOW, SYSTEM], SYSTEM_USER_ID);
 
             expect(result.user).toBe(LOW);
             expect(result.reason).toBe('name');
         });
 
         it('resolves a duplicated Name identically however the cache is ordered', () => {
-            const forward = resolvePrincipalFrom('shared.name', [HIGH, LOW, SYSTEM], SYSTEM_USER_ID);
-            const reversed = resolvePrincipalFrom('shared.name', [SYSTEM, LOW, HIGH], SYSTEM_USER_ID);
+            const forward = ResolvePrincipalFrom('shared.name', [HIGH, LOW, SYSTEM], SYSTEM_USER_ID);
+            const reversed = ResolvePrincipalFrom('shared.name', [SYSTEM, LOW, HIGH], SYSTEM_USER_ID);
 
             expect(reversed.user).toBe(forward.user);
         });
@@ -145,7 +145,7 @@ describe('resolvePrincipalFrom', () => {
             const lowEmail: ResolvablePrincipal = { ...LOW, Name: 'a.person', Email: 'shared@acme.com' };
             const highEmail: ResolvablePrincipal = { ...HIGH, Name: 'b.person', Email: 'shared@acme.com' };
 
-            const result = resolvePrincipalFrom('shared@acme.com', [highEmail, lowEmail, SYSTEM], SYSTEM_USER_ID);
+            const result = ResolvePrincipalFrom('shared@acme.com', [highEmail, lowEmail, SYSTEM], SYSTEM_USER_ID);
 
             expect(result.user).toBe(lowEmail);
             expect(result.reason).toBe('email');
@@ -169,7 +169,7 @@ describe('resolvePrincipalFrom', () => {
         };
 
         it('does not resolve a deactivated candidate by Email', () => {
-            const result = resolvePrincipalFrom('departed@acme.com', [...STOCK_HOST, RETIRED], SYSTEM_USER_ID);
+            const result = ResolvePrincipalFrom('departed@acme.com', [...STOCK_HOST, RETIRED], SYSTEM_USER_ID);
 
             expect(result.user).toBe(SYSTEM);
             expect(result.reason).toBe('system');
@@ -180,14 +180,14 @@ describe('resolvePrincipalFrom', () => {
             // most: without it the guarantee holds only for the rungs nobody configures.
             const renamed: ResolvablePrincipal = { ...RETIRED, Name: 'ops-service-account', Email: 'ops@acme.com' };
 
-            const result = resolvePrincipalFrom('ops-service-account', [...STOCK_HOST, renamed], SYSTEM_USER_ID);
+            const result = ResolvePrincipalFrom('ops-service-account', [...STOCK_HOST, renamed], SYSTEM_USER_ID);
 
             expect(result.user).toBe(SYSTEM);
             expect(result.reason).toBe('system');
         });
 
         it('reports that the candidate matched but is inactive, not that it matched nothing', () => {
-            const result = resolvePrincipalFrom('departed@acme.com', [...STOCK_HOST, RETIRED], SYSTEM_USER_ID);
+            const result = ResolvePrincipalFrom('departed@acme.com', [...STOCK_HOST, RETIRED], SYSTEM_USER_ID);
 
             // "matched no user's Name or Email" would send the operator hunting for a typo in a
             // value that is spelled correctly. The fix here is to reactivate the account or name a
@@ -215,7 +215,7 @@ describe('resolvePrincipalFrom', () => {
                 IsActive: true,
             };
 
-            const result = resolvePrincipalFrom('ops@acme.com', [inactiveByName, activeByEmail], SYSTEM_USER_ID);
+            const result = ResolvePrincipalFrom('ops@acme.com', [inactiveByName, activeByEmail], SYSTEM_USER_ID);
 
             expect(result.user).toBe(activeByEmail);
             expect(result.reason).toBe('email');
@@ -224,14 +224,14 @@ describe('resolvePrincipalFrom', () => {
     });
     describe('fallbacks', () => {
         it('falls back to the System user rather than an arbitrary Owner when the candidate is unresolvable', () => {
-            const result = resolvePrincipalFrom('nobody@nowhere.example', STOCK_HOST, SYSTEM_USER_ID);
+            const result = ResolvePrincipalFrom('nobody@nowhere.example', STOCK_HOST, SYSTEM_USER_ID);
 
             expect(result.user).toBe(SYSTEM);
             expect(result.reason).toBe('system');
         });
 
         it('warns when a configured candidate did not resolve, naming the candidate', () => {
-            const result = resolvePrincipalFrom('nobody@nowhere.example', STOCK_HOST, SYSTEM_USER_ID);
+            const result = ResolvePrincipalFrom('nobody@nowhere.example', STOCK_HOST, SYSTEM_USER_ID);
 
             expect(result.warning).toContain('nobody@nowhere.example');
         });
@@ -239,7 +239,7 @@ describe('resolvePrincipalFrom', () => {
         it('falls back to the System user WITHOUT warning when no candidate is configured', () => {
             // Zod defaults this setting to '', so an unset/blank value must not be reported as a
             // misconfiguration — but it must still land somewhere deterministic.
-            const result = resolvePrincipalFrom('', STOCK_HOST, SYSTEM_USER_ID);
+            const result = ResolvePrincipalFrom('', STOCK_HOST, SYSTEM_USER_ID);
 
             expect(result.user).toBe(SYSTEM);
             expect(result.warning).toBeUndefined();
@@ -256,7 +256,7 @@ describe('resolvePrincipalFrom', () => {
             };
             const users = [laterOwner, HOST_ADMIN, ANONYMOUS];
 
-            const result = resolvePrincipalFrom('nobody@nowhere.example', users, SYSTEM_USER_ID);
+            const result = ResolvePrincipalFrom('nobody@nowhere.example', users, SYSTEM_USER_ID);
 
             expect(result.user).toBe(HOST_ADMIN);
             expect(result.reason).toBe('owner');
@@ -271,7 +271,7 @@ describe('resolvePrincipalFrom', () => {
                 IsActive: false,
             };
 
-            const result = resolvePrincipalFrom('nobody@nowhere.example', [inactiveOwner, HOST_ADMIN], SYSTEM_USER_ID);
+            const result = ResolvePrincipalFrom('nobody@nowhere.example', [inactiveOwner, HOST_ADMIN], SYSTEM_USER_ID);
 
             expect(result.user).toBe(HOST_ADMIN);
         });
@@ -281,7 +281,7 @@ describe('resolvePrincipalFrom', () => {
             // "we never act as a disabled user, except as the one user we reach first".
             const inactiveSystem: ResolvablePrincipal = { ...SYSTEM, IsActive: false };
 
-            const result = resolvePrincipalFrom('nobody@nowhere.example', [inactiveSystem, HOST_ADMIN], SYSTEM_USER_ID);
+            const result = ResolvePrincipalFrom('nobody@nowhere.example', [inactiveSystem, HOST_ADMIN], SYSTEM_USER_ID);
 
             expect(result.user).toBe(HOST_ADMIN);
             expect(result.reason).toBe('owner');
@@ -290,13 +290,13 @@ describe('resolvePrincipalFrom', () => {
         it('returns no principal when the system user is deactivated and no active Owner remains', () => {
             const inactiveSystem: ResolvablePrincipal = { ...SYSTEM, IsActive: false };
 
-            const result = resolvePrincipalFrom('nobody@nowhere.example', [inactiveSystem, ANONYMOUS], SYSTEM_USER_ID);
+            const result = ResolvePrincipalFrom('nobody@nowhere.example', [inactiveSystem, ANONYMOUS], SYSTEM_USER_ID);
 
             expect(result.user).toBeNull();
         });
 
         it('returns no principal at all when the cache is empty', () => {
-            const result = resolvePrincipalFrom(SHIPPED_DEFAULT, [], SYSTEM_USER_ID);
+            const result = ResolvePrincipalFrom(SHIPPED_DEFAULT, [], SYSTEM_USER_ID);
 
             expect(result.user).toBeNull();
             expect(result.reason).toBe('none');

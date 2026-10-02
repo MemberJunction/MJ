@@ -78,6 +78,36 @@ export class OrderEntity extends mjBizAppsOrdersOrderEntity {
 `ClassFactory` priority auto-increments by load order, so a server-only subclass extending this one
 still wins server-side with no configuration — and the browser keeps the collection.
 
+### At runtime — `DeclareRelatedRecordsDynamic` (generic engines only)
+
+`DeclareRelatedRecords` is protected, so only the class itself can call it. Engines that work on
+*any* entity need to attach a collection from outside, to a relationship the class never declared.
+`DeclareRelatedRecordsDynamic(options)` is the public entry point for that. It takes the same
+`RelatedRecordCollectionOptions` and returns the same `RelatedRecordCollection`:
+
+```typescript
+// Record Cloning's materializer, when the parent has no writable collection for this relationship
+const lines = parent.DeclareRelatedRecordsDynamic({
+    Name: '_mj_clone_Order_Lines_OrderHeaderID',
+    RelatedEntity: 'MJ_BizApps_Orders: Order Lines',
+    RelatedEntityJoinField: 'OrderHeaderID',
+    Source: 'database',
+    ReadOnly: false,
+});
+```
+
+- It registers the collection on **that instance only**. Other instances, and the other tier,
+  don't get it.
+- It throws if a companion with that name is already registered. Look for an existing declared
+  collection first. The cloning materializer reuses a writable collection that matches the child
+  entity and join field.
+- Once registered, the collection behaves like any other. `Save()` includes its rows in the
+  parent's save plan.
+- Current callers: `CloneMaterializer` (`@memberjunction/record-cloning`) and `mj sync push`, which
+  resolves a record's `collections` key to a relationship and declares a collection when the class has none.
+
+In entity code, don't use it. Declare the collection in metadata or on a shared subclass (above).
+
 ---
 
 ## 2. What happens on `Save()` — the local flow
@@ -109,15 +139,17 @@ flowchart TD
     Accept --> Done([return true])
 
     Node -.->|any node fails| Rollback[scope.Rollback]
-    Rollback --> Failed([return false<br/><b>nothing persisted</b>])
+    Rollback --> Restore[Put every record back<br/>as it was before Save<br/><i>IS-A parents included</i>]
+    Restore --> Failed([return false<br/><b>nothing persisted</b>])
 
     style Single fill:#1b5e20,stroke:#66bb6a,color:#fff
     style Guarantees fill:#0d47a1,stroke:#64b5f6,color:#fff
     style Rollback fill:#b71c1c,stroke:#ef5350,color:#fff
+    style Restore fill:#b71c1c,stroke:#ef5350,color:#fff
     style Failed fill:#b71c1c,stroke:#ef5350,color:#fff
 ```
 
-Three properties of that diagram are the whole design:
+Four properties of that diagram are the whole design:
 
 **A single-node plan is the old path, untouched.** An entity with no collections — or whose
 collections are empty — takes the byte-for-byte original save. That is what makes this safe to
@@ -131,6 +163,13 @@ path to quietly skip a guarantee the single-record path has.
 **Validation runs over the complete set — including removals — before anything is written.** A
 cross-record invariant ("debits must equal credits") therefore sees the whole graph, rather than
 being evaluated after half of it has landed.
+
+**A failure leaves every record as it was before `Save()`.** Each node that saved before the failure
+was finalized as saved and clean, and so was each IS-A parent above it. The rollback undoes their
+writes, and the graph puts them back in memory too: saved flags, values and pending edits. The same
+`Save()` can then simply be called again. A delete graph works the same way: a record it deletes is
+reset with `NewRecord()` only once the graph commits, so a rollback leaves it saved and a retry
+deletes it.
 
 ---
 
@@ -454,6 +493,11 @@ await order.Delete();   // OnRemove:'delete' collections cascade — related rec
 
 Records still go through their own `Delete()`, so soft-delete, Record Changes and entity actions
 all behave normally.
+
+The one transaction is the server's. There, a failed delete rolls back and every record stays saved,
+so the same `Delete()` can be retried. A client provider has no transaction to open, so the deletes run
+one at a time: a failure partway leaves the earlier deletes done, and their records reset. For an
+atomic delete from the browser, expose a remote operation that deletes the graph on the server.
 
 ### Validating across records
 

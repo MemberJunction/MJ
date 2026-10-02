@@ -247,7 +247,16 @@ export class LiveKitParticipantTileComponent implements AfterViewInit, OnDestroy
   private attachedAudioSid: string | null = null;
 
   /** Whether a video track is currently attached (drives the avatar fallback). */
-  public hasVideo = false;
+  public HasVideo = false;
+
+  /** @deprecated Use {@link HasVideo}. */
+  public get hasVideo() {
+    return this.HasVideo;
+  }
+  /** @deprecated Use {@link HasVideo}. */
+  public set hasVideo(value) {
+    this.HasVideo = value;
+  }
 
   /** Show the active-speaker ring around the tile. */
   @Input() public ShowActiveSpeakerRing = true;
@@ -280,13 +289,18 @@ export class LiveKitParticipantTileComponent implements AfterViewInit, OnDestroy
   }
 
   /** The participant's initials for the avatar fallback. */
-  public get initials(): string {
+  public get Initials(): string {
     const name = this.Participant?.DisplayName ?? '';
     const parts = name.trim().split(/\s+/).filter(Boolean);
     if (parts.length === 0) {
       return '?';
     }
     return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+  }
+
+  /** @deprecated Use {@link Initials}. */
+  public get initials(): string {
+    return this.Initials;
   }
 
   public ngAfterViewInit(): void {
@@ -312,7 +326,7 @@ export class LiveKitParticipantTileComponent implements AfterViewInit, OnDestroy
     const el = this.videoRef?.nativeElement;
     if (!p || !el) {
       this.detachVideo();
-      this.hasVideo = false;
+      this.HasVideo = false;
       return;
     }
     const source = p.IsScreenSharing ? Track.Source.ScreenShare : Track.Source.Camera;
@@ -320,7 +334,7 @@ export class LiveKitParticipantTileComponent implements AfterViewInit, OnDestroy
     const track = pub?.track;
     if (!track || pub?.isMuted) {
       this.detachVideo();
-      this.hasVideo = false;
+      this.HasVideo = false;
       return;
     }
     if (this.attachedVideoSid !== track.sid) {
@@ -328,7 +342,7 @@ export class LiveKitParticipantTileComponent implements AfterViewInit, OnDestroy
       track.attach(el);
       this.attachedVideoSid = track.sid ?? null;
     }
-    this.hasVideo = true;
+    this.HasVideo = true;
   }
 
   /** Attaches the participant's microphone track to the hidden audio element (skipped for the local user). */

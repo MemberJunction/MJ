@@ -1,0 +1,38 @@
+[
+  {
+    "fields": {
+      "Name": "Decision Reranker",
+      "Description": "Reranks documents with a typed decision: one call asks a Likelihood question per document (\"This note bears on the request\"), with the query as the state, and each document's relevance score is the probability. It asks the Default Decision prompt, or the prompt named in the agent's RerankerConfiguration.rerankPromptID, so the decision model and its failover come from that prompt's bindings. It needs no API key of its own. It is not bound to Default Rerank: an agent opts in by setting RerankerConfiguration.rerankerModelId to this model.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Reranker",
+      "PowerRank": 50,
+      "IsActive": true,
+      "SpeedRank": 0,
+      "CostRank": 0,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=MemberJunction",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "DecisionReranker",
+            "APIName": "Default Decision",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "178C2832-AB3B-4EE6-8942-D40A5697C52B"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "6057A6E8-87AF-4263-A177-C2BA66717C26"
+    }
+  }
+]

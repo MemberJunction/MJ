@@ -3,11 +3,12 @@
  * the {@link RealtimeAgentType} (Realtime Co-Agent).
  *
  * The {@link RealtimeSessionRunner} owns the lifecycle of a single full-duplex
- * {@link IRealtimeSession}: it opens the session, registers a **stable, target-independent** tool
- * set (always including `invoke-target-agent`), wires the provider event handlers, routes tool
- * calls (invoke-target → delegate to the target agent; others → an injected tool executor),
+ * {@link IRealtimeSession}: it opens the session, registers the tool set (always including
+ * `invoke-target-agent`, extra tools, and any server channel tools), wires the provider event handlers,
+ * routes tool calls (invoke-target → delegate to the target agent; others → an injected tool executor),
  * persists each transcript turn as a conversation detail, accumulates usage and checkpoints it on
- * a debounced cadence, and aborts any in-flight delegated run on barge-in.
+ * a debounced cadence, and aborts any in-flight delegated run on barge-in. (Note: telephony, media,
+ * and room sessions run via this runner do not project direct actions).
  *
  * **Why dependency injection.** Every collaborator that would otherwise pull in `BaseAgent`,
  * metadata, or the database is injected via {@link RealtimeSessionRunnerDeps}. That keeps the
@@ -37,6 +38,7 @@ import { RealtimeRecordingController } from './realtime-recording-capture';
 import {
     RealtimeToolBroker,
     INVOKE_TARGET_AGENT_TOOL_NAME,
+    INVOKE_TARGET_AGENT_DESCRIPTION,
     DelegateToTargetRequest,
     DelegatedResult,
     ToolExecutionResult,
@@ -49,6 +51,7 @@ import { BuildServerNarrationInstructions } from './realtime-narration';
 // keep their import paths. The single source of truth is `realtime-tool-broker.ts`.
 export {
     INVOKE_TARGET_AGENT_TOOL_NAME,
+    INVOKE_TARGET_AGENT_DESCRIPTION,
     DelegateToTargetRequest,
     DelegatedResult,
     ToolExecutionResult,
@@ -80,8 +83,7 @@ export interface RealtimeSessionRunnerDeps {
 
     /**
      * Extra realtime tools to register *in addition to* the always-present `invoke-target-agent`
-     * tool — e.g. fixed UI/control tools. These stay target-independent (see
-     * {@link INVOKE_TARGET_AGENT_TOOL_NAME}). Optional.
+     * tool — e.g. fixed UI/control tools. Optional.
      */
     ExtraTools?: RealtimeToolDefinition[];
 
@@ -247,20 +249,20 @@ export interface RealtimeSessionResult {
  */
 export class RealtimeSessionRunner {
     /** Default upper bound (ms) on the teardown transcript drain — see `TranscriptFlushTimeoutMs`. */
-    private static readonly DefaultTranscriptFlushTimeoutMs = 5000;
+    private static readonly defaultTranscriptFlushTimeoutMs = 5000;
 
     // ── Delegated-run progress narration (server-bridged B3) ──────────────────
     /** First spoken update fires no earlier than this long after a delegation burst starts. */
-    private static readonly FirstNarrationDelayMs = 5000;
+    private static readonly firstNarrationDelayMs = 5000;
     /** Minimum gap between SUBSEQUENT spoken updates (floods aggregate into one digest). */
-    private static readonly NarrationIntervalMs = 8000;
+    private static readonly NarrationIntervalMs = 8000;  // case-violation-ok-legacy-back-compat: the camelCase name is already declared in this class
     /** Max progress messages aggregated into one spoken digest. */
-    private static readonly MaxDigestMessages = 4;
+    private static readonly maxDigestMessages = 4;
     /**
      * Progress steps worth narrating — mirrors the client-direct resolver's filter so both
      * topologies narrate the same signal and drop the same initialization/finalization noise.
      */
-    private static readonly SignificantProgressSteps = [
+    private static readonly significantProgressSteps = [
         'prompt_execution', 'action_execution', 'subagent_execution', 'decision_processing'
     ];
 
@@ -366,6 +368,8 @@ export class RealtimeSessionRunner {
      * {@link RealtimeSessionRunnerDeps.ServerChannelTools} (the server-side interactive channels'
      * dynamic vocabulary). This is the full set the provider sees — everything target-specific runs
      * *inside* the delegated agent's own run and is never registered on the realtime socket.
+     * Note: telephony, media, and room sessions run via RealtimeSessionRunner currently do not
+     * project direct actions.
      *
      * @returns The ordered tool definitions to register.
      */
@@ -383,9 +387,7 @@ export class RealtimeSessionRunner {
 
         const invokeTargetTool: RealtimeToolDefinition = {
             Name: INVOKE_TARGET_AGENT_TOOL_NAME,
-            Description:
-                'Invoke the target agent to perform real work (seconds to minutes). Use this whenever ' +
-                'actual work is needed beyond conversation; narrate while it runs.',
+            Description: INVOKE_TARGET_AGENT_DESCRIPTION,
             ParametersSchema: invokeTargetSchema
         };
 
@@ -442,7 +444,7 @@ export class RealtimeSessionRunner {
         }
 
         this.deps.LogStatus?.(
-            `🎙️ Realtime session started with ${tools.length} tool(s) (target-independent set).`,
+            `🎙️ Realtime session started with ${tools.length} tool(s).`,
             true
         );
     }
@@ -591,7 +593,7 @@ export class RealtimeSessionRunner {
         if (!flush) {
             return;
         }
-        const timeoutMs = this.deps.TranscriptFlushTimeoutMs ?? RealtimeSessionRunner.DefaultTranscriptFlushTimeoutMs;
+        const timeoutMs = this.deps.TranscriptFlushTimeoutMs ?? RealtimeSessionRunner.defaultTranscriptFlushTimeoutMs;
         let timer: ReturnType<typeof setTimeout> | null = null;
         try {
             await Promise.race([
@@ -843,7 +845,7 @@ export class RealtimeSessionRunner {
      *    `RequestSpokenUpdate` contract, so the runner does not gate on busy state.
      */
     private handleDelegationProgress(progress: { step: string; message: string }): void {
-        if (!RealtimeSessionRunner.SignificantProgressSteps.includes(progress.step)) {
+        if (!RealtimeSessionRunner.significantProgressSteps.includes(progress.step)) {
             return;
         }
         const session = this.session;
@@ -866,7 +868,7 @@ export class RealtimeSessionRunner {
             return;
         }
         this.pendingNarrationMessages.push(message);
-        if (this.pendingNarrationMessages.length > RealtimeSessionRunner.MaxDigestMessages) {
+        if (this.pendingNarrationMessages.length > RealtimeSessionRunner.maxDigestMessages) {
             this.pendingNarrationMessages.shift();
         }
     }
@@ -879,7 +881,7 @@ export class RealtimeSessionRunner {
     private nextNarrationDelayMs(): number {
         const now = Date.now();
         const firstAnchor = this.narrationCount === 0
-            ? this.narrationBurstStartedAt + RealtimeSessionRunner.FirstNarrationDelayMs
+            ? this.narrationBurstStartedAt + RealtimeSessionRunner.firstNarrationDelayMs
             : 0;
         const spacingFloor = this.lastNarrationAt > 0
             ? this.lastNarrationAt + this.narrationIntervalMs()

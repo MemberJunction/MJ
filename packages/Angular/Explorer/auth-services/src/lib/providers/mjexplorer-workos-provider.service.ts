@@ -71,7 +71,7 @@ export class MJWorkOSProvider extends MJAuthBase implements OnDestroy {
    * Factory function to provide the Angular dependencies required by WorkOS.
    * Stored as a static property so the factory can read it without instantiation.
    */
-  static angularProviderFactory = (environment: Record<string, unknown>) => [
+  static AngularProviderFactory = (environment: Record<string, unknown>) => [
     {
       provide: 'workosConfig',
       useValue: {
@@ -82,6 +82,15 @@ export class MJWorkOSProvider extends MJAuthBase implements OnDestroy {
       } satisfies WorkOSAuthConfig
     }
   ];
+
+  /** @deprecated Use {@link AngularProviderFactory}. */
+  static get angularProviderFactory() {
+    return this.AngularProviderFactory;
+  }
+  /** @deprecated Use {@link AngularProviderFactory}. */
+  static set angularProviderFactory(value) {
+    this.AngularProviderFactory = value;
+  }
 
   constructor(@Inject('workosConfig') private workosConfig: WorkOSAuthConfig) {
     const config: AngularAuthProviderConfig = {

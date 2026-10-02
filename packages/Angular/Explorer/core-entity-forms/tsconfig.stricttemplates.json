@@ -1,0 +1,31 @@
+{
+  // Verification-only config. `tsconfig.json` sets `strictTemplates: false` so the
+  // generated forms do not blow TypeScript's expression-complexity limit (TS2563) —
+  // which also means Angular does not type-check ANY template expression in this
+  // package, including the hand-written custom forms and panels. A member renamed on
+  // a component's own interface then compiles clean while its template still reads
+  // the old name, and every read is `undefined` at runtime.
+  //
+  // Run this after renaming any interface member used by a template here:
+  //
+  //     npx ngc -p tsconfig.stricttemplates.json
+  //
+  // Emits to a throwaway outDir; it is a check, not part of `build`. Errors under
+  // `src/lib/custom/Files` and `src/lib/custom/Conversations` are pre-existing and
+  // unrelated (missing entity fields, literal-union mismatches).
+  "extends": "../../../../tsconfig.angular.json",
+  "compilerOptions": {
+    "outDir": "./dist-stricttmpl",
+    "useDefineForClassFields": false,
+    "baseUrl": ".",
+    "paths": {
+      "@memberjunction/ng-hierarchy-tree": ["../../Generic/hierarchy-tree/dist/public-api.d.ts"],
+      "@memberjunction/ng-hierarchy-tree/*": ["../../Generic/hierarchy-tree/dist/*"]
+    }
+  },
+  "angularCompilerOptions": {
+    "strictTemplates": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/EXAMPLE-*.ts", "src/**/*.example.ts", "src/**/*.test.ts", "src/**/*.spec.ts", "src/__tests__/**"]
+}

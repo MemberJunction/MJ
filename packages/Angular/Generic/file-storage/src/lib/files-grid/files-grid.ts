@@ -75,9 +75,27 @@ const FileDownloadQuerySchema = z.object({
   styleUrls: ['./files-grid.css'],
 })
 export class FilesGridComponent extends BaseAngularComponent implements OnInit, OnChanges {
-  public files: MJFileEntity[] = [];
+  public Files: MJFileEntity[] = [];
+
+  /** @deprecated Use {@link Files}. */
+  public get files(): MJFileEntity[] {
+    return this.Files;
+  }
+  /** @deprecated Use {@link Files}. */
+  public set files(value: MJFileEntity[]) {
+    this.Files = value;
+  }
   public isLoading: boolean = false;
-  public editFile: MJFileEntity | undefined;
+  public EditFile: MJFileEntity | undefined;
+
+  /** @deprecated Use {@link EditFile}. */
+  public get editFile(): MJFileEntity | undefined {
+    return this.EditFile;
+  }
+  /** @deprecated Use {@link EditFile}. */
+  public set editFile(value: MJFileEntity | undefined) {
+    this.EditFile = value;
+  }
 
   // AG Grid configuration
   // Themed from the shared --mj-* token params so this grid follows light/dark and
@@ -119,9 +137,14 @@ export class FilesGridComponent extends BaseAngularComponent implements OnInit, 
    *
    * @returns void
    */
+  public ResetEditFile() {
+    this.EditFile?.Revert();
+    this.EditFile = undefined;
+  }
+
+  /** @deprecated Use {@link ResetEditFile}. */
   public resetEditFile() {
-    this.editFile?.Revert();
-    this.editFile = undefined;
+    return this.ResetEditFile();
   }
 
   /**
@@ -132,23 +155,28 @@ export class FilesGridComponent extends BaseAngularComponent implements OnInit, 
    * @returns Promise<void> - A promise that resolves when the save operation is complete.
    * @throws Error - If there is an error during the save operation.
    */
-  public async saveEditFile() {
-    if (this.editFile) {
+  public async SaveEditFile() {
+    if (this.EditFile) {
       this.isLoading = true;
       //
-      const success = await this.editFile.Save();
+      const success = await this.EditFile.Save();
       if (success) {
-        this.notifications.CreateSimpleNotification(`Successfully saved file ${this.editFile.ID} ${this.editFile.Name}`, 'success');
-        this.editFile = undefined;
+        this.notifications.CreateSimpleNotification(`Successfully saved file ${this.EditFile.ID} ${this.EditFile.Name}`, 'success');
+        this.EditFile = undefined;
         // Refresh the grid to show the updated data
         if (this.gridApi) {
-          this.gridApi.setGridOption('rowData', this.files);
+          this.gridApi.setGridOption('rowData', this.Files);
         }
       } else {
-        this.notifications.CreateSimpleNotification(`Unable to save file ${this.editFile.ID} ${this.editFile.Name}`, 'error');
+        this.notifications.CreateSimpleNotification(`Unable to save file ${this.EditFile.ID} ${this.EditFile.Name}`, 'error');
       }
       this.isLoading = false;
     }
+  }
+
+  /** @deprecated Use {@link SaveEditFile}. */
+  public async saveEditFile() {
+    return this.SaveEditFile();
   }
 
   /**
@@ -158,7 +186,7 @@ export class FilesGridComponent extends BaseAngularComponent implements OnInit, 
    * @returns Promise<void> - A promise that resolves when the file download is complete.
    * @throws Error - If there is an error during the file download process.
    */
-  public downloadFile = async (file: MJFileEntity) => {
+  public DownloadFile = async (file: MJFileEntity) => {
     this.isLoading = true;
     const result = await GraphQLDataProvider.ExecuteGQL(FileDownloadQuery, {
       FileID: file.ID,
@@ -178,16 +206,30 @@ export class FilesGridComponent extends BaseAngularComponent implements OnInit, 
     this.isLoading = false;
   };
 
+  /** @deprecated Use {@link DownloadFile}. */
+  public get downloadFile() {
+    return this.DownloadFile;
+  }
+  /** @deprecated Use {@link DownloadFile}. */
+  public set downloadFile(value) {
+    this.DownloadFile = value;
+  }
+
   /**
    * Determines whether a file can be deleted based on its status and creation time.
    *
    * @param file - The MJFileEntity representing the file to be checked.
    * @returns boolean - True if the file can be deleted, false otherwise.
    */
-  public canBeDeleted(file: MJFileEntity): boolean {
+  public CanBeDeleted(file: MJFileEntity): boolean {
     const status = file.Status;
     const deletable = status === 'Uploaded' || Date.now() - +file.__mj_CreatedAt > 10 * 60 * 60;
     return deletable;
+  }
+
+  /** @deprecated Use {@link CanBeDeleted}. */
+  public canBeDeleted(file: MJFileEntity): boolean {
+    return this.CanBeDeleted(file);
   }
 
   /**
@@ -197,19 +239,28 @@ export class FilesGridComponent extends BaseAngularComponent implements OnInit, 
    * @returns Promise<void> - A promise that resolves when the file deletion is complete.
    * @throws Error - If there is an error during the file deletion process.
    */
-  public deleteFile = async (file: MJFileEntity) => {
+  public DeleteFile = async (file: MJFileEntity) => {
     this.isLoading = true;
     const ID = file.ID;
     const Name = file.Name;
     const deleteResult = await file.Delete();
     if (deleteResult) {
       this.notifications.CreateSimpleNotification(`Successfully deleted file ${ID} ${Name}`, 'info');
-      this.files = this.files.filter((f) => typeof f.ID === 'string' && f.ID !== ID);
+      this.Files = this.Files.filter((f) => typeof f.ID === 'string' && f.ID !== ID);
     } else {
       this.notifications.CreateSimpleNotification(`Unable to delete file ${ID} ${Name}`, 'error');
     }
     this.isLoading = false;
   };
+
+  /** @deprecated Use {@link DeleteFile}. */
+  public get deleteFile() {
+    return this.DeleteFile;
+  }
+  /** @deprecated Use {@link DeleteFile}. */
+  public set deleteFile(value) {
+    this.DeleteFile = value;
+  }
 
   /**
    * Handles the file upload event, sending a notification in case of failure and otherwise adding
@@ -217,15 +268,20 @@ export class FilesGridComponent extends BaseAngularComponent implements OnInit, 
    *
    * @param e - The file upload event.
    */
-  public handleFileUpload(e: FileUploadEvent) {
+  public HandleFileUpload(e: FileUploadEvent) {
     if (!e.success) {
       this.notifications.CreateSimpleNotification(`Unable to upload file '${e.file.name}'`, 'error');
       return;
     }
 
-    this.files.push(e.file);
-    this.files = [...this.files]; // trigger AG Grid row data change
+    this.Files.push(e.file);
+    this.Files = [...this.Files]; // trigger AG Grid row data change
     this.isLoading = false;
+  }
+
+  /** @deprecated Use {@link HandleFileUpload}. */
+  public handleFileUpload(e: FileUploadEvent) {
+    return this.HandleFileUpload(e);
   }
 
   /**
@@ -242,7 +298,7 @@ export class FilesGridComponent extends BaseAngularComponent implements OnInit, 
       ...(this.CategoryID !== undefined && { ExtraFilter: `CategoryID='${this.CategoryID}'` }),
     });
     if (result.Success) {
-      this.files = <MJFileEntity[]>result.Results ?? [];
+      this.Files = <MJFileEntity[]>result.Results ?? [];
     } else {
       throw new Error('Error loading files: ' + result.ErrorMessage);
     }
@@ -269,13 +325,13 @@ export class FilesGridComponent extends BaseAngularComponent implements OnInit, 
           container.className = 'action-buttons';
 
           const downloadBtn = this.createActionButton('fa-download', params.data?.Status !== 'Uploaded');
-          downloadBtn.addEventListener('click', () => this.downloadFile(params.data));
+          downloadBtn.addEventListener('click', () => this.DownloadFile(params.data));
 
-          const deleteBtn = this.createActionButton('fa-trash-can', !this.canBeDeleted(params.data));
-          deleteBtn.addEventListener('click', () => this.deleteFile(params.data));
+          const deleteBtn = this.createActionButton('fa-trash-can', !this.CanBeDeleted(params.data));
+          deleteBtn.addEventListener('click', () => this.DeleteFile(params.data));
 
           const editBtn = this.createActionButton('fa-pen-to-square', params.data?.Status !== 'Uploaded');
-          editBtn.addEventListener('click', () => { this.editFile = params.data; });
+          editBtn.addEventListener('click', () => { this.EditFile = params.data; });
 
           container.appendChild(downloadBtn);
           container.appendChild(deleteBtn);

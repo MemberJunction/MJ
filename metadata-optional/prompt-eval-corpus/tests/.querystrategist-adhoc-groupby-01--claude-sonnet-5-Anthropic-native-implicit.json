@@ -1,0 +1,86 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "querystrategist-adhoc-groupby-01 [claude-sonnet-5 · Anthropic · native-implicit]",
+    "Description": "Schema already known from the prior turn. The SQL must aggregate, not select rows — a param-fidelity case where the action name alone proves nothing.",
+    "InputDefinition": {
+      "payload": {
+        "schema": {
+          "entity": "MJ: AI Prompt Runs",
+          "view": "[__mj].vwAIPromptRuns"
+        }
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "How many prompt runs happened per day over the last week?"
+        },
+        {
+          "role": "user",
+          "content": "[Action Result] Get Entity Details succeeded. 'MJ: AI Prompt Runs' → [__mj].vwAIPromptRuns; columns ID, PromptID, RunAt, Success."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "querystrategist-adhoc-groupby-01",
+      "expect": {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Run Ad-hoc Query",
+            "params": {
+              "Query": {
+                "matcher": "regex",
+                "pattern": "SELECT[\\s\\S]+FROM[\\s\\S]+GROUP\\s+BY",
+                "flags": "i"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Query Strategist",
+      "modelId": "31280CE6-5EFC-4407-BEFB-339322D0CC2E",
+      "vendorId": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "native",
+      "nativeControlFlow": "implicit",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Run Ad-hoc Query",
+                "params": {
+                  "Query": {
+                    "matcher": "regex",
+                    "pattern": "SELECT[\\s\\S]+FROM[\\s\\S]+GROUP\\s+BY",
+                    "flags": "i"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "02202D03-5CA6-4DD4-AC5D-A6DEDF5EA6E0"
+  }
+}

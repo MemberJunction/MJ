@@ -63,7 +63,8 @@ vi.mock('@memberjunction/skyway-sqlserver', () => ({
 // it — the mock removes the database, not the code path.
 vi.mock('../install/open-app-metadata-refresh.js', async (importOriginal) => ({
     ...(await importOriginal<typeof import('../install/open-app-metadata-refresh.js')>()),
-    executeOpenAppMetadataRefresh: vi.fn(async (): Promise<void> => undefined),
+    ExecuteOpenAppMetadataRefresh: vi.fn(async (): Promise<void> => undefined),
+    get executeOpenAppMetadataRefresh() { return this.ExecuteOpenAppMetadataRefresh; },
 }));
 
 import { BuildSkywayConfig, RunAppMigrations, type SkywayDatabaseConfig } from '../install/migration-runner.js';

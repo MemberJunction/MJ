@@ -20,6 +20,8 @@
     [EnableEntityMentions]="enableEntityMentions"
     [EnableSkillCommands]="enableSkillCommands"
     [TargetAgentId]="pickerTargetAgentId"
+    [AllowedAgentIDs]="AllowedAgentIDs"
+    [MentionPeople]="MentionPeople"
     [enableAttachments]="enableAttachments"
     [maxAttachments]="maxAttachments"
     [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
@@ -59,7 +61,8 @@
     (backdropClick)="onRealtimeAgentPickerCancelled()"
     (detach)="onRealtimeAgentPickerCancelled()">
     <mj-realtime-agent-picker
-      [Provider]="Provider"
+      [Provider]="ProviderToUse"
+      [CurrentUser]="currentUser"
       [Agents]="voicePickerAgents"
       [DefaultAgentId]="voicePickerDefaultAgentId"
       [CoAgents]="voicePickerCoAgents"

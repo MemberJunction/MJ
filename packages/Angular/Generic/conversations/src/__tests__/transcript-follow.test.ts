@@ -293,7 +293,7 @@ describe('scrollTurnToTop — where the finished turn lands', () => {
     const scroll = seedPane(component, { clientHeight: 369, scrollTop: 900, scrollHeight: 1200, turnStartTop: 914 });
     const open = component as unknown as Open;
     const scrollToBottomNow = vi.fn();
-    open['scrollToBottomNow'] = scrollToBottomNow;
+    open['ScrollToBottomNow'] = scrollToBottomNow;
     land(component);
     expect(scroll).not.toHaveBeenCalled();
     expect(scrollToBottomNow).toHaveBeenCalled();
@@ -318,7 +318,7 @@ describe('scrollTurnToTop — where the finished turn lands', () => {
       stickyHeader: { offsetHeight: 28, cssTop: '12px', offsetTop: 5012 }
     });
     const scrollToBottomNow = vi.fn();
-    (component as unknown as Open)['scrollToBottomNow'] = scrollToBottomNow;
+    (component as unknown as Open)['ScrollToBottomNow'] = scrollToBottomNow;
     land(component);
     expect(scroll).not.toHaveBeenCalled();
     expect(scrollToBottomNow).toHaveBeenCalled();

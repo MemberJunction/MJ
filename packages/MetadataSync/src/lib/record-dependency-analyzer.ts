@@ -1,6 +1,6 @@
 import { Metadata, EntityInfo } from '@memberjunction/core';
 import { RecordData } from './sync-engine';
-import { METADATA_KEYWORDS, isNonKeywordAtSymbol } from '../constants/metadata-keywords';
+import { METADATA_KEYWORDS, IsNonKeywordAtSymbol } from '../constants/metadata-keywords';
 
 /**
  * Represents a flattened record with its context and dependencies
@@ -52,7 +52,7 @@ export interface DependencyAnalysisResult {
  * Analyzes and sorts records based on their dependencies
  */
 /** Group flattened rows by JSON-root graph for provider affinity. */
-export function groupRecordsByGraphId(records: FlattenedRecord[]): Map<string, FlattenedRecord[]> {
+export function GroupRecordsByGraphId(records: FlattenedRecord[]): Map<string, FlattenedRecord[]> {
   const map = new Map<string, FlattenedRecord[]>();
   for (const rec of records) {
     const gid = rec.graphId;
@@ -61,6 +61,11 @@ export function groupRecordsByGraphId(records: FlattenedRecord[]): Map<string, F
     else map.set(gid, [rec]);
   }
   return map;
+}
+
+/** @deprecated Use {@link GroupRecordsByGraphId}. */
+export function groupRecordsByGraphId(records: FlattenedRecord[]): Map<string, FlattenedRecord[]> {
+  return GroupRecordsByGraphId(records);
 }
 
 export class RecordDependencyAnalyzer {
@@ -88,7 +93,7 @@ export class RecordDependencyAnalyzer {
    * @param entityName The root entity name for these records
    * @returns Flattened records (dependencies not yet resolved)
    */
-  public flattenFileRecords(
+  public FlattenFileRecords(
     records: RecordData[],
     entityName: string
   ): FlattenedRecord[] {
@@ -102,6 +107,14 @@ export class RecordDependencyAnalyzer {
     return this.flattenedRecords.slice(startIndex);
   }
 
+  /** @deprecated Use {@link FlattenFileRecords}. */
+  public flattenFileRecords(
+    records: RecordData[],
+    entityName: string
+  ): FlattenedRecord[] {
+    return this.FlattenFileRecords(records, entityName);
+  }
+
   /**
    * Phase 2: Analyze dependencies across all collected records globally.
    *
@@ -112,7 +125,7 @@ export class RecordDependencyAnalyzer {
    * @param allRecords All flattened records from all metadata files
    * @returns Analysis result with sorted records, circular dependencies, etc.
    */
-  public analyzeAllDependencies(
+  public AnalyzeAllDependencies(
     allRecords: FlattenedRecord[]
   ): DependencyAnalysisResult {
     // Set up state from the provided records
@@ -148,13 +161,25 @@ export class RecordDependencyAnalyzer {
     };
   }
 
+  /** @deprecated Use {@link AnalyzeAllDependencies}. */
+  public analyzeAllDependencies(
+    allRecords: FlattenedRecord[]
+  ): DependencyAnalysisResult {
+    return this.AnalyzeAllDependencies(allRecords);
+  }
+
   /**
    * Resets the analyzer state. Call this before starting a new batch of files.
    */
-  public reset(): void {
+  public Reset(): void {
     this.flattenedRecords = [];
     this.recordIdMap.clear();
     this.recordCounter = 0;
+  }
+
+  /** @deprecated Use {@link Reset}. */
+  public reset(): void {
+    return this.Reset();
   }
 
   /**
@@ -173,7 +198,7 @@ export class RecordDependencyAnalyzer {
     entityName: string
   ): Promise<DependencyAnalysisResult> {
     // Reset state for single-file analysis (backward compatible behavior)
-    this.reset();
+    this.Reset();
 
     // Flatten records
     this.flattenRecords(records, entityName);
@@ -723,7 +748,7 @@ export class RecordDependencyAnalyzer {
    * This is essential for deletion ordering - we need to know what depends on a record
    * before we can safely delete it.
    */
-  public buildReverseDependencyMap(
+  public BuildReverseDependencyMap(
     records: FlattenedRecord[]
   ): Map<string, ReverseDependency[]> {
     const reverseMap = new Map<string, ReverseDependency[]>();
@@ -753,6 +778,13 @@ export class RecordDependencyAnalyzer {
     }
 
     return reverseMap;
+  }
+
+  /** @deprecated Use {@link BuildReverseDependencyMap}. */
+  public buildReverseDependencyMap(
+    records: FlattenedRecord[]
+  ): Map<string, ReverseDependency[]> {
+    return this.BuildReverseDependencyMap(records);
   }
 
   /**
@@ -812,7 +844,7 @@ export class RecordDependencyAnalyzer {
    *
    * This is simply the reverse of the forward topological sort used for creates.
    */
-  public reverseTopologicalSort(
+  public ReverseTopologicalSort(
     records: FlattenedRecord[],
     reverseDependencies: Map<string, ReverseDependency[]>
   ): FlattenedRecord[][] {
@@ -853,6 +885,14 @@ export class RecordDependencyAnalyzer {
     return forwardLevels.reverse();
   }
 
+  /** @deprecated Use {@link ReverseTopologicalSort}. */
+  public reverseTopologicalSort(
+    records: FlattenedRecord[],
+    reverseDependencies: Map<string, ReverseDependency[]>
+  ): FlattenedRecord[][] {
+    return this.ReverseTopologicalSort(records, reverseDependencies);
+  }
+
   /**
    * Find all transitive dependents of a set of records
    * This is useful for finding all records that must be deleted when deleting a parent
@@ -861,7 +901,7 @@ export class RecordDependencyAnalyzer {
    * @param reverseDependencies Reverse dependency map
    * @returns Set of all record IDs that depend on the input records (transitively)
    */
-  public findTransitiveDependents(
+  public FindTransitiveDependents(
     recordIds: Set<string>,
     reverseDependencies: Map<string, ReverseDependency[]>
   ): Set<string> {
@@ -888,5 +928,13 @@ export class RecordDependencyAnalyzer {
     }
 
     return dependents;
+  }
+
+  /** @deprecated Use {@link FindTransitiveDependents}. */
+  public findTransitiveDependents(
+    recordIds: Set<string>,
+    reverseDependencies: Map<string, ReverseDependency[]>
+  ): Set<string> {
+    return this.FindTransitiveDependents(recordIds, reverseDependencies);
   }
 }

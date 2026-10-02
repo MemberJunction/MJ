@@ -1,0 +1,39 @@
+{
+  "id": "dbresearch-no-relookup-02",
+  "agent": "Database Research Agent",
+  "description": "Same state as -01, expressed as a prohibition: re-fetching entity details it already has is the wasted-iteration failure.",
+  "tags": [
+    "mid-loop-action",
+    "regression-watch"
+  ],
+  "input": {
+    "payload": {
+      "databaseResearch": {
+        "entitiesFound": [
+          "MJ: AI Agents"
+        ]
+      }
+    },
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "How many AI agents are active, grouped by type?"
+      },
+      {
+        "role": "user",
+        "content": "[Action Result] Get Entity Details succeeded. Entity 'MJ: AI Agents' base view [__mj].vwAIAgents."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "action",
+    "actions": [
+      {
+        "name": "Run Ad-hoc Query"
+      }
+    ],
+    "forbiddenActions": [
+      "Get Entity Details"
+    ]
+  }
+}
