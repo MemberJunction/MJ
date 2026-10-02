@@ -8,6 +8,9 @@ MemberJunction driver for any server that speaks TypeSafe's System One decisions
 | **llama.cpp's `llama-server`** | `llama-server -hf ggml-org/Kev-4B-GGUF` (other sizes exist), on any machine, cloud VM or Hugging Face Inference Endpoint | Open by default; a bearer token with `--api-key` |
 | **TypeSafe's own API** | Hosted by TypeSafe | A bearer token |
 
+With `llama-server`, pass `--alias <name>` (for example `--alias kev-4b`), so runs record that name as the resolved model rather than the server's GGUF file path.
+As of 2026-10-02 no llama.cpp release includes `/v1/systemone` (release b11349 predates the merge), so build `llama-server` from source until one does.
+
 The models it serves in MJ's catalog are Jared Palmer's open-weight Kev 1.0 decision models: `Kev-0.8B`, `Kev-4B`, `Kev-9B` and `Kev-27B`, each with a row on the `System One Endpoint` vendor. `Kev-4B` is also on OpenRouter, through `OpenRouterDecision` in `@memberjunction/ai-openrouter`; that row has the higher priority, so a host with an OpenRouter key uses it first.
 
 ## Architecture
