@@ -3,7 +3,7 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { TabConfig } from '@memberjunction/ng-ui-components';
 import { DevToolsPrefs } from './dev-tools-prefs';
-import { buildAppStateInspectorAgentContext } from './dev-tools-agent-context';
+import { BuildAppStateInspectorAgentContext } from './dev-tools-agent-context';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { WorkspaceStateManager } from '@memberjunction/ng-base-application';
 import { DeveloperModeService } from '@memberjunction/ng-shared';
@@ -58,7 +58,7 @@ export class AppStateInspectorComponent extends BaseResourceComponent implements
         if (p?.activeSection && this.Sections.some(s => s.id === p.activeSection)) {
             this.ActiveSection = p.activeSection;
         }
-        this.refresh();
+        this.Refresh();
         this.NotifyLoadComplete();
     }
 
@@ -77,7 +77,7 @@ export class AppStateInspectorComponent extends BaseResourceComponent implements
     public override async GetResourceIconClass(): Promise<string> { return 'fa-solid fa-magnifying-glass-chart'; }
 
     /** Sections rendered as horizontal tabs in the chrome's [toolbar] slot. */
-    public get tabsConfig(): TabConfig[] {
+    public get TabsConfig(): TabConfig[] {
         return this.Sections.map(s => ({
             key: s.id,
             label: s.label,
@@ -85,26 +85,41 @@ export class AppStateInspectorComponent extends BaseResourceComponent implements
         }));
     }
 
+    /** @deprecated Use {@link TabsConfig}. */
+    public get tabsConfig(): TabConfig[] {
+        return this.TabsConfig;
+    }
+
     /** Adapter for `<mj-tab-nav>`'s string-typed `(TabChange)` output. */
-    public onTabChange(key: string): void {
+    public OnTabChange(key: string): void {
         const section = this.Sections.find(s => s.id === key);
         if (section) {
             this.OnSectionClick(section);
         }
     }
 
+    /** @deprecated Use {@link OnTabChange}. */
+    public onTabChange(key: string): void {
+        return this.OnTabChange(key);
+    }
+
     public OnSectionClick(section: InspectorSection): void {
         if (this.ActiveSection === section.id) return;
         this.ActiveSection = section.id;
         DevToolsPrefs.Save('appStateInspector', { activeSection: this.ActiveSection });
-        this.refresh();
+        this.Refresh();
     }
 
-    public refresh(): void {
+    public Refresh(): void {
         this.StateJson = JSON.stringify(this.computeSectionData(this.ActiveSection), this.jsonReplacer, 2);
         this.LastRefreshed = new Date();
         this.cdr.markForCheck();
         this.publishAgentContext();
+    }
+
+    /** @deprecated Use {@link Refresh}. */
+    public refresh(): void {
+        return this.Refresh();
     }
 
     public async OnCopy(): Promise<void> {
@@ -268,7 +283,7 @@ export class AppStateInspectorComponent extends BaseResourceComponent implements
      * "Email"/"Roles" — never their values). See SAFETY BOUNDARY above.
      */
     private publishAgentContext(): void {
-        const context = buildAppStateInspectorAgentContext({
+        const context = BuildAppStateInspectorAgentContext({
             StateSize: this.StateJson.length,
             KeyCount: this.activeSectionKeys().length,
             ActiveSection: this.ActiveSection,

@@ -39,7 +39,7 @@ export type {
     SkippedDynamicPackage,
     WorkspaceHome,
 } from './types.js';
-export { importFromHost, isResolutionFailure, resolvePackageJsonFromHost } from './host-import.js';
+export { ImportFromHost, importFromHost, IsResolutionFailure, isResolutionFailure, ResolvePackageJsonFromHost, resolvePackageJsonFromHost } from './host-import.js';
 export {
     ANY_PROCESS,
     CliProcessId,
@@ -66,7 +66,7 @@ export {
     ConsoleDynamicPackagesLogger,
     DiscoverMJConfig,
     LoadDynamicPackages,
-    mergeCandidates,
+    MergeCandidates, mergeCandidates,
     ResetLoadedDynamicPackages,
     SilentDynamicPackagesLogger,
     StderrDynamicPackagesLogger,

@@ -45,47 +45,272 @@ interface FieldDifference {
   styleUrls: ['./prompt-version-control.component.css']
 })
 export class PromptVersionControlComponent extends BaseAngularComponent implements OnInit, OnDestroy {
-  @Input() prompt: MJAIPromptEntityExtended | null = null;
-  @Input() autoLoad = true;
-  @Input() showRestoreActions = true;
-  @Input() showComparison = true;
-  @Input() maxVersions = 50;
+  @Input() Prompt: MJAIPromptEntityExtended | null = null;
+
+  /** @deprecated Use {@link Prompt}. */
+  @Input() set prompt(value: MJAIPromptEntityExtended | null) {
+    this.Prompt = value;
+  }
+  /** @deprecated Use {@link Prompt}. */
+  get prompt(): MJAIPromptEntityExtended | null {
+    return this.Prompt;
+  }
+  @Input() AutoLoad = true;
+
+  /** @deprecated Use {@link AutoLoad}. */
+  @Input() set autoLoad(value: PromptVersionControlComponent['AutoLoad']) {
+    this.AutoLoad = value;
+  }
+  /** @deprecated Use {@link AutoLoad}. */
+  get autoLoad(): PromptVersionControlComponent['AutoLoad'] {
+    return this.AutoLoad;
+  }
+  @Input() ShowRestoreActions = true;
+
+  /** @deprecated Use {@link ShowRestoreActions}. */
+  @Input() set showRestoreActions(value: PromptVersionControlComponent['ShowRestoreActions']) {
+    this.ShowRestoreActions = value;
+  }
+  /** @deprecated Use {@link ShowRestoreActions}. */
+  get showRestoreActions(): PromptVersionControlComponent['ShowRestoreActions'] {
+    return this.ShowRestoreActions;
+  }
+  @Input() ShowComparison = true;
+
+  /** @deprecated Use {@link ShowComparison}. */
+  @Input() set showComparison(value: PromptVersionControlComponent['ShowComparison']) {
+    this.ShowComparison = value;
+  }
+  /** @deprecated Use {@link ShowComparison}. */
+  get showComparison(): PromptVersionControlComponent['ShowComparison'] {
+    return this.ShowComparison;
+  }
+  @Input() MaxVersions = 50;
+
+  /** @deprecated Use {@link MaxVersions}. */
+  @Input() set maxVersions(value: PromptVersionControlComponent['MaxVersions']) {
+    this.MaxVersions = value;
+  }
+  /** @deprecated Use {@link MaxVersions}. */
+  get maxVersions(): PromptVersionControlComponent['MaxVersions'] {
+    return this.MaxVersions;
+  }
   
-  @Output() versionSelected = new EventEmitter<PromptVersion>();
-  @Output() versionRestored = new EventEmitter<MJAIPromptEntityExtended>();
-  @Output() versionCompared = new EventEmitter<VersionComparison>();
+  @Output() VersionSelected = new EventEmitter<PromptVersion>();
+
+  /**
+   * @deprecated Use {@link VersionSelected}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (versionSelected) keeps working. Must stay AFTER VersionSelected: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() versionSelected = this.VersionSelected;
+  @Output() VersionRestored = new EventEmitter<MJAIPromptEntityExtended>();
+
+  /**
+   * @deprecated Use {@link VersionRestored}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (versionRestored) keeps working. Must stay AFTER VersionRestored: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() versionRestored = this.VersionRestored;
+  @Output() VersionCompared = new EventEmitter<VersionComparison>();
+
+  /**
+   * @deprecated Use {@link VersionCompared}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (versionCompared) keeps working. Must stay AFTER VersionCompared: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() versionCompared = this.VersionCompared;
   
   // Data
-  public versions: PromptVersion[] = [];
-  public recordChanges: MJRecordChangeEntity[] = [];
-  public templateContents: Map<string, MJTemplateContentEntity> = new Map();
-  public availablePrompts: MJAIPromptEntityExtended[] = [];
-  public filteredAvailablePrompts: MJAIPromptEntityExtended[] = [];
+  public Versions: PromptVersion[] = [];
+
+  /** @deprecated Use {@link Versions}. */
+  public get versions(): PromptVersion[] {
+    return this.Versions;
+  }
+  /** @deprecated Use {@link Versions}. */
+  public set versions(value: PromptVersion[]) {
+    this.Versions = value;
+  }
+  public RecordChanges: MJRecordChangeEntity[] = [];
+
+  /** @deprecated Use {@link RecordChanges}. */
+  public get recordChanges(): MJRecordChangeEntity[] {
+    return this.RecordChanges;
+  }
+  /** @deprecated Use {@link RecordChanges}. */
+  public set recordChanges(value: MJRecordChangeEntity[]) {
+    this.RecordChanges = value;
+  }
+  public TemplateContents: Map<string, MJTemplateContentEntity> = new Map();
+
+  /** @deprecated Use {@link TemplateContents}. */
+  public get templateContents(): Map<string, MJTemplateContentEntity> {
+    return this.TemplateContents;
+  }
+  /** @deprecated Use {@link TemplateContents}. */
+  public set templateContents(value: Map<string, MJTemplateContentEntity>) {
+    this.TemplateContents = value;
+  }
+  public AvailablePrompts: MJAIPromptEntityExtended[] = [];
+
+  /** @deprecated Use {@link AvailablePrompts}. */
+  public get availablePrompts(): MJAIPromptEntityExtended[] {
+    return this.AvailablePrompts;
+  }
+  /** @deprecated Use {@link AvailablePrompts}. */
+  public set availablePrompts(value: MJAIPromptEntityExtended[]) {
+    this.AvailablePrompts = value;
+  }
+  public FilteredAvailablePrompts: MJAIPromptEntityExtended[] = [];
+
+  /** @deprecated Use {@link FilteredAvailablePrompts}. */
+  public get filteredAvailablePrompts(): MJAIPromptEntityExtended[] {
+    return this.FilteredAvailablePrompts;
+  }
+  /** @deprecated Use {@link FilteredAvailablePrompts}. */
+  public set filteredAvailablePrompts(value: MJAIPromptEntityExtended[]) {
+    this.FilteredAvailablePrompts = value;
+  }
   
   // UI State
   public isLoading = false;
-  public loadingMessage = '';
+  public LoadingMessage = '';
+
+  /** @deprecated Use {@link LoadingMessage}. */
+  public get loadingMessage() {
+    return this.LoadingMessage;
+  }
+  /** @deprecated Use {@link LoadingMessage}. */
+  public set loadingMessage(value) {
+    this.LoadingMessage = value;
+  }
   public error: string | null = null;
-  public currentView: 'timeline' | 'comparison' | 'details' = 'timeline';
-  public selectedVersion: PromptVersion | null = null;
-  public compareFromVersion: PromptVersion | null = null;
-  public compareToVersion: PromptVersion | null = null;
-  public comparisonResult: VersionComparison | null = null;
+  public CurrentView: 'timeline' | 'comparison' | 'details' = 'timeline';
+
+  /** @deprecated Use {@link CurrentView}. */
+  public get currentView(): 'timeline' | 'comparison' | 'details' {
+    return this.CurrentView;
+  }
+  /** @deprecated Use {@link CurrentView}. */
+  public set currentView(value: 'timeline' | 'comparison' | 'details') {
+    this.CurrentView = value;
+  }
+  public SelectedVersion: PromptVersion | null = null;
+
+  /** @deprecated Use {@link SelectedVersion}. */
+  public get selectedVersion(): PromptVersion | null {
+    return this.SelectedVersion;
+  }
+  /** @deprecated Use {@link SelectedVersion}. */
+  public set selectedVersion(value: PromptVersion | null) {
+    this.SelectedVersion = value;
+  }
+  public CompareFromVersion: PromptVersion | null = null;
+
+  /** @deprecated Use {@link CompareFromVersion}. */
+  public get compareFromVersion(): PromptVersion | null {
+    return this.CompareFromVersion;
+  }
+  /** @deprecated Use {@link CompareFromVersion}. */
+  public set compareFromVersion(value: PromptVersion | null) {
+    this.CompareFromVersion = value;
+  }
+  public CompareToVersion: PromptVersion | null = null;
+
+  /** @deprecated Use {@link CompareToVersion}. */
+  public get compareToVersion(): PromptVersion | null {
+    return this.CompareToVersion;
+  }
+  /** @deprecated Use {@link CompareToVersion}. */
+  public set compareToVersion(value: PromptVersion | null) {
+    this.CompareToVersion = value;
+  }
+  public ComparisonResult: VersionComparison | null = null;
+
+  /** @deprecated Use {@link ComparisonResult}. */
+  public get comparisonResult(): VersionComparison | null {
+    return this.ComparisonResult;
+  }
+  /** @deprecated Use {@link ComparisonResult}. */
+  public set comparisonResult(value: VersionComparison | null) {
+    this.ComparisonResult = value;
+  }
   
   // Filtering and sorting
-  public filterBy: 'all' | 'updates' | 'major' | 'template' = 'all';
-  public sortDirection: 'asc' | 'desc' = 'desc';
-  public searchTerm$ = new BehaviorSubject<string>('');
-  public promptSearchTerm$ = new BehaviorSubject<string>('');
-  public showSystemChanges = false;
+  public FilterBy: 'all' | 'updates' | 'major' | 'template' = 'all';
+
+  /** @deprecated Use {@link FilterBy}. */
+  public get filterBy(): 'all' | 'updates' | 'major' | 'template' {
+    return this.FilterBy;
+  }
+  /** @deprecated Use {@link FilterBy}. */
+  public set filterBy(value: 'all' | 'updates' | 'major' | 'template') {
+    this.FilterBy = value;
+  }
+  public SortDirection: 'asc' | 'desc' = 'desc';
+
+  /** @deprecated Use {@link SortDirection}. */
+  public get sortDirection(): 'asc' | 'desc' {
+    return this.SortDirection;
+  }
+  /** @deprecated Use {@link SortDirection}. */
+  public set sortDirection(value: 'asc' | 'desc') {
+    this.SortDirection = value;
+  }
+  public SearchTerm$ = new BehaviorSubject<string>('');
+
+  /** @deprecated Use {@link SearchTerm$}. */
+  public get searchTerm$() {
+    return this.SearchTerm$;
+  }
+  /** @deprecated Use {@link SearchTerm$}. */
+  public set searchTerm$(value) {
+    this.SearchTerm$ = value;
+  }
+  public PromptSearchTerm$ = new BehaviorSubject<string>('');
+
+  /** @deprecated Use {@link PromptSearchTerm$}. */
+  public get promptSearchTerm$() {
+    return this.PromptSearchTerm$;
+  }
+  /** @deprecated Use {@link PromptSearchTerm$}. */
+  public set promptSearchTerm$(value) {
+    this.PromptSearchTerm$ = value;
+  }
+  public ShowSystemChanges = false;
+
+  /** @deprecated Use {@link ShowSystemChanges}. */
+  public get showSystemChanges() {
+    return this.ShowSystemChanges;
+  }
+  /** @deprecated Use {@link ShowSystemChanges}. */
+  public set showSystemChanges(value) {
+    this.ShowSystemChanges = value;
+  }
   
   // Timeline configuration
-  public timelineConfig = {
+  public TimelineConfig = {
     showThumbnails: true,
     showDiffs: true,
     compactMode: false,
     groupByDate: true
   };
+
+  /** @deprecated Use {@link TimelineConfig}. */
+  public get timelineConfig() {
+    return this.TimelineConfig;
+  }
+  /** @deprecated Use {@link TimelineConfig}. */
+  public set timelineConfig(value) {
+    this.TimelineConfig = value;
+  }
   
   private destroy$ = new Subject<void>();
   
@@ -95,8 +320,8 @@ export class PromptVersionControlComponent extends BaseAngularComponent implemen
     this.loadAvailablePrompts();
     this.setupPromptFiltering();
     
-    if (this.autoLoad && this.prompt) {
-      this.loadVersionHistory();
+    if (this.AutoLoad && this.Prompt) {
+      this.LoadVersionHistory();
     }
   }
   
@@ -105,8 +330,8 @@ export class PromptVersionControlComponent extends BaseAngularComponent implemen
     this.destroy$.complete();
   }
   
-  public async loadVersionHistory(): Promise<void> {
-    if (!this.prompt) {
+  public async LoadVersionHistory(): Promise<void> {
+    if (!this.Prompt) {
       this.error = 'No prompt specified for version history';
       return;
     }
@@ -114,18 +339,18 @@ export class PromptVersionControlComponent extends BaseAngularComponent implemen
     try {
       this.isLoading = true;
       this.error = null;
-      this.loadingMessage = 'Loading version history...';
+      this.LoadingMessage = 'Loading version history...';
       
       const md = this.ProviderToUse;
-      const primaryKey = CompositeKey.FromID(this.prompt.ID); // first-pk-ok: this.prompt is a typed MJAIPromptEntityExtended — AI Prompts is a core entity keyed by ID
+      const primaryKey = CompositeKey.FromID(this.Prompt.ID); // first-pk-ok: this.prompt is a typed MJAIPromptEntityExtended — AI Prompts is a core entity keyed by ID
       
       // Get record changes using the new method (GetRecordChanges is on Metadata, not IMetadataProvider)
       const mdForChanges = md as unknown as Metadata;
-      this.recordChanges = await mdForChanges.GetRecordChanges<MJRecordChangeEntity>('MJ: AI Prompts', primaryKey);
+      this.RecordChanges = await mdForChanges.GetRecordChanges<MJRecordChangeEntity>('MJ: AI Prompts', primaryKey);
       
-      if (this.recordChanges.length === 0) {
-        this.versions = [];
-        LogStatus(`No version history found for prompt: ${this.prompt.Name}`);
+      if (this.RecordChanges.length === 0) {
+        this.Versions = [];
+        LogStatus(`No version history found for prompt: ${this.Prompt.Name}`);
         return;
       }
       
@@ -138,7 +363,7 @@ export class PromptVersionControlComponent extends BaseAngularComponent implemen
       // Apply current filters
       this.applyFilters();
       
-      LogStatus(`Loaded ${this.versions.length} versions for prompt: ${this.prompt.Name}`);
+      LogStatus(`Loaded ${this.Versions.length} versions for prompt: ${this.Prompt.Name}`);
       
     } catch (error) {
       this.error = 'Failed to load version history. Please try again.';
@@ -147,12 +372,17 @@ export class PromptVersionControlComponent extends BaseAngularComponent implemen
       this.isLoading = false;
     }
   }
+
+  /** @deprecated Use {@link LoadVersionHistory}. */
+  public async loadVersionHistory(): Promise<void> {
+    return this.LoadVersionHistory();
+  }
   
   private async loadTemplateContents(): Promise<void> {
     const templateIds = new Set<string>();
     
     // Extract template IDs from record changes
-    this.recordChanges.forEach(change => {
+    this.RecordChanges.forEach(change => {
       try {
         const fullRecord = JSON.parse(change.FullRecordJSON);
         if (fullRecord.TemplateID) {
@@ -176,7 +406,7 @@ export class PromptVersionControlComponent extends BaseAngularComponent implemen
     
     // Load template content entities
     if (templateIds.size > 0) {
-      this.loadingMessage = 'Loading template content history...';
+      this.LoadingMessage = 'Loading template content history...';
       
       // Note: We would need a way to get historical template content
       // For now, we'll get current template content and note this limitation
@@ -186,7 +416,7 @@ export class PromptVersionControlComponent extends BaseAngularComponent implemen
           const templateContent = await md.GetEntityObject<MJTemplateContentEntity>('MJ: Template Contents', md.CurrentUser);
           const loaded = await templateContent.Load(templateId);
           if (loaded) {
-            this.templateContents.set(templateId, templateContent);
+            this.TemplateContents.set(templateId, templateContent);
           }
         } catch (e) {
           // Template content might not exist anymore
@@ -197,13 +427,13 @@ export class PromptVersionControlComponent extends BaseAngularComponent implemen
   }
   
   private processRecordChanges(): void {
-    this.versions = this.recordChanges.map((change, index) => {
+    this.Versions = this.RecordChanges.map((change, index) => {
       let templateContent: MJTemplateContentEntity | undefined;
       
       try {
         const fullRecord = JSON.parse(change.FullRecordJSON);
         if (fullRecord.TemplateID) {
-          templateContent = this.templateContents.get(fullRecord.TemplateID);
+          templateContent = this.TemplateContents.get(fullRecord.TemplateID);
         }
       } catch (e) {
         // Ignore parsing errors
@@ -211,7 +441,7 @@ export class PromptVersionControlComponent extends BaseAngularComponent implemen
       
       const version: PromptVersion = {
         id: change.ID,
-        version: this.recordChanges.length - index, // Version number (newest = highest)
+        version: this.RecordChanges.length - index, // Version number (newest = highest)
         changedAt: new Date(change.ChangedAt),
         changedBy: change.User || 'Unknown',
         changeType: change.Type as 'Create' | 'Update' | 'Delete',
@@ -237,10 +467,10 @@ export class PromptVersionControlComponent extends BaseAngularComponent implemen
   }
   
   private applyFilters(): void {
-    let filtered = [...this.versions];
+    let filtered = [...this.Versions];
     
     // Apply filter by type
-    switch (this.filterBy) {
+    switch (this.FilterBy) {
       case 'updates':
         filtered = filtered.filter(v => v.changeType === 'Update');
         break;
@@ -253,12 +483,12 @@ export class PromptVersionControlComponent extends BaseAngularComponent implemen
     }
     
     // Apply system changes filter
-    if (!this.showSystemChanges) {
+    if (!this.ShowSystemChanges) {
       filtered = filtered.filter(v => v.changeSource !== 'External');
     }
     
     // Apply search term
-    const searchTerm = this.searchTerm$.value.toLowerCase();
+    const searchTerm = this.SearchTerm$.value.toLowerCase();
     if (searchTerm) {
       filtered = filtered.filter(v => 
         v.changesDescription.toLowerCase().includes(searchTerm) ||
@@ -269,10 +499,10 @@ export class PromptVersionControlComponent extends BaseAngularComponent implemen
     // Apply sorting
     filtered.sort((a, b) => {
       const comparison = a.changedAt.getTime() - b.changedAt.getTime();
-      return this.sortDirection === 'desc' ? -comparison : comparison;
+      return this.SortDirection === 'desc' ? -comparison : comparison;
     });
     
-    this.versions = filtered;
+    this.Versions = filtered;
   }
   
   private isMajorChange(version: PromptVersion): boolean {
@@ -287,33 +517,63 @@ export class PromptVersionControlComponent extends BaseAngularComponent implemen
     return !!version.changesJSON.TemplateID;
   }
   
+  public OnVersionSelect(version: PromptVersion): void {
+    this.SelectedVersion = version;
+    this.VersionSelected.emit(version);
+  }
+
+  /** @deprecated Use {@link OnVersionSelect}. */
   public onVersionSelect(version: PromptVersion): void {
-    this.selectedVersion = version;
-    this.versionSelected.emit(version);
+    return this.OnVersionSelect(version);
   }
   
+  public OnVersionRestore(version: PromptVersion): Promise<void> {
+    return this.RestoreVersion(version);
+  }
+
+  /** @deprecated Use {@link OnVersionRestore}. */
   public onVersionRestore(version: PromptVersion): Promise<void> {
-    return this.restoreVersion(version);
+    return this.OnVersionRestore(version);
   }
   
-  public getObjectKeys(obj: any): string[] {
+  public GetObjectKeys(obj: any): string[] {
     return Object.keys(obj || {});
   }
 
-  public getFieldDisplayNamePublic(fieldName: string): string {
+  /** @deprecated Use {@link GetObjectKeys}. */
+  public getObjectKeys(obj: any): string[] {
+    return this.GetObjectKeys(obj);
+  }
+
+  public GetFieldDisplayNamePublic(fieldName: string): string {
     return this.getFieldDisplayName(fieldName);
   }
 
-  public generateComparisonPublic(): void {
+  /** @deprecated Use {@link GetFieldDisplayNamePublic}. */
+  public getFieldDisplayNamePublic(fieldName: string): string {
+    return this.GetFieldDisplayNamePublic(fieldName);
+  }
+
+  public GenerateComparisonPublic(): void {
     this.generateComparison();
   }
 
-  public applyFiltersPublic(): void {
+  /** @deprecated Use {@link GenerateComparisonPublic}. */
+  public generateComparisonPublic(): void {
+    return this.GenerateComparisonPublic();
+  }
+
+  public ApplyFiltersPublic(): void {
     this.applyFilters();
   }
 
-  public async restoreVersion(version: PromptVersion): Promise<void> {
-    if (!version.canRestore || !this.prompt) {
+  /** @deprecated Use {@link ApplyFiltersPublic}. */
+  public applyFiltersPublic(): void {
+    return this.ApplyFiltersPublic();
+  }
+
+  public async RestoreVersion(version: PromptVersion): Promise<void> {
+    if (!version.canRestore || !this.Prompt) {
       this.notificationService.CreateSimpleNotification('Cannot restore this version', 'warning', 3000);
       return;
     }
@@ -323,11 +583,11 @@ export class PromptVersionControlComponent extends BaseAngularComponent implemen
     
     try {
       this.isLoading = true;
-      this.loadingMessage = 'Restoring version...';
+      this.LoadingMessage = 'Restoring version...';
       
       const md = this.ProviderToUse;
       const promptToRestore = await md.GetEntityObject<MJAIPromptEntityExtended>('MJ: AI Prompts', md.CurrentUser);
-      await promptToRestore.Load(this.prompt.ID);
+      await promptToRestore.Load(this.Prompt.ID);
       
       // Apply the historical data
       if (version.fullRecordJSON) {
@@ -344,10 +604,10 @@ export class PromptVersionControlComponent extends BaseAngularComponent implemen
         const saved = await promptToRestore.Save();
         if (saved) {
           this.notificationService.CreateSimpleNotification(`Version ${version.version} restored successfully`, 'success', 3000);
-          this.versionRestored.emit(promptToRestore);
+          this.VersionRestored.emit(promptToRestore);
           
           // Reload version history to reflect the new change
-          await this.loadVersionHistory();
+          await this.LoadVersionHistory();
         } else {
           throw new Error('Failed to save restored version');
         }
@@ -361,22 +621,32 @@ export class PromptVersionControlComponent extends BaseAngularComponent implemen
       this.isLoading = false;
     }
   }
+
+  /** @deprecated Use {@link RestoreVersion}. */
+  public async restoreVersion(version: PromptVersion): Promise<void> {
+    return this.RestoreVersion(version);
+  }
   
-  public startComparison(fromVersion: PromptVersion, toVersion?: PromptVersion): void {
-    this.compareFromVersion = fromVersion;
-    this.compareToVersion = toVersion || (this.versions.find(v => v.version === fromVersion.version + 1) || this.versions[0]);
-    this.currentView = 'comparison';
+  public StartComparison(fromVersion: PromptVersion, toVersion?: PromptVersion): void {
+    this.CompareFromVersion = fromVersion;
+    this.CompareToVersion = toVersion || (this.Versions.find(v => v.version === fromVersion.version + 1) || this.Versions[0]);
+    this.CurrentView = 'comparison';
     this.generateComparison();
+  }
+
+  /** @deprecated Use {@link StartComparison}. */
+  public startComparison(fromVersion: PromptVersion, toVersion?: PromptVersion): void {
+    return this.StartComparison(fromVersion, toVersion);
   }
   
   private generateComparison(): void {
-    if (!this.compareFromVersion || !this.compareToVersion) return;
+    if (!this.CompareFromVersion || !this.CompareToVersion) return;
     
     const differences: FieldDifference[] = [];
     
     // Compare prompt fields
-    const fromData = this.compareFromVersion.fullRecordJSON || {};
-    const toData = this.compareToVersion.fullRecordJSON || {};
+    const fromData = this.CompareFromVersion.fullRecordJSON || {};
+    const toData = this.CompareToVersion.fullRecordJSON || {};
     
     const allFields = new Set([...Object.keys(fromData), ...Object.keys(toData)]);
     
@@ -405,18 +675,18 @@ export class PromptVersionControlComponent extends BaseAngularComponent implemen
     // Compare template content if available
     this.compareTemplateContent(differences);
     
-    this.comparisonResult = {
-      fromVersion: this.compareFromVersion,
-      toVersion: this.compareToVersion,
+    this.ComparisonResult = {
+      fromVersion: this.CompareFromVersion,
+      toVersion: this.CompareToVersion,
       differences
     };
     
-    this.versionCompared.emit(this.comparisonResult);
+    this.VersionCompared.emit(this.ComparisonResult);
   }
   
   private compareTemplateContent(differences: FieldDifference[]): void {
-    const fromTemplate = this.compareFromVersion?.templateContent;
-    const toTemplate = this.compareToVersion?.templateContent;
+    const fromTemplate = this.CompareFromVersion?.templateContent;
+    const toTemplate = this.CompareToVersion?.templateContent;
     
     if (fromTemplate || toTemplate) {
       const fromContent = fromTemplate?.TemplateText || '';
@@ -450,28 +720,43 @@ export class PromptVersionControlComponent extends BaseAngularComponent implemen
   }
   
   public onFilterChange(filter: string): void {
-    this.filterBy = filter as any;
+    this.FilterBy = filter as any;
     this.applyFilters();
   }
   
+  public OnSortDirectionChange(): void {
+    this.SortDirection = this.SortDirection === 'asc' ? 'desc' : 'asc';
+    this.applyFilters();
+  }
+
+  /** @deprecated Use {@link OnSortDirectionChange}. */
   public onSortDirectionChange(): void {
-    this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
-    this.applyFilters();
+    return this.OnSortDirectionChange();
   }
   
+  public OnSearchChange(term: string): void {
+    this.SearchTerm$.next(term);
+    this.applyFilters();
+  }
+
+  /** @deprecated Use {@link OnSearchChange}. */
   public onSearchChange(term: string): void {
-    this.searchTerm$.next(term);
-    this.applyFilters();
+    return this.OnSearchChange(term);
   }
   
-  public onViewChange(view: string): void {
-    this.currentView = view as any;
-    if (view === 'comparison' && !this.comparisonResult && this.versions.length >= 2) {
-      this.startComparison(this.versions[1], this.versions[0]);
+  public OnViewChange(view: string): void {
+    this.CurrentView = view as any;
+    if (view === 'comparison' && !this.ComparisonResult && this.Versions.length >= 2) {
+      this.StartComparison(this.Versions[1], this.Versions[0]);
     }
   }
+
+  /** @deprecated Use {@link OnViewChange}. */
+  public onViewChange(view: string): void {
+    return this.OnViewChange(view);
+  }
   
-  public getChangeTypeIcon(changeType: string): string {
+  public GetChangeTypeIcon(changeType: string): string {
     switch (changeType) {
       case 'Create': return 'fa-plus-circle';
       case 'Update': return 'fa-edit';
@@ -479,8 +764,13 @@ export class PromptVersionControlComponent extends BaseAngularComponent implemen
       default: return 'fa-question-circle';
     }
   }
+
+  /** @deprecated Use {@link GetChangeTypeIcon}. */
+  public getChangeTypeIcon(changeType: string): string {
+    return this.GetChangeTypeIcon(changeType);
+  }
   
-  public getChangeTypeClass(changeType: string): string {
+  public GetChangeTypeClass(changeType: string): string {
     switch (changeType) {
       case 'Create': return 'change-create';
       case 'Update': return 'change-update';
@@ -488,8 +778,13 @@ export class PromptVersionControlComponent extends BaseAngularComponent implemen
       default: return 'change-unknown';
     }
   }
+
+  /** @deprecated Use {@link GetChangeTypeClass}. */
+  public getChangeTypeClass(changeType: string): string {
+    return this.GetChangeTypeClass(changeType);
+  }
   
-  public formatChangeValue(value: any): string {
+  public FormatChangeValue(value: any): string {
     if (value === null || value === undefined) return 'null';
     if (typeof value === 'object') return JSON.stringify(value, null, 2);
     if (typeof value === 'string' && value.length > 100) {
@@ -497,20 +792,30 @@ export class PromptVersionControlComponent extends BaseAngularComponent implemen
     }
     return String(value);
   }
+
+  /** @deprecated Use {@link FormatChangeValue}. */
+  public formatChangeValue(value: any): string {
+    return this.FormatChangeValue(value);
+  }
   
-  public getVersionLabel(version: PromptVersion): string {
+  public GetVersionLabel(version: PromptVersion): string {
     let label = `v${version.version}`;
     if (version.isActive) label += ' (Current)';
     if (version.changeType === 'Create') label += ' (Initial)';
     return label;
   }
+
+  /** @deprecated Use {@link GetVersionLabel}. */
+  public getVersionLabel(version: PromptVersion): string {
+    return this.GetVersionLabel(version);
+  }
   
-  public exportVersionHistory(): void {
+  public ExportVersionHistory(): void {
     const exportData = {
-      promptId: this.prompt?.ID,
-      promptName: this.prompt?.Name,
+      promptId: this.Prompt?.ID,
+      promptName: this.Prompt?.Name,
       exportedAt: new Date().toISOString(),
-      versions: this.versions.map(v => ({
+      versions: this.Versions.map(v => ({
         version: v.version,
         changedAt: v.changedAt.toISOString(),
         changedBy: v.changedBy,
@@ -524,13 +829,23 @@ export class PromptVersionControlComponent extends BaseAngularComponent implemen
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `prompt-version-history-${this.prompt?.Name || 'unknown'}-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `prompt-version-history-${this.Prompt?.Name || 'unknown'}-${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }
+
+  /** @deprecated Use {@link ExportVersionHistory}. */
+  public exportVersionHistory(): void {
+    return this.ExportVersionHistory();
+  }
   
+  public RefreshHistory(): void {
+    this.LoadVersionHistory();
+  }
+
+  /** @deprecated Use {@link RefreshHistory}. */
   public refreshHistory(): void {
-    this.loadVersionHistory();
+    return this.RefreshHistory();
   }
 
   private async loadAvailablePrompts(): Promise<void> {
@@ -538,8 +853,8 @@ export class PromptVersionControlComponent extends BaseAngularComponent implemen
       const metadata = this.ProviderToUse;
       const promptEntity = await metadata.GetEntityObject<MJAIPromptEntityExtended>('MJ: AI Prompts');
       const prompts = await promptEntity.GetAll();
-      this.availablePrompts = prompts.sort((a: MJAIPromptEntityExtended, b: MJAIPromptEntityExtended) => a.Name.localeCompare(b.Name));
-      this.filteredAvailablePrompts = [...this.availablePrompts];
+      this.AvailablePrompts = prompts.sort((a: MJAIPromptEntityExtended, b: MJAIPromptEntityExtended) => a.Name.localeCompare(b.Name));
+      this.FilteredAvailablePrompts = [...this.AvailablePrompts];
     } catch (error) {
       console.error('Failed to load available prompts:', error);
       LogError('Failed to load available prompts', undefined, error);
@@ -547,29 +862,39 @@ export class PromptVersionControlComponent extends BaseAngularComponent implemen
   }
 
   private setupPromptFiltering(): void {
-    this.promptSearchTerm$.subscribe(searchTerm => {
+    this.PromptSearchTerm$.subscribe(searchTerm => {
       this.filterAvailablePrompts(searchTerm);
     });
   }
 
   private filterAvailablePrompts(searchTerm: string): void {
     if (!searchTerm || searchTerm.trim() === '') {
-      this.filteredAvailablePrompts = [...this.availablePrompts];
+      this.FilteredAvailablePrompts = [...this.AvailablePrompts];
     } else {
       const term = searchTerm.toLowerCase().trim();
-      this.filteredAvailablePrompts = this.availablePrompts.filter(prompt =>
+      this.FilteredAvailablePrompts = this.AvailablePrompts.filter(prompt =>
         prompt.Name.toLowerCase().includes(term) ||
         (prompt.Description && prompt.Description.toLowerCase().includes(term))
       );
     }
   }
 
-  public onPromptSearchChange(searchTerm: string): void {
-    this.promptSearchTerm$.next(searchTerm);
+  public OnPromptSearchChange(searchTerm: string): void {
+    this.PromptSearchTerm$.next(searchTerm);
   }
 
+  /** @deprecated Use {@link OnPromptSearchChange}. */
+  public onPromptSearchChange(searchTerm: string): void {
+    return this.OnPromptSearchChange(searchTerm);
+  }
+
+  public SelectPromptForHistory(prompt: MJAIPromptEntityExtended): void {
+    this.Prompt = prompt;
+    this.LoadVersionHistory();
+  }
+
+  /** @deprecated Use {@link SelectPromptForHistory}. */
   public selectPromptForHistory(prompt: MJAIPromptEntityExtended): void {
-    this.prompt = prompt;
-    this.loadVersionHistory();
+    return this.SelectPromptForHistory(prompt);
   }
 }

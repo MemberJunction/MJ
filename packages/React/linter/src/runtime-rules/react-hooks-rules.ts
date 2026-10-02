@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
@@ -61,7 +61,7 @@ export class ReactHooksRulesRule extends BaseLintRule {
     const violations: Violation[] = [];
     const hooks = ['useState', 'useEffect', 'useMemo', 'useCallback', 'useRef', 'useContext', 'useReducer', 'useLayoutEffect'];
 
-    traverse(ast, {
+    Traverse(ast, {
       CallExpression(path: NodePath<t.CallExpression>) {
         let hookName: string | null = null;
         if (t.isIdentifier(path.node.callee) && hooks.includes(path.node.callee.name)) {

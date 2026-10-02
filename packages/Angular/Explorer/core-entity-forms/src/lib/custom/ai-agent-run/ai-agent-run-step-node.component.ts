@@ -9,50 +9,120 @@ import { TimelineItem } from './ai-agent-run-timeline.component';
   styleUrls: ['./ai-agent-run-step-node.component.css']
 })
 export class AIAgentRunStepNodeComponent {
-  @Input() item!: TimelineItem;
-  @Input() isSelected = false;
-  @Output() itemClick = new EventEmitter<TimelineItem>();
-  @Output() expandToggle = new EventEmitter<Event>();
-  @Output() navigateToEntity = new EventEmitter<{ entityName: string; recordId: string }>();
+  @Input() Item!: TimelineItem;
 
-  get hasChildren(): boolean {
-    return !!this.item.children && this.item.children.length > 0;
+  /** @deprecated Use {@link Item}. */
+  @Input() set item(value: TimelineItem) {
+    this.Item = value;
+  }
+  /** @deprecated Use {@link Item}. */
+  get item(): TimelineItem {
+    return this.Item;
+  }
+  @Input() IsSelected = false;
+
+  /** @deprecated Use {@link IsSelected}. */
+  @Input() set isSelected(value: AIAgentRunStepNodeComponent['IsSelected']) {
+    this.IsSelected = value;
+  }
+  /** @deprecated Use {@link IsSelected}. */
+  get isSelected(): AIAgentRunStepNodeComponent['IsSelected'] {
+    return this.IsSelected;
+  }
+  @Output() ItemClick = new EventEmitter<TimelineItem>();
+
+  /**
+   * @deprecated Use {@link ItemClick}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (itemClick) keeps working. Must stay AFTER ItemClick: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() itemClick = this.ItemClick;
+  @Output() ExpandToggle = new EventEmitter<Event>();
+
+  /**
+   * @deprecated Use {@link ExpandToggle}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (expandToggle) keeps working. Must stay AFTER ExpandToggle: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() expandToggle = this.ExpandToggle;
+  @Output() NavigateToEntity = new EventEmitter<{ entityName: string; recordId: string }>();
+
+  /**
+   * @deprecated Use {@link NavigateToEntity}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (navigateToEntity) keeps working. Must stay AFTER NavigateToEntity: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() navigateToEntity = this.NavigateToEntity;
+
+  get HasChildren(): boolean {
+    return !!this.Item.children && this.Item.children.length > 0;
   }
 
-  get isSubAgent(): boolean {
+  /** @deprecated Use {@link HasChildren}. */
+  get hasChildren(): boolean {
+    return this.HasChildren;
+  }
+
+  get IsSubAgent(): boolean {
     // A TaskGraph step expands too: it stands in for a whole graph of Task rows, and without the
     // affordance the run stops at "Task Graph: X" with no way to see what actually ran.
-    return this.item.type === 'subrun' ||
-      (this.item.type === 'step' && (this.item.data?.StepType === 'Sub-Agent' || this.item.data?.StepType === 'TaskGraph'));
+    return this.Item.type === 'subrun' ||
+      (this.Item.type === 'step' && (this.Item.data?.StepType === 'Sub-Agent' || this.Item.data?.StepType === 'TaskGraph'));
   }
 
-  get isParentStep(): boolean {
+  /** @deprecated Use {@link IsSubAgent}. */
+  get isSubAgent(): boolean {
+    return this.IsSubAgent;
+  }
+
+  get IsParentStep(): boolean {
     // STRUCTURAL, not type-gated. Anything holding children can be opened — a loop's iterations, a
     // workflow's steps, a nested run. The old test required `type === 'step'`, so a ForEach that
     // came from a task graph rendered its children into the model and then offered no way to reach
     // them: the work existed, was loaded, and was unreachable.
-    return !this.isSubAgent && this.hasChildren;
+    return !this.IsSubAgent && this.HasChildren;
   }
 
-  get canExpand(): boolean {
+  /** @deprecated Use {@link IsParentStep}. */
+  get isParentStep(): boolean {
+    return this.IsParentStep;
+  }
+
+  get CanExpand(): boolean {
     // Can expand if it's a sub-agent OR if it's a parent step with children
-    return this.isSubAgent || this.isParentStep;
+    return this.IsSubAgent || this.IsParentStep;
   }
 
-  get canNavigateToEntity(): boolean {
+  /** @deprecated Use {@link CanExpand}. */
+  get canExpand(): boolean {
+    return this.CanExpand;
+  }
+
+  get CanNavigateToEntity(): boolean {
     // For steps, check if it's a type that has a target and if TargetLogID exists
-    if (this.item.type === 'step' && this.item.data) {
-      const stepType = this.item.data.StepType;
+    if (this.Item.type === 'step' && this.Item.data) {
+      const stepType = this.Item.data.StepType;
       return (stepType === 'Actions' || stepType === 'Prompt' || stepType === 'Sub-Agent') 
-        && !!this.item.data.TargetLogID;
+        && !!this.Item.data.TargetLogID;
     }
     return false;
   }
 
-  get entityNavigationText(): string {
+  /** @deprecated Use {@link CanNavigateToEntity}. */
+  get canNavigateToEntity(): boolean {
+    return this.CanNavigateToEntity;
+  }
+
+  get EntityNavigationText(): string {
     // For step types, check the StepType
-    if (this.item.type === 'step' && this.item.data) {
-      const stepType = this.item.data.StepType;
+    if (this.Item.type === 'step' && this.Item.data) {
+      const stepType = this.Item.data.StepType;
       switch (stepType.trim().toLowerCase()) {
         case 'actions':
           return 'View Action Log';
@@ -70,6 +140,11 @@ export class AIAgentRunStepNodeComponent {
     return "";
   }
 
+  /** @deprecated Use {@link EntityNavigationText}. */
+  get entityNavigationText(): string {
+    return this.EntityNavigationText;
+  }
+
   /**
    * The glyph beside a row's status word.
    *
@@ -79,7 +154,7 @@ export class AIAgentRunStepNodeComponent {
    * to a task graph fell through to the unknown glyph and rendered a question mark. The projection
    * now normalizes the two vocabularies into one; these are the values it can produce.
    */
-  getStatusIcon(status: string): string {
+  GetStatusIcon(status: string): string {
     const iconMap: Record<string, string> = {
       'Running': 'fa-circle-notch fa-spin',
       'Completed': 'fa-check-circle',
@@ -97,28 +172,43 @@ export class AIAgentRunStepNodeComponent {
     return iconMap[status] || 'fa-question-circle';
   }
 
-  handleClick() {
-    this.itemClick.emit(this.item);
+  /** @deprecated Use {@link GetStatusIcon}. */
+  getStatusIcon(status: string): string {
+    return this.GetStatusIcon(status);
   }
 
-  handleExpandToggle(event: Event) {
-    if (this.canExpand) {
-      this.expandToggle.emit(event);
+  HandleClick() {
+    this.ItemClick.emit(this.Item);
+  }
+
+  /** @deprecated Use {@link HandleClick}. */
+  handleClick() {
+    return this.HandleClick();
+  }
+
+  HandleExpandToggle(event: Event) {
+    if (this.CanExpand) {
+      this.ExpandToggle.emit(event);
     }
   }
 
-  navigateToRecord(event: Event) {
+  /** @deprecated Use {@link HandleExpandToggle}. */
+  handleExpandToggle(event: Event) {
+    return this.HandleExpandToggle(event);
+  }
+
+  NavigateToRecord(event: Event) {
     event.stopPropagation();
     
-    if (!this.canNavigateToEntity) return;
+    if (!this.CanNavigateToEntity) return;
 
     let entityName = '';
     let recordId = '';
 
     // For step types, use TargetLogID and determine entity based on StepType
-    if (this.item.type === 'step' && this.item.data) {
-      recordId = this.item.data.TargetLogID;
-      const stepType = this.item.data.StepType;
+    if (this.Item.type === 'step' && this.Item.data) {
+      recordId = this.Item.data.TargetLogID;
+      const stepType = this.Item.data.StepType;
       
       switch (stepType.trim().toLowerCase()) {
         case 'actions':
@@ -133,9 +223,9 @@ export class AIAgentRunStepNodeComponent {
       }
     } else {
       // For direct types, use the item ID
-      recordId = this.item.id;
+      recordId = this.Item.id;
       
-      switch (this.item.type.trim().toLowerCase()) {
+      switch (this.Item.type.trim().toLowerCase()) {
         case 'actions':
           entityName = 'MJ: Action Execution Logs';
           break;
@@ -149,8 +239,13 @@ export class AIAgentRunStepNodeComponent {
     }
 
     if (entityName && recordId) {
-      this.navigateToEntity.emit({ entityName, recordId });
+      this.NavigateToEntity.emit({ entityName, recordId });
     }
+  }
+
+  /** @deprecated Use {@link NavigateToRecord}. */
+  navigateToRecord(event: Event) {
+    return this.NavigateToRecord(event);
   }
 
   /**
@@ -160,7 +255,7 @@ export class AIAgentRunStepNodeComponent {
    * native agent grant.
    */
   get SkillInvocations(): MJAIAgentRunStepEntity_AgentSkillInvocation[] {
-    const raw = this.item.type === 'step' ? this.item.data?.Skills : null;
+    const raw = this.Item.type === 'step' ? this.Item.data?.Skills : null;
     if (!raw) return [];
     try {
       const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
@@ -177,9 +272,9 @@ export class AIAgentRunStepNodeComponent {
     return `${inv.SkillName}: ${who}${reason}`;
   }
 
-  getAdditionalInfo(): string {
-    if (this.item.type === 'step' && this.item.data) {
-      const step = this.item.data;
+  GetAdditionalInfo(): string {
+    if (this.Item.type === 'step' && this.Item.data) {
+      const step = this.Item.data;
       const parts = [];
 
       if (step.TargetActionName) {
@@ -192,8 +287,8 @@ export class AIAgentRunStepNodeComponent {
       return parts.join(' • ');
     }
 
-    if (this.item.type === 'action' && this.item.data) {
-      const log = this.item.data;
+    if (this.Item.type === 'action' && this.Item.data) {
+      const log = this.Item.data;
       if (log.Message) {
         return log.Message.substring(0, 100) + (log.Message.length > 100 ? '...' : '');
       }
@@ -202,10 +297,20 @@ export class AIAgentRunStepNodeComponent {
     return '';
   }
 
-  onLogoError(event: Event): void {
+  /** @deprecated Use {@link GetAdditionalInfo}. */
+  getAdditionalInfo(): string {
+    return this.GetAdditionalInfo();
+  }
+
+  OnLogoError(event: Event): void {
     // Hide the broken image and show the icon instead by clearing logoUrl
     const imgElement = event.target as HTMLImageElement;
     imgElement.style.display = 'none';
-    this.item.logoUrl = undefined;
+    this.Item.logoUrl = undefined;
+  }
+
+  /** @deprecated Use {@link OnLogoError}. */
+  onLogoError(event: Event): void {
+    return this.OnLogoError(event);
   }
 }

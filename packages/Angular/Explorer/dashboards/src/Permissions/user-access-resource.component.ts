@@ -4,18 +4,18 @@ import { PermissionEngine, ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 
-import { validateStringParam } from '../shared/agent-tool-validation';
+import { ValidateStringParam } from '../shared/agent-tool-validation';
 import {
     PermissionsDomainGroup,
     PermissionsUserOption,
-    groupPermissionsByDomain,
-    loadPermissionsUsers,
-    resolvePermissionsUser,
+    GroupPermissionsByDomain,
+    LoadPermissionsUsers,
+    ResolvePermissionsUser,
 } from './permissions-shared';
 import {
-    buildPermissionsNotFoundError,
-    buildUserAccessAgentContext,
-    resolvePermissionsCandidate,
+    BuildPermissionsNotFoundError,
+    BuildUserAccessAgentContext,
+    ResolvePermissionsCandidate,
 } from './permissions-agent-context';
 
 /**
@@ -54,7 +54,7 @@ export class PermissionsUserAccessResourceComponent extends BaseResourceComponen
 
     override async ngOnInit(): Promise<void> {
         super.ngOnInit();
-        await this.loadUsers();
+        await this.LoadUsers();
         this.NotifyLoadComplete();
     }
 
@@ -89,7 +89,7 @@ export class PermissionsUserAccessResourceComponent extends BaseResourceComponen
      * shaping lives in the pure {@link buildUserAccessAgentContext} helper.
      */
     private publishAgentContext(): void {
-        const context = buildUserAccessAgentContext({
+        const context = BuildUserAccessAgentContext({
             SelectedUserId: this.SelectedUserId,
             SelectedUserName: this.SelectedUserName,
             SelectedUserRoles: this.SelectedUserRoles,
@@ -120,7 +120,7 @@ export class PermissionsUserAccessResourceComponent extends BaseResourceComponen
     private resolveUserRef(input: string): PermissionsUserOption | null {
         const needle = (input ?? '').trim().toLowerCase();
         if (!needle) return null;
-        const byCandidate = resolvePermissionsCandidate(input, this.userCandidates());
+        const byCandidate = ResolvePermissionsCandidate(input, this.userCandidates());
         if (byCandidate) {
             return this.Users.find((u) => UUIDsEqual(u.ID, byCandidate.ID)) ?? null;
         }
@@ -178,7 +178,7 @@ export class PermissionsUserAccessResourceComponent extends BaseResourceComponen
     private async handleSelectUserTool(
         params: Record<string, unknown>
     ): Promise<{ Success: boolean; Data?: unknown; ErrorMessage?: string }> {
-        const user = validateStringParam(params?.['userId'], 'userId');
+        const user = ValidateStringParam(params?.['userId'], 'userId');
         if (!user.ok) return user.result;
         if (!user.value.trim()) {
             return { Success: false, ErrorMessage: 'userId is required.' };
@@ -186,7 +186,7 @@ export class PermissionsUserAccessResourceComponent extends BaseResourceComponen
 
         const match = this.resolveUserRef(user.value);
         if (!match) {
-            return { Success: false, ErrorMessage: buildPermissionsNotFoundError(user.value, 'user', this.userCandidates()) };
+            return { Success: false, ErrorMessage: BuildPermissionsNotFoundError(user.value, 'user', this.userCandidates()) };
         }
 
         this.SelectedUserName = match.Name;
@@ -207,7 +207,7 @@ export class PermissionsUserAccessResourceComponent extends BaseResourceComponen
     }
 
     private handleSearchUsersTool(params: Record<string, unknown>): { Success: boolean; Data?: unknown; ErrorMessage?: string } {
-        const q = validateStringParam(params?.['query'], 'query');
+        const q = ValidateStringParam(params?.['query'], 'query');
         if (!q.ok) return q.result;
         const needle = q.value.trim().toLowerCase();
         if (!needle) {
@@ -220,13 +220,13 @@ export class PermissionsUserAccessResourceComponent extends BaseResourceComponen
     }
 
     private handleToggleGroupTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
-        const domain = validateStringParam(params?.['domainName'], 'domainName');
+        const domain = ValidateStringParam(params?.['domainName'], 'domainName');
         if (!domain.ok) return domain.result;
 
         const candidates = this.DomainGroups.map((g) => ({ ID: g.DomainName, Name: g.DomainName }));
-        const match = resolvePermissionsCandidate(domain.value, candidates);
+        const match = ResolvePermissionsCandidate(domain.value, candidates);
         if (!match) {
-            return { Success: false, ErrorMessage: buildPermissionsNotFoundError(domain.value, 'domain group', candidates) };
+            return { Success: false, ErrorMessage: BuildPermissionsNotFoundError(domain.value, 'domain group', candidates) };
         }
         const group = this.DomainGroups.find((g) => g.DomainName === match.Name)!;
         this.ToggleGroup(group);
@@ -234,11 +234,11 @@ export class PermissionsUserAccessResourceComponent extends BaseResourceComponen
         return { Success: true };
     }
 
-    async loadUsers(): Promise<void> {
+    async LoadUsers(): Promise<void> {
         this.IsLoadingUsers = true;
         this.ErrorMessage = null;
         try {
-            this.Users = await loadPermissionsUsers();
+            this.Users = await LoadPermissionsUsers();
             const md = this.ProviderToUse;
             this.SelectedUserId = md.CurrentUser?.ID ?? null;
             this.SelectedUserName = this.SelectedUserId
@@ -254,6 +254,11 @@ export class PermissionsUserAccessResourceComponent extends BaseResourceComponen
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link LoadUsers}. */
+    async loadUsers(): Promise<void> {
+        return this.LoadUsers();
+    }
+
     async OnUserChanged(userId: string): Promise<void> {
         this.SelectedUserId = userId;
         this.SelectedUserName = this.Users.find((u) => UUIDsEqual(u.ID, userId))?.Name ?? this.SelectedUserName;
@@ -266,7 +271,7 @@ export class PermissionsUserAccessResourceComponent extends BaseResourceComponen
         this.cdr.detectChanges();
 
         try {
-            const user = await resolvePermissionsUser(this.SelectedUserId!, this.Users);
+            const user = await ResolvePermissionsUser(this.SelectedUserId!, this.Users);
             if (!user) {
                 this.ErrorMessage = 'Could not load roles for the selected user.';
                 this.DomainGroups = [];
@@ -281,7 +286,7 @@ export class PermissionsUserAccessResourceComponent extends BaseResourceComponen
             for (const d of PermissionEngine.Instance.Domains) {
                 orderMap.set(d.Name, d.DisplayOrder ?? 999);
             }
-            this.DomainGroups = groupPermissionsByDomain(rows, orderMap);
+            this.DomainGroups = GroupPermissionsByDomain(rows, orderMap);
         } catch (e) {
             this.ErrorMessage = `Error loading permissions: ${e instanceof Error ? e.message : String(e)}`;
             this.DomainGroups = [];
@@ -298,9 +303,14 @@ export class PermissionsUserAccessResourceComponent extends BaseResourceComponen
     }
 
     /** Accordion-driven handler — SETS the emitted expanded value (vs. ToggleGroup's flip). */
-    public onGroupExpandedChange(group: PermissionsDomainGroup, expanded: boolean): void {
+    public OnGroupExpandedChange(group: PermissionsDomainGroup, expanded: boolean): void {
         group.Expanded = expanded;
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link OnGroupExpandedChange}. */
+    public onGroupExpandedChange(group: PermissionsDomainGroup, expanded: boolean): void {
+        return this.OnGroupExpandedChange(group, expanded);
     }
 
     TrackByDomain(_index: number, group: PermissionsDomainGroup): string {

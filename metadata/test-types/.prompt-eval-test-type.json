@@ -1,0 +1,16 @@
+{
+  "fields": {
+    "Name": "Prompt Eval",
+    "Description": "Evaluates a SINGLE model decision from frozen mid-loop state. No action ever executes — the runner returns the model reply and deterministic oracles read the decision off whichever channel it used (envelope or native tool calls). This is the corpus workhorse for the envelope baseline and the native comparison; loop-level cases use Agent Eval instead.",
+    "DriverClass": "PromptEvalDriver",
+    "Status": "Active",
+    "VariablesSchema": "@file:schemas/prompt-eval-variables.schema.json"
+  },
+  "primaryKey": {
+    "ID": "7CAED395-0BEF-437E-A343-AC0841D377DA"
+  },
+  "sync": {
+    "lastModified": "2026-09-13T20:06:58.691Z",
+    "checksum": "c8502a65813441e6499b5d9ec11e37f1f157f9173832a24e23e38bc3e9ef7657"
+  }
+}

@@ -16,7 +16,12 @@ const RESOLVABLE_STATUSES = new Set<string>(["Active", "Provisional"]);
 export interface ScopedPromptConfigTarget {
     override?: { modelId?: string; vendorId?: string };
     configurationId?: string;
-    effortLevel?: number;
+    /**
+     * Mirrors `AIPromptParams.effortLevel`, which accepts a provider-named level (OpenAI's
+     * `'xhigh'` / `'none'`) alongside MJ's numeric 1-100 scale. Narrowing it here would make a
+     * scoped config unable to carry a level the prompt layer can.
+     */
+    effortLevel?: number | string;
     additionalParameters?: Record<string, unknown>;
 }
 

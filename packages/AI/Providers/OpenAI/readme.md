@@ -51,7 +51,7 @@ graph TD
 - **Thinking/Reasoning**: Extraction of thinking content from reasoning model responses
 - **Embeddings**: Text embedding generation via text-embedding-3-small/large and other models
 - **Image Generation**: DALL-E integration via `BaseImageGenerator`
-- **Audio**: Text-to-speech and speech-to-text via `BaseAudio`
+- **Audio**: Text-to-speech and speech-to-text (Whisper) via `OpenAIAudioGenerator`, which implements both `BaseTextToSpeech` and `BaseSpeechToText`
 - **Multimodal Input**: Support for text, image, audio, and file content in messages
 - **Response Formats**: JSON mode, text, and structured output controls
 - **Effort Level**: Maps MJ effort levels to OpenAI reasoning effort parameters
@@ -160,6 +160,7 @@ export class MyProviderLLM extends OpenAILLM {
 
 - `OpenAILLM` -- Registered via `@RegisterClass(BaseLLM, OpenAILLM)`
 - `OpenAIEmbedding` -- Registered via `@RegisterClass(BaseEmbeddings, OpenAIEmbedding)`
+- `OpenAIAudioGenerator` -- Registered under the key `'OpenAIAudioGenerator'` against `BaseTextToSpeech`, `BaseSpeechToText` and the deprecated `BaseAudioGenerator`, so the TTS and speech-to-text runners and older callers all resolve it
 
 ## Dependencies
 
@@ -192,3 +193,11 @@ MJ-idiomatic keys are extracted (`ExtractRealtimeFeatures`), translated to provi
 - `WaitForConfigApplied()` resolves once the initial config is on the socket (deferred to `session.created` on OpenAI). A **15s readiness deadline** (`configReadinessTimeoutMs`, overridable) rejects awaiting callers on a silent endpoint WITHOUT cancelling the deferred apply.
 - `response.done` usage surfaces **per-modality token detail** (`RealtimeUsage.InputTokenDetails`/`OutputTokenDetails`: text/audio/image/cached) — required for multi-channel cost attribution (audio-in bills ~8× text-in on GPT Realtime 2.1).
 - `Capabilities.CanReconfigureTurnMode` is profile-gated (`supportsLiveReconfigure`); `Reconfigure` no-ops on profiles that declare no support.
+
+## OpenAI Live driver (`OpenAILiveRealtime`)
+
+`OpenAILiveRealtime` (`@RegisterClass(BaseRealtimeModel, 'OpenAILiveRealtime')`) implements the server model driver for the **OpenAI Live API (`gpt-live-1`)**:
+- **Endpoint**: `https://api.openai.com/v1/realtime/calls` WebRTC SDP exchange and session minting.
+- **Client Session Minting**: Generates client session configurations for browser WebRTC direct connection via `OpenAILiveClient`.
+- **Wire Event Compliance**: Enforces OpenAI Live wire protocol — tool outputs are delivered as `response.item.create` (type `function_call_output`), followed by `response.create` coordinated by `RealtimeToolBatchBarrier`. Does not emit `conversation.item.create` (which is rejected by OpenAI Live).
+- **Tool Projection & Execution**: Direct actions and subagent delegations (`invoke-target-agent`) are projected directly into the Live session tools schema, allowing the model to invoke direct tools and target agents concurrently.

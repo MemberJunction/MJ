@@ -1,5 +1,5 @@
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { convertIdentifiers, removeCollate, convertCommonFunctions, transformCodeOnly, removeNPrefix, convertBooleanLiteralComparisons, collectBooleanColumnNames, QuoteConstraintNames } from './ExpressionHelpers.js';
+import { ConvertIdentifiers, RemoveCollate, ConvertCommonFunctions, TransformCodeOnly, RemoveNPrefix, ConvertBooleanLiteralComparisons, CollectBooleanColumnNames, QuoteConstraintNames } from './ExpressionHelpers.js';
 
 export class AlterTableRule implements IConversionRule {
   Name = 'AlterTableRule';
@@ -11,8 +11,8 @@ export class AlterTableRule implements IConversionRule {
   BypassJustification = 'sqlglot does not handle T-SQL ALTER TABLE patterns: multi-column ADD with inline CONSTRAINT clauses, ADD CONSTRAINT name DEFAULT val FOR col syntax (T-SQL named defaults), inline FOREIGN KEY in ADD COLUMN, ALTER COLUMN type NOT NULL (must become SET NOT NULL in PG), or DEFERRABLE INITIALLY DEFERRED FK behavior we add. Custom rule produces idiomatic PG output and applies PG case-sensitive identifier quoting.';
 
   PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
-    let result = convertIdentifiers(sql);
-    result = removeCollate(result);
+    let result = ConvertIdentifiers(sql);
+    result = RemoveCollate(result);
 
     // Convert SQL Server types to PG types (for ALTER TABLE ADD COLUMN)
     result = this.convertTypes(result);
@@ -60,7 +60,7 @@ export class AlterTableRule implements IConversionRule {
     // SET DEFAULT form is produced above. Handles both `"col" = 0/1` (CHECK
     // constraints) and `ALTER COLUMN "col" SET DEFAULT 0/1` — neither is caught
     // by the type-adjacent rules in convertDefaults (no BOOLEAN keyword present).
-    result = convertBooleanLiteralComparisons(result, context.TableColumns);
+    result = ConvertBooleanLiteralComparisons(result, context.TableColumns);
     result = this.convertBooleanColumnDefaults(result, context.TableColumns);
 
     // Convert multi-column ADD to PG ADD COLUMN syntax (must run BEFORE removeInlineForeignKey
@@ -99,7 +99,7 @@ export class AlterTableRule implements IConversionRule {
     }
 
     // Remove N prefix from strings
-    result = removeNPrefix(result);
+    result = RemoveNPrefix(result);
 
     // Quote mixed-case constraint names so they survive folding. Shared with CreateTableRule
     // so the two sites cannot drift apart again — see QuoteConstraintNames.
@@ -110,7 +110,7 @@ export class AlterTableRule implements IConversionRule {
 
     // Convert common functions (LEN→LENGTH, etc.) before quoting PascalCase identifiers
     if (/\bCHECK\b/i.test(result)) {
-      result = convertCommonFunctions(result);
+      result = ConvertCommonFunctions(result);
     }
 
     // Quote PascalCase column names inside CHECK constraint bodies (preserve string literals)
@@ -206,7 +206,7 @@ export class AlterTableRule implements IConversionRule {
 
       const prefix = sql.slice(matchStart, openParen + 1);
       const body = sql.slice(openParen + 1, closeParen);
-      const quotedBody = transformCodeOnly(body, (code) =>
+      const quotedBody = TransformCodeOnly(body, (code) =>
         code.replace(
           /(?<!['"])\b([A-Z][a-zA-Z_]\w*)\b(?!['"])/g,
           (m: string, name: string) => {
@@ -277,7 +277,7 @@ export class AlterTableRule implements IConversionRule {
    * integer default on a boolean column at ALTER time.
    */
   private convertBooleanColumnDefaults(sql: string, tableColumns: Map<string, Map<string, string>>): string {
-    const boolCols = collectBooleanColumnNames(tableColumns);
+    const boolCols = CollectBooleanColumnNames(tableColumns);
     if (boolCols.size === 0) return sql;
     return sql.replace(
       /ALTER\s+COLUMN\s+"(\w+)"\s+SET\s+DEFAULT\s+\(*\s*([01])\s*\)*/gi,

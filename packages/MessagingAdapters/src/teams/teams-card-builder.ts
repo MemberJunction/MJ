@@ -13,8 +13,8 @@
  * @see https://learn.microsoft.com/en-us/adaptive-cards/
  */
 
-import { ExecuteAgentResult, MJAIAgentEntityExtended, ActionableCommand, OpenResourceCommand, AutomaticCommand, MediaOutput, AgentResponseForm, FormQuestion } from '@memberjunction/ai-core-plus';
-import { buildExplorerDeepLink, isOpenableURI, splitMarkdownIntoSections } from '../base/message-formatter.js';
+import { ExecuteAgentResult, MJAIAgentEntityExtended, ActionableCommand, OpenResourceCommand, ComposeEmailCommand, AutomaticCommand, MediaOutput, AgentResponseForm, FormQuestion } from '@memberjunction/ai-core-plus';
+import { BuildExplorerDeepLink, IsOpenableURI, SplitMarkdownIntoSections } from '../base/message-formatter.js';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -67,7 +67,7 @@ export interface BuildRichCardOptions {
  * └─────────────────────────────────┘
  * ```
  */
-export function buildRichAdaptiveCard(
+export function BuildRichAdaptiveCard(
     result: ExecuteAgentResult | null,
     agent: MJAIAgentEntityExtended,
     responseText: string,
@@ -77,10 +77,10 @@ export function buildRichAdaptiveCard(
     const actions: Record<string, unknown>[] = [];
 
     // Agent header
-    body.push(buildAgentHeader(agent));
+    body.push(BuildAgentHeader(agent));
 
     // Text content (with separator from header)
-    const textElements = buildTextBody(responseText);
+    const textElements = BuildTextBody(responseText);
     if (textElements.length > 0) {
         // Add separator to first text element
         textElements[0] = { ...textElements[0], separator: true };
@@ -100,27 +100,27 @@ export function buildRichAdaptiveCard(
 
     // Response form (structured input from agent)
     if (result?.responseForm?.questions && result.responseForm.questions.length > 0) {
-        body.push(...buildResponseFormElements(result.responseForm, agent?.Name ?? undefined));
+        body.push(...BuildResponseFormElements(result.responseForm, agent?.Name ?? undefined));
     }
 
     // Notes for file commands Teams cannot open (dropped from actions, not rendered dead)
     if (result?.actionableCommands && result.actionableCommands.length > 0) {
-        body.push(...buildUnopenableResourceNotes(result.actionableCommands));
+        body.push(...BuildUnopenableResourceNotes(result.actionableCommands));
     }
 
     // Metadata footer
     if (result?.agentRun) {
-        body.push(buildMetadataFooter(result));
+        body.push(BuildMetadataFooter(result));
     }
 
     // Action buttons (go in the card's top-level actions array)
     const commands = result?.actionableCommands;
     if (commands && commands.length > 0) {
-        actions.push(...buildActionButtons(commands, options?.explorerBaseURL));
+        actions.push(...BuildActionButtons(commands, options?.explorerBaseURL));
     }
 
     // "Open in MJ Explorer" action (single action button, no inline body link)
-    const explorerAction = buildExplorerLink(
+    const explorerAction = BuildExplorerLink(
         options?.explorerBaseURL,
         options?.artifactId,
         options?.conversationId
@@ -134,10 +134,20 @@ export function buildRichAdaptiveCard(
     return enforcePayloadSize(card, responseText, options);
 }
 
+/** @deprecated Use {@link BuildRichAdaptiveCard}. */
+export function buildRichAdaptiveCard(
+    result: ExecuteAgentResult | null,
+    agent: MJAIAgentEntityExtended,
+    responseText: string,
+    options?: BuildRichCardOptions
+): Record<string, unknown> {
+    return BuildRichAdaptiveCard(result, agent, responseText, options);
+}
+
 /**
  * Build a ColumnSet showing the agent's avatar and name.
  */
-export function buildAgentHeader(agent: MJAIAgentEntityExtended): Record<string, unknown> {
+export function BuildAgentHeader(agent: MJAIAgentEntityExtended): Record<string, unknown> {
     const agentName = agent.Name ?? 'Agent';
     const columns: Record<string, unknown>[] = [];
 
@@ -174,12 +184,17 @@ export function buildAgentHeader(agent: MJAIAgentEntityExtended): Record<string,
     };
 }
 
+/** @deprecated Use {@link BuildAgentHeader}. */
+export function buildAgentHeader(agent: MJAIAgentEntityExtended): Record<string, unknown> {
+    return BuildAgentHeader(agent);
+}
+
 /**
  * Convert markdown text to Adaptive Card TextBlock elements.
  * Uses `splitMarkdownIntoSections` from the shared message formatter.
  */
-export function buildTextBody(markdown: string): Record<string, unknown>[] {
-    const sections = splitMarkdownIntoSections(markdown);
+export function BuildTextBody(markdown: string): Record<string, unknown>[] {
+    const sections = SplitMarkdownIntoSections(markdown);
     const elements: Record<string, unknown>[] = [];
 
     for (const section of sections) {
@@ -225,11 +240,16 @@ export function buildTextBody(markdown: string): Record<string, unknown>[] {
     return elements;
 }
 
+/** @deprecated Use {@link BuildTextBody}. */
+export function buildTextBody(markdown: string): Record<string, unknown>[] {
+    return BuildTextBody(markdown);
+}
+
 /**
  * Build an Adaptive Card Container linking to the artifact in MJ Explorer.
  * Returns null if no explorer URL or neither artifact/conversation ID is available.
  */
-export function buildArtifactCard(
+export function BuildArtifactCard(
     artifactId: string,
     explorerBaseURL: string
 ): Record<string, unknown> {
@@ -256,6 +276,14 @@ export function buildArtifactCard(
     };
 }
 
+/** @deprecated Use {@link BuildArtifactCard}. */
+export function buildArtifactCard(
+    artifactId: string,
+    explorerBaseURL: string
+): Record<string, unknown> {
+    return BuildArtifactCard(artifactId, explorerBaseURL);
+}
+
 /**
  * Body notes for `open:url` commands whose URI Teams cannot open.
  *
@@ -263,29 +291,70 @@ export function buildArtifactCard(
  * was produced and points at the artifact link, which is the one route to the bytes from Teams
  * (unlike Slack, there is no file-upload path here).
  */
-export function buildUnopenableResourceNotes(commands: ActionableCommand[]): Record<string, unknown>[] {
-    const labels = commands
-        .slice(0, 5)
-        .filter(cmd => cmd.type === 'open:url' && 'url' in cmd && !isOpenableURI(cmd.url))
-        .map(cmd => cmd.label ?? 'File');
+export function BuildUnopenableResourceNotes(commands: ActionableCommand[]): Record<string, unknown>[] {
+    const notes: string[] = [];
 
-    if (labels.length === 0) return [];
+    for (const cmd of commands.slice(0, 5)) {
+        if (cmd.type === 'open:url' && 'url' in cmd && !IsOpenableURI(cmd.url)) {
+            notes.push(`📄 _${cmd.label ?? 'File'} — open it with "View in MJ Explorer" below._`);
+        } else if (cmd.type === 'compose:email') {
+            // A mailto: URL fails isOpenableURI, so buildActionButtons drops it. Without this note
+            // the command would render as nothing at all and the user would never learn a draft
+            // exists. Name the draft by its label only — no recipient or subject on a shared surface.
+            notes.push(formatComposeEmailNote(cmd));
+        }
+    }
 
-    return labels.map(label => ({
+    if (notes.length === 0) return [];
+
+    return notes.map(text => ({
         type: 'TextBlock',
-        text: `📄 _${label} — open it with "View in MJ Explorer" below._`,
+        text,
         wrap: true,
         isSubtle: true,
         spacing: 'Small',
     }));
 }
 
+/** @deprecated Use {@link BuildUnopenableResourceNotes}. */
+export function buildUnopenableResourceNotes(commands: ActionableCommand[]): Record<string, unknown>[] {
+    return BuildUnopenableResourceNotes(commands);
+}
+
+/**
+ * Describe a `compose:email` command for a Teams body note.
+ *
+ * Teams cannot open a `mailto:` from an Action.OpenUrl (its URI check accepts http/https only), so
+ * the draft is described and the user is pointed at Explorer, where the Email Draft artifact holds
+ * the full text. DELIBERATELY WITHOUT the recipient or subject: a Teams channel or group chat is a
+ * shared, retained surface, and correspondence metadata safe for the person who will send the mail
+ * is not safe for every participant. Only the label and the route back are shown; recipient and
+ * subject would need an explicit private-context signal from the adapter, which does not exist yet.
+ */
+function formatComposeEmailNote(cmd: ComposeEmailCommand): string {
+    return `✉️ _${escapeCardMarkdown(cmd.label || 'Email draft')} — email draft available; open it with "View in MJ Explorer" below to review and send._`;
+}
+
+/**
+ * Escape the markdown subset an Adaptive Card TextBlock renders.
+ *
+ * Every field here is AGENT-AUTHORED, and TextBlock renders links. Without this a subject of
+ * `Renewal [click here](https://evil.example)` becomes a live hyperlink inside an official MJ
+ * card — the same "never hand the user a hostile link" case the adapter guards elsewhere through
+ * isOpenableURI. Brackets and parens defuse links; underscores and asterisks stop agent text from
+ * breaking out of the surrounding italics.
+ */
+function escapeCardMarkdown(text: string): string {
+    return text.replace(/([\[\]()_*`\\])/g, '\\$1');
+}
+
 /**
  * Build Action.OpenUrl buttons from actionable commands.
- * Handles `open:url` and `open:resource` command types.
+ * Handles `open:url` and `open:resource` command types. `compose:email` carries a mailto: URL,
+ * which Teams will not open from a button — it is surfaced by buildUnopenableResourceNotes instead.
  * Returns at most 5 action buttons.
  */
-export function buildActionButtons(
+export function BuildActionButtons(
     commands: ActionableCommand[],
     explorerBaseURL?: string
 ): Record<string, unknown>[] {
@@ -293,7 +362,7 @@ export function buildActionButtons(
 
     for (const cmd of commands.slice(0, 5)) {
         if (cmd.type === 'open:url' && 'url' in cmd) {
-            if (!isOpenableURI(cmd.url)) continue;
+            if (!IsOpenableURI(cmd.url)) continue;
             // A dead button is worse than no button — see isOpenableURI. The dropped command is
             // surfaced as a body note by buildUnopenableResourceNotes.
             actions.push({
@@ -303,7 +372,7 @@ export function buildActionButtons(
             });
         } else if (cmd.type === 'open:resource') {
             const resourceCmd = cmd as OpenResourceCommand;
-            const deepLink = buildExplorerDeepLink(resourceCmd, explorerBaseURL);
+            const deepLink = BuildExplorerDeepLink(resourceCmd, explorerBaseURL);
             if (deepLink) {
                 actions.push({
                     type: 'Action.OpenUrl',
@@ -317,12 +386,20 @@ export function buildActionButtons(
     return actions;
 }
 
+/** @deprecated Use {@link BuildActionButtons}. */
+export function buildActionButtons(
+    commands: ActionableCommand[],
+    explorerBaseURL?: string
+): Record<string, unknown>[] {
+    return BuildActionButtons(commands, explorerBaseURL);
+}
+
 /**
  * Build an "Open in MJ Explorer" Action.OpenUrl.
  * Prefers artifact link; falls back to conversation link.
  * Returns null if neither ID is available or no explorer URL.
  */
-export function buildExplorerLink(
+export function BuildExplorerLink(
     explorerBaseURL?: string,
     artifactId?: string,
     conversationId?: string
@@ -351,10 +428,19 @@ export function buildExplorerLink(
     return null;
 }
 
+/** @deprecated Use {@link BuildExplorerLink}. */
+export function buildExplorerLink(
+    explorerBaseURL?: string,
+    artifactId?: string,
+    conversationId?: string
+): Record<string, unknown> | null {
+    return BuildExplorerLink(explorerBaseURL, artifactId, conversationId);
+}
+
 /**
  * Build a subtle metadata footer with timing and token info.
  */
-export function buildMetadataFooter(result: ExecuteAgentResult): Record<string, unknown> {
+export function BuildMetadataFooter(result: ExecuteAgentResult): Record<string, unknown> {
     const parts: string[] = [];
 
     const agentRun = result.agentRun;
@@ -394,10 +480,15 @@ export function buildMetadataFooter(result: ExecuteAgentResult): Record<string, 
     };
 }
 
+/** @deprecated Use {@link BuildMetadataFooter}. */
+export function buildMetadataFooter(result: ExecuteAgentResult): Record<string, unknown> {
+    return BuildMetadataFooter(result);
+}
+
 /**
  * Build a full Adaptive Card for an error message.
  */
-export function buildErrorCard(errorMessage: string): Record<string, unknown> {
+export function BuildErrorCard(errorMessage: string): Record<string, unknown> {
     return {
         type: 'AdaptiveCard',
         version: ADAPTIVE_CARD_VERSION,
@@ -412,6 +503,11 @@ export function buildErrorCard(errorMessage: string): Record<string, unknown> {
             },
         ],
     };
+}
+
+/** @deprecated Use {@link BuildErrorCard}. */
+export function buildErrorCard(errorMessage: string): Record<string, unknown> {
+    return BuildErrorCard(errorMessage);
 }
 
 // ─── Internal Helpers ────────────────────────────────────────────────────────
@@ -458,7 +554,7 @@ const NOTIFICATION_ICONS: Record<string, string> = {
  * read-only as a summary for now. Full interactivity is follow-up work
  * (requires Task Modules or Action.Submit webhook handling).
  */
-export function buildResponseFormElements(
+export function BuildResponseFormElements(
     form: AgentResponseForm,
     agentName?: string
 ): Record<string, unknown>[] {
@@ -516,6 +612,14 @@ export function buildResponseFormElements(
     });
 
     return elements;
+}
+
+/** @deprecated Use {@link BuildResponseFormElements}. */
+export function buildResponseFormElements(
+    form: AgentResponseForm,
+    agentName?: string
+): Record<string, unknown>[] {
+    return BuildResponseFormElements(form, agentName);
 }
 
 /**
@@ -737,7 +841,7 @@ function enforcePayloadSize(
     });
 
     // Add "View full in MJ Explorer" action if possible
-    const explorerLink = buildExplorerLink(
+    const explorerLink = BuildExplorerLink(
         options?.explorerBaseURL,
         options?.artifactId,
         options?.conversationId

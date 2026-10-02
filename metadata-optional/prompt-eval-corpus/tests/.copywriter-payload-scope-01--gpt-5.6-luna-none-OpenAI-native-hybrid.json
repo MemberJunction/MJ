@@ -1,0 +1,99 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "copywriter-payload-scope-01 [gpt-5.6-luna@none · OpenAI · native-hybrid]",
+    "Description": "The Copywriter may write content.* and copywriter.*; brand.*, seo.* and editor.* belong to other agents (PayloadUpstreamPaths). Drafting the copy is the decision; writing outside its lane is the failure this case exists to catch. Completing with the draft in the message is also acceptable.",
+    "InputDefinition": {
+      "payload": {
+        "content": {
+          "brief": "Announce the real-time refresh of the Analytics Dashboard."
+        },
+        "brand": {
+          "voice": "confident, plain"
+        },
+        "seo": {
+          "primaryKeyword": "real-time analytics"
+        }
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Write the announcement copy."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "copywriter-payload-scope-01",
+      "expect": {
+        "kind": "anyOf",
+        "anyOf": [
+          {
+            "kind": "payloadChange",
+            "forbiddenPayloadPaths": [
+              "newElements.brand",
+              "updateElements.brand",
+              "replaceElements.brand",
+              "newElements.seo",
+              "updateElements.seo",
+              "replaceElements.seo",
+              "newElements.editor",
+              "updateElements.editor"
+            ]
+          },
+          {
+            "kind": "taskComplete"
+          }
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Copywriter Agent",
+      "modelId": "3D2A79B9-745E-4005-8440-5FB62CA61448",
+      "vendorId": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "effortLevel": "none",
+      "toolCallingMode": "native",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "anyOf",
+            "anyOf": [
+              {
+                "kind": "payloadChange",
+                "forbiddenPayloadPaths": [
+                  "newElements.brand",
+                  "updateElements.brand",
+                  "replaceElements.brand",
+                  "newElements.seo",
+                  "updateElements.seo",
+                  "replaceElements.seo",
+                  "newElements.editor",
+                  "updateElements.editor"
+                ]
+              },
+              {
+                "kind": "taskComplete"
+              }
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "5F78038D-D7ED-4988-AAD8-ED9A1DD9ED9B"
+  }
+}

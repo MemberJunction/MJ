@@ -175,7 +175,7 @@ export interface DiscordNativeSdkConfig {
  * {@link DiscordAudioFrame.Pcm} is already an `ArrayBuffer`); kept a single export so it does not collide
  * under `index.ts`'s `export *`.
  */
-export function toArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
+export function ToArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
     if (data instanceof ArrayBuffer) {
         return data.slice(0);
     }
@@ -186,8 +186,13 @@ export function toArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
     return copy.buffer;
 }
 
+/** @deprecated Use {@link ToArrayBuffer}. */
+export function toArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
+    return ToArrayBuffer(data);
+}
+
 /** Normalizes the addon's free-form role string onto the bridge's {@link DiscordMemberRole}. */
-export function mapNativeRole(role?: string): DiscordMemberRole {
+export function MapNativeRole(role?: string): DiscordMemberRole {
     switch ((role ?? '').trim().toLowerCase()) {
         case 'host':
         case 'owner':
@@ -203,30 +208,45 @@ export function mapNativeRole(role?: string): DiscordMemberRole {
     }
 }
 
+/** @deprecated Use {@link MapNativeRole}. */
+export function mapNativeRole(role?: string): DiscordMemberRole {
+    return MapNativeRole(role);
+}
+
 /**
  * **Pure mapping** of one native member onto the bridge's {@link DiscordMember}. Isolated from the addon and
  * from I/O so it is unit-tested directly.
  */
-export function mapNativeMember(m: NativeVoiceMember): DiscordMember {
+export function MapNativeMember(m: NativeVoiceMember): DiscordMember {
     return {
         UserId: String(m.userId),
         DisplayName: m.displayName,
-        Role: mapNativeRole(m.role),
+        Role: MapNativeRole(m.role),
         IsSelf: m.isSelf,
     };
+}
+
+/** @deprecated Use {@link MapNativeMember}. */
+export function mapNativeMember(m: NativeVoiceMember): DiscordMember {
+    return MapNativeMember(m);
 }
 
 /**
  * **Pure mapping** of one native inbound audio frame onto the bridge's diarized {@link DiscordAudioFrame}.
  * Copies the PCM (see {@link toArrayBuffer}) and resolves the speaker label. Isolated for direct testing.
  */
-export function mapNativeAudioFrame(frame: NativeVoiceAudioFrame): DiscordAudioFrame {
+export function MapNativeAudioFrame(frame: NativeVoiceAudioFrame): DiscordAudioFrame {
     return {
-        Pcm: toArrayBuffer(frame.data),
+        Pcm: ToArrayBuffer(frame.data),
         UserId: String(frame.userId),
         DisplayName: frame.displayName,
         TimestampMs: typeof frame.timestampMs === 'number' ? frame.timestampMs : Date.now(),
     };
+}
+
+/** @deprecated Use {@link MapNativeAudioFrame}. */
+export function mapNativeAudioFrame(frame: NativeVoiceAudioFrame): DiscordAudioFrame {
+    return MapNativeAudioFrame(frame);
 }
 
 /**
@@ -265,7 +285,7 @@ function unwrapDefault(mod: unknown): unknown {
  * VERIFY against the native Discord voice addon: the module's default/namespace interop + that it exposes
  * `createClient`.
  */
-export const defaultNativeLoader: NativeModuleLoader = async (specifier: string): Promise<NativeMeetingModule> => {
+export const DefaultNativeLoader: NativeModuleLoader = async (specifier: string): Promise<NativeMeetingModule> => {
     try {
         // Runtime plugin discovery from config: the addon specifier is deployment-supplied (not known at
         // build time), so this dynamic import cannot be a static import. `@vite-ignore` stops Vite from
@@ -285,6 +305,9 @@ export const defaultNativeLoader: NativeModuleLoader = async (specifier: string)
         );
     }
 };
+
+/** @deprecated Use {@link DefaultNativeLoader}. */
+export const defaultNativeLoader: NativeModuleLoader = DefaultNativeLoader;
 
 /**
  * A **real, two-way** {@link IDiscordVoiceSdk} over a native Discord voice addon (Opus send + receive).
@@ -320,7 +343,7 @@ export class DiscordNativeMeetingSdk implements IDiscordVoiceSdk {
      * @param config Resolved credentials + raw-audio opts + the native module specifier.
      * @param loadModule The native-addon loader (defaults to the lazy specifier loader).
      */
-    constructor(config: DiscordNativeSdkConfig, loadModule: NativeModuleLoader = defaultNativeLoader) {
+    constructor(config: DiscordNativeSdkConfig, loadModule: NativeModuleLoader = DefaultNativeLoader) {
         this.config = config;
         this.loadModule = loadModule;
     }
@@ -415,7 +438,7 @@ export class DiscordNativeMeetingSdk implements IDiscordVoiceSdk {
             return [];
         }
         const natives = await this.client.getMembers();
-        return natives.map(mapNativeMember);
+        return natives.map(MapNativeMember);
     }
 
     /** Registers the voice-connection-dropped handler. */
@@ -449,8 +472,8 @@ export class DiscordNativeMeetingSdk implements IDiscordVoiceSdk {
 
     /** Wires the native client's callbacks to this adapter's handlers, mapping native shapes to the seam. */
     private wireClient(client: NativeVoiceClient): void {
-        client.onAudioFrame((frame) => this.audioHandler?.(mapNativeAudioFrame(frame)));
-        client.onMemberJoin((m) => this.joinHandler?.(mapNativeMember(m)));
+        client.onAudioFrame((frame) => this.audioHandler?.(MapNativeAudioFrame(frame)));
+        client.onMemberJoin((m) => this.joinHandler?.(MapNativeMember(m)));
         client.onMemberLeave((id) => this.leaveHandler?.(String(id)));
         client.onDisconnect(() => this.disconnectHandler?.());
     }
@@ -473,9 +496,9 @@ export class DiscordNativeMeetingSdk implements IDiscordVoiceSdk {
  * @returns A factory `(config) => DiscordNativeMeetingSdk`.
  */
 export function BindDiscordNative(
-    loadModule: NativeModuleLoader = defaultNativeLoader,
+    loadModule: NativeModuleLoader = DefaultNativeLoader,
 ): (config?: Record<string, unknown>) => DiscordNativeMeetingSdk {
-    return (config?: Record<string, unknown>) => new DiscordNativeMeetingSdk(readNativeConfig(config), loadModule);
+    return (config?: Record<string, unknown>) => new DiscordNativeMeetingSdk(ReadNativeConfig(config), loadModule);
 }
 
 /**
@@ -484,7 +507,7 @@ export function BindDiscordNative(
  * partially-resolved object (and {@link DiscordNativeMeetingSdk.joinVoiceChannel} then throws a precise error
  * if the required specifier is absent) rather than a half-typed blob.
  */
-export function readNativeConfig(config?: Record<string, unknown>): DiscordNativeSdkConfig {
+export function ReadNativeConfig(config?: Record<string, unknown>): DiscordNativeSdkConfig {
     const cfg = config ?? {};
     return {
         BotToken: readString(cfg.BotToken),
@@ -494,6 +517,11 @@ export function readNativeConfig(config?: Record<string, unknown>): DiscordNativ
         Channels: readNumber(cfg.Channels),
         NativeModuleSpecifier: readString(cfg.NativeModuleSpecifier),
     };
+}
+
+/** @deprecated Use {@link ReadNativeConfig}. */
+export function readNativeConfig(config?: Record<string, unknown>): DiscordNativeSdkConfig {
+    return ReadNativeConfig(config);
 }
 
 /** Reads a value as a non-empty string, or `undefined`. */

@@ -4,9 +4,9 @@ import { DatabasePlatform } from '@memberjunction/core';
  * Result of a rule-based SQL translation.
  */
 export interface RuleTranslationResult {
-    success: boolean;
-    translatedSQL: string;
-    appliedRules: string[];
+    Success: boolean;
+    TranslatedSQL: string;
+    AppliedRules: string[];
 }
 
 /**
@@ -25,7 +25,7 @@ export function RuleBasedTranslate(
     to: DatabasePlatform
 ): RuleTranslationResult {
     if (from === to) {
-        return { success: true, translatedSQL: sql, appliedRules: [] };
+        return { Success: true, TranslatedSQL: sql, AppliedRules: [] };
     }
 
     if (from === 'sqlserver' && to === 'postgresql') {
@@ -36,7 +36,7 @@ export function RuleBasedTranslate(
         return translatePostgresToSqlServer(sql);
     }
 
-    return { success: false, translatedSQL: sql, appliedRules: [] };
+    return { Success: false, TranslatedSQL: sql, AppliedRules: [] };
 }
 
 function translateSqlServerToPostgres(sql: string): RuleTranslationResult {
@@ -63,9 +63,9 @@ function translateSqlServerToPostgres(sql: string): RuleTranslationResult {
     }
 
     return {
-        success: appliedRules.length > 0,
-        translatedSQL: result,
-        appliedRules
+        Success: appliedRules.length > 0,
+        TranslatedSQL: result,
+        AppliedRules: appliedRules
     };
 }
 
@@ -94,8 +94,8 @@ function translatePostgresToSqlServer(sql: string): RuleTranslationResult {
     }
 
     return {
-        success: appliedRules.length > 0,
-        translatedSQL: result,
-        appliedRules
+        Success: appliedRules.length > 0,
+        TranslatedSQL: result,
+        AppliedRules: appliedRules
     };
 }

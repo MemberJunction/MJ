@@ -142,7 +142,7 @@ function shouldRotate(index: number): boolean {
  * Computes the layout for all word cloud items, returning positioned items
  * and the overall bounding viewBox.
  */
-export function computeWordCloudLayout(
+export function ComputeWordCloudLayout(
   items: WordCloudItem[],
   config: WordCloudLayoutConfig
 ): { Items: WordCloudLayoutItem[]; ViewBox: string } {
@@ -204,6 +204,14 @@ export function computeWordCloudLayout(
   const viewBox = computeViewBox(placedBoxes);
 
   return { Items: layoutItems, ViewBox: viewBox };
+}
+
+/** @deprecated Use {@link ComputeWordCloudLayout}. */
+export function computeWordCloudLayout(
+  items: WordCloudItem[],
+  config: WordCloudLayoutConfig
+): { Items: WordCloudLayoutItem[]; ViewBox: string } {
+  return ComputeWordCloudLayout(items, config);
 }
 
 /**

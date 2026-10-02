@@ -26,7 +26,7 @@ describe('BaseAgent.releasePerRunDataCache', () => {
     });
 
     it('clears the per-run cache entry for the current run when _agentRun is set', () => {
-        const clearRunCacheSpy = vi.spyOn(AgentDataPreloader.Instance, 'clearRunCache');
+        const clearRunCacheSpy = vi.spyOn(AgentDataPreloader.Instance, 'ClearRunCache');
         const agent = new BaseAgent();
         (agent as unknown as { _agentRun: { ID: string } })._agentRun = { ID: 'run-123' };
 
@@ -37,7 +37,7 @@ describe('BaseAgent.releasePerRunDataCache', () => {
     });
 
     it('is a no-op when _agentRun was never set (e.g. Execute() failed before creating it)', () => {
-        const clearRunCacheSpy = vi.spyOn(AgentDataPreloader.Instance, 'clearRunCache');
+        const clearRunCacheSpy = vi.spyOn(AgentDataPreloader.Instance, 'ClearRunCache');
         const agent = new BaseAgent();
 
         callRelease(agent);
@@ -46,7 +46,7 @@ describe('BaseAgent.releasePerRunDataCache', () => {
     });
 
     it('is a no-op when _agentRun has no ID', () => {
-        const clearRunCacheSpy = vi.spyOn(AgentDataPreloader.Instance, 'clearRunCache');
+        const clearRunCacheSpy = vi.spyOn(AgentDataPreloader.Instance, 'ClearRunCache');
         const agent = new BaseAgent();
         (agent as unknown as { _agentRun: { ID: string | undefined } })._agentRun = { ID: undefined };
 

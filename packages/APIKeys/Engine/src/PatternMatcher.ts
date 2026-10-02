@@ -32,7 +32,7 @@ export class PatternMatcher {
      * @param pattern - The pattern or comma-separated patterns to match against
      * @returns PatternMatchResult with match status and the specific pattern that matched
      */
-    public static match(value: string, pattern: string | null): PatternMatchResult {
+    public static Match(value: string, pattern: string | null): PatternMatchResult {
         // NULL pattern = wildcard (match all)
         if (pattern === null || pattern === undefined) {
             return { matched: true, matchedPattern: '*' };
@@ -53,6 +53,11 @@ export class PatternMatcher {
         }
 
         return { matched: false, matchedPattern: null };
+    }
+
+    /** @deprecated Use {@link Match}. */
+    public static match(value: string, pattern: string | null): PatternMatchResult {
+        return this.Match(value, pattern);
     }
 
     /**
@@ -94,11 +99,16 @@ export class PatternMatcher {
      * @param pattern - The pattern to check
      * @returns true if pattern contains wildcards
      */
-    public static hasWildcards(pattern: string | null): boolean {
+    public static HasWildcards(pattern: string | null): boolean {
         if (pattern === null || pattern === undefined) {
             return true; // NULL is treated as wildcard
         }
         return pattern.includes('*') || pattern.includes('?');
+    }
+
+    /** @deprecated Use {@link HasWildcards}. */
+    public static hasWildcards(pattern: string | null): boolean {
+        return this.HasWildcards(pattern);
     }
 
     /**
@@ -106,11 +116,16 @@ export class PatternMatcher {
      * @param pattern - Comma-separated pattern string
      * @returns Array of individual patterns
      */
-    public static parsePatterns(pattern: string | null): string[] {
+    public static ParsePatterns(pattern: string | null): string[] {
         if (pattern === null || pattern === undefined) {
             return ['*'];
         }
         return pattern.split(',').map(p => p.trim()).filter(p => p.length > 0);
+    }
+
+    /** @deprecated Use {@link ParsePatterns}. */
+    public static parsePatterns(pattern: string | null): string[] {
+        return this.ParsePatterns(pattern);
     }
 
     /**
@@ -118,7 +133,7 @@ export class PatternMatcher {
      * @param pattern - The pattern to validate
      * @returns true if valid, false otherwise
      */
-    public static isValidPattern(pattern: string | null): boolean {
+    public static IsValidPattern(pattern: string | null): boolean {
         if (pattern === null || pattern === undefined) {
             return true; // NULL is valid (wildcard)
         }
@@ -142,5 +157,10 @@ export class PatternMatcher {
         }
 
         return true;
+    }
+
+    /** @deprecated Use {@link IsValidPattern}. */
+    public static isValidPattern(pattern: string | null): boolean {
+        return this.IsValidPattern(pattern);
     }
 }

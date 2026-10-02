@@ -51,7 +51,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
             const batch = recommendationList.slice(i, i + Config.REX_BATCH_SIZE);
             LogStatus(`Processing batch ${batchCount + 1} of ${Math.ceil(recommendationList.length / Config.REX_BATCH_SIZE)}`);
 
-            const recordDocuments: MJEntityRecordDocumentEntityType[] | null = await this.GetEntityRecordDocuments(batch, entityDocumentID, request.CurrentUser);
+            const recordDocuments: MJEntityRecordDocumentEntityType[] | null = await this.getEntityRecordDocuments(batch, entityDocumentID, request.CurrentUser);
             if(!recordDocuments){
                 LogError(`Error getting entity record documents for batch ${batchCount + 1}`);
                 result.AppendError(`Error getting entity record documents for batch ${batchCount + 1}`);
@@ -106,7 +106,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
         return result;
     }
 
-    private async GetEntityRecordDocuments(recommendations: MJRecommendationEntity[], entityDocumentID: string, currentUser?: UserInfo): Promise<MJEntityRecordDocumentEntityType[] | null> {
+    private async getEntityRecordDocuments(recommendations: MJRecommendationEntity[], entityDocumentID: string, currentUser?: UserInfo): Promise<MJEntityRecordDocumentEntityType[] | null> {
         const rv: RunView = new RunView();
 
         //assuming all recommendations have the same source entity ID
@@ -129,7 +129,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
         return rvVectorResult.Results;
     }
 
-    private async GetAccessToken(): Promise<string | null> {
+    private async GetAccessToken(): Promise<string | null> {  // case-violation-ok-legacy-back-compat: reached by bracket access outside the declaring class, where a same-named key on an unrelated object is indistinguishable
         try{
             LogStatus("Getting Rex access token");
 
@@ -200,7 +200,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
                 LogError("Error getting Rex recommendation, rasaError:", undefined, rasaError);
                 if(params.ErrorListID){
                     const errorMessage: string = JSON.stringify(rasaError);
-                    await this.AddRecordToErrorsList(params.ErrorListID, params.VectorID, errorMessage, params.CurrentUser);
+                    await this.addRecordToErrorsList(params.ErrorListID, params.VectorID, errorMessage, params.CurrentUser);
                 }
             }
             else{
@@ -214,7 +214,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
 
         const entities: MJRecommendationItemEntity[] =  await Promise.all(recommendations.map(async (recommendation: RecommendationResponse) => {
             const entity: MJRecommendationItemEntity = await md.GetEntityObject<MJRecommendationItemEntity>("MJ: Recommendation Items", currentUser);
-            let data: Record<'entityID' | 'recordID', string> = this.GetEntityIDAndRecordID(recommendation, typeMap);
+            let data: Record<'entityID' | 'recordID', string> = this.getEntityIDAndRecordID(recommendation, typeMap);
 
             entity.NewRecord();
             entity.RecommendationID = recommendationEntity.ID;
@@ -228,7 +228,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
         return entities;
     }
 
-    private GetEntityIDAndRecordID(data: RecommendationResponse, typeMap: Record<string, string>): Record<'entityID' | 'recordID', string> {
+    private getEntityIDAndRecordID(data: RecommendationResponse, typeMap: Record<string, string>): Record<'entityID' | 'recordID', string> {
         let entityName: string = "";
         let entityID: string = "";
         let recordID: string = "";
@@ -299,7 +299,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
         return probability;
     }
 
-    private async AddRecordToErrorsList(listID: string, recordID: string, errorMessage: string, currentUser?: UserInfo): Promise<void> {
+    private async addRecordToErrorsList(listID: string, recordID: string, errorMessage: string, currentUser?: UserInfo): Promise<void> {
         const md = this.Provider;
         const listDetail: MJListDetailEntity = await md.GetEntityObject<MJListDetailEntity>("MJ: List Details", currentUser);
         
