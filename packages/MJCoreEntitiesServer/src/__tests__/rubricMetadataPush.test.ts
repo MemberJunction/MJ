@@ -15,6 +15,20 @@ const shipped = [
 ];
 
 describe('shipped rubric metadata', () => {
+    it('types deterministic values as JsonValue and the evaluator as the literal union', () => {
+        const types = readFileSync(join(root, 'entities/JSONType-interfaces/IRubricJsonTypes.ts'), 'utf8');
+        expect(types).toContain('Values: JsonValue[];');
+        expect(types).not.toContain('unknown[]');
+        expect(types).toContain("EvaluatorType: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self';");
+        expect(types).not.toMatch(/EvaluatorType:\s*string/);
+        const rule = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../../Rubrics/Engine/src/DeterministicRubricEvaluator.ts'), 'utf8');
+        expect(rule).toContain('Values?: JsonValue[]');
+        expect(rule).not.toContain('Values?: unknown[]');
+        const sampling = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../../Rubrics/Engine/src/sampling.ts'), 'utf8');
+        expect(sampling).toContain("EvaluatorType?: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self'");
+        expect(sampling).not.toContain('EvaluatorType?: string');
+    });
+
     it('pushes scales, draft rubrics, and publications before the agents that look them up', () => {
         const order = JSON.parse(readFileSync(join(root, '.mj-sync.json'), 'utf8')).directoryOrder as string[];
         const at = (name: string) => order.indexOf(name);

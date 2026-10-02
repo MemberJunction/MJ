@@ -191,9 +191,9 @@ Add interfaces under `metadata/entities/JSONType-interfaces/` with bridge record
 | `RubricEvaluationScore.Evidence` | `IRubricEvidence[]` | discriminated union on `Type`: `Quote {Text, Start?, End?, Verified?}`, `Turn {ConversationDetailID?, TurnIndex, Quote?}`, `File {FileID, Page?, Note?}`, `Url {Url, Title?}`, `Record {EntityName, RecordID, Note?}`, `Media {FileID, StartMs, EndMs}` |
 | `RubricEvaluation.Metadata` | `IRubricEvaluationMetadata` | `{ Evaluator?: {Name, Settings}, Samples?: {Count, Spread}, Timings?, RequestedBy?: {EntityName, RecordID}, DroppedEvidenceCount?, Warnings?: string[] }` |
 | `RubricVersion.ChangeDetails` | `IRubricVersionChangeDetails` | `{ BaseVersionID, Changes: {Path, Property, From, To, Bump}[] }` |
-| `AIAgentRubric.EvaluatorConfig` | `IRubricEvaluatorSelection` | `{ EvaluatorType, EvaluatorName?, PromptID?, AgentID?, ModelID?, Samples?, Mode?: 'SinglePass'\|'PerCriterion' }` |
+| `AIAgentRubric.EvaluatorConfig` | `IRubricEvaluatorSelection` | `{ EvaluatorType: 'Human'\|'AIPrompt'\|'Agent'\|'Deterministic'\|'Self'\|'External', EvaluatorName?, PromptID?, AgentID?, ModelID?, Samples?, Mode?: 'SinglePass'\|'PerCriterion' }` |
 
-`IRubricDeterministicRule`: `{ Path: string /* JSON path into subject content */, Operator: 'equals'|'notEquals'|'in'|'notIn'|'contains'|'exists'|'between'|'gte'|'lte'|'matches', Values: unknown[], LevelWhenTrue: string /* level label or numeric value */, LevelWhenFalse: string, NotApplicableWhenMissing?: boolean }`.
+`IRubricDeterministicRule`: `{ Path: string /* JSON path into subject content */, Operator: 'equals'|'notEquals'|'in'|'notIn'|'contains'|'exists'|'between'|'gte'|'lte'|'matches', Values: JsonValue[], LevelWhenTrue: string /* level label or numeric value */, LevelWhenFalse: string, NotApplicableWhenMissing?: boolean }`.
 
 ---
 

@@ -11,11 +11,13 @@ import type { RubricSubjectContent } from './content.js';
  * The stored shape is Path, Operator, Values, LevelWhenTrue, LevelWhenFalse,
  * and NotApplicableWhenMissing. The older path/equals/level fields still work.
  */
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
 export interface DeterministicRule {
     Path?: string;
     path?: string;
     Operator?: 'equals' | 'notEquals' | 'in' | 'notIn' | 'contains' | 'exists' | 'between' | 'gte' | 'lte' | 'matches';
-    Values?: unknown[];
+    Values?: JsonValue[];
     LevelWhenTrue?: string;
     LevelWhenFalse?: string;
     NotApplicableWhenMissing?: boolean;

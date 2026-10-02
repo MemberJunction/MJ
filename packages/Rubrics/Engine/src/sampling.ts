@@ -18,7 +18,7 @@ export interface SamplingLink {
 /** The evaluator a sampled run uses. Missing config is LLM SinglePass, not Deterministic. */
 export function SamplingEvaluatorChoice(config: unknown): { evaluator: 'LLM' | 'Deterministic' | 'AI'; promptMode: 'SinglePass' | 'PerCriterion' } {
     const parsed = typeof config === 'string' ? parseConfig(config) : config;
-    const record = parsed && typeof parsed === 'object' ? parsed as { EvaluatorType?: string; Mode?: string } : {};
+    const record = parsed && typeof parsed === 'object' ? parsed as { EvaluatorType?: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self'; Mode?: string } : {};
     const promptMode = record.Mode === 'PerCriterion' ? 'PerCriterion' : 'SinglePass';
     if (record.EvaluatorType === 'Deterministic') return { evaluator: 'Deterministic', promptMode };
     if (record.EvaluatorType === 'Agent') return { evaluator: 'AI', promptMode };
