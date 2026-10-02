@@ -1,8 +1,8 @@
 /**
  * decision-fixtures.ts — throwaway decision-routing fixtures for the cloudflare-clef and systemone-kev
  * bundles: real `MJ: Credentials` rows created through `CredentialEngine`, `MJ: AI Credential Bindings`
- * rows, a test Decision prompt with its own model bindings, a probe runner, and the cleanup for all of
- * them.
+ * rows, a test Decision prompt with its own model bindings, a test Decision model with model-vendor rows
+ * under keys the check chooses, a probe runner, and the cleanup for all of them.
  *
  * NOT a check bundle: it registers nothing on import.
  *
@@ -16,18 +16,20 @@
  * (and the engine's cached key material) once every credential it encrypted is deleted. A configured key
  * is used as it is.
  *
- * CLEANUP, children first: prompt runs (the tracked ones, and any other run of a test prompt), credential
- * bindings, prompt models, prompts, the credentials' `Credential Access` audit-log rows, then the
- * credentials. Every delete is best-effort, and one that fails or returns false is logged with its
+ * CLEANUP, children first: prompt runs (the tracked ones, and any other run of a test prompt or a test
+ * model), credential bindings, prompt models, prompts, model-vendor rows, models, the credentials'
+ * `Credential Access` audit-log rows, then the credentials. Every delete is best-effort, and one that fails or returns false is logged with its
  * reason, so a failing check still cleans up and a row it leaves is named. The platform's own Record
  * Changes history for the tracked entities is left, as every other bundle leaves it.
  */
 import { randomBytes } from 'node:crypto';
 import { CompositeKey, RunView, type BaseEntity, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { EscapeSQLString, MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { BaseDecision } from '@memberjunction/ai';
 import type {
     MJAICredentialBindingEntity,
+    MJAIModelEntity,
+    MJAIModelVendorEntity,
     MJAIPromptEntity,
     MJAIPromptModelEntity,
     MJCredentialEntity,
@@ -82,6 +84,27 @@ export function RequireInferenceRowID(modelName: string, vendorName: string): st
         throw new Error(`Expected one Active Inference Provider row for '${modelName}' on '${vendorName}', found ${rows.length}`);
     }
     return rows[0].ID;
+}
+
+/** The two kinds of model-vendor row: the vendor that made the model, and a vendor that serves it. */
+export type ModelVendorRowType = 'Model Developer' | 'Inference Provider';
+
+/** A vendor type definition's ID by name, or a thrown error naming the sync that would add it. */
+function requireVendorTypeID(name: ModelVendorRowType): string {
+    const definition = AIEngine.Instance.VendorTypeDefinitions.find(vt => vt.Name === name);
+    if (!definition) {
+        throw new Error(`The '${name}' vendor type definition is not in this database: sync the metadata (mj sync push --dir=metadata)`);
+    }
+    return definition.ID;
+}
+
+/** The ID of the `Decision` model type, or a thrown error naming the sync that would add it. */
+function requireDecisionModelTypeID(): string {
+    const modelType = AIEngine.Instance.ModelTypes.find(t => t.Name === 'Decision');
+    if (!modelType) {
+        throw new Error(`The 'Decision' AI model type is not in this database: sync the metadata (mj sync push --dir=metadata)`);
+    }
+    return modelType.ID;
 }
 
 /** The engine's `Default Decision` prompt, or a thrown error naming the sync that would add it. */
@@ -244,6 +267,17 @@ export interface CreatedDecisionPrompt {
     PromptModelIDs: Record<string, string>;
 }
 
+/** One `MJ: AI Model Vendors` row of a test Decision model. */
+export interface DecisionModelVendorRow {
+    /** The row's primary key. The check chooses it, so it knows where the row sorts. */
+    ID: string;
+    VendorName: string;
+    Type: ModelVendorRowType;
+    Priority: number;
+    DriverClass?: string;
+    APIName?: string;
+}
+
 /**
  * The rows one check creates, and their cleanup. Each check makes its own and calls {@link Cleanup} in a
  * `finally`; a bundle's Teardown calls {@link CleanupAll} as a backstop for any a check left behind.
@@ -256,6 +290,8 @@ export class DecisionFixtures {
     private readonly bindingIDs: string[] = [];
     private readonly promptModelIDs: string[] = [];
     private readonly promptIDs: string[] = [];
+    private readonly modelVendorIDs: string[] = [];
+    private readonly modelIDs: string[] = [];
     private readonly credentialIDs: string[] = [];
     private restoreEncryptionKey: (() => void) | undefined;
 
@@ -364,6 +400,51 @@ export class DecisionFixtures {
         return { Prompt: loaded, PromptModelIDs: promptModelIDs };
     }
 
+    /**
+     * Creates an Active `Decision` model (power rank 0, no limits, no cost row) with `rows` as its
+     * model-vendor rows, saved in the order given and under the keys given, then reloads the AI engine so
+     * the runner sees them. A model's name is limited to 50 characters, so it carries the fixture's
+     * marker and its description carries the safe-to-delete tag.
+     */
+    public async CreateDecisionModel(what: string, rows: DecisionModelVendorRow[]): Promise<MJAIModelEntityExtended> {
+        const model = await this.provider.GetEntityObject<MJAIModelEntity>('MJ: AI Models', this.user);
+        model.NewRecord();
+        model.Name = `IT model ${this.marker}`;
+        model.Description = `Integration-test Decision model for ${what} ${AGENT_LIVE_FIXTURE_TAG}`;
+        model.AIModelTypeID = requireDecisionModelTypeID();
+        model.IsActive = true;
+        model.PowerRank = 0;
+        model.SpeedRank = 0;
+        model.CostRank = 0;
+        await this.save(model, `model '${what}'`);
+        this.modelIDs.push(model.ID);
+
+        for (const spec of rows) {
+            const row = await this.provider.GetEntityObject<MJAIModelVendorEntity>('MJ: AI Model Vendors', this.user);
+            row.NewRecord();
+            row.ID = spec.ID;
+            row.ModelID = model.ID;
+            row.VendorID = RequireVendorID(spec.VendorName);
+            row.TypeID = requireVendorTypeID(spec.Type);
+            row.Priority = spec.Priority;
+            row.Status = 'Active';
+            row.DriverClass = spec.DriverClass ?? null;
+            row.APIName = spec.APIName ?? null;
+            row.SupportedResponseFormats = 'Any';
+            row.SupportsEffortLevel = false;
+            row.SupportsStreaming = false;
+            await this.save(row, `${spec.Type} row of model '${what}'`);
+            this.modelVendorIDs.push(row.ID);
+        }
+
+        await this.RefreshEngine();
+        const loaded = AIEngine.Instance.ModelsByID.get(NormalizeUUID(model.ID));
+        if (!loaded) {
+            throw new Error(`The test model '${model.Name}' is not in the AI engine after a reload`);
+        }
+        return loaded;
+    }
+
     /** Reloads the AI engine, so candidate selection and credential resolution see this fixture's rows. */
     public async RefreshEngine(): Promise<void> {
         await AIEngine.Instance.Config(true, this.user);
@@ -380,6 +461,8 @@ export class DecisionFixtures {
             await this.deleteAll('MJ: AI Credential Bindings', this.bindingIDs);
             await this.deleteAll('MJ: AI Prompt Models', this.promptModelIDs);
             await this.deleteAll('MJ: AI Prompts', this.promptIDs);
+            await this.deleteAll('MJ: AI Model Vendors', this.modelVendorIDs);
+            await this.deleteAll('MJ: AI Models', this.modelIDs);
             await this.deleteCredentials();
             await this.RefreshEngine();
         } catch (err: unknown) {
@@ -415,7 +498,7 @@ export class DecisionFixtures {
         return binding.ID;
     }
 
-    private async save(entity: MJAIPromptEntity | MJAIPromptModelEntity | MJAICredentialBindingEntity, what: string): Promise<void> {
+    private async save(entity: BaseEntity, what: string): Promise<void> {
         if (!(await entity.Save())) {
             throw new Error(`Could not save the ${what}: ${entity.LatestResult?.CompleteMessage ?? 'no message'}`);
         }
@@ -445,12 +528,23 @@ export class DecisionFixtures {
         }
     }
 
-    /** Any run of this fixture's prompts it was not handed, such as one from a run that threw, which would block the prompt's delete. */
+    /**
+     * Any run of this fixture's prompts or models it was not handed, such as one from a run that threw,
+     * which would block the prompt's or the model's delete.
+     */
     private async deleteUntrackedPromptRuns(): Promise<void> {
-        if (this.promptIDs.length === 0) {
+        const filters: string[] = [];
+        if (this.promptIDs.length > 0) {
+            filters.push(`PromptID IN (${this.inList(this.promptIDs)})`);
+        }
+        if (this.modelIDs.length > 0) {
+            const models = this.inList(this.modelIDs);
+            filters.push(`ModelID IN (${models})`, `OriginalModelID IN (${models})`);
+        }
+        if (filters.length === 0) {
             return;
         }
-        const ids = await this.idsWhere('MJ: AI Prompt Runs', `PromptID IN (${this.inList(this.promptIDs)})`);
+        const ids = await this.idsWhere('MJ: AI Prompt Runs', filters.join(' OR '));
         await this.deleteAll('MJ: AI Prompt Runs', ids);
     }
 

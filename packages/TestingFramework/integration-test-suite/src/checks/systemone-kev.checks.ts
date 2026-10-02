@@ -1,5 +1,5 @@
 /**
- * systemone-kev.checks.ts — the 'systemone-kev' bundle (KV1–KV9): Jared Palmer's Kev decision models
+ * systemone-kev.checks.ts — the 'systemone-kev' bundle (KV1–KV10): Jared Palmer's Kev decision models
  * and the generic `SystemOneDecision` driver, from the synced metadata through `AIDecisionRunner` to a
  * real HTTP request against a System One server running in this process.
  *
@@ -36,32 +36,40 @@
  *   KV9  Kev-4B on OpenRouter: an override naming Kev-4B and OpenRouter builds `OpenRouterDecision`,
  *        which POSTs to the OpenRouter decisions endpoint with the row's `jaredpalmer/kev-4b-20260924`,
  *        and the answers map.
+ *   KV10 a `ModelVendor` binding on the row that serves a model is found when the model has a second
+ *        Active row on the same vendor: a throwaway Decision model with a Model Developer row and an
+ *        Inference Provider row on System One Endpoint, under keys that put the Developer row first in
+ *        the engine on any database, and a credential bound to the Inference Provider row only. The
+ *        candidate counts as available, the request reaches its server with the bound token, and the
+ *        answers map. Before the fix the runner read only the first Active row of the pair.
  *
- * NO NETWORK BEYOND LOOPBACK. KV3 and KV5–KV8 start `node:http` servers on 127.0.0.1 with ephemeral ports
- * that answer `/v1/systemone` the way Kev's server does, and stop them after the check. For the whole
- * bundle, `OpenRouterDecision` is replaced by a subclass that overrides only `SendRequest` (as IT99 does
- * for Cloudflare): it answers only when a check arms it (KV8, KV9) and refuses otherwise, so a failover
- * to Kev-4B's OpenRouter row can never leave the process. `CloudflareDecision` is replaced the same way
+ * NO NETWORK BEYOND LOOPBACK. KV3, KV5–KV8 and KV10 start `node:http` servers on 127.0.0.1 with
+ * ephemeral ports that answer `/v1/systemone` the way Kev's server does, and stop them after the check.
+ * For the whole bundle, `OpenRouterDecision` is replaced by a subclass that overrides only `SendRequest`
+ * (as IT99 does for Cloudflare): it answers only when a check arms it (KV8, KV9) and refuses otherwise,
+ * so a failover to Kev-4B's OpenRouter row can never leave the process. `CloudflareDecision` is replaced the same way
  * by a guard that records the URL and refuses every request, so KV7's Clef candidate cannot reach
  * Cloudflare even if its missing-account check regressed, and KV7 can assert it sent nothing. KV4
  * registers the shared scripted decision driver over every decision driver class, as IT97 does. The
  * environment variables that would give a decision driver a real base URL or account ID are unset for
  * the bundle and restored after it.
  * Everything else is real: the prompt, model and vendor rows, candidate selection, credential resolution
- * (legacy `apiKeys` entries in KV3, `MJ: Credentials` rows with `MJ: AI Credential Bindings` in KV4–KV8),
- * the drivers' URL, header and body building, the fetch, the answer mapping, `BaseDecision`'s
+ * (legacy `apiKeys` entries in KV3, `MJ: Credentials` rows with `MJ: AI Credential Bindings` in KV4–KV8
+ * and KV10), the drivers' URL, header and body building, the fetch, the answer mapping, `BaseDecision`'s
  * validation, the failover loop and the run rows.
  *
  * TRANSPORT: SERVER-ONLY: the runner runs in this process, against servers and stand-ins in this process.
  *
- * FIXTURES: KV4–KV8 create their own credentials (encrypted, through `CredentialEngine`), bindings and
- * test Decision prompts (decision-fixtures.ts) and delete them in a `finally`, children first; Teardown
- * deletes whatever a failed check left. Every prompt run the bundle creates is deleted.
+ * FIXTURES: KV4–KV8 and KV10 create their own credentials (encrypted, through `CredentialEngine`),
+ * bindings, test Decision prompts and, in KV10, a test Decision model with its model-vendor rows
+ * (decision-fixtures.ts), and delete them in a `finally`, children first; Teardown deletes whatever a
+ * failed check left. Every prompt run the bundle creates is deleted.
  */
+import { randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { RunView } from '@memberjunction/core';
-import { EscapeSQLString, MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import {
     BaseDecision,
     DecisionResult,
@@ -1049,6 +1057,90 @@ async function checkKev4BOnOpenRouter(ctx: IntegrationCheckContext): Promise<voi
     Assert(typeof row?.Cost === 'number' && Math.abs(row.Cost - OPENROUTER_REPORTED_COST) < 1e-8, `KV9: run Cost, as OpenRouter reported it — expected ${OPENROUTER_REPORTED_COST} to 8 places, got ${String(row?.Cost)}`);
 }
 
+// ─── KV10: a binding on the serving row, whatever order the rows load in ─────────────────────────
+
+const KV10_TOKEN = 'it-kv10-inference-row-token';
+
+/** The keys of KV10's two rows of one model on one vendor. */
+interface TwoRowKeys {
+    Developer: string;
+    Inference: string;
+}
+
+/**
+ * Keys that put the Model Developer row first and the Inference Provider row last in whatever order a
+ * database returns them. The engine loads `MJ: AI Model Vendors` with no ORDER BY, so SQL Server returns
+ * the rows in clustered-key order, which compares a `uniqueidentifier`'s last six bytes first;
+ * PostgreSQL's `uuid` order and a string sort compare the first four bytes first. Both ends are all
+ * zeros for one key and all `f`s for the other, and the middle is random, so no two runs share a key.
+ */
+function twoRowKeys(): TwoRowKeys {
+    const middle = randomUUID().slice(8, 23);
+    return { Developer: `00000000${middle}-000000000000`, Inference: `ffffffff${middle}-ffffffffffff` };
+}
+
+/**
+ * Asserts the engine holds the model's two rows on `vendorId`, both Active, the Model Developer row
+ * first: the row the runner read before the fix, which does not serve the model and has no binding.
+ */
+function assertDeveloperRowFirst(modelId: string, vendorId: string, keys: TwoRowKeys): void {
+    const rows = (AIEngine.Instance.ModelVendorsByModelID.get(NormalizeUUID(modelId)) ?? []).filter(mv => UUIDsEqual(mv.VendorID, vendorId));
+    AssertEqual(
+        JSON.stringify(rows.map(mv => `${mv.Type}:${mv.Status}:${NormalizeUUID(mv.ID)}`)),
+        JSON.stringify([`Model Developer:Active:${keys.Developer}`, `Inference Provider:Active:${keys.Inference}`]),
+        "KV10 precondition: the engine's rows of the model on System One Endpoint, in order",
+    );
+}
+
+/** The one candidate of an override naming the KV10 model on System One Endpoint. */
+function requireOnlyCandidate(probe: DecisionRunnerProbe, prompt: MJAIPromptEntityExtended, params: AIDecisionParams, modelName: string): ModelVendorCandidate {
+    const candidates = probe.Candidates(prompt, params);
+    AssertEqual(candidates.map(describeCandidate).join(', '), `${modelName} / ${VENDOR_NAME} / ${DRIVER_CLASS}`, 'KV10: the candidates');
+    return candidates[0];
+}
+
+async function checkBindingOnServingRow(ctx: IntegrationCheckContext, server: LocalSystemOneServer): Promise<void> {
+    await AIEngine.Instance.Config(false, ctx.User);
+    const fixtures = new DecisionFixtures(ctx, 'kv10');
+    try {
+        const keys = twoRowKeys();
+        // Saved Developer row first as well, so an engine that appends saved rows holds the same order.
+        const model = await fixtures.CreateDecisionModel('KV10 two-row model', [
+            { ID: keys.Developer, VendorName: VENDOR_NAME, Type: 'Model Developer', Priority: 0 },
+            { ID: keys.Inference, VendorName: VENDOR_NAME, Type: 'Inference Provider', Priority: 1, DriverClass: DRIVER_CLASS, APIName: 'kev-latest' },
+        ]);
+        const vendor = requireVendor(VENDOR_NAME);
+        assertDeveloperRowFirst(model.ID, vendor.ID, keys);
+
+        const prompt = RequireDefaultDecisionPrompt();
+        const params = decisionParams(ctx, prompt);
+        params.override = { modelId: model.ID, vendorId: vendor.ID };
+        const probe = new DecisionRunnerProbe();
+        const unbound = requireOnlyCandidate(probe, prompt, params, model.Name);
+        Assert(!probe.HasCredentials(unbound, prompt, params), 'KV10 precondition: the candidate has a credential before any binding, so the binding would prove nothing');
+
+        const credential = await fixtures.CreateCredential(ENDPOINT_CREDENTIAL_TYPE, 'KV10 Inference Provider row', { apiKey: KV10_TOKEN, endpoint: server.BaseURL });
+        await fixtures.BindToModelVendor(credential.ID, keys.Inference);
+        assertDeveloperRowFirst(model.ID, vendor.ID, keys);
+        const bound = requireOnlyCandidate(probe, prompt, params, model.Name);
+        Assert(
+            probe.HasCredentials(bound, prompt, params),
+            'KV10: the candidate has no credential after its Inference Provider row was bound (the Model Developer row, first in the engine, was read instead)',
+        );
+
+        const before = server.Requests.length;
+        const result = await runDecision(probe, params, id => fixtures.TrackPromptRun(id));
+        assertAnsweredBy(result, model.Name, VENDOR_NAME, DRIVER_CLASS, 'KV10');
+        const considered = result.modelSelectionInfo?.ModelsConsidered.find(c => UUIDsEqual(c.model.ID, model.ID));
+        AssertEqual(considered?.available, true, 'KV10: the run saw the candidate as available');
+        assertServed(server, before, KV10_TOKEN, 'KV10');
+        assertKevAnswers(result, 'KV10');
+        await assertRunRow(ctx, result, model.Name, VENDOR_NAME, true, 'KV10');
+    } finally {
+        await fixtures.Cleanup();
+    }
+}
+
 // ─── Checks ──────────────────────────────────────────────────────────────────────────────────────
 
 export const SystemOneKevChecks: NamedCheck[] = [
@@ -1127,6 +1219,13 @@ export const SystemOneKevChecks: NamedCheck[] = [
         Id: 'systemone-kev.KV9',
         Name: 'KV9: an override naming Kev-4B on OpenRouter uses OpenRouterDecision, POSTs to the OpenRouter decisions endpoint with jaredpalmer/kev-4b-20260924, and maps the answers',
         Fn: checkKev4BOnOpenRouter,
+    },
+    {
+        Id: 'systemone-kev.KV10',
+        Name: 'KV10: a credential bound to the Inference Provider row of a model that also has a Model Developer row on the same vendor, loaded first, makes the candidate available and reaches its server with the bound token',
+        Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
+            await withLocalServers(1, ([server]) => checkBindingOnServingRow(ctx, server));
+        },
     },
 ];
 
