@@ -21,4 +21,18 @@ describe('rubrics integration rows', () => {
         expect(rolled).toMatch(/evaluation\.Status = 'Submitted'/);
         expect(rolled.indexOf('withProviderRollback')).toBeLessThan(rolled.indexOf("agent.Status = 'Active'"));
     });
+
+    it('does not gate rolled-back SQL checks, and still gates durable writes', () => {
+        const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../checks/rubrics.checks.ts'), 'utf8');
+        const head = (id: string) => {
+            const start = source.indexOf(`Id: 'rubrics.${id}'`);
+            return source.slice(start, source.indexOf('Fn:', start));
+        };
+        for (const id of ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R10']) {
+            expect(head(id)).not.toMatch(/RequiresMutation/);
+        }
+        for (const id of ['R7', 'R8', 'R9', 'W1']) {
+            expect(head(id)).toMatch(/RequiresMutation: true/);
+        }
+    });
 });

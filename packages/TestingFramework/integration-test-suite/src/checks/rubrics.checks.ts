@@ -436,7 +436,6 @@ export const RubricsChecks: NamedCheck[] = [
     {
         Id: 'rubrics.R1',
         Name: 'R1: changing PassThreshold on a published version throws 51102',
-        RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
             const pool = poolOf(ctx);
             const s = schemaOf(ctx);
@@ -455,7 +454,6 @@ export const RubricsChecks: NamedCheck[] = [
     {
         Id: 'rubrics.R2',
         Name: 'R2: a published version may move to Retired',
-        RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
             const pool = poolOf(ctx);
             const s = schemaOf(ctx);
@@ -476,7 +474,6 @@ export const RubricsChecks: NamedCheck[] = [
     {
         Id: 'rubrics.R3',
         Name: 'R3: inserting a criterion on a published version throws 51103',
-        RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
             const pool = poolOf(ctx);
             const s = schemaOf(ctx);
@@ -496,7 +493,6 @@ export const RubricsChecks: NamedCheck[] = [
     {
         Id: 'rubrics.R4',
         Name: 'R4: updating a score row after submit throws 51110',
-        RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
             const pool = poolOf(ctx);
             const s = schemaOf(ctx);
@@ -538,7 +534,6 @@ export const RubricsChecks: NamedCheck[] = [
     {
         Id: 'rubrics.R5',
         Name: 'R5: deleting a draft version deletes its tree; a published tree throws 51101',
-        RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
             const pool = poolOf(ctx);
             const s = schemaOf(ctx);
@@ -600,7 +595,6 @@ export const RubricsChecks: NamedCheck[] = [
     {
         Id: 'rubrics.R6',
         Name: 'R6: raw SQL throws 51104, 51105, 51106, 51107, 51108 and 51109',
-        RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
             const pool = poolOf(ctx);
             const s = schemaOf(ctx);
@@ -866,7 +860,6 @@ export const RubricsChecks: NamedCheck[] = [
     {
         Id: 'rubrics.R10',
         Name: 'R10: the cohort mean matches the engine Mean and leaves Self out',
-        RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
             const pool = poolOf(ctx);
             const s = schemaOf(ctx);
