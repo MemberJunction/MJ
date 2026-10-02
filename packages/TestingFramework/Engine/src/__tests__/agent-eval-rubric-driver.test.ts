@@ -151,5 +151,9 @@ describe('agent eval rubric driver', () => {
         const calibration = readFileSync(join(directory, '../drivers/RubricCalibrationTestDriver.ts'), 'utf8');
         expect(driver).toContain('if (!found.Success)');
         expect(calibration).toContain('if (!result.Success)');
+        expect(driver).not.toMatch(/new RunView\(\)/);
+        expect(driver).not.toContain('RunView.Provider as unknown');
+        expect(calibration).not.toMatch(/new RunView\(\)/);
+        expect(calibration).not.toContain('as never');
     });
 });

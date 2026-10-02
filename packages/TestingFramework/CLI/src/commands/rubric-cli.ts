@@ -1,5 +1,6 @@
 import { RunView, type UserInfo } from '@memberjunction/core';
 import { IsValidUUID, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { GetMJProvider } from '../lib/mj-provider';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 
 /** `name`, `id`, `name@1.2.0`, or `id@version-id`. */
@@ -202,7 +203,7 @@ export function RequireViewSuccess(result: { Success?: boolean; ErrorMessage?: s
 /** Loads the rubric and, when a version was named, that version's id. */
 export async function LookupRubricOverride(ref: string, user: UserInfo): Promise<{ rubricId: string; versionId?: string }> {
     const parsed = ParseRubricRef(ref);
-    const view = new RunView();
+    const view = RunView.FromMetadataProvider(GetMJProvider());
     const found = await view.RunView({
         EntityName: 'MJ: Rubrics',
         ExtraFilter: RubricIdentityFilter(parsed.rubric),

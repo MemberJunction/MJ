@@ -90,7 +90,7 @@ export class RubricCommands {
     }
 
     private async rows(entityName: string, filter: string | undefined, user: UserInfo): Promise<Record<string, unknown>[]> {
-        const view = new RunView();
+        const view = RunView.FromMetadataProvider(GetMJProvider());
         const result = await view.RunView({ EntityName: entityName, ExtraFilter: filter, ResultType: 'simple', MaxRows: 500 }, user);
         RequireViewSuccess(result, entityName);
         return (result.Results ?? []) as Record<string, unknown>[];

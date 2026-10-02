@@ -61,7 +61,9 @@ export class RubricCalibrationTestDriver extends BaseTestDriver {
     protected async loadPairs(input: CalibrationInput, context: DriverExecutionContext): Promise<CalibrationPair[]> {
         const subjects = await this.goldSubjects(input, context);
         if (subjects.length === 0 || !input.rubricId) return [];
-        const view = new RunView();
+        const provider = this.Provider;
+        if (!provider) throw new Error('Could not read MJ: Rubric Evaluations.');
+        const view = RunView.FromMetadataProvider(provider);
         const user = context.contextUser;
         const rubricId = input.rubricId.replace(/'/g, "''");
         const subjectIds = subjects.map(subject => `'${subject.recordID.replace(/'/g, "''")}'`).join(', ');
@@ -102,7 +104,9 @@ export class RubricCalibrationTestDriver extends BaseTestDriver {
 
     private async goldSubjects(input: CalibrationInput, context: DriverExecutionContext): Promise<{ entity: string; recordID: string }[]> {
         if ('subjects' in input.goldSet) return input.goldSet.subjects ?? [];
-        const view = new RunView();
+        const provider = this.Provider;
+        if (!provider) throw new Error(`Could not read ${input.goldSet.subjectEntity}.`);
+        const view = RunView.FromMetadataProvider(provider);
         const rows = await ReadRows(view, {
             EntityName: input.goldSet.subjectEntity,
             ExtraFilter: input.goldSet.filter || undefined,
@@ -127,7 +131,7 @@ export class RubricCalibrationTestDriver extends BaseTestDriver {
         const published = versions
             .filter(row => Number(row.MajorVersion ?? 0) === major && String(row.Status) === 'Published')
             .sort((left, right) => Number(right.MinorVersion ?? 0) - Number(left.MinorVersion ?? 0) || Number(right.PatchVersion ?? 0) - Number(left.PatchVersion ?? 0))[0];
-        const engine = providerRubricEngine(this.Provider as never, context.contextUser);
+        const engine = providerRubricEngine(this.Provider, context.contextUser);
         const result = await engine.evaluateRecord({
             rubricId: input.rubricId,
             versionId: published ? String(published.ID) : undefined,

@@ -6,7 +6,7 @@
 import { UserInfo, RunView } from '@memberjunction/core';
 import { ReportFlags } from '../types';
 import { OutputFormatter } from '../utils/output-formatter';
-import { InitializeMJProvider, GetContextUser } from '../lib/mj-provider';
+import { InitializeMJProvider, GetContextUser, GetMJProvider } from '../lib/mj-provider';
 import { FormatCriterionReport } from './rubric-cli';
 
 /**
@@ -31,7 +31,7 @@ export class ReportCommand {
                 process.exit(1);
                 return;
             }
-            const view = new RunView();
+            const view = RunView.FromMetadataProvider(GetMJProvider());
             const escaped = runId.replace(/'/g, "''");
             const found = await view.RunView({
                 EntityName: 'MJ: Test Runs',

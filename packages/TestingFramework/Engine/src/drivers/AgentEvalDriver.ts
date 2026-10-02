@@ -929,7 +929,9 @@ export class AgentEvalDriver extends BaseTestDriver {
     }
 
     protected async readMany(context: DriverExecutionContext, entityName: string, filter: string, maxRows = 100): Promise<Record<string, unknown>[]> {
-        const view = new RunView();
+        const provider = this.Provider;
+        if (!provider) throw new Error(`Could not read ${entityName}.`);
+        const view = RunView.FromMetadataProvider(provider);
         const found = await view.RunView({ EntityName: entityName, ExtraFilter: filter, ResultType: 'simple', MaxRows: maxRows }, context.contextUser);
         if (!found.Success) throw new Error(found.ErrorMessage || `Could not read ${entityName}.`);
         return (found.Results ?? []) as Record<string, unknown>[];
@@ -1052,7 +1054,7 @@ export class AgentEvalDriver extends BaseTestDriver {
                     targetEntity: turnResults[turnResults.length - 1].agentRun,
                     contextUser: context.contextUser,
                     testRunId: context.testRun.ID,
-                    provider: RunView.Provider as unknown as OracleInput['provider'],
+                    provider: this.Provider ?? undefined,
                 };
 
                 const result = await oracle.evaluate(oracleInput, oracleConfig.config || {});
@@ -1106,7 +1108,7 @@ export class AgentEvalDriver extends BaseTestDriver {
                     targetEntity: turnResult.agentRun,
                     contextUser: context.contextUser,
                     testRunId: context.testRun.ID,
-                    provider: RunView.Provider as unknown as OracleInput['provider'],
+                    provider: this.Provider ?? undefined,
                 };
 
                 const result = await oracle.evaluate(oracleInput, oracleConfig.config || {});

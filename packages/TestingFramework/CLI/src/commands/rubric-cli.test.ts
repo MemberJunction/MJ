@@ -29,6 +29,10 @@ describe('rubric CLI', () => {
         expect(cli).not.toMatch(/await import\(/);
         expect(commands).not.toMatch(/await import\(/);
         expect(report).not.toMatch(/await import\(/);
+        expect(cli).not.toMatch(/new RunView\(\)/);
+        expect(commands).not.toMatch(/new RunView\(\)/);
+        expect(report).not.toMatch(/new RunView\(\)/);
+        expect(cli).toContain('RunView.FromMetadataProvider');
     });
 
     it('parses a name, a version label, and a version id', () => {

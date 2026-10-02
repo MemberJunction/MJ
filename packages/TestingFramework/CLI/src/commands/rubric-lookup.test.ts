@@ -8,6 +8,9 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     return {
         ...actual,
         RunView: class {
+            static FromMetadataProvider() {
+                return new this();
+            }
             async RunView(params: { EntityName: string; ExtraFilter?: string }) {
                 views.push(params);
                 return responses.shift() ?? { Success: true, Results: [] };
