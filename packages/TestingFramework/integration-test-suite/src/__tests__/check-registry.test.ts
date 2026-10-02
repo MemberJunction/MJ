@@ -269,7 +269,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'content-vectorization': 10,
         'conversation-compaction': 18,
         'trailing-runtime-state': 6,
-        'dataset-cache': 3,
+        'dataset-cache': 4,
         'entity-actions': 8,
         'entity-embedded': 6,
         'entity-graph': 11,
